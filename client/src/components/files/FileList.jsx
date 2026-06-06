@@ -1,6 +1,4 @@
-// Directory listing for the file browser. Renders folders first, then files
-// (the backend already sorts this way). Tapping a folder calls onOpenDir; a
-// file calls onOpenFile. Shows a friendly empty state when there is nothing.
+import { useT } from '../../i18n/LanguageContext';
 
 function formatSize(bytes) {
   if (bytes == null || Number.isNaN(bytes)) return '';
@@ -10,14 +8,16 @@ function formatSize(bytes) {
 }
 
 export default function FileList({ entries, onOpenDir, onOpenFile }) {
+  const { t } = useT();
+
   if (!entries || entries.length === 0) {
     return (
       <div className="files-empty">
         <div className="files-empty__emoji" aria-hidden="true">
           {'\u{1F4C2}'}
         </div>
-        <p className="files-empty__title">No files here yet</p>
-        <p>Ask Claude in the chat to create something.</p>
+        <p className="files-empty__title">{t('files.empty')}</p>
+        <p>{t('files.emptyHint')}</p>
       </div>
     );
   }

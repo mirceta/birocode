@@ -1,6 +1,6 @@
 // Friendly, non-technical date formatting for the conversation list.
-// "Today, 2:30 PM" / "Yesterday" / "Jun 4" -- never an ISO timestamp.
-export function friendlyDate(value) {
+// Pass the translation function `t` so the labels follow the active language.
+export function friendlyDate(value, t) {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
@@ -11,11 +11,11 @@ export function friendlyDate(value) {
     minute: '2-digit',
   });
 
-  if (isSameDay(date, now)) return `Today, ${time}`;
+  if (isSameDay(date, now)) return t('date.today', { time });
 
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
-  if (isSameDay(date, yesterday)) return 'Yesterday';
+  if (isSameDay(date, yesterday)) return t('date.yesterday');
 
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }

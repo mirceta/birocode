@@ -1,6 +1,3 @@
-// M6 -- Read-only file browser. The user navigates folders and reads files
-// to confirm the changes Claude made in chat. All backend calls go through
-// M4's api client (apiGet), which handles auth.
 import { useCallback, useEffect, useState } from 'react';
 import { apiGet } from '../api/client';
 import Loading from '../components/shared/Loading';
@@ -8,45 +5,47 @@ import ErrorBanner from '../components/shared/ErrorBanner';
 import Breadcrumbs from '../components/files/Breadcrumbs';
 import FileList from '../components/files/FileList';
 import FileViewer from '../components/files/FileViewer';
+import { useT } from '../i18n/LanguageContext';
 import '../components/files/files.css';
 
-// Join a directory path and a child name into a clean POSIX path.
 function joinPath(dir, name) {
   if (dir === '/' || dir === '') return `/${name}`;
   return `${dir}/${name}`;
 }
 
 export default function Files() {
-  const [path, setPath] = useState('/'); // current directory
+  const { t } = useT();
+  const [path, setPath] = useState('/');
   const [entries, setEntries] = useState([]);
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState('');
 
-  // The open file, or null when browsing the directory listing.
-  const [openFile, setOpenFile] = useState(null); // { name, path }
+  const [openFile, setOpenFile] = useState(null);
   const [fileContent, setFileContent] = useState('');
   const [fileLoading, setFileLoading] = useState(false);
   const [fileError, setFileError] = useState('');
 
-  const loadDir = useCallback(async (dirPath) => {
-    setListLoading(true);
-    setListError('');
-    try {
-      const data = await apiGet(`/files?path=${encodeURIComponent(dirPath)}`);
-      setEntries(Array.isArray(data) ? data : []);
-    } catch {
-      setEntries([]);
-      setListError("We couldn't open this folder. Please try again.");
-    } finally {
-      setListLoading(false);
-    }
-  }, []);
+  const loadDir = useCallback(
+    async (dirPath) => {
+      setListLoading(true);
+      setListError('');
+      try {
+        const data = await apiGet(`/files?path=${encodeURIComponent(dirPath)}`);
+        setEntries(Array.isArray(data) ? data : []);
+      } catch {
+        setEntries([]);
+        setListError(t('files.loadError'));
+      } finally {
+        setListLoading(false);
+      }
+    },
+    [t],
+  );
 
   useEffect(() => {
     loadDir(path);
   }, [path, loadDir]);
 
-  // Breadcrumb / folder navigation always returns to the listing view.
   function navigateTo(dirPath) {
     setOpenFile(null);
     setFileError('');
@@ -67,7 +66,7 @@ export default function Files() {
       const data = await apiGet(`/files/read?path=${encodeURIComponent(filePath)}`);
       setFileContent(typeof data === 'string' ? data : data.content || '');
     } catch {
-      setFileError("This file can't be previewed.");
+      setFileError(t('files.previewError'));
     } finally {
       setFileLoading(false);
     }
@@ -79,17 +78,16 @@ export default function Files() {
     setFileContent('');
   }
 
-  // ---- File viewer mode ----
   if (openFile) {
     if (fileLoading) {
-      return <Loading label="Opening file..." />;
+      return <Loading label={t('files.opening')} />;
     }
     if (fileError) {
       return (
         <div className="file-viewer">
           <div className="file-viewer__bar">
             <button type="button" className="file-viewer__back" onClick={closeFile}>
-              <span aria-hidden="true">&larr;</span> Back
+              <span aria-hidden="true">&larr;</span> {t('common.back')}
             </button>
             <span className="file-viewer__name" title={openFile.name}>
               {openFile.name}
@@ -102,13 +100,12 @@ export default function Files() {
     return <FileViewer name={openFile.name} content={fileContent} onBack={closeFile} />;
   }
 
-  // ---- Directory listing mode ----
   return (
     <div className="files-page">
       <Breadcrumbs path={path} onNavigate={navigateTo} />
 
       {listLoading ? (
-        <Loading label="Loading your files..." />
+        <Loading label={t('files.loadingList')} />
       ) : listError ? (
         <ErrorBanner message={listError} onRetry={() => loadDir(path)} />
       ) : (

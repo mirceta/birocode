@@ -1,6 +1,7 @@
-// Reusable error display. Shows a friendly message with an optional retry.
-// Keep copy plain and non-technical -- no stack traces or jargon in the UI.
+import { useT } from '../../i18n/LanguageContext';
+
 export default function ErrorBanner({ message, onRetry }) {
+  const { t } = useT();
   if (!message) return null;
   return (
     <div className="error-banner" role="alert">
@@ -10,7 +11,7 @@ export default function ErrorBanner({ message, onRetry }) {
       <span>{message}</span>
       {onRetry && (
         <button type="button" className="error-banner__retry" onClick={onRetry}>
-          Try again
+          {t('common.tryAgain')}
         </button>
       )}
     </div>

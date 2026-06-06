@@ -1,10 +1,8 @@
 import { useRef, useState } from 'react';
+import { useT } from '../../i18n/LanguageContext';
 
-// Message composer fixed at the bottom of the chat, above the nav bar. Grows
-// with content up to a few lines, sends on Enter (Shift+Enter for newline),
-// and is disabled while a response is streaming so the user can't send two
-// messages at once.
 export default function ChatInput({ onSend, disabled }) {
+  const { t } = useT();
   const [value, setValue] = useState('');
   const textareaRef = useRef(null);
 
@@ -25,7 +23,6 @@ export default function ChatInput({ onSend, disabled }) {
 
   function handleChange(e) {
     setValue(e.target.value);
-    // Auto-grow the textarea up to its CSS max-height.
     const el = e.target;
     el.style.height = 'auto';
     el.style.height = `${el.scrollHeight}px`;
@@ -38,22 +35,22 @@ export default function ChatInput({ onSend, disabled }) {
       <textarea
         ref={textareaRef}
         className="chat-input__field"
-        placeholder="Type a message..."
+        placeholder={t('chat.inputPlaceholder')}
         rows={1}
         value={value}
         disabled={disabled}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
-        aria-label="Type a message"
+        aria-label={t('chat.inputAria')}
       />
       <button
         type="button"
         className="chat-input__send"
         onClick={submit}
         disabled={!canSend}
-        aria-label="Send"
+        aria-label={t('chat.sendAria')}
       >
-        Send
+        {t('chat.send')}
       </button>
     </div>
   );

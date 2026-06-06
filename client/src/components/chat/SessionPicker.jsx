@@ -1,8 +1,6 @@
 import { friendlyDate } from './formatDate';
+import { useT } from '../../i18n/LanguageContext';
 
-// Slide-down panel listing the user's past conversations. Tapping one resumes
-// it; "New conversation" starts fresh. Uses only "conversations" language --
-// never "session" or "thread".
 export default function SessionPicker({
   open,
   sessions,
@@ -13,33 +11,34 @@ export default function SessionPicker({
   onNew,
   onClose,
 }) {
+  const { t } = useT();
   if (!open) return null;
 
   return (
     <>
       <div className="picker-backdrop" onClick={onClose} aria-hidden="true" />
-      <div className="picker" role="dialog" aria-label="Your conversations">
+      <div className="picker" role="dialog" aria-label={t('chat.yourConversations')}>
         <div className="picker__header">
-          <span className="picker__title">Your conversations</span>
+          <span className="picker__title">{t('chat.yourConversations')}</span>
           <button
             type="button"
             className="picker__close"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t('common.close')}
           >
-            Close
+            {t('common.close')}
           </button>
         </div>
 
         <button type="button" className="picker__new" onClick={onNew}>
           <span className="picker__new-plus" aria-hidden="true">+</span>
-          New conversation
+          {t('picker.newConversation')}
         </button>
 
-        {loading && <div className="picker__hint">Loading your conversations...</div>}
-        {error && <div className="picker__hint">Couldn't load conversations.</div>}
+        {loading && <div className="picker__hint">{t('picker.loading')}</div>}
+        {error && <div className="picker__hint">{t('picker.loadError')}</div>}
         {!loading && !error && sessions.length === 0 && (
-          <div className="picker__hint">No conversations yet. Start a new one!</div>
+          <div className="picker__hint">{t('picker.empty')}</div>
         )}
 
         <ul className="picker__list">
@@ -51,10 +50,10 @@ export default function SessionPicker({
                 onClick={() => onSelect(s.id)}
               >
                 <span className="picker__item-title">
-                  {s.title || s.firstPrompt || 'Conversation'}
+                  {s.title || s.firstPrompt || t('picker.untitled')}
                 </span>
                 <span className="picker__item-meta">
-                  {[friendlyDate(s.lastModified), messageCount(s.turnCount)]
+                  {[friendlyDate(s.lastModified, t), messageCount(s.turnCount, t)]
                     .filter(Boolean)
                     .join(' -- ')}
                 </span>
@@ -67,7 +66,7 @@ export default function SessionPicker({
   );
 }
 
-function messageCount(turns) {
-  if (!turns && turns !== 0) return '';
-  return `${turns} ${turns === 1 ? 'message' : 'messages'}`;
+function messageCount(turns, t) {
+  if (turns == null) return '';
+  return t(turns === 1 ? 'picker.messageOne' : 'picker.messageMany', { count: turns });
 }

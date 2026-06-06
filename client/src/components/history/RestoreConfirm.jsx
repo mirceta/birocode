@@ -1,9 +1,8 @@
 import { friendlyDate } from './friendlyDate';
+import { useT } from '../../i18n/LanguageContext';
 
-// Confirmation dialog shown before going back to an earlier save. Restoring is
-// destructive (it undoes later changes), so we always confirm first. Matches
-// the restore-confirm mockup in UX-experience.md. No git jargon -- "Go back".
 export default function RestoreConfirm({ entry, restoring, onConfirm, onCancel }) {
+  const { t } = useT();
   return (
     <div
       className="hist-modal__backdrop"
@@ -18,14 +17,14 @@ export default function RestoreConfirm({ entry, restoring, onConfirm, onCancel }
         onClick={(e) => e.stopPropagation()}
       >
         <h2 id="restore-modal-title" className="hist-modal__title">
-          Go back to this version?
+          {t('history.confirmTitle')}
         </h2>
-        <p className="hist-modal__body">This will undo all changes made after:</p>
+        <p className="hist-modal__body">{t('history.confirmBody')}</p>
 
         <p className="hist-modal__quote">
-          {entry.message ? `"${entry.message}"` : 'No description'}
+          {entry.message ? `"${entry.message}"` : t('history.noDescription')}
         </p>
-        <p className="hist-modal__meta">{friendlyDate(entry.date)}</p>
+        <p className="hist-modal__meta">{friendlyDate(entry.date, t)}</p>
 
         <div className="hist-modal__actions">
           <button
@@ -34,7 +33,7 @@ export default function RestoreConfirm({ entry, restoring, onConfirm, onCancel }
             onClick={onCancel}
             disabled={restoring}
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -42,7 +41,7 @@ export default function RestoreConfirm({ entry, restoring, onConfirm, onCancel }
             onClick={onConfirm}
             disabled={restoring}
           >
-            {restoring ? 'Going back...' : 'Go back'}
+            {restoring ? t('history.goingBack') : t('history.goBackShort')}
           </button>
         </div>
       </div>

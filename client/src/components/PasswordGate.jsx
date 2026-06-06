@@ -1,13 +1,9 @@
 import { useState } from 'react';
 import { setPassword } from '../api/client';
+import { useT } from '../i18n/LanguageContext';
 
-// The only auth UI in the app. If no password is stored, we show a friendly
-// full-screen prompt. Saving stores it in localStorage and reloads so the rest
-// of the app mounts with the password available for every /api call.
-//
-// Intentionally non-technical copy -- the user just thinks of it as the code
-// that unlocks her workspace.
 export default function PasswordGate({ onUnlock }) {
+  const { t } = useT();
   const [value, setValue] = useState('');
 
   function handleSubmit(e) {
@@ -28,22 +24,20 @@ export default function PasswordGate({ onUnlock }) {
         <div className="pw-gate__emoji" aria-hidden="true">
           *
         </div>
-        <h1 className="pw-gate__title">Welcome back</h1>
-        <p className="pw-gate__subtitle">
-          Enter your access code to open your workspace.
-        </p>
+        <h1 className="pw-gate__title">{t('pwgate.title')}</h1>
+        <p className="pw-gate__subtitle">{t('pwgate.subtitle')}</p>
         <input
           className="pw-gate__input"
           type="password"
           inputMode="text"
           autoFocus
-          placeholder="Access code"
-          aria-label="Access code"
+          placeholder={t('pwgate.placeholder')}
+          aria-label={t('pwgate.aria')}
           value={value}
           onChange={(e) => setValue(e.target.value)}
         />
         <button className="pw-gate__button" type="submit" disabled={!value.trim()}>
-          Continue
+          {t('pwgate.continue')}
         </button>
       </form>
     </div>

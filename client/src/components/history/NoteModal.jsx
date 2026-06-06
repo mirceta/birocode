@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import { useT } from '../../i18n/LanguageContext';
 
-// "Save your work" dialog. Asks for an optional short note ("What changed?")
-// then saves. Matches the UX-experience.md save-flow mockup. No git jargon.
 export default function NoteModal({ saving, onConfirm, onCancel }) {
+  const { t } = useT();
   const [note, setNote] = useState('');
   const inputRef = useRef(null);
 
@@ -31,11 +31,11 @@ export default function NoteModal({ saving, onConfirm, onCancel }) {
       >
         <form onSubmit={handleSubmit}>
           <h2 id="save-modal-title" className="hist-modal__title">
-            Save your work
+            {t('save.modalTitle')}
           </h2>
 
           <label className="hist-modal__label" htmlFor="save-note">
-            What changed? (optional)
+            {t('save.noteLabel')}
           </label>
           <textarea
             id="save-note"
@@ -43,7 +43,7 @@ export default function NoteModal({ saving, onConfirm, onCancel }) {
             className="hist-modal__input"
             rows={3}
             maxLength={140}
-            placeholder="e.g. Updated revenue to 500k"
+            placeholder={t('save.notePlaceholder')}
             value={note}
             disabled={saving}
             onChange={(e) => setNote(e.target.value)}
@@ -56,14 +56,14 @@ export default function NoteModal({ saving, onConfirm, onCancel }) {
               onClick={onCancel}
               disabled={saving}
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               type="submit"
               className="hist-btn hist-btn--primary"
               disabled={saving}
             >
-              {saving ? 'Saving...' : 'Save'}
+              {saving ? t('save.saving') : t('save.idle')}
             </button>
           </div>
         </form>

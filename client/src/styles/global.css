@@ -107,6 +107,61 @@ textarea {
   margin: 0;
 }
 
+.app-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ---- Language toggle (radio group next to Save) ----------------------- */
+
+.lang-toggle {
+  display: inline-flex;
+  align-items: stretch;
+  padding: 2px;
+  margin: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+}
+
+.lang-toggle__option {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted, #666);
+  cursor: pointer;
+  border-radius: 999px;
+  user-select: none;
+}
+
+.lang-toggle__option.is-active {
+  background: var(--color-text);
+  color: var(--color-surface);
+}
+
+.lang-toggle__option input {
+  /* keep the native radio for a11y, but hide it visually */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.lang-toggle__option input:focus-visible + span {
+  outline: 2px solid var(--color-accent, #4f46e5);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 /* ---- Page content area ------------------------------------------------ */
 
 .app-content {

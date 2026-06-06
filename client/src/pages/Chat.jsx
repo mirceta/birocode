@@ -7,15 +7,14 @@ import ToolStatus from '../components/chat/ToolStatus';
 import SessionPicker from '../components/chat/SessionPicker';
 import { createSseParser } from '../components/chat/sseParser';
 import ErrorBanner from '../components/shared/ErrorBanner';
+import { useT } from '../i18n/LanguageContext';
 import '../components/chat/chat.css';
 
-const GREETING = { role: 'assistant', text: 'Hi! How can I help you today?' };
-
-// The chat screen. Owns conversation state, drives the SSE stream from the
-// backend, and renders the streaming response with markdown, a thinking
-// indicator, and tool-use status. Uses M4's api client for every call.
 export default function Chat() {
-  const [messages, setMessages] = useState([GREETING]);
+  const { t } = useT();
+  const greeting = { role: 'assistant', text: t('chat.greeting') };
+
+  const [messages, setMessages] = useState([greeting]);
   const [sessionId, setSessionId] = useState(null);
   const [streaming, setStreaming] = useState(false);
   const [thinking, setThinking] = useState(false);
@@ -31,9 +30,6 @@ export default function Chat() {
   const stickToBottom = useRef(true);
   const abortRef = useRef(null);
 
-  // ---- Auto-scroll -----------------------------------------------------
-  // Follow new content while streaming, but back off the moment the user
-  // scrolls up to read history; resume once they return to the bottom.
   const scrollToBottom = useCallback(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -50,9 +46,6 @@ export default function Chat() {
     if (stickToBottom.current) scrollToBottom();
   }, [messages, thinking, toolName, scrollToBottom]);
 
-  // ---- SSE event handling ----------------------------------------------
-  // Append streamed text to the in-progress assistant bubble (the last
-  // message in the list, which we add right before the stream starts).
   const appendToken = useCallback((text) => {
     setMessages((prev) => {
       const next = prev.slice();
@@ -73,12 +66,10 @@ export default function Chat() {
         setThinking(true);
         break;
       case 'tool':
-        // A tool started -- clear the thinking dots and show its status.
         setThinking(false);
         setToolName(evt.name);
         break;
       case 'token':
-        // First visible text -- clear thinking/tool indicators.
         setThinking(false);
         setToolName(null);
         if (evt.text) appendToken(evt.text);
@@ -87,19 +78,17 @@ export default function Chat() {
         if (evt.sessionId) setSessionId(evt.sessionId);
         break;
       case 'error':
-        setError(evt.message || 'Something went wrong. Please try again.');
+        setError(evt.message || t('chat.genericError'));
         break;
       default:
         break;
     }
   }
 
-  // ---- Sending ----------------------------------------------------------
   async function send(text) {
     setError('');
     stickToBottom.current = true;
 
-    // Add the user's message and an empty assistant bubble we will fill.
     setMessages((prev) => [
       ...prev,
       { role: 'user', text },
@@ -119,14 +108,13 @@ export default function Chat() {
       await apiStream('/chat', body, parse, { signal: controller.signal });
     } catch (err) {
       if (err.name !== 'AbortError') {
-        setError('Something went wrong while sending your message. Please try again.');
+        setError(t('chat.sendError'));
       }
     } finally {
       setStreaming(false);
       setThinking(false);
       setToolName(null);
       abortRef.current = null;
-      // Drop the trailing assistant bubble if it never received any text.
       setMessages((prev) => {
         const last = prev[prev.length - 1];
         if (last && last.role === 'assistant' && last.text === '') {
@@ -137,11 +125,10 @@ export default function Chat() {
     }
   }
 
-  // ---- Conversation switching ------------------------------------------
   function startNewConversation() {
     if (abortRef.current) abortRef.current.abort();
     setSessionId(null);
-    setMessages([GREETING]);
+    setMessages([greeting]);
     setError('');
     setThinking(false);
     setToolName(null);
@@ -159,9 +146,7 @@ export default function Chat() {
     setPickerOpen(false);
     stickToBottom.current = true;
 
-    // Load and show the actual past conversation. The backend continues the
-    // real Claude session via this id on the next send.
-    setMessages([{ role: 'assistant', text: 'Loading this conversation...' }]);
+    setMessages([{ role: 'assistant', text: t('chat.loadingConversation') }]);
     try {
       const data = await apiGet(`/sessions/${id}/messages`);
       const loaded = Array.isArray(data)
@@ -170,17 +155,11 @@ export default function Chat() {
       setMessages(
         loaded.length > 0
           ? loaded
-          : [
-              GREETING,
-              {
-                role: 'assistant',
-                text: "We're picking up where you left off. What would you like to do next?",
-              },
-            ],
+          : [greeting, { role: 'assistant', text: t('chat.resumed') }],
       );
     } catch {
-      setError("Couldn't load that conversation. You can still continue it by sending a message.");
-      setMessages([GREETING]);
+      setError(t('chat.resumeError'));
+      setMessages([greeting]);
     }
   }
 
@@ -206,10 +185,10 @@ export default function Chat() {
           className="chat__conversations"
           onClick={openPicker}
         >
-          Your conversations
+          {t('chat.yourConversations')}
         </button>
         <button type="button" className="chat__new" onClick={startNewConversation}>
-          New
+          {t('chat.new')}
         </button>
       </div>
 

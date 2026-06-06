@@ -1,14 +1,10 @@
-// Breadcrumb navigation for the file browser: Home > folder > subfolder.
-// Renders the current path as tappable segments. Tapping a segment jumps to
-// that level via onNavigate(path); the current (last) segment is not tappable.
-//
-// `path` is a POSIX-style path like "/business-plan/financials". Root is "/".
+import { useT } from '../../i18n/LanguageContext';
+
 export default function Breadcrumbs({ path, onNavigate }) {
+  const { t } = useT();
   const segments = path.split('/').filter(Boolean);
 
-  // Build a crumb for Home plus one per segment, each carrying the absolute
-  // path to navigate to when tapped.
-  const crumbs = [{ label: 'Home', target: '/' }];
+  const crumbs = [{ label: t('files.home'), target: '/' }];
   let acc = '';
   for (const seg of segments) {
     acc += `/${seg}`;
@@ -16,7 +12,7 @@ export default function Breadcrumbs({ path, onNavigate }) {
   }
 
   return (
-    <nav className="breadcrumbs" aria-label="Folder path">
+    <nav className="breadcrumbs" aria-label={t('files.pathAria')}>
       {crumbs.map((crumb, i) => {
         const isLast = i === crumbs.length - 1;
         return (

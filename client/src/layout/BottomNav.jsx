@@ -1,17 +1,17 @@
 import { NavLink } from 'react-router-dom';
-
-// Fixed bottom navigation. Every screen is one tap from every other screen.
-// Labels are deliberately plain -- Chat / Files / History, no jargon.
-const TABS = [
-  { to: '/', label: 'Chat', icon: 'C', end: true },
-  { to: '/files', label: 'Files', icon: 'F' },
-  { to: '/history', label: 'History', icon: 'H' },
-];
+import { useT } from '../i18n/LanguageContext';
 
 export default function BottomNav() {
+  const { t } = useT();
+  const tabs = [
+    { to: '/', label: t('nav.chat'), icon: 'C', end: true },
+    { to: '/files', label: t('nav.files'), icon: 'F' },
+    { to: '/history', label: t('nav.history'), icon: 'H' },
+  ];
+
   return (
-    <nav className="bottom-nav" aria-label="Main navigation">
-      {TABS.map((tab) => (
+    <nav className="bottom-nav" aria-label={t('nav.aria')}>
+      {tabs.map((tab) => (
         <NavLink
           key={tab.to}
           to={tab.to}

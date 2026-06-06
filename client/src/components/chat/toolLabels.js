@@ -1,13 +1,11 @@
-// Map raw Claude tool names to friendly, non-technical status labels.
-// The user never sees tool names like "Write" or "Bash" -- only plain
-// descriptions of what is happening to her documents.
-const LABELS = {
-  Write: 'Editing document...',
-  Edit: 'Editing document...',
-  Read: 'Reading file...',
-  Bash: 'Working...',
+// Map raw Claude tool names to translation keys for the friendly status label.
+const KEYS = {
+  Write: 'tool.editing',
+  Edit: 'tool.editing',
+  Read: 'tool.reading',
+  Bash: 'tool.working',
 };
 
-export function toolLabel(name) {
-  return LABELS[name] || 'Working...';
+export function toolLabel(name, t) {
+  return t(KEYS[name] || 'tool.working');
 }

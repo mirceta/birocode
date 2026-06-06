@@ -1,13 +1,11 @@
-// Read-only viewer for a single file's contents. Markdown files (.md) render
-// as a formatted document with a Raw/Rendered toggle; everything else shows as
-// monospace text. A Back button returns to the directory listing. The file is
-// fetched by the parent (Files.jsx); this component just renders what it gets.
 import { useState } from 'react';
 import Markdown from '../shared/Markdown';
+import { useT } from '../../i18n/LanguageContext';
 
 const MARKDOWN_RE = /\.(md|markdown|mdown|mkd|mkdn)$/i;
 
 export default function FileViewer({ name, content, onBack }) {
+  const { t } = useT();
   const isMarkdown = MARKDOWN_RE.test(name || '');
   const [raw, setRaw] = useState(false);
   const showRendered = isMarkdown && !raw;
@@ -16,7 +14,7 @@ export default function FileViewer({ name, content, onBack }) {
     <div className="file-viewer">
       <div className="file-viewer__bar">
         <button type="button" className="file-viewer__back" onClick={onBack}>
-          <span aria-hidden="true">&larr;</span> Back
+          <span aria-hidden="true">&larr;</span> {t('common.back')}
         </button>
         <span className="file-viewer__name" title={name}>
           {name}
@@ -26,9 +24,9 @@ export default function FileViewer({ name, content, onBack }) {
             type="button"
             className="file-viewer__toggle"
             onClick={() => setRaw((r) => !r)}
-            title={raw ? 'Show the formatted document' : 'Show the raw text'}
+            title={raw ? t('files.showRendered') : t('files.showRaw')}
           >
-            {raw ? 'Rendered' : 'Raw'}
+            {raw ? t('files.rendered') : t('files.raw')}
           </button>
         )}
       </div>

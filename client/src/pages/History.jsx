@@ -5,18 +5,17 @@ import ErrorBanner from '../components/shared/ErrorBanner';
 import HistoryTimeline from '../components/history/HistoryTimeline';
 import RestoreConfirm from '../components/history/RestoreConfirm';
 import { useSave } from '../components/history/SaveHandler';
+import { useT } from '../i18n/LanguageContext';
 import '../components/history/history.css';
 
-// The History screen: a timeline of previous saves with a "Go back to this
-// version" action. It reloads automatically when a save (from the header Save
-// button) or a restore completes, via the shared refreshTick from useSave().
 export default function History() {
+  const { t } = useT();
   const { refreshTick, notifyRestored, showToast } = useSave();
 
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [pending, setPending] = useState(null); // entry awaiting confirmation
+  const [pending, setPending] = useState(null);
   const [restoring, setRestoring] = useState(false);
 
   const load = useCallback(async () => {
@@ -26,13 +25,12 @@ export default function History() {
       const data = await apiGet('/history');
       setEntries(Array.isArray(data) ? data : []);
     } catch {
-      setError("We couldn't load your saved versions. Please try again.");
+      setError(t('history.loadError'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
-  // Reload on mount and whenever a save/restore bumps the shared signal.
   useEffect(() => {
     load();
   }, [load, refreshTick]);
@@ -43,17 +41,17 @@ export default function History() {
     try {
       await apiPost('/history/restore', { hash: pending.hash });
       setPending(null);
-      showToast('Done -- went back to that version', 'ok');
+      showToast(t('history.restoredToast'), 'ok');
       notifyRestored();
     } catch {
       setPending(null);
-      showToast("Couldn't go back -- please try again", 'error');
+      showToast(t('history.restoreErrorToast'), 'error');
     } finally {
       setRestoring(false);
     }
   }
 
-  if (loading) return <Loading label="Loading your saved versions..." />;
+  if (loading) return <Loading label={t('history.loading')} />;
 
   if (error) return <ErrorBanner message={error} onRetry={load} />;
 
@@ -63,8 +61,8 @@ export default function History() {
         <p className="hist-empty__icon" aria-hidden="true">
           {'🕓'}
         </p>
-        <h2>No saved versions yet</h2>
-        <p>Tap Save at the top to keep a snapshot of your work.</p>
+        <h2>{t('history.empty')}</h2>
+        <p>{t('history.emptyHint')}</p>
       </div>
     );
   }

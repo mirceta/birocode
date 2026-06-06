@@ -1,13 +1,12 @@
 import { toolLabel } from './toolLabels';
+import { useT } from '../../i18n/LanguageContext';
 
-// Inline status line shown while Claude uses a tool (e.g. "Editing
-// document..."). Driven by `tool` SSE events; the raw tool name is mapped to
-// friendly copy in toolLabels.js so no technical names leak into the UI.
 export default function ToolStatus({ name }) {
+  const { t } = useT();
   return (
     <div className="tool-status" role="status">
       <span className="tool-status__spinner" aria-hidden="true" />
-      <span>{toolLabel(name)}</span>
+      <span>{toolLabel(name, t)}</span>
     </div>
   );
 }

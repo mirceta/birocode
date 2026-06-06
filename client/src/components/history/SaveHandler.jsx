@@ -1,27 +1,18 @@
 import { createContext, useCallback, useContext, useRef, useState } from 'react';
 import { apiPost } from '../../api/client';
+import { useT } from '../../i18n/LanguageContext';
 import NoteModal from './NoteModal';
 import './history.css';
-
-// Owns the global Save flow used by the header Save button and shared by the
-// History page. Wrapping the app shell in <SaveProvider> lets any descendant
-// call useSave() to open the "What changed?" modal and trigger a save, and
-// lets History subscribe to a refresh signal so it reloads after a save or a
-// "go back" without manual reloads.
-//
-// Flow: tap Save -> NoteModal (optional note) -> POST /api/save ->
-//   - { hash } success  -> "Saved!" toast + bump refresh signal
-//   - { noChanges:true } -> "Nothing to save" toast
-//   - error              -> friendly failure toast
 
 const SaveContext = createContext(null);
 
 const TOAST_MS = 2200;
 
 export function SaveProvider({ children }) {
+  const { t } = useT();
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState(null); // { text, tone: 'ok' | 'warn' | 'error' }
+  const [toast, setToast] = useState(null);
   const [refreshTick, setRefreshTick] = useState(0);
   const toastTimer = useRef(null);
 
@@ -42,19 +33,19 @@ export function SaveProvider({ children }) {
         const res = await apiPost('/save', { message: note || undefined });
         setModalOpen(false);
         if (res && res.noChanges) {
-          showToast('Nothing to save', 'warn');
+          showToast(t('save.nothingToSave'), 'warn');
         } else {
-          showToast('Saved!', 'ok');
+          showToast(t('save.saved'), 'ok');
           bumpRefresh();
         }
       } catch {
         setModalOpen(false);
-        showToast("Couldn't save -- please try again", 'error');
+        showToast(t('save.failed'), 'error');
       } finally {
         setSaving(false);
       }
     },
-    [showToast, bumpRefresh],
+    [showToast, bumpRefresh, t],
   );
 
   const value = {
