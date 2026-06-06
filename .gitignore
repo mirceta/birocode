@@ -1,0 +1,12 @@
+# .NET build output
+**/bin/
+**/obj/
+
+# Logs written at runtime
+**/logs/
+*.log
+
+# Node (also covered by client/.gitignore)
+node_modules/
+dist/
+*.local
