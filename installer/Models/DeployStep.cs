@@ -3,8 +3,8 @@ namespace ClaudeWebInstaller.Models;
 /// <summary>
 /// Deployment phases for the Internet Deployment tab. Mirrors the deployer
 /// skill's phase grouping, adapted for our .NET + WinForms-in-session model
-/// (no PM2 / Windows Service -- IIS reverse-proxies the in-session app and the
-/// app autostarts at logon).
+/// (no PM2 / Windows Service -- IIS reverse-proxies the in-session app, which
+/// the operator runs in their logged-in session).
 /// </summary>
 public enum DeployPhase
 {
@@ -12,8 +12,6 @@ public enum DeployPhase
     Backend,
     Firewall,
     Configure,
-    IisProxy,
-    Autostart,
     Verify
 }
 

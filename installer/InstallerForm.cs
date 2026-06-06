@@ -50,8 +50,6 @@ public class InstallerForm : Form
     // -- Deploy controls --
     private readonly TextBox _domainBox;
     private readonly TextBox _proxyPortBox;
-    private readonly TextBox _siteFolderBox;
-    private readonly Button _siteFolderBrowse;
     private readonly ListView _deployList;
     private readonly TextBox _deployLogBox;
     private readonly Button _deployCheckButton;
@@ -211,7 +209,7 @@ public class InstallerForm : Form
         };
         var deploySubtitle = new Label
         {
-            Text = "Drop the IIS reverse-proxy web.config in front of the in-session app and autostart it at logon (TLS stays IIS's job)",
+            Text = "Verify the backend, open the firewall port, and generate the IIS reverse-proxy web.config for you to copy into your site (TLS / ARR / IIS stay your job)",
             Dock = DockStyle.Top, Height = 22, Padding = new Padding(8, 0, 0, 0)
         };
         _deployHintLabel = new Label
@@ -224,20 +222,9 @@ public class InstallerForm : Form
         // _deployPanel holds everything that should grey out until Local Setup passes.
         _deployPanel = new Panel { Dock = DockStyle.Fill, Enabled = false };
 
-        var deploySettings = new Panel { Dock = DockStyle.Top, Height = 132, Padding = new Padding(8, 4, 8, 4) };
+        var deploySettings = new Panel { Dock = DockStyle.Top, Height = 100, Padding = new Padding(8, 4, 8, 4) };
         int dy = 8;
 
-        var siteFolderLabel = new Label { Text = "IIS site folder:", AutoSize = true, Location = new Point(labelX, dy + 3) };
-        _siteFolderBox = new TextBox
-        {
-            Location = new Point(fieldX, dy), Width = fieldW, Text = _deployer.SiteWebConfigFolder,
-            PlaceholderText = "Physical path of the operator's IIS site (web.config target)"
-        };
-        _siteFolderBox.TextChanged += OnDeployFieldChanged;
-        _siteFolderBrowse = new Button { Text = "Browse...", Location = new Point(browseX, dy - 1), Width = browseW };
-        _siteFolderBrowse.Click += (_, _) => BrowseFolder("Select the operator's IIS site folder (web.config target)", _siteFolderBox);
-
-        dy += 32;
         var proxyPortLabel = new Label { Text = "Backend port:", AutoSize = true, Location = new Point(labelX, dy + 3) };
         _proxyPortBox = new TextBox { Location = new Point(fieldX, dy), Width = 80, Text = _deployer.ProxyPort.ToString() };
         _proxyPortBox.TextChanged += OnDeployFieldChanged;
@@ -254,7 +241,8 @@ public class InstallerForm : Form
         dy += 34;
         var deploySettingsHint = new Label
         {
-            Text = "IIS owns TLS and the public domain. Provide the IIS site folder + backend port to enable Deploy All; " +
+            Text = "IIS owns TLS, ARR, and the public domain. Deploy All generates the reverse-proxy web.config to " +
+                   "C:\\ProgramData\\ClaudeWeb\\web.config for you to copy into your IIS site. Provide the backend port to enable Deploy All; " +
                    "the public domain is optional and only used to verify https://<domain>/api/health. " +
                    "Settings persist to settings.json (Deploy section).",
             AutoSize = true, ForeColor = SystemColors.GrayText, Location = new Point(labelX, dy),
@@ -263,7 +251,6 @@ public class InstallerForm : Form
 
         deploySettings.Controls.AddRange(new Control[]
         {
-            siteFolderLabel, _siteFolderBox, _siteFolderBrowse,
             proxyPortLabel, _proxyPortBox,
             domainLabel, _domainBox,
             deploySettingsHint
@@ -618,7 +605,6 @@ public class InstallerForm : Form
     private void OnDeployFieldChanged(object? sender, EventArgs e)
     {
         _deployer.SetDomain(_domainBox.Text);
-        _deployer.SetSiteWebConfigFolder(_siteFolderBox.Text);
 
         if (int.TryParse(_proxyPortBox.Text.Trim(), out int port) && port is > 0 and <= 65535)
         {
@@ -659,10 +645,10 @@ public class InstallerForm : Form
         {
             var go = MessageBox.Show(
                 "This program is NOT running as Administrator.\n\n" +
-                "The firewall and web.config (ARR) steps will be skipped or marked Failed.\n" +
-                "To write web.config into the IIS site folder, close and relaunch as Administrator.\n\n" +
-                "Continue anyway (autostart + checks only)?",
-                "Administrator required for IIS",
+                "The firewall step will be skipped or marked Failed.\n" +
+                "To open the inbound firewall port, close and relaunch as Administrator.\n\n" +
+                "Continue anyway (web.config generation + checks only)?",
+                "Administrator required for firewall",
                 MessageBoxButtons.OKCancel, MessageBoxIcon.Warning);
             if (go != DialogResult.OK) return;
         }
@@ -732,7 +718,6 @@ public class InstallerForm : Form
         _deployCheckButton.Enabled = enabled;
         _deployButton.Enabled = enabled && _deployer.CanDeploy;
         _verifyButton.Enabled = enabled;
-        _siteFolderBrowse.Enabled = enabled;
     }
 
     // ---------------- Event subscriptions ----------------

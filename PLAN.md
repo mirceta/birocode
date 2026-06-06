@@ -347,11 +347,11 @@ unchanged. Tab 2 "Internet Deployment" is new and stays disabled until the Local
 Setup Check All passes (InstallerService.AllChecksPassed). Files added:
 Models/DeployStep.cs (DeployPhase enum, reuses StepStatus), Services/DeployerService.cs
 (no UI, reports via StepStatusChanged / LogMessage). InstallerForm.cs hosts both
-tabs. settings.json gained a "Deploy" section (Domain, ProxyPort,
-SiteWebConfigFolder); both services merge-write so neither clobbers the other's
-keys. powershell.exe -Command for the ARR-enable and IIS cmdlets. The web.config
-step requires Administrator (detected via WindowsPrincipal). TLS is IIS's job:
-this tool does NOT manage certificates or HTTPS bindings -- the operator's
+tabs. settings.json gained a "Deploy" section (Domain, ProxyPort only); both
+services merge-write so neither clobbers the other's keys. powershell.exe
+-Command for the firewall cmdlets. Only the firewall step requires Administrator
+(detected via WindowsPrincipal); web.config generation does not. TLS is IIS's
+job: this tool does NOT manage certificates or HTTPS bindings -- the operator's
 existing IIS site already owns the public domain and its cert (same as the
 api-chatbot deployment), and the hop from IIS to our app is plain HTTP.
 ClaudeWeb.App and client/ source were not modified.
@@ -364,15 +364,18 @@ Decisions:
   a deploy panel in the form). Window title becomes "Claude Web Setup & Deploy".
   The Deploy tab is disabled until the Local Setup checks pass.
 - The backend runs as the existing WinForms app in the operator's logged-in
-  session (NO headless service). IIS reverse-proxies to its port. So deploy =
-  IIS ARR in front + autostart the GUI app. No change to ClaudeWeb.App source.
+  session (NO headless service). IIS reverse-proxies to its port. The tool does
+  NOT write into IIS or enable ARR -- that stays the operator's job; it only
+  GENERATES the recommended web.config locally for the operator to copy in.
+  Autostart at logon is deferred for now (removed). No change to ClaudeWeb.App
+  source.
 
 Deploy steps. The checks focus on OUR system and connectivity, not on the IIS
 box's prerequisites -- that box is trusted (it already proxies the api-chatbot
 through IIS + ARR and owns the public domain + its TLS cert), so "is IIS/ARR
 installed" and TLS are not our tool's concern. Internal/LAN access is HTTP
 (http://<host>:<port> directly); there is no HTTPS anywhere in our tool.
-Resulting step list (1..10):
+Resulting step list (1..9):
 - PreFlight: 1 Local Setup passed (backend + frontend built).
 - Backend (our system): 2 responds on localhost:<port>/api/health; 3 reachable
   on the machine's LAN IP (confirms 0.0.0.0 binding, not localhost-only); 4 proxy
@@ -382,21 +385,23 @@ Resulting step list (1..10):
   (matches ours or a pre-existing one so no duplicates). Deploy action adds the
   rule via New-NetFirewallRule (admin). NO 443 firewall step -- 443 is IIS's
   edge, already open for the existing site.
-- Configure (settings panel): IIS site folder (web.config target), backend port,
-  public domain (OPTIONAL -- only used for the public health verify). No TLS
-  cert / .pfx / thumbprint / IIS site name fields -- IIS owns TLS.
-- 7 Reverse-proxy web.config written (admin): first ensures ARR proxy is enabled
-  at server level (idempotent, best-effort), then writes web.config into the
-  operator's existing IIS site folder. The web.config contains ONLY the ARR
-  rewrite rule -> http://localhost:<port>, the SSE handler
-  (responseBufferLimit=0), and websockets on. NO HTTP->HTTPS redirect rule
-  (that is IIS's edge policy, not ours).
-- Autostart: 8 register ClaudeWeb.App to start at logon (Startup-folder shortcut).
-- Verify: 9 GET http://localhost:<port>/api/health returns 200; 10 GET
+- Configure (settings panel): backend port, public domain (OPTIONAL -- only used
+  for the public health verify). No IIS site folder field, no TLS cert / .pfx /
+  thumbprint / IIS site name fields -- IIS owns TLS.
+- 7 Reverse-proxy web.config generated (no admin): writes the recommended
+  web.config to C:\ProgramData\ClaudeWeb\web.config (computed
+  GeneratedWebConfigPath) for the operator to copy into their own IIS site. The
+  tool does NOT write into IIS folders and does NOT enable ARR -- the operator
+  does that themselves. The web.config contains ONLY the ARR rewrite rule ->
+  http://localhost:<port>, the SSE handler (responseBufferLimit=0), and
+  websockets on. NO HTTP->HTTPS redirect rule (that is IIS's edge policy).
+- Verify: 8 GET http://localhost:<port>/api/health returns 200; 9 GET
   https://<domain>/api/health returns 200 (skipped with a Warning if no public
   domain is set).
 
-Needs Administrator for the firewall and web.config steps -- the program detects
-elevation and instructs the user to relaunch as Administrator if needed.
-Hardening code changes (restrict CORS, rate-limit the password gate) are
-surfaced as warnings and applied separately if wanted before going fully public.
+Autostart at logon is deferred (the old Startup-folder shortcut step was
+removed). Needs Administrator only for the firewall step -- the program detects
+elevation and instructs the user to relaunch as Administrator if needed; the
+web.config generation step works without elevation. Hardening code changes
+(restrict CORS, rate-limit the password gate) are surfaced as warnings and
+applied separately if wanted before going fully public.

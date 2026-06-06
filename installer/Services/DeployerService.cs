@@ -21,12 +21,14 @@ namespace ClaudeWebInstaller.Services;
 /// public domain and its certificate (same as the api-chatbot deployment), and
 /// the hop from IIS to our app is plain HTTP. This tool does NOT manage
 /// certificates or HTTPS bindings. "Deploy" means: verify our backend, open the
-/// backend's inbound firewall port, drop the ARR reverse-proxy web.config into
-/// the operator's existing IIS site folder, and autostart the app at logon.
-/// ClaudeWeb.App source is never modified -- hardening gaps are warnings only.
+/// backend's inbound firewall port, and GENERATE the recommended reverse-proxy
+/// web.config to a fixed local path for the operator to copy into their IIS
+/// site. The tool never writes into IIS folders nor enables ARR -- that stays
+/// the operator's job. ClaudeWeb.App source is never modified -- hardening gaps
+/// are warnings only.
 ///
-/// Shell routing: cmd.exe /c for netsh and friends, powershell.exe -Command for
-/// IIS cmdlets (WebAdministration). The web.config step requires Administrator.
+/// Shell routing: powershell.exe -Command for the firewall cmdlets. The
+/// firewall step requires Administrator; web.config generation does not.
 /// </summary>
 public class DeployerService
 {
@@ -41,13 +43,14 @@ public class DeployerService
     public int ProxyPort { get; private set; }
 
     /// <summary>
-    /// Physical path of the operator's existing IIS site, where web.config is
-    /// written. Defaults to a ProgramData fallback only; the operator should
-    /// point this at their real site folder.
+    /// Fixed local path the recommended reverse-proxy web.config is GENERATED to
+    /// (C:\ProgramData\ClaudeWeb\web.config). Computed, never user-set: the
+    /// operator copies this file into their own IIS site folder. The tool never
+    /// writes into IIS itself.
     /// </summary>
-    public string SiteWebConfigFolder { get; private set; } =
+    public string GeneratedWebConfigPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-            "ClaudeWeb", "site");
+            "ClaudeWeb", "web.config");
 
     public IReadOnlyList<DeployStep> Steps => _steps;
 
@@ -80,8 +83,6 @@ public class DeployerService
             Domain = d["Domain"]?.GetValue<string>() ?? "";
             var port = d["ProxyPort"]?.GetValue<int>() ?? 0;
             if (port > 0) ProxyPort = port;
-            var folder = d["SiteWebConfigFolder"]?.GetValue<string>();
-            if (!string.IsNullOrWhiteSpace(folder)) SiteWebConfigFolder = folder;
         }
         catch { /* ignore corrupt settings */ }
     }
@@ -104,8 +105,7 @@ public class DeployerService
         obj["Deploy"] = new JsonObject
         {
             ["Domain"] = Domain,
-            ["ProxyPort"] = ProxyPort,
-            ["SiteWebConfigFolder"] = SiteWebConfigFolder
+            ["ProxyPort"] = ProxyPort
         };
 
         File.WriteAllText(_settingsPath,
@@ -114,16 +114,9 @@ public class DeployerService
 
     public void SetDomain(string value) { Domain = value?.Trim() ?? ""; SaveSettings(); }
     public void SetProxyPort(int value) { ProxyPort = value; SaveSettings(); }
-    public void SetSiteWebConfigFolder(string value)
-    {
-        SiteWebConfigFolder = value?.Trim() ?? "";
-        SaveSettings();
-    }
 
     /// <summary>True once the minimum settings to run Deploy All are present.</summary>
-    public bool CanDeploy =>
-        ProxyPort is > 0 and <= 65535
-        && !string.IsNullOrWhiteSpace(SiteWebConfigFolder);
+    public bool CanDeploy => ProxyPort is > 0 and <= 65535;
 
     // 127.0.0.1, not localhost: the backend binds IPv4 only; localhost can
     // resolve to IPv6 ::1 first on Windows and fail.
@@ -177,22 +170,17 @@ public class DeployerService
                 "Inbound TCP allowed on the backend port",
                 DeployPhase.Firewall, CheckFirewallBackendPort, OpenFirewallBackendPort),
 
-            // -- Reverse-proxy web.config into the operator's existing IIS site --
-            new DeployStep(7, "Reverse-proxy web.config written",
-                "ARR rewrite -> http://localhost:<port>, SSE, websockets (TLS stays IIS's job)",
-                DeployPhase.Configure, CheckWebConfig, WriteWebConfig),
-
-            // -- Autostart (no admin needed) --
-            new DeployStep(8, "Autostart at logon",
-                "Shortcut to ClaudeWeb.exe in the current user's Startup folder",
-                DeployPhase.Autostart, CheckAutostart, CreateAutostart),
+            // -- Generate the recommended reverse-proxy web.config locally --
+            new DeployStep(7, "Reverse-proxy web.config generated",
+                "ARR rewrite -> http://localhost:<port>, SSE, websockets, written to ProgramData for the operator to copy into IIS",
+                DeployPhase.Configure, CheckWebConfig, GenerateWebConfig),
 
             // -- Verify --
-            new DeployStep(9, "Local health 200",
+            new DeployStep(8, "Local health 200",
                 "GET http://localhost:<port>/api/health -> 200",
                 DeployPhase.Verify, CheckAppResponding),
 
-            new DeployStep(10, "Public health 200",
+            new DeployStep(9, "Public health 200",
                 "GET https://<domain>/api/health -> 200 (skipped if no domain set)",
                 DeployPhase.Verify, CheckPublicHealth),
         };
@@ -378,23 +366,14 @@ public class DeployerService
     private async Task<(StepStatus, string)> CheckWebConfig(CancellationToken ct)
     {
         await Task.CompletedTask;
-        var path = Path.Combine(SiteWebConfigFolder, "web.config");
+        var path = GeneratedWebConfigPath;
         if (!File.Exists(path))
-            return (StepStatus.Missing, $"web.config missing at {path}");
+            return (StepStatus.Missing, $"Not generated yet (expected at {path})");
         var text = File.ReadAllText(path);
         bool proxy = text.Contains($"http://127.0.0.1:{ProxyPort}/", StringComparison.OrdinalIgnoreCase);
         return proxy
-            ? (StepStatus.Ok, $"web.config present, proxies to http://127.0.0.1:{ProxyPort}/")
-            : (StepStatus.Missing, $"web.config present but does not target port {ProxyPort}");
-    }
-
-    private async Task<(StepStatus, string)> CheckAutostart(CancellationToken ct)
-    {
-        await Task.CompletedTask;
-        var shortcut = AutostartShortcutPath;
-        return File.Exists(shortcut)
-            ? (StepStatus.Ok, $"Startup shortcut present: {shortcut}")
-            : (StepStatus.Missing, $"No startup shortcut at {shortcut}");
+            ? (StepStatus.Ok, $"Generated at {path} -- copy it into your IIS site folder")
+            : (StepStatus.Missing, $"Generated at {path} but does not target port {ProxyPort} -- regenerate");
     }
 
     private async Task<(StepStatus, string)> CheckPublicHealth(CancellationToken ct)
@@ -425,34 +404,26 @@ public class DeployerService
     // ---------------- Deploy actions ----------------
 
     /// <summary>
-    /// Ensures ARR proxy is enabled at server level (best-effort, idempotent),
-    /// then writes web.config into the operator's existing IIS site folder. TLS
-    /// and any HTTP->HTTPS redirect stay IIS's edge policy -- this tool only
-    /// drops in the reverse-proxy rule.
+    /// Generates the recommended reverse-proxy web.config to a fixed local path
+    /// (GeneratedWebConfigPath) for the operator to copy into their own IIS site.
+    /// This tool never writes into IIS folders nor enables ARR -- that stays the
+    /// operator's job. No Administrator required: it just writes a file.
     /// </summary>
-    private async Task<(bool, string)> WriteWebConfig(CancellationToken ct)
+    private async Task<(bool, string)> GenerateWebConfig(CancellationToken ct)
     {
-        if (!IsAdministrator()) return NotElevated();
-
-        // Ensure ARR reverse-proxy is enabled at server level. The box already
-        // runs api-chatbot this way so it is normally on; enabling it is
-        // idempotent and required for the rewrite rule to proxy out.
-        Log("  Ensuring ARR proxy is enabled at server level...");
-        await RunPowerShell(
-            "Set-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST' " +
-            "-filter 'system.webServer/proxy' -name 'enabled' -value 'True'", ct);
-
+        await Task.CompletedTask;
         try
         {
-            Directory.CreateDirectory(SiteWebConfigFolder);
-            var path = Path.Combine(SiteWebConfigFolder, "web.config");
+            var path = GeneratedWebConfigPath;
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             Log($"  Writing: {path}");
             File.WriteAllText(path, BuildWebConfig(ProxyPort));
-            return (true, $"web.config written to {path}");
+            return (true,
+                $"web.config generated at {path}. Copy it into your IIS site folder and ensure ARR is enabled there.");
         }
         catch (Exception ex)
         {
-            return (false, $"Failed to write web.config: {ex.Message}");
+            return (false, $"Failed to generate web.config: {ex.Message}");
         }
     }
 
@@ -476,34 +447,8 @@ public class DeployerService
 </configuration>
 ";
 
-    private async Task<(bool, string)> CreateAutostart(CancellationToken ct)
-    {
-        await Task.CompletedTask;
-        var exe = _installer.BuiltExePath;
-        if (!File.Exists(exe))
-            return (false, $"ClaudeWeb.exe not found at {exe} -- build it on the Local Setup tab first");
-
-        var shortcut = AutostartShortcutPath;
-        var workDir = Path.GetDirectoryName(exe) ?? "";
-        Log($"  Creating startup shortcut: {shortcut}");
-
-        // Use WScript.Shell via PowerShell to author the .lnk (no extra deps).
-        var (code, stdout, stderr) = await RunPowerShell(
-            "$ws = New-Object -ComObject WScript.Shell; " +
-            $"$sc = $ws.CreateShortcut('{PsEscape(shortcut)}'); " +
-            $"$sc.TargetPath = '{PsEscape(exe)}'; " +
-            $"$sc.WorkingDirectory = '{PsEscape(workDir)}'; " +
-            "$sc.Save()", ct);
-        if (code != 0 || !File.Exists(shortcut))
-            return (false, $"Failed to create startup shortcut.\n{stdout}\n{stderr}");
-        return (true, $"Startup shortcut created: {shortcut}");
-    }
-
-    private string AutostartShortcutPath =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Startup), "ClaudeWeb.lnk");
-
     private static (bool, string) NotElevated() =>
-        (false, "Run the program as Administrator to write web.config into the IIS site folder.");
+        (false, "Run the program as Administrator to open the inbound firewall port.");
 
     // ---------------- Orchestration ----------------
 
@@ -613,16 +558,16 @@ public class DeployerService
 
         var lines = new List<string>
         {
-            $"Proxy target:    http://127.0.0.1:{ProxyPort}",
-            $"web.config into: {SiteWebConfigFolder}",
-            $"Public domain:   {(string.IsNullOrWhiteSpace(Domain) ? "(none -- public health verify skipped)" : Domain)}",
-            "TLS:             handled by IIS (this tool does not manage certificates)",
+            $"Proxy target:      http://127.0.0.1:{ProxyPort}",
+            $"web.config to:     {GeneratedWebConfigPath} (generated; copy it into your IIS site yourself)",
+            $"Public domain:     {(string.IsNullOrWhiteSpace(Domain) ? "(none -- public health verify skipped)" : Domain)}",
+            "TLS / ARR / IIS:   the operator's job (this tool does not write into IIS or enable ARR)",
             "",
             "Steps to run (already-done steps are skipped):"
         };
         lines.AddRange(pending.Count == 0 ? new[] { "  (nothing pending)" } : pending.ToArray());
         if (!IsAdministrator())
-            lines.Add("\nWARNING: not running as Administrator -- the web.config step will be skipped/failed.");
+            lines.Add("\nWARNING: not running as Administrator -- the firewall step will be skipped/failed.");
         return string.Join(Environment.NewLine, lines);
     }
 
