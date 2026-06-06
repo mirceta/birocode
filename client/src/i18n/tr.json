@@ -68,6 +68,8 @@
   "files.showRaw": "Ham metni goster",
   "files.rendered": "Bicimli",
   "files.raw": "Ham",
+  "files.addedToMessage": "{name} mesajina eklendi",
+  "files.longPressHint": "Ipucu: bir dosyayi mesajina eklemek icin basili tut",
 
   "history.restoredToast": "Tamam -- o surume donuldu",
   "history.restoreErrorToast": "Geri donulemedi -- lutfen tekrar dene",

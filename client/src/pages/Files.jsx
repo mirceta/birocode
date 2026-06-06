@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiGet } from '../api/client';
 import Loading from '../components/shared/Loading';
 import ErrorBanner from '../components/shared/ErrorBanner';
 import Breadcrumbs from '../components/files/Breadcrumbs';
 import FileList from '../components/files/FileList';
 import FileViewer from '../components/files/FileViewer';
+import { useChat } from '../context/ChatContext';
 import { useT } from '../i18n/LanguageContext';
 import '../components/files/files.css';
 
@@ -15,10 +16,33 @@ function joinPath(dir, name) {
 
 export default function Files() {
   const { t } = useT();
+  const { setDraft } = useChat();
   const [path, setPath] = useState('/');
   const [entries, setEntries] = useState([]);
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState('');
+  const [toast, setToast] = useState('');
+  const toastTimer = useRef(null);
+
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
+
+  // Long-press a file -> drop an @reference to it into the chat composer (which
+  // lives in the shared ChatProvider, so it is there when you switch to Chat).
+  function referenceFile(name) {
+    const relPath = joinPath(path, name).replace(/^\/+/, '');
+    const token = `@${relPath}`;
+    setDraft((prev) => {
+      const base = prev || '';
+      const sep = base.length === 0 || /\s$/.test(base) ? '' : ' ';
+      return `${base}${sep}${token} `;
+    });
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      try { navigator.vibrate(25); } catch { /* ignore */ }
+    }
+    setToast(t('files.addedToMessage', { name }));
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(''), 2500);
+  }
 
   const [openFile, setOpenFile] = useState(null);
   const [fileContent, setFileContent] = useState('');
@@ -109,8 +133,15 @@ export default function Files() {
       ) : listError ? (
         <ErrorBanner message={listError} onRetry={() => loadDir(path)} />
       ) : (
-        <FileList entries={entries} onOpenDir={openDir} onOpenFile={openFileByName} />
+        <FileList
+          entries={entries}
+          onOpenDir={openDir}
+          onOpenFile={openFileByName}
+          onReferenceFile={referenceFile}
+        />
       )}
+
+      {toast && <div className="files-toast" role="status">{toast}</div>}
     </div>
   );
 }

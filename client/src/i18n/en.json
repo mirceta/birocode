@@ -68,6 +68,8 @@
   "files.showRaw": "Show the raw text",
   "files.rendered": "Rendered",
   "files.raw": "Raw",
+  "files.addedToMessage": "Added {name} to your message",
+  "files.longPressHint": "Tip: press and hold a file to add it to your message",
 
   "history.restoredToast": "Done -- went back to that version",
   "history.restoreErrorToast": "Couldn't go back -- please try again",
