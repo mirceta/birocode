@@ -41,11 +41,8 @@ public class InstallerForm : Form
     // -- Deploy controls --
     private readonly TextBox _domainBox;
     private readonly TextBox _proxyPortBox;
-    private readonly TextBox _pfxPathBox;
-    private readonly TextBox _pfxPasswordBox;
-    private readonly TextBox _thumbprintBox;
-    private readonly TextBox _siteNameBox;
-    private readonly Button _pfxBrowse;
+    private readonly TextBox _siteFolderBox;
+    private readonly Button _siteFolderBrowse;
     private readonly ListView _deployList;
     private readonly TextBox _deployLogBox;
     private readonly Button _deployCheckButton;
@@ -178,7 +175,7 @@ public class InstallerForm : Form
         };
         var deploySubtitle = new Label
         {
-            Text = "Put IIS (TLS reverse proxy) in front of the in-session app and autostart it at logon",
+            Text = "Drop the IIS reverse-proxy web.config in front of the in-session app and autostart it at logon (TLS stays IIS's job)",
             Dock = DockStyle.Top, Height = 22, Padding = new Padding(8, 0, 0, 0)
         };
         _deployHintLabel = new Label
@@ -191,58 +188,38 @@ public class InstallerForm : Form
         // _deployPanel holds everything that should grey out until Local Setup passes.
         _deployPanel = new Panel { Dock = DockStyle.Fill, Enabled = false };
 
-        var deploySettings = new Panel { Dock = DockStyle.Top, Height = 168, Padding = new Padding(8, 4, 8, 4) };
+        var deploySettings = new Panel { Dock = DockStyle.Top, Height = 132, Padding = new Padding(8, 4, 8, 4) };
         int dy = 8;
 
-        var domainLabel = new Label { Text = "Public domain:", AutoSize = true, Location = new Point(labelX, dy + 3) };
-        _domainBox = new TextBox
+        var siteFolderLabel = new Label { Text = "IIS site folder:", AutoSize = true, Location = new Point(labelX, dy + 3) };
+        _siteFolderBox = new TextBox
         {
-            Location = new Point(fieldX, dy), Width = fieldW, Text = _deployer.Domain,
-            PlaceholderText = "claudeweb.example.com"
+            Location = new Point(fieldX, dy), Width = fieldW, Text = _deployer.SiteWebConfigFolder,
+            PlaceholderText = "Physical path of the operator's IIS site (web.config target)"
         };
-        _domainBox.TextChanged += OnDeployFieldChanged;
+        _siteFolderBox.TextChanged += OnDeployFieldChanged;
+        _siteFolderBrowse = new Button { Text = "Browse...", Location = new Point(browseX, dy - 1), Width = browseW };
+        _siteFolderBrowse.Click += (_, _) => BrowseFolder("Select the operator's IIS site folder (web.config target)", _siteFolderBox);
 
         dy += 32;
-        var proxyPortLabel = new Label { Text = "Proxy to port:", AutoSize = true, Location = new Point(labelX, dy + 3) };
+        var proxyPortLabel = new Label { Text = "Backend port:", AutoSize = true, Location = new Point(labelX, dy + 3) };
         _proxyPortBox = new TextBox { Location = new Point(fieldX, dy), Width = 80, Text = _deployer.ProxyPort.ToString() };
         _proxyPortBox.TextChanged += OnDeployFieldChanged;
 
-        var siteNameLabel = new Label { Text = "IIS site name:", AutoSize = true, Location = new Point(fieldX + 110, dy + 3) };
-        _siteNameBox = new TextBox { Location = new Point(fieldX + 230, dy), Width = 240, Text = _deployer.SiteName };
-        _siteNameBox.TextChanged += OnDeployFieldChanged;
-
         dy += 32;
-        var pfxLabel = new Label { Text = "TLS .pfx path:", AutoSize = true, Location = new Point(labelX, dy + 3) };
-        _pfxPathBox = new TextBox
+        var domainLabel = new Label { Text = "Public domain (optional):", AutoSize = true, Location = new Point(labelX, dy + 3) };
+        _domainBox = new TextBox
         {
-            Location = new Point(fieldX, dy), Width = fieldW, Text = _deployer.PfxPath,
-            PlaceholderText = "C:\\certs\\claudeweb.pfx  (or use a thumbprint below)"
+            Location = new Point(fieldX, dy), Width = fieldW, Text = _deployer.Domain,
+            PlaceholderText = "claudeweb.example.com  (only used for the public health verify)"
         };
-        _pfxPathBox.TextChanged += OnDeployFieldChanged;
-        _pfxBrowse = new Button { Text = "Browse...", Location = new Point(browseX, dy - 1), Width = browseW };
-        _pfxBrowse.Click += (_, _) => BrowsePfx();
-
-        dy += 32;
-        var pfxPwLabel = new Label { Text = ".pfx password:", AutoSize = true, Location = new Point(labelX, dy + 3) };
-        _pfxPasswordBox = new TextBox
-        {
-            Location = new Point(fieldX, dy), Width = 200, Text = _deployer.PfxPassword,
-            UseSystemPasswordChar = true
-        };
-        _pfxPasswordBox.TextChanged += OnDeployFieldChanged;
-
-        var thumbLabel = new Label { Text = "or thumbprint:", AutoSize = true, Location = new Point(fieldX + 210, dy + 3) };
-        _thumbprintBox = new TextBox
-        {
-            Location = new Point(fieldX + 300, dy), Width = 200, Text = _deployer.CertThumbprint,
-            PlaceholderText = "existing cert thumbprint"
-        };
-        _thumbprintBox.TextChanged += OnDeployFieldChanged;
+        _domainBox.TextChanged += OnDeployFieldChanged;
 
         dy += 34;
         var deploySettingsHint = new Label
         {
-            Text = "Provide domain + port + a TLS option (.pfx path or thumbprint) to enable Deploy All. " +
+            Text = "IIS owns TLS and the public domain. Provide the IIS site folder + backend port to enable Deploy All; " +
+                   "the public domain is optional and only used to verify https://<domain>/api/health. " +
                    "Settings persist to settings.json (Deploy section).",
             AutoSize = true, ForeColor = SystemColors.GrayText, Location = new Point(labelX, dy),
             MaximumSize = new Size(fieldW + 200, 0)
@@ -250,10 +227,9 @@ public class InstallerForm : Form
 
         deploySettings.Controls.AddRange(new Control[]
         {
+            siteFolderLabel, _siteFolderBox, _siteFolderBrowse,
+            proxyPortLabel, _proxyPortBox,
             domainLabel, _domainBox,
-            proxyPortLabel, _proxyPortBox, siteNameLabel, _siteNameBox,
-            pfxLabel, _pfxPathBox, _pfxBrowse,
-            pfxPwLabel, _pfxPasswordBox, thumbLabel, _thumbprintBox,
             deploySettingsHint
         });
 
@@ -393,18 +369,6 @@ public class InstallerForm : Form
             target.Text = dialog.SelectedPath;
     }
 
-    private void BrowsePfx()
-    {
-        using var dialog = new OpenFileDialog
-        {
-            Title = "Select the TLS certificate (.pfx)",
-            Filter = "PFX certificate (*.pfx)|*.pfx|All files (*.*)|*.*"
-        };
-        if (File.Exists(_pfxPathBox.Text)) dialog.FileName = _pfxPathBox.Text;
-        if (dialog.ShowDialog() == DialogResult.OK)
-            _pfxPathBox.Text = dialog.FileName;
-    }
-
     // ---------------- Local Setup action handlers ----------------
 
     private async void OnCheckAll(object? sender, EventArgs e)
@@ -524,10 +488,7 @@ public class InstallerForm : Form
     private void OnDeployFieldChanged(object? sender, EventArgs e)
     {
         _deployer.SetDomain(_domainBox.Text);
-        _deployer.SetPfxPath(_pfxPathBox.Text);
-        _deployer.SetPfxPassword(_pfxPasswordBox.Text);
-        _deployer.SetCertThumbprint(_thumbprintBox.Text);
-        _deployer.SetSiteName(_siteNameBox.Text);
+        _deployer.SetSiteWebConfigFolder(_siteFolderBox.Text);
 
         if (int.TryParse(_proxyPortBox.Text.Trim(), out int port) && port is > 0 and <= 65535)
         {
@@ -568,9 +529,9 @@ public class InstallerForm : Form
         {
             var go = MessageBox.Show(
                 "This program is NOT running as Administrator.\n\n" +
-                "IIS, certificate and ARR steps will be skipped or marked Failed.\n" +
-                "To configure IIS, close and relaunch the program as Administrator.\n\n" +
-                "Continue anyway (autostart + web.config-in-userspace only)?",
+                "The firewall and web.config (ARR) steps will be skipped or marked Failed.\n" +
+                "To write web.config into the IIS site folder, close and relaunch as Administrator.\n\n" +
+                "Continue anyway (autostart + checks only)?",
                 "Administrator required for IIS",
                 MessageBoxButtons.OKCancel, MessageBoxIcon.Warning);
             if (go != DialogResult.OK) return;
@@ -641,7 +602,7 @@ public class InstallerForm : Form
         _deployCheckButton.Enabled = enabled;
         _deployButton.Enabled = enabled && _deployer.CanDeploy;
         _verifyButton.Enabled = enabled;
-        _pfxBrowse.Enabled = enabled;
+        _siteFolderBrowse.Enabled = enabled;
     }
 
     // ---------------- Event subscriptions ----------------

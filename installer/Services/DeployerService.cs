@@ -17,12 +17,16 @@ namespace ClaudeWebInstaller.Services;
 ///
 /// Deployment model: the backend runs as the existing WinForms app in the
 /// operator's logged-in session. There is NO headless mode and NO Windows
-/// Service. "Deploy" means put IIS (ARR reverse proxy + TLS) in front of the
-/// in-session app and autostart that app at logon. ClaudeWeb.App source is
-/// never modified -- hardening gaps are reported as warnings only.
+/// Service. TLS is IIS's job: the operator's existing IIS site already owns the
+/// public domain and its certificate (same as the api-chatbot deployment), and
+/// the hop from IIS to our app is plain HTTP. This tool does NOT manage
+/// certificates or HTTPS bindings. "Deploy" means: verify our backend, open the
+/// backend's inbound firewall port, drop the ARR reverse-proxy web.config into
+/// the operator's existing IIS site folder, and autostart the app at logon.
+/// ClaudeWeb.App source is never modified -- hardening gaps are warnings only.
 ///
 /// Shell routing: cmd.exe /c for netsh and friends, powershell.exe -Command for
-/// IIS cmdlets (WebAdministration). IIS/cert/ARR steps require Administrator.
+/// IIS cmdlets (WebAdministration). The web.config step requires Administrator.
 /// </summary>
 public class DeployerService
 {
@@ -32,15 +36,16 @@ public class DeployerService
 
     // Deployer settings panel values (persisted to the shared settings.json
     // under a "Deploy" section so the installer's own keys are untouched).
+    /// <summary>Public domain. OPTIONAL -- used only for the public health verify.</summary>
     public string Domain { get; private set; } = "";
     public int ProxyPort { get; private set; }
-    public string PfxPath { get; private set; } = "";
-    public string PfxPassword { get; private set; } = "";
-    public string CertThumbprint { get; private set; } = "";
-    public string SiteName { get; private set; } = "ClaudeWeb";
 
-    /// <summary>Physical folder that holds the IIS site's web.config.</summary>
-    public string SitePhysicalPath =>
+    /// <summary>
+    /// Physical path of the operator's existing IIS site, where web.config is
+    /// written. Defaults to a ProgramData fallback only; the operator should
+    /// point this at their real site folder.
+    /// </summary>
+    public string SiteWebConfigFolder { get; private set; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
             "ClaudeWeb", "site");
 
@@ -75,10 +80,8 @@ public class DeployerService
             Domain = d["Domain"]?.GetValue<string>() ?? "";
             var port = d["ProxyPort"]?.GetValue<int>() ?? 0;
             if (port > 0) ProxyPort = port;
-            PfxPath = d["PfxPath"]?.GetValue<string>() ?? "";
-            PfxPassword = d["PfxPassword"]?.GetValue<string>() ?? "";
-            CertThumbprint = d["CertThumbprint"]?.GetValue<string>() ?? "";
-            SiteName = d["SiteName"]?.GetValue<string>() ?? "ClaudeWeb";
+            var folder = d["SiteWebConfigFolder"]?.GetValue<string>();
+            if (!string.IsNullOrWhiteSpace(folder)) SiteWebConfigFolder = folder;
         }
         catch { /* ignore corrupt settings */ }
     }
@@ -102,10 +105,7 @@ public class DeployerService
         {
             ["Domain"] = Domain,
             ["ProxyPort"] = ProxyPort,
-            ["PfxPath"] = PfxPath,
-            ["PfxPassword"] = PfxPassword,
-            ["CertThumbprint"] = CertThumbprint,
-            ["SiteName"] = SiteName
+            ["SiteWebConfigFolder"] = SiteWebConfigFolder
         };
 
         File.WriteAllText(_settingsPath,
@@ -114,25 +114,16 @@ public class DeployerService
 
     public void SetDomain(string value) { Domain = value?.Trim() ?? ""; SaveSettings(); }
     public void SetProxyPort(int value) { ProxyPort = value; SaveSettings(); }
-    public void SetPfxPath(string value) { PfxPath = value?.Trim() ?? ""; SaveSettings(); }
-    public void SetPfxPassword(string value) { PfxPassword = value ?? ""; SaveSettings(); }
-    public void SetCertThumbprint(string value)
+    public void SetSiteWebConfigFolder(string value)
     {
-        // Normalize: strip spaces / non-hex so thumbprint compares cleanly.
-        CertThumbprint = new string((value ?? "").Where(Uri.IsHexDigit).ToArray()).ToUpperInvariant();
-        SaveSettings();
-    }
-    public void SetSiteName(string value)
-    {
-        SiteName = string.IsNullOrWhiteSpace(value) ? "ClaudeWeb" : value.Trim();
+        SiteWebConfigFolder = value?.Trim() ?? "";
         SaveSettings();
     }
 
     /// <summary>True once the minimum settings to run Deploy All are present.</summary>
     public bool CanDeploy =>
-        !string.IsNullOrWhiteSpace(Domain)
-        && ProxyPort is > 0 and <= 65535
-        && (!string.IsNullOrWhiteSpace(PfxPath) || !string.IsNullOrWhiteSpace(CertThumbprint));
+        ProxyPort is > 0 and <= 65535
+        && !string.IsNullOrWhiteSpace(SiteWebConfigFolder);
 
     public string HealthUrlLocal => $"http://localhost:{ProxyPort}/api/health";
     public string HealthUrlPublic => $"https://{Domain}/api/health";
@@ -179,36 +170,28 @@ public class DeployerService
                 "Access code / CORS / rate-limit (informational -- never blocks)",
                 DeployPhase.Backend, CheckHardening),
 
-            // -- Firewall (open the inbound ports our system needs) --
+            // -- Firewall (open the inbound port our backend needs) --
             new DeployStep(6, "Firewall: backend port open",
                 "Inbound TCP allowed on the backend port",
                 DeployPhase.Firewall, CheckFirewallBackendPort, OpenFirewallBackendPort),
 
-            new DeployStep(7, "Firewall: HTTPS (443) open",
-                "Inbound TCP allowed on 443 for public HTTPS",
-                DeployPhase.Firewall, CheckFirewall443, OpenFirewall443),
-
-            // -- IIS reverse proxy (assumes IIS + ARR are already set up on this box) --
-            new DeployStep(8, "IIS site + SSL binding",
-                "Site on 443 bound to the domain with the TLS certificate (also enables ARR proxy)",
-                DeployPhase.IisProxy, CheckIisSite, CreateIisSite),
-
-            new DeployStep(9, "web.config (reverse proxy)",
-                "Reverse proxy -> localhost:<port>, HTTPS redirect, SSE, websockets",
+            // -- Reverse-proxy web.config into the operator's existing IIS site --
+            new DeployStep(7, "Reverse-proxy web.config written",
+                "ARR rewrite -> http://localhost:<port>, SSE, websockets (TLS stays IIS's job)",
                 DeployPhase.Configure, CheckWebConfig, WriteWebConfig),
 
             // -- Autostart (no admin needed) --
-            new DeployStep(10, "Autostart at logon",
+            new DeployStep(8, "Autostart at logon",
                 "Shortcut to ClaudeWeb.exe in the current user's Startup folder",
                 DeployPhase.Autostart, CheckAutostart, CreateAutostart),
 
             // -- Verify --
-            new DeployStep(11, "Local health 200",
+            new DeployStep(9, "Local health 200",
                 "GET http://localhost:<port>/api/health -> 200",
                 DeployPhase.Verify, CheckAppResponding),
 
-            new DeployStep(12, "Public health 200",
-                "GET https://<domain>/api/health -> 200 (through IIS)",
+            new DeployStep(10, "Public health 200",
+                "GET https://<domain>/api/health -> 200 (skipped if no domain set)",
                 DeployPhase.Verify, CheckPublicHealth),
         };
     }
@@ -360,12 +343,6 @@ public class DeployerService
     private Task<(bool, string)> OpenFirewallBackendPort(CancellationToken ct)
         => OpenFirewallPort(ProxyPort, $"Claude Web backend ({ProxyPort})", ct);
 
-    private Task<(StepStatus, string)> CheckFirewall443(CancellationToken ct)
-        => CheckFirewallPort(443, ct);
-
-    private Task<(bool, string)> OpenFirewall443(CancellationToken ct)
-        => OpenFirewallPort(443, "Claude Web HTTPS (443)", ct);
-
     /// <summary>
     /// True if ANY enabled inbound Allow rule covers this TCP port (ours or one
     /// IIS/api-chatbot already created), so we never add a duplicate.
@@ -396,29 +373,10 @@ public class DeployerService
             : (false, $"Failed to add firewall rule for TCP {port}.\n{stdout}\n{stderr}");
     }
 
-    private async Task<(StepStatus, string)> CheckIisSite(CancellationToken ct)
-    {
-        if (string.IsNullOrWhiteSpace(Domain))
-            return (StepStatus.Missing, "Set the public domain in the settings panel first");
-
-        var (code, stdout, _) = await RunPowerShell(
-            $"$s = Get-Website -Name '{SiteName}' -ErrorAction SilentlyContinue; " +
-            "if ($s) { ($s.bindings.Collection | ForEach-Object { $_.bindingInformation }) -join ';' }", ct);
-        if (code != 0 || stdout.Trim().Length == 0)
-            return (StepStatus.Missing, $"IIS site '{SiteName}' does not exist");
-
-        bool has443 = stdout.Contains(":443:");
-        bool hasDomain = stdout.Contains(Domain, StringComparison.OrdinalIgnoreCase);
-        return has443 && hasDomain
-            ? (StepStatus.Ok, $"Site '{SiteName}' bound to {Domain}:443")
-            : (StepStatus.Missing,
-                $"Site '{SiteName}' exists but is not bound to {Domain}:443 (bindings: {stdout.Trim()})");
-    }
-
     private async Task<(StepStatus, string)> CheckWebConfig(CancellationToken ct)
     {
         await Task.CompletedTask;
-        var path = Path.Combine(SitePhysicalPath, "web.config");
+        var path = Path.Combine(SiteWebConfigFolder, "web.config");
         if (!File.Exists(path))
             return (StepStatus.Missing, $"web.config missing at {path}");
         var text = File.ReadAllText(path);
@@ -440,7 +398,8 @@ public class DeployerService
     private async Task<(StepStatus, string)> CheckPublicHealth(CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(Domain))
-            return (StepStatus.Missing, "Set the public domain first");
+            return (StepStatus.Warning,
+                "No public domain set -- skipped (internal/LAN access uses http://<host>:<port> directly)");
         string url = HealthUrlPublic;
         Log($"  GET {url}");
         try
@@ -463,13 +422,15 @@ public class DeployerService
 
     // ---------------- Deploy actions ----------------
 
-    private async Task<(bool, string)> CreateIisSite(CancellationToken ct)
+    /// <summary>
+    /// Ensures ARR proxy is enabled at server level (best-effort, idempotent),
+    /// then writes web.config into the operator's existing IIS site folder. TLS
+    /// and any HTTP->HTTPS redirect stay IIS's edge policy -- this tool only
+    /// drops in the reverse-proxy rule.
+    /// </summary>
+    private async Task<(bool, string)> WriteWebConfig(CancellationToken ct)
     {
         if (!IsAdministrator()) return NotElevated();
-        if (string.IsNullOrWhiteSpace(Domain))
-            return (false, "Public domain is required");
-
-        Directory.CreateDirectory(SitePhysicalPath);
 
         // Ensure ARR reverse-proxy is enabled at server level. The box already
         // runs api-chatbot this way so it is normally on; enabling it is
@@ -479,68 +440,10 @@ public class DeployerService
             "Set-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST' " +
             "-filter 'system.webServer/proxy' -name 'enabled' -value 'True'", ct);
 
-        // 1. Resolve the certificate thumbprint -- import the .pfx if a path was given.
-        string thumb = CertThumbprint;
-        if (!string.IsNullOrWhiteSpace(PfxPath))
-        {
-            if (!File.Exists(PfxPath))
-                return (false, $"PFX file not found: {PfxPath}");
-
-            Log($"  Importing PFX into LocalMachine\\My: {PfxPath}");
-            string pwExpr = string.IsNullOrEmpty(PfxPassword)
-                ? "$null"
-                : $"(ConvertTo-SecureString -String '{PsEscape(PfxPassword)}' -AsPlainText -Force)";
-            var (icode, istdout, istderr) = await RunPowerShell(
-                $"$c = Import-PfxCertificate -FilePath '{PsEscape(PfxPath)}' " +
-                $"-CertStoreLocation Cert:\\LocalMachine\\My -Password {pwExpr}; " +
-                "$c.Thumbprint", ct);
-            if (icode != 0)
-                return (false, $"PFX import failed.\n{istdout}\n{istderr}");
-            thumb = new string(istdout.Where(Uri.IsHexDigit).ToArray()).ToUpperInvariant();
-            Log($"  Imported cert thumbprint: {thumb}");
-        }
-
-        if (string.IsNullOrWhiteSpace(thumb))
-            return (false, "No certificate thumbprint resolved (provide a .pfx path or a thumbprint)");
-
-        // 2. Create the site if missing (HTTP placeholder binding -- the SSL
-        //    binding is added in the next step via New-WebBinding + netsh).
-        var (ccode, cstdout, cstderr) = await RunPowerShell(
-            $"if (-not (Get-Website -Name '{SiteName}' -ErrorAction SilentlyContinue)) {{ " +
-            $"New-WebSite -Name '{SiteName}' -Port 80 -HostHeader '{Domain}' " +
-            $"-PhysicalPath '{PsEscape(SitePhysicalPath)}' -Force | Out-Null }} " +
-            $"if (-not (Get-WebBinding -Name '{SiteName}' -Protocol https -Port 443 -ErrorAction SilentlyContinue)) {{ " +
-            $"New-WebBinding -Name '{SiteName}' -Protocol https -Port 443 -HostHeader '{Domain}' -SslFlags 1 }}", ct);
-        if (ccode != 0)
-            return (false, $"Failed to create/ensure IIS site.\n{cstdout}\n{cstderr}");
-
-        // 3. Bind the certificate (SNI) to domain:443 via netsh.
-        Log($"  Binding cert {thumb} to {Domain}:443 (SNI)");
-        string appId = "{" + Guid.NewGuid() + "}";
-        var (ncode, nstdout, nstderr) = await RunCmd(
-            $"netsh http add sslcert hostnameport={Domain}:443 certhash={thumb} " +
-            $"appid={appId} certstorename=MY", ct);
-        if (ncode != 0)
-        {
-            // A pre-existing binding is fine; report other failures.
-            string combined = nstdout + nstderr;
-            if (!combined.Contains("exists", StringComparison.OrdinalIgnoreCase)
-                && !combined.Contains("1312", StringComparison.OrdinalIgnoreCase))
-                return (false, $"netsh sslcert binding failed.\n{combined}");
-            Log("  (SSL binding already existed -- leaving it in place)");
-        }
-
-        return (true, $"Site '{SiteName}' bound to {Domain}:443 with cert {thumb}");
-    }
-
-    private async Task<(bool, string)> WriteWebConfig(CancellationToken ct)
-    {
-        if (!IsAdministrator()) return NotElevated();
-        await Task.CompletedTask;
         try
         {
-            Directory.CreateDirectory(SitePhysicalPath);
-            var path = Path.Combine(SitePhysicalPath, "web.config");
+            Directory.CreateDirectory(SiteWebConfigFolder);
+            var path = Path.Combine(SiteWebConfigFolder, "web.config");
             Log($"  Writing: {path}");
             File.WriteAllText(path, BuildWebConfig(ProxyPort));
             return (true, $"web.config written to {path}");
@@ -557,13 +460,6 @@ public class DeployerService
   <system.webServer>
     <rewrite>
       <rules>
-        <rule name=""HttpsRedirect"" stopProcessing=""true"">
-          <match url=""(.*)"" />
-          <conditions>
-            <add input=""{{HTTPS}}"" pattern=""^OFF$"" />
-          </conditions>
-          <action type=""Redirect"" url=""https://{{HTTP_HOST}}/{{R:1}}"" redirectType=""Permanent"" />
-        </rule>
         <rule name=""ReverseProxy"" stopProcessing=""true"">
           <match url=""(.*)"" />
           <action type=""Rewrite"" url=""http://localhost:{port}/{{R:1}}"" />
@@ -605,7 +501,7 @@ public class DeployerService
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Startup), "ClaudeWeb.lnk");
 
     private static (bool, string) NotElevated() =>
-        (false, "Run the program as Administrator to configure IIS / certificates.");
+        (false, "Run the program as Administrator to write web.config into the IIS site folder.");
 
     // ---------------- Orchestration ----------------
 
@@ -628,13 +524,13 @@ public class DeployerService
             Log($"  -> {status}: {details}");
         }
         if (!admin)
-            Log("  NOTE: not elevated -- Deploy All's IIS/cert steps will require relaunch as Administrator.");
+            Log("  NOTE: not elevated -- Deploy All's web.config step will require relaunch as Administrator.");
     }
 
     /// <summary>
     /// Runs deploy delegates for steps that are Missing/Failed and have one.
-    /// Re-checks first and skips anything already in place. IIS/cert steps
-    /// require Administrator (marked Failed with a clear hint when not elevated).
+    /// Re-checks first and skips anything already in place. The web.config step
+    /// requires Administrator (marked Failed with a clear hint when not elevated).
     /// </summary>
     public async Task DeployAllAsync(CancellationToken ct)
     {
@@ -685,7 +581,7 @@ public class DeployerService
         }
     }
 
-    /// <summary>Runs only the Verify-phase steps (10-11).</summary>
+    /// <summary>Runs only the Verify-phase steps (9-10).</summary>
     public async Task VerifyAsync(CancellationToken ct)
     {
         for (int i = 0; i < _steps.Count; i++)
@@ -715,16 +611,16 @@ public class DeployerService
 
         var lines = new List<string>
         {
-            $"Domain:        {Domain}",
-            $"Proxy target:  http://localhost:{ProxyPort}",
-            $"IIS site:      {SiteName} (physical path {SitePhysicalPath})",
-            $"TLS:           {(string.IsNullOrWhiteSpace(PfxPath) ? $"thumbprint {CertThumbprint}" : $"import {PfxPath}")}",
+            $"Proxy target:    http://localhost:{ProxyPort}",
+            $"web.config into: {SiteWebConfigFolder}",
+            $"Public domain:   {(string.IsNullOrWhiteSpace(Domain) ? "(none -- public health verify skipped)" : Domain)}",
+            "TLS:             handled by IIS (this tool does not manage certificates)",
             "",
             "Steps to run (already-done steps are skipped):"
         };
         lines.AddRange(pending.Count == 0 ? new[] { "  (nothing pending)" } : pending.ToArray());
         if (!IsAdministrator())
-            lines.Add("\nWARNING: not running as Administrator -- IIS/cert steps will be skipped/failed.");
+            lines.Add("\nWARNING: not running as Administrator -- the web.config step will be skipped/failed.");
         return string.Join(Environment.NewLine, lines);
     }
 
@@ -748,10 +644,6 @@ public class DeployerService
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8
         };
-
-    /// <summary>Runs a command via cmd.exe /c (netsh, etc.).</summary>
-    private Task<(int ExitCode, string Stdout, string Stderr)> RunCmd(string command, CancellationToken ct)
-        => RunProcess("cmd.exe", $"/c {command}", $"cmd /c {command}", ct);
 
     /// <summary>Runs a PowerShell command (IIS cmdlets / WebAdministration).</summary>
     private Task<(int ExitCode, string Stdout, string Stderr)> RunPowerShell(string command, CancellationToken ct)

@@ -347,10 +347,13 @@ unchanged. Tab 2 "Internet Deployment" is new and stays disabled until the Local
 Setup Check All passes (InstallerService.AllChecksPassed). Files added:
 Models/DeployStep.cs (DeployPhase enum, reuses StepStatus), Services/DeployerService.cs
 (no UI, reports via StepStatusChanged / LogMessage). InstallerForm.cs hosts both
-tabs. settings.json gained a "Deploy" section (Domain, ProxyPort, PfxPath,
-PfxPassword, CertThumbprint, SiteName); both services merge-write so neither
-clobbers the other's keys. cmd.exe /c for netsh, powershell.exe -Command for IIS
-cmdlets. IIS/cert/ARR steps require Administrator (detected via WindowsPrincipal).
+tabs. settings.json gained a "Deploy" section (Domain, ProxyPort,
+SiteWebConfigFolder); both services merge-write so neither clobbers the other's
+keys. powershell.exe -Command for the ARR-enable and IIS cmdlets. The web.config
+step requires Administrator (detected via WindowsPrincipal). TLS is IIS's job:
+this tool does NOT manage certificates or HTTPS bindings -- the operator's
+existing IIS site already owns the public domain and its cert (same as the
+api-chatbot deployment), and the hop from IIS to our app is plain HTTP.
 ClaudeWeb.App and client/ source were not modified.
 
 Decisions:
@@ -366,26 +369,34 @@ Decisions:
 
 Deploy steps. The checks focus on OUR system and connectivity, not on the IIS
 box's prerequisites -- that box is trusted (it already proxies the api-chatbot
-through IIS + ARR), so "is IIS/ARR installed" is not re-verified. The one
-mandatory ARR-enable is folded into the site-create action.
-- PreFlight: Local Setup passed (backend + frontend built).
-- Backend (our system): responds on localhost:<port>/api/health; reachable on
-  the machine's LAN IP (confirms 0.0.0.0 binding, not localhost-only); proxy
-  target port == appsettings Port; Security notes (access code / CORS /
+through IIS + ARR and owns the public domain + its TLS cert), so "is IIS/ARR
+installed" and TLS are not our tool's concern. Internal/LAN access is HTTP
+(http://<host>:<port> directly); there is no HTTPS anywhere in our tool.
+Resulting step list (1..10):
+- PreFlight: 1 Local Setup passed (backend + frontend built).
+- Backend (our system): 2 responds on localhost:<port>/api/health; 3 reachable
+  on the machine's LAN IP (confirms 0.0.0.0 binding, not localhost-only); 4 proxy
+  target port == appsettings Port; 5 Security notes (access code / CORS /
   rate-limit) as an informational warning that never blocks.
-- Firewall: an enabled inbound TCP allow rule exists for the backend port and
-  for 443 (matches ours or a pre-existing one so no duplicates). Deploy action
-  adds the rule via New-NetFirewallRule (admin).
-- Configure (settings panel): public domain, proxy target port, TLS cert
-  (.pfx + password, or an existing thumbprint), IIS site name.
-- IisProxy (admin): create IIS site on 443 bound to the domain + SSL cert
-  (folds in enabling ARR proxy at server level); write web.config (reverse
-  proxy -> http://localhost:<port>, HTTP->HTTPS redirect, SSE
-  responseBufferLimit=0, websockets on).
-- Autostart: register ClaudeWeb.App to start at logon (Startup-folder shortcut).
-- Verify: GET https://<domain>/api/health returns 200 (plus localhost health).
+- Firewall: 6 an enabled inbound TCP allow rule exists for the backend port
+  (matches ours or a pre-existing one so no duplicates). Deploy action adds the
+  rule via New-NetFirewallRule (admin). NO 443 firewall step -- 443 is IIS's
+  edge, already open for the existing site.
+- Configure (settings panel): IIS site folder (web.config target), backend port,
+  public domain (OPTIONAL -- only used for the public health verify). No TLS
+  cert / .pfx / thumbprint / IIS site name fields -- IIS owns TLS.
+- 7 Reverse-proxy web.config written (admin): first ensures ARR proxy is enabled
+  at server level (idempotent, best-effort), then writes web.config into the
+  operator's existing IIS site folder. The web.config contains ONLY the ARR
+  rewrite rule -> http://localhost:<port>, the SSE handler
+  (responseBufferLimit=0), and websockets on. NO HTTP->HTTPS redirect rule
+  (that is IIS's edge policy, not ours).
+- Autostart: 8 register ClaudeWeb.App to start at logon (Startup-folder shortcut).
+- Verify: 9 GET http://localhost:<port>/api/health returns 200; 10 GET
+  https://<domain>/api/health returns 200 (skipped with a Warning if no public
+  domain is set).
 
-Needs Administrator for the firewall/IIS/cert steps -- the program detects
+Needs Administrator for the firewall and web.config steps -- the program detects
 elevation and instructs the user to relaunch as Administrator if needed.
 Hardening code changes (restrict CORS, rate-limit the password gate) are
 surfaced as warnings and applied separately if wanted before going fully public.
