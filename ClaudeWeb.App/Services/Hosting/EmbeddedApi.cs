@@ -1,4 +1,8 @@
 using ClaudeWeb.Models;
+using ClaudeWeb.Services.Chat;
+using ClaudeWeb.Services.Files;
+using ClaudeWeb.Services.Git;
+using ClaudeWeb.Services.Logging;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.StaticFiles;
@@ -7,7 +11,7 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace ClaudeWeb.Services;
+namespace ClaudeWeb.Services.Hosting;
 
 /// <summary>
 /// Hosts the embedded Kestrel web server on a background thread so the

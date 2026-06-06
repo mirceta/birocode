@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 
-namespace ClaudeWeb.Services;
+namespace ClaudeWeb.Services.Git;
 
 /// <summary>
 /// DI registration for the M3 Git API module. The orchestrator un-comments

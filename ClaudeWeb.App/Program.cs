@@ -1,5 +1,6 @@
 using ClaudeWeb.Models;
-using ClaudeWeb.Services;
+using ClaudeWeb.Services.Hosting;
+using ClaudeWeb.Services.Logging;
 using ClaudeWeb.UI;
 using Microsoft.Extensions.Configuration;
 

@@ -1,6 +1,6 @@
 using System.Threading;
 
-namespace ClaudeWeb.Services;
+namespace ClaudeWeb.Services.Logging;
 
 /// <summary>
 /// Thread-safe logger shared by all modules. Each log line is timestamped,

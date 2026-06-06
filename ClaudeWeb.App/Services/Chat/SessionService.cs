@@ -1,7 +1,8 @@
 using System.Text.Json;
 using ClaudeWeb.Models;
+using ClaudeWeb.Services.Logging;
 
-namespace ClaudeWeb.Services;
+namespace ClaudeWeb.Services.Chat;
 
 /// <summary>
 /// One session as shown in the sidebar list. Mirrors the GET /api/sessions

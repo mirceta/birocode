@@ -299,3 +299,40 @@ in `appsettings.json`.
 
 - Tunnel solution for remote phone access: ngrok, Cloudflare Tunnel, or Tailscale?
 - Whether to change the default `AuthPassword` before exposing publicly.
+
+## Refactor: folder structure (in progress)
+
+ClaudeWeb.App/Services/ is flat (10 files in one folder). Reorganize by
+concern, with namespaces matching folders, keeping the build green:
+
+  Services/Hosting/   EmbeddedApi.cs, PasswordAuthMiddleware.cs  -> ClaudeWeb.Services.Hosting
+  Services/Logging/   Logger.cs                                  -> ClaudeWeb.Services.Logging
+  Services/Chat/      CliRunnerService.cs, SessionService.cs,
+                      ChatModuleExtensions.cs                    -> ClaudeWeb.Services.Chat
+  Services/Files/     FileService.cs, FileModuleExtensions.cs    -> ClaudeWeb.Services.Files
+  Services/Git/       GitService.cs, GitModuleExtensions.cs      -> ClaudeWeb.Services.Git
+
+Controllers/ stays flat (only 4). Update usings across the app. Light
+clean-code pass for any duplication / SOLID issues. Verify `dotnet build`
+and a runtime smoke test. Code itself is already clean -- this is ordering.
+
+## Installer (planned)
+
+A WinForms installer at claude-web/installer/ (own .sln), following the
+installer skill's 3-layer pattern: Models/InstallStep.cs,
+Services/InstallerService.cs (no UI, reports via events), InstallerForm.cs
+(no logic, subscribes to events). Source of truth is a new claude-web README
+(Prerequisites / Install / Build / Deploy), written first.
+
+Diagnostic CHECK steps (the "is it set up correctly" part):
+- .NET 8 Desktop Runtime present
+- `claude` CLI present AND authenticated (the common failure)
+- git present
+- Node present (build-time only)
+- WorkingDirectory exists and is a git repo
+- Frontend built (client/dist present)
+- Configured port free
+- AuthPassword set (warn if still the default)
+
+INSTALL/BUILD/RUN steps: npm install + build the frontend, launch the app,
+verify GET /api/health responds. Remote phone access (tunnel) scope TBD.

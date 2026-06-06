@@ -1,7 +1,8 @@
 using ClaudeWeb.Models;
+using ClaudeWeb.Services.Logging;
 using Microsoft.AspNetCore.Http;
 
-namespace ClaudeWeb.Services;
+namespace ClaudeWeb.Services.Hosting;
 
 /// <summary>
 /// Lightweight shared-password gate for /api/* routes. The password is

@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 
-namespace ClaudeWeb.Services;
+namespace ClaudeWeb.Services.Chat;
 
 /// <summary>
 /// DI registration for the M1 chat module. The orchestrator un-comments the

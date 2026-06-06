@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
-using ClaudeWeb.Services;
+using ClaudeWeb.Services.Chat;
+using ClaudeWeb.Services.Logging;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 

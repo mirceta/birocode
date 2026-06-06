@@ -1,4 +1,5 @@
-using ClaudeWeb.Services;
+using ClaudeWeb.Services.Git;
+using ClaudeWeb.Services.Logging;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ClaudeWeb.Controllers;

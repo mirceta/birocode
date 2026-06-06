@@ -2,8 +2,9 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
 using ClaudeWeb.Models;
+using ClaudeWeb.Services.Logging;
 
-namespace ClaudeWeb.Services;
+namespace ClaudeWeb.Services.Git;
 
 /// <summary>
 /// Snapshot/restore operations backed by git, run inside

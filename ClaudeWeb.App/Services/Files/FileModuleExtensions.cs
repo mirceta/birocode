@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 
-namespace ClaudeWeb.Services;
+namespace ClaudeWeb.Services.Files;
 
 /// <summary>
 /// DI registration for the M2 File API module. The orchestrator un-comments

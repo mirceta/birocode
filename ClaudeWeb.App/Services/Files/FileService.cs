@@ -1,7 +1,8 @@
 using System.Text;
 using ClaudeWeb.Models;
+using ClaudeWeb.Services.Logging;
 
-namespace ClaudeWeb.Services;
+namespace ClaudeWeb.Services.Files;
 
 /// <summary>
 /// Browses and reads files under <see cref="AppConfig.WorkingDirectory"/>.

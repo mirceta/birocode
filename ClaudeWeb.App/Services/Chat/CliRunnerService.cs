@@ -1,8 +1,9 @@
 using System.Diagnostics;
 using System.Text.Json;
 using ClaudeWeb.Models;
+using ClaudeWeb.Services.Logging;
 
-namespace ClaudeWeb.Services;
+namespace ClaudeWeb.Services.Chat;
 
 /// <summary>
 /// Spawns the Claude Code CLI, parses its <c>stream-json</c> stdout line by
