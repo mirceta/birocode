@@ -15,6 +15,9 @@ public record SessionSummary(
     DateTime LastModified,
     string? FirstPrompt);
 
+/// <summary>One human-visible message in a transcript: role is "user" or "assistant".</summary>
+public record ChatMessage(string Role, string Text);
+
 /// <summary>
 /// Lists and parses Claude Code session transcripts (JSONL) for the current
 /// working directory. Claude stores them under
@@ -74,6 +77,85 @@ public class SessionService
         }
 
         return sessions.OrderByDescending(s => s.LastModified).ToList();
+    }
+
+    /// <summary>
+    /// Reads the full human-visible transcript for one session (user prompts and
+    /// assistant text replies, in order). Tool-use steps, model "thinking", and
+    /// IDE/system-reminder injections are skipped so it reads like the live chat.
+    /// Returns an empty list if the transcript is missing or unreadable.
+    /// </summary>
+    public List<ChatMessage> GetMessages(string sessionId)
+    {
+        var messages = new List<ChatMessage>();
+        if (string.IsNullOrWhiteSpace(sessionId)) return messages;
+
+        // sessionId is a UUID file name; reject anything that could escape the folder.
+        if (sessionId.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) return messages;
+
+        var path = Path.Combine(ProjectsDirectoryFor(_config.WorkingDirectory), sessionId + ".jsonl");
+        if (!File.Exists(path))
+        {
+            _logger.Info($"[CHAT] Transcript not found: {path}");
+            return messages;
+        }
+
+        try
+        {
+            foreach (var line in File.ReadLines(path))
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+
+                using var doc = JsonDocument.Parse(line);
+                var root = doc.RootElement;
+
+                if (!root.TryGetProperty("type", out var typeProp)) continue;
+                var type = typeProp.GetString();
+                if (type != "user" && type != "assistant") continue;
+                if (!root.TryGetProperty("message", out var msg)) continue;
+
+                var text = ExtractVisibleText(msg);
+                if (string.IsNullOrWhiteSpace(text)) continue;
+
+                messages.Add(new ChatMessage(type == "user" ? "user" : "assistant", text!.Trim()));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[CHAT] Failed to read transcript {sessionId}: {ex.Message}");
+        }
+
+        return messages;
+    }
+
+    /// <summary>
+    /// Concatenates the visible "text" blocks of a message (string content, or an
+    /// array of typed blocks). Skips thinking / tool_use / tool_result blocks and
+    /// IDE/system-reminder injections so only the human-readable reply remains.
+    /// </summary>
+    private static string? ExtractVisibleText(JsonElement msg)
+    {
+        if (!msg.TryGetProperty("content", out var content)) return null;
+
+        if (content.ValueKind == JsonValueKind.String)
+            return Clean(content.GetString());
+
+        if (content.ValueKind == JsonValueKind.Array)
+        {
+            var parts = new List<string>();
+            foreach (var block in content.EnumerateArray())
+            {
+                if (!block.TryGetProperty("type", out var bt) || bt.GetString() != "text") continue;
+                if (block.TryGetProperty("text", out var t))
+                {
+                    var cleaned = Clean(t.GetString());
+                    if (cleaned != null) parts.Add(cleaned);
+                }
+            }
+            return parts.Count > 0 ? string.Join("\n\n", parts) : null;
+        }
+
+        return null;
     }
 
     /// <summary>

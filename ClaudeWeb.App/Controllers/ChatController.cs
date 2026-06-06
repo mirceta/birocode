@@ -91,6 +91,19 @@ public class ChatController : ControllerBase
         return Ok(sessions);
     }
 
+    /// <summary>
+    /// Returns the human-visible transcript (user + assistant text, in order) for
+    /// one session, so the UI can show a past conversation when it is reopened.
+    /// </summary>
+    [HttpGet("sessions/{id}/messages")]
+    public IActionResult SessionMessages(string id)
+    {
+        _logger.CountRequest();
+        var messages = _sessions.GetMessages(id);
+        _logger.Info($"[CHAT] Loaded {messages.Count} message(s) for session {id}");
+        return Ok(messages);
+    }
+
     private async Task WriteSseAsync(object evt)
     {
         var json = JsonSerializer.Serialize(evt, SseJson);

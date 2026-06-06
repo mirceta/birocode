@@ -149,23 +149,39 @@ export default function Chat() {
     setPickerOpen(false);
   }
 
-  function resumeConversation(id) {
+  async function resumeConversation(id) {
     if (abortRef.current) abortRef.current.abort();
     setSessionId(id);
-    // We don't have the full transcript client-side; start a fresh view and
-    // let the backend continue the existing conversation on the next send.
-    setMessages([
-      GREETING,
-      {
-        role: 'assistant',
-        text: "We're picking up where you left off. What would you like to do next?",
-      },
-    ]);
     setError('');
     setThinking(false);
     setToolName(null);
     setStreaming(false);
     setPickerOpen(false);
+    stickToBottom.current = true;
+
+    // Load and show the actual past conversation. The backend continues the
+    // real Claude session via this id on the next send.
+    setMessages([{ role: 'assistant', text: 'Loading this conversation...' }]);
+    try {
+      const data = await apiGet(`/sessions/${id}/messages`);
+      const loaded = Array.isArray(data)
+        ? data.map((m) => ({ role: m.role, text: m.text }))
+        : [];
+      setMessages(
+        loaded.length > 0
+          ? loaded
+          : [
+              GREETING,
+              {
+                role: 'assistant',
+                text: "We're picking up where you left off. What would you like to do next?",
+              },
+            ],
+      );
+    } catch {
+      setError("Couldn't load that conversation. You can still continue it by sending a message.");
+      setMessages([GREETING]);
+    }
   }
 
   async function openPicker() {
