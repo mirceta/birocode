@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import SaveButton from '../components/shared/SaveButton';
 import LanguageToggle from '../components/shared/LanguageToggle';
 import { SaveProvider } from '../components/history/SaveHandler';
+import { ChatProvider } from '../context/ChatContext';
 import { useT } from '../i18n/LanguageContext';
 import BottomNav from './BottomNav';
 
@@ -13,6 +14,7 @@ export default function Layout() {
   }, [t]);
   return (
     <SaveProvider>
+      <ChatProvider>
       <div className="app-shell">
         <div className="app-frame">
           <header className="app-header">
@@ -30,6 +32,7 @@ export default function Layout() {
           <BottomNav />
         </div>
       </div>
+      </ChatProvider>
     </SaveProvider>
   );
 }
