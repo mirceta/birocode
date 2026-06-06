@@ -1,5 +1,7 @@
 using System.Diagnostics;
+using System.Net;
 using System.Net.Http;
+using System.Net.NetworkInformation;
 using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
@@ -155,51 +157,57 @@ public class DeployerService
     {
         return new List<DeployStep>
         {
-            // -- PreFlight (checks only; change nothing) --
+            // -- PreFlight --
             new DeployStep(1, "Local Setup passed",
                 "Backend (ClaudeWeb.exe) and frontend (client/dist) are built",
                 DeployPhase.PreFlight, CheckLocalSetup),
 
-            new DeployStep(2, "App responding",
+            // -- Backend (our system) --
+            new DeployStep(2, "Backend responding (localhost)",
                 "GET http://localhost:<port>/api/health returns 200",
-                DeployPhase.PreFlight, CheckAppResponding),
+                DeployPhase.Backend, CheckAppResponding),
 
-            new DeployStep(3, "Hardening review",
-                "CORS / rate-limit / default password warnings (never blocks)",
-                DeployPhase.PreFlight, CheckHardening),
+            new DeployStep(3, "Backend reachable on the network",
+                "Health responds on this machine's LAN IP (bound to 0.0.0.0, not just localhost)",
+                DeployPhase.Backend, CheckLanReachable),
 
-            // -- IisProxy (need Administrator) --
-            new DeployStep(4, "IIS installed",
-                "Web-Server feature / W3SVC service present",
-                DeployPhase.IisProxy, CheckIisInstalled),
+            new DeployStep(4, "Proxy target matches backend port",
+                "appsettings Port equals the port the reverse proxy forwards to",
+                DeployPhase.Backend, CheckPortMatch),
 
-            new DeployStep(5, "ARR module present",
-                "Application Request Routing global module is installed",
-                DeployPhase.IisProxy, CheckArrPresent),
+            new DeployStep(5, "Security notes",
+                "Access code / CORS / rate-limit (informational -- never blocks)",
+                DeployPhase.Backend, CheckHardening),
 
-            new DeployStep(6, "ARR proxy enabled",
-                "Server-level system.webServer/proxy enabled = True",
-                DeployPhase.Configure, CheckArrProxyEnabled, EnableArrProxy),
+            // -- Firewall (open the inbound ports our system needs) --
+            new DeployStep(6, "Firewall: backend port open",
+                "Inbound TCP allowed on the backend port",
+                DeployPhase.Firewall, CheckFirewallBackendPort, OpenFirewallBackendPort),
 
-            new DeployStep(7, "IIS site + SSL binding",
-                "Site on 443 bound to the domain with the TLS certificate",
+            new DeployStep(7, "Firewall: HTTPS (443) open",
+                "Inbound TCP allowed on 443 for public HTTPS",
+                DeployPhase.Firewall, CheckFirewall443, OpenFirewall443),
+
+            // -- IIS reverse proxy (assumes IIS + ARR are already set up on this box) --
+            new DeployStep(8, "IIS site + SSL binding",
+                "Site on 443 bound to the domain with the TLS certificate (also enables ARR proxy)",
                 DeployPhase.IisProxy, CheckIisSite, CreateIisSite),
 
-            new DeployStep(8, "web.config written",
-                "Reverse proxy + HTTPS redirect + SSE + websockets in site path",
+            new DeployStep(9, "web.config (reverse proxy)",
+                "Reverse proxy -> localhost:<port>, HTTPS redirect, SSE, websockets",
                 DeployPhase.Configure, CheckWebConfig, WriteWebConfig),
 
             // -- Autostart (no admin needed) --
-            new DeployStep(9, "Autostart at logon",
+            new DeployStep(10, "Autostart at logon",
                 "Shortcut to ClaudeWeb.exe in the current user's Startup folder",
                 DeployPhase.Autostart, CheckAutostart, CreateAutostart),
 
             // -- Verify --
-            new DeployStep(10, "Local health 200",
+            new DeployStep(11, "Local health 200",
                 "GET http://localhost:<port>/api/health -> 200",
                 DeployPhase.Verify, CheckAppResponding),
 
-            new DeployStep(11, "Public health 200",
+            new DeployStep(12, "Public health 200",
                 "GET https://<domain>/api/health -> 200 (through IIS)",
                 DeployPhase.Verify, CheckPublicHealth),
         };
@@ -269,41 +277,123 @@ public class DeployerService
         return (StepStatus.Warning, string.Join("  |  ", warnings));
     }
 
-    // ---------------- IIS / ARR checks ----------------
+    // ---------------- Backend (our system) checks ----------------
 
-    private async Task<(StepStatus, string)> CheckIisInstalled(CancellationToken ct)
+    /// <summary>
+    /// Confirms the backend is reachable on the machine's LAN IP, not just
+    /// localhost -- i.e. it is bound to 0.0.0.0 so a reverse proxy / other hosts
+    /// can reach it. (The app binds 0.0.0.0 by default; this catches a
+    /// misconfiguration or a not-running app.)
+    /// </summary>
+    private async Task<(StepStatus, string)> CheckLanReachable(CancellationToken ct)
     {
-        // W3SVC service is the most reliable signal and works without admin.
-        var (code, stdout, _) = await RunPowerShell(
-            "(Get-Service -Name W3SVC -ErrorAction SilentlyContinue).Status", ct);
-        if (code == 0 && stdout.Trim().Length > 0 && !stdout.Contains("Cannot find"))
-            return (StepStatus.Ok, $"W3SVC service: {stdout.Trim()}");
+        string? ip = GetLanIPv4();
+        if (ip == null)
+            return (StepStatus.Warning, "No LAN IPv4 address found -- cannot test network reachability");
 
-        return (StepStatus.Missing,
-            "IIS (W3SVC) not detected. Install IIS with the URL Rewrite and ARR modules, then re-check.");
+        string url = $"http://{ip}:{ProxyPort}/api/health";
+        Log($"  GET {url}");
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+            var resp = await http.GetAsync(url, ct);
+            Log($"  HTTP {(int)resp.StatusCode}");
+            return resp.IsSuccessStatusCode
+                ? (StepStatus.Ok, $"Reachable at {url} (bound to the network interface)")
+                : (StepStatus.Missing, $"HTTP {(int)resp.StatusCode} from {url}");
+        }
+        catch (Exception ex)
+        {
+            Log($"  (no response: {ex.Message})");
+            return (StepStatus.Missing,
+                $"Not reachable at {url}. If localhost works but this does not, the app is bound to localhost only (or is not running).");
+        }
     }
 
-    private async Task<(StepStatus, string)> CheckArrPresent(CancellationToken ct)
+    /// <summary>The reverse proxy target port must equal the port the backend listens on.</summary>
+    private async Task<(StepStatus, string)> CheckPortMatch(CancellationToken ct)
     {
+        await Task.CompletedTask;
+        int appPort = ReadAppConfiguredPort();
+        if (appPort <= 0)
+            return (StepStatus.Warning, $"Could not read Port from {_installer.AppSettingsPath}");
+        return appPort == ProxyPort
+            ? (StepStatus.Ok, $"Backend listens on {appPort}; proxy targets {ProxyPort}")
+            : (StepStatus.Missing,
+                $"Mismatch: backend Port={appPort} but proxy target={ProxyPort}. Set the proxy port to {appPort} (or change appsettings).");
+    }
+
+    private int ReadAppConfiguredPort()
+    {
+        try
+        {
+            if (!File.Exists(_installer.AppSettingsPath)) return 0;
+            var node = JsonNode.Parse(File.ReadAllText(_installer.AppSettingsPath));
+            return node?["Port"]?.GetValue<int>() ?? 0;
+        }
+        catch { return 0; }
+    }
+
+    /// <summary>First non-loopback, non-APIPA IPv4 address of an up interface.</summary>
+    private static string? GetLanIPv4()
+    {
+        try
+        {
+            return NetworkInterface.GetAllNetworkInterfaces()
+                .Where(n => n.OperationalStatus == OperationalStatus.Up
+                         && n.NetworkInterfaceType != NetworkInterfaceType.Loopback)
+                .SelectMany(n => n.GetIPProperties().UnicastAddresses)
+                .Select(a => a.Address)
+                .Where(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
+                         && !IPAddress.IsLoopback(a))
+                .Select(a => a.ToString())
+                .FirstOrDefault(ip => !ip.StartsWith("169.254"));
+        }
+        catch { return null; }
+    }
+
+    // ---------------- Firewall checks ----------------
+
+    private Task<(StepStatus, string)> CheckFirewallBackendPort(CancellationToken ct)
+        => CheckFirewallPort(ProxyPort, ct);
+
+    private Task<(bool, string)> OpenFirewallBackendPort(CancellationToken ct)
+        => OpenFirewallPort(ProxyPort, $"Claude Web backend ({ProxyPort})", ct);
+
+    private Task<(StepStatus, string)> CheckFirewall443(CancellationToken ct)
+        => CheckFirewallPort(443, ct);
+
+    private Task<(bool, string)> OpenFirewall443(CancellationToken ct)
+        => OpenFirewallPort(443, "Claude Web HTTPS (443)", ct);
+
+    /// <summary>
+    /// True if ANY enabled inbound Allow rule covers this TCP port (ours or one
+    /// IIS/api-chatbot already created), so we never add a duplicate.
+    /// </summary>
+    private async Task<(StepStatus, string)> CheckFirewallPort(int port, CancellationToken ct)
+    {
+        string ps =
+            "$open = Get-NetFirewallRule -Direction Inbound -Action Allow -Enabled True -ErrorAction SilentlyContinue | " +
+            "Get-NetFirewallPortFilter | Where-Object { $_.Protocol -eq 'TCP' -and " +
+            "($_.LocalPort -contains '" + port + "' -or $_.LocalPort -eq 'Any') }; " +
+            "if ($open) { 'OPEN' } else { 'CLOSED' }";
+        var (code, stdout, _) = await RunPowerShell(ps, ct);
+        if (code == 0 && stdout.Contains("OPEN"))
+            return (StepStatus.Ok, $"Inbound TCP {port} is allowed");
+        if (code == 0 && stdout.Contains("CLOSED"))
+            return (StepStatus.Missing, $"No inbound firewall rule allows TCP {port}");
+        return (StepStatus.Warning, $"Could not determine the firewall state for TCP {port}");
+    }
+
+    private async Task<(bool, string)> OpenFirewallPort(int port, string ruleName, CancellationToken ct)
+    {
+        if (!IsAdministrator()) return NotElevated();
         var (code, stdout, stderr) = await RunPowerShell(
-            "Get-WebGlobalModule -Name ApplicationRequestRouting -ErrorAction SilentlyContinue | " +
-            "Select-Object -ExpandProperty Name", ct);
-        if (code == 0 && stdout.Contains("ApplicationRequestRouting", StringComparison.OrdinalIgnoreCase))
-            return (StepStatus.Ok, "ApplicationRequestRouting module present");
-
-        return (StepStatus.Missing,
-            "ARR not installed. Install Application Request Routing (and URL Rewrite) from the Microsoft Web Platform, then re-check. " +
-            (stderr.Trim().Length > 0 ? $"[{stderr.Trim()}]" : ""));
-    }
-
-    private async Task<(StepStatus, string)> CheckArrProxyEnabled(CancellationToken ct)
-    {
-        var (code, stdout, _) = await RunPowerShell(
-            "(Get-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST' " +
-            "-filter 'system.webServer/proxy' -name 'enabled' -ErrorAction SilentlyContinue).Value", ct);
-        if (code == 0 && stdout.Trim().Equals("True", StringComparison.OrdinalIgnoreCase))
-            return (StepStatus.Ok, "ARR proxy enabled at server level");
-        return (StepStatus.Missing, "ARR proxy not enabled at server level");
+            $"New-NetFirewallRule -DisplayName '{PsEscape(ruleName)}' -Direction Inbound " +
+            $"-Protocol TCP -LocalPort {port} -Action Allow | Out-Null", ct);
+        return code == 0
+            ? (true, $"Opened inbound TCP {port} ('{ruleName}')")
+            : (false, $"Failed to add firewall rule for TCP {port}.\n{stdout}\n{stderr}");
     }
 
     private async Task<(StepStatus, string)> CheckIisSite(CancellationToken ct)
@@ -373,17 +463,6 @@ public class DeployerService
 
     // ---------------- Deploy actions ----------------
 
-    private async Task<(bool, string)> EnableArrProxy(CancellationToken ct)
-    {
-        if (!IsAdministrator()) return NotElevated();
-        var (code, stdout, stderr) = await RunPowerShell(
-            "Set-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST' " +
-            "-filter 'system.webServer/proxy' -name 'enabled' -value 'True'", ct);
-        return code == 0
-            ? (true, "ARR proxy enabled")
-            : (false, $"Failed to enable ARR proxy.\n{stdout}\n{stderr}");
-    }
-
     private async Task<(bool, string)> CreateIisSite(CancellationToken ct)
     {
         if (!IsAdministrator()) return NotElevated();
@@ -391,6 +470,14 @@ public class DeployerService
             return (false, "Public domain is required");
 
         Directory.CreateDirectory(SitePhysicalPath);
+
+        // Ensure ARR reverse-proxy is enabled at server level. The box already
+        // runs api-chatbot this way so it is normally on; enabling it is
+        // idempotent and required for the rewrite rule to proxy out.
+        Log("  Ensuring ARR proxy is enabled at server level...");
+        await RunPowerShell(
+            "Set-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST' " +
+            "-filter 'system.webServer/proxy' -name 'enabled' -value 'True'", ct);
 
         // 1. Resolve the certificate thumbprint -- import the .pfx if a path was given.
         string thumb = CertThumbprint;

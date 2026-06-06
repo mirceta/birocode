@@ -9,6 +9,8 @@ namespace ClaudeWebInstaller.Models;
 public enum DeployPhase
 {
     PreFlight,
+    Backend,
+    Firewall,
     Configure,
     IisProxy,
     Autostart,

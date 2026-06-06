@@ -364,22 +364,28 @@ Decisions:
   session (NO headless service). IIS reverse-proxies to its port. So deploy =
   IIS ARR in front + autostart the GUI app. No change to ClaudeWeb.App source.
 
-Deploy steps (deployer skill adapted for our .NET app behind IIS):
-- PreFlight: Local Setup passed; app answers GET http://localhost:<port>/api/health.
-  Verify/WARN hardening (does not modify app code): CORS is allow-all (tighten
-  for prod), no rate limit on the password gate (brute-force risk on a public
-  URL), AuthPassword still default.
-- Configure (settings panel): public domain, localhost port to proxy to, TLS
-  cert (.pfx path + password, or an existing cert thumbprint), IIS site name.
-- IisProxy (admin): IIS installed + ARR module present (install ARR if missing);
-  create IIS site on 443 bound to the domain + SSL cert; enable ARR proxy at
-  server level; write web.config (reverse proxy -> http://localhost:<port>,
-  HTTP->HTTPS redirect, SSE responseBufferLimit=0, websockets on).
-- Autostart: register ClaudeWeb.App to start at logon (Startup-folder shortcut)
-  so the proxied app is always up after a reboot+login.
+Deploy steps. The checks focus on OUR system and connectivity, not on the IIS
+box's prerequisites -- that box is trusted (it already proxies the api-chatbot
+through IIS + ARR), so "is IIS/ARR installed" is not re-verified. The one
+mandatory ARR-enable is folded into the site-create action.
+- PreFlight: Local Setup passed (backend + frontend built).
+- Backend (our system): responds on localhost:<port>/api/health; reachable on
+  the machine's LAN IP (confirms 0.0.0.0 binding, not localhost-only); proxy
+  target port == appsettings Port; Security notes (access code / CORS /
+  rate-limit) as an informational warning that never blocks.
+- Firewall: an enabled inbound TCP allow rule exists for the backend port and
+  for 443 (matches ours or a pre-existing one so no duplicates). Deploy action
+  adds the rule via New-NetFirewallRule (admin).
+- Configure (settings panel): public domain, proxy target port, TLS cert
+  (.pfx + password, or an existing thumbprint), IIS site name.
+- IisProxy (admin): create IIS site on 443 bound to the domain + SSL cert
+  (folds in enabling ARR proxy at server level); write web.config (reverse
+  proxy -> http://localhost:<port>, HTTP->HTTPS redirect, SSE
+  responseBufferLimit=0, websockets on).
+- Autostart: register ClaudeWeb.App to start at logon (Startup-folder shortcut).
 - Verify: GET https://<domain>/api/health returns 200 (plus localhost health).
 
-Needs Administrator for the IIS/cert/ARR steps -- the program detects elevation
-and instructs the user to relaunch as Administrator if needed. Hardening code
-changes (restrict CORS, rate-limit the password gate) are surfaced as warnings
-and applied separately if the user wants them before going fully public.
+Needs Administrator for the firewall/IIS/cert steps -- the program detects
+elevation and instructs the user to relaunch as Administrator if needed.
+Hardening code changes (restrict CORS, rate-limit the password gate) are
+surfaced as warnings and applied separately if wanted before going fully public.
