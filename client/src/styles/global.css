@@ -113,6 +113,46 @@ textarea {
   gap: 10px;
 }
 
+/* ---- Repository selector (project dropdown in the header) ------------- */
+
+.repo-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 40vw;
+  padding: 2px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+}
+
+.repo-selector__icon {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.repo-selector__select {
+  max-width: 32vw;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text, #222);
+  cursor: pointer;
+  appearance: auto;
+}
+
+.repo-selector__select:focus-visible {
+  outline: 2px solid var(--color-accent, #4f46e5);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.repo-selector--empty {
+  font-size: 12px;
+  color: var(--color-text-muted, #666);
+}
+
 /* ---- Language toggle (radio group next to Save) ----------------------- */
 
 .lang-toggle {

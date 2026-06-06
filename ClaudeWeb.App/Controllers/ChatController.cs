@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using ClaudeWeb.Services.Chat;
 using ClaudeWeb.Services.Logging;
+using ClaudeWeb.Services.Repositories;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -20,6 +21,7 @@ public class ChatController : ControllerBase
 {
     private readonly CliRunnerService _cli;
     private readonly SessionService _sessions;
+    private readonly RepositoryResolver _repos;
     private readonly Logger _logger;
 
     private static readonly JsonSerializerOptions SseJson = new()
@@ -27,10 +29,11 @@ public class ChatController : ControllerBase
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
     };
 
-    public ChatController(CliRunnerService cli, SessionService sessions, Logger logger)
+    public ChatController(CliRunnerService cli, SessionService sessions, RepositoryResolver repos, Logger logger)
     {
         _cli = cli;
         _sessions = sessions;
+        _repos = repos;
         _logger = logger;
     }
 
@@ -56,11 +59,21 @@ public class ChatController : ControllerBase
             return;
         }
 
-        if (!_cli.TryBeginRun())
+        var repo = _repos.Current();
+        if (repo is null)
         {
-            _logger.Info("[CHAT] Rejected: a chat turn is already running.");
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            await Response.WriteAsJsonAsync(new { error = "No repository selected or configured." });
+            return;
+        }
+
+        // Per-repo single-flight: a turn already running in THIS repo is rejected,
+        // but other repos can run concurrently.
+        if (!_cli.TryBeginRun(repo.Id))
+        {
+            _logger.Info($"[CHAT] Rejected: a chat turn is already running for \"{repo.Name}\".");
             Response.StatusCode = StatusCodes.Status409Conflict;
-            await Response.WriteAsJsonAsync(new { error = "Another chat request is already in progress." });
+            await Response.WriteAsJsonAsync(new { error = "Another chat request is already in progress for this project." });
             return;
         }
 
@@ -77,17 +90,22 @@ public class ChatController : ControllerBase
         await _cli.RunAsync(
             message,
             request?.SessionId,
+            workingDirectory: repo.Path,
+            repoId: repo.Id,
             emit: evt => WriteSseAsync(evt),
             ct: HttpContext.RequestAborted);
     }
 
-    /// <summary>Lists prior sessions for the current working directory, newest first.</summary>
+    /// <summary>Lists prior sessions for the selected repository, newest first.</summary>
     [HttpGet("sessions")]
     public IActionResult Sessions()
     {
         _logger.CountRequest();
-        var sessions = _sessions.ListSessions();
-        _logger.Info($"[CHAT] Listed {sessions.Count} session(s)");
+        var repo = _repos.Current();
+        if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
+
+        var sessions = _sessions.ListSessions(repo.Path);
+        _logger.Info($"[CHAT] Listed {sessions.Count} session(s) for \"{repo.Name}\"");
         return Ok(sessions);
     }
 
@@ -99,7 +117,10 @@ public class ChatController : ControllerBase
     public IActionResult SessionMessages(string id)
     {
         _logger.CountRequest();
-        var messages = _sessions.GetMessages(id);
+        var repo = _repos.Current();
+        if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
+
+        var messages = _sessions.GetMessages(repo.Path, id);
         _logger.Info($"[CHAT] Loaded {messages.Count} message(s) for session {id}");
         return Ok(messages);
     }

@@ -6,6 +6,7 @@ import Breadcrumbs from '../components/files/Breadcrumbs';
 import FileList from '../components/files/FileList';
 import FileViewer from '../components/files/FileViewer';
 import { useChat } from '../context/ChatContext';
+import { useRepo } from '../context/RepoContext';
 import { useT } from '../i18n/LanguageContext';
 import '../components/files/files.css';
 
@@ -17,6 +18,7 @@ function joinPath(dir, name) {
 export default function Files() {
   const { t } = useT();
   const { setDraft } = useChat();
+  const { currentRepoId } = useRepo();
   const [path, setPath] = useState('/');
   const [entries, setEntries] = useState([]);
   const [listLoading, setListLoading] = useState(true);
@@ -69,6 +71,14 @@ export default function Files() {
   useEffect(() => {
     loadDir(path);
   }, [path, loadDir]);
+
+  // Switching projects: go back to the root and close any open file so we never
+  // show a stale path that may not exist in the newly selected repository.
+  useEffect(() => {
+    setOpenFile(null);
+    setFileError('');
+    setPath('/');
+  }, [currentRepoId]);
 
   function navigateTo(dirPath) {
     setOpenFile(null);

@@ -24,6 +24,9 @@
   "nav.history": "Gecmis",
   "nav.aria": "Ana menu",
 
+  "repo.label": "Proje",
+  "repo.none": "Proje yok",
+
   "pwgate.title": "Tekrar hosgeldin",
   "pwgate.subtitle": "Calisma alanini acmak icin erisim kodunu gir.",
   "pwgate.placeholder": "Erisim kodu",

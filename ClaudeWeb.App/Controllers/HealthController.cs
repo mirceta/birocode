@@ -1,4 +1,5 @@
 using ClaudeWeb.Models;
+using ClaudeWeb.Services.Repositories;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ClaudeWeb.Controllers;
@@ -13,10 +14,12 @@ namespace ClaudeWeb.Controllers;
 public class HealthController : ControllerBase
 {
     private readonly AppConfig _config;
+    private readonly RepositoryRegistry _registry;
 
-    public HealthController(AppConfig config)
+    public HealthController(AppConfig config, RepositoryRegistry registry)
     {
         _config = config;
+        _registry = registry;
     }
 
     [HttpGet]
@@ -24,6 +27,6 @@ public class HealthController : ControllerBase
     {
         status = "running",
         port = _config.Port,
-        workingDirectory = _config.WorkingDirectory
+        repositoryCount = _registry.GetAll().Count
     });
 }
