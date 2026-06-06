@@ -45,6 +45,24 @@ dotnet run --project ClaudeWeb.App
 Then open http://localhost:5099 on the host (or http://<host-lan-ip>:5099 from
 a phone on the same network) and enter the access code (`AuthPassword`).
 
+## Installer (recommended setup)
+
+A Windows Forms installer at `installer/` checks that everything is set up
+correctly and performs the local setup for you. It verifies each prerequisite
+below (including that the `claude` CLI is actually signed in), applies your
+Working directory / Port / Access password to `appsettings.json`, installs and
+builds the frontend and backend, and finally launches the app and confirms it
+responds.
+
+```
+dotnet build installer/ClaudeWebInstaller.sln
+dotnet run --project installer
+```
+
+Use **Check All** to see what is missing, **Install All** to fix it, then
+**Test**. It does not configure remote/phone access (that stays manual -- see
+Deploy).
+
 ## Install
 
 Frontend dependencies (the backend restores its own on build):

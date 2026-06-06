@@ -316,23 +316,25 @@ Controllers/ stays flat (only 4). Update usings across the app. Light
 clean-code pass for any duplication / SOLID issues. Verify `dotnet build`
 and a runtime smoke test. Code itself is already clean -- this is ordering.
 
-## Installer (planned)
+## Installer (built)
 
-A WinForms installer at claude-web/installer/ (own .sln), following the
-installer skill's 3-layer pattern: Models/InstallStep.cs,
+A WinForms installer at claude-web/installer/ (own .sln, ClaudeWebInstaller),
+following the installer skill's 3-layer pattern: Models/InstallStep.cs,
 Services/InstallerService.cs (no UI, reports via events), InstallerForm.cs
-(no logic, subscribes to events). Source of truth is a new claude-web README
-(Prerequisites / Install / Build / Deploy), written first.
+(no logic, subscribes to events). Source of truth is claude-web/README.md.
+Scope: local setup + diagnostics only (no tunnel / remote access).
 
 Diagnostic CHECK steps (the "is it set up correctly" part):
-- .NET 8 Desktop Runtime present
-- `claude` CLI present AND authenticated (the common failure)
+- .NET 8 Desktop Runtime present (plus SDK note for building)
+- `claude` CLI present AND authenticated -- probes with one tiny real request
 - git present
-- Node present (build-time only)
-- WorkingDirectory exists and is a git repo
+- Node + npm present (build-time only)
+- WorkingDirectory exists and is a git repo (auto-fix: create + git init)
 - Frontend built (client/dist present)
-- Configured port free
-- AuthPassword set (warn if still the default)
+- Configured port free (reports owning PID if not)
+- AuthPassword set (warns if still the default 'changeme')
 
-INSTALL/BUILD/RUN steps: npm install + build the frontend, launch the app,
-verify GET /api/health responds. Remote phone access (tunnel) scope TBD.
+INSTALL/BUILD steps: apply settings to appsettings.json, npm install, build
+frontend + backend. TEST: launch the app and verify GET /api/health returns
+200, then stop it. Replaces the skill's ClaudeMonitor prerequisite with the
+claude-CLI checks, since Claude Web talks to the CLI directly.
