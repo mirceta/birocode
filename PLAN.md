@@ -338,3 +338,48 @@ INSTALL/BUILD steps: apply settings to appsettings.json, npm install, build
 frontend + backend. TEST: launch the app and verify GET /api/health returns
 200, then stop it. Replaces the skill's ClaudeMonitor prerequisite with the
 claude-CLI checks, since Claude Web talks to the CLI directly.
+
+## Setup and Deploy program: Internet Deployment tab (BUILT)
+
+The installer at claude-web/installer/ (ClaudeWebInstaller) is now a two-tab
+"Claude Web Setup & Deploy" app. Tab 1 "Local Setup" is the existing installer,
+unchanged. Tab 2 "Internet Deployment" is new and stays disabled until the Local
+Setup Check All passes (InstallerService.AllChecksPassed). Files added:
+Models/DeployStep.cs (DeployPhase enum, reuses StepStatus), Services/DeployerService.cs
+(no UI, reports via StepStatusChanged / LogMessage). InstallerForm.cs hosts both
+tabs. settings.json gained a "Deploy" section (Domain, ProxyPort, PfxPath,
+PfxPassword, CertThumbprint, SiteName); both services merge-write so neither
+clobbers the other's keys. cmd.exe /c for netsh, powershell.exe -Command for IIS
+cmdlets. IIS/cert/ARR steps require Administrator (detected via WindowsPrincipal).
+ClaudeWeb.App and client/ source were not modified.
+
+Decisions:
+- ONE WinForms app. The existing claude-web/installer/ program gains a second
+  tab. Tab 1 "Local Setup" = the existing installer (unchanged behavior).
+  Tab 2 "Internet Deployment" = a new DeployerService following the deployer
+  skill's 3-layer pattern (Models/DeployStep.cs, Services/DeployerService.cs,
+  a deploy panel in the form). Window title becomes "Claude Web Setup & Deploy".
+  The Deploy tab is disabled until the Local Setup checks pass.
+- The backend runs as the existing WinForms app in the operator's logged-in
+  session (NO headless service). IIS reverse-proxies to its port. So deploy =
+  IIS ARR in front + autostart the GUI app. No change to ClaudeWeb.App source.
+
+Deploy steps (deployer skill adapted for our .NET app behind IIS):
+- PreFlight: Local Setup passed; app answers GET http://localhost:<port>/api/health.
+  Verify/WARN hardening (does not modify app code): CORS is allow-all (tighten
+  for prod), no rate limit on the password gate (brute-force risk on a public
+  URL), AuthPassword still default.
+- Configure (settings panel): public domain, localhost port to proxy to, TLS
+  cert (.pfx path + password, or an existing cert thumbprint), IIS site name.
+- IisProxy (admin): IIS installed + ARR module present (install ARR if missing);
+  create IIS site on 443 bound to the domain + SSL cert; enable ARR proxy at
+  server level; write web.config (reverse proxy -> http://localhost:<port>,
+  HTTP->HTTPS redirect, SSE responseBufferLimit=0, websockets on).
+- Autostart: register ClaudeWeb.App to start at logon (Startup-folder shortcut)
+  so the proxied app is always up after a reboot+login.
+- Verify: GET https://<domain>/api/health returns 200 (plus localhost health).
+
+Needs Administrator for the IIS/cert/ARR steps -- the program detects elevation
+and instructs the user to relaunch as Administrator if needed. Hardening code
+changes (restrict CORS, rate-limit the password gate) are surfaced as warnings
+and applied separately if the user wants them before going fully public.

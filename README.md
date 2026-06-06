@@ -45,23 +45,30 @@ dotnet run --project ClaudeWeb.App
 Then open http://localhost:5099 on the host (or http://<host-lan-ip>:5099 from
 a phone on the same network) and enter the access code (`AuthPassword`).
 
-## Installer (recommended setup)
+## Setup & Deploy tool (recommended)
 
-A Windows Forms installer at `installer/` checks that everything is set up
-correctly and performs the local setup for you. It verifies each prerequisite
-below (including that the `claude` CLI is actually signed in), applies your
-Working directory / Port / Access password to `appsettings.json`, installs and
-builds the frontend and backend, and finally launches the app and confirms it
-responds.
+A Windows Forms app at `installer/` ("Claude Web Setup & Deploy") with two tabs.
 
 ```
 dotnet build installer/ClaudeWebInstaller.sln
 dotnet run --project installer
 ```
 
-Use **Check All** to see what is missing, **Install All** to fix it, then
-**Test**. It does not configure remote/phone access (that stays manual -- see
-Deploy).
+**Tab 1 -- Local Setup.** Checks every prerequisite below (including that the
+`claude` CLI is actually signed in), applies your Working directory / Port /
+Access password to `appsettings.json`, installs and builds the frontend and
+backend, then launches the app and confirms it responds. Use **Check All** ->
+**Install All** -> **Test**.
+
+**Tab 2 -- Internet Deployment** (enabled once Local Setup passes). Puts IIS in
+front of the app as a TLS reverse proxy (the same model as the Birokrat
+api-chatbot) so it is reachable over the internet: enables ARR, creates the IIS
+site bound to your domain with your certificate, writes the `web.config`
+(reverse proxy + HTTPS redirect + SSE buffering off), and adds the app to your
+Startup folder so it relaunches at logon. The backend keeps running as the
+in-session app -- IIS just fronts it. The IIS/certificate steps require running
+the program **as Administrator**. Settings (domain, certificate, port) persist
+to `installer/settings.json` (gitignored -- it holds passwords).
 
 ## Install
 
@@ -105,6 +112,14 @@ The monitoring GUI opens and Kestrel listens on the configured port
 
 - Local / LAN: run the app on the host and keep the machine on. Anyone on the
   same network can reach it at `http://<host-lan-ip>:<port>`.
-- Remote phone access (future, optional): expose the port through a tunnel
-  (Cloudflare Tunnel, ngrok, or Tailscale) and change `AuthPassword` from the
-  default first. This is not automated yet -- see PLAN.md "Still Open".
+- Internet: use the Setup & Deploy tool's "Internet Deployment" tab (run it as
+  Administrator). It fronts the in-session app with an IIS TLS reverse proxy
+  (ARR) bound to your domain -- the same model as the Birokrat api-chatbot --
+  so the app is reachable at `https://<your-domain>`. You provide a domain and
+  a TLS certificate (.pfx or an existing thumbprint).
+
+Before exposing publicly, change `AuthPassword` from the default. Note two
+known hardening gaps the deploy tab warns about but does not fix: CORS is
+allow-all, and the password gate has no rate limiting (brute-force risk).
+Restrict CORS to your domain and add login rate limiting before a fully public
+deployment.

@@ -20,6 +20,9 @@ public class InstallerService
     private readonly List<InstallStep> _steps;
     private readonly string _settingsPath;
 
+    /// <summary>Absolute path to the shared settings.json (installer + deployer sections).</summary>
+    public string SettingsPath => _settingsPath;
+
     // Resolved app paths (derived from ClaudeWebRoot).
     public string ClaudeWebRoot { get; private set; } = "";
     public string AppProjectDir => Path.Combine(ClaudeWebRoot, "ClaudeWeb.App");
@@ -58,41 +61,45 @@ public class InstallerService
 
     // ---------------- Settings persistence ----------------
 
-    private class PersistedSettings
-    {
-        public string ClaudeWebRoot { get; set; } = "";
-        public string WorkingDirectory { get; set; } = "";
-        public int Port { get; set; } = 5099;
-        public string AuthPassword { get; set; } = "";
-    }
-
     private void LoadSettings()
     {
         if (!File.Exists(_settingsPath)) return;
         try
         {
-            var json = File.ReadAllText(_settingsPath);
-            var s = JsonSerializer.Deserialize<PersistedSettings>(json);
-            if (s == null) return;
-            if (!string.IsNullOrWhiteSpace(s.ClaudeWebRoot)) ClaudeWebRoot = s.ClaudeWebRoot;
-            WorkingDirectory = s.WorkingDirectory;
-            if (s.Port > 0) Port = s.Port;
-            AuthPassword = s.AuthPassword;
+            var node = JsonNode.Parse(File.ReadAllText(_settingsPath));
+            if (node == null) return;
+            var root = node["ClaudeWebRoot"]?.GetValue<string>();
+            if (!string.IsNullOrWhiteSpace(root)) ClaudeWebRoot = root;
+            WorkingDirectory = node["WorkingDirectory"]?.GetValue<string>() ?? "";
+            var port = node["Port"]?.GetValue<int>() ?? 0;
+            if (port > 0) Port = port;
+            AuthPassword = node["AuthPassword"]?.GetValue<string>() ?? "";
         }
         catch { /* ignore corrupt settings */ }
     }
 
+    /// <summary>
+    /// Persists this service's settings while preserving any other top-level
+    /// sections (e.g. the deployer's "Deploy" object) already in the file.
+    /// </summary>
     private void SaveSettings()
     {
-        var s = new PersistedSettings
+        JsonObject obj;
+        try
         {
-            ClaudeWebRoot = ClaudeWebRoot,
-            WorkingDirectory = WorkingDirectory,
-            Port = Port,
-            AuthPassword = AuthPassword
-        };
+            obj = (File.Exists(_settingsPath)
+                ? JsonNode.Parse(File.ReadAllText(_settingsPath)) as JsonObject
+                : null) ?? new JsonObject();
+        }
+        catch { obj = new JsonObject(); }
+
+        obj["ClaudeWebRoot"] = ClaudeWebRoot;
+        obj["WorkingDirectory"] = WorkingDirectory;
+        obj["Port"] = Port;
+        obj["AuthPassword"] = AuthPassword;
+
         File.WriteAllText(_settingsPath,
-            JsonSerializer.Serialize(s, new JsonSerializerOptions { WriteIndented = true }));
+            obj.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
     }
 
     /// <summary>

@@ -10,3 +10,6 @@
 node_modules/
 dist/
 *.local
+
+# Installer/deployer runtime settings -- holds plaintext access + PFX passwords
+settings.json

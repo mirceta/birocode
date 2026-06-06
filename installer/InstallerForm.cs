@@ -4,14 +4,22 @@ using ClaudeWebInstaller.Services;
 namespace ClaudeWebInstaller;
 
 /// <summary>
-/// The installer window. Pure UI: it builds controls, subscribes to service
-/// events, and forwards button clicks to the service. No business logic lives
-/// here -- all checks/installs are in InstallerService.
+/// The Setup and Deploy window. Pure UI: it builds controls, subscribes to
+/// service events, and forwards button clicks to the services. No business
+/// logic lives here -- all checks/installs are in InstallerService and all
+/// deploy logic is in DeployerService.
+///
+/// Two tabs:
+///   - "Local Setup" hosts the existing installer UI (behavior unchanged).
+///   - "Internet Deployment" hosts the new deployer UI, disabled until the
+///     Local Setup tab's Check All has passed (InstallerService.AllChecksPassed).
 /// </summary>
 public class InstallerForm : Form
 {
     private readonly InstallerService _service;
+    private readonly DeployerService _deployer;
 
+    // -- Local Setup controls --
     private readonly TextBox _rootBox;
     private readonly TextBox _workingDirBox;
     private readonly TextBox _portBox;
@@ -26,18 +34,45 @@ public class InstallerForm : Form
     private readonly Button _testButton;
     private readonly Label _statusLabel;
 
+    // -- Tabs --
+    private readonly TabControl _tabs;
+    private readonly TabPage _deployTab;
+
+    // -- Deploy controls --
+    private readonly TextBox _domainBox;
+    private readonly TextBox _proxyPortBox;
+    private readonly TextBox _pfxPathBox;
+    private readonly TextBox _pfxPasswordBox;
+    private readonly TextBox _thumbprintBox;
+    private readonly TextBox _siteNameBox;
+    private readonly Button _pfxBrowse;
+    private readonly ListView _deployList;
+    private readonly TextBox _deployLogBox;
+    private readonly Button _deployCheckButton;
+    private readonly Button _deployButton;
+    private readonly Button _verifyButton;
+    private readonly Label _deployStatusLabel;
+    private readonly Label _deployHintLabel;
+    private readonly Panel _deployPanel;
+
     private CancellationTokenSource? _cts;
 
     public InstallerForm()
     {
-        Text = "Claude Web Installer";
-        Size = new Size(780, 720);
-        MinimumSize = new Size(640, 560);
+        Text = "Claude Web Setup & Deploy";
+        Size = new Size(820, 760);
+        MinimumSize = new Size(680, 600);
         StartPosition = FormStartPosition.CenterScreen;
 
         _service = new InstallerService(AppContext.BaseDirectory);
+        _deployer = new DeployerService(_service);
 
-        // -- Header --
+        _tabs = new TabControl { Dock = DockStyle.Fill };
+        var localTab = new TabPage("Local Setup");
+        _deployTab = new TabPage("Internet Deployment") { Enabled = false };
+
+        // ==================== LOCAL SETUP TAB ====================
+
         var header = new Label
         {
             Text = "Claude Web",
@@ -54,7 +89,6 @@ public class InstallerForm : Form
             Padding = new Padding(8, 0, 0, 0)
         };
 
-        // -- Settings panel --
         var settingsPanel = new Panel { Dock = DockStyle.Top, Height = 140, Padding = new Padding(8, 4, 8, 4) };
 
         const int labelX = 8, fieldX = 130, fieldW = 470, browseX = 608, browseW = 80;
@@ -109,46 +143,14 @@ public class InstallerForm : Form
             settingsHint
         });
 
-        // -- Step checklist --
-        _stepList = new ListView
-        {
-            View = View.Details,
-            FullRowSelect = true,
-            GridLines = true,
-            Dock = DockStyle.Fill,
-            HeaderStyle = ColumnHeaderStyle.Nonclickable
-        };
-        _stepList.Columns.Add("#", 30);
-        _stepList.Columns.Add("Phase", 60);
-        _stepList.Columns.Add("Step", 200);
-        _stepList.Columns.Add("Status", 80);
-        _stepList.Columns.Add("Details", 360);
-
+        _stepList = BuildChecklist();
         foreach (var step in _service.Steps)
-        {
-            var item = new ListViewItem(step.Number.ToString());
-            item.SubItems.Add(step.Phase.ToString());
-            item.SubItems.Add(step.Name);
-            item.SubItems.Add("Pending");
-            item.SubItems.Add(step.Description);
-            _stepList.Items.Add(item);
-        }
+            AddStepRow(_stepList, step.Number, step.Phase.ToString(), step.Name, step.Description);
         _stepList.DoubleClick += OnStepDoubleClick;
 
-        // -- Log panel --
-        _logBox = new TextBox
-        {
-            Multiline = true,
-            ReadOnly = true,
-            ScrollBars = ScrollBars.Vertical,
-            Dock = DockStyle.Bottom,
-            Height = 200,
-            Font = new Font("Consolas", 9)
-        };
+        _logBox = BuildLogBox();
 
-        // -- Action bar --
         var actionBar = new Panel { Dock = DockStyle.Bottom, Height = 44, Padding = new Padding(8, 4, 8, 4) };
-
         _checkButton = new Button { Text = "Check All", Location = new Point(8, 8), Width = 100 };
         _checkButton.Click += OnCheckAll;
         _installButton = new Button { Text = "Install All", Location = new Point(116, 8), Width = 100, Enabled = false };
@@ -156,24 +158,191 @@ public class InstallerForm : Form
         _testButton = new Button { Text = "Test", Location = new Point(224, 8), Width = 80, Enabled = false };
         _testButton.Click += OnTest;
         _statusLabel = new Label { Text = "", AutoSize = true, Location = new Point(320, 13) };
-
         actionBar.Controls.AddRange(new Control[] { _checkButton, _installButton, _testButton, _statusLabel });
 
-        // -- Layout (reverse dock order) --
-        Controls.Add(_stepList);
-        Controls.Add(_logBox);
-        Controls.Add(actionBar);
-        Controls.Add(settingsPanel);
-        Controls.Add(subtitle);
-        Controls.Add(header);
+        // Layout (reverse dock order) inside the Local Setup tab.
+        localTab.Controls.Add(_stepList);
+        localTab.Controls.Add(_logBox);
+        localTab.Controls.Add(actionBar);
+        localTab.Controls.Add(settingsPanel);
+        localTab.Controls.Add(subtitle);
+        localTab.Controls.Add(header);
+
+        // ==================== INTERNET DEPLOYMENT TAB ====================
+
+        var deployHeader = new Label
+        {
+            Text = "Internet Deployment",
+            Font = new Font(Font.FontFamily, 14, FontStyle.Bold),
+            Dock = DockStyle.Top, Height = 30, Padding = new Padding(8, 4, 0, 0)
+        };
+        var deploySubtitle = new Label
+        {
+            Text = "Put IIS (TLS reverse proxy) in front of the in-session app and autostart it at logon",
+            Dock = DockStyle.Top, Height = 22, Padding = new Padding(8, 0, 0, 0)
+        };
+        _deployHintLabel = new Label
+        {
+            Text = "Complete Local Setup first.",
+            Dock = DockStyle.Top, Height = 20, Padding = new Padding(8, 0, 0, 0),
+            ForeColor = Color.Firebrick
+        };
+
+        // _deployPanel holds everything that should grey out until Local Setup passes.
+        _deployPanel = new Panel { Dock = DockStyle.Fill, Enabled = false };
+
+        var deploySettings = new Panel { Dock = DockStyle.Top, Height = 168, Padding = new Padding(8, 4, 8, 4) };
+        int dy = 8;
+
+        var domainLabel = new Label { Text = "Public domain:", AutoSize = true, Location = new Point(labelX, dy + 3) };
+        _domainBox = new TextBox
+        {
+            Location = new Point(fieldX, dy), Width = fieldW, Text = _deployer.Domain,
+            PlaceholderText = "claudeweb.example.com"
+        };
+        _domainBox.TextChanged += OnDeployFieldChanged;
+
+        dy += 32;
+        var proxyPortLabel = new Label { Text = "Proxy to port:", AutoSize = true, Location = new Point(labelX, dy + 3) };
+        _proxyPortBox = new TextBox { Location = new Point(fieldX, dy), Width = 80, Text = _deployer.ProxyPort.ToString() };
+        _proxyPortBox.TextChanged += OnDeployFieldChanged;
+
+        var siteNameLabel = new Label { Text = "IIS site name:", AutoSize = true, Location = new Point(fieldX + 110, dy + 3) };
+        _siteNameBox = new TextBox { Location = new Point(fieldX + 230, dy), Width = 240, Text = _deployer.SiteName };
+        _siteNameBox.TextChanged += OnDeployFieldChanged;
+
+        dy += 32;
+        var pfxLabel = new Label { Text = "TLS .pfx path:", AutoSize = true, Location = new Point(labelX, dy + 3) };
+        _pfxPathBox = new TextBox
+        {
+            Location = new Point(fieldX, dy), Width = fieldW, Text = _deployer.PfxPath,
+            PlaceholderText = "C:\\certs\\claudeweb.pfx  (or use a thumbprint below)"
+        };
+        _pfxPathBox.TextChanged += OnDeployFieldChanged;
+        _pfxBrowse = new Button { Text = "Browse...", Location = new Point(browseX, dy - 1), Width = browseW };
+        _pfxBrowse.Click += (_, _) => BrowsePfx();
+
+        dy += 32;
+        var pfxPwLabel = new Label { Text = ".pfx password:", AutoSize = true, Location = new Point(labelX, dy + 3) };
+        _pfxPasswordBox = new TextBox
+        {
+            Location = new Point(fieldX, dy), Width = 200, Text = _deployer.PfxPassword,
+            UseSystemPasswordChar = true
+        };
+        _pfxPasswordBox.TextChanged += OnDeployFieldChanged;
+
+        var thumbLabel = new Label { Text = "or thumbprint:", AutoSize = true, Location = new Point(fieldX + 210, dy + 3) };
+        _thumbprintBox = new TextBox
+        {
+            Location = new Point(fieldX + 300, dy), Width = 200, Text = _deployer.CertThumbprint,
+            PlaceholderText = "existing cert thumbprint"
+        };
+        _thumbprintBox.TextChanged += OnDeployFieldChanged;
+
+        dy += 34;
+        var deploySettingsHint = new Label
+        {
+            Text = "Provide domain + port + a TLS option (.pfx path or thumbprint) to enable Deploy All. " +
+                   "Settings persist to settings.json (Deploy section).",
+            AutoSize = true, ForeColor = SystemColors.GrayText, Location = new Point(labelX, dy),
+            MaximumSize = new Size(fieldW + 200, 0)
+        };
+
+        deploySettings.Controls.AddRange(new Control[]
+        {
+            domainLabel, _domainBox,
+            proxyPortLabel, _proxyPortBox, siteNameLabel, _siteNameBox,
+            pfxLabel, _pfxPathBox, _pfxBrowse,
+            pfxPwLabel, _pfxPasswordBox, thumbLabel, _thumbprintBox,
+            deploySettingsHint
+        });
+
+        _deployList = BuildChecklist();
+        foreach (var step in _deployer.Steps)
+            AddStepRow(_deployList, step.Number, step.Phase.ToString(), step.Name, step.Description);
+        _deployList.DoubleClick += OnDeployStepDoubleClick;
+
+        _deployLogBox = BuildLogBox();
+
+        var deployActionBar = new Panel { Dock = DockStyle.Bottom, Height = 44, Padding = new Padding(8, 4, 8, 4) };
+        _deployCheckButton = new Button { Text = "Check All", Location = new Point(8, 8), Width = 100 };
+        _deployCheckButton.Click += OnDeployCheckAll;
+        _deployButton = new Button { Text = "Deploy All", Location = new Point(116, 8), Width = 100, Enabled = false };
+        _deployButton.Click += OnDeployAll;
+        _verifyButton = new Button { Text = "Verify", Location = new Point(224, 8), Width = 80 };
+        _verifyButton.Click += OnVerify;
+        _deployStatusLabel = new Label { Text = "", AutoSize = true, Location = new Point(320, 13) };
+        deployActionBar.Controls.AddRange(new Control[]
+        {
+            _deployCheckButton, _deployButton, _verifyButton, _deployStatusLabel
+        });
+
+        _deployPanel.Controls.Add(_deployList);
+        _deployPanel.Controls.Add(_deployLogBox);
+        _deployPanel.Controls.Add(deployActionBar);
+        _deployPanel.Controls.Add(deploySettings);
+
+        _deployTab.Controls.Add(_deployPanel);
+        _deployTab.Controls.Add(_deployHintLabel);
+        _deployTab.Controls.Add(deploySubtitle);
+        _deployTab.Controls.Add(deployHeader);
+
+        // ==================== ASSEMBLE ====================
+
+        _tabs.TabPages.Add(localTab);
+        _tabs.TabPages.Add(_deployTab);
+        Controls.Add(_tabs);
 
         _service.StepStatusChanged += OnStepStatusChanged;
         _service.LogMessage += OnLogMessage;
+        _deployer.StepStatusChanged += OnDeployStepStatusChanged;
+        _deployer.LogMessage += OnDeployLogMessage;
 
         ApplyRootValidity();
+        UpdateDeployButtonStates();
     }
 
-    // ---------------- Settings field handlers ----------------
+    // ---------------- Shared UI builders ----------------
+
+    private static ListView BuildChecklist()
+    {
+        var list = new ListView
+        {
+            View = View.Details,
+            FullRowSelect = true,
+            GridLines = true,
+            Dock = DockStyle.Fill,
+            HeaderStyle = ColumnHeaderStyle.Nonclickable
+        };
+        list.Columns.Add("#", 30);
+        list.Columns.Add("Phase", 80);
+        list.Columns.Add("Step", 200);
+        list.Columns.Add("Status", 80);
+        list.Columns.Add("Details", 380);
+        return list;
+    }
+
+    private static void AddStepRow(ListView list, int number, string phase, string name, string description)
+    {
+        var item = new ListViewItem(number.ToString());
+        item.SubItems.Add(phase);
+        item.SubItems.Add(name);
+        item.SubItems.Add("Pending");
+        item.SubItems.Add(description);
+        list.Items.Add(item);
+    }
+
+    private static TextBox BuildLogBox() => new()
+    {
+        Multiline = true,
+        ReadOnly = true,
+        ScrollBars = ScrollBars.Vertical,
+        Dock = DockStyle.Bottom,
+        Height = 200,
+        Font = new Font("Consolas", 9)
+    };
+
+    // ---------------- Local Setup field handlers ----------------
 
     private void OnRootChanged(object? sender, EventArgs e)
     {
@@ -224,7 +393,19 @@ public class InstallerForm : Form
             target.Text = dialog.SelectedPath;
     }
 
-    // ---------------- Action handlers ----------------
+    private void BrowsePfx()
+    {
+        using var dialog = new OpenFileDialog
+        {
+            Title = "Select the TLS certificate (.pfx)",
+            Filter = "PFX certificate (*.pfx)|*.pfx|All files (*.*)|*.*"
+        };
+        if (File.Exists(_pfxPathBox.Text)) dialog.FileName = _pfxPathBox.Text;
+        if (dialog.ShowDialog() == DialogResult.OK)
+            _pfxPathBox.Text = dialog.FileName;
+    }
+
+    // ---------------- Local Setup action handlers ----------------
 
     private async void OnCheckAll(object? sender, EventArgs e)
     {
@@ -237,6 +418,7 @@ public class InstallerForm : Form
         catch (Exception ex) { ShowErrorDialog("Check All failed", ex.ToString()); }
 
         UpdateButtonStates();
+        UpdateDeployGate();
     }
 
     private async void OnInstallAll(object? sender, EventArgs e)
@@ -260,6 +442,7 @@ public class InstallerForm : Form
         catch (Exception ex) { ShowErrorDialog("Install All failed", ex.ToString()); }
 
         UpdateButtonStates();
+        UpdateDeployGate();
     }
 
     private async void OnTest(object? sender, EventArgs e)
@@ -316,6 +499,151 @@ public class InstallerForm : Form
         _workingDirBrowse.Enabled = enabled;
     }
 
+    // ---------------- Deploy gate ----------------
+
+    /// <summary>Enables the Internet Deployment tab once Local Setup checks pass.</summary>
+    private void UpdateDeployGate()
+    {
+        bool gateOpen = _service.AllChecksPassed;
+        _deployTab.Enabled = gateOpen;
+        _deployPanel.Enabled = gateOpen;
+        _deployHintLabel.Text = gateOpen
+            ? "Local Setup checks passed -- Internet Deployment is available."
+            : "Complete Local Setup first.";
+        _deployHintLabel.ForeColor = gateOpen ? Color.ForestGreen : Color.Firebrick;
+
+        // Default the proxy port to the installer's port if the user left it.
+        if (gateOpen && string.IsNullOrWhiteSpace(_proxyPortBox.Text))
+            _proxyPortBox.Text = _service.Port.ToString();
+
+        UpdateDeployButtonStates();
+    }
+
+    // ---------------- Deploy field handlers ----------------
+
+    private void OnDeployFieldChanged(object? sender, EventArgs e)
+    {
+        _deployer.SetDomain(_domainBox.Text);
+        _deployer.SetPfxPath(_pfxPathBox.Text);
+        _deployer.SetPfxPassword(_pfxPasswordBox.Text);
+        _deployer.SetCertThumbprint(_thumbprintBox.Text);
+        _deployer.SetSiteName(_siteNameBox.Text);
+
+        if (int.TryParse(_proxyPortBox.Text.Trim(), out int port) && port is > 0 and <= 65535)
+        {
+            _deployer.SetProxyPort(port);
+            _proxyPortBox.ForeColor = SystemColors.WindowText;
+        }
+        else
+        {
+            _proxyPortBox.ForeColor = Color.Red;
+        }
+
+        UpdateDeployButtonStates();
+    }
+
+    private void UpdateDeployButtonStates()
+    {
+        _deployButton.Enabled = _deployTab.Enabled && _deployer.CanDeploy;
+    }
+
+    // ---------------- Deploy action handlers ----------------
+
+    private async void OnDeployCheckAll(object? sender, EventArgs e)
+    {
+        SetDeployButtonsEnabled(false);
+        _deployStatusLabel.Text = "Checking...";
+        _deployStatusLabel.ForeColor = SystemColors.ControlText;
+        _cts = new CancellationTokenSource();
+
+        try { await _deployer.CheckAllAsync(_cts.Token); }
+        catch (Exception ex) { ShowErrorDialog("Deploy Check All failed", ex.ToString()); }
+
+        UpdateDeployStatusAfterRun();
+    }
+
+    private async void OnDeployAll(object? sender, EventArgs e)
+    {
+        if (!DeployerService.IsAdministrator())
+        {
+            var go = MessageBox.Show(
+                "This program is NOT running as Administrator.\n\n" +
+                "IIS, certificate and ARR steps will be skipped or marked Failed.\n" +
+                "To configure IIS, close and relaunch the program as Administrator.\n\n" +
+                "Continue anyway (autostart + web.config-in-userspace only)?",
+                "Administrator required for IIS",
+                MessageBoxButtons.OKCancel, MessageBoxIcon.Warning);
+            if (go != DialogResult.OK) return;
+        }
+
+        var confirm = MessageBox.Show(
+            "The following will be configured:\n\n" + _deployer.DescribePendingDeploys() +
+            "\n\nProceed?",
+            "Confirm Deploy",
+            MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
+        if (confirm != DialogResult.OK) return;
+
+        SetDeployButtonsEnabled(false);
+        _deployStatusLabel.Text = "Deploying...";
+        _deployStatusLabel.ForeColor = SystemColors.ControlText;
+        _cts = new CancellationTokenSource();
+
+        try { await _deployer.DeployAllAsync(_cts.Token); }
+        catch (Exception ex) { ShowErrorDialog("Deploy All failed", ex.ToString()); }
+
+        UpdateDeployStatusAfterRun();
+    }
+
+    private async void OnVerify(object? sender, EventArgs e)
+    {
+        SetDeployButtonsEnabled(false);
+        _deployStatusLabel.Text = "Verifying...";
+        _deployStatusLabel.ForeColor = SystemColors.ControlText;
+        _cts = new CancellationTokenSource();
+
+        try { await _deployer.VerifyAsync(_cts.Token); }
+        catch (Exception ex) { ShowErrorDialog("Verify failed", ex.ToString()); }
+
+        var verifySteps = _deployer.Steps.Where(s => s.Phase == DeployPhase.Verify).ToList();
+        bool ok = verifySteps.All(s => s.Status is StepStatus.Ok or StepStatus.Warning);
+        if (ok)
+        {
+            _deployStatusLabel.Text = "Verify passed -- public health check OK.";
+            _deployStatusLabel.ForeColor = Color.ForestGreen;
+        }
+        else
+        {
+            _deployStatusLabel.Text = "Verify failed -- see details (double-click a row).";
+            _deployStatusLabel.ForeColor = Color.Firebrick;
+            var failed = verifySteps.FirstOrDefault(s => s.Status == StepStatus.Failed);
+            if (failed != null)
+                ShowErrorDialog($"Verify: {failed.Name}", failed.Details);
+        }
+        SetDeployButtonsEnabled(true);
+    }
+
+    private void UpdateDeployStatusAfterRun()
+    {
+        bool preflight = _deployer.PreFlightPassed;
+        bool allOk = _deployer.Steps.All(s => s.Status is StepStatus.Ok or StepStatus.Warning);
+        _deployStatusLabel.Text = allOk
+            ? "Deployment complete -- all steps OK."
+            : preflight
+                ? "Pre-flight OK; some deploy steps remain (see list)."
+                : "Pre-flight failed -- resolve the red rows first.";
+        _deployStatusLabel.ForeColor = allOk ? Color.ForestGreen
+            : preflight ? SystemColors.ControlText : Color.Firebrick;
+        SetDeployButtonsEnabled(true);
+    }
+
+    private void SetDeployButtonsEnabled(bool enabled)
+    {
+        _deployCheckButton.Enabled = enabled;
+        _deployButton.Enabled = enabled && _deployer.CanDeploy;
+        _verifyButton.Enabled = enabled;
+        _pfxBrowse.Enabled = enabled;
+    }
+
     // ---------------- Event subscriptions ----------------
 
     private void OnStepDoubleClick(object? sender, EventArgs e)
@@ -328,11 +656,27 @@ public class InstallerForm : Form
             $"Phase: {step.Phase}\nStatus: {step.Status}\n\nDetails:\n{step.Details}");
     }
 
-    private void OnStepStatusChanged(int index, StepStatus status, string details)
+    private void OnDeployStepDoubleClick(object? sender, EventArgs e)
     {
-        if (InvokeRequired) { Invoke(() => OnStepStatusChanged(index, status, details)); return; }
+        if (_deployList.SelectedItems.Count == 0) return;
+        int index = _deployList.SelectedItems[0].Index;
+        if (index < 0 || index >= _deployer.Steps.Count) return;
+        var step = _deployer.Steps[index];
+        ShowErrorDialog($"Step {step.Number}: {step.Name}",
+            $"Phase: {step.Phase}\nStatus: {step.Status}\n\nDetails:\n{step.Details}");
+    }
 
-        var item = _stepList.Items[index];
+    private void OnStepStatusChanged(int index, StepStatus status, string details)
+        => UpdateRow(_stepList, index, status, details);
+
+    private void OnDeployStepStatusChanged(int index, StepStatus status, string details)
+        => UpdateRow(_deployList, index, status, details);
+
+    private void UpdateRow(ListView list, int index, StepStatus status, string details)
+    {
+        if (InvokeRequired) { Invoke(() => UpdateRow(list, index, status, details)); return; }
+
+        var item = list.Items[index];
         item.SubItems[3].Text = status.ToString();
         item.SubItems[4].Text = details;
         item.BackColor = status switch
@@ -345,10 +689,13 @@ public class InstallerForm : Form
         };
     }
 
-    private void OnLogMessage(string message)
+    private void OnLogMessage(string message) => AppendLog(_logBox, message);
+    private void OnDeployLogMessage(string message) => AppendLog(_deployLogBox, message);
+
+    private void AppendLog(TextBox box, string message)
     {
-        if (InvokeRequired) { Invoke(() => OnLogMessage(message)); return; }
-        _logBox.AppendText(message + Environment.NewLine);
+        if (InvokeRequired) { Invoke(() => AppendLog(box, message)); return; }
+        box.AppendText(message + Environment.NewLine);
     }
 
     // ---------------- Error dialog ----------------
