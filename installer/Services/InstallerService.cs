@@ -599,7 +599,7 @@ public class InstallerService
         if (!File.Exists(BuiltExePath))
             return (false, $"ClaudeWeb.exe not found at {BuiltExePath} -- build first");
 
-        string url = $"http://localhost:{Port}/api/health";
+        string url = $"http://127.0.0.1:{Port}/api/health";
         Log("[TEST] Launching ClaudeWeb.exe...");
         Log($"  Exe: {BuiltExePath}");
         Log($"  Working directory: {AppProjectDir}");
@@ -775,13 +775,16 @@ public class InstallerService
         return new BackendStatus(processRunning, healthOk, Port, distPresent, localUrl, lanUrl);
     }
 
-    /// <summary>GET /api/health with a ~2s timeout; true only on HTTP 200.</summary>
+    /// <summary>GET /api/health; true only on HTTP 200.</summary>
     private async Task<bool> IsHealthyAsync(CancellationToken ct)
     {
         try
         {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
-            var resp = await http.GetAsync($"http://localhost:{Port}/api/health", ct);
+            // Use 127.0.0.1 (not localhost): the backend binds IPv4 0.0.0.0, but
+            // "localhost" resolves to IPv6 ::1 first on Windows, which fails and
+            // can exhaust the timeout before falling back to IPv4.
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(4) };
+            var resp = await http.GetAsync($"http://127.0.0.1:{Port}/api/health", ct);
             return resp.IsSuccessStatusCode;
         }
         catch

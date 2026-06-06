@@ -125,7 +125,9 @@ public class DeployerService
         ProxyPort is > 0 and <= 65535
         && !string.IsNullOrWhiteSpace(SiteWebConfigFolder);
 
-    public string HealthUrlLocal => $"http://localhost:{ProxyPort}/api/health";
+    // 127.0.0.1, not localhost: the backend binds IPv4 only; localhost can
+    // resolve to IPv6 ::1 first on Windows and fail.
+    public string HealthUrlLocal => $"http://127.0.0.1:{ProxyPort}/api/health";
     public string HealthUrlPublic => $"https://{Domain}/api/health";
 
     // ---------------- Elevation ----------------
@@ -380,9 +382,9 @@ public class DeployerService
         if (!File.Exists(path))
             return (StepStatus.Missing, $"web.config missing at {path}");
         var text = File.ReadAllText(path);
-        bool proxy = text.Contains($"http://localhost:{ProxyPort}/", StringComparison.OrdinalIgnoreCase);
+        bool proxy = text.Contains($"http://127.0.0.1:{ProxyPort}/", StringComparison.OrdinalIgnoreCase);
         return proxy
-            ? (StepStatus.Ok, $"web.config present, proxies to http://localhost:{ProxyPort}/")
+            ? (StepStatus.Ok, $"web.config present, proxies to http://127.0.0.1:{ProxyPort}/")
             : (StepStatus.Missing, $"web.config present but does not target port {ProxyPort}");
     }
 
@@ -462,7 +464,7 @@ public class DeployerService
       <rules>
         <rule name=""ReverseProxy"" stopProcessing=""true"">
           <match url=""(.*)"" />
-          <action type=""Rewrite"" url=""http://localhost:{port}/{{R:1}}"" />
+          <action type=""Rewrite"" url=""http://127.0.0.1:{port}/{{R:1}}"" />
         </rule>
       </rules>
     </rewrite>
@@ -611,7 +613,7 @@ public class DeployerService
 
         var lines = new List<string>
         {
-            $"Proxy target:    http://localhost:{ProxyPort}",
+            $"Proxy target:    http://127.0.0.1:{ProxyPort}",
             $"web.config into: {SiteWebConfigFolder}",
             $"Public domain:   {(string.IsNullOrWhiteSpace(Domain) ? "(none -- public health verify skipped)" : Domain)}",
             "TLS:             handled by IIS (this tool does not manage certificates)",
