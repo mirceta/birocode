@@ -102,6 +102,14 @@
   white-space: pre-wrap;
 }
 
+/* Links the user pasted, shown on the colored user bubble -- keep them
+   readable (white + underlined) and wrap long URLs instead of overflowing. */
+.msg__text a {
+  color: #fff;
+  text-decoration: underline;
+  word-break: break-all;
+}
+
 @keyframes bubble-in {
   from {
     opacity: 0;
@@ -159,6 +167,7 @@
 .msg__markdown a {
   color: var(--color-accent);
   text-decoration: underline;
+  word-break: break-all;
 }
 
 .msg__markdown code {
