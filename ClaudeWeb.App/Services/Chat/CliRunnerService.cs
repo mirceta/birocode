@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using ClaudeWeb.Models;
 using ClaudeWeb.Services.Logging;
+using ClaudeWeb.Services.Monitoring;
 
 namespace ClaudeWeb.Services.Chat;
 
@@ -30,14 +31,16 @@ public class CliRunnerService
 {
     private readonly AppConfig _config;
     private readonly Logger _logger;
+    private readonly CallLog _callLog;
 
     // Single-flight gate: 1 = free, 0 = a CLI process is running.
     private int _busy;
 
-    public CliRunnerService(AppConfig config, Logger logger)
+    public CliRunnerService(AppConfig config, Logger logger, CallLog callLog)
     {
         _config = config;
         _logger = logger;
+        _callLog = callLog;
     }
 
     /// <summary>True while a CLI process is in flight.</summary>
@@ -68,6 +71,15 @@ public class CliRunnerService
         var workingDirectory = _config.WorkingDirectory; // read per-request, never cache
         var resuming = !string.IsNullOrWhiteSpace(sessionId);
 
+        // Create the monitoring record up front so the GUI shows a "Running" row
+        // immediately. Updated in place as events translate; finalized below.
+        var record = _callLog.StartCall(
+            prompt: message,
+            commandLine: BuildDisplayCommand(message, sessionId),
+            workingDirectory: workingDirectory,
+            resuming: resuming,
+            sessionId: resuming ? sessionId! : "");
+
         try
         {
             var psi = CreateProcessInfo(message, sessionId, workingDirectory);
@@ -88,7 +100,7 @@ public class CliRunnerService
                 var line = await reader.ReadLineAsync(ct);
                 if (string.IsNullOrWhiteSpace(line)) continue;
 
-                await TranslateLine(line, emit,
+                await TranslateLine(line, emit, record,
                     onSessionId: id => capturedSessionId = id,
                     onError: () => sawError = true);
             }
@@ -102,6 +114,7 @@ public class CliRunnerService
                     ? $"Claude CLI exited with code {process.ExitCode}"
                     : stderr.Trim();
                 _logger.Error($"[CLI] Exit code {process.ExitCode}: {detail}");
+                record.ErrorMessage ??= detail;
                 await emit(new { type = "error", message = detail });
             }
             else if (!string.IsNullOrWhiteSpace(stderr))
@@ -109,21 +122,73 @@ public class CliRunnerService
                 _logger.Info($"[CLI] stderr: {stderr.Trim()}");
             }
 
+            // Finalize the monitoring record.
+            record.ExitCode = process.ExitCode;
+            if (!string.IsNullOrWhiteSpace(stderr)) record.StdErr = stderr.Trim();
+            FinalizeRecord(record, hadException: false, sawError: sawError, exitCode: process.ExitCode);
+
             _logger.Info($"[CLI] Process finished (session {Short(capturedSessionId ?? sessionId ?? "?")})");
         }
         catch (OperationCanceledException)
         {
             _logger.Info("[CLI] Run cancelled (client disconnected).");
+            record.ErrorMessage ??= "Run cancelled (client disconnected).";
+            FinalizeRecord(record, hadException: true, sawError: true, exitCode: record.ExitCode);
         }
         catch (Exception ex)
         {
             _logger.Error($"[CLI] Run failed: {ex.Message}");
+            record.ErrorMessage ??= ex.Message;
+            FinalizeRecord(record, hadException: true, sawError: true, exitCode: record.ExitCode);
             try { await emit(new { type = "error", message = ex.Message }); } catch { }
         }
         finally
         {
             EndRun();
         }
+    }
+
+    /// <summary>
+    /// Sets the terminal status on the record and publishes the final change.
+    /// Status precedence: Error (exception / exit!=0 / sawError) > Throttled >
+    /// Success.
+    /// </summary>
+    private void FinalizeRecord(CallRecord record, bool hadException, bool sawError, int? exitCode)
+    {
+        if (record.FinishedAt.HasValue) return; // already finalized
+        record.FinishedAt = DateTime.Now;
+
+        var failed = hadException || sawError || (exitCode.HasValue && exitCode.Value != 0);
+        record.Status = failed ? "Error"
+            : record.WasThrottled ? "Throttled"
+            : "Success";
+
+        _callLog.Update(record);
+    }
+
+    /// <summary>
+    /// Builds a readable representation of the spawn command for the GUI. The
+    /// prompt is truncated here for display; the full prompt lives on
+    /// <see cref="CallRecord.Prompt"/>.
+    /// </summary>
+    private static string BuildDisplayCommand(string message, string? sessionId)
+    {
+        var promptDisplay = message.Replace("\r", " ").Replace("\n", " ");
+        if (promptDisplay.Length > 80) promptDisplay = promptDisplay[..80] + "...";
+
+        var parts = new List<string> { "claude" };
+        if (!string.IsNullOrWhiteSpace(sessionId))
+        {
+            parts.Add("--resume");
+            parts.Add(sessionId);
+        }
+        parts.Add("-p");
+        parts.Add($"\"{promptDisplay}\"");
+        parts.Add("--output-format");
+        parts.Add("stream-json");
+        parts.Add("--include-partial-messages");
+        parts.Add("--verbose");
+        return string.Join(" ", parts);
     }
 
     // --- stream-json -> stable SSE translation ----------------------------
@@ -134,7 +199,7 @@ public class CliRunnerService
     /// the stream.
     /// </summary>
     private async Task TranslateLine(
-        string line, Func<object, Task> emit,
+        string line, Func<object, Task> emit, CallRecord record,
         Action<string> onSessionId, Action onError)
     {
         JsonDocument doc;
@@ -153,19 +218,19 @@ public class CliRunnerService
             switch (type)
             {
                 case "system":
-                    await HandleSystem(root, emit, onSessionId);
+                    await HandleSystem(root, emit, record, onSessionId);
                     break;
                 case "stream_event":
-                    await HandleStreamEvent(root, emit);
+                    await HandleStreamEvent(root, emit, record);
                     break;
                 case "assistant":
-                    await HandleAssistant(root, emit);
+                    await HandleAssistant(root, emit, record);
                     break;
                 case "rate_limit_event":
-                    await HandleRateLimit(root, emit, onError);
+                    await HandleRateLimit(root, emit, record, onError);
                     break;
                 case "result":
-                    await HandleResult(root, emit, onError);
+                    await HandleResult(root, emit, record, onError);
                     break;
                 // "user" (tool_result echoes) and "message_*" are intentionally
                 // not surfaced to the client -- internal CLI bookkeeping.
@@ -174,19 +239,33 @@ public class CliRunnerService
     }
 
     /// <summary>system/init carries the session id immediately -- forward it now.</summary>
-    private async Task HandleSystem(JsonElement root, Func<object, Task> emit, Action<string> onSessionId)
+    private async Task HandleSystem(JsonElement root, Func<object, Task> emit, CallRecord record, Action<string> onSessionId)
     {
         var subtype = root.TryGetProperty("subtype", out var sp) ? sp.GetString() : null;
-        if (subtype == "init" && root.TryGetProperty("session_id", out var sidProp))
+        if (subtype != "init") return;
+
+        // Capture model + cwd from the init event for the monitoring record.
+        if (root.TryGetProperty("model", out var modelProp) && modelProp.ValueKind == JsonValueKind.String)
+            record.Model = modelProp.GetString();
+        if (root.TryGetProperty("cwd", out var cwdProp) && cwdProp.ValueKind == JsonValueKind.String)
+        {
+            var cwd = cwdProp.GetString();
+            if (!string.IsNullOrEmpty(cwd)) record.WorkingDirectory = cwd;
+        }
+
+        if (root.TryGetProperty("session_id", out var sidProp))
         {
             var sid = sidProp.GetString();
             if (!string.IsNullOrEmpty(sid))
             {
+                record.SessionId = sid;
                 onSessionId(sid);
                 _logger.Info($"[CHAT] Session id {Short(sid)} (sent to client)");
                 await emit(new { type = "session", sessionId = sid });
             }
         }
+
+        _callLog.Update(record);
     }
 
     /// <summary>
@@ -194,7 +273,7 @@ public class CliRunnerService
     /// and reduce thinking deltas to a content-free "thinking" signal so the
     /// chain-of-thought never leaks into the chat bubble.
     /// </summary>
-    private async Task HandleStreamEvent(JsonElement root, Func<object, Task> emit)
+    private async Task HandleStreamEvent(JsonElement root, Func<object, Task> emit, CallRecord record)
     {
         if (!root.TryGetProperty("event", out var ev)) return;
         var evType = ev.TryGetProperty("type", out var etp) ? etp.GetString() : "";
@@ -210,6 +289,7 @@ public class CliRunnerService
                     {
                         var name = cb.TryGetProperty("name", out var np) ? np.GetString() ?? "tool" : "tool";
                         _logger.Info($"[CHAT] Tool: {name}");
+                        AddTool(record, name);
                         await emit(new { type = "tool", name, status = "start" });
                     }
                     else if (cbType == "thinking")
@@ -227,7 +307,15 @@ public class CliRunnerService
                     {
                         var text = delta.TryGetProperty("text", out var t) ? t.GetString() ?? "" : "";
                         if (text.Length > 0)
+                        {
+                            if (!record.FirstTokenAt.HasValue)
+                            {
+                                record.FirstTokenAt = DateTime.Now;
+                                _callLog.Update(record);
+                            }
+                            record.Output.Append(text);
                             await emit(new { type = "token", text });
+                        }
                     }
                     else if (dType == "thinking_delta")
                     {
@@ -245,7 +333,7 @@ public class CliRunnerService
     /// blocks (some tool calls only appear in this consolidated event, not as a
     /// stream_event). Text is already streamed via deltas, so it's not re-sent.
     /// </summary>
-    private async Task HandleAssistant(JsonElement root, Func<object, Task> emit)
+    private async Task HandleAssistant(JsonElement root, Func<object, Task> emit, CallRecord record)
     {
         if (!root.TryGetProperty("message", out var msg) ||
             !msg.TryGetProperty("content", out var content) ||
@@ -259,13 +347,24 @@ public class CliRunnerService
             {
                 var name = block.TryGetProperty("name", out var np) ? np.GetString() ?? "tool" : "tool";
                 _logger.Info($"[CHAT] Tool: {name}");
+                AddTool(record, name);
                 await emit(new { type = "tool", name, status = "start" });
             }
         }
     }
 
+    /// <summary>Append a tool name to the record, collapsing consecutive duplicates.</summary>
+    private void AddTool(CallRecord record, string name)
+    {
+        if (record.Tools.Count == 0 || record.Tools[^1] != name)
+        {
+            record.Tools.Add(name);
+            _callLog.Update(record);
+        }
+    }
+
     /// <summary>Surface a throttle warning when the CLI reports a non-allowed status.</summary>
-    private async Task HandleRateLimit(JsonElement root, Func<object, Task> emit, Action onError)
+    private async Task HandleRateLimit(JsonElement root, Func<object, Task> emit, CallRecord record, Action onError)
     {
         var status = root.TryGetProperty("rate_limit_info", out var info) &&
                      info.TryGetProperty("status", out var sp)
@@ -275,17 +374,25 @@ public class CliRunnerService
         if (status != "" && status != "allowed")
         {
             onError();
+            record.WasThrottled = true;
+            record.ErrorMessage ??= $"Rate limited (status: {status})";
+            _callLog.Update(record);
             _logger.Error($"[CLI] Rate limit: {status}");
             await emit(new { type = "error", message = $"Rate limited (status: {status})" });
         }
     }
 
     /// <summary>Terminal event. Emits "done" on success or "error" on failure.</summary>
-    private async Task HandleResult(JsonElement root, Func<object, Task> emit, Action onError)
+    private async Task HandleResult(JsonElement root, Func<object, Task> emit, CallRecord record, Action onError)
     {
         var sessionId = root.TryGetProperty("session_id", out var sidProp) ? sidProp.GetString() : null;
         var isError = root.TryGetProperty("is_error", out var iep) &&
                       iep.ValueKind == JsonValueKind.True;
+
+        // The result event carries all four token counts in one usage object --
+        // capture them regardless of success/error.
+        CaptureUsageAndMeta(root, record);
+        if (!string.IsNullOrEmpty(sessionId)) record.SessionId = sessionId;
 
         if (isError)
         {
@@ -295,22 +402,52 @@ public class CliRunnerService
             var msg = !string.IsNullOrWhiteSpace(resultText) ? resultText
                     : !string.IsNullOrWhiteSpace(subtype) ? subtype
                     : "Claude CLI reported an error";
+            record.ErrorMessage ??= msg;
+            _callLog.Update(record);
             _logger.Error($"[CLI] Result error: {msg}");
             await emit(new { type = "error", message = msg });
             return;
         }
 
-        double? cost = root.TryGetProperty("total_cost_usd", out var cp) &&
-                       cp.ValueKind == JsonValueKind.Number
-            ? cp.GetDouble()
-            : null;
+        _callLog.Update(record);
+        _logger.Info($"[CLI] Done: session {Short(sessionId ?? "?")}, {record.NumTurns} turn(s), cost ${record.CostUsd ?? 0:0.0000}");
 
-        var turns = root.TryGetProperty("num_turns", out var ntp) && ntp.ValueKind == JsonValueKind.Number
-            ? ntp.GetInt32() : 0;
-        _logger.Info($"[CLI] Done: session {Short(sessionId ?? "?")}, {turns} turn(s), cost ${cost ?? 0:0.0000}");
-
-        await emit(new { type = "done", sessionId, cost });
+        await emit(new { type = "done", sessionId, cost = record.CostUsd });
     }
+
+    /// <summary>
+    /// Reads token usage (input/output/cache-read/cache-creation), cost, turn
+    /// count, stop reason, and model from the terminal result event into the
+    /// monitoring record.
+    /// </summary>
+    private static void CaptureUsageAndMeta(JsonElement root, CallRecord record)
+    {
+        if (root.TryGetProperty("usage", out var usage) && usage.ValueKind == JsonValueKind.Object)
+        {
+            record.InputTokens = ReadLong(usage, "input_tokens");
+            record.OutputTokens = ReadLong(usage, "output_tokens");
+            record.CacheReadTokens = ReadLong(usage, "cache_read_input_tokens");
+            record.CacheCreationTokens = ReadLong(usage, "cache_creation_input_tokens");
+        }
+
+        if (root.TryGetProperty("total_cost_usd", out var cp) && cp.ValueKind == JsonValueKind.Number)
+            record.CostUsd = cp.GetDouble();
+
+        if (root.TryGetProperty("num_turns", out var ntp) && ntp.ValueKind == JsonValueKind.Number)
+            record.NumTurns = ntp.GetInt32();
+
+        if (root.TryGetProperty("stop_reason", out var srp) && srp.ValueKind == JsonValueKind.String)
+            record.StopReason = srp.GetString();
+
+        // Model may also appear at the result level on some CLI versions.
+        if (string.IsNullOrEmpty(record.Model) &&
+            root.TryGetProperty("model", out var mp) && mp.ValueKind == JsonValueKind.String)
+            record.Model = mp.GetString();
+    }
+
+    private static long ReadLong(JsonElement obj, string name) =>
+        obj.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.Number
+            ? p.GetInt64() : 0;
 
     // --- process setup ----------------------------------------------------
 

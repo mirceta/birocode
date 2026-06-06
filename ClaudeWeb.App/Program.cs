@@ -1,6 +1,7 @@
 using ClaudeWeb.Models;
 using ClaudeWeb.Services.Hosting;
 using ClaudeWeb.Services.Logging;
+using ClaudeWeb.Services.Monitoring;
 using ClaudeWeb.UI;
 using Microsoft.Extensions.Configuration;
 
@@ -19,13 +20,14 @@ static class Program
 
         // Shared singletons -- registered in DI by EmbeddedApi so all modules inject them.
         var logger = new Logger();
+        var callLog = new CallLog();
 
         // Start the embedded Kestrel server on a background thread.
-        var api = new EmbeddedApi(config, logger);
+        var api = new EmbeddedApi(config, logger, callLog);
         api.Start();
 
         // Launch the monitoring GUI (blocks on the WinForms message loop).
-        var form = new MainForm(config, logger, api);
+        var form = new MainForm(config, logger, api, callLog);
         Application.Run(form);
 
         // Shut the server down cleanly when the GUI closes.

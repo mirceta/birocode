@@ -3,6 +3,7 @@ using ClaudeWeb.Services.Chat;
 using ClaudeWeb.Services.Files;
 using ClaudeWeb.Services.Git;
 using ClaudeWeb.Services.Logging;
+using ClaudeWeb.Services.Monitoring;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.StaticFiles;
@@ -37,15 +38,17 @@ public class EmbeddedApi
 {
     private readonly AppConfig _config;
     private readonly Logger _logger;
+    private readonly CallLog _callLog;
     private WebApplication? _app;
 
     public bool IsRunning { get; private set; }
     public int Port => _config.Port;
 
-    public EmbeddedApi(AppConfig config, Logger logger)
+    public EmbeddedApi(AppConfig config, Logger logger, CallLog callLog)
     {
         _config = config;
         _logger = logger;
+        _callLog = callLog;
     }
 
     public void Start()
@@ -74,6 +77,7 @@ public class EmbeddedApi
             // Shared singletons -- every module can inject these.
             builder.Services.AddSingleton(_config);
             builder.Services.AddSingleton(_logger);
+            builder.Services.AddSingleton(_callLog);
 
             // Controllers auto-discovered here -- new controllers need NO changes.
             builder.Services.AddControllers();
