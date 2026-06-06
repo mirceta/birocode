@@ -22,6 +22,10 @@ export function ChatProvider({ children }) {
 
   const [messages, setMessages] = useState(() => [greeting()]);
   const [sessionId, setSessionId] = useState(null);
+  // The unsent composer text. Lives here (not in ChatInput) so it survives
+  // navigating to other tabs and back, and so other tabs (e.g. Files) can drop
+  // a file reference into it.
+  const [draft, setDraft] = useState('');
   const [streaming, setStreaming] = useState(false);
   const [thinking, setThinking] = useState(false);
   const [toolName, setToolName] = useState(null);
@@ -75,6 +79,7 @@ export function ChatProvider({ children }) {
 
   async function send(text) {
     setError('');
+    setDraft(''); // clear the composer the moment the message is sent
     setMessages((prev) => [
       ...prev,
       { role: 'user', text },
@@ -165,6 +170,8 @@ export function ChatProvider({ children }) {
   const value = {
     messages,
     sessionId,
+    draft,
+    setDraft,
     streaming,
     thinking,
     toolName,

@@ -17,6 +17,8 @@ export default function Chat() {
   const {
     messages,
     sessionId,
+    draft,
+    setDraft,
     streaming,
     thinking,
     toolName,
@@ -82,7 +84,12 @@ export default function Chat() {
         {error && <ErrorBanner message={error} />}
       </div>
 
-      <ChatInput onSend={handleSend} disabled={streaming} />
+      <ChatInput
+        value={draft}
+        onChange={setDraft}
+        onSend={handleSend}
+        disabled={streaming}
+      />
 
       <SessionPicker
         open={pickerOpen}

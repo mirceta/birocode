@@ -1,17 +1,26 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useT } from '../../i18n/LanguageContext';
 
-export default function ChatInput({ onSend, disabled }) {
+// Controlled composer. The draft text lives in ChatContext (so it persists
+// across tab navigation and can be appended to by other tabs), and is passed
+// in via value/onChange.
+export default function ChatInput({ value, onChange, onSend, disabled }) {
   const { t } = useT();
-  const [value, setValue] = useState('');
   const textareaRef = useRef(null);
 
+  // Auto-grow to fit the content. Runs on every value change -- including when
+  // the draft is restored after navigating back, or cleared after sending.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+
   function submit() {
-    const trimmed = value.trim();
+    const trimmed = (value || '').trim();
     if (!trimmed || disabled) return;
-    onSend(trimmed);
-    setValue('');
-    if (textareaRef.current) textareaRef.current.style.height = 'auto';
+    onSend(trimmed); // ChatContext clears the draft on send
   }
 
   function handleKeyDown(e) {
@@ -21,14 +30,7 @@ export default function ChatInput({ onSend, disabled }) {
     }
   }
 
-  function handleChange(e) {
-    setValue(e.target.value);
-    const el = e.target;
-    el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
-  }
-
-  const canSend = value.trim().length > 0 && !disabled;
+  const canSend = (value || '').trim().length > 0 && !disabled;
 
   return (
     <div className="chat-input">
@@ -39,7 +41,7 @@ export default function ChatInput({ onSend, disabled }) {
         rows={1}
         value={value}
         disabled={disabled}
-        onChange={handleChange}
+        onChange={(e) => onChange(e.target.value)}
         onKeyDown={handleKeyDown}
         aria-label={t('chat.inputAria')}
       />
