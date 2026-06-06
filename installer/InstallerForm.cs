@@ -32,7 +32,16 @@ public class InstallerForm : Form
     private readonly Button _checkButton;
     private readonly Button _installButton;
     private readonly Button _testButton;
+    private readonly Button _runButton;
+    private readonly Button _stopButton;
     private readonly Label _statusLabel;
+
+    // -- Backend run/status controls --
+    private readonly Label _backendStatusLabel;
+    private readonly Label _webAppStatusLabel;
+    private readonly System.Windows.Forms.Timer _statusTimer;
+    private bool _lastHealthOk;
+    private bool _lastProcessRunning;
 
     // -- Tabs --
     private readonly TabControl _tabs;
@@ -154,16 +163,43 @@ public class InstallerForm : Form
         _installButton.Click += OnInstallAll;
         _testButton = new Button { Text = "Test", Location = new Point(224, 8), Width = 80, Enabled = false };
         _testButton.Click += OnTest;
-        _statusLabel = new Label { Text = "", AutoSize = true, Location = new Point(320, 13) };
-        actionBar.Controls.AddRange(new Control[] { _checkButton, _installButton, _testButton, _statusLabel });
+        _runButton = new Button { Text = "Run", Location = new Point(312, 8), Width = 70 };
+        _runButton.Click += OnRun;
+        _stopButton = new Button { Text = "Stop", Location = new Point(390, 8), Width = 70, Enabled = false };
+        _stopButton.Click += OnStop;
+        _statusLabel = new Label { Text = "", AutoSize = true, Location = new Point(470, 13) };
+        actionBar.Controls.AddRange(new Control[]
+        {
+            _checkButton, _installButton, _testButton, _runButton, _stopButton, _statusLabel
+        });
+
+        // Live backend status panel (the backend + web app are one process).
+        var statusPanel = new Panel { Dock = DockStyle.Bottom, Height = 50, Padding = new Padding(8, 4, 8, 4) };
+        _backendStatusLabel = new Label
+        {
+            AutoSize = true, Location = new Point(8, 4),
+            Font = new Font(Font.FontFamily, 9, FontStyle.Bold),
+            Text = "Backend (API): checking..."
+        };
+        _webAppStatusLabel = new Label
+        {
+            AutoSize = true, Location = new Point(8, 26),
+            Text = "Web app: checking...", ForeColor = SystemColors.GrayText
+        };
+        statusPanel.Controls.AddRange(new Control[] { _backendStatusLabel, _webAppStatusLabel });
 
         // Layout (reverse dock order) inside the Local Setup tab.
         localTab.Controls.Add(_stepList);
         localTab.Controls.Add(_logBox);
+        localTab.Controls.Add(statusPanel);
         localTab.Controls.Add(actionBar);
         localTab.Controls.Add(settingsPanel);
         localTab.Controls.Add(subtitle);
         localTab.Controls.Add(header);
+
+        // Poll backend status every ~3s and refresh the panel + Run/Stop state.
+        _statusTimer = new System.Windows.Forms.Timer { Interval = 3000 };
+        _statusTimer.Tick += (_, _) => RefreshBackendStatus();
 
         // ==================== INTERNET DEPLOYMENT TAB ====================
 
@@ -276,6 +312,13 @@ public class InstallerForm : Form
 
         ApplyRootValidity();
         UpdateDeployButtonStates();
+    }
+
+    protected override void OnLoad(EventArgs e)
+    {
+        base.OnLoad(e);
+        RefreshBackendStatus();
+        _statusTimer.Start();
     }
 
     // ---------------- Shared UI builders ----------------
@@ -435,6 +478,87 @@ public class InstallerForm : Form
         _checkButton.Enabled = true;
         _installButton.Enabled = !_service.AllStepsPassed;
         _testButton.Enabled = _service.AllChecksPassed;
+
+        RefreshBackendStatus();
+    }
+
+    // ---------------- Run / Stop / live status ----------------
+
+    private async void OnRun(object? sender, EventArgs e)
+    {
+        _runButton.Enabled = false;
+        var (ok, message) = await _service.StartBackend();
+        _statusLabel.Text = message;
+        _statusLabel.ForeColor = ok ? Color.ForestGreen : Color.Firebrick;
+        RefreshBackendStatus();
+    }
+
+    private void OnStop(object? sender, EventArgs e)
+    {
+        _stopButton.Enabled = false;
+        var (ok, message) = _service.StopBackend();
+        _statusLabel.Text = message;
+        _statusLabel.ForeColor = ok ? SystemColors.ControlText : Color.Firebrick;
+        RefreshBackendStatus();
+    }
+
+    /// <summary>
+    /// Fetches backend status off the UI thread, then marshals back via
+    /// BeginInvoke to update the labels and Run/Stop enabled state -- the same
+    /// cross-thread pattern UpdateRow uses for StepStatusChanged.
+    /// </summary>
+    private async void RefreshBackendStatus()
+    {
+        BackendStatus status;
+        try { status = await _service.GetBackendStatusAsync(CancellationToken.None); }
+        catch { return; }
+
+        if (IsDisposed || Disposing) return;
+        if (InvokeRequired) { BeginInvoke(() => ApplyBackendStatus(status)); return; }
+        ApplyBackendStatus(status);
+    }
+
+    private void ApplyBackendStatus(BackendStatus s)
+    {
+        _lastHealthOk = s.HealthOk;
+        _lastProcessRunning = s.ProcessRunning;
+
+        // Line 1: backend API.
+        if (s.HealthOk)
+        {
+            _backendStatusLabel.Text = $"Backend (API): ● Running on http://localhost:{s.Port}";
+            _backendStatusLabel.ForeColor = Color.ForestGreen;
+        }
+        else if (s.ProcessRunning)
+        {
+            _backendStatusLabel.Text = "Backend (API): ● Starting (process up, not responding yet)";
+            _backendStatusLabel.ForeColor = Color.DarkOrange;
+        }
+        else
+        {
+            _backendStatusLabel.Text = "Backend (API): ○ Stopped";
+            _backendStatusLabel.ForeColor = Color.Firebrick;
+        }
+
+        // Line 2: web app URLs.
+        if (s.HealthOk)
+        {
+            string lan = s.LanUrl == null ? "(LAN address unavailable)" : s.LanUrl;
+            _webAppStatusLabel.Text = $"Web app: open at {s.LocalUrl}  |  phone: {lan}";
+            _webAppStatusLabel.ForeColor = Color.ForestGreen;
+        }
+        else
+        {
+            string note = s.DistPresent
+                ? "Web app: unavailable until the backend is running"
+                : "Web app: not built (run Install All) -- unavailable until the backend is running";
+            _webAppStatusLabel.Text = note;
+            _webAppStatusLabel.ForeColor = SystemColors.GrayText;
+        }
+
+        // Run while not healthy; Stop while a process exists (best-effort).
+        _runButton.Enabled = !s.HealthOk;
+        _stopButton.Enabled = s.ProcessRunning;
     }
 
     private void UpdateButtonStates()
@@ -452,6 +576,8 @@ public class InstallerForm : Form
         _checkButton.Enabled = true;
         _installButton.Enabled = !allOk;
         _testButton.Enabled = checksOk;
+
+        RefreshBackendStatus();
     }
 
     private void SetButtonsEnabled(bool enabled)
@@ -461,6 +587,10 @@ public class InstallerForm : Form
         _testButton.Enabled = enabled;
         _rootBrowse.Enabled = enabled;
         _workingDirBrowse.Enabled = enabled;
+
+        // Run/Stop reflect actual backend state, not the check/install workflow.
+        _runButton.Enabled = enabled && !_lastHealthOk;
+        _stopButton.Enabled = enabled && _lastProcessRunning;
     }
 
     // ---------------- Deploy gate ----------------
@@ -692,6 +822,8 @@ public class InstallerForm : Form
     {
         if (disposing)
         {
+            _statusTimer?.Stop();
+            _statusTimer?.Dispose();
             _cts?.Cancel();
             _cts?.Dispose();
         }

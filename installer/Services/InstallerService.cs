@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net.Http;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
@@ -680,6 +681,136 @@ public class InstallerService
             }
             process?.Dispose();
         }
+    }
+
+    // ---------------- Run / Stop / Status (persistent backend) ----------------
+
+    /// <summary>Process name of the backend exe (no extension), as GetProcessesByName expects.</summary>
+    private const string BackendProcessName = "ClaudeWeb";
+
+    /// <summary>
+    /// Starts the backend as a normal detached GUI process in the user session
+    /// (UseShellExecute = true -- no output redirection, not killed by this tool).
+    /// No-ops if it is already healthy. Unlike TestAsync, this is a persistent start.
+    /// </summary>
+    public async Task<(bool Ok, string Message)> StartBackend()
+    {
+        if (!File.Exists(BuiltExePath))
+        {
+            Log("[RUN] Backend not built.");
+            return (false, "Backend not built -- run Install All first");
+        }
+
+        if (await IsHealthyAsync(CancellationToken.None))
+        {
+            Log("[RUN] Backend is already running.");
+            return (true, "Backend is already running");
+        }
+
+        try
+        {
+            Log($"[RUN] Starting backend: {BuiltExePath}");
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = BuiltExePath,
+                WorkingDirectory = AppProjectDir,
+                UseShellExecute = true
+            });
+            Log("[RUN] Backend launch requested.");
+            return (true, $"Started ClaudeWeb.exe -- open http://localhost:{Port}/");
+        }
+        catch (Exception ex)
+        {
+            Log($"[RUN] Failed to start backend: {ex.Message}");
+            return (false, $"Failed to start backend: {ex.Message}");
+        }
+    }
+
+    /// <summary>Kills any running ClaudeWeb backend process and reports how many were stopped.</summary>
+    public (bool Ok, string Message) StopBackend()
+    {
+        var processes = Process.GetProcessesByName(BackendProcessName);
+        if (processes.Length == 0)
+        {
+            Log("[STOP] No ClaudeWeb process running.");
+            return (true, "Backend is not running");
+        }
+
+        int stopped = 0;
+        foreach (var p in processes)
+        {
+            try
+            {
+                Log($"[STOP] Killing ClaudeWeb (PID {p.Id})...");
+                p.Kill(entireProcessTree: true);
+                p.WaitForExit(5000);
+                stopped++;
+            }
+            catch (Exception ex)
+            {
+                Log($"[STOP] Could not kill PID {p.Id}: {ex.Message}");
+            }
+            finally { p.Dispose(); }
+        }
+
+        bool ok = stopped > 0;
+        string msg = ok ? $"Stopped {stopped} ClaudeWeb process(es)" : "Found ClaudeWeb but could not stop it";
+        Log($"[STOP] {msg}.");
+        return (ok, msg);
+    }
+
+    /// <summary>
+    /// Reports the current backend state without changing anything: whether a
+    /// process exists, whether /api/health responds, plus the URLs to open.
+    /// </summary>
+    public async Task<BackendStatus> GetBackendStatusAsync(CancellationToken ct)
+    {
+        bool processRunning = Process.GetProcessesByName(BackendProcessName).Length > 0;
+        bool healthOk = await IsHealthyAsync(ct);
+        bool distPresent = File.Exists(Path.Combine(ClientDir, "dist", "index.html"));
+        string localUrl = $"http://localhost:{Port}/";
+        string? lanIp = GetLanIPv4();
+        string? lanUrl = lanIp == null ? null : $"http://{lanIp}:{Port}/";
+
+        return new BackendStatus(processRunning, healthOk, Port, distPresent, localUrl, lanUrl);
+    }
+
+    /// <summary>GET /api/health with a ~2s timeout; true only on HTTP 200.</summary>
+    private async Task<bool> IsHealthyAsync(CancellationToken ct)
+    {
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
+            var resp = await http.GetAsync($"http://localhost:{Port}/api/health", ct);
+            return resp.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>First up, non-loopback, non-link-local (169.254.x) IPv4 address, or null.</summary>
+    private static string? GetLanIPv4()
+    {
+        try
+        {
+            foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (nic.OperationalStatus != OperationalStatus.Up) continue;
+                if (nic.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;
+
+                foreach (var addr in nic.GetIPProperties().UnicastAddresses)
+                {
+                    if (addr.Address.AddressFamily != AddressFamily.InterNetwork) continue;
+                    var ip = addr.Address.ToString();
+                    if (ip.StartsWith("169.254.")) continue; // link-local / APIPA
+                    return ip;
+                }
+            }
+        }
+        catch { /* best effort */ }
+        return null;
     }
 
     // ---------------- Shell helpers ----------------
