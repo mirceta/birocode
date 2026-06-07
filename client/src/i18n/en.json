@@ -22,10 +22,18 @@
   "nav.chat": "Chat",
   "nav.files": "Files",
   "nav.history": "History",
+  "nav.app": "App",
   "nav.aria": "Main navigation",
 
   "repo.label": "Project",
   "repo.none": "No projects",
+
+  "apptab.online": "running",
+  "apptab.offline": "not running",
+  "apptab.checking": "checking...",
+  "apptab.refresh": "Refresh",
+  "apptab.emptyTitle": "Nothing is running yet",
+  "apptab.emptyBody": "Ask Claude in the Chat tab to start your app on port {port}, bound to 0.0.0.0 and launched detached so it keeps running.",
 
   "pwgate.title": "Welcome back",
   "pwgate.subtitle": "Enter your access code to open your workspace.",

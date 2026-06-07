@@ -22,10 +22,18 @@
   "nav.chat": "Sohbet",
   "nav.files": "Dosyalar",
   "nav.history": "Gecmis",
+  "nav.app": "Uygulama",
   "nav.aria": "Ana menu",
 
   "repo.label": "Proje",
   "repo.none": "Proje yok",
+
+  "apptab.online": "calisiyor",
+  "apptab.offline": "calismiyor",
+  "apptab.checking": "kontrol ediliyor...",
+  "apptab.refresh": "Yenile",
+  "apptab.emptyTitle": "Henuz bir sey calismiyor",
+  "apptab.emptyBody": "Sohbet sekmesinde Claude'dan uygulamani {port} portunda, 0.0.0.0 adresine bagli ve ayri bir surec olarak baslatmasini iste ki calismaya devam etsin.",
 
   "pwgate.title": "Tekrar hosgeldin",
   "pwgate.subtitle": "Calisma alanini acmak icin erisim kodunu gir.",

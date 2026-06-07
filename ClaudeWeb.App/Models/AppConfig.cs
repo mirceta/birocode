@@ -18,6 +18,13 @@ public class AppConfig
     public int Port { get; set; } = 5099;
 
     /// <summary>
+    /// Port the "App" tab previews. Claude is expected to start the product
+    /// (the app in the opened repo) listening on 0.0.0.0:&lt;PreviewPort&gt;; the App
+    /// tab simply iframes it. The harness does not start/stop the product.
+    /// </summary>
+    public int PreviewPort { get; set; } = 5200;
+
+    /// <summary>
     /// Shared password required on /api/* calls (except /api/health and static
     /// files). Supplied by clients via the X-Auth-Password header or ?pw= query.
     /// </summary>
