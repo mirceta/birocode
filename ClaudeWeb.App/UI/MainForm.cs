@@ -136,6 +136,36 @@ public class MainForm : Form
             Padding = new Padding(12, 8, 12, 8)
         };
 
+        // Right-docked action area. A FlowLayoutPanel keeps the button visible
+        // regardless of window width or DPI scaling -- anchoring a hard-coded
+        // Location proved fragile (it was pushed off-screen).
+        var actions = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Right,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            AutoSize = true,
+            BackColor = Color.Transparent,
+            Padding = new Padding(0, 8, 0, 0)
+        };
+
+        var manageButton = new Button
+        {
+            Text = "Manage Projects",
+            AutoSize = true,
+            Height = 32,
+            Padding = new Padding(12, 5, 12, 5),
+            BackColor = Color.FromArgb(70, 130, 200),
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            Cursor = Cursors.Hand,
+            Margin = new Padding(0, 0, 4, 0)
+        };
+        manageButton.FlatAppearance.BorderSize = 0;
+        manageButton.Click += OnManageRepositories;
+        actions.Controls.Add(manageButton);
+
         workingDirLabel = new Label
         {
             Text = RepositoriesSummary(),
@@ -144,21 +174,6 @@ public class MainForm : Form
             Location = new Point(12, 10),
             AutoSize = true
         };
-
-        var changeButton = new Button
-        {
-            Text = "Repositories...",
-            Size = new Size(110, 26),
-            Location = new Point(670, 6),
-            Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            BackColor = Color.FromArgb(60, 70, 85),
-            ForeColor = Color.FromArgb(200, 210, 220),
-            FlatStyle = FlatStyle.Flat,
-            Font = new Font("Segoe UI", 9f),
-            Cursor = Cursors.Hand
-        };
-        changeButton.FlatAppearance.BorderColor = Color.FromArgb(80, 90, 110);
-        changeButton.Click += OnManageRepositories;
 
         serverLabel = new Label
         {
@@ -169,9 +184,11 @@ public class MainForm : Form
             AutoSize = true
         };
 
+        // Add the docked action panel first so the absolutely-positioned labels
+        // keep their top-left coordinates.
+        panel.Controls.Add(actions);
         panel.Controls.Add(workingDirLabel);
         panel.Controls.Add(serverLabel);
-        panel.Controls.Add(changeButton);
         return panel;
     }
 
