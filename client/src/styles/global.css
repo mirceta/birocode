@@ -117,21 +117,13 @@ textarea {
 
 .repo-selector {
   display: inline-flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-  max-width: 46vw;
-  padding: 3px 8px;
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  background: var(--color-surface);
-}
-
-.repo-selector__row {
-  display: inline-flex;
   align-items: center;
   gap: 4px;
-  max-width: 100%;
+  max-width: 40vw;
+  padding: 2px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
 }
 
 .repo-selector__icon {
@@ -140,7 +132,7 @@ textarea {
 }
 
 .repo-selector__select {
-  max-width: 34vw;
+  max-width: 32vw;
   border: 0;
   background: transparent;
   font-size: 12px;
@@ -154,23 +146,6 @@ textarea {
   outline: 2px solid var(--color-accent, #4f46e5);
   outline-offset: 2px;
   border-radius: 4px;
-}
-
-/* Folder this project maps to on disk -- always-visible feedback. */
-.repo-selector__path {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 10px;
-  line-height: 1.2;
-  color: var(--color-text-muted, #666);
-  /* Clip from the LEFT so the meaningful tail (the folder name) stays visible
-     when the path is too long. unicode-bidi keeps the path itself LTR so the
-     characters are not reordered by the rtl base direction. */
-  direction: rtl;
-  unicode-bidi: plaintext;
-  text-align: left;
 }
 
 .repo-selector--empty {
