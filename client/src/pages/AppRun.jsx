@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { apiGet } from '../api/client';
+import { apiGet, apiPost } from '../api/client';
 import { useT } from '../i18n/LanguageContext';
 import './apprun.css';
 
@@ -29,6 +29,8 @@ export default function AppRun() {
   const [port, setPort] = useState(null);
   const [online, setOnline] = useState(null); // null = checking, true, false
   const [reloadKey, setReloadKey] = useState(0);
+  const [preparing, setPreparing] = useState(false);
+  const [note, setNote] = useState('');
   const pollRef = useRef(null);
 
   // The product runs on the same host the user is reaching the harness on (so it
@@ -68,6 +70,19 @@ export default function AppRun() {
     check();
   }
 
+  async function prepare() {
+    setPreparing(true);
+    setNote('');
+    try {
+      await apiPost('/app/prepare');
+      setNote(t('apptab.prepared'));
+    } catch {
+      setNote(t('apptab.prepareError'));
+    } finally {
+      setPreparing(false);
+    }
+  }
+
   const statusLabel =
     online === null ? t('apptab.checking') : online ? t('apptab.online') : t('apptab.offline');
   const statusClass =
@@ -85,10 +100,21 @@ export default function AppRun() {
             {url}
           </a>
         )}
+        <button
+          type="button"
+          className="apprun__prepare"
+          onClick={prepare}
+          disabled={preparing}
+          title={t('apptab.prepareHint')}
+        >
+          {preparing ? t('apptab.preparing') : t('apptab.prepare')}
+        </button>
         <button type="button" className="apprun__refresh" onClick={refresh}>
           {t('apptab.refresh')}
         </button>
       </div>
+
+      {note && <div className="apprun__note" role="status">{note}</div>}
 
       <div className="apprun__body">
         {online ? (

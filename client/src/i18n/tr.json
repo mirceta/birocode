@@ -32,6 +32,11 @@
   "apptab.offline": "calismiyor",
   "apptab.checking": "kontrol ediliyor...",
   "apptab.refresh": "Yenile",
+  "apptab.prepare": "Onizleme icin hazirla",
+  "apptab.preparing": "Hazirlaniyor...",
+  "apptab.prepareHint": "Bu projenin CLAUDE.md dosyasina onizleme talimatlarini yaz",
+  "apptab.prepared": "Onizleme adimlari CLAUDE.md dosyasina yazildi -- Dosyalar sekmesinden inceleyip Claude'dan uygulamayi baslatmasini iste.",
+  "apptab.prepareError": "CLAUDE.md yazilamadi.",
   "apptab.emptyTitle": "Henuz bir sey calismiyor",
   "apptab.emptyBody": "Sohbet sekmesinde Claude'dan uygulamani {port} portunda, 0.0.0.0 adresine bagli ve ayri bir surec olarak baslatmasini iste ki calismaya devam etsin.",
 

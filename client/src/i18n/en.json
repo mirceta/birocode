@@ -32,6 +32,11 @@
   "apptab.offline": "not running",
   "apptab.checking": "checking...",
   "apptab.refresh": "Refresh",
+  "apptab.prepare": "Prepare for preview",
+  "apptab.preparing": "Preparing...",
+  "apptab.prepareHint": "Write preview instructions into this project's CLAUDE.md",
+  "apptab.prepared": "Wrote preview steps to CLAUDE.md -- review it in the Files tab, then ask Claude to start the app.",
+  "apptab.prepareError": "Couldn't write CLAUDE.md.",
   "apptab.emptyTitle": "Nothing is running yet",
   "apptab.emptyBody": "Ask Claude in the Chat tab to start your app on port {port}, bound to 0.0.0.0 and launched detached so it keeps running.",
 
