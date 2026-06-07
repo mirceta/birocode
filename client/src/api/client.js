@@ -7,6 +7,7 @@
 // feature modules (M5 chat, M6 files, M7 save/history) never re-handle auth.
 
 export const PW_KEY = 'claudeweb_pw';
+export const REPO_KEY = 'claudeweb_repo';
 
 export function getPassword() {
   return localStorage.getItem(PW_KEY) || '';
@@ -20,6 +21,19 @@ export function clearPassword() {
   localStorage.removeItem(PW_KEY);
 }
 
+// The id of the repository the user has selected. Sent on every request as
+// X-Repo-Id so the backend scopes chat/files/history to the chosen project.
+// Read live from localStorage on each request so a repo switch takes effect
+// immediately without re-creating the api helpers.
+export function getRepoId() {
+  return localStorage.getItem(REPO_KEY) || '';
+}
+
+export function setRepoId(id) {
+  if (id) localStorage.setItem(REPO_KEY, id);
+  else localStorage.removeItem(REPO_KEY);
+}
+
 // Thrown for any non-2xx response. Carries the HTTP status so callers can
 // special-case 401 (wrong password) without parsing message strings.
 export class ApiError extends Error {
@@ -31,7 +45,10 @@ export class ApiError extends Error {
 }
 
 function authHeaders(extra = {}) {
-  return { 'X-Auth-Password': getPassword(), ...extra };
+  const headers = { 'X-Auth-Password': getPassword(), ...extra };
+  const repoId = getRepoId();
+  if (repoId) headers['X-Repo-Id'] = repoId;
+  return headers;
 }
 
 async function handle(res) {

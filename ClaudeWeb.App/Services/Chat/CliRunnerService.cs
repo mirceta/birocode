@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
 using ClaudeWeb.Models;
@@ -23,36 +24,37 @@ namespace ClaudeWeb.Services.Chat;
 ///   claude -p "&lt;message&gt;" --output-format stream-json --include-partial-messages --verbose
 ///   (+ "--resume &lt;sessionId&gt;" before -p when continuing a session)
 ///
-/// Only one CLI process may run at a time -- concurrent requests are rejected
-/// (see <see cref="TryBeginRun"/>). The working directory is read per-request
-/// from <see cref="AppConfig.WorkingDirectory"/>, never cached.
+/// One CLI process may run at a time PER REPOSITORY -- concurrent requests to
+/// the same repo are rejected (see <see cref="TryBeginRun"/>), but different
+/// repos run in parallel. The working directory is supplied per-request by the
+/// caller (resolved from the selected repository), never cached.
 /// </summary>
 public class CliRunnerService
 {
-    private readonly AppConfig _config;
     private readonly Logger _logger;
     private readonly CallLog _callLog;
 
-    // Single-flight gate: 1 = free, 0 = a CLI process is running.
-    private int _busy;
+    // Per-repo single-flight gate: a repo id present in the set means a CLI
+    // process is running for that repo. Different repos run concurrently.
+    private readonly ConcurrentDictionary<string, byte> _busyRepos = new();
 
-    public CliRunnerService(AppConfig config, Logger logger, CallLog callLog)
+    public CliRunnerService(Logger logger, CallLog callLog)
     {
-        _config = config;
         _logger = logger;
         _callLog = callLog;
     }
 
-    /// <summary>True while a CLI process is in flight.</summary>
-    public bool IsBusy => Volatile.Read(ref _busy) != 0;
+    /// <summary>True while a CLI process is in flight for the given repository.</summary>
+    public bool IsBusy(string repoId) => _busyRepos.ContainsKey(repoId);
 
     /// <summary>
-    /// Atomically claim the single CLI slot. Returns false if a run is already
-    /// in progress, in which case the caller must reject the request.
+    /// Atomically claim the CLI slot for one repository. Returns false if a run
+    /// is already in progress for that repo, in which case the caller must
+    /// reject the request. Runs in other repos are unaffected.
     /// </summary>
-    public bool TryBeginRun() => Interlocked.CompareExchange(ref _busy, 1, 0) == 0;
+    public bool TryBeginRun(string repoId) => _busyRepos.TryAdd(repoId, 1);
 
-    private void EndRun() => Volatile.Write(ref _busy, 0);
+    private void EndRun(string repoId) => _busyRepos.TryRemove(repoId, out _);
 
     /// <summary>
     /// Runs one chat turn. Invokes <paramref name="emit"/> for every translated
@@ -61,14 +63,17 @@ public class CliRunnerService
     /// </summary>
     /// <param name="message">The user's prompt.</param>
     /// <param name="sessionId">When non-empty, resumes that session.</param>
+    /// <param name="workingDirectory">The selected repository's folder; the CLI runs here.</param>
+    /// <param name="repoId">The selected repository's id; releases its per-repo slot when done.</param>
     /// <param name="emit">Async sink that writes one stable SSE event to the client.</param>
     public async Task RunAsync(
         string message,
         string? sessionId,
+        string workingDirectory,
+        string repoId,
         Func<object, Task> emit,
         CancellationToken ct = default)
     {
-        var workingDirectory = _config.WorkingDirectory; // read per-request, never cache
         var resuming = !string.IsNullOrWhiteSpace(sessionId);
 
         // Create the monitoring record up front so the GUI shows a "Running" row
@@ -144,7 +149,7 @@ public class CliRunnerService
         }
         finally
         {
-            EndRun();
+            EndRun(repoId);
         }
     }
 

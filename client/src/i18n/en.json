@@ -24,6 +24,9 @@
   "nav.history": "History",
   "nav.aria": "Main navigation",
 
+  "repo.label": "Project",
+  "repo.none": "No projects",
+
   "pwgate.title": "Welcome back",
   "pwgate.subtitle": "Enter your access code to open your workspace.",
   "pwgate.placeholder": "Access code",

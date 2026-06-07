@@ -7,8 +7,10 @@ namespace ClaudeWeb.Models;
 public class AppConfig
 {
     /// <summary>
-    /// The fixed working directory Claude operates in. Set at startup from
-    /// config; can be changed at runtime via the monitoring GUI "Change" button.
+    /// Legacy single working directory. Still read from appsettings.json for
+    /// backward compatibility: on first run it seeds the initial entry in the
+    /// repository registry (see <see cref="ClaudeWeb.Services.Repositories.RepositoryRegistry"/>).
+    /// Runtime repository management lives in the registry, not here.
     /// </summary>
     public string WorkingDirectory { get; set; } = @"C:\Users\km\Desktop\claude-web-workspace";
 

@@ -1,29 +1,27 @@
 using System.Text;
-using ClaudeWeb.Models;
 using ClaudeWeb.Services.Logging;
 
 namespace ClaudeWeb.Services.Files;
 
 /// <summary>
-/// Browses and reads files under <see cref="AppConfig.WorkingDirectory"/>.
+/// Browses and reads files under a repository root supplied by the caller (the
+/// currently selected repository's folder).
 ///
 /// SECURITY: this is the most security-sensitive module -- a path-traversal
 /// bug here is arbitrary file read on the host. Every requested path is
-/// resolved against the working directory and validated to stay inside it
-/// (see <see cref="ResolveSafePath"/>). The working directory is read
-/// per-request (never cached) because the operator can change it at runtime.
+/// resolved against the supplied root and validated to stay inside it
+/// (see <see cref="ResolveSafePath"/>). The root comes from the server-trusted
+/// repository registry (keyed by id), never from a client-supplied path.
 /// </summary>
 public class FileService
 {
-    private readonly AppConfig _config;
     private readonly Logger _logger;
 
     /// <summary>Maximum file size returned by <see cref="ReadFile"/> (1 MB).</summary>
     private const long MaxReadBytes = 1024 * 1024;
 
-    public FileService(AppConfig config, Logger logger)
+    public FileService(Logger logger)
     {
-        _config = config;
         _logger = logger;
     }
 
@@ -38,14 +36,12 @@ public class FileService
     public sealed record FileContent(string Content, string Path);
 
     /// <summary>
-    /// Resolves a client-supplied relative path against the current working
-    /// directory and verifies it cannot escape that root. Returns an invalid
+    /// Resolves a client-supplied relative path against the given repository
+    /// root and verifies it cannot escape that root. Returns an invalid
     /// result (caller -> HTTP 403) on any violation; never throws on bad input.
     /// </summary>
-    public PathResult ResolveSafePath(string? requestedPath)
+    public PathResult ResolveSafePath(string? workingDir, string? requestedPath)
     {
-        var workingDir = _config.WorkingDirectory;
-
         if (string.IsNullOrWhiteSpace(workingDir))
             return new PathResult(false, "", "Working directory is not configured");
 

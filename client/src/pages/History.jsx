@@ -5,12 +5,14 @@ import ErrorBanner from '../components/shared/ErrorBanner';
 import HistoryTimeline from '../components/history/HistoryTimeline';
 import RestoreConfirm from '../components/history/RestoreConfirm';
 import { useSave } from '../components/history/SaveHandler';
+import { useRepo } from '../context/RepoContext';
 import { useT } from '../i18n/LanguageContext';
 import '../components/history/history.css';
 
 export default function History() {
   const { t } = useT();
   const { refreshTick, notifyRestored, showToast } = useSave();
+  const { currentRepoId } = useRepo();
 
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -33,7 +35,7 @@ export default function History() {
 
   useEffect(() => {
     load();
-  }, [load, refreshTick]);
+  }, [load, refreshTick, currentRepoId]);
 
   async function confirmRestore() {
     if (!pending) return;

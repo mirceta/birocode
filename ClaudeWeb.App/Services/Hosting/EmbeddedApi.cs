@@ -4,6 +4,7 @@ using ClaudeWeb.Services.Files;
 using ClaudeWeb.Services.Git;
 using ClaudeWeb.Services.Logging;
 using ClaudeWeb.Services.Monitoring;
+using ClaudeWeb.Services.Repositories;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.StaticFiles;
@@ -39,16 +40,18 @@ public class EmbeddedApi
     private readonly AppConfig _config;
     private readonly Logger _logger;
     private readonly CallLog _callLog;
+    private readonly RepositoryRegistry _repositories;
     private WebApplication? _app;
 
     public bool IsRunning { get; private set; }
     public int Port => _config.Port;
 
-    public EmbeddedApi(AppConfig config, Logger logger, CallLog callLog)
+    public EmbeddedApi(AppConfig config, Logger logger, CallLog callLog, RepositoryRegistry repositories)
     {
         _config = config;
         _logger = logger;
         _callLog = callLog;
+        _repositories = repositories;
     }
 
     public void Start()
@@ -78,6 +81,8 @@ public class EmbeddedApi
             builder.Services.AddSingleton(_config);
             builder.Services.AddSingleton(_logger);
             builder.Services.AddSingleton(_callLog);
+            // Pre-built so the WinForms UI and the API share one instance.
+            builder.Services.AddSingleton(_repositories);
 
             // Controllers auto-discovered here -- new controllers need NO changes.
             builder.Services.AddControllers();
@@ -90,6 +95,7 @@ public class EmbeddedApi
                     .AllowAnyMethod()));
 
             // === MODULE SERVICE REGISTRATION (orchestrator wires these between phases) ===
+            builder.Services.AddRepositoryModule(); // multi-repo (resolver + HttpContext)
             builder.Services.AddChatModule();   // M1
             builder.Services.AddFileModule();   // M2
             builder.Services.AddGitModule();    // M3

@@ -6,6 +6,7 @@ import Breadcrumbs from '../components/files/Breadcrumbs';
 import FileList from '../components/files/FileList';
 import FileViewer from '../components/files/FileViewer';
 import { useChat } from '../context/ChatContext';
+import { useRepo } from '../context/RepoContext';
 import { useT } from '../i18n/LanguageContext';
 import '../components/files/files.css';
 
@@ -17,6 +18,7 @@ function joinPath(dir, name) {
 export default function Files() {
   const { t } = useT();
   const { setDraft } = useChat();
+  const { currentRepoId } = useRepo();
   const [path, setPath] = useState('/');
   const [entries, setEntries] = useState([]);
   const [listLoading, setListLoading] = useState(true);
@@ -66,9 +68,20 @@ export default function Files() {
     [t],
   );
 
+  // Refetch when the path changes OR the project changes. currentRepoId is in
+  // the deps so a switch reloads even when we're already at the root (where
+  // setPath('/') below is a no-op and would otherwise not trigger a reload).
   useEffect(() => {
     loadDir(path);
-  }, [path, loadDir]);
+  }, [path, loadDir, currentRepoId]);
+
+  // Switching projects: go back to the root and close any open file so we never
+  // show a stale path that may not exist in the newly selected repository.
+  useEffect(() => {
+    setOpenFile(null);
+    setFileError('');
+    setPath('/');
+  }, [currentRepoId]);
 
   function navigateTo(dirPath) {
     setOpenFile(null);

@@ -2,6 +2,7 @@ using ClaudeWeb.Models;
 using ClaudeWeb.Services.Hosting;
 using ClaudeWeb.Services.Logging;
 using ClaudeWeb.Services.Monitoring;
+using ClaudeWeb.Services.Repositories;
 
 namespace ClaudeWeb.UI;
 
@@ -38,6 +39,7 @@ public class MainForm : Form
     private readonly Logger _logger;
     private readonly EmbeddedApi _api;
     private readonly CallLog _callLog;
+    private readonly RepositoryRegistry _repositories;
 
     private readonly Label _workingDirLabel;
     private readonly Label _serverLabel;
@@ -50,12 +52,13 @@ public class MainForm : Form
     // Maps a CallRecord.Number to its ListView row for in-place updates.
     private readonly Dictionary<int, ListViewItem> _rowsByNumber = new();
 
-    public MainForm(AppConfig config, Logger logger, EmbeddedApi api, CallLog callLog)
+    public MainForm(AppConfig config, Logger logger, EmbeddedApi api, CallLog callLog, RepositoryRegistry repositories)
     {
         _config = config;
         _logger = logger;
         _api = api;
         _callLog = callLog;
+        _repositories = repositories;
 
         Text = "Claude Web";
         Size = new Size(1200, 720);
@@ -133,29 +136,44 @@ public class MainForm : Form
             Padding = new Padding(12, 8, 12, 8)
         };
 
+        // Right-docked action area. A FlowLayoutPanel keeps the button visible
+        // regardless of window width or DPI scaling -- anchoring a hard-coded
+        // Location proved fragile (it was pushed off-screen).
+        var actions = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Right,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            AutoSize = true,
+            BackColor = Color.Transparent,
+            Padding = new Padding(0, 8, 0, 0)
+        };
+
+        var manageButton = new Button
+        {
+            Text = "Manage Projects",
+            AutoSize = true,
+            Height = 32,
+            Padding = new Padding(12, 5, 12, 5),
+            BackColor = Color.FromArgb(70, 130, 200),
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            Cursor = Cursors.Hand,
+            Margin = new Padding(0, 0, 4, 0)
+        };
+        manageButton.FlatAppearance.BorderSize = 0;
+        manageButton.Click += OnManageRepositories;
+        actions.Controls.Add(manageButton);
+
         workingDirLabel = new Label
         {
-            Text = $"Working Dir: {_config.WorkingDirectory}",
+            Text = RepositoriesSummary(),
             Font = new Font("Segoe UI", 9.5f),
             ForeColor = Color.FromArgb(200, 210, 220),
             Location = new Point(12, 10),
             AutoSize = true
         };
-
-        var changeButton = new Button
-        {
-            Text = "Change",
-            Size = new Size(80, 26),
-            Location = new Point(700, 6),
-            Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            BackColor = Color.FromArgb(60, 70, 85),
-            ForeColor = Color.FromArgb(200, 210, 220),
-            FlatStyle = FlatStyle.Flat,
-            Font = new Font("Segoe UI", 9f),
-            Cursor = Cursors.Hand
-        };
-        changeButton.FlatAppearance.BorderColor = Color.FromArgb(80, 90, 110);
-        changeButton.Click += OnChangeWorkingDirectory;
 
         serverLabel = new Label
         {
@@ -166,9 +184,11 @@ public class MainForm : Form
             AutoSize = true
         };
 
+        // Add the docked action panel first so the absolutely-positioned labels
+        // keep their top-left coordinates.
+        panel.Controls.Add(actions);
         panel.Controls.Add(workingDirLabel);
         panel.Controls.Add(serverLabel);
-        panel.Controls.Add(changeButton);
         return panel;
     }
 
@@ -300,21 +320,20 @@ public class MainForm : Form
 
     // --- Event handlers ----------------------------------------------------
 
-    private void OnChangeWorkingDirectory(object? sender, EventArgs e)
+    private void OnManageRepositories(object? sender, EventArgs e)
     {
-        using var dialog = new FolderBrowserDialog
-        {
-            Description = "Select the working directory Claude operates in",
-            SelectedPath = Directory.Exists(_config.WorkingDirectory) ? _config.WorkingDirectory : "",
-            ShowNewFolderButton = true
-        };
+        using var dialog = new RepositoriesForm(_repositories);
+        dialog.ShowDialog(this);
+        // The dialog persists changes as it goes; just refresh the header summary.
+        _workingDirLabel.Text = RepositoriesSummary();
+    }
 
-        if (dialog.ShowDialog() == DialogResult.OK)
-        {
-            _config.WorkingDirectory = dialog.SelectedPath;
-            _workingDirLabel.Text = $"Working Dir: {_config.WorkingDirectory}";
-            _logger.Info($"[CONFIG] Working directory changed to {_config.WorkingDirectory}");
-        }
+    private string RepositoriesSummary()
+    {
+        var repos = _repositories.GetAll();
+        if (repos.Count == 0) return "Repositories: none (click Repositories... to add one)";
+        if (repos.Count == 1) return $"Repository: {repos[0].Name}  ({repos[0].Path})";
+        return $"Repositories: {repos.Count}  -- {string.Join(", ", repos.Select(r => r.Name))}";
     }
 
     private void RefreshServerStatus()

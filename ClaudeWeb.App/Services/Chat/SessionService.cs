@@ -26,17 +26,16 @@ public record ChatMessage(string Role, string Text);
 ///
 /// JSONL parsing follows ConversationStore.ExtractMetadata in ClaudeMonitor:
 /// pull the sessionId, first user prompt, turn counts and timestamps from the
-/// transcript lines. Read <see cref="AppConfig.WorkingDirectory"/> per call so
-/// the operator can change it at runtime.
+/// transcript lines. The working directory is supplied per call by the
+/// controller (resolved from the selected repository), so sessions are scoped
+/// to the repo they were created in.
 /// </summary>
 public class SessionService
 {
-    private readonly AppConfig _config;
     private readonly Logger _logger;
 
-    public SessionService(AppConfig config, Logger logger)
+    public SessionService(Logger logger)
     {
-        _config = config;
         _logger = logger;
     }
 
@@ -60,9 +59,9 @@ public class SessionService
     /// newest first. Returns an empty list when the project folder does not
     /// exist yet (no sessions started here).
     /// </summary>
-    public List<SessionSummary> ListSessions()
+    public List<SessionSummary> ListSessions(string workingDir)
     {
-        var dir = ProjectsDirectoryFor(_config.WorkingDirectory);
+        var dir = ProjectsDirectoryFor(workingDir);
         if (!Directory.Exists(dir))
         {
             _logger.Info($"[CHAT] No session folder yet for working directory ({dir})");
@@ -85,7 +84,7 @@ public class SessionService
     /// IDE/system-reminder injections are skipped so it reads like the live chat.
     /// Returns an empty list if the transcript is missing or unreadable.
     /// </summary>
-    public List<ChatMessage> GetMessages(string sessionId)
+    public List<ChatMessage> GetMessages(string workingDir, string sessionId)
     {
         var messages = new List<ChatMessage>();
         if (string.IsNullOrWhiteSpace(sessionId)) return messages;
@@ -93,7 +92,7 @@ public class SessionService
         // sessionId is a UUID file name; reject anything that could escape the folder.
         if (sessionId.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) return messages;
 
-        var path = Path.Combine(ProjectsDirectoryFor(_config.WorkingDirectory), sessionId + ".jsonl");
+        var path = Path.Combine(ProjectsDirectoryFor(workingDir), sessionId + ".jsonl");
         if (!File.Exists(path))
         {
             _logger.Info($"[CHAT] Transcript not found: {path}");

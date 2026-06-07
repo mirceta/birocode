@@ -1,5 +1,6 @@
 using ClaudeWeb.Services.Files;
 using ClaudeWeb.Services.Logging;
+using ClaudeWeb.Services.Repositories;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ClaudeWeb.Controllers;
@@ -17,11 +18,13 @@ namespace ClaudeWeb.Controllers;
 public class FileController : ControllerBase
 {
     private readonly FileService _files;
+    private readonly RepositoryResolver _repos;
     private readonly Logger _logger;
 
-    public FileController(FileService files, Logger logger)
+    public FileController(FileService files, RepositoryResolver repos, Logger logger)
     {
         _files = files;
+        _repos = repos;
         _logger = logger;
     }
 
@@ -30,9 +33,12 @@ public class FileController : ControllerBase
     public IActionResult List([FromQuery] string? path)
     {
         _logger.CountRequest();
+        var repo = _repos.Current();
+        if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
+
         var requested = string.IsNullOrEmpty(path) ? "/" : path;
 
-        var result = _files.ResolveSafePath(requested);
+        var result = _files.ResolveSafePath(repo.Path, requested);
         if (!result.IsValid)
         {
             _logger.Error($"[FILE] List denied '{requested}': {result.Reason}");
@@ -62,9 +68,12 @@ public class FileController : ControllerBase
     public IActionResult Read([FromQuery] string? path)
     {
         _logger.CountRequest();
+        var repo = _repos.Current();
+        if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
+
         var requested = string.IsNullOrEmpty(path) ? "/" : path;
 
-        var result = _files.ResolveSafePath(requested);
+        var result = _files.ResolveSafePath(repo.Path, requested);
         if (!result.IsValid)
         {
             _logger.Error($"[FILE] Read denied '{requested}': {result.Reason}");

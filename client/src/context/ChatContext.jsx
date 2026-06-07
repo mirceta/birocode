@@ -1,6 +1,7 @@
-import { createContext, useCallback, useContext, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { apiGet, apiStream } from '../api/client';
 import { createSseParser } from '../components/chat/sseParser';
+import { useRepo } from './RepoContext';
 import { useT } from '../i18n/LanguageContext';
 
 // Holds the chat conversation (messages + the session being continued) and the
@@ -18,6 +19,7 @@ export function useChat() {
 
 export function ChatProvider({ children }) {
   const { t } = useT();
+  const { currentRepoId } = useRepo();
   const greeting = () => ({ role: 'assistant', text: t('chat.greeting') });
 
   const [messages, setMessages] = useState(() => [greeting()]);
@@ -37,6 +39,16 @@ export function ChatProvider({ children }) {
   const [sessionsError, setSessionsError] = useState(false);
 
   const abortRef = useRef(null);
+
+  // Sessions are scoped to a repository, so switching projects starts a fresh
+  // conversation. Skip the very first run (no real switch has happened yet).
+  const prevRepoRef = useRef(currentRepoId);
+  useEffect(() => {
+    if (prevRepoRef.current === currentRepoId) return;
+    prevRepoRef.current = currentRepoId;
+    startNewConversation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentRepoId]);
 
   const appendToken = useCallback((text) => {
     setMessages((prev) => {

@@ -1,5 +1,6 @@
 using ClaudeWeb.Services.Git;
 using ClaudeWeb.Services.Logging;
+using ClaudeWeb.Services.Repositories;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ClaudeWeb.Controllers;
@@ -15,11 +16,13 @@ namespace ClaudeWeb.Controllers;
 public class GitController : ControllerBase
 {
     private readonly GitService _git;
+    private readonly RepositoryResolver _repos;
     private readonly Logger _logger;
 
-    public GitController(GitService git, Logger logger)
+    public GitController(GitService git, RepositoryResolver repos, Logger logger)
     {
         _git = git;
+        _repos = repos;
         _logger = logger;
     }
 
@@ -31,9 +34,11 @@ public class GitController : ControllerBase
     public IActionResult Save([FromBody] SaveRequest? body)
     {
         _logger.CountRequest();
+        var repo = _repos.Current();
+        if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
         try
         {
-            var result = _git.Save(body?.Message);
+            var result = _git.Save(repo.Path, body?.Message);
             if (result.NoChanges)
                 return Ok(new { noChanges = true });
 
@@ -51,9 +56,11 @@ public class GitController : ControllerBase
     public IActionResult History()
     {
         _logger.CountRequest();
+        var repo = _repos.Current();
+        if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
         try
         {
-            var entries = _git.History()
+            var entries = _git.History(repo.Path)
                 .Select(e => new { hash = e.Hash, date = e.Date, message = e.Message });
             return Ok(entries);
         }
@@ -69,9 +76,11 @@ public class GitController : ControllerBase
     public IActionResult Restore([FromBody] RestoreRequest? body)
     {
         _logger.CountRequest();
+        var repo = _repos.Current();
+        if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
         try
         {
-            var hash = _git.Restore(body?.Hash);
+            var hash = _git.Restore(repo.Path, body?.Hash);
             return Ok(new { restored = true, hash });
         }
         catch (ArgumentException ex)

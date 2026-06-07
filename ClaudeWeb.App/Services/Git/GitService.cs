@@ -7,16 +7,15 @@ using ClaudeWeb.Services.Logging;
 namespace ClaudeWeb.Services.Git;
 
 /// <summary>
-/// Snapshot/restore operations backed by git, run inside
-/// <see cref="AppConfig.WorkingDirectory"/> via <see cref="Process.Start(ProcessStartInfo)"/>
+/// Snapshot/restore operations backed by git, run inside the selected
+/// repository's folder via <see cref="Process.Start(ProcessStartInfo)"/>
 /// (same redirected-stdout spawn pattern as ClaudeMonitor's CLI runner).
 ///
-/// The working directory is read per-request (never cached) because the
-/// operator can change it at runtime.
+/// The working directory is supplied per-call by the controller (resolved from
+/// the selected repository), never cached.
 /// </summary>
 public partial class GitService
 {
-    private readonly AppConfig _config;
     private readonly Logger _logger;
 
     /// <summary>Field delimiter for `git log` output -- avoids JSON-escaping issues.</summary>
@@ -28,9 +27,8 @@ public partial class GitService
     [GeneratedRegex("^[0-9a-f]{7,40}$")]
     private static partial Regex CommitHashRegex();
 
-    public GitService(AppConfig config, Logger logger)
+    public GitService(Logger logger)
     {
-        _config = config;
         _logger = logger;
     }
 
@@ -42,36 +40,36 @@ public partial class GitService
     /// auto-generated "Save yyyy-MM-dd HH:mm" when none is given. Returns a
     /// result with NoChanges=true when the working tree is clean.
     /// </summary>
-    public SaveResult Save(string? message)
+    public SaveResult Save(string workingDir, string? message)
     {
         var commitMessage = string.IsNullOrWhiteSpace(message)
             ? $"Save {DateTime.Now:yyyy-MM-dd HH:mm}"
             : message.Trim();
 
-        RunGit("add -A");
+        RunGit(workingDir, "add -A");
 
         // Detect a clean tree first so "nothing to commit" is not treated as an error.
-        var status = RunGit("status --porcelain");
+        var status = RunGit(workingDir, "status --porcelain");
         if (string.IsNullOrWhiteSpace(status.StdOut))
         {
             _logger.Info("[GIT] Save -> nothing to commit");
             return new SaveResult("", commitMessage, NoChanges: true);
         }
 
-        var commit = RunGit("commit -m", commitMessage);
+        var commit = RunGit(workingDir, "commit -m", commitMessage);
         if (commit.ExitCode != 0)
             throw new InvalidOperationException(
                 $"git commit failed (exit {commit.ExitCode}): {FirstLine(commit.StdErr, commit.StdOut)}");
 
-        var hash = RunGit("rev-parse HEAD").StdOut.Trim();
+        var hash = RunGit(workingDir, "rev-parse HEAD").StdOut.Trim();
         _logger.Info($"[GIT] Save -> {Short(hash)} \"{commitMessage}\"");
         return new SaveResult(hash, commitMessage, NoChanges: false);
     }
 
     /// <summary>Returns the most recent commits (newest first, capped at 50).</summary>
-    public IReadOnlyList<HistoryEntry> History()
+    public IReadOnlyList<HistoryEntry> History(string workingDir)
     {
-        var result = RunGit($"log -n {HistoryLimit} --format=%H{Delimiter}%ci{Delimiter}%s");
+        var result = RunGit(workingDir, $"log -n {HistoryLimit} --format=%H{Delimiter}%ci{Delimiter}%s");
         if (result.ExitCode != 0)
         {
             // No commits yet (or not a repo) -> empty history rather than an error.
@@ -99,12 +97,12 @@ public partial class GitService
     /// (`git checkout &lt;hash&gt; -- .`). The hash is validated against
     /// ^[0-9a-f]{7,40}$ before being passed to git.
     /// </summary>
-    public string Restore(string? hash)
+    public string Restore(string workingDir, string? hash)
     {
         if (string.IsNullOrWhiteSpace(hash) || !CommitHashRegex().IsMatch(hash))
             throw new ArgumentException("Invalid commit hash");
 
-        var result = RunGit($"checkout {hash} -- .");
+        var result = RunGit(workingDir, $"checkout {hash} -- .");
         if (result.ExitCode != 0)
             throw new InvalidOperationException(
                 $"git checkout failed (exit {result.ExitCode}): {FirstLine(result.StdErr, result.StdOut)}");
@@ -122,10 +120,8 @@ public partial class GitService
     /// redirected. Extra <paramref name="literalArgs"/> are passed via the
     /// ArgumentList so values (e.g. commit messages) need no manual quoting/escaping.
     /// </summary>
-    private GitOutput RunGit(string arguments, params string[] literalArgs)
+    private GitOutput RunGit(string workingDir, string arguments, params string[] literalArgs)
     {
-        var workingDir = _config.WorkingDirectory;
-
         var psi = new ProcessStartInfo
         {
             FileName = "git",

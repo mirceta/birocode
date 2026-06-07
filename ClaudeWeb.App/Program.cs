@@ -2,6 +2,7 @@ using ClaudeWeb.Models;
 using ClaudeWeb.Services.Hosting;
 using ClaudeWeb.Services.Logging;
 using ClaudeWeb.Services.Monitoring;
+using ClaudeWeb.Services.Repositories;
 using ClaudeWeb.UI;
 using Microsoft.Extensions.Configuration;
 
@@ -22,12 +23,17 @@ static class Program
         var logger = new Logger();
         var callLog = new CallLog();
 
+        // Operator-managed repository registry. Built here (not just in DI) so the
+        // WinForms UI and the web API share one instance. Seeds from the legacy
+        // WorkingDirectory on first run.
+        var repositories = new RepositoryRegistry(config, logger);
+
         // Start the embedded Kestrel server on a background thread.
-        var api = new EmbeddedApi(config, logger, callLog);
+        var api = new EmbeddedApi(config, logger, callLog, repositories);
         api.Start();
 
         // Launch the monitoring GUI (blocks on the WinForms message loop).
-        var form = new MainForm(config, logger, api, callLog);
+        var form = new MainForm(config, logger, api, callLog, repositories);
         Application.Run(form);
 
         // Shut the server down cleanly when the GUI closes.
