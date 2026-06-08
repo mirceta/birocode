@@ -16,4 +16,11 @@ public class RepositoryConfig
 
     /// <summary>Absolute path to the repository folder Claude operates in.</summary>
     public string Path { get; set; } = "";
+
+    /// <summary>
+    /// True for the harness's own source repository (pinned at startup). It is
+    /// non-removable and serves as the default project, so "improve this app" is
+    /// always one selection away.
+    /// </summary>
+    public bool IsSelf { get; set; }
 }

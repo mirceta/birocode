@@ -30,7 +30,7 @@ public class RepoController : ControllerBase
     {
         _logger.CountRequest();
         var repos = _registry.GetAll()
-            .Select(r => new { id = r.Id, name = r.Name, path = r.Path, exists = r.Exists, isGitRepo = r.IsGitRepo });
+            .Select(r => new { id = r.Id, name = r.Name, path = r.Path, exists = r.Exists, isGitRepo = r.IsGitRepo, isSelf = r.IsSelf });
         return Ok(repos);
     }
 }

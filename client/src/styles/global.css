@@ -206,6 +206,9 @@ textarea {
 
 .app-content {
   flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
   padding: 16px;
   /* leave room for the fixed bottom nav so content never hides behind it */

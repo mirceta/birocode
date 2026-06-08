@@ -13,3 +13,6 @@ dist/
 
 # Installer/deployer runtime settings -- holds plaintext access + PFX passwords
 settings.json
+
+# Isolated build output for the App-tab self-preview (see CLAUDE.md)
+.claudeweb-preview/

@@ -36,7 +36,7 @@ public class RepositoryRegistry
     }
 
     /// <summary>A repository plus derived status the picker/UI cares about.</summary>
-    public sealed record RepositoryInfo(string Id, string Name, string Path, bool Exists, bool IsGitRepo);
+    public sealed record RepositoryInfo(string Id, string Name, string Path, bool Exists, bool IsGitRepo, bool IsSelf);
 
     /// <summary>All repositories, in operator order. Returns copies.</summary>
     public IReadOnlyList<RepositoryInfo> GetAll()
@@ -97,18 +97,63 @@ public class RepositoryRegistry
         }
     }
 
-    /// <summary>Removes a repository by id. No-op if the id is unknown.</summary>
+    /// <summary>
+    /// Removes a repository by id. No-op if the id is unknown. The pinned self
+    /// repo cannot be removed.
+    /// </summary>
     public bool Remove(string id)
     {
         lock (_gate)
         {
             var idx = _repos.FindIndex(r => string.Equals(r.Id, id, StringComparison.Ordinal));
             if (idx < 0) return false;
+            if (_repos[idx].IsSelf)
+            {
+                _logger.Info("[REPO] Refused to remove the pinned self repo");
+                return false;
+            }
             var removed = _repos[idx];
             _repos.RemoveAt(idx);
             Save();
             _logger.Info($"[REPO] Removed \"{removed.Name}\" ({removed.Path})");
             return true;
+        }
+    }
+
+    /// <summary>
+    /// Ensures the harness's own source repo is registered as the pinned,
+    /// non-removable self repo at index 0 (so it is the default project). Called
+    /// at startup once the repo root is known. Updates the path if the install
+    /// moved; no-op when <paramref name="repoRoot"/> is empty.
+    /// </summary>
+    public void EnsureSelfRepo(string? repoRoot, string name)
+    {
+        if (string.IsNullOrWhiteSpace(repoRoot) || !Directory.Exists(repoRoot)) return;
+        var full = System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(repoRoot));
+
+        lock (_gate)
+        {
+            var self = _repos.FirstOrDefault(r => r.IsSelf);
+            if (self is null)
+            {
+                // Reuse an existing plain entry that already points at the root,
+                // otherwise create one. Either way, pin it to the front.
+                self = _repos.FirstOrDefault(r =>
+                    string.Equals(System.IO.Path.TrimEndingDirectorySeparator(r.Path), full, StringComparison.OrdinalIgnoreCase));
+                if (self is null)
+                {
+                    self = new RepositoryConfig { Id = Guid.NewGuid().ToString("N") };
+                    _repos.Add(self);
+                }
+            }
+
+            self.IsSelf = true;
+            self.Name = name;
+            self.Path = full;
+            _repos.Remove(self);
+            _repos.Insert(0, self);
+            Save();
+            _logger.Info($"[REPO] Pinned self repo \"{name}\" ({full})");
         }
     }
 
@@ -203,9 +248,9 @@ public class RepositoryRegistry
     {
         var exists = Directory.Exists(r.Path);
         var isGit = exists && Directory.Exists(System.IO.Path.Combine(r.Path, ".git"));
-        return new RepositoryInfo(r.Id, r.Name, r.Path, exists, isGit);
+        return new RepositoryInfo(r.Id, r.Name, r.Path, exists, isGit, r.IsSelf);
     }
 
     private static RepositoryConfig Clone(RepositoryConfig r) =>
-        new() { Id = r.Id, Name = r.Name, Path = r.Path };
+        new() { Id = r.Id, Name = r.Name, Path = r.Path, IsSelf = r.IsSelf };
 }

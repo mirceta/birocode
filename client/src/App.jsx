@@ -6,6 +6,7 @@ import Layout from './layout/Layout';
 import Chat from './pages/Chat';
 import Files from './pages/Files';
 import History from './pages/History';
+import AppRun from './pages/AppRun';
 
 // App root. Before the shell mounts we require an access code so that every
 // /api call has a password to attach (see api/client.js). The gate is the
@@ -24,6 +25,7 @@ export default function App() {
           <Route index element={<Chat />} />
           <Route path="files" element={<Files />} />
           <Route path="history" element={<History />} />
+          <Route path="app" element={<AppRun />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import MessageBubble from '../components/chat/MessageBubble';
 import ChatInput from '../components/chat/ChatInput';
 import ThinkingIndicator from '../components/chat/ThinkingIndicator';
-import ToolStatus from '../components/chat/ToolStatus';
+import ActivitySteps from '../components/chat/ActivitySteps';
 import SessionPicker from '../components/chat/SessionPicker';
 import ErrorBanner from '../components/shared/ErrorBanner';
 import { useChat } from '../context/ChatContext';
@@ -20,8 +20,6 @@ export default function Chat() {
     draft,
     setDraft,
     streaming,
-    thinking,
-    toolName,
     error,
     pickerOpen,
     setPickerOpen,
@@ -52,7 +50,12 @@ export default function Chat() {
   // Follow new content while streaming (unless the user scrolled up to read).
   useEffect(() => {
     if (stickToBottom.current) scrollToBottom();
-  }, [messages, thinking, toolName, scrollToBottom]);
+  }, [messages, streaming, scrollToBottom]);
+
+  // Brief "starting" dots before the first event of a turn arrives.
+  const last = messages[messages.length - 1];
+  const awaitingFirst =
+    streaming && last && last.role === 'assistant' && !last.text && (!last.steps || last.steps.length === 0);
 
   // On (re)mount -- e.g. coming back from the Files tab -- jump to the latest.
   useEffect(() => {
@@ -77,10 +80,12 @@ export default function Chat() {
 
       <div className="chat__scroll" ref={scrollRef} onScroll={handleScroll}>
         {messages.map((m, i) => (
-          <MessageBubble key={i} role={m.role} text={m.text} />
+          <div key={i} className="turn">
+            {m.role === 'assistant' && m.steps?.length > 0 && <ActivitySteps steps={m.steps} />}
+            {(m.text || m.role === 'user') && <MessageBubble role={m.role} text={m.text} />}
+          </div>
         ))}
-        {thinking && <ThinkingIndicator />}
-        {toolName && <ToolStatus name={toolName} />}
+        {awaitingFirst && <ThinkingIndicator />}
         {error && <ErrorBanner message={error} />}
       </div>
 

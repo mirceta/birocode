@@ -28,6 +28,11 @@ static class Program
         // WorkingDirectory on first run.
         var repositories = new RepositoryRegistry(config, logger);
 
+        // Pin the harness's own source repo as the default project, so the app can
+        // be opened (and improved) in itself via the App tab. No-op for installs
+        // that ship without the source tree.
+        repositories.EnsureSelfRepo(FindRepoRoot(), "Claude Web (this app)");
+
         // Start the embedded Kestrel server on a background thread.
         var api = new EmbeddedApi(config, logger, callLog, repositories);
         api.Start();
@@ -45,11 +50,31 @@ static class Program
         var configuration = new ConfigurationBuilder()
             .SetBasePath(AppContext.BaseDirectory)
             .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
+            // CLAUDEWEB_* env vars override appsettings (e.g. CLAUDEWEB_PORT). Lets a
+            // self-dev preview instance run on a different port without editing config.
+            .AddEnvironmentVariables(prefix: "CLAUDEWEB_")
             .Build();
 
         var config = new AppConfig();
         configuration.Bind(config);
         return config;
+    }
+
+    /// <summary>
+    /// Finds the harness's source repo root by walking up from the executable
+    /// until a folder containing ClaudeWeb.sln is found. Returns null for installs
+    /// that ship without the source tree.
+    /// </summary>
+    private static string? FindRepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "ClaudeWeb.sln")))
+                return dir.FullName;
+            dir = dir.Parent;
+        }
+        return null;
     }
 
     private static void EnsureWorkingDirectory(AppConfig config)

@@ -7,6 +7,7 @@ export default function BottomNav() {
     { to: '/', label: t('nav.chat'), icon: 'C', end: true },
     { to: '/files', label: t('nav.files'), icon: 'F' },
     { to: '/history', label: t('nav.history'), icon: 'H' },
+    { to: '/app', label: t('nav.app'), icon: '▶' },
   ];
 
   return (

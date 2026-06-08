@@ -13,12 +13,14 @@ namespace ClaudeWeb.Services.Chat;
 /// the frontend (M5) consumes. The frontend never sees raw CLI internals.
 ///
 /// Stable SSE event shapes (one JSON object per SSE "data:" line):
-///   {"type":"session","sessionId":"..."}        from system/init
-///   {"type":"token","text":"Hel"}               from text_delta
-///   {"type":"thinking"}                          from thinking content/delta
-///   {"type":"tool","name":"Write","status":"start"} from tool_use blocks
-///   {"type":"done","sessionId":"...","cost":0.04}   from result
-///   {"type":"error","message":"..."}             from result.is_error / throttle / failures
+///   {"type":"session","sessionId":"..."}             from system/init
+///   {"type":"token","text":"Hel"}                    from text_delta (the answer)
+///   {"type":"thinking","text":"..."}                 from thinking content/delta
+///   {"type":"tool","id","name","status":"start"}     tool_use begins
+///   {"type":"tool","id","name","status":"input","summary","detail"}  full input known
+///   {"type":"tool","id","status":"end","ok","preview"}              tool_result
+///   {"type":"done","sessionId":"...","cost":0.04}    from result
+///   {"type":"error","message":"..."}                 from result.is_error / throttle / failures
 ///
 /// Spawn command (Verified CLI Contract, claude v2.1.92):
 ///   claude -p "&lt;message&gt;" --output-format stream-json --include-partial-messages --verbose
@@ -231,14 +233,16 @@ public class CliRunnerService
                 case "assistant":
                     await HandleAssistant(root, emit, record);
                     break;
+                case "user":
+                    await HandleUser(root, emit);
+                    break;
                 case "rate_limit_event":
                     await HandleRateLimit(root, emit, record, onError);
                     break;
                 case "result":
                     await HandleResult(root, emit, record, onError);
                     break;
-                // "user" (tool_result echoes) and "message_*" are intentionally
-                // not surfaced to the client -- internal CLI bookkeeping.
+                // "message_*" framing events carry no user-visible content.
             }
         }
     }
@@ -293,9 +297,10 @@ public class CliRunnerService
                     if (cbType == "tool_use")
                     {
                         var name = cb.TryGetProperty("name", out var np) ? np.GetString() ?? "tool" : "tool";
+                        var id = cb.TryGetProperty("id", out var ip) ? ip.GetString() ?? "" : "";
                         _logger.Info($"[CHAT] Tool: {name}");
                         AddTool(record, name);
-                        await emit(new { type = "tool", name, status = "start" });
+                        await emit(new { type = "tool", id, name, status = "start" });
                     }
                     else if (cbType == "thinking")
                     {
@@ -324,8 +329,11 @@ public class CliRunnerService
                     }
                     else if (dType == "thinking_delta")
                     {
-                        // Don't forward the reasoning text -- just the state.
-                        await emit(new { type = "thinking" });
+                        // Forward the reasoning text so the UI can show what it's
+                        // working through (rendered dimmed/collapsible, not in the
+                        // answer bubble).
+                        var text = delta.TryGetProperty("thinking", out var th) ? th.GetString() ?? "" : "";
+                        await emit(new { type = "thinking", text });
                     }
                     // signature_delta / input_json_delta -> ignored.
                 }
@@ -351,11 +359,102 @@ public class CliRunnerService
             if (bt == "tool_use")
             {
                 var name = block.TryGetProperty("name", out var np) ? np.GetString() ?? "tool" : "tool";
+                var id = block.TryGetProperty("id", out var ip) ? ip.GetString() ?? "" : "";
                 _logger.Info($"[CHAT] Tool: {name}");
                 AddTool(record, name);
-                await emit(new { type = "tool", name, status = "start" });
+
+                // The consolidated block carries the full input -- send a one-line
+                // summary (the command, file path, etc.) plus a truncated detail
+                // for the expandable view. Also carries `name` so this works even
+                // for tools that never appeared as a stream_event.
+                string summary = "", detail = "";
+                if (block.TryGetProperty("input", out var input) && input.ValueKind == JsonValueKind.Object)
+                {
+                    summary = ToolSummary(name, input);
+                    detail = Truncate(input.GetRawText(), 1200);
+                }
+                await emit(new { type = "tool", id, name, status = "input", summary, detail });
             }
         }
+    }
+
+    /// <summary>
+    /// tool_result blocks (echoed back as a "user" event) carry each tool's
+    /// output. Surface a short, truncated preview and an ok/failed flag so the UI
+    /// can close out the tool step.
+    /// </summary>
+    private async Task HandleUser(JsonElement root, Func<object, Task> emit)
+    {
+        if (!root.TryGetProperty("message", out var msg) ||
+            !msg.TryGetProperty("content", out var content) ||
+            content.ValueKind != JsonValueKind.Array)
+            return;
+
+        foreach (var block in content.EnumerateArray())
+        {
+            var bt = block.TryGetProperty("type", out var btp) ? btp.GetString() : "";
+            if (bt != "tool_result") continue;
+
+            var id = block.TryGetProperty("tool_use_id", out var ip) ? ip.GetString() ?? "" : "";
+            var ok = !(block.TryGetProperty("is_error", out var ep) && ep.ValueKind == JsonValueKind.True);
+            var preview = Truncate(ExtractToolResultText(block), 800, maxLines: 15);
+            await emit(new { type = "tool", id, status = "end", ok, preview });
+        }
+    }
+
+    /// <summary>Pulls the text of a tool_result whose content may be a plain
+    /// string or an array of typed blocks.</summary>
+    private static string ExtractToolResultText(JsonElement block)
+    {
+        if (!block.TryGetProperty("content", out var content)) return "";
+        if (content.ValueKind == JsonValueKind.String) return content.GetString() ?? "";
+        if (content.ValueKind == JsonValueKind.Array)
+        {
+            var parts = new List<string>();
+            foreach (var b in content.EnumerateArray())
+            {
+                if (b.TryGetProperty("type", out var t) && t.GetString() == "text" &&
+                    b.TryGetProperty("text", out var tx))
+                    parts.Add(tx.GetString() ?? "");
+            }
+            return string.Join("\n", parts);
+        }
+        return "";
+    }
+
+    /// <summary>One-line, human-readable summary of a tool call's input.</summary>
+    private static string ToolSummary(string name, JsonElement input)
+    {
+        string Get(string key) =>
+            input.TryGetProperty(key, out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() ?? "" : "";
+
+        var s = name switch
+        {
+            "Bash" => Get("command"),
+            "Read" or "Write" or "Edit" or "NotebookEdit" => Get("file_path"),
+            "Glob" or "Grep" => Get("pattern"),
+            "Task" or "Agent" => Get("description"),
+            "WebFetch" or "WebSearch" => Get("url") + Get("query"),
+            "Skill" => Get("skill"),
+            _ => Get("command") + Get("file_path") + Get("path") + Get("pattern") + Get("url") + Get("description"),
+        };
+        return Truncate(s.Replace("\r", " ").Replace("\n", " "), 140);
+    }
+
+    /// <summary>Truncates to a char budget and (optionally) a line budget, adding
+    /// an ellipsis when clipped.</summary>
+    private static string Truncate(string? text, int maxChars, int maxLines = 0)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+        var s = text;
+        if (maxLines > 0)
+        {
+            var lines = s.Split('\n');
+            if (lines.Length > maxLines)
+                s = string.Join("\n", lines.Take(maxLines)) + "\n...";
+        }
+        if (s.Length > maxChars) s = s[..maxChars] + "...";
+        return s;
     }
 
     /// <summary>Append a tool name to the record, collapsing consecutive duplicates.</summary>
