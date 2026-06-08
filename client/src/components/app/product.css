@@ -1,0 +1,40 @@
+/* The embedded product preview + its empty state. The parent must be a flex
+   container (column or row) so these flex children fill the available space. */
+
+.product-frame {
+  flex: 1 1 auto;
+  width: 100%;
+  border: 0;
+  display: block;
+  background: #fff;
+}
+
+.product-empty {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  color: var(--color-text-muted, #666);
+}
+
+.product-empty__icon {
+  font-size: 40px;
+  margin: 0 0 8px;
+  opacity: 0.5;
+}
+
+.product-empty h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  color: var(--color-text, #222);
+}
+
+.product-empty p {
+  margin: 0;
+  max-width: 32ch;
+  font-size: 13px;
+  line-height: 1.5;
+}

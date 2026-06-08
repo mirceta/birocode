@@ -1,29 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { apiGet, apiPost } from '../api/client';
+import ProductFrame from '../components/app/ProductFrame';
 import { useT } from '../i18n/LanguageContext';
 import './apprun.css';
 
-// The "App" tab: previews the product (the app in the opened repo) by iframing a
-// fixed preview port. The harness does NOT start the product -- you ask Claude in
-// the Chat tab to start it on that port (bound to 0.0.0.0, launched detached so
-// it survives the turn). This page just shows whatever is listening there.
-
-// A no-cors probe: resolves (opaque) if something answers on the URL, rejects if
-// the port is closed/unreachable. Lets us detect "is it up?" without the product
-// needing CORS headers.
-async function probe(url) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 3000);
-  try {
-    await fetch(url, { mode: 'no-cors', cache: 'no-store', signal: controller.signal });
-    return true;
-  } catch {
-    return false;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
+// The builder's "App" tab: a status bar (liveness, URL, Prepare, Refresh) over a
+// shared ProductFrame that previews whatever is running on the preview port. The
+// harness does NOT start the product -- you ask Claude in Chat to start it.
 export default function AppRun() {
   const { t } = useT();
   const [port, setPort] = useState(null);
@@ -31,10 +14,7 @@ export default function AppRun() {
   const [reloadKey, setReloadKey] = useState(0);
   const [preparing, setPreparing] = useState(false);
   const [note, setNote] = useState('');
-  const pollRef = useRef(null);
 
-  // The product runs on the same host the user is reaching the harness on (so it
-  // works from a phone over the LAN), just on the preview port.
   const url = port ? `${window.location.protocol}//${window.location.hostname}:${port}` : null;
 
   useEffect(() => {
@@ -50,25 +30,6 @@ export default function AppRun() {
       cancelled = true;
     };
   }, []);
-
-  const check = useCallback(async () => {
-    if (!url) return;
-    const up = await probe(url);
-    setOnline(up);
-  }, [url]);
-
-  // Poll while the page is open so the preview appears as soon as Claude starts it.
-  useEffect(() => {
-    if (!url) return undefined;
-    check();
-    pollRef.current = setInterval(check, 4000);
-    return () => clearInterval(pollRef.current);
-  }, [url, check]);
-
-  function refresh() {
-    setReloadKey((k) => k + 1);
-    check();
-  }
 
   async function prepare() {
     setPreparing(true);
@@ -109,7 +70,7 @@ export default function AppRun() {
         >
           {preparing ? t('apptab.preparing') : t('apptab.prepare')}
         </button>
-        <button type="button" className="apprun__refresh" onClick={refresh}>
+        <button type="button" className="apprun__refresh" onClick={() => setReloadKey((k) => k + 1)}>
           {t('apptab.refresh')}
         </button>
       </div>
@@ -117,20 +78,7 @@ export default function AppRun() {
       {note && <div className="apprun__note" role="status">{note}</div>}
 
       <div className="apprun__body">
-        {online ? (
-          <iframe
-            key={reloadKey}
-            className="apprun__frame"
-            src={url}
-            title={t('nav.app')}
-          />
-        ) : (
-          <div className="apprun__empty">
-            <p className="apprun__empty-icon" aria-hidden="true">▶</p>
-            <h2>{t('apptab.emptyTitle')}</h2>
-            <p>{t('apptab.emptyBody', { port: port ?? 5200 })}</p>
-          </div>
-        )}
+        <ProductFrame port={port} reloadKey={reloadKey} onStatus={setOnline} />
       </div>
     </div>
   );

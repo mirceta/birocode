@@ -28,6 +28,8 @@
   "repo.label": "Project",
   "repo.none": "No projects",
 
+  "landing.builder": "Builder",
+
   "apptab.online": "running",
   "apptab.offline": "not running",
   "apptab.checking": "checking...",

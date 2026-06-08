@@ -27,6 +27,7 @@ public class HealthController : ControllerBase
     {
         status = "running",
         port = _config.Port,
+        previewPort = _config.PreviewPort,
         repositoryCount = _registry.GetAll().Count
     });
 }

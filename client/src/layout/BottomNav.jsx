@@ -4,10 +4,10 @@ import { useT } from '../i18n/LanguageContext';
 export default function BottomNav() {
   const { t } = useT();
   const tabs = [
-    { to: '/', label: t('nav.chat'), icon: 'C', end: true },
-    { to: '/files', label: t('nav.files'), icon: 'F' },
-    { to: '/history', label: t('nav.history'), icon: 'H' },
-    { to: '/app', label: t('nav.app'), icon: '▶' },
+    { to: '/studio', label: t('nav.chat'), icon: 'C', end: true },
+    { to: '/studio/files', label: t('nav.files'), icon: 'F' },
+    { to: '/studio/history', label: t('nav.history'), icon: 'H' },
+    { to: '/studio/app', label: t('nav.app'), icon: '▶' },
   ];
 
   return (

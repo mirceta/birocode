@@ -28,6 +28,8 @@
   "repo.label": "Proje",
   "repo.none": "Proje yok",
 
+  "landing.builder": "Stüdyo",
+
   "apptab.online": "calisiyor",
   "apptab.offline": "calismiyor",
   "apptab.checking": "kontrol ediliyor...",
