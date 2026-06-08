@@ -146,7 +146,26 @@ app.use((req, _res, next) => {
 For other servers, the equivalent: in FastAPI use `root_path` + a small
 ASGI middleware; in Django, `FORCE_SCRIPT_NAME`; in Spring, `server.servlet.context-path`.
 
-After all three changes, verify (page bundle hash will change, so the proxy
+**4. Body-less POSTs through the proxy.** IIS+ARR rejects POSTs that lack
+either `Content-Length` or `Transfer-Encoding` with `HTTP 411 Length
+Required`. Browsers don't always set `Content-Length: 0` for a body-less
+`fetch(url, { method: 'POST' })`, so those calls work locally on the
+product's own port but get 411 through the proxy. Always send at least an
+empty JSON body on POST:
+
+```js
+// Bad -- 411 through the proxy
+await fetch('/api/foo', { method: 'POST' })
+
+// Good -- works locally AND through the proxy
+await fetch('/api/foo', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: '{}',
+})
+```
+
+After all four changes, verify (page bundle hash will change, so the proxy
 self-cache might serve stale -- hard-refresh in the browser):
 
 ```
