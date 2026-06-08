@@ -29,8 +29,6 @@ export function ChatProvider({ children }) {
   // a file reference into it.
   const [draft, setDraft] = useState('');
   const [streaming, setStreaming] = useState(false);
-  const [thinking, setThinking] = useState(false);
-  const [toolName, setToolName] = useState(null);
   const [error, setError] = useState('');
 
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -50,16 +48,91 @@ export function ChatProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentRepoId]);
 
-  const appendToken = useCallback((text) => {
+  // Update the last message in place, but only if it is the (streaming) assistant
+  // turn. `updater` receives the message and returns a new one.
+  const updateAssistant = useCallback((updater) => {
     setMessages((prev) => {
       const next = prev.slice();
-      const last = next[next.length - 1];
-      if (last && last.role === 'assistant') {
-        next[next.length - 1] = { ...last, text: last.text + text };
-      }
+      const i = next.length - 1;
+      if (i >= 0 && next[i].role === 'assistant') next[i] = updater(next[i]);
       return next;
     });
   }, []);
+
+  const appendToken = useCallback(
+    (text) => updateAssistant((m) => ({ ...m, text: m.text + text })),
+    [updateAssistant],
+  );
+
+  // --- activity steps (the verbose trail under a turn) --------------------
+  // Each assistant turn carries an ordered `steps` array: contiguous thinking is
+  // one { kind:'thinking', text } step; each tool call is a { kind:'tool', id,
+  // name, summary, detail, status:'running'|'done'|'error', preview, startedAt }.
+
+  const addThinking = useCallback(
+    (text) =>
+      updateAssistant((m) => {
+        const steps = (m.steps || []).slice();
+        const last = steps[steps.length - 1];
+        if (last && last.kind === 'thinking') {
+          steps[steps.length - 1] = { ...last, text: last.text + (text || '') };
+        } else {
+          steps.push({ kind: 'thinking', text: text || '' });
+        }
+        return { ...m, steps };
+      }),
+    [updateAssistant],
+  );
+
+  const handleTool = useCallback(
+    (evt) =>
+      updateAssistant((m) => {
+        const steps = (m.steps || []).slice();
+        let idx = evt.id ? steps.findIndex((s) => s.kind === 'tool' && s.id === evt.id) : -1;
+
+        if (evt.status === 'start' || evt.status === 'input') {
+          if (idx === -1) {
+            steps.push({
+              kind: 'tool',
+              id: evt.id,
+              name: evt.name || 'tool',
+              status: 'running',
+              startedAt: Date.now(),
+              summary: evt.summary || '',
+              detail: evt.detail || '',
+              preview: '',
+            });
+          } else {
+            steps[idx] = {
+              ...steps[idx],
+              name: evt.name || steps[idx].name,
+              summary: evt.summary ?? steps[idx].summary,
+              detail: evt.detail ?? steps[idx].detail,
+            };
+          }
+        } else if (evt.status === 'end') {
+          // Match by id, else fall back to the most recent still-running tool.
+          if (idx === -1) {
+            for (let j = steps.length - 1; j >= 0; j--) {
+              if (steps[j].kind === 'tool' && steps[j].status === 'running') {
+                idx = j;
+                break;
+              }
+            }
+          }
+          if (idx !== -1) {
+            steps[idx] = {
+              ...steps[idx],
+              status: evt.ok === false ? 'error' : 'done',
+              ok: evt.ok !== false,
+              preview: evt.preview || '',
+            };
+          }
+        }
+        return { ...m, steps };
+      }),
+    [updateAssistant],
+  );
 
   function handleEvent(evt) {
     switch (evt.type) {
@@ -67,15 +140,12 @@ export function ChatProvider({ children }) {
         if (evt.sessionId) setSessionId(evt.sessionId);
         break;
       case 'thinking':
-        setThinking(true);
+        addThinking(evt.text);
         break;
       case 'tool':
-        setThinking(false);
-        setToolName(evt.name);
+        handleTool(evt);
         break;
       case 'token':
-        setThinking(false);
-        setToolName(null);
         if (evt.text) appendToken(evt.text);
         break;
       case 'done':
@@ -95,11 +165,9 @@ export function ChatProvider({ children }) {
     setMessages((prev) => [
       ...prev,
       { role: 'user', text },
-      { role: 'assistant', text: '' },
+      { role: 'assistant', text: '', steps: [] },
     ]);
     setStreaming(true);
-    setThinking(true);
-    setToolName(null);
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -115,15 +183,26 @@ export function ChatProvider({ children }) {
       }
     } finally {
       setStreaming(false);
-      setThinking(false);
-      setToolName(null);
       abortRef.current = null;
       setMessages((prev) => {
-        const last = prev[prev.length - 1];
-        if (last && last.role === 'assistant' && last.text === '') {
-          return prev.slice(0, -1);
+        const next = prev.slice();
+        const last = next[next.length - 1];
+        if (last && last.role === 'assistant') {
+          // Drop a truly empty turn (no answer text and no activity).
+          if (last.text === '' && (!last.steps || last.steps.length === 0)) {
+            return next.slice(0, -1);
+          }
+          // Close out any tool step still spinning (e.g. on early stream end).
+          if (last.steps?.some((s) => s.kind === 'tool' && s.status === 'running')) {
+            next[next.length - 1] = {
+              ...last,
+              steps: last.steps.map((s) =>
+                s.kind === 'tool' && s.status === 'running' ? { ...s, status: 'done' } : s,
+              ),
+            };
+          }
         }
-        return prev;
+        return next;
       });
     }
   }
@@ -133,8 +212,6 @@ export function ChatProvider({ children }) {
     setSessionId(null);
     setMessages([greeting()]);
     setError('');
-    setThinking(false);
-    setToolName(null);
     setStreaming(false);
     setPickerOpen(false);
   }
@@ -143,8 +220,6 @@ export function ChatProvider({ children }) {
     if (abortRef.current) abortRef.current.abort();
     setSessionId(id);
     setError('');
-    setThinking(false);
-    setToolName(null);
     setStreaming(false);
     setPickerOpen(false);
 
@@ -185,8 +260,6 @@ export function ChatProvider({ children }) {
     draft,
     setDraft,
     streaming,
-    thinking,
-    toolName,
     error,
     pickerOpen,
     setPickerOpen,
