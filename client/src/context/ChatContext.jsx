@@ -207,6 +207,13 @@ export function ChatProvider({ children }) {
     }
   }
 
+  // Interrupt the in-flight turn. Aborting the fetch closes the SSE connection,
+  // which fires HttpContext.RequestAborted on the server -> the CLI process is
+  // killed. send()'s catch treats AbortError as a normal stop.
+  const stop = useCallback(() => {
+    if (abortRef.current) abortRef.current.abort();
+  }, []);
+
   function startNewConversation() {
     if (abortRef.current) abortRef.current.abort();
     setSessionId(null);
@@ -267,6 +274,7 @@ export function ChatProvider({ children }) {
     sessionsLoading,
     sessionsError,
     send,
+    stop,
     startNewConversation,
     resumeConversation,
     openPicker,

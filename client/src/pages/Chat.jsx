@@ -27,6 +27,7 @@ export default function Chat() {
     sessionsLoading,
     sessionsError,
     send,
+    stop,
     startNewConversation,
     resumeConversation,
     openPicker,
@@ -93,7 +94,8 @@ export default function Chat() {
         value={draft}
         onChange={setDraft}
         onSend={handleSend}
-        disabled={streaming}
+        onStop={stop}
+        streaming={streaming}
       />
 
       <SessionPicker

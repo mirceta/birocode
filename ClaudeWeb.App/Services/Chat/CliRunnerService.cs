@@ -87,6 +87,7 @@ public class CliRunnerService
             resuming: resuming,
             sessionId: resuming ? sessionId! : "");
 
+        Process? process = null;
         try
         {
             var psi = CreateProcessInfo(message, sessionId, workingDirectory);
@@ -94,7 +95,7 @@ public class CliRunnerService
                 ? $"[CLI] Resuming session {Short(sessionId!)} in {workingDirectory}"
                 : $"[CLI] Starting new session in {workingDirectory}");
 
-            using var process = new Process { StartInfo = psi };
+            process = new Process { StartInfo = psi };
             process.Start();
 
             string? capturedSessionId = null;
@@ -151,6 +152,13 @@ public class CliRunnerService
         }
         finally
         {
+            // Ensure the CLI (and its child tree) is actually dead. On a cancel /
+            // client disconnect, Dispose alone would leave it running -- still
+            // working and still billing. On normal completion HasExited is true,
+            // so this is a no-op.
+            try { if (process is { HasExited: false }) process.Kill(entireProcessTree: true); }
+            catch { /* already gone / race */ }
+            process?.Dispose();
             EndRun(repoId);
         }
     }

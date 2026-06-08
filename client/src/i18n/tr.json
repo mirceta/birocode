@@ -55,6 +55,8 @@
   "chat.inputAria": "Bir mesaj yaz",
   "chat.send": "Gonder",
   "chat.sendAria": "Gonder",
+  "chat.stop": "Durdur",
+  "chat.stopAria": "Uretimi durdur",
   "chat.thinkingAria": "Dusunuyor",
   "chat.thinking": "Dusunuyor",
   "chat.inputLabel": "Girdi",

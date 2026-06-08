@@ -4,9 +4,10 @@ import { useT } from '../../i18n/LanguageContext';
 // Controlled composer. The draft text lives in ChatContext (so it persists
 // across tab navigation and can be appended to by other tabs), and is passed
 // in via value/onChange.
-export default function ChatInput({ value, onChange, onSend, disabled }) {
+export default function ChatInput({ value, onChange, onSend, onStop, streaming }) {
   const { t } = useT();
   const textareaRef = useRef(null);
+  const disabled = streaming;
 
   // Auto-grow to fit the content. Runs on every value change -- including when
   // the draft is restored after navigating back, or cleared after sending.
@@ -45,15 +46,27 @@ export default function ChatInput({ value, onChange, onSend, disabled }) {
         onKeyDown={handleKeyDown}
         aria-label={t('chat.inputAria')}
       />
-      <button
-        type="button"
-        className="chat-input__send"
-        onClick={submit}
-        disabled={!canSend}
-        aria-label={t('chat.sendAria')}
-      >
-        {t('chat.send')}
-      </button>
+      {streaming ? (
+        <button
+          type="button"
+          className="chat-input__send chat-input__stop"
+          onClick={onStop}
+          aria-label={t('chat.stopAria')}
+        >
+          <span className="chat-input__stop-square" aria-hidden="true" />
+          {t('chat.stop')}
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="chat-input__send"
+          onClick={submit}
+          disabled={!canSend}
+          aria-label={t('chat.sendAria')}
+        >
+          {t('chat.send')}
+        </button>
+      )}
     </div>
   );
 }

@@ -469,6 +469,20 @@ details.step > summary::-webkit-details-marker {
   cursor: not-allowed;
 }
 
+.chat-input__stop {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--color-text);
+}
+
+.chat-input__stop-square {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  background: #fff;
+}
+
 /* ---- Session picker --------------------------------------------------- */
 
 .picker-backdrop {

@@ -55,6 +55,8 @@
   "chat.inputAria": "Type a message",
   "chat.send": "Send",
   "chat.sendAria": "Send",
+  "chat.stop": "Stop",
+  "chat.stopAria": "Stop generating",
   "chat.thinkingAria": "Thinking",
   "chat.thinking": "Thinking",
   "chat.inputLabel": "Input",
