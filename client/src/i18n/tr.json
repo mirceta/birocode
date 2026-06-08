@@ -64,6 +64,8 @@
   "chat.outputLabel": "Cikti",
   "chat.genericError": "Bir seyler ters gitti. Lutfen tekrar dene.",
   "chat.sendError": "Mesajini gonderirken bir seyler ters gitti. Lutfen tekrar dene.",
+  "chat.attach": "Dosya ekle",
+  "chat.uploadError": "Dosya yuklenemedi. Lutfen tekrar dene.",
   "chat.loadingConversation": "Bu sohbet yukleniyor...",
   "chat.resumed": "Kaldigin yerden devam ediyoruz. Sirada ne yapmak istersin?",
   "chat.resumeError": "O sohbet yuklenemedi. Bir mesaj gondererek devam edebilirsin.",

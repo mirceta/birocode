@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { apiGet, apiStream } from '../api/client';
+import { apiGet, apiStream, apiUpload } from '../api/client';
 import { createSseParser } from '../components/chat/sseParser';
 import { useRepo } from './RepoContext';
 import { useT } from '../i18n/LanguageContext';
@@ -28,6 +28,7 @@ export function ChatProvider({ children }) {
   // navigating to other tabs and back, and so other tabs (e.g. Files) can drop
   // a file reference into it.
   const [draft, setDraft] = useState('');
+  const [attachment, setAttachment] = useState(null);
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState('');
 
@@ -161,10 +162,27 @@ export function ChatProvider({ children }) {
 
   async function send(text) {
     setError('');
+    const pendingFile = attachment;
     setDraft(''); // clear the composer the moment the message is sent
+    setAttachment(null);
+
+    // Upload the attachment first (if any) and build the final prompt.
+    let fullText = text;
+    if (pendingFile) {
+      try {
+        const result = await apiUpload('/upload', pendingFile);
+        const suffix = `\n\n[Attached file: ${result.path}]`;
+        fullText = text ? text + suffix : suffix;
+      } catch {
+        setError(t('chat.uploadError'));
+        setDraft(text); // restore the draft so the user doesn't lose their message
+        return;
+      }
+    }
+
     setMessages((prev) => [
       ...prev,
-      { role: 'user', text },
+      { role: 'user', text: fullText },
       { role: 'assistant', text: '', steps: [] },
     ]);
     setStreaming(true);
@@ -174,7 +192,7 @@ export function ChatProvider({ children }) {
     const parse = createSseParser(handleEvent);
 
     try {
-      const body = { message: text };
+      const body = { message: fullText };
       if (sessionId) body.sessionId = sessionId;
       await apiStream('/chat', body, parse, { signal: controller.signal });
     } catch (err) {
@@ -266,6 +284,8 @@ export function ChatProvider({ children }) {
     sessionId,
     draft,
     setDraft,
+    attachment,
+    setAttachment,
     streaming,
     error,
     pickerOpen,

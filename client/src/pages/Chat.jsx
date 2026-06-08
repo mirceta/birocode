@@ -19,6 +19,8 @@ export default function Chat() {
     sessionId,
     draft,
     setDraft,
+    attachment,
+    setAttachment,
     streaming,
     error,
     pickerOpen,
@@ -96,6 +98,8 @@ export default function Chat() {
         onSend={handleSend}
         onStop={stop}
         streaming={streaming}
+        attachment={attachment}
+        onAttach={setAttachment}
       />
 
       <SessionPicker

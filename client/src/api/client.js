@@ -87,6 +87,18 @@ export async function apiPost(path, body) {
   return handle(res);
 }
 
+// Upload a file via multipart/form-data. Returns the parsed JSON response.
+export async function apiUpload(path, file) {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(url(path), {
+    method: 'POST',
+    headers: { 'X-Auth-Password': getPassword(), 'X-Repo-Id': getRepoId() },
+    body: form,
+  });
+  return handle(res);
+}
+
 // Streaming POST helper for M5 (chat). Sends a JSON body and reads the
 // response as a stream, invoking `onEvent(chunk)` with each decoded text
 // chunk as it arrives. Resolves when the stream ends. The caller is

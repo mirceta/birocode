@@ -16,3 +16,6 @@ settings.json
 
 # Isolated build output for the App-tab self-preview (see CLAUDE.md)
 .claudeweb-preview/
+
+# Chat file uploads (images etc. sent alongside prompts)
+.claudeweb-uploads/
