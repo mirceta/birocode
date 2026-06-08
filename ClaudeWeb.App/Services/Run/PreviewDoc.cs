@@ -91,16 +91,20 @@ user asks you to run, start, or preview the app:
 ### Build for the reverse-proxy sub-path
 
 This Claude Web install fronts the App tab through a reverse proxy that maps
-**{PREVIEW_URL}** -> `http://<host>:{PORT}/` (the proxy strips the prefix before
-forwarding). If your built HTML/CSS/JS references **absolute** URLs (e.g.
-`/assets/index-XYZ.js`, `/api/foo`), the browser fetches them at the page's
-origin *without* the `{PREVIEW_URL}` prefix -- so they escape your product
-and get routed to the harness on a different port. Symptoms: blank app,
-404s on `/assets/...`, ""Failed to load module script: Expected JavaScript
-... but the server responded with a MIME type of 'text/html'"".
+**{PREVIEW_URL}** -> `http://<host>:{PORT}/` (the proxy **strips** the prefix
+before forwarding). Any **absolute** URL the browser sees in your page --
+`/assets/index-XYZ.js`, `/api/foo`, `/img/x.png` -- is sent at the page's
+origin *without* the `{PREVIEW_URL}` prefix, so it escapes your product and
+gets routed to the harness on a different port. Symptoms: blank app, 404s on
+`/assets/...`, **401 Unauthorized on `/api/...`** (the harness password-gates
+its own API), ""Failed to load module script: Expected JavaScript ... but the
+server responded with a MIME type of 'text/html'"".
 
-So when you build the product, set its **base URL** to `{PREVIEW_URL}` so
-the generated HTML references `{PREVIEW_URL}assets/...`:
+You need to fix this in **three places**: built-time asset URLs, runtime
+fetch URLs, and the server's URL handling.
+
+**1. Built-time asset URLs (script/link tags in index.html).** Set the
+framework's base URL to `{PREVIEW_URL}`:
 
 - **Vite**: `base: '{PREVIEW_URL}'` in `vite.config.*`
 - **Create React App**: `""homepage"": ""{PREVIEW_URL}""` in `package.json`
@@ -108,25 +112,49 @@ the generated HTML references `{PREVIEW_URL}assets/...`:
 - **Angular**: build with `--base-href {PREVIEW_URL}`
 - **Plain HTML**: prefer relative paths (`./assets/...`), or set `<base href=""{PREVIEW_URL}"">`.
 
-A self-contained app that already uses only relative paths needs no change.
+**2. Runtime fetch / XHR / axios URLs.** Setting the build-time base does
+NOT rewrite calls like `fetch('/api/foo')` in your JS -- those are still
+hard-coded absolute paths and will escape the prefix at runtime. Derive the
+API base from the framework's runtime base value so it inherits whatever
+prefix you built with:
 
-Also make the product **directly reachable at `:{PORT}{PREVIEW_URL}`** so the
-absolute URLs in the built HTML still work when you hit the LAN port without
-going through the proxy. Easiest: also mount static assets under the prefix.
-For Express:
+- **Vite**: `const API = import.meta.env.BASE_URL.replace(/\/$/, '')` then
+  `fetch(\`${API}/api/...\`)`. Becomes `'/api/...'` when base is `'/'`
+  and `'{PREVIEW_URL_NO_TRAIL}/api/...'` when base is `'{PREVIEW_URL}'`.
+- **Create React App**: use `process.env.PUBLIC_URL` analogously.
+- **Next.js**: prefix fetches with `process.env.NEXT_PUBLIC_BASE_PATH` (set
+  it from `next.config`'s `basePath`).
+- **Angular**: inject `APP_BASE_HREF` and prepend it to API URLs.
+- **Plain HTML**: use relative URLs (`fetch('api/foo')`) so they resolve
+  against the current page's path.
+
+**3. Server-side URL handling.** The browser will send requests at
+`{PREVIEW_URL}api/...` when accessed directly on the LAN port (no proxy in
+front), and at `/api/...` when behind the proxy (which has already stripped
+the prefix). The cleanest fix is a one-line URL-rewrite at the top of your
+middleware chain so the rest of your routes don't care which path they
+arrived through. For Express:
 
 ```js
-app.use(express.static('dist'))
-app.use('{PREVIEW_URL_NO_TRAIL}', express.static('dist'))
+app.use((req, _res, next) => {
+  if (req.url.startsWith('{PREVIEW_URL}')) req.url = req.url.slice('{PREVIEW_URL_NO_TRAIL}'.length)
+  next()
+})
+// then your existing app.use(express.static(...)), app.get('/api/...'), etc.
 ```
 
-Verify (after starting on port {PORT}):
+For other servers, the equivalent: in FastAPI use `root_path` + a small
+ASGI middleware; in Django, `FORCE_SCRIPT_NAME`; in Spring, `server.servlet.context-path`.
+
+After all three changes, verify (page bundle hash will change, so the proxy
+self-cache might serve stale -- hard-refresh in the browser):
 
 ```
-curl -I http://localhost:{PORT}/                            # 200, Content-Type: text/html
-curl -I http://localhost:{PORT}{PREVIEW_URL}                # 200, Content-Type: text/html
-curl -I http://localhost:{PORT}/assets/<hash>.js            # 200, Content-Type: text/javascript  (path the proxy sends after stripping)
-curl -I http://localhost:{PORT}{PREVIEW_URL}assets/<hash>.js # 200, Content-Type: text/javascript  (path the browser hits without the proxy)
+curl -I http://localhost:{PORT}/                              # 200, text/html
+curl -I http://localhost:{PORT}{PREVIEW_URL}                  # 200, text/html (direct-LAN form)
+curl -I http://localhost:{PORT}/assets/<hash>.js              # 200, text/javascript (proxy-stripped form)
+curl -I http://localhost:{PORT}{PREVIEW_URL}assets/<hash>.js  # 200, text/javascript (direct-LAN form)
+curl    http://localhost:{PORT}{PREVIEW_URL}api/<your-route>  # 200 + real API JSON, not the harness's 401
 ```";
 
     private const string Self = @"
