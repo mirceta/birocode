@@ -18,12 +18,23 @@ public static class PreviewDoc
 
     public sealed record PrepareResult(string Action, string FileName);
 
-    /// <summary>Builds the managed section for the given preview port. Self-dev
-    /// gets the extra isolated-build steps (the harness can't build over its own
-    /// running exe).</summary>
-    public static string BuildSection(int port, bool isSelf)
+    /// <summary>Builds the managed section for the given preview port. When
+    /// <paramref name="previewUrl"/> is non-empty (this install is behind a
+    /// reverse proxy), the extra sub-path section is included so the product
+    /// is built with the correct base URL. Self-dev gets the isolated-build
+    /// steps (the harness can't build over its own running exe).</summary>
+    public static string BuildSection(int port, string? previewUrl, bool isSelf)
     {
         var body = Generic.Replace("{PORT}", port.ToString());
+        if (!string.IsNullOrWhiteSpace(previewUrl))
+        {
+            var withSlash = previewUrl!.EndsWith("/") ? previewUrl : previewUrl + "/";
+            var noTrail = withSlash.TrimEnd('/');
+            body += Proxy
+                .Replace("{PORT}", port.ToString())
+                .Replace("{PREVIEW_URL}", withSlash)
+                .Replace("{PREVIEW_URL_NO_TRAIL}", noTrail);
+        }
         if (isSelf) body += Self.Replace("{PORT}", port.ToString());
         return $"{Begin}\n\n{body.Trim()}\n\n{End}\n";
     }
@@ -32,11 +43,11 @@ public static class PreviewDoc
     /// Creates, updates, or appends the managed section in &lt;repoPath&gt;/CLAUDE.md.
     /// Returns which action was taken.
     /// </summary>
-    public static PrepareResult Prepare(string repoPath, int port, bool isSelf)
+    public static PrepareResult Prepare(string repoPath, int port, string? previewUrl, bool isSelf)
     {
         const string fileName = "CLAUDE.md";
         var path = Path.Combine(repoPath, fileName);
-        var section = BuildSection(port, isSelf);
+        var section = BuildSection(port, previewUrl, isSelf);
 
         if (!File.Exists(path))
         {
@@ -74,6 +85,49 @@ user asks you to run, start, or preview the app:
    - Windows: `Get-NetTCPConnection -LocalPort {PORT} -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }`
    - macOS/Linux: `lsof -ti tcp:{PORT} | xargs -r kill`
 4. Use this repository's own stack and scripts to start it.";
+
+    private const string Proxy = @"
+
+### Build for the reverse-proxy sub-path
+
+This Claude Web install fronts the App tab through a reverse proxy that maps
+**{PREVIEW_URL}** -> `http://<host>:{PORT}/` (the proxy strips the prefix before
+forwarding). If your built HTML/CSS/JS references **absolute** URLs (e.g.
+`/assets/index-XYZ.js`, `/api/foo`), the browser fetches them at the page's
+origin *without* the `{PREVIEW_URL}` prefix -- so they escape your product
+and get routed to the harness on a different port. Symptoms: blank app,
+404s on `/assets/...`, ""Failed to load module script: Expected JavaScript
+... but the server responded with a MIME type of 'text/html'"".
+
+So when you build the product, set its **base URL** to `{PREVIEW_URL}` so
+the generated HTML references `{PREVIEW_URL}assets/...`:
+
+- **Vite**: `base: '{PREVIEW_URL}'` in `vite.config.*`
+- **Create React App**: `""homepage"": ""{PREVIEW_URL}""` in `package.json`
+- **Next.js**: `basePath: '{PREVIEW_URL_NO_TRAIL}'` in `next.config.*` (no trailing slash)
+- **Angular**: build with `--base-href {PREVIEW_URL}`
+- **Plain HTML**: prefer relative paths (`./assets/...`), or set `<base href=""{PREVIEW_URL}"">`.
+
+A self-contained app that already uses only relative paths needs no change.
+
+Also make the product **directly reachable at `:{PORT}{PREVIEW_URL}`** so the
+absolute URLs in the built HTML still work when you hit the LAN port without
+going through the proxy. Easiest: also mount static assets under the prefix.
+For Express:
+
+```js
+app.use(express.static('dist'))
+app.use('{PREVIEW_URL_NO_TRAIL}', express.static('dist'))
+```
+
+Verify (after starting on port {PORT}):
+
+```
+curl -I http://localhost:{PORT}/                            # 200, Content-Type: text/html
+curl -I http://localhost:{PORT}{PREVIEW_URL}                # 200, Content-Type: text/html
+curl -I http://localhost:{PORT}/assets/<hash>.js            # 200, Content-Type: text/javascript  (path the proxy sends after stripping)
+curl -I http://localhost:{PORT}{PREVIEW_URL}assets/<hash>.js # 200, Content-Type: text/javascript  (path the browser hits without the proxy)
+```";
 
     private const string Self = @"
 

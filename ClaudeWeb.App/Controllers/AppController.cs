@@ -43,7 +43,7 @@ public class AppController : ControllerBase
 
         try
         {
-            var result = PreviewDoc.Prepare(repo.Path, _config.PreviewPort, repo.IsSelf);
+            var result = PreviewDoc.Prepare(repo.Path, _config.PreviewPort, _config.PreviewUrl, repo.IsSelf);
             return Ok(new { action = result.Action, file = result.FileName, project = repo.Name });
         }
         catch (Exception ex)
