@@ -39,6 +39,7 @@
   "apptab.prepareHint": "Bu projenin CLAUDE.md dosyasina onizleme talimatlarini yaz",
   "apptab.prepared": "Onizleme adimlari CLAUDE.md dosyasina yazildi -- Dosyalar sekmesinden inceleyip Claude'dan uygulamayi baslatmasini iste.",
   "apptab.prepareError": "CLAUDE.md yazilamadi.",
+  "apptab.fullscreen": "Tam ekran",
   "apptab.emptyTitle": "Henuz bir sey calismiyor",
   "apptab.emptyBody": "Sohbet sekmesinde Claude'dan uygulamani {port} portunda, 0.0.0.0 adresine bagli ve ayri bir surec olarak baslatmasini iste ki calismaya devam etsin.",
 

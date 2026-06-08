@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { apiGet, apiPost } from '../api/client';
 import ProductFrame from '../components/app/ProductFrame';
 import { resolveProductUrl } from '../components/app/productUrl';
@@ -10,6 +11,7 @@ import './apprun.css';
 // harness does NOT start the product -- you ask Claude in Chat to start it.
 export default function AppRun() {
   const { t } = useT();
+  const navigate = useNavigate();
   const [port, setPort] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
   const [online, setOnline] = useState(null); // null = checking, true, false
@@ -76,6 +78,9 @@ export default function AppRun() {
         </button>
         <button type="button" className="apprun__refresh" onClick={() => setReloadKey((k) => k + 1)}>
           {t('apptab.refresh')}
+        </button>
+        <button type="button" className="apprun__fullscreen" onClick={() => navigate('/')} title={t('apptab.fullscreen')}>
+          {t('apptab.fullscreen')}
         </button>
       </div>
 
