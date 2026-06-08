@@ -25,6 +25,16 @@ public class AppConfig
     public int PreviewPort { get; set; } = 5200;
 
     /// <summary>
+    /// How the browser should reach the product when the app is served through a
+    /// reverse proxy (e.g. IIS). Set to a same-origin path like "/preview/" that
+    /// the proxy forwards to the product, so the iframe works over HTTPS without
+    /// exposing the raw preview port. Empty = embed the product directly at
+    /// &lt;host&gt;:&lt;PreviewPort&gt; (the LAN/no-proxy case). When set, it is only used
+    /// for proxied requests; direct access on the Kestrel port still uses the port.
+    /// </summary>
+    public string PreviewUrl { get; set; } = "";
+
+    /// <summary>
     /// Shared password required on /api/* calls (except /api/health and static
     /// files). Supplied by clients via the X-Auth-Password header or ?pw= query.
     /// </summary>

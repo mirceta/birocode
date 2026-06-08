@@ -22,7 +22,7 @@ async function probe(url) {
   }
 }
 
-export default function ProductFrame({ port, reloadKey = 0, onStatus }) {
+export default function ProductFrame({ url, port, reloadKey = 0, onStatus }) {
   const { t } = useT();
   const [online, setOnline] = useState(null); // null = checking, true, false
   const pollRef = useRef(null);
@@ -31,10 +31,6 @@ export default function ProductFrame({ port, reloadKey = 0, onStatus }) {
   // pass an inline function, which would otherwise restart the poll each render).
   const onStatusRef = useRef(onStatus);
   onStatusRef.current = onStatus;
-
-  // The product runs on the same host the user reached this page on (so it works
-  // from a phone over the LAN), just on the preview port.
-  const url = port ? `${window.location.protocol}//${window.location.hostname}:${port}` : null;
 
   const check = useCallback(async () => {
     if (!url) return;

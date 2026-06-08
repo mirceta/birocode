@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiGet } from '../api/client';
 import ProductFrame from '../components/app/ProductFrame';
+import { resolveProductUrl } from '../components/app/productUrl';
 import { useT } from '../i18n/LanguageContext';
 import './landing.css';
 
@@ -13,12 +14,15 @@ export default function Landing() {
   const { t } = useT();
   const navigate = useNavigate();
   const [port, setPort] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState('');
 
   useEffect(() => {
     let cancelled = false;
     apiGet('/health')
       .then((d) => {
-        if (!cancelled) setPort(d?.previewPort ?? 5200);
+        if (cancelled) return;
+        setPort(d?.previewPort ?? 5200);
+        setPreviewUrl(d?.previewUrl ?? '');
       })
       .catch(() => {
         if (!cancelled) setPort(5200);
@@ -27,6 +31,8 @@ export default function Landing() {
       cancelled = true;
     };
   }, []);
+
+  const url = port ? resolveProductUrl(port, previewUrl) : null;
 
   return (
     <div className="landing">
@@ -38,7 +44,7 @@ export default function Landing() {
       >
         <span aria-hidden="true">⚙</span> {t('landing.builder')}
       </button>
-      <ProductFrame port={port} />
+      <ProductFrame url={url} port={port} />
     </div>
   );
 }

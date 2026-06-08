@@ -28,7 +28,7 @@ public class AppController : ControllerBase
     }
 
     [HttpGet("preview")]
-    public IActionResult Preview() => Ok(new { port = _config.PreviewPort });
+    public IActionResult Preview() => Ok(new { port = _config.PreviewPort, previewUrl = _config.PreviewUrl });
 
     /// <summary>
     /// Writes/updates the preview convention in the opened repo's CLAUDE.md so

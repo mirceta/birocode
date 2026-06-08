@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiGet, apiPost } from '../api/client';
 import ProductFrame from '../components/app/ProductFrame';
+import { resolveProductUrl } from '../components/app/productUrl';
 import { useT } from '../i18n/LanguageContext';
 import './apprun.css';
 
@@ -10,18 +11,21 @@ import './apprun.css';
 export default function AppRun() {
   const { t } = useT();
   const [port, setPort] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState('');
   const [online, setOnline] = useState(null); // null = checking, true, false
   const [reloadKey, setReloadKey] = useState(0);
   const [preparing, setPreparing] = useState(false);
   const [note, setNote] = useState('');
 
-  const url = port ? `${window.location.protocol}//${window.location.hostname}:${port}` : null;
+  const url = port ? resolveProductUrl(port, previewUrl) : null;
 
   useEffect(() => {
     let cancelled = false;
     apiGet('/app/preview')
       .then((data) => {
-        if (!cancelled) setPort(data?.port ?? 5200);
+        if (cancelled) return;
+        setPort(data?.port ?? 5200);
+        setPreviewUrl(data?.previewUrl ?? '');
       })
       .catch(() => {
         if (!cancelled) setPort(5200);
@@ -78,7 +82,7 @@ export default function AppRun() {
       {note && <div className="apprun__note" role="status">{note}</div>}
 
       <div className="apprun__body">
-        <ProductFrame port={port} reloadKey={reloadKey} onStatus={setOnline} />
+        <ProductFrame url={url} port={port} reloadKey={reloadKey} onStatus={setOnline} />
       </div>
     </div>
   );
