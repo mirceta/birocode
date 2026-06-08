@@ -165,8 +165,49 @@ await fetch('/api/foo', {
 })
 ```
 
-After all four changes, verify (page bundle hash will change, so the proxy
-self-cache might serve stale -- hard-refresh in the browser):
+**5. ARR's output cache on GET responses (the silent killer).** ARR caches
+GET responses by exact URL and **ignores `Cache-Control: no-store` from the
+backend** -- once a response is cached, subsequent GETs to the same URL
+return the cached body until the cache entry expires, even if a POST to a
+sibling URL has changed the underlying state. Symptoms look exactly like a
+client-side bug:
+
+- Click a difficulty button -> UI snaps back to the previous value 1s later.
+- Click ""Start"" on a real-time game -> render flashes the moving entity,
+  then snaps back to the dead/initial state.
+- Game state poll appears to ""revert"" your mutations on a delay.
+- Behaviour is fine on `http://<host>:{PORT}` (no cache layer) but broken on
+  `{PREVIEW_URL}` (proxy with cache in the path).
+
+This is NOT a React race condition, even though it looks identical. The
+proxy is serving a frozen-in-time GET response.
+
+Two fixes, apply at least one:
+
+a) **Client-side cache-busting (always works, no proxy access needed).**
+   Append a unique query param to every GET so each URL is a cache miss:
+
+   ```js
+   const nocache = (p) => `${p}${p.includes('?') ? '&' : '?'}_=${Date.now()}`
+   await fetch(nocache('/api/state'))   // -> /api/state?_=1717543210
+   ```
+
+b) **Server-side no-store header (defence in depth, won't evict already-
+   cached entries).** Add `Cache-Control: no-store` on `/api/*` responses
+   so future entries don't get cached. For Express:
+
+   ```js
+   app.use('/api', (_req, res, next) => {
+     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
+     next()
+   })
+   ```
+
+   Be aware: any URL the proxy has already cached will keep serving stale
+   until its TTL passes -- you usually still need (a) for an immediate fix.
+
+After all five changes, verify (page bundle hash will change, so the proxy
+self-cache might serve stale HTML -- hard-refresh in the browser):
 
 ```
 curl -I http://localhost:{PORT}/                              # 200, text/html
@@ -174,7 +215,18 @@ curl -I http://localhost:{PORT}{PREVIEW_URL}                  # 200, text/html (
 curl -I http://localhost:{PORT}/assets/<hash>.js              # 200, text/javascript (proxy-stripped form)
 curl -I http://localhost:{PORT}{PREVIEW_URL}assets/<hash>.js  # 200, text/javascript (direct-LAN form)
 curl    http://localhost:{PORT}{PREVIEW_URL}api/<your-route>  # 200 + real API JSON, not the harness's 401
-```";
+```
+
+To prove ARR's cache is the culprit (not a race), make a mutation through
+the proxy and then GET twice -- once bare, once with a unique query param:
+
+```
+# Through the public host, not localhost:
+curl -X POST -H 'Content-Type: application/json' -d '{...}' http://<host>{PREVIEW_URL}api/your-mutation
+curl                                                          http://<host>{PREVIEW_URL}api/your-state     # might be STALE
+curl                                                          http://<host>{PREVIEW_URL}api/your-state?_=1 # always FRESH
+```
+If the bare GET disagrees with the `?_=1` GET, you're hitting ARR's cache.";
 
     private const string Self = @"
 
