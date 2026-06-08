@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import AskQuestionCard from './AskQuestionCard';
 import { useT } from '../../i18n/LanguageContext';
 
 // Renders the verbose activity trail of an assistant turn: contiguous thinking
@@ -89,6 +90,8 @@ export default function ActivitySteps({ steps }) {
       {steps.map((s, i) =>
         s.kind === 'thinking' ? (
           <ThinkingStep key={i} text={s.text} />
+        ) : s.name === 'AskUserQuestion' && s.detail ? (
+          <AskQuestionCard key={s.id || i} step={s} />
         ) : (
           <ToolStep key={s.id || i} step={s} />
         ),
