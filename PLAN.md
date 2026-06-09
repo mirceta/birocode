@@ -1,92 +1,212 @@
-# Plan: the "App" tab — preview the running product
+# Agent Dock — multi-session tab bar
 
-## Concept
+## Glossary
 
-This app is a **harness**: a phone-accessible web UI for driving Claude Code over
-a repository (Chat / Files / History). This feature adds an **App tab** that
-shows the application you're building, running live, embedded in the harness.
+- **Dock** — horizontal tab bar below the header showing all open agent sessions
+- **Dock tab** — one item in the Dock, representing a conversation in a specific repo
+- **Active tab** — the Dock tab currently displayed in the main content area
+- **Agent session** — one Claude CLI conversation identified by a `sessionId` in a specific repo
 
-Key insight: Claude Code already has permission to run commands on the host. So
-"start the product" is just something you **tell Claude in chat** ("run the
-backend", "yarn start"). The harness does **not** need to build, orchestrate, or
-manage the product — it only needs to **show whatever is running on a fixed
-preview port**.
+## Problem
 
-Terms:
+Today, running agents in parallel across repos requires opening multiple Chrome
+tabs. You can't tell which Chrome tab maps to which repo without clicking into
+it. Closing a tab loses the live view. There is no unified place to see all
+running agents at once.
 
-- **Harness** — this app (the web UI you're using). Serves on `:5099`.
-- **Product** — the app in the currently-opened repository, started by Claude.
-- **Preview port** — a fixed port (default **5200**) the Product is expected to
-  serve on; the App tab iframes it.
-- **Self-Development** — open the harness's own repo as the project; the Product
-  becomes the harness, so it can preview/improve itself.
+## Goal
 
-## Approach
+Replace the multi-browser-tab workflow with an in-app Dock that shows all open
+agent sessions. The user can:
 
-The App tab is just an `<iframe src="http://<your-host>:5200">` plus a little
-chrome. You ask Claude to start the product on `:5200`; the tab shows it.
+1. See all active/open sessions at a glance (repo name + status indicator)
+2. Click a tab to switch the view to that conversation
+3. Close a tab when done (session remains in History, just removed from Dock)
+4. Have the Dock survive page reloads and app restarts (persisted)
 
-That's the whole feature. The two things that don't "just work" are handled by
-**conventions told to Claude** (via a `CLAUDE.md` in the repo), not by harness
-code:
+## Current architecture (relevant parts)
 
-1. **The server must outlive the chat turn.** The harness runs `claude -p`
-   (one-shot); a server Claude starts normally dies when the turn ends. Fix:
-   Claude launches it **detached** (`Start-Process` on Windows / `nohup … &
-   disown` on Unix), bound to `0.0.0.0:5200`.
-2. **Self-dev build lock.** When Product = Harness, building/running from the
-   same repo collides with the running harness (`MSB3027` locked exe / port
-   5099). Fix: for self-dev, Claude builds/runs to an **isolated output dir** on
-   `:5200`. (Generic products don't have this problem.)
+- **ChatContext** holds one conversation's state: `messages`, `sessionId`,
+  `streaming`, `draft`, `error`. Mounted once in Layout above the Outlet.
+- **Switching repos** triggers `startNewConversation()` — clears all state.
+- **One SSE stream per repo** enforced by backend (`_busyRepos` dict, 409 on
+  overlap). Different repos can stream concurrently.
+- **Sessions live on disk** as JSONL files under `~/.claude/projects/<encoded-cwd>/`.
+  The backend reads them on demand; there is no frontend database.
+- **Streaming survives tab navigation** (Chat -> Files -> Chat) because
+  ChatContext lives above the router Outlet.
 
-## What we build (small)
+## Design
 
-1. **App tab** (4th bottom-nav tab) → `pages/AppRun.jsx`:
-   - `<iframe>` to `${location.protocol}//${location.hostname}:<previewPort>`
-     (uses the host you're on, so it works from the phone over the LAN).
-   - **Refresh** button.
-   - **Empty / not-listening state**: "Nothing is running on :5200 yet — ask
-     Claude to start the app."
-   - A small **listening indicator** (poll whether `:5200` responds).
-2. **Configurable preview port** (default 5200) — `appsettings.json` +
-   `GET /api/app/preview` so the frontend knows the port. (No start/stop/build
-   endpoints.)
-3. **Pin the self repo** (`RepositoryRegistry`): a non-removable
-   "Claude Web (this app)" entry so "improve this app" is one selection away.
-4. **`CLAUDE.md`** in the repo encoding the two conventions above so Claude
-   starts previews consistently (detached, `0.0.0.0:5200`, isolated build for
-   self-dev).
-5. **i18n:** EN + TR strings for the new tab.
+### 1. Dock state: `DockContext`
 
-## What we explicitly DROP (vs the earlier plan)
+New context mounted above ChatContext in Layout. Holds:
 
-`ProductRunner`, `claudeweb.run.json` manifest, build orchestration,
-port-injection hooks, and Start/Stop/Restart buttons. Lifecycle is managed by
-talking to Claude ("start the app", "kill whatever's on 5200").
+```
+dockTabs: [{ id, repoId, repoName, sessionId, status, createdAt }]
+activeTabId: string | null
+```
 
-## Trade-off accepted
+- `id` — random UUID, the Dock tab's own identity
+- `repoId` — which repo this tab targets
+- `repoName` — display name (denormalized for convenience)
+- `sessionId` — Claude session UUID (null until the first `system/init` event)
+- `status` — `"idle"` | `"running"` | `"done"` | `"error"`
+- `createdAt` — timestamp, used for ordering
 
-No lifecycle UI — you start/stop/restart the product via chat, and cleaning up
-orphaned servers is on you. Fine for a developer dev-loop.
+Actions:
+- `openTab(repoId, repoName)` — creates a new Dock tab and makes it active
+- `closeTab(id)` — removes a tab; if it was active, switches to the next one
+- `setActiveTab(id)` — switches the displayed conversation
+- `updateTab(id, patch)` — updates sessionId/status as the stream progresses
 
-## Verification
+### 2. Persistence
 
-0. **De-risk first:** confirm a detached server Claude starts on `:5200`
-   survives after the chat turn ends and stays reachable. The whole feature
-   depends on this.
-1. Ask Claude to start a product on `:5200` → App tab shows it.
-2. Edit a file via Chat → ask Claude to restart it → change appears on refresh.
-3. Self repo: build/run isolated on `:5200` → App tab shows the app inside the
-   app; the outer session is untouched.
+Dock tabs are persisted to **localStorage** under key `claudeweb_dock`. On load,
+the Dock reads the saved array and restores it. Tabs with `status: "running"` are
+reset to `"idle"` on load (the CLI process is gone after a restart, but the
+session can be resumed).
 
-## Notes / limitations
+This is simpler than server-side persistence and works immediately. The session
+transcripts themselves already live on disk (JSONL), so resuming a restored tab
+just calls `--resume <sessionId>`.
 
-- HTTPS would block an `http://:5200` iframe (mixed content) — LAN/`http` only
-  for now; a reverse proxy is a later option.
-- Security blast radius is unchanged (Claude already runs arbitrary commands);
-  keep this a trusted-operator, LAN/localhost tool.
+### 3. Per-tab chat state: refactor ChatContext into a map
 
-## Rough size
+Today ChatContext holds a single conversation. Refactor to hold a **map of
+conversations keyed by Dock tab id**:
 
-1 new frontend page + nav/i18n edits; 1 small config + endpoint; pin-self-repo
-tweak; a `CLAUDE.md`. Much smaller than the multi-repo feature.
+```
+conversations: Map<tabId, {
+  messages, sessionId, streaming, draft, error, abortController, attachment
+}>
+```
+
+The existing `send()`, `resumeConversation()`, `startNewConversation()` methods
+gain a `tabId` parameter (or infer it from `activeTabId`). The Chat page reads
+from `conversations.get(activeTabId)`.
+
+Key behavior:
+- Switching the active Dock tab swaps which conversation the Chat page renders.
+  No data is lost — inactive tabs' state stays in the map.
+- Starting a new turn on a tab uses that tab's `repoId` for requests,
+  regardless of the global repo selector's current value.
+- Each tab manages its own `AbortController` so streams are independent.
+
+### 4. Multiple concurrent SSE streams
+
+The backend already supports one CLI process per repo concurrently. The frontend
+currently opens one SSE connection at a time. With the Dock, multiple SSE
+connections can be open simultaneously (one per running tab, each to a different
+repo).
+
+Each conversation entry in the map holds its own `AbortController`. Closing a
+tab or the user clicking "Stop" aborts only that tab's stream.
+
+### 5. Dock UI component
+
+A horizontal strip rendered in Layout between the header and the main content:
+
+```
+[header]
+[dock: tab1 | tab2 | tab3 | + ]
+[main content]
+[bottom nav]
+```
+
+Each Dock tab shows:
+- Repo name (truncated if long)
+- Status dot: green (running), gray (idle), red (error), blue (done)
+- Close button (X)
+
+The `+` button opens a picker to choose a repo and create a new tab.
+
+Clicking a tab:
+- Sets it as active in DockContext
+- The Chat page re-renders with that tab's conversation
+- The bottom nav stays on Chat (or navigates to Chat if on another page)
+
+Styling: compact, single-line, horizontally scrollable if many tabs. Sits above
+the main content area but below the header.
+
+### 6. Repo selector interaction
+
+With the Dock, the repo selector's role changes:
+- It still shows the repos for reference
+- But the **active Dock tab** determines which repo requests target, not the
+  global selector
+- Changing the repo selector when no Dock tabs exist creates a new Dock tab
+- When Dock tabs exist, the selector could either: (a) switch to an existing
+  tab for that repo, or (b) create a new tab. Start with (a), add (b) via
+  the `+` button.
+
+### 7. Backend changes
+
+Minimal:
+- **`GET /api/dock/status`** (optional) — returns `{ [repoId]: "busy"|"idle" }`
+  so the frontend can show accurate status dots without polling per-repo.
+  Reads from `CliRunnerService._busyRepos`. Low priority — the frontend can
+  track status from its own SSE events.
+- No other backend changes needed. The existing `POST /api/chat` with
+  `X-Repo-Id` header already routes to the right repo. `GET /api/sessions`
+  already scopes to the repo. The Dock is primarily a frontend feature.
+
+## Implementation phases
+
+### Phase 1: DockContext + UI shell
+- Create `DockContext` with state, actions, localStorage persistence
+- Render the Dock bar in Layout (between header and main content)
+- Wire the `+` button to create tabs from the repo list
+- Wire close button to remove tabs
+- No chat integration yet — just the tab bar appearing/disappearing
+
+### Phase 2: Per-tab chat state
+- Refactor ChatContext from single-conversation to a map keyed by tab id
+- The active Dock tab determines which conversation is displayed
+- `send()` uses the active tab's repoId for requests
+- Switching tabs swaps the rendered conversation instantly
+
+### Phase 3: Concurrent streaming
+- Allow multiple SSE connections (one per running tab)
+- Each tab has its own AbortController
+- Status updates flow from SSE events into DockContext (running/done/error)
+- Dock tab status dots update in real time
+
+### Phase 4: Persistence & resume
+- Dock tabs survive page reload (localStorage)
+- On restore, tabs with sessionId can be resumed (load transcript + send new
+  messages with `--resume`)
+- Tabs that were "running" reset to "idle" on reload
+
+### Phase 5: Polish
+- Keyboard shortcuts to switch tabs (Ctrl+1/2/3 or Ctrl+Tab)
+- Drag to reorder tabs
+- Tab context menu (close, close others, rename)
+- Auto-create a Dock tab when the user sends the first message (if no tabs exist)
+- Hide Dock bar when there are 0 tabs (preserve current single-conversation feel)
+
+## Files to modify
+
+| File | Change |
+|------|--------|
+| `client/src/context/DockContext.jsx` | **New** — Dock state + persistence |
+| `client/src/layout/Dock.jsx` | **New** — Dock tab bar component |
+| `client/src/layout/dock.css` | **New** — Dock styling |
+| `client/src/context/ChatContext.jsx` | Refactor to per-tab conversation map |
+| `client/src/layout/Layout.jsx` | Mount DockProvider, render Dock bar |
+| `client/src/pages/Chat.jsx` | Read from active tab's conversation |
+| `client/src/components/chat/ChatInput.jsx` | Use active tab's draft/send |
+| `client/src/api/client.js` | `apiStream` needs per-call repoId override |
+| `client/src/styles/global.css` | Dock layout spacing (adjust app-content top) |
+
+## Risks & mitigations
+
+- **Memory** — Holding multiple conversations in memory could grow large if
+  sessions are long. Mitigation: cap stored messages per tab (e.g. last 200),
+  load full transcript on demand.
+- **Complexity** — ChatContext refactor touches many components. Mitigation:
+  phase 2 can keep the existing API shape by having ChatContext expose the
+  active tab's state as the default, so most consumers don't change.
+- **Concurrent streams on slow connections** — Multiple SSE connections may
+  compete for bandwidth. Mitigation: the browser limits concurrent connections
+  per origin (6 in Chrome), and we'll rarely have more than 3-4 agents.
