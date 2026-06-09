@@ -117,6 +117,23 @@ public class EmbeddedApi
             IFileProvider? distProvider = distPath != null ? new PhysicalFileProvider(distPath) : null;
             ConfigureStaticFiles(_app, distPath, distProvider);
 
+            // Prevent caching of index.html so redeployments are picked up
+            // immediately by browsers and the ARR proxy.
+            _app.Use(async (context, next) =>
+            {
+                context.Response.OnStarting(() =>
+                {
+                    var path = context.Request.Path.Value ?? "";
+                    if (context.Response.ContentType?.Contains("text/html") == true
+                        && !path.StartsWith("/api/"))
+                    {
+                        context.Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";
+                    }
+                    return Task.CompletedTask;
+                });
+                await next();
+            });
+
             _app.UseRouting();
 
             _app.UseCors();

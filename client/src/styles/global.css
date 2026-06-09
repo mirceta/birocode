@@ -257,6 +257,19 @@ textarea {
   line-height: 1;
 }
 
+/* ---- Build stamp ------------------------------------------------------ */
+
+.build-stamp {
+  position: fixed;
+  bottom: calc(var(--nav-height) + 4px);
+  left: 6px;
+  font-size: 9px;
+  color: var(--color-text-soft);
+  opacity: 0.45;
+  pointer-events: none;
+  z-index: 10;
+}
+
 /* ---- Save button ------------------------------------------------------ */
 
 .save-button {

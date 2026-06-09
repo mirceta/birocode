@@ -34,6 +34,9 @@ export default function Layout() {
               </main>
 
               <BottomNav />
+              <span className="build-stamp">
+                {new Date(__BUILD_TIME__).toLocaleString()}
+              </span>
             </div>
           </div>
         </ChatProvider>

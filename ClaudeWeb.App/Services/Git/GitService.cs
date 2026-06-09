@@ -153,6 +153,13 @@ public partial class GitService
         return new GitOutput(process.ExitCode, stdout, stderr);
     }
 
+    /// <summary>Returns the current branch name (or detached HEAD description).</summary>
+    public string CurrentBranch(string workingDir)
+    {
+        var result = RunGit(workingDir, "rev-parse --abbrev-ref HEAD");
+        return result.ExitCode == 0 ? result.StdOut.Trim() : "unknown";
+    }
+
     private static string Short(string hash) => hash.Length >= 7 ? hash[..7] : hash;
 
     private static string FirstLine(string primary, string fallback)

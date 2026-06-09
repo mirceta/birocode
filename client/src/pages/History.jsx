@@ -15,6 +15,7 @@ export default function History() {
   const { currentRepoId } = useRepo();
 
   const [entries, setEntries] = useState([]);
+  const [branch, setBranch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [pending, setPending] = useState(null);
@@ -24,8 +25,12 @@ export default function History() {
     setLoading(true);
     setError('');
     try {
-      const data = await apiGet('/history');
+      const [data, branchData] = await Promise.all([
+        apiGet('/history'),
+        apiGet('/branch').catch(() => null),
+      ]);
       setEntries(Array.isArray(data) ? data : []);
+      setBranch(branchData?.branch || '');
     } catch {
       setError(t('history.loadError'));
     } finally {
@@ -71,6 +76,12 @@ export default function History() {
 
   return (
     <div className="hist-page">
+      {branch && (
+        <div className="hist-branch">
+          <span className="hist-branch__icon" aria-hidden="true">⎇</span>
+          {branch}
+        </div>
+      )}
       <HistoryTimeline entries={entries} onGoBack={setPending} />
 
       {pending && (

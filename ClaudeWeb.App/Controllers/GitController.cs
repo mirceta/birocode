@@ -51,6 +51,25 @@ public class GitController : ControllerBase
         }
     }
 
+    /// <summary>GET /api/branch -- current git branch name.</summary>
+    [HttpGet("branch")]
+    public IActionResult Branch()
+    {
+        _logger.CountRequest();
+        var repo = _repos.Current();
+        if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
+        try
+        {
+            var branch = _git.CurrentBranch(repo.Path);
+            return Ok(new { branch });
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[GIT] Branch failed: {ex.Message}");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
     /// <summary>GET /api/history -- recent commits, newest first.</summary>
     [HttpGet("history")]
     public IActionResult History()

@@ -5,6 +5,9 @@ import react from '@vitejs/plugin-react';
 // Production builds output to dist/, which the backend serves as static files.
 export default defineConfig({
   plugins: [react()],
+  define: {
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+  },
   server: {
     port: 5173,
     proxy: {
