@@ -132,6 +132,9 @@ public partial class GitService
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8,
         };
+        // Never let git block on an interactive credential prompt -- fail fast
+        // so API calls (e.g. status?fetch=true) cannot hang the request.
+        psi.Environment["GIT_TERMINAL_PROMPT"] = "0";
 
         if (!string.IsNullOrEmpty(workingDir) && Directory.Exists(workingDir))
             psi.WorkingDirectory = workingDir;
@@ -155,15 +158,33 @@ public partial class GitService
 
     public sealed record StatusFile(string Path, string Index, string Worktree, bool Untracked, bool Conflicted);
     public sealed record StatusResult(
-        string Branch, string? Upstream, int Ahead, int Behind, IReadOnlyList<StatusFile> Files);
+        string Branch, string? Upstream, int Ahead, int Behind, IReadOnlyList<StatusFile> Files,
+        bool Fetched, string? FetchError,
+        string? BaseBranch, int BaseAhead, int BaseBehind);
 
     /// <summary>
     /// Read-only working-tree status (plans/git-tab.md): current branch,
     /// upstream + ahead/behind, and the changed/untracked/conflicted paths.
     /// Parses `git status --porcelain=v2 --branch`.
+    /// With <paramref name="fetch"/> (plans/git-origin-sync.md) a `git fetch`
+    /// runs first so ahead/behind reflects the real origin; a failed fetch is
+    /// reported via FetchError rather than failing the status call.
     /// </summary>
-    public StatusResult Status(string workingDir)
+    public StatusResult Status(string workingDir, bool fetch = false)
     {
+        var fetched = false;
+        string? fetchError = null;
+        if (fetch)
+        {
+            var f = RunGit(workingDir, "fetch --quiet");
+            if (f.ExitCode == 0) fetched = true;
+            else
+            {
+                fetchError = FirstLine(f.StdErr, f.StdOut);
+                _logger.Error($"[GIT] Fetch failed: {fetchError}");
+            }
+        }
+
         var result = RunGit(workingDir, "status --porcelain=v2 --branch");
         if (result.ExitCode != 0)
             throw new InvalidOperationException(
@@ -223,8 +244,47 @@ public partial class GitService
             }
         }
 
-        _logger.Info($"[GIT] Status -> {branch} (+{ahead}/-{behind}), {files.Count} change(s)");
-        return new StatusResult(branch, upstream, ahead, behind, files);
+        var (baseBranch, baseAhead, baseBehind) = CompareToBase(workingDir, branch);
+
+        _logger.Info($"[GIT] Status -> {branch} (+{ahead}/-{behind}), {files.Count} change(s){(fetched ? ", fetched" : "")}"
+            + (baseBranch is null ? "" : $", vs {baseBranch} +{baseAhead}/-{baseBehind}"));
+        return new StatusResult(branch, upstream, ahead, behind, files, fetched, fetchError,
+            baseBranch, baseAhead, baseBehind);
+    }
+
+    /// <summary>
+    /// Compares HEAD to the repo's main line (plans/git-main-compare.md).
+    /// Base = first of local main, local master, origin/main, origin/master
+    /// that exists. Returns (null, 0, 0) when on the base branch itself,
+    /// detached, no base found, or the comparison fails.
+    /// </summary>
+    private (string? BaseBranch, int Ahead, int Behind) CompareToBase(string workingDir, string branch)
+    {
+        if (branch is "main" or "master" or "unknown" or "(detached)")
+            return (null, 0, 0);
+
+        string? baseRef = null;
+        foreach (var candidate in new[] { "main", "master", "origin/main", "origin/master" })
+        {
+            if (RunGit(workingDir, $"rev-parse --verify --quiet refs/{(candidate.StartsWith("origin/") ? "remotes/" : "heads/")}{candidate}").ExitCode == 0)
+            {
+                baseRef = candidate;
+                break;
+            }
+        }
+        if (baseRef is null) return (null, 0, 0);
+
+        // "behind<TAB>ahead": left = commits only on base, right = only on HEAD.
+        var result = RunGit(workingDir, $"rev-list --left-right --count {baseRef}...HEAD");
+        if (result.ExitCode != 0) return (null, 0, 0);
+
+        var parts = result.StdOut.Trim().Split('\t', ' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 2
+            || !int.TryParse(parts[0], out var behindBase)
+            || !int.TryParse(parts[1], out var aheadOfBase))
+            return (null, 0, 0);
+
+        return (baseRef, aheadOfBase, behindBase);
     }
 
     /// <summary>Returns the current branch name (or detached HEAD description).</summary>
