@@ -9,6 +9,7 @@ export default function BottomNav() {
   const showAppTab = useFeature('appTab');
   const showAgents = useFeature('agentDock');
   const showGit = useFeature('gitTab');
+  const showScreen = useFeature('screenTab');
 
   // Badge reflects the most urgent agent status: running > error > done.
   const agentBadge =
@@ -23,6 +24,7 @@ export default function BottomNav() {
     { to: '/studio/history', label: t('nav.history'), icon: 'H' },
     ...(showAgents ? [{ to: '/studio/agents', label: t('nav.agents'), icon: 'A', badge: agentBadge }] : []),
     ...(showGit ? [{ to: '/studio/git', label: t('nav.git'), icon: '⎇' }] : []),
+    ...(showScreen ? [{ to: '/studio/screen', label: t('nav.screen'), icon: 'S' }] : []),
     ...(showAppTab ? [{ to: '/studio/app', label: t('nav.app'), icon: '▶' }] : []),
   ];
 
