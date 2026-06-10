@@ -35,7 +35,7 @@ function emptyConversation(greeting) {
 export function ChatProvider({ children }) {
   const { t } = useT();
   const { currentRepoId } = useRepo();
-  const { activeTab, activeTabId, updateTab } = useDock();
+  const { tabs, activeTab, activeTabId, updateTab } = useDock();
   const greeting = () => ({ role: 'assistant', text: t('chat.greeting') });
 
   // Per-tab conversation map: tabId -> conversation state.
@@ -60,12 +60,23 @@ export function ChatProvider({ children }) {
   // The repo to target for API calls.
   const activeRepoId = activeTab ? activeTab.repoId : currentRepoId;
 
-  // Ensure a conversation entry exists for the active key.
+  // Ensure a conversation entry exists for the active key. If the tab was
+  // restored from localStorage with a stored sessionId (page reload), resume
+  // it: seed the sessionId so the next send() uses --resume, and load the
+  // transcript.
   useEffect(() => {
+    if (convos[activeKey]) return;
+    const storedSessionId = activeTab?.sessionId || null;
     setConvos((prev) => {
       if (prev[activeKey]) return prev;
-      return { ...prev, [activeKey]: emptyConversation(greeting()) };
+      const fresh = emptyConversation(greeting());
+      if (storedSessionId) {
+        fresh.sessionId = storedSessionId;
+        fresh.messages = [{ role: 'assistant', text: t('chat.loadingConversation') }];
+      }
+      return { ...prev, [activeKey]: fresh };
     });
+    if (storedSessionId) loadTranscript(activeKey, storedSessionId, activeTab.repoId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeKey]);
 
@@ -294,7 +305,10 @@ export function ChatProvider({ children }) {
     });
     setPickerOpen(false);
     if (activeTabId) updateTab(activeTabId, { sessionId: id, status: 'idle' });
+    await loadTranscript(key, id, repoId);
+  }
 
+  async function loadTranscript(key, id, repoId) {
     try {
       const data = await apiGet(`/sessions/${id}/messages`, { repoId });
       const loaded = Array.isArray(data)
@@ -324,12 +338,22 @@ export function ChatProvider({ children }) {
     }
   }
 
-  // Clean up conversation state when a Dock tab is removed.
-  const prevTabIds = useRef(new Set());
+  // Clean up when an agent tab is closed: abort any in-flight stream and
+  // drop its conversation entry.
   useEffect(() => {
-    // Not using Dock context's tabs directly here — read from convos keys.
-    // We track which tab IDs we know about via the convos map.
-  }, []);
+    const live = new Set(tabs.map((tab) => tab.id));
+    const stale = Object.keys(convos).filter((k) => k !== 'default' && !live.has(k));
+    if (stale.length === 0) return;
+    for (const k of stale) {
+      abortRefs.current[k]?.abort();
+      delete abortRefs.current[k];
+    }
+    setConvos((prev) => {
+      const next = { ...prev };
+      for (const k of stale) delete next[k];
+      return next;
+    });
+  }, [tabs, convos]);
 
   const value = {
     messages: conv.messages,

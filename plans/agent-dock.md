@@ -1,17 +1,21 @@
 # Agent Dock — multi-session tab bar
 
-> **Status (2026-06-10):** In development on branch `feature/agent-dock`.
-> Phases 1–4 implemented (see "Where it lives" below); Phase 5 polish not started.
+> **Status (2026-06-10):** Implemented and browser-verified (Playwright:
+> `.claudeweb-preview/playwright/verify-agents-tab.mjs`). The Dock strip was
+> replaced by an **Agents tab** (`client/src/pages/Agents.jsx` +
+> `/studio/agents` route): a conversation-list page in the bottom nav with a
+> status badge on the nav icon (running > error > done). Advanced-mode-only
+> (`agentDock` capability, see `plans/ui-modes.md`). `Dock.jsx`/`dock.css`
+> deleted; the state layer (DockContext, per-tab ChatContext map, concurrent
+> streams) is unchanged. Known bugs fixed: resume-after-reload now seeds the
+> stored `sessionId` and loads the transcript; closing a tab aborts its
+> in-flight stream and drops its conversation entry.
 >
 > **Decision (2026-06-10): the Dock strip is replaced by an Agents tab.**
 > The horizontal strip crowds the chat window on the phone. Instead, sessions
 > get a dedicated bottom-nav tab presented as a conversation list (like a
 > messaging app's chat list), with a status badge on the nav icon for
-> background activity. The state layer (DockContext, per-tab ChatContext map,
-> concurrent streams) is unchanged — only the presentation moves. The Agents
-> tab is Advanced-mode-only (see `plans/ui-modes.md`). Section 5 below
-> describes the superseded strip UI; the strip code (`Dock.jsx`, `dock.css`)
-> will be replaced by an Agents page.
+> background activity. Section 5 below describes the superseded strip UI.
 
 ## Glossary
 

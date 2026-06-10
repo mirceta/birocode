@@ -11,7 +11,6 @@ import { DockProvider } from '../context/DockContext';
 import { UiModeProvider, useFeature } from '../context/UiModeContext';
 import { useT } from '../i18n/LanguageContext';
 import BottomNav from './BottomNav';
-import Dock from './Dock';
 
 // The build stamp is an Operator debugging aid — Advanced Mode only.
 function BuildStamp() {
@@ -45,8 +44,6 @@ export default function Layout() {
                       <ModeToggle />
                     </div>
                   </header>
-
-                  <Dock />
 
                   <main className="app-content">
                     <Outlet />

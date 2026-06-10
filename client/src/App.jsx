@@ -8,6 +8,7 @@ import Chat from './pages/Chat';
 import Files from './pages/Files';
 import History from './pages/History';
 import AppRun from './pages/AppRun';
+import Agents from './pages/Agents';
 
 // Two layers:
 //   /        -- public landing: just the running product, no login, no chrome.
@@ -27,6 +28,7 @@ export default function App() {
             <Route path="files" element={<Files />} />
             <Route path="history" element={<History />} />
             <Route path="app" element={<AppRun />} />
+            <Route path="agents" element={<Agents />} />
           </Route>
         ) : (
           <Route path="/studio/*" element={<PasswordGate onUnlock={() => setUnlocked(true)} />} />

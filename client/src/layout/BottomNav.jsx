@@ -1,14 +1,26 @@
 import { NavLink } from 'react-router-dom';
+import { useDock } from '../context/DockContext';
 import { useFeature } from '../context/UiModeContext';
 import { useT } from '../i18n/LanguageContext';
 
 export default function BottomNav() {
   const { t } = useT();
+  const { tabs: agentTabs } = useDock();
   const showAppTab = useFeature('appTab');
+  const showAgents = useFeature('agentDock');
+
+  // Badge reflects the most urgent agent status: running > error > done.
+  const agentBadge =
+    agentTabs.some((a) => a.status === 'running') ? 'running'
+    : agentTabs.some((a) => a.status === 'error') ? 'error'
+    : agentTabs.some((a) => a.status === 'done') ? 'done'
+    : null;
+
   const tabs = [
     { to: '/studio', label: t('nav.chat'), icon: 'C', end: true },
     { to: '/studio/files', label: t('nav.files'), icon: 'F' },
     { to: '/studio/history', label: t('nav.history'), icon: 'H' },
+    ...(showAgents ? [{ to: '/studio/agents', label: t('nav.agents'), icon: 'A', badge: agentBadge }] : []),
     ...(showAppTab ? [{ to: '/studio/app', label: t('nav.app'), icon: '▶' }] : []),
   ];
 
@@ -25,6 +37,7 @@ export default function BottomNav() {
         >
           <span className="bottom-nav__icon" aria-hidden="true">
             {tab.icon}
+            {tab.badge && <span className={`bottom-nav__badge bottom-nav__badge--${tab.badge}`} />}
           </span>
           <span>{tab.label}</span>
         </NavLink>

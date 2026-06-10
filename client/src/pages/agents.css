@@ -1,0 +1,170 @@
+/* Agents tab — conversation list for concurrent agent sessions */
+
+.agents {
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.agents__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.agents__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+.agents__new {
+  padding: 6px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.agents__new:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.agents__empty {
+  margin: 24px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--color-text-soft);
+}
+
+/* Inline repo picker */
+.agents__picker {
+  margin-bottom: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  padding: 4px;
+}
+
+.agents__picker-title {
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.agents__picker-item {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: calc(var(--radius) - 2px);
+  background: none;
+  font-size: 13px;
+  text-align: left;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.agents__picker-item:hover {
+  background: var(--color-hover, rgba(0, 0, 0, 0.04));
+}
+
+/* Agent cards */
+.agents__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.agent-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.agent-card:hover {
+  background: var(--color-hover, rgba(0, 0, 0, 0.04));
+}
+
+.agent-card--active {
+  border-color: var(--color-accent);
+}
+
+.agent-card__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #aaa;
+  flex-shrink: 0;
+}
+
+.agent-card--running .agent-card__dot {
+  background: #22c55e;
+  animation: agent-pulse 1.2s ease-in-out infinite;
+}
+
+.agent-card--done .agent-card__dot {
+  background: #3b82f6;
+}
+
+.agent-card--error .agent-card__dot {
+  background: #ef4444;
+}
+
+@keyframes agent-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.agent-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.agent-card__name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-card__status {
+  font-size: 12px;
+  color: var(--color-text-soft);
+}
+
+.agent-card__close {
+  font-size: 18px;
+  line-height: 1;
+  padding: 4px 8px;
+  opacity: 0.5;
+  cursor: pointer;
+}
+
+.agent-card__close:hover {
+  opacity: 1;
+}

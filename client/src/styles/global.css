@@ -314,8 +314,37 @@ textarea {
 }
 
 .bottom-nav__icon {
+  position: relative;
   font-size: 22px;
   line-height: 1;
+}
+
+/* Agent status badge on the Agents nav icon */
+.bottom-nav__badge {
+  position: absolute;
+  top: -2px;
+  right: -6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.bottom-nav__badge--running {
+  background: #22c55e;
+  animation: badge-pulse 1.2s ease-in-out infinite;
+}
+
+.bottom-nav__badge--done {
+  background: #3b82f6;
+}
+
+.bottom-nav__badge--error {
+  background: #ef4444;
+}
+
+@keyframes badge-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
 /* ---- Build stamp ------------------------------------------------------ */
