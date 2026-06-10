@@ -287,6 +287,48 @@ public partial class GitService
         return (baseRef, aheadOfBase, behindBase);
     }
 
+    public sealed record PullBaseResult(string? BaseBranch, bool Ok, bool Updated, string? Error);
+
+    /// <summary>
+    /// Brings the local base branch (main, then master) up to date with origin
+    /// (plans/agents-git-sync.md — the one UI-triggered git mutation). On the
+    /// base branch itself: `git pull --ff-only`; otherwise
+    /// `git fetch origin base:base`, which fast-forwards the local ref without
+    /// touching the checkout. Git refuses the latter when the base is checked
+    /// out in a sibling worktree — that surfaces as Error.
+    /// </summary>
+    public PullBaseResult PullBase(string workingDir)
+    {
+        string? baseRef = null;
+        foreach (var candidate in new[] { "main", "master" })
+        {
+            if (RunGit(workingDir, $"rev-parse --verify --quiet refs/heads/{candidate}").ExitCode == 0)
+            {
+                baseRef = candidate;
+                break;
+            }
+        }
+        if (baseRef is null)
+            return new PullBaseResult(null, false, false, "no local main/master branch");
+
+        var before = RunGit(workingDir, $"rev-parse {baseRef}").StdOut.Trim();
+        var branch = CurrentBranch(workingDir);
+        var run = branch == baseRef
+            ? RunGit(workingDir, "pull --ff-only")
+            : RunGit(workingDir, $"fetch origin {baseRef}:{baseRef}");
+        if (run.ExitCode != 0)
+        {
+            var error = FirstLine(run.StdErr, run.StdOut);
+            _logger.Error($"[GIT] PullBase {baseRef} failed: {error}");
+            return new PullBaseResult(baseRef, false, false, error);
+        }
+
+        var after = RunGit(workingDir, $"rev-parse {baseRef}").StdOut.Trim();
+        var updated = after != before;
+        _logger.Info($"[GIT] PullBase -> {baseRef} {(updated ? $"{Short(before)}..{Short(after)}" : "already up to date")}");
+        return new PullBaseResult(baseRef, true, updated, null);
+    }
+
     /// <summary>Returns the current branch name (or detached HEAD description).</summary>
     public string CurrentBranch(string workingDir)
     {
