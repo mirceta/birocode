@@ -1,5 +1,8 @@
 # Agent Dock — multi-session tab bar
 
+> **Status (2026-06-10):** In development on branch `feature/agent-dock`.
+> Phases 1–4 implemented (see "Where it lives" below); Phase 5 polish not started.
+
 ## Glossary
 
 - **Dock** — horizontal tab bar below the header showing all open agent sessions
@@ -185,19 +188,21 @@ Minimal:
 - Auto-create a Dock tab when the user sends the first message (if no tabs exist)
 - Hide Dock bar when there are 0 tabs (preserve current single-conversation feel)
 
-## Files to modify
+## Where it lives
 
-| File | Change |
-|------|--------|
-| `client/src/context/DockContext.jsx` | **New** — Dock state + persistence |
-| `client/src/layout/Dock.jsx` | **New** — Dock tab bar component |
-| `client/src/layout/dock.css` | **New** — Dock styling |
-| `client/src/context/ChatContext.jsx` | Refactor to per-tab conversation map |
-| `client/src/layout/Layout.jsx` | Mount DockProvider, render Dock bar |
-| `client/src/pages/Chat.jsx` | Read from active tab's conversation |
-| `client/src/components/chat/ChatInput.jsx` | Use active tab's draft/send |
-| `client/src/api/client.js` | `apiStream` needs per-call repoId override |
-| `client/src/styles/global.css` | Dock layout spacing (adjust app-content top) |
+The feature is almost entirely frontend. Every file involved:
+
+| File | Role |
+|------|------|
+| `client/src/context/DockContext.jsx` | **New.** Dock tab state (`{id, repoId, repoName, sessionId, status, createdAt}`), actions (`openTab`/`closeTab`/`setActiveTab`/`updateTab`), localStorage persistence under `claudeweb_dock`, running→idle reset on reload |
+| `client/src/layout/Dock.jsx` | **New.** The tab bar UI: tabs with status dots, close button, `+` repo picker |
+| `client/src/layout/dock.css` | **New.** Dock styling |
+| `client/src/context/ChatContext.jsx` | Refactored from single conversation to a per-tab map (`convos[tabId]`, key `"default"` when no Dock tabs exist). Per-tab AbortControllers enable concurrent SSE streams. Exposes the active tab's state through `useChat()` so existing consumers are unchanged |
+| `client/src/layout/Layout.jsx` | Mounts `DockProvider` (above `ChatProvider`) and renders the Dock bar between header and main content |
+| `client/src/pages/Chat.jsx` | Renders the active tab's conversation |
+| `client/src/api/client.js` | Per-call repoId override so each tab's requests target its own repo |
+| `client/src/components/chat/chat.css` | Spacing adjustments for the Dock bar |
+| `ClaudeWeb.App/Controllers/ChatController.cs`, `ClaudeWeb.App/Services/Chat/CliRunnerService.cs` | Minor backend tweaks; per-repo concurrency (`_busyRepos`) already existed |
 
 ## Risks & mitigations
 
