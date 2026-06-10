@@ -248,6 +248,9 @@ export function ChatProvider({ children }) {
 
     const controller = new AbortController();
     abortRefs.current[key] = controller;
+    // New turn = new run = new event buffer. Reset the dedup watermark or the
+    // new run's low seq numbers get discarded as replays of the previous turn.
+    seqRefs.current[key] = 0;
     const handleEvent = makeEventHandler(key, tabId);
     const parse = createSseParser(handleEvent);
 

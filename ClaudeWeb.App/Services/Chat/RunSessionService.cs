@@ -32,7 +32,14 @@ public class RunSession
     private int _seq;
     private bool _sawDone;
 
-    public RunSession(string repoId) => RepoId = repoId;
+    /// <param name="startSeq">Seq to continue counting from (the previous
+    /// run's last seq). Seq is monotonic per repo across runs so a client
+    /// holding an old watermark never discards a new run's events.</param>
+    public RunSession(string repoId, int startSeq = 0)
+    {
+        RepoId = repoId;
+        _seq = startSeq;
+    }
 
     public string RepoId { get; }
 
@@ -165,7 +172,7 @@ public class RunSessionService
                 session = existing;
                 return false;
             }
-            session = new RunSession(repoId);
+            session = new RunSession(repoId, existing?.LastSeq ?? 0);
             _sessions[repoId] = session;
             return true;
         }
