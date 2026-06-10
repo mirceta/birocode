@@ -1,9 +1,10 @@
 # Screen Tab — view the host desktop from the phone
 
-> **Status (2026-06-10):** Implemented on `feature/screen-tab` and
-> browser-verified on an isolated preview instance on :5201
+> **Status (2026-06-10):** Deployed to the live :5099 harness and confirmed
+> by the End User (second attempt; the first deploy auto-rolled back when
+> the 7-minute confirmation window lapsed). Browser-verified beforehand on
+> an isolated preview instance on :5201
 > (`.claudeweb-preview/playwright/verify-screen-tab.mjs`, 9/9 checks).
-> Not yet deployed to :5099.
 
 ## Problem
 
