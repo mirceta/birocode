@@ -93,6 +93,23 @@ export async function apiPost(path, body, { repoId } = {}) {
   return handle(res);
 }
 
+export async function apiPatch(path, body, { repoId } = {}) {
+  const res = await fetch(url(path), {
+    method: 'PATCH',
+    headers: authHeaders({ 'Content-Type': 'application/json' }, repoId),
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  return handle(res);
+}
+
+export async function apiDelete(path, { repoId } = {}) {
+  const res = await fetch(url(path), {
+    method: 'DELETE',
+    headers: authHeaders({}, repoId),
+  });
+  return handle(res);
+}
+
 // Upload a file via multipart/form-data. Returns the parsed JSON response.
 export async function apiUpload(path, file, { repoId } = {}) {
   const form = new FormData();

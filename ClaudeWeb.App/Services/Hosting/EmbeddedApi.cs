@@ -1,5 +1,6 @@
 using ClaudeWeb.Models;
 using ClaudeWeb.Services.Chat;
+using ClaudeWeb.Services.Dock;
 using ClaudeWeb.Services.Files;
 using ClaudeWeb.Services.Git;
 using ClaudeWeb.Services.Logging;
@@ -99,6 +100,7 @@ public class EmbeddedApi
             builder.Services.AddChatModule();   // M1
             builder.Services.AddFileModule();   // M2
             builder.Services.AddGitModule();    // M3
+            builder.Services.AddDockModule();   // dock sync (plans/dock-sync.md)
             // === END MODULE SERVICE REGISTRATION ===
 
             _app = builder.Build();

@@ -35,7 +35,7 @@ function emptyConversation(greeting) {
 export function ChatProvider({ children }) {
   const { t } = useT();
   const { currentRepoId } = useRepo();
-  const { tabs, activeTab, activeTabId, updateTab } = useDock();
+  const { tabs, activeTab, activeTabId, updateTab, loaded: dockLoaded } = useDock();
   const greeting = () => ({ role: 'assistant', text: t('chat.greeting') });
 
   // Per-tab conversation map: tabId -> conversation state.
@@ -377,6 +377,9 @@ export function ChatProvider({ children }) {
   // becomes visible again (phone unlock), ask GET /api/runs which repos are
   // still running and reattach / fix stale tab badges.
   async function reconcile() {
+    // The dock list now arrives from the backend; until it lands we don't
+    // know which tabs exist, so reconciling would mis-target 'default'.
+    if (!dockLoaded) return;
     let runs;
     try {
       runs = await apiGet('/runs');
@@ -419,6 +422,10 @@ export function ChatProvider({ children }) {
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, []);
+  // First reconcile happens once the backend dock list has loaded.
+  useEffect(() => {
+    if (dockLoaded) reconcileRef.current();
+  }, [dockLoaded]);
 
   const stop = useCallback(() => {
     const key = activeKey;
