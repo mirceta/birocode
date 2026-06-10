@@ -1,11 +1,11 @@
 # Dock Sync — agent tabs live on the backend
 
-> **Status (2026-06-10):** Implemented and browser-verified on an isolated
-> :5200 instance: `.claudeweb-preview/playwright/verify-dock-sync.mjs` (two
-> browser contexts: migration, open on A → visible on B, close on B → A
-> converges) plus the chat regression tests (`verify-two-turns.mjs`,
-> `verify-detached-runs.mjs`) all pass. Not yet merged or deployed; the live
-> :5099 harness is untouched (its client/dist was restored after the build).
+> **Status (2026-06-10):** Deployed to the live :5099 harness and confirmed
+> by the End User. Browser-verified on an isolated :5200 instance:
+> `.claudeweb-preview/playwright/verify-dock-sync.mjs` (two browser contexts:
+> migration, open on A → visible on B, close on B → A converges) plus the
+> chat regression tests (`verify-two-turns.mjs`, `verify-detached-runs.mjs`)
+> all pass.
 
 ## Problem
 
