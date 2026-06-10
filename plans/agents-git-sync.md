@@ -1,10 +1,11 @@
 # Agents git sync — branch position on agent cards + "Pull main" button
 
-> **Status (2026-06-11):** Implemented and browser-verified on an isolated
-> preview instance on :5201
+> **Status (2026-06-11):** Deployed to the live :5099 harness and confirmed
+> by the End User. Browser-verified beforehand on an isolated preview
+> instance on :5201
 > (`.claudeweb-preview/playwright/verify-agents-git-sync.mjs`, 5/5 checks:
 > card shows vs-main + vs-origin lines and branch, pull reports per-repo
-> success, failed pull shows the reason). Not yet deployed to :5099.
+> success, failed pull shows the reason).
 
 ## Problem
 
