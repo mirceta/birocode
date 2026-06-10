@@ -39,6 +39,17 @@
   opacity: 0.7;
 }
 
+.git-branch__noupstream {
+  color: #b58900;
+  font-weight: 600;
+}
+
+.git-branch__fetcherror {
+  width: 100%;
+  font-size: 12px;
+  color: #c0392b;
+}
+
 .git-refresh {
   margin-left: auto;
   min-height: 32px;

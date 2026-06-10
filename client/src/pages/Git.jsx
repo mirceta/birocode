@@ -28,16 +28,21 @@ export default function Git() {
 
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [checking, setChecking] = useState(false);
   const [error, setError] = useState('');
 
-  const load = useCallback(async () => {
+  // Initial/background loads stay fast (no fetch); the "check origin" button
+  // passes fetch=true for a real origin comparison (plans/git-origin-sync.md).
+  const load = useCallback(async (fetchOrigin = false) => {
     setError('');
+    if (fetchOrigin) setChecking(true);
     try {
-      setStatus(await apiGet('/git/status'));
+      setStatus(await apiGet(fetchOrigin ? '/git/status?fetch=true' : '/git/status'));
     } catch {
       setError(t('git.loadError'));
     } finally {
       setLoading(false);
+      setChecking(false);
     }
   }, [t]);
 
@@ -56,7 +61,7 @@ export default function Git() {
   }, [load]);
 
   if (loading) return <Loading label={t('git.loading')} />;
-  if (error) return <ErrorBanner message={error} onRetry={load} />;
+  if (error) return <ErrorBanner message={error} onRetry={() => load()} />;
   if (!status) return null;
 
   const groups = GROUPS
@@ -70,19 +75,33 @@ export default function Git() {
         <div className="git-branch__name">
           <span aria-hidden="true">⎇</span> {status.branch}
         </div>
-        {status.upstream && (
+        {status.upstream ? (
           <div className="git-branch__sync">
             {status.upstream}
             {status.ahead > 0 && <span className="git-branch__ahead">↑{status.ahead}</span>}
             {status.behind > 0 && <span className="git-branch__behind">↓{status.behind}</span>}
             {status.ahead === 0 && status.behind === 0 && (
-              <span className="git-branch__insync">{t('git.inSync')}</span>
+              <span className="git-branch__insync">
+                {status.fetched ? t('git.inSyncOrigin') : t('git.inSync')}
+              </span>
             )}
           </div>
+        ) : (
+          <div className="git-branch__sync">
+            <span className="git-branch__noupstream">{t('git.noUpstream')}</span>
+          </div>
         )}
-        <button type="button" className="git-refresh" onClick={load}>
-          {t('git.refresh')}
+        <button
+          type="button"
+          className="git-refresh"
+          onClick={() => load(true)}
+          disabled={checking}
+        >
+          {checking ? t('git.checking') : t('git.checkOrigin')}
         </button>
+        {status.fetchError && (
+          <div className="git-branch__fetcherror">{t('git.fetchError')}</div>
+        )}
       </div>
 
       {clean ? (

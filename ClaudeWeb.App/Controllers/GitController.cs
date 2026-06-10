@@ -71,22 +71,25 @@ public class GitController : ControllerBase
         }
     }
 
-    /// <summary>GET /api/git/status -- read-only branch + working-tree state.</summary>
+    /// <summary>GET /api/git/status?fetch=true -- read-only branch + working-tree state,
+    /// optionally fetching origin first (plans/git-origin-sync.md).</summary>
     [HttpGet("git/status")]
-    public IActionResult Status()
+    public IActionResult Status([FromQuery] bool fetch = false)
     {
         _logger.CountRequest();
         var repo = _repos.Current();
         if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
         try
         {
-            var s = _git.Status(repo.Path);
+            var s = _git.Status(repo.Path, fetch);
             return Ok(new
             {
                 branch = s.Branch,
                 upstream = s.Upstream,
                 ahead = s.Ahead,
                 behind = s.Behind,
+                fetched = s.Fetched,
+                fetchError = s.FetchError,
                 files = s.Files.Select(f => new
                 {
                     path = f.Path,
