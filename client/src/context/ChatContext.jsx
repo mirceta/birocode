@@ -29,6 +29,7 @@ function emptyConversation(greeting) {
     attachment: null,
     streaming: false,
     error: '',
+    contextTokens: null,
   };
 }
 
@@ -72,6 +73,10 @@ export function ChatProvider({ children }) {
   // transcript.
   useEffect(() => {
     if (convos[activeKey]) return;
+    // Tabs arrive async from the backend (plans/dock-sync.md): wait for the
+    // dock before seeding a tab conversation, so the tab's stored sessionId
+    // is actually known here.
+    if (activeKey !== 'default' && !dockLoaded) return;
     const storedSessionId = activeTab?.sessionId || null;
     setConvos((prev) => {
       if (prev[activeKey]) return prev;
@@ -84,7 +89,7 @@ export function ChatProvider({ children }) {
     });
     if (storedSessionId) loadTranscript(activeKey, storedSessionId, activeTab.repoId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeKey]);
+  }, [activeKey, dockLoaded]);
 
   // When the global repo changes and we're in default mode (no Dock tabs),
   // reset the default conversation.
@@ -201,6 +206,10 @@ export function ChatProvider({ children }) {
           break;
         case 'token':
           if (evt.text) appendToken(key, evt.text);
+          break;
+        case 'usage':
+          // Raw context size in tokens for the ctx pill (plans/context-meter.md).
+          if (evt.contextTokens > 0) updateConvo(key, { contextTokens: evt.contextTokens });
           break;
         case 'done':
           if (evt.sessionId) {
@@ -503,6 +512,9 @@ export function ChatProvider({ children }) {
   // Clean up when an agent tab is closed: abort any in-flight stream and
   // drop its conversation entry.
   useEffect(() => {
+    // Until the backend dock list lands, tabs=[] means "unknown", not "all
+    // closed" — deleting here would wipe the active tab's conversation.
+    if (!dockLoaded) return;
     const live = new Set(tabs.map((tab) => tab.id));
     const stale = Object.keys(convos).filter((k) => k !== 'default' && !live.has(k));
     if (stale.length === 0) return;
@@ -517,7 +529,7 @@ export function ChatProvider({ children }) {
       for (const k of stale) delete next[k];
       return next;
     });
-  }, [tabs, convos]);
+  }, [tabs, convos, dockLoaded]);
 
   const value = {
     messages: conv.messages,
@@ -528,6 +540,7 @@ export function ChatProvider({ children }) {
     setAttachment: (a) => updateConvo(activeKey, { attachment: a }),
     streaming: conv.streaming,
     error: conv.error,
+    contextTokens: conv.contextTokens,
     pickerOpen,
     setPickerOpen,
     sessions,

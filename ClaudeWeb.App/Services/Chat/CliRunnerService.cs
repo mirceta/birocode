@@ -18,6 +18,7 @@ namespace ClaudeWeb.Services.Chat;
 ///   {"type":"tool","id","name","status":"start"}     tool_use begins
 ///   {"type":"tool","id","name","status":"input","summary","detail"}  full input known
 ///   {"type":"tool","id","status":"end","ok","preview"}              tool_result
+///   {"type":"usage","contextTokens":132456}          from assistant message.usage (context fill)
 ///   {"type":"done","sessionId":"...","cost":0.04}    from result
 ///   {"type":"error","message":"..."}                 from result.is_error / throttle / failures
 ///
@@ -344,8 +345,21 @@ public class CliRunnerService
     /// </summary>
     private async Task HandleAssistant(JsonElement root, Func<object, Task> emit, CallRecord record)
     {
-        if (!root.TryGetProperty("message", out var msg) ||
-            !msg.TryGetProperty("content", out var content) ||
+        if (!root.TryGetProperty("message", out var msg)) return;
+
+        // message.usage on each assistant message tells us how big the context
+        // that produced it was: input + cache-read + cache-creation tokens.
+        // Forwarded as a raw count (no window size assumed -- it varies by model).
+        if (msg.TryGetProperty("usage", out var usage) && usage.ValueKind == JsonValueKind.Object)
+        {
+            var contextTokens = ReadLong(usage, "input_tokens")
+                + ReadLong(usage, "cache_read_input_tokens")
+                + ReadLong(usage, "cache_creation_input_tokens");
+            if (contextTokens > 0)
+                await emit(new { type = "usage", contextTokens });
+        }
+
+        if (!msg.TryGetProperty("content", out var content) ||
             content.ValueKind != JsonValueKind.Array)
             return;
 
