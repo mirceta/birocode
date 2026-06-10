@@ -40,7 +40,7 @@ function toServerPatch(patch) {
 }
 
 export function DockProvider({ children }) {
-  const { repos } = useRepo();
+  const { repos, selectRepo } = useRepo();
   const [tabs, setTabs] = useState([]);
   // True once the first successful fetch landed; ChatContext defers its run
   // reconciliation until then (before that the tab list is simply unknown).
@@ -124,11 +124,14 @@ export function DockProvider({ children }) {
     // the client id so the conversation key is stable across devices.
     setTabs((prev) => [...prev, tab]);
     setActiveTabId(id);
+    // A new agent is tied to its repo — follow it with the global project
+    // selector so Git/Files/etc. show that project (plans/agent-repo-sync.md).
+    selectRepo(repoId);
     apiPost('/dock', tab).catch(() => {
       setTabs((prev) => prev.filter((t) => t.id !== id));
     });
     return id;
-  }, []);
+  }, [selectRepo]);
 
   const closeTab = useCallback((id) => {
     setTabs((prev) => prev.filter((t) => t.id !== id));
@@ -142,9 +145,16 @@ export function DockProvider({ children }) {
     });
   }, []);
 
+  // Explicitly selecting an agent also selects its project globally
+  // (plans/agent-repo-sync.md). One-directional: the project selector never
+  // changes the active agent, and the implicit first-tab fallback in
+  // refresh() does not sync (loading the app must not override the device's
+  // project selection).
   const setActiveTab = useCallback((id) => {
     setActiveTabId(id);
-  }, []);
+    const tab = tabsRef.current.find((t) => t.id === id);
+    if (tab?.repoId) selectRepo(tab.repoId);
+  }, [selectRepo]);
 
   const updateTab = useCallback((id, patch) => {
     setTabs((prev) =>
