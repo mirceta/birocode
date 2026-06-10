@@ -11,9 +11,10 @@ public static class ChatModuleExtensions
 {
     public static IServiceCollection AddChatModule(this IServiceCollection services)
     {
-        // Singletons: CliRunnerService enforces a single in-flight CLI process,
-        // so its busy-gate must be shared across all requests.
+        // Singletons: RunSessionService owns detached runs and the per-repo
+        // single-flight gate, so it must be shared across all requests.
         services.AddSingleton<CliRunnerService>();
+        services.AddSingleton<RunSessionService>();
         services.AddSingleton<SessionService>();
         return services;
     }

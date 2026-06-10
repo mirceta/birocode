@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { apiGet, apiStream, apiUpload } from '../api/client';
+import { apiGet, apiPost, apiStream, apiStreamGet, apiUpload } from '../api/client';
 import { createSseParser } from '../components/chat/sseParser';
 import { getModel, setModel as persistModel } from '../components/chat/ModelSelector';
 import { useDock } from './DockContext';
@@ -46,6 +46,12 @@ export function ChatProvider({ children }) {
 
   // Per-tab abort controllers (not in React state — refs to avoid re-renders).
   const abortRefs = useRef({});
+  // Highest event seq seen per conversation. The backend tags every SSE event
+  // with a seq so a reattach (GET /api/chat/stream?after=N) never duplicates
+  // or misses events (see plans/detached-runs.md).
+  const seqRefs = useRef({});
+  // Set while the user explicitly stopped a run, so reattach logic stands down.
+  const stopRefs = useRef({});
 
   const [model, setModelState] = useState(getModel);
   const changeModel = useCallback((id) => { persistModel(id); setModelState(id); }, []);
@@ -175,6 +181,11 @@ export function ChatProvider({ children }) {
 
   function makeEventHandler(key, tabId) {
     return function handleEvent(evt) {
+      // Dedup across reattaches: skip anything we already applied.
+      if (evt.seq != null) {
+        if (evt.seq <= (seqRefs.current[key] || 0)) return;
+        seqRefs.current[key] = evt.seq;
+      }
       switch (evt.type) {
         case 'session':
           if (evt.sessionId) {
@@ -246,41 +257,181 @@ export function ChatProvider({ children }) {
       if (currentConvo.sessionId) body.sessionId = currentConvo.sessionId;
       await apiStream('/chat', body, parse, { signal: controller.signal, repoId });
     } catch (err) {
-      if (err.name !== 'AbortError') {
+      if (err.name === 'AbortError') {
+        // User stop or tab close — nothing to recover.
+      } else if (err.status === undefined) {
+        // Connection lost (screen lock, network drop) — the backend run is
+        // still alive. Reattach instead of declaring failure.
+        const recovered = await streamRun(key, tabId, repoId);
+        if (!recovered && !stopRefs.current[key]) {
+          updateConvo(key, { error: t('chat.sendError') });
+          if (tabId) updateTab(tabId, { status: 'error' });
+        }
+      } else {
+        // Real HTTP error from the backend (400/409/...).
         updateConvo(key, { error: t('chat.sendError') });
         if (tabId) updateTab(tabId, { status: 'error' });
       }
     } finally {
-      updateConvo(key, (c) => {
-        const msgs = c.messages.slice();
-        const last = msgs[msgs.length - 1];
-        if (last && last.role === 'assistant') {
-          if (last.text === '' && (!last.steps || last.steps.length === 0)) {
-            return { ...c, streaming: false, messages: msgs.slice(0, -1) };
-          }
-          if (last.steps?.some((s) => s.kind === 'tool' && s.status === 'running')) {
-            msgs[msgs.length - 1] = {
-              ...last,
-              steps: last.steps.map((s) =>
-                s.kind === 'tool' && s.status === 'running' ? { ...s, status: 'done' } : s,
-              ),
-            };
-          }
-        }
-        return { ...c, streaming: false, messages: msgs };
-      });
+      finishStream(key);
       delete abortRefs.current[key];
+      delete stopRefs.current[key];
     }
   }
 
+  // Close out a conversation's streaming state: drop an untouched assistant
+  // bubble, settle any tool steps left "running", clear the streaming flag.
+  function finishStream(key) {
+    updateConvo(key, (c) => {
+      const msgs = c.messages.slice();
+      const last = msgs[msgs.length - 1];
+      if (last && last.role === 'assistant') {
+        if (last.text === '' && (!last.steps || last.steps.length === 0)) {
+          return { ...c, streaming: false, messages: msgs.slice(0, -1) };
+        }
+        if (last.steps?.some((s) => s.kind === 'tool' && s.status === 'running')) {
+          msgs[msgs.length - 1] = {
+            ...last,
+            steps: last.steps.map((s) =>
+              s.kind === 'tool' && s.status === 'running' ? { ...s, status: 'done' } : s,
+            ),
+          };
+        }
+      }
+      return { ...c, streaming: false, messages: msgs };
+    });
+  }
+
+  // Attach (or reattach) to the backend run for a repo, resuming after the
+  // last seq we saw. Retries transient failures; gives up on 404 (no run).
+  // Returns true when the stream ended normally or the user stopped it.
+  async function streamRun(key, tabId, repoId, attempts = 5) {
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, 2000));
+      if (stopRefs.current[key]) return true;
+      const controller = new AbortController();
+      abortRefs.current[key] = controller;
+      const parse = createSseParser(makeEventHandler(key, tabId));
+      try {
+        const after = seqRefs.current[key] || 0;
+        await apiStreamGet(`/chat/stream?after=${after}`, parse, {
+          signal: controller.signal, repoId,
+        });
+        return true;
+      } catch (err) {
+        if (err.name === 'AbortError') return true;
+        if (err.status === 404) return false; // no run on the backend
+        // transient — retry
+      } finally {
+        if (abortRefs.current[key] === controller) delete abortRefs.current[key];
+      }
+    }
+    return false;
+  }
+
+  // Reattach a conversation that has no live reader to its backend run
+  // (after a page reload or phone unlock).
+  async function attachToRun(key, tabId, repoId, run) {
+    if (abortRefs.current[key]) return;
+
+    const existing = convos[key];
+    const fresh = !existing || existing.messages.length <= 1;
+    if (!existing) {
+      setConvos((prev) => (prev[key] ? prev : { ...prev, [key]: emptyConversation(greeting()) }));
+    }
+    if (tabId) {
+      updateTab(tabId, {
+        status: 'running',
+        ...(run?.sessionId ? { sessionId: run.sessionId } : {}),
+      });
+    }
+    // A fresh conversation (page reload) has lost the turn's messages: pull
+    // the transcript from disk first so the user's prompt is visible, then
+    // let the replay stream the in-progress answer on top of it.
+    if (fresh && run?.sessionId) {
+      await loadTranscript(key, run.sessionId, repoId);
+      updateConvo(key, { sessionId: run.sessionId });
+    }
+
+    updateConvo(key, (c) => {
+      const msgs = c.messages.slice();
+      const last = msgs[msgs.length - 1];
+      if (!(c.streaming && last && last.role === 'assistant')) {
+        msgs.push({ role: 'assistant', text: '', steps: [] });
+      }
+      return { ...c, messages: msgs, streaming: true, error: '' };
+    });
+    const recovered = await streamRun(key, tabId, repoId);
+    finishStream(key);
+    if (!recovered && !stopRefs.current[key]) {
+      updateConvo(key, { error: t('chat.sendError') });
+      if (tabId) updateTab(tabId, { status: 'error' });
+    }
+    delete stopRefs.current[key];
+  }
+
+  // Reconcile local state with backend runs: on load and whenever the page
+  // becomes visible again (phone unlock), ask GET /api/runs which repos are
+  // still running and reattach / fix stale tab badges.
+  async function reconcile() {
+    let runs;
+    try {
+      runs = await apiGet('/runs');
+    } catch {
+      return;
+    }
+    const targets = tabs.length > 0
+      ? tabs.map((tab) => ({ key: tab.id, tabId: tab.id, repoId: tab.repoId, tab }))
+      : [{ key: 'default', tabId: null, repoId: currentRepoId, tab: null }];
+    for (const { key, tabId, repoId, tab } of targets) {
+      const run = runs?.[repoId];
+      if (run?.status === 'running') {
+        attachToRun(key, tabId, repoId, run);
+      } else if (tab && tab.status === 'running' && !abortRefs.current[key]) {
+        // The run finished while no client was attached (page was closed):
+        // fix the badge and restore the finished turn from the transcript.
+        updateTab(tabId, {
+          status: run ? run.status : 'idle',
+          ...(run?.sessionId ? { sessionId: run.sessionId } : {}),
+        });
+        if (run?.sessionId) {
+          const c = convos[key];
+          if (!c || c.messages.length <= 1) {
+            setConvos((prev) => (prev[key] ? prev : { ...prev, [key]: emptyConversation(greeting()) }));
+            loadTranscript(key, run.sessionId, repoId);
+            updateConvo(key, { sessionId: run.sessionId });
+          }
+        }
+      }
+    }
+  }
+
+  const reconcileRef = useRef(reconcile);
+  reconcileRef.current = reconcile;
+  useEffect(() => {
+    reconcileRef.current();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') reconcileRef.current();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
+
   const stop = useCallback(() => {
-    const controller = abortRefs.current[activeKey];
-    if (controller) controller.abort();
-  }, [activeKey]);
+    const key = activeKey;
+    stopRefs.current[key] = true;
+    abortRefs.current[key]?.abort();
+    // The run is backend-owned now: aborting the local stream detaches us but
+    // leaves the CLI working, so an explicit stop call is required.
+    apiPost('/chat/stop', undefined, { repoId: activeRepoId }).catch(() => {});
+    if (activeTabId) updateTab(activeTabId, { status: 'idle' });
+  }, [activeKey, activeRepoId, activeTabId, updateTab]);
 
   function resetConversation(key) {
     const controller = abortRefs.current[key];
     if (controller) controller.abort();
+    seqRefs.current[key] = 0;
+    delete stopRefs.current[key];
     setConvos((prev) => ({
       ...prev,
       [key]: emptyConversation(greeting()),
@@ -298,6 +449,7 @@ export function ChatProvider({ children }) {
     const repoId = activeRepoId;
     const controller = abortRefs.current[key];
     if (controller) controller.abort();
+    seqRefs.current[key] = 0;
 
     updateConvo(key, {
       sessionId: id, error: '', streaming: false,
@@ -347,6 +499,8 @@ export function ChatProvider({ children }) {
     for (const k of stale) {
       abortRefs.current[k]?.abort();
       delete abortRefs.current[k];
+      delete seqRefs.current[k];
+      delete stopRefs.current[k];
     }
     setConvos((prev) => {
       const next = { ...prev };

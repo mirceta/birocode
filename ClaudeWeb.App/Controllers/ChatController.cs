@@ -1,5 +1,4 @@
 using System.Text;
-using System.Text.Json;
 using ClaudeWeb.Services.Chat;
 using ClaudeWeb.Services.Logging;
 using ClaudeWeb.Services.Repositories;
@@ -12,26 +11,30 @@ namespace ClaudeWeb.Controllers;
 /// Chat endpoints (M1). Auto-discovered by AddControllers() -- no Program.cs
 /// changes needed. Password auth is applied globally by PasswordAuthMiddleware.
 ///
-///   POST /api/chat     -- streams a Claude turn as Server-Sent Events.
-///   GET  /api/sessions -- lists prior sessions for the working directory.
+///   POST /api/chat        -- starts a detached Run, streams it as SSE.
+///   GET  /api/chat/stream  -- reattaches to the repo's Run (replay + live).
+///   POST /api/chat/stop    -- cancels the repo's Run (kills the CLI).
+///   GET  /api/runs         -- per-repo run status for reconciliation.
+///   GET  /api/sessions     -- lists prior sessions for the working directory.
+///
+/// The Run is owned by RunSessionService, not by the HTTP connection: a client
+/// disconnect (phone lock, tab close) drops only the SSE attachment while the
+/// CLI keeps working. See plans/detached-runs.md.
 /// </summary>
 [ApiController]
 [Route("api")]
 public class ChatController : ControllerBase
 {
     private readonly CliRunnerService _cli;
+    private readonly RunSessionService _runs;
     private readonly SessionService _sessions;
     private readonly RepositoryResolver _repos;
     private readonly Logger _logger;
 
-    private static readonly JsonSerializerOptions SseJson = new()
-    {
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
-
-    public ChatController(CliRunnerService cli, SessionService sessions, RepositoryResolver repos, Logger logger)
+    public ChatController(CliRunnerService cli, RunSessionService runs, SessionService sessions, RepositoryResolver repos, Logger logger)
     {
         _cli = cli;
+        _runs = runs;
         _sessions = sessions;
         _repos = repos;
         _logger = logger;
@@ -41,10 +44,10 @@ public class ChatController : ControllerBase
     public record ChatRequest(string? Message, string? SessionId, string? Model);
 
     /// <summary>
-    /// Streams one chat turn. The CLI runner translates raw stream-json into
-    /// the stable SSE contract; we just forward each event as
-    /// <c>data: &lt;json&gt;\n\n</c> and flush. Only one turn runs at a time --
-    /// concurrent requests get 409.
+    /// Starts one detached chat turn and attaches this response to it as SSE.
+    /// The Run executes on a background task with the Run Session's own token,
+    /// so dropping this connection leaves the CLI working; reattach via
+    /// GET /api/chat/stream. Only one turn runs at a time per repo -- 409.
     /// </summary>
     [HttpPost("chat")]
     public async Task Chat([FromBody] ChatRequest? request)
@@ -69,7 +72,7 @@ public class ChatController : ControllerBase
 
         // Per-repo single-flight: a turn already running in THIS repo is rejected,
         // but other repos can run concurrently.
-        if (!_cli.TryBeginRun(repo.Id))
+        if (!_runs.TryBeginRun(repo.Id, out var session))
         {
             _logger.Info($"[CHAT] Rejected: a chat turn is already running for \"{repo.Name}\".");
             Response.StatusCode = StatusCodes.Status409Conflict;
@@ -77,24 +80,112 @@ public class ChatController : ControllerBase
             return;
         }
 
-        // From here on the CLI slot is claimed; RunAsync always releases it.
+        _logger.Info(string.IsNullOrWhiteSpace(request?.SessionId)
+            ? "[CHAT] New chat turn (detached)"
+            : $"[CHAT] Resume chat turn (session {request!.SessionId}, detached)");
+
+        // The Run itself: background task, Run Session token (NOT RequestAborted).
+        var sessionId = request?.SessionId;
+        var model = request?.Model;
+        var path = repo.Path;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _cli.RunAsync(
+                    message,
+                    sessionId,
+                    workingDirectory: path,
+                    model: model,
+                    emit: session.EmitAsync,
+                    ct: session.Cts.Token);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"[CHAT] Detached run crashed: {ex.Message}");
+            }
+            finally
+            {
+                session.Complete();
+            }
+        });
+
+        // This response is just the first attachment.
+        await AttachAsync(session, after: 0);
+    }
+
+    /// <summary>
+    /// Reattaches to the repo's Run: replays buffered events with
+    /// seq &gt; <paramref name="after"/>, then streams live ones. Also works
+    /// after the Run finished (replay only), so a reopened tab can catch up.
+    /// </summary>
+    [HttpGet("chat/stream")]
+    public async Task ChatStream([FromQuery] int after = 0)
+    {
+        _logger.CountRequest();
+
+        var repo = _repos.Current();
+        var session = repo is null ? null : _runs.Get(repo.Id);
+        if (session is null)
+        {
+            Response.StatusCode = StatusCodes.Status404NotFound;
+            await Response.WriteAsJsonAsync(new { error = "No run found for this repository." });
+            return;
+        }
+
+        _logger.Info($"[CHAT] Reattach to run in \"{repo!.Name}\" (after seq {after}, status {session.Status})");
+        await AttachAsync(session, after);
+    }
+
+    /// <summary>Explicitly stops the repo's running turn (kills the CLI process
+    /// tree). The only way a Run dies early -- disconnects no longer stop it.</summary>
+    [HttpPost("chat/stop")]
+    public IActionResult ChatStop()
+    {
+        _logger.CountRequest();
+
+        var repo = _repos.Current();
+        var session = repo is null ? null : _runs.Get(repo.Id);
+        if (session is null || session.Status != "running")
+            return NotFound(new { error = "No running turn for this repository." });
+
+        _logger.Info($"[CHAT] Stop requested for run in \"{repo!.Name}\"");
+        session.Cts.Cancel();
+        return Ok(new { stopped = true });
+    }
+
+    /// <summary>Per-repo run state so the frontend can reconcile tab status on
+    /// load/unlock and decide whether to reattach.</summary>
+    [HttpGet("runs")]
+    public IActionResult Runs()
+    {
+        _logger.CountRequest();
+        return Ok(_runs.Snapshot());
+    }
+
+    /// <summary>One SSE attachment to a Run Session. RequestAborted ends only
+    /// this attachment; the Run keeps going.</summary>
+    private async Task AttachAsync(RunSession session, int after)
+    {
         Response.StatusCode = StatusCodes.Status200OK;
         Response.ContentType = "text/event-stream";
         Response.Headers.CacheControl = "no-cache";
         Response.Headers.Connection = "keep-alive";
 
-        _logger.Info(string.IsNullOrWhiteSpace(request?.SessionId)
-            ? "[CHAT] New chat turn"
-            : $"[CHAT] Resume chat turn (session {request!.SessionId})");
-
-        await _cli.RunAsync(
-            message,
-            request?.SessionId,
-            workingDirectory: repo.Path,
-            repoId: repo.Id,
-            model: request?.Model,
-            emit: evt => WriteSseAsync(evt),
-            ct: HttpContext.RequestAborted);
+        try
+        {
+            await foreach (var json in session.StreamAsync(after, HttpContext.RequestAborted))
+            {
+                var bytes = Encoding.UTF8.GetBytes($"data: {json}\n\n");
+                await Response.Body.WriteAsync(bytes, HttpContext.RequestAborted);
+                await Response.Body.FlushAsync(HttpContext.RequestAborted);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Client detached (screen lock, tab close) -- the Run continues.
+            _logger.Info("[CHAT] Client detached from stream; run continues.");
+        }
     }
 
     /// <summary>Lists prior sessions for the selected repository, newest first.</summary>
@@ -126,11 +217,4 @@ public class ChatController : ControllerBase
         return Ok(messages);
     }
 
-    private async Task WriteSseAsync(object evt)
-    {
-        var json = JsonSerializer.Serialize(evt, SseJson);
-        var bytes = Encoding.UTF8.GetBytes($"data: {json}\n\n");
-        await Response.Body.WriteAsync(bytes, HttpContext.RequestAborted);
-        await Response.Body.FlushAsync(HttpContext.RequestAborted);
-    }
 }

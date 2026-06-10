@@ -18,9 +18,9 @@ function loadTabs() {
   try {
     const raw = localStorage.getItem(DOCK_KEY);
     if (!raw) return [];
-    const tabs = JSON.parse(raw);
-    // Reset any "running" tabs to "idle" — the CLI process is gone after reload.
-    return tabs.map((t) => (t.status === 'running' ? { ...t, status: 'idle' } : t));
+    // Keep stored statuses as-is (including "running"): runs are backend-owned
+    // and survive reloads. ChatProvider reconciles against GET /api/runs.
+    return JSON.parse(raw);
   } catch {
     return [];
   }
