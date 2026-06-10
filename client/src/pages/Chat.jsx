@@ -7,6 +7,7 @@ import SessionPicker from '../components/chat/SessionPicker';
 import ErrorBanner from '../components/shared/ErrorBanner';
 import ModelSelector from '../components/chat/ModelSelector';
 import { useChat } from '../context/ChatContext';
+import { useFeature } from '../context/UiModeContext';
 import { useT } from '../i18n/LanguageContext';
 import '../components/chat/chat.css';
 
@@ -31,12 +32,15 @@ export default function Chat() {
     sessionsError,
     model,
     changeModel,
+    contextTokens,
     send,
     stop,
     startNewConversation,
     resumeConversation,
     openPicker,
   } = useChat();
+
+  const showContextMeter = useFeature('contextMeter');
 
   const scrollRef = useRef(null);
   const stickToBottom = useRef(true);
@@ -79,6 +83,11 @@ export default function Chat() {
         <button type="button" className="chat__conversations" onClick={openPicker}>
           {t('chat.yourConversations')}
         </button>
+        {showContextMeter && contextTokens > 0 && (
+          <span className="chat__ctx" title={`${contextTokens.toLocaleString()} context tokens`}>
+            ctx {Math.round(contextTokens / 1000)}K
+          </span>
+        )}
         <ModelSelector value={model} onChange={changeModel} />
         <button type="button" className="chat__new" onClick={startNewConversation}>
           {t('chat.new')}
