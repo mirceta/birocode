@@ -10,6 +10,7 @@ namespace ClaudeWeb.Controllers;
 ///   POST /api/save             -- git add -A + commit
 ///   GET  /api/history          -- git log (last 50)
 ///   POST /api/history/restore  -- git checkout &lt;hash&gt; -- .
+///   GET  /api/git/status       -- read-only working-tree status (plans/git-tab.md)
 /// </summary>
 [ApiController]
 [Route("api")]
@@ -66,6 +67,39 @@ public class GitController : ControllerBase
         catch (Exception ex)
         {
             _logger.Error($"[GIT] Branch failed: {ex.Message}");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    /// <summary>GET /api/git/status -- read-only branch + working-tree state.</summary>
+    [HttpGet("git/status")]
+    public IActionResult Status()
+    {
+        _logger.CountRequest();
+        var repo = _repos.Current();
+        if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
+        try
+        {
+            var s = _git.Status(repo.Path);
+            return Ok(new
+            {
+                branch = s.Branch,
+                upstream = s.Upstream,
+                ahead = s.Ahead,
+                behind = s.Behind,
+                files = s.Files.Select(f => new
+                {
+                    path = f.Path,
+                    index = f.Index,
+                    worktree = f.Worktree,
+                    untracked = f.Untracked,
+                    conflicted = f.Conflicted,
+                }),
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[GIT] Status failed: {ex.Message}");
             return StatusCode(500, new { error = ex.Message });
         }
     }
