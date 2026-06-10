@@ -1,9 +1,9 @@
 # Agent branch — show each agent's git branch on the Agents tab
 
-> **Status (2026-06-10):** Implemented on `feature/agent-branch` and
-> browser-verified on an isolated preview instance on :5201
-> (`.claudeweb-preview/playwright/verify-agent-branch.mjs`, 3/3 checks,
-> with pinned dock tabs). Not yet deployed to :5099.
+> **Status (2026-06-10):** Deployed to the live :5099 harness and confirmed
+> by the End User. Browser-verified beforehand on an isolated preview
+> instance on :5201 (`.claudeweb-preview/playwright/verify-agent-branch.mjs`,
+> 3/3 checks, with pinned dock tabs).
 
 ## Problem
 
