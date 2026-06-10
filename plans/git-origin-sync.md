@@ -1,9 +1,9 @@
 # Git origin sync — real local-vs-origin discrepancy on the Git tab
 
-> **Status (2026-06-10):** Implemented on `feature/git-origin-sync` and
-> browser-verified on an isolated preview instance on :5201
+> **Status (2026-06-10):** Deployed to the live :5099 harness and confirmed
+> by the End User. Browser-verified beforehand on an isolated preview
+> instance on :5201
 > (`.claudeweb-preview/playwright/verify-git-origin-sync.mjs`, 7/7 checks).
-> Not yet deployed to :5099.
 
 ## Problem
 
