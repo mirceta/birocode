@@ -1,9 +1,11 @@
 # Detached Runs — agent runs survive client disconnects
 
-> **Status (2026-06-10):** Implemented and browser-verified on an isolated
-> :5200 instance (curl disconnect/replay/stop tests + Playwright mid-stream
-> reload test, `.claudeweb-preview/playwright/verify-detached-runs.mjs` —
-> all checks passed). Not yet merged to main; live :5099 harness untouched.
+> **Status (2026-06-10):** Deployed to the live :5099 harness and confirmed
+> by the End User. Includes the follow-up seq-watermark fix (per-run seq
+> restart silently swallowed every second turn; seq is now monotonic per repo
+> across runs and the client watermark resets on send). Browser-verified via
+> `.claudeweb-preview/playwright/verify-detached-runs.mjs` (mid-stream reload)
+> and `verify-two-turns.mjs` (multi-turn live streaming). Not yet merged to main.
 
 ## Problem
 
