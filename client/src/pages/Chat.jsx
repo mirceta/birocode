@@ -5,6 +5,7 @@ import ThinkingIndicator from '../components/chat/ThinkingIndicator';
 import ActivitySteps from '../components/chat/ActivitySteps';
 import SessionPicker from '../components/chat/SessionPicker';
 import ErrorBanner from '../components/shared/ErrorBanner';
+import ModelSelector from '../components/chat/ModelSelector';
 import { useChat } from '../context/ChatContext';
 import { useT } from '../i18n/LanguageContext';
 import '../components/chat/chat.css';
@@ -28,6 +29,8 @@ export default function Chat() {
     sessions,
     sessionsLoading,
     sessionsError,
+    model,
+    changeModel,
     send,
     stop,
     startNewConversation,
@@ -76,6 +79,7 @@ export default function Chat() {
         <button type="button" className="chat__conversations" onClick={openPicker}>
           {t('chat.yourConversations')}
         </button>
+        <ModelSelector value={model} onChange={changeModel} />
         <button type="button" className="chat__new" onClick={startNewConversation}>
           {t('chat.new')}
         </button>

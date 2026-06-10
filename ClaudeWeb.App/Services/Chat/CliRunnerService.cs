@@ -73,7 +73,8 @@ public class CliRunnerService
         string? sessionId,
         string workingDirectory,
         string repoId,
-        Func<object, Task> emit,
+        string? model = null,
+        Func<object, Task>? emit = null,
         CancellationToken ct = default)
     {
         var resuming = !string.IsNullOrWhiteSpace(sessionId);
@@ -90,7 +91,7 @@ public class CliRunnerService
         Process? process = null;
         try
         {
-            var psi = CreateProcessInfo(message, sessionId, workingDirectory);
+            var psi = CreateProcessInfo(message, sessionId, workingDirectory, model);
             _logger.Info(resuming
                 ? $"[CLI] Resuming session {Short(sessionId!)} in {workingDirectory}"
                 : $"[CLI] Starting new session in {workingDirectory}");
@@ -563,7 +564,7 @@ public class CliRunnerService
 
     // --- process setup ----------------------------------------------------
 
-    private static ProcessStartInfo CreateProcessInfo(string message, string? sessionId, string? workingDirectory)
+    private static ProcessStartInfo CreateProcessInfo(string message, string? sessionId, string? workingDirectory, string? model = null)
     {
         var psi = new ProcessStartInfo
         {
@@ -588,6 +589,12 @@ public class CliRunnerService
         psi.ArgumentList.Add("stream-json");
         psi.ArgumentList.Add("--include-partial-messages");
         psi.ArgumentList.Add("--verbose");
+
+        if (!string.IsNullOrWhiteSpace(model))
+        {
+            psi.ArgumentList.Add("--model");
+            psi.ArgumentList.Add(model);
+        }
 
         // Force Max-plan / CLI auth -- never pick up an API key from the env.
         psi.EnvironmentVariables.Remove("ANTHROPIC_API_KEY");

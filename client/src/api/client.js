@@ -48,9 +48,11 @@ export class ApiError extends Error {
   }
 }
 
-function authHeaders(extra = {}) {
+// `overrideRepoId` lets Dock tabs target a specific repo regardless of the
+// global selection. When omitted, falls back to the global getRepoId().
+function authHeaders(extra = {}, overrideRepoId) {
   const headers = { 'X-Auth-Password': getPassword(), ...extra };
-  const repoId = getRepoId();
+  const repoId = overrideRepoId || getRepoId();
   if (repoId) headers['X-Repo-Id'] = repoId;
   return headers;
 }
@@ -77,27 +79,28 @@ function url(path) {
   return clean.startsWith('/api') ? clean : `/api${clean}`;
 }
 
-export async function apiGet(path) {
-  const res = await fetch(url(path), { headers: authHeaders() });
+export async function apiGet(path, { repoId } = {}) {
+  const res = await fetch(url(path), { headers: authHeaders({}, repoId) });
   return handle(res);
 }
 
-export async function apiPost(path, body) {
+export async function apiPost(path, body, { repoId } = {}) {
   const res = await fetch(url(path), {
     method: 'POST',
-    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    headers: authHeaders({ 'Content-Type': 'application/json' }, repoId),
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   return handle(res);
 }
 
 // Upload a file via multipart/form-data. Returns the parsed JSON response.
-export async function apiUpload(path, file) {
+export async function apiUpload(path, file, { repoId } = {}) {
   const form = new FormData();
   form.append('file', file);
+  const rid = repoId || getRepoId();
   const res = await fetch(url(path), {
     method: 'POST',
-    headers: { 'X-Auth-Password': getPassword(), 'X-Repo-Id': getRepoId() },
+    headers: { 'X-Auth-Password': getPassword(), 'X-Repo-Id': rid },
     body: form,
   });
   return handle(res);
@@ -113,7 +116,7 @@ export async function apiUpload(path, file) {
 export async function apiStream(path, body, onEvent, options = {}) {
   const res = await fetch(url(path), {
     method: 'POST',
-    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    headers: authHeaders({ 'Content-Type': 'application/json' }, options.repoId),
     body: body === undefined ? undefined : JSON.stringify(body),
     signal: options.signal,
   });
