@@ -1,10 +1,9 @@
 # Context Meter — show current context usage next to the chat
 
-> **Status (2026-06-10):** Implemented on `feature/context-meter` and
-> browser-verified on the isolated :5200 instance
+> **Status (2026-06-10):** Deployed to the live :5099 harness and confirmed
+> by the End User. Browser-verified on the isolated :5200 instance
 > (`.claudeweb-preview/playwright/verify-context-meter.mjs` plus the
-> `verify-two-turns.mjs` / `verify-detached-runs.mjs` regressions). Not yet
-> deployed to :5099.
+> `verify-two-turns.mjs` / `verify-detached-runs.mjs` regressions).
 >
 > Includes a dock-sync follow-up fix (see below): on page load with a
 > remembered active agent tab, ChatContext deleted the tab's conversation
