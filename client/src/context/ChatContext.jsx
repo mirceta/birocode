@@ -1,14 +1,18 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { apiGet, apiStream, apiUpload } from '../api/client';
 import { createSseParser } from '../components/chat/sseParser';
+import { getModel, setModel as persistModel } from '../components/chat/ModelSelector';
+import { useDock } from './DockContext';
 import { useRepo } from './RepoContext';
 import { useT } from '../i18n/LanguageContext';
 
-// Holds the chat conversation (messages + the session being continued) and the
-// streaming logic. Mounted in Layout, which stays mounted across tab switches,
-// so navigating to Files/History and back no longer resets the conversation.
-// An in-progress stream also survives navigation, since the abort controller
-// and state live here rather than in the (unmounted) Chat page.
+// Holds per-tab chat conversations. Each Dock tab gets its own independent
+// conversation state (messages, sessionId, streaming, draft, etc.). The active
+// tab's state is surfaced through useChat() so existing consumers (Chat page,
+// ChatInput) work without changes.
+//
+// When no Dock tabs exist, a "default" conversation keyed by the global repo
+// selector is used, preserving the pre-Dock single-conversation experience.
 const ChatContext = createContext(null);
 
 export function useChat() {
@@ -17,62 +21,107 @@ export function useChat() {
   return ctx;
 }
 
+function emptyConversation(greeting) {
+  return {
+    messages: [greeting],
+    sessionId: null,
+    draft: '',
+    attachment: null,
+    streaming: false,
+    error: '',
+  };
+}
+
 export function ChatProvider({ children }) {
   const { t } = useT();
   const { currentRepoId } = useRepo();
+  const { tabs, activeTab, activeTabId, updateTab } = useDock();
   const greeting = () => ({ role: 'assistant', text: t('chat.greeting') });
 
-  const [messages, setMessages] = useState(() => [greeting()]);
-  const [sessionId, setSessionId] = useState(null);
-  // The unsent composer text. Lives here (not in ChatInput) so it survives
-  // navigating to other tabs and back, and so other tabs (e.g. Files) can drop
-  // a file reference into it.
-  const [draft, setDraft] = useState('');
-  const [attachment, setAttachment] = useState(null);
-  const [streaming, setStreaming] = useState(false);
-  const [error, setError] = useState('');
+  // Per-tab conversation map: tabId -> conversation state.
+  // "default" key is used when no Dock tabs exist.
+  const [convos, setConvos] = useState(() => ({
+    default: emptyConversation(greeting()),
+  }));
+
+  // Per-tab abort controllers (not in React state — refs to avoid re-renders).
+  const abortRefs = useRef({});
+
+  const [model, setModelState] = useState(getModel);
+  const changeModel = useCallback((id) => { persistModel(id); setModelState(id); }, []);
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [sessions, setSessions] = useState([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [sessionsError, setSessionsError] = useState(false);
 
-  const abortRef = useRef(null);
+  // Determine which conversation key is active.
+  const activeKey = activeTabId || 'default';
+  // The repo to target for API calls.
+  const activeRepoId = activeTab ? activeTab.repoId : currentRepoId;
 
-  // Sessions are scoped to a repository, so switching projects starts a fresh
-  // conversation. Skip the very first run (no real switch has happened yet).
+  // Ensure a conversation entry exists for the active key. If the tab was
+  // restored from localStorage with a stored sessionId (page reload), resume
+  // it: seed the sessionId so the next send() uses --resume, and load the
+  // transcript.
+  useEffect(() => {
+    if (convos[activeKey]) return;
+    const storedSessionId = activeTab?.sessionId || null;
+    setConvos((prev) => {
+      if (prev[activeKey]) return prev;
+      const fresh = emptyConversation(greeting());
+      if (storedSessionId) {
+        fresh.sessionId = storedSessionId;
+        fresh.messages = [{ role: 'assistant', text: t('chat.loadingConversation') }];
+      }
+      return { ...prev, [activeKey]: fresh };
+    });
+    if (storedSessionId) loadTranscript(activeKey, storedSessionId, activeTab.repoId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeKey]);
+
+  // When the global repo changes and we're in default mode (no Dock tabs),
+  // reset the default conversation.
   const prevRepoRef = useRef(currentRepoId);
   useEffect(() => {
+    if (activeTabId) return; // Dock tabs manage their own repos.
     if (prevRepoRef.current === currentRepoId) return;
     prevRepoRef.current = currentRepoId;
-    startNewConversation();
+    resetConversation('default');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentRepoId]);
+  }, [currentRepoId, activeTabId]);
 
-  // Update the last message in place, but only if it is the (streaming) assistant
-  // turn. `updater` receives the message and returns a new one.
-  const updateAssistant = useCallback((updater) => {
-    setMessages((prev) => {
-      const next = prev.slice();
-      const i = next.length - 1;
-      if (i >= 0 && next[i].role === 'assistant') next[i] = updater(next[i]);
-      return next;
+  // Get the current conversation (safe fallback).
+  const conv = convos[activeKey] || emptyConversation(greeting());
+
+  // Update a specific conversation's state.
+  const updateConvo = useCallback((key, updater) => {
+    setConvos((prev) => {
+      const current = prev[key];
+      if (!current) return prev;
+      const updated = typeof updater === 'function' ? updater(current) : { ...current, ...updater };
+      return { ...prev, [key]: updated };
     });
   }, []);
 
+  // Update the last assistant message in a specific conversation.
+  const updateAssistant = useCallback((key, updater) => {
+    updateConvo(key, (c) => {
+      const msgs = c.messages.slice();
+      const i = msgs.length - 1;
+      if (i >= 0 && msgs[i].role === 'assistant') msgs[i] = updater(msgs[i]);
+      return { ...c, messages: msgs };
+    });
+  }, [updateConvo]);
+
   const appendToken = useCallback(
-    (text) => updateAssistant((m) => ({ ...m, text: m.text + text })),
+    (key, text) => updateAssistant(key, (m) => ({ ...m, text: m.text + text })),
     [updateAssistant],
   );
 
-  // --- activity steps (the verbose trail under a turn) --------------------
-  // Each assistant turn carries an ordered `steps` array: contiguous thinking is
-  // one { kind:'thinking', text } step; each tool call is a { kind:'tool', id,
-  // name, summary, detail, status:'running'|'done'|'error', preview, startedAt }.
-
   const addThinking = useCallback(
-    (text) =>
-      updateAssistant((m) => {
+    (key, text) =>
+      updateAssistant(key, (m) => {
         const steps = (m.steps || []).slice();
         const last = steps[steps.length - 1];
         if (last && last.kind === 'thinking') {
@@ -86,22 +135,17 @@ export function ChatProvider({ children }) {
   );
 
   const handleTool = useCallback(
-    (evt) =>
-      updateAssistant((m) => {
+    (key, evt) =>
+      updateAssistant(key, (m) => {
         const steps = (m.steps || []).slice();
         let idx = evt.id ? steps.findIndex((s) => s.kind === 'tool' && s.id === evt.id) : -1;
 
         if (evt.status === 'start' || evt.status === 'input') {
           if (idx === -1) {
             steps.push({
-              kind: 'tool',
-              id: evt.id,
-              name: evt.name || 'tool',
-              status: 'running',
-              startedAt: Date.now(),
-              summary: evt.summary || '',
-              detail: evt.detail || '',
-              preview: '',
+              kind: 'tool', id: evt.id, name: evt.name || 'tool',
+              status: 'running', startedAt: Date.now(),
+              summary: evt.summary || '', detail: evt.detail || '', preview: '',
             });
           } else {
             steps[idx] = {
@@ -112,21 +156,15 @@ export function ChatProvider({ children }) {
             };
           }
         } else if (evt.status === 'end') {
-          // Match by id, else fall back to the most recent still-running tool.
           if (idx === -1) {
             for (let j = steps.length - 1; j >= 0; j--) {
-              if (steps[j].kind === 'tool' && steps[j].status === 'running') {
-                idx = j;
-                break;
-              }
+              if (steps[j].kind === 'tool' && steps[j].status === 'running') { idx = j; break; }
             }
           }
           if (idx !== -1) {
             steps[idx] = {
-              ...steps[idx],
-              status: evt.ok === false ? 'error' : 'done',
-              ok: evt.ok !== false,
-              preview: evt.preview || '',
+              ...steps[idx], status: evt.ok === false ? 'error' : 'done',
+              ok: evt.ok !== false, preview: evt.preview || '',
             };
           }
         }
@@ -135,84 +173,93 @@ export function ChatProvider({ children }) {
     [updateAssistant],
   );
 
-  function handleEvent(evt) {
-    switch (evt.type) {
-      case 'session':
-        if (evt.sessionId) setSessionId(evt.sessionId);
-        break;
-      case 'thinking':
-        addThinking(evt.text);
-        break;
-      case 'tool':
-        handleTool(evt);
-        break;
-      case 'token':
-        if (evt.text) appendToken(evt.text);
-        break;
-      case 'done':
-        if (evt.sessionId) setSessionId(evt.sessionId);
-        break;
-      case 'error':
-        setError(evt.message || t('chat.genericError'));
-        break;
-      default:
-        break;
-    }
+  function makeEventHandler(key, tabId) {
+    return function handleEvent(evt) {
+      switch (evt.type) {
+        case 'session':
+          if (evt.sessionId) {
+            updateConvo(key, { sessionId: evt.sessionId });
+            if (tabId) updateTab(tabId, { sessionId: evt.sessionId });
+          }
+          break;
+        case 'thinking':
+          addThinking(key, evt.text);
+          break;
+        case 'tool':
+          handleTool(key, evt);
+          break;
+        case 'token':
+          if (evt.text) appendToken(key, evt.text);
+          break;
+        case 'done':
+          if (evt.sessionId) {
+            updateConvo(key, { sessionId: evt.sessionId });
+            if (tabId) updateTab(tabId, { sessionId: evt.sessionId, status: 'done' });
+          }
+          break;
+        case 'error':
+          updateConvo(key, { error: evt.message || t('chat.genericError') });
+          if (tabId) updateTab(tabId, { status: 'error' });
+          break;
+        default:
+          break;
+      }
+    };
   }
 
   async function send(text) {
-    setError('');
-    const pendingFile = attachment;
-    setDraft(''); // clear the composer the moment the message is sent
-    setAttachment(null);
+    const key = activeKey;
+    const tabId = activeTabId;
+    const repoId = activeRepoId;
 
-    // Upload the attachment first (if any) and build the final prompt.
+    updateConvo(key, { error: '' });
+    const pendingFile = conv.attachment;
+    updateConvo(key, { draft: '', attachment: null });
+
     let fullText = text;
     if (pendingFile) {
       try {
-        const result = await apiUpload('/upload', pendingFile);
+        const result = await apiUpload('/upload', pendingFile, { repoId });
         const suffix = `\n\n[Attached file: ${result.path}]`;
         fullText = text ? text + suffix : suffix;
       } catch {
-        setError(t('chat.uploadError'));
-        setDraft(text); // restore the draft so the user doesn't lose their message
+        updateConvo(key, { error: t('chat.uploadError'), draft: text });
         return;
       }
     }
 
-    setMessages((prev) => [
-      ...prev,
-      { role: 'user', text: fullText },
-      { role: 'assistant', text: '', steps: [] },
-    ]);
-    setStreaming(true);
+    updateConvo(key, (c) => ({
+      ...c,
+      messages: [...c.messages, { role: 'user', text: fullText }, { role: 'assistant', text: '', steps: [] }],
+      streaming: true,
+    }));
+    if (tabId) updateTab(tabId, { status: 'running' });
 
     const controller = new AbortController();
-    abortRef.current = controller;
+    abortRefs.current[key] = controller;
+    const handleEvent = makeEventHandler(key, tabId);
     const parse = createSseParser(handleEvent);
 
     try {
-      const body = { message: fullText };
-      if (sessionId) body.sessionId = sessionId;
-      await apiStream('/chat', body, parse, { signal: controller.signal });
+      const body = { message: fullText, model };
+      const currentConvo = convos[key] || conv;
+      if (currentConvo.sessionId) body.sessionId = currentConvo.sessionId;
+      await apiStream('/chat', body, parse, { signal: controller.signal, repoId });
     } catch (err) {
       if (err.name !== 'AbortError') {
-        setError(t('chat.sendError'));
+        updateConvo(key, { error: t('chat.sendError') });
+        if (tabId) updateTab(tabId, { status: 'error' });
       }
     } finally {
-      setStreaming(false);
-      abortRef.current = null;
-      setMessages((prev) => {
-        const next = prev.slice();
-        const last = next[next.length - 1];
+      updateConvo(key, (c) => {
+        const msgs = c.messages.slice();
+        const last = msgs[msgs.length - 1];
         if (last && last.role === 'assistant') {
-          // Drop a truly empty turn (no answer text and no activity).
           if (last.text === '' && (!last.steps || last.steps.length === 0)) {
-            return next.slice(0, -1);
+            return { ...c, streaming: false, messages: msgs.slice(0, -1) };
           }
-          // Close out any tool step still spinning (e.g. on early stream end).
           if (last.steps?.some((s) => s.kind === 'tool' && s.status === 'running')) {
-            next[next.length - 1] = {
+            msgs[msgs.length - 1] = {
               ...last,
               steps: last.steps.map((s) =>
                 s.kind === 'tool' && s.status === 'running' ? { ...s, status: 'done' } : s,
@@ -220,48 +267,60 @@ export function ChatProvider({ children }) {
             };
           }
         }
-        return next;
+        return { ...c, streaming: false, messages: msgs };
       });
+      delete abortRefs.current[key];
     }
   }
 
-  // Interrupt the in-flight turn. Aborting the fetch closes the SSE connection,
-  // which fires HttpContext.RequestAborted on the server -> the CLI process is
-  // killed. send()'s catch treats AbortError as a normal stop.
   const stop = useCallback(() => {
-    if (abortRef.current) abortRef.current.abort();
-  }, []);
+    const controller = abortRefs.current[activeKey];
+    if (controller) controller.abort();
+  }, [activeKey]);
 
-  function startNewConversation() {
-    if (abortRef.current) abortRef.current.abort();
-    setSessionId(null);
-    setMessages([greeting()]);
-    setError('');
-    setStreaming(false);
+  function resetConversation(key) {
+    const controller = abortRefs.current[key];
+    if (controller) controller.abort();
+    setConvos((prev) => ({
+      ...prev,
+      [key]: emptyConversation(greeting()),
+    }));
     setPickerOpen(false);
   }
 
-  async function resumeConversation(id) {
-    if (abortRef.current) abortRef.current.abort();
-    setSessionId(id);
-    setError('');
-    setStreaming(false);
-    setPickerOpen(false);
+  function startNewConversation() {
+    resetConversation(activeKey);
+    if (activeTabId) updateTab(activeTabId, { sessionId: null, status: 'idle' });
+  }
 
-    setMessages([{ role: 'assistant', text: t('chat.loadingConversation') }]);
+  async function resumeConversation(id) {
+    const key = activeKey;
+    const repoId = activeRepoId;
+    const controller = abortRefs.current[key];
+    if (controller) controller.abort();
+
+    updateConvo(key, {
+      sessionId: id, error: '', streaming: false,
+      messages: [{ role: 'assistant', text: t('chat.loadingConversation') }],
+    });
+    setPickerOpen(false);
+    if (activeTabId) updateTab(activeTabId, { sessionId: id, status: 'idle' });
+    await loadTranscript(key, id, repoId);
+  }
+
+  async function loadTranscript(key, id, repoId) {
     try {
-      const data = await apiGet(`/sessions/${id}/messages`);
+      const data = await apiGet(`/sessions/${id}/messages`, { repoId });
       const loaded = Array.isArray(data)
         ? data.map((m) => ({ role: m.role, text: m.text }))
         : [];
-      setMessages(
-        loaded.length > 0
+      updateConvo(key, {
+        messages: loaded.length > 0
           ? loaded
           : [greeting(), { role: 'assistant', text: t('chat.resumed') }],
-      );
+      });
     } catch {
-      setError(t('chat.resumeError'));
-      setMessages([greeting()]);
+      updateConvo(key, { error: t('chat.resumeError'), messages: [greeting()] });
     }
   }
 
@@ -270,7 +329,7 @@ export function ChatProvider({ children }) {
     setSessionsLoading(true);
     setSessionsError(false);
     try {
-      const data = await apiGet('/sessions');
+      const data = await apiGet('/sessions', { repoId: activeRepoId });
       setSessions(Array.isArray(data) ? data : []);
     } catch {
       setSessionsError(true);
@@ -279,20 +338,39 @@ export function ChatProvider({ children }) {
     }
   }
 
+  // Clean up when an agent tab is closed: abort any in-flight stream and
+  // drop its conversation entry.
+  useEffect(() => {
+    const live = new Set(tabs.map((tab) => tab.id));
+    const stale = Object.keys(convos).filter((k) => k !== 'default' && !live.has(k));
+    if (stale.length === 0) return;
+    for (const k of stale) {
+      abortRefs.current[k]?.abort();
+      delete abortRefs.current[k];
+    }
+    setConvos((prev) => {
+      const next = { ...prev };
+      for (const k of stale) delete next[k];
+      return next;
+    });
+  }, [tabs, convos]);
+
   const value = {
-    messages,
-    sessionId,
-    draft,
-    setDraft,
-    attachment,
-    setAttachment,
-    streaming,
-    error,
+    messages: conv.messages,
+    sessionId: conv.sessionId,
+    draft: conv.draft,
+    setDraft: (d) => updateConvo(activeKey, { draft: d }),
+    attachment: conv.attachment,
+    setAttachment: (a) => updateConvo(activeKey, { attachment: a }),
+    streaming: conv.streaming,
+    error: conv.error,
     pickerOpen,
     setPickerOpen,
     sessions,
     sessionsLoading,
     sessionsError,
+    model,
+    changeModel,
     send,
     stop,
     startNewConversation,

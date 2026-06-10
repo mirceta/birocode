@@ -23,12 +23,25 @@
   "nav.files": "Files",
   "nav.history": "History",
   "nav.app": "App",
+  "nav.agents": "Agents",
   "nav.aria": "Main navigation",
+
+  "agents.title": "Agents",
+  "agents.new": "New agent",
+  "agents.empty": "No agents yet. Start one to run Claude on another project in parallel.",
+  "agents.status.idle": "Idle",
+  "agents.status.running": "Running...",
+  "agents.status.done": "Done",
+  "agents.status.error": "Error",
 
   "repo.label": "Project",
   "repo.none": "No projects",
 
   "landing.builder": "Builder",
+
+  "mode.label": "View mode",
+  "mode.simple": "Simple",
+  "mode.advanced": "Advanced",
 
   "apptab.online": "running",
   "apptab.offline": "not running",

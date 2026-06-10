@@ -50,6 +50,18 @@
   transform: scale(0.97);
 }
 
+.chat__model {
+  min-height: 36px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
 /* ---- Message list ----------------------------------------------------- */
 
 .chat__scroll {

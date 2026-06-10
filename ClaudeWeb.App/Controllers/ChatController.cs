@@ -38,7 +38,7 @@ public class ChatController : ControllerBase
     }
 
     /// <summary>Request body for POST /api/chat.</summary>
-    public record ChatRequest(string? Message, string? SessionId);
+    public record ChatRequest(string? Message, string? SessionId, string? Model);
 
     /// <summary>
     /// Streams one chat turn. The CLI runner translates raw stream-json into
@@ -92,6 +92,7 @@ public class ChatController : ControllerBase
             request?.SessionId,
             workingDirectory: repo.Path,
             repoId: repo.Id,
+            model: request?.Model,
             emit: evt => WriteSseAsync(evt),
             ct: HttpContext.RequestAborted);
     }

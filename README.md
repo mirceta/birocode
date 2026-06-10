@@ -9,9 +9,10 @@ The host runs a small C# .NET 8 WinForms app with an embedded web server
 (Kestrel). The operator sees a monitoring GUI; the end user sees a React web
 app served by the same process.
 
-See [PLAN.md](PLAN.md) for architecture and module details and
-[ANALYSIS.md](ANALYSIS.md) for the design decision (including a comparison to
-Anthropic's Claude Dispatch).
+See [ANALYSIS.md](ANALYSIS.md) for the design decision (including a comparison
+to Anthropic's Claude Dispatch). Module conventions (how controllers and
+services plug in) are in [plans/INTEGRATION.md](plans/INTEGRATION.md); feature
+plans live in [plans/](plans/) (one file per feature, with a status header).
 
 ## Prerequisites
 

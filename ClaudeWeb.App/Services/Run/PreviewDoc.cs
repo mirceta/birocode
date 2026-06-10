@@ -1,52 +1,110 @@
 namespace ClaudeWeb.Services.Run;
 
 /// <summary>
-/// Writes the "preview" convention into the opened repository's CLAUDE.md, so
-/// Claude knows how to start that project for the App tab. The text lives in the
-/// target repo (inspectable + editable by the operator) rather than being
-/// injected invisibly at runtime.
+/// Writes the "preview" convention into the opened repository so Claude knows
+/// how to start that project for the App tab. The detailed guides are written
+/// as separate files under docs/claude-web/ (each with a single
+/// responsibility); CLAUDE.md gets only a short managed pointer block telling
+/// Claude which guide to read in which circumstance. This keeps CLAUDE.md slim
+/// (it is loaded into every conversation) while the guides are read on demand.
 ///
-/// The section is delimited by HTML-comment markers so re-running "Prepare" is
-/// idempotent: it replaces the existing block in place (refreshing the port /
-/// self-dev steps) instead of appending duplicates. Any content the user wrote
-/// outside the markers is left untouched.
+/// The CLAUDE.md section is delimited by HTML-comment markers so re-running
+/// "Prepare" is idempotent: it replaces the existing block in place instead of
+/// appending duplicates. Any content the user wrote outside the markers is
+/// left untouched. The doc files are overwritten wholesale on each Prepare.
 /// </summary>
 public static class PreviewDoc
 {
     public const string Begin = "<!-- claude-web:preview (managed by Claude Web -- re-run \"Prepare for preview\" to update) -->";
     public const string End = "<!-- /claude-web:preview -->";
+    public const string DocsDir = "docs/claude-web";
+
+    private const string ManagedNote = "<!-- managed by Claude Web -- re-run \"Prepare for preview\" to update -->";
 
     public sealed record PrepareResult(string Action, string FileName);
 
-    /// <summary>Builds the managed section for the given preview port. When
-    /// <paramref name="previewUrl"/> is non-empty (this install is behind a
-    /// reverse proxy), the extra sub-path section is included so the product
-    /// is built with the correct base URL. Self-dev gets the isolated-build
-    /// steps (the harness can't build over its own running exe).</summary>
+    /// <summary>Builds the managed CLAUDE.md pointer block. Each bullet tells
+    /// Claude when to read which guide; the guide content itself lives in
+    /// docs/claude-web/ (see <see cref="WriteDocs"/>).</summary>
     public static string BuildSection(int port, string? previewUrl, bool isSelf)
     {
-        var body = Generic.Replace("{PORT}", port.ToString());
+        var bullets =
+            $"- **{DocsDir}/preview.md** — read FIRST whenever the user asks you to run,\n" +
+            $"  start, or preview the app: serve on 0.0.0.0:{port}, launch detached, free\n" +
+            "  the port.\n";
+
         if (!string.IsNullOrWhiteSpace(previewUrl))
         {
-            var withSlash = previewUrl!.EndsWith("/") ? previewUrl : previewUrl + "/";
-            var noTrail = withSlash.TrimEnd('/');
-            body += Proxy
-                .Replace("{PORT}", port.ToString())
-                .Replace("{PREVIEW_URL}", withSlash)
-                .Replace("{PREVIEW_URL_NO_TRAIL}", noTrail);
+            bullets +=
+                $"- **{DocsDir}/proxy.md** — read before building/serving the frontend, and\n" +
+                "  when debugging a blank page, 404s on assets, 401s on /api, HTTP 411, or UI\n" +
+                "  state that \"reverts\" seconds after a click: the five reverse-proxy traps\n" +
+                $"  of the {previewUrl} sub-path.\n" +
+                $"- **{DocsDir}/browser-testing.md** — read BEFORE claiming a UI or proxy fix\n" +
+                "  works: verify with a headless Playwright browser, not just curl.\n";
         }
-        if (isSelf) body += Self.Replace("{PORT}", port.ToString());
+
+        if (isSelf)
+        {
+            bullets +=
+                $"- **{DocsDir}/self-dev.md** — read before building or running this repo:\n" +
+                "  it is Claude Web itself, so build to an isolated dir, never into the\n" +
+                "  running app's own bin/ or port.\n";
+        }
+
+        var body =
+            "## Previewing this app in Claude Web\n\n" +
+            $"The Claude Web \"App\" tab embeds whatever is listening on port **{port}**.\n" +
+            $"Detailed guides live in `{DocsDir}/` (also managed by \"Prepare for\n" +
+            "preview\"). Read the right one for the task at hand:\n\n" +
+            bullets;
+
         return $"{Begin}\n\n{body.Trim()}\n\n{End}\n";
     }
 
+    /// <summary>Writes the guide files under &lt;repoPath&gt;/docs/claude-web/.
+    /// proxy.md and browser-testing.md are only written when this install is
+    /// behind a reverse proxy; self-dev.md only for the harness's own repo.</summary>
+    public static void WriteDocs(string repoPath, int port, string? previewUrl, bool isSelf)
+    {
+        var dir = Path.Combine(repoPath, "docs", "claude-web");
+        Directory.CreateDirectory(dir);
+
+        string Sub(string text)
+        {
+            text = text.Replace("{PORT}", port.ToString());
+            if (!string.IsNullOrWhiteSpace(previewUrl))
+            {
+                var withSlash = previewUrl!.EndsWith("/") ? previewUrl : previewUrl + "/";
+                text = text
+                    .Replace("{PREVIEW_URL_NO_TRAIL}", withSlash.TrimEnd('/'))
+                    .Replace("{PREVIEW_URL}", withSlash);
+            }
+            return $"{ManagedNote}\n\n{text.Trim()}\n";
+        }
+
+        File.WriteAllText(Path.Combine(dir, "preview.md"), Sub(GenericDoc));
+        if (!string.IsNullOrWhiteSpace(previewUrl))
+        {
+            File.WriteAllText(Path.Combine(dir, "proxy.md"), Sub(ProxyDoc));
+            File.WriteAllText(Path.Combine(dir, "browser-testing.md"), Sub(BrowserTestDoc));
+        }
+        if (isSelf)
+        {
+            File.WriteAllText(Path.Combine(dir, "self-dev.md"), Sub(SelfDoc));
+        }
+    }
+
     /// <summary>
-    /// Creates, updates, or appends the managed section in &lt;repoPath&gt;/CLAUDE.md.
-    /// Returns which action was taken.
+    /// Writes the guide files and creates, updates, or appends the managed
+    /// pointer section in &lt;repoPath&gt;/CLAUDE.md. Returns which action was taken.
     /// </summary>
     public static PrepareResult Prepare(string repoPath, int port, string? previewUrl, bool isSelf)
     {
         const string fileName = "CLAUDE.md";
         var path = Path.Combine(repoPath, fileName);
+
+        WriteDocs(repoPath, port, previewUrl, isSelf);
         var section = BuildSection(port, previewUrl, isSelf);
 
         if (!File.Exists(path))
@@ -71,7 +129,7 @@ public static class PreviewDoc
         return new PrepareResult("appended", fileName);
     }
 
-    private const string Generic = @"## Previewing this app in Claude Web
+    private const string GenericDoc = @"# Previewing this app in Claude Web
 
 The Claude Web ""App"" tab embeds whatever is listening on **port {PORT}**. When the
 user asks you to run, start, or preview the app:
@@ -86,9 +144,7 @@ user asks you to run, start, or preview the app:
    - macOS/Linux: `lsof -ti tcp:{PORT} | xargs -r kill`
 4. Use this repository's own stack and scripts to start it.";
 
-    private const string Proxy = @"
-
-### Build for the reverse-proxy sub-path
+    private const string ProxyDoc = @"# Build for the reverse-proxy sub-path
 
 This Claude Web install fronts the App tab through a reverse proxy that maps
 **{PREVIEW_URL}** -> `http://<host>:{PORT}/` (the proxy **strips** the prefix
@@ -226,12 +282,12 @@ curl -X POST -H 'Content-Type: application/json' -d '{...}' http://<host>{PREVIE
 curl                                                          http://<host>{PREVIEW_URL}api/your-state     # might be STALE
 curl                                                          http://<host>{PREVIEW_URL}api/your-state?_=1 # always FRESH
 ```
-If the bare GET disagrees with the `?_=1` GET, you're hitting ARR's cache.
+If the bare GET disagrees with the `?_=1` GET, you're hitting ARR's cache.";
 
-### Test in a real headless browser, not just with curl
+    private const string BrowserTestDoc = @"# Test in a real headless browser, not just with curl
 
-`curl` is the wrong lens for any of these except trap 4. Traps 1, 2, 3, 5 all
-involve **what the browser does after the page loads** -- which assets it
+`curl` is the wrong lens for proxy traps 1, 2, 3 and 5 (see proxy.md) -- they
+all involve **what the browser does after the page loads**: which assets it
 asks for, which fetch URLs it constructs, whether `setState` from a click
 sticks after the next poll. curl tells you the server responds correctly,
 not whether the user sees a working product. After many ""should be fixed""
@@ -309,9 +365,7 @@ Common ""it works in curl but the screenshot is broken"" scenarios:
   interfering -- but the cause is almost certainly the proxy cache (which
   makes polls return stale data), not the polls themselves.";
 
-    private const string Self = @"
-
-### This repo is Claude Web itself (self-development)
+    private const string SelfDoc = @"# This repo is Claude Web itself (self-development)
 
 You cannot build into the running app's own `bin/` (its `ClaudeWeb.exe` is locked)
 or reuse its port. Build to an isolated dir and run on {PORT}:

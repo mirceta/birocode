@@ -1,4 +1,5 @@
 import { useRepo } from '../../context/RepoContext';
+import { useFeature } from '../../context/UiModeContext';
 import { useT } from '../../i18n/LanguageContext';
 
 // Header dropdown for choosing which project (repository) to work in. Shows only
@@ -9,7 +10,9 @@ import { useT } from '../../i18n/LanguageContext';
 export default function RepoSelector() {
   const { repos, currentRepoId, selectRepo, loading } = useRepo();
   const { t } = useT();
+  const visible = useFeature('repoSelector');
 
+  if (!visible) return null;
   if (loading && repos.length === 0) return null;
   if (repos.length === 0) {
     return <span className="repo-selector repo-selector--empty">{t('repo.none')}</span>;
