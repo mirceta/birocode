@@ -1,0 +1,117 @@
+/* Git tab (plans/git-tab.md) — read-only status view. */
+
+.git-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.git-branch {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 12px 14px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.git-branch__name {
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.git-branch__sync {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.git-branch__ahead,
+.git-branch__behind {
+  font-weight: 700;
+}
+
+.git-branch__insync {
+  opacity: 0.7;
+}
+
+.git-refresh {
+  margin-left: auto;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.git-group__title {
+  margin: 0 0 6px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+
+.git-files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.git-file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 14px;
+}
+
+.git-file:last-child {
+  border-bottom: none;
+}
+
+.git-file__status {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--color-border);
+}
+
+.git-file__status--staged { background: #d9f2dd; color: #1d6b2f; }
+.git-file__status--changed { background: #fdeacc; color: #8a5a00; }
+.git-file__status--untracked { background: #e3e8f0; color: #44506b; }
+.git-file__status--conflicts { background: #f8d7d7; color: #9c1c1c; }
+
+.git-file__path {
+  word-break: break-all;
+}
+
+.git-clean {
+  text-align: center;
+  padding: 40px 16px;
+  opacity: 0.85;
+}
+
+.git-clean__icon {
+  font-size: 40px;
+  margin: 0 0 8px;
+  color: #1d6b2f;
+}

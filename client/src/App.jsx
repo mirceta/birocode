@@ -9,6 +9,7 @@ import Files from './pages/Files';
 import History from './pages/History';
 import AppRun from './pages/AppRun';
 import Agents from './pages/Agents';
+import Git from './pages/Git';
 
 // Two layers:
 //   /        -- public landing: just the running product, no login, no chrome.
@@ -29,6 +30,7 @@ export default function App() {
             <Route path="history" element={<History />} />
             <Route path="app" element={<AppRun />} />
             <Route path="agents" element={<Agents />} />
+            <Route path="git" element={<Git />} />
           </Route>
         ) : (
           <Route path="/studio/*" element={<PasswordGate onUnlock={() => setUnlocked(true)} />} />

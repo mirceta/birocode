@@ -153,6 +153,80 @@ public partial class GitService
         return new GitOutput(process.ExitCode, stdout, stderr);
     }
 
+    public sealed record StatusFile(string Path, string Index, string Worktree, bool Untracked, bool Conflicted);
+    public sealed record StatusResult(
+        string Branch, string? Upstream, int Ahead, int Behind, IReadOnlyList<StatusFile> Files);
+
+    /// <summary>
+    /// Read-only working-tree status (plans/git-tab.md): current branch,
+    /// upstream + ahead/behind, and the changed/untracked/conflicted paths.
+    /// Parses `git status --porcelain=v2 --branch`.
+    /// </summary>
+    public StatusResult Status(string workingDir)
+    {
+        var result = RunGit(workingDir, "status --porcelain=v2 --branch");
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException(
+                $"git status failed (exit {result.ExitCode}): {FirstLine(result.StdErr, result.StdOut)}");
+
+        string branch = "unknown";
+        string? upstream = null;
+        int ahead = 0, behind = 0;
+        var files = new List<StatusFile>();
+
+        using var reader = new StringReader(result.StdOut);
+        string? line;
+        while ((line = reader.ReadLine()) != null)
+        {
+            if (line.StartsWith("# branch.head "))
+                branch = line["# branch.head ".Length..].Trim();
+            else if (line.StartsWith("# branch.upstream "))
+                upstream = line["# branch.upstream ".Length..].Trim();
+            else if (line.StartsWith("# branch.ab "))
+            {
+                // "# branch.ab +1 -0"
+                var parts = line["# branch.ab ".Length..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                foreach (var p in parts)
+                {
+                    if (p.StartsWith('+') && int.TryParse(p[1..], out var a)) ahead = a;
+                    else if (p.StartsWith('-') && int.TryParse(p[1..], out var b)) behind = b;
+                }
+            }
+            else if (line.StartsWith("1 ") || line.StartsWith("2 "))
+            {
+                // "1 XY sub mH mI mW hH hI path" / "2 XY ... path\torigPath"
+                var parts = line.Split(' ', line.StartsWith("1 ") ? 9 : 10);
+                if (parts.Length < 9) continue;
+                var xy = parts[1];
+                var path = parts[^1];
+                if (line.StartsWith("2 "))
+                {
+                    var tab = path.IndexOf('\t');
+                    if (tab >= 0) path = path[..tab]; // new name of a rename
+                }
+                files.Add(new StatusFile(path,
+                    Index: xy[0].ToString(), Worktree: xy[1].ToString(),
+                    Untracked: false, Conflicted: false));
+            }
+            else if (line.StartsWith("u "))
+            {
+                // unmerged: "u XY sub m1 m2 m3 mW h1 h2 h3 path"
+                var parts = line.Split(' ', 11);
+                if (parts.Length < 11) continue;
+                files.Add(new StatusFile(parts[^1], Index: parts[1][0].ToString(),
+                    Worktree: parts[1][1].ToString(), Untracked: false, Conflicted: true));
+            }
+            else if (line.StartsWith("? "))
+            {
+                files.Add(new StatusFile(line[2..], Index: ".", Worktree: ".",
+                    Untracked: true, Conflicted: false));
+            }
+        }
+
+        _logger.Info($"[GIT] Status -> {branch} (+{ahead}/-{behind}), {files.Count} change(s)");
+        return new StatusResult(branch, upstream, ahead, behind, files);
+    }
+
     /// <summary>Returns the current branch name (or detached HEAD description).</summary>
     public string CurrentBranch(string workingDir)
     {

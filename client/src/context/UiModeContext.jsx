@@ -22,6 +22,7 @@ export const FEATURES = {
   agentDock: 'advanced', // and the future Agents tab
   buildStamp: 'advanced',
   contextMeter: 'advanced', // ctx pill in the chat header (plans/context-meter.md)
+  gitTab: 'advanced', // read-only git status tab (plans/git-tab.md)
 };
 
 const MODE_KEY = 'claudeweb_ui_mode';
