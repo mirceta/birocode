@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { apiGet } from '../api/client';
 import { useDock } from '../context/DockContext';
 import { useFeature } from '../context/UiModeContext';
 import { useT } from '../i18n/LanguageContext';
@@ -11,8 +12,26 @@ export default function Agents() {
   const { t } = useT();
   const { tabs, activeTabId, setActiveTab, closeTab, openTab, repos } = useDock();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [branches, setBranches] = useState({}); // repoId -> branch name
   const navigate = useNavigate();
   const visible = useFeature('agentDock');
+
+  // Git branch per tab repo (plans/agent-branch.md). Best-effort: non-git
+  // repos fail the call and simply show no branch line.
+  const repoIds = [...new Set(tabs.map((tab) => tab.repoId))].join(',');
+  useEffect(() => {
+    if (!repoIds) return;
+    repoIds.split(',').forEach(async (repoId) => {
+      try {
+        const { branch } = await apiGet('/branch', { repoId });
+        // The backend reports "unknown" for non-git repos.
+        if (branch && branch !== 'unknown')
+          setBranches((prev) => ({ ...prev, [repoId]: branch }));
+      } catch {
+        /* not a git repo, or transient error — show nothing */
+      }
+    });
+  }, [repoIds]);
 
   if (!visible) return null;
 
@@ -76,6 +95,11 @@ export default function Agents() {
               <span className="agent-card__dot" />
               <span className="agent-card__body">
                 <span className="agent-card__name">{tab.repoName}</span>
+                {branches[tab.repoId] && (
+                  <span className="agent-card__branch">
+                    <span aria-hidden="true">⎇</span> {branches[tab.repoId]}
+                  </span>
+                )}
                 <span className="agent-card__status">
                   {t(`agents.status.${tab.status}`)}
                 </span>
