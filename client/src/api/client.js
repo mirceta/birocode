@@ -84,6 +84,22 @@ export async function apiGet(path, { repoId } = {}) {
   return handle(res);
 }
 
+// GET /api/<path> returning a Blob (e.g. screen snapshots). Auth via the
+// usual headers, which an <img src> could not send.
+export async function apiGetBlob(path, { repoId } = {}) {
+  const res = await fetch(url(path), { headers: authHeaders({}, repoId) });
+  if (!res.ok) {
+    let detail = '';
+    try {
+      detail = await res.text();
+    } catch {
+      /* ignore */
+    }
+    throw new ApiError(detail || `Request failed (${res.status})`, res.status);
+  }
+  return res.blob();
+}
+
 export async function apiPost(path, body, { repoId } = {}) {
   const res = await fetch(url(path), {
     method: 'POST',

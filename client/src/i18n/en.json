@@ -25,6 +25,7 @@
   "nav.app": "App",
   "nav.agents": "Agents",
   "nav.git": "Git",
+  "nav.screen": "Screen",
   "nav.aria": "Main navigation",
 
   "git.loading": "Checking the project's git state...",
@@ -37,6 +38,13 @@
   "git.group.changed": "Changed",
   "git.group.untracked": "Untracked",
   "git.group.conflicts": "Conflicts",
+
+  "screen.source": "Capture source",
+  "screen.desktop": "Whole desktop",
+  "screen.refresh": "Refresh",
+  "screen.auto": "Auto",
+  "screen.alt": "Host desktop snapshot",
+  "screen.captureError": "We couldn't capture the screen. Please try again.",
 
   "agents.title": "Agents",
   "agents.new": "New agent",

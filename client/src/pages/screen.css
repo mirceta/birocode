@@ -1,0 +1,66 @@
+/* Screen tab (plans/screen-tab.md) */
+
+.screen-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.screen-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.screen-source {
+  flex: 1;
+  min-width: 0;
+  max-width: 320px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #444);
+  background: var(--surface, #1e1e1e);
+  color: inherit;
+  font-size: 13px;
+}
+
+.screen-refresh {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #444);
+  background: var(--surface, #1e1e1e);
+  color: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.screen-refresh:disabled {
+  opacity: 0.5;
+}
+
+.screen-auto {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  user-select: none;
+}
+
+.screen-view {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--border, #333);
+  border-radius: 10px;
+  background: #000;
+}
+
+.screen-img {
+  display: block;
+  width: 100%;
+  height: auto;
+}

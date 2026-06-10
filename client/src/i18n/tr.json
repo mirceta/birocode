@@ -25,6 +25,7 @@
   "nav.app": "Uygulama",
   "nav.agents": "Ajanlar",
   "nav.git": "Git",
+  "nav.screen": "Ekran",
   "nav.aria": "Ana menu",
 
   "git.loading": "Projenin git durumu kontrol ediliyor...",
@@ -37,6 +38,13 @@
   "git.group.changed": "Degisen",
   "git.group.untracked": "Izlenmeyen",
   "git.group.conflicts": "Cakismalar",
+
+  "screen.source": "Goruntu kaynagi",
+  "screen.desktop": "Tum masaustu",
+  "screen.refresh": "Yenile",
+  "screen.auto": "Otomatik",
+  "screen.alt": "Masaustu goruntusu",
+  "screen.captureError": "Ekran goruntusu alinamadi. Lutfen tekrar dene.",
 
   "agents.title": "Ajanlar",
   "agents.new": "Yeni ajan",
