@@ -27,6 +27,13 @@ These terms are used consistently across the docs, plans, and code comments:
 | **Operator** | The human at the host PC: sees the monitoring GUI, clicks "Prepare for preview". |
 | **End User** | The person on the phone using the web UI served by the Harness. |
 
+## UI modes
+
+The web UI has a device-local **Simple/Advanced** toggle (see
+`plans/ui-modes.md`). **New UI features default to Advanced** — add them to the
+capability map in `client/src/context/UiModeContext.jsx` as `'advanced'` unless
+the user says the End User (Basic mode) needs them.
+
 ## Build / run the harness normally
 
 ```

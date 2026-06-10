@@ -1,6 +1,7 @@
 # UI Modes — Basic / Advanced
 
-> **Status (2026-06-10):** Planned, not started.
+> **Status (2026-06-10):** Implemented and browser-verified (Playwright:
+> `.claudeweb-preview/playwright/verify-ui-modes.mjs`).
 
 ## Glossary
 

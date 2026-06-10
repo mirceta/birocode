@@ -30,6 +30,10 @@
 
   "landing.builder": "Builder",
 
+  "mode.label": "View mode",
+  "mode.simple": "Simple",
+  "mode.advanced": "Advanced",
+
   "apptab.online": "running",
   "apptab.offline": "not running",
   "apptab.checking": "checking...",

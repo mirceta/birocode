@@ -30,6 +30,10 @@
 
   "landing.builder": "Stüdyo",
 
+  "mode.label": "Gorunum modu",
+  "mode.simple": "Basit",
+  "mode.advanced": "Gelismis",
+
   "apptab.online": "calisiyor",
   "apptab.offline": "calismiyor",
   "apptab.checking": "kontrol ediliyor...",

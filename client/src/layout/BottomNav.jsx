@@ -1,13 +1,15 @@
 import { NavLink } from 'react-router-dom';
+import { useFeature } from '../context/UiModeContext';
 import { useT } from '../i18n/LanguageContext';
 
 export default function BottomNav() {
   const { t } = useT();
+  const showAppTab = useFeature('appTab');
   const tabs = [
     { to: '/studio', label: t('nav.chat'), icon: 'C', end: true },
     { to: '/studio/files', label: t('nav.files'), icon: 'F' },
     { to: '/studio/history', label: t('nav.history'), icon: 'H' },
-    { to: '/studio/app', label: t('nav.app'), icon: '▶' },
+    ...(showAppTab ? [{ to: '/studio/app', label: t('nav.app'), icon: '▶' }] : []),
   ];
 
   return (
