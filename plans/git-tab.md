@@ -1,10 +1,9 @@
 # Git Tab — read-only git status view
 
-> **Status (2026-06-10):** Implemented on `feature/git-tab` and
-> browser-verified on an isolated preview instance
-> (`.claudeweb-preview/playwright/verify-git-tab.mjs`; ran on :5201 because
-> the minesweeper Product legitimately held the :5200 Preview Port). Not yet
-> deployed to :5099.
+> **Status (2026-06-10):** Deployed to the live :5099 harness and confirmed
+> by the End User. Browser-verified beforehand on an isolated preview
+> instance (`.claudeweb-preview/playwright/verify-git-tab.mjs`; ran on :5201
+> because the minesweeper Product legitimately held the :5200 Preview Port).
 
 ## Problem
 
