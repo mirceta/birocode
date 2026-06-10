@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
 using ClaudeWeb.Models;
@@ -26,19 +25,20 @@ namespace ClaudeWeb.Services.Chat;
 ///   claude -p "&lt;message&gt;" --output-format stream-json --include-partial-messages --verbose
 ///   (+ "--resume &lt;sessionId&gt;" before -p when continuing a session)
 ///
-/// One CLI process may run at a time PER REPOSITORY -- concurrent requests to
-/// the same repo are rejected (see <see cref="TryBeginRun"/>), but different
-/// repos run in parallel. The working directory is supplied per-request by the
-/// caller (resolved from the selected repository), never cached.
+/// One CLI process may run at a time PER REPOSITORY -- the per-repo
+/// single-flight gate lives in <see cref="RunSessionService"/> (see
+/// plans/detached-runs.md). Different repos run in parallel. The working
+/// directory is supplied per-request by the caller (resolved from the
+/// selected repository), never cached.
+///
+/// The run is detached from any HTTP connection: <paramref name="ct"/> is the
+/// Run Session's own token, fired only by an explicit user Stop or app
+/// shutdown -- never by a client disconnect.
 /// </summary>
 public class CliRunnerService
 {
     private readonly Logger _logger;
     private readonly CallLog _callLog;
-
-    // Per-repo single-flight gate: a repo id present in the set means a CLI
-    // process is running for that repo. Different repos run concurrently.
-    private readonly ConcurrentDictionary<string, byte> _busyRepos = new();
 
     public CliRunnerService(Logger logger, CallLog callLog)
     {
@@ -46,33 +46,20 @@ public class CliRunnerService
         _callLog = callLog;
     }
 
-    /// <summary>True while a CLI process is in flight for the given repository.</summary>
-    public bool IsBusy(string repoId) => _busyRepos.ContainsKey(repoId);
-
-    /// <summary>
-    /// Atomically claim the CLI slot for one repository. Returns false if a run
-    /// is already in progress for that repo, in which case the caller must
-    /// reject the request. Runs in other repos are unaffected.
-    /// </summary>
-    public bool TryBeginRun(string repoId) => _busyRepos.TryAdd(repoId, 1);
-
-    private void EndRun(string repoId) => _busyRepos.TryRemove(repoId, out _);
-
     /// <summary>
     /// Runs one chat turn. Invokes <paramref name="emit"/> for every translated
-    /// stable SSE event as it arrives. Caller is responsible for calling
-    /// <see cref="TryBeginRun"/> first; this method always releases the slot.
+    /// stable SSE event as it arrives. The caller claims the per-repo slot via
+    /// <see cref="RunSessionService.TryBeginRun"/> first and marks the session
+    /// complete when this returns.
     /// </summary>
     /// <param name="message">The user's prompt.</param>
     /// <param name="sessionId">When non-empty, resumes that session.</param>
     /// <param name="workingDirectory">The selected repository's folder; the CLI runs here.</param>
-    /// <param name="repoId">The selected repository's id; releases its per-repo slot when done.</param>
-    /// <param name="emit">Async sink that writes one stable SSE event to the client.</param>
+    /// <param name="emit">Async sink that buffers/broadcasts one stable SSE event.</param>
     public async Task RunAsync(
         string message,
         string? sessionId,
         string workingDirectory,
-        string repoId,
         string? model = null,
         Func<object, Task>? emit = null,
         CancellationToken ct = default)
@@ -140,9 +127,10 @@ public class CliRunnerService
         }
         catch (OperationCanceledException)
         {
-            _logger.Info("[CLI] Run cancelled (client disconnected).");
-            record.ErrorMessage ??= "Run cancelled (client disconnected).";
+            _logger.Info("[CLI] Run stopped (user stop or app shutdown).");
+            record.ErrorMessage ??= "Run stopped by user.";
             FinalizeRecord(record, hadException: true, sawError: true, exitCode: record.ExitCode);
+            try { await emit(new { type = "error", message = "Run stopped by user." }); } catch { }
         }
         catch (Exception ex)
         {
@@ -153,14 +141,13 @@ public class CliRunnerService
         }
         finally
         {
-            // Ensure the CLI (and its child tree) is actually dead. On a cancel /
-            // client disconnect, Dispose alone would leave it running -- still
-            // working and still billing. On normal completion HasExited is true,
-            // so this is a no-op.
+            // Ensure the CLI (and its child tree) is actually dead. On a user
+            // Stop, Dispose alone would leave it running -- still working and
+            // still billing. On normal completion HasExited is true, so this
+            // is a no-op.
             try { if (process is { HasExited: false }) process.Kill(entireProcessTree: true); }
             catch { /* already gone / race */ }
             process?.Dispose();
-            EndRun(repoId);
         }
     }
 

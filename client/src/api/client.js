@@ -120,7 +120,20 @@ export async function apiStream(path, body, onEvent, options = {}) {
     body: body === undefined ? undefined : JSON.stringify(body),
     signal: options.signal,
   });
+  return readStream(res, onEvent);
+}
 
+// Streaming GET helper: reattaches to a detached backend run
+// (GET /api/chat/stream?after=N). Same chunk contract as apiStream.
+export async function apiStreamGet(path, onEvent, options = {}) {
+  const res = await fetch(url(path), {
+    headers: authHeaders({}, options.repoId),
+    signal: options.signal,
+  });
+  return readStream(res, onEvent);
+}
+
+async function readStream(res, onEvent) {
   if (!res.ok) {
     let detail = '';
     try {
