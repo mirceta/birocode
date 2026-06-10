@@ -78,8 +78,16 @@ export default function Git() {
         {status.upstream ? (
           <div className="git-branch__sync">
             {status.upstream}
-            {status.ahead > 0 && <span className="git-branch__ahead">↑{status.ahead}</span>}
-            {status.behind > 0 && <span className="git-branch__behind">↓{status.behind}</span>}
+            {status.ahead > 0 && (
+              <span className="git-branch__ahead">
+                {t(status.ahead === 1 ? 'git.aheadOne' : 'git.ahead', { n: status.ahead })}
+              </span>
+            )}
+            {status.behind > 0 && (
+              <span className="git-branch__behind">
+                {t(status.behind === 1 ? 'git.behindOne' : 'git.behind', { n: status.behind })}
+              </span>
+            )}
             {status.ahead === 0 && status.behind === 0 && (
               <span className="git-branch__insync">
                 {status.fetched ? t('git.inSyncOrigin') : t('git.inSync')}
