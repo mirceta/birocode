@@ -99,6 +99,29 @@ export default function Git() {
             <span className="git-branch__noupstream">{t('git.noUpstream')}</span>
           </div>
         )}
+        {status.baseBranch && (
+          <div className="git-branch__sync git-branch__base">
+            {status.baseAhead > 0 && (
+              <span className="git-branch__ahead">
+                {t(status.baseAhead === 1 ? 'git.baseAheadOne' : 'git.baseAhead', {
+                  n: status.baseAhead, base: status.baseBranch,
+                })}
+              </span>
+            )}
+            {status.baseBehind > 0 && (
+              <span className="git-branch__behind">
+                {t(status.baseBehind === 1 ? 'git.baseBehindOne' : 'git.baseBehind', {
+                  n: status.baseBehind, base: status.baseBranch,
+                })}
+              </span>
+            )}
+            {status.baseAhead === 0 && status.baseBehind === 0 && (
+              <span className="git-branch__insync">
+                {t('git.baseInSync', { base: status.baseBranch })}
+              </span>
+            )}
+          </div>
+        )}
         <button
           type="button"
           className="git-refresh"

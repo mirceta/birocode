@@ -90,6 +90,9 @@ public class GitController : ControllerBase
                 behind = s.Behind,
                 fetched = s.Fetched,
                 fetchError = s.FetchError,
+                baseBranch = s.BaseBranch,
+                baseAhead = s.BaseAhead,
+                baseBehind = s.BaseBehind,
                 files = s.Files.Select(f => new
                 {
                     path = f.Path,
