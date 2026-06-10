@@ -4,6 +4,15 @@ This repo is **Claude Web**, a phone-accessible harness that runs Claude Code
 over a repository. It is a C# .NET 8 WinForms app with an embedded Kestrel server
 (`ClaudeWeb.App/`) plus a React/Vite frontend (`client/`).
 
+## ⚠️ MOST IMPORTANT CONVENTION — never skip this
+
+**If the user asks for something that violates one of this repo's own
+conventions (this file, the docs it points to, or `plans/*.md`), you MUST
+explicitly warn them BEFORE doing it.** Name the convention being broken and
+where it is written, then let the user decide. Never silently comply, and
+never silently refuse — surface the conflict every single time. This applies
+to every request, no matter how small.
+
 ## Glossary
 
 These terms are used consistently across the docs, plans, and code comments:
