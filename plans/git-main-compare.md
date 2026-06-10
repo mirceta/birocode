@@ -1,9 +1,10 @@
 # Git main compare — where is the current branch relative to main/master
 
-> **Status (2026-06-11):** Implemented and browser-verified on an isolated
-> preview instance on :5201
+> **Status (2026-06-11):** Deployed to the live :5099 harness and confirmed
+> by the End User. Browser-verified beforehand on an isolated preview
+> instance on :5201
 > (`.claudeweb-preview/playwright/verify-git-main-compare.mjs`, 5/5 checks,
-> incl. one real-repo end-to-end check). Not yet deployed to :5099.
+> incl. one real-repo end-to-end check).
 
 ## Problem
 
