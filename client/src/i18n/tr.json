@@ -44,6 +44,7 @@
   "mode.advanced": "Gelismis",
 
   "apptab.online": "calisiyor",
+  "apptab.unknownProduct": "bilinmiyor ({process})",
   "apptab.offline": "calismiyor",
   "apptab.checking": "kontrol ediliyor...",
   "apptab.refresh": "Yenile",

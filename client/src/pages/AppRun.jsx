@@ -15,6 +15,7 @@ export default function AppRun() {
   const [port, setPort] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
   const [online, setOnline] = useState(null); // null = checking, true, false
+  const [identity, setIdentity] = useState(null); // { repoName, processName, ... }
   const [reloadKey, setReloadKey] = useState(0);
   const [preparing, setPreparing] = useState(false);
   const [note, setNote] = useState('');
@@ -37,6 +38,27 @@ export default function AppRun() {
     };
   }, []);
 
+  // Whoever listens on the preview port may change at any time (Claude starts
+  // and restarts products) — re-resolve identity whenever liveness flips or
+  // the iframe is refreshed.
+  useEffect(() => {
+    if (!online) {
+      setIdentity(null);
+      return;
+    }
+    let cancelled = false;
+    apiGet('/app/identity')
+      .then((data) => {
+        if (!cancelled) setIdentity(data);
+      })
+      .catch(() => {
+        if (!cancelled) setIdentity(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [online, reloadKey]);
+
   async function prepare() {
     setPreparing(true);
     setNote('');
@@ -50,8 +72,14 @@ export default function AppRun() {
     }
   }
 
+  const productLabel = identity?.running
+    ? identity.repoName
+      ?? t('apptab.unknownProduct', { process: identity.processName || '?' })
+    : null;
   const statusLabel =
-    online === null ? t('apptab.checking') : online ? t('apptab.online') : t('apptab.offline');
+    online === null ? t('apptab.checking')
+    : online ? (productLabel ? `${t('apptab.online')} — ${productLabel}` : t('apptab.online'))
+    : t('apptab.offline');
   const statusClass =
     online === null ? 'is-checking' : online ? 'is-online' : 'is-offline';
 
