@@ -1,8 +1,8 @@
 # Plan Tab — clickable subplan navigation
 
-> **Status (2026-06-11):** In development on `main`. Browser-verified on the
-> live :5099 harness (`.claudeweb-preview/playwright/verify-plan-tab-nav.mjs`,
-> 10/10 checks). Awaiting End User confirmation.
+> **Status (2026-06-11):** Deployed and confirmed. Live on the :5099 harness,
+> browser-verified (`.claudeweb-preview/playwright/verify-plan-tab-nav.mjs`,
+> 10/10 checks) and confirmed by the End User.
 
 ## Problem
 
