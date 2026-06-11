@@ -6,7 +6,9 @@
 > (`.claudeweb-preview/playwright/verify-projects-tab.mjs`, 15/15 checks).
 > **2026-06-11 follow-up (branch `feature/projects-basic-mode`):** promoted
 > `projectsTab` to `'basic'` in the capability map at End User request, so
-> Basic mode shows the Projects tab and header chip too.
+> Basic mode shows the Projects tab and header chip too. Deployed to the
+> live :5099 harness and confirmed by the End User (verified beforehand on
+> the :5201 preview, `verify-projects-basic.mjs`, 8/8 checks).
 
 ## Why
 
