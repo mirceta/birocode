@@ -1,6 +1,9 @@
 # Agent colour marks
 
-> **Status (2026-06-11):** In progress on branch `feature/agent-color`.
+> **Status (2026-06-11):** Deployed to the live :5099 harness and confirmed by
+> the End User. Browser-verified beforehand on the :5201 preview
+> (`verify-agent-color.mjs`, 12/12 checks); colour round-trip re-verified on
+> live after the bin swap.
 
 ## Why
 
