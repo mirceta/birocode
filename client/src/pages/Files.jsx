@@ -2,27 +2,23 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiGet } from '../api/client';
 import Loading from '../components/shared/Loading';
 import ErrorBanner from '../components/shared/ErrorBanner';
-import Breadcrumbs from '../components/files/Breadcrumbs';
-import FileList from '../components/files/FileList';
+import FileTree from '../components/files/FileList';
 import FileViewer from '../components/files/FileViewer';
 import { useChat } from '../context/ChatContext';
 import { useRepo } from '../context/RepoContext';
 import { useT } from '../i18n/LanguageContext';
 import '../components/files/files.css';
 
-function joinPath(dir, name) {
-  if (dir === '/' || dir === '') return `/${name}`;
-  return `${dir}/${name}`;
-}
-
+// VS Code-style explorer (see plans/files-tree-view.md): one flat node cache
+// keyed by full path plus a Set of expanded folders. Children are fetched
+// lazily on first expand and stay cached until the repo changes or the page
+// unmounts.
 export default function Files() {
   const { t } = useT();
-  const { setDraft } = useChat();
+  const { draft, setDraft } = useChat();
   const { currentRepoId } = useRepo();
-  const [path, setPath] = useState('/');
-  const [entries, setEntries] = useState([]);
-  const [listLoading, setListLoading] = useState(true);
-  const [listError, setListError] = useState('');
+  const [nodes, setNodes] = useState({});
+  const [expanded, setExpanded] = useState(() => new Set());
   const [toast, setToast] = useState('');
   const toastTimer = useRef(null);
 
@@ -30,17 +26,19 @@ export default function Files() {
 
   // Long-press a file -> drop an @reference to it into the chat composer (which
   // lives in the shared ChatProvider, so it is there when you switch to Chat).
-  function referenceFile(name) {
-    const relPath = joinPath(path, name).replace(/^\/+/, '');
+  function referenceFile(filePath) {
+    const relPath = filePath.replace(/^\/+/, '');
     const token = `@${relPath}`;
-    setDraft((prev) => {
-      const base = prev || '';
-      const sep = base.length === 0 || /\s$/.test(base) ? '' : ' ';
-      return `${base}${sep}${token} `;
-    });
+    // ChatContext's setDraft is a plain setter (per-conversation store), NOT a
+    // React state setter -- passing an updater function would store the
+    // function itself as the draft and crash the composer.
+    const base = draft || '';
+    const sep = base.length === 0 || /\s$/.test(base) ? '' : ' ';
+    setDraft(`${base}${sep}${token} `);
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       try { navigator.vibrate(25); } catch { /* ignore */ }
     }
+    const name = filePath.split('/').pop();
     setToast(t('files.addedToMessage', { name }));
     clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(''), 2500);
@@ -51,50 +49,46 @@ export default function Files() {
   const [fileLoading, setFileLoading] = useState(false);
   const [fileError, setFileError] = useState('');
 
-  const loadDir = useCallback(
-    async (dirPath) => {
-      setListLoading(true);
-      setListError('');
-      try {
-        const data = await apiGet(`/files?path=${encodeURIComponent(dirPath)}`);
-        setEntries(Array.isArray(data) ? data : []);
-      } catch {
-        setEntries([]);
-        setListError(t('files.loadError'));
-      } finally {
-        setListLoading(false);
-      }
-    },
-    [t],
-  );
+  const loadDir = useCallback(async (dirPath) => {
+    setNodes((prev) => ({ ...prev, [dirPath]: { entries: null, state: 'loading' } }));
+    try {
+      const data = await apiGet(`/files?path=${encodeURIComponent(dirPath)}`);
+      setNodes((prev) => ({
+        ...prev,
+        [dirPath]: { entries: Array.isArray(data) ? data : [], state: 'loaded' },
+      }));
+    } catch {
+      setNodes((prev) => ({ ...prev, [dirPath]: { entries: null, state: 'error' } }));
+    }
+  }, []);
 
-  // Refetch when the path changes OR the project changes. currentRepoId is in
-  // the deps so a switch reloads even when we're already at the root (where
-  // setPath('/') below is a no-op and would otherwise not trigger a reload).
-  useEffect(() => {
-    loadDir(path);
-  }, [path, loadDir, currentRepoId]);
-
-  // Switching projects: go back to the root and close any open file so we never
-  // show a stale path that may not exist in the newly selected repository.
+  // Switching projects (and first mount): reset the tree and close any open
+  // file so we never show stale paths from another repository.
   useEffect(() => {
     setOpenFile(null);
     setFileError('');
-    setPath('/');
-  }, [currentRepoId]);
+    setNodes({});
+    setExpanded(new Set());
+    loadDir('/');
+  }, [currentRepoId, loadDir]);
 
-  function navigateTo(dirPath) {
-    setOpenFile(null);
-    setFileError('');
-    setPath(dirPath);
+  // Tap a folder row: collapse if expanded, otherwise expand and lazily fetch
+  // its children (also refetches after a failed attempt). Collapsed folders
+  // keep their cached children, so re-expanding is instant.
+  function toggleDir(dirPath) {
+    const isExpanding = !expanded.has(dirPath);
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(dirPath)) next.delete(dirPath);
+      else next.add(dirPath);
+      return next;
+    });
+    const node = nodes[dirPath];
+    if (isExpanding && (!node || node.state === 'error')) loadDir(dirPath);
   }
 
-  function openDir(name) {
-    navigateTo(joinPath(path, name));
-  }
-
-  async function openFileByName(name) {
-    const filePath = joinPath(path, name);
+  async function openFileAt(filePath) {
+    const name = filePath.split('/').pop();
     setOpenFile({ name, path: filePath });
     setFileContent('');
     setFileError('');
@@ -137,20 +131,22 @@ export default function Files() {
     return <FileViewer name={openFile.name} content={fileContent} onBack={closeFile} />;
   }
 
+  const root = nodes['/'];
+
   return (
     <div className="files-page">
-      <Breadcrumbs path={path} onNavigate={navigateTo} />
-
-      {listLoading ? (
+      {!root || root.state === 'loading' ? (
         <Loading label={t('files.loadingList')} />
-      ) : listError ? (
-        <ErrorBanner message={listError} onRetry={() => loadDir(path)} />
+      ) : root.state === 'error' ? (
+        <ErrorBanner message={t('files.loadError')} onRetry={() => loadDir('/')} />
       ) : (
-        <FileList
-          entries={entries}
-          onOpenDir={openDir}
-          onOpenFile={openFileByName}
+        <FileTree
+          nodes={nodes}
+          expanded={expanded}
+          onToggleDir={toggleDir}
+          onOpenFile={openFileAt}
           onReferenceFile={referenceFile}
+          onRetryDir={loadDir}
         />
       )}
 

@@ -175,12 +175,11 @@
   "tool.reading": "Reading file...",
   "tool.working": "Working...",
 
-  "files.home": "Home",
-  "files.pathAria": "Folder path",
   "files.empty": "No files here yet",
   "files.emptyHint": "Ask Claude in the chat to create something.",
   "files.opening": "Opening file...",
   "files.loadingList": "Loading your files...",
+  "files.loadingFolder": "Loading...",
   "files.loadError": "We couldn't open this folder. Please try again.",
   "files.previewError": "This file can't be previewed.",
   "files.showRendered": "Show the formatted document",
