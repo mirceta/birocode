@@ -1,6 +1,8 @@
 # PWA shell — home-screen icon for Android
 
-> **Status (2026-06-11):** In progress on branch `feature/pwa-shell`.
+> **Status (2026-06-11):** Deployed to the live :5099 harness and confirmed by
+> the End User. Browser-verified beforehand on the :5201 preview
+> (`.claudeweb-preview/playwright/verify-pwa-shell.mjs`, 8/8 checks).
 
 ## Why
 
