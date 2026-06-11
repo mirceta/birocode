@@ -17,7 +17,7 @@ export const FEATURES = {
   saveButton: 'basic',
   languageToggle: 'basic',
   appTab: 'advanced',
-  projectsTab: 'advanced', // projects list + add + header chip (plans/projects-tab.md)
+  projectsTab: 'basic', // projects list + add + header chip (plans/projects-tab.md) — promoted to basic 2026-06-11 at End User request
   modelSelector: 'advanced',
   agentDock: 'advanced', // and the future Agents tab
   buildStamp: 'advanced',

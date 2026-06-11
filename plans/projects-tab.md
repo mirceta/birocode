@@ -4,6 +4,9 @@
 > folder picker) and confirmed by the End User. Browser-verified beforehand
 > on an isolated :5201 preview
 > (`.claudeweb-preview/playwright/verify-projects-tab.mjs`, 15/15 checks).
+> **2026-06-11 follow-up (branch `feature/projects-basic-mode`):** promoted
+> `projectsTab` to `'basic'` in the capability map at End User request, so
+> Basic mode shows the Projects tab and header chip too.
 
 ## Why
 
