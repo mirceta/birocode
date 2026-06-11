@@ -26,6 +26,7 @@
   "nav.agents": "Agents",
   "nav.git": "Git",
   "nav.screen": "Screen",
+  "nav.projects": "Projects",
   "nav.aria": "Main navigation",
 
   "git.loading": "Checking the project's git state...",
@@ -75,6 +76,20 @@
 
   "repo.label": "Project",
   "repo.none": "No projects",
+
+  "projects.title": "Projects",
+  "projects.active": "Active",
+  "projects.missing": "folder missing",
+  "projects.notGit": "not a git repo",
+  "projects.newTitle": "New project",
+  "projects.pathLabel": "Folder path on the host",
+  "projects.pathPlaceholder": "C:\\path\\to\\project",
+  "projects.nameLabel": "Name (optional)",
+  "projects.add": "Add project",
+  "projects.adding": "Adding...",
+  "projects.added": "{name} added and selected",
+  "projects.addError": "Couldn't add the project. Please check the path.",
+  "projects.loadError": "We couldn't load your projects. Please try again.",
 
   "landing.builder": "Builder",
 

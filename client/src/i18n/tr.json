@@ -26,6 +26,7 @@
   "nav.agents": "Ajanlar",
   "nav.git": "Git",
   "nav.screen": "Ekran",
+  "nav.projects": "Projeler",
   "nav.aria": "Ana menu",
 
   "git.loading": "Projenin git durumu kontrol ediliyor...",
@@ -75,6 +76,20 @@
 
   "repo.label": "Proje",
   "repo.none": "Proje yok",
+
+  "projects.title": "Projeler",
+  "projects.active": "Aktif",
+  "projects.missing": "klasor eksik",
+  "projects.notGit": "git deposu degil",
+  "projects.newTitle": "Yeni proje",
+  "projects.pathLabel": "Sunucudaki klasor yolu",
+  "projects.pathPlaceholder": "C:\\yol\\proje",
+  "projects.nameLabel": "Ad (istege bagli)",
+  "projects.add": "Proje ekle",
+  "projects.adding": "Ekleniyor...",
+  "projects.added": "{name} eklendi ve secildi",
+  "projects.addError": "Proje eklenemedi. Lutfen yolu kontrol et.",
+  "projects.loadError": "Projeler yuklenemedi. Lutfen tekrar dene.",
 
   "landing.builder": "Stüdyo",
 

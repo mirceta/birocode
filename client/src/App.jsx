@@ -11,6 +11,7 @@ import AppRun from './pages/AppRun';
 import Agents from './pages/Agents';
 import Git from './pages/Git';
 import Screen from './pages/Screen';
+import Projects from './pages/Projects';
 
 // Two layers:
 //   /        -- public landing: just the running product, no login, no chrome.
@@ -33,6 +34,7 @@ export default function App() {
             <Route path="agents" element={<Agents />} />
             <Route path="git" element={<Git />} />
             <Route path="screen" element={<Screen />} />
+            <Route path="projects" element={<Projects />} />
           </Route>
         ) : (
           <Route path="/studio/*" element={<PasswordGate onUnlock={() => setUnlocked(true)} />} />

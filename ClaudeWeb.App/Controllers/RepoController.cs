@@ -5,12 +5,14 @@ using Microsoft.AspNetCore.Mvc;
 namespace ClaudeWeb.Controllers;
 
 /// <summary>
-/// Repository list endpoint. The phone user picks one of these; the chosen id
-/// is then sent on every other request via the X-Repo-Id header. Repositories
-/// are managed by the operator from the desktop GUI (not over the web), so this
-/// controller is read-only.
+/// Repository endpoints. The phone user picks one of these; the chosen id
+/// is then sent on every other request via the X-Repo-Id header.
 ///
-///   GET /api/repos -- [{ id, name, path, exists, isGitRepo }]
+/// Since plans/projects-tab.md the End User can also register a new project
+/// over the web (previously Operator-only via the desktop GUI):
+///
+///   GET  /api/repos -- [{ id, name, path, exists, isGitRepo, isSelf }]
+///   POST /api/repos -- { path, name? } -> { id, name, path, exists, isGitRepo, isSelf }
 /// </summary>
 [ApiController]
 [Route("api/repos")]
@@ -32,5 +34,26 @@ public class RepoController : ControllerBase
         var repos = _registry.GetAll()
             .Select(r => new { id = r.Id, name = r.Name, path = r.Path, exists = r.Exists, isGitRepo = r.IsGitRepo, isSelf = r.IsSelf });
         return Ok(repos);
+    }
+
+    public record AddRequest(string? Path, string? Name);
+
+    [HttpPost]
+    public IActionResult Add([FromBody] AddRequest request)
+    {
+        _logger.CountRequest();
+        if (string.IsNullOrWhiteSpace(request?.Path))
+            return BadRequest(new { error = "Path is required" });
+
+        try
+        {
+            var r = _registry.Add(request.Path, request.Name);
+            return Ok(new { id = r.Id, name = r.Name, path = r.Path, exists = r.Exists, isGitRepo = r.IsGitRepo, isSelf = r.IsSelf });
+        }
+        catch (Exception ex) when (ex is ArgumentException or DirectoryNotFoundException or IOException or UnauthorizedAccessException)
+        {
+            _logger.Error($"[REPO] Add failed: {ex.Message}");
+            return BadRequest(new { error = ex.Message });
+        }
     }
 }
