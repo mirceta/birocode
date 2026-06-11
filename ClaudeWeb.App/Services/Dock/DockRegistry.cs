@@ -21,6 +21,20 @@ public class DockTab
     /// devices like the rest of the tab.
     /// </summary>
     public string? Color { get; set; }
+
+    /// <summary>
+    /// Stashed prompt ideas jotted down while the agent runs
+    /// (plans/prompt-stash.md). Shared across devices like the rest of the tab.
+    /// </summary>
+    public List<StashItem> Stash { get; set; } = new();
+}
+
+/// <summary>One stashed prompt idea on a dock tab.</summary>
+public class StashItem
+{
+    public string Id { get; set; } = "";
+    public string Text { get; set; } = "";
+    public long CreatedAt { get; set; }
 }
 
 /// <summary>
@@ -115,6 +129,50 @@ public class DockRegistry
         }
     }
 
+    /// <summary>
+    /// Stashes a prompt idea on a tab (plans/prompt-stash.md). The client may
+    /// supply the id (optimistic UI); an existing id returns the existing item
+    /// unchanged. Returns null when the tab is unknown.
+    /// </summary>
+    public StashItem? AddStash(string tabId, string text, string? id = null, long? createdAt = null)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        lock (_gate)
+        {
+            var tab = _tabs.FirstOrDefault(t => string.Equals(t.Id, tabId, StringComparison.Ordinal));
+            if (tab is null) return null;
+            if (!string.IsNullOrWhiteSpace(id))
+            {
+                var existing = tab.Stash.FirstOrDefault(s => string.Equals(s.Id, id, StringComparison.Ordinal));
+                if (existing != null) return CloneStash(existing);
+            }
+            var item = new StashItem
+            {
+                Id = string.IsNullOrWhiteSpace(id) ? Guid.NewGuid().ToString("N") : id,
+                Text = text.Length > 4000 ? text[..4000] : text,
+                CreatedAt = createdAt ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            };
+            tab.Stash.Add(item);
+            Save();
+            return CloneStash(item);
+        }
+    }
+
+    /// <summary>Removes a stashed idea. False if the tab or item is unknown.</summary>
+    public bool RemoveStash(string tabId, string stashId)
+    {
+        lock (_gate)
+        {
+            var tab = _tabs.FirstOrDefault(t => string.Equals(t.Id, tabId, StringComparison.Ordinal));
+            if (tab is null) return false;
+            var idx = tab.Stash.FindIndex(s => string.Equals(s.Id, stashId, StringComparison.Ordinal));
+            if (idx < 0) return false;
+            tab.Stash.RemoveAt(idx);
+            Save();
+            return true;
+        }
+    }
+
     /// <summary>Closes a tab. False if the id is unknown.</summary>
     public bool Remove(string id)
     {
@@ -143,7 +201,10 @@ public class DockRegistry
                 _tabs.Clear();
                 foreach (var t in loaded)
                     if (!string.IsNullOrWhiteSpace(t.Id) && !string.IsNullOrWhiteSpace(t.RepoId))
+                    {
+                        t.Stash ??= new(); // pre-stash dock.json entries
                         _tabs.Add(t);
+                    }
             }
             _logger.Info($"[DOCK] Loaded {_tabs.Count} tab(s) from {_storePath}");
         }
@@ -182,5 +243,13 @@ public class DockRegistry
         Status = t.Status,
         CreatedAt = t.CreatedAt,
         Color = t.Color,
+        Stash = t.Stash.Select(CloneStash).ToList(),
+    };
+
+    private static StashItem CloneStash(StashItem s) => new()
+    {
+        Id = s.Id,
+        Text = s.Text,
+        CreatedAt = s.CreatedAt,
     };
 }

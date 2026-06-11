@@ -27,6 +27,7 @@ export const FEATURES = {
   screenTab: 'advanced', // host-desktop snapshots (plans/screen-tab.md)
   machineName: 'advanced', // header title shows "machine · project · branch"
   multiPane: 'advanced', // side-by-side desktop panes (plans/multi-pane.md)
+  promptStash: 'advanced', // stash prompt ideas mid-run in the composer (plans/prompt-stash.md)
 };
 
 const MODE_KEY = 'claudeweb_ui_mode';

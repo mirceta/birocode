@@ -22,7 +22,7 @@ harness where the dock describes work happening on the host PC.
 |------|------------|
 | **Dock** | The list of agent tabs shown in the Agents tab of the web UI. |
 | **Dock Registry** | New backend singleton owning the persisted, authoritative tab list. |
-| **Dock Tab** | One entry: `{ id, repoId, repoName, sessionId, status, createdAt, color }`. (`color` added by plans/agent-color.md — optional highlight mark.) |
+| **Dock Tab** | One entry: `{ id, repoId, repoName, sessionId, status, createdAt, color, stash }`. (`color` added by plans/agent-color.md — optional highlight mark; `stash` added by plans/prompt-stash.md — stored prompt ideas.) |
 | **Active Tab** | The tab a device is currently viewing. Deliberately NOT synced — stays device-local. |
 
 ## Design

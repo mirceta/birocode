@@ -158,6 +158,34 @@ export function DockProvider({ children }) {
     if (tab?.repoId) selectRepo(tab.repoId);
   }, [selectRepo]);
 
+  // Prompt stash (plans/prompt-stash.md): ideas jotted down while the agent
+  // runs, attached to the tab on the backend. Optimistic, client-supplied id
+  // (same pattern as openTab).
+  const addStash = useCallback((tabId, text) => {
+    const item = { id: genId(), text, createdAt: Date.now() };
+    setTabs((prev) =>
+      prev.map((t) => (t.id === tabId ? { ...t, stash: [...(t.stash || []), item] } : t)),
+    );
+    apiPost(`/dock/${tabId}/stash`, item).catch(() => {
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.id === tabId ? { ...t, stash: (t.stash || []).filter((s) => s.id !== item.id) } : t,
+        ),
+      );
+    });
+  }, []);
+
+  const removeStash = useCallback((tabId, stashId) => {
+    setTabs((prev) =>
+      prev.map((t) =>
+        t.id === tabId ? { ...t, stash: (t.stash || []).filter((s) => s.id !== stashId) } : t,
+      ),
+    );
+    apiDelete(`/dock/${tabId}/stash/${stashId}`).catch(() => {
+      /* already gone on the backend; the next refresh re-syncs */
+    });
+  }, []);
+
   const updateTab = useCallback((id, patch) => {
     setTabs((prev) =>
       prev.map((t) => (t.id === id ? { ...t, ...patch } : t)),
@@ -181,6 +209,8 @@ export function DockProvider({ children }) {
     closeTab,
     setActiveTab,
     updateTab,
+    addStash,
+    removeStash,
     repos,
   };
 

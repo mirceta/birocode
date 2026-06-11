@@ -610,6 +610,80 @@ details.step > summary::-webkit-details-marker {
   display: none;
 }
 
+/* Stash button — bookmark a draft mid-run (plans/prompt-stash.md) */
+.chat-input__stash {
+  min-width: var(--touch);
+  min-height: var(--touch);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 18px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.chat-input__stash:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.chat-input__stash:not(:disabled):hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* Stashed-idea chips above the composer row */
+.chat-stash {
+  display: flex;
+  gap: 6px;
+  padding: 8px 4px 0;
+  overflow-x: auto;
+}
+
+.chat-stash__chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 260px;
+  flex: 0 0 auto;
+  padding: 5px 6px 5px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-bg);
+  font-size: 12px;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.chat-stash__chip:hover {
+  border-color: var(--color-accent);
+}
+
+.chat-stash__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-stash__remove {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--color-text-soft);
+}
+
+.chat-stash__remove:hover {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
 .chat-input__field {
   flex: 1;
   resize: none;

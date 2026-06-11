@@ -7,10 +7,12 @@ namespace ClaudeWeb.Controllers;
 /// <summary>
 /// Backend-owned agent tab list, shared by every device (plans/dock-sync.md).
 ///
-///   GET    /api/dock      -- [{ id, repoId, repoName, sessionId, status, createdAt, color }]
+///   GET    /api/dock      -- [{ id, repoId, repoName, sessionId, status, createdAt, color, stash }]
 ///   POST   /api/dock      -- open a tab  { repoId, repoName, sessionId?, status?, createdAt?, color? }
 ///   PATCH  /api/dock/{id} -- partial update { sessionId?, status?, repoName?, color? }
 ///   DELETE /api/dock/{id} -- close a tab
+///   POST   /api/dock/{id}/stash           -- stash a prompt idea { text, id?, createdAt? }
+///   DELETE /api/dock/{id}/stash/{stashId} -- remove a stashed idea
 /// </summary>
 [ApiController]
 [Route("api/dock")]
@@ -18,6 +20,7 @@ public class DockController : ControllerBase
 {
     public record CreateRequest(string? Id, string? RepoId, string? RepoName, string? SessionId, string? Status, long? CreatedAt, string? Color);
     public record PatchRequest(string? SessionId, string? Status, string? RepoName, string? Color);
+    public record StashRequest(string? Id, string? Text, long? CreatedAt);
 
     private readonly DockRegistry _dock;
     private readonly Logger _logger;
@@ -37,7 +40,10 @@ public class DockController : ControllerBase
         status = t.Status,
         createdAt = t.CreatedAt,
         color = t.Color,
+        stash = t.Stash.Select(StashDto),
     };
+
+    private static object StashDto(StashItem s) => new { id = s.Id, text = s.Text, createdAt = s.CreatedAt };
 
     [HttpGet]
     public IActionResult List()
@@ -69,5 +75,24 @@ public class DockController : ControllerBase
     {
         _logger.CountRequest();
         return _dock.Remove(id) ? Ok(new { removed = true }) : NotFound(new { error = "unknown tab" });
+    }
+
+    [HttpPost("{id}/stash")]
+    public IActionResult AddStash(string id, [FromBody] StashRequest req)
+    {
+        _logger.CountRequest();
+        if (string.IsNullOrWhiteSpace(req.Text))
+            return BadRequest(new { error = "text is required" });
+        var item = _dock.AddStash(id, req.Text, req.Id, req.CreatedAt);
+        return item is null ? NotFound(new { error = "unknown tab" }) : Ok(StashDto(item));
+    }
+
+    [HttpDelete("{id}/stash/{stashId}")]
+    public IActionResult RemoveStash(string id, string stashId)
+    {
+        _logger.CountRequest();
+        return _dock.RemoveStash(id, stashId)
+            ? Ok(new { removed = true })
+            : NotFound(new { error = "unknown tab or stash item" });
     }
 }

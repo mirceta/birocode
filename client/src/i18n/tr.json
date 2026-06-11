@@ -152,6 +152,8 @@
   "chat.genericError": "Bir seyler ters gitti. Lutfen tekrar dene.",
   "chat.sendError": "Mesajini gonderirken bir seyler ters gitti. Lutfen tekrar dene.",
   "chat.attach": "Dosya ekle",
+  "chat.stash": "Bu fikri sonraya sakla",
+  "chat.stashListAria": "Saklanan istem fikirleri",
   "chat.uploadError": "Dosya yuklenemedi. Lutfen tekrar dene.",
   "chat.loadingConversation": "Bu sohbet yukleniyor...",
   "chat.resumed": "Kaldigin yerden devam ediyoruz. Sirada ne yapmak istersin?",

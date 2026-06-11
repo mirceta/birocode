@@ -1,4 +1,6 @@
 import { useEffect, useRef } from 'react';
+import { useDock } from '../../context/DockContext';
+import { useFeature } from '../../context/UiModeContext';
 import { useT } from '../../i18n/LanguageContext';
 
 // Controlled composer. The draft text lives in ChatContext (so it persists
@@ -6,11 +8,21 @@ import { useT } from '../../i18n/LanguageContext';
 // in via value/onChange. An optional attachment (image/file) can be added via
 // the paperclip button; it is uploaded on send and its path appended to the
 // message so Claude can Read it.
+//
+// Typing stays ENABLED while the agent streams — you can draft the next idea
+// mid-run and either wait to send it or stash it (plans/prompt-stash.md):
+// the bookmark button stores the draft on the active agent tab (backend-
+// synced), and the chips above the row bring a stashed idea back into the
+// composer. Tapping a chip while a draft exists swaps them, so nothing is
+// ever lost.
 export default function ChatInput({ value, onChange, onSend, onStop, streaming, attachment, onAttach }) {
   const { t } = useT();
+  const { activeTabId, activeTab, addStash, removeStash } = useDock();
+  const stashEnabled = useFeature('promptStash') && !!activeTabId;
+  const stash = (stashEnabled && activeTab?.stash) || [];
   const textareaRef = useRef(null);
   const fileRef = useRef(null);
-  const disabled = streaming;
+  const sendDisabled = streaming;
 
   // Auto-grow to fit the content. Runs on every value change -- including when
   // the draft is restored after navigating back, or cleared after sending.
@@ -23,7 +35,7 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
 
   function submit() {
     const trimmed = (value || '').trim();
-    if ((!trimmed && !attachment) || disabled) return;
+    if ((!trimmed && !attachment) || sendDisabled) return;
     onSend(trimmed);
   }
 
@@ -41,10 +53,54 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
     e.target.value = '';
   }
 
-  const canSend = ((value || '').trim().length > 0 || !!attachment) && !disabled;
+  function handleStash() {
+    const trimmed = (value || '').trim();
+    if (!trimmed || !stashEnabled) return;
+    addStash(activeTabId, trimmed);
+    onChange('');
+  }
+
+  function handleChipTap(item) {
+    // Swap: a non-empty draft is stashed before the chip replaces it.
+    const trimmed = (value || '').trim();
+    if (trimmed) addStash(activeTabId, trimmed);
+    onChange(item.text);
+    removeStash(activeTabId, item.id);
+  }
+
+  function handleChipRemove(e, item) {
+    e.stopPropagation();
+    removeStash(activeTabId, item.id);
+  }
+
+  const canSend = ((value || '').trim().length > 0 || !!attachment) && !sendDisabled;
+  const canStash = stashEnabled && (value || '').trim().length > 0;
 
   return (
     <div className="chat-input">
+      {stash.length > 0 && (
+        <div className="chat-stash" aria-label={t('chat.stashListAria')}>
+          {stash.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className="chat-stash__chip"
+              title={item.text}
+              onClick={() => handleChipTap(item)}
+            >
+              <span className="chat-stash__text">{item.text}</span>
+              <span
+                className="chat-stash__remove"
+                role="button"
+                aria-label={t('common.close')}
+                onClick={(e) => handleChipRemove(e, item)}
+              >
+                &times;
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
       {attachment && (
         <div className="chat-input__preview">
           {attachment.type.startsWith('image/') ? (
@@ -71,7 +127,7 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
           type="button"
           className="chat-input__attach"
           onClick={() => fileRef.current?.click()}
-          disabled={disabled}
+          disabled={streaming}
           aria-label={t('chat.attach')}
           title={t('chat.attach')}
         >
@@ -90,11 +146,22 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
           placeholder={t('chat.inputPlaceholder')}
           rows={1}
           value={value}
-          disabled={disabled}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
           aria-label={t('chat.inputAria')}
         />
+        {stashEnabled && (
+          <button
+            type="button"
+            className="chat-input__stash"
+            onClick={handleStash}
+            disabled={!canStash}
+            aria-label={t('chat.stash')}
+            title={t('chat.stash')}
+          >
+            &#9873;
+          </button>
+        )}
         {streaming ? (
           <button
             type="button"
