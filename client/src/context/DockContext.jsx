@@ -36,6 +36,8 @@ function toServerPatch(patch) {
   if ('sessionId' in patch) body.sessionId = patch.sessionId ?? '';
   if ('status' in patch) body.status = patch.status;
   if ('repoName' in patch) body.repoName = patch.repoName;
+  // Empty string clears the colour mark on the backend (see DockRegistry.Update).
+  if ('color' in patch) body.color = patch.color ?? '';
   return Object.keys(body).length > 0 ? body : null;
 }
 

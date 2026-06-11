@@ -6,12 +6,17 @@ import { useFeature } from '../context/UiModeContext';
 import { useT } from '../i18n/LanguageContext';
 import './agents.css';
 
+// Preset highlight colours for marking agents (plans/agent-color.md). A fixed
+// palette keeps the marks fast to pick and visually consistent.
+const AGENT_COLORS = ['#ef4444', '#f59e0b', '#eab308', '#22c55e', '#3b82f6', '#a855f7', '#ec4899'];
+
 // Agents tab — conversation list for concurrent agent sessions.
 // Replaces the old Dock strip (Advanced Mode only, gated by 'agentDock').
 export default function Agents() {
   const { t } = useT();
-  const { tabs, activeTabId, setActiveTab, closeTab, openTab, repos } = useDock();
+  const { tabs, activeTabId, setActiveTab, closeTab, openTab, updateTab, repos } = useDock();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [colorPickerFor, setColorPickerFor] = useState(null); // tab id whose palette is open
   const [info, setInfo] = useState({}); // repoId -> /git/status payload
   const [pulling, setPulling] = useState(false);
   const [pullResults, setPullResults] = useState(null); // [{name, ok, updated, baseBranch, error}]
@@ -96,6 +101,17 @@ export default function Agents() {
     closeTab(id);
   }
 
+  function toggleColorPicker(e, id) {
+    e.stopPropagation();
+    setColorPickerFor((cur) => (cur === id ? null : id));
+  }
+
+  function handleSetColor(e, id, color) {
+    e.stopPropagation();
+    updateTab(id, { color }); // '' clears the mark
+    setColorPickerFor(null);
+  }
+
   function handleNewAgent(repoId, repoName) {
     openTab(repoId, repoName);
     setPickerOpen(false);
@@ -161,12 +177,18 @@ export default function Agents() {
         <p className="agents__empty">{t('agents.empty')}</p>
       )}
 
+      {colorPickerFor && (
+        <div className="agent-color__backdrop" onClick={() => setColorPickerFor(null)} />
+      )}
+
       <ul className="agents__list">
         {tabs.map((tab) => (
           <li key={tab.id}>
             <button
               type="button"
               className={`agent-card agent-card--${tab.status}${tab.id === activeTabId ? ' agent-card--active' : ''}`}
+              data-colored={tab.color ? 'true' : undefined}
+              style={tab.color ? { '--agent-color': tab.color } : undefined}
               onClick={() => handleOpen(tab.id)}
             >
               <span className="agent-card__dot" />
@@ -189,6 +211,39 @@ export default function Agents() {
                   {t(`agents.status.${tab.status}`)}
                 </span>
               </span>
+
+              <span
+                className="agent-card__swatch"
+                role="button"
+                tabIndex={0}
+                aria-label={t('agents.color.label')}
+                style={tab.color ? { background: tab.color } : undefined}
+                onClick={(e) => toggleColorPicker(e, tab.id)}
+              />
+
+              {colorPickerFor === tab.id && (
+                <span className="agent-color" onClick={(e) => e.stopPropagation()}>
+                  {AGENT_COLORS.map((c) => (
+                    <span
+                      key={c}
+                      className="agent-color__opt"
+                      role="button"
+                      aria-label={c}
+                      style={{ background: c }}
+                      onClick={(e) => handleSetColor(e, tab.id, c)}
+                    />
+                  ))}
+                  <span
+                    className="agent-color__opt agent-color__opt--clear"
+                    role="button"
+                    aria-label={t('agents.color.clear')}
+                    onClick={(e) => handleSetColor(e, tab.id, '')}
+                  >
+                    &times;
+                  </span>
+                </span>
+              )}
+
               <span
                 className="agent-card__close"
                 onClick={(e) => handleClose(e, tab.id)}

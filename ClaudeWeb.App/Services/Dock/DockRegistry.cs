@@ -14,6 +14,13 @@ public class DockTab
     public string? SessionId { get; set; }
     public string Status { get; set; } = "idle";
     public long CreatedAt { get; set; }
+
+    /// <summary>
+    /// User-chosen highlight colour for the agent card (plans/agent-color.md),
+    /// a CSS hex like "#ef4444", or null/empty for no mark. Shared across
+    /// devices like the rest of the tab.
+    /// </summary>
+    public string? Color { get; set; }
 }
 
 /// <summary>
@@ -55,7 +62,7 @@ public class DockRegistry
     /// without losing their conversation linkage.
     /// </summary>
     public DockTab Add(string repoId, string repoName, string? sessionId = null,
-        string? status = null, long? createdAt = null, string? id = null)
+        string? status = null, long? createdAt = null, string? id = null, string? color = null)
     {
         if (string.IsNullOrWhiteSpace(repoId))
             throw new ArgumentException("repoId is required", nameof(repoId));
@@ -77,6 +84,7 @@ public class DockRegistry
             SessionId = string.IsNullOrWhiteSpace(sessionId) ? null : sessionId,
             Status = string.IsNullOrWhiteSpace(status) ? "idle" : status,
             CreatedAt = createdAt ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            Color = string.IsNullOrWhiteSpace(color) ? null : color,
         };
         lock (_gate)
         {
@@ -91,7 +99,7 @@ public class DockRegistry
     /// Partial update. Only non-null fields are applied; per-tab last-write-wins
     /// when two devices race. Returns the updated copy, or null if unknown.
     /// </summary>
-    public DockTab? Update(string id, string? sessionId, string? status, string? repoName)
+    public DockTab? Update(string id, string? sessionId, string? status, string? repoName, string? color)
     {
         lock (_gate)
         {
@@ -100,6 +108,8 @@ public class DockRegistry
             if (sessionId != null) tab.SessionId = sessionId.Length == 0 ? null : sessionId;
             if (status != null) tab.Status = status;
             if (repoName != null) tab.RepoName = repoName;
+            // Empty string clears the mark; null leaves it untouched.
+            if (color != null) tab.Color = color.Length == 0 ? null : color;
             Save();
             return Clone(tab);
         }
@@ -171,5 +181,6 @@ public class DockRegistry
         SessionId = t.SessionId,
         Status = t.Status,
         CreatedAt = t.CreatedAt,
+        Color = t.Color,
     };
 }

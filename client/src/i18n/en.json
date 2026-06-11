@@ -76,6 +76,8 @@
   "agents.status.running": "Running...",
   "agents.status.done": "Done",
   "agents.status.error": "Error",
+  "agents.color.label": "Mark with a colour",
+  "agents.color.clear": "Clear colour",
 
   "repo.label": "Project",
   "repo.none": "No projects",

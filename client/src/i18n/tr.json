@@ -76,6 +76,8 @@
   "agents.status.running": "Calisiyor...",
   "agents.status.done": "Tamamlandi",
   "agents.status.error": "Hata",
+  "agents.color.label": "Renkle isaretle",
+  "agents.color.clear": "Rengi temizle",
 
   "repo.label": "Proje",
   "repo.none": "Proje yok",
