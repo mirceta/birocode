@@ -1,10 +1,9 @@
 # Projects tab — in-app project management
 
-> **Status (2026-06-11):** Deployed to the live :5099 harness and confirmed
-> by the End User. Browser-verified beforehand on an isolated :5201 preview
-> (`.claudeweb-preview/playwright/verify-projects-tab.mjs`, 12/12 checks:
-> list, select via tap, badge/chip updates, runtime add + auto-select,
-> bad-path error from the server).
+> **Status (2026-06-11):** v1 deployed and confirmed. **v2 (folder picker)**
+> implemented and browser-verified on an isolated :5201 preview
+> (`.claudeweb-preview/playwright/verify-projects-tab.mjs`, 15/15 checks).
+> v2 not yet deployed to :5099.
 
 ## Why
 
@@ -27,10 +26,14 @@ directory on the host as a project. The user was warned and approved on
      "missing folder" and "not a git repo".
    - Tapping a project makes it the device's active project (same
      device-local selection as the old dropdown).
-   - "New project" form: host path + optional display name. Server validates
-     the folder exists; duplicates return the existing entry. Registered at
-     runtime via the existing `RepositoryRegistry.Add` (already persists and
-     is thread-safe) — **no restart needed**.
+   - "New project" form (v2 folder picker): a plain **folder name inside the
+     Projects Root** + optional display name. The Projects Root is the parent
+     folder of the pinned self repo (e.g. `...\playground`) — new projects
+     can only live there. Existing unregistered playground folders are shown
+     as tappable chips; a name that doesn't exist yet is **created by the
+     harness**. Duplicates return the existing entry. Registered at runtime
+     via the existing `RepositoryRegistry.Add` (already persists and is
+     thread-safe) — **no restart needed**.
 2. **Header dropdown removed.** The header now shows the current project name
    as a chip that links to the Projects tab. `RepoSelector.jsx` deleted; the
    `repoSelector` capability key becomes `projectsTab` (Advanced).
@@ -40,9 +43,13 @@ them; can be exposed later if asked).
 
 ## How
 
-- Backend: `RepoController` gains `POST /api/repos` `{ path, name? }` →
-  `RepositoryRegistry.Add` → `{ id, name, path, exists, isGitRepo, isSelf }`;
-  400 with a message on bad/missing path.
+- Backend: `RepoController` gains
+  - `GET /api/repos/folders` → `{ root, folders: [{ name, registered }] }` —
+    subfolders of the Projects Root (dot-folders hidden);
+  - `POST /api/repos` `{ folder, name? }` → resolves `root\folder`, creates
+    the directory when missing, then `RepositoryRegistry.Add` →
+    `{ id, name, path, exists, isGitRepo, isSelf, created }`. Plain names
+    only: separators, `..` and invalid filename chars are rejected (400).
 - Frontend: `pages/Projects.jsx` + `projects.css`; route + bottom-nav entry
   (icon "P"); header chip in `Layout.jsx`; i18n keys `projects.*` in en/tr.
 - Selection still flows through `RepoContext.selectRepo` (localStorage +
@@ -52,5 +59,9 @@ them; can be exposed later if asked).
 
 `.claudeweb-preview/playwright/verify-projects-tab.mjs` on an isolated :5201
 preview: tab lists projects, selecting one updates `claudeweb_repo` and the
-header chip, adding a project with a real temp dir works without restart,
-bad path shows the server error.
+header chip, the folder label shows the playground root, tapping a chip fills
+the input, adding a non-existent folder creates it on disk and registers +
+selects it without restart, and an invalid folder name shows the server error.
+NOTE: the preview shares `%APPDATA%\ClaudeWeb\repositories.json` and the real
+playground with the live harness — the test's registry entry and created
+folder must be removed after the run.

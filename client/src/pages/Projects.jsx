@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { apiPost } from '../api/client';
+import { useCallback, useEffect, useState } from 'react';
+import { apiGet, apiPost } from '../api/client';
 import { useRepo } from '../context/RepoContext';
 import { useT } from '../i18n/LanguageContext';
 import Loading from '../components/shared/Loading';
@@ -13,23 +13,37 @@ import './projects.css';
 export default function Projects() {
   const { repos, currentRepoId, selectRepo, loading, error, reloadRepos } = useRepo();
   const { t } = useT();
-  const [path, setPath] = useState('');
+  const [folder, setFolder] = useState('');
   const [name, setName] = useState('');
   const [adding, setAdding] = useState(false);
   const [notice, setNotice] = useState(null); // { ok: bool, text: string }
+  // { root, folders: [{ name, registered }] } — subfolders of the playground.
+  const [hostFolders, setHostFolders] = useState(null);
+
+  const loadFolders = useCallback(() => {
+    apiGet('/repos/folders').then(setHostFolders).catch(() => setHostFolders(null));
+  }, []);
+
+  useEffect(() => {
+    loadFolders();
+  }, [loadFolders]);
 
   const handleAdd = async (e) => {
     e.preventDefault();
-    if (!path.trim() || adding) return;
+    if (!folder.trim() || adding) return;
     setAdding(true);
     setNotice(null);
     try {
-      const repo = await apiPost('/repos', { path: path.trim(), name: name.trim() || null });
+      const repo = await apiPost('/repos', { folder: folder.trim(), name: name.trim() || null });
       await reloadRepos();
+      loadFolders();
       selectRepo(repo.id);
-      setPath('');
+      setFolder('');
       setName('');
-      setNotice({ ok: true, text: t('projects.added', { name: repo.name }) });
+      setNotice({
+        ok: true,
+        text: t(repo.created ? 'projects.addedCreated' : 'projects.added', { name: repo.name }),
+      });
     } catch (err) {
       let msg = '';
       try {
@@ -76,15 +90,35 @@ export default function Projects() {
 
       <form className="projects__add" onSubmit={handleAdd}>
         <h3 className="projects__add-title">{t('projects.newTitle')}</h3>
+        {hostFolders?.folders?.some((f) => !f.registered) && (
+          <div className="projects__field">
+            <span className="projects__field-label">{t('projects.existingFolders')}</span>
+            <div className="projects__folder-chips">
+              {hostFolders.folders.filter((f) => !f.registered).map((f) => (
+                <button
+                  key={f.name}
+                  type="button"
+                  className={`projects__folder-chip${f.name === folder ? ' projects__folder-chip--selected' : ''}`}
+                  onClick={() => setFolder(f.name)}
+                  disabled={adding}
+                >
+                  {f.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <label className="projects__field">
-          <span className="projects__field-label">{t('projects.pathLabel')}</span>
+          <span className="projects__field-label">
+            {t('projects.folderLabel', { root: hostFolders?.root || '...' })}
+          </span>
           <input
             type="text"
-            value={path}
-            onChange={(e) => setPath(e.target.value)}
-            placeholder={t('projects.pathPlaceholder')}
+            value={folder}
+            onChange={(e) => setFolder(e.target.value)}
             disabled={adding}
           />
+          <span className="projects__field-hint">{t('projects.folderHint')}</span>
         </label>
         <label className="projects__field">
           <span className="projects__field-label">{t('projects.nameLabel')}</span>
@@ -95,7 +129,7 @@ export default function Projects() {
             disabled={adding}
           />
         </label>
-        <button type="submit" className="projects__add-btn" disabled={adding || !path.trim()}>
+        <button type="submit" className="projects__add-btn" disabled={adding || !folder.trim()}>
           {adding ? t('projects.adding') : t('projects.add')}
         </button>
         {notice && (
