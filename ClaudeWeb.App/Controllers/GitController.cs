@@ -110,6 +110,26 @@ public class GitController : ControllerBase
         }
     }
 
+    /// <summary>POST /api/git/pull-base -- fast-forward local main/master from
+    /// origin (plans/agents-git-sync.md; the one UI-triggered git mutation).</summary>
+    [HttpPost("git/pull-base")]
+    public IActionResult PullBase()
+    {
+        _logger.CountRequest();
+        var repo = _repos.Current();
+        if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
+        try
+        {
+            var r = _git.PullBase(repo.Path);
+            return Ok(new { baseBranch = r.BaseBranch, ok = r.Ok, updated = r.Updated, error = r.Error });
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[GIT] PullBase failed: {ex.Message}");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
     /// <summary>GET /api/history -- recent commits, newest first.</summary>
     [HttpGet("history")]
     public IActionResult History()
