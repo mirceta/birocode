@@ -13,9 +13,15 @@ namespace ClaudeWeb.Controllers;
 /// are constrained to the Projects Root — the parent folder of the pinned
 /// self repo (e.g. ...\playground) — and the folder is created when missing:
 ///
-///   GET  /api/repos         -- [{ id, name, path, exists, isGitRepo, isSelf }]
-///   GET  /api/repos/folders -- { root, folders: [{ name, registered }] }
-///   POST /api/repos         -- { folder, name? } -> { id, name, path, exists, isGitRepo, isSelf, created }
+///   GET  /api/repos                 -- [{ id, name, path, exists, isGitRepo, isSelf, visibility }]
+///   GET  /api/repos/folders         -- { root, folders: [{ name, registered }] }
+///   POST /api/repos                 -- { folder, name?, visibility? } -> the new repo + created flag
+///   POST /api/repos/{id}/visibility -- { visibility: "basic"|"advanced" }
+///
+/// Per plans/project-visibility.md each project carries a visibility:
+/// "advanced" (the default) hides it from Basic mode's Projects list;
+/// "basic" shows it in both modes. The client stamps new projects with the
+/// creating device's mode and filters the list client-side.
 /// </summary>
 [ApiController]
 [Route("api/repos")]
@@ -35,7 +41,7 @@ public class RepoController : ControllerBase
     {
         _logger.CountRequest();
         var repos = _registry.GetAll()
-            .Select(r => new { id = r.Id, name = r.Name, path = r.Path, exists = r.Exists, isGitRepo = r.IsGitRepo, isSelf = r.IsSelf });
+            .Select(r => new { id = r.Id, name = r.Name, path = r.Path, exists = r.Exists, isGitRepo = r.IsGitRepo, isSelf = r.IsSelf, visibility = r.Visibility });
         return Ok(repos);
     }
 
@@ -67,7 +73,7 @@ public class RepoController : ControllerBase
         return Ok(new { root, folders });
     }
 
-    public record AddRequest(string? Folder, string? Name);
+    public record AddRequest(string? Folder, string? Name, string? Visibility);
 
     /// <summary>
     /// Registers the folder <c>&lt;Projects Root&gt;\{Folder}</c> as a project,
@@ -97,14 +103,27 @@ public class RepoController : ControllerBase
                 Directory.CreateDirectory(path);
                 _logger.Info($"[REPO] Created project folder {path}");
             }
-            var r = _registry.Add(path, request!.Name);
-            return Ok(new { id = r.Id, name = r.Name, path = r.Path, exists = r.Exists, isGitRepo = r.IsGitRepo, isSelf = r.IsSelf, created });
+            var r = _registry.Add(path, request!.Name, request.Visibility);
+            return Ok(new { id = r.Id, name = r.Name, path = r.Path, exists = r.Exists, isGitRepo = r.IsGitRepo, isSelf = r.IsSelf, visibility = r.Visibility, created });
         }
         catch (Exception ex) when (ex is ArgumentException or DirectoryNotFoundException or IOException or UnauthorizedAccessException)
         {
             _logger.Error($"[REPO] Add failed: {ex.Message}");
             return BadRequest(new { error = ex.Message });
         }
+    }
+
+    public record VisibilityRequest(string? Visibility);
+
+    /// <summary>Sets a project's UI-mode visibility ("basic" or "advanced").</summary>
+    [HttpPost("{id}/visibility")]
+    public IActionResult SetVisibility(string id, [FromBody] VisibilityRequest request)
+    {
+        _logger.CountRequest();
+        if (!_registry.SetVisibility(id, request?.Visibility))
+            return NotFound(new { error = "Unknown repository id" });
+        var r = _registry.GetAll().First(x => x.Id == id);
+        return Ok(new { id = r.Id, visibility = r.Visibility });
     }
 
     /// <summary>

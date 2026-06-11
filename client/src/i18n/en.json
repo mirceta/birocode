@@ -92,6 +92,11 @@
   "projects.addedCreated": "{name} created, added and selected",
   "projects.addError": "Couldn't add the project. Please check the path.",
   "projects.loadError": "We couldn't load your projects. Please try again.",
+  "projects.visBasic": "Basic",
+  "projects.visAdvanced": "Advanced only",
+  "projects.visToggleHint": "Tap to toggle Basic / Advanced-only visibility",
+  "projects.visError": "Couldn't change the project's visibility.",
+  "projects.noneBasic": "No projects are available in Basic mode yet. Switch to Advanced mode to manage visibility.",
 
   "landing.builder": "Builder",
 

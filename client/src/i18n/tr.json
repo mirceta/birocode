@@ -92,6 +92,11 @@
   "projects.addedCreated": "{name} olusturuldu, eklendi ve secildi",
   "projects.addError": "Proje eklenemedi. Lutfen yolu kontrol et.",
   "projects.loadError": "Projeler yuklenemedi. Lutfen tekrar dene.",
+  "projects.visBasic": "Temel",
+  "projects.visAdvanced": "Sadece gelismis",
+  "projects.visToggleHint": "Temel / sadece gelismis gorunurlugu icin dokun",
+  "projects.visError": "Projenin gorunurlugu degistirilemedi.",
+  "projects.noneBasic": "Temel modda henuz proje yok. Gorunurlugu yonetmek icin gelismis moda gec.",
 
   "landing.builder": "Stüdyo",
 

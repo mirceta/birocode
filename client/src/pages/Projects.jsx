@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { apiGet, apiPost } from '../api/client';
 import { useRepo } from '../context/RepoContext';
+import { useUiMode } from '../context/UiModeContext';
 import { useT } from '../i18n/LanguageContext';
 import Loading from '../components/shared/Loading';
 import ErrorBanner from '../components/shared/ErrorBanner';
@@ -10,8 +11,14 @@ import './projects.css';
 // register projects. Replaces the old header dropdown. Selection stays
 // device-local (RepoContext.selectRepo); adding registers the path on the
 // backend at runtime via POST /api/repos — no harness restart.
+//
+// Per-project visibility (plans/project-visibility.md): Basic mode lists
+// only projects with visibility 'basic'; Advanced lists all and can toggle
+// each project between Basic and Advanced-only. New projects are stamped
+// with the creating device's mode.
 export default function Projects() {
   const { repos, currentRepoId, selectRepo, loading, error, reloadRepos } = useRepo();
+  const { isAdvanced } = useUiMode();
   const { t } = useT();
   const [folder, setFolder] = useState('');
   const [name, setName] = useState('');
@@ -34,7 +41,11 @@ export default function Projects() {
     setAdding(true);
     setNotice(null);
     try {
-      const repo = await apiPost('/repos', { folder: folder.trim(), name: name.trim() || null });
+      const repo = await apiPost('/repos', {
+        folder: folder.trim(),
+        name: name.trim() || null,
+        visibility: isAdvanced ? 'advanced' : 'basic',
+      });
       await reloadRepos();
       loadFolders();
       selectRepo(repo.id);
@@ -57,6 +68,18 @@ export default function Projects() {
     }
   };
 
+  const toggleVisibility = async (r) => {
+    const visibility = r.visibility === 'basic' ? 'advanced' : 'basic';
+    try {
+      await apiPost(`/repos/${r.id}/visibility`, { visibility });
+      await reloadRepos();
+    } catch {
+      setNotice({ ok: false, text: t('projects.visError') });
+    }
+  };
+
+  const visibleRepos = isAdvanced ? repos : repos.filter((r) => r.visibility === 'basic');
+
   if (loading && repos.length === 0) return <Loading />;
   if (error) return <ErrorBanner message={t('projects.loadError')} onRetry={reloadRepos} />;
 
@@ -67,8 +90,8 @@ export default function Projects() {
       </div>
 
       <ul className="projects__list">
-        {repos.map((r) => (
-          <li key={r.id}>
+        {visibleRepos.map((r) => (
+          <li key={r.id} className="projects__item">
             <button
               type="button"
               className={`project-card${r.id === currentRepoId ? ' project-card--active' : ''}`}
@@ -84,8 +107,21 @@ export default function Projects() {
                 {r.id === currentRepoId && <span className="project-card__badge project-card__badge--active">{t('projects.active')}</span>}
               </span>
             </button>
+            {isAdvanced && (
+              <button
+                type="button"
+                className={`project-card__vis${r.visibility === 'basic' ? ' project-card__vis--basic' : ''}`}
+                onClick={() => toggleVisibility(r)}
+                title={t('projects.visToggleHint')}
+              >
+                {t(r.visibility === 'basic' ? 'projects.visBasic' : 'projects.visAdvanced')}
+              </button>
+            )}
           </li>
         ))}
+        {visibleRepos.length === 0 && (
+          <li className="projects__empty">{t('projects.noneBasic')}</li>
+        )}
       </ul>
 
       <form className="projects__add" onSubmit={handleAdd}>

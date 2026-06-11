@@ -28,6 +28,38 @@
   gap: 8px;
 }
 
+.projects__item {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+/* Visibility toggle next to a card — Advanced mode only (plans/project-visibility.md) */
+.project-card__vis {
+  flex-shrink: 0;
+  align-self: center;
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-text-soft);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.project-card__vis--basic {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.projects__empty {
+  font-size: 12px;
+  color: var(--color-text-soft);
+  padding: 12px;
+}
+
 .project-card {
   display: flex;
   align-items: center;

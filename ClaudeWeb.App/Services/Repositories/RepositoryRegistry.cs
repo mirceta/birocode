@@ -36,7 +36,11 @@ public class RepositoryRegistry
     }
 
     /// <summary>A repository plus derived status the picker/UI cares about.</summary>
-    public sealed record RepositoryInfo(string Id, string Name, string Path, bool Exists, bool IsGitRepo, bool IsSelf);
+    public sealed record RepositoryInfo(string Id, string Name, string Path, bool Exists, bool IsGitRepo, bool IsSelf, string Visibility);
+
+    /// <summary>Normalizes a visibility value: anything but "basic" is "advanced".</summary>
+    public static string NormalizeVisibility(string? visibility) =>
+        string.Equals(visibility?.Trim(), "basic", StringComparison.OrdinalIgnoreCase) ? "basic" : "advanced";
 
     /// <summary>All repositories, in operator order. Returns copies.</summary>
     public IReadOnlyList<RepositoryInfo> GetAll()
@@ -66,9 +70,10 @@ public class RepositoryRegistry
     /// <summary>
     /// Adds a repository for the given folder. The path must be an existing
     /// directory; adding the same path twice returns the existing entry. The
-    /// name defaults to the folder name when not supplied.
+    /// name defaults to the folder name when not supplied; the visibility
+    /// defaults to advanced-only.
     /// </summary>
-    public RepositoryInfo Add(string path, string? name = null)
+    public RepositoryInfo Add(string path, string? name = null, string? visibility = null)
     {
         if (string.IsNullOrWhiteSpace(path))
             throw new ArgumentException("Path is required", nameof(path));
@@ -89,6 +94,7 @@ public class RepositoryRegistry
                 Id = Guid.NewGuid().ToString("N"),
                 Name = string.IsNullOrWhiteSpace(name) ? (System.IO.Path.GetFileName(full) is { Length: > 0 } n ? n : full) : name.Trim(),
                 Path = full,
+                Visibility = NormalizeVisibility(visibility),
             };
             _repos.Add(repo);
             Save();
@@ -154,6 +160,20 @@ public class RepositoryRegistry
             _repos.Insert(0, self);
             Save();
             _logger.Info($"[REPO] Pinned self repo \"{name}\" ({full})");
+        }
+    }
+
+    /// <summary>Sets a repository's UI-mode visibility ("basic" or "advanced"). No-op if the id is unknown.</summary>
+    public bool SetVisibility(string id, string? visibility)
+    {
+        lock (_gate)
+        {
+            var repo = _repos.FirstOrDefault(r => string.Equals(r.Id, id, StringComparison.Ordinal));
+            if (repo is null) return false;
+            repo.Visibility = NormalizeVisibility(visibility);
+            Save();
+            _logger.Info($"[REPO] Visibility of \"{repo.Name}\" -> {repo.Visibility}");
+            return true;
         }
     }
 
@@ -248,9 +268,9 @@ public class RepositoryRegistry
     {
         var exists = Directory.Exists(r.Path);
         var isGit = exists && Directory.Exists(System.IO.Path.Combine(r.Path, ".git"));
-        return new RepositoryInfo(r.Id, r.Name, r.Path, exists, isGit, r.IsSelf);
+        return new RepositoryInfo(r.Id, r.Name, r.Path, exists, isGit, r.IsSelf, NormalizeVisibility(r.Visibility));
     }
 
     private static RepositoryConfig Clone(RepositoryConfig r) =>
-        new() { Id = r.Id, Name = r.Name, Path = r.Path, IsSelf = r.IsSelf };
+        new() { Id = r.Id, Name = r.Name, Path = r.Path, IsSelf = r.IsSelf, Visibility = r.Visibility };
 }

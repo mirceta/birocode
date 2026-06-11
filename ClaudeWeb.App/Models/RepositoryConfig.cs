@@ -23,4 +23,12 @@ public class RepositoryConfig
     /// always one selection away.
     /// </summary>
     public bool IsSelf { get; set; }
+
+    /// <summary>
+    /// Per-project UI-mode visibility (plans/project-visibility.md):
+    /// "basic" = listed in both Basic and Advanced mode, "advanced" = listed in
+    /// Advanced mode only. Defaults to "advanced", so entries predating this
+    /// field (absent in repositories.json) load as advanced-only.
+    /// </summary>
+    public string Visibility { get; set; } = "advanced";
 }
