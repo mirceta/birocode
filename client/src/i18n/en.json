@@ -28,6 +28,8 @@
   "nav.plan": "Plan",
   "plan.none": "No active plan",
   "plan.noneHint": "When work on a feature starts, the plan appears here (plan.md at the project root) and updates live.",
+  "plan.home": "plan.md",
+  "plan.homeAria": "Back to root plan",
   "nav.screen": "Screen",
   "nav.projects": "Projects",
   "nav.aria": "Main navigation",
