@@ -569,7 +569,7 @@ public class CliRunnerService
     {
         var psi = new ProcessStartInfo
         {
-            FileName = "claude",
+            FileName = OperatingSystem.IsWindows() ? "claude.cmd" : "claude",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
