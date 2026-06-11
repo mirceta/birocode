@@ -1,9 +1,9 @@
 # Projects tab — in-app project management
 
-> **Status (2026-06-11):** v1 deployed and confirmed. **v2 (folder picker)**
-> implemented and browser-verified on an isolated :5201 preview
+> **Status (2026-06-11):** Deployed to the live :5099 harness (v1 + v2
+> folder picker) and confirmed by the End User. Browser-verified beforehand
+> on an isolated :5201 preview
 > (`.claudeweb-preview/playwright/verify-projects-tab.mjs`, 15/15 checks).
-> v2 not yet deployed to :5099.
 
 ## Why
 
