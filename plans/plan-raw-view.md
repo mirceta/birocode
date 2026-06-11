@@ -1,6 +1,8 @@
 # Plan Tab — raw text view
 
-> **Status (2026-06-11):** In development on `feature/plan-raw-view`.
+> **Status (2026-06-11):** Deployed and confirmed. Live on the :5099 harness,
+> browser-verified (`.claudeweb-preview/playwright/verify-plan-raw-view.mjs`,
+> 14/14 checks) and confirmed by the End User.
 
 ## Problem
 
