@@ -1,8 +1,8 @@
 # Files tab -- VS Code-style folder tree
 
-> **Status (2026-06-11):** Implemented and browser-verified
-> (`.preview-test/files-tree-test.mjs`, 13/13 checks pass against the :5099
-> harness). Branch: `feature/files-tree-view`, not yet merged to main.
+> **Status (2026-06-11):** Deployed and confirmed. Merged to main, live on
+> the :5099 harness, browser-verified (`.preview-test/files-tree-test.mjs`,
+> 13/13 checks pass).
 
 ## What we are building
 
