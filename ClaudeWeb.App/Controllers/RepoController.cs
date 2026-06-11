@@ -76,9 +76,10 @@ public class RepoController : ControllerBase
     public record AddRequest(string? Folder, string? Name, string? Visibility);
 
     /// <summary>
-    /// Registers the folder <c>&lt;Projects Root&gt;\{Folder}</c> as a project,
-    /// creating the folder first when it does not exist. Plain folder names
-    /// only — separators and traversal are rejected.
+    /// Registers a project. <c>Folder</c> may be either a plain folder name —
+    /// resolved (and created if missing) under the Projects Root, as the picker
+    /// chips supply — or an absolute path to an existing folder anywhere on the
+    /// host, which is registered as-is.
     /// </summary>
     [HttpPost]
     public IActionResult Add([FromBody] AddRequest request)
@@ -87,22 +88,38 @@ public class RepoController : ControllerBase
         var folder = request?.Folder?.Trim();
         if (string.IsNullOrEmpty(folder))
             return BadRequest(new { error = "Folder name is required" });
-        if (folder is "." or ".." || folder.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
-            return BadRequest(new { error = $"Invalid folder name: {folder}" });
-
-        var root = ProjectsRoot();
-        if (root is null)
-            return StatusCode(500, new { error = "Projects root unknown (no self repo registered)" });
 
         try
         {
-            var path = Path.Combine(root, folder);
-            var created = !Directory.Exists(path);
-            if (created)
+            string path;
+            bool created = false;
+
+            if (Path.IsPathRooted(folder))
             {
-                Directory.CreateDirectory(path);
-                _logger.Info($"[REPO] Created project folder {path}");
+                // Absolute path: register an existing folder anywhere on the host.
+                path = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
+                if (!Directory.Exists(path))
+                    return BadRequest(new { error = $"Folder does not exist: {path}" });
             }
+            else
+            {
+                // Plain folder name: resolve under the Projects Root, creating it.
+                if (folder is "." or ".." || folder.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+                    return BadRequest(new { error = $"Invalid folder name: {folder}" });
+
+                var root = ProjectsRoot();
+                if (root is null)
+                    return StatusCode(500, new { error = "Projects root unknown (no self repo registered)" });
+
+                path = Path.Combine(root, folder);
+                created = !Directory.Exists(path);
+                if (created)
+                {
+                    Directory.CreateDirectory(path);
+                    _logger.Info($"[REPO] Created project folder {path}");
+                }
+            }
+
             var r = _registry.Add(path, request!.Name, request.Visibility);
             return Ok(new { id = r.Id, name = r.Name, path = r.Path, exists = r.Exists, isGitRepo = r.IsGitRepo, isSelf = r.IsSelf, visibility = r.Visibility, created });
         }
