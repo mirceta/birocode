@@ -28,12 +28,13 @@ function useVisibleTabs() {
   const showGit = useFeature('gitTab');
   const showScreen = useFeature('screenTab');
   const showProjects = useFeature('projectsTab');
+  // Order must match BottomNav.jsx — it decides pane neighbours.
   return [
     { key: 'chat', path: '/studio', label: 'nav.chat', element: <Chat /> },
     { key: 'files', path: '/studio/files', label: 'nav.files', element: <Files /> },
+    ...(showGit ? [{ key: 'git', path: '/studio/git', label: 'nav.git', element: <Git /> }] : []),
     { key: 'history', path: '/studio/history', label: 'nav.history', element: <History /> },
     ...(showAgents ? [{ key: 'agents', path: '/studio/agents', label: 'nav.agents', element: <Agents /> }] : []),
-    ...(showGit ? [{ key: 'git', path: '/studio/git', label: 'nav.git', element: <Git /> }] : []),
     ...(showScreen ? [{ key: 'screen', path: '/studio/screen', label: 'nav.screen', element: <Screen /> }] : []),
     ...(showProjects ? [{ key: 'projects', path: '/studio/projects', label: 'nav.projects', element: <Projects /> }] : []),
     ...(showAppTab ? [{ key: 'app', path: '/studio/app', label: 'nav.app', element: <AppRun /> }] : []),

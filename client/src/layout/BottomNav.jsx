@@ -19,12 +19,14 @@ export default function BottomNav() {
     : agentTabs.some((a) => a.status === 'done') ? 'done'
     : null;
 
+  // Order matters: it decides which tabs become neighbours in the multi-pane
+  // desktop view (plans/multi-pane.md). Keep this in sync with PaneStrip.jsx.
   const tabs = [
     { to: '/studio', label: t('nav.chat'), icon: 'C', end: true },
     { to: '/studio/files', label: t('nav.files'), icon: 'F' },
+    ...(showGit ? [{ to: '/studio/git', label: t('nav.git'), icon: '⎇' }] : []),
     { to: '/studio/history', label: t('nav.history'), icon: 'H' },
     ...(showAgents ? [{ to: '/studio/agents', label: t('nav.agents'), icon: 'A', badge: agentBadge }] : []),
-    ...(showGit ? [{ to: '/studio/git', label: t('nav.git'), icon: '⎇' }] : []),
     ...(showScreen ? [{ to: '/studio/screen', label: t('nav.screen'), icon: 'S' }] : []),
     ...(showProjects ? [{ to: '/studio/projects', label: t('nav.projects'), icon: 'P' }] : []),
     ...(showAppTab ? [{ to: '/studio/app', label: t('nav.app'), icon: '▶' }] : []),
