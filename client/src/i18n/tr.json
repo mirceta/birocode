@@ -78,6 +78,11 @@
   "agents.status.error": "Hata",
   "agents.color.label": "Renkle isaretle",
   "agents.color.clear": "Rengi temizle",
+  "agents.legend.inactive": "pasif",
+  "agents.legend.running": "bir sey calisiyor",
+  "agents.legend.deploy": "deploy bekliyor",
+  "agents.legend.merge": "merge bekliyor",
+  "agents.legend.problem": "buyuk sorun",
 
   "repo.label": "Proje",
   "repo.none": "Proje yok",

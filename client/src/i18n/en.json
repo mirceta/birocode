@@ -78,6 +78,11 @@
   "agents.status.error": "Error",
   "agents.color.label": "Mark with a colour",
   "agents.color.clear": "Clear colour",
+  "agents.legend.inactive": "inactive",
+  "agents.legend.running": "running something",
+  "agents.legend.deploy": "awaiting deploy",
+  "agents.legend.merge": "awaiting merge",
+  "agents.legend.problem": "big problem",
 
   "repo.label": "Project",
   "repo.none": "No projects",

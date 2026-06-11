@@ -121,6 +121,37 @@
   background: var(--color-hover, rgba(0, 0, 0, 0.04));
 }
 
+/* Colour legend — the End User's marking convention (plans/agent-color.md) */
+.agents__legend {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+.agents__legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--color-text-soft);
+}
+
+.agents__legend-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.agents__legend-dot--none {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-sizing: border-box;
+}
+
 /* Agent cards */
 .agents__list {
   list-style: none;

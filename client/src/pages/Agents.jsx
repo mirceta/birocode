@@ -10,6 +10,16 @@ import './agents.css';
 // palette keeps the marks fast to pick and visually consistent.
 const AGENT_COLORS = ['#ef4444', '#f59e0b', '#eab308', '#22c55e', '#3b82f6', '#a855f7', '#ec4899'];
 
+// The End User's colour convention, shown as a legend above the list.
+// null = no mark (white card).
+const LEGEND = [
+  { key: 'inactive', color: null },
+  { key: 'running', color: '#22c55e' },
+  { key: 'deploy', color: '#f59e0b' },
+  { key: 'merge', color: '#3b82f6' },
+  { key: 'problem', color: '#ef4444' },
+];
+
 // Agents tab — conversation list for concurrent agent sessions.
 // Replaces the old Dock strip (Advanced Mode only, gated by 'agentDock').
 export default function Agents() {
@@ -175,6 +185,20 @@ export default function Agents() {
 
       {tabs.length === 0 && !pickerOpen && (
         <p className="agents__empty">{t('agents.empty')}</p>
+      )}
+
+      {tabs.length > 0 && (
+        <ul className="agents__legend">
+          {LEGEND.map((item) => (
+            <li key={item.key} className="agents__legend-item">
+              <span
+                className={`agents__legend-dot${item.color ? '' : ' agents__legend-dot--none'}`}
+                style={item.color ? { background: item.color } : undefined}
+              />
+              {t(`agents.legend.${item.key}`)}
+            </li>
+          ))}
+        </ul>
       )}
 
       {colorPickerFor && (

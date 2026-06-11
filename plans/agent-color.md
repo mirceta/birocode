@@ -26,6 +26,11 @@ per-agent highlight colour does this.
   normally (`color` absent → null).
 - The colour mark is independent of the **status dot** (green/blue/red for
   running/done/error) — different signal, different place on the card.
+- **Legend** (follow-up, same day): a muted one-line legend above the list
+  documents the End User's own convention — white = inactive, green = running
+  something, orange = awaiting deploy, blue = awaiting merge, red = big
+  problem. Purely informative; the palette itself is unchanged and the
+  meanings are not enforced.
 
 ## Scope
 
