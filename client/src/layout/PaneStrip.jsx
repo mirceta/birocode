@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { getLastClaudeView } from '../components/shared/ClaudeViewToggle';
 import { useFeature } from '../context/UiModeContext';
 import { useT } from '../i18n/LanguageContext';
 import Chat from '../pages/Chat';
@@ -32,16 +33,26 @@ function useVisibleTabs() {
   const showScreen = useFeature('screenTab');
   const showTerminal = useFeature('terminalTab');
   const showProjects = useFeature('projectsTab');
+  const { pathname } = useLocation();
+
+  // Chat and Term share the first slot (plans/terminal-sessions.md): the pane
+  // shows whichever view the route (or, off-route, the device memory) says.
+  const path = pathname.replace(/\/+$/, '') || '/studio';
+  const termView = showTerminal
+    && (path === '/studio/terminal' || (path !== '/studio' && getLastClaudeView() === 'term'));
+  const claudePane = termView
+    ? { key: 'claude', path: '/studio/terminal', label: 'nav.terminal', element: <Terminal /> }
+    : { key: 'claude', path: '/studio', label: 'nav.chat', element: <Chat /> };
+
   // Order must match BottomNav.jsx — it decides pane neighbours.
   return [
-    { key: 'chat', path: '/studio', label: 'nav.chat', element: <Chat /> },
+    claudePane,
     { key: 'files', path: '/studio/files', label: 'nav.files', element: <Files /> },
     ...(showPlan ? [{ key: 'plan', path: '/studio/plan', label: 'nav.plan', element: <Plan /> }] : []),
     ...(showGit ? [{ key: 'git', path: '/studio/git', label: 'nav.git', element: <Git /> }] : []),
     { key: 'history', path: '/studio/history', label: 'nav.history', element: <History /> },
     ...(showAgents ? [{ key: 'agents', path: '/studio/agents', label: 'nav.agents', element: <Agents /> }] : []),
     ...(showScreen ? [{ key: 'screen', path: '/studio/screen', label: 'nav.screen', element: <Screen /> }] : []),
-    ...(showTerminal ? [{ key: 'terminal', path: '/studio/terminal', label: 'nav.terminal', element: <Terminal /> }] : []),
     ...(showProjects ? [{ key: 'projects', path: '/studio/projects', label: 'nav.projects', element: <Projects /> }] : []),
     ...(showAppTab ? [{ key: 'app', path: '/studio/app', label: 'nav.app', element: <AppRun /> }] : []),
   ];

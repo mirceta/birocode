@@ -3,18 +3,20 @@ import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { apiGet, apiPost, apiStreamGet } from '../api/client';
+import SessionPicker from '../components/chat/SessionPicker';
 import { createSseParser } from '../components/chat/sseParser';
+import ClaudeViewToggle from '../components/shared/ClaudeViewToggle';
 import { useRepo } from '../context/RepoContext';
 import { useT } from '../i18n/LanguageContext';
 import './terminal.css';
 
-// Terminal tab (plans/terminal-tab.md): a backend-owned PowerShell on a
-// ConPTY pseudo-console, rendered with xterm.js. The shell survives client
-// disconnects; every (re)attach resets the xterm and replays the server's
-// output buffer, so there is no seq watermark to get wrong. Input goes
-// through POST /api/terminal/input as raw PTY bytes — the composer adds \r,
-// the key row sends escape sequences, and desktop keystrokes pass through
-// xterm's onData.
+// Terminal view (plans/terminal-tab.md + plans/terminal-sessions.md):
+// backend-owned PowerShells on ConPTY pseudo-consoles, several per repo,
+// rendered with ONE xterm.js instance. Switching sessions aborts the SSE
+// attachment, resets the xterm, and replays the chosen shell's buffer (the
+// reattach mechanism from the original terminal tab, reused verbatim).
+// "Resume a conversation" starts a fresh shell that auto-runs
+// `claude --resume <id>` — decision (a): you land mid-conversation.
 const SPECIAL_KEYS = [
   { label: 'Esc', data: '\x1b' },
   { label: 'Tab', data: '\t' },
@@ -34,51 +36,74 @@ export default function Terminal() {
   const termRef = useRef(null);
   const fitRef = useRef(null);
   const abortRef = useRef(null);
+  const activeRef = useRef(null); // termId the input paths target (avoids stale closures)
+
+  const [shells, setShells] = useState([]);
+  const [activeId, setActiveId] = useState(null);
   const [line, setLine] = useState('');
   const [exited, setExited] = useState(false);
   const [error, setError] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [conversations, setConversations] = useState([]);
+  const [convosLoading, setConvosLoading] = useState(false);
+  const [convosError, setConvosError] = useState('');
+
+  activeRef.current = activeId;
+
+  const refreshShells = useCallback(async () => {
+    const list = await apiGet('/terminal/list');
+    setShells(list);
+    return list;
+  }, []);
 
   const sendData = useCallback(async (data) => {
+    if (!activeRef.current) return;
     try {
-      await apiPost('/terminal/input', { data });
+      await apiPost('/terminal/input', { termId: activeRef.current, data });
       setError('');
     } catch {
       setError(t('terminal.sendError'));
     }
   }, [t]);
 
-  // One attachment: reset the xterm, replay the whole buffer, stream live.
-  const attach = useCallback(async () => {
+  // One attachment to one shell: reset the xterm, replay, stream live.
+  const attach = useCallback(async (termId) => {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
     termRef.current?.reset();
+    setExited(false);
     const parse = createSseParser((evt) => {
       if (evt.type === 'data' && evt.data) termRef.current?.write(b64ToBytes(evt.data));
-      if (evt.type === 'exit') setExited(true);
+      if (evt.type === 'exit' && activeRef.current === termId) setExited(true);
     });
     try {
-      await apiStreamGet('/terminal/stream', parse, { signal: controller.signal });
+      await apiStreamGet(`/terminal/stream?termId=${encodeURIComponent(termId)}`, parse, {
+        signal: controller.signal,
+      });
     } catch (err) {
       if (err?.name !== 'AbortError') setError(t('terminal.streamError'));
     }
   }, [t]);
 
-  const start = useCallback(async () => {
-    setExited(false);
+  const startShell = useCallback(async (resumeSessionId, label) => {
     setError('');
     try {
       const cols = termRef.current?.cols ?? 100;
       const rows = termRef.current?.rows ?? 30;
-      await apiPost('/terminal/start', { cols, rows });
-      attach();
-    } catch {
-      setError(t('terminal.startError'));
+      const shell = await apiPost('/terminal/start', { cols, rows, resumeSessionId, label });
+      await refreshShells();
+      setActiveId(shell.termId);
+      return shell;
+    } catch (err) {
+      // 409 = per-repo live-shell cap; surface the server's message.
+      setError(err?.status === 409 ? t('terminal.capError') : t('terminal.startError'));
+      return null;
     }
-  }, [attach, t]);
+  }, [refreshShells, t]);
 
-  // Mount: create the xterm, fit it, start/attach. Repo switch remounts via
-  // the key on the page div below.
+  // Mount / repo switch: build the xterm, then reconcile with the backend —
+  // adopt existing shells or start the first one.
   useEffect(() => {
     const term = new XTerm({
       convertEol: false,
@@ -97,29 +122,39 @@ export default function Terminal() {
 
     // Desktop bonus: typing in the focused terminal goes straight to the PTY.
     const dataSub = term.onData((d) => {
-      apiPost('/terminal/input', { data: d }).catch(() => { /* surfaced via composer sends */ });
+      if (activeRef.current) {
+        apiPost('/terminal/input', { termId: activeRef.current, data: d }).catch(() => { /* surfaced via composer sends */ });
+      }
     });
 
-    start();
+    (async () => {
+      try {
+        const list = await refreshShells();
+        if (list.length > 0) setActiveId(list[0].termId);
+        else await startShell();
+      } catch {
+        setError(t('terminal.startError'));
+      }
+    })();
 
     const onResize = () => {
       fit.fit();
-      apiPost('/terminal/resize', { cols: term.cols, rows: term.rows }).catch(() => { /* best-effort */ });
+      if (activeRef.current) {
+        apiPost('/terminal/resize', { termId: activeRef.current, cols: term.cols, rows: term.rows })
+          .catch(() => { /* best-effort */ });
+      }
     };
     window.addEventListener('resize', onResize);
-
-    // Re-fit once layout/fonts settle: the mount-time fit can measure a
-    // pre-settle width and the PTY would stay the wrong size.
     const settleTimer = setTimeout(onResize, 350);
 
-    // Reattach when the phone comes back from sleep/background.
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') reconcile();
-    };
-    const reconcile = async () => {
+    // Phone returns from sleep/background: reconcile and reattach.
+    const onVisible = async () => {
+      if (document.visibilityState !== 'visible') return;
       try {
-        const status = await apiGet('/terminal');
-        if (status.running) attach();
+        const list = await refreshShells();
+        const current = list.find((s) => s.termId === activeRef.current);
+        if (current) attach(current.termId);
+        else if (list.length > 0) setActiveId(list[0].termId);
         else setExited(true);
       } catch { /* keep current view */ }
     };
@@ -137,6 +172,17 @@ export default function Terminal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentRepoId]);
 
+  // Attach whenever the active shell changes; tell the PTY our size.
+  useEffect(() => {
+    if (!activeId) return;
+    attach(activeId);
+    const term = termRef.current;
+    if (term) {
+      apiPost('/terminal/resize', { termId: activeId, cols: term.cols, rows: term.rows })
+        .catch(() => { /* best-effort */ });
+    }
+  }, [activeId, attach]);
+
   const sendLine = async (e) => {
     e.preventDefault();
     await sendData(`${line}\r`);
@@ -144,25 +190,91 @@ export default function Terminal() {
   };
 
   const kill = async () => {
+    if (!activeId) return;
     try {
-      await apiPost('/terminal/kill');
-      setExited(true);
+      await apiPost('/terminal/kill', { termId: activeId });
+      const list = await refreshShells();
+      if (list.length > 0) setActiveId(list[0].termId);
+      else {
+        setActiveId(null);
+        setExited(true);
+        termRef.current?.reset();
+      }
     } catch {
       setError(t('terminal.killError'));
     }
   };
 
+  const openPicker = async () => {
+    setPickerOpen(true);
+    setConvosLoading(true);
+    setConvosError('');
+    try {
+      setConversations(await apiGet('/sessions'));
+    } catch {
+      setConvosError(t('picker.loadError'));
+    } finally {
+      setConvosLoading(false);
+    }
+  };
+
+  const resumeConversation = async (sessionId) => {
+    setPickerOpen(false);
+    const convo = conversations.find((c) => c.id === sessionId);
+    const label = `↻ ${(convo?.title || convo?.firstPrompt || sessionId).slice(0, 30)}`;
+    await startShell(sessionId, label);
+  };
+
+  const newShell = async () => {
+    setPickerOpen(false);
+    await startShell();
+  };
+
   return (
     <div className="terminal-page" key={currentRepoId}>
       <div className="terminal-toolbar">
-        <span className="terminal-title">{t('terminal.title')}</span>
-        {exited
-          ? <button type="button" className="terminal-btn" onClick={start}>{t('terminal.restart')}</button>
-          : <button type="button" className="terminal-btn terminal-btn--danger" onClick={kill}>{t('terminal.kill')}</button>}
+        <ClaudeViewToggle />
+        {activeId && (
+          <button type="button" className="terminal-btn terminal-btn--danger" onClick={kill}>
+            {t('terminal.kill')}
+          </button>
+        )}
+      </div>
+
+      <div className="terminal-strip" role="tablist" aria-label={t('terminal.shellsAria')}>
+        {shells.map((s) => (
+          <button
+            key={s.termId}
+            type="button"
+            role="tab"
+            aria-selected={s.termId === activeId}
+            className={`terminal-chip${s.termId === activeId ? ' is-active' : ''}`}
+            onClick={() => setActiveId(s.termId)}
+            title={s.label}
+          >
+            {s.label}
+          </button>
+        ))}
+        <button
+          type="button"
+          className="terminal-chip terminal-chip--add"
+          onClick={openPicker}
+          aria-label={t('terminal.addShell')}
+        >
+          +
+        </button>
       </div>
 
       {error && <div className="terminal-error" role="alert">{error}</div>}
-      {exited && <div className="terminal-exited">{t('terminal.exited')}</div>}
+      {exited && !activeId && (
+        <div className="terminal-exited">
+          {t('terminal.exited')}{' '}
+          <button type="button" className="terminal-btn" onClick={() => startShell()}>
+            {t('terminal.restart')}
+          </button>
+        </div>
+      )}
+      {exited && activeId && <div className="terminal-exited">{t('terminal.shellExited')}</div>}
 
       <div className="terminal-host" ref={hostRef} />
 
@@ -172,7 +284,7 @@ export default function Terminal() {
             key={k.label}
             type="button"
             className="terminal-key"
-            disabled={exited}
+            disabled={!activeId || exited}
             onClick={() => sendData(k.data)}
           >
             {k.label}
@@ -186,15 +298,28 @@ export default function Terminal() {
           value={line}
           onChange={(e) => setLine(e.target.value)}
           placeholder={t('terminal.placeholder')}
-          disabled={exited}
+          disabled={!activeId || exited}
           autoComplete="off"
           autoCapitalize="off"
           spellCheck="false"
         />
-        <button type="submit" className="terminal-send" disabled={exited}>
+        <button type="submit" className="terminal-send" disabled={!activeId || exited}>
           {t('terminal.send')}
         </button>
       </form>
+
+      <SessionPicker
+        open={pickerOpen}
+        sessions={conversations}
+        loading={convosLoading}
+        error={convosError ? true : null}
+        activeId={null}
+        onSelect={resumeConversation}
+        onNew={newShell}
+        onClose={() => setPickerOpen(false)}
+        title={t('terminal.pickerTitle')}
+        newLabel={t('terminal.newShell')}
+      />
     </div>
   );
 }

@@ -29,18 +29,43 @@ public sealed class TerminalSession : IDisposable
     private bool _exited;
 
     public string RepoId { get; }
+    public string TermId { get; }
+    public string Label { get; }
+    /// <summary>Claude session id this terminal was opened to resume, if any
+    /// (plans/terminal-sessions.md). Purely informational for the UI.</summary>
+    public string? ResumeSessionId { get; }
+    /// <summary>Orders List(): Dictionary enumeration reuses freed slots after
+    /// a Remove, so insertion order alone is not stable.</summary>
+    public DateTime CreatedAt { get; } = DateTime.UtcNow;
     public short Cols { get; private set; }
     public short Rows { get; private set; }
     public bool IsRunning { get { lock (_lock) return !_exited && !_pty.HasExited; } }
 
-    public TerminalSession(string repoId, string workingDirectory, short cols, short rows, Logger logger)
+    public TerminalSession(string repoId, string termId, string label, string workingDirectory,
+        short cols, short rows, Logger logger, string? resumeSessionId = null)
     {
         RepoId = repoId;
+        TermId = termId;
+        Label = label;
+        ResumeSessionId = resumeSessionId;
         Cols = cols;
         Rows = rows;
         _logger = logger;
         _pty = new ConPty("powershell.exe -NoLogo", workingDirectory, cols, rows);
         _ = Task.Run(ReadLoopAsync);
+
+        // Resume mode: run claude inside the shell (so quitting claude drops
+        // back to a usable prompt). Short delay lets PowerShell reach its
+        // prompt before the line lands; ConPTY buffers input either way.
+        if (!string.IsNullOrEmpty(resumeSessionId))
+        {
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(750);
+                try { await WriteAsync($"claude --resume {resumeSessionId}\r"); }
+                catch (Exception ex) { _logger.Info($"[TERM] resume injection failed: {ex.Message}"); }
+            });
+        }
     }
 
     /// <summary>Dedicated PTY output pump: byte chunks go into the replay

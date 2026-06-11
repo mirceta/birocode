@@ -1,9 +1,10 @@
 # Terminal sessions — Chat/Term in one nav slot, multiple PTYs, resuming Claude conversations
 
-> **Status (2026-06-11):** Built and browser-verified (20/20) on
-> `feature/terminal-sessions`; awaiting End User confirmation. The canonical
-> plan with build decisions lives at
-> [plans/terminal-sessions.md](plans/terminal-sessions.md).
+> **Status (2026-06-11):** In development on `feature/terminal-sessions`
+> (stacked on `feature/terminal-tab`, PR #7). Browser-verified on the :5201
+> harness (`.claudeweb-preview/playwright/verify-terminal-sessions.mjs`,
+> 20/20 checks). Resume behavior: decision (a) — auto-run `claude --resume`.
+> Awaiting End User confirmation.
 
 ## What and why
 
@@ -86,13 +87,17 @@ is also a billing choice (Term = subscription, Chat = credits).
 - Session cap per repo (e.g. 5) to bound forgotten-shell sprawl; oldest-idle
   is rejected, not silently killed.
 
-## Open question (the one decision needed)
+## Decisions made during the build
 
-When tapping a past conversation in the picker:
-
-- **(a) auto-run** `claude --resume <id>` — you land mid-conversation
-  (leaning this way: fewer taps, matches "resume like Chat"), or
-- **(b) pre-fill** the command in a fresh shell and let the user hit Enter.
+- Resume = **(a) auto-run** `claude --resume <id>` (user's call). The id is
+  validated `^[A-Za-z0-9_-]{1,128}$` server-side — it lands on a PowerShell
+  command line and must not smuggle shell syntax.
+- `TerminalSession.CreatedAt` orders `List()`: Dictionary enumeration reuses
+  freed slots after a Remove, so insertion order alone lied after a kill.
+- Fixed in passing: `.app-header__title` now ellipsizes — long
+  machine·project·branch titles used to wrap past the 56px sticky header and
+  invisibly intercept taps on the first ~26px of page content (it ate the
+  Chat/Term toggle on phones).
 
 ## Verification sketch
 

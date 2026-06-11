@@ -5,6 +5,7 @@ import ThinkingIndicator from '../components/chat/ThinkingIndicator';
 import ActivitySteps from '../components/chat/ActivitySteps';
 import SessionPicker from '../components/chat/SessionPicker';
 import ErrorBanner from '../components/shared/ErrorBanner';
+import ClaudeViewToggle from '../components/shared/ClaudeViewToggle';
 import ModelSelector from '../components/chat/ModelSelector';
 import { useChat } from '../context/ChatContext';
 import { useFeature } from '../context/UiModeContext';
@@ -80,6 +81,7 @@ export default function Chat() {
   return (
     <div className="chat">
       <div className="chat__bar">
+        <ClaudeViewToggle />
         <button type="button" className="chat__conversations" onClick={openPicker}>
           {t('chat.yourConversations')}
         </button>
