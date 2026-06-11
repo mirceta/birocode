@@ -144,3 +144,30 @@
   border-top: 1px solid var(--color-border);
   margin: 20px 0;
 }
+
+/* Mermaid diagrams (```mermaid code blocks). White card so diagram colors
+   stay readable regardless of theme; scrolls horizontally when wide. */
+.mermaid {
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  margin: 12px 0;
+  overflow-x: auto;
+  text-align: center;
+}
+
+.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.mermaid__loading {
+  color: var(--color-text-soft);
+  margin: 12px 0;
+}
+
+/* Diagram source shown verbatim when mermaid fails to parse it. */
+.mermaid__error {
+  border-left: 4px solid #c0392b;
+}

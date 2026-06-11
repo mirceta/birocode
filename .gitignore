@@ -19,3 +19,4 @@ settings.json
 
 # Chat file uploads (images etc. sent alongside prompts)
 .claudeweb-uploads/
+.preview-test/
