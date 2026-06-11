@@ -24,6 +24,7 @@ export const FEATURES = {
   contextMeter: 'advanced', // ctx pill in the chat header (plans/context-meter.md)
   gitTab: 'advanced', // read-only git status tab (plans/git-tab.md)
   screenTab: 'advanced', // host-desktop snapshots (plans/screen-tab.md)
+  machineName: 'advanced', // header title shows "machine · project · branch"
 };
 
 const MODE_KEY = 'claudeweb_ui_mode';

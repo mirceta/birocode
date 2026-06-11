@@ -1,16 +1,51 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
+import { apiGet } from '../api/client';
 import SaveButton from '../components/shared/SaveButton';
 import LanguageToggle from '../components/shared/LanguageToggle';
 import ModeToggle from '../components/shared/ModeToggle';
 import ProjectChip from '../components/shared/ProjectChip';
 import { SaveProvider } from '../components/history/SaveHandler';
 import { ChatProvider } from '../context/ChatContext';
-import { RepoProvider } from '../context/RepoContext';
+import { RepoProvider, useRepo } from '../context/RepoContext';
 import { DockProvider } from '../context/DockContext';
 import { UiModeProvider, useFeature } from '../context/UiModeContext';
 import { useT } from '../i18n/LanguageContext';
 import BottomNav from './BottomNav';
+
+// Header title: in Advanced Mode shows "machine · project · branch" so the
+// Operator always sees which host/repo/branch they are driving; Basic Mode
+// keeps the friendly app title.
+function HeaderTitle() {
+  const { t } = useT();
+  const show = useFeature('machineName');
+  const { current } = useRepo();
+  const [machineName, setMachineName] = useState(null);
+  const [branch, setBranch] = useState(null);
+
+  useEffect(() => {
+    if (!show) return;
+    apiGet('/health')
+      .then((h) => setMachineName(h.machineName || null))
+      .catch(() => setMachineName(null));
+  }, [show]);
+
+  useEffect(() => {
+    if (!show || !current) {
+      setBranch(null);
+      return;
+    }
+    apiGet('/branch', { repoId: current.id })
+      .then((b) => setBranch(b.branch || null))
+      .catch(() => setBranch(null));
+  }, [show, current]);
+
+  if (!show || !machineName) {
+    return <h1 className="app-header__title">{t('app.title')}</h1>;
+  }
+  const parts = [machineName, current?.name, branch].filter(Boolean);
+  return <h1 className="app-header__title">{parts.join(' · ')}</h1>;
+}
 
 // The build stamp is an Operator debugging aid — Advanced Mode only.
 function BuildStamp() {
@@ -36,7 +71,7 @@ export default function Layout() {
               <div className="app-shell">
                 <div className="app-frame">
                   <header className="app-header">
-                    <h1 className="app-header__title">{t('app.title')}</h1>
+                    <HeaderTitle />
                     <div className="app-header__actions">
                       <ProjectChip />
                       <LanguageToggle />

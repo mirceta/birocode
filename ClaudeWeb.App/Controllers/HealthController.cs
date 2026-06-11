@@ -29,6 +29,7 @@ public class HealthController : ControllerBase
         port = _config.Port,
         previewPort = _config.PreviewPort,
         previewUrl = _config.PreviewUrl,
-        repositoryCount = _registry.GetAll().Count
+        repositoryCount = _registry.GetAll().Count,
+        machineName = Environment.MachineName
     });
 }
