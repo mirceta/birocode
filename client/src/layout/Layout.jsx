@@ -3,7 +3,7 @@ import { Outlet } from 'react-router-dom';
 import SaveButton from '../components/shared/SaveButton';
 import LanguageToggle from '../components/shared/LanguageToggle';
 import ModeToggle from '../components/shared/ModeToggle';
-import RepoSelector from '../components/shared/RepoSelector';
+import ProjectChip from '../components/shared/ProjectChip';
 import { SaveProvider } from '../components/history/SaveHandler';
 import { ChatProvider } from '../context/ChatContext';
 import { RepoProvider } from '../context/RepoContext';
@@ -38,7 +38,7 @@ export default function Layout() {
                   <header className="app-header">
                     <h1 className="app-header__title">{t('app.title')}</h1>
                     <div className="app-header__actions">
-                      <RepoSelector />
+                      <ProjectChip />
                       <LanguageToggle />
                       <SaveButton />
                       <ModeToggle />

@@ -17,7 +17,7 @@ export const FEATURES = {
   saveButton: 'basic',
   languageToggle: 'basic',
   appTab: 'advanced',
-  repoSelector: 'advanced',
+  projectsTab: 'advanced', // projects list + add + header chip (plans/projects-tab.md)
   modelSelector: 'advanced',
   agentDock: 'advanced', // and the future Agents tab
   buildStamp: 'advanced',
