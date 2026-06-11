@@ -1,6 +1,8 @@
 # Multi-pane desktop layout
 
-> **Status (2026-06-11):** In progress on branch `feature/multi-pane`.
+> **Status (2026-06-11):** Deployed to the live :5099 harness and confirmed by
+> the End User. Browser-verified beforehand on the :5201 preview
+> (`verify-multi-pane.mjs`, 15/15 checks).
 
 ## Why
 
