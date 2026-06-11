@@ -6,6 +6,12 @@
 This is the **home file** of the Plan tab (repo-root `plan.md`). Links below
 demonstrate every kind of link the tab handles.
 
+## Active feature plans
+
+- [Files tree view](plans/files-tree-view.md) — VS Code-style folder
+  expand/collapse in the Files tab (branch `feature/files-tree-view`,
+  implemented, awaiting merge).
+
 ## Subplans (internal links — open in-place)
 
 - [Example subplan](plans/example-subplan.md) — a demo subplan written for
