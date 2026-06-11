@@ -24,6 +24,7 @@ export const FEATURES = {
   contextMeter: 'advanced', // ctx pill in the chat header (plans/context-meter.md)
   gitTab: 'advanced', // read-only git status tab (plans/git-tab.md)
   planTab: 'advanced', // repo-root plan.md viewer (plans/plan-tab.md)
+  planRawView: 'advanced', // raw-text toggle in the Plan tab header (plans/plan-raw-view.md)
   screenTab: 'advanced', // host-desktop snapshots (plans/screen-tab.md)
   machineName: 'advanced', // header title shows "machine · project · branch"
   multiPane: 'advanced', // side-by-side desktop panes (plans/multi-pane.md)

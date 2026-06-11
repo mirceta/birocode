@@ -3,6 +3,7 @@ import { apiGet } from '../api/client';
 import Loading from '../components/shared/Loading';
 import Markdown from '../components/shared/Markdown';
 import { useRepo } from '../context/RepoContext';
+import { useFeature } from '../context/UiModeContext';
 import { useT } from '../i18n/LanguageContext';
 import './plan.css';
 
@@ -39,6 +40,8 @@ export default function Plan() {
   const [currentPath, setCurrentPath] = useState(ROOT);
   const [content, setContent] = useState(null); // null = no file at currentPath
   const [loading, setLoading] = useState(true);
+  const [raw, setRaw] = useState(false); // raw text view (plans/plan-raw-view.md)
+  const canRaw = useFeature('planRawView');
 
   const load = useCallback(async () => {
     try {
@@ -51,9 +54,10 @@ export default function Plan() {
     }
   }, [currentPath]);
 
-  // Repo switch resets navigation to the root plan.
+  // Repo switch resets navigation to the root plan, rendered.
   useEffect(() => {
     setCurrentPath(ROOT);
+    setRaw(false);
   }, [currentRepoId]);
 
   useEffect(() => {
@@ -89,6 +93,17 @@ export default function Plan() {
       >
         <span aria-hidden="true">⌂</span> {t('plan.home')}
       </button>
+      {canRaw && (
+        <button
+          type="button"
+          className="plan__raw-toggle"
+          onClick={() => setRaw((r) => !r)}
+          aria-pressed={raw}
+          aria-label={t('plan.rawAria')}
+        >
+          <span aria-hidden="true">{'</>'}</span> {t('plan.raw')}
+        </button>
+      )}
       {!atRoot && <span className="plan__path">{currentPath}</span>}
     </div>
   );
@@ -110,7 +125,9 @@ export default function Plan() {
   return (
     <div className="plan">
       {header}
-      <Markdown onLinkClick={handleLinkClick}>{content}</Markdown>
+      {raw
+        ? <pre className="plan__raw">{content}</pre>
+        : <Markdown onLinkClick={handleLinkClick}>{content}</Markdown>}
     </div>
   );
 }

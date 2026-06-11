@@ -30,6 +30,8 @@
   "plan.noneHint": "Bir ozellik uzerinde calisma basladiginda plan burada gorunur (proje kokundeki plan.md) ve canli guncellenir.",
   "plan.home": "plan.md",
   "plan.homeAria": "Kok plana don",
+  "plan.raw": "Ham",
+  "plan.rawAria": "Ham metin gorunumunu ac/kapat",
   "nav.screen": "Ekran",
   "nav.projects": "Projeler",
   "nav.aria": "Ana menu",

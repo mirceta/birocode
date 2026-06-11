@@ -33,6 +33,31 @@
   cursor: default;
 }
 
+.plan__raw-toggle {
+  font: inherit;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border, rgba(0,0,0,0.12));
+  background: var(--color-surface, #fafafa);
+  color: inherit;
+  cursor: pointer;
+}
+
+.plan__raw-toggle[aria-pressed="true"] {
+  background: var(--color-accent-soft, #e8f0fe);
+  border-color: var(--color-accent, #4a7dff);
+}
+
+.plan__raw {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+
 .plan__path {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 13px;
