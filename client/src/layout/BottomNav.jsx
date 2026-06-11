@@ -9,6 +9,7 @@ export default function BottomNav() {
   const showAppTab = useFeature('appTab');
   const showAgents = useFeature('agentDock');
   const showGit = useFeature('gitTab');
+  const showPlan = useFeature('planTab');
   const showScreen = useFeature('screenTab');
   const showProjects = useFeature('projectsTab');
 
@@ -24,6 +25,7 @@ export default function BottomNav() {
   const tabs = [
     { to: '/studio', label: t('nav.chat'), icon: 'C', end: true },
     { to: '/studio/files', label: t('nav.files'), icon: 'F' },
+    ...(showPlan ? [{ to: '/studio/plan', label: t('nav.plan'), icon: '☰' }] : []),
     ...(showGit ? [{ to: '/studio/git', label: t('nav.git'), icon: '⎇' }] : []),
     { to: '/studio/history', label: t('nav.history'), icon: 'H' },
     ...(showAgents ? [{ to: '/studio/agents', label: t('nav.agents'), icon: 'A', badge: agentBadge }] : []),
