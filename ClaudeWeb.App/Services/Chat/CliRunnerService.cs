@@ -565,11 +565,40 @@ public class CliRunnerService
 
     // --- process setup ----------------------------------------------------
 
+    /// <summary>
+    /// Resolved once per process. The CLI's launcher differs per install:
+    /// the npm global install puts a <c>claude.cmd</c> shim on PATH, the
+    /// native installer a <c>claude.exe</c> -- so probe PATH for whichever
+    /// exists instead of hardcoding one flavor.
+    /// </summary>
+    private static readonly Lazy<string> ClaudeCommand = new(ResolveClaudeCommand);
+
+    private static string ResolveClaudeCommand()
+    {
+        if (!OperatingSystem.IsWindows()) return "claude";
+
+        var dirs = (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
+            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries);
+        foreach (var dir in dirs)
+        {
+            foreach (var name in new[] { "claude.exe", "claude.cmd" })
+            {
+                try
+                {
+                    var candidate = Path.Combine(dir.Trim(), name);
+                    if (File.Exists(candidate)) return candidate;
+                }
+                catch { /* malformed PATH entry -- skip */ }
+            }
+        }
+        return "claude.cmd"; // previous behavior as a last resort
+    }
+
     private static ProcessStartInfo CreateProcessInfo(string message, string? sessionId, string? workingDirectory, string? model = null)
     {
         var psi = new ProcessStartInfo
         {
-            FileName = OperatingSystem.IsWindows() ? "claude.cmd" : "claude",
+            FileName = ClaudeCommand.Value,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
