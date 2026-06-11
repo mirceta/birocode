@@ -25,6 +25,7 @@ export const FEATURES = {
   gitTab: 'advanced', // read-only git status tab (plans/git-tab.md)
   screenTab: 'advanced', // host-desktop snapshots (plans/screen-tab.md)
   machineName: 'advanced', // header title shows "machine · project · branch"
+  multiPane: 'advanced', // side-by-side desktop panes (plans/multi-pane.md)
 };
 
 const MODE_KEY = 'claudeweb_ui_mode';

@@ -12,6 +12,7 @@ import { DockProvider } from '../context/DockContext';
 import { UiModeProvider, useFeature } from '../context/UiModeContext';
 import { useT } from '../i18n/LanguageContext';
 import BottomNav from './BottomNav';
+import PaneStrip, { useMultiPane } from './PaneStrip';
 
 // Header title: in Advanced Mode shows "machine · project · branch" so the
 // Operator always sees which host/repo/branch they are driving; Basic Mode
@@ -57,37 +58,51 @@ function BuildStamp() {
   );
 }
 
-export default function Layout() {
+// Inner shell so it can use the provider hooks (UiMode for multi-pane).
+// On a wide Advanced-mode window the content area becomes a pane strip
+// (plans/multi-pane.md); otherwise the classic single-page Outlet.
+function StudioShell() {
   const { t } = useT();
+  const { multi, panes, activeKey } = useMultiPane();
   useEffect(() => {
     document.title = t('app.title');
   }, [t]);
+  return (
+    <div className="app-shell">
+      <div className={`app-frame${multi ? ' app-frame--multi' : ''}`}>
+        <header className="app-header">
+          <HeaderTitle />
+          <div className="app-header__actions">
+            <ProjectChip />
+            <LanguageToggle />
+            <SaveButton />
+            <ModeToggle />
+          </div>
+        </header>
+
+        {multi ? (
+          <PaneStrip panes={panes} activeKey={activeKey} />
+        ) : (
+          <main className="app-content">
+            <Outlet />
+          </main>
+        )}
+
+        <BottomNav />
+        <BuildStamp />
+      </div>
+    </div>
+  );
+}
+
+export default function Layout() {
   return (
     <UiModeProvider>
       <RepoProvider>
         <DockProvider>
           <SaveProvider>
             <ChatProvider>
-              <div className="app-shell">
-                <div className="app-frame">
-                  <header className="app-header">
-                    <HeaderTitle />
-                    <div className="app-header__actions">
-                      <ProjectChip />
-                      <LanguageToggle />
-                      <SaveButton />
-                      <ModeToggle />
-                    </div>
-                  </header>
-
-                  <main className="app-content">
-                    <Outlet />
-                  </main>
-
-                  <BottomNav />
-                  <BuildStamp />
-                </div>
-              </div>
+              <StudioShell />
             </ChatProvider>
           </SaveProvider>
         </DockProvider>
