@@ -1,6 +1,9 @@
 # Terminal tab — interactive PowerShell (and interactive Claude) in the browser
 
-> **Status (2026-06-11):** In development on `feature/terminal-tab`.
+> **Status (2026-06-11):** Deployed and confirmed. Live on the :5099 harness
+> (backend + frontend swapped together, rollback disarmed), browser-verified
+> (`.claudeweb-preview/playwright/verify-terminal-tab.mjs`, 11/11 checks) and
+> confirmed working by the End User. PR: #7.
 
 ## Problem
 
