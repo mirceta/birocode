@@ -13,6 +13,7 @@ import Agents from './pages/Agents';
 import Git from './pages/Git';
 import Plan from './pages/Plan';
 import Screen from './pages/Screen';
+import Terminal from './pages/Terminal';
 import Projects from './pages/Projects';
 
 // Two layers:
@@ -48,6 +49,7 @@ export default function App() {
             <Route path="git" element={<Git />} />
             <Route path="plan" element={<Plan />} />
             <Route path="screen" element={<Screen />} />
+            <Route path="terminal" element={<Terminal />} />
             <Route path="projects" element={<Projects />} />
           </Route>
         ) : (

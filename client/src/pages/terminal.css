@@ -1,0 +1,126 @@
+.terminal-page {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  height: 100%;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  /* The xterm DOM has a fixed pixel width (cols × char width). Without these
+     clamps it inflates this flex item's minimum size, the page grows wider
+     than the viewport, and FitAddon "fits" to the inflated width — keep the
+     box bounded so fit measures the real available space. */
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.terminal-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.terminal-title {
+  font-weight: 700;
+}
+
+.terminal-btn {
+  font: inherit;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border, rgba(0,0,0,0.12));
+  background: var(--color-surface, #fafafa);
+  color: inherit;
+  cursor: pointer;
+}
+
+.terminal-btn--danger {
+  color: #b3261e;
+  border-color: rgba(179,38,30,0.4);
+}
+
+.terminal-error {
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgba(179,38,30,0.08);
+  color: #b3261e;
+  font-size: 14px;
+}
+
+.terminal-exited {
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--color-surface, #fafafa);
+  color: var(--color-text-soft);
+  font-size: 14px;
+}
+
+.terminal-host {
+  flex: 1;
+  min-height: 280px;
+  min-width: 0;
+  max-width: 100%;
+  background: #1e1e1e;
+  border-radius: 8px;
+  padding: 6px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.terminal-keys {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.terminal-key {
+  font: inherit;
+  font-size: 13px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border, rgba(0,0,0,0.12));
+  background: var(--color-surface, #fafafa);
+  color: inherit;
+  cursor: pointer;
+}
+
+.terminal-key:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.terminal-composer {
+  display: flex;
+  gap: 8px;
+}
+
+.terminal-input {
+  flex: 1;
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border, rgba(0,0,0,0.12));
+  background: var(--color-bg, #fff);
+  color: inherit;
+}
+
+.terminal-send {
+  font: inherit;
+  font-weight: 600;
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: none;
+  background: var(--color-accent, #4a7dff);
+  color: #fff;
+  cursor: pointer;
+}
+
+.terminal-send:disabled,
+.terminal-input:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

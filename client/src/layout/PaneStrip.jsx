@@ -10,6 +10,7 @@ import Agents from '../pages/Agents';
 import Git from '../pages/Git';
 import Plan from '../pages/Plan';
 import Screen from '../pages/Screen';
+import Terminal from '../pages/Terminal';
 import Projects from '../pages/Projects';
 
 // Multi-pane desktop layout (plans/multi-pane.md): a sliding window over the
@@ -29,6 +30,7 @@ function useVisibleTabs() {
   const showGit = useFeature('gitTab');
   const showPlan = useFeature('planTab');
   const showScreen = useFeature('screenTab');
+  const showTerminal = useFeature('terminalTab');
   const showProjects = useFeature('projectsTab');
   // Order must match BottomNav.jsx — it decides pane neighbours.
   return [
@@ -39,6 +41,7 @@ function useVisibleTabs() {
     { key: 'history', path: '/studio/history', label: 'nav.history', element: <History /> },
     ...(showAgents ? [{ key: 'agents', path: '/studio/agents', label: 'nav.agents', element: <Agents /> }] : []),
     ...(showScreen ? [{ key: 'screen', path: '/studio/screen', label: 'nav.screen', element: <Screen /> }] : []),
+    ...(showTerminal ? [{ key: 'terminal', path: '/studio/terminal', label: 'nav.terminal', element: <Terminal /> }] : []),
     ...(showProjects ? [{ key: 'projects', path: '/studio/projects', label: 'nav.projects', element: <Projects /> }] : []),
     ...(showAppTab ? [{ key: 'app', path: '/studio/app', label: 'nav.app', element: <AppRun /> }] : []),
   ];
