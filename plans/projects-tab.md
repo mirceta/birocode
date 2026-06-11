@@ -1,6 +1,10 @@
 # Projects tab — in-app project management
 
-> **Status (2026-06-11):** In progress on branch `feature/projects-tab`.
+> **Status (2026-06-11):** Deployed to the live :5099 harness and confirmed
+> by the End User. Browser-verified beforehand on an isolated :5201 preview
+> (`.claudeweb-preview/playwright/verify-projects-tab.mjs`, 12/12 checks:
+> list, select via tap, badge/chip updates, runtime add + auto-select,
+> bad-path error from the server).
 
 ## Why
 
