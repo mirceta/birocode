@@ -1,6 +1,8 @@
 # Per-project Basic/Advanced visibility
 
-> **Status (2026-06-11):** In progress on branch `feature/project-visibility`.
+> **Status (2026-06-11):** Deployed to the live :5099 harness and confirmed by
+> the End User. Browser-verified beforehand on the :5201 preview
+> (`.claudeweb-preview/playwright/verify-project-visibility.mjs`, 13/13 checks).
 
 ## Why
 
