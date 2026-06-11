@@ -8,6 +8,7 @@ import History from '../pages/History';
 import AppRun from '../pages/AppRun';
 import Agents from '../pages/Agents';
 import Git from '../pages/Git';
+import Plan from '../pages/Plan';
 import Screen from '../pages/Screen';
 import Projects from '../pages/Projects';
 
@@ -26,12 +27,14 @@ function useVisibleTabs() {
   const showAppTab = useFeature('appTab');
   const showAgents = useFeature('agentDock');
   const showGit = useFeature('gitTab');
+  const showPlan = useFeature('planTab');
   const showScreen = useFeature('screenTab');
   const showProjects = useFeature('projectsTab');
   // Order must match BottomNav.jsx — it decides pane neighbours.
   return [
     { key: 'chat', path: '/studio', label: 'nav.chat', element: <Chat /> },
     { key: 'files', path: '/studio/files', label: 'nav.files', element: <Files /> },
+    ...(showPlan ? [{ key: 'plan', path: '/studio/plan', label: 'nav.plan', element: <Plan /> }] : []),
     ...(showGit ? [{ key: 'git', path: '/studio/git', label: 'nav.git', element: <Git /> }] : []),
     { key: 'history', path: '/studio/history', label: 'nav.history', element: <History /> },
     ...(showAgents ? [{ key: 'agents', path: '/studio/agents', label: 'nav.agents', element: <Agents /> }] : []),
