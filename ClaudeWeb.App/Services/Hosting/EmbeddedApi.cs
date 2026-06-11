@@ -1,4 +1,5 @@
 using ClaudeWeb.Models;
+using ClaudeWeb.Services.Auth;
 using ClaudeWeb.Services.Chat;
 using ClaudeWeb.Services.Dock;
 using ClaudeWeb.Services.Files;
@@ -97,6 +98,7 @@ public class EmbeddedApi
                     .AllowAnyMethod()));
 
             // === MODULE SERVICE REGISTRATION (orchestrator wires these between phases) ===
+            builder.Services.AddAuthModule();   // session login (plans/auth-login.md)
             builder.Services.AddRepositoryModule(); // multi-repo (resolver + HttpContext)
             builder.Services.AddChatModule();   // M1
             builder.Services.AddFileModule();   // M2
@@ -142,9 +144,10 @@ public class EmbeddedApi
 
             _app.UseCors();
 
-            // Shared-password gate for /api/* (health + static assets already
-            // served above, so they never reach this).
-            _app.UseMiddleware<PasswordAuthMiddleware>(_config, _logger);
+            // Auth gate for /api/* — session cookie or X-Auth-Password header
+            // (plans/auth-login.md). Health + static assets already served
+            // above, so they never reach this. Deps resolve from DI.
+            _app.UseMiddleware<PasswordAuthMiddleware>();
 
             _app.MapControllers();
 

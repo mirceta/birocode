@@ -35,8 +35,9 @@ public class AppConfig
     public string PreviewUrl { get; set; } = "";
 
     /// <summary>
-    /// Shared password required on /api/* calls (except /api/health and static
-    /// files). Supplied by clients via the X-Auth-Password header or ?pw= query.
+    /// LEGACY seed only (plans/auth-login.md): hashed into
+    /// %APPDATA%\ClaudeWeb\auth.json on first run, then ignored. Rotate the
+    /// real password via POST /api/auth/password, not here.
     /// </summary>
     public string AuthPassword { get; set; } = "changeme";
 }

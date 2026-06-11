@@ -1,24 +1,17 @@
 // Generic API client for Claude Web.
 //
-// Every request to /api/* is automatically authenticated: the backend's
-// PasswordAuthMiddleware protects all /api routes and expects the shared
-// password in the `X-Auth-Password` header (see plans/INTEGRATION.md section 4).
-// The password is stored in localStorage under PW_KEY and injected here so that
-// feature modules (M5 chat, M6 files, M7 save/history) never re-handle auth.
+// Auth (plans/auth-login.md): the session token lives in an HttpOnly cookie
+// set by POST /api/auth/login, so the browser attaches it to every same-origin
+// fetch automatically — no password handling here. Feature modules never
+// re-handle auth; a 401 means "not logged in" (the App-level gate handles it).
 
-export const PW_KEY = 'claudeweb_pw';
 export const REPO_KEY = 'claudeweb_repo';
 
-export function getPassword() {
-  return localStorage.getItem(PW_KEY) || '';
-}
-
-export function setPassword(pw) {
-  localStorage.setItem(PW_KEY, pw);
-}
-
-export function clearPassword() {
-  localStorage.removeItem(PW_KEY);
+// Pre-session-auth versions kept the password in localStorage — purge it.
+try {
+  localStorage.removeItem('claudeweb_pw');
+} catch {
+  /* private mode */
 }
 
 // The id of the repository the user has selected. Sent on every request as
@@ -51,7 +44,7 @@ export class ApiError extends Error {
 // `overrideRepoId` lets Dock tabs target a specific repo regardless of the
 // global selection. When omitted, falls back to the global getRepoId().
 function authHeaders(extra = {}, overrideRepoId) {
-  const headers = { 'X-Auth-Password': getPassword(), ...extra };
+  const headers = { ...extra };
   const repoId = overrideRepoId || getRepoId();
   if (repoId) headers['X-Repo-Id'] = repoId;
   return headers;
@@ -133,7 +126,7 @@ export async function apiUpload(path, file, { repoId } = {}) {
   const rid = repoId || getRepoId();
   const res = await fetch(url(path), {
     method: 'POST',
-    headers: { 'X-Auth-Password': getPassword(), 'X-Repo-Id': rid },
+    headers: { 'X-Repo-Id': rid },
     body: form,
   });
   return handle(res);

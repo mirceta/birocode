@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { getPassword } from './api/client';
+import { apiGet } from './api/client';
 import PasswordGate from './components/PasswordGate';
+import Loading from './components/shared/Loading';
 import Landing from './pages/Landing';
 import Layout from './layout/Layout';
 import Chat from './pages/Chat';
@@ -16,10 +17,21 @@ import Projects from './pages/Projects';
 // Two layers:
 //   /        -- public landing: just the running product, no login, no chrome.
 //   /studio  -- the Claude Web builder (Chat/Files/History/App), behind the
-//               access code. The gate now wraps only this branch, not the whole
-//               app, so a visitor reaches the product without ever logging in.
+//               session login (plans/auth-login.md). The gate wraps only this
+//               branch, so a visitor reaches the product without logging in.
 export default function App() {
-  const [unlocked, setUnlocked] = useState(() => Boolean(getPassword()));
+  // 'unknown' until GET /api/auth/check answers; the session lives in an
+  // HttpOnly cookie, so the server is the only one who knows.
+  const [auth, setAuth] = useState('unknown');
+  const unlocked = auth === 'in';
+
+  useEffect(() => {
+    apiGet('/auth/check')
+      .then((r) => setAuth(r.authenticated ? 'in' : 'out'))
+      .catch(() => setAuth('out'));
+  }, []);
+
+  if (auth === 'unknown') return <Loading />;
 
   return (
     <BrowserRouter>
@@ -37,7 +49,7 @@ export default function App() {
             <Route path="projects" element={<Projects />} />
           </Route>
         ) : (
-          <Route path="/studio/*" element={<PasswordGate onUnlock={() => setUnlocked(true)} />} />
+          <Route path="/studio/*" element={<PasswordGate onUnlock={() => setAuth('in')} />} />
         )}
       </Routes>
     </BrowserRouter>

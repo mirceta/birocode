@@ -123,6 +123,8 @@
   "pwgate.placeholder": "Access code",
   "pwgate.aria": "Access code",
   "pwgate.continue": "Continue",
+  "pwgate.wrong": "Wrong access code. Please try again.",
+  "pwgate.throttled": "Too many attempts. Try again in {seconds} seconds.",
 
   "chat.greeting": "Hi! How can I help you today?",
   "chat.yourConversations": "Your conversations",

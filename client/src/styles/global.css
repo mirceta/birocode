@@ -520,3 +520,9 @@ textarea {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+.pw-gate__error {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: #c0392b;
+}

@@ -123,6 +123,8 @@
   "pwgate.placeholder": "Erisim kodu",
   "pwgate.aria": "Erisim kodu",
   "pwgate.continue": "Devam et",
+  "pwgate.wrong": "Yanlis erisim kodu. Lutfen tekrar dene.",
+  "pwgate.throttled": "Cok fazla deneme. {seconds} saniye sonra tekrar dene.",
 
   "chat.greeting": "Merhaba! Bugun sana nasil yardim edebilirim?",
   "chat.yourConversations": "Sohbetlerin",

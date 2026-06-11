@@ -74,10 +74,24 @@ Registered in `EmbeddedApi.cs` at startup; inject by constructor:
 
 ## 4. Auth
 
-`PasswordAuthMiddleware` already protects all `/api/*` routes. Clients pass the
-shared password via the `X-Auth-Password` header or `?pw=` query param.
-Exemptions: `GET /api/health` and all non-`/api` (static/SPA) routes.
+Session login since plans/auth-login.md. `PasswordAuthMiddleware` protects all
+`/api/*` routes; a request is authorized by either:
+
+- the `claudeweb_session` HttpOnly cookie issued by `POST /api/auth/login`
+  (the browser path — the React client never handles passwords or tokens), or
+- the `X-Auth-Password` header (the tooling path for curl/Playwright).
+
+The old `?pw=` query param is NOT accepted (it leaked into proxy logs).
+Failed attempts on either path hit a per-IP brute-force throttle (429).
+Secrets live in `%APPDATA%\ClaudeWeb\auth.json` (PBKDF2 hash; seeded once
+from `AppConfig.AuthPassword`, which is otherwise ignored) and sessions in
+`sessions.json` next to it. Exemptions: `GET /api/health`,
+`POST /api/auth/login`, `GET /api/auth/check`, and all non-`/api` routes.
 Module controllers do NOT implement auth themselves -- it is global.
+
+Playwright UI tests cannot fake the gate via localStorage any more: POST
+`/api/auth/login` and install the cookie with `ctx.addCookies` (see
+`verify-auth-login.mjs`).
 
 ## 5. Logging categories (convention)
 

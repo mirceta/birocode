@@ -1,20 +1,43 @@
 import { useState } from 'react';
-import { setPassword } from '../api/client';
+import { apiPost } from '../api/client';
 import { useT } from '../i18n/LanguageContext';
 
+// Login gate (plans/auth-login.md): POSTs the password to /api/auth/login,
+// which sets the HttpOnly session cookie. Wrong password and brute-force
+// lockout (429 + retryAfterSeconds) are surfaced inline.
 export default function PasswordGate({ onUnlock }) {
   const { t } = useT();
   const [value, setValue] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     const pw = value.trim();
-    if (!pw) return;
-    setPassword(pw);
-    if (onUnlock) {
-      onUnlock();
-    } else {
-      window.location.reload();
+    if (!pw || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await apiPost('/auth/login', { password: pw });
+      if (onUnlock) {
+        onUnlock();
+      } else {
+        window.location.reload();
+      }
+    } catch (err) {
+      let body = null;
+      try {
+        body = JSON.parse(err.message);
+      } catch {
+        /* not JSON */
+      }
+      if (err.status === 429) {
+        setError(t('pwgate.throttled', { seconds: body?.retryAfterSeconds ?? '?' }));
+      } else {
+        setError(t('pwgate.wrong'));
+      }
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -35,10 +58,12 @@ export default function PasswordGate({ onUnlock }) {
           aria-label={t('pwgate.aria')}
           value={value}
           onChange={(e) => setValue(e.target.value)}
+          disabled={busy}
         />
-        <button className="pw-gate__button" type="submit" disabled={!value.trim()}>
+        <button className="pw-gate__button" type="submit" disabled={!value.trim() || busy}>
           {t('pwgate.continue')}
         </button>
+        {error && <p className="pw-gate__error">{error}</p>}
       </form>
     </div>
   );

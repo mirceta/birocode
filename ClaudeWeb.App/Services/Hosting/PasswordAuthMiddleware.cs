@@ -1,54 +1,71 @@
-using ClaudeWeb.Models;
+using ClaudeWeb.Controllers;
+using ClaudeWeb.Services.Auth;
 using ClaudeWeb.Services.Logging;
 using Microsoft.AspNetCore.Http;
 
 namespace ClaudeWeb.Services.Hosting;
 
 /// <summary>
-/// Lightweight shared-password gate for /api/* routes. The password is
-/// supplied either via the "X-Auth-Password" header or the "?pw=" query
-/// parameter and compared against <see cref="AppConfig.AuthPassword"/>.
+/// Auth gate for /api/* routes (plans/auth-login.md). A request is authorized
+/// when it carries either:
+///   - a valid session cookie ("claudeweb_session", issued by /api/auth/login), or
+///   - the password in the "X-Auth-Password" header (kept for curl/Playwright
+///     tooling; verified against the PBKDF2 hash, with the last good value
+///     cached so tools don't pay the KDF cost per request).
 ///
-/// Exemptions (no password required):
-///   - GET /api/health      (so health checks and probes work)
-///   - any non-/api/* route (the React app shell + static assets)
+/// The old "?pw=" query parameter is intentionally NOT accepted any more —
+/// query strings leak into proxy logs.
 ///
-/// A missing/wrong password on a protected /api/* route returns 401.
-/// This is intentionally a single shared password, not a user system.
+/// Exemptions (no auth required):
+///   - GET  /api/health      (health checks and probes)
+///   - POST /api/auth/login  (you must be able to log in)
+///   - GET  /api/auth/check  (drives the client's login gate)
+///   - any non-/api/* route  (the React app shell + static assets)
+///
+/// Failed header auth counts toward the same per-IP brute-force throttle as
+/// failed logins. Still a single shared password, not a user system.
 /// </summary>
 public class PasswordAuthMiddleware
 {
     private const string HeaderName = "X-Auth-Password";
-    private const string QueryName = "pw";
 
     private readonly RequestDelegate _next;
-    private readonly AppConfig _config;
+    private readonly AuthService _auth;
     private readonly Logger _logger;
 
-    public PasswordAuthMiddleware(RequestDelegate next, AppConfig config, Logger logger)
+    // Last password that verified successfully via the header path, tagged
+    // with the password version it verified against. Lets tooling make many
+    // calls without a 210k-iteration PBKDF2 per request, while a password
+    // change invalidates the cache immediately.
+    private volatile VerifiedHeader? _verifiedHeader;
+
+    private sealed record VerifiedHeader(string Password, int Version);
+
+    public PasswordAuthMiddleware(RequestDelegate next, AuthService auth, Logger logger)
     {
         _next = next;
-        _config = config;
+        _auth = auth;
         _logger = logger;
     }
 
     public async Task InvokeAsync(HttpContext context)
     {
-        if (!RequiresAuth(context))
+        if (!RequiresAuth(context) || IsAuthorized(context))
         {
             await _next(context);
             return;
         }
 
-        if (IsAuthorized(context))
+        if (_auth.BlockedFor(AuthController.ClientKey(context)) is { } wait)
         {
-            await _next(context);
+            context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+            await context.Response.WriteAsJsonAsync(new { error = "Too many attempts", retryAfterSeconds = (int)Math.Ceiling(wait.TotalSeconds) });
             return;
         }
 
         _logger.Error($"[AUTH] 401 rejected {context.Request.Method} {context.Request.Path}");
         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-        await context.Response.WriteAsJsonAsync(new { error = "Unauthorized: missing or invalid password" });
+        await context.Response.WriteAsJsonAsync(new { error = "Unauthorized: log in or supply a valid X-Auth-Password header" });
     }
 
     private static bool RequiresAuth(HttpContext context)
@@ -59,9 +76,13 @@ public class PasswordAuthMiddleware
         if (!path.StartsWithSegments("/api"))
             return false;
 
-        // Health check is always open.
-        if (HttpMethods.IsGet(context.Request.Method) &&
-            path.Equals("/api/health", StringComparison.OrdinalIgnoreCase))
+        var isGet = HttpMethods.IsGet(context.Request.Method);
+        if (isGet && path.Equals("/api/health", StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (isGet && path.Equals("/api/auth/check", StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (HttpMethods.IsPost(context.Request.Method) &&
+            path.Equals("/api/auth/login", StringComparison.OrdinalIgnoreCase))
             return false;
 
         return true;
@@ -69,10 +90,39 @@ public class PasswordAuthMiddleware
 
     private bool IsAuthorized(HttpContext context)
     {
-        var supplied = context.Request.Headers[HeaderName].FirstOrDefault()
-                       ?? context.Request.Query[QueryName].FirstOrDefault();
+        // 1. Session cookie (the browser path).
+        if (_auth.ValidateSession(context.Request.Cookies[AuthController.CookieName]))
+            return true;
 
-        return !string.IsNullOrEmpty(supplied) &&
-               string.Equals(supplied, _config.AuthPassword, StringComparison.Ordinal);
+        // 2. X-Auth-Password header (the tooling path).
+        var supplied = context.Request.Headers[HeaderName].FirstOrDefault();
+        if (string.IsNullOrEmpty(supplied))
+            return false;
+
+        var version = _auth.PasswordVersion;
+        var cached = _verifiedHeader;
+        if (cached != null && cached.Version == version && FixedTimeEquals(supplied, cached.Password))
+            return true;
+
+        var client = AuthController.ClientKey(context);
+        if (_auth.BlockedFor(client) is not null)
+            return false; // locked out — don't even run the KDF
+
+        if (_auth.VerifyPassword(supplied))
+        {
+            _verifiedHeader = new VerifiedHeader(supplied, version);
+            _auth.RecordSuccess(client);
+            return true;
+        }
+
+        _auth.RecordFailure(client);
+        return false;
+    }
+
+    private static bool FixedTimeEquals(string a, string b)
+    {
+        var ba = System.Text.Encoding.UTF8.GetBytes(a);
+        var bb = System.Text.Encoding.UTF8.GetBytes(b);
+        return System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(ba, bb);
     }
 }
