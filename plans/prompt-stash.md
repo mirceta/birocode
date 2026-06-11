@@ -1,6 +1,9 @@
 # Prompt stash — jot ideas mid-run
 
-> **Status (2026-06-11):** In progress on branch `feature/prompt-stash`.
+> **Status (2026-06-11):** Deployed to the live :5099 harness and confirmed by
+> the End User. Browser-verified beforehand on the :5201 preview
+> (`verify-prompt-stash.mjs`, 11/11 checks); stash round-trip re-verified on
+> live after the bin swap.
 
 ## Why
 
