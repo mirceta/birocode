@@ -54,6 +54,22 @@
   color: #c0392b;
 }
 
+/* Stale-local-base warning (plans/git-origin-visibility.md) */
+.git-branch__drift {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #b58900;
+}
+
+.git-fetchedat {
+  font-size: 12px;
+  opacity: 0.6;
+}
+
 .git-refresh {
   margin-left: auto;
   min-height: 32px;

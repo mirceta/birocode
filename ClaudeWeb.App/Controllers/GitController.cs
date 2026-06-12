@@ -93,6 +93,13 @@ public class GitController : ControllerBase
                 baseBranch = s.BaseBranch,
                 baseAhead = s.BaseAhead,
                 baseBehind = s.BaseBehind,
+                localBaseBranch = s.LocalBaseBranch,
+                originBaseBranch = s.OriginBaseBranch,
+                originBaseAhead = s.OriginBaseAhead,
+                originBaseBehind = s.OriginBaseBehind,
+                baseDriftAhead = s.BaseDriftAhead,
+                baseDriftBehind = s.BaseDriftBehind,
+                fetchedAt = s.FetchedAt,
                 files = s.Files.Select(f => new
                 {
                     path = f.Path,

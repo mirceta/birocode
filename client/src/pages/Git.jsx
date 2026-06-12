@@ -122,6 +122,48 @@ export default function Git() {
             )}
           </div>
         )}
+        {/* Origin-aware positions (plans/git-origin-visibility.md): HEAD vs
+            origin/main directly — skipped when another row already shows the
+            same ref (upstream on the base branch, or the baseBranch fallback). */}
+        {status.originBaseBranch
+          && status.originBaseBranch !== status.upstream
+          && status.originBaseBranch !== status.baseBranch && (
+          <div className="git-branch__sync git-branch__base">
+            {status.originBaseAhead > 0 && (
+              <span className="git-branch__ahead">
+                {t(status.originBaseAhead === 1 ? 'git.baseAheadOne' : 'git.baseAhead', {
+                  n: status.originBaseAhead, base: status.originBaseBranch,
+                })}
+              </span>
+            )}
+            {status.originBaseBehind > 0 && (
+              <span className="git-branch__behind">
+                {t(status.originBaseBehind === 1 ? 'git.baseBehindOne' : 'git.baseBehind', {
+                  n: status.originBaseBehind, base: status.originBaseBranch,
+                })}
+              </span>
+            )}
+            {status.originBaseAhead === 0 && status.originBaseBehind === 0 && (
+              <span className="git-branch__insync">
+                {t('git.baseInSync', { base: status.originBaseBranch })}
+              </span>
+            )}
+          </div>
+        )}
+        {/* Stale-local-main warning — the 2026-06-12 silent drift. Hidden on
+            the base branch itself (the upstream row covers it there). */}
+        {status.branch !== status.localBaseBranch
+          && (status.baseDriftBehind > 0 || status.baseDriftAhead > 0) && (
+          <div className="git-branch__drift" role="note">
+            <span aria-hidden="true">⚠</span>
+            {status.baseDriftBehind > 0 && (
+              <span>{t('git.driftBehind', { base: status.localBaseBranch, n: status.baseDriftBehind })}</span>
+            )}
+            {status.baseDriftAhead > 0 && (
+              <span>{t('git.driftAhead', { base: status.localBaseBranch, n: status.baseDriftAhead })}</span>
+            )}
+          </div>
+        )}
         <button
           type="button"
           className="git-refresh"
@@ -130,6 +172,13 @@ export default function Git() {
         >
           {checking ? t('git.checking') : t('git.checkOrigin')}
         </button>
+        <span className="git-fetchedat">
+          {status.fetchedAt
+            ? t('git.fetchedAt', {
+                time: new Date(status.fetchedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              })
+            : t('git.neverFetched')}
+        </span>
         {status.fetchError && (
           <div className="git-branch__fetcherror">{t('git.fetchError')}</div>
         )}

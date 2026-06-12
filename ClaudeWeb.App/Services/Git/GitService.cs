@@ -160,7 +160,9 @@ public partial class GitService
     public sealed record StatusResult(
         string Branch, string? Upstream, int Ahead, int Behind, IReadOnlyList<StatusFile> Files,
         bool Fetched, string? FetchError,
-        string? BaseBranch, int BaseAhead, int BaseBehind);
+        string? BaseBranch, int BaseAhead, int BaseBehind,
+        string? LocalBaseBranch, string? OriginBaseBranch, int OriginBaseAhead, int OriginBaseBehind,
+        int BaseDriftAhead, int BaseDriftBehind, DateTime? FetchedAt);
 
     /// <summary>
     /// Read-only working-tree status (plans/git-tab.md): current branch,
@@ -245,11 +247,80 @@ public partial class GitService
         }
 
         var (baseBranch, baseAhead, baseBehind) = CompareToBase(workingDir, branch);
+        var origin = CompareToOriginBase(workingDir, branch);
 
         _logger.Info($"[GIT] Status -> {branch} (+{ahead}/-{behind}), {files.Count} change(s){(fetched ? ", fetched" : "")}"
-            + (baseBranch is null ? "" : $", vs {baseBranch} +{baseAhead}/-{baseBehind}"));
+            + (baseBranch is null ? "" : $", vs {baseBranch} +{baseAhead}/-{baseBehind}")
+            + (origin.OriginBase is null ? "" : $", vs {origin.OriginBase} +{origin.Ahead}/-{origin.Behind}, base drift +{origin.DriftAhead}/-{origin.DriftBehind}"));
         return new StatusResult(branch, upstream, ahead, behind, files, fetched, fetchError,
-            baseBranch, baseAhead, baseBehind);
+            baseBranch, baseAhead, baseBehind,
+            origin.LocalBase, origin.OriginBase, origin.Ahead, origin.Behind,
+            origin.DriftAhead, origin.DriftBehind, FetchHeadTime(workingDir));
+    }
+
+    /// <summary>
+    /// Origin-aware positions (plans/git-origin-visibility.md): HEAD vs the
+    /// remote-tracking base (origin/main|master), and local base vs origin
+    /// base ("drift" — a stale local main made 'ahead of main' a lie on
+    /// 2026-06-12). Local and origin bases are detected independently.
+    /// Values reflect the locally-known origin refs; a fetch refreshes them.
+    /// </summary>
+    private (string? LocalBase, string? OriginBase, int Ahead, int Behind, int DriftAhead, int DriftBehind)
+        CompareToOriginBase(string workingDir, string branch)
+    {
+        string? localBase = null;
+        foreach (var c in new[] { "main", "master" })
+            if (RunGit(workingDir, $"rev-parse --verify --quiet refs/heads/{c}").ExitCode == 0)
+            {
+                localBase = c;
+                break;
+            }
+        string? originBase = null;
+        foreach (var c in new[] { "origin/main", "origin/master" })
+            if (RunGit(workingDir, $"rev-parse --verify --quiet refs/remotes/{c}").ExitCode == 0)
+            {
+                originBase = c;
+                break;
+            }
+
+        var (ahead, behind) = (0, 0);
+        if (originBase is not null && branch is not "unknown" and not "(detached)")
+            (ahead, behind) = CountLeftRight(workingDir, originBase, "HEAD");
+
+        var (driftAhead, driftBehind) = (0, 0);
+        if (originBase is not null && localBase is not null)
+            (driftAhead, driftBehind) = CountLeftRight(workingDir, originBase, localBase);
+
+        return (localBase, originBase, ahead, behind, driftAhead, driftBehind);
+    }
+
+    /// <summary>(right-only, left-only) of `rev-list --left-right --count L...R`
+    /// — i.e. how far RIGHT is ahead/behind LEFT. (0,0) on any failure.</summary>
+    private (int Ahead, int Behind) CountLeftRight(string workingDir, string leftRef, string rightRef)
+    {
+        var result = RunGit(workingDir, $"rev-list --left-right --count {leftRef}...{rightRef}");
+        if (result.ExitCode != 0) return (0, 0);
+        var parts = result.StdOut.Trim().Split('\t', ' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 2
+            || !int.TryParse(parts[0], out var leftOnly)
+            || !int.TryParse(parts[1], out var rightOnly))
+            return (0, 0);
+        return (rightOnly, leftOnly);
+    }
+
+    /// <summary>When origin state was last fetched: .git/FETCH_HEAD's mtime,
+    /// null when never fetched (or .git is not a plain directory).</summary>
+    private static DateTime? FetchHeadTime(string workingDir)
+    {
+        try
+        {
+            var path = Path.Combine(workingDir, ".git", "FETCH_HEAD");
+            return File.Exists(path) ? File.GetLastWriteTime(path) : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -274,16 +345,7 @@ public partial class GitService
         }
         if (baseRef is null) return (null, 0, 0);
 
-        // "behind<TAB>ahead": left = commits only on base, right = only on HEAD.
-        var result = RunGit(workingDir, $"rev-list --left-right --count {baseRef}...HEAD");
-        if (result.ExitCode != 0) return (null, 0, 0);
-
-        var parts = result.StdOut.Trim().Split('\t', ' ', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length != 2
-            || !int.TryParse(parts[0], out var behindBase)
-            || !int.TryParse(parts[1], out var aheadOfBase))
-            return (null, 0, 0);
-
+        var (aheadOfBase, behindBase) = CountLeftRight(workingDir, baseRef, "HEAD");
         return (baseRef, aheadOfBase, behindBase);
     }
 
