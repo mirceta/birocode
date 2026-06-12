@@ -1,8 +1,7 @@
 # Terminal sessions — Chat/Term in one nav slot, multiple PTYs, resuming Claude conversations
 
-> **Status (2026-06-11):** Built and browser-verified (20/20) on
-> `feature/terminal-sessions`; awaiting End User confirmation. The canonical
-> plan with build decisions lives at
+> **Status (2026-06-12):** Deployed and confirmed on :5099. The canonical
+> plan with build decisions and the deploy post-mortem lives at
 > [plans/terminal-sessions.md](plans/terminal-sessions.md).
 
 ## What and why

@@ -1,10 +1,12 @@
 # Terminal sessions — Chat/Term in one nav slot, multiple PTYs, resuming Claude conversations
 
-> **Status (2026-06-11):** In development on `feature/terminal-sessions`
-> (stacked on `feature/terminal-tab`, PR #7). Browser-verified on the :5201
-> harness (`.claudeweb-preview/playwright/verify-terminal-sessions.mjs`,
-> 20/20 checks). Resume behavior: decision (a) — auto-run `claude --resume`.
-> Awaiting End User confirmation.
+> **Status (2026-06-12):** Deployed and confirmed. Live on :5099 (fourth
+> deploy attempt — the first three failed on deploy-TOOLING bugs, never the
+> feature: 7-min confirm window ×2, then swap.ps1 nesting bin\bin + arm.ps1
+> locale bug = 30-min outage on 2026-06-12; scripts since hardened with
+> robocopy /MIR, port-free wait, HTTP health check + auto-rollback).
+> Browser-verified (`verify-terminal-sessions.mjs`, 20/20) and confirmed by
+> the End User. Resume behavior: decision (a) — auto-run `claude --resume`.
 
 ## What and why
 
