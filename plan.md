@@ -18,6 +18,15 @@
 
 ## Recently shipped
 
+- **Git tab suite** (merged to main 2026-06-12 evening, deployed & confirmed):
+  [origin visibility](plans/git-origin-visibility.md) (honest origin/main
+  comparisons + drift warning), [actions](plans/git-actions.md)
+  (merge-main/pull-main/pull-branch/push-branch with busy-guard and
+  conflict auto-abort), [other-branches overview](plans/git-branches.md)
+  (cross-computer WIP memory, dead branches hidden) and the
+  [history graph](plans/git-graph.md) (mermaid, newest at top, HEAD
+  marked). Also enforced: deploys must contain origin/main
+  (docs/claude-web/self-dev.md + swap.ps1 guard).
 - [Auth IP filter](plans/auth-ip-filter.md) — IP allowlist gate in front of
   password login. Merged to main, deployed & field-tested 2026-06-12.
 - [Terminal sessions](plans/terminal-sessions.md) — Chat/Term in one nav
@@ -30,10 +39,9 @@
 
 ## Next up
 
-- Git tab upgrades (user request, not yet planned): merge-main-into-branch,
-  pull/push origin, refresh buttons — and compare against **origin/main**,
-  not local main (today's lesson: the tab said "ahead of main" while origin
-  had moved).
+- Housekeeping (offered, awaiting the user's word): delete the merged local
+  branches (4× feature/git-* + 17 older ones — the Git tab's dead-branch
+  filter already hides them).
 
 ## Reference docs
 
