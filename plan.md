@@ -8,19 +8,19 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-13):** One feature in flight: dual chat — implemented
-> on `feature/dual-chat`, browser-verified 24/24 on :5201, awaiting
-> preview/deploy.
+> **Status (2026-06-13):** No feature in flight. Dual chat deployed &
+> confirmed; its branch awaits the merge word.
 
 ## Active feature plans
 
-- [Dual chat](plans/dual-chat.md) — two persistent chat tabs: a Project
-  chat that follows the active project (today's behavior) and an always-on
-  Claude Web chat pinned to the Harness's own repo. Implemented &
-  verified 2026-06-13 (`feature/dual-chat`), not yet deployed.
+- (none)
 
 ## Recently shipped
 
+- [Dual chat](plans/dual-chat.md) — two persistent chat tabs: a Project
+  chat that follows the active project and an always-on Claude Web chat
+  pinned to the Harness's own repo. Deployed & confirmed 2026-06-13; on
+  `feature/dual-chat`, not yet merged to main.
 - [Settings tab](plans/settings-tab.md) — rearrangeable nav-tab order with
   live preview; extracted the one canonical tab registry. Deployed &
   confirmed 2026-06-12.

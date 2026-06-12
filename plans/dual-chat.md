@@ -1,11 +1,13 @@
 # Dual chat — a Project chat plus an always-on Claude Web chat
 
-> **Status (2026-06-13):** Implemented on `feature/dual-chat` and
-> browser-verified on :5201 — `verify-dual-chat.mjs` 24/24 (repo targeting
-> per send asserted via a stubbed /api/chat, multi-turn, switch-survival,
-> same-repo independence, 409 banner, basic mode; screenshots read). Not
-> yet deployed. Plan v2 after the user corrected scope (v1 guessed "pin
-> every chat to its birth repo" — wrong, deleted).
+> **Status (2026-06-13):** Deployed and confirmed ("it works", 00:34;
+> rollback disarmed; health 200, served bundle hash == disk, /api/repos
+> isSelf round-trip OK). Browser-verified on :5201 — `verify-dual-chat.mjs`
+> 24/24 (repo targeting per send asserted via a stubbed /api/chat,
+> multi-turn, switch-survival, same-repo independence, 409 banner, basic
+> mode; screenshots read). On `feature/dual-chat`, not yet merged to main.
+> Plan v2 after the user corrected scope (v1 guessed "pin every chat to
+> its birth repo" — wrong, deleted).
 
 ## Problem
 
