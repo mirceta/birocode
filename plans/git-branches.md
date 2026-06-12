@@ -1,10 +1,10 @@
 # Git tab — other-branches overview
 
-> **Status (2026-06-12):** Deployed and confirmed. Live on :5099 (hardened
-> pipeline, health in 2s), fixture-verified
-> (`verify-git-branches.mjs`, 14/14) and confirmed by the End User. First
-> live response listed 17 forgotten feature branches — exactly the problem
-> this solves.
+> **Status (2026-06-12):** Deployed and confirmed, including increment 2
+> (push-branch button + dead-branch filter, `verify-git-push.mjs` 9/9 with
+> a real push to a bare origin). The filter cut the live overview from 17
+> forgotten branches to the 2 with actual unmerged work. Confirmed by the
+> End User.
 
 ## Problem
 
