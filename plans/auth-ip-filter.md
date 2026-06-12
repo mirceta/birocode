@@ -1,8 +1,11 @@
 # Auth — IP allowlist filter
 
-> **Status (2026-06-12):** APPROVED v2 — requirements confirmed, design
-> written, XFF decision made (Option A, Design §1). Ready to implement.
-> Branch: `feature/auth-ip-filter`.
+> **Status (2026-06-12):** DEPLOYED — verified on an isolated preview
+> instance (gate + XFF hardening via curl; Guests tab 12/12 Playwright
+> checks; live-SSE kill in 254 ms), then deployed to production and
+> field-tested (internet IP correct via `TrustedProxyIps`, approve/remove
+> flow working). Merged to main. Remaining vectors:
+> [threat-model.md](threat-model.md).
 
 ## What we are building
 
@@ -180,7 +183,9 @@ ClaudeWeb.App/Services/IpFilter/
   IpFilterMiddleware.cs        # the gate itself
   IpFilterModuleExtensions.cs  # AddIpFilterModule()
 ClaudeWeb.App/Controllers/IpFilterController.cs   # web read + remove only
-ClaudeWeb.App/UI/IpFilterPanel.cs                 # desktop GUI (approve lives here)
+ClaudeWeb.App/UI/IpFilterForm.cs                  # desktop GUI dialog (approve lives here;
+                                                  #   RepositoriesForm precedent, opened by a
+                                                  #   "Guests (IPs)" header button in MainForm)
 client/src/pages/Guests.jsx (+ css, i18n keys)    # web inspection tab
 ```
 

@@ -11,6 +11,7 @@ import Git from '../pages/Git';
 import Plan from '../pages/Plan';
 import Screen from '../pages/Screen';
 import Projects from '../pages/Projects';
+import Guests from '../pages/Guests';
 
 // Multi-pane desktop layout (plans/multi-pane.md): a sliding window over the
 // nav's tab list, centered on the active route. No pane management UI — the
@@ -30,6 +31,7 @@ function useVisibleTabs() {
   const showPlan = useFeature('planTab');
   const showScreen = useFeature('screenTab');
   const showProjects = useFeature('projectsTab');
+  const showGuests = useFeature('guestsTab');
   // Order must match BottomNav.jsx — it decides pane neighbours.
   return [
     { key: 'chat', path: '/studio', label: 'nav.chat', element: <Chat /> },
@@ -40,6 +42,7 @@ function useVisibleTabs() {
     ...(showAgents ? [{ key: 'agents', path: '/studio/agents', label: 'nav.agents', element: <Agents /> }] : []),
     ...(showScreen ? [{ key: 'screen', path: '/studio/screen', label: 'nav.screen', element: <Screen /> }] : []),
     ...(showProjects ? [{ key: 'projects', path: '/studio/projects', label: 'nav.projects', element: <Projects /> }] : []),
+    ...(showGuests ? [{ key: 'guests', path: '/studio/guests', label: 'nav.guests', element: <Guests /> }] : []),
     ...(showAppTab ? [{ key: 'app', path: '/studio/app', label: 'nav.app', element: <AppRun /> }] : []),
   ];
 }

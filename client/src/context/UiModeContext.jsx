@@ -29,6 +29,7 @@ export const FEATURES = {
   machineName: 'advanced', // header title shows "machine · project · branch"
   multiPane: 'advanced', // side-by-side desktop panes (plans/multi-pane.md)
   promptStash: 'advanced', // stash prompt ideas mid-run in the composer (plans/prompt-stash.md)
+  guestsTab: 'advanced', // IP allowlist inspection: view + unlist only, never approve (plans/auth-ip-filter.md)
 };
 
 const MODE_KEY = 'claudeweb_ui_mode';
