@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
-import { apiGet } from '../api/client';
+import { apiGet, apiPost } from '../api/client';
 import Loading from '../components/shared/Loading';
 import ErrorBanner from '../components/shared/ErrorBanner';
 import { useRepo } from '../context/RepoContext';
+import { useFeature } from '../context/UiModeContext';
 import { useT } from '../i18n/LanguageContext';
 import './git.css';
 
-// Read-only git status view (plans/git-tab.md): branch, ahead/behind vs
-// upstream, and the working-tree changes. No actions — the agent performs
-// all git mutations through chat.
+// Git tab (plans/git-tab.md + plans/git-actions.md): a fixed position card —
+// the same "n ahead · m behind" rows every time (vs main, origin/main,
+// origin/B) — and three inward-sync actions (merge main into branch, pull
+// main, pull branch). No push/rebase/checkout: publishing stays with Claude
+// in chat. Actions are blocked while a chat run mutates this repo.
 const GROUPS = [
   { key: 'conflicts', test: (f) => f.conflicted },
   { key: 'staged', test: (f) => !f.conflicted && !f.untracked && f.index !== '.' },
@@ -22,17 +25,37 @@ function statusLetter(f) {
   return f.worktree !== '.' ? f.worktree : f.index;
 }
 
+function PositionRow({ a, b, label, missingLabel }) {
+  const { t } = useT();
+  if (!label) {
+    return (
+      <div className="git-row">
+        <span className="git-row__counts git-row__counts--missing">{missingLabel}</span>
+      </div>
+    );
+  }
+  return (
+    <div className="git-row">
+      <span className={`git-row__counts${a === 0 && b === 0 ? ' git-row__counts--insync' : ''}`}>
+        {t('git.aheadBehind', { a, b })}
+      </span>
+      <span className="git-row__ref">{label}</span>
+    </div>
+  );
+}
+
 export default function Git() {
   const { t } = useT();
   const { currentRepoId } = useRepo();
+  const showActions = useFeature('gitActions');
 
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState('');
+  const [acting, setActing] = useState(''); // which action is in flight
+  const [actionMsg, setActionMsg] = useState(null); // { ok, text }
 
-  // Initial/background loads stay fast (no fetch); the "check origin" button
-  // passes fetch=true for a real origin comparison (plans/git-origin-sync.md).
   const load = useCallback(async (fetchOrigin = false) => {
     setError('');
     if (fetchOrigin) setChecking(true);
@@ -46,12 +69,14 @@ export default function Git() {
     }
   }, [t]);
 
+  // Tab open / repo switch: fetch origin so all three rows are honest
+  // (agreed addition 1). Visibility returns stay cheap.
   useEffect(() => {
     setLoading(true);
-    load();
+    setActionMsg(null);
+    load(true);
   }, [load, currentRepoId]);
 
-  // Re-check when the phone comes back to the page.
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState === 'visible') load();
@@ -59,6 +84,24 @@ export default function Git() {
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [load]);
+
+  const act = async (name, path) => {
+    setActing(name);
+    setActionMsg(null);
+    try {
+      const r = await apiPost(path);
+      setActionMsg({ ok: true, text: r.updated ? t('git.actUpdated') : t('git.actNoop') });
+    } catch (err) {
+      let text = err.message;
+      try {
+        text = JSON.parse(err.message).error || text;
+      } catch { /* raw text */ }
+      setActionMsg({ ok: false, text });
+    } finally {
+      setActing('');
+      load();
+    }
+  };
 
   if (loading) return <Loading label={t('git.loading')} />;
   if (error) return <ErrorBanner message={error} onRetry={() => load()} />;
@@ -69,106 +112,89 @@ export default function Git() {
     .filter((g) => g.files.length > 0);
   const clean = status.files.length === 0;
 
+  const onBase = status.branch === status.localBaseBranch;
+  const busy = !!status.busy;
+  const base = status.localBaseBranch || status.baseBranch;
+  // The originBase row dedupes only against an IDENTICAL baseBranch fallback
+  // (no local main) — otherwise all three rows always render (user's spec).
+  const showBaseRow = !onBase && !!status.baseBranch;
+  const showOriginBaseRow = !!status.originBaseBranch
+    && status.originBaseBranch !== status.baseBranch
+    && !(onBase && status.originBaseBranch === status.upstream);
+  const canMerge = !busy && clean && !onBase && status.baseBehind > 0
+    && status.baseBranch === status.localBaseBranch;
+  const canPullMain = !busy && !!base && (onBase ? status.behind > 0 : status.baseDriftBehind > 0);
+  const canPullBranch = !busy && !onBase && !!status.upstream && status.behind > 0;
+
   return (
     <div className="git-page">
       <div className="git-branch">
         <div className="git-branch__name">
           <span aria-hidden="true">⎇</span> {status.branch}
         </div>
-        {status.upstream ? (
-          <div className="git-branch__sync">
-            {status.upstream}
-            {status.ahead > 0 && (
-              <span className="git-branch__ahead">
-                {t(status.ahead === 1 ? 'git.aheadOne' : 'git.ahead', { n: status.ahead })}
-              </span>
+
+        <div className="git-rows">
+          {showBaseRow && (
+            <PositionRow a={status.baseAhead} b={status.baseBehind} label={status.baseBranch} />
+          )}
+          {showOriginBaseRow && (
+            <PositionRow a={status.originBaseAhead} b={status.originBaseBehind} label={status.originBaseBranch} />
+          )}
+          <PositionRow
+            a={status.ahead}
+            b={status.behind}
+            label={status.upstream}
+            missingLabel={t('git.noUpstream')}
+          />
+        </div>
+
+        {showActions && (
+          <div className="git-actions">
+            {!onBase && (
+              <button
+                type="button"
+                className="git-action"
+                disabled={!canMerge || !!acting}
+                onClick={() => act('merge', '/git/merge-base')}
+              >
+                {acting === 'merge' ? t('git.acting') : t('git.actMerge', { base })}
+              </button>
             )}
-            {status.behind > 0 && (
-              <span className="git-branch__behind">
-                {t(status.behind === 1 ? 'git.behindOne' : 'git.behind', { n: status.behind })}
-              </span>
-            )}
-            {status.ahead === 0 && status.behind === 0 && (
-              <span className="git-branch__insync">
-                {status.fetched ? t('git.inSyncOrigin') : t('git.inSync')}
-              </span>
-            )}
-          </div>
-        ) : (
-          <div className="git-branch__sync">
-            <span className="git-branch__noupstream">{t('git.noUpstream')}</span>
-          </div>
-        )}
-        {status.baseBranch && (
-          <div className="git-branch__sync git-branch__base">
-            {status.baseAhead > 0 && (
-              <span className="git-branch__ahead">
-                {t(status.baseAhead === 1 ? 'git.baseAheadOne' : 'git.baseAhead', {
-                  n: status.baseAhead, base: status.baseBranch,
-                })}
-              </span>
-            )}
-            {status.baseBehind > 0 && (
-              <span className="git-branch__behind">
-                {t(status.baseBehind === 1 ? 'git.baseBehindOne' : 'git.baseBehind', {
-                  n: status.baseBehind, base: status.baseBranch,
-                })}
-              </span>
-            )}
-            {status.baseAhead === 0 && status.baseBehind === 0 && (
-              <span className="git-branch__insync">
-                {t('git.baseInSync', { base: status.baseBranch })}
-              </span>
-            )}
-          </div>
-        )}
-        {/* Origin-aware positions (plans/git-origin-visibility.md): HEAD vs
-            origin/main directly — skipped when another row already shows the
-            same ref (upstream on the base branch, or the baseBranch fallback). */}
-        {status.originBaseBranch
-          && status.originBaseBranch !== status.upstream
-          && status.originBaseBranch !== status.baseBranch && (
-          <div className="git-branch__sync git-branch__base">
-            {status.originBaseAhead > 0 && (
-              <span className="git-branch__ahead">
-                {t(status.originBaseAhead === 1 ? 'git.baseAheadOne' : 'git.baseAhead', {
-                  n: status.originBaseAhead, base: status.originBaseBranch,
-                })}
-              </span>
-            )}
-            {status.originBaseBehind > 0 && (
-              <span className="git-branch__behind">
-                {t(status.originBaseBehind === 1 ? 'git.baseBehindOne' : 'git.baseBehind', {
-                  n: status.originBaseBehind, base: status.originBaseBranch,
-                })}
-              </span>
-            )}
-            {status.originBaseAhead === 0 && status.originBaseBehind === 0 && (
-              <span className="git-branch__insync">
-                {t('git.baseInSync', { base: status.originBaseBranch })}
-              </span>
+            <button
+              type="button"
+              className="git-action"
+              disabled={!canPullMain || !!acting}
+              onClick={() => act('pullMain', onBase ? '/git/pull-current' : '/git/pull-base')}
+            >
+              {acting === 'pullMain' ? t('git.acting') : t('git.actPullMain', { base: base || 'main' })}
+            </button>
+            {!onBase && (
+              <button
+                type="button"
+                className="git-action"
+                disabled={!canPullBranch || !!acting}
+                onClick={() => act('pullBranch', '/git/pull-current')}
+              >
+                {acting === 'pullBranch' ? t('git.acting') : t('git.actPullBranch')}
+              </button>
             )}
           </div>
         )}
-        {/* Stale-local-main warning — the 2026-06-12 silent drift. Hidden on
-            the base branch itself (the upstream row covers it there). */}
-        {status.branch !== status.localBaseBranch
-          && (status.baseDriftBehind > 0 || status.baseDriftAhead > 0) && (
-          <div className="git-branch__drift" role="note">
-            <span aria-hidden="true">⚠</span>
-            {status.baseDriftBehind > 0 && (
-              <span>{t('git.driftBehind', { base: status.localBaseBranch, n: status.baseDriftBehind })}</span>
-            )}
-            {status.baseDriftAhead > 0 && (
-              <span>{t('git.driftAhead', { base: status.localBaseBranch, n: status.baseDriftAhead })}</span>
-            )}
+        {showActions && busy && <div className="git-acthint">{t('git.actBusy')}</div>}
+        {showActions && !busy && !clean && !onBase && status.baseBehind > 0 && (
+          <div className="git-acthint">{t('git.actDirty')}</div>
+        )}
+        {actionMsg && (
+          <div className={`git-actmsg git-actmsg--${actionMsg.ok ? 'ok' : 'err'}`} role="status">
+            {actionMsg.text}
           </div>
         )}
+
         <button
           type="button"
           className="git-refresh"
           onClick={() => load(true)}
-          disabled={checking}
+          disabled={checking || !!acting}
         >
           {checking ? t('git.checking') : t('git.checkOrigin')}
         </button>

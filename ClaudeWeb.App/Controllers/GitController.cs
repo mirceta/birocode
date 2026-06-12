@@ -1,3 +1,4 @@
+using ClaudeWeb.Services.Chat;
 using ClaudeWeb.Services.Git;
 using ClaudeWeb.Services.Logging;
 using ClaudeWeb.Services.Repositories;
@@ -18,12 +19,14 @@ public class GitController : ControllerBase
 {
     private readonly GitService _git;
     private readonly RepositoryResolver _repos;
+    private readonly RunSessionService _runs;
     private readonly Logger _logger;
 
-    public GitController(GitService git, RepositoryResolver repos, Logger logger)
+    public GitController(GitService git, RepositoryResolver repos, RunSessionService runs, Logger logger)
     {
         _git = git;
         _repos = repos;
+        _runs = runs;
         _logger = logger;
     }
 
@@ -100,6 +103,9 @@ public class GitController : ControllerBase
                 baseDriftAhead = s.BaseDriftAhead,
                 baseDriftBehind = s.BaseDriftBehind,
                 fetchedAt = s.FetchedAt,
+                // A chat run mutating this repo right now: git actions are
+                // rejected (and greyed out) while true (plans/git-actions.md).
+                busy = _runs.IsBusy(repo.Id),
                 files = s.Files.Select(f => new
                 {
                     path = f.Path,
@@ -133,6 +139,51 @@ public class GitController : ControllerBase
         catch (Exception ex)
         {
             _logger.Error($"[GIT] PullBase failed: {ex.Message}");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    /// <summary>POST /api/git/merge-base -- merge LOCAL main/master into the
+    /// current branch (plans/git-actions.md). Clean tree required; conflicts
+    /// auto-abort server-side. 409 while a chat run is active in the repo.</summary>
+    [HttpPost("git/merge-base")]
+    public IActionResult MergeBase()
+    {
+        _logger.CountRequest();
+        var repo = _repos.Current();
+        if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
+        if (_runs.IsBusy(repo.Id))
+            return Conflict(new { error = "Claude is working in this project — try again when the run finishes." });
+        try
+        {
+            var r = _git.MergeBase(repo.Path);
+            return r.Ok ? Ok(new { updated = r.Updated }) : UnprocessableEntity(new { error = r.Error });
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[GIT] MergeBase failed: {ex.Message}");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    /// <summary>POST /api/git/pull-current -- `git pull --ff-only` on the
+    /// current branch (plans/git-actions.md). 409 while a chat run is active.</summary>
+    [HttpPost("git/pull-current")]
+    public IActionResult PullCurrent()
+    {
+        _logger.CountRequest();
+        var repo = _repos.Current();
+        if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
+        if (_runs.IsBusy(repo.Id))
+            return Conflict(new { error = "Claude is working in this project — try again when the run finishes." });
+        try
+        {
+            var r = _git.PullCurrent(repo.Path);
+            return r.Ok ? Ok(new { updated = r.Updated }) : UnprocessableEntity(new { error = r.Error });
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[GIT] PullCurrent failed: {ex.Message}");
             return StatusCode(500, new { error = ex.Message });
         }
     }

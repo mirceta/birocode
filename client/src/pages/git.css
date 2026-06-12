@@ -54,16 +54,79 @@
   color: #c0392b;
 }
 
-/* Stale-local-base warning (plans/git-origin-visibility.md) */
-.git-branch__drift {
+/* Uniform position rows + inward-sync actions (plans/git-actions.md) */
+.git-rows {
   width: 100%;
   display: flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.git-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
   font-size: 13px;
+}
+
+.git-row__counts {
+  font-weight: 700;
+  min-width: 150px;
+}
+
+.git-row__counts--insync {
+  font-weight: 400;
+  opacity: 0.55;
+}
+
+.git-row__counts--missing {
   font-weight: 600;
   color: #b58900;
 }
+
+.git-row__ref {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  opacity: 0.75;
+}
+
+.git-actions {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.git-action {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: inherit;
+  cursor: pointer;
+}
+
+.git-action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.git-acthint {
+  width: 100%;
+  font-size: 12px;
+  color: #b58900;
+}
+
+.git-actmsg {
+  width: 100%;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.git-actmsg--ok { color: #2e7d32; }
+.git-actmsg--err { color: #c0392b; }
 
 .git-fetchedat {
   font-size: 12px;

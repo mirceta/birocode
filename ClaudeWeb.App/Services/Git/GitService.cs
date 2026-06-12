@@ -391,6 +391,70 @@ public partial class GitService
         return new PullBaseResult(baseRef, true, updated, null);
     }
 
+    public sealed record GitActionResult(bool Ok, bool Updated, string? Error);
+
+    /// <summary>
+    /// Merges the LOCAL base branch (main, then master) into the current
+    /// branch (plans/git-actions.md). Requires a clean working tree, and on
+    /// any merge failure runs `merge --abort` so a phone tap can never leave
+    /// a conflicted tree — conflicts are for Claude in chat.
+    /// </summary>
+    public GitActionResult MergeBase(string workingDir)
+    {
+        string? baseRef = null;
+        foreach (var candidate in new[] { "main", "master" })
+            if (RunGit(workingDir, $"rev-parse --verify --quiet refs/heads/{candidate}").ExitCode == 0)
+            {
+                baseRef = candidate;
+                break;
+            }
+        if (baseRef is null) return new GitActionResult(false, false, "no local main/master branch");
+
+        var branch = CurrentBranch(workingDir);
+        if (branch == baseRef) return new GitActionResult(false, false, $"already on {baseRef}");
+
+        var dirty = RunGit(workingDir, "status --porcelain");
+        if (!string.IsNullOrWhiteSpace(dirty.StdOut))
+            return new GitActionResult(false, false, "working tree has uncommitted changes");
+
+        var before = RunGit(workingDir, "rev-parse HEAD").StdOut.Trim();
+        var run = RunGit(workingDir, $"merge --no-edit {baseRef}");
+        if (run.ExitCode != 0)
+        {
+            RunGit(workingDir, "merge --abort"); // best-effort; tree must stay clean
+            var error = FirstLine(run.StdErr, run.StdOut);
+            _logger.Error($"[GIT] MergeBase {baseRef} failed (aborted): {error}");
+            return new GitActionResult(false, false, error);
+        }
+
+        var after = RunGit(workingDir, "rev-parse HEAD").StdOut.Trim();
+        var updated = after != before;
+        _logger.Info($"[GIT] MergeBase -> {baseRef} into {branch} {(updated ? $"{Short(before)}..{Short(after)}" : "already up to date")}");
+        return new GitActionResult(true, updated, null);
+    }
+
+    /// <summary>
+    /// `git pull --ff-only` on the current branch (plans/git-actions.md).
+    /// A diverged branch or missing upstream surfaces as Error — never a
+    /// surprise merge commit.
+    /// </summary>
+    public GitActionResult PullCurrent(string workingDir)
+    {
+        var before = RunGit(workingDir, "rev-parse HEAD").StdOut.Trim();
+        var run = RunGit(workingDir, "pull --ff-only");
+        if (run.ExitCode != 0)
+        {
+            var error = FirstLine(run.StdErr, run.StdOut);
+            _logger.Error($"[GIT] PullCurrent failed: {error}");
+            return new GitActionResult(false, false, error);
+        }
+
+        var after = RunGit(workingDir, "rev-parse HEAD").StdOut.Trim();
+        var updated = after != before;
+        _logger.Info($"[GIT] PullCurrent {(updated ? $"{Short(before)}..{Short(after)}" : "already up to date")}");
+        return new GitActionResult(true, updated, null);
+    }
+
     /// <summary>Returns the current branch name (or detached HEAD description).</summary>
     public string CurrentBranch(string workingDir)
     {

@@ -22,7 +22,8 @@ export const FEATURES = {
   agentDock: 'advanced', // and the future Agents tab
   buildStamp: 'advanced',
   contextMeter: 'advanced', // ctx pill in the chat header (plans/context-meter.md)
-  gitTab: 'advanced', // read-only git status tab (plans/git-tab.md)
+  gitTab: 'advanced', // git status tab (plans/git-tab.md)
+  gitActions: 'advanced', // inward-sync buttons in the Git tab (plans/git-actions.md)
   planTab: 'advanced', // repo-root plan.md viewer (plans/plan-tab.md)
   planRawView: 'advanced', // raw-text toggle in the Plan tab header (plans/plan-raw-view.md)
   screenTab: 'advanced', // host-desktop snapshots (plans/screen-tab.md)
