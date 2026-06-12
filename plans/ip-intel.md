@@ -18,11 +18,17 @@ rack is a scanner, whatever the country).
 
 Decisions (user approved the API lean):
 
-- **Source**: a free no-key HTTPS geolocation API (ipwho.is-class) called
-  from the backend, plus a local reverse-DNS lookup. Tradeoff accepted:
-  visitor IPs are sent to a third-party service. (The no-leak alternative —
-  a local MaxMind GeoLite2 DB — was declined as heavy for this app's
+- **Source**: a free no-key HTTPS geolocation API (ipwho.is) called from the
+  backend, plus a local reverse-DNS lookup. Tradeoff accepted: visitor IPs
+  are sent to a third-party service. (The no-leak alternative — a local
+  MaxMind GeoLite2 DB — was declined as heavy for this app's
   [threat model](threat-model.md).)
+- **Datacenter flag is INFERRED, not authoritative**: ipwho.is's free tier
+  has no hosting/proxy field (paid). Rather than switch to an HTTP-only API
+  (cleartext visitor IPs) we keep HTTPS and infer "non-residential" from the
+  org/ASN against a known-provider list (Amazon, Hetzner, OVH, Cloudflare,
+  …). A residential ISP is probably the Operator; a hosting rack is a
+  scanner. Good enough to triage; not a security guarantee.
 - **Never in the request path**: the IP gate must never wait on an external
   API. Enrichment runs lazily when the Guests tab is opened.
 - **Cached forever** in `%APPDATA%\ClaudeWeb\ipinfo-cache.json` — an IP's
