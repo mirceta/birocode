@@ -31,6 +31,7 @@ export const FEATURES = {
   promptStash: 'advanced', // stash prompt ideas mid-run in the composer (plans/prompt-stash.md)
   terminalTab: 'advanced', // live PowerShell on a ConPTY (plans/terminal-tab.md) — real Administrator shell, never promote to basic
   guestsTab: 'advanced', // IP allowlist inspection: view + unlist only, never approve (plans/auth-ip-filter.md)
+  helloButton: 'advanced', // inert HELLO header button (user request 2026-06-12, no plan file)
 };
 
 const MODE_KEY = 'claudeweb_ui_mode';

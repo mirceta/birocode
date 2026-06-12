@@ -48,6 +48,13 @@ function HeaderTitle() {
   return <h1 className="app-header__title">{parts.join(' · ')}</h1>;
 }
 
+// HELLO button (user request 2026-06-12, no plan file — flagged): inert,
+// Advanced-only, text deliberately not i18n'd.
+function HelloButton() {
+  if (!useFeature('helloButton')) return null;
+  return <button type="button" className="hello-btn">HELLO</button>;
+}
+
 // The build stamp is an Operator debugging aid — Advanced Mode only.
 function BuildStamp() {
   if (!useFeature('buildStamp')) return null;
@@ -73,6 +80,7 @@ function StudioShell() {
         <header className="app-header">
           <HeaderTitle />
           <div className="app-header__actions">
+            <HelloButton />
             <ProjectChip />
             <LanguageToggle />
             <SaveButton />

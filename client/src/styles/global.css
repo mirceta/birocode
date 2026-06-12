@@ -121,6 +121,17 @@ textarea {
   gap: 10px;
 }
 
+.hello-btn {
+  font: inherit;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: inherit;
+  cursor: pointer;
+}
+
 /* ---- Project chip (active project name in the header) ------------------ */
 /* Links to the Projects tab, where switching/adding happens. */
 
