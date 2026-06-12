@@ -22,6 +22,10 @@
 
 ## Recently shipped
 
+- [Projects folder picker](plans/projects-folder-picker.md) — navigable
+  folder picker replaces the chip wall; folder creation is explicit only
+  (typos no longer create folders). Merged to main, deployed & confirmed
+  2026-06-13.
 - [Multi-pane: five panes](plans/multi-pane-five.md) — desktop pane cap
   raised 4 -> 5 for 4K monitors. Merged to main, deployed 2026-06-13.
 - [IP intelligence](plans/ip-intel.md) — country/ISP/datacenter enrichment

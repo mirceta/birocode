@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { apiGet, apiPost } from '../api/client';
 import { useRepo } from '../context/RepoContext';
 import { useUiMode } from '../context/UiModeContext';
@@ -12,6 +12,11 @@ import './projects.css';
 // device-local (RepoContext.selectRepo); adding registers the path on the
 // backend at runtime via POST /api/repos — no harness restart.
 //
+// New-project flow (plans/projects-folder-picker.md): a collapsed
+// "+ New project" button opens a navigable folder picker scoped to the
+// Projects Root. Registering never creates folders implicitly — creation is
+// a separate, explicit action.
+//
 // Per-project visibility (plans/project-visibility.md): Basic mode lists
 // only projects with visibility 'basic'; Advanced lists all and can toggle
 // each project between Basic and Advanced-only. New projects are stamped
@@ -20,53 +25,73 @@ export default function Projects() {
   const { repos, currentRepoId, selectRepo, loading, error, reloadRepos } = useRepo();
   const { isAdvanced } = useUiMode();
   const { t } = useT();
-  const [folder, setFolder] = useState('');
+  const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
+  const [nameTouched, setNameTouched] = useState(false);
+  const [newFolder, setNewFolder] = useState(''); // "create folder here" input
   const [adding, setAdding] = useState(false);
   const [notice, setNotice] = useState(null); // { ok: bool, text: string }
-  // { root, folders: [{ name, registered }] } — subfolders of the playground.
-  const [hostFolders, setHostFolders] = useState(null);
+  // Picker state: { root, path, folders: [{ name, registered, isGitRepo }] }
+  const [picker, setPicker] = useState(null);
 
-  const loadFolders = useCallback(() => {
-    apiGet('/repos/folders').then(setHostFolders).catch(() => setHostFolders(null));
+  const loadFolders = useCallback((path) => {
+    apiGet(`/repos/folders?path=${encodeURIComponent(path || '')}`)
+      .then(setPicker)
+      .catch(() => setPicker(null));
   }, []);
 
-  useEffect(() => {
-    loadFolders();
-  }, [loadFolders]);
+  const openPicker = (path) => {
+    loadFolders(path);
+    if (!nameTouched) setName(path ? path.split('/').pop() : '');
+    setNotice(null);
+  };
 
-  const handleAdd = async (e) => {
-    e.preventDefault();
-    if (!folder.trim() || adding) return;
+  const closeForm = () => {
+    setShowForm(false);
+    setPicker(null);
+    setName('');
+    setNameTouched(false);
+    setNewFolder('');
+    setNotice(null);
+  };
+
+  const failNotice = (err) => {
+    let msg = '';
+    try {
+      msg = JSON.parse(err.message)?.error || '';
+    } catch {
+      /* body was not JSON */
+    }
+    setNotice({ ok: false, text: msg || t('projects.addError') });
+  };
+
+  const register = async (folder, createFolder) => {
+    if (adding) return;
     setAdding(true);
     setNotice(null);
     try {
       const repo = await apiPost('/repos', {
-        folder: folder.trim(),
-        name: name.trim() || null,
+        folder,
+        name: createFolder ? null : name.trim() || null,
         visibility: isAdvanced ? 'advanced' : 'basic',
+        createFolder,
       });
       await reloadRepos();
-      loadFolders();
       selectRepo(repo.id);
-      setFolder('');
-      setName('');
+      closeForm();
       setNotice({
         ok: true,
         text: t(repo.created ? 'projects.addedCreated' : 'projects.added', { name: repo.name }),
       });
     } catch (err) {
-      let msg = '';
-      try {
-        msg = JSON.parse(err.message)?.error || '';
-      } catch {
-        /* body was not JSON */
-      }
-      setNotice({ ok: false, text: msg || t('projects.addError') });
+      failNotice(err);
     } finally {
       setAdding(false);
     }
   };
+
+  // Breadcrumb segments for the current picker path.
+  const crumbs = picker?.path ? picker.path.split('/') : [];
 
   const toggleVisibility = async (r) => {
     const visibility = r.visibility === 'basic' ? 'advanced' : 'basic';
@@ -124,54 +149,118 @@ export default function Projects() {
         )}
       </ul>
 
-      <form className="projects__add" onSubmit={handleAdd}>
-        <h3 className="projects__add-title">{t('projects.newTitle')}</h3>
-        {hostFolders?.folders?.some((f) => !f.registered) && (
-          <div className="projects__field">
-            <span className="projects__field-label">{t('projects.existingFolders')}</span>
-            <div className="projects__folder-chips">
-              {hostFolders.folders.filter((f) => !f.registered).map((f) => (
+      {!showForm && (
+        <button
+          type="button"
+          className="projects__add-btn projects__new-btn"
+          onClick={() => {
+            setShowForm(true);
+            openPicker('');
+          }}
+        >
+          + {t('projects.newTitle')}
+        </button>
+      )}
+
+      {showForm && (
+        <div className="projects__add">
+          <div className="projects__add-head">
+            <h3 className="projects__add-title">{t('projects.newTitle')}</h3>
+            <button type="button" className="projects__close" onClick={closeForm} title={t('projects.cancel')}>
+              ✕
+            </button>
+          </div>
+
+          <nav className="projects__crumbs" aria-label={t('projects.pickerLabel')}>
+            <button type="button" className="projects__crumb" onClick={() => openPicker('')} disabled={adding}>
+              {picker?.root?.split(/[\\/]/).pop() || '...'}
+            </button>
+            {crumbs.map((seg, i) => (
+              <span key={crumbs.slice(0, i + 1).join('/')}>
+                {' / '}
                 <button
-                  key={f.name}
                   type="button"
-                  className={`projects__folder-chip${f.name === folder ? ' projects__folder-chip--selected' : ''}`}
-                  onClick={() => setFolder(f.name)}
+                  className="projects__crumb"
+                  onClick={() => openPicker(crumbs.slice(0, i + 1).join('/'))}
                   disabled={adding}
                 >
-                  {f.name}
+                  {seg}
                 </button>
-              ))}
-            </div>
+              </span>
+            ))}
+          </nav>
+
+          <ul className="projects__picker-list">
+            {(picker?.folders || []).map((f) => {
+              const sub = picker.path ? `${picker.path}/${f.name}` : f.name;
+              return (
+                <li key={f.name}>
+                  <button
+                    type="button"
+                    className="projects__picker-row"
+                    onClick={() => openPicker(sub)}
+                    disabled={adding || f.registered}
+                  >
+                    <span className="projects__picker-name">📁 {f.name}</span>
+                    {f.registered && <span className="project-card__badge">{t('projects.alreadyProject')}</span>}
+                    {!f.registered && f.isGitRepo && <span className="project-card__badge">git</span>}
+                  </button>
+                </li>
+              );
+            })}
+            {picker && picker.folders.length === 0 && (
+              <li className="projects__empty">{t('projects.pickerEmpty')}</li>
+            )}
+          </ul>
+
+          {picker?.path && (
+            <>
+              <label className="projects__field">
+                <span className="projects__field-label">{t('projects.nameLabel')}</span>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    setNameTouched(true);
+                  }}
+                  disabled={adding}
+                />
+              </label>
+              <button
+                type="button"
+                className="projects__add-btn"
+                onClick={() => register(picker.path, false)}
+                disabled={adding}
+              >
+                {adding ? t('projects.adding') : t('projects.useFolder', { name: crumbs[crumbs.length - 1] })}
+              </button>
+            </>
+          )}
+
+          <div className="projects__create-row">
+            <input
+              type="text"
+              placeholder={t('projects.createPlaceholder')}
+              value={newFolder}
+              onChange={(e) => setNewFolder(e.target.value)}
+              disabled={adding}
+            />
+            <button
+              type="button"
+              className="projects__add-btn"
+              onClick={() => register(picker?.path ? `${picker.path}/${newFolder.trim()}` : newFolder.trim(), true)}
+              disabled={adding || !newFolder.trim()}
+            >
+              {t('projects.createHere')}
+            </button>
           </div>
-        )}
-        <label className="projects__field">
-          <span className="projects__field-label">
-            {t('projects.folderLabel', { root: hostFolders?.root || '...' })}
-          </span>
-          <input
-            type="text"
-            value={folder}
-            onChange={(e) => setFolder(e.target.value)}
-            disabled={adding}
-          />
-          <span className="projects__field-hint">{t('projects.folderHint')}</span>
-        </label>
-        <label className="projects__field">
-          <span className="projects__field-label">{t('projects.nameLabel')}</span>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            disabled={adding}
-          />
-        </label>
-        <button type="submit" className="projects__add-btn" disabled={adding || !folder.trim()}>
-          {adding ? t('projects.adding') : t('projects.add')}
-        </button>
-        {notice && (
-          <p className={`projects__notice${notice.ok ? '' : ' projects__notice--error'}`}>{notice.text}</p>
-        )}
-      </form>
+        </div>
+      )}
+
+      {notice && (
+        <p className={`projects__notice${notice.ok ? '' : ' projects__notice--error'}`}>{notice.text}</p>
+      )}
     </div>
   );
 }
