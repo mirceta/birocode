@@ -4,6 +4,7 @@ using ClaudeWeb.Services.Chat;
 using ClaudeWeb.Services.Dock;
 using ClaudeWeb.Services.Files;
 using ClaudeWeb.Services.Git;
+using ClaudeWeb.Services.IpFilter;
 using ClaudeWeb.Services.Logging;
 using ClaudeWeb.Services.Monitoring;
 using ClaudeWeb.Services.Repositories;
@@ -44,17 +45,19 @@ public class EmbeddedApi
     private readonly Logger _logger;
     private readonly CallLog _callLog;
     private readonly RepositoryRegistry _repositories;
+    private readonly IpAllowlistService _ipAllowlist;
     private WebApplication? _app;
 
     public bool IsRunning { get; private set; }
     public int Port => _config.Port;
 
-    public EmbeddedApi(AppConfig config, Logger logger, CallLog callLog, RepositoryRegistry repositories)
+    public EmbeddedApi(AppConfig config, Logger logger, CallLog callLog, RepositoryRegistry repositories, IpAllowlistService ipAllowlist)
     {
         _config = config;
         _logger = logger;
         _callLog = callLog;
         _repositories = repositories;
+        _ipAllowlist = ipAllowlist;
     }
 
     public void Start()
@@ -78,6 +81,10 @@ public class EmbeddedApi
 
             var builder = WebApplication.CreateBuilder(options);
             builder.WebHost.UseUrls($"http://0.0.0.0:{_config.Port}");
+
+            // Which peers may speak for clients via X-Forwarded-For
+            // (plans/auth-ip-filter.md §1). Must happen before any request.
+            ClientIp.Configure(_config);
             builder.Logging.ClearProviders();
 
             // Shared singletons -- every module can inject these.
@@ -86,6 +93,7 @@ public class EmbeddedApi
             builder.Services.AddSingleton(_callLog);
             // Pre-built so the WinForms UI and the API share one instance.
             builder.Services.AddSingleton(_repositories);
+            builder.Services.AddSingleton(_ipAllowlist);
 
             // Controllers auto-discovered here -- new controllers need NO changes.
             builder.Services.AddControllers();
@@ -98,6 +106,7 @@ public class EmbeddedApi
                     .AllowAnyMethod()));
 
             // === MODULE SERVICE REGISTRATION (orchestrator wires these between phases) ===
+            builder.Services.AddIpFilterModule(); // IP allowlist (plans/auth-ip-filter.md)
             builder.Services.AddAuthModule();   // session login (plans/auth-login.md)
             builder.Services.AddRepositoryModule(); // multi-repo (resolver + HttpContext)
             builder.Services.AddChatModule();   // M1
@@ -108,6 +117,12 @@ public class EmbeddedApi
             // === END MODULE SERVICE REGISTRATION ===
 
             _app = builder.Build();
+
+            // IP allowlist gate — the OUTERMOST check, before even static
+            // files: an unapproved IP never receives the SPA shell or the
+            // login screen, only a standalone rejection page. No exemptions
+            // (plans/auth-ip-filter.md).
+            _app.UseMiddleware<IpFilterMiddleware>();
 
             // Pipeline order matters. Static files MUST run before routing:
             // StaticFileMiddleware skips serving once an endpoint is selected,
