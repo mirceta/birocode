@@ -1,4 +1,5 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
+import { getLastClaudeView } from '../components/shared/ClaudeViewToggle';
 import { useDock } from '../context/DockContext';
 import { useFeature } from '../context/UiModeContext';
 import { useT } from '../i18n/LanguageContext';
@@ -6,13 +7,29 @@ import { useT } from '../i18n/LanguageContext';
 export default function BottomNav() {
   const { t } = useT();
   const { tabs: agentTabs } = useDock();
+  const { pathname } = useLocation();
   const showAppTab = useFeature('appTab');
   const showAgents = useFeature('agentDock');
   const showGit = useFeature('gitTab');
   const showPlan = useFeature('planTab');
   const showScreen = useFeature('screenTab');
+  const showTerminal = useFeature('terminalTab');
   const showProjects = useFeature('projectsTab');
   const showGuests = useFeature('guestsTab');
+
+  // Chat and Term share the first nav slot (plans/terminal-sessions.md): the
+  // slot opens the last-used view and is active on either route; the actual
+  // switching lives in the in-page ClaudeViewToggle.
+  const path = pathname.replace(/\/+$/, '') || '/studio';
+  const termView = showTerminal
+    && (path === '/studio/terminal' || (path !== '/studio' && getLastClaudeView() === 'term'));
+  const claudeTab = {
+    to: termView ? '/studio/terminal' : '/studio',
+    label: termView ? t('nav.terminal') : t('nav.chat'),
+    icon: termView ? '>_' : 'C',
+    end: true,
+    forceActive: path === '/studio' || path === '/studio/terminal',
+  };
 
   // Badge reflects the most urgent agent status: running > error > done.
   const agentBadge =
@@ -24,7 +41,7 @@ export default function BottomNav() {
   // Order matters: it decides which tabs become neighbours in the multi-pane
   // desktop view (plans/multi-pane.md). Keep this in sync with PaneStrip.jsx.
   const tabs = [
-    { to: '/studio', label: t('nav.chat'), icon: 'C', end: true },
+    claudeTab,
     { to: '/studio/files', label: t('nav.files'), icon: 'F' },
     ...(showPlan ? [{ to: '/studio/plan', label: t('nav.plan'), icon: '☰' }] : []),
     ...(showGit ? [{ to: '/studio/git', label: t('nav.git'), icon: '⎇' }] : []),
@@ -44,7 +61,7 @@ export default function BottomNav() {
           to={tab.to}
           end={tab.end}
           className={({ isActive }) =>
-            `bottom-nav__item${isActive ? ' is-active' : ''}`
+            `bottom-nav__item${(tab.forceActive ?? isActive) ? ' is-active' : ''}`
           }
         >
           <span className="bottom-nav__icon" aria-hidden="true">

@@ -1,6 +1,8 @@
 import { friendlyDate } from './formatDate';
 import { useT } from '../../i18n/LanguageContext';
 
+// `title`/`newLabel` let other callers rebrand the dialog (the Term view's
+// resume picker, plans/terminal-sessions.md); defaults keep Chat unchanged.
 export default function SessionPicker({
   open,
   sessions,
@@ -10,16 +12,19 @@ export default function SessionPicker({
   onSelect,
   onNew,
   onClose,
+  title,
+  newLabel,
 }) {
   const { t } = useT();
   if (!open) return null;
 
+  const heading = title || t('chat.yourConversations');
   return (
     <>
       <div className="picker-backdrop" onClick={onClose} aria-hidden="true" />
-      <div className="picker" role="dialog" aria-label={t('chat.yourConversations')}>
+      <div className="picker" role="dialog" aria-label={heading}>
         <div className="picker__header">
-          <span className="picker__title">{t('chat.yourConversations')}</span>
+          <span className="picker__title">{heading}</span>
           <button
             type="button"
             className="picker__close"
@@ -32,7 +37,7 @@ export default function SessionPicker({
 
         <button type="button" className="picker__new" onClick={onNew}>
           <span className="picker__new-plus" aria-hidden="true">+</span>
-          {t('picker.newConversation')}
+          {newLabel || t('picker.newConversation')}
         </button>
 
         {loading && <div className="picker__hint">{t('picker.loading')}</div>}
