@@ -452,6 +452,58 @@ public partial class GitService
         return result;
     }
 
+    public sealed record GraphCommit(
+        string Hash, string Short, IReadOnlyList<string> Parents,
+        IReadOnlyList<string> Refs, string Subject);
+
+    /// <summary>
+    /// Recent history across the refs that matter (plans/git-graph.md):
+    /// HEAD, local+origin base, origin/&lt;current&gt;, and the filtered
+    /// other-branches. Newest first; the frontend translates to a mermaid
+    /// gitGraph. Read-only.
+    /// </summary>
+    public List<GraphCommit> GraphLog(string workingDir, int limit = 30)
+    {
+        var (localBase, originBase) = DetectBases(workingDir);
+        var current = CurrentBranch(workingDir);
+
+        var refs = new List<string>();
+        if (current is not "unknown" and not "(detached)") refs.Add(current);
+        if (localBase is not null && localBase != current) refs.Add(localBase);
+        if (originBase is not null) refs.Add(originBase);
+        if (current is not "unknown" and not "(detached)"
+            && RunGit(workingDir, $"rev-parse --verify --quiet refs/remotes/origin/{current}").ExitCode == 0)
+            refs.Add($"origin/{current}");
+        foreach (var b in ListBranches(workingDir).Take(5))
+            refs.Add(b.Name);
+        if (refs.Count == 0) return new();
+
+        // Refs go through literalArgs: RunGit splits the argument string on
+        // spaces with no quote handling, so quoting here reaches git verbatim.
+        var run = RunGit(workingDir,
+            $"log --topo-order -n {limit} --format=%H%x09%h%x09%P%x09%D%x09%s",
+            refs.Append("--").ToArray());
+        if (run.ExitCode != 0) return new();
+
+        var commits = new List<GraphCommit>();
+        foreach (var line in run.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = line.TrimEnd().Split('\t', 5);
+            if (parts.Length < 5) continue;
+            var decorations = parts[3]
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(d => d.StartsWith("HEAD -> ") ? d["HEAD -> ".Length..] : d)
+                .Where(d => d != "HEAD" && !d.StartsWith("tag: "))
+                .ToList();
+            commits.Add(new GraphCommit(
+                parts[0], parts[1],
+                parts[2].Split(' ', StringSplitOptions.RemoveEmptyEntries),
+                decorations, parts[4]));
+        }
+        _logger.Info($"[GIT] GraphLog -> {commits.Count} commit(s) across {refs.Count} ref(s)");
+        return commits;
+    }
+
     public sealed record GitActionResult(bool Ok, bool Updated, string? Error);
 
     /// <summary>

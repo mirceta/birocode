@@ -106,6 +106,7 @@
   "git.actNoop": "Already up to date.",
   "git.others": "Other branches",
   "git.actPush": "Push branch to origin",
+  "git.graph": "History graph",
   "git.fetchedAt": "origin state as of {time}",
   "git.neverFetched": "origin not fetched yet",
   "git.clean": "Working tree is clean",

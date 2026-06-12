@@ -3,9 +3,11 @@ import { apiGet, apiPost } from '../api/client';
 import { friendlyDate } from '../components/chat/formatDate';
 import Loading from '../components/shared/Loading';
 import ErrorBanner from '../components/shared/ErrorBanner';
+import Mermaid from '../components/shared/Mermaid';
 import { useRepo } from '../context/RepoContext';
 import { useFeature } from '../context/UiModeContext';
 import { useT } from '../i18n/LanguageContext';
+import { buildGitGraph } from './gitGraph';
 import './git.css';
 
 // Git tab (plans/git-tab.md + plans/git-actions.md): a fixed position card —
@@ -51,9 +53,11 @@ export default function Git() {
   const showActions = useFeature('gitActions');
 
   const showBranchList = useFeature('gitBranchList');
+  const showGraph = useFeature('gitGraphView');
 
   const [status, setStatus] = useState(null);
   const [branches, setBranches] = useState([]);
+  const [graph, setGraph] = useState(null); // mermaid text or null
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState('');
@@ -65,8 +69,9 @@ export default function Git() {
     if (fetchOrigin) setChecking(true);
     try {
       setStatus(await apiGet(fetchOrigin ? '/git/status?fetch=true' : '/git/status'));
-      // Branch overview is best-effort: its failure never blocks the card.
+      // Branch overview + graph are best-effort: never block the card.
       apiGet('/git/branches').then(setBranches).catch(() => setBranches([]));
+      apiGet('/git/graph').then((g) => setGraph(buildGitGraph(g))).catch(() => setGraph(null));
     } catch {
       setError(t('git.loadError'));
     } finally {
@@ -283,6 +288,16 @@ export default function Git() {
               </div>
             </div>
           ))}
+        </section>
+      )}
+
+      {/* History graph (plans/git-graph.md): recent topology, mermaid-drawn.
+          Translation degrades gracefully; Mermaid falls back to source on
+          any syntax error, so this section can never take the tab down. */}
+      {showGraph && graph && (
+        <section className="git-graph">
+          <h3 className="git-others__title">{t('git.graph')}</h3>
+          <Mermaid chart={graph} />
         </section>
       )}
     </div>

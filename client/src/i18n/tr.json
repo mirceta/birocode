@@ -106,6 +106,7 @@
   "git.actNoop": "Zaten guncel.",
   "git.others": "Diger dallar",
   "git.actPush": "Dali origin'e gonder",
+  "git.graph": "Gecmis grafigi",
   "git.fetchedAt": "origin durumu: {time} itibariyla",
   "git.neverFetched": "origin henuz cekilmedi",
   "git.clean": "Calisma agaci temiz",

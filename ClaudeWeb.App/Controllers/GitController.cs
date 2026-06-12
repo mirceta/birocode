@@ -220,6 +220,34 @@ public class GitController : ControllerBase
         }
     }
 
+    /// <summary>GET /api/git/graph -- recent structured history for the
+    /// mermaid graph (plans/git-graph.md). Read-only.</summary>
+    [HttpGet("git/graph")]
+    public IActionResult Graph()
+    {
+        _logger.CountRequest();
+        var repo = _repos.Current();
+        if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
+        try
+        {
+            var commits = _git.GraphLog(repo.Path).Select(c => new
+            {
+                hash = c.Hash,
+                @short = c.Short,
+                parents = c.Parents,
+                refs = c.Refs,
+                subject = c.Subject,
+            });
+            var s = _git.Status(repo.Path);
+            return Ok(new { branch = s.Branch, baseBranch = s.LocalBaseBranch ?? "main", commits });
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[GIT] Graph failed: {ex.Message}");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
     /// <summary>POST /api/git/push-current -- push the current branch to
     /// origin, publishing with -u when needed (plans/git-branches.md). Plain
     /// push only. 409 while a chat run is active.</summary>
