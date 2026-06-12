@@ -3,13 +3,11 @@
   "lang.en": "EN",
   "lang.tr": "TR",
   "lang.legend": "Language",
-
   "common.tryAgain": "Try again",
   "common.justAMoment": "Just a moment...",
   "common.cancel": "Cancel",
   "common.close": "Close",
   "common.back": "Back",
-
   "save.idle": "Save",
   "save.saving": "Saving...",
   "save.modalTitle": "Save your work",
@@ -18,7 +16,6 @@
   "save.nothingToSave": "Nothing to save",
   "save.saved": "Saved!",
   "save.failed": "Couldn't save -- please try again",
-
   "nav.chat": "Chat",
   "nav.files": "Files",
   "nav.history": "History",
@@ -57,7 +54,6 @@
   "nav.projects": "Projects",
   "nav.guests": "Guests",
   "nav.aria": "Main navigation",
-
   "guests.loading": "Loading the guest list...",
   "guests.loadError": "We couldn't load the guest list. Please try again.",
   "guests.approvedTitle": "Approved guests",
@@ -74,7 +70,6 @@
   "guests.confirmRemoveSelf": "\"{name}\" ({ip}) is YOUR OWN IP.\n\nRemoving it terminates this connection immediately and locks you out until the administrator re-approves you at the host PC. Remove anyway?",
   "guests.removeError": "We couldn't remove that guest. Please try again.",
   "guests.approveHint": "New IPs can only be approved in the desktop app on the host PC — never from here.",
-
   "git.loading": "Checking the project's git state...",
   "git.loadError": "We couldn't read the git status. Please try again.",
   "git.refresh": "Refresh",
@@ -116,14 +111,12 @@
   "git.group.changed": "Changed",
   "git.group.untracked": "Untracked",
   "git.group.conflicts": "Conflicts",
-
   "screen.source": "Capture source",
   "screen.desktop": "Whole desktop",
   "screen.refresh": "Refresh",
   "screen.auto": "Auto",
   "screen.alt": "Host desktop snapshot",
   "screen.captureError": "We couldn't capture the screen. Please try again.",
-
   "agents.title": "Agents",
   "agents.new": "New agent",
   "agents.empty": "No agents yet. Start one to run Claude on another project in parallel.",
@@ -143,10 +136,8 @@
   "agents.legend.deploy": "awaiting deploy",
   "agents.legend.merge": "awaiting merge",
   "agents.legend.problem": "big problem",
-
   "repo.label": "Project",
   "repo.none": "No projects",
-
   "projects.title": "Projects",
   "projects.active": "Active",
   "projects.missing": "folder missing",
@@ -167,13 +158,10 @@
   "projects.visToggleHint": "Tap to toggle Basic / Advanced-only visibility",
   "projects.visError": "Couldn't change the project's visibility.",
   "projects.noneBasic": "No projects are available in Basic mode yet. Switch to Advanced mode to manage visibility.",
-
   "landing.builder": "Builder",
-
   "mode.label": "View mode",
   "mode.simple": "Simple",
   "mode.advanced": "Advanced",
-
   "apptab.online": "running",
   "apptab.unknownProduct": "unknown ({process})",
   "apptab.offline": "not running",
@@ -187,7 +175,6 @@
   "apptab.fullscreen": "Full screen",
   "apptab.emptyTitle": "Nothing is running yet",
   "apptab.emptyBody": "Ask Claude in the Chat tab to start your app on port {port}, bound to 0.0.0.0 and launched detached so it keeps running.",
-
   "pwgate.title": "Welcome back",
   "pwgate.subtitle": "Enter your access code to open your workspace.",
   "pwgate.placeholder": "Access code",
@@ -195,7 +182,6 @@
   "pwgate.continue": "Continue",
   "pwgate.wrong": "Wrong access code. Please try again.",
   "pwgate.throttled": "Too many attempts. Try again in {seconds} seconds.",
-
   "chat.greeting": "Hi! How can I help you today?",
   "chat.yourConversations": "Your conversations",
   "chat.new": "New",
@@ -218,7 +204,6 @@
   "chat.loadingConversation": "Loading this conversation...",
   "chat.resumed": "We're picking up where you left off. What would you like to do next?",
   "chat.resumeError": "Couldn't load that conversation. You can still continue it by sending a message.",
-
   "picker.newConversation": "New conversation",
   "picker.loading": "Loading your conversations...",
   "picker.loadError": "Couldn't load conversations.",
@@ -226,11 +211,9 @@
   "picker.untitled": "Conversation",
   "picker.messageOne": "{count} message",
   "picker.messageMany": "{count} messages",
-
   "tool.editing": "Editing document...",
   "tool.reading": "Reading file...",
   "tool.working": "Working...",
-
   "files.empty": "No files here yet",
   "files.emptyHint": "Ask Claude in the chat to create something.",
   "files.opening": "Opening file...",
@@ -244,7 +227,6 @@
   "files.raw": "Raw",
   "files.addedToMessage": "Added {name} to your message",
   "files.longPressHint": "Tip: press and hold a file to add it to your message",
-
   "history.restoredToast": "Done -- went back to that version",
   "history.restoreErrorToast": "Couldn't go back -- please try again",
   "history.loading": "Loading your saved versions...",
@@ -257,9 +239,10 @@
   "history.confirmBody": "This will undo all changes made after:",
   "history.goingBack": "Going back...",
   "history.goBackShort": "Go back",
-
   "date.today": "Today, {time}",
   "date.yesterdayWithTime": "Yesterday, {time}",
   "date.yesterday": "Yesterday",
-  "date.unknown": "Unknown date"
+  "date.unknown": "Unknown date",
+  "files.histBack": "Back to the previous document",
+  "files.histForward": "Forward to the next document"
 }

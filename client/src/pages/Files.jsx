@@ -4,8 +4,10 @@ import Loading from '../components/shared/Loading';
 import ErrorBanner from '../components/shared/ErrorBanner';
 import FileTree from '../components/files/FileList';
 import FileViewer from '../components/files/FileViewer';
+import resolvePath from '../components/shared/resolvePath';
 import { useChat } from '../context/ChatContext';
 import { useRepo } from '../context/RepoContext';
+import { useFeature } from '../context/UiModeContext';
 import { useT } from '../i18n/LanguageContext';
 import '../components/files/files.css';
 
@@ -49,6 +51,14 @@ export default function Files() {
   const [fileLoading, setFileLoading] = useState(false);
   const [fileError, setFileError] = useState('');
 
+  // Doc-link navigation (plans/doc-viewer.md slice 2): a history of file
+  // paths visited via in-document links. Tree clicks reset it; ◀ ▶ move
+  // through it without truncating, a new link click truncates the forward
+  // tail (browser semantics).
+  const docLinks = useFeature('docLinks');
+  const [hist, setHist] = useState([]);
+  const [histIdx, setHistIdx] = useState(-1);
+
   const loadDir = useCallback(async (dirPath) => {
     setNodes((prev) => ({ ...prev, [dirPath]: { entries: null, state: 'loading' } }));
     try {
@@ -87,7 +97,7 @@ export default function Files() {
     if (isExpanding && (!node || node.state === 'error')) loadDir(dirPath);
   }
 
-  async function openFileAt(filePath) {
+  async function loadFile(filePath) {
     const name = filePath.split('/').pop();
     setOpenFile({ name, path: filePath });
     setFileContent('');
@@ -103,10 +113,35 @@ export default function Files() {
     }
   }
 
+  // Tree click: open the file and start a fresh history at it.
+  function openFileAt(filePath) {
+    setHist([filePath]);
+    setHistIdx(0);
+    loadFile(filePath);
+  }
+
+  // In-document link: resolve against the open file's folder, push history.
+  function followLink(href) {
+    const target = resolvePath(openFile?.path || '', href);
+    if (!target || target === openFile?.path) return;
+    setHist((h) => [...h.slice(0, histIdx + 1), target]);
+    setHistIdx((i) => i + 1);
+    loadFile(target);
+  }
+
+  function histGo(delta) {
+    const i = histIdx + delta;
+    if (i < 0 || i >= hist.length) return;
+    setHistIdx(i);
+    loadFile(hist[i]);
+  }
+
   function closeFile() {
     setOpenFile(null);
     setFileError('');
     setFileContent('');
+    setHist([]);
+    setHistIdx(-1);
   }
 
   if (openFile) {
@@ -128,7 +163,18 @@ export default function Files() {
         </div>
       );
     }
-    return <FileViewer name={openFile.name} content={fileContent} onBack={closeFile} />;
+    return (
+      <FileViewer
+        name={openFile.name}
+        content={fileContent}
+        onBack={closeFile}
+        onNavigate={docLinks ? followLink : undefined}
+        canBack={docLinks && histIdx > 0}
+        canForward={docLinks && histIdx < hist.length - 1}
+        onHistBack={() => histGo(-1)}
+        onHistForward={() => histGo(1)}
+      />
+    );
   }
 
   const root = nodes['/'];

@@ -168,6 +168,32 @@
   background: var(--color-accent-soft);
 }
 
+/* Doc-link history arrows (plans/doc-viewer.md slice 2). */
+.file-viewer__hist {
+  display: inline-flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.file-viewer__hist-btn {
+  min-height: 36px;
+  min-width: 36px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-accent);
+  font-size: 12px;
+}
+
+.file-viewer__hist-btn:disabled {
+  color: var(--color-text-soft);
+  opacity: 0.45;
+}
+
+.file-viewer__hist-btn:not(:disabled):hover {
+  background: var(--color-accent-soft);
+}
+
 .file-viewer__name {
   flex: 1;
   font-size: 16px;
