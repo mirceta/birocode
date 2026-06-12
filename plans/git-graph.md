@@ -1,7 +1,11 @@
 # Git tab — mermaid history graph
 
-> **Status (2026-06-12):** In development on `feature/git-graph` (stacked on
-> `feature/git-branches`).
+> **Status (2026-06-12):** Deployed and confirmed. Live on :5099,
+> fixture-verified (`verify-git-graph.mjs`, 9/9 incl. a real merge topology
+> and the real repo's PR-merge history rendering as SVG) and confirmed by
+> the End User. Pre-deploy, the enforced ancestry rule caught origin/main
+> having moved (doc-viewer slice 1, which itself touched Mermaid.jsx) —
+> merged and re-verified before swap instead of clobbering it.
 
 ## What and why
 
