@@ -1,9 +1,8 @@
 # Docs viewer — browser-grade documentation viewing in-app
 
-> **Status (2026-06-12):** APPROVED as SLICES — each slice is its own
-> branch, deployed before the next starts. Slice 1 in progress. Slices
-> 3/4 deferred until needed. Structured per
-> [doc-principles.md](doc-principles.md).
+> **Status (2026-06-12):** SLICE 1 DEPLOYED & confirmed in production.
+> Slice 2 next (own branch). Slices 3/4 deferred until needed.
+> Structured per [doc-principles.md](doc-principles.md).
 
 ## Goal
 
@@ -16,7 +15,7 @@ doc set (repo: `...\Prg\agentic-workflows\web-flow-autodev`; the folder
 doesn't exist on this machine yet, so synthetic fixtures with the same
 shape live in `.preview-test/doc-viewer-fixtures/`).
 
-## Slice 1 — mermaid fidelity (branch `feature/doc-viewer`) — IN PROGRESS
+## Slice 1 — mermaid fidelity (branch `feature/doc-viewer`) — DEPLOYED
 
 The pain that forced diagrams down to bare box titles. Hypothesis:
 `securityLevel: 'strict'` in `client/src/components/shared/Mermaid.jsx:11`

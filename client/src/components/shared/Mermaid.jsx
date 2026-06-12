@@ -8,7 +8,17 @@ function loadMermaid() {
   if (!mermaidPromise) {
     mermaidPromise = import('mermaid').then((mod) => {
       const mermaid = mod.default;
-      mermaid.initialize({ startOnLoad: false, securityLevel: 'strict' });
+      // 'antiscript' (not 'strict'): strict disables HTML labels, which
+      // makes multi-line labels impossible — they render as SVG <text>
+      // that cannot wrap, and <br/> is escaped to literal text. antiscript
+      // keeps HTML labels but still strips <script> and event handlers.
+      // Wrapping config per plans/doc-viewer.md slice 1.
+      mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: 'antiscript',
+        markdownAutoWrap: true,
+        flowchart: { htmlLabels: true, wrappingWidth: 200 },
+      });
       return mermaid;
     });
   }

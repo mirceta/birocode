@@ -3,15 +3,18 @@
 > Editing any plan? First read
 > [doc principles](plans/doc-principles.md) — cohesion by unit,
 > progressive disclosure, reference-don't-duplicate.
+>
+> New doc-viewer capabilities, shown live:
+> [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
+> Files tab to see wrapping mermaid labels etc. in action.
 
 > **Status (2026-06-12):** One feature in flight.
 
 ## Active feature plans
 
 - [Docs viewer](plans/doc-viewer.md) — sliced: 1) mermaid label wrapping
-  (branch `feature/doc-viewer`, in progress), 2) doc links + history in
-  the Files viewer (next), 3) cross-repo links + 4) HTML webview
-  (deferred).
+  (deployed & confirmed 2026-06-12), 2) doc links + history in the Files
+  viewer (next), 3) cross-repo links + 4) HTML webview (deferred).
 
 ## Recently shipped
 
