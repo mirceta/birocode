@@ -3,13 +3,11 @@
   "lang.en": "EN",
   "lang.tr": "TR",
   "lang.legend": "Dil",
-
   "common.tryAgain": "Tekrar dene",
   "common.justAMoment": "Bir saniye...",
   "common.cancel": "Iptal",
   "common.close": "Kapat",
   "common.back": "Geri",
-
   "save.idle": "Kaydet",
   "save.saving": "Kaydediliyor...",
   "save.modalTitle": "Calismani kaydet",
@@ -18,7 +16,6 @@
   "save.nothingToSave": "Kaydedilecek bir sey yok",
   "save.saved": "Kaydedildi!",
   "save.failed": "Kaydedilemedi -- lutfen tekrar dene",
-
   "nav.chat": "Sohbet",
   "nav.files": "Dosyalar",
   "nav.history": "Gecmis",
@@ -57,7 +54,6 @@
   "nav.projects": "Projeler",
   "nav.guests": "Misafirler",
   "nav.aria": "Ana menu",
-
   "guests.loading": "Misafir listesi yukleniyor...",
   "guests.loadError": "Misafir listesi yuklenemedi. Lutfen tekrar dene.",
   "guests.approvedTitle": "Onayli misafirler",
@@ -77,7 +73,6 @@
   "guests.geoPending": "Konum araniyor…",
   "guests.geoLocal": "Yerel ag",
   "guests.geoDatacenter": "veri merkezi / proxy",
-
   "git.loading": "Projenin git durumu kontrol ediliyor...",
   "git.loadError": "Git durumu okunamadi. Lutfen tekrar dene.",
   "git.refresh": "Yenile",
@@ -119,14 +114,12 @@
   "git.group.changed": "Degisen",
   "git.group.untracked": "Izlenmeyen",
   "git.group.conflicts": "Cakismalar",
-
   "screen.source": "Goruntu kaynagi",
   "screen.desktop": "Tum masaustu",
   "screen.refresh": "Yenile",
   "screen.auto": "Otomatik",
   "screen.alt": "Masaustu goruntusu",
   "screen.captureError": "Ekran goruntusu alinamadi. Lutfen tekrar dene.",
-
   "agents.title": "Ajanlar",
   "agents.new": "Yeni ajan",
   "agents.empty": "Henuz ajan yok. Baska bir projede Claude'u paralel calistirmak icin bir tane baslat.",
@@ -146,10 +139,8 @@
   "agents.legend.deploy": "deploy bekliyor",
   "agents.legend.merge": "merge bekliyor",
   "agents.legend.problem": "buyuk sorun",
-
   "repo.label": "Proje",
   "repo.none": "Proje yok",
-
   "projects.title": "Projeler",
   "projects.active": "Aktif",
   "projects.missing": "klasor eksik",
@@ -170,13 +161,10 @@
   "projects.visToggleHint": "Temel / sadece gelismis gorunurlugu icin dokun",
   "projects.visError": "Projenin gorunurlugu degistirilemedi.",
   "projects.noneBasic": "Temel modda henuz proje yok. Gorunurlugu yonetmek icin gelismis moda gec.",
-
   "landing.builder": "Stüdyo",
-
   "mode.label": "Gorunum modu",
   "mode.simple": "Basit",
   "mode.advanced": "Gelismis",
-
   "apptab.online": "calisiyor",
   "apptab.unknownProduct": "bilinmiyor ({process})",
   "apptab.offline": "calismiyor",
@@ -190,7 +178,6 @@
   "apptab.fullscreen": "Tam ekran",
   "apptab.emptyTitle": "Henuz bir sey calismiyor",
   "apptab.emptyBody": "Sohbet sekmesinde Claude'dan uygulamani {port} portunda, 0.0.0.0 adresine bagli ve ayri bir surec olarak baslatmasini iste ki calismaya devam etsin.",
-
   "pwgate.title": "Tekrar hosgeldin",
   "pwgate.subtitle": "Calisma alanini acmak icin erisim kodunu gir.",
   "pwgate.placeholder": "Erisim kodu",
@@ -198,7 +185,6 @@
   "pwgate.continue": "Devam et",
   "pwgate.wrong": "Yanlis erisim kodu. Lutfen tekrar dene.",
   "pwgate.throttled": "Cok fazla deneme. {seconds} saniye sonra tekrar dene.",
-
   "chat.greeting": "Merhaba! Bugun sana nasil yardim edebilirim?",
   "chat.yourConversations": "Sohbetlerin",
   "chat.new": "Yeni",
@@ -221,7 +207,6 @@
   "chat.loadingConversation": "Bu sohbet yukleniyor...",
   "chat.resumed": "Kaldigin yerden devam ediyoruz. Sirada ne yapmak istersin?",
   "chat.resumeError": "O sohbet yuklenemedi. Bir mesaj gondererek devam edebilirsin.",
-
   "picker.newConversation": "Yeni sohbet",
   "picker.loading": "Sohbetlerin yukleniyor...",
   "picker.loadError": "Sohbetler yuklenemedi.",
@@ -229,11 +214,9 @@
   "picker.untitled": "Sohbet",
   "picker.messageOne": "{count} mesaj",
   "picker.messageMany": "{count} mesaj",
-
   "tool.editing": "Belge duzenleniyor...",
   "tool.reading": "Dosya okunuyor...",
   "tool.working": "Calisiyor...",
-
   "files.empty": "Henuz dosya yok",
   "files.emptyHint": "Sohbette Claude'dan bir sey olusturmasini iste.",
   "files.opening": "Dosya aciliyor...",
@@ -247,7 +230,6 @@
   "files.raw": "Ham",
   "files.addedToMessage": "{name} mesajina eklendi",
   "files.longPressHint": "Ipucu: bir dosyayi mesajina eklemek icin basili tut",
-
   "history.restoredToast": "Tamam -- o surume donuldu",
   "history.restoreErrorToast": "Geri donulemedi -- lutfen tekrar dene",
   "history.loading": "Kayitli surumlerin yukleniyor...",
@@ -260,9 +242,10 @@
   "history.confirmBody": "Bu, su tarihten sonra yapilan tum degisiklikleri geri alir:",
   "history.goingBack": "Geri donuluyor...",
   "history.goBackShort": "Geri don",
-
   "date.today": "Bugun, {time}",
   "date.yesterdayWithTime": "Dun, {time}",
   "date.yesterday": "Dun",
-  "date.unknown": "Bilinmeyen tarih"
+  "date.unknown": "Bilinmeyen tarih",
+  "files.histBack": "Onceki belgeye geri don",
+  "files.histForward": "Sonraki belgeye ilerle"
 }

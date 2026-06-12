@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { apiGet } from '../api/client';
 import Loading from '../components/shared/Loading';
 import Markdown from '../components/shared/Markdown';
+import resolvePath from '../components/shared/resolvePath';
 import { useRepo } from '../context/RepoContext';
 import { useFeature } from '../context/UiModeContext';
 import { useT } from '../i18n/LanguageContext';
@@ -16,22 +17,6 @@ import './plan.css';
 // home button always returns to ROOT.
 const POLL_MS = 5000;
 const ROOT = 'plan.md';
-
-// Resolve a relative href against the current file's directory. Mirrors
-// browser URL semantics (`../`, `./`, leading `/` = repo root). Lenient on
-// purpose — the server validates traversal.
-function resolvePath(currentPath, href) {
-  if (href.startsWith('/')) return href.replace(/^\/+/, '');
-  const baseSegs = currentPath.split('/').slice(0, -1);
-  const segs = baseSegs.concat(href.split('/'));
-  const out = [];
-  for (const s of segs) {
-    if (s === '' || s === '.') continue;
-    if (s === '..') out.pop();
-    else out.push(s);
-  }
-  return out.join('/');
-}
 
 export default function Plan() {
   const { t } = useT();

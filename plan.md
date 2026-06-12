@@ -14,7 +14,8 @@
 
 - [Docs viewer](plans/doc-viewer.md) — sliced: 1) mermaid label wrapping
   (deployed & confirmed 2026-06-12), 2) doc links + history in the Files
-  viewer (next), 3) cross-repo links + 4) HTML webview (deferred).
+  viewer (deployed & confirmed 2026-06-12, merged to main), 3) cross-repo
+  links + 4) HTML webview (deferred).
 - [IP intelligence](plans/ip-intel.md) — country/ISP/datacenter-badge
   enrichment for the Guests tab's IPs (planned, `feature/ip-intel`).
 

@@ -1,5 +1,6 @@
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeSlug from 'rehype-slug';
 import Mermaid from './Mermaid';
 import './markdown.css';
 
@@ -33,9 +34,19 @@ const isInternalHref = (href) => {
 // External links and anchor-only links keep their default behavior.
 export default function Markdown({ children, onLinkClick }) {
   const handleAnchor = (e, href) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    // Anchor-only (#section): scroll to the heading id (rehype-slug) ourselves
+    // — native fragment navigation would fight the SPA router's URL.
+    if (href?.startsWith('#')) {
+      const el = document.getElementById(decodeURIComponent(href.slice(1)));
+      if (el) {
+        e.preventDefault();
+        el.scrollIntoView({ block: 'start' });
+      }
+      return;
+    }
     if (!onLinkClick) return;
     if (!isInternalHref(href)) return;
-    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
     onLinkClick(href, e);
   };
@@ -43,12 +54,15 @@ export default function Markdown({ children, onLinkClick }) {
     <div className="markdown">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        // GitHub-style ids on headings so #anchor links scroll in-page
+        // (plans/doc-viewer.md slice 2).
+        rehypePlugins={[rehypeSlug]}
         components={{
           a: ({ node, href, ...props }) => (
             <a
               {...props}
               href={href}
-              target={onLinkClick && isInternalHref(href) ? undefined : '_blank'}
+              target={href?.startsWith('#') || (onLinkClick && isInternalHref(href)) ? undefined : '_blank'}
               rel="noreferrer"
               onClick={(e) => handleAnchor(e, href)}
             />

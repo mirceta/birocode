@@ -35,6 +35,7 @@ export const FEATURES = {
   terminalTab: 'advanced', // live PowerShell on a ConPTY (plans/terminal-tab.md) — real Administrator shell, never promote to basic
   guestsTab: 'advanced', // IP allowlist inspection: view + unlist only, never approve (plans/auth-ip-filter.md)
   helloButton: 'advanced', // inert HELLO header button (user request 2026-06-12, no plan file)
+  docLinks: 'advanced', // doc links + history in the Files viewer (plans/doc-viewer.md slice 2)
 };
 
 const MODE_KEY = 'claudeweb_ui_mode';

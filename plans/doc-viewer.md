@@ -1,7 +1,8 @@
 # Docs viewer — browser-grade documentation viewing in-app
 
-> **Status (2026-06-12):** SLICE 1 DEPLOYED & confirmed in production.
-> Slice 2 next (own branch). Slices 3/4 deferred until needed.
+> **Status (2026-06-12):** SLICES 1 & 2 DEPLOYED & confirmed in production.
+> Slice 2 lives on `feature/doc-viewer-links` (not yet merged to main).
+> Slices 3/4 deferred until needed.
 > Structured per [doc-principles.md](doc-principles.md).
 
 ## Goal
@@ -30,7 +31,7 @@ with zero truncation, verified headless per
 `docs/claude-web/browser-testing.md`. Frontend-only, no new security
 surface.
 
-## Slice 2 — doc navigation in the repo (own branch, after slice 1)
+## Slice 2 — doc navigation (branch `feature/doc-viewer-links`) — DEPLOYED
 
 Working relative links (`./`, in-repo paths, `#anchors`) plus
 back/forward history in the **existing Files viewer** — no new tab
