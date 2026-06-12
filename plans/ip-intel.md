@@ -1,6 +1,11 @@
 # IP intelligence in the Guests tab
 
-> **Status (2026-06-12):** Planned, on `feature/ip-intel`. Not yet built.
+> **Status (2026-06-12):** Deployed and confirmed. Live on :5099 (verified
+> against real traffic — the user's phones geolocated to their ISP, a real
+> scanner labeled), `verify-ip-intel.mjs` 11/11. Merged to main via PR #9.
+> Known rough edge, deliberately accepted by the user: first-sight lookups
+> can be slow (reverse-DNS has no timeout; results appear on a later tab
+> load) — a fix was offered and declined as unnecessary.
 
 ## Problem
 
