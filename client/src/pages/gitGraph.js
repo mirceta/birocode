@@ -28,6 +28,12 @@ export function buildGitGraph(data) {
       }
     }
   }
+  // "You are here": tag the current checkout's tip with HEAD.
+  const headTip = laneTips.get(data.branch);
+  if (headTip) {
+    if (!tags.has(headTip)) tags.set(headTip, []);
+    tags.get(headTip).unshift('HEAD');
+  }
 
   // First-parent walks claim lane ownership, base first so it owns the trunk.
   const laneOf = new Map();
@@ -45,7 +51,9 @@ export function buildGitGraph(data) {
   }
   for (const c of commits) if (!laneOf.has(c.hash)) laneOf.set(c.hash, base);
 
-  const lines = ['gitGraph TB:'];
+  // BT = newest at the top, like every other list in the tab — the user
+  // couldn't tell past from future in the TB version.
+  const lines = ['gitGraph BT:'];
   const created = new Set([safe(base)]);
   const emittedTip = new Map();
   let head = safe(base);

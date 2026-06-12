@@ -107,6 +107,7 @@
   "git.others": "Diger dallar",
   "git.actPush": "Dali origin'e gonder",
   "git.graph": "Gecmis grafigi",
+  "git.graphHint": "En yeni ustte, en eski altta. HEAD = su an buradasin.",
   "git.fetchedAt": "origin durumu: {time} itibariyla",
   "git.neverFetched": "origin henuz cekilmedi",
   "git.clean": "Calisma agaci temiz",

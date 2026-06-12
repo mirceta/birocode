@@ -166,6 +166,12 @@
   max-width: 100%;
 }
 
+.git-graph__hint {
+  margin: -4px 0 6px;
+  font-size: 12px;
+  opacity: 0.6;
+}
+
 .git-fetchedat {
   font-size: 12px;
   opacity: 0.6;

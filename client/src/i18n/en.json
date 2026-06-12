@@ -107,6 +107,7 @@
   "git.others": "Other branches",
   "git.actPush": "Push branch to origin",
   "git.graph": "History graph",
+  "git.graphHint": "Newest at the top, oldest at the bottom. HEAD = where you are.",
   "git.fetchedAt": "origin state as of {time}",
   "git.neverFetched": "origin not fetched yet",
   "git.clean": "Working tree is clean",

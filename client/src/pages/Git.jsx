@@ -297,6 +297,7 @@ export default function Git() {
       {showGraph && graph && (
         <section className="git-graph">
           <h3 className="git-others__title">{t('git.graph')}</h3>
+          <p className="git-graph__hint">{t('git.graphHint')}</p>
           <Mermaid chart={graph} />
         </section>
       )}
