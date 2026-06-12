@@ -1,7 +1,11 @@
 # Git tab — uniform position card + inward-sync actions
 
-> **Status (2026-06-12):** In development on `feature/git-actions` (stacked
-> on `feature/git-origin-visibility`).
+> **Status (2026-06-12):** Deployed and confirmed. Live on :5099 (hardened
+> pipeline, health in 2s; the busy-guard observably working on its first
+> live request). Fixture-verified (`verify-git-actions.mjs`, 17/17 — all
+> three buttons actually clicked, conflict auto-abort proven) and confirmed
+> by the End User. Next increment: other-branches overview (playback
+> approved-pending "create it").
 
 ## What the user specified
 
