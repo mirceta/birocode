@@ -1,7 +1,17 @@
 # Claude Web — working plan
 
-> **Status (2026-06-12):** No feature currently in flight. Three features
-> shipped today from parallel sessions.
+> Editing any plan? First read
+> [doc principles](plans/doc-principles.md) — cohesion by unit,
+> progressive disclosure, reference-don't-duplicate.
+
+> **Status (2026-06-12):** One feature in flight.
+
+## Active feature plans
+
+- [Docs viewer](plans/doc-viewer.md) — sliced: 1) mermaid label wrapping
+  (branch `feature/doc-viewer`, in progress), 2) doc links + history in
+  the Files viewer (next), 3) cross-repo links + 4) HTML webview
+  (deferred).
 
 ## Recently shipped
 
@@ -29,3 +39,5 @@
 - [Proxy guide](docs/claude-web/proxy.md) — reverse-proxy traps of /preview/.
 - [Threat model](plans/threat-model.md) — remaining attack vectors after the
   auth IP filter, with severity/likelihood ratings.
+- [Doc principles](plans/doc-principles.md) — how to structure plans/docs
+  (cohesion, progressive disclosure, no duplication).
