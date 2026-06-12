@@ -12,6 +12,8 @@
 
 ## Active feature plans
 
+- [Multi-pane: five panes](plans/multi-pane-five.md) — raise the desktop
+  pane cap from 4 to 5 for 4K monitors (DRAFT, under discussion).
 - [Docs viewer](plans/doc-viewer.md) — sliced: 1) mermaid label wrapping
   (deployed & confirmed 2026-06-12), 2) doc links + history in the Files
   viewer (deployed & confirmed 2026-06-12, merged to main), 3) cross-repo

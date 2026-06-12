@@ -20,7 +20,7 @@ import Guests from '../pages/Guests';
 // tab order decides which neighbors appear.
 
 const MIN_PANE_WIDTH = 420;
-const MAX_PANES = 4;
+const MAX_PANES = 5;
 
 const paneCountNow = () =>
   Math.max(1, Math.min(MAX_PANES, Math.floor(window.innerWidth / MIN_PANE_WIDTH)));
