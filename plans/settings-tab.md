@@ -1,6 +1,11 @@
 # Settings tab — rearrangeable tab order
 
-> **Status (2026-06-12):** Planned, on `feature/settings-tab`. Not yet built.
+> **Status (2026-06-12):** Deployed and confirmed. Live on :5099 (health in
+> 2s; the user had already saved a custom order before verification even
+> ran). `verify-settings-tab.mjs` 14/14 incl. real pointer-drag, live nav
+> preview, persistence, and multi-pane adherence. Pre-deploy, the ancestry
+> guard caught a parallel session's pane-cap-5 change to PaneStrip.jsx —
+> composed and re-verified instead of clobbering (second save in one day).
 
 ## Problem
 
