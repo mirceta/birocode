@@ -8,20 +8,26 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-13):** No feature in flight.
+> **Status (2026-06-13):** One feature in flight: dual chat — implemented
+> on `feature/dual-chat`, browser-verified 24/24 on :5201, awaiting
+> preview/deploy.
 
 ## Active feature plans
 
-- [Docs viewer](plans/doc-viewer.md) — sliced: 1) mermaid label wrapping
-  (deployed & confirmed 2026-06-12), 2) doc links + history in the Files
-  viewer (deployed & confirmed 2026-06-12, merged to main), 3) cross-repo
-  links + 4) HTML webview (deferred).
-- [Settings tab](plans/settings-tab.md) — rearrangeable nav-tab order with
-  live preview; extracts the one canonical tab registry (planned,
-  `feature/settings-tab`).
+- [Dual chat](plans/dual-chat.md) — two persistent chat tabs: a Project
+  chat that follows the active project (today's behavior) and an always-on
+  Claude Web chat pinned to the Harness's own repo. Implemented &
+  verified 2026-06-13 (`feature/dual-chat`), not yet deployed.
 
 ## Recently shipped
 
+- [Settings tab](plans/settings-tab.md) — rearrangeable nav-tab order with
+  live preview; extracted the one canonical tab registry. Deployed &
+  confirmed 2026-06-12.
+- [Docs viewer](plans/doc-viewer.md) — sliced: 1) mermaid label wrapping +
+  2) doc links + history in the Files viewer (both deployed & confirmed
+  2026-06-12, merged to main); 3) cross-repo links + 4) HTML webview
+  remain deferred.
 - [Multi-pane: five panes](plans/multi-pane-five.md) — desktop pane cap
   raised 4 -> 5 for 4K monitors. Merged to main, deployed 2026-06-13.
 - [IP intelligence](plans/ip-intel.md) — country/ISP/datacenter enrichment

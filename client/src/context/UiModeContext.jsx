@@ -37,6 +37,7 @@ export const FEATURES = {
   helloButton: 'advanced', // inert HELLO header button (user request 2026-06-12, no plan file)
   settingsTab: 'advanced', // app preferences incl. tab order (plans/settings-tab.md)
   docLinks: 'advanced', // doc links + history in the Files viewer (plans/doc-viewer.md slice 2)
+  dualChat: 'advanced', // Project | Claude Web chat switcher (plans/dual-chat.md)
 };
 
 const MODE_KEY = 'claudeweb_ui_mode';

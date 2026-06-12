@@ -7,6 +7,11 @@ import { useRepo } from './RepoContext';
 // this device is LOOKING at stays local.
 const LEGACY_DOCK_KEY = 'claudeweb_dock'; // pre-sync localStorage tab list
 const ACTIVE_KEY = 'claudeweb_dock_active';
+// Which chat surface this device is looking at (plans/dual-chat.md):
+// 'agent' = the active dock tab (or the plain default chat when none exist),
+// 'project' = the project-following chat, 'harness' = the always-on Claude Web
+// chat. Device-local by design, like ACTIVE_KEY.
+const VIEW_KEY = 'claudeweb_chat_view';
 
 const DockContext = createContext(null);
 
@@ -48,6 +53,19 @@ export function DockProvider({ children }) {
   // reconciliation until then (before that the tab list is simply unknown).
   const [loaded, setLoaded] = useState(false);
   const [activeTabId, setActiveTabId] = useState(() => localStorage.getItem(ACTIVE_KEY) || null);
+  const [chatView, setChatViewState] = useState(() => {
+    const stored = localStorage.getItem(VIEW_KEY);
+    return stored === 'project' || stored === 'harness' ? stored : 'agent';
+  });
+
+  const setChatView = useCallback((view) => {
+    try {
+      localStorage.setItem(VIEW_KEY, view);
+    } catch {
+      /* private mode */
+    }
+    setChatViewState(view);
+  }, []);
 
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
@@ -126,6 +144,7 @@ export function DockProvider({ children }) {
     // the client id so the conversation key is stable across devices.
     setTabs((prev) => [...prev, tab]);
     setActiveTabId(id);
+    setChatView('agent');
     // A new agent is tied to its repo — follow it with the global project
     // selector so Git/Files/etc. show that project (plans/agent-repo-sync.md).
     selectRepo(repoId);
@@ -133,7 +152,7 @@ export function DockProvider({ children }) {
       setTabs((prev) => prev.filter((t) => t.id !== id));
     });
     return id;
-  }, [selectRepo]);
+  }, [selectRepo, setChatView]);
 
   const closeTab = useCallback((id) => {
     setTabs((prev) => prev.filter((t) => t.id !== id));
@@ -154,9 +173,10 @@ export function DockProvider({ children }) {
   // project selection).
   const setActiveTab = useCallback((id) => {
     setActiveTabId(id);
+    setChatView('agent');
     const tab = tabsRef.current.find((t) => t.id === id);
     if (tab?.repoId) selectRepo(tab.repoId);
-  }, [selectRepo]);
+  }, [selectRepo, setChatView]);
 
   // Prompt stash (plans/prompt-stash.md): ideas jotted down while the agent
   // runs, attached to the tab on the backend. Optimistic, client-supplied id
@@ -205,6 +225,8 @@ export function DockProvider({ children }) {
     loaded,
     activeTabId,
     activeTab,
+    chatView,
+    setChatView,
     openTab,
     closeTab,
     setActiveTab,

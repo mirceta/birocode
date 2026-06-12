@@ -39,9 +39,13 @@ export default function Chat() {
     startNewConversation,
     resumeConversation,
     openPicker,
+    chatView,
+    setChatView,
+    hasSelfRepo,
   } = useChat();
 
   const showContextMeter = useFeature('contextMeter');
+  const showDualChat = useFeature('dualChat');
 
   const scrollRef = useRef(null);
   const stickToBottom = useRef(true);
@@ -80,6 +84,30 @@ export default function Chat() {
 
   return (
     <div className="chat">
+      {showDualChat && (
+        <div className="chat__scopes" role="tablist" aria-label={t('chat.scopesAria')}>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={chatView === 'project'}
+            className={`chat__scope${chatView === 'project' ? ' chat__scope--on' : ''}`}
+            onClick={() => setChatView('project')}
+          >
+            {t('chat.tabProject')}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={chatView === 'harness'}
+            className={`chat__scope${chatView === 'harness' ? ' chat__scope--on' : ''}`}
+            disabled={!hasSelfRepo}
+            title={hasSelfRepo ? undefined : t('chat.noSelfRepo')}
+            onClick={() => setChatView('harness')}
+          >
+            {t('chat.tabClaudeWeb')}
+          </button>
+        </div>
+      )}
       <div className="chat__bar">
         <ClaudeViewToggle />
         <button type="button" className="chat__conversations" onClick={openPicker}>

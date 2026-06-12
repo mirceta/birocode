@@ -24,6 +24,40 @@
   border-bottom: 1px solid var(--color-border);
 }
 
+/* Dual-chat surface switcher (plans/dual-chat.md): Project | Claude Web.
+   Neither segment is on while an agent conversation is showing. */
+.chat__scopes {
+  display: flex;
+  gap: 6px;
+  padding: 8px 16px 0;
+  background: var(--color-surface);
+}
+
+.chat__scope {
+  min-height: 30px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.chat__scope--on {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
+.chat__scope:disabled {
+  opacity: 0.45;
+}
+
+.chat__scope:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
 .chat__conversations {
   flex: 1;
   min-height: 36px;

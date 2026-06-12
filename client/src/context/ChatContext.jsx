@@ -4,6 +4,7 @@ import { createSseParser } from '../components/chat/sseParser';
 import { getModel, setModel as persistModel } from '../components/chat/ModelSelector';
 import { useDock } from './DockContext';
 import { useRepo } from './RepoContext';
+import { useFeature } from './UiModeContext';
 import { useT } from '../i18n/LanguageContext';
 
 // Holds per-tab chat conversations. Each Dock tab gets its own independent
@@ -13,6 +14,12 @@ import { useT } from '../i18n/LanguageContext';
 //
 // When no Dock tabs exist, a "default" conversation keyed by the global repo
 // selector is used, preserving the pre-Dock single-conversation experience.
+//
+// Dual chat (plans/dual-chat.md): next to 'default' lives a second fixed
+// conversation key, 'harness', permanently pinned to the self repo (Claude
+// Web itself). Which surface is visible is the device-local chatView in
+// DockContext: 'agent' (dock tab / plain default — the pre-dual behavior),
+// 'project' (the project-following chat) or 'harness'.
 const ChatContext = createContext(null);
 
 export function useChat() {
@@ -35,8 +42,11 @@ function emptyConversation(greeting) {
 
 export function ChatProvider({ children }) {
   const { t } = useT();
-  const { currentRepoId } = useRepo();
-  const { tabs, activeTab, activeTabId, updateTab, loaded: dockLoaded } = useDock();
+  const { currentRepoId, repos } = useRepo();
+  const { tabs, activeTab, activeTabId, updateTab, loaded: dockLoaded, chatView, setChatView } = useDock();
+  const dualChat = useFeature('dualChat');
+  // The harness's own repo — the backend pins it and flags it isSelf.
+  const selfRepoId = repos.find((r) => r.isSelf)?.id || null;
   const greeting = () => ({ role: 'assistant', text: t('chat.greeting') });
 
   // Per-tab conversation map: tabId -> conversation state.
@@ -62,10 +72,22 @@ export function ChatProvider({ children }) {
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [sessionsError, setSessionsError] = useState(false);
 
-  // Determine which conversation key is active.
-  const activeKey = activeTabId || 'default';
+  // Resolve which chat surface is visible. 'agent' is the pre-dual behavior
+  // (active dock tab, else the plain default chat). The harness view degrades
+  // to 'project' while repos are loading or when no self repo is registered.
+  let view = dualChat ? chatView : 'agent';
+  if (view === 'harness' && !selfRepoId) view = 'project';
+
+  // Determine which conversation key is active, and the dock tab actually
+  // backing it (null when a fixed Project/Claude Web chat is showing, so tab
+  // status patches never hit a background agent).
+  const visibleTab = view === 'agent' ? activeTab : null;
+  const visibleTabId = view === 'agent' ? activeTabId : null;
+  const activeKey =
+    view === 'harness' ? 'harness' : view === 'project' ? 'default' : activeTabId || 'default';
   // The repo to target for API calls.
-  const activeRepoId = activeTab ? activeTab.repoId : currentRepoId;
+  const activeRepoId =
+    view === 'harness' ? selfRepoId : visibleTab ? visibleTab.repoId : currentRepoId;
 
   // Ensure a conversation entry exists for the active key. If the tab was
   // restored from localStorage with a stored sessionId (page reload), resume
@@ -75,9 +97,9 @@ export function ChatProvider({ children }) {
     if (convos[activeKey]) return;
     // Tabs arrive async from the backend (plans/dock-sync.md): wait for the
     // dock before seeding a tab conversation, so the tab's stored sessionId
-    // is actually known here.
-    if (activeKey !== 'default' && !dockLoaded) return;
-    const storedSessionId = activeTab?.sessionId || null;
+    // is actually known here. The fixed keys don't depend on the dock.
+    if (activeKey !== 'default' && activeKey !== 'harness' && !dockLoaded) return;
+    const storedSessionId = visibleTab?.sessionId || null;
     setConvos((prev) => {
       if (prev[activeKey]) return prev;
       const fresh = emptyConversation(greeting());
@@ -87,20 +109,22 @@ export function ChatProvider({ children }) {
       }
       return { ...prev, [activeKey]: fresh };
     });
-    if (storedSessionId) loadTranscript(activeKey, storedSessionId, activeTab.repoId);
+    if (storedSessionId) loadTranscript(activeKey, storedSessionId, visibleTab.repoId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeKey, dockLoaded]);
 
-  // When the global repo changes and we're in default mode (no Dock tabs),
-  // reset the default conversation.
+  // When the global repo changes, reset the project-following default
+  // conversation. The harness chat is pinned and never resets here; an
+  // active agent view means the switch came from agent-repo-sync — leave
+  // the default chat alone, as before.
   const prevRepoRef = useRef(currentRepoId);
   useEffect(() => {
-    if (activeTabId) return; // Dock tabs manage their own repos.
+    if (view === 'agent' && activeTabId) return; // Dock tabs manage their own repos.
     if (prevRepoRef.current === currentRepoId) return;
     prevRepoRef.current = currentRepoId;
     resetConversation('default');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentRepoId, activeTabId]);
+  }, [currentRepoId, activeTabId, view]);
 
   // Get the current conversation (safe fallback).
   const conv = convos[activeKey] || emptyConversation(greeting());
@@ -229,7 +253,7 @@ export function ChatProvider({ children }) {
 
   async function send(text) {
     const key = activeKey;
-    const tabId = activeTabId;
+    const tabId = visibleTabId;
     const repoId = activeRepoId;
 
     updateConvo(key, { error: '' });
@@ -280,8 +304,11 @@ export function ChatProvider({ children }) {
           if (tabId) updateTab(tabId, { status: 'error' });
         }
       } else {
-        // Real HTTP error from the backend (400/409/...).
-        updateConvo(key, { error: t('chat.sendError') });
+        // Real HTTP error from the backend. 409 = the repo's single run slot
+        // is taken — with dual chat two conversations can share a repo, so
+        // say which problem this is instead of a generic failure.
+        const msg = err.status === 409 ? t('chat.busyError') : t('chat.sendError');
+        updateConvo(key, { error: msg });
         if (tabId) updateTab(tabId, { status: 'error' });
       }
     } finally {
@@ -395,9 +422,24 @@ export function ChatProvider({ children }) {
     } catch {
       return;
     }
-    const targets = tabs.length > 0
+    let targets = tabs.length > 0
       ? tabs.map((tab) => ({ key: tab.id, tabId: tab.id, repoId: tab.repoId, tab }))
       : [{ key: 'default', tabId: null, repoId: currentRepoId, tab: null }];
+    if (dualChat && selfRepoId) {
+      targets.push({ key: 'harness', tabId: null, repoId: selfRepoId, tab: null });
+      // One run per repo: when another conversation also targets the self
+      // repo, only one of them may reattach to its run. Prefer the one
+      // already carrying the run's sessionId; otherwise the harness yields.
+      const shared = targets.filter((tg) => tg.repoId === selfRepoId);
+      if (shared.length > 1) {
+        const run = runs?.[selfRepoId];
+        const match = run?.sessionId
+          ? shared.find((tg) => convos[tg.key]?.sessionId === run.sessionId)
+          : null;
+        const keep = match || shared.find((tg) => tg.key !== 'harness');
+        targets = targets.filter((tg) => tg.repoId !== selfRepoId || tg === keep);
+      }
+    }
     for (const { key, tabId, repoId, tab } of targets) {
       const run = runs?.[repoId];
       if (run?.status === 'running') {
@@ -443,8 +485,8 @@ export function ChatProvider({ children }) {
     // The run is backend-owned now: aborting the local stream detaches us but
     // leaves the CLI working, so an explicit stop call is required.
     apiPost('/chat/stop', undefined, { repoId: activeRepoId }).catch(() => {});
-    if (activeTabId) updateTab(activeTabId, { status: 'idle' });
-  }, [activeKey, activeRepoId, activeTabId, updateTab]);
+    if (visibleTabId) updateTab(visibleTabId, { status: 'idle' });
+  }, [activeKey, activeRepoId, visibleTabId, updateTab]);
 
   function resetConversation(key) {
     const controller = abortRefs.current[key];
@@ -460,7 +502,7 @@ export function ChatProvider({ children }) {
 
   function startNewConversation() {
     resetConversation(activeKey);
-    if (activeTabId) updateTab(activeTabId, { sessionId: null, status: 'idle' });
+    if (visibleTabId) updateTab(visibleTabId, { sessionId: null, status: 'idle' });
   }
 
   async function resumeConversation(id) {
@@ -475,7 +517,7 @@ export function ChatProvider({ children }) {
       messages: [{ role: 'assistant', text: t('chat.loadingConversation') }],
     });
     setPickerOpen(false);
-    if (activeTabId) updateTab(activeTabId, { sessionId: id, status: 'idle' });
+    if (visibleTabId) updateTab(visibleTabId, { sessionId: id, status: 'idle' });
     await loadTranscript(key, id, repoId);
   }
 
@@ -516,7 +558,9 @@ export function ChatProvider({ children }) {
     // closed" — deleting here would wipe the active tab's conversation.
     if (!dockLoaded) return;
     const live = new Set(tabs.map((tab) => tab.id));
-    const stale = Object.keys(convos).filter((k) => k !== 'default' && !live.has(k));
+    const stale = Object.keys(convos).filter(
+      (k) => k !== 'default' && k !== 'harness' && !live.has(k),
+    );
     if (stale.length === 0) return;
     for (const k of stale) {
       abortRefs.current[k]?.abort();
@@ -553,6 +597,11 @@ export function ChatProvider({ children }) {
     startNewConversation,
     resumeConversation,
     openPicker,
+    // Dual chat (plans/dual-chat.md): the resolved surface, the device-local
+    // selector, and whether a self repo exists to pin the harness chat to.
+    chatView: view,
+    setChatView,
+    hasSelfRepo: !!selfRepoId,
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
