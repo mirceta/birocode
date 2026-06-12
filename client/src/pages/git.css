@@ -17,6 +17,28 @@
   border-radius: var(--radius);
 }
 
+/* Which repo is this? Name as registered + absolute path (user request). */
+.git-repoinfo {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.git-repoinfo__name {
+  font-weight: 700;
+}
+
+.git-repoinfo__path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  opacity: 0.65;
+  word-break: break-all;
+}
+
 .git-branch__name {
   font-weight: 700;
   font-size: 16px;

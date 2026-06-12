@@ -49,7 +49,7 @@ function PositionRow({ a, b, label, missingLabel }) {
 
 export default function Git() {
   const { t } = useT();
-  const { currentRepoId } = useRepo();
+  const { currentRepoId, current } = useRepo();
   const showActions = useFeature('gitActions');
 
   const showBranchList = useFeature('gitBranchList');
@@ -142,6 +142,12 @@ export default function Git() {
   return (
     <div className="git-page">
       <div className="git-branch">
+        {current && (
+          <div className="git-repoinfo">
+            <span className="git-repoinfo__name">{current.name}</span>
+            <span className="git-repoinfo__path">{current.path}</span>
+          </div>
+        )}
         <div className="git-branch__name">
           <span aria-hidden="true">⎇</span> {status.branch}
         </div>
