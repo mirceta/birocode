@@ -1,7 +1,10 @@
 # Git tab — other-branches overview
 
-> **Status (2026-06-12):** In development on `feature/git-branches` (stacked
-> on `feature/git-actions`).
+> **Status (2026-06-12):** Deployed and confirmed. Live on :5099 (hardened
+> pipeline, health in 2s), fixture-verified
+> (`verify-git-branches.mjs`, 14/14) and confirmed by the End User. First
+> live response listed 17 forgotten feature branches — exactly the problem
+> this solves.
 
 ## Problem
 
