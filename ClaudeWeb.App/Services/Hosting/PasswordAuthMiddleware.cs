@@ -56,7 +56,7 @@ public class PasswordAuthMiddleware
             return;
         }
 
-        if (_auth.BlockedFor(AuthController.ClientKey(context)) is { } wait)
+        if (_auth.BlockedFor(ClientIp.Get(context)) is { } wait)
         {
             context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
             await context.Response.WriteAsJsonAsync(new { error = "Too many attempts", retryAfterSeconds = (int)Math.Ceiling(wait.TotalSeconds) });
@@ -104,7 +104,7 @@ public class PasswordAuthMiddleware
         if (cached != null && cached.Version == version && FixedTimeEquals(supplied, cached.Password))
             return true;
 
-        var client = AuthController.ClientKey(context);
+        var client = ClientIp.Get(context);
         if (_auth.BlockedFor(client) is not null)
             return false; // locked out — don't even run the KDF
 

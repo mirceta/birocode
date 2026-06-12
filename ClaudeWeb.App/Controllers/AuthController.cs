@@ -1,4 +1,5 @@
 using ClaudeWeb.Services.Auth;
+using ClaudeWeb.Services.Hosting;
 using ClaudeWeb.Services.Logging;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -38,7 +39,7 @@ public class AuthController : ControllerBase
     public IActionResult Login([FromBody] LoginRequest request)
     {
         _logger.CountRequest();
-        var client = ClientKey(HttpContext);
+        var client = ClientIp.Get(HttpContext);
 
         if (_auth.BlockedFor(client) is { } wait)
             return StatusCode(429, new { error = "Too many attempts", retryAfterSeconds = (int)Math.Ceiling(wait.TotalSeconds) });
@@ -82,15 +83,6 @@ public class AuthController : ControllerBase
         var error = _auth.ChangePassword(request?.Current, request?.Next, Request.Cookies[CookieName]);
         if (error != null) return BadRequest(new { error });
         return Ok(new { ok = true });
-    }
-
-    /// <summary>Client identity for throttling: first X-Forwarded-For hop, else the socket address.</summary>
-    public static string ClientKey(HttpContext context)
-    {
-        var fwd = context.Request.Headers["X-Forwarded-For"].FirstOrDefault();
-        if (!string.IsNullOrWhiteSpace(fwd))
-            return fwd.Split(',')[0].Trim();
-        return context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
     }
 
     private static CookieOptions CookieOptions(HttpContext context) => new()

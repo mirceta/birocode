@@ -1,5 +1,6 @@
 using ClaudeWeb.Models;
 using ClaudeWeb.Services.Hosting;
+using ClaudeWeb.Services.IpFilter;
 using ClaudeWeb.Services.Logging;
 using ClaudeWeb.Services.Monitoring;
 using ClaudeWeb.Services.Repositories;
@@ -40,6 +41,7 @@ public class MainForm : Form
     private readonly EmbeddedApi _api;
     private readonly CallLog _callLog;
     private readonly RepositoryRegistry _repositories;
+    private readonly IpAllowlistService _ipAllowlist;
 
     private readonly Label _workingDirLabel;
     private readonly Label _serverLabel;
@@ -52,13 +54,14 @@ public class MainForm : Form
     // Maps a CallRecord.Number to its ListView row for in-place updates.
     private readonly Dictionary<int, ListViewItem> _rowsByNumber = new();
 
-    public MainForm(AppConfig config, Logger logger, EmbeddedApi api, CallLog callLog, RepositoryRegistry repositories)
+    public MainForm(AppConfig config, Logger logger, EmbeddedApi api, CallLog callLog, RepositoryRegistry repositories, IpAllowlistService ipAllowlist)
     {
         _config = config;
         _logger = logger;
         _api = api;
         _callLog = callLog;
         _repositories = repositories;
+        _ipAllowlist = ipAllowlist;
 
         Text = "Claude Web";
         Size = new Size(1200, 720);
@@ -165,6 +168,29 @@ public class MainForm : Form
         manageButton.FlatAppearance.BorderSize = 0;
         manageButton.Click += OnManageRepositories;
         actions.Controls.Add(manageButton);
+
+        // The ONLY place in the system where IPs can be approved
+        // (plans/auth-ip-filter.md req. 1).
+        var guestsButton = new Button
+        {
+            Text = "Guests (IPs)",
+            AutoSize = true,
+            Height = 32,
+            Padding = new Padding(12, 5, 12, 5),
+            BackColor = Color.FromArgb(70, 130, 200),
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            Cursor = Cursors.Hand,
+            Margin = new Padding(0, 0, 4, 0)
+        };
+        guestsButton.FlatAppearance.BorderSize = 0;
+        guestsButton.Click += (_, _) =>
+        {
+            using var dialog = new IpFilterForm(_ipAllowlist);
+            dialog.ShowDialog(this);
+        };
+        actions.Controls.Add(guestsButton);
 
         workingDirLabel = new Label
         {

@@ -15,6 +15,7 @@ export default function BottomNav() {
   const showScreen = useFeature('screenTab');
   const showTerminal = useFeature('terminalTab');
   const showProjects = useFeature('projectsTab');
+  const showGuests = useFeature('guestsTab');
 
   // Chat and Term share the first nav slot (plans/terminal-sessions.md): the
   // slot opens the last-used view and is active on either route; the actual
@@ -48,6 +49,7 @@ export default function BottomNav() {
     ...(showAgents ? [{ to: '/studio/agents', label: t('nav.agents'), icon: 'A', badge: agentBadge }] : []),
     ...(showScreen ? [{ to: '/studio/screen', label: t('nav.screen'), icon: 'S' }] : []),
     ...(showProjects ? [{ to: '/studio/projects', label: t('nav.projects'), icon: 'P' }] : []),
+    ...(showGuests ? [{ to: '/studio/guests', label: t('nav.guests'), icon: '⛨' }] : []),
     ...(showAppTab ? [{ to: '/studio/app', label: t('nav.app'), icon: '▶' }] : []),
   ];
 

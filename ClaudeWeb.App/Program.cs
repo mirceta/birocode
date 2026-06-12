@@ -1,5 +1,6 @@
 using ClaudeWeb.Models;
 using ClaudeWeb.Services.Hosting;
+using ClaudeWeb.Services.IpFilter;
 using ClaudeWeb.Services.Logging;
 using ClaudeWeb.Services.Monitoring;
 using ClaudeWeb.Services.Repositories;
@@ -33,12 +34,17 @@ static class Program
         // that ship without the source tree.
         repositories.EnsureSelfRepo(FindRepoRoot(), "Claude Web (this app)");
 
+        // IP allowlist (plans/auth-ip-filter.md). Built here so the WinForms
+        // GUI (the ONLY surface that can approve IPs) and the web API share
+        // one instance — same pattern as RepositoryRegistry.
+        var ipAllowlist = new IpAllowlistService(logger);
+
         // Start the embedded Kestrel server on a background thread.
-        var api = new EmbeddedApi(config, logger, callLog, repositories);
+        var api = new EmbeddedApi(config, logger, callLog, repositories, ipAllowlist);
         api.Start();
 
         // Launch the monitoring GUI (blocks on the WinForms message loop).
-        var form = new MainForm(config, logger, api, callLog, repositories);
+        var form = new MainForm(config, logger, api, callLog, repositories, ipAllowlist);
         Application.Run(form);
 
         // Shut the server down cleanly when the GUI closes.

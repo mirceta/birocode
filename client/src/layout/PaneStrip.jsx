@@ -13,6 +13,7 @@ import Plan from '../pages/Plan';
 import Screen from '../pages/Screen';
 import Terminal from '../pages/Terminal';
 import Projects from '../pages/Projects';
+import Guests from '../pages/Guests';
 
 // Multi-pane desktop layout (plans/multi-pane.md): a sliding window over the
 // nav's tab list, centered on the active route. No pane management UI — the
@@ -33,6 +34,7 @@ function useVisibleTabs() {
   const showScreen = useFeature('screenTab');
   const showTerminal = useFeature('terminalTab');
   const showProjects = useFeature('projectsTab');
+  const showGuests = useFeature('guestsTab');
   const { pathname } = useLocation();
 
   // Chat and Term share the first slot (plans/terminal-sessions.md): the pane
@@ -54,6 +56,7 @@ function useVisibleTabs() {
     ...(showAgents ? [{ key: 'agents', path: '/studio/agents', label: 'nav.agents', element: <Agents /> }] : []),
     ...(showScreen ? [{ key: 'screen', path: '/studio/screen', label: 'nav.screen', element: <Screen /> }] : []),
     ...(showProjects ? [{ key: 'projects', path: '/studio/projects', label: 'nav.projects', element: <Projects /> }] : []),
+    ...(showGuests ? [{ key: 'guests', path: '/studio/guests', label: 'nav.guests', element: <Guests /> }] : []),
     ...(showAppTab ? [{ key: 'app', path: '/studio/app', label: 'nav.app', element: <AppRun /> }] : []),
   ];
 }
