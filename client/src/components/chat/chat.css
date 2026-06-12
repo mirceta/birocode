@@ -12,6 +12,7 @@
   flex-direction: column;
   margin: -16px -16px calc(-1 * (var(--nav-height) + 16px));
   height: calc(100vh - var(--header-height));
+  height: calc(100dvh - var(--header-height)); /* match the dvh-locked frame */
 }
 
 .chat__bar {
