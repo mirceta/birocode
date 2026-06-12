@@ -196,12 +196,11 @@
   "tool.reading": "Dosya okunuyor...",
   "tool.working": "Calisiyor...",
 
-  "files.home": "Ana sayfa",
-  "files.pathAria": "Klasor yolu",
   "files.empty": "Henuz dosya yok",
   "files.emptyHint": "Sohbette Claude'dan bir sey olusturmasini iste.",
   "files.opening": "Dosya aciliyor...",
   "files.loadingList": "Dosyalarin yukleniyor...",
+  "files.loadingFolder": "Yukleniyor...",
   "files.loadError": "Bu klasor acilamadi. Lutfen tekrar dene.",
   "files.previewError": "Bu dosya onizlenemiyor.",
   "files.showRendered": "Bicimlenmis belgeyi goster",
