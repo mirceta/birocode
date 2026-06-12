@@ -74,6 +74,9 @@
   "guests.confirmRemoveSelf": "\"{name}\" ({ip}) is YOUR OWN IP.\n\nRemoving it terminates this connection immediately and locks you out until the administrator re-approves you at the host PC. Remove anyway?",
   "guests.removeError": "We couldn't remove that guest. Please try again.",
   "guests.approveHint": "New IPs can only be approved in the desktop app on the host PC — never from here.",
+  "guests.geoPending": "Looking up location…",
+  "guests.geoLocal": "Local network",
+  "guests.geoDatacenter": "datacenter / hosting",
 
   "git.loading": "Checking the project's git state...",
   "git.loadError": "We couldn't read the git status. Please try again.",

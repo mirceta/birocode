@@ -17,6 +17,32 @@ function fmt(utc) {
   return Number.isNaN(d.getTime()) ? null : d.toLocaleString();
 }
 
+// ISO-2 country code -> flag emoji (regional indicator letters).
+function flag(cc) {
+  if (!cc || cc.length !== 2) return '';
+  return String.fromCodePoint(...[...cc.toUpperCase()].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
+}
+
+// IP intelligence row (plans/ip-intel.md): flag + place, ISP/AS, rDNS, and
+// the datacenter/proxy badge — the strongest "bot, not me" signal. Absent
+// until the background lookup fills the cache (shows on a later load).
+function GeoLine({ geo, t }) {
+  if (!geo) return <span className="guest__geo guest__geo--pending">{t('guests.geoPending')}</span>;
+  if (geo.local) return <span className="guest__geo guest__geo--local">{t('guests.geoLocal')}</span>;
+
+  const place = [geo.city, geo.country].filter(Boolean).join(', ');
+  const org = [geo.org, geo.asn].filter(Boolean).join(' · ');
+  return (
+    <span className="guest__geo">
+      {geo.countryCode && <span className="guest__flag" aria-hidden="true">{flag(geo.countryCode)}</span>}
+      {place && <span className="guest__place">{place}</span>}
+      {org && <span className="guest__org">{org}</span>}
+      {geo.hostname && <span className="guest__host">{geo.hostname}</span>}
+      {geo.datacenter && <span className="guest__dc">{t('guests.geoDatacenter')}</span>}
+    </span>
+  );
+}
+
 export default function Guests() {
   const { t } = useT();
   const [data, setData] = useState(null);
@@ -81,6 +107,7 @@ export default function Guests() {
                 </span>
                 <span className="guest__ip">{g.ip}</span>
               </div>
+              <GeoLine geo={g.geo} t={t} />
               <div className="guest__meta">
                 <span className="guest__access">
                   {fmt(g.lastAccessUtc)
@@ -117,6 +144,7 @@ export default function Guests() {
                     {t(a.count === 1 ? 'guests.attemptOne' : 'guests.attemptMany', { n: a.count })}
                   </span>
                 </div>
+                <GeoLine geo={a.geo} t={t} />
                 <div className="guest__meta">
                   <span className="guest__access">
                     {t('guests.lastAttempt', { time: fmt(a.lastUtc) || '—' })}

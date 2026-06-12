@@ -10,6 +10,7 @@ public static class IpFilterModuleExtensions
     public static IServiceCollection AddIpFilterModule(this IServiceCollection services)
     {
         services.AddSingleton<IpConnectionRegistry>();
+        services.AddSingleton<IpInfoService>(); // IP enrichment (plans/ip-intel.md)
         return services;
     }
 }

@@ -26,6 +26,39 @@
   gap: 6px;
 }
 
+/* IP intelligence row (plans/ip-intel.md) */
+.guest__geo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  font-size: 12px;
+  color: var(--text-dim, #8a8f98);
+}
+
+.guest__geo--pending,
+.guest__geo--local {
+  font-style: italic;
+  opacity: 0.7;
+}
+
+.guest__flag { font-size: 14px; }
+
+.guest__place { font-weight: 600; color: var(--color-text); }
+
+.guest__host {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  word-break: break-all;
+}
+
+.guest__dc {
+  font-weight: 700;
+  color: #b3261e;
+  background: rgba(179, 38, 30, 0.1);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
 .guest {
   display: flex;
   flex-direction: column;

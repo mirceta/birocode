@@ -74,6 +74,9 @@
   "guests.confirmRemoveSelf": "\"{name}\" ({ip}) SENIN KENDI IP'in.\n\nKaldirirsan bu baglanti hemen kesilir ve yonetici ana bilgisayardan seni yeniden onaylayana kadar disarida kalirsin. Yine de kaldirilsin mi?",
   "guests.removeError": "Misafir kaldirilamadi. Lutfen tekrar dene.",
   "guests.approveHint": "Yeni IP'ler yalnizca ana bilgisayardaki masaustu uygulamasindan onaylanabilir — buradan asla.",
+  "guests.geoPending": "Konum araniyor…",
+  "guests.geoLocal": "Yerel ag",
+  "guests.geoDatacenter": "veri merkezi / proxy",
 
   "git.loading": "Projenin git durumu kontrol ediliyor...",
   "git.loadError": "Git durumu okunamadi. Lutfen tekrar dene.",
