@@ -16,7 +16,8 @@ window is wide enough.
 No free-form pane management. The nav's tab order is the only order, and the
 clicked tab is the anchor:
 
-1. Measure the window: `paneCount = clamp(floor(innerWidth / 420px), 1, 4)`.
+1. Measure the window: `paneCount = clamp(floor(innerWidth / 420px), 1, 5)`
+   (cap raised from 4 -- see [multi-pane-five.md](multi-pane-five.md)).
 2. The active route picks the anchor tab; render `paneCount` tabs **centered
    on the anchor**, clamped at the ends of the list
    (`start = clamp(activeIdx - floor((n-1)/2), 0, len - n)`).

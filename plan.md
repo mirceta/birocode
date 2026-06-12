@@ -8,7 +8,7 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-12):** One feature in flight.
+> **Status (2026-06-13):** No feature in flight.
 
 ## Active feature plans
 
@@ -22,6 +22,8 @@
 
 ## Recently shipped
 
+- [Multi-pane: five panes](plans/multi-pane-five.md) — desktop pane cap
+  raised 4 -> 5 for 4K monitors. Merged to main, deployed 2026-06-13.
 - [IP intelligence](plans/ip-intel.md) — country/ISP/datacenter enrichment
   in the Guests tab. Deployed & confirmed 2026-06-12.
 - **Git tab suite** (merged to main 2026-06-12 evening, deployed & confirmed):
