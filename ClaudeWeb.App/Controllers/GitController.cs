@@ -220,6 +220,29 @@ public class GitController : ControllerBase
         }
     }
 
+    /// <summary>POST /api/git/push-current -- push the current branch to
+    /// origin, publishing with -u when needed (plans/git-branches.md). Plain
+    /// push only. 409 while a chat run is active.</summary>
+    [HttpPost("git/push-current")]
+    public IActionResult PushCurrent()
+    {
+        _logger.CountRequest();
+        var repo = _repos.Current();
+        if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
+        if (_runs.IsBusy(repo.Id))
+            return Conflict(new { error = "Claude is working in this project — try again when the run finishes." });
+        try
+        {
+            var r = _git.PushCurrent(repo.Path);
+            return r.Ok ? Ok(new { updated = r.Updated }) : UnprocessableEntity(new { error = r.Error });
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[GIT] PushCurrent failed: {ex.Message}");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
     /// <summary>GET /api/history -- recent commits, newest first.</summary>
     [HttpGet("history")]
     public IActionResult History()

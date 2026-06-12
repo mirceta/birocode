@@ -431,6 +431,14 @@ public partial class GitService
                 : CountLeftRight(workingDir, localBase, name);
             var (obAhead, obBehind) = originBase is null ? (0, 0)
                 : CountLeftRight(workingDir, originBase, name);
+            // Dead-branch filter (user rule): no unique commits vs any
+            // existing base = fully merged = history, not WIP — hidden no
+            // matter how far behind it has drifted.
+            var hasBase = localBase is not null || originBase is not null;
+            var unique = (localBase is not null && baseAhead > 0)
+                || (originBase is not null && obAhead > 0);
+            if (hasBase && !unique) continue;
+
             var hasUpstream = RunGit(workingDir,
                 $"rev-parse --verify --quiet refs/remotes/origin/{name}").ExitCode == 0;
             var (upAhead, upBehind) = hasUpstream
@@ -505,6 +513,36 @@ public partial class GitService
         var after = RunGit(workingDir, "rev-parse HEAD").StdOut.Trim();
         var updated = after != before;
         _logger.Info($"[GIT] PullCurrent {(updated ? $"{Short(before)}..{Short(after)}" : "already up to date")}");
+        return new GitActionResult(true, updated, null);
+    }
+
+    /// <summary>
+    /// Pushes the current branch to origin (plans/git-branches.md — branches
+    /// on origin are the user's cross-computer memory). Publishes with -u
+    /// when the branch has no upstream yet. Plain push only: a diverged
+    /// branch fails cleanly — force-push stays with Claude in chat.
+    /// </summary>
+    public GitActionResult PushCurrent(string workingDir)
+    {
+        var branch = CurrentBranch(workingDir);
+        if (branch is "unknown" or "(detached)")
+            return new GitActionResult(false, false, "not on a branch");
+
+        var remoteRef = $"refs/remotes/origin/{branch}";
+        var before = RunGit(workingDir, $"rev-parse --verify --quiet {remoteRef}");
+        var hasUpstream = RunGit(workingDir, "rev-parse --abbrev-ref --symbolic-full-name @{u}").ExitCode == 0;
+
+        var run = RunGit(workingDir, hasUpstream ? "push" : $"push -u origin {branch}");
+        if (run.ExitCode != 0)
+        {
+            var error = FirstLine(run.StdErr, run.StdOut);
+            _logger.Error($"[GIT] PushCurrent {branch} failed: {error}");
+            return new GitActionResult(false, false, error);
+        }
+
+        var after = RunGit(workingDir, $"rev-parse --verify --quiet {remoteRef}");
+        var updated = before.StdOut.Trim() != after.StdOut.Trim();
+        _logger.Info($"[GIT] PushCurrent -> {branch} {(updated ? "pushed" : "already up to date")}");
         return new GitActionResult(true, updated, null);
     }
 

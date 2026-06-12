@@ -131,6 +131,8 @@ export default function Git() {
     && status.baseBranch === status.localBaseBranch;
   const canPullMain = !busy && !!base && (onBase ? status.behind > 0 : status.baseDriftBehind > 0);
   const canPullBranch = !busy && !onBase && !!status.upstream && status.behind > 0;
+  // Publishable (no upstream yet) or carrying unpushed commits.
+  const canPush = !busy && (!status.upstream || status.ahead > 0);
 
   return (
     <div className="git-page">
@@ -184,6 +186,14 @@ export default function Git() {
                 {acting === 'pullBranch' ? t('git.acting') : t('git.actPullBranch')}
               </button>
             )}
+            <button
+              type="button"
+              className="git-action"
+              disabled={!canPush || !!acting}
+              onClick={() => act('push', '/git/push-current')}
+            >
+              {acting === 'push' ? t('git.acting') : t('git.actPush')}
+            </button>
           </div>
         )}
         {showActions && busy && <div className="git-acthint">{t('git.actBusy')}</div>}

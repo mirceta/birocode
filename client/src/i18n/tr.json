@@ -105,6 +105,7 @@
   "git.actUpdated": "Guncellendi.",
   "git.actNoop": "Zaten guncel.",
   "git.others": "Diger dallar",
+  "git.actPush": "Dali origin'e gonder",
   "git.fetchedAt": "origin durumu: {time} itibariyla",
   "git.neverFetched": "origin henuz cekilmedi",
   "git.clean": "Calisma agaci temiz",
