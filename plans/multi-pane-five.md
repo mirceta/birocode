@@ -1,10 +1,10 @@
 # Multi-pane -- raise the pane cap to five
 
-> **Status (2026-06-12):** Implemented on `feature/multi-pane-five`,
-> browser-verified on the isolated :5201 preview
-> (`.preview-test/verify-five-panes.mjs`, 6/6 checks: 3840px -> 5 panes,
-> 2100px -> 5, 2000px -> 4, 900px -> 2, edge clamping with n=5, Basic mode
-> untouched). Not yet merged/deployed.
+> **Status (2026-06-13):** Merged to main and deployed to the live :5099
+> harness (health check 200, new bundle served). Browser-verified beforehand
+> on the isolated :5201 preview (`.preview-test/verify-five-panes.mjs`,
+> 6/6 checks: 3840px -> 5 panes, 2100px -> 5, 2000px -> 4, 900px -> 2,
+> edge clamping with n=5, Basic mode untouched).
 > Increment of [multi-pane.md](multi-pane.md) (Deployed).
 
 ## Why

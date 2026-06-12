@@ -8,12 +8,10 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-12):** One feature in flight.
+> **Status (2026-06-13):** No feature in flight.
 
 ## Active feature plans
 
-- [Multi-pane: five panes](plans/multi-pane-five.md) — raise the desktop
-  pane cap from 4 to 5 for 4K monitors (DRAFT, under discussion).
 - [Docs viewer](plans/doc-viewer.md) — sliced: 1) mermaid label wrapping
   (deployed & confirmed 2026-06-12), 2) doc links + history in the Files
   viewer (deployed & confirmed 2026-06-12, merged to main), 3) cross-repo
@@ -23,6 +21,8 @@
 
 ## Recently shipped
 
+- [Multi-pane: five panes](plans/multi-pane-five.md) — desktop pane cap
+  raised 4 -> 5 for 4K monitors. Merged to main, deployed 2026-06-13.
 - **Git tab suite** (merged to main 2026-06-12 evening, deployed & confirmed):
   [origin visibility](plans/git-origin-visibility.md) (honest origin/main
   comparisons + drift warning), [actions](plans/git-actions.md)
