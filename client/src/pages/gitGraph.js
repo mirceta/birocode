@@ -80,8 +80,11 @@ export function buildGitGraph(data) {
       const p2 = c.parents[1];
       const p2lane = safe(laneOf.get(p2) || '');
       // Expressible only when the second parent IS the emitted tip of a
-      // different existing lane — otherwise degrade (never render wrong).
-      if (p2lane && p2lane !== lane && created.has(p2lane) && emittedTip.get(p2lane) === p2) {
+      // different existing lane AND the current lane already has a commit in
+      // the window (mermaid rejects merging into an empty branch — happens
+      // when the history window starts mid-stream). Otherwise degrade
+      // (never render wrong).
+      if (p2lane && p2lane !== lane && created.has(p2lane) && emittedTip.get(p2lane) === p2 && emittedTip.has(lane)) {
         lines.push(`merge ${p2lane}${tag}`);
         emittedTip.set(lane, c.hash);
         continue;
