@@ -16,11 +16,14 @@
   (deployed & confirmed 2026-06-12), 2) doc links + history in the Files
   viewer (deployed & confirmed 2026-06-12, merged to main), 3) cross-repo
   links + 4) HTML webview (deferred).
-- [IP intelligence](plans/ip-intel.md) — country/ISP/datacenter-badge
-  enrichment for the Guests tab's IPs (planned, `feature/ip-intel`).
+- [Settings tab](plans/settings-tab.md) — rearrangeable nav-tab order with
+  live preview; extracts the one canonical tab registry (planned,
+  `feature/settings-tab`).
 
 ## Recently shipped
 
+- [IP intelligence](plans/ip-intel.md) — country/ISP/datacenter enrichment
+  in the Guests tab. Deployed & confirmed 2026-06-12.
 - **Git tab suite** (merged to main 2026-06-12 evening, deployed & confirmed):
   [origin visibility](plans/git-origin-visibility.md) (honest origin/main
   comparisons + drift warning), [actions](plans/git-actions.md)
