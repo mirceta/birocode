@@ -11,11 +11,12 @@ namespace ClaudeWeb.Controllers;
 /// Since plans/projects-tab.md the End User can also register a new project
 /// over the web (previously Operator-only via the desktop GUI). New projects
 /// are constrained to the Projects Root — the parent folder of the pinned
-/// self repo (e.g. ...\playground) — and the folder is created when missing:
+/// self repo (e.g. ...\playground). Folders are only created on explicit
+/// request (plans/projects-folder-picker.md):
 ///
 ///   GET  /api/repos                 -- [{ id, name, path, exists, isGitRepo, isSelf, visibility }]
-///   GET  /api/repos/folders         -- { root, folders: [{ name, registered }] }
-///   POST /api/repos                 -- { folder, name?, visibility? } -> the new repo + created flag
+///   GET  /api/repos/folders?path=   -- { root, path, folders: [{ name, registered, isGitRepo }] }
+///   POST /api/repos                 -- { folder, name?, visibility?, createFolder? } -> the new repo + created flag
 ///   POST /api/repos/{id}/visibility -- { visibility: "basic"|"advanced" }
 ///
 /// Per plans/project-visibility.md each project carries a visibility:
@@ -46,40 +47,53 @@ public class RepoController : ControllerBase
     }
 
     /// <summary>
-    /// Lists the subfolders of the Projects Root so the Projects tab can offer
-    /// a picker. Folders already registered as a project are flagged.
+    /// Lists subfolders for the Projects tab's navigable picker
+    /// (plans/projects-folder-picker.md). <c>path</c> is relative to the
+    /// Projects Root and must stay inside its subtree; omitted = the root
+    /// itself. Folders already registered as a project are flagged.
     /// </summary>
     [HttpGet("folders")]
-    public IActionResult Folders()
+    public IActionResult Folders([FromQuery] string? path)
     {
         _logger.CountRequest();
         var root = ProjectsRoot();
         if (root is null)
             return StatusCode(500, new { error = "Projects root unknown (no self repo registered)" });
 
+        var rel = (path ?? "").Trim().Replace('\\', '/').Trim('/');
+        var dir = rel.Length == 0 ? root : Path.GetFullPath(Path.Combine(root, rel));
+        // Stay inside the Projects Root subtree (rejects .. traversal).
+        var rootFull = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+        if (!Path.TrimEndingDirectorySeparator(dir).StartsWith(rootFull, StringComparison.OrdinalIgnoreCase))
+            return BadRequest(new { error = "Path is outside the projects root" });
+        if (!Directory.Exists(dir))
+            return BadRequest(new { error = $"Folder does not exist: {rel}" });
+
         var registeredPaths = _registry.GetAll()
             .Select(r => Path.TrimEndingDirectorySeparator(r.Path))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var folders = Directory.EnumerateDirectories(root)
+        var folders = Directory.EnumerateDirectories(dir)
             .Select(p => new
             {
                 name = Path.GetFileName(p),
                 registered = registeredPaths.Contains(Path.TrimEndingDirectorySeparator(p)),
+                isGitRepo = Directory.Exists(Path.Combine(p, ".git")),
             })
             .Where(f => !string.IsNullOrEmpty(f.name) && !f.name.StartsWith('.'))
             .OrderBy(f => f.name, StringComparer.OrdinalIgnoreCase);
 
-        return Ok(new { root, folders });
+        return Ok(new { root, path = rel, folders });
     }
 
-    public record AddRequest(string? Folder, string? Name, string? Visibility);
+    public record AddRequest(string? Folder, string? Name, string? Visibility, bool CreateFolder = false);
 
     /// <summary>
-    /// Registers a project. <c>Folder</c> may be either a plain folder name —
-    /// resolved (and created if missing) under the Projects Root, as the picker
-    /// chips supply — or an absolute path to an existing folder anywhere on the
-    /// host, which is registered as-is.
+    /// Registers a project. <c>Folder</c> may be either a path relative to the
+    /// Projects Root (as the navigable picker supplies) or an absolute path to
+    /// an existing folder anywhere on the host, registered as-is. A missing
+    /// relative folder is only created when <c>CreateFolder</c> is true —
+    /// per plans/projects-folder-picker.md, typos must never create folders.
     /// </summary>
     [HttpPost]
     public IActionResult Add([FromBody] AddRequest request)
@@ -103,19 +117,23 @@ public class RepoController : ControllerBase
             }
             else
             {
-                // Plain folder name: resolve under the Projects Root, creating it.
-                if (folder is "." or ".." || folder.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
-                    return BadRequest(new { error = $"Invalid folder name: {folder}" });
-
+                // Relative path: resolve under the Projects Root, inside its subtree.
                 var root = ProjectsRoot();
                 if (root is null)
                     return StatusCode(500, new { error = "Projects root unknown (no self repo registered)" });
 
-                path = Path.Combine(root, folder);
-                created = !Directory.Exists(path);
-                if (created)
+                path = Path.GetFullPath(Path.Combine(root, folder.Replace('\\', '/').Trim('/')));
+                var rootFull = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+                if (!Path.TrimEndingDirectorySeparator(path).StartsWith(rootFull, StringComparison.OrdinalIgnoreCase)
+                    || Path.TrimEndingDirectorySeparator(path).Equals(rootFull, StringComparison.OrdinalIgnoreCase))
+                    return BadRequest(new { error = $"Invalid folder: {folder}" });
+
+                if (!Directory.Exists(path))
                 {
+                    if (!request!.CreateFolder)
+                        return BadRequest(new { error = $"Folder does not exist: {folder}" });
                     Directory.CreateDirectory(path);
+                    created = true;
                     _logger.Info($"[REPO] Created project folder {path}");
                 }
             }

@@ -9,6 +9,8 @@
 > Basic mode shows the Projects tab and header chip too. Deployed to the
 > live :5099 harness and confirmed by the End User (verified beforehand on
 > the :5201 preview, `verify-projects-basic.mjs`, 8/8 checks).
+> **2026-06-13:** the v2 "New project" form (chips + create-on-missing) is
+> superseded by [projects-folder-picker.md](projects-folder-picker.md).
 
 ## Why
 

@@ -17,6 +17,10 @@
 
 ## Recently shipped
 
+- [Projects folder picker](plans/projects-folder-picker.md) — navigable
+  folder picker replaces the chip wall; folder creation is explicit only
+  (typos no longer create folders). Merged to main, deployed & confirmed
+  2026-06-13.
 - [Dual chat](plans/dual-chat.md) — two persistent chat tabs: a Project
   chat that follows the active project and an always-on Claude Web chat
   pinned to the Harness's own repo. Deployed & confirmed 2026-06-13; on
