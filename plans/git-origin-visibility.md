@@ -1,6 +1,9 @@
 # Git tab — full origin visibility
 
-> **Status (2026-06-12):** In development on `feature/git-origin-visibility`.
+> **Status (2026-06-12):** Deployed and confirmed. Live on :5099 (hardened
+> pipeline: health=True in 2s, first try), browser-verified
+> (`verify-git-origin-visibility.mjs`, 14/14 incl. a manufactured-drift
+> fixture repo) and confirmed by the End User.
 
 ## Problem
 
