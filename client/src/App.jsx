@@ -16,6 +16,7 @@ import Screen from './pages/Screen';
 import Terminal from './pages/Terminal';
 import Projects from './pages/Projects';
 import Guests from './pages/Guests';
+import Settings from './pages/Settings';
 
 // Two layers:
 //   /        -- public landing: just the running product, no login, no chrome.
@@ -53,6 +54,7 @@ export default function App() {
             <Route path="terminal" element={<Terminal />} />
             <Route path="projects" element={<Projects />} />
             <Route path="guests" element={<Guests />} />
+            <Route path="settings" element={<Settings />} />
           </Route>
         ) : (
           <Route path="/studio/*" element={<PasswordGate onUnlock={() => setAuth('in')} />} />

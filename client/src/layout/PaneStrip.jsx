@@ -1,23 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { getLastClaudeView } from '../components/shared/ClaudeViewToggle';
 import { useFeature } from '../context/UiModeContext';
 import { useT } from '../i18n/LanguageContext';
-import Chat from '../pages/Chat';
-import Files from '../pages/Files';
-import History from '../pages/History';
-import AppRun from '../pages/AppRun';
-import Agents from '../pages/Agents';
-import Git from '../pages/Git';
-import Plan from '../pages/Plan';
-import Screen from '../pages/Screen';
-import Terminal from '../pages/Terminal';
-import Projects from '../pages/Projects';
-import Guests from '../pages/Guests';
+import { useOrderedTabs } from './tabRegistry';
 
 // Multi-pane desktop layout (plans/multi-pane.md): a sliding window over the
 // nav's tab list, centered on the active route. No pane management UI — the
-// tab order decides which neighbors appear.
+// tab order decides which neighbors appear, and since plans/settings-tab.md
+// that order is the user's own (layout/tabRegistry.jsx is the single source).
 
 const MIN_PANE_WIDTH = 420;
 const MAX_PANES = 4;
@@ -25,44 +15,8 @@ const MAX_PANES = 4;
 const paneCountNow = () =>
   Math.max(1, Math.min(MAX_PANES, Math.floor(window.innerWidth / MIN_PANE_WIDTH)));
 
-// Same tabs, same order, same feature gates as BottomNav.
-function useVisibleTabs() {
-  const showAppTab = useFeature('appTab');
-  const showAgents = useFeature('agentDock');
-  const showGit = useFeature('gitTab');
-  const showPlan = useFeature('planTab');
-  const showScreen = useFeature('screenTab');
-  const showTerminal = useFeature('terminalTab');
-  const showProjects = useFeature('projectsTab');
-  const showGuests = useFeature('guestsTab');
-  const { pathname } = useLocation();
-
-  // Chat and Term share the first slot (plans/terminal-sessions.md): the pane
-  // shows whichever view the route (or, off-route, the device memory) says.
-  const path = pathname.replace(/\/+$/, '') || '/studio';
-  const termView = showTerminal
-    && (path === '/studio/terminal' || (path !== '/studio' && getLastClaudeView() === 'term'));
-  const claudePane = termView
-    ? { key: 'claude', path: '/studio/terminal', label: 'nav.terminal', element: <Terminal /> }
-    : { key: 'claude', path: '/studio', label: 'nav.chat', element: <Chat /> };
-
-  // Order must match BottomNav.jsx — it decides pane neighbours.
-  return [
-    claudePane,
-    { key: 'files', path: '/studio/files', label: 'nav.files', element: <Files /> },
-    ...(showPlan ? [{ key: 'plan', path: '/studio/plan', label: 'nav.plan', element: <Plan /> }] : []),
-    ...(showGit ? [{ key: 'git', path: '/studio/git', label: 'nav.git', element: <Git /> }] : []),
-    { key: 'history', path: '/studio/history', label: 'nav.history', element: <History /> },
-    ...(showAgents ? [{ key: 'agents', path: '/studio/agents', label: 'nav.agents', element: <Agents /> }] : []),
-    ...(showScreen ? [{ key: 'screen', path: '/studio/screen', label: 'nav.screen', element: <Screen /> }] : []),
-    ...(showProjects ? [{ key: 'projects', path: '/studio/projects', label: 'nav.projects', element: <Projects /> }] : []),
-    ...(showGuests ? [{ key: 'guests', path: '/studio/guests', label: 'nav.guests', element: <Guests /> }] : []),
-    ...(showAppTab ? [{ key: 'app', path: '/studio/app', label: 'nav.app', element: <AppRun /> }] : []),
-  ];
-}
-
 export function useMultiPane() {
-  const tabs = useVisibleTabs();
+  const tabs = useOrderedTabs();
   const enabled = useFeature('multiPane');
   const { pathname } = useLocation();
   const [paneCount, setPaneCount] = useState(paneCountNow);
@@ -92,7 +46,7 @@ export default function PaneStrip({ panes, activeKey }) {
           key={pane.key}
           className={`pane${pane.key === activeKey ? ' pane--active' : ''}`}
         >
-          <Link to={pane.path} className="pane__bar">{t(pane.label)}</Link>
+          <Link to={pane.path} className="pane__bar">{t(pane.labelKey)}</Link>
           <div className="app-content">{pane.element}</div>
         </section>
       ))}

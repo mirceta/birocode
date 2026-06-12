@@ -102,6 +102,15 @@ export async function apiPost(path, body, { repoId } = {}) {
   return handle(res);
 }
 
+export async function apiPut(path, body, { repoId } = {}) {
+  const res = await fetch(url(path), {
+    method: 'PUT',
+    headers: authHeaders({ 'Content-Type': 'application/json' }, repoId),
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  return handle(res);
+}
+
 export async function apiPatch(path, body, { repoId } = {}) {
   const res = await fetch(url(path), {
     method: 'PATCH',

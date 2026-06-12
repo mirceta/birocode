@@ -10,6 +10,7 @@ import { ChatProvider } from '../context/ChatContext';
 import { RepoProvider, useRepo } from '../context/RepoContext';
 import { DockProvider } from '../context/DockContext';
 import { UiModeProvider, useFeature } from '../context/UiModeContext';
+import { UiSettingsProvider } from '../context/UiSettingsContext';
 import { useT } from '../i18n/LanguageContext';
 import BottomNav from './BottomNav';
 import PaneStrip, { useMultiPane } from './PaneStrip';
@@ -106,15 +107,17 @@ function StudioShell() {
 export default function Layout() {
   return (
     <UiModeProvider>
-      <RepoProvider>
-        <DockProvider>
-          <SaveProvider>
-            <ChatProvider>
-              <StudioShell />
-            </ChatProvider>
-          </SaveProvider>
-        </DockProvider>
-      </RepoProvider>
+      <UiSettingsProvider>
+        <RepoProvider>
+          <DockProvider>
+            <SaveProvider>
+              <ChatProvider>
+                <StudioShell />
+              </ChatProvider>
+            </SaveProvider>
+          </DockProvider>
+        </RepoProvider>
+      </UiSettingsProvider>
     </UiModeProvider>
   );
 }

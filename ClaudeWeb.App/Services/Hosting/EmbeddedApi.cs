@@ -9,6 +9,7 @@ using ClaudeWeb.Services.Logging;
 using ClaudeWeb.Services.Monitoring;
 using ClaudeWeb.Services.Repositories;
 using ClaudeWeb.Services.Screen;
+using ClaudeWeb.Services.Settings;
 using ClaudeWeb.Services.Terminal;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -116,6 +117,7 @@ public class EmbeddedApi
             builder.Services.AddDockModule();   // dock sync (plans/dock-sync.md)
             builder.Services.AddScreenModule(); // screen tab (plans/screen-tab.md)
             builder.Services.AddTerminalModule(); // terminal tab (plans/terminal-tab.md)
+            builder.Services.AddSettingsModule(); // UI settings (plans/settings-tab.md)
             // === END MODULE SERVICE REGISTRATION ===
 
             _app = builder.Build();
