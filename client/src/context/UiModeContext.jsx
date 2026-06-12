@@ -29,6 +29,8 @@ export const FEATURES = {
   machineName: 'advanced', // header title shows "machine · project · branch"
   multiPane: 'advanced', // side-by-side desktop panes (plans/multi-pane.md)
   promptStash: 'advanced', // stash prompt ideas mid-run in the composer (plans/prompt-stash.md)
+  terminalTab: 'advanced', // live PowerShell on a ConPTY (plans/terminal-tab.md) — real Administrator shell, never promote to basic
+
 };
 
 const MODE_KEY = 'claudeweb_ui_mode';

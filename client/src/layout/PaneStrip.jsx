@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { getLastClaudeView } from '../components/shared/ClaudeViewToggle';
 import { useFeature } from '../context/UiModeContext';
 import { useT } from '../i18n/LanguageContext';
 import Chat from '../pages/Chat';
@@ -10,6 +11,7 @@ import Agents from '../pages/Agents';
 import Git from '../pages/Git';
 import Plan from '../pages/Plan';
 import Screen from '../pages/Screen';
+import Terminal from '../pages/Terminal';
 import Projects from '../pages/Projects';
 
 // Multi-pane desktop layout (plans/multi-pane.md): a sliding window over the
@@ -29,10 +31,22 @@ function useVisibleTabs() {
   const showGit = useFeature('gitTab');
   const showPlan = useFeature('planTab');
   const showScreen = useFeature('screenTab');
+  const showTerminal = useFeature('terminalTab');
   const showProjects = useFeature('projectsTab');
+  const { pathname } = useLocation();
+
+  // Chat and Term share the first slot (plans/terminal-sessions.md): the pane
+  // shows whichever view the route (or, off-route, the device memory) says.
+  const path = pathname.replace(/\/+$/, '') || '/studio';
+  const termView = showTerminal
+    && (path === '/studio/terminal' || (path !== '/studio' && getLastClaudeView() === 'term'));
+  const claudePane = termView
+    ? { key: 'claude', path: '/studio/terminal', label: 'nav.terminal', element: <Terminal /> }
+    : { key: 'claude', path: '/studio', label: 'nav.chat', element: <Chat /> };
+
   // Order must match BottomNav.jsx — it decides pane neighbours.
   return [
-    { key: 'chat', path: '/studio', label: 'nav.chat', element: <Chat /> },
+    claudePane,
     { key: 'files', path: '/studio/files', label: 'nav.files', element: <Files /> },
     ...(showPlan ? [{ key: 'plan', path: '/studio/plan', label: 'nav.plan', element: <Plan /> }] : []),
     ...(showGit ? [{ key: 'git', path: '/studio/git', label: 'nav.git', element: <Git /> }] : []),

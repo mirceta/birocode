@@ -106,6 +106,13 @@ textarea {
   font-weight: 600;
   color: var(--color-text);
   margin: 0;
+  /* Long machine·project·branch titles must not wrap: the header box is a
+     fixed height and the overflow is invisible but still intercepts taps on
+     the content below it (it ate the Chat/Term toggle on phones). */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-header__actions {
