@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { apiGet, apiPost } from '../api/client';
+import { friendlyDate } from '../components/chat/formatDate';
 import Loading from '../components/shared/Loading';
 import ErrorBanner from '../components/shared/ErrorBanner';
 import { useRepo } from '../context/RepoContext';
@@ -49,7 +50,10 @@ export default function Git() {
   const { currentRepoId } = useRepo();
   const showActions = useFeature('gitActions');
 
+  const showBranchList = useFeature('gitBranchList');
+
   const [status, setStatus] = useState(null);
+  const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState('');
@@ -61,6 +65,8 @@ export default function Git() {
     if (fetchOrigin) setChecking(true);
     try {
       setStatus(await apiGet(fetchOrigin ? '/git/status?fetch=true' : '/git/status'));
+      // Branch overview is best-effort: its failure never blocks the card.
+      apiGet('/git/branches').then(setBranches).catch(() => setBranches([]));
     } catch {
       setError(t('git.loadError'));
     } finally {
@@ -234,6 +240,40 @@ export default function Git() {
             </ul>
           </section>
         ))
+      )}
+
+      {/* Other branches (plans/git-branches.md): same convention per branch,
+          led by the last commit — the "what was I doing there" memory aid.
+          Read-only; the action buttons only ever touch the checked-out branch. */}
+      {showBranchList && branches.length > 0 && (
+        <section className="git-others">
+          <h3 className="git-others__title">{t('git.others')} ({branches.length})</h3>
+          {branches.map((b) => (
+            <div key={b.name} className="git-other">
+              <div className="git-other__head">
+                <span className="git-other__name">
+                  <span aria-hidden="true">⎇</span> {b.name}
+                </span>
+                <span className="git-other__meta">
+                  “{b.subject}” · {friendlyDate(b.committedAt, t)}
+                </span>
+              </div>
+              <div className="git-rows">
+                {status.localBaseBranch && (
+                  <PositionRow a={b.baseAhead} b={b.baseBehind} label={status.localBaseBranch} />
+                )}
+                {status.originBaseBranch && (
+                  <PositionRow a={b.originBaseAhead} b={b.originBaseBehind} label={status.originBaseBranch} />
+                )}
+                {b.hasUpstream ? (
+                  <PositionRow a={b.upstreamAhead} b={b.upstreamBehind} label={`origin/${b.name}`} />
+                ) : (
+                  <PositionRow label={null} missingLabel={t('git.noUpstream')} />
+                )}
+              </div>
+            </div>
+          ))}
+        </section>
       )}
     </div>
   );

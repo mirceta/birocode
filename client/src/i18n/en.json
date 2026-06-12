@@ -104,6 +104,7 @@
   "git.actDirty": "Uncommitted changes in the working tree — merge is disabled.",
   "git.actUpdated": "Updated.",
   "git.actNoop": "Already up to date.",
+  "git.others": "Other branches",
   "git.fetchedAt": "origin state as of {time}",
   "git.neverFetched": "origin not fetched yet",
   "git.clean": "Working tree is clean",

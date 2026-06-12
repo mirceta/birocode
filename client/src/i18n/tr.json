@@ -104,6 +104,7 @@
   "git.actDirty": "Calisma agacinda kaydedilmemis degisiklikler var — birlestirme devre disi.",
   "git.actUpdated": "Guncellendi.",
   "git.actNoop": "Zaten guncel.",
+  "git.others": "Diger dallar",
   "git.fetchedAt": "origin durumu: {time} itibariyla",
   "git.neverFetched": "origin henuz cekilmedi",
   "git.clean": "Calisma agaci temiz",

@@ -265,8 +265,9 @@ public partial class GitService
     /// 2026-06-12). Local and origin bases are detected independently.
     /// Values reflect the locally-known origin refs; a fetch refreshes them.
     /// </summary>
-    private (string? LocalBase, string? OriginBase, int Ahead, int Behind, int DriftAhead, int DriftBehind)
-        CompareToOriginBase(string workingDir, string branch)
+    /// <summary>Local and origin base branches, detected independently
+    /// (a repo can have a local master with nothing pushed, etc.).</summary>
+    private (string? LocalBase, string? OriginBase) DetectBases(string workingDir)
     {
         string? localBase = null;
         foreach (var c in new[] { "main", "master" })
@@ -282,6 +283,13 @@ public partial class GitService
                 originBase = c;
                 break;
             }
+        return (localBase, originBase);
+    }
+
+    private (string? LocalBase, string? OriginBase, int Ahead, int Behind, int DriftAhead, int DriftBehind)
+        CompareToOriginBase(string workingDir, string branch)
+    {
+        var (localBase, originBase) = DetectBases(workingDir);
 
         var (ahead, behind) = (0, 0);
         if (originBase is not null && branch is not "unknown" and not "(detached)")
@@ -389,6 +397,51 @@ public partial class GitService
         var updated = after != before;
         _logger.Info($"[GIT] PullBase -> {baseRef} {(updated ? $"{Short(before)}..{Short(after)}" : "already up to date")}");
         return new PullBaseResult(baseRef, true, updated, null);
+    }
+
+    public sealed record BranchInfo(
+        string Name, string Subject, DateTimeOffset CommittedAt,
+        int BaseAhead, int BaseBehind, int OriginBaseAhead, int OriginBaseBehind,
+        bool HasUpstream, int UpstreamAhead, int UpstreamBehind);
+
+    /// <summary>
+    /// All local branches except the checked-out one and the base branch
+    /// (plans/git-branches.md), newest commit first, each with the same three
+    /// comparisons the current-branch card shows. Read-only.
+    /// </summary>
+    public List<BranchInfo> ListBranches(string workingDir)
+    {
+        var (localBase, originBase) = DetectBases(workingDir);
+        var current = CurrentBranch(workingDir);
+
+        var run = RunGit(workingDir,
+            "for-each-ref refs/heads --sort=-committerdate --format=%(refname:short)%09%(committerdate:iso8601-strict)%09%(subject)");
+        if (run.ExitCode != 0) return new();
+
+        var result = new List<BranchInfo>();
+        foreach (var line in run.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = line.TrimEnd().Split('\t', 3);
+            if (parts.Length < 3) continue;
+            var name = parts[0];
+            if (name == current || name == localBase) continue;
+            if (!DateTimeOffset.TryParse(parts[1], out var when)) when = DateTimeOffset.MinValue;
+
+            var (baseAhead, baseBehind) = localBase is null ? (0, 0)
+                : CountLeftRight(workingDir, localBase, name);
+            var (obAhead, obBehind) = originBase is null ? (0, 0)
+                : CountLeftRight(workingDir, originBase, name);
+            var hasUpstream = RunGit(workingDir,
+                $"rev-parse --verify --quiet refs/remotes/origin/{name}").ExitCode == 0;
+            var (upAhead, upBehind) = hasUpstream
+                ? CountLeftRight(workingDir, $"origin/{name}", name)
+                : (0, 0);
+
+            result.Add(new BranchInfo(name, parts[2], when,
+                baseAhead, baseBehind, obAhead, obBehind, hasUpstream, upAhead, upBehind));
+        }
+        _logger.Info($"[GIT] ListBranches -> {result.Count} other branch(es)");
+        return result;
     }
 
     public sealed record GitActionResult(bool Ok, bool Updated, string? Error);

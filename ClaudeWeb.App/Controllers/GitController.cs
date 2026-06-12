@@ -143,6 +143,38 @@ public class GitController : ControllerBase
         }
     }
 
+    /// <summary>GET /api/git/branches -- read-only overview of the OTHER local
+    /// branches (plans/git-branches.md), newest commit first.</summary>
+    [HttpGet("git/branches")]
+    public IActionResult Branches()
+    {
+        _logger.CountRequest();
+        var repo = _repos.Current();
+        if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
+        try
+        {
+            var branches = _git.ListBranches(repo.Path).Select(b => new
+            {
+                name = b.Name,
+                subject = b.Subject,
+                committedAt = b.CommittedAt,
+                baseAhead = b.BaseAhead,
+                baseBehind = b.BaseBehind,
+                originBaseAhead = b.OriginBaseAhead,
+                originBaseBehind = b.OriginBaseBehind,
+                hasUpstream = b.HasUpstream,
+                upstreamAhead = b.UpstreamAhead,
+                upstreamBehind = b.UpstreamBehind,
+            });
+            return Ok(branches);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[GIT] Branches failed: {ex.Message}");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
     /// <summary>POST /api/git/merge-base -- merge LOCAL main/master into the
     /// current branch (plans/git-actions.md). Clean tree required; conflicts
     /// auto-abort server-side. 409 while a chat run is active in the repo.</summary>
