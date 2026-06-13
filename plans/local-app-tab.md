@@ -1,13 +1,13 @@
 # Local tab — preview any local port, never published
 
-> **Status (2026-06-13):** Implemented on `feature/local-app-tab` (`d3e23a0`)
-> and browser-verified on :5201 — `verify-local-app-tab.mjs` 9/9 (cross-origin
-> iframe render, persistence, dead-port empty state, basic-mode hidden), plus
-> end-to-end with the first real consumer: the web-flow-autodev pilot on
-> :5300 (`shot-autodev-pilot.mjs`, screenshots read). Not yet deployed.
-> NOTE until deployed: the live binary predates `LocalPort` — any registry
-> save through live :5099 (e.g. adding a project) strips the field from
-> repositories.json. Deploy closes the window.
+> **Status (2026-06-13):** Deployed and confirmed ("it works", 02:08;
+> rollback disarmed; health 200, bundle hash match, live /api/repos serves
+> web-flow-autodev's localPort=5300 — the field-strip window is closed).
+> Browser-verified on :5201 — `verify-local-app-tab.mjs` 9/9 (cross-origin
+> iframe render, persistence, dead-port empty state, basic-mode hidden),
+> plus end-to-end with the first real consumer: the web-flow-autodev pilot
+> on :5300 (`shot-autodev-pilot.mjs`, screenshots read). On
+> `feature/local-app-tab`, not yet merged to main.
 
 ## Problem
 

@@ -8,18 +8,19 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-13):** One feature in flight: Local tab
-> (`feature/local-app-tab`, implemented & browser-verified 9/9, awaiting
-> deploy). First consumer: the web-flow-autodev pilot web app.
+> **Status (2026-06-13):** No feature in flight. Local tab deployed &
+> confirmed; its branch awaits the merge word.
 
 ## Active feature plans
 
-- [Local tab](plans/local-app-tab.md) — preview any local port per project
-  with a direct iframe; LAN-only, none of the /preview/ proxy machinery.
-  Implemented & verified 2026-06-13, not yet deployed.
+- (none)
 
 ## Recently shipped
 
+- [Local tab](plans/local-app-tab.md) — preview any local port per project
+  with a direct iframe; LAN-only, none of the /preview/ proxy machinery.
+  First consumer: the web-flow-autodev web pilot on :5300. Deployed &
+  confirmed 2026-06-13; on `feature/local-app-tab`, not yet merged to main.
 - [Pane widths](plans/pane-widths.md) — per-tab span (1-4 slot units) for
   the desktop multi-pane strip, set on the Settings tab cards. Merged to
   main, deployed & confirmed 2026-06-13.
