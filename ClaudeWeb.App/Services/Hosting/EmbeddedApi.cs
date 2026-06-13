@@ -7,6 +7,7 @@ using ClaudeWeb.Services.Git;
 using ClaudeWeb.Services.IpFilter;
 using ClaudeWeb.Services.Logging;
 using ClaudeWeb.Services.Monitoring;
+using ClaudeWeb.Services.Notes;
 using ClaudeWeb.Services.Repositories;
 using ClaudeWeb.Services.Screen;
 using ClaudeWeb.Services.Settings;
@@ -118,6 +119,7 @@ public class EmbeddedApi
             builder.Services.AddScreenModule(); // screen tab (plans/screen-tab.md)
             builder.Services.AddTerminalModule(); // terminal tab (plans/terminal-tab.md)
             builder.Services.AddSettingsModule(); // UI settings (plans/settings-tab.md)
+            builder.Services.AddNotesModule();  // per-project ideas (plans/ideas-tab.md)
             // === END MODULE SERVICE REGISTRATION ===
 
             _app = builder.Build();

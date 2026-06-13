@@ -8,12 +8,15 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-13):** No feature in flight. Local tab deployed &
-> confirmed; its branch awaits the merge word.
+> **Status (2026-06-13):** One feature in flight: Ideas tab
+> (`feature/ideas-tab`, implemented & browser-verified 11/11, awaiting
+> deploy).
 
 ## Active feature plans
 
-- (none)
+- [Ideas tab](plans/ideas-tab.md) — per-project notes stored on the
+  backend; create/edit/delete, scoped by project like Files/Git.
+  Implemented & verified 2026-06-13, not yet deployed.
 
 ## Recently shipped
 

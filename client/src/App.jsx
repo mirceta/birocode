@@ -10,6 +10,7 @@ import Files from './pages/Files';
 import History from './pages/History';
 import AppRun from './pages/AppRun';
 import LocalApp from './pages/LocalApp';
+import Ideas from './pages/Ideas';
 import Agents from './pages/Agents';
 import Git from './pages/Git';
 import Plan from './pages/Plan';
@@ -49,6 +50,7 @@ export default function App() {
             <Route path="history" element={<History />} />
             <Route path="app" element={<AppRun />} />
             <Route path="local" element={<LocalApp />} />
+            <Route path="ideas" element={<Ideas />} />
             <Route path="agents" element={<Agents />} />
             <Route path="git" element={<Git />} />
             <Route path="plan" element={<Plan />} />
