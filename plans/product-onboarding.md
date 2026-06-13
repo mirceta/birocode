@@ -188,6 +188,51 @@ flowchart TD
 - Frontend: a `Verify exposure` button + results panel on `LocalApp.jsx` (and
   the App tab), each row ✓/✗ with the fix link. Re-run button.
 
+## User story — using the Exposure check
+
+How it actually feels in your hands, both to *verify* and to *assist*.
+
+**1. Verify a freshly-built web surface (the common case).**
+> *As the operator, I just had Claude add a web UI to a project. I want to
+> know it's embeddable here without the curl-IPv4-then-IPv6 ritual.*
+
+I'm on the project in Claude Web. I built its web app, started it, set the
+Local port — and the **Local tab is blank**. Instead of guessing, I hit
+**Verify exposure**. A checklist appears: ✓ port configured, ✓ listening on
+IPv4, ✓ serves at root, ✓ relative assets — but ✗ **listening on IPv6**, with
+"bind dual-stack (`ListenAnyIP`)" and a link to the rule. In five seconds I
+know the *exact* problem, not just "blank."
+
+**2. Assist the fix without re-deriving anything.**
+> *As the operator, I want the failing check to tell me — or my agent —
+> precisely what to change.*
+
+I flip to Chat and type: *"Verify exposure says the app isn't listening on
+IPv6 — bind it dual-stack."* The agent already has the contract (it's
+single-source), patches the bind, restarts. I tap **Re-run** on the panel:
+every row goes green, and the Local tab now renders the app. I never opened a
+terminal, never recalled the `::1` footgun myself — the check carried that
+knowledge.
+
+**3. Confirm before sharing the link.**
+> *As the operator, before I send someone the internet URL, I want proof it
+> works over the proxy, not just on my laptop.*
+
+All-green in the Exposure check means the same-origin `/api/localview/` path —
+assets and the app's own API — resolves through the harness, so I trust the
+public link instead of finding out from the other person that it's broken.
+
+**4. Catch a regression on something that used to work.**
+> *As the operator, a product that worked last week is suddenly blank.*
+
+One **Verify exposure** click: ✗ "listening" — someone changed the port in
+the build. The checklist points straight at it; I fix the Local port (or the
+app's port) and re-run. The check turned a mystery into a one-line diagnosis.
+
+The thread through all four: the panel converts "is it exposed right?" from a
+manual, knowledge-dependent ritual into a **one-click answer that names the
+fix** — and (slice 2) eventually offers to apply it.
+
 ## Recommendation (phasing)
 
 1. **Slice 1 — the Exposure check (above).** Read-only verifier as a
