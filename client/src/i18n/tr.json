@@ -8,6 +8,8 @@
   "common.cancel": "Iptal",
   "common.close": "Kapat",
   "common.back": "Geri",
+  "staleBanner.message": "Claude Web'in yeni bir sürümü mevcut.",
+  "staleBanner.reload": "Yeniden yükle",
   "save.idle": "Kaydet",
   "save.saving": "Kaydediliyor...",
   "save.modalTitle": "Calismani kaydet",
