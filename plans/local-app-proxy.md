@@ -1,12 +1,14 @@
 # Local tab over the internet — harness-proxied, authenticated, not on the landing
 
-> **Status (2026-06-13):** Implemented on `feature/local-app-proxy` and
-> browser-verified on :5201 — `verify-local-app-proxy.mjs` 7/7 (401 unauth,
-> 404 unknown repo, iframe uses the same-origin proxy path, pilot renders
-> THROUGH the proxy incl. proxied api/forms, landing unaffected; screenshot
-> read) + API checks (proxied api/forms = 408 forms). Pilot made sub-path
-> aware on `feature/web-pilot` (Vite base './', relative fetch). Not yet
-> deployed. Decisions locked (user said "start work", accepting the reversal):
+> **Status (2026-06-13):** Deployed and confirmed — works over the internet
+> from the user's phone (WiFi off), so the off-box IIS forward of the
+> harness root DOES hold (the one assumption I couldn't test from the box).
+> Live :5099 round-trip OK: 401 unauth, 200 auth, proxied api/forms = 408.
+> Rollback disarmed; health 200, bundle hash match. Browser-verified on
+> :5201 first — `verify-local-app-proxy.mjs` 7/7. Pilot made sub-path aware
+> on `feature/web-pilot` (Vite base './', relative fetch). On
+> `feature/local-app-proxy`, not yet merged to main. Decisions locked
+> (user said "start work", accepting the reversal):
 > 1) the selected project's local product is **exposed to the internet
 > behind the harness password** — LAN-only is reversed on purpose;
 > 2) **proxy-only** — the LAN-direct iframe is replaced, not kept

@@ -8,18 +8,22 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-13):** One feature in flight: Local tab over the
-> internet (`feature/local-app-proxy`) — implemented & verified 7/7,
-> awaiting deploy.
+> **Status (2026-06-13):** No feature in flight. Local-tab-over-internet
+> deployed & confirmed (works from the phone off-LAN); its branch awaits
+> the merge word.
 
 ## Active feature plans
+
+- (none)
+
+## Recently shipped
 
 - [Local tab over the internet](plans/local-app-proxy.md) — the harness
   reverse-proxies the project's local port under an authenticated
   `/api/localview/{repoId}/` path so the Local tab works over the internet
-  (behind the password), not just the LAN. Reverses the LAN-only choice in
-  [local-app-tab](plans/local-app-tab.md); also fixes the IPv6/HTTPS issue.
-  Implemented & verified 2026-06-13, not yet deployed.
+  (behind the password), not just the LAN. Also fixes the IPv6/HTTPS issue.
+  Deployed & confirmed 2026-06-13; on `feature/local-app-proxy`, not yet
+  merged to main.
 
 ## Recently shipped
 
