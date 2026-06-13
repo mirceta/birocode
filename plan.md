@@ -8,21 +8,44 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-13):** Understanding panel slice 1, Deployments tab slice 1,
-> and the product-onboarding Exposure check (slices 1 & 2) are all merged to
-> main, deployed & confirmed. **In flight:** Understanding panel **slice 2** —
-> problem specified (panel works in the Harness but not in Product Repos),
-> design next.
+> **Status (2026-06-13):** **In flight:** Understanding panel **slice 2** — a
+> composer-prefill button that makes the panel work in Product Repos (built,
+> browser-verified 6/6; pending deploy). Already merged & deployed: Understanding
+> panel slice 1, Deployments tab slice 1, the product-onboarding Exposure check
+> (slices 1-3), and per-tab agent spaces. Proposed: a
+> [spec-baseline](plans/spec-baseline.md) DESIGN plan — what to borrow from
+> OpenSpec — on `feature/spec-baseline`.
 
 ## Active feature plans
 
 - [Understanding panel](plans/understanding-panel.md) **— slice 2** — make the
   panel work in Product Repos, not just the Harness. A composer-prefill button
   drops the "write your understanding first" instruction into the chat box (no
-  extra `claude -p` cost). Built; pending browser-verify.
+  extra `claude -p` cost). Built & browser-verified 6/6; pending deploy.
+
+## Proposed / design (not building yet)
+
+- [Spec baseline](plans/spec-baseline.md) — borrow OpenSpec's one missing
+  idea (a living "what the system does today" baseline + change-as-delta)
+  into our existing plan convention, without adopting its tooling. Slice 1 =
+  `docs/capabilities.md` + a delta stanza in each plan + a ritual step.
 
 ## Recently shipped
 
+- [Per-tab agent spaces](plans/per-tab-spaces.md) — two browser tabs on one
+  machine no longer share a single "currently open agent". The active agent,
+  chat surface, and selected project moved from shared `localStorage` to per-tab
+  `sessionStorage` (with a `localStorage` seed for fresh tabs/restarts). Refines
+  [dock-sync](plans/dock-sync.md)'s Active Tab to tab-local. Reproduced
+  before/after on an isolated harness. Merged to main, deployed & confirmed
+  2026-06-13.
+- [Exposure check — freshness](plans/expose-freshness.md) — slice 3 of product
+  onboarding. "Verify exposure" was server-side and couldn't see that the
+  operator's own browser was rendering a stale/blank cached embed (real
+  incident: all-green check, blank tab, fixed only by incognito). Added a
+  client-side "embed is current" check + one-click Reload-embed, made Refresh
+  cache-bust, and set `Cache-Control: no-store` on the proxy's HTML. Merged to
+  main, deployed & confirmed 2026-06-13.
 - [Product onboarding](plans/product-onboarding.md) — make product exposure
   harness-driven + verifiable instead of hand-copied instructions that drift.
   **Slice 1 (Exposure check)** — a "Verify exposure" panel on the Local tab

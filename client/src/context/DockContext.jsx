@@ -1,16 +1,19 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { apiDelete, apiGet, apiPatch, apiPost } from '../api/client';
+import { readTabState, writeTabState } from '../api/viewState';
 import { useRepo } from './RepoContext';
 
 // The tab list itself is backend-owned (GET/POST/PATCH/DELETE /api/dock) so
 // every device shows the same agents (see plans/dock-sync.md). Only which tab
-// this device is LOOKING at stays local.
+// this browser tab is LOOKING at stays local — and it is per-browser-tab
+// (sessionStorage via viewState.js), so two tabs on one machine each keep their
+// own active agent instead of clobbering each other on refresh.
 const LEGACY_DOCK_KEY = 'claudeweb_dock'; // pre-sync localStorage tab list
 const ACTIVE_KEY = 'claudeweb_dock_active';
-// Which chat surface this device is looking at (plans/dual-chat.md):
+// Which chat surface this browser tab is looking at (plans/dual-chat.md):
 // 'agent' = the active dock tab (or the plain default chat when none exist),
 // 'project' = the project-following chat, 'harness' = the always-on Claude Web
-// chat. Device-local by design, like ACTIVE_KEY.
+// chat. Tab-local by design, like ACTIVE_KEY.
 const VIEW_KEY = 'claudeweb_chat_view';
 
 const DockContext = createContext(null);
@@ -52,18 +55,14 @@ export function DockProvider({ children }) {
   // True once the first successful fetch landed; ChatContext defers its run
   // reconciliation until then (before that the tab list is simply unknown).
   const [loaded, setLoaded] = useState(false);
-  const [activeTabId, setActiveTabId] = useState(() => localStorage.getItem(ACTIVE_KEY) || null);
+  const [activeTabId, setActiveTabId] = useState(() => readTabState(ACTIVE_KEY) || null);
   const [chatView, setChatViewState] = useState(() => {
-    const stored = localStorage.getItem(VIEW_KEY);
+    const stored = readTabState(VIEW_KEY);
     return stored === 'project' || stored === 'harness' ? stored : 'agent';
   });
 
   const setChatView = useCallback((view) => {
-    try {
-      localStorage.setItem(VIEW_KEY, view);
-    } catch {
-      /* private mode */
-    }
+    writeTabState(VIEW_KEY, view);
     setChatViewState(view);
   }, []);
 
@@ -124,10 +123,10 @@ export function DockProvider({ children }) {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [refresh]);
 
-  // Persist which tab this device is viewing (device-local by design).
+  // Persist which tab this browser tab is viewing (tab-local by design — see
+  // viewState.js, so two tabs on one machine stay independent).
   useEffect(() => {
-    if (activeTabId) localStorage.setItem(ACTIVE_KEY, activeTabId);
-    else localStorage.removeItem(ACTIVE_KEY);
+    writeTabState(ACTIVE_KEY, activeTabId);
   }, [activeTabId]);
 
   const openTab = useCallback((repoId, repoName) => {

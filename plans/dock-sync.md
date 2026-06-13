@@ -23,7 +23,7 @@ harness where the dock describes work happening on the host PC.
 | **Dock** | The list of agent tabs shown in the Agents tab of the web UI. |
 | **Dock Registry** | New backend singleton owning the persisted, authoritative tab list. |
 | **Dock Tab** | One entry: `{ id, repoId, repoName, sessionId, status, createdAt, color, stash }`. (`color` added by plans/agent-color.md — optional highlight mark; `stash` added by plans/prompt-stash.md — stored prompt ideas.) |
-| **Active Tab** | The tab a device is currently viewing. Deliberately NOT synced — stays device-local. |
+| **Active Tab** | The tab a viewer is currently looking at. Deliberately NOT synced — stays **tab-local** (per browser tab; see "Per-tab spaces" below). |
 
 ## Design
 
@@ -55,6 +55,14 @@ Frontend `DockContext` drops the localStorage tab list:
 
 No UI-mode capability change: the Agents tab itself keeps its existing
 visibility; no new UI surface is added.
+
+### Per-tab spaces (2026-06-13)
+
+The Active Tab was originally `localStorage` ("device-local"), but two tabs of
+the same browser share `localStorage`, so they clobbered each other's active
+agent on refresh. Refined to **tab-local** (`sessionStorage`, with a
+`localStorage` seed). Full design + the affected keys live in
+[per-tab-spaces](per-tab-spaces.md).
 
 ## Files touched
 
