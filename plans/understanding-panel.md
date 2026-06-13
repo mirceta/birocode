@@ -1,9 +1,12 @@
 # Understanding panel — the agent's restatement of the request, atop chat
 
-> **Status (2026-06-13):** In development on `feature/understanding-panel`.
-> Open questions resolved: file = repo-root `understanding.md` (**no backend**);
-> write is **prompt-driven, no extra `claude -p` call**; **write-once** per
-> turn (panel polling catches rewrites); **Advanced-mode only**.
+> **Status (2026-06-13):** **Slice 1 shipped** — panel merged to main,
+> browser-verified 9/9. Open questions resolved: file = repo-root
+> `understanding.md` (**no backend**); write is **prompt-driven, no extra
+> `claude -p` call**; **write-once** per turn (panel polling catches rewrites);
+> **Advanced-mode only**.
+> **Slice 2 — problem specified, not yet designed:** the panel works in the
+> Harness but never in Product Repos (see "Slice 2" below).
 > Structured per [doc-principles.md](doc-principles.md).
 
 ## Problem
@@ -121,3 +124,50 @@ No controller, no service, no new store.
 
 Hygiene: the test writes/removes `understanding.md` under a pinned test repo
 and restores it in `finally`; session logged out.
+
+## Slice 2 — make it work for Product Repos (problem spec)
+
+> Status: **problem specified, not yet designed.** This section is the agreed
+> statement of what slice 2 will solve; the solution is deliberately left open.
+
+### Problem
+
+The panel works in the **Harness** (Claude Web's own repo) but is effectively
+**unavailable in every Product Repo**. Verified against `main` (2026-06-13):
+
+- **The panel UI is Harness-only by construction.** `UnderstandingPanel` lives
+  in the Harness frontend (`client/src/components/chat/UnderstandingPanel.jsx`),
+  rendered inside the Claude Web chat (`pages/Chat.jsx`). A Product is a
+  separate app embedded via the App-tab iframe; the panel is never part of it.
+- **The write trigger only fires in the Harness repo.** What makes Claude write
+  `understanding.md` is the "write your understanding first" convention in
+  `CLAUDE.md`, which the Claude CLI auto-loads from its **working directory**.
+  `CliRunnerService.CreateProcessInfo` (`ClaudeWeb.App/Services/Chat/CliRunnerService.cs`)
+  spawns `claude -p <message> --output-format stream-json --include-partial-messages
+  --verbose` (+ `--resume`/`--model`) and **nothing else** — no
+  `--append-system-prompt`, no injected instruction. The working dir is the
+  *selected repo* (`CliRunnerService.cs:632`), so in a Product Repo the CLI reads
+  *that* repo's `CLAUDE.md`, which has no such convention.
+
+Net effect: the panel **renders** for any selected repo but is only ever
+**populated** for the Harness's own repo. In a Product Repo `understanding.md`
+is never written, so the panel stays hidden. This is the Q2 gap the slice-1
+Design already flagged ("it only works where the convention exists").
+
+### Goal
+
+The understanding panel should work for **Product Repos too**, not just the
+Harness — i.e. when the user makes a substantive request in any opened Product,
+Claude writes that Product's `understanding.md` and the panel shows it.
+
+### Out of scope / open for the design step
+
+- The *how* is undecided. The slice-1 Design noted a candidate (the deferred
+  Q2 upgrade: `CliRunnerService` appends the standing instruction to the turn's
+  prompt — same call, no extra `claude -p`); another is seeding the convention
+  into a Product's `CLAUDE.md` during product onboarding
+  ([product-onboarding.md](product-onboarding.md)). Choosing and designing this
+  is the next step, not part of this problem statement.
+- Whether the panel should respect the dual-chat scope (Project vs Claude Web
+  chat) rather than the global `currentRepoId` is a **related** nuance to settle
+  during design, but it is not the core gap.

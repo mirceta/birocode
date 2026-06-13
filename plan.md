@@ -8,13 +8,18 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-13):** Understanding panel, Deployments tab slice 1, and
-> the product-onboarding Exposure check (slices 1 & 2) are all merged to main,
-> deployed & confirmed. No feature currently in flight.
+> **Status (2026-06-13):** Understanding panel slice 1, Deployments tab slice 1,
+> and the product-onboarding Exposure check (slices 1 & 2) are all merged to
+> main, deployed & confirmed. **In flight:** Understanding panel **slice 2** —
+> problem specified (panel works in the Harness but not in Product Repos),
+> design next.
 
 ## Active feature plans
 
-_None in flight — see Recently shipped below._
+- [Understanding panel](plans/understanding-panel.md) **— slice 2** — the panel
+  works in the Harness but never in Product Repos (the write convention lives
+  only in the Harness's `CLAUDE.md`; the CLI injects nothing). Problem verified
+  & specified; solution not yet designed.
 
 ## Recently shipped
 
