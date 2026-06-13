@@ -1,7 +1,16 @@
 # Deployments tab — make deploys observable and safe
 
-> **Status (2026-06-13):** Proposed — plan for discussion, sliced. Slice 1
-> (observability + rollback control) is the first build. Not started.
+> **Status (2026-06-13):** Slice 1 IMPLEMENTED on `feature/deployments-tab`
+> and browser-verified on :5201 — `verify-deployments-tab.mjs` 14/14 (real
+> live card from the seeded ledger + contains-origin/main badge + history;
+> stubbed armed countdown ticks; Keep it disarms; typed-confirm gates Roll
+> back now both client- and server-side; basic-mode hidden; screenshots
+> read). API checks: status returns live=da6de32/containsOriginMain, and
+> rollback without "ROLLBACK" → 400. Deploy scripts edited **additively**
+> (ledger append in swap.ps1/rollback.ps1, stage-tested first; the
+> origin/main guard untouched) — these live off-repo in
+> `claudeweb-rollback\`, not version-controlled. Not yet deployed. Slice 2
+> (one-button deploy) still future.
 
 ## Problem
 

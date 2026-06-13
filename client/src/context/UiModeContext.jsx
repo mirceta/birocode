@@ -40,6 +40,7 @@ export const FEATURES = {
   dualChat: 'advanced', // Project | Claude Web chat switcher (plans/dual-chat.md)
   localAppTab: 'advanced', // direct-iframe Local tab, per-project port (plans/local-app-tab.md)
   ideasTab: 'advanced', // per-project notes (plans/ideas-tab.md)
+  deploysTab: 'advanced', // deploy status + rollback control (plans/deployments-tab.md)
 };
 
 const MODE_KEY = 'claudeweb_ui_mode';

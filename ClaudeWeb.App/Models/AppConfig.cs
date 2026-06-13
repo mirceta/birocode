@@ -18,6 +18,14 @@ public class AppConfig
     public int Port { get; set; } = 5099;
 
     /// <summary>
+    /// Directory holding the deploy scripts (arm/swap/rollback) and the
+    /// append-only <c>deploys.jsonl</c> ledger the Deployments tab reads
+    /// (plans/deployments-tab.md). Off-repo by design — the deploy tooling
+    /// lives outside the tree it deploys.
+    /// </summary>
+    public string DeployScriptsDir { get; set; } = @"C:\Users\Administrator\Desktop\playground\claudeweb-rollback";
+
+    /// <summary>
     /// Port the "App" tab previews. Claude is expected to start the product
     /// (the app in the opened repo) listening on 0.0.0.0:&lt;PreviewPort&gt;; the App
     /// tab simply iframes it. The harness does not start/stop the product.

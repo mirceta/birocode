@@ -9,16 +9,17 @@
 > Files tab to see wrapping mermaid labels etc. in action.
 
 > **Status (2026-06-13):** One feature in flight: Deployments tab
-> (`feature/deployments-tab`) — plan drafted (sliced); slice 1 =
-> observability + rollback control, not yet built.
+> (`feature/deployments-tab`) — slice 1 implemented & verified 14/14,
+> awaiting deploy. Slice 2 (one-button deploy) future.
 
 ## Active feature plans
 
 - [Deployments tab](plans/deployments-tab.md) — make deploys observable and
-  safe: show what's live (commit, contains-origin/main), a live
-  armed-rollback countdown with Keep-it / Roll-back-now, and deploy history.
-  Slice 1 (observability + rollback control) first; slice 2 (one-button
-  deploy + lock) later. Plan drafted 2026-06-13.
+  safe: shows what's live (commit, contains-origin/main), a live
+  armed-rollback countdown with Keep-it / typed-confirm Roll-back-now, and
+  deploy history from a new `deploys.jsonl` ledger. Slice 1 implemented &
+  verified 2026-06-13, not yet deployed; slice 2 (one-button deploy + lock)
+  later.
 
 ## Recently shipped
 
