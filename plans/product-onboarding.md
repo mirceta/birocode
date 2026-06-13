@@ -9,8 +9,11 @@
 > yet merged to main. Slice 2 (scaffold / agent-task) still future. Builds on
 > the contract in [../docs/networking/local-product-guide.md](../docs/networking/local-product-guide.md).
 >
-> **Slice 2 (Fix with an agent) IMPLEMENTED** (2026-06-13, `feature/networking-doc`,
-> not yet deployed): chose the **agent-task variant (D)** over code-scaffolding
+> **Slice 2 (Fix with an agent) DEPLOYED & confirmed** (2026-06-13, ~16:20;
+> live `/api/expose/check` returns no fixPrompt for the healthy pilot, health
+> 200, bundle match; deployed alongside the other session's understanding
+> panel after composing the merge). On `feature/networking-doc`, not yet
+> merged to main. Chose the **agent-task variant (D)** over code-scaffolding
 > (C) — stack-agnostic, no harness-writes-foreign-code. The check composes a
 > fix task from the FAILING rules + the current contract (server-side, so it's
 > single-source and never stale) and pre-fills it into the **Project chat** for

@@ -22,9 +22,8 @@
   **Slice 1 (Exposure check)** — a "Verify exposure" panel on the Local tab
   that probes the product and names what's wrong — deployed & confirmed
   2026-06-13. **Slice 2 (Fix with an agent)** — composes a fix task from the
-  failures + the current contract and pre-fills the Project chat — built &
-  verified 10/10, awaiting deploy. On `feature/networking-doc` (not yet
-  merged).
+  failures + the current contract and pre-fills the Project chat — deployed &
+  confirmed 2026-06-13. On `feature/networking-doc` (not yet merged).
 - [Understanding panel](plans/understanding-panel.md) — a collapsible panel
   at the top of the chat window that renders Claude's own restatement of the
   request (written to a file), so the user can confirm "you understood me"
