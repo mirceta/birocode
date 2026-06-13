@@ -90,6 +90,9 @@
 
 ## Reference docs
 
+- [Networking map](docs/networking.md) — how the homepage / App tab / Local
+  tab are served, the gates, and a "won't serve" decision tree
+  ([plan](plans/networking-doc.md)).
 - [Module conventions](plans/INTEGRATION.md) — how controllers/services plug in.
 - [Design rationale](ANALYSIS.md) — why this app exists.
 - [Proxy guide](docs/claude-web/proxy.md) — reverse-proxy traps of /preview/.
