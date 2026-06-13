@@ -1,38 +1,39 @@
-# Understanding — Understanding panel availability (problem spec)
+# Understanding — slice 2: a "prefill understanding prompt" button
 
 ## Goal
 
-Verify a claim that will become the **problem specification** for the next
-slice of `plans/understanding-panel.md`:
+Make the understanding panel usable in **Product Repos** without any extra
+`claude -p` call (Anthropic cost concern rules out CliRunnerService
+system-prompt injection).
 
-> The understanding panel is available in **our application** (the Harness /
-> Claude Web itself) but **not** in any of the **product applications** (the
-> apps inside other opened Repos).
+## Approach (the user's call)
+
+Add a **button next to the chat** that, when clicked, **inserts a canned
+instruction into the chat input box** — the "write your understanding of my
+request to `understanding.md` first" prompt. It does **not** auto-send; the
+user presses Enter to send it as a normal turn. Cheap (no extra invocation),
+works in any selected repo (the agent runs in that repo and writes its
+`understanding.md`). Accepted tradeoff: the user must remember to click it.
 
 ## What I'll do
 
-1. Investigate the code to determine, precisely, where the panel and its
-   `understanding.md` actually work:
-   - the panel **UI** (where it renders), and
-   - the panel's **content trigger** — what makes Claude write `understanding.md`
-     (the `CLAUDE.md` convention vs. any Harness-level prompt injection).
-2. Confirm whether product Repos ever get an `understanding.md` written, i.e.
-   whether the panel is ever populated outside the Harness's own repo.
-3. Write up the verified finding as the **Problem** section of a new slice in
-   the plan. (Not solving it yet — just specifying it.)
+1. Reuse the existing composer-prefill pattern (prompt-stash chips fill the
+   draft; Exposure-check slice 2 "pre-fills the Project chat") rather than
+   invent a new mechanism — `setDraft` from `ChatContext`.
+2. Add the button in/near the chat composer, gated by the existing
+   `understandingPanel: 'advanced'` capability. i18n en/tr.
+3. Decide: clicking with text already in the box should **not** clobber it
+   (prepend/append rather than replace) — confirm against the stash pattern.
+4. Update `plans/understanding-panel.md` slice 2 from problem-spec → this
+   design; browser-verify; then commit.
 
-## Finding — CONFIRMED (2026-06-13)
+## Status — built, pending browser-verify
 
-Hypothesis confirmed against `main`:
+Implemented: a 📝 button in the composer (`ChatInput.jsx`, next to attach/stash),
+gated by `understandingPanel`, that appends the canned `understanding.prefillPrompt`
+to the draft and focuses the box (no auto-send, no extra `claude -p`). i18n en/tr;
+CSS mirrors the stash button. Frontend builds clean. Plan slice 2 updated.
+Next: rebuild the :5200 preview and headless-verify the button, then commit.
 
-- Panel UI is Harness-only by construction (`UnderstandingPanel.jsx` in the
-  Harness chat; Products are separate iframe apps).
-- The write trigger is **only** the Harness's `CLAUDE.md` convention. The CLI
-  spawn (`CliRunnerService.cs:597-636`) injects **no** system prompt, and runs
-  in the *selected repo's* dir — so a Product Repo reads its own `CLAUDE.md`,
-  which lacks the convention. `understanding.md` is never written there → panel
-  stays hidden.
-
-Net: the panel **renders** for any repo but is only ever **populated** for the
-Harness. Recorded as the **Slice 2 problem spec** in
-`plans/understanding-panel.md`; solution design is the next step (not done yet).
+Minor calls (flag if wrong): button placement (composer, next to attach) and the
+canned wording — easy to tweak.

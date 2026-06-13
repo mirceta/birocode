@@ -19,6 +19,7 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
   const { t } = useT();
   const { activeTabId, activeTab, addStash, removeStash } = useDock();
   const stashEnabled = useFeature('promptStash') && !!activeTabId;
+  const understandingEnabled = useFeature('understandingPanel');
   const stash = (stashEnabled && activeTab?.stash) || [];
   const textareaRef = useRef(null);
   const fileRef = useRef(null);
@@ -58,6 +59,18 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
     if (!trimmed || !stashEnabled) return;
     addStash(activeTabId, trimmed);
     onChange('');
+  }
+
+  // Drop the standing "write your understanding first" instruction into the
+  // composer (plans/understanding-panel.md slice 2). It does NOT auto-send —
+  // the user reviews and presses Enter, so it's an ordinary turn (no extra
+  // claude -p call). Appended to any existing draft so nothing is lost, then
+  // the box is focused for review.
+  function handleUnderstandingPrefill() {
+    const prompt = t('understanding.prefillPrompt');
+    const current = (value || '').trim();
+    onChange(current ? `${current}\n\n${prompt}` : prompt);
+    requestAnimationFrame(() => textareaRef.current?.focus());
   }
 
   function handleChipTap(item) {
@@ -140,6 +153,17 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
           className="chat-input__file-hidden"
           onChange={handleFileChange}
         />
+        {understandingEnabled && (
+          <button
+            type="button"
+            className="chat-input__understand"
+            onClick={handleUnderstandingPrefill}
+            aria-label={t('understanding.prefill')}
+            title={t('understanding.prefill')}
+          >
+            &#128221;
+          </button>
+        )}
         <textarea
           ref={textareaRef}
           className="chat-input__field"

@@ -16,10 +16,10 @@
 
 ## Active feature plans
 
-- [Understanding panel](plans/understanding-panel.md) **— slice 2** — the panel
-  works in the Harness but never in Product Repos (the write convention lives
-  only in the Harness's `CLAUDE.md`; the CLI injects nothing). Problem verified
-  & specified; solution not yet designed.
+- [Understanding panel](plans/understanding-panel.md) **— slice 2** — make the
+  panel work in Product Repos, not just the Harness. A composer-prefill button
+  drops the "write your understanding first" instruction into the chat box (no
+  extra `claude -p` cost). Built; pending browser-verify.
 
 ## Recently shipped
 

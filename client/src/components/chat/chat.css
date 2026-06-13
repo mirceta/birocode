@@ -699,6 +699,24 @@ details.step > summary::-webkit-details-marker {
   display: none;
 }
 
+/* Understanding-prefill button — drops the "write your understanding first"
+   instruction into the composer (plans/understanding-panel.md slice 2). */
+.chat-input__understand {
+  min-width: var(--touch);
+  min-height: var(--touch);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 18px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.chat-input__understand:hover {
+  border-color: var(--color-accent);
+}
+
 /* Stash button — bookmark a draft mid-run (plans/prompt-stash.md) */
 .chat-input__stash {
   min-width: var(--touch);
