@@ -8,12 +8,15 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-13):** No feature in flight. Ideas tab deployed &
-> confirmed; its branch awaits the merge word.
+> **Status (2026-06-13):** One feature in planning (plan-tab stretch -- not
+> yet built, on `feature/plan-tab-stretch`). Ideas tab deployed & confirmed;
+> its branch awaits the merge word.
 
 ## Active feature plans
 
-- (none)
+- [Plan-tab stretch](plans/plan-tab-stretch.md) -- Plan/doc content width
+  tracks the pane (tiered via container query); wider pane = wider diagrams,
+  prose stays readable.
 
 ## Recently shipped
 
