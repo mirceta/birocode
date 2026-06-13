@@ -5,6 +5,10 @@ A HOWTO for the agent building an app that should show up in Claude Web's
 derived from the working `web-flow-autodev` pilot. Drop a link to this in
 your product repo's `CLAUDE.md`, or just follow it.
 
+> Hand-copying this into each product repo drifts over time — making the
+> setup harness-driven and verifiable instead is the
+> [product-onboarding](../../plans/product-onboarding.md) design.
+
 Context for *why* (the harness side): [surfaces.md](surfaces.md) and
 [../../plans/local-app-proxy.md](../../plans/local-app-proxy.md). The Local
 tab embeds the same-origin path `/api/localview/{repoId}/`, and the harness
