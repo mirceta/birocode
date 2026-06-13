@@ -1,6 +1,7 @@
 # Instance switcher — swipe between harnesses on different computers
 
-> **Status (2026-06-13):** PLANNED — discussion draft, nothing built.
+> **Status (2026-06-13):** PLANNED -- all open decisions settled (see below),
+> ready to build; nothing built yet.
 > Builds on [pwa-shell.md](pwa-shell.md) (the home-screen launcher) and reuses
 > the iframe pattern from [local-app-tab.md](local-app-tab.md) /
 > `components/app/ProductFrame`. Structured per
@@ -75,26 +76,21 @@ flowchart LR
   Track --> Dots["Dots + label indicator<br/>marks the active slide"]
 ```
 
-## Open decisions (discuss before building)
+## Settled decisions (2026-06-13)
 
-1. **Config storage — device-local vs backend-synced.** The list of computers
-   is inherently per-device/per-network, and the shell may be served by
-   *either* instance, so backend-syncing it to one instance's
-   `uisettings.json` is awkward. *Proposed:* device-local `localStorage`.
-   **Confirm.**
-2. **PWA `start_url`.** Switch the home-screen icon to open `/switch` by
-   default, or keep `/studio` and reach the switcher via a link/button?
-   *Proposed:* keep `/studio` as default, add `/switch` as an opt-in the user
-   can set as their installed start page — least disruptive. **Confirm.**
-3. **Phone interaction model.** A phone can't usefully show two full Harness
-   UIs side-by-side. *Proposed:* swipe-to-**switch** (full-screen carousel,
-   one instance visible at a time), not split. **Confirm.**
-4. **How many instances.** Generalize to N (recommended — same code for 2 or
-   5) rather than hard-coding two. **Confirm.**
-5. **Keep-alive vs lazy mount.** N live iframes = N full app instances in
-   memory. For 2 it's fine to keep all mounted (instant swipe). For more,
-   mount the current + neighbours and reload the rest on demand. *Proposed:*
-   keep all mounted at N≤3, lazy beyond. **Confirm.**
+1. **Config storage = device-local `localStorage`.** The instance list is
+   per-device/per-network and the shell may be served by either instance, so
+   it is never backend-synced.
+2. **PWA `start_url` stays the current one** (`/studio`); the switcher is
+   reached from there. The user adds other computers later from within the
+   switcher; the home-screen icon is not repointed.
+3. **Phone interaction = swipe-to-switch.** Full-screen carousel, one instance
+   visible at a time; no split view.
+4. **N instances.** Generalized to N (same code for 2 or 5), not hard-coded to
+   two.
+5. **Keep-alive vs lazy mount.** Keep all iframes mounted at N<=3 (instant
+   swipe); beyond that, mount current + neighbours and reload the rest on
+   demand.
 
 ## Caveats
 
