@@ -264,6 +264,212 @@
   word-break: break-all;
 }
 
+/* Branch "PR preview" (plans/git-pr-preview.md) */
+.git-review {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.git-review__toggle {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 12px 14px;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.git-review__caret {
+  opacity: 0.6;
+}
+
+.git-review__title {
+  font-weight: 700;
+}
+
+.git-review__into {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.git-review__summary {
+  margin-left: auto;
+  font-size: 12px;
+  opacity: 0.65;
+}
+
+.git-review__body {
+  padding: 0 14px 14px;
+  border-top: 1px solid var(--color-border);
+}
+
+.git-review__hint {
+  margin: 10px 0 8px;
+  font-size: 12px;
+  opacity: 0.65;
+}
+
+.git-review__truncated {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #b58900;
+}
+
+.git-review__subtitle {
+  margin: 14px 0 6px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+
+.git-review__empty {
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.6;
+}
+
+.git-rvcommits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.git-rvcommit {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 13px;
+}
+
+.git-rvcommit:last-child {
+  border-bottom: none;
+}
+
+.git-rvcommit__hash {
+  flex: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.git-rvcommit__subject {
+  flex: 1;
+  word-break: break-word;
+}
+
+.git-rvcommit__meta {
+  flex: none;
+  font-size: 12px;
+  opacity: 0.55;
+}
+
+.git-rvfiles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.git-rvfile {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.git-rvfile:last-child {
+  border-bottom: none;
+}
+
+.git-rvfile__head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.git-rvfile__status {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--color-border);
+}
+
+.git-rvfile__status--add { background: #d9f2dd; color: #1d6b2f; }
+.git-rvfile__status--del { background: #f8d7d7; color: #9c1c1c; }
+.git-rvfile__status--mod { background: #fdeacc; color: #8a5a00; }
+.git-rvfile__status--ren { background: #e3e8f0; color: #44506b; }
+
+.git-rvfile__path {
+  flex: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.git-rvfile__counts {
+  flex: none;
+  display: flex;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.git-rvfile__add { color: #1d6b2f; }
+.git-rvfile__del { color: #9c1c1c; }
+.git-rvfile__bin { opacity: 0.6; font-weight: 400; font-style: italic; }
+
+.git-rvfile__body {
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg, #faf5f0);
+}
+
+.git-rvfile__hint {
+  padding: 8px 12px;
+  font-size: 12px;
+  opacity: 0.65;
+}
+
+.git-rvpatch {
+  margin: 0;
+  padding: 10px 12px;
+  max-height: 480px;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre;
+  tab-size: 2;
+}
+
 .git-clean {
   text-align: center;
   padding: 40px 16px;

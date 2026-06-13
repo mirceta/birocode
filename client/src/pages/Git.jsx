@@ -8,6 +8,7 @@ import { useRepo } from '../context/RepoContext';
 import { useFeature } from '../context/UiModeContext';
 import { useT } from '../i18n/LanguageContext';
 import { buildGitGraph } from './gitGraph';
+import BranchReview from './BranchReview';
 import './git.css';
 
 // Git tab (plans/git-tab.md + plans/git-actions.md): a fixed position card —
@@ -54,6 +55,7 @@ export default function Git() {
 
   const showBranchList = useFeature('gitBranchList');
   const showGraph = useFeature('gitGraphView');
+  const showReview = useFeature('gitBranchReview');
 
   const [status, setStatus] = useState(null);
   const [branches, setBranches] = useState([]);
@@ -236,6 +238,11 @@ export default function Git() {
           <div className="git-branch__fetcherror">{t('git.fetchError')}</div>
         )}
       </div>
+
+      {/* Branch "PR preview" (plans/git-pr-preview.md): the committed delta of
+          this branch vs its base — distinct from the working-tree status below.
+          Self-hides on the base branch (isFeatureBranch:false). */}
+      {showReview && <BranchReview branch={status.branch} repoId={currentRepoId} />}
 
       {clean ? (
         <div className="git-clean">
