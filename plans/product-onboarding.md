@@ -8,6 +8,15 @@
 > panel). Read-only, advanced (Local tab). On `feature/networking-doc`, not
 > yet merged to main. Slice 2 (scaffold / agent-task) still future. Builds on
 > the contract in [../docs/networking/local-product-guide.md](../docs/networking/local-product-guide.md).
+>
+> **Slice 2 (Fix with an agent) IMPLEMENTED** (2026-06-13, `feature/networking-doc`,
+> not yet deployed): chose the **agent-task variant (D)** over code-scaffolding
+> (C) — stack-agnostic, no harness-writes-foreign-code. The check composes a
+> fix task from the FAILING rules + the current contract (server-side, so it's
+> single-source and never stale) and pre-fills it into the **Project chat** for
+> review/send; the verifier is the done-condition (re-run). `verify-expose-fix.mjs`
+> 10/10 (no prompt when green; prompt names the rules + contract doc on failure;
+> button pre-fills the project composer + navigates).
 
 ## Problem
 
@@ -241,8 +250,11 @@ fix** — and (slice 2) eventually offers to apply it.
 
 1. **Slice 1 — the Exposure check (above).** Read-only verifier as a
    Local/App-tab panel. Highest leverage, lowest risk, kills drift.
-2. **Slice 2 — scaffold / agent-task (C/D)** for the common stacks, reusing
-   the verifier as the done-condition; this is where "promote to its own tab"
-   may earn itself.
+2. **Slice 2 — DONE as the agent-task variant (D).** "Fix with an agent" on
+   the Exposure check composes the fix task from the failing rules + the
+   single-source contract and pre-fills the Project chat; the verifier is the
+   done-condition. Code-scaffolding (C) was deliberately *not* chosen — it's
+   per-stack and means the harness writing into a foreign repo; the agent-task
+   delivers the current contract live and keeps a human in the loop.
 3. Throughout — **(A)**: the contract stays single-source; repos link, never
    paste.

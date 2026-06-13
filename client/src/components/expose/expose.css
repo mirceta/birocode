@@ -34,6 +34,11 @@
   font-size: 12px;
 }
 .expose__btn:disabled { opacity: 0.5; }
+.expose__btn--fix {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
 
 .expose__error { color: #d1242f; font-size: 13px; margin: 0 0 8px; }
 

@@ -602,6 +602,14 @@ export function ChatProvider({ children }) {
     chatView: view,
     setChatView,
     hasSelfRepo: !!selfRepoId,
+    // Drop text into the PROJECT chat's composer and switch to it (the Exposure
+    // check's "Fix with an agent", plans/product-onboarding.md). Targets the
+    // 'default' conversation explicitly so it lands on the project chat
+    // regardless of the current view.
+    prefillProjectChat: (text) => {
+      updateConvo('default', { draft: text });
+      setChatView('project');
+    },
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

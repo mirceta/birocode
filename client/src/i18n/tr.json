@@ -248,6 +248,7 @@
   "expose.allGood": "Dogru sunuluyor — burada gomulebilir.",
   "expose.someFail": "{ok}/{total} kontrol gecti — duzeltilecekler asagida.",
   "expose.rerun": "Tekrar calistir",
+  "expose.fixWithAgent": "Bir ajanla duzelt",
   "expose.error": "Sunum kontrolu calistirilamadi. Lutfen tekrar dene.",
   "expose.guideNote": "Tam sozlesme: docs/networking/local-product-guide.md",
   "localapp.noProject": "Once bir proje sec — Yerel sekme secili projenin uygulamasini gosterir.",

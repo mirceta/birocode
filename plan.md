@@ -24,8 +24,10 @@
   harness-driven + verifiable instead of hand-copied instructions that drift.
   **Slice 1 (Exposure check)** — a "Verify exposure" panel on the Local tab
   that probes the product and names what's wrong — deployed & confirmed
-  2026-06-13 on `feature/networking-doc` (not yet merged). Slice 2 (scaffold
-  / agent-task) future.
+  2026-06-13. **Slice 2 (Fix with an agent)** — composes a fix task from the
+  failures + the current contract and pre-fills the Project chat — built &
+  verified 10/10, awaiting deploy. On `feature/networking-doc` (not yet
+  merged).
 
 ## Recently shipped
 

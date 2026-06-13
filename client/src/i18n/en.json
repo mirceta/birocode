@@ -248,6 +248,7 @@
   "expose.allGood": "Exposed correctly — embeddable here.",
   "expose.someFail": "{ok}/{total} checks pass — see what to fix below.",
   "expose.rerun": "Re-run",
+  "expose.fixWithAgent": "Fix with an agent",
   "expose.error": "Couldn't run the exposure check. Please try again.",
   "expose.guideNote": "Full contract: docs/networking/local-product-guide.md",
   "localapp.noProject": "Select a project first — the Local tab shows the current project's app.",

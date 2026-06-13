@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { apiGet } from '../../api/client';
+import { useChat } from '../../context/ChatContext';
 import { useT } from '../../i18n/LanguageContext';
 import './expose.css';
 
@@ -8,6 +10,8 @@ import './expose.css';
 // shows each rule pass/fail with the exact fix. Read-only — it only probes.
 export default function ExposeCheck() {
   const { t } = useT();
+  const navigate = useNavigate();
+  const { prefillProjectChat } = useChat();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -31,6 +35,13 @@ export default function ExposeCheck() {
   const checks = data?.checks || [];
   const okCount = checks.filter((c) => c.ok).length;
   const allOk = checks.length > 0 && okCount === checks.length;
+  const fixPrompt = data?.fixPrompt || '';
+
+  function fixWithAgent() {
+    if (!fixPrompt) return;
+    prefillProjectChat(fixPrompt);
+    navigate('/studio');
+  }
 
   return (
     <div className="expose">
@@ -42,6 +53,11 @@ export default function ExposeCheck() {
               ? t('expose.allGood')
               : t('expose.someFail', { ok: okCount, total: checks.length })}
         </span>
+        {!loading && !allOk && fixPrompt && (
+          <button type="button" className="expose__btn expose__btn--fix" onClick={fixWithAgent}>
+            {t('expose.fixWithAgent')}
+          </button>
+        )}
         <button type="button" className="expose__btn" onClick={run} disabled={loading}>
           {t('expose.rerun')}
         </button>

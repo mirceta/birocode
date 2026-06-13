@@ -103,6 +103,30 @@ public class ExposeService
         return results;
     }
 
+    /// <summary>
+    /// Slice 2 (plans/product-onboarding.md): a ready-to-send agent task built
+    /// from the FAILING checks + the current contract. Null when all pass. The
+    /// contract text lives here (single source) so the agent always gets the
+    /// up-to-date rules, never a stale copy in the product repo.
+    /// </summary>
+    public string? BuildFixPrompt(RepositoryConfig repo, IReadOnlyList<Check> checks)
+    {
+        var failing = checks.Where(c => !c.Ok).ToList();
+        if (failing.Count == 0) return null;
+
+        var lines = failing
+            .Select(c => $"- {c.Label}: {c.Fix ?? c.Detail}")
+            .ToList();
+
+        var port = repo.LocalPort?.ToString() ?? "<set a port>";
+        return
+            $"The local web product for \"{repo.Name}\" (port {port}) isn't correctly exposed to " +
+            "Claude Web's Local tab. Fix the items below so it embeds correctly — the full contract is in " +
+            "docs/networking/local-product-guide.md:\n\n" +
+            string.Join("\n", lines) +
+            $"\n\nThen restart the product on port {port}. I'll re-run the Exposure check to confirm.";
+    }
+
     private static IEnumerable<(string Key, string Label)> Blocked() => new[]
     {
         ("listeningIpv4", "Listening (IPv4)"),

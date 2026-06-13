@@ -33,6 +33,7 @@ public class ExposeController : ControllerBase
         var repo = _repos.Current();
         if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
         var checks = await _expose.RunAsync(repo, ct);
-        return Ok(new { repo = repo.Name, localPort = repo.LocalPort, checks });
+        var fixPrompt = _expose.BuildFixPrompt(repo, checks);
+        return Ok(new { repo = repo.Name, localPort = repo.LocalPort, checks, fixPrompt });
     }
 }
