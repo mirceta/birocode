@@ -10,13 +10,18 @@
 
 > **Status (2026-06-13):** Understanding panel, Deployments tab slice 1, and
 > the product-onboarding Exposure check (slices 1 & 2) are all merged to main,
-> deployed & confirmed. No build in flight. New: a
-> [spec-baseline](plans/spec-baseline.md) DESIGN plan (proposed) — what to
-> borrow from OpenSpec — on `feature/spec-baseline`.
+> deployed & confirmed. In flight: [per-tab agent spaces](plans/per-tab-spaces.md)
+> on `feature/per-tab-agent-spaces` (code written, not yet browser-verified or
+> deployed). Also a [spec-baseline](plans/spec-baseline.md) DESIGN plan
+> (proposed) — what to borrow from OpenSpec — on `feature/spec-baseline`.
 
 ## Active feature plans
 
-_None in flight — see Recently shipped below._
+- [Per-tab agent spaces](plans/per-tab-spaces.md) — two browser tabs on one
+  machine no longer share a single "currently open agent"; the active agent,
+  chat surface, and selected project move from shared `localStorage` to per-tab
+  `sessionStorage` (with a `localStorage` seed for fresh tabs/restarts).
+  Refines [dock-sync](plans/dock-sync.md)'s Active Tab to tab-local.
 
 ## Proposed / design (not building yet)
 
