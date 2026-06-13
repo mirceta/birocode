@@ -1,8 +1,9 @@
 # Networking map — a durable reference for how surfaces are served
 
-> **Status (2026-06-13):** Done. The reference lives at
-> [docs/networking.md](../docs/networking.md); diagrams render in the
-> doc-viewer (4 diagrams, 0 parse errors). Not a feature — a doc.
+> **Status (2026-06-13):** Done, then refactored for progressive disclosure
+> ([doc-principles #2](doc-principles.md)) into a thin overview +
+> three detail docs. Diagrams render in the doc-viewer (0 parse errors).
+> Not a feature — a doc.
 
 ## Why
 
@@ -16,17 +17,18 @@ one place so "why won't it serve?" is a lookup, not an investigation.
 
 ## What it contains
 
-[docs/networking.md](../docs/networking.md):
-- **The two front doors** (internet via IIS-HTTPS vs LAN-direct-HTTP) and why
-  the door decides protocol/host — and therefore the iframe URLs.
-- **How each surface is served** (homepage / App tab / Local tab) with the
-  exact URL each iframe targets.
-- **The gates** (IP allowlist outermost; password on `/api/*`; the
-  deliberate `/preview/` hole) as a flow.
-- **LAN vs internet matrix** — what works where.
-- **The decision tree + symptom→cause→fix table** — the payoff: walk it
-  before blaming React/races/state.
-- **What we control vs the off-box IIS we can't.**
+Thin overview that links down to three cohesive detail docs:
+
+- **[docs/networking.md](../docs/networking.md)** — the 30-second model: cast,
+  the two-front-doors topology diagram, the LAN-vs-internet matrix, and
+  one-line "how each surface is served" pointers.
+- **[networking/surfaces.md](../docs/networking/surfaces.md)** — how the
+  homepage / App tab / Local tab each build their iframe URL.
+- **[networking/gates.md](../docs/networking/gates.md)** — the gate stack (IP
+  allowlist, password on `/api/*`, the `/preview/` hole, XFF/TrustedProxyIps).
+- **[networking/troubleshooting.md](../docs/networking/troubleshooting.md)** —
+  the payoff: decision tree + symptom→cause→fix + recurring footguns + what
+  we control vs the off-box IIS.
 
 ## Maintenance
 
