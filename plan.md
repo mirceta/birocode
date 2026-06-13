@@ -17,6 +17,9 @@
 
 ## Recently shipped
 
+- [Pane widths](plans/pane-widths.md) — per-tab span (1-4 slot units) for
+  the desktop multi-pane strip, set on the Settings tab cards. Merged to
+  main, deployed & confirmed 2026-06-13.
 - [Projects folder picker](plans/projects-folder-picker.md) — navigable
   folder picker replaces the chip wall; folder creation is explicit only
   (typos no longer create folders). Merged to main, deployed & confirmed

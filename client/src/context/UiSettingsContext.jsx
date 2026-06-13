@@ -5,6 +5,7 @@ import { apiGet, apiPut } from '../api/client';
 // server because the user works from phone and desktop interchangeably.
 // Empty tabOrder = default order. Saves are optimistic — the nav reorders
 // instantly, the PUT follows.
+// tabWidths (plans/pane-widths.md): tab key -> pane span 1-4, absent = 1.
 const UiSettingsContext = createContext(null);
 
 export function useUiSettings() {
@@ -15,11 +16,15 @@ export function useUiSettings() {
 
 export function UiSettingsProvider({ children }) {
   const [tabOrder, setTabOrderState] = useState([]);
+  const [tabWidths, setTabWidthsState] = useState({});
 
   useEffect(() => {
     apiGet('/settings/ui')
-      .then((s) => setTabOrderState(s.tabOrder || []))
-      .catch(() => { /* default order until the next load */ });
+      .then((s) => {
+        setTabOrderState(s.tabOrder || []);
+        setTabWidthsState(s.tabWidths || {});
+      })
+      .catch(() => { /* defaults until the next load */ });
   }, []);
 
   const saveTabOrder = useCallback((order) => {
@@ -27,8 +32,13 @@ export function UiSettingsProvider({ children }) {
     apiPut('/settings/ui', { tabOrder: order }).catch(() => { /* re-fetched next load */ });
   }, []);
 
+  const saveTabWidths = useCallback((order, widths) => {
+    setTabWidthsState(widths); // optimistic — the strip obeys immediately
+    apiPut('/settings/ui', { tabOrder: order, tabWidths: widths }).catch(() => { /* re-fetched next load */ });
+  }, []);
+
   return (
-    <UiSettingsContext.Provider value={{ tabOrder, saveTabOrder }}>
+    <UiSettingsContext.Provider value={{ tabOrder, tabWidths, saveTabOrder, saveTabWidths }}>
       {children}
     </UiSettingsContext.Provider>
   );

@@ -77,6 +77,21 @@
   color: var(--color-accent, #4a7dff);
 }
 
+/* Pane-width stepper (plans/pane-widths.md): 1-4 slot units on desktop. */
+.taborder__width {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.taborder__width-val {
+  min-width: 26px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0.8;
+}
+
 .taborder__btns {
   display: flex;
   gap: 4px;

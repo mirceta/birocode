@@ -8,11 +8,13 @@ import './settings.css';
 // (pointer-based, touch included) or tap ↑/↓; the REAL bottom nav reorders
 // live as you move (the saved order is optimistic, backend-synced). FLIP
 // animation: displaced cards slide instead of snapping.
+// Each card also carries a 1-4 pane-width stepper (plans/pane-widths.md);
+// widths only affect the desktop multi-pane strip.
 
 export default function Settings() {
   const { t } = useT();
   const tabs = useOrderedTabs();
-  const { saveTabOrder } = useUiSettings();
+  const { tabWidths, saveTabOrder, saveTabWidths } = useUiSettings();
 
   const [drag, setDrag] = useState(null); // { key, startPointerY, pointerY, startTop }
   const itemRefs = useRef(new Map());
@@ -80,6 +82,15 @@ export default function Settings() {
 
   const endDrag = () => setDrag(null);
 
+  // Pane width stepper: keep the map sparse (1 = absent). PUT requires
+  // tabOrder, so we send the current order along — a harmless no-op save.
+  const setWidth = (key, v) => {
+    const next = { ...tabWidths };
+    if (v <= 1) delete next[key];
+    else next[key] = v;
+    saveTabWidths(keys, next);
+  };
+
   const dragStyle = (key) => {
     if (drag?.key !== key) return undefined;
     const el = itemRefs.current.get(key);
@@ -117,6 +128,27 @@ export default function Settings() {
                 {tab.key === 'claude' ? t('settings.claudeSlot') : t(tab.labelKey)}
               </span>
               {tab.advancedOnly && <span className="taborder__adv">{t('settings.advancedBadge')}</span>}
+              <span className="taborder__width" title={t('settings.paneWidthHint')}>
+                <button
+                  type="button"
+                  className="taborder__btn"
+                  aria-label={t('settings.widthDec')}
+                  disabled={(tabWidths[tab.key] || 1) <= 1}
+                  onClick={() => setWidth(tab.key, (tabWidths[tab.key] || 1) - 1)}
+                >
+                  −
+                </button>
+                <span className="taborder__width-val">{tabWidths[tab.key] || 1}×</span>
+                <button
+                  type="button"
+                  className="taborder__btn"
+                  aria-label={t('settings.widthInc')}
+                  disabled={(tabWidths[tab.key] || 1) >= 4}
+                  onClick={() => setWidth(tab.key, (tabWidths[tab.key] || 1) + 1)}
+                >
+                  +
+                </button>
+              </span>
               <span className="taborder__btns">
                 <button
                   type="button"

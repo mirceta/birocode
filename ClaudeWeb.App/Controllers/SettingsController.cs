@@ -5,10 +5,12 @@ using Microsoft.AspNetCore.Mvc;
 namespace ClaudeWeb.Controllers;
 
 /// <summary>
-/// Backend-synced UI settings (plans/settings-tab.md).
-///   GET /api/settings/ui -- { tabOrder: [...] } (empty = default order)
+/// Backend-synced UI settings (plans/settings-tab.md, plans/pane-widths.md).
+///   GET /api/settings/ui -- { tabOrder: [...], tabWidths: { key: 1-4 } }
+///                           (empty = defaults: registry order, width 1)
 ///   PUT /api/settings/ui -- save; unknown tab keys are dropped, duplicates
-///                           collapsed. Auth: global middleware as always.
+///                           collapsed, widths clamped to 1-4 (1 = omitted).
+///                           Auth: global middleware as always.
 /// </summary>
 [ApiController]
 [Route("api/settings")]
@@ -30,13 +32,13 @@ public class SettingsController : ControllerBase
         _logger = logger;
     }
 
-    public record UiSettingsRequest(List<string>? TabOrder);
+    public record UiSettingsRequest(List<string>? TabOrder, Dictionary<string, int>? TabWidths);
 
     [HttpGet("ui")]
     public IActionResult Get()
     {
         _logger.CountRequest();
-        return Ok(new { tabOrder = _settings.TabOrder });
+        return Ok(new { tabOrder = _settings.TabOrder, tabWidths = _settings.TabWidths });
     }
 
     [HttpPut("ui")]
@@ -51,6 +53,17 @@ public class SettingsController : ControllerBase
             .Distinct()
             .ToList();
         _settings.SetTabOrder(cleaned);
-        return Ok(new { tabOrder = cleaned });
+
+        if (request.TabWidths != null)
+        {
+            var widths = request.TabWidths
+                .Where(kv => KnownTabs.Contains(kv.Key))
+                .Select(kv => (kv.Key, Value: Math.Clamp(kv.Value, 1, 4)))
+                .Where(kv => kv.Value > 1) // width 1 is the default — keep the store sparse
+                .ToDictionary(kv => kv.Key, kv => kv.Value);
+            _settings.SetTabWidths(widths);
+        }
+
+        return Ok(new { tabOrder = cleaned, tabWidths = _settings.TabWidths });
     }
 }
