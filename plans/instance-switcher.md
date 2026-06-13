@@ -15,6 +15,24 @@ the phone they want to glance at one machine, then swipe to the other —
 without retyping addresses or juggling browser tabs. The existing PWA icon
 opens exactly one instance; this turns it into a multi-instance switcher.
 
+## User stories
+
+- As the End User on my phone, I open the PWA and swipe left/right to move
+  between my Desk PC and Laptop harnesses without retyping any address.
+- As the End User, the first time I add my Laptop I type its label and URL once;
+  it is remembered on this device from then on.
+- As the End User, when I swipe to an instance I have not logged into yet, I see
+  that instance's own login gate inside the frame and sign in once; it stays
+  logged in afterwards.
+- As the End User, a dots+label indicator always tells me which machine I am
+  looking at, so I never confuse Desk PC for Laptop.
+- As the End User, if a machine is off or off-network, its slide shows a clear
+  failure (labelled), not a blank screen, and the others still work.
+- As the End User on a desktop, I can use arrow buttons / left-right keys
+  instead of swiping.
+- As the End User, I can rename, reorder, or remove instances later as my set of
+  computers changes.
+
 ## Native vs PWA — read first
 
 The "Android app" the user remembers is the **PWA shell**
