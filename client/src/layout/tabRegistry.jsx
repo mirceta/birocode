@@ -38,12 +38,19 @@ const STATIC_TABS = [
 /// Visible tabs in the user's order. The Chat/Term pair is ONE 'claude'
 /// entry whose face follows the route / last-used view
 /// (plans/terminal-sessions.md); it moves as one unit when reordered.
-export function useOrderedTabs() {
+///
+/// `includeHidden` (Settings only, plans/tab-visibility.md): keep tabs the
+/// user has hidden and annotate each `{ hidden }`, so the Settings toggle UI
+/// can list them. Every other consumer (BottomNav, PaneStrip, active-tab)
+/// calls with the default and gets the hidden tabs filtered out.
+export function useOrderedTabs({ includeHidden = false } = {}) {
   const { uiMode } = useUiMode();
-  const { tabOrder } = useUiSettings();
+  const { tabOrder, hiddenTabs } = useUiSettings();
   const { pathname } = useLocation();
   const isAdvanced = uiMode === 'advanced';
   const visible = (feature) => !feature || FEATURES[feature] === 'basic' || isAdvanced;
+  // Hiding is an advanced-mode preference; Basic mode ignores the set.
+  const hidden = new Set(isAdvanced ? hiddenTabs : []);
 
   const path = pathname.replace(/\/+$/, '') || '/studio';
   const termView = visible('terminalTab')
@@ -60,7 +67,8 @@ export function useOrderedTabs() {
   };
 
   const tabs = [claude, ...STATIC_TABS.filter((t) => visible(t.feature))]
-    .map((t) => ({ ...t, advancedOnly: !!t.feature && FEATURES[t.feature] !== 'basic' }));
+    .map((t) => ({ ...t, advancedOnly: !!t.feature && FEATURES[t.feature] !== 'basic', hidden: hidden.has(t.key) }))
+    .filter((t) => includeHidden || !t.hidden);
 
   // Saved order first (by its index); tabs it doesn't mention follow in
   // default order — new tabs ship without migrations.

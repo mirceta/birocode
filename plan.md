@@ -17,6 +17,9 @@
 
 ## Recently shipped
 
+- [Tab visibility](plans/tab-visibility.md) — per-tab show/hide toggles on
+  the Settings cards drop tabs from the advanced nav (claude/settings always
+  shown). Merged to main, deployed & confirmed 2026-06-13.
 - [Local tab](plans/local-app-tab.md) — preview any local port per project
   with a direct iframe; LAN-only, none of the /preview/ proxy machinery.
   First consumer: the web-flow-autodev web pilot on :5300. Deployed &

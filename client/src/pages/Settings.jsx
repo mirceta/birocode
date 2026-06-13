@@ -9,12 +9,16 @@ import './settings.css';
 // live as you move (the saved order is optimistic, backend-synced). FLIP
 // animation: displaced cards slide instead of snapping.
 // Each card also carries a 1-4 pane-width stepper (plans/pane-widths.md);
-// widths only affect the desktop multi-pane strip.
+// widths only affect the desktop multi-pane strip. A show/hide toggle
+// (plans/tab-visibility.md) drops a tab from the advanced nav — claude and
+// settings are non-hideable. This list uses includeHidden so hidden tabs
+// stay listed (dimmed) and can be re-enabled.
+const NON_HIDEABLE = new Set(['claude', 'settings']);
 
 export default function Settings() {
   const { t } = useT();
-  const tabs = useOrderedTabs();
-  const { tabWidths, saveTabOrder, saveTabWidths } = useUiSettings();
+  const tabs = useOrderedTabs({ includeHidden: true });
+  const { tabWidths, hiddenTabs, saveTabOrder, saveTabWidths, saveHiddenTabs } = useUiSettings();
 
   const [drag, setDrag] = useState(null); // { key, startPointerY, pointerY, startTop }
   const itemRefs = useRef(new Map());
@@ -91,6 +95,14 @@ export default function Settings() {
     saveTabWidths(keys, next);
   };
 
+  // Show/hide a tab in the advanced nav. Sparse list (absent = shown).
+  const setHidden = (key, hide) => {
+    const next = hide
+      ? [...new Set([...hiddenTabs, key])]
+      : hiddenTabs.filter((k) => k !== key);
+    saveHiddenTabs(keys, next);
+  };
+
   const dragStyle = (key) => {
     if (drag?.key !== key) return undefined;
     const el = itemRefs.current.get(key);
@@ -113,7 +125,7 @@ export default function Settings() {
             <li
               key={tab.key}
               ref={(el) => itemRefs.current.set(tab.key, el)}
-              className={`taborder__item${drag?.key === tab.key ? ' is-dragging' : ''}`}
+              className={`taborder__item${drag?.key === tab.key ? ' is-dragging' : ''}${tab.hidden ? ' is-hidden' : ''}`}
               style={dragStyle(tab.key)}
             >
               <span
@@ -128,6 +140,19 @@ export default function Settings() {
                 {tab.key === 'claude' ? t('settings.claudeSlot') : t(tab.labelKey)}
               </span>
               {tab.advancedOnly && <span className="taborder__adv">{t('settings.advancedBadge')}</span>}
+              {!NON_HIDEABLE.has(tab.key) && (
+                <button
+                  type="button"
+                  className={`taborder__toggle${tab.hidden ? '' : ' is-on'}`}
+                  role="switch"
+                  aria-checked={!tab.hidden}
+                  aria-label={tab.hidden ? t('settings.tabShow') : t('settings.tabHide')}
+                  title={t('settings.tabHiddenHint')}
+                  onClick={() => setHidden(tab.key, !tab.hidden)}
+                >
+                  <span className="taborder__toggle-knob" aria-hidden="true" />
+                </button>
+              )}
               <span className="taborder__width" title={t('settings.paneWidthHint')}>
                 <button
                   type="button"

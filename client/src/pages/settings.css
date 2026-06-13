@@ -92,6 +92,49 @@
   opacity: 0.8;
 }
 
+/* Show/hide toggle (plans/tab-visibility.md): a small switch per card. */
+.taborder__toggle {
+  flex-shrink: 0;
+  width: 40px;
+  height: 22px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  cursor: pointer;
+  position: relative;
+  transition: background 140ms ease;
+}
+
+.taborder__toggle.is-on {
+  background: var(--color-accent, #4a7dff);
+  border-color: var(--color-accent, #4a7dff);
+}
+
+.taborder__toggle-knob {
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transform: translateY(-50%);
+  transition: left 140ms ease;
+}
+
+.taborder__toggle.is-on .taborder__toggle-knob {
+  left: 20px;
+}
+
+.taborder__item.is-hidden {
+  opacity: 0.55;
+}
+
+.taborder__item.is-hidden .taborder__toggle {
+  opacity: 1;
+}
+
 .taborder__btns {
   display: flex;
   gap: 4px;

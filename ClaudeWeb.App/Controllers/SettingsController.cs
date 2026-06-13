@@ -32,13 +32,17 @@ public class SettingsController : ControllerBase
         _logger = logger;
     }
 
-    public record UiSettingsRequest(List<string>? TabOrder, Dictionary<string, int>? TabWidths);
+    // claude (home slot) and settings (the toggle UI itself) can never be
+    // hidden — hiding them would strand the user (plans/tab-visibility.md).
+    private static readonly HashSet<string> NonHideable = new() { "claude", "settings" };
+
+    public record UiSettingsRequest(List<string>? TabOrder, Dictionary<string, int>? TabWidths, List<string>? HiddenTabs);
 
     [HttpGet("ui")]
     public IActionResult Get()
     {
         _logger.CountRequest();
-        return Ok(new { tabOrder = _settings.TabOrder, tabWidths = _settings.TabWidths });
+        return Ok(new { tabOrder = _settings.TabOrder, tabWidths = _settings.TabWidths, hiddenTabs = _settings.HiddenTabs });
     }
 
     [HttpPut("ui")]
@@ -64,6 +68,16 @@ public class SettingsController : ControllerBase
             _settings.SetTabWidths(widths);
         }
 
-        return Ok(new { tabOrder = cleaned, tabWidths = _settings.TabWidths });
+        if (request.HiddenTabs != null)
+        {
+            var hidden = request.HiddenTabs
+                .Where(KnownTabs.Contains)
+                .Where(k => !NonHideable.Contains(k))
+                .Distinct()
+                .ToList();
+            _settings.SetHiddenTabs(hidden);
+        }
+
+        return Ok(new { tabOrder = cleaned, tabWidths = _settings.TabWidths, hiddenTabs = _settings.HiddenTabs });
     }
 }

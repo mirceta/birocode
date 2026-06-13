@@ -25,6 +25,7 @@ public class UiSettingsService
     private readonly object _gate = new();
     private List<string> _tabOrder = new();
     private Dictionary<string, int> _tabWidths = new();
+    private List<string> _hiddenTabs = new();
 
     public UiSettingsService(Logger logger)
     {
@@ -41,6 +42,9 @@ public class UiSettingsService
         // Tab key -> pane span in slot units, 1-4 (plans/pane-widths.md).
         // Absent key = 1, so new tabs need no migration.
         public Dictionary<string, int> TabWidths { get; set; } = new();
+        // Tab keys hidden from the advanced nav (plans/tab-visibility.md).
+        // Absent = shown, so new tabs are visible by default.
+        public List<string> HiddenTabs { get; set; } = new();
     }
 
     public List<string> TabOrder
@@ -51,6 +55,11 @@ public class UiSettingsService
     public Dictionary<string, int> TabWidths
     {
         get { lock (_gate) return new Dictionary<string, int>(_tabWidths); }
+    }
+
+    public List<string> HiddenTabs
+    {
+        get { lock (_gate) return new List<string>(_hiddenTabs); }
     }
 
     public void SetTabOrder(IEnumerable<string> order)
@@ -73,6 +82,16 @@ public class UiSettingsService
         _logger.Info($"[SETTINGS] Tab widths -> {(_tabWidths.Count == 0 ? "(default)" : string.Join(",", _tabWidths.Select(kv => $"{kv.Key}={kv.Value}")))}");
     }
 
+    public void SetHiddenTabs(IEnumerable<string> hidden)
+    {
+        lock (_gate)
+        {
+            _hiddenTabs = hidden.ToList();
+            Save();
+        }
+        _logger.Info($"[SETTINGS] Hidden tabs -> {(_hiddenTabs.Count == 0 ? "(none)" : string.Join(",", _hiddenTabs))}");
+    }
+
     private void Load()
     {
         try
@@ -81,6 +100,7 @@ public class UiSettingsService
             var store = JsonSerializer.Deserialize<Store>(File.ReadAllText(_path));
             if (store?.TabOrder != null) _tabOrder = store.TabOrder;
             if (store?.TabWidths != null) _tabWidths = store.TabWidths;
+            if (store?.HiddenTabs != null) _hiddenTabs = store.HiddenTabs;
         }
         catch (Exception ex)
         {
@@ -96,7 +116,7 @@ public class UiSettingsService
         try
         {
             var tmp = _path + ".tmp";
-            File.WriteAllText(tmp, JsonSerializer.Serialize(new Store { TabOrder = _tabOrder, TabWidths = _tabWidths }, JsonOpts));
+            File.WriteAllText(tmp, JsonSerializer.Serialize(new Store { TabOrder = _tabOrder, TabWidths = _tabWidths, HiddenTabs = _hiddenTabs }, JsonOpts));
             File.Move(tmp, _path, overwrite: true);
         }
         catch (Exception ex)
