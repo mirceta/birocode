@@ -34,6 +34,20 @@ The web UI has a device-local **Simple/Advanced** toggle (see
 capability map in `client/src/context/UiModeContext.jsx` as `'advanced'` unless
 the user says the End User (Basic mode) needs them.
 
+## Understanding panel — write your understanding first
+
+When the user gives you a substantive request (a feature, a change, a task —
+not a trivial one-liner or a pure question), **first write your understanding
+of what they asked for to `understanding.md` at the Repo root**, as markdown:
+a short restatement of the goal, the concrete things you'll do, and anything
+you're assuming. Keep it current — overwrite it when the request changes.
+
+The Harness renders this file in a collapsible panel at the top of the chat
+window (`plans/understanding-panel.md`) so the user can confirm you understood
+them before you proceed. This is a prompt convention only — there is no extra
+model call. Delete `understanding.md` when the request is done, the same way
+`plan.md` is retired when a feature ships.
+
 ## Build / run the harness normally
 
 ```

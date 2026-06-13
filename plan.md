@@ -8,15 +8,12 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-13):** No feature in flight. Deployments tab slice 1
-> deployed & merged (slice 2 = one-button deploy, future). On
-> `feature/networking-doc` (awaits merge): the [networking map](docs/networking.md)
-> + a [product-onboarding](plans/product-onboarding.md) design plan
-> (proposed, may become a feature).
-
-## Active feature plans
-
-- (none)
+> **Status (2026-06-13):** Two feature branches in flight, both awaiting the
+> merge word: **product-onboarding** — Exposure check slice 1 (deployed) +
+> slice 2 (built) on `feature/networking-doc` (which also carries the
+> networking docs); and the **Understanding panel** on
+> `feature/understanding-panel` (verified 9/9). Deployments tab slice 1
+> shipped (slice 2 = one-button deploy, future).
 
 ## Active feature plans
 
@@ -28,6 +25,11 @@
   failures + the current contract and pre-fills the Project chat — built &
   verified 10/10, awaiting deploy. On `feature/networking-doc` (not yet
   merged).
+- [Understanding panel](plans/understanding-panel.md) — a collapsible panel
+  at the top of the chat window that renders Claude's own restatement of the
+  request (written to a file), so the user can confirm "you understood me"
+  before work proceeds. Reuses the Plan tab's render+poll machinery.
+  Browser-verified (9/9) on `feature/understanding-panel`, not yet merged.
 
 ## Recently shipped
 
