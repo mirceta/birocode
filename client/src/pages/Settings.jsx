@@ -202,6 +202,12 @@ export default function Settings() {
           {t('settings.restoreDefault')}
         </button>
       </section>
+
+      <section className="settings-section">
+        <h3 className="settings-section__title">{t('switcher.title')}</h3>
+        <p className="settings-section__hint">{t('settings.switcherHint')}</p>
+        <a className="settings-restore" href="/switch">{t('settings.openSwitcher')}</a>
+      </section>
     </div>
   );
 }

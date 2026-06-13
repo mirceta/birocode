@@ -4,6 +4,7 @@ import { apiGet } from './api/client';
 import PasswordGate from './components/PasswordGate';
 import Loading from './components/shared/Loading';
 import Landing from './pages/Landing';
+import InstanceSwitcher from './pages/InstanceSwitcher';
 import Layout from './layout/Layout';
 import Chat from './pages/Chat';
 import Files from './pages/Files';
@@ -20,8 +21,11 @@ import Projects from './pages/Projects';
 import Guests from './pages/Guests';
 import Settings from './pages/Settings';
 
-// Two layers:
+// Layers:
 //   /        -- public landing: just the running product, no login, no chrome.
+//   /switch  -- the instance switcher shell (plans/instance-switcher.md): a
+//               device-local carousel of harness iframes. No login of its own;
+//               each embedded instance gates itself.
 //   /studio  -- the Claude Web builder (Chat/Files/History/App), behind the
 //               session login (plans/auth-login.md). The gate wraps only this
 //               branch, so a visitor reaches the product without logging in.
@@ -43,6 +47,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Landing />} />
+        <Route path="/switch" element={<InstanceSwitcher />} />
         {unlocked ? (
           <Route path="/studio" element={<Layout />}>
             <Route index element={<Chat />} />
