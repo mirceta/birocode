@@ -39,6 +39,22 @@ In `C:\Users\Administrator\Desktop\playground\claudeweb-rollback\`:
 - `rollback.ps1` — restore `bin.lastgood` + `client/dist.lastgood`, restart,
   delete the scheduled task.
 
+A deploy's lifecycle — note the **race** the tab is built to tame: once
+healthy, live is only kept if someone disarms within 15 minutes.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Staging: deploy
+    Staging --> Swapping: ancestry guard passes
+    Swapping --> HealthCheck: bin swapped, :5099 up
+    HealthCheck --> Armed: health 200<br/>(rollback armed, 15 min)
+    HealthCheck --> RolledBack: health fails (auto)
+    Armed --> Live: Keep it (disarm)
+    Armed --> RolledBack: 15 min elapse, no disarm
+    Live --> [*]
+    RolledBack --> [*]
+```
+
 The harness serves `client/dist` from the **working tree** at runtime, so a
 frontend build hits live instantly (before any bin swap).
 
@@ -87,6 +103,23 @@ global gate):
 - `POST /api/deploy/rollback` → run `rollback.ps1` (detached) — destructive,
   needs a confirm in the UI.
 
+`status` is a join over three live sources — none of which exist in one place
+today, which is exactly why deploys feel like guesswork:
+
+```mermaid
+flowchart LR
+    TAB["Deployments tab"] --> REQ["GET /api/deploy/status"]
+    REQ --> SVC["DeployService"]
+    SVC --> L["deploys.json<br/>what's live + history"]
+    SVC --> G["git merge-base<br/>contains origin/main?"]
+    SVC --> T["schtasks query<br/>armed? firesAt"]
+    L --> OUT["status JSON"]
+    G --> OUT
+    T --> OUT
+    style OUT fill:#eef7ff,stroke:#3b7dd8
+    style L fill:#f6f0ff,stroke:#7c5cbf
+```
+
 Scripts dir is config (`AppConfig`), defaulting to the known path.
 
 ### Frontend
@@ -107,6 +140,20 @@ visibility) so a deploy from elsewhere shows up.
   :5099 returns — the same detached-run pattern the chat already uses
   ([detached-runs](detached-runs.md)). This is the hard part; slice 1
   deliberately avoids it.
+
+```mermaid
+sequenceDiagram
+    participant U as Deployments tab
+    participant H as Harness :5099
+    participant S as Detached swap
+    U->>H: POST /api/deploy/start
+    H->>S: spawn (detached)
+    H-->>U: stream progress
+    S->>H: kill + swap + restart
+    Note over U,H: :5099 down — stream drops
+    U->>H: reattach when back up
+    H-->>U: resume → done / rolled back
+```
 
 ## Decisions / open questions
 
