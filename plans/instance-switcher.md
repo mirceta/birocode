@@ -92,6 +92,24 @@ flowchart LR
    swipe); beyond that, mount current + neighbours and reload the rest on
    demand.
 
+### Mount window (decision 5)
+
+Each live iframe is a full Harness app in memory, so beyond 3 instances only a
+sliding window stays mounted: the active slide plus its immediate neighbours.
+Slides outside the window are unmounted and reload on demand when swiped into.
+
+```mermaid
+flowchart LR
+  subgraph small["N &lt;= 3: every slide stays live"]
+    direction LR
+    A1["1 live"] --- A2["2 live (active)"] --- A3["3 live"]
+  end
+  subgraph big["N &gt; 3: window = active + neighbours"]
+    direction LR
+    B1["1 unmounted<br/>(reload on swipe)"] --- B2["2 live"] --- B3["3 live (active)"] --- B4["4 live"] --- B5["5 unmounted<br/>(reload on swipe)"]
+  end
+```
+
 ## Caveats
 
 - **Mixed content.** If the shell is ever served over HTTPS, browsers block
