@@ -59,6 +59,8 @@ dotnet run --project ClaudeWeb.App # run the harness (GUI + Kestrel on :5099)
 
 - `README.md` — setup, build, deploy for human operators
 - `ANALYSIS.md` — why this app exists (design rationale)
+- `docs/networking.md` — how the homepage / App tab / Local tab are served,
+  the gates, and a "won't serve" decision tree — read when ANY surface won't load
 - `plans/INTEGRATION.md` — module conventions (how controllers/services plug in)
 - `plans/<feature>.md` — one plan per feature, with a status header
 - `docs/claude-web/` — preview/proxy guides, managed by the app (see below)

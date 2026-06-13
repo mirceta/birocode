@@ -52,6 +52,12 @@
   color: #fff;
 }
 
+.localapp__btn--on {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
 .localapp__btn:disabled {
   opacity: 0.5;
 }

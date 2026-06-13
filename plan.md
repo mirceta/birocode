@@ -8,8 +8,9 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-13):** Understanding panel and Deployments tab slice 1
-> both merged to main, deployed & confirmed. No feature currently in flight.
+> **Status (2026-06-13):** Understanding panel, Deployments tab slice 1, and
+> the product-onboarding Exposure check (slices 1 & 2) are all merged to main,
+> deployed & confirmed. No feature currently in flight.
 
 ## Active feature plans
 
@@ -17,6 +18,13 @@ _None in flight — see Recently shipped below._
 
 ## Recently shipped
 
+- [Product onboarding](plans/product-onboarding.md) — make product exposure
+  harness-driven + verifiable instead of hand-copied instructions that drift.
+  **Slice 1 (Exposure check)** — a "Verify exposure" panel on the Local tab
+  that probes the product and names what's wrong — deployed & confirmed
+  2026-06-13. **Slice 2 (Fix with an agent)** — composes a fix task from the
+  failures + the current contract and pre-fills the Project chat — deployed &
+  confirmed 2026-06-13.
 - [Understanding panel](plans/understanding-panel.md) — a collapsible panel
   at the top of the chat window that renders Claude's own restatement of the
   request (written to a file), so the user can confirm "you understood me"
@@ -95,6 +103,9 @@ _None in flight — see Recently shipped below._
 
 ## Reference docs
 
+- [Networking map](docs/networking.md) — how the homepage / App tab / Local
+  tab are served, the gates, and a "won't serve" decision tree
+  ([plan](plans/networking-doc.md)).
 - [Module conventions](plans/INTEGRATION.md) — how controllers/services plug in.
 - [Design rationale](ANALYSIS.md) — why this app exists.
 - [Proxy guide](docs/claude-web/proxy.md) — reverse-proxy traps of /preview/.

@@ -20,6 +20,10 @@
 > imply yes). The proxy design is correct over any origin that reaches the
 > harness regardless; this only decides whether "internet" literally works.
 
+> **Related:** making a product repo *set itself up* to be exposed here
+> (instead of hand-copying the contract) is the
+> [product-onboarding](product-onboarding.md) design.
+
 ## What the user wants
 
 Make the Local tab's per-project product reachable **over the internet**,

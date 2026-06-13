@@ -3,6 +3,7 @@ using ClaudeWeb.Services.Auth;
 using ClaudeWeb.Services.Chat;
 using ClaudeWeb.Services.Deploy;
 using ClaudeWeb.Services.Dock;
+using ClaudeWeb.Services.Expose;
 using ClaudeWeb.Services.Files;
 using ClaudeWeb.Services.Git;
 using ClaudeWeb.Services.IpFilter;
@@ -104,6 +105,8 @@ public class EmbeddedApi
 
             // HttpClient for the Local-tab reverse proxy (plans/local-app-proxy.md).
             builder.Services.AddHttpClient("localview", c => c.Timeout = TimeSpan.FromSeconds(100));
+            // Short-timeout client for the Exposure check probes (plans/product-onboarding.md).
+            builder.Services.AddHttpClient("expose", c => c.Timeout = TimeSpan.FromSeconds(4));
 
             // CORS allow-all for the React dev-server proxy.
             builder.Services.AddCors(options =>
@@ -125,6 +128,7 @@ public class EmbeddedApi
             builder.Services.AddSettingsModule(); // UI settings (plans/settings-tab.md)
             builder.Services.AddNotesModule();  // per-project ideas (plans/ideas-tab.md)
             builder.Services.AddDeployModule(); // deployments tab (plans/deployments-tab.md)
+            builder.Services.AddExposeModule(); // exposure check (plans/product-onboarding.md)
             // === END MODULE SERVICE REGISTRATION ===
 
             _app = builder.Build();
