@@ -1,12 +1,14 @@
 # Ideas tab — per-project notes, stored on the backend
 
-> **Status (2026-06-13):** Implemented on `feature/ideas-tab` and
-> browser-verified on :5201 — `verify-ideas-tab.mjs` 11/11 (create, edit,
-> delete, reload persistence, PROJECT SCOPING both directions, basic-mode
-> hidden; screenshot read). Not yet deployed. Decisions locked: create +
-> edit + delete, **plain text**; **Advanced mode only**; **body-only**
-> notes (first line = heading); **separate** from prompt-stash. Markdown
-> deferrable.
+> **Status (2026-06-13):** Deployed and confirmed ("It works", 11:25;
+> rollback disarmed; health 200, bundle hash match, live /api/notes
+> POST/GET/DELETE round-trip OK, notes.json written). Browser-verified on
+> :5201 — `verify-ideas-tab.mjs` 11/11 (create, edit, delete, reload
+> persistence, PROJECT SCOPING both directions, basic-mode hidden;
+> screenshot read). On `feature/ideas-tab`, not yet merged to main.
+> Decisions locked: create + edit + delete, **plain text**; **Advanced
+> mode only**; **body-only** notes (first line = heading); **separate**
+> from prompt-stash. Markdown deferrable.
 
 ## Problem
 

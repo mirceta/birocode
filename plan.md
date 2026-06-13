@@ -8,18 +8,18 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-13):** One feature in flight: Ideas tab
-> (`feature/ideas-tab`, implemented & browser-verified 11/11, awaiting
-> deploy).
+> **Status (2026-06-13):** No feature in flight. Ideas tab deployed &
+> confirmed; its branch awaits the merge word.
 
 ## Active feature plans
 
-- [Ideas tab](plans/ideas-tab.md) — per-project notes stored on the
-  backend; create/edit/delete, scoped by project like Files/Git.
-  Implemented & verified 2026-06-13, not yet deployed.
+- (none)
 
 ## Recently shipped
 
+- [Ideas tab](plans/ideas-tab.md) — per-project notes stored on the
+  backend; create/edit/delete, scoped by project like Files/Git. Deployed
+  & confirmed 2026-06-13; on `feature/ideas-tab`, not yet merged to main.
 - [Tab visibility](plans/tab-visibility.md) — per-tab show/hide toggles on
   the Settings cards drop tabs from the advanced nav (claude/settings always
   shown). Merged to main, deployed & confirmed 2026-06-13.
