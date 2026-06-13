@@ -101,6 +101,9 @@ public class EmbeddedApi
             // Controllers auto-discovered here -- new controllers need NO changes.
             builder.Services.AddControllers();
 
+            // HttpClient for the Local-tab reverse proxy (plans/local-app-proxy.md).
+            builder.Services.AddHttpClient("localview", c => c.Timeout = TimeSpan.FromSeconds(100));
+
             // CORS allow-all for the React dev-server proxy.
             builder.Services.AddCors(options =>
                 options.AddDefaultPolicy(p => p

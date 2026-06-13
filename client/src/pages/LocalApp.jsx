@@ -19,10 +19,11 @@ export default function LocalApp() {
   const [reloadKey, setReloadKey] = useState(0);
 
   const port = current?.localPort || null;
-  // Same host the UI was loaded from; on the LAN that's the harness box.
-  // Browsed remotely the port is unreachable by design — the empty state
-  // plus the hint below explain it.
-  const url = port ? `${window.location.protocol}//${window.location.hostname}:${port}` : null;
+  // Embed the harness's OWN reverse proxy, not the port directly
+  // (plans/local-app-proxy.md): same-origin so it works over the internet
+  // behind the login, with no mixed-content/IPv6 trap. The trailing slash is
+  // load-bearing — the product's relative asset/API URLs resolve under it.
+  const url = port && current ? `/api/localview/${current.id}/` : null;
 
   // Leave edit mode when switching projects.
   useEffect(() => {
@@ -73,7 +74,7 @@ export default function LocalApp() {
             </button>
           </>
         )}
-        <span className="localapp__hint">{t('localapp.lanOnly')}</span>
+        <span className="localapp__hint">{t('localapp.servedHint')}</span>
       </div>
 
       {showForm ? (
