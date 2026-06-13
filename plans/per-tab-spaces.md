@@ -1,10 +1,11 @@
 # Per-tab agent spaces — two tabs on one machine stay independent
 
-> **Status (2026-06-13):** In progress on `feature/per-tab-agent-spaces`.
-> Code written + **browser-verified before/after** on an isolated `:5210`
-> harness (`.claudeweb-preview/playwright/verify-per-tab.mjs`): the original
-> build reproduces the clobber (Tab B inherits Tab A's agent on refresh), the
-> fixed build keeps each tab independent. NOT deployed yet.
+> **Status (2026-06-13):** Shipped. Merged to main, deployed to the live
+> `:5099` harness (deploy `25fb5b8`), and confirmed by the End User.
+> **Browser-verified before/after** on an isolated `:5210` harness
+> (`.claudeweb-preview/playwright/verify-per-tab.mjs`): the original build
+> reproduces the clobber (Tab B inherits Tab A's agent on refresh), the fixed
+> build keeps each tab independent.
 
 ## Problem
 

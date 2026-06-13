@@ -8,22 +8,17 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-13):** Understanding panel, Deployments tab slice 1, the
-> product-onboarding Exposure check (slices 1 & 2), and the Exposure check
-> freshness slice 3 (catch a stale-in-the-browser embed) are all merged to
-> main, deployed & confirmed. In flight:
-> [per-tab agent spaces](plans/per-tab-spaces.md) on
-> `feature/per-tab-agent-spaces` (code written + browser-verified, deploying).
-> Also a [spec-baseline](plans/spec-baseline.md) DESIGN plan (proposed) — what
-> to borrow from OpenSpec — on `feature/spec-baseline`.
+> **Status (2026-06-13):** No build in flight. Understanding panel, Deployments
+> tab slice 1, the product-onboarding Exposure check (slices 1 & 2), the
+> Exposure check freshness slice 3, and per-tab agent spaces are all merged to
+> main, deployed & confirmed. Proposed: a
+> [spec-baseline](plans/spec-baseline.md) DESIGN plan — what to borrow from
+> OpenSpec — on `feature/spec-baseline`.
 
 ## Active feature plans
 
-- [Per-tab agent spaces](plans/per-tab-spaces.md) — two browser tabs on one
-  machine no longer share a single "currently open agent"; the active agent,
-  chat surface, and selected project move from shared `localStorage` to per-tab
-  `sessionStorage` (with a `localStorage` seed for fresh tabs/restarts).
-  Refines [dock-sync](plans/dock-sync.md)'s Active Tab to tab-local.
+_None in flight._ When a feature is started, list its plan here; move it down
+to "Recently shipped" once it's deployed & confirmed.
 
 ## Proposed / design (not building yet)
 
@@ -34,6 +29,13 @@
 
 ## Recently shipped
 
+- [Per-tab agent spaces](plans/per-tab-spaces.md) — two browser tabs on one
+  machine no longer share a single "currently open agent". The active agent,
+  chat surface, and selected project moved from shared `localStorage` to per-tab
+  `sessionStorage` (with a `localStorage` seed for fresh tabs/restarts). Refines
+  [dock-sync](plans/dock-sync.md)'s Active Tab to tab-local. Reproduced
+  before/after on an isolated harness. Merged to main, deployed & confirmed
+  2026-06-13.
 - [Exposure check — freshness](plans/expose-freshness.md) — slice 3 of product
   onboarding. "Verify exposure" was server-side and couldn't see that the
   operator's own browser was rendering a stale/blank cached embed (real
