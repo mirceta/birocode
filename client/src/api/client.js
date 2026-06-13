@@ -5,6 +5,8 @@
 // fetch automatically — no password handling here. Feature modules never
 // re-handle auth; a 401 means "not logged in" (the App-level gate handles it).
 
+import { readTabState, writeTabState } from './viewState';
+
 export const REPO_KEY = 'claudeweb_repo';
 
 // Pre-session-auth versions kept the password in localStorage — purge it.
@@ -16,10 +18,10 @@ try {
 
 // The id of the repository the user has selected. Sent on every request as
 // X-Repo-Id so the backend scopes chat/files/history to the chosen project.
-// Held in a module-level variable (per-tab JS context) so two browser tabs
-// don't overwrite each other's selection via shared localStorage. localStorage
-// is only used for persistence across page loads.
-let _repoId = localStorage.getItem(REPO_KEY) || '';
+// The selection is part of a tab's "space" and follows its active agent, so it
+// is per-browser-tab (sessionStorage, seeded once from localStorage) — two tabs
+// on one machine don't clobber each other's project. See viewState.js.
+let _repoId = readTabState(REPO_KEY) || '';
 
 export function getRepoId() {
   return _repoId;
@@ -27,8 +29,7 @@ export function getRepoId() {
 
 export function setRepoId(id) {
   _repoId = id || '';
-  if (id) localStorage.setItem(REPO_KEY, id);
-  else localStorage.removeItem(REPO_KEY);
+  writeTabState(REPO_KEY, _repoId);
 }
 
 // Thrown for any non-2xx response. Carries the HTTP status so callers can
