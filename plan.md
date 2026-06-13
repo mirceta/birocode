@@ -8,13 +8,17 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-13):** **In flight:** Understanding panel **slice 2** — a
+> **Status (2026-06-14):** **In flight:** Understanding panel **slice 2** — a
 > composer-prefill button that makes the panel work in Product Repos (built,
-> browser-verified 6/6; pending deploy). Already merged & deployed: Understanding
-> panel slice 1, Deployments tab slice 1, the product-onboarding Exposure check
-> (slices 1-3), and per-tab agent spaces. Proposed: a
+> browser-verified 6/6; pending deploy). **Just merged to main:** Git tab PR
+> preview — the branch's committed delta vs its base, like a GitHub PR (slices
+> 1 & 2, built + browser-verified; pending deploy). Already merged & deployed:
+> Understanding panel slice 1, Deployments tab slice 1, the product-onboarding
+> Exposure check (slices 1-3), and per-tab agent spaces. Proposed: a
 > [spec-baseline](plans/spec-baseline.md) DESIGN plan — what to borrow from
-> OpenSpec — on `feature/spec-baseline`.
+> OpenSpec — on `feature/spec-baseline`. Parked: a
+> [PWA "older version" warning](plans/pwa-webapk-warning.md) plan on
+> `feature/pwa-webapk-warning` (set aside, not started).
 
 ## Active feature plans
 
@@ -22,6 +26,13 @@
   panel work in Product Repos, not just the Harness. A composer-prefill button
   drops the "write your understanding first" instruction into the chat box (no
   extra `claude -p` cost). Built & browser-verified 6/6; pending deploy.
+- [Git tab — branch PR preview](plans/git-pr-preview.md) — for the current
+  feature branch, show where it branched off, the commits since, and the
+  cumulative `base...HEAD` file diff — what a GitHub pull request shows, which
+  is distinct from the existing working-tree `git status` view. Read-only;
+  reuses `GitService.RunGit`/`DetectBases`. Slice 1 = summary (commits +
+  changed-file counts), slice 2 = lazy per-file patch. Built & browser-verified;
+  pending deploy.
 
 ## Proposed / design (not building yet)
 
