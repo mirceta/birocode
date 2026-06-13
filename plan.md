@@ -8,13 +8,17 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-13):** No feature in flight. Local-tab-over-internet
-> deployed & confirmed (works from the phone off-LAN); its branch awaits
-> the merge word.
+> **Status (2026-06-13):** One feature in flight: Deployments tab
+> (`feature/deployments-tab`) — plan drafted (sliced); slice 1 =
+> observability + rollback control, not yet built.
 
 ## Active feature plans
 
-- (none)
+- [Deployments tab](plans/deployments-tab.md) — make deploys observable and
+  safe: show what's live (commit, contains-origin/main), a live
+  armed-rollback countdown with Keep-it / Roll-back-now, and deploy history.
+  Slice 1 (observability + rollback control) first; slice 2 (one-button
+  deploy + lock) later. Plan drafted 2026-06-13.
 
 ## Recently shipped
 
