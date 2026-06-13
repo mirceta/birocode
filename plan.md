@@ -8,12 +8,19 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-13):** No feature in flight. Ideas tab deployed &
-> confirmed; its branch awaits the merge word.
+> **Status (2026-06-13):** Building the Understanding panel on
+> `feature/understanding-panel` (plan written, all 4 questions resolved —
+> repo-root `understanding.md`, **no backend**, prompt-driven write, Advanced
+> only). Frontend-only build next. Ideas tab deployed & confirmed; its branch
+> awaits the merge word.
 
 ## Active feature plans
 
-- (none)
+- [Understanding panel](plans/understanding-panel.md) — a collapsible panel
+  at the top of the chat window that renders Claude's own restatement of the
+  request (written to a file), so the user can confirm "you understood me"
+  before work proceeds. Reuses the Plan tab's render+poll machinery. In
+  development on `feature/understanding-panel`.
 
 ## Recently shipped
 

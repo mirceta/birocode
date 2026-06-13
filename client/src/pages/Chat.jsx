@@ -4,6 +4,7 @@ import ChatInput from '../components/chat/ChatInput';
 import ThinkingIndicator from '../components/chat/ThinkingIndicator';
 import ActivitySteps from '../components/chat/ActivitySteps';
 import SessionPicker from '../components/chat/SessionPicker';
+import UnderstandingPanel from '../components/chat/UnderstandingPanel';
 import ErrorBanner from '../components/shared/ErrorBanner';
 import ClaudeViewToggle from '../components/shared/ClaudeViewToggle';
 import ModelSelector from '../components/chat/ModelSelector';
@@ -46,6 +47,7 @@ export default function Chat() {
 
   const showContextMeter = useFeature('contextMeter');
   const showDualChat = useFeature('dualChat');
+  const showUnderstanding = useFeature('understandingPanel');
 
   const scrollRef = useRef(null);
   const stickToBottom = useRef(true);
@@ -123,6 +125,8 @@ export default function Chat() {
           {t('chat.new')}
         </button>
       </div>
+
+      {showUnderstanding && <UnderstandingPanel />}
 
       <div className="chat__scroll" ref={scrollRef} onScroll={handleScroll}>
         {messages.map((m, i) => (
