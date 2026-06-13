@@ -1,14 +1,13 @@
 # Product onboarding — set a product repo up to expose itself, harness-driven
 
-> **Status (2026-06-13):** Slice 1 (the **Exposure check**) IMPLEMENTED on
-> `feature/networking-doc` and browser-verified on :5201 —
-> `verify-expose-check.mjs` 10/10: all-green against the correctly-exposed
-> web-flow-autodev pilot, AND the *right* failures against a deliberately-
-> broken server (IPv4-only bind → IPv6 fail; absolute `/assets` → relative-
-> assets fail) with the correct fix text; Local-tab panel renders the
-> checklist (screenshot read). Read-only, advanced (Local tab). Not yet
-> deployed. Slice 2 (scaffold / agent-task) still future. Builds on the
-> contract in [../docs/networking/local-product-guide.md](../docs/networking/local-product-guide.md).
+> **Status (2026-06-13):** Slice 1 (the **Exposure check**) DEPLOYED &
+> confirmed ("it works", ~16:06; live `/api/expose/check` = 6/6 green for the
+> pilot; health 200, bundle match). Verified on :5201 first —
+> `verify-expose-check.mjs` 10/10 (all-green pilot + the *right* failures on a
+> deliberately-broken IPv4-only/absolute-URL server, with fix text; Local-tab
+> panel). Read-only, advanced (Local tab). On `feature/networking-doc`, not
+> yet merged to main. Slice 2 (scaffold / agent-task) still future. Builds on
+> the contract in [../docs/networking/local-product-guide.md](../docs/networking/local-product-guide.md).
 
 ## Problem
 

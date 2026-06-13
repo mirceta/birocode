@@ -22,10 +22,10 @@
 
 - [Product onboarding](plans/product-onboarding.md) — make product exposure
   harness-driven + verifiable instead of hand-copied instructions that drift.
-  **Slice 1 (Exposure check)** built & verified 10/10 on
-  `feature/networking-doc` (a "Verify exposure" panel on the Local tab that
-  probes the product and names what's wrong); not yet deployed. Slice 2
-  (scaffold / agent-task) future.
+  **Slice 1 (Exposure check)** — a "Verify exposure" panel on the Local tab
+  that probes the product and names what's wrong — deployed & confirmed
+  2026-06-13 on `feature/networking-doc` (not yet merged). Slice 2 (scaffold
+  / agent-task) future.
 
 ## Recently shipped
 
