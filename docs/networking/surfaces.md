@@ -64,3 +64,7 @@ fall out of "same-origin":
 The embedded product must use **relative URLs** so they resolve under the
 `/api/localview/{repo}/` prefix (the iframe `src` ends in `/`). Same idea as
 the `/preview/` sub-path, minus the public exposure.
+
+> **Building a product to embed here?** Follow the contract in
+> [local-product-guide.md](local-product-guide.md) — dual-stack bind, serve
+> at root, relative URLs.

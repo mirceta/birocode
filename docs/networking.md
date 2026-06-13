@@ -16,6 +16,8 @@ need it.
 >   password + the `/preview/` hole).
 > - **[troubleshooting.md](networking/troubleshooting.md)** — **open this when
 >   a surface won't load**: decision tree + symptom→cause→fix.
+> - **[local-product-guide.md](networking/local-product-guide.md)** — building
+>   an app to embed in the Local tab? The contract to follow.
 
 ## Cast (who and what)
 
