@@ -22,25 +22,24 @@
 
 ## Recently shipped
 
+- [Plan-tab stretch](plans/plan-tab-stretch.md) — Plan/doc content width
+  tracks the pane (tiered via container query); wider pane = wider diagrams,
+  prose stays readable. Merged to main, deployed & confirmed 2026-06-13.
 - [Local tab over the internet](plans/local-app-proxy.md) — the harness
   reverse-proxies the project's local port under an authenticated
   `/api/localview/{repoId}/` path so the Local tab works over the internet
   (behind the password), not just the LAN. Also fixes the IPv6/HTTPS issue.
-  Deployed & confirmed 2026-06-13; on `feature/local-app-proxy`, not yet
-  merged to main.
-
-## Recently shipped
-
+  Merged to main, deployed & confirmed 2026-06-13.
 - [Ideas tab](plans/ideas-tab.md) — per-project notes stored on the
-  backend; create/edit/delete, scoped by project like Files/Git. Deployed
-  & confirmed 2026-06-13; on `feature/ideas-tab`, not yet merged to main.
+  backend; create/edit/delete, scoped by project like Files/Git. Merged to
+  main, deployed & confirmed 2026-06-13.
 - [Tab visibility](plans/tab-visibility.md) — per-tab show/hide toggles on
   the Settings cards drop tabs from the advanced nav (claude/settings always
   shown). Merged to main, deployed & confirmed 2026-06-13.
 - [Local tab](plans/local-app-tab.md) — preview any local port per project
   with a direct iframe; LAN-only, none of the /preview/ proxy machinery.
-  First consumer: the web-flow-autodev web pilot on :5300. Deployed &
-  confirmed 2026-06-13; on `feature/local-app-tab`, not yet merged to main.
+  First consumer: the web-flow-autodev web pilot on :5300. Merged to main,
+  deployed & confirmed 2026-06-13. (Superseded by the proxy version above.)
 - [Pane widths](plans/pane-widths.md) — per-tab span (1-4 slot units) for
   the desktop multi-pane strip, set on the Settings tab cards. Merged to
   main, deployed & confirmed 2026-06-13.
@@ -50,8 +49,8 @@
   2026-06-13.
 - [Dual chat](plans/dual-chat.md) — two persistent chat tabs: a Project
   chat that follows the active project and an always-on Claude Web chat
-  pinned to the Harness's own repo. Deployed & confirmed 2026-06-13; on
-  `feature/dual-chat`, not yet merged to main.
+  pinned to the Harness's own repo. Merged to main, deployed & confirmed
+  2026-06-13.
 - [Settings tab](plans/settings-tab.md) — rearrangeable nav-tab order with
   live preview; extracted the one canonical tab registry. Deployed &
   confirmed 2026-06-12.

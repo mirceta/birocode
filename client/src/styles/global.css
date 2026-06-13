@@ -294,6 +294,10 @@ textarea {
   padding: 16px;
   /* leave room for the fixed bottom nav so content never hides behind it */
   padding-bottom: calc(var(--nav-height) + 16px);
+  /* Query container so content (e.g. .plan) can size to the pane's actual
+     rendered width -- a stretched pane gets wider content, not side margin
+     (plans/plan-tab-stretch.md). inline-size only: height stays auto. */
+  container-type: inline-size;
 }
 
 /* ---- Multi-pane desktop layout (plans/multi-pane.md) ------------------- */
