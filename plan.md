@@ -9,13 +9,21 @@
 > Files tab to see wrapping mermaid labels etc. in action.
 
 > **Status (2026-06-13):** No feature in flight. Deployments tab slice 1
-> deployed & merged (slice 2 = one-button deploy, future). New: a
-> [networking map](docs/networking.md) reference (on `feature/networking-doc`,
-> awaits the merge word).
+> deployed & merged (slice 2 = one-button deploy, future). On
+> `feature/networking-doc` (awaits merge): the [networking map](docs/networking.md)
+> + a [product-onboarding](plans/product-onboarding.md) design plan
+> (proposed, may become a feature).
 
 ## Active feature plans
 
 - (none)
+
+## Proposed / design (not building yet)
+
+- [Product onboarding](plans/product-onboarding.md) — make setting a product
+  repo up to expose itself (Local/App tab) harness-driven, single-source, and
+  verifiable, instead of hand-copying instructions that drift. Likely first
+  slice: a stack-agnostic "Verify exposure" check.
 
 ## Recently shipped
 
