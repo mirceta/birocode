@@ -62,9 +62,13 @@ public class DeployService
 
     public bool Disarm()
     {
-        var (code, _, _) = Run("schtasks", $"/Delete /TN {TaskName} /F");
-        _logger.Info($"[DEPLOY] Disarm rollback (Keep it) -> exit {code}");
-        return code == 0;
+        // "Keep it" means "ensure no rollback fires" — so success is defined by
+        // the END STATE (no armed task), not schtasks's exit code, which returns
+        // non-zero when the task is already absent (a harmless, common case).
+        Run("schtasks", $"/Delete /TN {TaskName} /F");
+        var stillArmed = GetRollback().Armed;
+        _logger.Info($"[DEPLOY] Disarm rollback (Keep it) -> armed now: {stillArmed}");
+        return !stillArmed;
     }
 
     public void TriggerRollback()
