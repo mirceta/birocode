@@ -1,8 +1,8 @@
 # Product onboarding — set a product repo up to expose itself, harness-driven
 
-> **Status (2026-06-13):** Proposed — design/discussion, not a feature yet.
-> Captures the problem + options so we stop re-arguing it in chat. May
-> become a feature. Builds on the exposure contract in
+> **Status (2026-06-13):** Proposed — design/discussion, not built. Slice 1
+> (the **Exposure check** diagnostics assistant) is now designed concretely
+> below; ready to build on the word. Builds on the exposure contract in
 > [../docs/networking/local-product-guide.md](../docs/networking/local-product-guide.md).
 
 ## Problem
@@ -122,15 +122,78 @@ time, so it can't be stale.
 - **Editing the product repo.** Scaffolding (C) means the harness writes code
   into another repo — precedent exists (Prepare for preview), but it's a
   bigger trust/UX step than a read-only verifier.
-- **Naming/UI.** A per-project "exposure readiness" panel? A button on the
-  Local/App tab? TBD.
+- **Naming/UI.** Resolved in *Slice 1 design* below.
 
-## Recommendation (if it becomes a feature)
+## Slice 1 design — the Exposure check (per-project diagnostics assistant)
 
-1. **Slice 1 — the verifier (B).** A `Verify exposure` action + a readiness
-   checklist, stack-agnostic, that names exactly what's wrong. Highest
-   leverage, lowest risk, kills drift.
-2. **Slice 2 — scaffold/agent-task (C/D)** for the common stacks, reusing the
-   verifier as the done-condition.
+The concrete first build: a per-project "is this product correctly web-exposed,
+and if not, exactly why?" assistant. This is design direction **(B)** with a
+home in the UI.
+
+### Decisions (my calls — adjustable)
+
+- **Name: "Exposure check" (verb: *Verify exposure*). NOT "Deployment".** We
+  already have a **Deploys** tab — but that's deploying *the harness itself*
+  (rollback countdown, what's-live, [deployments-tab](deployments-tab.md)).
+  This is about a *project's product*. Same word, different concern; keeping
+  them distinct avoids real confusion.
+- **Placement: a panel/action on the Local & App tabs first, not a new nav
+  tab.** The problem *appears* on the Local/App tab when it's blank — so a
+  **"Verify exposure / Why is this blank?"** button there, opening the
+  checklist in context, is the highest-value spot. Promote to its own tab
+  later only if it grows setup actions (slice 2). Less nav weight, more
+  context.
+- **Advanced-only** (operator/dev concern), per convention.
+- **Read-only.** Slice 1 only *probes and reports* — it never edits the
+  product. (Scaffolding is slice 2.)
+
+### The checks (stack-agnostic, all HTTP-level)
+
+`GET /api/expose/check` (scoped to the selected repo via `X-Repo-Id`) runs
+these and returns a structured pass/fail-with-reason list:
+
+| Check | How | Fail → fix |
+|-------|-----|-----------|
+| Port configured | repo has a `LocalPort` | set it on the Local tab |
+| Listening (IPv4) | connect `127.0.0.1:port` | start the product |
+| Listening (IPv6) | connect `[::1]:port` | bind **dual-stack** (`ListenAnyIP`) — the #1 footgun |
+| Serves at root | `GET /` → 200 HTML | serve at `/`, no server base path |
+| Relative assets | parse `/` HTML: no leading-slash `/assets` | Vite `base:'./'` |
+| Resolves through proxy | `GET /api/localview/{repo}/` + a sample asset → 200 | relative URLs |
+| App's own API works | a known app endpoint through the proxy → 200 | relative `fetch('api/…')` |
+
+Each row links the offending rule in
+[local-product-guide.md](../docs/networking/local-product-guide.md). App
+products add the `/preview/` checks — but **LAN-side only**; the off-box IIS
+forward can't be probed from this box (say so, don't pretend).
+
+```mermaid
+flowchart TD
+    BLANK["Local/App tab blank<br/>or just unsure"] --> BTN["Verify exposure"]
+    BTN --> RUN["GET /api/expose/check (selected repo)"]
+    RUN --> LIST["checklist: each rule ✓ / ✗ + the fix"]
+    LIST -->|"all green"| OK["embeddable"]
+    LIST -->|"a ✗"| FIX["agent fixes the named rule → re-run"]
+    FIX --> RUN
+    style OK fill:#f0faf2,stroke:#2ea043
+    style BTN fill:#eef7ff,stroke:#3b7dd8
+```
+
+### Backend / frontend sketch
+
+- `ExposeService` + `ExposeController` (`GET /api/expose/check`, advanced,
+  behind the global gate): runs the probes (reuse the `LocalProxy` plumbing +
+  `RepositoryRegistry` for the port), parses `index.html`, returns
+  `[{ key, ok, detail, fixHref }]`.
+- Frontend: a `Verify exposure` button + results panel on `LocalApp.jsx` (and
+  the App tab), each row ✓/✗ with the fix link. Re-run button.
+
+## Recommendation (phasing)
+
+1. **Slice 1 — the Exposure check (above).** Read-only verifier as a
+   Local/App-tab panel. Highest leverage, lowest risk, kills drift.
+2. **Slice 2 — scaffold / agent-task (C/D)** for the common stacks, reusing
+   the verifier as the done-condition; this is where "promote to its own tab"
+   may earn itself.
 3. Throughout — **(A)**: the contract stays single-source; repos link, never
    paste.
