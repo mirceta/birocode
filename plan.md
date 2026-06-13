@@ -10,11 +10,20 @@
 
 > **Status (2026-06-13):** Understanding panel, Deployments tab slice 1, and
 > the product-onboarding Exposure check (slices 1 & 2) are all merged to main,
-> deployed & confirmed. No feature currently in flight.
+> deployed & confirmed. No build in flight. New: a
+> [spec-baseline](plans/spec-baseline.md) DESIGN plan (proposed) — what to
+> borrow from OpenSpec — on `feature/spec-baseline`.
 
 ## Active feature plans
 
 _None in flight — see Recently shipped below._
+
+## Proposed / design (not building yet)
+
+- [Spec baseline](plans/spec-baseline.md) — borrow OpenSpec's one missing
+  idea (a living "what the system does today" baseline + change-as-delta)
+  into our existing plan convention, without adopting its tooling. Slice 1 =
+  `docs/capabilities.md` + a delta stanza in each plan + a ritual step.
 
 ## Recently shipped
 
