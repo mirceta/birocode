@@ -8,17 +8,20 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-13):** No build in flight. Understanding panel, Deployments
-> tab slice 1, the product-onboarding Exposure check (slices 1 & 2), the
-> Exposure check freshness slice 3, and per-tab agent spaces are all merged to
-> main, deployed & confirmed. Proposed: a
+> **Status (2026-06-13):** Understanding panel, Deployments tab slice 1, the
+> product-onboarding Exposure check (slices 1 & 2), the Exposure check freshness
+> slice 3, and per-tab agent spaces are all merged to main, deployed & confirmed.
+> In flight: [stale-copy warning banner](plans/stale-version-banner.md) on
+> `feature/stale-version-banner`. Proposed: a
 > [spec-baseline](plans/spec-baseline.md) DESIGN plan — what to borrow from
 > OpenSpec — on `feature/spec-baseline`.
 
 ## Active feature plans
 
-_None in flight._ When a feature is started, list its plan here; move it down
-to "Recently shipped" once it's deployed & confirmed.
+- [Stale-copy warning banner](plans/stale-version-banner.md) — after a redeploy,
+  an open browser running the old cached bundle gets a dismissible "new version
+  — Reload" banner (build-stamp compare via `version.json`). Closes the gap that
+  stranded open windows on stale code after the per-tab-spaces deploy.
 
 ## Proposed / design (not building yet)
 
