@@ -8,12 +8,15 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-13):** No feature in flight. Ideas tab deployed &
-> confirmed; its branch awaits the merge word.
+> **Status (2026-06-13):** One feature in planning (instance switcher -- not
+> yet built, on `feature/instance-switcher`). Ideas tab deployed & confirmed;
+> its branch awaits the merge word.
 
 ## Active feature plans
 
-- (none)
+- [Instance switcher](plans/instance-switcher.md) -- a PWA/web shell that
+  swipes between this Harness running on different computers (each its own
+  URL). Planning draft; open decisions to settle before building.
 
 ## Recently shipped
 
