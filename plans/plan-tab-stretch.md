@@ -1,7 +1,10 @@
 # Plan-tab stretch -- content width tracks the pane
 
-> **Status (2026-06-13):** PLANNED -- design agreed (tiered, container-query
-> based), nothing built. Structured per [doc-principles.md](doc-principles.md).
+> **Status (2026-06-13):** BUILT & browser-verified on the :5201 preview
+> (`.preview-test/plan-stretch-test.mjs`, 9/9: narrow pane = 860px column,
+> Plan pane stretched to span 4 -> `.plan` grows to ~1842px in a 2079px pane,
+> resets to 860 when un-stretched, settings restored). Not yet merged/deployed.
+> Structured per [doc-principles.md](doc-principles.md).
 
 ## Why
 
@@ -35,11 +38,12 @@ flowchart TB
 
 1. Make the pane a query container: `.app-content { container-type: inline-size }`
    (or `.pane`). One declaration; affects only descendants.
-2. Replace the single `.plan max-width` with container-query tiers, e.g.:
+2. Replace the single `.plan max-width` with container-query tiers (as built):
    - default / narrow: `max-width: 860px` (today's readable column)
    - `@container (min-width: 1040px)`: `max-width: 1080px`
    - `@container (min-width: 1480px)`: `max-width: 1320px`
-   (Exact breakpoints/caps tuned during build against real panes.)
+   - `@container (min-width: 1900px)`: `max-width: 90%` (very wide panes keep
+     filling, with ~10% breathing room so it never goes full-bleed)
 3. Let diagrams break out of the prose cap: the mermaid/diagram wrapper gets
    its own wider allowance (up to the full content box) so a wide pane renders
    bigger diagrams while prose stays readable.
