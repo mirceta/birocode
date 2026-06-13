@@ -18,12 +18,14 @@
 
 - (none)
 
-## Proposed / design (not building yet)
+## Active feature plans
 
-- [Product onboarding](plans/product-onboarding.md) — make setting a product
-  repo up to expose itself (Local/App tab) harness-driven, single-source, and
-  verifiable, instead of hand-copying instructions that drift. Likely first
-  slice: a stack-agnostic "Verify exposure" check.
+- [Product onboarding](plans/product-onboarding.md) — make product exposure
+  harness-driven + verifiable instead of hand-copied instructions that drift.
+  **Slice 1 (Exposure check)** built & verified 10/10 on
+  `feature/networking-doc` (a "Verify exposure" panel on the Local tab that
+  probes the product and names what's wrong); not yet deployed. Slice 2
+  (scaffold / agent-task) future.
 
 ## Recently shipped
 

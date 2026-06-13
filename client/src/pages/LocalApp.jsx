@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiPost } from '../api/client';
 import ProductFrame from '../components/app/ProductFrame';
+import ExposeCheck from '../components/expose/ExposeCheck';
 import { useRepo } from '../context/RepoContext';
 import { useT } from '../i18n/LanguageContext';
 import './localapp.css';
@@ -17,6 +18,7 @@ export default function LocalApp() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  const [checking, setChecking] = useState(false);
 
   const port = current?.localPort || null;
   // Embed the harness's OWN reverse proxy, not the port directly
@@ -25,10 +27,11 @@ export default function LocalApp() {
   // load-bearing — the product's relative asset/API URLs resolve under it.
   const url = port && current ? `/api/localview/${current.id}/` : null;
 
-  // Leave edit mode when switching projects.
+  // Leave edit mode / close the check when switching projects.
   useEffect(() => {
     setEditing(false);
     setError('');
+    setChecking(false);
   }, [current?.id]);
 
   async function savePort(e) {
@@ -72,10 +75,19 @@ export default function LocalApp() {
             <button type="button" className="localapp__btn" onClick={() => setReloadKey((k) => k + 1)}>
               {t('apptab.refresh')}
             </button>
+            <button
+              type="button"
+              className={`localapp__btn${checking ? ' localapp__btn--on' : ''}`}
+              onClick={() => setChecking((c) => !c)}
+            >
+              {t('expose.verify')}
+            </button>
           </>
         )}
         <span className="localapp__hint">{t('localapp.servedHint')}</span>
       </div>
+
+      {checking && port && !showForm && <ExposeCheck />}
 
       {showForm ? (
         <form className="localapp__form" onSubmit={savePort}>
