@@ -1,0 +1,112 @@
+/* Local tab (plans/local-app-tab.md): direct iframe of a host port. Mirrors
+   the App tab's edge-to-edge layout (apprun.css). */
+.localapp {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: -16px -16px 0;
+}
+
+.localapp__bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  flex: 0 0 auto;
+}
+
+.localapp__name {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.localapp__url {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.localapp__btn {
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 600;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.localapp__btn--primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
+.localapp__btn:disabled {
+  opacity: 0.5;
+}
+
+.localapp__hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--color-text-muted, #888);
+  white-space: nowrap;
+}
+
+.localapp__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+.localapp__form {
+  padding: 24px 16px;
+  max-width: 420px;
+}
+
+.localapp__form-title {
+  margin: 0 0 8px;
+  font-size: 17px;
+}
+
+.localapp__form-body {
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: var(--color-text-muted, #666);
+}
+
+.localapp__form-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.localapp__port-input {
+  width: 110px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius, 8px);
+  font-size: 14px;
+}
+
+.localapp__error {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: #d1242f;
+}
+
+.localapp__none {
+  padding: 24px 16px;
+  color: var(--color-text-muted, #666);
+}

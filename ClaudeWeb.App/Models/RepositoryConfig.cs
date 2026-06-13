@@ -31,4 +31,11 @@ public class RepositoryConfig
     /// field (absent in repositories.json) load as advanced-only.
     /// </summary>
     public string Visibility { get; set; } = "advanced";
+
+    /// <summary>
+    /// Port of this project's Product for the Local tab (plans/local-app-tab.md):
+    /// the UI iframes <c>host:LocalPort</c> directly, LAN-only — unlike the
+    /// Preview Port, nothing forwards it to the internet. Null = not set.
+    /// </summary>
+    public int? LocalPort { get; set; }
 }

@@ -38,6 +38,7 @@ export const FEATURES = {
   settingsTab: 'advanced', // app preferences incl. tab order (plans/settings-tab.md)
   docLinks: 'advanced', // doc links + history in the Files viewer (plans/doc-viewer.md slice 2)
   dualChat: 'advanced', // Project | Claude Web chat switcher (plans/dual-chat.md)
+  localAppTab: 'advanced', // direct-iframe Local tab, per-project port (plans/local-app-tab.md)
 };
 
 const MODE_KEY = 'claudeweb_ui_mode';

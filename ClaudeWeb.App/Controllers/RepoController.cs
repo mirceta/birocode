@@ -14,10 +14,11 @@ namespace ClaudeWeb.Controllers;
 /// self repo (e.g. ...\playground). Folders are only created on explicit
 /// request (plans/projects-folder-picker.md):
 ///
-///   GET  /api/repos                 -- [{ id, name, path, exists, isGitRepo, isSelf, visibility }]
+///   GET  /api/repos                 -- [{ id, name, path, exists, isGitRepo, isSelf, visibility, localPort }]
 ///   GET  /api/repos/folders?path=   -- { root, path, folders: [{ name, registered, isGitRepo }] }
 ///   POST /api/repos                 -- { folder, name?, visibility?, createFolder? } -> the new repo + created flag
 ///   POST /api/repos/{id}/visibility -- { visibility: "basic"|"advanced" }
+///   POST /api/repos/{id}/localport  -- { port } 1..65535 sets, null/0 clears (plans/local-app-tab.md)
 ///
 /// Per plans/project-visibility.md each project carries a visibility:
 /// "advanced" (the default) hides it from Basic mode's Projects list;
@@ -42,7 +43,7 @@ public class RepoController : ControllerBase
     {
         _logger.CountRequest();
         var repos = _registry.GetAll()
-            .Select(r => new { id = r.Id, name = r.Name, path = r.Path, exists = r.Exists, isGitRepo = r.IsGitRepo, isSelf = r.IsSelf, visibility = r.Visibility });
+            .Select(r => new { id = r.Id, name = r.Name, path = r.Path, exists = r.Exists, isGitRepo = r.IsGitRepo, isSelf = r.IsSelf, visibility = r.Visibility, localPort = r.LocalPort });
         return Ok(repos);
     }
 
@@ -139,7 +140,7 @@ public class RepoController : ControllerBase
             }
 
             var r = _registry.Add(path, request!.Name, request.Visibility);
-            return Ok(new { id = r.Id, name = r.Name, path = r.Path, exists = r.Exists, isGitRepo = r.IsGitRepo, isSelf = r.IsSelf, visibility = r.Visibility, created });
+            return Ok(new { id = r.Id, name = r.Name, path = r.Path, exists = r.Exists, isGitRepo = r.IsGitRepo, isSelf = r.IsSelf, visibility = r.Visibility, localPort = r.LocalPort, created });
         }
         catch (Exception ex) when (ex is ArgumentException or DirectoryNotFoundException or IOException or UnauthorizedAccessException)
         {
@@ -159,6 +160,25 @@ public class RepoController : ControllerBase
             return NotFound(new { error = "Unknown repository id" });
         var r = _registry.GetAll().First(x => x.Id == id);
         return Ok(new { id = r.Id, visibility = r.Visibility });
+    }
+
+    public record LocalPortRequest(int? Port);
+
+    /// <summary>
+    /// Sets the project's Local-tab port (plans/local-app-tab.md). 1..65535
+    /// sets; null or 0 clears.
+    /// </summary>
+    [HttpPost("{id}/localport")]
+    public IActionResult SetLocalPort(string id, [FromBody] LocalPortRequest request)
+    {
+        _logger.CountRequest();
+        var port = request?.Port is > 0 ? request.Port : null;
+        if (port is > 65535)
+            return BadRequest(new { error = "Port must be 1..65535" });
+        if (!_registry.SetLocalPort(id, port))
+            return NotFound(new { error = "Unknown repository id" });
+        var r = _registry.GetAll().First(x => x.Id == id);
+        return Ok(new { id = r.Id, localPort = r.LocalPort });
     }
 
     /// <summary>

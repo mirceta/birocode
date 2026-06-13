@@ -9,6 +9,7 @@ import Chat from './pages/Chat';
 import Files from './pages/Files';
 import History from './pages/History';
 import AppRun from './pages/AppRun';
+import LocalApp from './pages/LocalApp';
 import Agents from './pages/Agents';
 import Git from './pages/Git';
 import Plan from './pages/Plan';
@@ -47,6 +48,7 @@ export default function App() {
             <Route path="files" element={<Files />} />
             <Route path="history" element={<History />} />
             <Route path="app" element={<AppRun />} />
+            <Route path="local" element={<LocalApp />} />
             <Route path="agents" element={<Agents />} />
             <Route path="git" element={<Git />} />
             <Route path="plan" element={<Plan />} />

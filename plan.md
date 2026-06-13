@@ -8,12 +8,15 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-13):** No feature in flight. Dual chat deployed &
-> confirmed; its branch awaits the merge word.
+> **Status (2026-06-13):** One feature in flight: Local tab
+> (`feature/local-app-tab`, implemented & browser-verified 9/9, awaiting
+> deploy). First consumer: the web-flow-autodev pilot web app.
 
 ## Active feature plans
 
-- (none)
+- [Local tab](plans/local-app-tab.md) — preview any local port per project
+  with a direct iframe; LAN-only, none of the /preview/ proxy machinery.
+  Implemented & verified 2026-06-13, not yet deployed.
 
 ## Recently shipped
 

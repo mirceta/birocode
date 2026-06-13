@@ -6,6 +6,7 @@ import Chat from '../pages/Chat';
 import Files from '../pages/Files';
 import History from '../pages/History';
 import AppRun from '../pages/AppRun';
+import LocalApp from '../pages/LocalApp';
 import Agents from '../pages/Agents';
 import Git from '../pages/Git';
 import Plan from '../pages/Plan';
@@ -30,6 +31,7 @@ const STATIC_TABS = [
   { key: 'projects', path: '/studio/projects', labelKey: 'nav.projects', icon: 'P', feature: 'projectsTab', element: <Projects /> },
   { key: 'guests', path: '/studio/guests', labelKey: 'nav.guests', icon: '⛨', feature: 'guestsTab', element: <Guests /> },
   { key: 'app', path: '/studio/app', labelKey: 'nav.app', icon: '▶', feature: 'appTab', element: <AppRun /> },
+  { key: 'localapp', path: '/studio/local', labelKey: 'nav.localApp', icon: '⌂', feature: 'localAppTab', element: <LocalApp /> },
   { key: 'settings', path: '/studio/settings', labelKey: 'nav.settings', icon: '⚙', feature: 'settingsTab', element: <Settings /> },
 ];
 

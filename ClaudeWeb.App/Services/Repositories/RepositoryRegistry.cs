@@ -36,7 +36,7 @@ public class RepositoryRegistry
     }
 
     /// <summary>A repository plus derived status the picker/UI cares about.</summary>
-    public sealed record RepositoryInfo(string Id, string Name, string Path, bool Exists, bool IsGitRepo, bool IsSelf, string Visibility);
+    public sealed record RepositoryInfo(string Id, string Name, string Path, bool Exists, bool IsGitRepo, bool IsSelf, string Visibility, int? LocalPort);
 
     /// <summary>Normalizes a visibility value: anything but "basic" is "advanced".</summary>
     public static string NormalizeVisibility(string? visibility) =>
@@ -177,6 +177,24 @@ public class RepositoryRegistry
         }
     }
 
+    /// <summary>
+    /// Sets the project's Local-tab port (plans/local-app-tab.md); null clears
+    /// it. No-op if the id is unknown or the port is out of range.
+    /// </summary>
+    public bool SetLocalPort(string id, int? port)
+    {
+        if (port is < 1 or > 65535) return false;
+        lock (_gate)
+        {
+            var repo = _repos.FirstOrDefault(r => string.Equals(r.Id, id, StringComparison.Ordinal));
+            if (repo is null) return false;
+            repo.LocalPort = port;
+            Save();
+            _logger.Info($"[REPO] Local port of \"{repo.Name}\" -> {(port?.ToString() ?? "cleared")}");
+            return true;
+        }
+    }
+
     /// <summary>Renames a repository. No-op if the id is unknown or the name is blank.</summary>
     public bool Rename(string id, string name)
     {
@@ -268,9 +286,9 @@ public class RepositoryRegistry
     {
         var exists = Directory.Exists(r.Path);
         var isGit = exists && Directory.Exists(System.IO.Path.Combine(r.Path, ".git"));
-        return new RepositoryInfo(r.Id, r.Name, r.Path, exists, isGit, r.IsSelf, NormalizeVisibility(r.Visibility));
+        return new RepositoryInfo(r.Id, r.Name, r.Path, exists, isGit, r.IsSelf, NormalizeVisibility(r.Visibility), r.LocalPort);
     }
 
     private static RepositoryConfig Clone(RepositoryConfig r) =>
-        new() { Id = r.Id, Name = r.Name, Path = r.Path, IsSelf = r.IsSelf, Visibility = r.Visibility };
+        new() { Id = r.Id, Name = r.Name, Path = r.Path, IsSelf = r.IsSelf, Visibility = r.Visibility, LocalPort = r.LocalPort };
 }
