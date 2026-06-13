@@ -1,16 +1,18 @@
 # Deployments tab — make deploys observable and safe
 
-> **Status (2026-06-13):** Slice 1 IMPLEMENTED on `feature/deployments-tab`
-> and browser-verified on :5201 — `verify-deployments-tab.mjs` 14/14 (real
-> live card from the seeded ledger + contains-origin/main badge + history;
-> stubbed armed countdown ticks; Keep it disarms; typed-confirm gates Roll
-> back now both client- and server-side; basic-mode hidden; screenshots
-> read). API checks: status returns live=da6de32/containsOriginMain, and
-> rollback without "ROLLBACK" → 400. Deploy scripts edited **additively**
-> (ledger append in swap.ps1/rollback.ps1, stage-tested first; the
-> origin/main guard untouched) — these live off-repo in
-> `claudeweb-rollback\`, not version-controlled. Not yet deployed. Slice 2
-> (one-button deploy) still future.
+> **Status (2026-06-13):** Slice 1 DEPLOYED & confirmed ("it works", 14:24).
+> Its own deploy was the first real ledger write — swap.ps1 appended the
+> e773bc8 entry, and live `/api/deploy/status` shows `live=e773bc8,
+> containsOriginMain=true, history=2`. Dogfooding the live **Keep it**
+> surfaced a robustness bug (schtasks /Delete returns non-zero when the task
+> is already absent, so Keep it could report failure though the goal was
+> met); fixed in `16477a7` — `Disarm()` now succeeds by END STATE (no armed
+> task). That fix is committed but NOT yet on live (lands next deploy); the
+> live keep still works for the normal armed→disarm path. Verified on :5201:
+> `verify-deployments-tab.mjs` 14/14 + both keep paths return disarmed.
+> Deploy scripts edited **additively** (ledger append, origin/main guard
+> untouched; off-repo, not version-controlled). On `feature/deployments-tab`,
+> not yet merged to main. Slice 2 (one-button deploy) still future.
 
 ## Problem
 
