@@ -8,16 +8,26 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-13):** Understanding panel, Deployments tab slice 1, and
-> the product-onboarding Exposure check (slices 1 & 2) are all merged to main,
-> deployed & confirmed. No feature currently in flight.
+> **Status (2026-06-13):** No feature in flight. **Exposure check freshness**
+> (catch a stale-in-the-browser embed) is deployed & confirmed on
+> `feature/expose-freshness-check` (not yet merged to main). Understanding
+> panel, Deployments tab slice 1, and the product-onboarding Exposure check
+> (slices 1 & 2) are all merged to main, deployed & confirmed.
 
 ## Active feature plans
 
-_None in flight — see Recently shipped below._
+_None in flight._ When a feature is started, list its plan here; move it down
+to "Recently shipped" once it's deployed & confirmed.
 
 ## Recently shipped
 
+- [Exposure check — freshness](plans/expose-freshness.md) — slice 3 of product
+  onboarding. "Verify exposure" was server-side and couldn't see that the
+  operator's own browser was rendering a stale/blank cached embed (real
+  incident: all-green check, blank tab, fixed only by incognito). Added a
+  client-side "embed is current" check + one-click Reload-embed, made Refresh
+  cache-bust, and set `Cache-Control: no-store` on the proxy's HTML. Deployed
+  & confirmed 2026-06-13 on `feature/expose-freshness-check` (not yet merged).
 - [Product onboarding](plans/product-onboarding.md) — make product exposure
   harness-driven + verifiable instead of hand-copied instructions that drift.
   **Slice 1 (Exposure check)** — a "Verify exposure" panel on the Local tab

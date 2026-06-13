@@ -100,6 +100,14 @@ public class LocalProxyController : ControllerBase
             // Kestrel sets the framing itself; a copied length/encoding can clash.
             Response.Headers.Remove("transfer-encoding");
 
+            // Stale-embed prevention (plans/expose-freshness.md): keep the proxied
+            // HTML document out of the browser cache so a rebuilt/fixed product is
+            // never shadowed by a cached pre-fix index.html. Hashed JS/CSS keep
+            // their normal caching, so this costs nothing on the asset path.
+            if (string.Equals(upstream.Content.Headers.ContentType?.MediaType, "text/html",
+                    StringComparison.OrdinalIgnoreCase))
+                Response.Headers["Cache-Control"] = "no-store";
+
             await upstream.Content.CopyToAsync(Response.Body, HttpContext.RequestAborted);
         }
     }

@@ -18,14 +18,27 @@ export default function LocalApp() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  const [bust, setBust] = useState(0);
   const [checking, setChecking] = useState(false);
 
   const port = current?.localPort || null;
   // Embed the harness's OWN reverse proxy, not the port directly
   // (plans/local-app-proxy.md): same-origin so it works over the internet
   // behind the login, with no mixed-content/IPv6 trap. The trailing slash is
-  // load-bearing — the product's relative asset/API URLs resolve under it.
-  const url = port && current ? `/api/localview/${current.id}/` : null;
+  // load-bearing — the product's relative asset/API URLs resolve under it. The
+  // `?_=<n>` cache-bust token (plans/expose-freshness.md) is bumped by Refresh
+  // and the Exposure check's Reload-embed action so a refresh truly forces a
+  // fresh document fetch; relative `./assets/…` still resolve under the slash.
+  const url = port && current
+    ? `/api/localview/${current.id}/${bust ? `?_=${bust}` : ''}`
+    : null;
+
+  // Force the embed to re-fetch the current build (not the browser's cached
+  // copy): bump the cache-bust token AND remount the iframe.
+  function reloadEmbed() {
+    setBust(Date.now());
+    setReloadKey((k) => k + 1);
+  }
 
   // Leave edit mode / close the check when switching projects.
   useEffect(() => {
@@ -72,7 +85,7 @@ export default function LocalApp() {
             <button type="button" className="localapp__btn" onClick={() => { setPortDraft(String(port)); setEditing(true); }}>
               {t('localapp.changePort')}
             </button>
-            <button type="button" className="localapp__btn" onClick={() => setReloadKey((k) => k + 1)}>
+            <button type="button" className="localapp__btn" onClick={reloadEmbed}>
               {t('apptab.refresh')}
             </button>
             <button
@@ -87,7 +100,7 @@ export default function LocalApp() {
         <span className="localapp__hint">{t('localapp.servedHint')}</span>
       </div>
 
-      {checking && port && !showForm && <ExposeCheck />}
+      {checking && port && !showForm && <ExposeCheck onReloadEmbed={reloadEmbed} />}
 
       {showForm ? (
         <form className="localapp__form" onSubmit={savePort}>
