@@ -45,6 +45,50 @@ flowchart TD
     style PX fill:#eef7ff,stroke:#3b7dd8
 ```
 
+## User stories — what this actually feels like
+
+Concrete walkthroughs of the feature in use, to ground the design above.
+
+**1. The operator views a private tool from the train.**
+> *As the operator, away from the office, I want to open the web-flow-autodev
+> exposure matrix on my phone, so that I can check progress without being on
+> the LAN.*
+
+I open `next5.birokrat.si` on my phone and log in. I pick **web-flow-autodev**
+in Projects, tap the **Local** tab, and the exposure matrix loads right
+there in the tab. Behind the scenes the harness fetched it from
+`127.0.0.1:5300` on the host and streamed it back to me — I never needed to
+be on the LAN, and the port was never opened to the internet directly.
+Before this feature the tab was blank off-LAN; now it just works.
+
+**2. A stranger cannot see it.**
+> *As the operator, I want the local tool to stay private, so that exposing
+> it remotely doesn't leak internal data.*
+
+Someone who finds `next5.birokrat.si/api/localview/...` without logging in
+gets a flat **401** — the same password gate that guards everything else.
+The tool only appears *inside* the harness, after login, when I click the
+Local tab. It is never on the public home page (that spot belongs to the App
+tab's product).
+
+**3. The operator sets up a new project's preview once.**
+> *As the operator, I want to point the Local tab at any project's app, so
+> that each project shows its own running app.*
+
+On a project with no local app configured, the Local tab shows a small form:
+"which port does this serve on?" I type `5300`, hit save, and from then on
+that project's Local tab shows its app. The port is remembered on the
+backend, so it's already set the next time I open the project — on any device.
+
+**4. The App tab is the public face; the Local tab is the private one.**
+> *As the operator, I want a public demo page AND a private internal view, so
+> that visitors see the product but only I see the tooling.*
+
+The **App tab**'s product is what anyone sees at the site root with no login —
+the shop window. The **Local tab**'s product is the back office: same idea of
+"show a running app," but reachable only through my logged-in session. Same
+feature shape, opposite audience.
+
 The App product is reachable with no login (it *is* the home page); the
 Local product is only ever reached through the gated harness origin.
 
