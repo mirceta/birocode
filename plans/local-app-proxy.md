@@ -29,6 +29,25 @@ not just the LAN. The contrast they drew:
   after clicking the Local tab** — gated by the harness login, never on the
   landing page.
 
+```mermaid
+flowchart TD
+    NET["Internet visitor"] --> IIS["Off-box IIS<br/>next5.birokrat.si"]
+    IIS -->|"/preview/ — ungated"| APP["App product :5200"]
+    APP --> LAND["Public landing page<br/>no login"]
+    IIS -->|"/ — password + IP gate"| H["Harness :5099"]
+    subgraph GATED["Inside the harness — logged in only"]
+        H --> LT["Local tab"]
+        LT -->|"iframe /api/localview/{repoId}/"| PX["Reverse proxy"]
+        PX -->|"127.0.0.1:LocalPort"| LOCAL["Local product"]
+    end
+    style GATED fill:#f6f0ff,stroke:#7c5cbf,stroke-width:2px
+    style LAND fill:#fff4e0,stroke:#c08a2d
+    style PX fill:#eef7ff,stroke:#3b7dd8
+```
+
+The App product is reachable with no login (it *is* the home page); the
+Local product is only ever reached through the gated harness origin.
+
 ## ⚠️ Convention + security reversal (must confirm first)
 
 1. **Reverses LAN-only.** [local-app-tab](local-app-tab.md) deliberately
@@ -81,19 +100,47 @@ IIS already forwards. So the harness reverse-proxies the local port itself.
 - Streams request/response bodies and copies status + headers; drops
   hop-by-hop headers. `HttpClient` (registered singleton / `IHttpClientFactory`).
 
+```mermaid
+sequenceDiagram
+    participant I as iframe (Local tab)
+    participant G as Auth gate (/api/*)
+    participant P as LocalProxyController
+    participant L as Local app (127.0.0.1:port)
+    I->>G: GET /api/localview/{repoId}/ (no cookie)
+    G-->>I: 401 — stranger blocked
+    I->>G: GET /api/localview/{repoId}/ (session cookie)
+    G->>P: authorized
+    P->>P: repoId → LocalPort<br/>(unknown ⇒ 404)
+    P->>L: GET / (prefix stripped)
+    L-->>P: index.html + body
+    P-->>I: streamed response
+```
+
 ### Sub-path handling (the unavoidable cost)
 
-The product is served under `/api/localview/{repoId}/`. To make relative
-URLs resolve there without baking the repoId into the build:
+The product is served under `/api/localview/{repoId}/`. As built, the
+sub-path resolves itself with **two cheap rules — no HTML rewriting**:
 
-- The proxy **injects `<base href="/api/localview/{repoId}/">`** into the
-  product's `index.html` as it streams (single-pass, only on the HTML
-  document). All **relative** asset/API URLs then resolve under the
-  sub-path; the proxy strips the prefix before forwarding to the product.
-- The product must use **relative URLs** (Vite `base: './'`, fetch via
-  `document.baseURI`) — the [proxy guide](../docs/claude-web/proxy.md)
-  playbook. The **web-flow-autodev pilot** (`feature/web-pilot`) gets this
-  update as the first consumer.
+- The Local-tab iframe `src` ends in a **trailing slash**
+  (`/api/localview/{repoId}/`), so the browser treats it as the base
+  directory and resolves every **relative** URL under it.
+- The product emits **relative URLs** (Vite `base: './'`, `fetch('api/...')`
+  with no leading slash) — the [proxy guide](../docs/claude-web/proxy.md)
+  playbook. The **web-flow-autodev pilot** (`feature/web-pilot`) is the first
+  consumer updated this way. The proxy then just **strips the prefix** before
+  forwarding; it does not parse or inject anything into the HTML.
+
+```mermaid
+flowchart LR
+    DOC["Document at<br/>/api/localview/{id}/"] -->|"references<br/>./assets/app.js"| REQ["Browser fetches<br/>/api/localview/{id}/assets/app.js"]
+    REQ --> STRIP["Proxy strips<br/>/api/localview/{id}"]
+    STRIP --> SERVE["Product serves<br/>/assets/app.js"]
+    style DOC fill:#eef7ff,stroke:#3b7dd8
+    style SERVE fill:#f0faf2,stroke:#2ea043
+```
+
+An **absolute** URL (`/assets/app.js`) would escape the prefix and hit the
+harness instead — that's why the product must stay relative.
 
 ### Frontend (Local tab)
 
@@ -118,9 +165,10 @@ product is never added to `/`, satisfying "only when I click the Local tab."
 
 ## Implementation
 
-1. Backend: `LocalProxyController` (or middleware) at `/api/localview/...`,
-   `HttpClient` wiring, repoId→LocalPort resolution, `<base>` injection,
-   prefix strip, header/stream copy.
+1. Backend: `LocalProxyController` at `/api/localview/{repoId}/{**rest}`,
+   `HttpClient` wiring, repoId→LocalPort resolution, prefix strip (the
+   catch-all `rest` is forwarded as-is), header/stream copy, 502 on a dead
+   app. No HTML rewriting — the product carries relative URLs.
 2. Frontend: `LocalApp.jsx` → same-origin iframe; tidy the port form copy
    (it's now an internet-reachable preview).
 3. Pilot: make `web-flow-autodev/web` sub-path-aware (relative base + API).
