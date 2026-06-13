@@ -1,6 +1,7 @@
 using ClaudeWeb.Models;
 using ClaudeWeb.Services.Auth;
 using ClaudeWeb.Services.Chat;
+using ClaudeWeb.Services.Deploy;
 using ClaudeWeb.Services.Dock;
 using ClaudeWeb.Services.Files;
 using ClaudeWeb.Services.Git;
@@ -101,6 +102,9 @@ public class EmbeddedApi
             // Controllers auto-discovered here -- new controllers need NO changes.
             builder.Services.AddControllers();
 
+            // HttpClient for the Local-tab reverse proxy (plans/local-app-proxy.md).
+            builder.Services.AddHttpClient("localview", c => c.Timeout = TimeSpan.FromSeconds(100));
+
             // CORS allow-all for the React dev-server proxy.
             builder.Services.AddCors(options =>
                 options.AddDefaultPolicy(p => p
@@ -120,6 +124,7 @@ public class EmbeddedApi
             builder.Services.AddTerminalModule(); // terminal tab (plans/terminal-tab.md)
             builder.Services.AddSettingsModule(); // UI settings (plans/settings-tab.md)
             builder.Services.AddNotesModule();  // per-project ideas (plans/ideas-tab.md)
+            builder.Services.AddDeployModule(); // deployments tab (plans/deployments-tab.md)
             // === END MODULE SERVICE REGISTRATION ===
 
             _app = builder.Build();

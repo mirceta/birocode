@@ -1,7 +1,24 @@
+/* Content width tracks the pane (plans/plan-tab-stretch.md): tiered, keyed off
+   the pane's actual rendered width via the .app-content query container. Narrow
+   pane = today's 860px reading column; wider panes step up so text and diagrams
+   both stretch instead of staying a fixed centred column. Tuned, not full-bleed
+   -- the widest tier keeps ~10% breathing room so prose stays readable. */
 .plan {
   padding: 16px;
   max-width: 860px;
   margin: 0 auto;
+}
+
+@container (min-width: 1040px) {
+  .plan { max-width: 1080px; }
+}
+
+@container (min-width: 1480px) {
+  .plan { max-width: 1320px; }
+}
+
+@container (min-width: 1900px) {
+  .plan { max-width: 90%; }
 }
 
 .plan__header {

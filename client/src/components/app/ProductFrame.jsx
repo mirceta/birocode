@@ -7,14 +7,22 @@ import './product.css';
 // probe + the "nothing running" empty state; the parent supplies the port and
 // can force a reload by bumping `reloadKey`. `onStatus(online)` reports liveness.
 
-// A no-cors probe: resolves (opaque) if something answers, rejects if the port is
-// closed -- lets us detect "is it up?" without the product needing CORS headers.
+// Is it up? Cross-origin direct ports (App tab / Landing) can't expose CORS, so
+// we no-cors-probe and treat any answer as "up". Same-origin URLs (the Local
+// tab's /api/localview/ proxy, plans/local-app-proxy.md) DO let us read the
+// status, so we check res.ok — a 502 from a dead local app then shows the empty
+// state instead of the proxy's error body.
 async function probe(url) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 3000);
+  const sameOrigin = url.startsWith('/') || url.startsWith(window.location.origin);
   try {
-    await fetch(url, { mode: 'no-cors', cache: 'no-store', signal: controller.signal });
-    return true;
+    const res = await fetch(url, {
+      mode: sameOrigin ? 'cors' : 'no-cors',
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    return sameOrigin ? res.ok : true;
   } catch {
     return false;
   } finally {

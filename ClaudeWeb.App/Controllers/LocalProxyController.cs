@@ -1,0 +1,106 @@
+using ClaudeWeb.Services.Logging;
+using ClaudeWeb.Services.Repositories;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+
+namespace ClaudeWeb.Controllers;
+
+/// <summary>
+/// Authenticated reverse proxy for the Local tab (plans/local-app-proxy.md).
+/// Forwards <c>/api/localview/{repoId}/{**rest}</c> to
+/// <c>http://127.0.0.1:{repo.LocalPort}/{rest}</c> so a project's local app is
+/// reachable over the internet through the harness's own (already-public)
+/// origin — WITHOUT an off-box IIS rule, and behind the session+IP gate (it
+/// lives under /api/, which PasswordAuthMiddleware protects). Same-origin, so
+/// the iframe's session cookie rides along automatically and there is no
+/// mixed-content/IPv6 issue (the connect to 127.0.0.1 is server-side).
+///
+/// SSRF-bounded: the path carries a repoId, resolved to that project's
+/// configured LocalPort. The proxy only ever dials 127.0.0.1 on a port the
+/// operator explicitly set — never an arbitrary host/port from the URL.
+/// </summary>
+[ApiController]
+[Route("api/localview")]
+public class LocalProxyController : ControllerBase
+{
+    // Connection-scoped headers must not be forwarded (RFC 7230 §6.1) + Host.
+    private static readonly HashSet<string> HopByHop = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Connection", "Keep-Alive", "Proxy-Authenticate", "Proxy-Authorization",
+        "TE", "Trailer", "Transfer-Encoding", "Upgrade", "Host",
+    };
+
+    private readonly IHttpClientFactory _http;
+    private readonly RepositoryRegistry _registry;
+    private readonly Logger _logger;
+
+    public LocalProxyController(IHttpClientFactory http, RepositoryRegistry registry, Logger logger)
+    {
+        _http = http;
+        _registry = registry;
+        _logger = logger;
+    }
+
+    [AcceptVerbs("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS")]
+    [Route("{repoId}/{**rest}")]
+    public async Task Proxy(string repoId, string? rest)
+    {
+        _logger.CountRequest();
+
+        var repo = _registry.GetAll().FirstOrDefault(r => r.Id == repoId);
+        if (repo?.LocalPort is not int port)
+        {
+            Response.StatusCode = StatusCodes.Status404NotFound;
+            await Response.WriteAsJsonAsync(new { error = "No local app is configured for this project." });
+            return;
+        }
+
+        var target = $"http://127.0.0.1:{port}/{rest ?? string.Empty}{Request.QueryString}";
+
+        using var msg = new HttpRequestMessage(new HttpMethod(Request.Method), target);
+
+        // Body (and its Content-* headers) for methods that carry one.
+        if (Request.ContentLength is > 0 || Request.Headers.ContainsKey("Transfer-Encoding"))
+        {
+            msg.Content = new StreamContent(Request.Body);
+            foreach (var h in Request.Headers)
+                if (h.Key.StartsWith("Content-", StringComparison.OrdinalIgnoreCase))
+                    msg.Content.Headers.TryAddWithoutValidation(h.Key, h.Value.ToArray());
+        }
+
+        // Remaining request headers, minus hop-by-hop and Content-* (handled above).
+        foreach (var h in Request.Headers)
+        {
+            if (HopByHop.Contains(h.Key) || h.Key.StartsWith("Content-", StringComparison.OrdinalIgnoreCase))
+                continue;
+            msg.Headers.TryAddWithoutValidation(h.Key, h.Value.ToArray());
+        }
+
+        HttpResponseMessage upstream;
+        try
+        {
+            var client = _http.CreateClient("localview");
+            upstream = await client.SendAsync(msg, HttpCompletionOption.ResponseHeadersRead, HttpContext.RequestAborted);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.Error($"[LOCALVIEW] {repo.Name} :{port} unreachable: {ex.Message}");
+            Response.StatusCode = StatusCodes.Status502BadGateway;
+            await Response.WriteAsJsonAsync(new { error = "The local app is not responding." });
+            return;
+        }
+
+        using (upstream)
+        {
+            Response.StatusCode = (int)upstream.StatusCode;
+            foreach (var h in upstream.Headers)
+                if (!HopByHop.Contains(h.Key)) Response.Headers[h.Key] = h.Value.ToArray();
+            foreach (var h in upstream.Content.Headers)
+                if (!HopByHop.Contains(h.Key)) Response.Headers[h.Key] = h.Value.ToArray();
+            // Kestrel sets the framing itself; a copied length/encoding can clash.
+            Response.Headers.Remove("transfer-encoding");
+
+            await upstream.Content.CopyToAsync(Response.Body, HttpContext.RequestAborted);
+        }
+    }
+}
