@@ -61,6 +61,16 @@
 }
 .expose__row.is-ok { background: #f0faf2; border-color: #b7e4c2; }
 .expose__row.is-fail { background: #fdf6e3; border-color: #e8d39a; }
+/* Freshness warning (plans/expose-freshness.md): a browser-cache notice, NOT a
+   contract failure, so it gets its own amber-on-left look distinct from ✗. */
+.expose__row.is-stale {
+  background: #fff8e6;
+  border-color: #d4a72c;
+  border-left-width: 4px;
+}
+
+/* The client-side freshness row sits apart from the server checklist. */
+.expose__list--client { margin-top: 6px; }
 
 .expose__icon {
   font-weight: 800;
@@ -68,6 +78,7 @@
 }
 .expose__row.is-ok .expose__icon { color: #1a7f37; }
 .expose__row.is-fail .expose__icon { color: #9a6700; }
+.expose__row.is-stale .expose__icon { color: #bf8700; }
 
 .expose__main {
   display: flex;
@@ -78,6 +89,14 @@
 .expose__label { font-weight: 600; font-size: 13px; }
 .expose__detail { font-size: 12px; color: var(--color-text-muted, #777); word-break: break-word; }
 .expose__fix { font-size: 12px; color: #8a5a00; margin-top: 2px; word-break: break-word; }
+
+.expose__btn--reload {
+  align-self: flex-start;
+  margin-top: 6px;
+  background: #bf8700;
+  border-color: #bf8700;
+  color: #fff;
+}
 
 .expose__guide {
   margin: 10px 0 0;
