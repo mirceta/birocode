@@ -8,18 +8,27 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-13):** One feature in planning (instance switcher -- not
-> yet built, on `feature/instance-switcher`). Ideas tab deployed & confirmed;
-> its branch awaits the merge word.
+> **Status (2026-06-13):** One feature being built (instance switcher --
+> decisions settled, on `feature/instance-switcher`). Plan-tab stretch merged
+> to main; Local-tab-over-internet & Ideas tab deployed & confirmed.
 
 ## Active feature plans
 
 - [Instance switcher](plans/instance-switcher.md) -- a PWA/web shell that
   swipes between this Harness running on different computers (each its own
-  URL). Planning draft; open decisions to settle before building.
+  URL). Decisions settled; implementation in progress.
 
 ## Recently shipped
 
+- [Plan-tab stretch](plans/plan-tab-stretch.md) — Plan/doc content width
+  tracks the pane (tiered via container query); wider pane = wider diagrams,
+  prose stays readable. Merged to main 2026-06-13.
+- [Local tab over the internet](plans/local-app-proxy.md) — the harness
+  reverse-proxies the project's local port under an authenticated
+  `/api/localview/{repoId}/` path so the Local tab works over the internet
+  (behind the password), not just the LAN. Also fixes the IPv6/HTTPS issue.
+  Deployed & confirmed 2026-06-13; on `feature/local-app-proxy`, not yet
+  merged to main.
 - [Ideas tab](plans/ideas-tab.md) — per-project notes stored on the
   backend; create/edit/delete, scoped by project like Files/Git. Deployed
   & confirmed 2026-06-13; on `feature/ideas-tab`, not yet merged to main.
