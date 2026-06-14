@@ -8,15 +8,17 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-14):** **Just planned:** Agent dashboard — a grid overview
-> of every agent on this machine with per-cell Maximize, on
-> `feature/agent-dashboard` (not started). **In flight:** Understanding panel
-> **slice 2** — a composer-prefill button that makes the panel work in Product
-> Repos (built, browser-verified 6/6; pending deploy). **Just merged to main:**
-> Git tab PR preview — the branch's committed delta vs its base, like a GitHub
-> PR (slices 1 & 2, built + browser-verified; pending deploy). Already merged & deployed:
-> Understanding panel slice 1, Deployments tab slice 1, the product-onboarding
-> Exposure check (slices 1-3), and per-tab agent spaces. Proposed: a
+> **Status (2026-06-14):** **In flight:** Agent dashboard — a grid overview of
+> every agent on this machine with per-cell Maximize, on
+> `feature/agent-dashboard` (slice 1 built + browser-verified). **Deployed &
+> confirmed (cf75052):** the
+> [stale-copy warning banner](plans/stale-version-banner.md) and the Local-tab
+> "how to expose a web app" instructions are live on :5099. The same deploy
+> also carried Understanding panel **slice 2** and the Git tab **PR preview**
+> (slices 1 & 2) live — their owners to mark confirmed. Already merged &
+> deployed: Understanding panel slice 1, Deployments tab slice 1, the
+> product-onboarding Exposure check (slices 1-3), and per-tab agent spaces.
+> Proposed: a
 > [spec-baseline](plans/spec-baseline.md) DESIGN plan — what to borrow from
 > OpenSpec — on `feature/spec-baseline`. Parked: a
 > [PWA "older version" warning](plans/pwa-webapk-warning.md) plan on
@@ -27,7 +29,8 @@
 - [Understanding panel](plans/understanding-panel.md) **— slice 2** — make the
   panel work in Product Repos, not just the Harness. A composer-prefill button
   drops the "write your understanding first" instruction into the chat box (no
-  extra `claude -p` cost). Built & browser-verified 6/6; pending deploy.
+  extra `claude -p` cost). Built & browser-verified 6/6; live via the cf75052
+  deploy, owner to confirm.
 - [Git tab — branch PR preview](plans/git-pr-preview.md) — for the current
   feature branch, show where it branched off, the commits since, and the
   cumulative `base...HEAD` file diff — what a GitHub pull request shows, which
@@ -40,8 +43,8 @@
   Maximize button per cell that opens that agent in the normal `/studio` view.
   Removes the "open one → look → navigate back" dance. Mostly a new view over
   existing plumbing (`DockContext`, `/api/runs`, the open-agent flow). Slice 1 =
-  static grid + maximize, slice 2 = liveness, slice 3 (later) = live tail. Just
-  planned; not started.
+  static grid + maximize (built & browser-verified), slice 2 = liveness, slice 3
+  (later) = live tail.
 
 ## Proposed / design (not building yet)
 
@@ -52,6 +55,16 @@
 
 ## Recently shipped
 
+- [Stale-copy warning banner](plans/stale-version-banner.md) — after a redeploy,
+  an open browser running the old cached bundle gets a dismissible "new version
+  — Reload" banner (build-stamp compare via `version.json`). Closes the gap that
+  stranded open windows on stale code after the per-tab-spaces deploy. Deployed
+  & confirmed 2026-06-14 (cf75052).
+- Local tab — "how to expose a web app" instructions in the setup form: open an
+  agent in the Claude Web repo, give it the path to the target app, and ask it
+  to reconfigure it for Local-tab exposure (one loopback port, relative URLs).
+  Extends [Local tab over the internet](plans/local-app-proxy.md). Deployed &
+  confirmed 2026-06-14 (cf75052).
 - [Per-tab agent spaces](plans/per-tab-spaces.md) — two browser tabs on one
   machine no longer share a single "currently open agent". The active agent,
   chat surface, and selected project moved from shared `localStorage` to per-tab

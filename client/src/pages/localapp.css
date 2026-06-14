@@ -75,9 +75,51 @@
   display: flex;
 }
 
+.localapp__setup {
+  overflow-y: auto;
+}
+
 .localapp__form {
   padding: 24px 16px;
   max-width: 420px;
+}
+
+.localapp__how {
+  margin: 0 16px 24px;
+  padding: 16px 18px;
+  max-width: 560px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius, 8px);
+  background: var(--color-surface);
+}
+
+.localapp__how-title {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.localapp__how-intro {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: var(--color-text-muted, #666);
+}
+
+.localapp__how-steps {
+  margin: 0 0 10px;
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.localapp__how-steps li {
+  margin-bottom: 4px;
+}
+
+.localapp__how-note {
+  margin: 0;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--color-text-muted, #888);
 }
 
 .localapp__form-title {

@@ -103,30 +103,46 @@ export default function LocalApp() {
       {checking && port && !showForm && <ExposeCheck onReloadEmbed={reloadEmbed} />}
 
       {showForm ? (
-        <form className="localapp__form" onSubmit={savePort}>
-          <h2 className="localapp__form-title">{t('localapp.formTitle')}</h2>
-          <p className="localapp__form-body">{t('localapp.formBody', { name: current.name })}</p>
-          <div className="localapp__form-row">
-            <input
-              className="localapp__port-input"
-              type="number"
-              min="1"
-              max="65535"
-              placeholder={t('localapp.portPlaceholder')}
-              value={portDraft}
-              onChange={(e) => setPortDraft(e.target.value)}
-            />
-            <button type="submit" className="localapp__btn localapp__btn--primary" disabled={saving || !portDraft.trim()}>
-              {saving ? t('localapp.saving') : t('localapp.save')}
-            </button>
-            {port && (
-              <button type="button" className="localapp__btn" onClick={() => setEditing(false)}>
-                {t('localapp.cancel')}
+        <div className="localapp__setup">
+          <form className="localapp__form" onSubmit={savePort}>
+            <h2 className="localapp__form-title">{t('localapp.formTitle')}</h2>
+            <p className="localapp__form-body">{t('localapp.formBody', { name: current.name })}</p>
+            <div className="localapp__form-row">
+              <input
+                className="localapp__port-input"
+                type="number"
+                min="1"
+                max="65535"
+                placeholder={t('localapp.portPlaceholder')}
+                value={portDraft}
+                onChange={(e) => setPortDraft(e.target.value)}
+              />
+              <button type="submit" className="localapp__btn localapp__btn--primary" disabled={saving || !portDraft.trim()}>
+                {saving ? t('localapp.saving') : t('localapp.save')}
               </button>
-            )}
-          </div>
-          {error && <p className="localapp__error" role="alert">{error}</p>}
-        </form>
+              {port && (
+                <button type="button" className="localapp__btn" onClick={() => setEditing(false)}>
+                  {t('localapp.cancel')}
+                </button>
+              )}
+            </div>
+            {error && <p className="localapp__error" role="alert">{error}</p>}
+          </form>
+
+          {/* How to make an arbitrary web app embeddable here: point an agent in
+              this (Claude Web) repo at the app and have it reconfigure it — the
+              same one-port/relative-URL setup the proxy needs. */}
+          <section className="localapp__how">
+            <h3 className="localapp__how-title">{t('localapp.howTitle')}</h3>
+            <p className="localapp__how-intro">{t('localapp.howIntro')}</p>
+            <ol className="localapp__how-steps">
+              <li>{t('localapp.howStep1')}</li>
+              <li>{t('localapp.howStep2')}</li>
+              <li>{t('localapp.howStep3')}</li>
+            </ol>
+            <p className="localapp__how-note">{t('localapp.howNote')}</p>
+          </section>
+        </div>
       ) : (
         <div className="localapp__body">
           <ProductFrame url={url} port={port} reloadKey={reloadKey} />
