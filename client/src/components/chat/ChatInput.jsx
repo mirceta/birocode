@@ -235,7 +235,7 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
             title={t('prompts.manage')}
             aria-expanded={mgrOpen}
           >
-            +
+            &#9881;
           </button>
         )}
         <textarea
