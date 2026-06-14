@@ -238,6 +238,8 @@
   "understanding.title": "Understanding",
   "understanding.collapse": "Hide",
   "understanding.expand": "Show",
+  "understanding.prefill": "Ask Claude to write its understanding first",
+  "understanding.prefillPrompt": "Before acting on my requests, first write your understanding of what I'm asking to `understanding.md` at the repo root, as markdown: a short restatement of the goal, the concrete things you'll do, and any assumptions. Keep it current if the request changes, and let me confirm it before you proceed.",
   "localapp.formTitle": "Local preview port",
   "localapp.formBody": "Which port does {name} serve on? The Local tab serves it through the harness, so it's reachable wherever you can log in — but never on the public home page.",
   "localapp.portPlaceholder": "e.g. 5300",

@@ -8,11 +8,13 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-13):** Understanding panel, Deployments tab slice 1, the
-> product-onboarding Exposure check (slices 1 & 2), the Exposure check freshness
-> slice 3, and per-tab agent spaces are all merged to main, deployed & confirmed.
-> In flight: [stale-copy warning banner](plans/stale-version-banner.md) on
-> `feature/stale-version-banner`. Proposed: a
+> **Status (2026-06-14):** **In flight (pending deploy):** the
+> [stale-copy warning banner](plans/stale-version-banner.md), the Local-tab
+> "how to expose a web app" instructions, and Understanding panel **slice 2**
+> (a composer-prefill button that makes the panel work in Product Repos; built,
+> browser-verified 6/6). Already merged & deployed: Understanding panel slice 1,
+> Deployments tab slice 1, the product-onboarding Exposure check (slices 1-3),
+> and per-tab agent spaces. Proposed: a
 > [spec-baseline](plans/spec-baseline.md) DESIGN plan — what to borrow from
 > OpenSpec — on `feature/spec-baseline`.
 
@@ -22,6 +24,15 @@
   an open browser running the old cached bundle gets a dismissible "new version
   — Reload" banner (build-stamp compare via `version.json`). Closes the gap that
   stranded open windows on stale code after the per-tab-spaces deploy.
+- [Understanding panel](plans/understanding-panel.md) **— slice 2** — make the
+  panel work in Product Repos, not just the Harness. A composer-prefill button
+  drops the "write your understanding first" instruction into the chat box (no
+  extra `claude -p` cost). Built & browser-verified 6/6; pending deploy.
+- Local tab — "how to expose a web app" instructions in the setup form: open an
+  agent in the Claude Web repo, give it the path to the target app, and ask it
+  to reconfigure it for Local-tab exposure (one loopback port, relative URLs).
+  Built & browser-verified; pending deploy. Extends
+  [Local tab over the internet](plans/local-app-proxy.md).
 
 ## Proposed / design (not building yet)
 
