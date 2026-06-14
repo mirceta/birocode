@@ -1,9 +1,9 @@
 # Dashboard shortcut — keyboard toggle between dashboard and tabs
 
-> **Status (2026-06-14):** Building on `feature/dashboard-shortcut` off main
-> (24894b2). Frontend-only. Small addition to the agent dashboard
-> ([agent-dashboard.md](agent-dashboard.md), the parallel session's feature) —
-> compose carefully on `Layout.jsx`.
+> **Status (2026-06-14):** DEPLOYED & CONFIRMED on live :5099 (77aa0ae); rollback
+> disarmed. Browser-verified (verify-dashboard-shortcut.mjs 5/5). Frontend-only
+> addition to the agent dashboard ([agent-dashboard.md](agent-dashboard.md)).
+> Merged to main.
 
 ## Problem
 

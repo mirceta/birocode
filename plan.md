@@ -27,9 +27,6 @@
 
 ## Active feature plans
 
-- [Dashboard shortcut](plans/dashboard-shortcut.md) — `Ctrl/Cmd+Shift+D` toggles
-  between the agent dashboard overlay and the normal tab view (Escape still
-  closes; ignored while typing). Building on `feature/dashboard-shortcut`.
 - [Agent dashboard](plans/agent-dashboard.md) — a mission-control grid showing
   every agent on this machine at once (status + what it's doing). Opened from a
   top-bar button (Advanced + 2+ agents) as a full-screen overlay, not a tab;
@@ -48,6 +45,9 @@
 
 ## Recently shipped
 
+- [Dashboard shortcut](plans/dashboard-shortcut.md) — `Ctrl/Cmd+Shift+D` toggles
+  between the agent dashboard overlay and the normal tab view (Escape still
+  closes; ignored while typing). Deployed & confirmed 2026-06-14 (77aa0ae).
 - [Understanding panel](plans/understanding-panel.md) **— slice 2** — a
   composer-prefill button that makes the panel work in Product Repos, not just
   the Harness; drops the "write your understanding first" instruction into the
