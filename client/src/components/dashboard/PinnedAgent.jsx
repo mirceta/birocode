@@ -9,7 +9,7 @@ import { useT } from '../../i18n/LanguageContext';
 //
 // The header is the maximize affordance — tapping it opens this agent in the
 // full /studio view (the same flow as a dashboard card / Agents-tab row).
-export default function PinnedAgent({ tab, status, recency, onMaximize }) {
+export default function PinnedAgent({ tab, status, recency, repoPath, onMaximize }) {
   const { t } = useT();
   const chat = useChatFor({
     key: tab.id,
@@ -33,6 +33,7 @@ export default function PinnedAgent({ tab, status, recency, onMaximize }) {
       >
         <span className="phone__dot" />
         <span className="phone__name">{tab.repoName}</span>
+        {repoPath && <span className="phone__path">{repoPath}</span>}
         <span className="phone__status">{t(`agents.status.${status}`)}</span>
       </button>
       <div className="phone__screen">

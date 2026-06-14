@@ -200,6 +200,11 @@ export default function Agents() {
               <span className="agent-card__dot" />
               <span className="agent-card__body">
                 <span className="agent-card__name">{tab.repoName}</span>
+                {repos.find((r) => r.id === tab.repoId)?.path && (
+                  <span className="agent-card__path">
+                    {repos.find((r) => r.id === tab.repoId).path}
+                  </span>
+                )}
                 {info[tab.repoId] && (
                   <span className="agent-card__branch">
                     <span aria-hidden="true">⎇</span> {info[tab.repoId].branch}

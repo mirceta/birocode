@@ -87,6 +87,11 @@ export default function Dashboard({ onClose }) {
   const { tabs: dockTabs, activeTabId, setActiveTab, repos } = useDock();
   // Only agents toggled "show on dashboard" in the Agents tab (default on).
   const tabs = useMemo(() => dockTabs.filter((tab) => tab.dashboard !== false), [dockTabs]);
+  // repoId -> filesystem path, for the path line on each dock.
+  const repoPath = useCallback(
+    (repoId) => repos.find((r) => r.id === repoId)?.path || '',
+    [repos],
+  );
   const navigate = useNavigate();
   const [view, setView] = useState(readView);
   function chooseView(next) {
@@ -247,6 +252,7 @@ export default function Dashboard({ onClose }) {
                     tab={tab}
                     status={status}
                     recency={recency}
+                    repoPath={repoPath(tab.repoId)}
                     onMaximize={handleOpen}
                   />
                 </li>
@@ -268,6 +274,9 @@ export default function Dashboard({ onClose }) {
                     <span className="dash-cell__dot" />
                     <span className="dash-cell__name">{tab.repoName}</span>
                   </span>
+                  {repoPath(tab.repoId) && (
+                    <span className="dash-cell__path">{repoPath(tab.repoId)}</span>
+                  )}
                   <span className="dash-cell__status">
                     {t(`agents.status.${status}`)}
                   </span>
