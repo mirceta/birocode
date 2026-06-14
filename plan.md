@@ -10,13 +10,16 @@
 
 > **Status (2026-06-14):** **In flight (pending deploy):** the
 > [stale-copy warning banner](plans/stale-version-banner.md), the Local-tab
-> "how to expose a web app" instructions, and Understanding panel **slice 2**
-> (a composer-prefill button that makes the panel work in Product Repos; built,
-> browser-verified 6/6). Already merged & deployed: Understanding panel slice 1,
-> Deployments tab slice 1, the product-onboarding Exposure check (slices 1-3),
-> and per-tab agent spaces. Proposed: a
+> "how to expose a web app" instructions, Understanding panel **slice 2**
+> (composer-prefill button for Product Repos), and the Git tab **PR preview**
+> (branch delta vs base, slices 1 & 2) — all built & browser-verified. Already
+> merged & deployed: Understanding panel slice 1, Deployments tab slice 1, the
+> product-onboarding Exposure check (slices 1-3), and per-tab agent spaces.
+> Proposed: a
 > [spec-baseline](plans/spec-baseline.md) DESIGN plan — what to borrow from
-> OpenSpec — on `feature/spec-baseline`.
+> OpenSpec — on `feature/spec-baseline`. Parked: a
+> [PWA "older version" warning](plans/pwa-webapk-warning.md) plan on
+> `feature/pwa-webapk-warning` (set aside, not started).
 
 ## Active feature plans
 
@@ -33,6 +36,13 @@
   to reconfigure it for Local-tab exposure (one loopback port, relative URLs).
   Built & browser-verified; pending deploy. Extends
   [Local tab over the internet](plans/local-app-proxy.md).
+- [Git tab — branch PR preview](plans/git-pr-preview.md) — for the current
+  feature branch, show where it branched off, the commits since, and the
+  cumulative `base...HEAD` file diff — what a GitHub pull request shows, which
+  is distinct from the existing working-tree `git status` view. Read-only;
+  reuses `GitService.RunGit`/`DetectBases`. Slice 1 = summary (commits +
+  changed-file counts), slice 2 = lazy per-file patch. Built & browser-verified;
+  pending deploy.
 
 ## Proposed / design (not building yet)
 

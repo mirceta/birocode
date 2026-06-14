@@ -598,6 +598,153 @@ public partial class GitService
         return new GitActionResult(true, updated, null);
     }
 
+    // --- branch "PR preview" (plans/git-pr-preview.md) -----------------------
+
+    /// <summary>Max commits / files / patch chars returned by the review.</summary>
+    private const int ReviewCommitLimit = 100;
+    private const int ReviewFileLimit = 500;
+    private const int ReviewPatchMaxChars = 200_000;
+
+    public sealed record ReviewCommit(string Short, string Author, string Date, string Subject);
+    public sealed record ReviewFile(string Path, string? OldPath, int Added, int Deleted, bool Binary, string Status);
+    public sealed record ReviewResult(
+        bool IsFeatureBranch, string? Base, string? BaseRef, string? MergeBase,
+        IReadOnlyList<ReviewCommit> Commits, IReadOnlyList<ReviewFile> Files, bool Truncated);
+    public sealed record ReviewFilePatch(string Path, string Patch, bool Truncated);
+
+    /// <summary>
+    /// What a GitHub pull request would show for the checked-out feature branch
+    /// (plans/git-pr-preview.md): the base it would merge into, the merge-base
+    /// commit it diverged at, the commits unique to the branch
+    /// (<c>git log base..HEAD</c>, two-dot) and the cumulative changed-file list
+    /// (<c>git diff base...HEAD</c>, three-dot — the branch's own changes since
+    /// divergence, like a PR's "Files changed"). Base prefers the origin base
+    /// (mirrors GitHub), else the local base. On the base branch itself there is
+    /// nothing to review -> IsFeatureBranch=false. Read-only.
+    /// </summary>
+    public ReviewResult Review(string workingDir)
+    {
+        var empty = new ReviewResult(false, null, null, null,
+            Array.Empty<ReviewCommit>(), Array.Empty<ReviewFile>(), false);
+
+        var current = CurrentBranch(workingDir);
+        if (current is "unknown" or "(detached)") return empty;
+
+        var (localBase, originBase) = DetectBases(workingDir);
+        var baseRef = originBase ?? localBase;
+        if (baseRef is null) return empty;
+
+        // On the base branch itself? Nothing to PR.
+        var baseBranchName = baseRef.StartsWith("origin/") ? baseRef["origin/".Length..] : baseRef;
+        if (current == baseBranchName || current == localBase) return empty;
+
+        var mb = RunGit(workingDir, $"merge-base {baseRef} HEAD");
+        var mergeBase = mb.ExitCode == 0 && !string.IsNullOrWhiteSpace(mb.StdOut)
+            ? Short(mb.StdOut.Trim()) : null;
+        // Diverged with no common ancestor (unrelated histories): not a reviewable branch.
+        if (mergeBase is null) return empty;
+
+        var commits = new List<ReviewCommit>();
+        var commitRun = RunGit(workingDir,
+            $"log {baseRef}..HEAD --format=%h{Delimiter}%an{Delimiter}%cI{Delimiter}%s -n {ReviewCommitLimit + 1}");
+        if (commitRun.ExitCode == 0)
+            foreach (var line in commitRun.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var parts = line.Split(Delimiter, 4);
+                if (parts.Length < 4) continue;
+                commits.Add(new ReviewCommit(parts[0], parts[1], parts[2], parts[3]));
+            }
+        var commitsTruncated = commits.Count > ReviewCommitLimit;
+        if (commitsTruncated) commits = commits.Take(ReviewCommitLimit).ToList();
+
+        // Status letters + rename old->new paths from --name-status (clean),
+        // line counts from --numstat (keyed by the resolved new path).
+        var statuses = new Dictionary<string, (string Status, string? OldPath)>(StringComparer.Ordinal);
+        var nameStatus = RunGit(workingDir, $"diff --name-status {baseRef}...HEAD");
+        if (nameStatus.ExitCode == 0)
+            foreach (var line in nameStatus.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var parts = line.Split('\t');
+                if (parts.Length < 2) continue;
+                var status = parts[0];
+                if ((status.StartsWith('R') || status.StartsWith('C')) && parts.Length >= 3)
+                    statuses[parts[2]] = (status[0].ToString(), parts[1]);
+                else
+                    statuses[parts[1]] = (status[0].ToString(), null);
+            }
+
+        var files = new List<ReviewFile>();
+        var numstat = RunGit(workingDir, $"diff --numstat {baseRef}...HEAD");
+        if (numstat.ExitCode == 0)
+            foreach (var line in numstat.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var parts = line.Split('\t');
+                if (parts.Length < 3) continue;
+                var binary = parts[0] == "-" || parts[1] == "-";
+                int.TryParse(parts[0], out var added);
+                int.TryParse(parts[1], out var deleted);
+                var path = ResolveNumstatPath(string.Join('\t', parts.Skip(2)));
+                var meta = statuses.TryGetValue(path, out var m) ? m : ("M", (string?)null);
+                files.Add(new ReviewFile(path, meta.Item2, added, deleted, binary, meta.Item1));
+            }
+        var filesTruncated = files.Count > ReviewFileLimit;
+        if (filesTruncated) files = files.Take(ReviewFileLimit).ToList();
+
+        _logger.Info($"[GIT] Review -> {current} vs {baseRef} @ {mergeBase}: {commits.Count} commit(s), {files.Count} file(s)");
+        return new ReviewResult(true, baseRef, baseRef, mergeBase, commits, files,
+            commitsTruncated || filesTruncated);
+    }
+
+    /// <summary>
+    /// The unified patch for ONE file of the branch review
+    /// (<c>git diff base...HEAD -- &lt;path&gt;</c>), fetched lazily on expand so a
+    /// huge diff never ships up front. Output is capped at
+    /// <see cref="ReviewPatchMaxChars"/> chars (Truncated marks the cut). The
+    /// path is passed via the ArgumentList, never the shell.
+    /// </summary>
+    public ReviewFilePatch ReviewFileDiff(string workingDir, string path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) throw new ArgumentException("path required");
+
+        var (localBase, originBase) = DetectBases(workingDir);
+        var baseRef = originBase ?? localBase;
+        if (baseRef is null) throw new InvalidOperationException("no base branch to diff against");
+
+        var run = RunGit(workingDir, $"diff {baseRef}...HEAD --", path);
+        if (run.ExitCode != 0)
+            throw new InvalidOperationException(
+                $"git diff failed (exit {run.ExitCode}): {FirstLine(run.StdErr, run.StdOut)}");
+
+        var patch = run.StdOut;
+        var truncated = patch.Length > ReviewPatchMaxChars;
+        if (truncated) patch = patch[..ReviewPatchMaxChars];
+        _logger.Info($"[GIT] ReviewFile -> {path} ({patch.Length} chars{(truncated ? ", truncated" : "")})");
+        return new ReviewFilePatch(path, patch, truncated);
+    }
+
+    /// <summary>Resolves a `git diff --numstat` rename path to the NEW path,
+    /// handling both the plain "old => new" and the "dir/{old => new}" brace
+    /// forms. Non-rename paths are returned unchanged.</summary>
+    private static string ResolveNumstatPath(string raw)
+    {
+        if (!raw.Contains("=>")) return raw;
+        var open = raw.IndexOf('{');
+        if (open >= 0)
+        {
+            var arrow = raw.IndexOf("=>", open, StringComparison.Ordinal);
+            var close = raw.IndexOf('}', arrow < 0 ? open : arrow);
+            if (arrow >= 0 && close > arrow)
+            {
+                var prefix = raw[..open];
+                var newMid = raw[(arrow + 2)..close].Trim();
+                var suffix = raw[(close + 1)..];
+                return (prefix + newMid + suffix).Replace("//", "/").Trim();
+            }
+        }
+        var parts = raw.Split("=>", 2);
+        return parts[^1].Trim();
+    }
+
     /// <summary>Returns the current branch name (or detached HEAD description).</summary>
     public string CurrentBranch(string workingDir)
     {

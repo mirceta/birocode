@@ -271,6 +271,77 @@ public class GitController : ControllerBase
         }
     }
 
+    /// <summary>GET /api/git/review -- read-only "PR preview" for the current
+    /// feature branch (plans/git-pr-preview.md): base, merge-base, the commits
+    /// unique to the branch, and the cumulative changed-file list with counts.
+    /// On the base branch returns isFeatureBranch:false. No busy guard.</summary>
+    [HttpGet("git/review")]
+    public IActionResult Review()
+    {
+        _logger.CountRequest();
+        var repo = _repos.Current();
+        if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
+        try
+        {
+            var r = _git.Review(repo.Path);
+            return Ok(new
+            {
+                isFeatureBranch = r.IsFeatureBranch,
+                @base = r.Base,
+                baseRef = r.BaseRef,
+                mergeBase = r.MergeBase,
+                truncated = r.Truncated,
+                commits = r.Commits.Select(c => new
+                {
+                    @short = c.Short,
+                    author = c.Author,
+                    date = c.Date,
+                    subject = c.Subject,
+                }),
+                files = r.Files.Select(f => new
+                {
+                    path = f.Path,
+                    oldPath = f.OldPath,
+                    added = f.Added,
+                    deleted = f.Deleted,
+                    binary = f.Binary,
+                    status = f.Status,
+                }),
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[GIT] Review failed: {ex.Message}");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    /// <summary>GET /api/git/review/file?path=... -- the unified patch for ONE
+    /// file of the branch review (plans/git-pr-preview.md), fetched lazily on
+    /// expand. Bounded; truncated:true marks a cut. Read-only.</summary>
+    [HttpGet("git/review/file")]
+    public IActionResult ReviewFile([FromQuery] string? path)
+    {
+        _logger.CountRequest();
+        var repo = _repos.Current();
+        if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
+        if (string.IsNullOrWhiteSpace(path)) return BadRequest(new { error = "path is required" });
+        try
+        {
+            var r = _git.ReviewFileDiff(repo.Path, path);
+            return Ok(new { path = r.Path, patch = r.Patch, truncated = r.Truncated });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[GIT] ReviewFile failed: {ex.Message}");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
     /// <summary>GET /api/history -- recent commits, newest first.</summary>
     [HttpGet("history")]
     public IActionResult History()
