@@ -15,8 +15,10 @@ public record SessionSummary(
     DateTime LastModified,
     string? FirstPrompt);
 
-/// <summary>One human-visible message in a transcript: role is "user" or "assistant".</summary>
-public record ChatMessage(string Role, string Text);
+/// <summary>One human-visible message in a transcript: role is "user" or "assistant".
+/// Timestamp is the JSONL line time (when available) — the dashboard uses the last
+/// user message's timestamp to colour an agent dock by recency.</summary>
+public record ChatMessage(string Role, string Text, DateTime? Timestamp = null);
 
 /// <summary>
 /// Lists and parses Claude Code session transcripts (JSONL) for the current
@@ -116,7 +118,12 @@ public class SessionService
                 var text = ExtractVisibleText(msg);
                 if (string.IsNullOrWhiteSpace(text)) continue;
 
-                messages.Add(new ChatMessage(type == "user" ? "user" : "assistant", text!.Trim()));
+                DateTime? ts = null;
+                if (root.TryGetProperty("timestamp", out var tsProp) &&
+                    DateTime.TryParse(tsProp.GetString(), out var parsed))
+                    ts = parsed;
+
+                messages.Add(new ChatMessage(type == "user" ? "user" : "assistant", text!.Trim(), ts));
             }
         }
         catch (Exception ex)

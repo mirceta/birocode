@@ -83,6 +83,36 @@
   background: color-mix(in srgb, var(--agent-color) 12%, var(--color-surface));
 }
 
+/* Recency border (plans/agent-dashboard.md) — colour a dock by how long ago
+   the user last wrote in that agent: <1min green, <5min bright green,
+   5–30min blue, 30–60min purple, >1hr none (no data-recency attribute).
+   A fat all-sides border overrides the subtle default + the colour left-border. */
+.dash-cell[data-recency],
+.phone[data-recency] {
+  border-width: 5px;
+  border-style: solid;
+}
+
+.dash-cell[data-recency='fresh'],
+.phone[data-recency='fresh'] {
+  border-color: #16a34a;
+}
+
+.dash-cell[data-recency='recent'],
+.phone[data-recency='recent'] {
+  border-color: #4ade80;
+}
+
+.dash-cell[data-recency='mid'],
+.phone[data-recency='mid'] {
+  border-color: #3b82f6;
+}
+
+.dash-cell[data-recency='old'],
+.phone[data-recency='old'] {
+  border-color: #a855f7;
+}
+
 .dash-cell__head {
   display: flex;
   align-items: center;

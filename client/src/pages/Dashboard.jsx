@@ -48,6 +48,35 @@ function latestActivity(messages) {
   return last?.text ? oneLine(last.text) : '';
 }
 
+// Timestamp (ms) of the last message *I* sent in this transcript — the basis
+// for the recency border. Iterates from the end and stops at the first user
+// message that carries a timestamp.
+function lastUserAt(messages) {
+  if (!Array.isArray(messages)) return 0;
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const m = messages[i];
+    if (m?.role === 'user' && m?.timestamp) {
+      const t = Date.parse(m.timestamp);
+      if (!Number.isNaN(t)) return t;
+    }
+  }
+  return 0;
+}
+
+// Map "how long ago I last wrote" to a border tier (plans/agent-dashboard.md):
+//   <1min green · <5min bright green · 5–30min blue · 30–60min purple · >1hr none.
+// Returns undefined for >1hr / never, so no data-recency attribute is set.
+function recencyTier(at, now) {
+  if (!at) return undefined;
+  const min = (now - at) / 60000;
+  if (min < 0) return undefined;
+  if (min < 1) return 'fresh';
+  if (min < 5) return 'recent';
+  if (min < 30) return 'mid';
+  if (min < 60) return 'old';
+  return undefined;
+}
+
 // Agent dashboard (plans/agent-dashboard.md) — a full-screen grid overview of
 // every dock agent, opened from the top bar (not a tab). This is a new VIEW
 // over DockContext, not new plumbing: it reads the same agent list the Agents
@@ -80,6 +109,10 @@ export default function Dashboard({ onClose }) {
   // than one long row: 4 → 2×2, 6 → 3×2, 10 → 4×3.
   const columns = Math.max(1, Math.ceil(Math.sqrt(tabs.length)));
 
+  // Recency tiers are derived against "now"; recomputed each render. The 5s poll
+  // re-renders via setLive, so the borders age without a separate timer.
+  const now = Date.now();
+
   // Poll while the overlay is mounted (i.e. open); the effect's teardown stops
   // it on close. A `busy` guard skips a tick if the previous one is still in
   // flight, so a slow poll can't pile up.
@@ -104,17 +137,19 @@ export default function Dashboard({ onClose }) {
             const status = run?.status || tab.status;
             const sessionId = run?.sessionId || tab.sessionId;
             let activity = '';
+            let at = 0;
             if (sessionId) {
               try {
                 const messages = await apiGet(`/sessions/${sessionId}/messages`, {
                   repoId: tab.repoId,
                 });
                 activity = latestActivity(messages);
+                at = lastUserAt(messages);
               } catch {
                 /* no transcript yet / repo gone — leave activity blank */
               }
             }
-            return [tab.id, { status, activity }];
+            return [tab.id, { status, activity, at }];
           }),
         );
         if (!cancelled) setLive(Object.fromEntries(pairs));
@@ -204,10 +239,16 @@ export default function Dashboard({ onClose }) {
           {tabs.map((tab) => {
             const info = live[tab.id];
             const status = info?.status || tab.status;
+            const recency = recencyTier(info?.at, now);
             if (view === 'phones') {
               return (
                 <li key={tab.id} className="dash__phone-cell">
-                  <PinnedAgent tab={tab} status={status} onMaximize={handleOpen} />
+                  <PinnedAgent
+                    tab={tab}
+                    status={status}
+                    recency={recency}
+                    onMaximize={handleOpen}
+                  />
                 </li>
               );
             }
@@ -219,6 +260,7 @@ export default function Dashboard({ onClose }) {
                   type="button"
                   className={`dash-cell dash-cell--${status}${tab.id === activeTabId ? ' dash-cell--active' : ''}`}
                   data-colored={tab.color ? 'true' : undefined}
+                  data-recency={recency}
                   style={tab.color ? { '--agent-color': tab.color } : undefined}
                   onClick={() => handleOpen(tab.id)}
                 >
