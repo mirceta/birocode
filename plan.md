@@ -52,6 +52,12 @@
 
 ## Recently shipped
 
+- [Dashboard git status on docks](plans/dashboard-git-status.md) — the Git tab's
+  branch + "n ahead · m behind" position rows (vs base main/master, origin/main,
+  upstream) now render on the dashboard **phone docks** too, and the **cards**
+  were switched to the same rows — all via a shared `GitStatusSummary` component
+  so the three surfaces can't drift. Deployed & confirmed 2026-06-14 on
+  `feature/dashboard-git-status`; not yet merged.
 - [Dashboard chat cut off](plans/dashboard-chat-scroll.md) — **bug fix:** in the
   dashboard "wall of phones," the embedded chat overflowed its cell (clipped, no
   reachable composer) because `height:100%` couldn't resolve against a

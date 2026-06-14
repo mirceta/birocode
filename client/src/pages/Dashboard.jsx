@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { apiGet } from '../api/client';
 import { useDock } from '../context/DockContext';
 import { useT } from '../i18n/LanguageContext';
-import { syncLines } from '../lib/gitSync';
+import GitStatusSummary from '../components/git/GitStatusSummary';
 import PinnedAgent from '../components/dashboard/PinnedAgent';
 import './dashboard.css';
 
@@ -147,6 +147,8 @@ export default function Dashboard({ onClose }) {
   // { [repoId]: /git/status payload } — branch + ahead/behind, like the Agents
   // tab. Fetched once when the overlay opens (git state moves slowly).
   const [gitInfo, setGitInfo] = useState({});
+  // { [repoId]: true } while a per-dock refresh is in flight (spinner + guard).
+  const [gitBusy, setGitBusy] = useState({});
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
 
@@ -239,6 +241,23 @@ export default function Dashboard({ onClose }) {
   useEffect(() => {
     loadGit();
   }, [loadGit]);
+
+  // Per-dock refresh: re-fetch one repo's git status, hitting origin (fetch=true)
+  // like the Git tab's refresh so the origin-relative rows actually update.
+  const refreshGit = useCallback(async (repoId) => {
+    if (!repoId) return;
+    setGitBusy((prev) => ({ ...prev, [repoId]: true }));
+    try {
+      const status = await apiGet('/git/status?fetch=true', { repoId });
+      if (status.branch && status.branch !== 'unknown') {
+        setGitInfo((prev) => ({ ...prev, [repoId]: status }));
+      }
+    } catch {
+      /* transient error / not a git repo — keep the last good status */
+    } finally {
+      setGitBusy((prev) => ({ ...prev, [repoId]: false }));
+    }
+  }, []);
 
   function handleOpen(id) {
     setActiveTab(id);
@@ -343,6 +362,9 @@ export default function Dashboard({ onClose }) {
                     status={status}
                     recency={recency}
                     repoPath={repoPath(tab.repoId)}
+                    git={gitInfo[tab.repoId]}
+                    gitRefreshing={!!gitBusy[tab.repoId]}
+                    onRefreshGit={() => refreshGit(tab.repoId)}
                     onMaximize={handleOpen}
                   />
                 </li>
@@ -370,19 +392,7 @@ export default function Dashboard({ onClose }) {
                   <span className="dash-cell__status">
                     {t(`agents.status.${status}`)}
                   </span>
-                  {git && (
-                    <span className="dash-cell__branch">
-                      <span aria-hidden="true">⎇</span> {git.branch}
-                    </span>
-                  )}
-                  {git && syncLines(t, git).map((line) => (
-                    <span
-                      key={line.key}
-                      className={`dash-cell__sync${line.warn ? ' dash-cell__sync--warn' : ''}`}
-                    >
-                      {line.text}
-                    </span>
-                  ))}
+                  {git && <GitStatusSummary status={git} compact />}
                   <span className="dash-cell__activity">
                     {activity || t('dashboard.noActivity')}
                   </span>

@@ -39,10 +39,8 @@
   word-break: break-all;
 }
 
-.git-branch__name {
-  font-weight: 700;
-  font-size: 16px;
-}
+/* .git-branch__name + the .git-row* position rows now live with the shared
+   GitStatusSummary component (components/git/gitStatusSummary.css). */
 
 .git-branch__sync {
   display: flex;
@@ -76,40 +74,8 @@
   color: #c0392b;
 }
 
-/* Uniform position rows + inward-sync actions (plans/git-actions.md) */
-.git-rows {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.git-row {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  font-size: 13px;
-}
-
-.git-row__counts {
-  font-weight: 700;
-  min-width: 150px;
-}
-
-.git-row__counts--insync {
-  font-weight: 400;
-  opacity: 0.55;
-}
-
-.git-row__counts--missing {
-  font-weight: 600;
-  color: #b58900;
-}
-
-.git-row__ref {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  opacity: 0.75;
-}
+/* Inward-sync actions (plans/git-actions.md). The position rows above them
+   live with the shared GitStatusSummary component. */
 
 .git-actions {
   width: 100%;
