@@ -1,10 +1,12 @@
 # Dashboard git status on agent docks — branch + sync, like the Git tab
 
-> **Status (2026-06-14):** **Slice 1 DEPLOYED & CONFIRMED** on live :5099;
-> browser-verified (`dash-git-status-check.mjs`: branch + position rows render
-> on the Git tab, dashboard cards, and phone docks). New feature on
-> `feature/dashboard-git-status`. Frontend-only; reuses the `gitInfo` the
-> dashboard already fetches. Not yet merged to main.
+> **Status (2026-06-14):** **Slices 1 & 2 DEPLOYED & CONFIRMED** on live :5099;
+> browser-verified — slice 1 (`dash-git-status-check.mjs`: branch + position
+> rows on the Git tab, cards, and docks) and slice 2 (`dash-git-refresh-check.mjs`:
+> the per-dock refresh button fires a `fetch=true` request, spins, and updates
+> in place). On `feature/dashboard-git-status`. Frontend-only; reuses the
+> `gitInfo` the dashboard already fetches. Slice 1 merged to main; slice 2 not
+> yet merged.
 
 ## Problem
 
@@ -74,6 +76,10 @@ scope here).
 
 - **Slice 1** — branch + sync lines on the phone dock header, reusing
   `syncLines` and the existing `gitInfo`. Frontend-only.
+- **Slice 2** — a per-dock **refresh button** (↻) next to each dock's Git
+  section. Re-fetches that one agent's `/git/status?fetch=true` (hits origin,
+  like the Git tab's refresh) and updates `gitInfo[repoId]` in place; spins +
+  disables while in flight. Frontend-only.
 
 ## Verification
 
