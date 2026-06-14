@@ -159,6 +159,7 @@
   "dashboard.title": "Dashboard",
   "dashboard.empty": "No agents yet. Start one in the Agents tab to see it here.",
   "dashboard.open": "Dashboard",
+  "dashboard.shortcutHint": "Toggle dashboard / tabs (Ctrl/Cmd+Shift+D)",
   "dashboard.close": "Close dashboard",
   "dashboard.noActivity": "No activity yet",
   "dashboard.maximize": "Open this agent in full view",

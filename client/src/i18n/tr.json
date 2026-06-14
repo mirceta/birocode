@@ -159,6 +159,7 @@
   "dashboard.title": "Panel",
   "dashboard.empty": "Henuz ajan yok. Burada gormek icin Ajanlar sekmesinden bir tane baslat.",
   "dashboard.open": "Panel",
+  "dashboard.shortcutHint": "Panel / sekme gecisi (Ctrl/Cmd+Shift+D)",
   "dashboard.close": "Paneli kapat",
   "dashboard.noActivity": "Henuz etkinlik yok",
   "dashboard.maximize": "Bu ajani tam gorunumde ac",
