@@ -19,7 +19,9 @@
 > (slices 1 & 2) — now deployed & confirmed. Already merged &
 > deployed: Understanding panel slice 1, Deployments tab slice 1, the
 > product-onboarding Exposure check (slices 1-3), and per-tab agent spaces.
-> Proposed: a
+> [Chat windowing](plans/chat-windowing.md) slice 1 — render only the recent
+> tail of long conversations so the app stays fast — is deployed & confirmed on
+> `feature/chat-windowing` (not yet merged). Proposed: a
 > [spec-baseline](plans/spec-baseline.md) DESIGN plan — what to borrow from
 > OpenSpec — on `feature/spec-baseline`. Parked: a
 > [PWA "older version" warning](plans/pwa-webapk-warning.md) plan on
@@ -51,6 +53,23 @@
 
 ## Recently shipped
 
+- [Dashboard git status on docks](plans/dashboard-git-status.md) — the Git tab's
+  branch + "n ahead · m behind" position rows (vs base main/master, origin/main,
+  upstream) now render on the dashboard **phone docks** too, and the **cards**
+  were switched to the same rows — all via a shared `GitStatusSummary` component
+  so the three surfaces can't drift. Deployed & confirmed 2026-06-14 on
+  `feature/dashboard-git-status`; not yet merged.
+- [Dashboard chat cut off](plans/dashboard-chat-scroll.md) — **bug fix:** in the
+  dashboard "wall of phones," the embedded chat overflowed its cell (clipped, no
+  reachable composer) because `height:100%` couldn't resolve against a
+  flex-derived frame height. Fixed by sizing the embedded chat via flexbox
+  (`.phone__screen` flex column; chat `flex:1; min-height:0`). Deployed &
+  confirmed 2026-06-14 (1488dc9); not yet merged.
+- [Chat windowing](plans/chat-windowing.md) — long chats were slow because
+  `Chat.jsx` rendered every message (heavy markdown bubble per turn) and we
+  almost never scroll up. **Slice 1** renders only the recent tail (last 50)
+  with a "Show earlier" reveal; full transcript stays in state, frontend-only.
+  Deployed & confirmed 2026-06-14 on `feature/chat-windowing`; not yet merged.
 - [Dashboard shortcut](plans/dashboard-shortcut.md) — `Ctrl/Cmd+Shift+D` toggles
   between the agent dashboard overlay and the normal tab view (Escape still
   closes; ignored while typing). Deployed & confirmed 2026-06-14 (77aa0ae).

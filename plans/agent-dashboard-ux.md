@@ -60,6 +60,20 @@ compare). Closed by the same button, the in-overlay **×**, or **Escape**.
 - **The whole cell is the click target** — clicking it opens that agent (the
   dashboard is read + open, not a management screen; there is no separate
   Maximize button).
+- **A recency border** — the dock is outlined (a fat 5px border) by how long
+  ago *you* last wrote in that agent, so the ones you touched most recently
+  stand out: **<1min** green, **<5min** bright green, **5–30min** blue,
+  **30–60min** purple, **>1hr** no border. Applies to both cards and phones.
+
+- **The repository path** — each dock shows the project's filesystem path (a
+  small muted line under the repo name), on the Agents-tab cards, the Dashboard
+  cards, and the phone bars. Sourced from `/api/repos` (`repo.path`), looked up
+  by the tab's `repoId`.
+
+**Choosing which agents appear:** each card in the **Agents** tab has a
+show-on-dashboard toggle (the grid glyph next to the colour swatch). Off =
+that agent is omitted from the Dashboard (both views). Default on; the choice
+is stored on the backend dock tab, so it is shared across devices.
 
 ## Open an agent — into the existing view, and back
 

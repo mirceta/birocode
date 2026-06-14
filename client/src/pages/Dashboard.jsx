@@ -1,21 +1,48 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiGet } from '../api/client';
 import { useDock } from '../context/DockContext';
 import { useT } from '../i18n/LanguageContext';
-import { syncLines } from '../lib/gitSync';
+import GitStatusSummary from '../components/git/GitStatusSummary';
 import PinnedAgent from '../components/dashboard/PinnedAgent';
 import './dashboard.css';
 
-// The dashboard has two layouts (plans/agent-dashboard.md): summary "cards"
-// (status + activity + git, cheap) and the "wall of phones" — each agent's
-// live Chat rendered in place. The choice is remembered per device.
+// The dashboard has three layouts (plans/agent-dashboard.md): summary "cards"
+// (status + activity + git, cheap), the "wall of phones" — each agent's live
+// Chat rendered in place — and "hot", a mix that renders hot agents (recently
+// used by me) as phones and cold ones as cards. The choice is per device.
 const VIEW_KEY = 'claudeweb_dash_view';
 function readView() {
   try {
-    return localStorage.getItem(VIEW_KEY) === 'phones' ? 'phones' : 'cards';
+    const v = localStorage.getItem(VIEW_KEY);
+    return v === 'phones' || v === 'hot' ? v : 'cards';
   } catch {
     return 'cards';
+  }
+}
+
+// In "hot" mode, an agent renders as a phone when I've messaged it within the
+// last 30 min (recency tiers fresh/recent/mid); older/never-used agents render
+// as cheap cards. Same cutoff used for the recency border (recencyTier).
+function isHotTier(tier) {
+  return tier === 'fresh' || tier === 'recent' || tier === 'mid';
+}
+
+// Dock size is a per-device "bigger/smaller" stepper: an index into SIZE_STEPS
+// that scales the square cells' width cap (height follows via aspect-ratio).
+// Default is the middle step (1.0 = the original 340/460px caps).
+const SIZE_KEY = 'claudeweb_dash_size';
+const SIZE_STEPS = [0.7, 0.85, 1, 1.2, 1.45];
+const SIZE_DEFAULT = 2;
+function clampSize(i) {
+  return Math.min(SIZE_STEPS.length - 1, Math.max(0, i));
+}
+function readSize() {
+  try {
+    const i = parseInt(localStorage.getItem(SIZE_KEY), 10);
+    return Number.isNaN(i) ? SIZE_DEFAULT : clampSize(i);
+  } catch {
+    return SIZE_DEFAULT;
   }
 }
 
@@ -48,6 +75,35 @@ function latestActivity(messages) {
   return last?.text ? oneLine(last.text) : '';
 }
 
+// Timestamp (ms) of the last message *I* sent in this transcript — the basis
+// for the recency border. Iterates from the end and stops at the first user
+// message that carries a timestamp.
+function lastUserAt(messages) {
+  if (!Array.isArray(messages)) return 0;
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const m = messages[i];
+    if (m?.role === 'user' && m?.timestamp) {
+      const t = Date.parse(m.timestamp);
+      if (!Number.isNaN(t)) return t;
+    }
+  }
+  return 0;
+}
+
+// Map "how long ago I last wrote" to a border tier (plans/agent-dashboard.md):
+//   <1min green · <5min bright green · 5–30min blue · 30–60min purple · >1hr none.
+// Returns undefined for >1hr / never, so no data-recency attribute is set.
+function recencyTier(at, now) {
+  if (!at) return undefined;
+  const min = (now - at) / 60000;
+  if (min < 0) return undefined;
+  if (min < 1) return 'fresh';
+  if (min < 5) return 'recent';
+  if (min < 30) return 'mid';
+  if (min < 60) return 'old';
+  return undefined;
+}
+
 // Agent dashboard (plans/agent-dashboard.md) — a full-screen grid overview of
 // every dock agent, opened from the top bar (not a tab). This is a new VIEW
 // over DockContext, not new plumbing: it reads the same agent list the Agents
@@ -55,7 +111,14 @@ function latestActivity(messages) {
 // (setActiveTab + /studio), then closes the overlay.
 export default function Dashboard({ onClose }) {
   const { t } = useT();
-  const { tabs, activeTabId, setActiveTab } = useDock();
+  const { tabs: dockTabs, activeTabId, setActiveTab, repos } = useDock();
+  // Only agents toggled "show on dashboard" in the Agents tab (default on).
+  const tabs = useMemo(() => dockTabs.filter((tab) => tab.dashboard !== false), [dockTabs]);
+  // repoId -> filesystem path, for the path line on each dock.
+  const repoPath = useCallback(
+    (repoId) => repos.find((r) => r.id === repoId)?.path || '',
+    [repos],
+  );
   const navigate = useNavigate();
   const [view, setView] = useState(readView);
   function chooseView(next) {
@@ -65,6 +128,19 @@ export default function Dashboard({ onClose }) {
     } catch {
       /* private mode — fall back to in-memory only */
     }
+  }
+  // "Bigger/smaller" dock size, stepped and remembered per device.
+  const [sizeIdx, setSizeIdx] = useState(readSize);
+  function stepSize(delta) {
+    setSizeIdx((prev) => {
+      const next = clampSize(prev + delta);
+      try {
+        localStorage.setItem(SIZE_KEY, String(next));
+      } catch {
+        /* private mode — fall back to in-memory only */
+      }
+      return next;
+    });
   }
   // { [tabId]: { status, activity } } — fresher than the dock list, view-local.
   const [live, setLive] = useState({});
@@ -77,6 +153,18 @@ export default function Dashboard({ onClose }) {
   // Lay agents out in a grid that approximates a square (columns = ⌈√n⌉) rather
   // than one long row: 4 → 2×2, 6 → 3×2, 10 → 4×3.
   const columns = Math.max(1, Math.ceil(Math.sqrt(tabs.length)));
+
+  // Recency tiers are derived against "now"; recomputed each render. The 5s poll
+  // re-renders via setLive, so the borders age without a separate timer.
+  const now = Date.now();
+
+  // Order by "hotness": agents I used most recently (live[id].at) sort first;
+  // ties and not-yet-loaded agents keep their dock order (Array.sort is stable).
+  // Driven by the same poll, so the ordering refreshes live as I work.
+  const orderedTabs = useMemo(
+    () => [...tabs].sort((a, b) => (live[b.id]?.at || 0) - (live[a.id]?.at || 0)),
+    [tabs, live],
+  );
 
   // Poll while the overlay is mounted (i.e. open); the effect's teardown stops
   // it on close. A `busy` guard skips a tick if the previous one is still in
@@ -102,17 +190,19 @@ export default function Dashboard({ onClose }) {
             const status = run?.status || tab.status;
             const sessionId = run?.sessionId || tab.sessionId;
             let activity = '';
+            let at = 0;
             if (sessionId) {
               try {
                 const messages = await apiGet(`/sessions/${sessionId}/messages`, {
                   repoId: tab.repoId,
                 });
                 activity = latestActivity(messages);
+                at = lastUserAt(messages);
               } catch {
                 /* no transcript yet / repo gone — leave activity blank */
               }
             }
-            return [tab.id, { status, activity }];
+            return [tab.id, { status, activity, at }];
           }),
         );
         if (!cancelled) setLive(Object.fromEntries(pairs));
@@ -161,6 +251,28 @@ export default function Dashboard({ onClose }) {
       <div className="dash__header">
         <h2 className="dash__title">{t('dashboard.title')}</h2>
         {tabs.length > 0 && (
+          <div className="dash__size" role="group" aria-label={t('dashboard.size')}>
+            <button
+              type="button"
+              className="dash__size-btn"
+              onClick={() => stepSize(-1)}
+              disabled={sizeIdx <= 0}
+              aria-label={t('dashboard.sizeSmaller')}
+            >
+              &minus;
+            </button>
+            <button
+              type="button"
+              className="dash__size-btn"
+              onClick={() => stepSize(1)}
+              disabled={sizeIdx >= SIZE_STEPS.length - 1}
+              aria-label={t('dashboard.sizeBigger')}
+            >
+              +
+            </button>
+          </div>
+        )}
+        {tabs.length > 0 && (
           <div className="dash__views" role="tablist" aria-label={t('dashboard.title')}>
             <button
               type="button"
@@ -180,6 +292,15 @@ export default function Dashboard({ onClose }) {
             >
               {t('dashboard.viewPhones')}
             </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === 'hot'}
+              className={`dash__view${view === 'hot' ? ' dash__view--on' : ''}`}
+              onClick={() => chooseView('hot')}
+            >
+              {t('dashboard.viewHot')}
+            </button>
           </div>
         )}
         <button
@@ -196,16 +317,35 @@ export default function Dashboard({ onClose }) {
         <p className="dash__empty">{t('dashboard.empty')}</p>
       ) : (
         <ul
-          className={`dash__grid${view === 'phones' ? ' dash__grid--phones' : ''}`}
-          style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+          className={`dash__grid${view !== 'cards' ? ' dash__grid--phones' : ''}`}
+          style={{
+            // All layouts cap their columns so cells stay square (height tracks
+            // width via aspect-ratio) and centred, instead of stretching into wide
+            // rectangles. Phones (and the mixed "hot" view, which can hold phones)
+            // get a larger cap since they render live chats.
+            gridTemplateColumns:
+              view === 'cards'
+                ? `repeat(${columns}, minmax(0, ${Math.round(340 * SIZE_STEPS[sizeIdx])}px))`
+                : `repeat(${columns}, minmax(0, ${Math.round(460 * SIZE_STEPS[sizeIdx])}px))`,
+          }}
         >
-          {tabs.map((tab) => {
+          {orderedTabs.map((tab) => {
             const info = live[tab.id];
             const status = info?.status || tab.status;
-            if (view === 'phones') {
+            const recency = recencyTier(info?.at, now);
+            // Phones view: always a phone. Hot view: phone iff hot. Cards: never.
+            const asPhone = view === 'phones' || (view === 'hot' && isHotTier(recency));
+            if (asPhone) {
               return (
                 <li key={tab.id} className="dash__phone-cell">
-                  <PinnedAgent tab={tab} status={status} onMaximize={handleOpen} />
+                  <PinnedAgent
+                    tab={tab}
+                    status={status}
+                    recency={recency}
+                    repoPath={repoPath(tab.repoId)}
+                    git={gitInfo[tab.repoId]}
+                    onMaximize={handleOpen}
+                  />
                 </li>
               );
             }
@@ -217,6 +357,7 @@ export default function Dashboard({ onClose }) {
                   type="button"
                   className={`dash-cell dash-cell--${status}${tab.id === activeTabId ? ' dash-cell--active' : ''}`}
                   data-colored={tab.color ? 'true' : undefined}
+                  data-recency={recency}
                   style={tab.color ? { '--agent-color': tab.color } : undefined}
                   onClick={() => handleOpen(tab.id)}
                 >
@@ -224,22 +365,13 @@ export default function Dashboard({ onClose }) {
                     <span className="dash-cell__dot" />
                     <span className="dash-cell__name">{tab.repoName}</span>
                   </span>
+                  {repoPath(tab.repoId) && (
+                    <span className="dash-cell__path">{repoPath(tab.repoId)}</span>
+                  )}
                   <span className="dash-cell__status">
                     {t(`agents.status.${status}`)}
                   </span>
-                  {git && (
-                    <span className="dash-cell__branch">
-                      <span aria-hidden="true">⎇</span> {git.branch}
-                    </span>
-                  )}
-                  {git && syncLines(t, git).map((line) => (
-                    <span
-                      key={line.key}
-                      className={`dash-cell__sync${line.warn ? ' dash-cell__sync--warn' : ''}`}
-                    >
-                      {line.text}
-                    </span>
-                  ))}
+                  {git && <GitStatusSummary status={git} compact />}
                   <span className="dash-cell__activity">
                     {activity || t('dashboard.noActivity')}
                   </span>

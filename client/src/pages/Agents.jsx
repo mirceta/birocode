@@ -97,6 +97,13 @@ export default function Agents() {
     setColorPickerFor(null);
   }
 
+  // Toggle whether this agent appears on the Dashboard (default on). Shared
+  // across devices via the backend dock field.
+  function handleToggleDashboard(e, id, shown) {
+    e.stopPropagation();
+    updateTab(id, { dashboard: !shown });
+  }
+
   function handleNewAgent(repoId, repoName) {
     openTab(repoId, repoName);
     setPickerOpen(false);
@@ -193,6 +200,11 @@ export default function Agents() {
               <span className="agent-card__dot" />
               <span className="agent-card__body">
                 <span className="agent-card__name">{tab.repoName}</span>
+                {repos.find((r) => r.id === tab.repoId)?.path && (
+                  <span className="agent-card__path">
+                    {repos.find((r) => r.id === tab.repoId).path}
+                  </span>
+                )}
                 {info[tab.repoId] && (
                   <span className="agent-card__branch">
                     <span aria-hidden="true">⎇</span> {info[tab.repoId].branch}
@@ -209,6 +221,18 @@ export default function Agents() {
                 <span className="agent-card__status">
                   {t(`agents.status.${tab.status}`)}
                 </span>
+              </span>
+
+              <span
+                className={`agent-card__dash${tab.dashboard === false ? ' agent-card__dash--off' : ''}`}
+                role="button"
+                tabIndex={0}
+                aria-pressed={tab.dashboard !== false}
+                title={t(tab.dashboard === false ? 'agents.dashboard.show' : 'agents.dashboard.hide')}
+                aria-label={t(tab.dashboard === false ? 'agents.dashboard.show' : 'agents.dashboard.hide')}
+                onClick={(e) => handleToggleDashboard(e, tab.id, tab.dashboard !== false)}
+              >
+                ▦
               </span>
 
               <span

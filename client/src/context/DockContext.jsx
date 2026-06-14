@@ -46,6 +46,8 @@ function toServerPatch(patch) {
   if ('repoName' in patch) body.repoName = patch.repoName;
   // Empty string clears the colour mark on the backend (see DockRegistry.Update).
   if ('color' in patch) body.color = patch.color ?? '';
+  // Whether the agent shows on the Dashboard (toggled from the Agents tab).
+  if ('dashboard' in patch) body.dashboard = patch.dashboard;
   return Object.keys(body).length > 0 ? body : null;
 }
 

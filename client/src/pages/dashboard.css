@@ -49,6 +49,9 @@
   padding: 0;
   display: grid;
   gap: 20px;
+  /* Both views are width-capped (see Dashboard.jsx), so centre the grid rather
+     than leaving the cells clinging to the left. */
+  justify-content: center;
 }
 
 /* The whole cell is the click target (opens that agent — no separate button). */
@@ -58,6 +61,10 @@
   flex-direction: column;
   gap: 10px;
   width: 100%;
+  /* Square-ish: height tracks the (capped) width instead of a fixed strip, so
+     a couple of agents don't become wide rectangles. min-height keeps a floor
+     when the column shrinks on narrow screens. */
+  aspect-ratio: 1 / 1;
   min-height: 240px;
   padding: 28px;
   border: 1px solid var(--color-border);
@@ -81,6 +88,36 @@
 .dash-cell[data-colored='true'] {
   border-left: 4px solid var(--agent-color);
   background: color-mix(in srgb, var(--agent-color) 12%, var(--color-surface));
+}
+
+/* Recency border (plans/agent-dashboard.md) — colour a dock by how long ago
+   the user last wrote in that agent: <1min green, <5min bright green,
+   5–30min blue, 30–60min purple, >1hr none (no data-recency attribute).
+   A fat all-sides border overrides the subtle default + the colour left-border. */
+.dash-cell[data-recency],
+.phone[data-recency] {
+  border-width: 5px;
+  border-style: solid;
+}
+
+.dash-cell[data-recency='fresh'],
+.phone[data-recency='fresh'] {
+  border-color: #16a34a;
+}
+
+.dash-cell[data-recency='recent'],
+.phone[data-recency='recent'] {
+  border-color: #4ade80;
+}
+
+.dash-cell[data-recency='mid'],
+.phone[data-recency='mid'] {
+  border-color: #3b82f6;
+}
+
+.dash-cell[data-recency='old'],
+.phone[data-recency='old'] {
+  border-color: #a855f7;
 }
 
 .dash-cell__head {
@@ -130,19 +167,16 @@
   color: var(--color-text-soft);
 }
 
-/* Git state, mirroring the Agents tab (.agent-card__branch / __sync). */
-.dash-cell__branch,
-.dash-cell__sync {
-  font-size: 13px;
+/* Repository filesystem path of the agent's project. */
+.dash-cell__path {
+  font-size: 11px;
   color: var(--color-text-soft);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-break: break-all;
+  line-height: 1.3;
 }
 
-.dash-cell__sync--warn {
-  color: #b58900;
-}
+/* Git state now uses the shared GitStatusSummary component (branch +
+   ahead/behind rows, same as the Git tab). See plans/dashboard-git-status.md. */
 
 /* The "what's it doing" line (slice 2 liveness). Grows to fill the taller
    cell and clamps to a few lines so cells stay uniform regardless of
@@ -162,12 +196,42 @@
 .dash__views {
   display: flex;
   gap: 2px;
+  margin-right: 12px;
+  padding: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+}
+
+/* "Bigger/smaller" stepper — mirrors the views pill, sits just left of it and
+   carries the margin-left:auto that pushes both controls to the right. */
+.dash__size {
+  display: flex;
+  gap: 2px;
   margin-left: auto;
   margin-right: 12px;
   padding: 2px;
   border: 1px solid var(--color-border);
   border-radius: 999px;
   background: var(--color-surface);
+}
+
+.dash__size-btn {
+  border: none;
+  background: none;
+  border-radius: 999px;
+  width: 28px;
+  height: 26px;
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 600;
+  color: var(--color-text-soft);
+  cursor: pointer;
+}
+
+.dash__size-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 .dash__view {
@@ -187,14 +251,12 @@
 }
 
 /* ---- Wall of phones (plans/agent-dashboard.md) ------------------------- */
-/* Each phone is a fixed-height frame holding one agent's live <Chat embedded>.
-   Fixed rows keep the wall uniform regardless of transcript length. */
-.dash__grid--phones {
-  grid-auto-rows: 560px;
-}
-
+/* Each phone is a square frame holding one agent's live <Chat embedded>. The
+   cell's height tracks its (capped) width via aspect-ratio — same as the
+   cards — so the wall stays square regardless of transcript length. */
 .dash__phone-cell {
   min-width: 0;
+  aspect-ratio: 1 / 1;
 }
 
 .phone {
@@ -231,6 +293,15 @@
   background: var(--color-hover, rgba(0, 0, 0, 0.04));
 }
 
+/* Git status block on the dock — branch + ahead/behind rows, same as the Git
+   tab (plans/dashboard-git-status.md). Given its own room above the chat. */
+.phone__git {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
 .phone__dot {
   width: 9px;
   height: 9px;
@@ -261,6 +332,16 @@
   white-space: nowrap;
 }
 
+.phone__path {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--color-text-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .phone__status {
   margin-left: auto;
   font-size: 12px;
@@ -268,24 +349,42 @@
   flex-shrink: 0;
 }
 
-/* The screen holds the embedded chat; clip its scroll to the frame. */
+/* The screen holds the embedded chat; clip its scroll to the frame. It's a flex
+   column so the chat fills it via flex (a flex-derived height isn't "definite,"
+   so the chat's old height:100% couldn't resolve against it and overflowed). */
 .phone__screen {
   flex: 1;
   min-height: 0;
   position: relative;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Embedded chat overrides: the standalone Chat page fills the viewport and
    pins its composer to the bottom of the screen (above the nav). Inside a
    phone it must instead fill its frame and keep the composer in-flow, so
    N phones don't stack their composers at the window bottom. */
-.chat--embedded {
+/* `.chat.chat--embedded` (two classes) so this height beats the base
+   `.chat { height: calc(100dvh - …) }` regardless of stylesheet load order —
+   otherwise the chat renders viewport-tall and overflows the phone frame,
+   clipping the composer. min-height:0 lets it shrink as a flex child too. */
+.chat.chat--embedded {
   margin: 0;
-  height: 100%;
+  /* Fill the (flex-column) phone screen via flex, not height:100% — the screen's
+     flex-derived height isn't a definite % basis. min-height:0 lets it shrink so
+     the inner scroll area bounds and the in-flow composer stays in the frame. */
+  flex: 1;
+  min-height: 0;
 }
 
 .chat--embedded .chat__scroll {
+  /* min-height:0 lets this flex:1 scroll area shrink below its content inside
+     the bounded phone frame, so it scrolls internally instead of growing and
+     pushing the in-flow composer past the clipped bottom (the bug: chat cut
+     off, composer unreachable). Standalone Chat avoids this via a fixed
+     composer; embedded keeps the composer in-flow, so it needs the floor. */
+  min-height: 0;
   padding: 12px 12px 16px;
 }
 
@@ -296,6 +395,8 @@
   width: 100%;
   max-width: none;
   padding: 0 10px 10px;
+  /* Never let the composer shrink/clip — the scroll area absorbs the height. */
+  flex: 0 0 auto;
 }
 
 /* Narrow screens: one phone per row, each a tall slab; beat the inline
