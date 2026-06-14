@@ -26,7 +26,7 @@ flowchart TD
   Stream["GET /api/chat/stream<br/>(slice 3: opt-in live tail)"] -.-> Activity["latest-activity line"]
   Badge --> Card
   Activity --> Card
-  Card["Dashboard card<br/>name · repo · colour"] -->|Maximize| Studio["/studio — the existing view"]
+  Card["Dashboard cell<br/>name · repo · colour"] -->|click cell| Studio["/studio — the existing view"]
 ```
 
 ## Agent status the badge reflects (already modelled today)
@@ -52,21 +52,24 @@ stateDiagram-v2
 
 ## Capability + placement
 
-- New capability flag `agentDashboard`, **Advanced** (per the convention: new
+- Capability flag `agentDashboard`, **Advanced** (per the convention: new
   features default to advanced unless promoted) in `UiModeContext.jsx`.
-- New tab registered in `tabRegistry.jsx` → route under `/studio` (default: a
-  separate "Dashboard" tab; see the UX doc for the new-tab-vs-evolve-Agents
-  question).
+- **Not a tab.** A top-bar button in `Layout.jsx` (`app-header__actions`)
+  toggles a full-screen overlay that replaces the content region and hides the
+  bottom nav / pane strip. The button only renders when `agentDashboard` is on
+  **and** `DockContext` holds 2+ agents. State (`dashOpen`) lives in
+  `StudioShell`; Escape / the in-overlay × / the button itself close it.
 
 ## Slices
 
-- **Slice 1 — static grid + maximize. ✅ built & verified.** `agentDashboard`
-  capability + a "Dashboard" tab (`pages/Dashboard.jsx`, `dashboard.css`,
-  registry/route/`KnownTabs`/i18n); a responsive CSS grid of agent cards from
-  `DockContext` (name, status badge + dot, colour mark); a Maximize button per
-  card wired to `setActiveTab` + `/studio`. Browser-verified: grid renders all
-  6 dock agents, Maximize lands on `/studio`, tab hidden in Basic mode.
-- **Slice 2 — liveness.** Per-card status refresh + a one-line latest-activity
+- **Slice 1 — static grid + open-agent. ✅ built & verified.** First shipped as
+  a bottom-nav tab; **redirected** to a top-bar full-screen overlay.
+  `agentDashboard` capability; `pages/Dashboard.jsx` + `dashboard.css` render a
+  responsive CSS grid of agent cells from `DockContext` (name, status badge +
+  dot, colour mark); the whole cell is clickable → `setActiveTab` + `/studio` +
+  close. Top-bar entry (`DashboardButton`) gated Advanced + 2+ agents. No tab /
+  route / `KnownTabs` entry.
+- **Slice 2 — liveness.** Per-cell status refresh + a one-line latest-activity
   string, updated on a timer (and/or reconciled from `/api/runs`).
 - **Slice 3 (later, maybe) — live tail.** An opt-in scrolling stream tail per
   cell, bounded so we don't open N heavy SSE streams at once.

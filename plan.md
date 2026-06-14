@@ -8,9 +8,10 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-14):** **In flight:** Agent dashboard — a grid overview of
-> every agent on this machine with per-cell Maximize, on
-> `feature/agent-dashboard` (slice 1 built + browser-verified). **Deployed &
+> **Status (2026-06-14):** **In flight:** Agent dashboard — a top-bar
+> full-screen grid overview of every agent on this machine, on
+> `feature/agent-dashboard` (slice 1 built + browser-verified; redirected from a
+> tab to a top-bar overlay). **Deployed &
 > confirmed (cf75052):** the
 > [stale-copy warning banner](plans/stale-version-banner.md) and the Local-tab
 > "how to expose a web app" instructions are live on :5099. The same deploy
@@ -38,11 +39,12 @@
   changed-file counts), slice 2 = lazy per-file patch. Built & browser-verified;
   pending deploy.
 - [Agent dashboard](plans/agent-dashboard.md) — a mission-control grid showing
-  every agent on this machine at once (status + what it's doing), with a
-  Maximize button per cell that opens that agent in the normal `/studio` view.
-  Removes the "open one → look → navigate back" dance. Mostly a new view over
-  existing plumbing (`DockContext`, `/api/runs`, the open-agent flow). Slice 1 =
-  static grid + maximize (built & browser-verified), slice 2 = liveness, slice 3
+  every agent on this machine at once (status + what it's doing). Opened from a
+  top-bar button (Advanced + 2+ agents) as a full-screen overlay, not a tab;
+  click a cell to open that agent in the normal `/studio` view. Removes the
+  "open one → look → navigate back" dance. Mostly a new view over existing
+  plumbing (`DockContext`, `/api/runs`, the open-agent flow). Slice 1 = static
+  grid + open-agent (built & browser-verified), slice 2 = liveness, slice 3
   (later) = live tail.
 
 ## Proposed / design (not building yet)

@@ -20,7 +20,7 @@ public class SettingsController : ControllerBase
     private static readonly HashSet<string> KnownTabs = new()
     {
         "claude", "files", "git", "history",
-        "agents", "dashboard", "screen", "projects", "guests", "app", "localapp", "ideas", "deploys", "settings",
+        "agents", "screen", "projects", "guests", "app", "localapp", "ideas", "deploys", "settings",
     };
 
     private readonly UiSettingsService _settings;

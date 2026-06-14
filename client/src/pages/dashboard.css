@@ -1,8 +1,9 @@
 /* Agent dashboard — grid overview of all dock agents (plans/agent-dashboard.md) */
 
+/* Full-screen overlay: fills the content region the studio normally uses
+   (.app-content is the scroller, so this just lays out and pads). */
 .dash {
   padding: 16px;
-  overflow-y: auto;
 }
 
 .dash__header {
@@ -17,6 +18,20 @@
   font-size: 15px;
   font-weight: 600;
   color: var(--color-accent);
+}
+
+.dash__close {
+  border: none;
+  background: none;
+  font-size: 26px;
+  line-height: 1;
+  padding: 0 4px;
+  color: var(--color-text-soft);
+  cursor: pointer;
+}
+
+.dash__close:hover {
+  color: var(--color-text);
 }
 
 .dash__empty {
@@ -36,15 +51,25 @@
   gap: 12px;
 }
 
+/* The whole cell is the click target (opens that agent — no separate button). */
 .dash-cell {
   position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  width: 100%;
   padding: 14px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   background: var(--color-surface);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.dash-cell:hover {
+  border-color: var(--color-accent);
+  background: var(--color-hover, rgba(0, 0, 0, 0.04));
 }
 
 .dash-cell--active {
@@ -104,9 +129,9 @@
   color: var(--color-text-soft);
 }
 
-.dash-cell__maximize {
-  align-self: flex-start;
-  margin-top: auto;
+/* Top-bar entry button (opens the overlay). Pill, like the other header
+   controls; highlighted while the overlay is open. */
+.dash-btn {
   padding: 6px 14px;
   border: 1px solid var(--color-border);
   border-radius: 999px;
@@ -117,7 +142,13 @@
   cursor: pointer;
 }
 
-.dash-cell__maximize:hover {
+.dash-btn:hover {
   border-color: var(--color-accent);
   color: var(--color-accent);
+}
+
+.dash-btn--active {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: #fff;
 }

@@ -9,10 +9,11 @@ import StaleVersionBanner from '../components/shared/StaleVersionBanner';
 import { SaveProvider } from '../components/history/SaveHandler';
 import { ChatProvider } from '../context/ChatContext';
 import { RepoProvider, useRepo } from '../context/RepoContext';
-import { DockProvider } from '../context/DockContext';
+import { DockProvider, useDock } from '../context/DockContext';
 import { UiModeProvider, useFeature } from '../context/UiModeContext';
 import { UiSettingsProvider } from '../context/UiSettingsContext';
 import { useT } from '../i18n/LanguageContext';
+import Dashboard from '../pages/Dashboard';
 import BottomNav from './BottomNav';
 import PaneStrip, { useMultiPane } from './PaneStrip';
 
@@ -57,6 +58,26 @@ function HelloButton() {
   return <button type="button" className="hello-btn">HELLO</button>;
 }
 
+// Top-bar entry point for the agent dashboard (plans/agent-dashboard.md). The
+// dashboard is a full-screen overview, not a tab — it only earns a button when
+// there is more than one agent to compare. Advanced-gated via 'agentDashboard'.
+function DashboardButton({ open, onToggle }) {
+  const { t } = useT();
+  const enabled = useFeature('agentDashboard');
+  const { tabs } = useDock();
+  if (!enabled || tabs.length < 2) return null;
+  return (
+    <button
+      type="button"
+      className={`dash-btn${open ? ' dash-btn--active' : ''}`}
+      onClick={onToggle}
+      aria-pressed={open}
+    >
+      {t('dashboard.open')}
+    </button>
+  );
+}
+
 // The build stamp is an Operator debugging aid — Advanced Mode only.
 function BuildStamp() {
   if (!useFeature('buildStamp')) return null;
@@ -73,9 +94,19 @@ function BuildStamp() {
 function StudioShell() {
   const { t } = useT();
   const { multi, panes, activeKey } = useMultiPane();
+  const [dashOpen, setDashOpen] = useState(false);
   useEffect(() => {
     document.title = t('app.title');
   }, [t]);
+  // Escape closes the full-screen dashboard overlay.
+  useEffect(() => {
+    if (!dashOpen) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setDashOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [dashOpen]);
   return (
     <div className="app-shell">
       <div className={`app-frame${multi ? ' app-frame--multi' : ''}`}>
@@ -84,6 +115,7 @@ function StudioShell() {
           <HeaderTitle />
           <div className="app-header__actions">
             <HelloButton />
+            <DashboardButton open={dashOpen} onToggle={() => setDashOpen((o) => !o)} />
             <ProjectChip />
             <LanguageToggle />
             <SaveButton />
@@ -91,7 +123,14 @@ function StudioShell() {
           </div>
         </header>
 
-        {multi ? (
+        {dashOpen ? (
+          // Full-screen overview: replaces the content area and hides the
+          // bottom nav / pane strip (plans/agent-dashboard.md). Top bar stays
+          // visible so the same button (or Escape, or the in-overlay ×) closes.
+          <main className="app-content">
+            <Dashboard onClose={() => setDashOpen(false)} />
+          </main>
+        ) : multi ? (
           <PaneStrip panes={panes} activeKey={activeKey} />
         ) : (
           <main className="app-content">
@@ -99,7 +138,7 @@ function StudioShell() {
           </main>
         )}
 
-        <BottomNav />
+        {!dashOpen && <BottomNav />}
         <BuildStamp />
       </div>
     </div>

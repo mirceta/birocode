@@ -1,78 +1,107 @@
 # Understanding — Agent dashboard (grid overview of all agents)
 
-> **Progress (2026-06-14):** Slice 1 (static grid + per-cell Maximize) is built
-> & browser-verified — a new Advanced "Dashboard" tab renders every dock agent
-> as a card (name, status badge + dot, colour mark) and Maximize opens the agent
-> in `/studio`. Slices 2 (liveness) and 3 (live tail) still to come. The three
-> open questions below were resolved with the documented defaults (new tab;
-> timer-based liveness for v1; Maximize → `/studio`) — confirm or redirect.
+> **Progress (2026-06-14):** Fork **resolved → top-bar full-screen overlay**
+> (option B). Slice 1 rebuilt: the dashboard is no longer a tab — a top-bar
+> **Dashboard** button (Advanced + 2+ agents) opens a full-screen overlay; click
+> a cell to open that agent; close via the button, the × , or Escape. Slices 2
+> (liveness) and 3 (live tail) remain.
 
-## The goal
+## The goal, in one picture
 
-Make the whole machine **controllable at a glance**. Today, to see what another
-agent is doing I have to open the Agents tab, click into one agent (which
-maximizes it into the normal chat/files/git view), look, then navigate back to
-the agent I was on. There's no single screen that shows *all* agents and what
-each is doing *right now* at the same time.
+Today every agent lives behind the Agents tab one at a time: open one, look,
+navigate back, repeat. There is no single screen showing **all** agents and
+what each is doing **at once**. The dashboard is that screen.
 
-You want an **agent dashboard**: a grid where each defined agent on this
-computer is a live cell. Each cell shows enough to know what's going on inside
-that agent without opening it. A **Maximize** button on a cell expands that
-agent into the full single-agent view we already have (the bottom tab
-navigation — chat/files/git/etc. scoped to that agent).
+```mermaid
+flowchart LR
+  subgraph Today["Today — one at a time"]
+    direction TB
+    L["Agents tab<br/>(a list)"] --> O1["open agent"]
+    O1 --> Look1["look"]
+    Look1 --> Back["go back"]
+    Back --> L
+  end
+  subgraph Goal["Goal — all at once"]
+    direction TB
+    D["Dashboard grid"] --> See["see every agent's<br/>status + activity"]
+    See --> Max["Maximize one"]
+    Max --> Studio["/studio<br/>(the normal view)"]
+  end
+  Today -. "replace the dance with" .-> Goal
+```
 
-This is like a mission-control / "wall of screens" view sitting *above* the
-existing per-agent tab navigation.
+## What a cell shows, and where each piece comes from
 
-## What exists today that we'll reuse (not rebuild)
+Each agent in the dock becomes one cell. The dashboard is a new **view** over
+plumbing we already have — it does not add backend.
 
-- **The agent list** — `DockContext` already holds every agent
-  (`{ id, repoId, repoName, sessionId, status, color, stash }`), backed by
-  `/api/dock`, persisted server-side. The dashboard reads this same list.
-- **Per-agent live status** — `status` is already one of
-  `idle | running | done | error` (the badges/legend the Agents tab shows).
-  Live activity comes from `GET /api/runs` (snapshot) + `GET /api/chat/stream`
-  (SSE tail of what the agent is currently saying/doing).
-- **Maximize = the existing "open agent" action** — `setActiveTab(id)` +
-  navigate to `/studio`, exactly what clicking an Agents-tab card does now.
-- **Grid layout baseline** — the multi-pane (`PaneStrip` / `useMultiPane`)
-  already lays out N panes; the dashboard is a sibling idea (a CSS grid of
-  agent cells rather than panes of one agent).
+```mermaid
+flowchart TD
+  Dock["DockContext<br/>GET /api/dock"] --> Name["name · repo · colour"]
+  Runs["GET /api/runs<br/>(snapshot, on a timer)"] --> Badge["status badge<br/>idle / running / done / error"]
+  Stream["GET /api/chat/stream<br/>(SSE — slice 3, opt-in)"] -.-> Activity["latest-activity line"]
+  Name --> Cell["Agent cell"]
+  Badge --> Cell
+  Activity --> Cell
+  Cell -->|Maximize → setActiveTab + /studio| Studio["the existing full view"]
+```
 
-## What I'd actually build (high level — for your confirmation, not final)
+## The status each badge reflects (already modelled today)
 
-1. A new **Agent dashboard** surface (Advanced-gated, new capability flag) that
-   renders every dock agent as a card in a responsive grid.
-2. Each card shows: agent name + repo, a status badge (idle/running/done/error,
-   reusing the existing legend + colour), and a short **live "what's it doing"
-   line** — e.g. the latest assistant/tool activity — so I can tell a stuck
-   agent from a working one at a glance.
-3. A **Maximize** control per card that opens that agent full-screen via the
-   existing open-agent flow.
-4. Lightweight live updates (poll `/api/runs`, and/or a small streamed tail) so
-   the grid stays current without me clicking in.
+```mermaid
+stateDiagram-v2
+  [*] --> idle
+  idle --> running: user sends a turn
+  running --> done: graceful finish
+  running --> error: crash / cancel
+  done --> running: next turn
+  error --> running: retry
+```
 
-## Open questions for you (these change the design)
+## What's done vs. what's left
 
-1. **New tab vs. evolve the Agents tab?** The Agents tab is already a list of
-   agent cards. Is the dashboard a *new* tab (e.g. "Dashboard"), or should it
-   *replace/become* the Agents tab's layout (cards → live grid)?
-2. **How "live" per cell?** Cheapest: status badge + last-known activity line,
-   refreshed on a timer. Richer (and heavier): an actual scrolling tail of each
-   agent's stream in every cell. Which do you want for v1?
-3. **Maximize target** — confirm "the mode we currently have" = the normal
-   `/studio` per-agent chat/files/git view (what clicking an Agents card does
-   today). Yes?
+```mermaid
+flowchart LR
+  S1["Slice 1<br/>static grid + Maximize"]:::done --> S2["Slice 2<br/>liveness on a timer"]:::next --> S3["Slice 3 (maybe)<br/>live SSE tail per cell"]:::later
+  classDef done fill:#22c55e,color:#fff,stroke:#16a34a
+  classDef next fill:#f59e0b,color:#fff,stroke:#d97706
+  classDef later fill:#e5e7eb,color:#374151,stroke:#9ca3af
+```
 
-## Assumptions (tell me if wrong)
+- **Slice 1 — done.** Advanced "Dashboard" tab; responsive grid of dock agents
+  (name, status badge + dot, colour mark); per-cell **Maximize** → `/studio`.
+- **Slice 2 — next.** Per-cell status refresh + a one-line "what's it doing",
+  updated on a **timer** (poll `/api/runs` + a cheap latest-activity source).
+  No per-cell connections.
+- **Slice 3 — later, maybe.** An **opt-in** scrolling SSE tail per cell, bounded
+  so we never open N heavy streams at once.
 
-- Scope = agents on *this* computer (the dock list), not cross-machine.
-- Creating/deleting/configuring agents stays in the existing Agents tab — the
-  dashboard is **read + maximize**, an overview, not a management screen.
-- One feature, one branch off `main` (per our git workflow).
+## How it's reached (resolved → overlay)
 
-## Out of scope (for now)
+The dashboard is **not a tab**. A top-bar **Dashboard** button opens a
+full-screen overlay that replaces the content area and hides the bottom nav /
+pane strip; the top bar stays so the same button closes it.
 
-- Spawning or editing agents from the dashboard.
-- Any cross-machine / remote-agent aggregation.
-- Changing how individual agents run.
+```mermaid
+flowchart TD
+  Bar["Top bar"] -->|"Dashboard button<br/>(Advanced + 2+ agents)"| Over["Full-screen overlay<br/>grid of agent cells"]
+  Over -->|"click a cell"| Studio["open that agent → /studio"]
+  Over -->|"button / × / Escape"| Close["close → back to studio"]
+```
+
+## What we reuse, not rebuild (both options)
+
+- **Agent list** — `DockContext` (`{ id, repoId, repoName, sessionId, status,
+  color, stash }`) via `/api/dock`, persisted server-side.
+- **Status** — already `idle | running | done | error` (the Agents-tab legend).
+- **Maximize** — `setActiveTab(id)` + navigate `/studio` (what an Agents card
+  does today).
+- **Grid baseline** — `PaneStrip` / `useMultiPane` lay out N panes; the
+  dashboard is a sibling (a CSS grid of cells, not panes of one agent).
+
+## Assumptions / out of scope
+
+- Scope = agents on **this** computer (the dock list); no cross-machine.
+- Creating / editing / configuring agents stays in the **Agents tab** — the
+  dashboard is **read + open**, an overview, not a management screen.
+- One feature, one branch (`feature/agent-dashboard`).
