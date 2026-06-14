@@ -158,6 +158,155 @@
   overflow: hidden;
 }
 
+/* ---- Cards / Phones view toggle (header) ------------------------------- */
+.dash__views {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+  margin-right: 12px;
+  padding: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+}
+
+.dash__view {
+  border: none;
+  background: none;
+  border-radius: 999px;
+  padding: 4px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-soft);
+  cursor: pointer;
+}
+
+.dash__view--on {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+/* ---- Wall of phones (plans/agent-dashboard.md) ------------------------- */
+/* Each phone is a fixed-height frame holding one agent's live <Chat embedded>.
+   Fixed rows keep the wall uniform regardless of transcript length. */
+.dash__grid--phones {
+  grid-auto-rows: 560px;
+}
+
+.dash__phone-cell {
+  min-width: 0;
+}
+
+.phone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.phone[data-colored='true'] {
+  border-left: 4px solid var(--agent-color);
+}
+
+/* Phone header doubles as the maximize affordance. */
+.phone__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  text-align: left;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.phone__bar:hover {
+  background: var(--color-hover, rgba(0, 0, 0, 0.04));
+}
+
+.phone__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #aaa;
+  flex-shrink: 0;
+}
+
+.phone--running .phone__dot {
+  background: #22c55e;
+  animation: dash-pulse 1.2s ease-in-out infinite;
+}
+
+.phone--done .phone__dot {
+  background: #3b82f6;
+}
+
+.phone--error .phone__dot {
+  background: #ef4444;
+}
+
+.phone__name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.phone__status {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--color-text-soft);
+  flex-shrink: 0;
+}
+
+/* The screen holds the embedded chat; clip its scroll to the frame. */
+.phone__screen {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Embedded chat overrides: the standalone Chat page fills the viewport and
+   pins its composer to the bottom of the screen (above the nav). Inside a
+   phone it must instead fill its frame and keep the composer in-flow, so
+   N phones don't stack their composers at the window bottom. */
+.chat--embedded {
+  margin: 0;
+  height: 100%;
+}
+
+.chat--embedded .chat__scroll {
+  padding: 12px 12px 16px;
+}
+
+.chat--embedded .chat-input {
+  position: static;
+  transform: none;
+  left: auto;
+  width: 100%;
+  max-width: none;
+  padding: 0 10px 10px;
+}
+
+/* Narrow screens: one phone per row, each a tall slab; beat the inline
+   grid-template-columns Dashboard.jsx sets for the square layout. */
+@media (max-width: 700px) {
+  .dash__grid--phones {
+    grid-template-columns: 1fr !important;
+    grid-auto-rows: 70vh;
+  }
+}
+
 /* Top-bar entry button (opens the overlay). Pill, like the other header
    controls; highlighted while the overlay is open. */
 .dash-btn {

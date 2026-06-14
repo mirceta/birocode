@@ -16,8 +16,15 @@ import '../components/chat/chat.css';
 // The chat screen. Conversation state + streaming live in ChatContext (mounted
 // in Layout) so they survive navigating to other tabs. This component is the
 // view: it renders the messages and owns only the scroll behavior.
-export default function Chat() {
+//
+// Normally it drives the ACTIVE conversation (useChat). The Agent Dashboard's
+// "wall of phones" reuses this same view for a BACKGROUND agent by passing a
+// `chat` facade from useChatFor + `embedded` (drops the app-level chrome —
+// Claude/Term toggle, project/harness scopes, understanding panel — that only
+// makes sense for the one active conversation). See plans/agent-dashboard.md.
+export default function Chat({ chat: injected, embedded = false }) {
   const { t } = useT();
+  const active = useChat();
   const {
     messages,
     sessionId,
@@ -43,7 +50,7 @@ export default function Chat() {
     chatView,
     setChatView,
     hasSelfRepo,
-  } = useChat();
+  } = injected || active;
 
   const showContextMeter = useFeature('contextMeter');
   const showDualChat = useFeature('dualChat');
@@ -85,8 +92,8 @@ export default function Chat() {
   }
 
   return (
-    <div className="chat">
-      {showDualChat && (
+    <div className={`chat${embedded ? ' chat--embedded' : ''}`}>
+      {!embedded && showDualChat && (
         <div className="chat__scopes" role="tablist" aria-label={t('chat.scopesAria')}>
           <button
             type="button"
@@ -111,7 +118,7 @@ export default function Chat() {
         </div>
       )}
       <div className="chat__bar">
-        <ClaudeViewToggle />
+        {!embedded && <ClaudeViewToggle />}
         <button type="button" className="chat__conversations" onClick={openPicker}>
           {t('chat.yourConversations')}
         </button>
@@ -126,7 +133,7 @@ export default function Chat() {
         </button>
       </div>
 
-      {showUnderstanding && <UnderstandingPanel />}
+      {!embedded && showUnderstanding && <UnderstandingPanel />}
 
       <div className="chat__scroll" ref={scrollRef} onScroll={handleScroll}>
         {messages.map((m, i) => (
@@ -147,6 +154,7 @@ export default function Chat() {
         streaming={streaming}
         attachment={attachment}
         onAttach={setAttachment}
+        embedded={embedded}
       />
 
       <SessionPicker

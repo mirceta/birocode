@@ -4,7 +4,20 @@ import { apiGet } from '../api/client';
 import { useDock } from '../context/DockContext';
 import { useT } from '../i18n/LanguageContext';
 import { syncLines } from '../lib/gitSync';
+import PinnedAgent from '../components/dashboard/PinnedAgent';
 import './dashboard.css';
+
+// The dashboard has two layouts (plans/agent-dashboard.md): summary "cards"
+// (status + activity + git, cheap) and the "wall of phones" — each agent's
+// live Chat rendered in place. The choice is remembered per device.
+const VIEW_KEY = 'claudeweb_dash_view';
+function readView() {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'phones' ? 'phones' : 'cards';
+  } catch {
+    return 'cards';
+  }
+}
 
 // Slice 2 liveness (plans/agent-dashboard.md) — while the overlay is open,
 // poll the cheap snapshot endpoints on a timer and keep the result LOCAL to
@@ -44,6 +57,15 @@ export default function Dashboard({ onClose }) {
   const { t } = useT();
   const { tabs, activeTabId, setActiveTab } = useDock();
   const navigate = useNavigate();
+  const [view, setView] = useState(readView);
+  function chooseView(next) {
+    setView(next);
+    try {
+      localStorage.setItem(VIEW_KEY, next);
+    } catch {
+      /* private mode — fall back to in-memory only */
+    }
+  }
   // { [tabId]: { status, activity } } — fresher than the dock list, view-local.
   const [live, setLive] = useState({});
   // { [repoId]: /git/status payload } — branch + ahead/behind, like the Agents
@@ -138,6 +160,28 @@ export default function Dashboard({ onClose }) {
     <div className="dash">
       <div className="dash__header">
         <h2 className="dash__title">{t('dashboard.title')}</h2>
+        {tabs.length > 0 && (
+          <div className="dash__views" role="tablist" aria-label={t('dashboard.title')}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === 'cards'}
+              className={`dash__view${view === 'cards' ? ' dash__view--on' : ''}`}
+              onClick={() => chooseView('cards')}
+            >
+              {t('dashboard.viewCards')}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === 'phones'}
+              className={`dash__view${view === 'phones' ? ' dash__view--on' : ''}`}
+              onClick={() => chooseView('phones')}
+            >
+              {t('dashboard.viewPhones')}
+            </button>
+          </div>
+        )}
         <button
           type="button"
           className="dash__close"
@@ -152,12 +196,19 @@ export default function Dashboard({ onClose }) {
         <p className="dash__empty">{t('dashboard.empty')}</p>
       ) : (
         <ul
-          className="dash__grid"
+          className={`dash__grid${view === 'phones' ? ' dash__grid--phones' : ''}`}
           style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
         >
           {tabs.map((tab) => {
             const info = live[tab.id];
             const status = info?.status || tab.status;
+            if (view === 'phones') {
+              return (
+                <li key={tab.id} className="dash__phone-cell">
+                  <PinnedAgent tab={tab} status={status} onMaximize={handleOpen} />
+                </li>
+              );
+            }
             const activity = info?.activity;
             const git = gitInfo[tab.repoId];
             return (

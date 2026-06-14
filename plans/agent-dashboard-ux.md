@@ -74,6 +74,35 @@ Clicking a cell opens that agent in **the per-agent view we already have** (the
 same place clicking an Agents-tab card takes you today) and closes the overlay.
 Re-opening the dashboard is one tap on the top-bar button.
 
+## Slice 4 — the literal wall of phones
+
+The cells so far are *summaries* (name, status, activity, git). The headline
+next step makes each cell the agent's **real, live view** — as if you set
+several mobile phones side by side, each phone showing one agent's single-tab
+experience. On a big screen you watch five agents at once; each looks and
+behaves like the one-tab-at-a-time view you'd get on a phone.
+
+```mermaid
+flowchart LR
+  subgraph Wall["Dashboard — wall of phones"]
+    direction LR
+    P1["📱 Agent A<br/>live Chat"]
+    P2["📱 Agent B<br/>live Chat"]
+    P3["📱 Agent C<br/>live Chat"]
+  end
+```
+
+**We start Chat-only** (each phone = that agent's live chat) because it's the
+safe, shippable slice — the technical reasons are in
+[agent-dashboard-tech.md](agent-dashboard-tech.md#slice-4-feasibility--the-wall-of-phones-researched-2026-06-14).
+A Chat-only phone shows just the conversation — no per-agent Files/Git/Terminal
+tabs yet; that's a deliberate stopping point, not a dead end.
+
+Four UX questions are still open and gate the build: which view each phone shows,
+whether phones are interactive or read-only (mirror + "maximise to interact"),
+whether phones replace the summary cards or sit behind a toggle, and how the wall
+collapses on small screens. (Listed in the tech plan.)
+
 ## UX decisions (resolved)
 
 - **A top-bar button → full-screen overlay, not a tab.** The Agents tab stays
