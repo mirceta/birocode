@@ -10,7 +10,16 @@ import GitStatusSummary from '../git/GitStatusSummary';
 //
 // The header is the maximize affordance — tapping it opens this agent in the
 // full /studio view (the same flow as a dashboard card / Agents-tab row).
-export default function PinnedAgent({ tab, status, recency, repoPath, git, onMaximize }) {
+export default function PinnedAgent({
+  tab,
+  status,
+  recency,
+  repoPath,
+  git,
+  gitRefreshing = false,
+  onRefreshGit,
+  onMaximize,
+}) {
   const { t } = useT();
   const chat = useChatFor({
     key: tab.id,
@@ -40,6 +49,18 @@ export default function PinnedAgent({ tab, status, recency, repoPath, git, onMax
       {git && (
         <div className="phone__git">
           <GitStatusSummary status={git} compact />
+          {onRefreshGit && (
+            <button
+              type="button"
+              className={`phone__git-refresh${gitRefreshing ? ' is-spinning' : ''}`}
+              onClick={onRefreshGit}
+              disabled={gitRefreshing}
+              title={t('dashboard.refreshGit')}
+              aria-label={t('dashboard.refreshGit')}
+            >
+              ↻
+            </button>
+          )}
         </div>
       )}
       <div className="phone__screen">
