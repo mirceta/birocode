@@ -1,6 +1,57 @@
 /* M6 -- File browser styles. Scoped to the Files screen.
    Mirrors global.css tokens (warm palette, 44px touch targets, soft radius). */
 
+/* ---- Pins (plans/plan-files-merge.md) ---------------------------------- */
+
+.files-pins {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 0 0 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.files-pins__label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-soft);
+  margin-right: 2px;
+}
+
+.files-pin {
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 600;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* "No active plan" state when plan.md is opened but missing (carried over from
+   the old Plan tab). */
+.files-noplan {
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.files-noplan__title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+
+.files-noplan__hint {
+  font-size: 13px;
+  color: var(--color-text-soft);
+  margin: 0;
+}
+
 /* ---- File / folder tree ------------------------------------------------ */
 
 .files-hint {
