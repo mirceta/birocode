@@ -14,7 +14,6 @@ import Ideas from './pages/Ideas';
 import Deployments from './pages/Deployments';
 import Agents from './pages/Agents';
 import Git from './pages/Git';
-import Plan from './pages/Plan';
 import Screen from './pages/Screen';
 import Terminal from './pages/Terminal';
 import Projects from './pages/Projects';
@@ -55,7 +54,6 @@ export default function App() {
             <Route path="deploys" element={<Deployments />} />
             <Route path="agents" element={<Agents />} />
             <Route path="git" element={<Git />} />
-            <Route path="plan" element={<Plan />} />
             <Route path="screen" element={<Screen />} />
             <Route path="terminal" element={<Terminal />} />
             <Route path="projects" element={<Projects />} />
