@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiGet, apiPost, apiPatch, apiDelete } from '../../api/client';
 import ErrorBanner from '../shared/ErrorBanner';
 import { useT } from '../../i18n/LanguageContext';
@@ -9,6 +9,9 @@ import './ideas.css';
 // composer + list + edit/delete, fetched once from /api/notes. Rendered by both
 // the Ideas tab (pages/Ideas.jsx) and the dashboard's pinned-left panel, so the
 // behaviour lives in one place.
+//
+// Each idea has an OPTIONAL free-text `project` label, and a client-side fuzzy
+// filter narrows the list as you type (plans/ideas-filter-project.md).
 function relTime(ms, t) {
   const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
   if (s < 60) return t('ideas.justNow');
@@ -20,6 +23,20 @@ function relTime(ms, t) {
   return t('ideas.daysAgo', { n: d });
 }
 
+// Forgiving fuzzy match: the query's characters must appear in order somewhere
+// in the target (a classic command-palette subsequence match), case-insensitive
+// and ignoring whitespace in the query. Empty query matches everything.
+function fuzzyMatch(query, target) {
+  const q = query.toLowerCase().replace(/\s+/g, '');
+  if (!q) return true;
+  const s = (target || '').toLowerCase();
+  let i = 0;
+  for (let j = 0; j < s.length && i < q.length; j++) {
+    if (s[j] === q[i]) i++;
+  }
+  return i === q.length;
+}
+
 export default function IdeasPanel() {
   const { t } = useT();
 
@@ -27,9 +44,12 @@ export default function IdeasPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [draft, setDraft] = useState('');
+  const [draftProject, setDraftProject] = useState('');
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editDraft, setEditDraft] = useState('');
+  const [editProject, setEditProject] = useState('');
+  const [filter, setFilter] = useState('');
   const draftRef = useRef(null);
 
   const load = useCallback(async () => {
@@ -49,15 +69,24 @@ export default function IdeasPanel() {
     load();
   }, [load]);
 
+  // Fuzzy filter over both the idea text and its project label.
+  const visible = useMemo(() => {
+    const q = filter.trim();
+    if (!q) return notes;
+    return notes.filter((n) => fuzzyMatch(q, `${n.text} ${n.project || ''}`));
+  }, [notes, filter]);
+
   async function add() {
     const text = draft.trim();
     if (!text || adding) return;
+    const project = draftProject.trim();
     setAdding(true);
     setError('');
     try {
-      const note = await apiPost('/notes', { text });
+      const note = await apiPost('/notes', { text, project });
       setNotes((prev) => [note, ...prev]);
       setDraft('');
+      setDraftProject('');
       draftRef.current?.focus();
     } catch {
       setError(t('ideas.saveError'));
@@ -69,11 +98,14 @@ export default function IdeasPanel() {
   async function saveEdit(id) {
     const text = editDraft.trim();
     if (!text) return;
+    const project = editProject.trim();
     const prev = notes;
-    setNotes((ns) => ns.map((n) => (n.id === id ? { ...n, text, updatedAt: Date.now() } : n)));
+    setNotes((ns) =>
+      ns.map((n) => (n.id === id ? { ...n, text, project: project || null, updatedAt: Date.now() } : n)),
+    );
     setEditingId(null);
     try {
-      await apiPatch(`/notes/${id}`, { text });
+      await apiPatch(`/notes/${id}`, { text, project });
     } catch {
       setNotes(prev);
       setError(t('ideas.saveError'));
@@ -89,6 +121,12 @@ export default function IdeasPanel() {
       setNotes(prev);
       setError(t('ideas.deleteError'));
     }
+  }
+
+  function startEdit(n) {
+    setEditingId(n.id);
+    setEditDraft(n.text);
+    setEditProject(n.project || '');
   }
 
   // Ctrl/Cmd+Enter submits the composer (the textarea keeps plain Enter for newlines).
@@ -111,6 +149,14 @@ export default function IdeasPanel() {
           onKeyDown={onDraftKey}
           rows={3}
         />
+        <input
+          className="ideas__input ideas__project"
+          type="text"
+          placeholder={t('ideas.projectPlaceholder')}
+          value={draftProject}
+          onChange={(e) => setDraftProject(e.target.value)}
+          onKeyDown={onDraftKey}
+        />
         <button type="button" className="ideas__add" onClick={add} disabled={adding || !draft.trim()}>
           {adding ? t('ideas.adding') : t('ideas.add')}
         </button>
@@ -118,13 +164,25 @@ export default function IdeasPanel() {
 
       {error && <ErrorBanner message={error} />}
 
+      {!loading && notes.length > 0 && (
+        <input
+          className="ideas__input ideas__filter"
+          type="search"
+          placeholder={t('ideas.filterPlaceholder')}
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+        />
+      )}
+
       <div className="ideas__list">
         {loading ? (
           <p className="ideas__muted">{t('ideas.loading')}</p>
         ) : notes.length === 0 ? (
           <p className="ideas__muted">{t('ideas.empty')}</p>
+        ) : visible.length === 0 ? (
+          <p className="ideas__muted">{t('ideas.noMatches')}</p>
         ) : (
-          notes.map((n) => (
+          visible.map((n) => (
             <div key={n.id} className="idea">
               {editingId === n.id ? (
                 <div className="idea__edit">
@@ -134,6 +192,13 @@ export default function IdeasPanel() {
                     onChange={(e) => setEditDraft(e.target.value)}
                     rows={3}
                     autoFocus
+                  />
+                  <input
+                    className="ideas__input ideas__project"
+                    type="text"
+                    placeholder={t('ideas.projectPlaceholder')}
+                    value={editProject}
+                    onChange={(e) => setEditProject(e.target.value)}
                   />
                   <div className="idea__actions">
                     <button type="button" className="idea__btn idea__btn--primary" onClick={() => saveEdit(n.id)} disabled={!editDraft.trim()}>
@@ -148,8 +213,9 @@ export default function IdeasPanel() {
                 <>
                   <p className="idea__text">{n.text}</p>
                   <div className="idea__foot">
+                    {n.project && <span className="idea__project">{n.project}</span>}
                     <span className="idea__time">{relTime(n.updatedAt || n.createdAt, t)}</span>
-                    <button type="button" className="idea__btn" onClick={() => { setEditingId(n.id); setEditDraft(n.text); }}>
+                    <button type="button" className="idea__btn" onClick={() => startEdit(n)}>
                       {t('ideas.edit')}
                     </button>
                     <button type="button" className="idea__btn idea__btn--danger" onClick={() => remove(n.id)}>

@@ -58,6 +58,13 @@
 
 ## Recently shipped
 
+- [Ideas — fuzzy filter + optional project field](plans/ideas-filter-project.md)
+  — a client-side **fuzzy filter** (subsequence search box) over the Global
+  Ideas list and an **optional free-text `project` field** on each idea (chip on
+  the card, persisted; old projectless ideas unaffected). Both flow through the
+  shared `IdeasPanel`, so the Ideas tab and the dashboard's pinned-left panel got
+  them together. Browser-verified on an isolated :5210 instance; merged to main
+  2026-06-15 (not yet deployed). On `feature/ideas-filter-project`.
 - [Dashboard git status on docks](plans/dashboard-git-status.md) — the Git tab's
   branch + "n ahead · m behind" position rows (vs base main/master, origin/main,
   upstream) now render on the dashboard **phone docks** too, and the **cards**
