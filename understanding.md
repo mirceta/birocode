@@ -1,33 +1,26 @@
-# Understanding — seamless feature lifecycle (kickoff & closeout)
+# Understanding — user-defined custom prompts
 
-## The problem (as I understand it)
-Both ends of a feature's life are a manual ritual you re-explain every time, and
-the agent forgets steps if they aren't restated:
+## What you asked for
+Right now the composer has two **hardcoded** prefill buttons (understanding 📝,
+kick-off 🚀). You want to **add your own pre-prepared prompts on the fly** — a UI
+to create/manage personal prompt presets, each of which then shows up as the same
+kind of one-tap button that fills the chat box.
 
-- **Kickoff:** open a `feature/<name>` branch, add the plan file + a `plan.md`
-  dashboard entry, write `understanding.md`, then start the build→verify cycle.
-- **Closeout:** once it's built/deployed/confirmed, "finish it off per our flow"
-  — disarm the rollback, keep-it bookkeeping (mark plan shipped, move to Recently
-  shipped), retire `understanding.md`, merge to main + push, tidy the branch.
-
-You want **both** to be seamless — start the next feature and close out the
-finished one without re-describing the whole dance.
-
-## Approach (decided)
-Same mechanism as the Understanding panel (slice 2) / Exposure "Fix with an
-agent": **composer-prefill buttons**. A button by the chat box calls
-`ChatContext.prefillProjectChat(text)` to drop a ready-made prompt into the
-composer (no extra model call); you review/edit and send.
-
-- **Kick off a feature** button → fills the composer with the kickoff ritual
-  (branch off main, plan file + `plan.md` entry, `understanding.md`, playback).
-- **Close out** button → fills it with the closeout ritual (disarm rollback,
-  keep-it bookkeeping, retire `understanding.md`, merge to main + push, tidy).
-
-The canned prompt text is the ritual's single source of truth, so the agent
-stops forgetting steps.
+## Proposed approach (defaults — tell me to adjust)
+- **Each preset = a label + a prompt body**, saved to a **global, backend-synced**
+  list (`prompts.json`), so they follow you across devices and projects.
+- **Backend:** a `PromptsService` + `/api/prompts` CRUD (the Notes/Pins pattern,
+  but global — not per-repo).
+- **In the composer:** saved presets render as buttons next to 📝/🚀; clicking
+  prefills the composer (append, no auto-send) — the exact mechanism the kickoff
+  button uses.
+- **Manager UI:** a small add/edit/delete surface (default: a `+`/⚙ button by the
+  composer that opens a popover with the list + an add form).
+- Built-in 📝/🚀 stay; your custom ones appear alongside. Advanced-gated.
 
 ## Status
-Approach written into `plans/feature-kickoff.md`; **not built yet**. Open
-build-time questions: prompt source (client const vs. server-built), exact
-button placement, gating, and whether closeout is static or branch-aware.
+Branch `feature/custom-prompts` created off synced main; plan +
+`plans/custom-prompts.md` entry written. **Not built yet** — playing this back
+first. Open questions in the plan: storage scope (global vs per-project),
+manager UI shape, whether the built-ins become editable presets, per-preset
+icons, and limits.

@@ -29,6 +29,11 @@
 
 ## Active feature plans
 
+- [Custom prompts](plans/custom-prompts.md) — let the user add their own
+  pre-prepared prompts on the fly: a manage UI + per-prompt composer buttons that
+  prefill the chat box, generalizing the hardcoded understanding/kickoff buttons.
+  Global backend-synced library. Playback pending. On `feature/custom-prompts`.
+
 - [Feature kickoff & closeout](plans/feature-kickoff.md) — a seamless feature
   lifecycle for BOTH ends: starting the next feature (branch, plan, understanding)
   AND finishing one per our flow (keep-it bookkeeping, mark shipped, merge, tidy)

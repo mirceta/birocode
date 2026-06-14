@@ -1,7 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useDock } from '../../context/DockContext';
 import { useFeature } from '../../context/UiModeContext';
+import { usePrompts } from '../../context/PromptsContext';
 import { useT } from '../../i18n/LanguageContext';
+import PromptManager from './PromptManager';
 
 // Controlled composer. The draft text lives in ChatContext (so it persists
 // across tab navigation and can be appended to by other tabs), and is passed
@@ -24,6 +26,12 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
   const stashEnabled = useFeature('promptStash') && !!activeTabId && !embedded;
   const understandingEnabled = useFeature('understandingPanel');
   const kickoffEnabled = useFeature('featureKickoff');
+  // User-defined prompt presets (plans/custom-prompts.md): per-preset buttons in
+  // the toolbar; the manage popover only on the main composer (not in dashboard
+  // phones — `embedded`).
+  const customPromptsEnabled = useFeature('customPrompts');
+  const { prompts, addPrompt, updatePrompt, deletePrompt } = usePrompts();
+  const [mgrOpen, setMgrOpen] = useState(false);
   const stash = (stashEnabled && activeTab?.stash) || [];
   const textareaRef = useRef(null);
   const fileRef = useRef(null);
@@ -87,6 +95,14 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
     requestAnimationFrame(() => textareaRef.current?.focus());
   }
 
+  // Insert a custom preset's text into the composer — same shape as the built-in
+  // prefills (append, no auto-send, focus).
+  function insertPrompt(promptText) {
+    const current = (value || '').trim();
+    onChange(current ? `${current}\n\n${promptText}` : promptText);
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }
+
   function handleChipTap(item) {
     // Swap: a non-empty draft is stashed before the chip replaces it.
     const trimmed = (value || '').trim();
@@ -105,6 +121,15 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
 
   return (
     <div className="chat-input">
+      {customPromptsEnabled && !embedded && mgrOpen && (
+        <PromptManager
+          prompts={prompts}
+          onAdd={addPrompt}
+          onUpdate={updatePrompt}
+          onDelete={deletePrompt}
+          onClose={() => setMgrOpen(false)}
+        />
+      )}
       {stash.length > 0 && (
         <div className="chat-stash" aria-label={t('chat.stashListAria')}>
           {stash.map((item) => (
@@ -187,6 +212,30 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
             title={t('feature.kickoff')}
           >
             &#128640;
+          </button>
+        )}
+        {customPromptsEnabled && prompts.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            className="chat-input__preset"
+            onClick={() => insertPrompt(p.text)}
+            aria-label={t('prompts.insertAria', { label: p.label || p.text })}
+            title={p.label || p.text}
+          >
+            {p.emoji || '\u{1F4AC}'}
+          </button>
+        ))}
+        {customPromptsEnabled && !embedded && (
+          <button
+            type="button"
+            className="chat-input__manage"
+            onClick={() => setMgrOpen((o) => !o)}
+            aria-label={t('prompts.manage')}
+            title={t('prompts.manage')}
+            aria-expanded={mgrOpen}
+          >
+            +
           </button>
         )}
         <textarea

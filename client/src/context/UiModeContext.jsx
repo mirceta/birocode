@@ -42,6 +42,7 @@ export const FEATURES = {
   ideasTab: 'advanced', // per-project notes (plans/ideas-tab.md)
   understandingPanel: 'advanced', // restatement-of-request panel atop chat (plans/understanding-panel.md)
   featureKickoff: 'advanced', // composer button that prefills the "start a new feature" ritual (plans/feature-kickoff.md)
+  customPrompts: 'advanced', // user-defined composer prompt presets + manager (plans/custom-prompts.md)
   deploysTab: 'advanced', // deploy status + rollback control (plans/deployments-tab.md)
 };
 
