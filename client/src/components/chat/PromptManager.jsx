@@ -18,8 +18,16 @@ const EMOJIS = [
   '🙌', '💾', '📥', '📤', '🔗', '🪲', '🧱', '🎁', '⏰', '🏷️',
 ];
 
-export default function PromptManager({ prompts, onAdd, onUpdate, onDelete, onClose }) {
+export default function PromptManager({ prompts, onAdd, onUpdate, onDelete, onInsert, onClose }) {
   const { t } = useT();
+  // The two former hardcoded composer buttons (understanding 📝, kickoff 🚀) now
+  // live here as built-in entries — insert-only (no edit/delete), text from i18n
+  // so they stay translatable. They sit above the user's own prompts.
+  const builtins = [
+    { id: '__understanding', emoji: '\u{1F4DD}', label: t('understanding.prefill'), text: t('understanding.prefillPrompt'), builtin: true },
+    { id: '__kickoff', emoji: '\u{1F680}', label: t('feature.kickoff'), text: t('feature.kickoffPrompt'), builtin: true },
+  ];
+  const items = [...builtins, ...prompts];
   const [editingId, setEditingId] = useState(null);
   const [emoji, setEmoji] = useState(EMOJIS[0]);
   const [label, setLabel] = useState('');
@@ -78,24 +86,34 @@ export default function PromptManager({ prompts, onAdd, onUpdate, onDelete, onCl
         </button>
       </div>
 
-      {prompts.length === 0 ? (
-        <p className="prompt-mgr__empty">{t('prompts.empty')}</p>
-      ) : (
-        <ul className="prompt-mgr__list">
-          {prompts.map((p) => (
-            <li key={p.id} className="prompt-mgr__item">
-              <span className="prompt-mgr__item-emoji" aria-hidden="true">{p.emoji}</span>
-              <span className="prompt-mgr__item-label" title={p.text}>{p.label || p.text}</span>
+      <ul className="prompt-mgr__list">
+        {items.map((p) => (
+          <li key={p.id} className="prompt-mgr__item">
+            <span className="prompt-mgr__item-emoji" aria-hidden="true">{p.emoji}</span>
+            <span className="prompt-mgr__item-label" title={p.text}>{p.label || p.text}</span>
+            <button
+              type="button"
+              className="prompt-mgr__item-btn prompt-mgr__item-use"
+              onClick={() => { onInsert(p.text); onClose(); }}
+            >
+              {t('prompts.use')}
+            </button>
+            {!p.builtin && (
               <button type="button" className="prompt-mgr__item-btn" onClick={() => startEdit(p)}>
                 {t('prompts.edit')}
               </button>
+            )}
+            {!p.builtin && (
               <button type="button" className="prompt-mgr__item-btn" onClick={() => remove(p.id)}>
                 {t('prompts.delete')}
               </button>
-            </li>
-          ))}
-        </ul>
-      )}
+            )}
+          </li>
+        ))}
+      </ul>
+
+      <p className="prompt-mgr__formhint">{t('prompts.addHint')}</p>
+
 
       <form className="prompt-mgr__form" onSubmit={save}>
         <div className="prompt-mgr__emoji-grid" role="group" aria-label={t('prompts.emoji')}>

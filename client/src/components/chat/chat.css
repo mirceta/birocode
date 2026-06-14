@@ -854,6 +854,18 @@ details.step > summary::-webkit-details-marker {
   cursor: pointer;
 }
 
+/* The "Use" action (insert into composer) is the primary per-row action. */
+.prompt-mgr__item-use {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.prompt-mgr__formhint {
+  font-size: 12px;
+  color: var(--color-text-soft);
+  margin: 12px 0 6px;
+}
+
 .prompt-mgr__form {
   border-top: 1px solid var(--color-border);
   padding-top: 10px;

@@ -271,6 +271,8 @@
   "prompts.manage": "Manage custom prompts",
   "prompts.title": "Custom prompts",
   "prompts.empty": "No custom prompts yet. Add one below.",
+  "prompts.use": "Use",
+  "prompts.addHint": "Add your own prompt below:",
   "prompts.add": "Add",
   "prompts.save": "Save",
   "prompts.cancel": "Cancel",

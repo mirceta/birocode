@@ -6,20 +6,21 @@ kick-off 🚀). You want to **add your own pre-prepared prompts on the fly** —
 to create/manage personal prompt presets, each of which then shows up as the same
 kind of one-tap button that fills the chat box.
 
-## Approach (built)
-- **Each preset = an emoji + a label + a prompt body**, saved to a **global,
-  backend-synced** list (`prompts.json`), so they follow you across devices and
-  projects.
-- **Backend:** a `PromptsService` + `/api/prompts` CRUD (the Notes/Pins pattern,
-  but global — not per-repo).
-- **In the composer:** saved presets render as buttons next to 📝/🚀; clicking
-  prefills the composer (append, no auto-send) — the exact mechanism the kickoff
-  button uses.
-- **Manager UI:** a `+` button by the composer opens a popover with the list +
-  an add/edit/delete form (emoji picker + label + text).
-- Built-in 📝/🚀 stay; your custom ones appear alongside. Advanced-gated.
+## Approach (built — unified single-entry design)
+- **One ⚙ button** by the composer opens a **centered modal** (portaled to
+  `<body>` so the composer's `transform` stacking context can't hide it). The
+  old per-feature toolbar buttons (📝 understanding, 🚀 kickoff) and per-preset
+  buttons are gone — everything lives in the modal.
+- **The modal lists every prompt** — the two built-ins (understanding, kickoff,
+  text from i18n, insert-only) on top, then the user's custom ones — each with a
+  **Use** button that inserts it into the composer (append, no auto-send) and
+  closes the modal. Custom ones also have Edit/Delete.
+- **Add your own** via the emoji-picker + label + text form at the bottom.
+- **Backend:** global `PromptsService` + `/api/prompts` CRUD (Notes/Pins
+  pattern, but global — not per-repo); custom prompts persist in `prompts.json`.
+- Advanced-gated.
 
 ## Status
-Built & browser-verified (`verify-custom-prompts.mjs`, 7/7 on isolated :5201:
-add → composer button → prefill; edit + delete persist across reload). Committed
-on `feature/custom-prompts` (586ea03). Pending deploy/merge.
+Built & browser-verified on live :5099 (`verify-unified.mjs` 9/9: toolbar has
+only ⚙; modal lists built-ins with Use; Use prefills the composer + closes;
+no errors). Deployed (backend `369e88b`, frontend live). Pending "keep it".

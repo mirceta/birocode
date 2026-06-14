@@ -24,11 +24,11 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
   // cross-write) inside a dashboard phone for a background agent — disable it
   // there (plans/agent-dashboard.md).
   const stashEnabled = useFeature('promptStash') && !!activeTabId && !embedded;
-  const understandingEnabled = useFeature('understandingPanel');
-  const kickoffEnabled = useFeature('featureKickoff');
-  // User-defined prompt presets (plans/custom-prompts.md): per-preset buttons in
-  // the toolbar; the manage popover only on the main composer (not in dashboard
-  // phones — `embedded`).
+  // Prompts (plans/custom-prompts.md): a single ⚙ button opens a modal that holds
+  // BOTH the built-in prompts (understanding, kickoff — formerly their own toolbar
+  // buttons) and the user's custom ones, each with a "Use" button that prefills
+  // the composer. Modal only on the main composer (not dashboard phones —
+  // `embedded`).
   const customPromptsEnabled = useFeature('customPrompts');
   const { prompts, addPrompt, updatePrompt, deletePrompt } = usePrompts();
   const [mgrOpen, setMgrOpen] = useState(false);
@@ -73,30 +73,9 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
     onChange('');
   }
 
-  // Drop the standing "write your understanding first" instruction into the
-  // composer (plans/understanding-panel.md slice 2). It does NOT auto-send —
-  // the user reviews and presses Enter, so it's an ordinary turn (no extra
-  // claude -p call). Appended to any existing draft so nothing is lost, then
-  // the box is focused for review.
-  function handleUnderstandingPrefill() {
-    const prompt = t('understanding.prefillPrompt');
-    const current = (value || '').trim();
-    onChange(current ? `${current}\n\n${prompt}` : prompt);
-    requestAnimationFrame(() => textareaRef.current?.focus());
-  }
-
-  // Drop the "start a new feature" ritual into the composer (plans/feature-kickoff.md).
-  // Same shape as the understanding prefill: no auto-send, appended so nothing is
-  // lost, then focus so the user types the feature name after the trailing colon.
-  function handleKickoffPrefill() {
-    const prompt = t('feature.kickoffPrompt');
-    const current = (value || '').trim();
-    onChange(current ? `${current}\n\n${prompt}` : prompt);
-    requestAnimationFrame(() => textareaRef.current?.focus());
-  }
-
-  // Insert a custom preset's text into the composer — same shape as the built-in
-  // prefills (append, no auto-send, focus).
+  // Insert a prompt's text into the composer (called from the manager modal's
+  // "Use" buttons — built-in and custom alike). Appended so nothing is lost, no
+  // auto-send: the user reviews and presses Enter, so it's an ordinary turn.
   function insertPrompt(promptText) {
     const current = (value || '').trim();
     onChange(current ? `${current}\n\n${promptText}` : promptText);
@@ -127,6 +106,7 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
           onAdd={addPrompt}
           onUpdate={updatePrompt}
           onDelete={deletePrompt}
+          onInsert={insertPrompt}
           onClose={() => setMgrOpen(false)}
         />
       )}
@@ -192,40 +172,6 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
           className="chat-input__file-hidden"
           onChange={handleFileChange}
         />
-        {understandingEnabled && (
-          <button
-            type="button"
-            className="chat-input__understand"
-            onClick={handleUnderstandingPrefill}
-            aria-label={t('understanding.prefill')}
-            title={t('understanding.prefill')}
-          >
-            &#128221;
-          </button>
-        )}
-        {kickoffEnabled && (
-          <button
-            type="button"
-            className="chat-input__kickoff"
-            onClick={handleKickoffPrefill}
-            aria-label={t('feature.kickoff')}
-            title={t('feature.kickoff')}
-          >
-            &#128640;
-          </button>
-        )}
-        {customPromptsEnabled && prompts.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            className="chat-input__preset"
-            onClick={() => insertPrompt(p.text)}
-            aria-label={t('prompts.insertAria', { label: p.label || p.text })}
-            title={p.label || p.text}
-          >
-            {p.emoji || '\u{1F4AC}'}
-          </button>
-        ))}
         {customPromptsEnabled && !embedded && (
           <button
             type="button"

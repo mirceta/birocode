@@ -271,6 +271,8 @@
   "prompts.manage": "Ozel istemleri yonet",
   "prompts.title": "Ozel istemler",
   "prompts.empty": "Henuz ozel istem yok. Asagidan ekle.",
+  "prompts.use": "Kullan",
+  "prompts.addHint": "Kendi istemini asagidan ekle:",
   "prompts.add": "Ekle",
   "prompts.save": "Kaydet",
   "prompts.cancel": "Iptal",

@@ -1,11 +1,16 @@
 # Custom prompts — user-defined composer prefill buttons
 
-> **Status (2026-06-14):** BUILT & browser-verified (`verify-custom-prompts.mjs`
-> 7/7 on isolated :5201: add via the popover → composer button → prefills the box;
-> edit + delete persist across reload; global backend-synced). On
-> `feature/custom-prompts` off main (2567e84), pending deploy/merge. Extends the
-> [feature-kickoff](feature-kickoff.md) composer-prefill buttons to a user-managed
-> library.
+> **Status (2026-06-14):** BUILT, DEPLOYED to live :5099, browser-verified.
+> **Redesigned after first feedback into a single-entry UI:** one ⚙ button opens
+> a centered modal (portaled to `<body>` — the composer's `transform` stacking
+> context was hiding the original popover, "the button does nothing"). The modal
+> holds BOTH the former toolbar buttons (📝 understanding, 🚀 kickoff, now
+> insert-only built-ins) AND the user's custom prompts, each with a **Use** button
+> that prefills the composer; custom ones add Edit/Delete; an add form at the
+> bottom. The 📝/🚀/per-preset toolbar buttons were removed. Verified live with
+> `verify-unified.mjs` (9/9) + `verify-modal.mjs` (phone+desktop). On
+> `feature/custom-prompts` (merged with origin/main), pending "keep it". Supersedes
+> the [feature-kickoff](feature-kickoff.md) per-button approach.
 
 ## Problem
 
