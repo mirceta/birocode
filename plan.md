@@ -22,12 +22,6 @@
 > `feature/pwa-webapk-warning` (set aside, not started).
 
 ## Active feature plans
-
-- [Image preview](plans/files-image-preview.md) — view image files
-  (`.png/.jpg/.svg/...`) in the Files tab via a new whitelisted `/api/files/raw`
-  endpoint + an `<img>` in the viewer. Enables "agent saves a screenshot to the
-  repo → view it in Files." Keeps the Screen tab. Building on
-  `feature/files-image-preview`.
 - [Understanding panel](plans/understanding-panel.md) **— slice 2** — make the
   panel work in Product Repos, not just the Harness. A composer-prefill button
   drops the "write your understanding first" instruction into the chat box (no
@@ -50,6 +44,11 @@
 
 ## Recently shipped
 
+- [Image preview](plans/files-image-preview.md) — image files
+  (`.png/.jpg/.svg/...`) render as pictures in the Files viewer via a new
+  whitelisted `/api/files/raw` endpoint + an `<img>` (blob-fetched, 5 s
+  live-refresh). "Agent saves a screenshot to the repo → view it in Files."
+  Screen tab kept. Deployed & confirmed 2026-06-14 (bf81848); not yet merged.
 - [HTML preview](plans/html-preview.md) — `.html`/`.htm` files render as a page
   in the Files viewer via a sandboxed `srcDoc` iframe (scripts inert), with the
   same raw/rendered toggle Markdown has. Realizes the deferred doc-viewer "HTML

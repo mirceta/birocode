@@ -1,8 +1,11 @@
 # Image preview — view image files in the Files tab
 
-> **Status (2026-06-14):** Building on `feature/files-image-preview` off main
-> (fae48a5). Extends the unified Files viewer (after Markdown + HTML) to images,
-> enabling "agent saves a screenshot to the repo → view it in Files."
+> **Status (2026-06-14):** DEPLOYED & CONFIRMED on live :5099 (bf81848); rollback
+> disarmed, /api/files/raw live (served a real screenshot.png as image/png).
+> Browser-verified (verify-files-image-preview.mjs 5/5 on :5201). On
+> `feature/files-image-preview`, NOT yet merged to main. Extends the unified
+> Files viewer (after Markdown + HTML) to images — "agent saves a screenshot to
+> the repo → view it in Files."
 
 ## Problem
 
