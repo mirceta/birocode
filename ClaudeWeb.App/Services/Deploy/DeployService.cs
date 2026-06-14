@@ -71,6 +71,53 @@ public class DeployService
         return !stillArmed;
     }
 
+    public sealed record PullMainResult(bool Deploying, string? MainCommit, string? Error);
+
+    /// <summary>
+    /// Pull-main-redeploy slice 1 (plans/pull-main-redeploy.md), option (A):
+    /// redeploy live from the latest origin/main, leaving the current branch
+    /// checkout untouched. Pre-flights synchronously (fetch + resolve
+    /// origin/main) so a bad state fails fast with a clear message, then fires
+    /// scripts/deploy-main.ps1 DETACHED — it restarts the harness, so it must
+    /// outlive this request (same pattern as <see cref="TriggerRollback"/>).
+    /// </summary>
+    public PullMainResult PullMainRedeploy(bool noSwap = false)
+    {
+        var repo = _registry.GetAll().FirstOrDefault(r => r.IsSelf)?.Path;
+        if (string.IsNullOrWhiteSpace(repo))
+            return new PullMainResult(false, null, "No self repository is registered.");
+
+        var (fc, _, fe) = Run("git", $"-C \"{repo}\" fetch origin");
+        if (fc != 0)
+            return new PullMainResult(false, null, $"git fetch origin failed: {fe.Trim()}");
+        var (rc, sha, re) = Run("git", $"-C \"{repo}\" rev-parse origin/main");
+        if (rc != 0)
+            return new PullMainResult(false, null, $"origin/main not found: {re.Trim()}");
+        var commit = sha.Trim();
+
+        var script = Path.Combine(repo, "scripts", "deploy-main.ps1");
+        if (!File.Exists(script))
+            return new PullMainResult(false, commit, $"Deploy script missing: {script}");
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = "powershell",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        psi.ArgumentList.Add("-ExecutionPolicy");
+        psi.ArgumentList.Add("Bypass");
+        psi.ArgumentList.Add("-File");
+        psi.ArgumentList.Add(script);
+        psi.ArgumentList.Add("-RepoPath");
+        psi.ArgumentList.Add(repo);
+        if (noSwap) psi.ArgumentList.Add("-NoSwap");
+        Process.Start(psi);
+
+        _logger.Info($"[DEPLOY] pull-main redeploy triggered (origin/main {commit[..Math.Min(7, commit.Length)]}, noSwap={noSwap}, detached)");
+        return new PullMainResult(true, commit, null);
+    }
+
     public void TriggerRollback()
     {
         // Detached: rollback.ps1 stops the harness, so it must outlive this request.

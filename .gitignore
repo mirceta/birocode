@@ -17,6 +17,12 @@ settings.json
 # Isolated build output for the App-tab self-preview (see CLAUDE.md)
 .claudeweb-preview/
 
+# Self-dev deploy scaffolding (pull-main-redeploy, plans/pull-main-redeploy.md):
+# the in-place deploy script, the origin/main build worktree, the live copy.
+.selfdev-build/
+.selfdev-live/
+.claudeweb-deploy-main/
+
 # Chat file uploads (images etc. sent alongside prompts)
 .claudeweb-uploads/
 .preview-test/
