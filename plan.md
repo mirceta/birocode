@@ -8,11 +8,13 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-14):** **In flight:** Understanding panel **slice 2** — a
-> composer-prefill button that makes the panel work in Product Repos (built,
-> browser-verified 6/6; pending deploy). **Just merged to main:** Git tab PR
-> preview — the branch's committed delta vs its base, like a GitHub PR (slices
-> 1 & 2, built + browser-verified; pending deploy). Already merged & deployed:
+> **Status (2026-06-14):** **Just planned:** Agent dashboard — a grid overview
+> of every agent on this machine with per-cell Maximize, on
+> `feature/agent-dashboard` (not started). **In flight:** Understanding panel
+> **slice 2** — a composer-prefill button that makes the panel work in Product
+> Repos (built, browser-verified 6/6; pending deploy). **Just merged to main:**
+> Git tab PR preview — the branch's committed delta vs its base, like a GitHub
+> PR (slices 1 & 2, built + browser-verified; pending deploy). Already merged & deployed:
 > Understanding panel slice 1, Deployments tab slice 1, the product-onboarding
 > Exposure check (slices 1-3), and per-tab agent spaces. Proposed: a
 > [spec-baseline](plans/spec-baseline.md) DESIGN plan — what to borrow from
@@ -33,6 +35,13 @@
   reuses `GitService.RunGit`/`DetectBases`. Slice 1 = summary (commits +
   changed-file counts), slice 2 = lazy per-file patch. Built & browser-verified;
   pending deploy.
+- [Agent dashboard](plans/agent-dashboard.md) — a mission-control grid showing
+  every agent on this machine at once (status + what it's doing), with a
+  Maximize button per cell that opens that agent in the normal `/studio` view.
+  Removes the "open one → look → navigate back" dance. Mostly a new view over
+  existing plumbing (`DockContext`, `/api/runs`, the open-agent flow). Slice 1 =
+  static grid + maximize, slice 2 = liveness, slice 3 (later) = live tail. Just
+  planned; not started.
 
 ## Proposed / design (not building yet)
 
