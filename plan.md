@@ -22,6 +22,11 @@
 > `feature/pwa-webapk-warning` (set aside, not started).
 
 ## Active feature plans
+
+- [HTML preview](plans/html-preview.md) — render `.html`/`.htm` files in the
+  Files viewer as a page (sandboxed `srcDoc` iframe, scripts inert), with the
+  same raw/rendered toggle Markdown has. Realizes the deferred doc-viewer "HTML
+  webview" slice. Building on `feature/html-preview`.
 - [Understanding panel](plans/understanding-panel.md) **— slice 2** — make the
   panel work in Product Repos, not just the Harness. A composer-prefill button
   drops the "write your understanding first" instruction into the chat box (no
