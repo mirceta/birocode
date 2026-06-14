@@ -15,8 +15,8 @@
 > confirmed (cf75052):** the
 > [stale-copy warning banner](plans/stale-version-banner.md) and the Local-tab
 > "how to expose a web app" instructions are live on :5099. The same deploy
-> also carried Understanding panel **slice 2** and the Git tab **PR preview**
-> (slices 1 & 2) live — their owners to mark confirmed. Already merged &
+> also shipped Understanding panel **slice 2** and the Git tab **PR preview**
+> (slices 1 & 2) — now deployed & confirmed. Already merged &
 > deployed: Understanding panel slice 1, Deployments tab slice 1, the
 > product-onboarding Exposure check (slices 1-3), and per-tab agent spaces.
 > Proposed: a
@@ -30,18 +30,6 @@
 - [Dashboard shortcut](plans/dashboard-shortcut.md) — `Ctrl/Cmd+Shift+D` toggles
   between the agent dashboard overlay and the normal tab view (Escape still
   closes; ignored while typing). Building on `feature/dashboard-shortcut`.
-- [Understanding panel](plans/understanding-panel.md) **— slice 2** — make the
-  panel work in Product Repos, not just the Harness. A composer-prefill button
-  drops the "write your understanding first" instruction into the chat box (no
-  extra `claude -p` cost). Built & browser-verified 6/6; live via the cf75052
-  deploy, owner to confirm.
-- [Git tab — branch PR preview](plans/git-pr-preview.md) — for the current
-  feature branch, show where it branched off, the commits since, and the
-  cumulative `base...HEAD` file diff — what a GitHub pull request shows, which
-  is distinct from the existing working-tree `git status` view. Read-only;
-  reuses `GitService.RunGit`/`DetectBases`. Slice 1 = summary (commits +
-  changed-file counts), slice 2 = lazy per-file patch. Built & browser-verified;
-  pending deploy.
 - [Agent dashboard](plans/agent-dashboard.md) — a mission-control grid showing
   every agent on this machine at once (status + what it's doing). Opened from a
   top-bar button (Advanced + 2+ agents) as a full-screen overlay, not a tab;
@@ -60,6 +48,15 @@
 
 ## Recently shipped
 
+- [Understanding panel](plans/understanding-panel.md) **— slice 2** — a
+  composer-prefill button that makes the panel work in Product Repos, not just
+  the Harness; drops the "write your understanding first" instruction into the
+  chat box (no extra `claude -p` cost). Deployed & confirmed 2026-06-14.
+- [Git tab — branch PR preview](plans/git-pr-preview.md) — for the current
+  feature branch, shows where it branched off, the commits since, and the
+  cumulative `base...HEAD` file diff (what a GitHub PR shows) — distinct from the
+  working-tree `git status` view. Slices 1 (summary) & 2 (lazy per-file patch).
+  Deployed & confirmed 2026-06-14.
 - [Image preview](plans/files-image-preview.md) — image files
   (`.png/.jpg/.svg/...`) render as pictures in the Files viewer via a new
   whitelisted `/api/files/raw` endpoint + an `<img>` (blob-fetched, 5 s
