@@ -13,6 +13,70 @@ mission-control "wall of screens" sitting *above* the per-agent tab navigation:
 a grid of live agent cells, each with a **Maximize** button that expands that
 agent into the existing full view.
 
+## Visuals
+
+### The dashboard at a glance — a grid of live agent cells
+
+```mermaid
+flowchart TB
+  subgraph Dashboard["Agent Dashboard — every agent on this machine, at once"]
+    direction LR
+    subgraph A["BridgeAgent Dev &nbsp; running"]
+      direction TB
+      A1["last: editing PaneStrip.jsx"]
+      A2["Maximize"]
+    end
+    subgraph B["Workspace 1 &nbsp; done"]
+      direction TB
+      B1["last: tests passed"]
+      B2["Maximize"]
+    end
+    subgraph C["Discussions &nbsp; idle"]
+      direction TB
+      C1["last: awaiting input"]
+      C2["Maximize"]
+    end
+    subgraph D["BridgeAgent &nbsp; error"]
+      direction TB
+      D1["last: build failed"]
+      D2["Maximize"]
+    end
+  end
+```
+
+### Maximize — from overview into the existing per-agent view and back
+
+```mermaid
+flowchart LR
+  G["Dashboard grid<br/>all agents at a glance"] -->|click Maximize on Agent B| M["setActiveTab(B)<br/>navigate /studio"]
+  M --> S["Full per-agent view<br/>chat · files · git · plan"]
+  S -->|Dashboard tab| G
+```
+
+### Where each cell's information comes from (reused plumbing)
+
+```mermaid
+flowchart TD
+  Dock["DockContext<br/>GET /api/dock"] --> Card
+  Runs["GET /api/runs<br/>snapshot, on a timer"] --> Badge["status badge<br/>idle / running / done / error"]
+  Stream["GET /api/chat/stream<br/>(slice 3: opt-in live tail)"] -.-> Activity["latest-activity line"]
+  Badge --> Card
+  Activity --> Card
+  Card["Dashboard card<br/>name · repo · colour"] -->|Maximize| Studio["/studio — the existing view"]
+```
+
+### Agent status the badge reflects (already modelled today)
+
+```mermaid
+stateDiagram-v2
+  [*] --> idle
+  idle --> running: user sends a turn
+  running --> done: graceful finish
+  running --> error: crash / cancel
+  done --> running: next turn
+  error --> running: retry
+```
+
 ## What we reuse (this is mostly a new *view*, not new plumbing)
 
 - **Agent list** — `DockContext` already holds every agent
