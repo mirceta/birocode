@@ -170,6 +170,8 @@
   "agents.status.error": "Hata",
   "agents.color.label": "Renkle isaretle",
   "agents.color.clear": "Rengi temizle",
+  "agents.dashboard.show": "Panoda goster",
+  "agents.dashboard.hide": "Panodan gizle",
   "agents.legend.inactive": "pasif",
   "agents.legend.running": "bir sey calisiyor",
   "agents.legend.deploy": "deploy bekliyor",

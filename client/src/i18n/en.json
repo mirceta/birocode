@@ -170,6 +170,8 @@
   "agents.status.error": "Error",
   "agents.color.label": "Mark with a colour",
   "agents.color.clear": "Clear colour",
+  "agents.dashboard.show": "Show on dashboard",
+  "agents.dashboard.hide": "Hide from dashboard",
   "agents.legend.inactive": "inactive",
   "agents.legend.running": "running something",
   "agents.legend.deploy": "awaiting deploy",

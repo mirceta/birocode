@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiGet } from '../api/client';
 import { useDock } from '../context/DockContext';
@@ -55,7 +55,9 @@ function latestActivity(messages) {
 // (setActiveTab + /studio), then closes the overlay.
 export default function Dashboard({ onClose }) {
   const { t } = useT();
-  const { tabs, activeTabId, setActiveTab } = useDock();
+  const { tabs: dockTabs, activeTabId, setActiveTab, repos } = useDock();
+  // Only agents toggled "show on dashboard" in the Agents tab (default on).
+  const tabs = useMemo(() => dockTabs.filter((tab) => tab.dashboard !== false), [dockTabs]);
   const navigate = useNavigate();
   const [view, setView] = useState(readView);
   function chooseView(next) {

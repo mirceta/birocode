@@ -7,9 +7,9 @@ namespace ClaudeWeb.Controllers;
 /// <summary>
 /// Backend-owned agent tab list, shared by every device (plans/dock-sync.md).
 ///
-///   GET    /api/dock      -- [{ id, repoId, repoName, sessionId, status, createdAt, color, stash }]
+///   GET    /api/dock      -- [{ id, repoId, repoName, sessionId, status, createdAt, color, dashboard, stash }]
 ///   POST   /api/dock      -- open a tab  { repoId, repoName, sessionId?, status?, createdAt?, color? }
-///   PATCH  /api/dock/{id} -- partial update { sessionId?, status?, repoName?, color? }
+///   PATCH  /api/dock/{id} -- partial update { sessionId?, status?, repoName?, color?, dashboard? }
 ///   DELETE /api/dock/{id} -- close a tab
 ///   POST   /api/dock/{id}/stash           -- stash a prompt idea { text, id?, createdAt? }
 ///   DELETE /api/dock/{id}/stash/{stashId} -- remove a stashed idea
@@ -19,7 +19,7 @@ namespace ClaudeWeb.Controllers;
 public class DockController : ControllerBase
 {
     public record CreateRequest(string? Id, string? RepoId, string? RepoName, string? SessionId, string? Status, long? CreatedAt, string? Color);
-    public record PatchRequest(string? SessionId, string? Status, string? RepoName, string? Color);
+    public record PatchRequest(string? SessionId, string? Status, string? RepoName, string? Color, bool? Dashboard);
     public record StashRequest(string? Id, string? Text, long? CreatedAt);
 
     private readonly DockRegistry _dock;
@@ -40,6 +40,7 @@ public class DockController : ControllerBase
         status = t.Status,
         createdAt = t.CreatedAt,
         color = t.Color,
+        dashboard = t.Dashboard,
         stash = t.Stash.Select(StashDto),
     };
 
@@ -66,7 +67,7 @@ public class DockController : ControllerBase
     public IActionResult Patch(string id, [FromBody] PatchRequest req)
     {
         _logger.CountRequest();
-        var tab = _dock.Update(id, req.SessionId, req.Status, req.RepoName, req.Color);
+        var tab = _dock.Update(id, req.SessionId, req.Status, req.RepoName, req.Color, req.Dashboard);
         return tab is null ? NotFound(new { error = "unknown tab" }) : Ok(ToDto(tab));
     }
 

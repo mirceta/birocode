@@ -23,6 +23,13 @@ public class DockTab
     public string? Color { get; set; }
 
     /// <summary>
+    /// Whether this agent appears on the Dashboard (toggled from the Agents
+    /// tab). Defaults to true so existing tabs keep showing; shared across
+    /// devices like the rest of the tab.
+    /// </summary>
+    public bool Dashboard { get; set; } = true;
+
+    /// <summary>
     /// Stashed prompt ideas jotted down while the agent runs
     /// (plans/prompt-stash.md). Shared across devices like the rest of the tab.
     /// </summary>
@@ -113,7 +120,7 @@ public class DockRegistry
     /// Partial update. Only non-null fields are applied; per-tab last-write-wins
     /// when two devices race. Returns the updated copy, or null if unknown.
     /// </summary>
-    public DockTab? Update(string id, string? sessionId, string? status, string? repoName, string? color)
+    public DockTab? Update(string id, string? sessionId, string? status, string? repoName, string? color, bool? dashboard)
     {
         lock (_gate)
         {
@@ -124,6 +131,7 @@ public class DockRegistry
             if (repoName != null) tab.RepoName = repoName;
             // Empty string clears the mark; null leaves it untouched.
             if (color != null) tab.Color = color.Length == 0 ? null : color;
+            if (dashboard != null) tab.Dashboard = dashboard.Value;
             Save();
             return Clone(tab);
         }
@@ -243,6 +251,7 @@ public class DockRegistry
         Status = t.Status,
         CreatedAt = t.CreatedAt,
         Color = t.Color,
+        Dashboard = t.Dashboard,
         Stash = t.Stash.Select(CloneStash).ToList(),
     };
 
