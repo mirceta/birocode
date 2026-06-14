@@ -29,6 +29,11 @@
 
 ## Active feature plans
 
+- [Ideas pinned left of the dashboard](plans/ideas-pinned-dashboard.md) — pin
+  the per-project Ideas (notes) down the left of the agent-dashboard overlay,
+  alongside the agent grid. **Plan START** (early design, open questions — the
+  load-bearing one: whose ideas, since the dashboard spans all projects). On
+  `feature/ideas-pinned-dashboard`; reuses the shipped `/api/notes`.
 - [Agent dashboard](plans/agent-dashboard.md) — a mission-control grid showing
   every agent on this machine at once (status + what it's doing). Opened from a
   top-bar button (Advanced + 2+ agents) as a full-screen overlay, not a tab;
