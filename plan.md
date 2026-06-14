@@ -23,6 +23,11 @@
 
 ## Active feature plans
 
+- [Per-project tab settings](plans/browser-scoped-tab-order.md) — tab order,
+  pane widths, and visibility are one global layout today. **Design done,
+  ready to build:** make them **per-project** (Option B — backend store keyed by
+  `repoId`), so each project has its own nav layout; cross-device sync kept.
+  Star-rated comparison + a sub-plan per option.
 - [Understanding panel](plans/understanding-panel.md) **— slice 2** — make the
   panel work in Product Repos, not just the Harness. A composer-prefill button
   drops the "write your understanding first" instruction into the chat box (no
