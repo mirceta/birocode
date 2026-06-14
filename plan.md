@@ -19,10 +19,9 @@
 > (slices 1 & 2) — now deployed & confirmed. Already merged &
 > deployed: Understanding panel slice 1, Deployments tab slice 1, the
 > product-onboarding Exposure check (slices 1-3), and per-tab agent spaces.
-> Proposed: a
-> [chat-windowing](plans/chat-windowing.md) plan — render only the recent tail
-> of long conversations so the app stays fast — on `feature/chat-windowing`;
-> and a
+> [Chat windowing](plans/chat-windowing.md) slice 1 — render only the recent
+> tail of long conversations so the app stays fast — is deployed & confirmed on
+> `feature/chat-windowing` (not yet merged). Proposed: a
 > [spec-baseline](plans/spec-baseline.md) DESIGN plan — what to borrow from
 > OpenSpec — on `feature/spec-baseline`. Parked: a
 > [PWA "older version" warning](plans/pwa-webapk-warning.md) plan on
@@ -41,11 +40,6 @@
 
 ## Proposed / design (not building yet)
 
-- [Chat windowing](plans/chat-windowing.md) — long chats are slow because
-  `Chat.jsx` renders every message (heavy markdown bubble per turn) and we
-  almost never scroll up. Render only the recent tail (last ~50) with a "Show
-  earlier" reveal; full transcript stays in state, frontend-only. On
-  `feature/chat-windowing`.
 - [Spec baseline](plans/spec-baseline.md) — borrow OpenSpec's one missing
   idea (a living "what the system does today" baseline + change-as-delta)
   into our existing plan convention, without adopting its tooling. Slice 1 =
@@ -53,6 +47,11 @@
 
 ## Recently shipped
 
+- [Chat windowing](plans/chat-windowing.md) — long chats were slow because
+  `Chat.jsx` rendered every message (heavy markdown bubble per turn) and we
+  almost never scroll up. **Slice 1** renders only the recent tail (last 50)
+  with a "Show earlier" reveal; full transcript stays in state, frontend-only.
+  Deployed & confirmed 2026-06-14 on `feature/chat-windowing`; not yet merged.
 - [Dashboard shortcut](plans/dashboard-shortcut.md) — `Ctrl/Cmd+Shift+D` toggles
   between the agent dashboard overlay and the normal tab view (Escape still
   closes; ignored while typing). Deployed & confirmed 2026-06-14 (77aa0ae).

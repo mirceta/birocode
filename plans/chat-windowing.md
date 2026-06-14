@@ -1,7 +1,10 @@
 # Chat windowing — render only the tail of long conversations
 
-> **Status (2026-06-14):** PROPOSED — not started. New feature on
-> `feature/chat-windowing`. Frontend-only; no backend or transcript changes.
+> **Status (2026-06-14):** **Slice 1 DEPLOYED & CONFIRMED** on live :5099;
+> browser-verified (`chat-windowing-check.mjs`: 200-msg chat renders 50 + "Show
+> earlier (150)", reveals in chunks to full, short chats unchanged). New feature
+> on `feature/chat-windowing`. Frontend-only; no backend or transcript changes.
+> Not yet merged to main. Slice 2 (virtualization) deferred.
 
 ## Problem
 

@@ -178,6 +178,25 @@
   scroll-behavior: smooth;
 }
 
+/* "Show earlier messages" — only present when the tail window hides history
+   (plans/chat-windowing.md). Sits centred at the top of the scroll area. */
+.chat__earlier {
+  align-self: center;
+  margin-bottom: 4px;
+  padding: 5px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-soft);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.chat__earlier:hover {
+  color: var(--color-text);
+  border-color: var(--color-accent);
+}
+
 .msg {
   display: flex;
   max-width: 100%;

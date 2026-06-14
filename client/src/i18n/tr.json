@@ -235,6 +235,7 @@
   "chat.greeting": "Merhaba! Bugun sana nasil yardim edebilirim?",
   "chat.yourConversations": "Sohbetlerin",
   "chat.new": "Yeni",
+  "chat.showEarlier": "Onceki mesajlari goster",
   "chat.inputPlaceholder": "Bir mesaj yaz...",
   "chat.inputAria": "Bir mesaj yaz",
   "chat.send": "Gonder",
