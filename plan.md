@@ -38,14 +38,10 @@
   grid + open-agent (built & browser-verified), slice 2 = liveness, slice 3
   (later) = live tail.
 
-- [Pull main & redeploy](plans/pull-main-redeploy.md) — a one-button
-  "make live = latest `main`" for Self-Development: even while you're on a
-  feature branch, fetch + redeploy the Harness from the latest `origin/main`
-  (live catches up) **without** disturbing your branch checkout. Builds on the
-  existing `git/pull-base` and the `DeployService` rollback-trigger pattern; the
-  gap is a UI-triggered *forward* deploy (there's only rollback today). PLAN
-  ONLY — branch `feature/pull-main-redeploy`; one open question (deploy main
-  itself vs. merge-into-branch) needs the user before slicing.
+- [Pull main & redeploy](plans/pull-main-redeploy.md) — one button to make live
+  = latest `origin/main` even while you're on a feature branch, without
+  disturbing your checkout. PLAN ONLY (`feature/pull-main-redeploy`); one open
+  question pending.
 
 ## Proposed / design (not building yet)
 
