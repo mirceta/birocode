@@ -1,8 +1,16 @@
 # Pull main & redeploy — one-button "make live = latest main"
 
-> **Status (2026-06-14):** **PLAN ONLY — not started, ready to build.** Branch
-> `feature/pull-main-redeploy`. Scope locked to [option (A)](#decision): deploy
-> `origin/main` itself, branch checkout untouched.
+> **Status (2026-06-14):** **Slice 1 (backend) BUILT & VERIFIED via dry-run**
+> on `feature/pull-main-redeploy` (commit `95ee974`); not merged. Scope =
+> [option (A)](#decision). `POST /api/deploy/pull-main` (typed `DEPLOY-MAIN`
+> confirm) → `scripts/deploy-main.ps1` builds `origin/main` in an isolated git
+> worktree, health-checks the new build on a temp port (:5201), and only then
+> would swap live. Verified end-to-end through the endpoint with `noSwap=true`:
+> copy deps → vite build → dotnet build → healthy on :5201 → stop before swap,
+> with live (:5099) and the branch checkout untouched throughout. **Not yet
+> exercised:** an actual live swap (`noSwap=false`) — deferred while a second
+> checkout is actively redeploying live; the health gate makes it safe to run.
+> Slice 2 (UI button) not started.
 
 ## Problem
 
@@ -49,14 +57,34 @@ fired detached the way `TriggerRollback()` fires `rollback.ps1`, behind a new
 `POST /api/deploy/pull-main`. Reuse the armed auto-rollback so a bad main can't
 brick live.
 
-## Slices (provisional)
+## Slices
 
-1. Backend `POST /api/deploy/pull-main` = `pull-base` + detached deploy-from-main
-   + ledger entry + armed rollback. Verify via `GET /api/deploy/status`
-   (live commit contains `origin/main`).
+1. **DONE (dry-run verified).** Backend `POST /api/deploy/pull-main` →
+   `scripts/deploy-main.ps1`: fetch + FF local main (best-effort), build
+   `origin/main` in an isolated worktree, temp-port health check, swap live,
+   remove the worktree. The plan's original ledger-entry + armed-rollback step
+   was **dropped on this machine** — that infrastructure (`DeployScriptsDir`,
+   `swap.ps1`/`rollback.ps1`, `deploys.jsonl`) is absent here (it points at a
+   non-existent `Administrator` path); re-add it as a follow-up if/when the
+   production rollback tooling is present. Remaining: exercise a real
+   `noSwap=false` swap.
 2. UI button on the Deployments tab — confirm + spinner, reusing the rollback
    button's confirm pattern.
 3. *(maybe)* same button on the Git tab, by the ahead/behind-vs-origin rows.
+
+### Implementation notes (slice 1 — hard-won)
+
+The script runs **detached from the harness**, which made the build fight a
+string of Windows/PowerShell traps, all now handled in `deploy-main.ps1`:
+`ErrorActionPreference='Stop'` turns git's informational stderr into a fatal
+error (use `Continue` + explicit `$LASTEXITCODE`); a helper named `Git` shadows
+the `git` exe and recurses; an interrupted `worktree add` leaves it LOCKED
+(needs `-f -f`); node isn't on the spawned PATH and the inherited PATH isn't
+usable by `cmd`, so the build sets an explicit Windows PATH; `Set-Location`
+doesn't change a native child's cwd, so vite is run via `cmd /c cd`. Crucially,
+node_modules is **copied** into the worktree, never junctioned — a junction
+inside the worktree is a footgun (a recursive delete follows it and wipes the
+real shared `node_modules`; this bit twice during development).
 
 ## Verification (when built)
 

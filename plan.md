@@ -40,8 +40,8 @@
 
 - [Pull main & redeploy](plans/pull-main-redeploy.md) — one button to make live
   = latest `origin/main` even while you're on a feature branch, without
-  disturbing your checkout. Plan ready, not started
-  (`feature/pull-main-redeploy`).
+  disturbing your checkout. Slice 1 (backend endpoint + deploy-from-main script)
+  built & dry-run-verified on `feature/pull-main-redeploy`; UI button next.
 
 ## Proposed / design (not building yet)
 
