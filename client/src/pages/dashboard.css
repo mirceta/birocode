@@ -297,9 +297,53 @@
    tab (plans/dashboard-git-status.md). Given its own room above the chat. */
 .phone__git {
   flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface);
+}
+
+.phone__git .git-summary {
+  flex: 1 1 auto;
+}
+
+/* Per-dock git refresh — re-fetches this agent's git status (hits origin). */
+.phone__git-refresh {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-soft);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.phone__git-refresh:hover:not(:disabled) {
+  color: var(--color-text);
+  border-color: var(--color-accent);
+}
+
+.phone__git-refresh:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.phone__git-refresh.is-spinning {
+  animation: dash-spin 0.8s linear infinite;
+}
+
+@keyframes dash-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .phone__dot {

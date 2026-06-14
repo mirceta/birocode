@@ -166,6 +166,7 @@
   "dashboard.viewCards": "Kartlar",
   "dashboard.viewPhones": "Telefonlar",
   "dashboard.viewHot": "Sicak",
+  "dashboard.refreshGit": "Git durumunu yenile",
   "dashboard.size": "Boyut",
   "dashboard.sizeSmaller": "Daha kucuk",
   "dashboard.sizeBigger": "Daha buyuk",
