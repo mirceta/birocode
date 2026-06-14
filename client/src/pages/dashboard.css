@@ -351,24 +351,42 @@
   flex-shrink: 0;
 }
 
-/* The screen holds the embedded chat; clip its scroll to the frame. */
+/* The screen holds the embedded chat; clip its scroll to the frame. It's a flex
+   column so the chat fills it via flex (a flex-derived height isn't "definite,"
+   so the chat's old height:100% couldn't resolve against it and overflowed). */
 .phone__screen {
   flex: 1;
   min-height: 0;
   position: relative;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Embedded chat overrides: the standalone Chat page fills the viewport and
    pins its composer to the bottom of the screen (above the nav). Inside a
    phone it must instead fill its frame and keep the composer in-flow, so
    N phones don't stack their composers at the window bottom. */
-.chat--embedded {
+/* `.chat.chat--embedded` (two classes) so this height beats the base
+   `.chat { height: calc(100dvh - …) }` regardless of stylesheet load order —
+   otherwise the chat renders viewport-tall and overflows the phone frame,
+   clipping the composer. min-height:0 lets it shrink as a flex child too. */
+.chat.chat--embedded {
   margin: 0;
-  height: 100%;
+  /* Fill the (flex-column) phone screen via flex, not height:100% — the screen's
+     flex-derived height isn't a definite % basis. min-height:0 lets it shrink so
+     the inner scroll area bounds and the in-flow composer stays in the frame. */
+  flex: 1;
+  min-height: 0;
 }
 
 .chat--embedded .chat__scroll {
+  /* min-height:0 lets this flex:1 scroll area shrink below its content inside
+     the bounded phone frame, so it scrolls internally instead of growing and
+     pushing the in-flow composer past the clipped bottom (the bug: chat cut
+     off, composer unreachable). Standalone Chat avoids this via a fixed
+     composer; embedded keeps the composer in-flow, so it needs the floor. */
+  min-height: 0;
   padding: 12px 12px 16px;
 }
 
@@ -379,6 +397,8 @@
   width: 100%;
   max-width: none;
   padding: 0 10px 10px;
+  /* Never let the composer shrink/clip — the scroll area absorbs the height. */
+  flex: 0 0 auto;
 }
 
 /* Narrow screens: one phone per row, each a tall slab; beat the inline
