@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { apiGet, apiPut } from '../api/client';
+import { useRepo } from './RepoContext';
 
 // Backend-synced UI settings (plans/settings-tab.md): tab order lives on the
 // server because the user works from phone and desktop interchangeably.
@@ -7,6 +8,12 @@ import { apiGet, apiPut } from '../api/client';
 // instantly, the PUT follows.
 // tabWidths (plans/pane-widths.md): tab key -> pane span 1-4, absent = 1.
 // hiddenTabs (plans/tab-visibility.md): keys hidden from the advanced nav.
+//
+// Per-project (plans/browser-scoped-tab-order.md): the settings are stored per
+// project on the backend, keyed by the X-Repo-Id header the api client already
+// sends. So we re-fetch whenever the selected project changes, and a save lands
+// under the active project. Mounted INSIDE RepoProvider so it can see the
+// selection.
 const UiSettingsContext = createContext(null);
 
 export function useUiSettings() {
@@ -16,10 +23,14 @@ export function useUiSettings() {
 }
 
 export function UiSettingsProvider({ children }) {
+  const { currentRepoId } = useRepo();
   const [tabOrder, setTabOrderState] = useState([]);
   const [tabWidths, setTabWidthsState] = useState({});
   const [hiddenTabs, setHiddenTabsState] = useState([]);
 
+  // Load the active project's layout, and reload when the project changes
+  // (the api client sends the current X-Repo-Id, so the backend returns that
+  // project's settings).
   useEffect(() => {
     apiGet('/settings/ui')
       .then((s) => {
@@ -28,7 +39,7 @@ export function UiSettingsProvider({ children }) {
         setHiddenTabsState(s.hiddenTabs || []);
       })
       .catch(() => { /* defaults until the next load */ });
-  }, []);
+  }, [currentRepoId]);
 
   const saveTabOrder = useCallback((order) => {
     setTabOrderState(order); // optimistic — the nav obeys immediately

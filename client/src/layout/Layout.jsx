@@ -109,8 +109,8 @@ function StudioShell() {
 export default function Layout() {
   return (
     <UiModeProvider>
-      <UiSettingsProvider>
-        <RepoProvider>
+      <RepoProvider>
+        <UiSettingsProvider>
           <DockProvider>
             <SaveProvider>
               <ChatProvider>
@@ -118,8 +118,8 @@ export default function Layout() {
               </ChatProvider>
             </SaveProvider>
           </DockProvider>
-        </RepoProvider>
-      </UiSettingsProvider>
+        </UiSettingsProvider>
+      </RepoProvider>
     </UiModeProvider>
   );
 }

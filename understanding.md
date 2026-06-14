@@ -30,7 +30,18 @@ unchanged.
 - `plans/tab-order-option-browser.md` / `-tab.md` — rejected alternatives, kept
   for the record.
 
-## Status
+## Status — built & verified (7/7)
 
-Design complete and decided. Next: create a feature branch is already done
-(`feature/browser-scoped-tab-order`); commit the plan, then build Option B.
+Implemented Option B:
+- `UiSettingsService` → `repoId → { tabOrder, tabWidths, hiddenTabs }` map, with
+  `__default__` legacy migration and fork-on-write so a project's other settings
+  don't reset when one is changed.
+- `SettingsController` keys GET/PUT by the resolved repo (`RepositoryResolver`).
+- `Layout.jsx` moved `UiSettingsProvider` inside `RepoProvider`;
+  `UiSettingsContext` re-fetches on project switch. `useOrderedTabs`/`PaneStrip`/
+  `Settings` unchanged.
+
+Browser-verified on an isolated :5200 instance (`verify-per-project-tabs.mjs`,
+7/7): API isolation (SELF=custom order, OTHER inherits default) + in-app project
+switch swaps the nav and restores it. Live :5099 left untouched (settings file
+backed up + restored). Next: commit, then deploy/merge when the user says.

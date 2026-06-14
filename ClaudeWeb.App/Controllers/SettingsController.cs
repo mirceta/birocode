@@ -1,4 +1,5 @@
 using ClaudeWeb.Services.Logging;
+using ClaudeWeb.Services.Repositories;
 using ClaudeWeb.Services.Settings;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,6 +12,10 @@ namespace ClaudeWeb.Controllers;
 ///   PUT /api/settings/ui -- save; unknown tab keys are dropped, duplicates
 ///                           collapsed, widths clamped to 1-4 (1 = omitted).
 ///                           Auth: global middleware as always.
+///
+/// **Per-project (plans/browser-scoped-tab-order.md):** both verbs target the
+/// project the request carries in the <c>X-Repo-Id</c> header (via
+/// <see cref="RepositoryResolver"/>), so each project keeps its own layout.
 /// </summary>
 [ApiController]
 [Route("api/settings")]
@@ -24,11 +29,13 @@ public class SettingsController : ControllerBase
     };
 
     private readonly UiSettingsService _settings;
+    private readonly RepositoryResolver _repos;
     private readonly Logger _logger;
 
-    public SettingsController(UiSettingsService settings, Logger logger)
+    public SettingsController(UiSettingsService settings, RepositoryResolver repos, Logger logger)
     {
         _settings = settings;
+        _repos = repos;
         _logger = logger;
     }
 
@@ -42,7 +49,9 @@ public class SettingsController : ControllerBase
     public IActionResult Get()
     {
         _logger.CountRequest();
-        return Ok(new { tabOrder = _settings.TabOrder, tabWidths = _settings.TabWidths, hiddenTabs = _settings.HiddenTabs });
+        var repoId = _repos.Current()?.Id;
+        var v = _settings.GetForRepo(repoId);
+        return Ok(new { tabOrder = v.TabOrder, tabWidths = v.TabWidths, hiddenTabs = v.HiddenTabs });
     }
 
     [HttpPut("ui")]
@@ -52,11 +61,13 @@ public class SettingsController : ControllerBase
         if (request?.TabOrder is null)
             return BadRequest(new { error = "tabOrder is required (empty list = default order)" });
 
+        var repoId = _repos.Current()?.Id;
+
         var cleaned = request.TabOrder
             .Where(KnownTabs.Contains)
             .Distinct()
             .ToList();
-        _settings.SetTabOrder(cleaned);
+        _settings.SetTabOrder(repoId, cleaned);
 
         if (request.TabWidths != null)
         {
@@ -65,7 +76,7 @@ public class SettingsController : ControllerBase
                 .Select(kv => (kv.Key, Value: Math.Clamp(kv.Value, 1, 4)))
                 .Where(kv => kv.Value > 1) // width 1 is the default — keep the store sparse
                 .ToDictionary(kv => kv.Key, kv => kv.Value);
-            _settings.SetTabWidths(widths);
+            _settings.SetTabWidths(repoId, widths);
         }
 
         if (request.HiddenTabs != null)
@@ -75,9 +86,10 @@ public class SettingsController : ControllerBase
                 .Where(k => !NonHideable.Contains(k))
                 .Distinct()
                 .ToList();
-            _settings.SetHiddenTabs(hidden);
+            _settings.SetHiddenTabs(repoId, hidden);
         }
 
-        return Ok(new { tabOrder = cleaned, tabWidths = _settings.TabWidths, hiddenTabs = _settings.HiddenTabs });
+        var view = _settings.GetForRepo(repoId);
+        return Ok(new { tabOrder = view.TabOrder, tabWidths = view.TabWidths, hiddenTabs = view.HiddenTabs });
     }
 }
