@@ -1,17 +1,15 @@
 using ClaudeWeb.Services.Logging;
 using ClaudeWeb.Services.Notes;
-using ClaudeWeb.Services.Repositories;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ClaudeWeb.Controllers;
 
 /// <summary>
-/// Per-project ideas/notes (plans/ideas-tab.md). Scoped to the current project
-/// by the X-Repo-Id header (RepositoryResolver), exactly like Files/Git — a
-/// note created under one project is never visible under another.
-///   GET    /api/notes        -- this project's notes, newest first
-///   POST   /api/notes        -- { text } create -> the note
-///   PATCH  /api/notes/{id}   -- { text } edit  -> the note
+/// Global ideas/notes (plans/ideas-pinned-dashboard.md). ONE master list shared
+/// across the whole app — NOT project-scoped (reverses plans/ideas-tab.md).
+///   GET    /api/notes        -- all ideas, newest first
+///   POST   /api/notes        -- { text } create -> the idea
+///   PATCH  /api/notes/{id}   -- { text } edit  -> the idea
 ///   DELETE /api/notes/{id}   -- remove one
 /// </summary>
 [ApiController]
@@ -19,13 +17,11 @@ namespace ClaudeWeb.Controllers;
 public class NotesController : ControllerBase
 {
     private readonly NotesService _notes;
-    private readonly RepositoryResolver _repos;
     private readonly Logger _logger;
 
-    public NotesController(NotesService notes, RepositoryResolver repos, Logger logger)
+    public NotesController(NotesService notes, Logger logger)
     {
         _notes = notes;
-        _repos = repos;
         _logger = logger;
     }
 
@@ -35,18 +31,14 @@ public class NotesController : ControllerBase
     public IActionResult List()
     {
         _logger.CountRequest();
-        var repo = _repos.Current();
-        if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
-        return Ok(_notes.List(repo.Id));
+        return Ok(_notes.List());
     }
 
     [HttpPost]
     public IActionResult Create([FromBody] NoteRequest? request)
     {
         _logger.CountRequest();
-        var repo = _repos.Current();
-        if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
-        var note = _notes.Add(repo.Id, request?.Text, Now());
+        var note = _notes.Add(request?.Text, Now());
         if (note is null) return BadRequest(new { error = "Note text is required." });
         return Ok(note);
     }
@@ -55,9 +47,7 @@ public class NotesController : ControllerBase
     public IActionResult Update(string id, [FromBody] NoteRequest? request)
     {
         _logger.CountRequest();
-        var repo = _repos.Current();
-        if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
-        var note = _notes.Update(repo.Id, id, request?.Text, Now());
+        var note = _notes.Update(id, request?.Text, Now());
         if (note is null) return NotFound(new { error = "Unknown note id or empty text." });
         return Ok(note);
     }
@@ -66,9 +56,7 @@ public class NotesController : ControllerBase
     public IActionResult Delete(string id)
     {
         _logger.CountRequest();
-        var repo = _repos.Current();
-        if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
-        if (!_notes.Delete(repo.Id, id)) return NotFound(new { error = "Unknown note id." });
+        if (!_notes.Delete(id)) return NotFound(new { error = "Unknown note id." });
         return Ok(new { id });
     }
 

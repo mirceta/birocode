@@ -32,8 +32,13 @@
 - [Custom prompts](plans/custom-prompts.md) — let the user add their own
   pre-prepared prompts on the fly: a manage UI + per-prompt composer buttons that
   prefill the chat box, generalizing the hardcoded understanding/kickoff buttons.
-  Global backend-synced library. Playback pending. On `feature/custom-prompts`.
-
+  Global backend-synced library. Built & browser-verified; pending deploy/merge.
+  On `feature/custom-prompts`.
+- [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
+  — make Ideas a single **global** master list (no longer per-project; reverses
+  ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
+  of the agent-dashboard overlay. Design set (backend de-keying + migration +
+  shared component); not built. On `feature/ideas-pinned-dashboard`.
 - [Feature kickoff & closeout](plans/feature-kickoff.md) — a seamless feature
   lifecycle for BOTH ends: starting the next feature (branch, plan, understanding)
   AND finishing one per our flow (keep-it bookkeeping, mark shipped, merge, tidy)

@@ -1,4 +1,6 @@
-/* Ideas tab (plans/ideas-tab.md): per-project notes. */
+/* Ideas (plans/ideas-pinned-dashboard.md): one global notes list. Rendered by
+   the Ideas tab and the dashboard's pinned-left panel via the shared
+   IdeasPanel component. */
 .ideas {
   display: flex;
   flex-direction: column;

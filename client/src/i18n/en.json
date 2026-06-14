@@ -312,7 +312,7 @@
   "expose.freshBlankDetail": "The embed rendered blank while the server is serving the current build ({server}). This is a browser-cache issue, not a product problem.",
   "expose.reloadEmbed": "Reload embed",
   "localapp.noProject": "Select a project first — the Local tab shows the current project's app.",
-  "ideas.placeholder": "Jot an idea for {project}...",
+  "ideas.placeholder": "Jot an idea...",
   "ideas.add": "Add",
   "ideas.adding": "Adding...",
   "ideas.save": "Save",
