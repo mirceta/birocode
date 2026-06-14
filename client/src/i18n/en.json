@@ -235,6 +235,7 @@
   "chat.greeting": "Hi! How can I help you today?",
   "chat.yourConversations": "Your conversations",
   "chat.new": "New",
+  "chat.showEarlier": "Show earlier messages",
   "chat.inputPlaceholder": "Type a message...",
   "chat.inputAria": "Type a message",
   "chat.send": "Send",

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import MessageBubble from '../components/chat/MessageBubble';
 import ChatInput from '../components/chat/ChatInput';
 import ThinkingIndicator from '../components/chat/ThinkingIndicator';
@@ -16,6 +16,13 @@ import '../components/chat/chat.css';
 // The chat screen. Conversation state + streaming live in ChatContext (mounted
 // in Layout) so they survive navigating to other tabs. This component is the
 // view: it renders the messages and owns only the scroll behavior.
+//
+// Long chats are slow because every turn mounts a heavy markdown bubble, and we
+// almost never scroll up — so we render only the recent TAIL by default
+// (plans/chat-windowing.md). Older messages stay in state; a "Show earlier"
+// button reveals them in chunks. WINDOW/CHUNK are render-only caps, not data.
+const WINDOW = 50;
+const REVEAL_CHUNK = 50;
 //
 // Normally it drives the ACTIVE conversation (useChat). The Agent Dashboard's
 // "wall of phones" reuses this same view for a BACKGROUND agent by passing a
@@ -59,6 +66,34 @@ export default function Chat({ chat: injected, embedded = false }) {
   const scrollRef = useRef(null);
   const stickToBottom = useRef(true);
 
+  // Only the last `visibleCount` messages are rendered; the rest stay in state.
+  const [visibleCount, setVisibleCount] = useState(WINDOW);
+  const total = messages.length;
+  const start = Math.max(0, total - visibleCount);
+  const hidden = start;
+
+  // Switching conversations (resume / new / dashboard agent swap) snaps the
+  // window back to the tail so we never mount a huge history up front.
+  useEffect(() => {
+    setVisibleCount(WINDOW);
+  }, [sessionId]);
+
+  // Revealing earlier messages prepends content above the viewport; keep the
+  // user's reading position by restoring distance-from-bottom after the render.
+  const revealAnchor = useRef(null);
+  useLayoutEffect(() => {
+    if (revealAnchor.current == null) return;
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight - revealAnchor.current;
+    revealAnchor.current = null;
+  }, [visibleCount]);
+
+  function revealEarlier() {
+    const el = scrollRef.current;
+    if (el) revealAnchor.current = el.scrollHeight - el.scrollTop;
+    setVisibleCount((n) => n + REVEAL_CHUNK);
+  }
+
   const scrollToBottom = useCallback(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -88,6 +123,7 @@ export default function Chat({ chat: injected, embedded = false }) {
 
   function handleSend(text) {
     stickToBottom.current = true;
+    setVisibleCount(WINDOW);
     send(text);
   }
 
@@ -136,12 +172,20 @@ export default function Chat({ chat: injected, embedded = false }) {
       {!embedded && showUnderstanding && <UnderstandingPanel />}
 
       <div className="chat__scroll" ref={scrollRef} onScroll={handleScroll}>
-        {messages.map((m, i) => (
-          <div key={i} className="turn">
-            {m.role === 'assistant' && m.steps?.length > 0 && <ActivitySteps steps={m.steps} />}
-            {(m.text || m.role === 'user') && <MessageBubble role={m.role} text={m.text} />}
-          </div>
-        ))}
+        {hidden > 0 && (
+          <button type="button" className="chat__earlier" onClick={revealEarlier}>
+            {t('chat.showEarlier')} ({hidden})
+          </button>
+        )}
+        {messages.slice(start).map((m, i) => {
+          const key = start + i; // absolute index — stable as the window slides
+          return (
+            <div key={key} className="turn">
+              {m.role === 'assistant' && m.steps?.length > 0 && <ActivitySteps steps={m.steps} />}
+              {(m.text || m.role === 'user') && <MessageBubble role={m.role} text={m.text} />}
+            </div>
+          );
+        })}
         {awaitingFirst && <ThinkingIndicator />}
         {error && <ErrorBanner message={error} />}
       </div>
