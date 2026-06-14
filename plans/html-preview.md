@@ -4,6 +4,12 @@
 > Frontend-only. Realizes the deferred "HTML webview" slice of
 > [doc-viewer](doc-viewer.md), scoped to a safe sandboxed render.
 
+## Try it
+
+Open **[html-preview-demo.html](html-preview-demo.html)** — a self-contained
+page that renders its own styling and proves the script sandbox holds (a line
+stays red because its `<script>` can't run). Tap **Raw** to see the source.
+
 ## Problem
 
 The Files viewer renders **Markdown** but shows every other file — including
