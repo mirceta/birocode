@@ -20,6 +20,9 @@
 > deployed: Understanding panel slice 1, Deployments tab slice 1, the
 > product-onboarding Exposure check (slices 1-3), and per-tab agent spaces.
 > Proposed: a
+> [chat-windowing](plans/chat-windowing.md) plan — render only the recent tail
+> of long conversations so the app stays fast — on `feature/chat-windowing`;
+> and a
 > [spec-baseline](plans/spec-baseline.md) DESIGN plan — what to borrow from
 > OpenSpec — on `feature/spec-baseline`. Parked: a
 > [PWA "older version" warning](plans/pwa-webapk-warning.md) plan on
@@ -38,6 +41,11 @@
 
 ## Proposed / design (not building yet)
 
+- [Chat windowing](plans/chat-windowing.md) — long chats are slow because
+  `Chat.jsx` renders every message (heavy markdown bubble per turn) and we
+  almost never scroll up. Render only the recent tail (last ~50) with a "Show
+  earlier" reveal; full transcript stays in state, frontend-only. On
+  `feature/chat-windowing`.
 - [Spec baseline](plans/spec-baseline.md) — borrow OpenSpec's one missing
   idea (a living "what the system does today" baseline + change-as-delta)
   into our existing plan convention, without adopting its tooling. Slice 1 =
