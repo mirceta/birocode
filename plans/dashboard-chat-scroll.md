@@ -1,11 +1,9 @@
 # Dashboard chat cut off — can't scroll to the composer
 
-> **Status (2026-06-14):** FIXED — built & browser-verified
-> (`verify-dashboard-chat-scroll.mjs` 6/6: composer sits within the phone frame,
-> bounded scroll area scrolls a 96k-px transcript, composer reachable after
-> scrolling). Frontend-only CSS, live on :5099. On `feature/dashboard-chat-scroll`,
-> pending deploy/merge. Touches the parallel session's agent-dashboard CSS —
-> compose carefully.
+> **Status (2026-06-14):** DEPLOYED & CONFIRMED on live :5099 (1488dc9); rollback
+> disarmed. Browser-verified (`verify-dashboard-chat-scroll.mjs` 6/6) on the tree
+> merged with the parallel session's chat-windowing work. Frontend-only CSS. On
+> `feature/dashboard-chat-scroll`, NOT yet merged to main.
 
 ## Problem (bug report)
 

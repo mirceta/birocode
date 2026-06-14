@@ -29,10 +29,6 @@
 
 ## Active feature plans
 
-- [Dashboard chat cut off](plans/dashboard-chat-scroll.md) — **bug:** in the
-  dashboard "wall of phones," an agent's chat is clipped — you can't scroll to
-  the bottom or reach the message composer. Likely a cell height/overflow issue.
-  Issue captured; fix TBD. On `feature/dashboard-chat-scroll`.
 - [Agent dashboard](plans/agent-dashboard.md) — a mission-control grid showing
   every agent on this machine at once (status + what it's doing). Opened from a
   top-bar button (Advanced + 2+ agents) as a full-screen overlay, not a tab;
@@ -51,6 +47,12 @@
 
 ## Recently shipped
 
+- [Dashboard chat cut off](plans/dashboard-chat-scroll.md) — **bug fix:** in the
+  dashboard "wall of phones," the embedded chat overflowed its cell (clipped, no
+  reachable composer) because `height:100%` couldn't resolve against a
+  flex-derived frame height. Fixed by sizing the embedded chat via flexbox
+  (`.phone__screen` flex column; chat `flex:1; min-height:0`). Deployed &
+  confirmed 2026-06-14 (1488dc9); not yet merged.
 - [Chat windowing](plans/chat-windowing.md) — long chats were slow because
   `Chat.jsx` rendered every message (heavy markdown bubble per turn) and we
   almost never scroll up. **Slice 1** renders only the recent tail (last 50)
