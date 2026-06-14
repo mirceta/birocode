@@ -145,8 +145,28 @@ over reattaching. Refactor the single provider instead.
   Cells also show **git state** — branch + ahead/behind lines — matching the
   Agents tab: a best-effort `GET /api/git/status` per unique `repoId`, fetched
   once on open, formatted with the shared `lib/gitSync.js#syncLines` (extracted
-  from Agents.jsx so both views stay in sync). Cells lay out in a **square-ish
-  grid** (columns = ⌈√n⌉, set inline by `Dashboard.jsx`).
+  from Agents.jsx so both views stay in sync). Cells lay out in a **square
+  grid** (columns = ⌈√n⌉, set inline by `Dashboard.jsx`): both views cap their
+  columns (cards `minmax(0, 340px)`, phones `minmax(0, 460px)`), the grid is
+  centred, and the cell carries `aspect-ratio: 1` (`.dash-cell` for cards,
+  `.dash__phone-cell` for phones), so cells stay square instead of stretching
+  into wide rectangles regardless of agent count or transcript length.
+  Each card also shows the project's **repository path** under the repo name
+  (`.dash-cell__path`, sourced from `/api/repos`).
+  **Recency border:** the same poll reads the last *user* message's timestamp
+  (`SessionService.ChatMessage` now carries the JSONL line `Timestamp`; the
+  client iterates the transcript from the end for the newest `role==='user'`
+  time). `Dashboard.jsx` maps the age to a tier (`fresh`/`recent`/`mid`/`old`,
+  or none >1hr) and stamps `data-recency` on `.dash-cell` / passes it to
+  `PinnedAgent` → `.phone`; `dashboard.css` colours a 2px border per tier
+  (<1min green, <5min bright green, 5–30min blue, 30–60min purple), 5px wide.
+  Tiers are recomputed against `Date.now()` each poll re-render, so borders age
+  without a separate timer.
+  **Show-on-dashboard toggle:** a backend-owned `Dashboard` bool on the dock tab
+  (default true, alongside `Color`), plumbed DockTab → DockRegistry.Update →
+  DockController PATCH → DockContext `toServerPatch`. The Agents-tab card renders
+  the toggle (`.agent-card__dash`); `Dashboard.jsx` filters
+  `dockTabs.filter(t => t.dashboard !== false)`. Shared across devices.
 - **Slice 3 (later, maybe) — live tail.** An opt-in scrolling stream tail per
   cell, bounded so we don't open N heavy SSE streams at once.
 - **Slice 4 — wall of phones (Chat-only). ✅ built & verified.** `ChatContext`
