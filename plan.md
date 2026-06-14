@@ -34,6 +34,12 @@
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
   of the agent-dashboard overlay. Design set (backend de-keying + migration +
   shared component); not built. On `feature/ideas-pinned-dashboard`.
+- [Feature kickoff & closeout](plans/feature-kickoff.md) — a seamless feature
+  lifecycle for BOTH ends: starting the next feature (branch, plan, understanding)
+  AND finishing one per our flow (keep-it bookkeeping, mark shipped, merge, tidy)
+  — so the user doesn't re-describe the ritual and the agent doesn't drop steps.
+  Approach decided: composer-prefill buttons (Understanding-panel pattern) that
+  fill the chat box with the kickoff/closeout ritual. On `feature/feature-kickoff`.
 - [Agent dashboard](plans/agent-dashboard.md) — a mission-control grid showing
   every agent on this machine at once (status + what it's doing). Opened from a
   top-bar button (Advanced + 2+ agents) as a full-screen overlay, not a tab;

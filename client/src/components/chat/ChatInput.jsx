@@ -23,6 +23,7 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
   // there (plans/agent-dashboard.md).
   const stashEnabled = useFeature('promptStash') && !!activeTabId && !embedded;
   const understandingEnabled = useFeature('understandingPanel');
+  const kickoffEnabled = useFeature('featureKickoff');
   const stash = (stashEnabled && activeTab?.stash) || [];
   const textareaRef = useRef(null);
   const fileRef = useRef(null);
@@ -71,6 +72,16 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
   // the box is focused for review.
   function handleUnderstandingPrefill() {
     const prompt = t('understanding.prefillPrompt');
+    const current = (value || '').trim();
+    onChange(current ? `${current}\n\n${prompt}` : prompt);
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }
+
+  // Drop the "start a new feature" ritual into the composer (plans/feature-kickoff.md).
+  // Same shape as the understanding prefill: no auto-send, appended so nothing is
+  // lost, then focus so the user types the feature name after the trailing colon.
+  function handleKickoffPrefill() {
+    const prompt = t('feature.kickoffPrompt');
     const current = (value || '').trim();
     onChange(current ? `${current}\n\n${prompt}` : prompt);
     requestAnimationFrame(() => textareaRef.current?.focus());
@@ -165,6 +176,17 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
             title={t('understanding.prefill')}
           >
             &#128221;
+          </button>
+        )}
+        {kickoffEnabled && (
+          <button
+            type="button"
+            className="chat-input__kickoff"
+            onClick={handleKickoffPrefill}
+            aria-label={t('feature.kickoff')}
+            title={t('feature.kickoff')}
+          >
+            &#128640;
           </button>
         )}
         <textarea

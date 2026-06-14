@@ -266,6 +266,8 @@
   "understanding.expand": "Goster",
   "understanding.prefill": "Claude'dan once ne anladigini yazmasini iste",
   "understanding.prefillPrompt": "Isteklerimi yapmadan once, ne anladigini once depo kokundeki `understanding.md` dosyasina markdown olarak yaz: hedefin kisa bir ozeti, yapacagin somut seyler ve varsayimlarin. Istek degisirse guncel tut ve devam etmeden once onaylamami bekle.",
+  "feature.kickoff": "Yeni bir ozellik baslat",
+  "feature.kickoffPrompt": "I want you to start a new feature. make sure you are on the main branch that is synced with origin/main. create a new feature branch. Make a new entry in the Active feature plans section in plans.md . This is the feature we will be working on: ",
   "localapp.formTitle": "Yerel onizleme portu",
   "localapp.formBody": "{name} hangi portta calisiyor? Yerel sekme onu harness uzerinden sunar, yani giris yapabildigin her yerden erisilir — ama asla genel ana sayfada gorunmez.",
   "localapp.portPlaceholder": "orn. 5300",

@@ -266,6 +266,8 @@
   "understanding.expand": "Show",
   "understanding.prefill": "Ask Claude to write its understanding first",
   "understanding.prefillPrompt": "Before acting on my requests, first write your understanding of what I'm asking to `understanding.md` at the repo root, as markdown: a short restatement of the goal, the concrete things you'll do, and any assumptions. Keep it current if the request changes, and let me confirm it before you proceed.",
+  "feature.kickoff": "Kick off a new feature",
+  "feature.kickoffPrompt": "I want you to start a new feature. make sure you are on the main branch that is synced with origin/main. create a new feature branch. Make a new entry in the Active feature plans section in plans.md . This is the feature we will be working on: ",
   "localapp.formTitle": "Local preview port",
   "localapp.formBody": "Which port does {name} serve on? The Local tab serves it through the harness, so it's reachable wherever you can log in — but never on the public home page.",
   "localapp.portPlaceholder": "e.g. 5300",
