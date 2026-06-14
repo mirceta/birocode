@@ -1,8 +1,8 @@
 # Pull main & redeploy — one-button "make live = latest main"
 
-> **Status (2026-06-14):** **PLAN ONLY — not started.** Branch
-> `feature/pull-main-redeploy`. The [open question](#open-question) needs the
-> user's call before slicing.
+> **Status (2026-06-14):** **PLAN ONLY — not started, ready to build.** Branch
+> `feature/pull-main-redeploy`. Scope locked to [option (A)](#decision): deploy
+> `origin/main` itself, branch checkout untouched.
 
 ## Problem
 
@@ -28,14 +28,12 @@ flowchart LR
     style BR fill:#eef2ff,stroke:#5c6cbf
 ```
 
-### Open question
+### Decision
 
-"Redeploy **it**" — two readings; plan **defaults to (A)**:
-
-- **(A) Deploy `origin/main` itself.** Branch checkout never switches. The
-  diagram above.
-- **(B) Merge main into the current branch, then redeploy.** Adds a merge commit
-  to your branch (`pull-base` → `merge-base` → deploy); not "untouched."
+**(A) Deploy `origin/main` itself** (confirmed by the user) — live catches up to
+latest main; the branch checkout never switches (the diagram above). *Not* (B),
+"merge main into the current branch then redeploy," which would add a merge
+commit and so isn't "untouched."
 
 ## Build on what exists — the gap is a *forward* deploy
 
@@ -51,7 +49,7 @@ fired detached the way `TriggerRollback()` fires `rollback.ps1`, behind a new
 `POST /api/deploy/pull-main`. Reuse the armed auto-rollback so a bad main can't
 brick live.
 
-## Slices (provisional — pending the A/B call)
+## Slices (provisional)
 
 1. Backend `POST /api/deploy/pull-main` = `pull-base` + detached deploy-from-main
    + ledger entry + armed rollback. Verify via `GET /api/deploy/status`
