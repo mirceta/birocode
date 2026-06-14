@@ -207,12 +207,42 @@
 .dash__views {
   display: flex;
   gap: 2px;
+  margin-right: 12px;
+  padding: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+}
+
+/* "Bigger/smaller" stepper — mirrors the views pill, sits just left of it and
+   carries the margin-left:auto that pushes both controls to the right. */
+.dash__size {
+  display: flex;
+  gap: 2px;
   margin-left: auto;
   margin-right: 12px;
   padding: 2px;
   border: 1px solid var(--color-border);
   border-radius: 999px;
   background: var(--color-surface);
+}
+
+.dash__size-btn {
+  border: none;
+  background: none;
+  border-radius: 999px;
+  width: 28px;
+  height: 26px;
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 600;
+  color: var(--color-text-soft);
+  cursor: pointer;
+}
+
+.dash__size-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 .dash__view {

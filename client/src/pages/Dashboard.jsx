@@ -19,6 +19,24 @@ function readView() {
   }
 }
 
+// Dock size is a per-device "bigger/smaller" stepper: an index into SIZE_STEPS
+// that scales the square cells' width cap (height follows via aspect-ratio).
+// Default is the middle step (1.0 = the original 340/460px caps).
+const SIZE_KEY = 'claudeweb_dash_size';
+const SIZE_STEPS = [0.7, 0.85, 1, 1.2, 1.45];
+const SIZE_DEFAULT = 2;
+function clampSize(i) {
+  return Math.min(SIZE_STEPS.length - 1, Math.max(0, i));
+}
+function readSize() {
+  try {
+    const i = parseInt(localStorage.getItem(SIZE_KEY), 10);
+    return Number.isNaN(i) ? SIZE_DEFAULT : clampSize(i);
+  } catch {
+    return SIZE_DEFAULT;
+  }
+}
+
 // Slice 2 liveness (plans/agent-dashboard.md) — while the overlay is open,
 // poll the cheap snapshot endpoints on a timer and keep the result LOCAL to
 // this view (no DockContext writes, no per-cell SSE):
@@ -101,6 +119,19 @@ export default function Dashboard({ onClose }) {
     } catch {
       /* private mode — fall back to in-memory only */
     }
+  }
+  // "Bigger/smaller" dock size, stepped and remembered per device.
+  const [sizeIdx, setSizeIdx] = useState(readSize);
+  function stepSize(delta) {
+    setSizeIdx((prev) => {
+      const next = clampSize(prev + delta);
+      try {
+        localStorage.setItem(SIZE_KEY, String(next));
+      } catch {
+        /* private mode — fall back to in-memory only */
+      }
+      return next;
+    });
   }
   // { [tabId]: { status, activity } } — fresher than the dock list, view-local.
   const [live, setLive] = useState({});
@@ -203,6 +234,28 @@ export default function Dashboard({ onClose }) {
       <div className="dash__header">
         <h2 className="dash__title">{t('dashboard.title')}</h2>
         {tabs.length > 0 && (
+          <div className="dash__size" role="group" aria-label={t('dashboard.size')}>
+            <button
+              type="button"
+              className="dash__size-btn"
+              onClick={() => stepSize(-1)}
+              disabled={sizeIdx <= 0}
+              aria-label={t('dashboard.sizeSmaller')}
+            >
+              &minus;
+            </button>
+            <button
+              type="button"
+              className="dash__size-btn"
+              onClick={() => stepSize(1)}
+              disabled={sizeIdx >= SIZE_STEPS.length - 1}
+              aria-label={t('dashboard.sizeBigger')}
+            >
+              +
+            </button>
+          </div>
+        )}
+        {tabs.length > 0 && (
           <div className="dash__views" role="tablist" aria-label={t('dashboard.title')}>
             <button
               type="button"
@@ -245,8 +298,8 @@ export default function Dashboard({ onClose }) {
             // rectangles. Phones get a larger cap since they hold a live chat.
             gridTemplateColumns:
               view === 'phones'
-                ? `repeat(${columns}, minmax(0, 460px))`
-                : `repeat(${columns}, minmax(0, 340px))`,
+                ? `repeat(${columns}, minmax(0, ${Math.round(460 * SIZE_STEPS[sizeIdx])}px))`
+                : `repeat(${columns}, minmax(0, ${Math.round(340 * SIZE_STEPS[sizeIdx])}px))`,
           }}
         >
           {tabs.map((tab) => {
