@@ -18,6 +18,7 @@ namespace ClaudeWeb.Services.Notes;
 public class NotesService
 {
     public const int MaxTextLength = 20_000;
+    public const int MaxProjectLength = 200;
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
 
     private readonly Logger _logger;
@@ -34,7 +35,10 @@ public class NotesService
         Load();
     }
 
-    public sealed record Note(string Id, string Text, long CreatedAt, long UpdatedAt);
+    // Project is an OPTIONAL free-text label (plans/ideas-filter-project.md).
+    // Null/absent on older notes — System.Text.Json tolerates the missing field
+    // on load, so no migration is needed.
+    public sealed record Note(string Id, string Text, string? Project, long CreatedAt, long UpdatedAt);
 
     // On-disk model. `Ideas` is the current shape; `Notes` is the legacy
     // per-repo map, read once for migration.
@@ -50,12 +54,12 @@ public class NotesService
         lock (_gate) return _ideas.AsEnumerable().Reverse().ToList();
     }
 
-    /// <summary>Adds an idea. Text is trimmed and length-capped; empty text is rejected (null return).</summary>
-    public Note? Add(string? text, long now)
+    /// <summary>Adds an idea. Text is trimmed and length-capped; empty text is rejected (null return). Project is optional.</summary>
+    public Note? Add(string? text, string? project, long now)
     {
         var clean = Clean(text);
         if (clean is null) return null;
-        var note = new Note(Guid.NewGuid().ToString("N"), clean, now, now);
+        var note = new Note(Guid.NewGuid().ToString("N"), clean, CleanProject(project), now, now);
         lock (_gate)
         {
             _ideas.Add(note);
@@ -65,8 +69,8 @@ public class NotesService
         return note;
     }
 
-    /// <summary>Edits an idea's text. Null return if the id is unknown or the text is empty.</summary>
-    public Note? Update(string id, string? text, long now)
+    /// <summary>Edits an idea's text and project. Null return if the id is unknown or the text is empty.</summary>
+    public Note? Update(string id, string? text, string? project, long now)
     {
         var clean = Clean(text);
         if (clean is null) return null;
@@ -74,7 +78,7 @@ public class NotesService
         {
             var i = _ideas.FindIndex(n => n.Id == id);
             if (i < 0) return null;
-            var updated = _ideas[i] with { Text = clean, UpdatedAt = now };
+            var updated = _ideas[i] with { Text = clean, Project = CleanProject(project), UpdatedAt = now };
             _ideas[i] = updated;
             Save();
             _logger.Info($"[NOTES] Updated idea {id}");
@@ -98,6 +102,15 @@ public class NotesService
         if (string.IsNullOrWhiteSpace(text)) return null;
         var t = text.Trim();
         return t.Length > MaxTextLength ? t[..MaxTextLength] : t;
+    }
+
+    // Optional: empty/whitespace project normalises to null (no project),
+    // otherwise trimmed and length-capped.
+    private static string? CleanProject(string? project)
+    {
+        if (string.IsNullOrWhiteSpace(project)) return null;
+        var p = project.Trim();
+        return p.Length > MaxProjectLength ? p[..MaxProjectLength] : p;
     }
 
     private void Load()
