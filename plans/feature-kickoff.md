@@ -1,12 +1,13 @@
 # Feature kickoff & closeout — a seamless feature lifecycle
 
-> **Status (2026-06-14):** Kickoff button BUILT & browser-verified
-> (`verify-feature-kickoff.mjs` 6/6: advanced-gated composer button prefills the
-> ritual, no auto-send, hidden in Basic). Frontend-only, live on :5099. On
-> `feature/feature-kickoff`, pending deploy/merge. **Closeout button still TODO**
-> — awaiting the user's closeout prompt text. Defaults chosen: client-side prompt
-> constant (i18n `feature.kickoffPrompt`), button in the composer toolbar next to
-> the understanding-prefill button, advanced-gated (`featureKickoff`).
+> **Status (2026-06-14):** Kickoff button DEPLOYED & CONFIRMED on live :5099
+> (2fc32da); rollback disarmed. Browser-verified (`verify-feature-kickoff.mjs`
+> 6/6: advanced-gated composer button prefills the ritual, no auto-send, hidden
+> in Basic). On `feature/feature-kickoff`, NOT yet merged to main. **Closeout
+> button still TODO** — awaiting the user's closeout prompt text. Defaults:
+> client-side prompt constant (i18n `feature.kickoffPrompt`), button in the
+> composer toolbar next to the understanding-prefill button, advanced-gated
+> (`featureKickoff`).
 
 ## Problem
 
