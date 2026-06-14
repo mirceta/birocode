@@ -9,6 +9,7 @@ import { useFeature } from '../context/UiModeContext';
 import { useT } from '../i18n/LanguageContext';
 import { buildGitGraph } from './gitGraph';
 import BranchReview from './BranchReview';
+import GitStatusSummary, { PositionRow } from '../components/git/GitStatusSummary';
 import './git.css';
 
 // Git tab (plans/git-tab.md + plans/git-actions.md): a fixed position card —
@@ -27,25 +28,6 @@ function statusLetter(f) {
   if (f.untracked) return '?';
   if (f.conflicted) return 'U';
   return f.worktree !== '.' ? f.worktree : f.index;
-}
-
-function PositionRow({ a, b, label, missingLabel }) {
-  const { t } = useT();
-  if (!label) {
-    return (
-      <div className="git-row">
-        <span className="git-row__counts git-row__counts--missing">{missingLabel}</span>
-      </div>
-    );
-  }
-  return (
-    <div className="git-row">
-      <span className={`git-row__counts${a === 0 && b === 0 ? ' git-row__counts--insync' : ''}`}>
-        {t('git.aheadBehind', { a, b })}
-      </span>
-      <span className="git-row__ref">{label}</span>
-    </div>
-  );
 }
 
 export default function Git() {
@@ -128,12 +110,6 @@ export default function Git() {
   const onBase = status.branch === status.localBaseBranch;
   const busy = !!status.busy;
   const base = status.localBaseBranch || status.baseBranch;
-  // The originBase row dedupes only against an IDENTICAL baseBranch fallback
-  // (no local main) — otherwise all three rows always render (user's spec).
-  const showBaseRow = !onBase && !!status.baseBranch;
-  const showOriginBaseRow = !!status.originBaseBranch
-    && status.originBaseBranch !== status.baseBranch
-    && !(onBase && status.originBaseBranch === status.upstream);
   const canMerge = !busy && clean && !onBase && status.baseBehind > 0
     && status.baseBranch === status.localBaseBranch;
   const canPullMain = !busy && !!base && (onBase ? status.behind > 0 : status.baseDriftBehind > 0);
@@ -150,24 +126,7 @@ export default function Git() {
             <span className="git-repoinfo__path">{current.path}</span>
           </div>
         )}
-        <div className="git-branch__name">
-          <span aria-hidden="true">⎇</span> {status.branch}
-        </div>
-
-        <div className="git-rows">
-          {showBaseRow && (
-            <PositionRow a={status.baseAhead} b={status.baseBehind} label={status.baseBranch} />
-          )}
-          {showOriginBaseRow && (
-            <PositionRow a={status.originBaseAhead} b={status.originBaseBehind} label={status.originBaseBranch} />
-          )}
-          <PositionRow
-            a={status.ahead}
-            b={status.behind}
-            label={status.upstream}
-            missingLabel={t('git.noUpstream')}
-          />
-        </div>
+        <GitStatusSummary status={status} />
 
         {showActions && (
           <div className="git-actions">

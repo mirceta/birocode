@@ -1,6 +1,7 @@
 import Chat from '../../pages/Chat';
 import { useChatFor } from '../../context/ChatContext';
 import { useT } from '../../i18n/LanguageContext';
+import GitStatusSummary from '../git/GitStatusSummary';
 
 // One "phone" in the Agent Dashboard's wall of phones (plans/agent-dashboard.md):
 // a single agent's live Chat view, pinned to that agent's repo regardless of
@@ -9,7 +10,7 @@ import { useT } from '../../i18n/LanguageContext';
 //
 // The header is the maximize affordance — tapping it opens this agent in the
 // full /studio view (the same flow as a dashboard card / Agents-tab row).
-export default function PinnedAgent({ tab, status, recency, repoPath, onMaximize }) {
+export default function PinnedAgent({ tab, status, recency, repoPath, git, onMaximize }) {
   const { t } = useT();
   const chat = useChatFor({
     key: tab.id,
@@ -36,6 +37,11 @@ export default function PinnedAgent({ tab, status, recency, repoPath, onMaximize
         {repoPath && <span className="phone__path">{repoPath}</span>}
         <span className="phone__status">{t(`agents.status.${status}`)}</span>
       </button>
+      {git && (
+        <div className="phone__git">
+          <GitStatusSummary status={git} compact />
+        </div>
+      )}
       <div className="phone__screen">
         <Chat chat={chat} embedded />
       </div>

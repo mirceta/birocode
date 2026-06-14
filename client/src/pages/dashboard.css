@@ -175,19 +175,8 @@
   line-height: 1.3;
 }
 
-/* Git state, mirroring the Agents tab (.agent-card__branch / __sync). */
-.dash-cell__branch,
-.dash-cell__sync {
-  font-size: 13px;
-  color: var(--color-text-soft);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dash-cell__sync--warn {
-  color: #b58900;
-}
+/* Git state now uses the shared GitStatusSummary component (branch +
+   ahead/behind rows, same as the Git tab). See plans/dashboard-git-status.md. */
 
 /* The "what's it doing" line (slice 2 liveness). Grows to fill the taller
    cell and clamps to a few lines so cells stay uniform regardless of
@@ -302,6 +291,15 @@
 
 .phone__bar:hover {
   background: var(--color-hover, rgba(0, 0, 0, 0.04));
+}
+
+/* Git status block on the dock — branch + ahead/behind rows, same as the Git
+   tab (plans/dashboard-git-status.md). Given its own room above the chat. */
+.phone__git {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
 }
 
 .phone__dot {

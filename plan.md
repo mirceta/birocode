@@ -40,12 +40,6 @@
 
 ## Proposed / design (not building yet)
 
-- [Dashboard git status on docks](plans/dashboard-git-status.md) — the dashboard
-  **cards** already show branch + ahead/behind sync lines, but the **phone
-  docks** (`PinnedAgent`) don't. Add the same Git-tab status fields (branch,
-  relation to base main/master, relation to origin) to the docks, reusing the
-  `gitSync.syncLines` helper and the `gitInfo` the dashboard already fetches.
-  Starter plan on `feature/dashboard-git-status`.
 - [Spec baseline](plans/spec-baseline.md) — borrow OpenSpec's one missing
   idea (a living "what the system does today" baseline + change-as-delta)
   into our existing plan convention, without adopting its tooling. Slice 1 =
@@ -53,6 +47,12 @@
 
 ## Recently shipped
 
+- [Dashboard git status on docks](plans/dashboard-git-status.md) — the Git tab's
+  branch + "n ahead · m behind" position rows (vs base main/master, origin/main,
+  upstream) now render on the dashboard **phone docks** too, and the **cards**
+  were switched to the same rows — all via a shared `GitStatusSummary` component
+  so the three surfaces can't drift. Deployed & confirmed 2026-06-14 on
+  `feature/dashboard-git-status`; not yet merged.
 - [Chat windowing](plans/chat-windowing.md) — long chats were slow because
   `Chat.jsx` rendered every message (heavy markdown bubble per turn) and we
   almost never scroll up. **Slice 1** renders only the recent tail (last 50)

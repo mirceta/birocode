@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { apiGet } from '../api/client';
 import { useDock } from '../context/DockContext';
 import { useT } from '../i18n/LanguageContext';
-import { syncLines } from '../lib/gitSync';
+import GitStatusSummary from '../components/git/GitStatusSummary';
 import PinnedAgent from '../components/dashboard/PinnedAgent';
 import './dashboard.css';
 
@@ -343,6 +343,7 @@ export default function Dashboard({ onClose }) {
                     status={status}
                     recency={recency}
                     repoPath={repoPath(tab.repoId)}
+                    git={gitInfo[tab.repoId]}
                     onMaximize={handleOpen}
                   />
                 </li>
@@ -370,19 +371,7 @@ export default function Dashboard({ onClose }) {
                   <span className="dash-cell__status">
                     {t(`agents.status.${status}`)}
                   </span>
-                  {git && (
-                    <span className="dash-cell__branch">
-                      <span aria-hidden="true">⎇</span> {git.branch}
-                    </span>
-                  )}
-                  {git && syncLines(t, git).map((line) => (
-                    <span
-                      key={line.key}
-                      className={`dash-cell__sync${line.warn ? ' dash-cell__sync--warn' : ''}`}
-                    >
-                      {line.text}
-                    </span>
-                  ))}
+                  {git && <GitStatusSummary status={git} compact />}
                   <span className="dash-cell__activity">
                     {activity || t('dashboard.noActivity')}
                   </span>

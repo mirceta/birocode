@@ -1,8 +1,10 @@
 # Dashboard git status on agent docks — branch + sync, like the Git tab
 
-> **Status (2026-06-14):** PROPOSED — starter plan, not started. New feature on
-> `feature/dashboard-git-status`. Expected frontend-only; reuses data the
-> dashboard already fetches.
+> **Status (2026-06-14):** **Slice 1 DEPLOYED & CONFIRMED** on live :5099;
+> browser-verified (`dash-git-status-check.mjs`: branch + position rows render
+> on the Git tab, dashboard cards, and phone docks). New feature on
+> `feature/dashboard-git-status`. Frontend-only; reuses the `gitInfo` the
+> dashboard already fetches. Not yet merged to main.
 
 ## Problem
 
@@ -49,16 +51,24 @@ So the data is in hand; the gap is purely rendering it on the dock.
 - Keep it best-effort: non-git repos / not-yet-loaded status simply render
   nothing (same as the cards).
 
-## Open questions / decisions
+## Decisions (confirmed by the user)
 
-- **Placement on the phone** — git row inside the existing `phone__bar` header
-  (tight, one line) vs. a thin strip below it. The phone screen is a live chat,
-  so vertical space is precious; lean toward a single compact line.
-- **How much** — full base + origin sync lines (mirror the cards), or just
-  branch + a terse "↑n ↓m" against origin to save space? Default: mirror the
-  cards for consistency; revisit if too tall.
-- **Cards too?** The cards already have this, so scope is the phone docks only —
-  confirm we're not also changing the cards.
+- **Placement** — give the git block the room it needs on the dock; **not** a
+  cramped one-line strip that looks ugly. A proper git section.
+- **How much** — do it **exactly like the Git tab**: branch name + the same
+  `PositionRow`s ("n ahead · m behind" vs base / origin-base / upstream, with the
+  in-sync and missing-upstream styling), not the simplified `syncLines`.
+- **Cards too** — render it the **same way on the cards**, replacing their
+  current `syncLines` summary so cards and docks match the Git tab.
+
+## Approach
+
+Per [doc-principles](doc-principles.md) ("extract the shared mechanism"): pull
+the Git tab's branch-name + `git-rows`/`PositionRow` block into a shared
+component (`components/git/GitStatusSummary`, with its own CSS) and render it on
+all three surfaces — the Git tab, the dashboard cards, and the phone docks — so
+they can never drift. `gitSync.syncLines` stays for the Agents tab (out of
+scope here).
 
 ## Slices
 
