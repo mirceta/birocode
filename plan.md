@@ -40,6 +40,12 @@
 
 ## Proposed / design (not building yet)
 
+- [Dashboard git status on docks](plans/dashboard-git-status.md) — the dashboard
+  **cards** already show branch + ahead/behind sync lines, but the **phone
+  docks** (`PinnedAgent`) don't. Add the same Git-tab status fields (branch,
+  relation to base main/master, relation to origin) to the docks, reusing the
+  `gitSync.syncLines` helper and the `gitInfo` the dashboard already fetches.
+  Starter plan on `feature/dashboard-git-status`.
 - [Spec baseline](plans/spec-baseline.md) — borrow OpenSpec's one missing
   idea (a living "what the system does today" baseline + change-as-delta)
   into our existing plan convention, without adopting its tooling. Slice 1 =
