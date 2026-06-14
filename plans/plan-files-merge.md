@@ -1,11 +1,12 @@
 # Files tab absorbs the Plan tab — default-open + pins + live-poll
 
-> **Status (2026-06-14):** Slices 1 & 2 BUILT & BROWSER-VERIFIED, pending
-> deploy. Branch `feature/plan-files-merge`. Slice 1 (verify-plan-files-merge.mjs
-> 9/9 on :5099) and slice 2 (verify-plan-files-pins.mjs 7/7 on isolated :5201
-> with the new Pins backend). The Files tab is the single file surface: default/
-> remembered open, return-to-tree, 5 s poll, and per-project backend-synced pins
-> (📌 toggle in the viewer bar) seeded with plan.md + CLAUDE.md. Plan tab removed.
+> **Status (2026-06-14):** DEPLOYED & CONFIRMED on live :5099 (8e5e4fc); rollback
+> disarmed, health 200, GET /api/pins live. Browser-verified: slice 1
+> (verify-plan-files-merge.mjs 9/9 on :5099) + slice 2 (verify-plan-files-pins.mjs
+> 7/7 on isolated :5201). On `feature/plan-files-merge`, NOT yet merged to main.
+> The Files tab is the single file surface: default/remembered open,
+> return-to-tree, 5 s poll, and per-project backend-synced pins (📌 toggle in the
+> viewer bar) seeded with plan.md + CLAUDE.md. Plan tab removed.
 
 ## Problem
 
