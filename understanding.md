@@ -3,8 +3,12 @@
 > **Progress (2026-06-14):** Fork **resolved → top-bar full-screen overlay**
 > (option B). Slice 1 rebuilt: the dashboard is no longer a tab — a top-bar
 > **Dashboard** button (Advanced + 2+ agents) opens a full-screen overlay; click
-> a cell to open that agent; close via the button, the × , or Escape. Slices 2
-> (liveness) and 3 (live tail) remain.
+> a cell to open that agent; close via the button, the × , or Escape.
+>
+> **👉 NEXT STEP — Slice 2 (liveness):** give each cell a live status refresh +
+> a one-line "what's it doing", on a timer. Then Slice 3 (live tail) is optional.
+> The authoritative slice plan lives in
+> [plans/agent-dashboard.md](plans/agent-dashboard.md) (+ its UX / tech detail).
 
 ## The goal, in one picture
 
@@ -43,7 +47,7 @@ flowchart TD
   Name --> Cell["Agent cell"]
   Badge --> Cell
   Activity --> Cell
-  Cell -->|Maximize → setActiveTab + /studio| Studio["the existing full view"]
+  Cell -->|click cell → setActiveTab + /studio| Studio["the existing full view"]
 ```
 
 ## The status each badge reflects (already modelled today)
@@ -68,9 +72,10 @@ flowchart LR
   classDef later fill:#e5e7eb,color:#374151,stroke:#9ca3af
 ```
 
-- **Slice 1 — done.** Advanced "Dashboard" tab; responsive grid of dock agents
-  (name, status badge + dot, colour mark); per-cell **Maximize** → `/studio`.
-- **Slice 2 — next.** Per-cell status refresh + a one-line "what's it doing",
+- **Slice 1 — done.** Advanced top-bar **Dashboard** button → full-screen
+  overlay; responsive grid of dock agents (name, status badge + dot, colour
+  mark); click any cell → open that agent in `/studio`.
+- **Slice 2 — 👈 next.** Per-cell status refresh + a one-line "what's it doing",
   updated on a **timer** (poll `/api/runs` + a cheap latest-activity source).
   No per-cell connections.
 - **Slice 3 — later, maybe.** An **opt-in** scrolling SSE tail per cell, bounded
@@ -94,7 +99,7 @@ flowchart TD
 - **Agent list** — `DockContext` (`{ id, repoId, repoName, sessionId, status,
   color, stash }`) via `/api/dock`, persisted server-side.
 - **Status** — already `idle | running | done | error` (the Agents-tab legend).
-- **Maximize** — `setActiveTab(id)` + navigate `/studio` (what an Agents card
+- **Open** — `setActiveTab(id)` + navigate `/studio` (what an Agents card
   does today).
 - **Grid baseline** — `PaneStrip` / `useMultiPane` lay out N panes; the
   dashboard is a sibling (a CSS grid of cells, not panes of one agent).

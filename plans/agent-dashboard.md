@@ -25,5 +25,9 @@ existing full view.
 ## Slices (detail in the technical design)
 
 1. **Static grid + open-agent** ✅ built — top-bar full-screen overlay; click a cell to open that agent.
-2. **Liveness** — per-cell status + a one-line "what's it doing", on a timer.
+2. **Liveness** 👈 **NEXT** — per-cell status + a one-line "what's it doing", on a timer.
 3. **Live tail (later, maybe)** — an opt-in scrolling stream tail per cell.
+
+> **Next step = Slice 2.** Full detail (data sources, the v1 liveness cost
+> tradeoff, where it plugs in) is in
+> [agent-dashboard-tech.md § Slices](agent-dashboard-tech.md#slices).

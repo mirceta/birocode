@@ -69,8 +69,9 @@ stateDiagram-v2
   dot, colour mark); the whole cell is clickable → `setActiveTab` + `/studio` +
   close. Top-bar entry (`DashboardButton`) gated Advanced + 2+ agents. No tab /
   route / `KnownTabs` entry.
-- **Slice 2 — liveness.** Per-cell status refresh + a one-line latest-activity
-  string, updated on a timer (and/or reconciled from `/api/runs`).
+- **Slice 2 — liveness. 👈 NEXT.** Per-cell status refresh + a one-line
+  latest-activity string, updated on a timer (and/or reconciled from
+  `/api/runs`). See *Liveness depth* above for the v1 cost tradeoff.
 - **Slice 3 (later, maybe) — live tail.** An opt-in scrolling stream tail per
   cell, bounded so we don't open N heavy SSE streams at once.
 
