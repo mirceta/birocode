@@ -24,10 +24,11 @@
 ## Active feature plans
 
 - [Files tab absorbs the Plan tab](plans/plan-files-merge.md) — the Files tab
-  becomes the single file surface: opens a remembered/default file (`plan.md`),
-  return-to-tree in the corner, **pins** (`plan.md`/`CLAUDE.md`, extensible),
-  and a 5 s poll of the open file. Retires the Plan tab + its duplicate
-  renderer. Planning — awaiting "create it".
+  is the single file surface: opens a remembered/default file (`plan.md`),
+  return-to-tree in the corner, per-project backend-synced **pins**
+  (`plan.md`/`CLAUDE.md`, 📌-toggle any file), and a 5 s poll of the open file.
+  Retires the Plan tab + its duplicate renderer. Slices 1 & 2 built &
+  browser-verified; pending deploy.
 - [Understanding panel](plans/understanding-panel.md) **— slice 2** — make the
   panel work in Product Repos, not just the Harness. A composer-prefill button
   drops the "write your understanding first" instruction into the chat box (no

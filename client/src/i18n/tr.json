@@ -340,6 +340,8 @@
   "files.addedToMessage": "{name} mesajina eklendi",
   "files.longPressHint": "Ipucu: bir dosyayi mesajina eklemek icin basili tut",
   "files.pinned": "Sabitlenmis",
+  "files.pin": "Dosyalar'in ustune sabitle",
+  "files.unpin": "Sabitlemeyi kaldir",
   "history.restoredToast": "Tamam -- o surume donuldu",
   "history.restoreErrorToast": "Geri donulemedi -- lutfen tekrar dene",
   "history.loading": "Kayitli surumlerin yukleniyor...",

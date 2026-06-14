@@ -1,11 +1,11 @@
 # Files tab absorbs the Plan tab — default-open + pins + live-poll
 
-> **Status (2026-06-14):** PLAN — not started. Branch `feature/plan-files-merge`
-> off main (547e50e). Playback written; awaiting "create it". Design refined by
-> the user: no Plan tab and no one-tap shortcut — the Files tab becomes the
-> single file surface, with a remembered default file, pins, and a 5 s poll of
-> the open file. Code-grounded against `Plan.jsx` / `Files.jsx` /
-> `FileViewer.jsx`.
+> **Status (2026-06-14):** Slices 1 & 2 BUILT & BROWSER-VERIFIED, pending
+> deploy. Branch `feature/plan-files-merge`. Slice 1 (verify-plan-files-merge.mjs
+> 9/9 on :5099) and slice 2 (verify-plan-files-pins.mjs 7/7 on isolated :5201
+> with the new Pins backend). The Files tab is the single file surface: default/
+> remembered open, return-to-tree, 5 s poll, and per-project backend-synced pins
+> (📌 toggle in the viewer bar) seeded with plan.md + CLAUDE.md. Plan tab removed.
 
 ## Problem
 

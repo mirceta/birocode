@@ -340,6 +340,8 @@
   "files.addedToMessage": "Added {name} to your message",
   "files.longPressHint": "Tip: press and hold a file to add it to your message",
   "files.pinned": "Pinned",
+  "files.pin": "Pin to the top of Files",
+  "files.unpin": "Unpin from Files",
   "history.restoredToast": "Done -- went back to that version",
   "history.restoreErrorToast": "Couldn't go back -- please try again",
   "history.loading": "Loading your saved versions...",
