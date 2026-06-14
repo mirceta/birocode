@@ -27,6 +27,10 @@
 
 ## Active feature plans
 
+- [Dashboard chat cut off](plans/dashboard-chat-scroll.md) — **bug:** in the
+  dashboard "wall of phones," an agent's chat is clipped — you can't scroll to
+  the bottom or reach the message composer. Likely a cell height/overflow issue.
+  Issue captured; fix TBD. On `feature/dashboard-chat-scroll`.
 - [Agent dashboard](plans/agent-dashboard.md) — a mission-control grid showing
   every agent on this machine at once (status + what it's doing). Opened from a
   top-bar button (Advanced + 2+ agents) as a full-screen overlay, not a tab;
