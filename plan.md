@@ -58,6 +58,12 @@
 
 ## Recently shipped
 
+- [Custom prompts](plans/custom-prompts.md) — a single ⚙ composer button opens a
+  centered modal (portaled to `<body>`) holding the built-in understanding/kickoff
+  prompts plus user-defined custom ones; each row shows the prompt text and a
+  **Use** button that prefills the composer, with Add/Edit/Delete for custom ones.
+  Global backend-synced (`PromptsService` + `/api/prompts`). Deployed to live
+  :5099, browser-verified (`verify-unified.mjs` 9/9); merged to main 2026-06-15.
 - [Ideas — fuzzy filter + optional project field](plans/ideas-filter-project.md)
   — a client-side **fuzzy filter** (subsequence search box) over the Global
   Ideas list and an **optional free-text `project` field** on each idea (chip on

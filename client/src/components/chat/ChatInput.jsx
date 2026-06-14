@@ -1,7 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useDock } from '../../context/DockContext';
 import { useFeature } from '../../context/UiModeContext';
+import { usePrompts } from '../../context/PromptsContext';
 import { useT } from '../../i18n/LanguageContext';
+import PromptManager from './PromptManager';
 
 // Controlled composer. The draft text lives in ChatContext (so it persists
 // across tab navigation and can be appended to by other tabs), and is passed
@@ -22,8 +24,14 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
   // cross-write) inside a dashboard phone for a background agent — disable it
   // there (plans/agent-dashboard.md).
   const stashEnabled = useFeature('promptStash') && !!activeTabId && !embedded;
-  const understandingEnabled = useFeature('understandingPanel');
-  const kickoffEnabled = useFeature('featureKickoff');
+  // Prompts (plans/custom-prompts.md): a single ⚙ button opens a modal that holds
+  // BOTH the built-in prompts (understanding, kickoff — formerly their own toolbar
+  // buttons) and the user's custom ones, each with a "Use" button that prefills
+  // the composer. Modal only on the main composer (not dashboard phones —
+  // `embedded`).
+  const customPromptsEnabled = useFeature('customPrompts');
+  const { prompts, addPrompt, updatePrompt, deletePrompt } = usePrompts();
+  const [mgrOpen, setMgrOpen] = useState(false);
   const stash = (stashEnabled && activeTab?.stash) || [];
   const textareaRef = useRef(null);
   const fileRef = useRef(null);
@@ -65,25 +73,12 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
     onChange('');
   }
 
-  // Drop the standing "write your understanding first" instruction into the
-  // composer (plans/understanding-panel.md slice 2). It does NOT auto-send —
-  // the user reviews and presses Enter, so it's an ordinary turn (no extra
-  // claude -p call). Appended to any existing draft so nothing is lost, then
-  // the box is focused for review.
-  function handleUnderstandingPrefill() {
-    const prompt = t('understanding.prefillPrompt');
+  // Insert a prompt's text into the composer (called from the manager modal's
+  // "Use" buttons — built-in and custom alike). Appended so nothing is lost, no
+  // auto-send: the user reviews and presses Enter, so it's an ordinary turn.
+  function insertPrompt(promptText) {
     const current = (value || '').trim();
-    onChange(current ? `${current}\n\n${prompt}` : prompt);
-    requestAnimationFrame(() => textareaRef.current?.focus());
-  }
-
-  // Drop the "start a new feature" ritual into the composer (plans/feature-kickoff.md).
-  // Same shape as the understanding prefill: no auto-send, appended so nothing is
-  // lost, then focus so the user types the feature name after the trailing colon.
-  function handleKickoffPrefill() {
-    const prompt = t('feature.kickoffPrompt');
-    const current = (value || '').trim();
-    onChange(current ? `${current}\n\n${prompt}` : prompt);
+    onChange(current ? `${current}\n\n${promptText}` : promptText);
     requestAnimationFrame(() => textareaRef.current?.focus());
   }
 
@@ -105,6 +100,16 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
 
   return (
     <div className="chat-input">
+      {customPromptsEnabled && !embedded && mgrOpen && (
+        <PromptManager
+          prompts={prompts}
+          onAdd={addPrompt}
+          onUpdate={updatePrompt}
+          onDelete={deletePrompt}
+          onInsert={insertPrompt}
+          onClose={() => setMgrOpen(false)}
+        />
+      )}
       {stash.length > 0 && (
         <div className="chat-stash" aria-label={t('chat.stashListAria')}>
           {stash.map((item) => (
@@ -167,26 +172,16 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
           className="chat-input__file-hidden"
           onChange={handleFileChange}
         />
-        {understandingEnabled && (
+        {customPromptsEnabled && !embedded && (
           <button
             type="button"
-            className="chat-input__understand"
-            onClick={handleUnderstandingPrefill}
-            aria-label={t('understanding.prefill')}
-            title={t('understanding.prefill')}
+            className="chat-input__manage"
+            onClick={() => setMgrOpen((o) => !o)}
+            aria-label={t('prompts.manage')}
+            title={t('prompts.manage')}
+            aria-expanded={mgrOpen}
           >
-            &#128221;
-          </button>
-        )}
-        {kickoffEnabled && (
-          <button
-            type="button"
-            className="chat-input__kickoff"
-            onClick={handleKickoffPrefill}
-            aria-label={t('feature.kickoff')}
-            title={t('feature.kickoff')}
-          >
-            &#128640;
+            &#9881;
           </button>
         )}
         <textarea

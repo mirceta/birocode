@@ -10,6 +10,7 @@ import { SaveProvider } from '../components/history/SaveHandler';
 import { ChatProvider } from '../context/ChatContext';
 import { RepoProvider, useRepo } from '../context/RepoContext';
 import { DockProvider, useDock } from '../context/DockContext';
+import { PromptsProvider } from '../context/PromptsContext';
 import { UiModeProvider, useFeature } from '../context/UiModeContext';
 import { UiSettingsProvider } from '../context/UiSettingsContext';
 import { useT } from '../i18n/LanguageContext';
@@ -164,7 +165,9 @@ export default function Layout() {
           <DockProvider>
             <SaveProvider>
               <ChatProvider>
-                <StudioShell />
+                <PromptsProvider>
+                  <StudioShell />
+                </PromptsProvider>
               </ChatProvider>
             </SaveProvider>
           </DockProvider>

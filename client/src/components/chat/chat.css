@@ -754,6 +754,214 @@ details.step > summary::-webkit-details-marker {
   border-color: var(--color-accent);
 }
 
+/* Custom prompt presets + manage button (plans/custom-prompts.md) */
+.chat-input__preset,
+.chat-input__manage {
+  min-width: var(--touch);
+  min-height: var(--touch);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 18px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.chat-input__preset:hover,
+.chat-input__manage:hover {
+  border-color: var(--color-accent);
+}
+
+/* Custom-prompts manager — a CENTERED MODAL portaled to <body> (see
+   PromptManager.jsx). The backdrop covers the viewport at a high z-index so no
+   ancestor stacking context (the composer's `transform`) can hide or clip it. */
+.prompt-mgr-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.prompt-mgr {
+  width: min(440px, 100%);
+  max-height: 85vh;
+  overflow-y: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius, 8px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  padding: 16px;
+}
+
+.prompt-mgr__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.prompt-mgr__title { font-weight: 600; font-size: 14px; }
+
+.prompt-mgr__close {
+  border: none;
+  background: none;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--color-text-soft);
+}
+
+.prompt-mgr__empty {
+  font-size: 13px;
+  color: var(--color-text-soft);
+  margin: 4px 0 10px;
+}
+
+.prompt-mgr__list {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.prompt-mgr__item { display: flex; align-items: flex-start; gap: 8px; }
+.prompt-mgr__item-emoji { font-size: 18px; flex: 0 0 auto; line-height: 1.5; }
+
+.prompt-mgr__item-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.prompt-mgr__item-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Show the prompt body, not just the label — clamped to a few lines so long
+   prompts (e.g. the kickoff ritual) don't dominate the list; full text is used
+   on Use/Edit. Preserves the author's line breaks. */
+.prompt-mgr__item-text {
+  font-size: 12px;
+  color: var(--color-text-soft);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.prompt-mgr__item-actions {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.prompt-mgr__item-btn {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* The "Use" action (insert into composer) is the primary per-row action. */
+.prompt-mgr__item-use {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.prompt-mgr__formhint {
+  font-size: 12px;
+  color: var(--color-text-soft);
+  margin: 12px 0 6px;
+}
+
+.prompt-mgr__form {
+  border-top: 1px solid var(--color-border);
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prompt-mgr__emoji-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-height: 96px;
+  overflow-y: auto;
+}
+
+.prompt-mgr__emoji {
+  min-width: 32px;
+  min-height: 32px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.prompt-mgr__emoji--on {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface));
+}
+
+.prompt-mgr__label-input,
+.prompt-mgr__text-input {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 6px);
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.prompt-mgr__text-input { resize: vertical; }
+.prompt-mgr__error { color: #d1242f; font-size: 12px; margin: 0; }
+.prompt-mgr__actions { display: flex; gap: 8px; }
+
+.prompt-mgr__save {
+  min-height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--color-accent);
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.prompt-mgr__save:disabled { opacity: 0.5; }
+
+.prompt-mgr__cancel {
+  min-height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  font-size: 13px;
+  cursor: pointer;
+}
+
 /* Stash button — bookmark a draft mid-run (plans/prompt-stash.md) */
 .chat-input__stash {
   min-width: var(--touch);
