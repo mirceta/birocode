@@ -472,6 +472,38 @@ export function ChatProvider({ children }) {
     }
   }
 
+  // Refresh ONE docked conversation on demand (the dashboard dock's per-dock
+  // chat-refresh button): a single-key version of reconcile(). Re-pull this
+  // agent's latest state from the backend — reattach if its run is live and we
+  // have no reader, otherwise fix a stale badge and re-fetch the transcript so
+  // the dock shows the finished turn. A no-op while a live stream is already
+  // attached (it's already delivering).
+  async function refreshOne(key, tabId, repoId, sessionId) {
+    let runs;
+    try {
+      runs = await apiGet('/runs');
+    } catch {
+      return;
+    }
+    const run = runs?.[repoId];
+    if (run?.status === 'running') {
+      if (!abortRefs.current[key]) attachToRun(key, tabId, repoId, run);
+      return;
+    }
+    // Not running: correct a stale 'running' badge, then re-pull the transcript.
+    if (tabId && run) {
+      updateTab(tabId, {
+        status: run.status || 'idle',
+        ...(run.sessionId ? { sessionId: run.sessionId } : {}),
+      });
+    }
+    const id = run?.sessionId || sessionId || convos[key]?.sessionId;
+    if (id) {
+      await loadTranscript(key, id, repoId);
+      updateConvo(key, { sessionId: id });
+    }
+  }
+
   const reconcileRef = useRef(reconcile);
   reconcileRef.current = reconcile;
   useEffect(() => {
@@ -662,6 +694,7 @@ export function ChatProvider({ children }) {
     stopTo,
     startNewIn,
     resumeIn,
+    refreshOne,
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
@@ -728,6 +761,7 @@ export function useChatFor({ key, repoId, tabId, sessionId }) {
     changeModel: ctx.changeModel,
     send: (text) => ctx.sendTo(text, target),
     stop: () => ctx.stopTo(target),
+    refresh: () => ctx.refreshOne(key, tabId, repoId, sessionId),
     startNewConversation: () => {
       setPickerOpen(false);
       ctx.startNewIn(target);

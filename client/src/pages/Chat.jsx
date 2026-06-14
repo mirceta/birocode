@@ -54,6 +54,7 @@ export default function Chat({ chat: injected, embedded = false }) {
     startNewConversation,
     resumeConversation,
     openPicker,
+    refresh,
     chatView,
     setChatView,
     hasSelfRepo,
@@ -68,6 +69,20 @@ export default function Chat({ chat: injected, embedded = false }) {
 
   // Only the last `visibleCount` messages are rendered; the rest stay in state.
   const [visibleCount, setVisibleCount] = useState(WINDOW);
+
+  // Conversation refresh — only the per-agent dock facade (useChatFor) exposes
+  // `refresh`; the main chat doesn't, so the button only appears on docks. It
+  // re-pulls this agent's latest transcript / reattaches a live run.
+  const [refreshing, setRefreshing] = useState(false);
+  async function handleRefresh() {
+    if (refreshing || !refresh) return;
+    setRefreshing(true);
+    try {
+      await refresh();
+    } finally {
+      setRefreshing(false);
+    }
+  }
   const total = messages.length;
   const start = Math.max(0, total - visibleCount);
   const hidden = start;
@@ -164,6 +179,18 @@ export default function Chat({ chat: injected, embedded = false }) {
           </span>
         )}
         <ModelSelector value={model} onChange={changeModel} />
+        {refresh && (
+          <button
+            type="button"
+            className={`chat__refresh${refreshing ? ' is-spinning' : ''}`}
+            onClick={handleRefresh}
+            disabled={refreshing}
+            title={t('chat.refresh')}
+            aria-label={t('chat.refresh')}
+          >
+            ↻
+          </button>
+        )}
         <button type="button" className="chat__new" onClick={startNewConversation}>
           {t('chat.new')}
         </button>

@@ -29,6 +29,12 @@
 
 ## Active feature plans
 
+- [Dock chat refresh](plans/dock-chat-refresh.md) — give each agent dock on the
+  dashboard a way to **refresh its conversation section** (re-pull that one
+  agent's latest transcript/events from the backend run), mirroring the dock's
+  existing per-dock git-refresh `↻`. For when a dock's embedded chat looks stale
+  and you don't want to maximize it or reload the page. Just started, not built.
+  On `feature/dock-chat-refresh`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
