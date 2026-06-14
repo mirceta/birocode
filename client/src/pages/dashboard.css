@@ -47,8 +47,8 @@
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
+  gap: 20px;
 }
 
 /* The whole cell is the click target (opens that agent — no separate button). */
@@ -56,10 +56,10 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
   width: 100%;
-  min-height: 160px;
-  padding: 20px;
+  min-height: 240px;
+  padding: 28px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   background: var(--color-surface);
@@ -117,7 +117,7 @@
 }
 
 .dash-cell__name {
-  font-size: 16px;
+  font-size: 20px;
   font-weight: 600;
   color: var(--color-text);
   overflow: hidden;
@@ -126,7 +126,7 @@
 }
 
 .dash-cell__status {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-text-soft);
 }
 
@@ -135,11 +135,11 @@
    transcript length. */
 .dash-cell__activity {
   flex: 1;
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: 14px;
+  line-height: 1.5;
   color: var(--color-text-soft);
   display: -webkit-box;
-  -webkit-line-clamp: 4;
+  -webkit-line-clamp: 6;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
