@@ -1,9 +1,9 @@
 # Feature kickoff & closeout — a seamless feature lifecycle
 
-> **Status (2026-06-14):** PLAN — problem captured, **design TBD**. On
-> `feature/feature-kickoff`. Next step: map ideas with the user, then decide the
-> approach. Nothing built yet. Scope covers BOTH ends of a feature's life:
-> starting one and finishing one.
+> **Status (2026-06-14):** PLAN — **approach decided** (composer-prefill buttons,
+> the Understanding-panel slice 2 pattern); ready to build on the user's word.
+> On `feature/feature-kickoff`. Scope covers BOTH ends of a feature's life:
+> starting one and finishing one. Nothing built yet.
 
 ## Problem
 
@@ -28,12 +28,41 @@ the agent forgetting pieces.
 
 ## Goal
 
-_TBD — to be mapped with the user (for both kickoff and closeout)._
+One-tap **composer-prefill buttons** that drop a ready-made prompt into the chat
+box — one to **kick off** a feature, one to **close one out** — so the user
+doesn't retype the ritual and the agent gets the full step list every time.
 
-## Ideas / open questions
+## Design (decided)
 
-_To fill in as we map this out together (no solution chosen yet)._
+Reuse the exact mechanism the Understanding panel (slice 2) and the Exposure
+check's "Fix with an agent" already use: a button calls
+`ChatContext.prefillProjectChat(text)` (`client/src/context/ChatContext.jsx`),
+which sets the project-chat draft to `text` and switches to the project chat —
+**no extra model call**; the user reviews/edits, then sends. (See
+`ExposeCheck.jsx`'s `fixWithAgent()` for the pattern: `prefillProjectChat(...)`
+then `navigate('/studio')`.)
 
-## Design
+Two buttons, placed by the chat composer (left side, alongside the existing
+prefill/attach controls — the spot the user pointed at):
 
-_TBD._
+- **Kick off a feature** → prefills a prompt instructing the agent to run the
+  kickoff ritual: branch `feature/<name>` off main, create `plans/<name>.md` +
+  a `plan.md` Active entry, write `understanding.md`, then play back before
+  building. The user fills in the feature name/description and sends.
+- **Close out the feature** → prefills a prompt for the closeout ritual: disarm
+  the rollback, keep-it bookkeeping (mark the plan shipped → *Recently shipped*),
+  retire `understanding.md`, `git fetch` + merge to main + push, tidy the branch.
+
+The canned prompt text **is** the ritual's single source of truth (so the agent
+stops forgetting steps) — mirrors how `ExposeService.BuildFixPrompt` keeps the
+contract in one place.
+
+## Open questions (decide at build time)
+
+- **Prompt source:** a client-side constant, or server-built (like
+  `ExposeService.BuildFixPrompt`) so the ritual lives in one canonical place?
+- **Button placement/affordance:** exact spot + icon by the composer; one combined
+  control vs. two buttons.
+- **Gating:** Advanced-only (new-UI convention) vs. always shown.
+- **Closeout smarts:** static prompt vs. lightly tailored to the current branch
+  state (branch name, deployed/confirmed status).

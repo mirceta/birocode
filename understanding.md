@@ -13,14 +13,21 @@ the agent forgets steps if they aren't restated:
 You want **both** to be seamless — start the next feature and close out the
 finished one without re-describing the whole dance.
 
-## Status of this task
-**Mapping phase, not building.** You asked me to just scaffold (branch + plan
-entry) and said "then we will map our ideas and solve the actual problem." So:
-- Branch `feature/feature-kickoff` is open.
-- `plans/feature-kickoff.md` captures the problem; **Goal/Design are TBD**.
-- No solution chosen yet (could be a CLAUDE.md convention, a skill/slash
-  command, an in-app affordance, a checklist file — we'll decide together).
+## Approach (decided)
+Same mechanism as the Understanding panel (slice 2) / Exposure "Fix with an
+agent": **composer-prefill buttons**. A button by the chat box calls
+`ChatContext.prefillProjectChat(text)` to drop a ready-made prompt into the
+composer (no extra model call); you review/edit and send.
 
-## Next step
-Map the ideas with you and pin down what "seamless" should actually mean and
-where the logic should live, before writing any design or code.
+- **Kick off a feature** button → fills the composer with the kickoff ritual
+  (branch off main, plan file + `plan.md` entry, `understanding.md`, playback).
+- **Close out** button → fills it with the closeout ritual (disarm rollback,
+  keep-it bookkeeping, retire `understanding.md`, merge to main + push, tidy).
+
+The canned prompt text is the ritual's single source of truth, so the agent
+stops forgetting steps.
+
+## Status
+Approach written into `plans/feature-kickoff.md`; **not built yet**. Open
+build-time questions: prompt source (client const vs. server-built), exact
+button placement, gating, and whether closeout is static or branch-aware.
