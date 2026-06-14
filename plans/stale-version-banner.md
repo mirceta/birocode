@@ -1,10 +1,11 @@
 # Stale-copy warning banner — tell an open tab its code is out of date
 
-> **Status (2026-06-13):** Code complete + **browser-verified** on an isolated
-> `:5210` harness (`.claudeweb-preview/playwright/verify-stale-banner.mjs`, 5/5:
-> banner shows on differing build, Reload reloads, dismiss hides, no banner when
-> builds match; per-tab regression still green). NOT deployed yet. On
-> `feature/stale-version-banner`. Motivated by the per-tab-spaces deploy: open
+> **Status (2026-06-14):** **Deployed & confirmed** on live :5099 (cf75052).
+> Browser-verified on an isolated `:5210` harness
+> (`.claudeweb-preview/playwright/verify-stale-banner.mjs`, 5/5: banner shows on
+> differing build, Reload reloads, dismiss hides, no banner when builds match;
+> per-tab regression still green). Merged to main via
+> `feature/local-tab-expose-help`. Motivated by the per-tab-spaces deploy: open
 > windows kept running the old cached bundle until a hard refresh (see
 > [per-tab-spaces](per-tab-spaces.md)).
 

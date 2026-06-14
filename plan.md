@@ -8,12 +8,12 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-14):** **In flight (pending deploy):** the
-> [stale-copy warning banner](plans/stale-version-banner.md), the Local-tab
-> "how to expose a web app" instructions, Understanding panel **slice 2**
-> (composer-prefill button for Product Repos), and the Git tab **PR preview**
-> (branch delta vs base, slices 1 & 2) — all built & browser-verified. Already
-> merged & deployed: Understanding panel slice 1, Deployments tab slice 1, the
+> **Status (2026-06-14):** **Deployed & confirmed (cf75052):** the
+> [stale-copy warning banner](plans/stale-version-banner.md) and the Local-tab
+> "how to expose a web app" instructions are live on :5099. The same deploy
+> also carried Understanding panel **slice 2** and the Git tab **PR preview**
+> (slices 1 & 2) live — their owners to mark confirmed. Already merged &
+> deployed: Understanding panel slice 1, Deployments tab slice 1, the
 > product-onboarding Exposure check (slices 1-3), and per-tab agent spaces.
 > Proposed: a
 > [spec-baseline](plans/spec-baseline.md) DESIGN plan — what to borrow from
@@ -23,19 +23,11 @@
 
 ## Active feature plans
 
-- [Stale-copy warning banner](plans/stale-version-banner.md) — after a redeploy,
-  an open browser running the old cached bundle gets a dismissible "new version
-  — Reload" banner (build-stamp compare via `version.json`). Closes the gap that
-  stranded open windows on stale code after the per-tab-spaces deploy.
 - [Understanding panel](plans/understanding-panel.md) **— slice 2** — make the
   panel work in Product Repos, not just the Harness. A composer-prefill button
   drops the "write your understanding first" instruction into the chat box (no
-  extra `claude -p` cost). Built & browser-verified 6/6; pending deploy.
-- Local tab — "how to expose a web app" instructions in the setup form: open an
-  agent in the Claude Web repo, give it the path to the target app, and ask it
-  to reconfigure it for Local-tab exposure (one loopback port, relative URLs).
-  Built & browser-verified; pending deploy. Extends
-  [Local tab over the internet](plans/local-app-proxy.md).
+  extra `claude -p` cost). Built & browser-verified 6/6; live via the cf75052
+  deploy, owner to confirm.
 - [Git tab — branch PR preview](plans/git-pr-preview.md) — for the current
   feature branch, show where it branched off, the commits since, and the
   cumulative `base...HEAD` file diff — what a GitHub pull request shows, which
@@ -53,6 +45,16 @@
 
 ## Recently shipped
 
+- [Stale-copy warning banner](plans/stale-version-banner.md) — after a redeploy,
+  an open browser running the old cached bundle gets a dismissible "new version
+  — Reload" banner (build-stamp compare via `version.json`). Closes the gap that
+  stranded open windows on stale code after the per-tab-spaces deploy. Deployed
+  & confirmed 2026-06-14 (cf75052).
+- Local tab — "how to expose a web app" instructions in the setup form: open an
+  agent in the Claude Web repo, give it the path to the target app, and ask it
+  to reconfigure it for Local-tab exposure (one loopback port, relative URLs).
+  Extends [Local tab over the internet](plans/local-app-proxy.md). Deployed &
+  confirmed 2026-06-14 (cf75052).
 - [Per-tab agent spaces](plans/per-tab-spaces.md) — two browser tabs on one
   machine no longer share a single "currently open agent". The active agent,
   chat surface, and selected project moved from shared `localStorage` to per-tab
