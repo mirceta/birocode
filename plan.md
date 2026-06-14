@@ -53,6 +53,12 @@
   were switched to the same rows — all via a shared `GitStatusSummary` component
   so the three surfaces can't drift. Deployed & confirmed 2026-06-14 on
   `feature/dashboard-git-status`; not yet merged.
+- [Dashboard chat cut off](plans/dashboard-chat-scroll.md) — **bug fix:** in the
+  dashboard "wall of phones," the embedded chat overflowed its cell (clipped, no
+  reachable composer) because `height:100%` couldn't resolve against a
+  flex-derived frame height. Fixed by sizing the embedded chat via flexbox
+  (`.phone__screen` flex column; chat `flex:1; min-height:0`). Deployed &
+  confirmed 2026-06-14 (1488dc9); not yet merged.
 - [Chat windowing](plans/chat-windowing.md) — long chats were slow because
   `Chat.jsx` rendered every message (heavy markdown bubble per turn) and we
   almost never scroll up. **Slice 1** renders only the recent tail (last 50)
