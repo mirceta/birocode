@@ -8,7 +8,11 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-14):** **Deployed & confirmed (cf75052):** the
+> **Status (2026-06-14):** **In flight:** Agent dashboard — a top-bar
+> full-screen grid overview of every agent on this machine, on
+> `feature/agent-dashboard` (slice 1 built + browser-verified; redirected from a
+> tab to a top-bar overlay). **Deployed &
+> confirmed (cf75052):** the
 > [stale-copy warning banner](plans/stale-version-banner.md) and the Local-tab
 > "how to expose a web app" instructions are live on :5099. The same deploy
 > also carried Understanding panel **slice 2** and the Git tab **PR preview**
@@ -40,6 +44,14 @@
   reuses `GitService.RunGit`/`DetectBases`. Slice 1 = summary (commits +
   changed-file counts), slice 2 = lazy per-file patch. Built & browser-verified;
   pending deploy.
+- [Agent dashboard](plans/agent-dashboard.md) — a mission-control grid showing
+  every agent on this machine at once (status + what it's doing). Opened from a
+  top-bar button (Advanced + 2+ agents) as a full-screen overlay, not a tab;
+  click a cell to open that agent in the normal `/studio` view. Removes the
+  "open one → look → navigate back" dance. Mostly a new view over existing
+  plumbing (`DockContext`, `/api/runs`, the open-agent flow). Slice 1 = static
+  grid + open-agent (built & browser-verified), slice 2 = liveness, slice 3
+  (later) = live tail.
 
 ## Proposed / design (not building yet)
 
@@ -50,6 +62,11 @@
 
 ## Recently shipped
 
+- [Image preview](plans/files-image-preview.md) — image files
+  (`.png/.jpg/.svg/...`) render as pictures in the Files viewer via a new
+  whitelisted `/api/files/raw` endpoint + an `<img>` (blob-fetched, 5 s
+  live-refresh). "Agent saves a screenshot to the repo → view it in Files."
+  Screen tab kept. Deployed & confirmed 2026-06-14 (bf81848); not yet merged.
 - [HTML preview](plans/html-preview.md) — `.html`/`.htm` files render as a page
   in the Files viewer via a sandboxed `srcDoc` iframe (scripts inert), with the
   same raw/rendered toggle Markdown has. Realizes the deferred doc-viewer "HTML

@@ -15,10 +15,13 @@ import { useT } from '../../i18n/LanguageContext';
 // synced), and the chips above the row bring a stashed idea back into the
 // composer. Tapping a chip while a draft exists swaps them, so nothing is
 // ever lost.
-export default function ChatInput({ value, onChange, onSend, onStop, streaming, attachment, onAttach }) {
+export default function ChatInput({ value, onChange, onSend, onStop, streaming, attachment, onAttach, embedded = false }) {
   const { t } = useT();
   const { activeTabId, activeTab, addStash, removeStash } = useDock();
-  const stashEnabled = useFeature('promptStash') && !!activeTabId;
+  // Stash is keyed to the ACTIVE dock tab, so it's meaningless (and would
+  // cross-write) inside a dashboard phone for a background agent — disable it
+  // there (plans/agent-dashboard.md).
+  const stashEnabled = useFeature('promptStash') && !!activeTabId && !embedded;
   const understandingEnabled = useFeature('understandingPanel');
   const stash = (stashEnabled && activeTab?.stash) || [];
   const textareaRef = useRef(null);

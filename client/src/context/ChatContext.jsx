@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { apiGet, apiPost, apiStream, apiStreamGet, apiUpload } from '../api/client';
 import { createSseParser } from '../components/chat/sseParser';
 import { getModel, setModel as persistModel } from '../components/chat/ModelSelector';
@@ -88,6 +88,16 @@ export function ChatProvider({ children }) {
   // The repo to target for API calls.
   const activeRepoId =
     view === 'harness' ? selfRepoId : visibleTab ? visibleTab.repoId : currentRepoId;
+
+  // A conversation "target" bundles the three things every chat action needs:
+  // which conversation key, which repo to scope API calls to, and which dock
+  // tab's badge to patch (null for the fixed Project/Claude Web chats). The
+  // active target reproduces the pre-existing single-conversation behaviour;
+  // useChatFor() (below) builds a target for a *background* agent so the Agent
+  // Dashboard can render several agents' chats live at once (the "wall of
+  // phones", plans/agent-dashboard.md). Every action takes an explicit target,
+  // so a background phone never touches the active conversation.
+  const activeTarget = { key: activeKey, repoId: activeRepoId, tabId: visibleTabId };
 
   // Ensure a conversation entry exists for the active key. If the tab was
   // restored from localStorage with a stored sessionId (page reload), resume
@@ -251,13 +261,9 @@ export function ChatProvider({ children }) {
     };
   }
 
-  async function send(text) {
-    const key = activeKey;
-    const tabId = visibleTabId;
-    const repoId = activeRepoId;
-
+  async function sendTo(text, { key, repoId, tabId }) {
     updateConvo(key, { error: '' });
-    const pendingFile = conv.attachment;
+    const pendingFile = convos[key]?.attachment;
     updateConvo(key, { draft: '', attachment: null });
 
     let fullText = text;
@@ -289,8 +295,8 @@ export function ChatProvider({ children }) {
 
     try {
       const body = { message: fullText, model };
-      const currentConvo = convos[key] || conv;
-      if (currentConvo.sessionId) body.sessionId = currentConvo.sessionId;
+      const currentConvo = convos[key];
+      if (currentConvo?.sessionId) body.sessionId = currentConvo.sessionId;
       await apiStream('/chat', body, parse, { signal: controller.signal, repoId });
     } catch (err) {
       if (err.name === 'AbortError') {
@@ -317,6 +323,9 @@ export function ChatProvider({ children }) {
       delete stopRefs.current[key];
     }
   }
+
+  // Active-conversation send — the API existing consumers (Chat page) use.
+  const send = (text) => sendTo(text, activeTarget);
 
   // Close out a conversation's streaming state: drop an untouched assistant
   // bubble, settle any tool steps left "running", clear the streaming flag.
@@ -478,15 +487,15 @@ export function ChatProvider({ children }) {
     if (dockLoaded) reconcileRef.current();
   }, [dockLoaded]);
 
-  const stop = useCallback(() => {
-    const key = activeKey;
+  function stopTo({ key, repoId, tabId }) {
     stopRefs.current[key] = true;
     abortRefs.current[key]?.abort();
     // The run is backend-owned now: aborting the local stream detaches us but
     // leaves the CLI working, so an explicit stop call is required.
-    apiPost('/chat/stop', undefined, { repoId: activeRepoId }).catch(() => {});
-    if (visibleTabId) updateTab(visibleTabId, { status: 'idle' });
-  }, [activeKey, activeRepoId, visibleTabId, updateTab]);
+    apiPost('/chat/stop', undefined, { repoId }).catch(() => {});
+    if (tabId) updateTab(tabId, { status: 'idle' });
+  }
+  const stop = () => stopTo(activeTarget);
 
   function resetConversation(key) {
     const controller = abortRefs.current[key];
@@ -497,17 +506,18 @@ export function ChatProvider({ children }) {
       ...prev,
       [key]: emptyConversation(greeting()),
     }));
+  }
+
+  function startNewIn({ key, tabId }) {
+    resetConversation(key);
+    if (tabId) updateTab(tabId, { sessionId: null, status: 'idle' });
+  }
+  const startNewConversation = () => {
     setPickerOpen(false);
-  }
+    startNewIn(activeTarget);
+  };
 
-  function startNewConversation() {
-    resetConversation(activeKey);
-    if (visibleTabId) updateTab(visibleTabId, { sessionId: null, status: 'idle' });
-  }
-
-  async function resumeConversation(id) {
-    const key = activeKey;
-    const repoId = activeRepoId;
+  async function resumeIn(id, { key, repoId, tabId }) {
     const controller = abortRefs.current[key];
     if (controller) controller.abort();
     seqRefs.current[key] = 0;
@@ -516,9 +526,41 @@ export function ChatProvider({ children }) {
       sessionId: id, error: '', streaming: false,
       messages: [{ role: 'assistant', text: t('chat.loadingConversation') }],
     });
-    setPickerOpen(false);
-    if (visibleTabId) updateTab(visibleTabId, { sessionId: id, status: 'idle' });
+    if (tabId) updateTab(tabId, { sessionId: id, status: 'idle' });
     await loadTranscript(key, id, repoId);
+  }
+  const resumeConversation = (id) => {
+    setPickerOpen(false);
+    return resumeIn(id, activeTarget);
+  };
+
+  // Seed a background conversation (a dashboard phone for an agent that isn't
+  // the active tab). Running agents are already seeded by reconcile(); this
+  // covers idle agents whose transcript the active-tab effect hasn't loaded.
+  // Idempotent: skips if the conversation exists, and only requests each
+  // transcript once (a ref watermark, since setConvos's guard runs async).
+  const transcriptRequested = useRef(new Set());
+  function seedConvo(key, repoId, sessionId) {
+    setConvos((prev) => {
+      if (prev[key]) return prev;
+      const fresh = emptyConversation(greeting());
+      if (sessionId) {
+        fresh.sessionId = sessionId;
+        fresh.messages = [{ role: 'assistant', text: t('chat.loadingConversation') }];
+      }
+      return { ...prev, [key]: fresh };
+    });
+    if (sessionId && !transcriptRequested.current.has(key)) {
+      transcriptRequested.current.add(key);
+      loadTranscript(key, sessionId, repoId);
+    }
+  }
+
+  // Fetch a repo's saved sessions for a session picker, scoped to that repo
+  // (used by the active picker and by each dashboard phone's own picker).
+  async function loadSessionsFor(repoId) {
+    const data = await apiGet('/sessions', { repoId });
+    return Array.isArray(data) ? data : [];
   }
 
   async function loadTranscript(key, id, repoId) {
@@ -542,8 +584,7 @@ export function ChatProvider({ children }) {
     setSessionsLoading(true);
     setSessionsError(false);
     try {
-      const data = await apiGet('/sessions', { repoId: activeRepoId });
-      setSessions(Array.isArray(data) ? data : []);
+      setSessions(await loadSessionsFor(activeRepoId));
     } catch {
       setSessionsError(true);
     } finally {
@@ -610,7 +651,100 @@ export function ChatProvider({ children }) {
       updateConvo('default', { draft: text });
       setChatView('project');
     },
+    // Per-key primitives for background conversations (the Agent Dashboard's
+    // wall of phones). useChatFor() composes these into a facade shaped like
+    // the active value above, but bound to a specific agent's target.
+    convos,
+    updateConvo,
+    seedConvo,
+    loadSessionsFor,
+    sendTo,
+    stopTo,
+    startNewIn,
+    resumeIn,
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
+}
+
+// Read + drive ONE agent's conversation by key, regardless of which tab is
+// active. The Agent Dashboard renders several of these at once — each a
+// "phone" showing one agent's live chat (plans/agent-dashboard.md). The
+// returned object matches the shape <Chat> consumes, so the same view renders
+// either the active conversation (useChat) or a background one (useChatFor).
+//
+// All API calls are scoped to `repoId`, so a background phone never reads or
+// writes another agent's repo. The session picker state is kept LOCAL here so
+// each phone has its own, rather than sharing the provider's single picker.
+export function useChatFor({ key, repoId, tabId, sessionId }) {
+  const ctx = useContext(ChatContext);
+  if (!ctx) throw new Error('useChatFor must be used within a <ChatProvider>');
+  const { t } = useT();
+  const greeting = useMemo(() => ({ role: 'assistant', text: t('chat.greeting') }), [t]);
+
+  // Seed this conversation once (idle agents reconcile() didn't attach). The
+  // provider guards against clobbering an existing/running conversation.
+  useEffect(() => {
+    ctx.seedConvo(key, repoId, sessionId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, repoId, sessionId]);
+
+  const conv = ctx.convos[key] || {
+    messages: [greeting], sessionId: null, draft: '', attachment: null,
+    streaming: false, error: '', contextTokens: null,
+  };
+
+  const target = useMemo(() => ({ key, repoId, tabId }), [key, repoId, tabId]);
+
+  // This phone's own session picker (not the provider's shared one).
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [sessions, setSessions] = useState([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [sessionsError, setSessionsError] = useState(false);
+  const openPicker = async () => {
+    setPickerOpen(true);
+    setSessionsLoading(true);
+    setSessionsError(false);
+    try {
+      setSessions(await ctx.loadSessionsFor(repoId));
+    } catch {
+      setSessionsError(true);
+    } finally {
+      setSessionsLoading(false);
+    }
+  };
+
+  return {
+    messages: conv.messages,
+    sessionId: conv.sessionId,
+    draft: conv.draft,
+    setDraft: (d) => ctx.updateConvo(key, { draft: d }),
+    attachment: conv.attachment,
+    setAttachment: (a) => ctx.updateConvo(key, { attachment: a }),
+    streaming: conv.streaming,
+    error: conv.error,
+    contextTokens: conv.contextTokens,
+    model: ctx.model,
+    changeModel: ctx.changeModel,
+    send: (text) => ctx.sendTo(text, target),
+    stop: () => ctx.stopTo(target),
+    startNewConversation: () => {
+      setPickerOpen(false);
+      ctx.startNewIn(target);
+    },
+    resumeConversation: (id) => {
+      setPickerOpen(false);
+      ctx.resumeIn(id, target);
+    },
+    openPicker,
+    pickerOpen,
+    setPickerOpen,
+    sessions,
+    sessionsLoading,
+    sessionsError,
+    // A per-agent phone has no project/harness scope selector.
+    chatView: 'agent',
+    setChatView: () => {},
+    hasSelfRepo: false,
+  };
 }
