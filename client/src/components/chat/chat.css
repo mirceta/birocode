@@ -773,21 +773,29 @@ details.step > summary::-webkit-details-marker {
   border-color: var(--color-accent);
 }
 
-/* Custom-prompts manager popover — floats above the composer. */
+/* Custom-prompts manager — a CENTERED MODAL portaled to <body> (see
+   PromptManager.jsx). The backdrop covers the viewport at a high z-index so no
+   ancestor stacking context (the composer's `transform`) can hide or clip it. */
+.prompt-mgr-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
 .prompt-mgr {
-  position: absolute;
-  bottom: 100%;
-  left: 12px;
-  right: 12px;
-  margin-bottom: 8px;
-  max-height: 60vh;
+  width: min(440px, 100%);
+  max-height: 85vh;
   overflow-y: auto;
-  z-index: 30;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius, 8px);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
-  padding: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  padding: 16px;
 }
 
 .prompt-mgr__head {

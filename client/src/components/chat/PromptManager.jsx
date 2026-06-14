@@ -1,9 +1,15 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useT } from '../../i18n/LanguageContext';
 
 // Add/edit/delete UI for custom composer prompts (plans/custom-prompts.md),
-// shown as a popover above the chat composer. Each preset is an emoji + label +
-// prompt text; the emoji is picked from the grid below.
+// shown as a CENTERED MODAL rendered via a portal to document.body. It must NOT
+// live inside the composer's DOM: `.chat-input` sets `transform: translateX(-50%)`,
+// which creates its own stacking + containing-block context — an earlier popover
+// version opened there but rendered behind other layers / off-screen on real
+// devices ("the button does nothing"). A body-level fixed overlay can't be
+// clipped or hidden by any ancestor. Each preset is an emoji + label + prompt
+// text; the emoji is picked from the grid below.
 const EMOJIS = [
   '🚀', '📝', '🐛', '✅', '🔧', '🧪', '📦', '🎨', '💡', '🔍',
   '🗑️', '♻️', '⚡', '🔒', '📋', '📌', '🧹', '🚧', '🏁', '🎯',
@@ -62,8 +68,9 @@ export default function PromptManager({ prompts, onAdd, onUpdate, onDelete, onCl
     }
   }
 
-  return (
-    <div className="prompt-mgr" role="dialog" aria-label={t('prompts.title')}>
+  return createPortal(
+    <div className="prompt-mgr-backdrop" onClick={onClose}>
+    <div className="prompt-mgr" role="dialog" aria-modal="true" aria-label={t('prompts.title')} onClick={(e) => e.stopPropagation()}>
       <div className="prompt-mgr__head">
         <span className="prompt-mgr__title">{t('prompts.title')}</span>
         <button type="button" className="prompt-mgr__close" onClick={onClose} aria-label={t('common.close')}>
@@ -131,5 +138,7 @@ export default function PromptManager({ prompts, onAdd, onUpdate, onDelete, onCl
         </div>
       </form>
     </div>
+    </div>,
+    document.body,
   );
 }
