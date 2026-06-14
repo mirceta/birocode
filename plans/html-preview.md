@@ -1,7 +1,8 @@
 # HTML preview — render .html files in the Files viewer
 
-> **Status (2026-06-14):** Building on `feature/html-preview` off main (d349bf9).
-> Frontend-only. Realizes the deferred "HTML webview" slice of
+> **Status (2026-06-14):** SHIPPED — live on :5099 (frontend-only; built into
+> client/dist) and confirmed working, merged to main. Browser-verified
+> (verify-html-preview.mjs 6/6). Realizes the deferred "HTML webview" slice of
 > [doc-viewer](doc-viewer.md), scoped to a safe sandboxed render.
 
 ## Try it

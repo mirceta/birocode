@@ -22,12 +22,6 @@
 > `feature/pwa-webapk-warning` (set aside, not started).
 
 ## Active feature plans
-
-- [HTML preview](plans/html-preview.md) — render `.html`/`.htm` files in the
-  Files viewer as a page (sandboxed `srcDoc` iframe, scripts inert), with the
-  same raw/rendered toggle Markdown has. Realizes the deferred doc-viewer "HTML
-  webview" slice. Building on `feature/html-preview`. Try it:
-  [html-preview-demo.html](plans/html-preview-demo.html).
 - [Understanding panel](plans/understanding-panel.md) **— slice 2** — make the
   panel work in Product Repos, not just the Harness. A composer-prefill button
   drops the "write your understanding first" instruction into the chat box (no
@@ -50,6 +44,11 @@
 
 ## Recently shipped
 
+- [HTML preview](plans/html-preview.md) — `.html`/`.htm` files render as a page
+  in the Files viewer via a sandboxed `srcDoc` iframe (scripts inert), with the
+  same raw/rendered toggle Markdown has. Realizes the deferred doc-viewer "HTML
+  webview" slice. Live on :5099 + merged to main 2026-06-14. Try it:
+  [html-preview-demo.html](plans/html-preview-demo.html).
 - [Files tab absorbs the Plan tab](plans/plan-files-merge.md) — the Files tab is
   the single file surface: remembered/default open (`plan.md`), return-to-tree,
   5 s live-poll of the open file, back/forward history, and per-project
