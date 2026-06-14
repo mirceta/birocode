@@ -4,12 +4,16 @@ using ClaudeWeb.Services.Logging;
 namespace ClaudeWeb.Services.Notes;
 
 /// <summary>
-/// Per-project ideas/notes (plans/ideas-tab.md), backend-synced so phone and
-/// desktop share them. Notes are keyed by repository id and persisted to
+/// Global ideas/notes (plans/ideas-pinned-dashboard.md), backend-synced so phone
+/// and desktop share them. ONE master list — not per-project (this reverses the
+/// original per-project design in plans/ideas-tab.md). Persisted to
 /// %APPDATA%\ClaudeWeb\notes.json with the ATOMIC temp+rename write and the
 /// never-reseed-on-unreadable load guard (the UiSettingsService pattern, born
 /// from the 2026-06-12 registry-clobber). Distinct from prompt-stash, which is
 /// per-agent-tab and ephemeral (plans/prompt-stash.md).
+///
+/// Migration: an old per-repo file ({ Notes: { repoId -> [..] } }) is flattened
+/// into the single Ideas list (by createdAt) on load and rewritten — no data lost.
 /// </summary>
 public class NotesService
 {
@@ -19,7 +23,7 @@ public class NotesService
     private readonly Logger _logger;
     private readonly string _path;
     private readonly object _gate = new();
-    private Store _store = new();
+    private List<Note> _ideas = new();
 
     public NotesService(Logger logger)
     {
@@ -32,66 +36,59 @@ public class NotesService
 
     public sealed record Note(string Id, string Text, long CreatedAt, long UpdatedAt);
 
+    // On-disk model. `Ideas` is the current shape; `Notes` is the legacy
+    // per-repo map, read once for migration.
     private sealed class Store
     {
-        // repo id -> its notes (insertion order; the API returns newest first).
-        public Dictionary<string, List<Note>> Notes { get; set; } = new();
+        public List<Note>? Ideas { get; set; }
+        public Dictionary<string, List<Note>>? Notes { get; set; }
     }
 
-    /// <summary>This project's notes, newest first.</summary>
-    public List<Note> List(string repoId)
+    /// <summary>All ideas, newest first.</summary>
+    public List<Note> List()
     {
-        lock (_gate)
-        {
-            if (!_store.Notes.TryGetValue(repoId, out var list)) return new List<Note>();
-            return list.AsEnumerable().Reverse().ToList();
-        }
+        lock (_gate) return _ideas.AsEnumerable().Reverse().ToList();
     }
 
-    /// <summary>Adds a note to a project. Text is trimmed and length-capped; empty text is rejected (null return).</summary>
-    public Note? Add(string repoId, string? text, long now)
+    /// <summary>Adds an idea. Text is trimmed and length-capped; empty text is rejected (null return).</summary>
+    public Note? Add(string? text, long now)
     {
         var clean = Clean(text);
         if (clean is null) return null;
         var note = new Note(Guid.NewGuid().ToString("N"), clean, now, now);
         lock (_gate)
         {
-            if (!_store.Notes.TryGetValue(repoId, out var list))
-                _store.Notes[repoId] = list = new List<Note>();
-            list.Add(note);
+            _ideas.Add(note);
             Save();
         }
-        _logger.Info($"[NOTES] Added note {note.Id} to {repoId}");
+        _logger.Info($"[NOTES] Added idea {note.Id}");
         return note;
     }
 
-    /// <summary>Edits a note's text. Null return if the id is unknown for this project or the text is empty.</summary>
-    public Note? Update(string repoId, string id, string? text, long now)
+    /// <summary>Edits an idea's text. Null return if the id is unknown or the text is empty.</summary>
+    public Note? Update(string id, string? text, long now)
     {
         var clean = Clean(text);
         if (clean is null) return null;
         lock (_gate)
         {
-            if (!_store.Notes.TryGetValue(repoId, out var list)) return null;
-            var i = list.FindIndex(n => n.Id == id);
+            var i = _ideas.FindIndex(n => n.Id == id);
             if (i < 0) return null;
-            var updated = list[i] with { Text = clean, UpdatedAt = now };
-            list[i] = updated;
+            var updated = _ideas[i] with { Text = clean, UpdatedAt = now };
+            _ideas[i] = updated;
             Save();
-            _logger.Info($"[NOTES] Updated note {id} in {repoId}");
+            _logger.Info($"[NOTES] Updated idea {id}");
             return updated;
         }
     }
 
-    /// <summary>Removes a note. False if the id is unknown for this project.</summary>
-    public bool Delete(string repoId, string id)
+    /// <summary>Removes an idea. False if the id is unknown.</summary>
+    public bool Delete(string id)
     {
         lock (_gate)
         {
-            if (!_store.Notes.TryGetValue(repoId, out var list)) return false;
-            var removed = list.RemoveAll(n => n.Id == id) > 0;
-            if (removed) Save();
-            if (removed) _logger.Info($"[NOTES] Deleted note {id} from {repoId}");
+            var removed = _ideas.RemoveAll(n => n.Id == id) > 0;
+            if (removed) { Save(); _logger.Info($"[NOTES] Deleted idea {id}"); }
             return removed;
         }
     }
@@ -109,7 +106,23 @@ public class NotesService
         {
             if (!File.Exists(_path)) return;
             var store = JsonSerializer.Deserialize<Store>(File.ReadAllText(_path));
-            if (store?.Notes != null) _store = store;
+            if (store is null) return;
+
+            if (store.Ideas != null)
+            {
+                _ideas = store.Ideas;
+            }
+            else if (store.Notes is { Count: > 0 })
+            {
+                // Legacy per-repo map → flatten every project's notes into one
+                // global list, ordered by createdAt, and rewrite in the new shape.
+                _ideas = store.Notes.Values
+                    .SelectMany(list => list)
+                    .OrderBy(n => n.CreatedAt)
+                    .ToList();
+                Save();
+                _logger.Info($"[NOTES] Migrated {_ideas.Count} per-project note(s) into the global ideas list");
+            }
         }
         catch (Exception ex)
         {
@@ -125,7 +138,7 @@ public class NotesService
         try
         {
             var tmp = _path + ".tmp";
-            File.WriteAllText(tmp, JsonSerializer.Serialize(_store, JsonOpts));
+            File.WriteAllText(tmp, JsonSerializer.Serialize(new Store { Ideas = _ideas }, JsonOpts));
             File.Move(tmp, _path, overwrite: true);
         }
         catch (Exception ex)

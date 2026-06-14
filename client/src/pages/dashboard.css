@@ -41,6 +41,42 @@
   color: var(--color-text-soft);
 }
 
+/* Pinned-left Ideas panel (plans/ideas-pinned-dashboard.md): the global ideas
+   list down the left of the overlay, the agent grid to its right. Sticky so it
+   stays in view as the grid scrolls. (Dashboard is desktop-only, so no mobile
+   layout — flex-wrap is just a graceful fallback for a narrow window.) */
+.dash__body {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.dash__ideas {
+  flex: 0 0 300px;
+  width: 300px;
+  position: sticky;
+  top: 16px;
+  max-height: calc(100dvh - var(--header-height, 56px) - 56px);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dash__ideas-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-accent);
+}
+
+.dash__main {
+  flex: 1 1 480px;
+  min-width: 0;
+}
+
 /* Square-ish grid — the column count (⌈√n⌉) is set inline by Dashboard.jsx so
    agents form an approximate square instead of one long row. */
 .dash__grid {

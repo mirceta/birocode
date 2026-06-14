@@ -5,6 +5,7 @@ import { useDock } from '../context/DockContext';
 import { useT } from '../i18n/LanguageContext';
 import GitStatusSummary from '../components/git/GitStatusSummary';
 import PinnedAgent from '../components/dashboard/PinnedAgent';
+import IdeasPanel from '../components/ideas/IdeasPanel';
 import './dashboard.css';
 
 // The dashboard has three layouts (plans/agent-dashboard.md): summary "cards"
@@ -332,6 +333,12 @@ export default function Dashboard({ onClose }) {
         </button>
       </div>
 
+      <div className="dash__body">
+        <aside className="dash__ideas">
+          <div className="dash__ideas-title">💡 {t('nav.ideas')}</div>
+          <IdeasPanel />
+        </aside>
+        <div className="dash__main">
       {tabs.length === 0 ? (
         <p className="dash__empty">{t('dashboard.empty')}</p>
       ) : (
@@ -402,6 +409,8 @@ export default function Dashboard({ onClose }) {
           })}
         </ul>
       )}
+        </div>
+      </div>
     </div>
   );
 }

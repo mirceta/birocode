@@ -1,61 +1,83 @@
-# Ideas pinned left of the dashboard
+# Ideas go global, pinned left of the dashboard
 
-> **Status (2026-06-14):** **Plan START** — early design, not built. On
-> `feature/ideas-pinned-dashboard`. Open questions below need answers before
-> building. Structured per [doc-principles.md](doc-principles.md).
+> **Status (2026-06-14):** Plan — design set, not built. On
+> `feature/ideas-pinned-dashboard`. Structured per
+> [doc-principles.md](doc-principles.md). Visual companion:
+> [ideas-pinned-dashboard.html](ideas-pinned-dashboard.html).
 
-## Problem
+## ⚠️ Reverses a documented decision
 
-The [agent dashboard](agent-dashboard.md) is the mission-control overlay: a
-full-screen grid / wall-of-phones of every agent on this machine. While watching
-the agents, the user wants their **[Ideas](ideas-tab.md)** (per-project notes)
-**pinned to the left** — always in view, not a separate tab you navigate away to.
+[ideas-tab.md](ideas-tab.md) deliberately made Ideas **per-project**
+("project-scoped," notes keyed by `repoId`). This plan makes them **global** —
+one master list, the same everywhere. The user chose this knowingly; recording
+it here per the repo's most-important convention.
 
-## Rough design (to refine)
+## Goal
 
-A left **Ideas panel** inside the dashboard overlay; the agent grid takes the
-rest. Reuse what's already shipped — the Ideas notes API and rendering — so this
-is mostly layout, not new plumbing.
+Ideas are a **global** feature: a single master list, not per-project and not
+per-agent. Keep the **Ideas tab**, but it now shows **all** ideas. Additionally,
+pin that same global list down the **left of the agent dashboard** overlay, so
+your notes are in view in mission control.
+
+## Design
+
+### Part A — Ideas become global
+
+- **Backend.** `NotesService` drops the `repoId` keying: `notes.json` goes from
+  `{ Notes: { repoId → [Note] } }` to a single global `{ Ideas: [Note] }` list.
+  `NotesController` no longer injects `RepositoryResolver` / reads `X-Repo-Id`;
+  `GET/POST/PATCH/DELETE /api/notes` operate on the one list. A `Note` is
+  unchanged (`{ id, text, createdAt, updatedAt }`).
+- **Migration (no data loss).** On load, if the old per-repo shape is found,
+  **flatten every project's notes into one list**, sorted by `createdAt`, and
+  save back in the new shape. Same atomic temp+rename + never-reseed-on-unreadable
+  guard as today.
+- **Ideas tab (`pages/Ideas.jsx`).** Fetch once (global) instead of on every
+  `currentRepoId` change; drop the project dependency. Composer/list/edit/delete
+  UI is otherwise unchanged.
+
+### Part B — pin the global Ideas left of the dashboard
+
+- Extract the Ideas list + composer from `pages/Ideas.jsx` into a **shared
+  component** (doc-principles §3) that both the tab and the dashboard panel
+  render — no duplication.
+- In `pages/Dashboard.jsx`, split the `.dash` body into the **Ideas panel
+  (left)** + the existing `.dash__grid` (right). The header (size, view toggle,
+  close) stays on top.
 
 ```mermaid
 flowchart LR
-    subgraph DASH["Dashboard overlay (.dash)"]
-        IDEAS["Ideas panel<br/>(pinned left)"]
-        GRID["Agent grid<br/>(.dash__grid)"]
-    end
-    IDEAS -.->|"reuses"| API[("/api/notes<br/>per-project")]
-    style IDEAS fill:#eef7ee,stroke:#4f9d69
+    TAB["Ideas tab"] --> SHARED["shared Ideas component"]
+    PANEL["Dashboard left panel"] --> SHARED
+    SHARED -->|"GET/POST/PATCH/DELETE"| API[("/api/notes<br/>one global list")]
+    style API fill:#eef7ee,stroke:#4f9d69
 ```
 
-- **Backend:** none — reuse the shipped `/api/notes` (`NotesController` /
-  `NotesService`, per-project via `X-Repo-Id`).
-- **Frontend:** restructure `pages/Dashboard.jsx`'s `.dash` body into a
-  horizontal split — Ideas panel (left) + existing `.dash__grid` (right).
-  Extract the Ideas list/composer out of `pages/Ideas.jsx` into a shared
-  component both the tab and the panel render, rather than duplicating it
-  (doc-principles §3). Header (size stepper, Cards/Phones/Hot toggle, close)
-  stays on top.
-- **Gating:** Advanced-only, like both parent features.
+- **Gating:** Ideas tab keeps its `ideasTab: 'advanced'` capability; the
+  dashboard panel rides the dashboard's own Advanced gating.
 
-## Open questions (answer before building)
+## Resolved
 
-1. **Whose ideas?** The dashboard spans **all projects**, but ideas are
-   **per-project**. Show the **currently-selected project's** ideas (`currentRepoId`,
-   simplest — leaning this), or add a project switcher in the panel, or a
-   cross-project grouped list? **This is the load-bearing decision.**
-2. **Read-only or editable?** Full composer/edit/delete (reuse the tab's UI), or
-   a read-only glance with editing left to the Ideas tab?
-3. **Layout / mobile.** The overlay is used on phones too — does the left panel
-   collapse / move to a drawer on narrow screens, or is this desktop-only?
-4. **Always shown or toggleable?** Pinned permanently, or a show/hide toggle
-   (and does it eat grid width when many agents are open)?
-5. **Coordination:** the agent dashboard is still evolving on
-   `feature/agent-dashboard` — build this on top of merged `main`, and expect to
-   rebase as the dashboard changes.
+- **Whose ideas?** → **all of them, global.** No per-project / per-agent scope.
+  This is the whole point of the change.
 
-## Verification (later)
+## Open questions (minor)
 
-Headless Playwright on an isolated `:5200` preview: open the dashboard overlay,
-confirm the Ideas panel renders the (selected project's) notes on the left
-alongside the agent grid; add/edit/delete round-trips if editable; project
-scoping holds; hidden in Basic mode.
+1. **Merge ordering** when flattening old per-repo notes — by `createdAt`
+   (leaning) is the natural single timeline.
+2. **Mobile.** The dashboard overlay is used on phones — does the left panel
+   collapse / stack on narrow screens? (Carried over from the layout question.)
+3. **Filename.** Keep `notes.json` (just reshaped) — yes, no rename needed.
+
+## Verification (planned)
+
+Headless Playwright on an isolated `:5200` preview:
+- **Global, not per-project:** add an idea while project A is selected; switch
+  to project B → the **same** idea is still shown (the old build hid it). Reload
+  persists.
+- **Migration:** seed an old-shape `notes.json` (notes under two repo ids),
+  start the harness, confirm `GET /api/notes` returns the merged list and the
+  file is rewritten to the global shape.
+- **Dashboard panel:** open the overlay → the Ideas panel renders the global
+  list on the left beside the agent grid; add/edit/delete round-trips.
+- Hygiene: back up/restore the shared `notes.json` around the test.

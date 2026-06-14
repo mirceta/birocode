@@ -104,11 +104,12 @@
 </head>
 <body>
 
-  <span class="pill">Plan START · feature/ideas-pinned-dashboard</span>
-  <h1>Ideas pinned left of the dashboard</h1>
-  <p class="sub">Pin the per-project <a href="ideas-tab.md">Ideas</a> down the left of the
-  <a href="agent-dashboard.md">agent-dashboard</a> overlay, alongside the agent grid — your notes
-  always in view in mission control.</p>
+  <span class="pill">Plan · feature/ideas-pinned-dashboard</span>
+  <h1>Ideas go global, pinned left of the dashboard</h1>
+  <p class="sub">Ideas become a <b>global</b> master list (no longer per-project). Keep the
+  <a href="ideas-tab.md">Ideas</a> tab (now showing all ideas), and pin that same list down the
+  left of the <a href="agent-dashboard.md">agent-dashboard</a> overlay — notes always in view in
+  mission control.</p>
 
   <h2>Proposed layout</h2>
   <p class="sub">A live, to-scale sketch of the dashboard overlay with the Ideas panel pinned left.
@@ -127,9 +128,9 @@
       <aside class="ideas">
         <div class="ideas__head">
           <span class="ideas__title">💡 Ideas</span>
-          <span class="ideas__scope">birocode</span>
+          <span class="ideas__scope">all · global</span>
         </div>
-        <div class="ideas__composer"><div class="fake-input">Jot an idea for this project…</div></div>
+        <div class="ideas__composer"><div class="fake-input">Jot an idea…</div></div>
         <div class="ideas__list">
           <div class="note"><b>Per-project tab order</b><small>2 h ago</small></div>
           <div class="note"><b>Wall-of-phones: live tail</b><small>yesterday</small></div>
@@ -169,31 +170,31 @@
   <p class="legend">On a narrow screen the left panel stacks above the grid (see open question 3).</p>
 
   <h2>Problem</h2>
-  <p>While watching the agents on the dashboard, the user wants their Ideas (per-project notes)
-  pinned to the left — always in view, not a separate tab you navigate away to.</p>
+  <p>Ideas are per-project today, but the user wants a single <b>global</b> list — and wants it
+  pinned to the left of the dashboard, always in view, not a separate tab you navigate away to.</p>
 
-  <h2>Rough design (to refine)</h2>
+  <h2>Design</h2>
   <ul>
-    <li><b>Backend:</b> none — reuse the shipped <code>/api/notes</code> (<code>NotesController</code> /
-      <code>NotesService</code>, per-project via <code>X-Repo-Id</code>).</li>
-    <li><b>Frontend:</b> split <code>pages/Dashboard.jsx</code>'s <code>.dash</code> body into
+    <li><b>Ideas go global:</b> <code>NotesService</code> drops the <code>repoId</code> keying —
+      <code>notes.json</code> becomes one global list; <code>/api/notes</code> stops reading
+      <code>X-Repo-Id</code>. <b>Migration:</b> flatten existing per-repo notes into one list
+      (by <code>createdAt</code>), no data lost.</li>
+    <li><b>Ideas tab:</b> fetch once (global), not per project; same composer/list UI.</li>
+    <li><b>Dashboard:</b> split <code>pages/Dashboard.jsx</code>'s <code>.dash</code> body into
       <em>Ideas panel (left)</em> + the existing <code>.dash__grid</code> (right). Extract the Ideas
-      list/composer out of <code>pages/Ideas.jsx</code> into a shared component both the tab and the
-      panel render (no duplication).</li>
-    <li><b>Gating:</b> Advanced-only, like both parent features.</li>
+      list/composer out of <code>pages/Ideas.jsx</code> into a shared component both render
+      (no duplication).</li>
   </ul>
 
-  <div class="note-box"><b>Load-bearing open question — whose ideas?</b> The dashboard spans
-  <em>all</em> projects, but ideas are <em>per-project</em>. The mockup shows the
-  <b>currently-selected project</b> (label top-right of the panel). Alternatives: a project switcher
-  in the panel, or a cross-project grouped list. Needs your call.</div>
+  <div class="note-box"><b>Resolved — whose ideas?</b> <b>All of them, global.</b> Ideas are no
+  longer per-project or per-agent: one master list shown everywhere (tab + this panel). This
+  reverses <a href="ideas-tab.md">ideas-tab.md</a>'s per-project decision (the user's call).</div>
 
-  <h2>Open questions</h2>
+  <h2>Open questions (minor)</h2>
   <ol>
-    <li><b>Whose ideas?</b> Selected project (shown) vs. switcher vs. cross-project. ← decides the rest.</li>
-    <li><b>Read-only or editable?</b> Full composer/edit/delete, or a read-only glance.</li>
+    <li><b>Merge ordering</b> when flattening the old per-repo notes into one list — by
+      <code>createdAt</code> (leaning).</li>
     <li><b>Mobile.</b> Left panel collapses to a drawer / stacks on narrow screens (mockup stacks).</li>
-    <li><b>Always shown or toggleable?</b> Pinned vs. a show/hide toggle that frees grid width.</li>
     <li><b>Coordination.</b> The agent dashboard is still evolving on <code>feature/agent-dashboard</code>;
       build on merged <code>main</code> and expect to rebase.</li>
   </ol>
