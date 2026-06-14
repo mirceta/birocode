@@ -12,8 +12,9 @@ import './dashboard.css';
 //   GET /api/sessions/{id}/messages (repo-scoped) -> transcript; last line is
 //     the agent's "what's it doing".
 const POLL_MS = 5000;
-// Keep the one-line activity short and single-line.
-const ACTIVITY_MAX = 160;
+// Enough text to fill the cell's clamped activity area without shipping whole
+// messages into the DOM.
+const ACTIVITY_MAX = 320;
 
 function oneLine(text) {
   return text.replace(/\s+/g, ' ').trim().slice(0, ACTIVITY_MAX);

@@ -47,8 +47,8 @@
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
 }
 
 /* The whole cell is the click target (opens that agent — no separate button). */
@@ -56,9 +56,10 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   width: 100%;
-  padding: 14px;
+  min-height: 160px;
+  padding: 20px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   background: var(--color-surface);
@@ -116,8 +117,8 @@
 }
 
 .dash-cell__name {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 16px;
+  font-weight: 600;
   color: var(--color-text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -125,18 +126,20 @@
 }
 
 .dash-cell__status {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--color-text-soft);
 }
 
-/* One-line "what's it doing" (slice 2 liveness), clamped to two lines so cells
-   stay uniform regardless of transcript length. */
+/* The "what's it doing" line (slice 2 liveness). Grows to fill the taller
+   cell and clamps to a few lines so cells stay uniform regardless of
+   transcript length. */
 .dash-cell__activity {
-  font-size: 12px;
-  line-height: 1.35;
+  flex: 1;
+  font-size: 13px;
+  line-height: 1.45;
   color: var(--color-text-soft);
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
