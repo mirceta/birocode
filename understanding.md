@@ -1,5 +1,12 @@
 # Understanding — Agent dashboard (grid overview of all agents)
 
+> **Progress (2026-06-14):** Slice 1 (static grid + per-cell Maximize) is built
+> & browser-verified — a new Advanced "Dashboard" tab renders every dock agent
+> as a card (name, status badge + dot, colour mark) and Maximize opens the agent
+> in `/studio`. Slices 2 (liveness) and 3 (live tail) still to come. The three
+> open questions below were resolved with the documented defaults (new tab;
+> timer-based liveness for v1; Maximize → `/studio`) — confirm or redirect.
+
 ## The goal
 
 Make the whole machine **controllable at a glance**. Today, to see what another

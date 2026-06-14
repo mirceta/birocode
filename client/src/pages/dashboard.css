@@ -1,0 +1,123 @@
+/* Agent dashboard — grid overview of all dock agents (plans/agent-dashboard.md) */
+
+.dash {
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.dash__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.dash__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+.dash__empty {
+  margin: 24px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--color-text-soft);
+}
+
+/* Responsive grid — cells fill the width, wrapping into as many columns as fit. */
+.dash__grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.dash-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.dash-cell--active {
+  border-color: var(--color-accent);
+}
+
+/* User colour mark — same convention as the Agents tab (plans/agent-color.md). */
+.dash-cell[data-colored='true'] {
+  border-left: 4px solid var(--agent-color);
+  background: color-mix(in srgb, var(--agent-color) 12%, var(--color-surface));
+}
+
+.dash-cell__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.dash-cell__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #aaa;
+  flex-shrink: 0;
+}
+
+.dash-cell--running .dash-cell__dot {
+  background: #22c55e;
+  animation: dash-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes dash-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.dash-cell--done .dash-cell__dot {
+  background: #3b82f6;
+}
+
+.dash-cell--error .dash-cell__dot {
+  background: #ef4444;
+}
+
+.dash-cell__name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash-cell__status {
+  font-size: 12px;
+  color: var(--color-text-soft);
+}
+
+.dash-cell__maximize {
+  align-self: flex-start;
+  margin-top: auto;
+  padding: 6px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.dash-cell__maximize:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}

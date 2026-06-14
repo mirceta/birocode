@@ -1,7 +1,9 @@
 # Agent dashboard — a grid overview of all agents
 
-> **Status (2026-06-14):** PLANNED, on `feature/agent-dashboard`. Not started.
-> Design defaults below are chosen but unconfirmed — flagged in the detail docs.
+> **Status (2026-06-14):** IN PROGRESS, on `feature/agent-dashboard`.
+> Slice 1 (static grid + maximize) **built & browser-verified**. Slices 2-3
+> not started. Design defaults below are chosen but still unconfirmed — flagged
+> in the detail docs.
 
 ## Why
 
@@ -22,6 +24,6 @@ existing full view.
 
 ## Slices (detail in the technical design)
 
-1. **Static grid + maximize** — the grid of agent cards + per-cell Maximize.
+1. **Static grid + maximize** ✅ built — the grid of agent cards + per-cell Maximize.
 2. **Liveness** — per-card status + a one-line "what's it doing", on a timer.
 3. **Live tail (later, maybe)** — an opt-in scrolling stream tail per cell.

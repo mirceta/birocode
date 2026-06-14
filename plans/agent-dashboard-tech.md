@@ -60,11 +60,12 @@ stateDiagram-v2
 
 ## Slices
 
-- **Slice 1 — static grid + maximize.** `agentDashboard` capability + tab; a
-  responsive CSS grid of agent cards from `DockContext` (name, repo, status
-  badge, colour); a Maximize button per card wired to the existing open-agent
-  flow. Browser-verify the grid renders every dock agent and Maximize opens the
-  right agent full-screen.
+- **Slice 1 — static grid + maximize. ✅ built & verified.** `agentDashboard`
+  capability + a "Dashboard" tab (`pages/Dashboard.jsx`, `dashboard.css`,
+  registry/route/`KnownTabs`/i18n); a responsive CSS grid of agent cards from
+  `DockContext` (name, status badge + dot, colour mark); a Maximize button per
+  card wired to `setActiveTab` + `/studio`. Browser-verified: grid renders all
+  6 dock agents, Maximize lands on `/studio`, tab hidden in Basic mode.
 - **Slice 2 — liveness.** Per-card status refresh + a one-line latest-activity
   string, updated on a timer (and/or reconciled from `/api/runs`).
 - **Slice 3 (later, maybe) — live tail.** An opt-in scrolling stream tail per

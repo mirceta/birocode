@@ -20,6 +20,7 @@ export const FEATURES = {
   projectsTab: 'basic', // projects list + add + header chip (plans/projects-tab.md) — promoted to basic 2026-06-11 at End User request
   modelSelector: 'advanced',
   agentDock: 'advanced', // and the future Agents tab
+  agentDashboard: 'advanced', // grid overview of all dock agents (plans/agent-dashboard.md)
   buildStamp: 'advanced',
   contextMeter: 'advanced', // ctx pill in the chat header (plans/context-meter.md)
   gitTab: 'advanced', // git status tab (plans/git-tab.md)

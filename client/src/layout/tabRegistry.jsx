@@ -10,6 +10,7 @@ import LocalApp from '../pages/LocalApp';
 import Ideas from '../pages/Ideas';
 import Deployments from '../pages/Deployments';
 import Agents from '../pages/Agents';
+import Dashboard from '../pages/Dashboard';
 import Git from '../pages/Git';
 import Plan from '../pages/Plan';
 import Screen from '../pages/Screen';
@@ -29,6 +30,7 @@ const STATIC_TABS = [
   { key: 'git', path: '/studio/git', labelKey: 'nav.git', icon: '⎇', feature: 'gitTab', element: <Git /> },
   { key: 'history', path: '/studio/history', labelKey: 'nav.history', icon: 'H', feature: null, element: <History /> },
   { key: 'agents', path: '/studio/agents', labelKey: 'nav.agents', icon: 'A', feature: 'agentDock', element: <Agents /> },
+  { key: 'dashboard', path: '/studio/dashboard', labelKey: 'nav.dashboard', icon: '▦', feature: 'agentDashboard', element: <Dashboard /> },
   { key: 'screen', path: '/studio/screen', labelKey: 'nav.screen', icon: 'S', feature: 'screenTab', element: <Screen /> },
   { key: 'projects', path: '/studio/projects', labelKey: 'nav.projects', icon: 'P', feature: 'projectsTab', element: <Projects /> },
   { key: 'guests', path: '/studio/guests', labelKey: 'nav.guests', icon: '⛨', feature: 'guestsTab', element: <Guests /> },

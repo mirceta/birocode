@@ -13,6 +13,7 @@ import LocalApp from './pages/LocalApp';
 import Ideas from './pages/Ideas';
 import Deployments from './pages/Deployments';
 import Agents from './pages/Agents';
+import Dashboard from './pages/Dashboard';
 import Git from './pages/Git';
 import Plan from './pages/Plan';
 import Screen from './pages/Screen';
@@ -54,6 +55,7 @@ export default function App() {
             <Route path="ideas" element={<Ideas />} />
             <Route path="deploys" element={<Deployments />} />
             <Route path="agents" element={<Agents />} />
+            <Route path="dashboard" element={<Dashboard />} />
             <Route path="git" element={<Git />} />
             <Route path="plan" element={<Plan />} />
             <Route path="screen" element={<Screen />} />
