@@ -1,7 +1,7 @@
 # Dock chat refresh
 
-> **Status (2026-06-15):** Proposed — branch `feature/dock-chat-refresh`.
-> Not built yet.
+> **Status (2026-06-15):** Shipped — built + browser-verified, merged to main.
+> Not yet deployed. Branch `feature/dock-chat-refresh`.
 
 ## Goal
 

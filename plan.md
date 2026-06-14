@@ -8,10 +8,11 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-14):** **In flight:** Agent dashboard — a top-bar
-> full-screen grid overview of every agent on this machine, on
-> `feature/agent-dashboard` (slice 1 built + browser-verified; redirected from a
-> tab to a top-bar overlay). **Deployed &
+> **Status (2026-06-15):** **Just merged (not yet deployed):** per-dock
+> [chat refresh](plans/dock-chat-refresh.md) on the agent dashboard. **In
+> flight:** Agent dashboard — a top-bar full-screen grid overview of every agent
+> on this machine, on `feature/agent-dashboard` (slice 1 built + browser-verified;
+> redirected from a tab to a top-bar overlay). **Deployed &
 > confirmed (cf75052):** the
 > [stale-copy warning banner](plans/stale-version-banner.md) and the Local-tab
 > "how to expose a web app" instructions are live on :5099. The same deploy
@@ -29,12 +30,6 @@
 
 ## Active feature plans
 
-- [Dock chat refresh](plans/dock-chat-refresh.md) — give each agent dock on the
-  dashboard a way to **refresh its conversation section** (re-pull that one
-  agent's latest transcript/events from the backend run), mirroring the dock's
-  existing per-dock git-refresh `↻`. For when a dock's embedded chat looks stale
-  and you don't want to maximize it or reload the page. Just started, not built.
-  On `feature/dock-chat-refresh`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
@@ -64,6 +59,13 @@
 
 ## Recently shipped
 
+- [Dock chat refresh](plans/dock-chat-refresh.md) — each dashboard agent dock
+  gets a **refresh `↻` for its conversation**, in the chat header next to "New"
+  (shown only on docks). It runs a single-key reconcile (`refreshOne`):
+  reattaches a live run or re-pulls the finished transcript — for when a dock's
+  embedded chat looks stale and you don't want to maximize it or reload.
+  Browser-verified on an isolated :5210 instance; merged to main 2026-06-15 (not
+  yet deployed). On `feature/dock-chat-refresh`.
 - [Custom prompts](plans/custom-prompts.md) — a single ⚙ composer button opens a
   centered modal (portaled to `<body>`) holding the built-in understanding/kickoff
   prompts plus user-defined custom ones; each row shows the prompt text and a
