@@ -165,6 +165,7 @@
   "dashboard.maximize": "Open this agent in full view",
   "dashboard.viewCards": "Cards",
   "dashboard.viewPhones": "Phones",
+  "dashboard.viewHot": "Hot",
   "dashboard.size": "Size",
   "dashboard.sizeSmaller": "Smaller docks",
   "dashboard.sizeBigger": "Bigger docks",

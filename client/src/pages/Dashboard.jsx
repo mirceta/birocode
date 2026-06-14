@@ -7,16 +7,25 @@ import { syncLines } from '../lib/gitSync';
 import PinnedAgent from '../components/dashboard/PinnedAgent';
 import './dashboard.css';
 
-// The dashboard has two layouts (plans/agent-dashboard.md): summary "cards"
-// (status + activity + git, cheap) and the "wall of phones" — each agent's
-// live Chat rendered in place. The choice is remembered per device.
+// The dashboard has three layouts (plans/agent-dashboard.md): summary "cards"
+// (status + activity + git, cheap), the "wall of phones" — each agent's live
+// Chat rendered in place — and "hot", a mix that renders hot agents (recently
+// used by me) as phones and cold ones as cards. The choice is per device.
 const VIEW_KEY = 'claudeweb_dash_view';
 function readView() {
   try {
-    return localStorage.getItem(VIEW_KEY) === 'phones' ? 'phones' : 'cards';
+    const v = localStorage.getItem(VIEW_KEY);
+    return v === 'phones' || v === 'hot' ? v : 'cards';
   } catch {
     return 'cards';
   }
+}
+
+// In "hot" mode, an agent renders as a phone when I've messaged it within the
+// last 30 min (recency tiers fresh/recent/mid); older/never-used agents render
+// as cheap cards. Same cutoff used for the recency border (recencyTier).
+function isHotTier(tier) {
+  return tier === 'fresh' || tier === 'recent' || tier === 'mid';
 }
 
 // Dock size is a per-device "bigger/smaller" stepper: an index into SIZE_STEPS
@@ -149,6 +158,14 @@ export default function Dashboard({ onClose }) {
   // re-renders via setLive, so the borders age without a separate timer.
   const now = Date.now();
 
+  // Order by "hotness": agents I used most recently (live[id].at) sort first;
+  // ties and not-yet-loaded agents keep their dock order (Array.sort is stable).
+  // Driven by the same poll, so the ordering refreshes live as I work.
+  const orderedTabs = useMemo(
+    () => [...tabs].sort((a, b) => (live[b.id]?.at || 0) - (live[a.id]?.at || 0)),
+    [tabs, live],
+  );
+
   // Poll while the overlay is mounted (i.e. open); the effect's teardown stops
   // it on close. A `busy` guard skips a tick if the previous one is still in
   // flight, so a slow poll can't pile up.
@@ -275,6 +292,15 @@ export default function Dashboard({ onClose }) {
             >
               {t('dashboard.viewPhones')}
             </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === 'hot'}
+              className={`dash__view${view === 'hot' ? ' dash__view--on' : ''}`}
+              onClick={() => chooseView('hot')}
+            >
+              {t('dashboard.viewHot')}
+            </button>
           </div>
         )}
         <button
@@ -291,22 +317,25 @@ export default function Dashboard({ onClose }) {
         <p className="dash__empty">{t('dashboard.empty')}</p>
       ) : (
         <ul
-          className={`dash__grid${view === 'phones' ? ' dash__grid--phones' : ''}`}
+          className={`dash__grid${view !== 'cards' ? ' dash__grid--phones' : ''}`}
           style={{
-            // Both layouts cap their columns so cells stay square (height tracks
+            // All layouts cap their columns so cells stay square (height tracks
             // width via aspect-ratio) and centred, instead of stretching into wide
-            // rectangles. Phones get a larger cap since they hold a live chat.
+            // rectangles. Phones (and the mixed "hot" view, which can hold phones)
+            // get a larger cap since they render live chats.
             gridTemplateColumns:
-              view === 'phones'
-                ? `repeat(${columns}, minmax(0, ${Math.round(460 * SIZE_STEPS[sizeIdx])}px))`
-                : `repeat(${columns}, minmax(0, ${Math.round(340 * SIZE_STEPS[sizeIdx])}px))`,
+              view === 'cards'
+                ? `repeat(${columns}, minmax(0, ${Math.round(340 * SIZE_STEPS[sizeIdx])}px))`
+                : `repeat(${columns}, minmax(0, ${Math.round(460 * SIZE_STEPS[sizeIdx])}px))`,
           }}
         >
-          {tabs.map((tab) => {
+          {orderedTabs.map((tab) => {
             const info = live[tab.id];
             const status = info?.status || tab.status;
             const recency = recencyTier(info?.at, now);
-            if (view === 'phones') {
+            // Phones view: always a phone. Hot view: phone iff hot. Cards: never.
+            const asPhone = view === 'phones' || (view === 'hot' && isHotTier(recency));
+            if (asPhone) {
               return (
                 <li key={tab.id} className="dash__phone-cell">
                   <PinnedAgent
