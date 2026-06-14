@@ -218,6 +218,36 @@
   background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface));
 }
 
+/* Sandboxed HTML preview (plans/html-preview.md). White canvas so a page's own
+   styles read normally regardless of the app theme. */
+.file-viewer__body--html {
+  display: flex;
+}
+
+.file-viewer__html {
+  width: 100%;
+  min-height: 70vh;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius, 8px);
+  background: #fff;
+}
+
+/* Image preview (plans/files-image-preview.md). Fit to width, neutral backdrop
+   so transparency (e.g. PNG screenshots) reads clearly. */
+.file-viewer__body--img {
+  display: flex;
+  justify-content: center;
+}
+
+.file-viewer__img {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius, 8px);
+  background:
+    repeating-conic-gradient(#f0ece4 0% 25%, #fff 0% 50%) 50% / 20px 20px;
+}
+
 .file-viewer__back {
   min-height: var(--touch);
   padding: 8px 14px;

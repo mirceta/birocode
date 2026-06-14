@@ -56,6 +56,16 @@
 
 ## Recently shipped
 
+- [Image preview](plans/files-image-preview.md) — image files
+  (`.png/.jpg/.svg/...`) render as pictures in the Files viewer via a new
+  whitelisted `/api/files/raw` endpoint + an `<img>` (blob-fetched, 5 s
+  live-refresh). "Agent saves a screenshot to the repo → view it in Files."
+  Screen tab kept. Deployed & confirmed 2026-06-14 (bf81848); not yet merged.
+- [HTML preview](plans/html-preview.md) — `.html`/`.htm` files render as a page
+  in the Files viewer via a sandboxed `srcDoc` iframe (scripts inert), with the
+  same raw/rendered toggle Markdown has. Realizes the deferred doc-viewer "HTML
+  webview" slice. Live on :5099 + merged to main 2026-06-14. Try it:
+  [html-preview-demo.html](plans/html-preview-demo.html).
 - [Files tab absorbs the Plan tab](plans/plan-files-merge.md) — the Files tab is
   the single file surface: remembered/default open (`plan.md`), return-to-tree,
   5 s live-poll of the open file, back/forward history, and per-project
