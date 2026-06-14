@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiGet } from '../api/client';
 import { useDock } from '../context/DockContext';
 import { useT } from '../i18n/LanguageContext';
+import { syncLines } from '../lib/gitSync';
 import './dashboard.css';
 
 // Slice 2 liveness (plans/agent-dashboard.md) — while the overlay is open,
@@ -45,8 +46,15 @@ export default function Dashboard({ onClose }) {
   const navigate = useNavigate();
   // { [tabId]: { status, activity } } — fresher than the dock list, view-local.
   const [live, setLive] = useState({});
+  // { [repoId]: /git/status payload } — branch + ahead/behind, like the Agents
+  // tab. Fetched once when the overlay opens (git state moves slowly).
+  const [gitInfo, setGitInfo] = useState({});
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
+
+  // Lay agents out in a grid that approximates a square (columns = ⌈√n⌉) rather
+  // than one long row: 4 → 2×2, 6 → 3×2, 10 → 4×3.
+  const columns = Math.max(1, Math.ceil(Math.sqrt(tabs.length)));
 
   // Poll while the overlay is mounted (i.e. open); the effect's teardown stops
   // it on close. A `busy` guard skips a tick if the previous one is still in
@@ -99,6 +107,27 @@ export default function Dashboard({ onClose }) {
     };
   }, []);
 
+  // Git status per agent repo, mirroring the Agents tab (plans/agents-git-sync.md):
+  // one best-effort GET /api/git/status per unique repoId, keyed by repoId.
+  // Non-git repos report "unknown" and simply show no git lines.
+  const repoIds = [...new Set(tabs.map((tab) => tab.repoId))].join(',');
+  const loadGit = useCallback(() => {
+    if (!repoIds) return;
+    repoIds.split(',').forEach(async (repoId) => {
+      try {
+        const status = await apiGet('/git/status', { repoId });
+        if (status.branch && status.branch !== 'unknown') {
+          setGitInfo((prev) => ({ ...prev, [repoId]: status }));
+        }
+      } catch {
+        /* not a git repo, or transient error — show nothing */
+      }
+    });
+  }, [repoIds]);
+  useEffect(() => {
+    loadGit();
+  }, [loadGit]);
+
   function handleOpen(id) {
     setActiveTab(id);
     navigate('/studio');
@@ -122,11 +151,15 @@ export default function Dashboard({ onClose }) {
       {tabs.length === 0 ? (
         <p className="dash__empty">{t('dashboard.empty')}</p>
       ) : (
-        <ul className="dash__grid">
+        <ul
+          className="dash__grid"
+          style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+        >
           {tabs.map((tab) => {
             const info = live[tab.id];
             const status = info?.status || tab.status;
             const activity = info?.activity;
+            const git = gitInfo[tab.repoId];
             return (
               <li key={tab.id}>
                 <button
@@ -143,6 +176,19 @@ export default function Dashboard({ onClose }) {
                   <span className="dash-cell__status">
                     {t(`agents.status.${status}`)}
                   </span>
+                  {git && (
+                    <span className="dash-cell__branch">
+                      <span aria-hidden="true">⎇</span> {git.branch}
+                    </span>
+                  )}
+                  {git && syncLines(t, git).map((line) => (
+                    <span
+                      key={line.key}
+                      className={`dash-cell__sync${line.warn ? ' dash-cell__sync--warn' : ''}`}
+                    >
+                      {line.text}
+                    </span>
+                  ))}
                   <span className="dash-cell__activity">
                     {activity || t('dashboard.noActivity')}
                   </span>

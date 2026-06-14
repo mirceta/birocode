@@ -4,6 +4,7 @@ import { apiGet, apiPost } from '../api/client';
 import { useDock } from '../context/DockContext';
 import { useFeature } from '../context/UiModeContext';
 import { useT } from '../i18n/LanguageContext';
+import { syncLines } from '../lib/gitSync';
 import './agents.css';
 
 // Preset highlight colours for marking agents (plans/agent-color.md). A fixed
@@ -71,32 +72,6 @@ export default function Agents() {
     setPullResults(results);
     setPulling(false);
     loadInfo();
-  }
-
-  // Same explicit wording as the Git tab, condensed to one line per compare.
-  function syncLines(s) {
-    const lines = [];
-    if (s.baseBranch) {
-      const parts = [];
-      if (s.baseAhead > 0)
-        parts.push(t(s.baseAhead === 1 ? 'git.baseAheadOne' : 'git.baseAhead', { n: s.baseAhead, base: s.baseBranch }));
-      if (s.baseBehind > 0)
-        parts.push(t(s.baseBehind === 1 ? 'git.baseBehindOne' : 'git.baseBehind', { n: s.baseBehind, base: s.baseBranch }));
-      if (parts.length === 0) parts.push(t('git.baseInSync', { base: s.baseBranch }));
-      lines.push({ key: 'base', text: parts.join(' · ') });
-    }
-    if (!s.upstream) {
-      lines.push({ key: 'origin', text: t('git.noUpstream'), warn: true });
-    } else {
-      const parts = [];
-      if (s.ahead > 0)
-        parts.push(t(s.ahead === 1 ? 'git.aheadOne' : 'git.ahead', { n: s.ahead }));
-      if (s.behind > 0)
-        parts.push(t(s.behind === 1 ? 'git.behindOne' : 'git.behind', { n: s.behind }));
-      if (parts.length === 0) parts.push(t('git.inSync'));
-      lines.push({ key: 'origin', text: parts.join(' · ') });
-    }
-    return lines;
   }
 
   if (!visible) return null;
@@ -223,7 +198,7 @@ export default function Agents() {
                     <span aria-hidden="true">⎇</span> {info[tab.repoId].branch}
                   </span>
                 )}
-                {info[tab.repoId] && syncLines(info[tab.repoId]).map((line) => (
+                {info[tab.repoId] && syncLines(t, info[tab.repoId]).map((line) => (
                   <span
                     key={line.key}
                     className={`agent-card__sync${line.warn ? ' agent-card__sync--warn' : ''}`}

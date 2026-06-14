@@ -75,7 +75,12 @@ stateDiagram-v2
   every 5s and keeps the result **view-local** (no DockContext writes, no
   per-cell SSE). A `busy` guard skips overlapping ticks; the effect teardown
   stops polling on close. Each cell shows the fresher status badge + a
-  two-line-clamped activity string (falling back to `dashboard.noActivity`).
+  multi-line-clamped activity string (falling back to `dashboard.noActivity`).
+  Cells also show **git state** — branch + ahead/behind lines — matching the
+  Agents tab: a best-effort `GET /api/git/status` per unique `repoId`, fetched
+  once on open, formatted with the shared `lib/gitSync.js#syncLines` (extracted
+  from Agents.jsx so both views stay in sync). Cells lay out in a **square-ish
+  grid** (columns = ⌈√n⌉, set inline by `Dashboard.jsx`).
 - **Slice 3 (later, maybe) — live tail.** An opt-in scrolling stream tail per
   cell, bounded so we don't open N heavy SSE streams at once.
 

@@ -41,13 +41,13 @@
   color: var(--color-text-soft);
 }
 
-/* Responsive grid — cells fill the width, wrapping into as many columns as fit. */
+/* Square-ish grid — the column count (⌈√n⌉) is set inline by Dashboard.jsx so
+   agents form an approximate square instead of one long row. */
 .dash__grid {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
   gap: 20px;
 }
 
@@ -56,7 +56,7 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
   width: 100%;
   min-height: 240px;
   padding: 28px;
@@ -128,6 +128,20 @@
 .dash-cell__status {
   font-size: 14px;
   color: var(--color-text-soft);
+}
+
+/* Git state, mirroring the Agents tab (.agent-card__branch / __sync). */
+.dash-cell__branch,
+.dash-cell__sync {
+  font-size: 13px;
+  color: var(--color-text-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash-cell__sync--warn {
+  color: #b58900;
 }
 
 /* The "what's it doing" line (slice 2 liveness). Grows to fill the taller

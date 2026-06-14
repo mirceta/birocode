@@ -8,9 +8,17 @@
 > **Slice 2 (liveness) — ✅ done.** Each cell now polls a fresher status + a
 > one-line "what's it doing" on a 5s timer while the overlay is open.
 >
-> **👉 NEXT STEP — Slice 3 (live tail), optional:** an opt-in scrolling SSE tail
-> per cell — only if the timer-polled line proves not live enough. The
-> authoritative slice plan lives in
+> **✅ DONE — two cell refinements (this request):**
+> 1. **Square-ish grid.** Agents lay out in a grid that approximates a square:
+>    columns = ⌈√n⌉ (set inline by Dashboard.jsx). 4 → 2×2, 6 → 3×2, 10 → 4×3.
+> 2. **Git state on each cell**, matching the Agents tab: branch (⎇) plus the
+>    ahead/behind-of-base and origin lines (incl. the amber "not published"
+>    warning). Reuses a shared `syncLines` helper (`client/src/lib/gitSync.js`,
+>    extracted from Agents.jsx) and fetches `GET /api/git/status` per agent
+>    `repoId`, once when the overlay opens.
+>
+> **Slice 3 (live tail) — still optional/next**, only if the timer-polled line
+> proves not live enough. Authoritative slice plan:
 > [plans/agent-dashboard.md](plans/agent-dashboard.md) (+ its UX / tech detail).
 
 ## The goal, in one picture
