@@ -72,6 +72,7 @@ function DashboardButton({ open, onToggle }) {
       className={`dash-btn${open ? ' dash-btn--active' : ''}`}
       onClick={onToggle}
       aria-pressed={open}
+      title={t('dashboard.shortcutHint')}
     >
       {t('dashboard.open')}
     </button>
@@ -94,19 +95,29 @@ function BuildStamp() {
 function StudioShell() {
   const { t } = useT();
   const { multi, panes, activeKey } = useMultiPane();
+  const dashEnabled = useFeature('agentDashboard');
   const [dashOpen, setDashOpen] = useState(false);
   useEffect(() => {
     document.title = t('app.title');
   }, [t]);
-  // Escape closes the full-screen dashboard overlay.
+  // Keyboard: Ctrl/Cmd+Shift+D toggles the dashboard overlay <-> tab view
+  // (plans/dashboard-shortcut.md); Escape closes it. Ignored while typing so it
+  // never fires mid-message; preventDefault so it wins over any browser binding.
   useEffect(() => {
-    if (!dashOpen) return undefined;
     const onKey = (e) => {
-      if (e.key === 'Escape') setDashOpen(false);
+      const el = e.target;
+      const typing = /^(input|textarea|select)$/i.test(el?.tagName || '') || el?.isContentEditable;
+      if (dashEnabled && (e.metaKey || e.ctrlKey) && e.shiftKey && !e.altKey
+          && (e.key === 'd' || e.key === 'D') && !typing) {
+        e.preventDefault();
+        setDashOpen((o) => !o);
+        return;
+      }
+      if (e.key === 'Escape' && dashOpen) setDashOpen(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [dashOpen]);
+  }, [dashEnabled, dashOpen]);
   return (
     <div className="app-shell">
       <div className={`app-frame${multi ? ' app-frame--multi' : ''}`}>

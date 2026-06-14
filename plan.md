@@ -26,6 +26,10 @@
 > `feature/pwa-webapk-warning` (set aside, not started).
 
 ## Active feature plans
+
+- [Dashboard shortcut](plans/dashboard-shortcut.md) — `Ctrl/Cmd+Shift+D` toggles
+  between the agent dashboard overlay and the normal tab view (Escape still
+  closes; ignored while typing). Building on `feature/dashboard-shortcut`.
 - [Understanding panel](plans/understanding-panel.md) **— slice 2** — make the
   panel work in Product Repos, not just the Harness. A composer-prefill button
   drops the "write your understanding first" instruction into the chat box (no
