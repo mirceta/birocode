@@ -22,6 +22,12 @@
 > `feature/pwa-webapk-warning` (set aside, not started).
 
 ## Active feature plans
+
+- [Image preview](plans/files-image-preview.md) — view image files
+  (`.png/.jpg/.svg/...`) in the Files tab via a new whitelisted `/api/files/raw`
+  endpoint + an `<img>` in the viewer. Enables "agent saves a screenshot to the
+  repo → view it in Files." Keeps the Screen tab. Building on
+  `feature/files-image-preview`.
 - [Understanding panel](plans/understanding-panel.md) **— slice 2** — make the
   panel work in Product Repos, not just the Harness. A composer-prefill button
   drops the "write your understanding first" instruction into the chat box (no

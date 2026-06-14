@@ -13,6 +13,7 @@ const HTML_RE = /\.(html?|xhtml)$/i;
 export default function FileViewer({
   name,
   content,
+  imageUrl,
   onBack,
   onNavigate,
   canBack = false,
@@ -23,8 +24,10 @@ export default function FileViewer({
   onTogglePin,
 }) {
   const { t } = useT();
+  const isImage = !!imageUrl;
   const isMarkdown = MARKDOWN_RE.test(name || '');
   const isHtml = HTML_RE.test(name || '');
+  // Images have no text source, so no raw toggle for them.
   const canRender = isMarkdown || isHtml;
   const [raw, setRaw] = useState(false);
   const showRendered = canRender && !raw;
@@ -85,11 +88,14 @@ export default function FileViewer({
           </button>
         )}
       </div>
-      <div className={`file-viewer__body${showRendered && isMarkdown ? ' file-viewer__body--doc' : ''}${showRendered && isHtml ? ' file-viewer__body--html' : ''}`}>
-        {showRendered && isMarkdown && (
+      <div className={`file-viewer__body${showRendered && isMarkdown ? ' file-viewer__body--doc' : ''}${showRendered && isHtml ? ' file-viewer__body--html' : ''}${isImage ? ' file-viewer__body--img' : ''}`}>
+        {isImage && (
+          <img className="file-viewer__img" src={imageUrl} alt={name} />
+        )}
+        {!isImage && showRendered && isMarkdown && (
           <Markdown onLinkClick={onNavigate}>{content}</Markdown>
         )}
-        {showRendered && isHtml && (
+        {!isImage && showRendered && isHtml && (
           // sandbox="" = no scripts / same-origin / forms / popups / top-nav, so
           // untrusted file content can't run in the harness's origin. srcDoc (not
           // src) means there's no fetchable URL or real origin to abuse.
@@ -100,7 +106,7 @@ export default function FileViewer({
             sandbox=""
           />
         )}
-        {!showRendered && (
+        {!isImage && !showRendered && (
           <pre className="file-viewer__code">{content}</pre>
         )}
       </div>
