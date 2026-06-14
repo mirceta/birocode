@@ -129,6 +129,18 @@
   color: var(--color-text-soft);
 }
 
+/* One-line "what's it doing" (slice 2 liveness), clamped to two lines so cells
+   stay uniform regardless of transcript length. */
+.dash-cell__activity {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--color-text-soft);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 /* Top-bar entry button (opens the overlay). Pill, like the other header
    controls; highlighted while the overlay is open. */
 .dash-btn {

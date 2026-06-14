@@ -3,7 +3,8 @@
 > **Status (2026-06-14):** IN PROGRESS, on `feature/agent-dashboard`.
 > Slice 1 **built & browser-verified**, then **redirected**: the dashboard is a
 > **top-bar full-screen overlay** (Advanced + 2+ agents), not a bottom-nav tab.
-> Slices 2-3 not started.
+> Slice 2 (liveness) **built & browser-verified** — cells poll status + a
+> one-line activity on a 5s timer while open. Slice 3 (live tail) not started.
 
 ## Why
 
@@ -25,9 +26,9 @@ existing full view.
 ## Slices (detail in the technical design)
 
 1. **Static grid + open-agent** ✅ built — top-bar full-screen overlay; click a cell to open that agent.
-2. **Liveness** 👈 **NEXT** — per-cell status + a one-line "what's it doing", on a timer.
-3. **Live tail (later, maybe)** — an opt-in scrolling stream tail per cell.
+2. **Liveness** ✅ built — per-cell status + a one-line "what's it doing", polled on a 5s timer while open.
+3. **Live tail (later, maybe)** 👈 **NEXT (optional)** — an opt-in scrolling stream tail per cell.
 
-> **Next step = Slice 2.** Full detail (data sources, the v1 liveness cost
-> tradeoff, where it plugs in) is in
-> [agent-dashboard-tech.md § Slices](agent-dashboard-tech.md#slices).
+> Slices 1-2 are shipped. Slice 3 (a per-cell live SSE tail) is optional — only
+> if the timer-polled activity line proves not live enough in practice. Full
+> detail is in [agent-dashboard-tech.md § Slices](agent-dashboard-tech.md#slices).

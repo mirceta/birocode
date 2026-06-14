@@ -160,6 +160,7 @@
   "dashboard.empty": "No agents yet. Start one in the Agents tab to see it here.",
   "dashboard.open": "Dashboard",
   "dashboard.close": "Close dashboard",
+  "dashboard.noActivity": "No activity yet",
   "agents.status.idle": "Idle",
   "agents.status.running": "Running...",
   "agents.status.done": "Done",

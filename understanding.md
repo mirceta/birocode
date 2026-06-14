@@ -5,9 +5,12 @@
 > **Dashboard** button (Advanced + 2+ agents) opens a full-screen overlay; click
 > a cell to open that agent; close via the button, the × , or Escape.
 >
-> **👉 NEXT STEP — Slice 2 (liveness):** give each cell a live status refresh +
-> a one-line "what's it doing", on a timer. Then Slice 3 (live tail) is optional.
-> The authoritative slice plan lives in
+> **Slice 2 (liveness) — ✅ done.** Each cell now polls a fresher status + a
+> one-line "what's it doing" on a 5s timer while the overlay is open.
+>
+> **👉 NEXT STEP — Slice 3 (live tail), optional:** an opt-in scrolling SSE tail
+> per cell — only if the timer-polled line proves not live enough. The
+> authoritative slice plan lives in
 > [plans/agent-dashboard.md](plans/agent-dashboard.md) (+ its UX / tech detail).
 
 ## The goal, in one picture
@@ -66,7 +69,7 @@ stateDiagram-v2
 
 ```mermaid
 flowchart LR
-  S1["Slice 1<br/>static grid + Maximize"]:::done --> S2["Slice 2<br/>liveness on a timer"]:::next --> S3["Slice 3 (maybe)<br/>live SSE tail per cell"]:::later
+  S1["Slice 1<br/>static grid + open"]:::done --> S2["Slice 2<br/>liveness on a timer"]:::done --> S3["Slice 3 (optional)<br/>live SSE tail per cell"]:::next
   classDef done fill:#22c55e,color:#fff,stroke:#16a34a
   classDef next fill:#f59e0b,color:#fff,stroke:#d97706
   classDef later fill:#e5e7eb,color:#374151,stroke:#9ca3af
@@ -75,11 +78,11 @@ flowchart LR
 - **Slice 1 — done.** Advanced top-bar **Dashboard** button → full-screen
   overlay; responsive grid of dock agents (name, status badge + dot, colour
   mark); click any cell → open that agent in `/studio`.
-- **Slice 2 — 👈 next.** Per-cell status refresh + a one-line "what's it doing",
-  updated on a **timer** (poll `/api/runs` + a cheap latest-activity source).
-  No per-cell connections.
-- **Slice 3 — later, maybe.** An **opt-in** scrolling SSE tail per cell, bounded
-  so we never open N heavy streams at once.
+- **Slice 2 — done.** Per-cell status refresh + a one-line "what's it doing",
+  polled on a **5s timer** while the overlay is open (`/api/runs` +
+  `/api/sessions/{id}/messages`), kept view-local. No per-cell connections.
+- **Slice 3 — 👈 next, optional.** An **opt-in** scrolling SSE tail per cell,
+  bounded so we never open N heavy streams at once.
 
 ## How it's reached (resolved → overlay)
 

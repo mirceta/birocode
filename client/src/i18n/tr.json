@@ -160,6 +160,7 @@
   "dashboard.empty": "Henuz ajan yok. Burada gormek icin Ajanlar sekmesinden bir tane baslat.",
   "dashboard.open": "Panel",
   "dashboard.close": "Paneli kapat",
+  "dashboard.noActivity": "Henuz etkinlik yok",
   "agents.status.idle": "Bosta",
   "agents.status.running": "Calisiyor...",
   "agents.status.done": "Tamamlandi",

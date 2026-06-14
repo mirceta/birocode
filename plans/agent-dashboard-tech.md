@@ -69,9 +69,13 @@ stateDiagram-v2
   dot, colour mark); the whole cell is clickable → `setActiveTab` + `/studio` +
   close. Top-bar entry (`DashboardButton`) gated Advanced + 2+ agents. No tab /
   route / `KnownTabs` entry.
-- **Slice 2 — liveness. 👈 NEXT.** Per-cell status refresh + a one-line
-  latest-activity string, updated on a timer (and/or reconciled from
-  `/api/runs`). See *Liveness depth* above for the v1 cost tradeoff.
+- **Slice 2 — liveness. ✅ built & verified.** While the overlay is open,
+  `pages/Dashboard.jsx` polls `GET /api/runs` (per-repo status snapshot) +
+  `GET /api/sessions/{sessionId}/messages` (repo-scoped, last line = activity)
+  every 5s and keeps the result **view-local** (no DockContext writes, no
+  per-cell SSE). A `busy` guard skips overlapping ticks; the effect teardown
+  stops polling on close. Each cell shows the fresher status badge + a
+  two-line-clamped activity string (falling back to `dashboard.noActivity`).
 - **Slice 3 (later, maybe) — live tail.** An opt-in scrolling stream tail per
   cell, bounded so we don't open N heavy SSE streams at once.
 
