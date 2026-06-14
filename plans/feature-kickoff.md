@@ -1,9 +1,12 @@
 # Feature kickoff & closeout — a seamless feature lifecycle
 
-> **Status (2026-06-14):** PLAN — **approach decided** (composer-prefill buttons,
-> the Understanding-panel slice 2 pattern); ready to build on the user's word.
-> On `feature/feature-kickoff`. Scope covers BOTH ends of a feature's life:
-> starting one and finishing one. Nothing built yet.
+> **Status (2026-06-14):** Kickoff button BUILT & browser-verified
+> (`verify-feature-kickoff.mjs` 6/6: advanced-gated composer button prefills the
+> ritual, no auto-send, hidden in Basic). Frontend-only, live on :5099. On
+> `feature/feature-kickoff`, pending deploy/merge. **Closeout button still TODO**
+> — awaiting the user's closeout prompt text. Defaults chosen: client-side prompt
+> constant (i18n `feature.kickoffPrompt`), button in the composer toolbar next to
+> the understanding-prefill button, advanced-gated (`featureKickoff`).
 
 ## Problem
 
@@ -56,6 +59,19 @@ prefill/attach controls — the spot the user pointed at):
 The canned prompt text **is** the ritual's single source of truth (so the agent
 stops forgetting steps) — mirrors how `ExposeService.BuildFixPrompt` keeps the
 contract in one place.
+
+### Kickoff prompt (exact text, user-supplied)
+
+The button prefills this verbatim, leaving the trailing colon so the user types
+the feature description after it, then sends:
+
+```
+I want you to start a new feature. make sure you are on the main branch that is synced with origin/main. create a new feature branch. Make a new entry in the Active feature plans section in plans.md . This is the feature we will be working on: 
+```
+
+### Closeout prompt (exact text)
+
+_TBD — to be supplied by the user (same shape: the verbatim closeout ritual)._
 
 ## Open questions (decide at build time)
 
