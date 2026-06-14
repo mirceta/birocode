@@ -90,24 +90,29 @@ export default function PromptManager({ prompts, onAdd, onUpdate, onDelete, onIn
         {items.map((p) => (
           <li key={p.id} className="prompt-mgr__item">
             <span className="prompt-mgr__item-emoji" aria-hidden="true">{p.emoji}</span>
-            <span className="prompt-mgr__item-label" title={p.text}>{p.label || p.text}</span>
-            <button
-              type="button"
-              className="prompt-mgr__item-btn prompt-mgr__item-use"
-              onClick={() => { onInsert(p.text); onClose(); }}
-            >
-              {t('prompts.use')}
-            </button>
-            {!p.builtin && (
-              <button type="button" className="prompt-mgr__item-btn" onClick={() => startEdit(p)}>
-                {t('prompts.edit')}
+            <div className="prompt-mgr__item-main">
+              {p.label && <span className="prompt-mgr__item-label">{p.label}</span>}
+              <span className="prompt-mgr__item-text">{p.text}</span>
+            </div>
+            <div className="prompt-mgr__item-actions">
+              <button
+                type="button"
+                className="prompt-mgr__item-btn prompt-mgr__item-use"
+                onClick={() => { onInsert(p.text); onClose(); }}
+              >
+                {t('prompts.use')}
               </button>
-            )}
-            {!p.builtin && (
-              <button type="button" className="prompt-mgr__item-btn" onClick={() => remove(p.id)}>
-                {t('prompts.delete')}
-              </button>
-            )}
+              {!p.builtin && (
+                <button type="button" className="prompt-mgr__item-btn" onClick={() => startEdit(p)}>
+                  {t('prompts.edit')}
+                </button>
+              )}
+              {!p.builtin && (
+                <button type="button" className="prompt-mgr__item-btn" onClick={() => remove(p.id)}>
+                  {t('prompts.delete')}
+                </button>
+              )}
+            </div>
           </li>
         ))}
       </ul>

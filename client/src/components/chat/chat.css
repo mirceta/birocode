@@ -831,15 +831,41 @@ details.step > summary::-webkit-details-marker {
   gap: 6px;
 }
 
-.prompt-mgr__item { display: flex; align-items: center; gap: 8px; }
-.prompt-mgr__item-emoji { font-size: 18px; flex: 0 0 auto; }
-.prompt-mgr__item-label {
+.prompt-mgr__item { display: flex; align-items: flex-start; gap: 8px; }
+.prompt-mgr__item-emoji { font-size: 18px; flex: 0 0 auto; line-height: 1.5; }
+
+.prompt-mgr__item-main {
   flex: 1 1 auto;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.prompt-mgr__item-label {
   font-size: 13px;
+  font-weight: 600;
+}
+
+/* Show the prompt body, not just the label — clamped to a few lines so long
+   prompts (e.g. the kickoff ritual) don't dominate the list; full text is used
+   on Use/Edit. Preserves the author's line breaks. */
+.prompt-mgr__item-text {
+  font-size: 12px;
+  color: var(--color-text-soft);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.prompt-mgr__item-actions {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .prompt-mgr__item-btn {
