@@ -49,6 +49,9 @@
   padding: 0;
   display: grid;
   gap: 20px;
+  /* Both views are width-capped (see Dashboard.jsx), so centre the grid rather
+     than leaving the cells clinging to the left. */
+  justify-content: center;
 }
 
 /* The whole cell is the click target (opens that agent — no separate button). */
@@ -58,6 +61,10 @@
   flex-direction: column;
   gap: 10px;
   width: 100%;
+  /* Square-ish: height tracks the (capped) width instead of a fixed strip, so
+     a couple of agents don't become wide rectangles. min-height keeps a floor
+     when the column shrinks on narrow screens. */
+  aspect-ratio: 1 / 1;
   min-height: 240px;
   padding: 28px;
   border: 1px solid var(--color-border);
@@ -225,14 +232,12 @@
 }
 
 /* ---- Wall of phones (plans/agent-dashboard.md) ------------------------- */
-/* Each phone is a fixed-height frame holding one agent's live <Chat embedded>.
-   Fixed rows keep the wall uniform regardless of transcript length. */
-.dash__grid--phones {
-  grid-auto-rows: 560px;
-}
-
+/* Each phone is a square frame holding one agent's live <Chat embedded>. The
+   cell's height tracks its (capped) width via aspect-ratio — same as the
+   cards — so the wall stays square regardless of transcript length. */
 .dash__phone-cell {
   min-width: 0;
+  aspect-ratio: 1 / 1;
 }
 
 .phone {

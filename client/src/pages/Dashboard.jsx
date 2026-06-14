@@ -239,7 +239,15 @@ export default function Dashboard({ onClose }) {
       ) : (
         <ul
           className={`dash__grid${view === 'phones' ? ' dash__grid--phones' : ''}`}
-          style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+          style={{
+            // Both layouts cap their columns so cells stay square (height tracks
+            // width via aspect-ratio) and centred, instead of stretching into wide
+            // rectangles. Phones get a larger cap since they hold a live chat.
+            gridTemplateColumns:
+              view === 'phones'
+                ? `repeat(${columns}, minmax(0, 460px))`
+                : `repeat(${columns}, minmax(0, 340px))`,
+          }}
         >
           {tabs.map((tab) => {
             const info = live[tab.id];
