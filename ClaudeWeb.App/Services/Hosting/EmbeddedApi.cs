@@ -10,6 +10,7 @@ using ClaudeWeb.Services.IpFilter;
 using ClaudeWeb.Services.Logging;
 using ClaudeWeb.Services.Monitoring;
 using ClaudeWeb.Services.Notes;
+using ClaudeWeb.Services.Pins;
 using ClaudeWeb.Services.Repositories;
 using ClaudeWeb.Services.Screen;
 using ClaudeWeb.Services.Settings;
@@ -127,6 +128,7 @@ public class EmbeddedApi
             builder.Services.AddTerminalModule(); // terminal tab (plans/terminal-tab.md)
             builder.Services.AddSettingsModule(); // UI settings (plans/settings-tab.md)
             builder.Services.AddNotesModule();  // per-project ideas (plans/ideas-tab.md)
+            builder.Services.AddPinsModule();   // per-project Files pins (plans/plan-files-merge.md)
             builder.Services.AddDeployModule(); // deployments tab (plans/deployments-tab.md)
             builder.Services.AddExposeModule(); // exposure check (plans/product-onboarding.md)
             // === END MODULE SERVICE REGISTRATION ===

@@ -19,7 +19,7 @@ public class SettingsController : ControllerBase
     // Canonical tab keys — mirror client/src/layout/tabRegistry.jsx.
     private static readonly HashSet<string> KnownTabs = new()
     {
-        "claude", "files", "plan", "git", "history",
+        "claude", "files", "git", "history",
         "agents", "dashboard", "screen", "projects", "guests", "app", "localapp", "ideas", "deploys", "settings",
     };
 

@@ -28,8 +28,6 @@ export const FEATURES = {
   gitBranchList: 'advanced', // other-branches overview in the Git tab (plans/git-branches.md)
   gitGraphView: 'advanced', // mermaid history graph in the Git tab (plans/git-graph.md)
   gitBranchReview: 'advanced', // branch "PR preview" in the Git tab (plans/git-pr-preview.md)
-  planTab: 'advanced', // repo-root plan.md viewer (plans/plan-tab.md)
-  planRawView: 'advanced', // raw-text toggle in the Plan tab header (plans/plan-raw-view.md)
   screenTab: 'advanced', // host-desktop snapshots (plans/screen-tab.md)
   machineName: 'advanced', // header title shows "machine · project · branch"
   multiPane: 'advanced', // side-by-side desktop panes (plans/multi-pane.md)

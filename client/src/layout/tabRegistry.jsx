@@ -12,7 +12,6 @@ import Deployments from '../pages/Deployments';
 import Agents from '../pages/Agents';
 import Dashboard from '../pages/Dashboard';
 import Git from '../pages/Git';
-import Plan from '../pages/Plan';
 import Screen from '../pages/Screen';
 import Terminal from '../pages/Terminal';
 import Projects from '../pages/Projects';
@@ -26,7 +25,6 @@ import Settings from '../pages/Settings';
 // rearranges it. Keys here mirror SettingsController.KnownTabs.
 const STATIC_TABS = [
   { key: 'files', path: '/studio/files', labelKey: 'nav.files', icon: 'F', feature: null, element: <Files /> },
-  { key: 'plan', path: '/studio/plan', labelKey: 'nav.plan', icon: '☰', feature: 'planTab', element: <Plan /> },
   { key: 'git', path: '/studio/git', labelKey: 'nav.git', icon: '⎇', feature: 'gitTab', element: <Git /> },
   { key: 'history', path: '/studio/history', labelKey: 'nav.history', icon: 'H', feature: null, element: <History /> },
   { key: 'agents', path: '/studio/agents', labelKey: 'nav.agents', icon: 'A', feature: 'agentDock', element: <Agents /> },

@@ -1,6 +1,10 @@
 # Plan Tab — always-visible current plan
 
-> **Status (2026-06-11):** In development on `feature/plan-tab`.
+> **Status (2026-06-14): SUPERSEDED.** The Plan tab was retired and folded into
+> the Files tab — `plan.md` is now the default-open / pinned file in the single
+> file viewer (which also has back/forward history and a 5 s live-poll). See
+> [Files tab absorbs the Plan tab](plan-files-merge.md). Historical record below.
+> (Originally shipped on `feature/plan-tab`, 2026-06-11.)
 
 ## Problem
 

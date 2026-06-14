@@ -25,7 +25,6 @@
 > `feature/pwa-webapk-warning` (set aside, not started).
 
 ## Active feature plans
-
 - [Understanding panel](plans/understanding-panel.md) **— slice 2** — make the
   panel work in Product Repos, not just the Harness. A composer-prefill button
   drops the "write your understanding first" instruction into the chat box (no
@@ -55,6 +54,12 @@
 
 ## Recently shipped
 
+- [Files tab absorbs the Plan tab](plans/plan-files-merge.md) — the Files tab is
+  the single file surface: remembered/default open (`plan.md`), return-to-tree,
+  5 s live-poll of the open file, back/forward history, and per-project
+  backend-synced **pins** (📌-toggle any file; seeded `plan.md`/`CLAUDE.md`).
+  Retired the Plan tab + its duplicate renderer. Deployed & confirmed
+  2026-06-14 (8e5e4fc); not yet merged to main.
 - [Stale-copy warning banner](plans/stale-version-banner.md) — after a redeploy,
   an open browser running the old cached bundle gets a dismissible "new version
   — Reload" banner (build-stamp compare via `version.json`). Closes the gap that

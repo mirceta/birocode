@@ -17,6 +17,8 @@ export default function FileViewer({
   canForward = false,
   onHistBack,
   onHistForward,
+  pinned = false,
+  onTogglePin,
 }) {
   const { t } = useT();
   const isMarkdown = MARKDOWN_RE.test(name || '');
@@ -56,6 +58,18 @@ export default function FileViewer({
         <span className="file-viewer__name" title={name}>
           {name}
         </span>
+        {onTogglePin && (
+          <button
+            type="button"
+            className={`file-viewer__pin${pinned ? ' file-viewer__pin--on' : ''}`}
+            onClick={onTogglePin}
+            title={pinned ? t('files.unpin') : t('files.pin')}
+            aria-label={pinned ? t('files.unpin') : t('files.pin')}
+            aria-pressed={pinned}
+          >
+            📌
+          </button>
+        )}
         {isMarkdown && (
           <button
             type="button"
