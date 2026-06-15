@@ -65,6 +65,13 @@
 
 ## Recently shipped
 
+- [Custom-prompts button on the dashboard docks](plans/dock-prompts-button.md) —
+  the custom-prompts **⚙ button** (plans/custom-prompts.md) is now in the
+  dashboard agent docks' embedded composer, not just the main chat tab (dropped
+  the `!embedded` gate in `ChatInput.jsx`; the modal already portals to `<body>`,
+  so the small dock doesn't shrink it, and "Use" prefills that dock's composer).
+  Frontend-only; browser-verified on an isolated :5210 instance; merged to main
+  2026-06-15. On `feature/dock-prompts-button`.
 - **Multiline prompts no longer truncated** (bug fix) — a chat message containing
   newlines reached the agent **only up to its first line**: launching the npm
   `claude.cmd` shim from .NET routes the command line through `cmd.exe`, which
