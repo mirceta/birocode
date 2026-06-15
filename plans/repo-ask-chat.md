@@ -59,6 +59,17 @@ time**. Two hard constraints shape every option:
 Legend: ✅ meets it · ⚠️ partial / needs extra work · ❌ doesn't meet it. Effort/risk
 are relative (Low < Med < High).
 
+**Overall rating (★ / 5)** — a single judgement weighing "meets the need" highest,
+then risk and cost:
+
+| Approach | Rating | One-line why |
+|----------|--------|--------------|
+| **A — Read-only Ask lane, shared cwd** | ★★★★½ (4.5) | Meets everything at modest cost; only caveat is verifying the read-only CLI flag |
+| **C — Twin repo entry (same path)** | ★★★½ (3.5) | Cheapest, no run-gate change; loses points on "one folder, two projects" confusion |
+| **B — Worktree-isolated Ask agent** | ★★★ (3) | The right call *only if* Ask must edit; worktree lifecycle + snapshot staleness are real overhead |
+| **E — Direct Claude API ask service** | ★★ (2) | Most control over read-only, but throws away CLI sessions/resume/streaming; over-engineered |
+| **D — Queued / serialized Ask** | ★½ (1.5) | Cheap and safe, but fails the core "ask **while** building" requirement |
+
 Per-approach notes:
 
 - **A (recommended):** smallest change that fully meets the need. Each lane keeps
