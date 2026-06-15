@@ -48,6 +48,25 @@ function readSize() {
   }
 }
 
+// Content zoom (plans/dashboard-zoom.md): scales the text + controls rendered
+// INSIDE each dock (the embedded chat), distinct from the window-size stepper
+// above. A CSS-`zoom` factor, remembered per device.
+const ZOOM_KEY = 'claudeweb_dash_content_zoom';
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 2;
+const ZOOM_STEP = 0.1;
+function clampZoom(z) {
+  return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(z * 100) / 100));
+}
+function readZoom() {
+  try {
+    const z = parseFloat(localStorage.getItem(ZOOM_KEY));
+    return Number.isNaN(z) ? 1 : clampZoom(z);
+  } catch {
+    return 1;
+  }
+}
+
 // Expandable Ideas dock (plans/ideas-arch-plan.md): the pinned-left dock can be
 // widened (≥2×) so the architectural-plan doc has room. Remembered per device.
 const IDEAS_WIDE_KEY = 'claudeweb_dash_ideas_wide';
@@ -155,6 +174,21 @@ export default function Dashboard({ onClose }) {
       return next;
     });
   }
+  // Content zoom for what's rendered INSIDE the docks (the embedded chat),
+  // remembered per device. Distinct from the window-size stepper above.
+  const [contentZoom, setContentZoom] = useState(readZoom);
+  function stepZoom(delta) {
+    setContentZoom((prev) => {
+      const next = clampZoom(prev + delta);
+      try {
+        localStorage.setItem(ZOOM_KEY, String(next));
+      } catch {
+        /* private mode — fall back to in-memory only */
+      }
+      return next;
+    });
+  }
+
   // Wide/narrow Ideas dock (room for the architectural plan), remembered.
   const [ideasWide, setIdeasWide] = useState(readIdeasWide);
   function toggleIdeasWide() {
@@ -318,6 +352,30 @@ export default function Dashboard({ onClose }) {
           </div>
         )}
         {tabs.length > 0 && (
+          <div className="dash__zoom" role="group" aria-label={t('dashboard.zoom')}>
+            <button
+              type="button"
+              className="dash__zoom-btn"
+              onClick={() => stepZoom(-ZOOM_STEP)}
+              disabled={contentZoom <= ZOOM_MIN}
+              aria-label={t('dashboard.zoomOut')}
+              title={t('dashboard.zoomOut')}
+            >
+              A&minus;
+            </button>
+            <button
+              type="button"
+              className="dash__zoom-btn"
+              onClick={() => stepZoom(ZOOM_STEP)}
+              disabled={contentZoom >= ZOOM_MAX}
+              aria-label={t('dashboard.zoomIn')}
+              title={t('dashboard.zoomIn')}
+            >
+              A+
+            </button>
+          </div>
+        )}
+        {tabs.length > 0 && (
           <div className="dash__views" role="tablist" aria-label={t('dashboard.title')}>
             <button
               type="button"
@@ -404,6 +462,7 @@ export default function Dashboard({ onClose }) {
                     tab={tab}
                     status={status}
                     recency={recency}
+                    contentZoom={contentZoom}
                     repoPath={repoPath(tab.repoId)}
                     git={gitInfo[tab.repoId]}
                     gitRefreshing={!!gitBusy[tab.repoId]}
