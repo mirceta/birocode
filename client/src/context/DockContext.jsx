@@ -51,6 +51,10 @@ function toServerPatch(patch) {
   // "Important" mark — red thick border + sorts first on the dashboard
   // (plans/important-agents.md).
   if ('important' in patch) body.important = patch.important;
+  // "Waiting on another agent" mark + optional free-text agent name
+  // (plans/agent-waiting.md). Empty string clears the name on the backend.
+  if ('waiting' in patch) body.waiting = patch.waiting;
+  if ('waitingOn' in patch) body.waitingOn = patch.waitingOn ?? '';
   return Object.keys(body).length > 0 ? body : null;
 }
 

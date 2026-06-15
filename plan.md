@@ -9,6 +9,11 @@
 > Files tab to see wrapping mermaid labels etc. in action.
 
 > **Status (2026-06-15):** **Latest — deployed & confirmed, merged to main:**
+> the [agent "waiting on" toggle](plans/agent-waiting.md) — an ⏳ dock-header
+> toggle (sibling of the ⭐ important button) that marks a dashboard dock as
+> waiting for another agent, with an optional inline "which agent" field and a
+> distinct amber cue that coexists with important's red border. **Also deployed &
+> confirmed, merged to main:**
 > [priority for ideas](plans/idea-priority.md) — each idea gets a 1–5 priority
 > and its card reddens as the priority rises, on both the Ideas tab and the
 > dashboard panel. **Also deployed & confirmed, merged to main:**
@@ -72,6 +77,16 @@
 
 ## Recently shipped
 
+- [Agent "waiting on" toggle](plans/agent-waiting.md) — a second dock-header
+  toggle (⏳, sibling of the ⭐ important button) marks a **dashboard dock** as
+  **waiting for another agent to finish**, with an optional inline free-text field
+  for **which** agent it's waiting on. Distinct **amber** waiting cue that
+  **coexists** with important's red border (an agent can be both); toggling off
+  clears the state and its text. Persisted as backend-synced `Waiting` +
+  `WaitingOn` on `DockTab` (same path as `color`/`dashboard`/`important`).
+  Advanced-mode. Browser-verified on an isolated :5210 instance
+  (`verify-agent-waiting.mjs` 13/13); deployed to live :5099 & confirmed
+  2026-06-15, merged to main. On `feature/agent-waiting`.
 - [Priority for ideas](plans/idea-priority.md) — each idea gets an optional
   **priority** with **five levels**; a **1–5 picker** on the composer, the edit
   form, and each card sets it, and the idea card's **background reddens as the

@@ -38,6 +38,21 @@ public class DockTab
     public bool Important { get; set; } = false;
 
     /// <summary>
+    /// Marked "waiting for another agent to finish" from the dashboard
+    /// (plans/agent-waiting.md): the dock gets an amber waiting cue. Defaults to
+    /// false so existing tabs are unaffected; shared across devices like the rest
+    /// of the tab.
+    /// </summary>
+    public bool Waiting { get; set; } = false;
+
+    /// <summary>
+    /// Optional free-text name of the agent this dock is waiting on
+    /// (plans/agent-waiting.md). Null/empty means "waiting, unspecified". Only
+    /// meaningful when <see cref="Waiting"/> is true.
+    /// </summary>
+    public string? WaitingOn { get; set; }
+
+    /// <summary>
     /// Stashed prompt ideas jotted down while the agent runs
     /// (plans/prompt-stash.md). Shared across devices like the rest of the tab.
     /// </summary>
@@ -128,7 +143,7 @@ public class DockRegistry
     /// Partial update. Only non-null fields are applied; per-tab last-write-wins
     /// when two devices race. Returns the updated copy, or null if unknown.
     /// </summary>
-    public DockTab? Update(string id, string? sessionId, string? status, string? repoName, string? color, bool? dashboard, bool? important)
+    public DockTab? Update(string id, string? sessionId, string? status, string? repoName, string? color, bool? dashboard, bool? important, bool? waiting, string? waitingOn)
     {
         lock (_gate)
         {
@@ -141,6 +156,9 @@ public class DockRegistry
             if (color != null) tab.Color = color.Length == 0 ? null : color;
             if (dashboard != null) tab.Dashboard = dashboard.Value;
             if (important != null) tab.Important = important.Value;
+            if (waiting != null) tab.Waiting = waiting.Value;
+            // Empty string clears the name; null leaves it untouched.
+            if (waitingOn != null) tab.WaitingOn = waitingOn.Length == 0 ? null : waitingOn;
             Save();
             return Clone(tab);
         }
@@ -262,6 +280,8 @@ public class DockRegistry
         Color = t.Color,
         Dashboard = t.Dashboard,
         Important = t.Important,
+        Waiting = t.Waiting,
+        WaitingOn = t.WaitingOn,
         Stash = t.Stash.Select(CloneStash).ToList(),
     };
 
