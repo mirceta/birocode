@@ -1,7 +1,9 @@
 # Side "Ask" conversation per repo
 
-**Status:** Planning (branch `feature/repo-ask-chat`). Not built. One crux
-decision open (read-only vs full-capability Ask lane) — see below.
+**Status:** Planning (branch `feature/repo-ask-chat`). Not built. **Decision
+made:** Approach **A** with a **read-only Ask lane** (`--permission-mode plan`,
+pending build-slice verification). Impact evaluated — see "Impact of the
+read-only decision" below.
 
 ## Problem
 
@@ -115,11 +117,65 @@ not modify the core run gate. Plan:
 - **Docs:** extend `plans/dual-chat.md`'s one-run-per-repo note; update the
   Glossary if "Ask"/"builder lane" becomes canonical.
 
-### Open decision (need the user)
+### Decision: read-only Ask lane (chosen 2026-06-15)
 
-Confirm the **Ask lane is read-only** (recommended — safe alongside the builder,
-matches "I just want to ask") vs **full capability** (forces approach B's
-worktree isolation). This picks A vs B above.
+Approach **A with a read-only Ask lane** is selected. Impact evaluated below.
+
+## Impact of the read-only decision
+
+### Feasibility — confirmed
+The installed CLI (**claude v2.1.177**) has the flags we need:
+`--permission-mode <default|plan|dontAsk|bypassPermissions>`, `--allowedTools` /
+`--disallowedTools` (with patterns like `Bash(git log:*)`), and `--tools`. So the
+read-only posture is a spawn-flag change, not a CLI feature request.
+
+### Recommended posture — defence in depth
+Primary: **`--permission-mode plan`** — the CLI's built-in "explore, don't act"
+mode (reads/searches freely to answer, structurally barred from edits/exec).
+Belt-and-suspenders: also **`--disallowedTools Write Edit NotebookEdit`** and
+restrict Bash to non-mutating use. ⚠️ **Must verify in the build slice** that in
+headless `-p` mode plan mode (a) still answers conversationally (the help notes it
+can emit a `prompt_suggestion` message) and (b) genuinely blocks Write/Edit/Bash
+mutations. If `-p` + plan is awkward, fall back to `default` mode + the disallow
+list. Either way, prove non-mutation with a test before relying on it.
+
+### Code impact — small and localized
+- **`RunSessionService`** (`Services/Chat/RunSessionService.cs`): the `_sessions`
+  dict + `TryBeginRun` / `Get` / `IsBusy` / `Snapshot` are all keyed by `repoId`.
+  Re-key by **`(repoId, lane)`** (e.g. `repoId` for builder, `repoId#ask` for
+  ask). Builder keeps its exact current key → **backward compatible**; the ask
+  lane is an independent slot with its own seq stream + event buffer.
+- **`ChatController`** (`Controllers/ChatController.cs`): thread a `lane` (default
+  `builder`) through `POST /api/chat`, `/api/chat/stream`, `/api/chat/stop`,
+  `/api/runs`. `/api/runs` `Snapshot()` shape gains the ask entries — keep builder
+  under its existing key so frontend reattach doesn't regress.
+- **`CliRunnerService.CreateProcessInfo`** (`Services/Chat/CliRunnerService.cs:597`):
+  add the read-only flags after `--verbose` when `lane == ask`. One extra param.
+- **Frontend**: a new conversation key + an "Ask" surface (per the chosen UI).
+  The convos map already supports per-key sessions/watermarks, so no new plumbing.
+
+### Safety — what read-only buys, and the residual risks
+- **Prevents** the Ask agent editing files, committing, or deleting — so it can't
+  corrupt the builder's work or fight it over the working tree. This is the whole
+  reason two `claude` processes can share one cwd.
+- **Residual risks to handle / accept:**
+  - **Bash is the mutation hole.** "Read-only" via tool-allowlist is only real if
+    Bash can't mutate; plan mode closes this holistically — another reason to
+    prefer it. If we allowlist Bash, even **`git status` can write `.git/index`**
+    (it refreshes the index), so it can contend with the builder's `git add`.
+    Prefer truly-read commands (`git log/show/diff`) or no Bash at all.
+  - **Moving target:** the Ask agent reads a tree the builder may be mid-editing,
+    so answers reflect a snapshot-in-time. Acceptable; worth a one-line UX note.
+  - **Shared quota:** both processes use the same Max-plan auth, so concurrent
+    heavy runs count against one quota and could hit rate limits. Minor.
+- **No regression to the builder:** default lane = builder keeps today's exact
+  single-flight behaviour; the ask lane is purely additive.
+
+### UX impact
+A fixed, always-available place to ask that never 409s against the builder —
+directly resolves the "where do I ask?" confusion. The Ask agent will refuse
+edit requests by design; set that expectation in the surface ("Ask is read-only —
+switch to the builder to make changes").
 
 ## Slices (draft)
 

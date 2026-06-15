@@ -33,14 +33,16 @@ design before building. The key facts that shape it:
   builder runs, the backend must allow a *second concurrent run* on the same
   repo — but on a separate "Ask lane" with its own session.
 
-## The main decision I need from you
+## Decision made: read-only Ask lane (Approach A)
 
-Two `claude` processes in the **same working directory** at once is safe only if
-the Ask one **doesn't edit files**. So I'm proposing the Ask lane runs
-**read-only** (it can read/search/answer, but not Write/Edit/run mutating
-commands) — which also matches "I just want to *ask* something." I'll confirm
-this with you before building (see the plan). If you'd rather the Ask agent be
-fully capable, that's possible but riskier and needs more care.
+You chose **Approach A** with a **read-only Ask lane**. Two `claude` processes in
+the same working directory is safe precisely because the Ask one **can't edit**
+(read/search/answer only) — and that matches "I just want to *ask* something."
+Impact evaluated in the plan: the CLI (v2.1.177) supports the read-only posture
+(`--permission-mode plan`), the code change is small and backward-compatible
+(re-key the run gate by `(repo, lane)`, add read-only spawn flags), and the main
+thing left to prove is that the read-only flags truly block all mutation in
+headless mode — which I'll verify in the first build slice.
 
 ## Assumptions
 
