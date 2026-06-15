@@ -1,8 +1,12 @@
 # Local app on the agent dock — pin its serving state, then render it
 
-> **Status (2026-06-15):** Proposed. On `feature/dock-local-app`, not started.
-> Slice 1 (pin the local-app serving state above the git section on each dock)
-> first; rendering the product in the dock follows.
+> **Status (2026-06-15):** **Slice 1 BUILT & browser-verified**, not yet merged
+> or deployed. On `feature/dock-local-app`. Each dock now shows a local-app row
+> above the git section — "serving on :PORT" (live), ":PORT · not serving"
+> (configured but dead), or "none". Verified on an isolated :5201 preview
+> (`.preview-test/dock-local-app-check.mjs`: 7 docks, row above git, a live :5300
+> reads serving, self :5305 reads offline, port-less repos read none). Slice 2
+> (render the product in the dock) follows.
 
 ## Problem
 
