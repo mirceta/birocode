@@ -64,12 +64,13 @@
 
 - [Architectural plan in Ideas + expandable dashboard dock](plans/ideas-arch-plan.md)
   — the shared `IdeasPanel` is now **tabbed** (Ideas | Architectural plan); the
-  Architectural-plan tab is a single user-written, **very tall** plain-text doc
-  (new global `GET/PUT /api/arch-plan`) you keep by hand to drive the agent grid.
-  The **dashboard Ideas dock** also gets an **expand toggle** (300→620px). Shows
-  in both the Ideas tab and the dashboard dock. Browser-verified on an isolated
-  :5210 instance; deployed to live :5099 & merged to main 2026-06-15. On
-  `feature/ideas-arch-plan`.
+  Architectural-plan tab is a single user-written, **very tall** doc (new global
+  `GET/PUT /api/arch-plan`) you keep by hand to drive the agent grid — the view
+  **renders Markdown** (shared GFM renderer) and Edit drops to the raw plain
+  text. The **dashboard Ideas dock** also gets an **expand toggle** (300→620px).
+  Shows in both the Ideas tab and the dashboard dock. Browser-verified on an
+  isolated :5210 instance; deployed to live :5099 & merged to main 2026-06-15
+  (markdown follow-up on `feature/archplan-markdown`). On `feature/ideas-arch-plan`.
 - [Dashboard opens from the header title](plans/dashboard-title-button.md) — the
   agent-dashboard entry point moved from the standalone top-bar **Dashboard**
   button onto the top-left `machine · project · branch` label, now a button
