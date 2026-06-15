@@ -1,9 +1,11 @@
 # Zoom the content inside the agent docks
 
-> **Status (2026-06-15):** **Building.** New feature on `feature/dashboard-zoom`,
-> branched off `main`. Zooms the **content inside** each dashboard agent dock (the
-> embedded chat's text + controls) smaller/bigger — distinct from the existing
-> dock-*window*-size stepper.
+> **Status (2026-06-15):** **Built, browser-verified & merged to main**
+> (not yet deployed). On `feature/dashboard-zoom`. Zooms the **content inside**
+> each dashboard agent dock (the embedded chat's text + controls) smaller/bigger
+> via a header A−/A+ control — distinct from the dock-*window*-size stepper.
+> Verified on an isolated :5210 instance (`.preview-test/dashboard-zoom-check.mjs`,
+> ALL PASS).
 
 ## Problem
 
