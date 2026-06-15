@@ -33,6 +33,12 @@
 
 ## Active feature plans
 
+- [Taller agent docks](plans/taller-agent-cards.md) — the agent-dashboard docks
+  are locked to a **square** (`aspect-ratio: 1/1`), so the "wall of phones" shows
+  only a few lines of chat — barely usable. Make the docks **taller than wide**
+  (portrait) so each shows more transcript, keeping the bigger/smaller stepper
+  and the reachable embedded composer. Planning; not built. On
+  `feature/taller-agent-cards`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
