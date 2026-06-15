@@ -7,6 +7,8 @@ import GitStatusSummary from '../components/git/GitStatusSummary';
 import PinnedAgent from '../components/dashboard/PinnedAgent';
 import CopyPath from '../components/dashboard/CopyPath';
 import ImportantStar from '../components/dashboard/ImportantStar';
+import WaitingBadge from '../components/dashboard/WaitingBadge';
+import WaitingOnField from '../components/dashboard/WaitingOnField';
 import IdeasPanel from '../components/ideas/IdeasPanel';
 import './dashboard.css';
 
@@ -264,6 +266,21 @@ export default function Dashboard({ onClose }) {
       const tab = tabsRef.current.find((t) => t.id === id);
       updateTab(id, { important: !tab?.important });
     },
+    [updateTab],
+  );
+
+  // "Waiting on another agent" mark (plans/agent-waiting.md): a toggle plus an
+  // optional free-text "which agent" name, both backend-synced like the rest.
+  const toggleWaiting = useCallback(
+    (id) => {
+      const tab = tabsRef.current.find((t) => t.id === id);
+      updateTab(id, { waiting: !tab?.waiting });
+    },
+    [updateTab],
+  );
+
+  const setWaitingOn = useCallback(
+    (id, text) => updateTab(id, { waitingOn: text }),
     [updateTab],
   );
 
@@ -548,6 +565,8 @@ export default function Dashboard({ onClose }) {
                     onRefreshGit={() => refreshGit(tab.repoId)}
                     onMaximize={handleOpen}
                     onToggleImportant={toggleImportant}
+                    onToggleWaiting={toggleWaiting}
+                    onSetWaitingOn={setWaitingOn}
                   />
                 </li>
               );
@@ -558,7 +577,7 @@ export default function Dashboard({ onClose }) {
               <li key={tab.id}>
                 <button
                   type="button"
-                  className={`dash-cell dash-cell--${status}${tab.id === activeTabId ? ' dash-cell--active' : ''}${tab.important ? ' dash-cell--important' : ''}`}
+                  className={`dash-cell dash-cell--${status}${tab.id === activeTabId ? ' dash-cell--active' : ''}${tab.important ? ' dash-cell--important' : ''}${tab.waiting ? ' dash-cell--waiting' : ''}`}
                   data-colored={tab.color ? 'true' : undefined}
                   data-recency={recency}
                   style={tab.color ? { '--agent-color': tab.color } : undefined}
@@ -572,6 +591,11 @@ export default function Dashboard({ onClose }) {
                       onToggle={() => toggleImportant(tab.id)}
                       className="dash-cell__important"
                     />
+                    <WaitingBadge
+                      waiting={!!tab.waiting}
+                      onToggle={() => toggleWaiting(tab.id)}
+                      className="dash-cell__waiting"
+                    />
                   </span>
                   {repoPath(tab.repoId) && (
                     <CopyPath path={repoPath(tab.repoId)} className="dash-cell__path" />
@@ -584,6 +608,13 @@ export default function Dashboard({ onClose }) {
                     {activity || t('dashboard.noActivity')}
                   </span>
                 </button>
+                {tab.waiting && (
+                  <WaitingOnField
+                    value={tab.waitingOn}
+                    onCommit={(text) => setWaitingOn(tab.id, text)}
+                    className="dash-cell__waiting-on"
+                  />
+                )}
               </li>
             );
           })}

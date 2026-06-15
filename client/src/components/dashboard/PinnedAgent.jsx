@@ -7,6 +7,8 @@ import GitStatusSummary from '../git/GitStatusSummary';
 import ProductFrame from '../app/ProductFrame';
 import CopyPath from './CopyPath';
 import ImportantStar from './ImportantStar';
+import WaitingBadge from './WaitingBadge';
+import WaitingOnField from './WaitingOnField';
 
 // One "phone" in the Agent Dashboard's wall of phones (plans/agent-dashboard.md):
 // a single agent's live Chat view, pinned to that agent's repo regardless of
@@ -27,6 +29,8 @@ export default function PinnedAgent({
   onRefreshGit,
   onMaximize,
   onToggleImportant,
+  onToggleWaiting,
+  onSetWaitingOn,
 }) {
   const { t } = useT();
   // Per-dock lane toggle (plans/repo-ask-chat.md slice 3): each phone can switch
@@ -58,7 +62,7 @@ export default function PinnedAgent({
 
   return (
     <div
-      className={`phone phone--${status}${tab.important ? ' phone--important' : ''}`}
+      className={`phone phone--${status}${tab.important ? ' phone--important' : ''}${tab.waiting ? ' phone--waiting' : ''}`}
       data-colored={tab.color ? 'true' : undefined}
       data-recency={recency}
       style={tab.color ? { '--agent-color': tab.color } : undefined}
@@ -78,7 +82,19 @@ export default function PinnedAgent({
           onToggle={() => onToggleImportant?.(tab.id)}
           className="phone__important"
         />
+        <WaitingBadge
+          waiting={!!tab.waiting}
+          onToggle={() => onToggleWaiting?.(tab.id)}
+          className="phone__waiting"
+        />
       </button>
+      {tab.waiting && (
+        <WaitingOnField
+          value={tab.waitingOn}
+          onCommit={(text) => onSetWaitingOn?.(tab.id, text)}
+          className="phone__waiting-on"
+        />
+      )}
       <div className="phone__lanes" role="tablist" aria-label={t('chat.scopesAria')}>
         <button
           type="button"
