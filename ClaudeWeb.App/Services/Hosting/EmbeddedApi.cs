@@ -1,4 +1,5 @@
 using ClaudeWeb.Models;
+using ClaudeWeb.Services.Analytics;
 using ClaudeWeb.Services.ArchPlan;
 using ClaudeWeb.Services.Auth;
 using ClaudeWeb.Services.Chat;
@@ -135,6 +136,7 @@ public class EmbeddedApi
             builder.Services.AddPromptsModule(); // user-defined composer prompts (plans/custom-prompts.md)
             builder.Services.AddDeployModule(); // deployments tab (plans/deployments-tab.md)
             builder.Services.AddExposeModule(); // exposure check (plans/product-onboarding.md)
+            builder.Services.AddAnalyticsModule(); // scoreboard (plans/scoreboard-analytics.md)
             // === END MODULE SERVICE REGISTRATION ===
 
             _app = builder.Build();

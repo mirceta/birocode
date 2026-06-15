@@ -7,6 +7,7 @@ import GitStatusSummary from '../components/git/GitStatusSummary';
 import PinnedAgent from '../components/dashboard/PinnedAgent';
 import CopyPath from '../components/dashboard/CopyPath';
 import IdeasPanel from '../components/ideas/IdeasPanel';
+import Scoreboard from '../components/dashboard/Scoreboard';
 import './dashboard.css';
 
 // The dashboard has three layouts (plans/agent-dashboard.md): summary "cards"
@@ -433,6 +434,7 @@ export default function Dashboard({ onClose }) {
           <IdeasPanel />
         </aside>
         <div className="dash__main">
+      <Scoreboard />
       {tabs.length === 0 ? (
         <p className="dash__empty">{t('dashboard.empty')}</p>
       ) : (

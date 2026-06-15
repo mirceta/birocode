@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using ClaudeWeb.Models;
+using ClaudeWeb.Services.Analytics;
 using ClaudeWeb.Services.Logging;
 using ClaudeWeb.Services.Monitoring;
 
@@ -40,11 +41,13 @@ public class CliRunnerService
 {
     private readonly Logger _logger;
     private readonly CallLog _callLog;
+    private readonly ActivityLog _activity;
 
-    public CliRunnerService(Logger logger, CallLog callLog)
+    public CliRunnerService(Logger logger, CallLog callLog, ActivityLog activity)
     {
         _logger = logger;
         _callLog = callLog;
+        _activity = activity;
     }
 
     /// <summary>
@@ -76,6 +79,12 @@ public class CliRunnerService
             workingDirectory: workingDirectory,
             resuming: resuming,
             sessionId: resuming ? sessionId! : "");
+
+        // Scoreboard ledger (plans/scoreboard-analytics.md): record a builder
+        // run's start/finish so analytics survive restarts. Read-only "ask" runs
+        // are a side conversation, not agent work — excluded so they don't
+        // inflate work-time stats.
+        if (!readOnly) _activity.Append("start", workingDirectory, resuming ? sessionId : null);
 
         Process? process = null;
         try
@@ -150,6 +159,8 @@ public class CliRunnerService
             try { if (process is { HasExited: false }) process.Kill(entireProcessTree: true); }
             catch { /* already gone / race */ }
             process?.Dispose();
+            // Close the scoreboard run interval (matches the "start" above).
+            if (!readOnly) _activity.Append("finish", workingDirectory, record.SessionId);
         }
     }
 

@@ -34,4 +34,17 @@ for:
 - **Backfill** (reconstructing pre-ledger history from transcripts): **deferred**
   to a future feature; noted in the plan.
 
-Design recorded in `plans/scoreboard-analytics.md`. Next: build once confirmed.
+Design recorded in `plans/scoreboard-analytics.md`.
+
+## Status — built & verified
+
+- Backend: `ActivityLog` (`activity.jsonl`) + `AnalyticsService` + `AnalyticsController`
+  (`GET /api/analytics`); `CliRunnerService` appends run start/finish (read-only
+  "ask" runs excluded so they don't inflate work time).
+- Frontend: `Scoreboard` component (4 stat cards + two hand-rolled SVG charts:
+  usage-window timeline + work/idle bars) rendered atop the agent docks in
+  `Dashboard.jsx`. i18n en/tr.
+- Verified on an isolated :5200 instance with a seeded ledger: `/api/analytics`
+  returns the exact expected metrics (longest run, peak concurrency 2, prompts
+  today 3, per-agent work/idle, total work); dashboard scoreboard 5/5 + screenshot.
+  Live :5099 untouched (synthetic ledger removed). Next: commit.

@@ -1,0 +1,133 @@
+/* Scoreboard / analytics panel (plans/scoreboard-analytics.md): pinned above the
+   agent docks. Headline stats + two hand-rolled SVG charts. */
+.scoreboard {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius, 12px);
+  background: var(--color-surface);
+}
+
+.scoreboard__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.scoreboard__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 120px;
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius, 10px);
+  background: var(--color-bg, #faf7f2);
+}
+
+.scoreboard__stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-accent);
+  line-height: 1.1;
+}
+
+.scoreboard__stat-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-text-soft, #777);
+}
+
+.scoreboard__stat-sub {
+  font-size: 11px;
+  color: var(--color-text-muted, #999);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scoreboard__empty {
+  font-size: 13px;
+  color: var(--color-text-soft, #777);
+  margin: 4px 2px;
+}
+
+.scoreboard__charts {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.scoreboard__chart-title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-text-soft, #777);
+}
+
+.scoreboard__svg {
+  width: 100%;
+  height: auto;
+  font-size: 11px;
+}
+
+.scoreboard__svg-label {
+  fill: var(--color-text);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.scoreboard__svg-num {
+  fill: var(--color-text-soft, #777);
+  font-size: 11px;
+}
+
+.scoreboard__svg-axis {
+  fill: var(--color-text-muted, #999);
+  font-size: 10px;
+}
+
+.scoreboard__track {
+  fill: var(--color-border);
+  opacity: 0.4;
+}
+
+.scoreboard__window {
+  fill: var(--color-accent);
+}
+
+.scoreboard__work {
+  fill: var(--color-accent);
+}
+
+.scoreboard__idle {
+  fill: var(--color-border);
+}
+
+.scoreboard__legend {
+  display: flex;
+  gap: 16px;
+  font-size: 11px;
+  color: var(--color-text-soft, #777);
+  margin-top: 4px;
+}
+
+.scoreboard__swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.scoreboard__swatch--work { background: var(--color-accent); }
+.scoreboard__swatch--idle { background: var(--color-border); }
