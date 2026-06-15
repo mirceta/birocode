@@ -287,12 +287,14 @@
 }
 
 /* ---- Wall of phones (plans/agent-dashboard.md) ------------------------- */
-/* Each phone is a square frame holding one agent's live <Chat embedded>. The
-   cell's height tracks its (capped) width via aspect-ratio — same as the
-   cards — so the wall stays square regardless of transcript length. */
+/* Each phone is a PORTRAIT frame holding one agent's live <Chat embedded>.
+   Width is still capped by the size stepper; height tracks it via a 3:4
+   (taller-than-wide) aspect-ratio — so each dock shows ~⅓ more transcript than
+   the old square without getting any wider (plans/taller-agent-cards.md). The
+   cards stay square (a cheap status summary doesn't need the height). */
 .dash__phone-cell {
   min-width: 0;
-  aspect-ratio: 1 / 1;
+  aspect-ratio: 3 / 4;
 }
 
 .phone {

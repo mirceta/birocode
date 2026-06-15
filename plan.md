@@ -69,6 +69,15 @@
   Advanced-mode + 2-agent gating. Frontend-only (`Layout.jsx` + `global.css`).
   Browser-verified on an isolated :5210 instance; merged to main 2026-06-15 (not
   yet deployed). On `feature/dashboard-title-button`.
+- [Taller agent docks](plans/taller-agent-cards.md) — the agent-dashboard "wall
+  of phones" docks were locked **square** (`aspect-ratio: 1/1`), so each embedded
+  chat showed only a few lines. Made the phones **portrait (3:4)** — height ≈
+  1.33× width, ~⅓ more transcript — without getting wider; cards stay square and
+  the size stepper still scales overall. One-line CSS change, no JS (the embedded
+  chat's flex sizing fills the taller frame, composer stays reachable).
+  Browser-verified on an isolated :5210 instance (`verify-taller-agent-cards.mjs`:
+  ratio 1.333, composer in-frame); merged to main 2026-06-15 (not yet deployed).
+  On `feature/taller-agent-cards`.
 - [Remove projects](plans/remove-projects.md) — the Projects tab can now
   **remove (unregister)** a project, mirroring its add action: a confirm-guarded
   🗑 control on each card (hidden for the self repo, shown in both UI modes) hits
