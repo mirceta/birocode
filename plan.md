@@ -48,6 +48,20 @@
 
 ## Active feature plans
 
+- [Serving model clarity](plans/serving-model-clarity.md) — **really** clear up,
+  and make safe, the **two ways the Harness serves a Product**: the **"global
+  app"** (shared **Preview Port :5200**, iframed by the App tab *and the public,
+  ungated homepage*) vs the **"local app"** (per-repo **`/api/localview/{repoId}/`**
+  proxy, behind the login). They have **inverted threat models** and several real
+  danger gaps: a private tool can be exposed publicly on :5200 by mistake; the
+  proxy's target port has **no blacklist** (SSRF footgun — 22/445/3389/:5099 all
+  accepted); self-dev port collisions and the IPv6-bind trap are silent. Proposed
+  approach (clarity + safety, **unification parked as out of scope**): slice 1 =
+  one **canonical serving-model doc** that supersedes the scattered networking
+  docs; slice 2 = **refused-port guard** on `localport`; slice 3 = **in-app
+  public-vs-private labels** + a confirm before public exposure; slice 4 (later) =
+  self-dev collision guard. **Primary-priority decision still the user's.**
+  PROPOSED — not started. On `feature/serving-model-clarity`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
