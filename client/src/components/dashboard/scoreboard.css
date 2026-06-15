@@ -18,29 +18,42 @@
 }
 
 .scoreboard__stat {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  min-width: 120px;
+  gap: 3px;
+  min-width: 130px;
   flex: 1;
-  padding: 10px 14px;
+  padding: 12px 16px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius, 10px);
   background: var(--color-bg, #faf7f2);
+  overflow: hidden;
+}
+
+/* A slim accent edge gives each card a little structure without shouting. */
+.scoreboard__stat::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--color-accent);
+  opacity: 0.55;
 }
 
 .scoreboard__stat-value {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 700;
-  color: var(--color-accent);
+  color: var(--color-text);
   line-height: 1.1;
+  letter-spacing: -0.01em;
 }
 
 .scoreboard__stat-label {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.05em;
   color: var(--color-text-soft, #777);
 }
 
@@ -58,46 +71,57 @@
   margin: 4px 2px;
 }
 
+/* Stacked full-width: the SVGs render their text in user units, so a narrow
+   column would shrink the labels — keep each chart the full panel width. */
 .scoreboard__charts {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
 }
 
 .scoreboard__chart-title {
-  margin: 0 0 6px;
-  font-size: 12px;
+  margin: 0 0 10px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.05em;
   color: var(--color-text-soft, #777);
 }
 
 .scoreboard__svg {
   width: 100%;
   height: auto;
-  font-size: 11px;
+  /* The viewBox is ~1000 units wide; pin the text size in user units so labels
+     don't scale up with the box. */
+  font-size: 13px;
 }
 
 .scoreboard__svg-label {
   fill: var(--color-text);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
 }
 
 .scoreboard__svg-num {
   fill: var(--color-text-soft, #777);
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .scoreboard__svg-axis {
   fill: var(--color-text-muted, #999);
-  font-size: 10px;
+  font-size: 11px;
+}
+
+.scoreboard__axis-line {
+  stroke: var(--color-border);
+  stroke-width: 1;
 }
 
 .scoreboard__track {
   fill: var(--color-border);
-  opacity: 0.4;
+  opacity: 0.5;
 }
 
 .scoreboard__window {
@@ -108,8 +132,10 @@
   fill: var(--color-accent);
 }
 
+/* Idle reads as a soft tint of the accent rather than a flat grey block. */
 .scoreboard__idle {
-  fill: var(--color-border);
+  fill: var(--color-accent);
+  opacity: 0.18;
 }
 
 .scoreboard__legend {
@@ -130,4 +156,4 @@
 }
 
 .scoreboard__swatch--work { background: var(--color-accent); }
-.scoreboard__swatch--idle { background: var(--color-border); }
+.scoreboard__swatch--idle { background: var(--color-accent); opacity: 0.18; }

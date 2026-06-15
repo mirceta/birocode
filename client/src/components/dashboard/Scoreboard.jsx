@@ -84,72 +84,85 @@ function Stat({ label, value, sub }) {
 }
 
 // Chart 1 — each agent's used window (first→last) on a shared time axis; overlap
-// across rows is the visual of concurrency.
+// across rows is the visual of concurrency. Slim rounded pills on a light rail,
+// with the window duration read out at the end of each row.
 function UsageTimeline({ agents, t }) {
   const t0 = Math.min(...agents.map((a) => a.firstStart));
   const t1 = Math.max(...agents.map((a) => a.lastFinish));
   const span = Math.max(1, t1 - t0);
-  const rowH = 22;
+  const rowH = 30;
+  const barH = 8;
   const W = 1000;
   const labelW = 150;
-  const trackW = W - labelW - 10;
+  const numW = 70;
+  const trackW = W - labelW - numW;
   const x = (ts) => labelW + ((ts - t0) / span) * trackW;
+  const H = agents.length * rowH + 24;
 
   return (
     <div className="scoreboard__chart">
       <h4 className="scoreboard__chart-title">{t('scoreboard.windows')}</h4>
-      <svg viewBox={`0 0 ${W} ${agents.length * rowH + 20}`} className="scoreboard__svg" role="img">
+      <svg viewBox={`0 0 ${W} ${H}`} className="scoreboard__svg" role="img" preserveAspectRatio="xMinYMin meet">
         {agents.map((a, i) => {
-          const y = i * rowH + 4;
+          const cy = i * rowH + rowH / 2;
           const x0 = x(a.firstStart);
-          const w = Math.max(6, x(a.lastFinish) - x0);
+          const w = Math.max(barH, x(a.lastFinish) - x0);
           return (
             <g key={a.agent}>
-              <text x="0" y={y + 12} className="scoreboard__svg-label">{a.agent}</text>
-              {/* Thin baseline for time context — NOT a full bar (a wide filled
-                  track reads as a giant bar when runs are short/sparse). */}
-              <rect x={labelW} y={y + 6} width={trackW} height="2" className="scoreboard__track" />
-              <rect x={x0} y={y} width={w} height="14" rx="3" className="scoreboard__window">
+              <text x="0" y={cy + 4} className="scoreboard__svg-label">{a.agent}</text>
+              {/* Light full-width rail for time context (rounded, recedes). */}
+              <rect x={labelW} y={cy - 2} width={trackW} height="4" rx="2" className="scoreboard__track" />
+              <rect x={x0} y={cy - barH / 2} width={w} height={barH} rx={barH / 2} className="scoreboard__window">
                 <title>{`${a.agent}: ${fmtClock(a.firstStart)} → ${fmtClock(a.lastFinish)}`}</title>
               </rect>
+              <text x={W} y={cy + 4} textAnchor="end" className="scoreboard__svg-num">
+                {fmtDur(a.lastFinish - a.firstStart)}
+              </text>
             </g>
           );
         })}
-        <text x={labelW} y={agents.length * rowH + 14} className="scoreboard__svg-axis">{fmtClock(t0)}</text>
-        <text x={W} y={agents.length * rowH + 14} textAnchor="end" className="scoreboard__svg-axis">{fmtClock(t1)}</text>
+        <line x1={labelW} y1={H - 16} x2={labelW + trackW} y2={H - 16} className="scoreboard__axis-line" />
+        <text x={labelW} y={H - 4} className="scoreboard__svg-axis">{fmtClock(t0)}</text>
+        <text x={labelW + trackW} y={H - 4} textAnchor="end" className="scoreboard__svg-axis">{fmtClock(t1)}</text>
       </svg>
     </div>
   );
 }
 
-// Chart 2 — per agent, a stacked bar of work (filled) + idle (light), exact
-// split; bar length is the agent's window duration so agents are comparable.
+// Chart 2 — per agent, a bar of work (filled) over idle (light), exact split;
+// bar length is the agent's window duration so agents are comparable.
 function WorkIdleBars({ agents, t }) {
   const maxDur = Math.max(1, ...agents.map((a) => a.workMs + a.idleMs));
-  const rowH = 26;
+  const rowH = 30;
+  const barH = 14;
   const W = 1000;
   const labelW = 150;
-  const barW = W - labelW - 90;
+  const numW = 90;
+  const barW = W - labelW - numW;
 
   return (
     <div className="scoreboard__chart">
       <h4 className="scoreboard__chart-title">{t('scoreboard.workIdle')}</h4>
-      <svg viewBox={`0 0 ${W} ${agents.length * rowH + 8}`} className="scoreboard__svg" role="img">
+      <svg viewBox={`0 0 ${W} ${agents.length * rowH + 6}`} className="scoreboard__svg" role="img" preserveAspectRatio="xMinYMin meet">
         {agents.map((a, i) => {
-          const y = i * rowH + 4;
-          const total = a.workMs + a.idleMs;
+          const cy = i * rowH + rowH / 2;
+          const fullW = ((a.workMs + a.idleMs) / maxDur) * barW;
           const workW = (a.workMs / maxDur) * barW;
-          const idleW = (a.idleMs / maxDur) * barW;
+          const r = barH / 2;
           return (
             <g key={a.agent}>
-              <text x="0" y={y + 13} className="scoreboard__svg-label">{a.agent}</text>
-              <rect x={labelW} y={y} width={Math.max(1, workW)} height="16" rx="3" className="scoreboard__work">
-                <title>{`${t('scoreboard.work')}: ${fmtDur(a.workMs)}`}</title>
-              </rect>
-              <rect x={labelW + workW} y={y} width={Math.max(0, idleW)} height="16" rx="3" className="scoreboard__idle">
+              <text x="0" y={cy + 4} className="scoreboard__svg-label">{a.agent}</text>
+              {/* Idle is the full pill (rounded both ends); work overlays from the
+                  left so the seam is clean and short bars still read as pills. */}
+              <rect x={labelW} y={cy - barH / 2} width={Math.max(barH, fullW)} height={barH} rx={r} className="scoreboard__idle">
                 <title>{`${t('scoreboard.idle')}: ${fmtDur(a.idleMs)}`}</title>
               </rect>
-              <text x={labelW + Math.max(workW + idleW, 2) + 6} y={y + 13} className="scoreboard__svg-num">
+              {a.workMs > 0 && (
+                <rect x={labelW} y={cy - barH / 2} width={Math.max(barH, workW)} height={barH} rx={r} className="scoreboard__work">
+                  <title>{`${t('scoreboard.work')}: ${fmtDur(a.workMs)}`}</title>
+                </rect>
+              )}
+              <text x={W} y={cy + 4} textAnchor="end" className="scoreboard__svg-num">
                 {fmtDur(a.workMs)}
               </text>
             </g>
