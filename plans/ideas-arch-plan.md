@@ -30,8 +30,9 @@ dashboard Ideas dock is a fixed 300px column — too narrow once a plan is open.
 ### Frontend — architectural plan in `IdeasPanel` (tabbed)
 - `IdeasPanel` is a **two-tab** panel: **Ideas** (composer + filter + list) and
   **Architectural plan** — one visible at a time, chosen tab remembered.
-- The Architectural-plan tab fills the panel height (**very tall**): plain
-  pre-wrapped text view + Edit→textarea→Save (`ArchPlanSection`).
+- The Architectural-plan tab fills the panel height (**very tall**). The view
+  **renders Markdown** via the shared `Markdown` component (GFM + mermaid);
+  Edit→textarea→Save edits the **raw** source (`ArchPlanSection`).
 - Shared component, so it shows in the Ideas tab and the dashboard dock.
 
 ### Frontend — expandable dashboard Ideas dock (`Dashboard.jsx`, `dashboard.css`)

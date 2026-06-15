@@ -55,24 +55,25 @@
   gap: 8px;
 }
 
-.archplan__text {
+/* Rendered-Markdown view box (plans/ideas-arch-plan.md): tall + scrollable. The
+   inner .markdown (shared renderer) styles the content. */
+.archplan__view {
   flex: 1;
   min-height: 50vh;
   overflow: auto;
-  margin: 0;
-  padding: 10px 12px;
+  padding: 10px 14px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius, 10px);
   background: var(--color-surface);
-  font-size: 13px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-family: inherit;
 }
 
-.archplan__text--empty {
+.archplan__view--empty {
   border-style: dashed;
+}
+
+/* Markdown defaults to a larger base size; keep the plan compact in the dock. */
+.archplan__view .markdown {
+  font-size: 13px;
 }
 
 .archplan__textarea {

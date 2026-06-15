@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { apiGet, apiPut } from '../../api/client';
 import ErrorBanner from '../shared/ErrorBanner';
+import Markdown from '../shared/Markdown';
 import { useT } from '../../i18n/LanguageContext';
 
 // The single global, user-written "architectural plan" document
 // (plans/ideas-arch-plan.md), shown as its own tall tab in the Ideas surface.
-// Plain text: view (pre-wrapped) + Edit→textarea→Save against GET/PUT
-// /api/arch-plan. Fills the panel height so there's room to read/write a lot.
+// View renders the doc as Markdown; Edit drops to a plain-text textarea (the raw
+// markdown). Saved via GET/PUT /api/arch-plan. Fills the panel height so there's
+// room to read/write a lot.
 export default function ArchPlanSection() {
   const { t } = useT();
   const [text, setText] = useState('');
@@ -77,11 +79,13 @@ export default function ArchPlanSection() {
       ) : (
         <>
           {text.trim() ? (
-            <pre className="archplan__text">{text}</pre>
+            <div className="archplan__view">
+              <Markdown>{text}</Markdown>
+            </div>
           ) : (
-            <p className="archplan__text archplan__text--empty ideas__muted">
-              {loaded ? t('archplan.empty') : t('ideas.loading')}
-            </p>
+            <div className="archplan__view archplan__view--empty">
+              <p className="ideas__muted">{loaded ? t('archplan.empty') : t('ideas.loading')}</p>
+            </div>
           )}
           <div className="idea__actions archplan__actions">
             <button type="button" className="idea__btn" onClick={startEdit}>
