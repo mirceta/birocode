@@ -24,4 +24,13 @@
     </None>
   </ItemGroup>
 
+  <!-- The bundled Exposure Helper (plans/serving-model-clarity.md): copied next
+       to the exe so ExposerHost finds exposer/ in published/preview builds too,
+       not only via `dotnet run` from the source tree. -->
+  <ItemGroup>
+    <None Include="..\exposer\**\*" Link="exposer\%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

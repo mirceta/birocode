@@ -39,5 +39,10 @@ strictly per-repo or built differently.
 
 ## Status
 
-Plan re-centered. **Not building yet** — say go and I'll start slice 1 (stand up
-the helper and serve it correctly on the Local tab).
+**Slice 1 built.** The harness serves the bundled Exposure Helper (`exposer/`)
+as its own Local-tab product: a loopback dual-stack static server (`ExposerHost`)
++ a read-time self-repo `LocalPort` fallback, so the existing proxy / Local tab /
+Exposure check all work with **no frontend changes**. Verified on an isolated
+preview (exposer binds 127.0.0.1 **and** [::1], serves at root, relative assets
+resolve, renders in a headless browser with its JS running). One check pending:
+the auth-gated proxy round-trip needs the operator's (rotated) password.

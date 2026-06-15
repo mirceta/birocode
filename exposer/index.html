@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Exposure Helper</title>
+    <!-- RELATIVE href (./assets/…), never "/assets/…": a leading slash escapes
+         the harness's /api/localview/<repo>/ sub-path. This is the rule most
+         products break. -->
+    <link rel="stylesheet" href="./assets/exposer.css" />
+  </head>
+  <body>
+    <main class="exposer">
+      <h1 class="exposer__title">Exposure&nbsp;Helper</h1>
+      <p class="exposer__tagline">
+        A local product the harness serves on its own Local tab — and the live
+        “done&nbsp;right” reference for getting your app embeddable here.
+      </p>
+
+      <section class="exposer__card">
+        <h2 class="exposer__h2">This page is itself correctly exposed</h2>
+        <p>
+          Run the Local tab’s <strong>Verify exposure</strong> against it and
+          every row is green. It satisfies the whole contract:
+        </p>
+        <ul class="exposer__rules">
+          <li><strong>Dual-stack bind</strong> — listens on IPv4 (127.0.0.1)
+            <em>and</em> IPv6 (<code>[::1]</code>); browsers resolve
+            <code>localhost</code> to <code>::1</code> first.</li>
+          <li><strong>Serves at root</strong> — <code>GET /</code> returns this
+            page, no server-side base path.</li>
+          <li><strong>Relative URLs</strong> — its CSS/JS load via
+            <code>./assets/…</code>, so they resolve under the proxy sub-path.</li>
+        </ul>
+      </section>
+
+      <p id="exposer-status" class="exposer__status">
+        Checking whether the relative script resolved…
+      </p>
+
+      <p class="exposer__next">
+        Next: a guided checklist that runs the Exposure check for your active
+        project right here. <span class="exposer__muted">(slice 2)</span>
+      </p>
+    </main>
+
+    <!-- RELATIVE src, same reason as the stylesheet above. -->
+    <script src="./assets/exposer.js"></script>
+  </body>
+</html>

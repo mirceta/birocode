@@ -26,6 +26,11 @@ public class RepositoryRegistry
     private readonly object _gate = new();
     private readonly List<RepositoryConfig> _repos = new();
 
+    // Read-time fallback for the pinned self repo's Local-tab port (the bundled
+    // Exposure Helper, plans/serving-model-clarity.md). Never persisted, so it
+    // can't pollute repositories.json or go stale when the port changes.
+    private int? _selfFallbackPort;
+
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
 
     public RepositoryRegistry(AppConfig config, Logger logger)
@@ -56,7 +61,7 @@ public class RepositoryRegistry
         lock (_gate)
         {
             var match = _repos.FirstOrDefault(r => string.Equals(r.Id, id, StringComparison.Ordinal));
-            return match is null ? null : Clone(match);
+            return match is null ? null : CloneWithEffectivePort(match);
         }
     }
 
@@ -64,7 +69,31 @@ public class RepositoryRegistry
     public RepositoryConfig? Default()
     {
         lock (_gate)
-            return _repos.Count > 0 ? Clone(_repos[0]) : null;
+            return _repos.Count > 0 ? CloneWithEffectivePort(_repos[0]) : null;
+    }
+
+    /// <summary>
+    /// Sets the port the pinned self repo's Local tab falls back to when the
+    /// operator hasn't configured one — the bundled Exposure Helper served by
+    /// ExposerHost (plans/serving-model-clarity.md). Applied at read time only
+    /// (never written to repositories.json). Null disables the fallback.
+    /// </summary>
+    public void SetSelfLocalPortFallback(int? port)
+    {
+        lock (_gate) _selfFallbackPort = port;
+    }
+
+    // The self repo's Local port falls back to the Exposure Helper when unset;
+    // every other repo (and an explicit operator port) is returned as-is.
+    // Caller holds _gate.
+    private int? EffectiveLocalPort(RepositoryConfig r) =>
+        r.LocalPort ?? (r.IsSelf ? _selfFallbackPort : null);
+
+    private RepositoryConfig CloneWithEffectivePort(RepositoryConfig r)
+    {
+        var clone = Clone(r);
+        clone.LocalPort = EffectiveLocalPort(r);
+        return clone;
     }
 
     /// <summary>
@@ -286,7 +315,7 @@ public class RepositoryRegistry
     {
         var exists = Directory.Exists(r.Path);
         var isGit = exists && Directory.Exists(System.IO.Path.Combine(r.Path, ".git"));
-        return new RepositoryInfo(r.Id, r.Name, r.Path, exists, isGit, r.IsSelf, NormalizeVisibility(r.Visibility), r.LocalPort);
+        return new RepositoryInfo(r.Id, r.Name, r.Path, exists, isGit, r.IsSelf, NormalizeVisibility(r.Visibility), EffectiveLocalPort(r));
     }
 
     private static RepositoryConfig Clone(RepositoryConfig r) =>

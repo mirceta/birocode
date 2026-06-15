@@ -1,4 +1,5 @@
 using ClaudeWeb.Models;
+using ClaudeWeb.Services.Expose;
 using ClaudeWeb.Services.Hosting;
 using ClaudeWeb.Services.IpFilter;
 using ClaudeWeb.Services.Logging;
@@ -34,6 +35,14 @@ static class Program
         // that ship without the source tree.
         repositories.EnsureSelfRepo(FindRepoRoot(), "Claude Web (this app)");
 
+        // Serve the bundled Exposure Helper (exposer/) as the harness's OWN
+        // Local-tab product (plans/serving-model-clarity.md, slice 1): a loopback
+        // dual-stack static server that dogfoods the embed contract and is the
+        // live reference. The self repo's Local tab falls back to its port when
+        // the operator hasn't set one (read-time only, never persisted).
+        var exposer = new ExposerHost(config, logger);
+        repositories.SetSelfLocalPortFallback(exposer.Start());
+
         // IP allowlist (plans/auth-ip-filter.md). Built here so the WinForms
         // GUI (the ONLY surface that can approve IPs) and the web API share
         // one instance — same pattern as RepositoryRegistry.
@@ -47,8 +56,9 @@ static class Program
         var form = new MainForm(config, logger, api, callLog, repositories, ipAllowlist);
         Application.Run(form);
 
-        // Shut the server down cleanly when the GUI closes.
+        // Shut the servers down cleanly when the GUI closes.
         api.Stop();
+        exposer.Stop();
     }
 
     private static AppConfig LoadConfig()

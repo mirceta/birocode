@@ -43,6 +43,15 @@ public class AppConfig
     public string PreviewUrl { get; set; } = "";
 
     /// <summary>
+    /// Loopback port the bundled Exposure Helper (exposer/) is served on, then
+    /// surfaced as the harness's own Local-tab product
+    /// (plans/serving-model-clarity.md). Loopback dual-stack only — never
+    /// LAN-exposed. The self repo's Local tab falls back to this when the
+    /// operator hasn't set a port.
+    /// </summary>
+    public int ExposerPort { get; set; } = 5198;
+
+    /// <summary>
     /// LEGACY seed only (plans/auth-login.md): hashed into
     /// %APPDATA%\ClaudeWeb\auth.json on first run, then ignored. Rotate the
     /// real password via POST /api/auth/password, not here.

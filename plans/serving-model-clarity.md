@@ -2,9 +2,17 @@
 
 > Editing this plan? First read [doc principles](doc-principles.md).
 
-> **Status (2026-06-15):** **PROPOSED — not started.** On
-> `feature/serving-model-clarity` (branched off main synced with origin/main).
-> Centerpiece decided with the user: a **served exposure-helper product** (below).
+> **Status (2026-06-16):** **Slice 1 built.** On `feature/serving-model-clarity`
+> (branched off main synced with origin/main). The harness now serves the bundled
+> Exposure Helper (`exposer/`) as its own Local-tab product via `ExposerHost` (a
+> loopback dual-stack static server) + a read-time self-repo `LocalPort` fallback —
+> the existing proxy, Local tab, and Exposure check all light up with **zero
+> frontend changes**. Verified on an isolated `:5210`/`:5298` preview: exposer
+> binds **both 127.0.0.1 and [::1]**, serves at root, relative assets resolve, no
+> absolute refs (OS netstat + curl), and it **renders in a headless browser with
+> its relative JS executing**. Pending: the auth-gated proxy sub-path + Exposure
+> check round-trip (needs the operator's rotated password — see verify note).
+> Slices 2-4 below not started.
 
 ## The problem we're solving
 
