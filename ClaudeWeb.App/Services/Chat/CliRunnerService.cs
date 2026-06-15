@@ -567,10 +567,18 @@ public class CliRunnerService
     // --- process setup ----------------------------------------------------
 
     /// <summary>
-    /// Resolved once per process. The CLI's launcher differs per install:
-    /// the npm global install puts a <c>claude.cmd</c> shim on PATH, the
-    /// native installer a <c>claude.exe</c> -- so probe PATH for whichever
-    /// exists instead of hardcoding one flavor.
+    /// Resolved once per process. The CLI's launcher differs per install: the
+    /// native installer puts a real <c>claude.exe</c> on PATH, the npm global
+    /// install puts a <c>claude.cmd</c> shim on PATH (wrapping a real exe under
+    /// <c>node_modules</c>).
+    ///
+    /// We deliberately resolve to a REAL <c>claude.exe</c> and avoid the
+    /// <c>.cmd</c> shim: launching a <c>.cmd</c> from .NET routes the command
+    /// line through <c>cmd.exe</c>, which ENDS the command at the first newline,
+    /// so a multiline <c>-p "&lt;prompt&gt;"</c> argument is silently truncated
+    /// after its first line. A real <c>.exe</c> receives its arguments verbatim
+    /// (<c>CreateProcess</c>/<c>CommandLineToArgvW</c> preserve embedded
+    /// newlines), so multiline prompts survive.
     /// </summary>
     private static readonly Lazy<string> ClaudeCommand = new(ResolveClaudeCommand);
 
@@ -580,19 +588,35 @@ public class CliRunnerService
 
         var dirs = (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
             .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries);
+
+        string? cmdFallback = null;
         foreach (var dir in dirs)
         {
-            foreach (var name in new[] { "claude.exe", "claude.cmd" })
+            var d = dir.Trim();
+            try
             {
-                try
+                // a) native installer: a real claude.exe directly on PATH.
+                var exe = Path.Combine(d, "claude.exe");
+                if (File.Exists(exe)) return exe;
+
+                // b) npm global install: shims sit on PATH, the real exe lives
+                //    under node_modules -- resolve straight to it so we never
+                //    launch the newline-truncating .cmd shim.
+                var npmExe = Path.Combine(d, "node_modules", "@anthropic-ai", "claude-code", "bin", "claude.exe");
+                if (File.Exists(npmExe)) return npmExe;
+
+                // c) remember the .cmd shim ONLY as a last resort (multiline
+                //    prompts will truncate -- see the field doc above).
+                if (cmdFallback is null)
                 {
-                    var candidate = Path.Combine(dir.Trim(), name);
-                    if (File.Exists(candidate)) return candidate;
+                    var cmd = Path.Combine(d, "claude.cmd");
+                    if (File.Exists(cmd)) cmdFallback = cmd;
                 }
-                catch { /* malformed PATH entry -- skip */ }
             }
+            catch { /* malformed PATH entry -- skip */ }
         }
-        return "claude.cmd"; // previous behavior as a last resort
+
+        return cmdFallback ?? "claude.cmd";
     }
 
     private static ProcessStartInfo CreateProcessInfo(string message, string? sessionId, string? workingDirectory, string? model = null, bool readOnly = false)
