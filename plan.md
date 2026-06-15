@@ -33,6 +33,11 @@
 
 ## Active feature plans
 
+- [Zoom the content inside the agent docks](plans/dashboard-zoom.md) — zoom the
+  **content rendered inside** each dashboard dock (the embedded chat's text +
+  controls) smaller/bigger via a header **A−/A+** control, remembered per device
+  — distinct from the existing dock-*window*-size stepper. Applies CSS `zoom` to
+  the phone docks' `.phone__screen`. Frontend-only. On `feature/dashboard-zoom`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left

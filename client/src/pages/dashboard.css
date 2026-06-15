@@ -346,6 +346,37 @@
   cursor: default;
 }
 
+/* Content zoom (plans/dashboard-zoom.md): A−/A+ scales what's INSIDE the docks
+   (the embedded chat), separate from the window-size stepper. */
+.dash__zoom {
+  display: flex;
+  gap: 2px;
+  margin-right: 12px;
+  padding: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+}
+
+.dash__zoom-btn {
+  border: none;
+  background: none;
+  border-radius: 999px;
+  min-width: 30px;
+  height: 26px;
+  padding: 0 6px;
+  font-size: 13px;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--color-text-soft);
+  cursor: pointer;
+}
+
+.dash__zoom-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 .dash__view {
   border: none;
   background: none;
