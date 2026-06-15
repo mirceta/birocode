@@ -8,7 +8,10 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-15):** **Deployed & confirmed, merged to main:**
+> **Status (2026-06-15):** **Latest — deployed & confirmed, merged to main:**
+> the **multiline-prompt truncation** bug fix — prompts containing newlines now
+> reach the agent in full (was truncated at the first line by the `claude.cmd`
+> shim). **Also deployed & confirmed, merged to main:**
 > [remove projects](plans/remove-projects.md) — the Projects tab can now
 > unregister a project (🗑 on each card; folder kept on disk). **Just merged
 > (not yet deployed):** per-dock
@@ -69,6 +72,30 @@
 
 ## Recently shipped
 
+- [Pin my last prompt at the top of the chat](plans/pin-last-prompt.md) — the
+  user's **most recent sent prompt** stays pinned in a non-scrolling banner above
+  the transcript (clamped, click-to-expand), so a long agent response doesn't
+  bury "what did I ask?". Shows in the main chat tab **and** the dashboard docks;
+  the message still appears normally below. Frontend-only (`Chat.jsx` +
+  `chat.css`); browser-verified on an isolated :5210 instance; merged to main
+  2026-06-15. On `feature/pin-last-prompt`.
+- [Custom-prompts button on the dashboard docks](plans/dock-prompts-button.md) —
+  the custom-prompts **⚙ button** (plans/custom-prompts.md) is now in the
+  dashboard agent docks' embedded composer, not just the main chat tab (dropped
+  the `!embedded` gate in `ChatInput.jsx`; the modal already portals to `<body>`,
+  so the small dock doesn't shrink it, and "Use" prefills that dock's composer).
+  Frontend-only; browser-verified on an isolated :5210 instance; merged to main
+  2026-06-15. On `feature/dock-prompts-button`.
+- **Multiline prompts no longer truncated** (bug fix) — a chat message containing
+  newlines reached the agent **only up to its first line**: launching the npm
+  `claude.cmd` shim from .NET routes the command line through `cmd.exe`, which
+  ends the command at the first newline, so the `-p "<prompt>"` argument was cut
+  off. Now resolves to the real `claude.exe` (native installer on PATH, else the
+  npm install's exe under `node_modules`); `claude.cmd` kept only as a last
+  resort. Proven with a dummy-launcher repro (`.cmd` dropped everything after the
+  first `\n`, a real `.exe` preserved it) plus an end-to-end echo test on an
+  isolated :5210 instance; deployed to live :5099 & confirmed 2026-06-15, merged
+  to main. On `fix/multiline-prompt-truncation`.
 - [Zoom the content inside the agent docks](plans/dashboard-zoom.md) — a header
   **A−/A+** control zooms the **content rendered inside** each dashboard dock (the
   embedded chat's text + controls) smaller/bigger via CSS `zoom` on the phone
