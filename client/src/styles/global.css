@@ -119,6 +119,31 @@ textarea {
   white-space: nowrap;
 }
 
+/* The title doubles as the dashboard entry point (plans/dashboard-title-button.md).
+   When interactive it renders as a <button> but keeps the title's look; the base
+   .app-header__title already supplies the ellipsis/nowrap/min-width:0 it needs. */
+button.app-header__title {
+  font-family: inherit;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: none;
+  padding: 4px 10px;
+  cursor: pointer;
+  max-width: 100%;
+}
+
+button.app-header__title:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+button.app-header__title.app-header__title--active,
+button.app-header__title.app-header__title--active:hover {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: #fff;
+}
+
 .app-header__actions {
   display: flex;
   align-items: center;

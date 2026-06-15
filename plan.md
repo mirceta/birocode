@@ -62,6 +62,13 @@
 
 ## Recently shipped
 
+- [Dashboard opens from the header title](plans/dashboard-title-button.md) — the
+  agent-dashboard entry point moved from the standalone top-bar **Dashboard**
+  button onto the top-left `machine · project · branch` label, now a button
+  (same text; accent-filled while the dashboard is open). Keeps the existing
+  Advanced-mode + 2-agent gating. Frontend-only (`Layout.jsx` + `global.css`).
+  Browser-verified on an isolated :5210 instance; merged to main 2026-06-15 (not
+  yet deployed). On `feature/dashboard-title-button`.
 - [Remove projects](plans/remove-projects.md) — the Projects tab can now
   **remove (unregister)** a project, mirroring its add action: a confirm-guarded
   🗑 control on each card (hidden for the self repo, shown in both UI modes) hits
