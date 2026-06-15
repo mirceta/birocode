@@ -2,7 +2,9 @@ import { useState } from 'react';
 import Chat from '../../pages/Chat';
 import { useChatFor } from '../../context/ChatContext';
 import { useT } from '../../i18n/LanguageContext';
+import { useFeature } from '../../context/UiModeContext';
 import GitStatusSummary from '../git/GitStatusSummary';
+import ProductFrame from '../app/ProductFrame';
 import CopyPath from './CopyPath';
 
 // One "phone" in the Agent Dashboard's wall of phones (plans/agent-dashboard.md):
@@ -38,6 +40,19 @@ export default function PinnedAgent({
     sessionId: isAsk ? null : tab.sessionId,
     lane: isAsk ? 'ask' : 'builder',
   });
+
+  // Slice 2 (plans/dock-local-app.md): the local-app row is the affordance that
+  // reveals the product IN the dock. Clicking it swaps phone__screen from the
+  // chat to ProductFrame (the same iframe + liveness the Local tab uses), and
+  // back. Off by default so the wall stays light — the iframe only mounts once
+  // revealed. Gated like the Local tab (localAppTab) and only when a port exists.
+  const canLocalApp = useFeature('localAppTab');
+  const [showApp, setShowApp] = useState(false);
+  const localPort = localApp?.port;
+  const localState = !localPort ? 'none' : localApp.online ? 'serving' : 'offline';
+  const canReveal = canLocalApp && !!localPort;
+  // If the port disappears (probe drops it), fall back to the chat view.
+  const appOpen = showApp && canReveal;
 
   return (
     <div
@@ -80,22 +95,41 @@ export default function PinnedAgent({
       </div>
       {/* Local-tab app serving state (plans/dock-local-app.md): a dedicated row
           above the git section saying whether this agent serves a local app.
-          Configured-but-dead reads "offline"; no localPort reads "no local app". */}
+          Configured-but-dead reads "offline"; no localPort reads "no local app".
+          Slice 2: when a port exists, the row is a toggle that reveals/hides the
+          product inside the dock (phone__screen ↔ ProductFrame). */}
       {(() => {
-        const port = localApp?.port;
-        const state = !port ? 'none' : localApp.online ? 'serving' : 'offline';
         const text =
-          state === 'serving'
-            ? t('dashboard.localServing', { port })
-            : state === 'offline'
-              ? t('dashboard.localOffline', { port })
+          localState === 'serving'
+            ? t('dashboard.localServing', { port: localPort })
+            : localState === 'offline'
+              ? t('dashboard.localOffline', { port: localPort })
               : t('dashboard.localNone');
-        return (
-          <div className={`phone__local phone__local--${state}`}>
+        const cls = `phone__local phone__local--${localState}${appOpen ? ' phone__local--open' : ''}`;
+        const inner = (
+          <>
             <span className="phone__local-dot" />
             <span className="phone__local-label">{t('dashboard.localApp')}</span>
             <span className="phone__local-text">{text}</span>
-          </div>
+            {canReveal && (
+              <span className="phone__local-caret" aria-hidden="true">
+                {appOpen ? '▾' : '▸'}
+              </span>
+            )}
+          </>
+        );
+        return canReveal ? (
+          <button
+            type="button"
+            className={cls}
+            onClick={() => setShowApp((v) => !v)}
+            aria-pressed={appOpen}
+            title={appOpen ? t('dashboard.localHide') : t('dashboard.localShow')}
+          >
+            {inner}
+          </button>
+        ) : (
+          <div className={cls}>{inner}</div>
         );
       })()}
       {git && (
@@ -116,7 +150,11 @@ export default function PinnedAgent({
         </div>
       )}
       <div className="phone__screen" style={contentZoom !== 1 ? { zoom: contentZoom } : undefined}>
-        <Chat chat={chat} embedded />
+        {appOpen ? (
+          <ProductFrame url={`/api/localview/${tab.repoId}/`} port={localPort} />
+        ) : (
+          <Chat chat={chat} embedded />
+        )}
       </div>
     </div>
   );
