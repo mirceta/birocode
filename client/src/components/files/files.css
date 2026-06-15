@@ -137,10 +137,28 @@
   font-size: 16px;
 }
 
+/* Line-count badge (plans/file-size-warnings.md). Sits left of the byte size;
+   turns into a warning when the file is over the 500-line limit. */
+.file-row__lines {
+  flex-shrink: 0;
+  color: var(--color-text-soft);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.file-row__lines--warn {
+  color: #d1242f;
+  font-weight: 600;
+}
+
 .file-row__size {
   flex-shrink: 0;
   color: var(--color-text-soft);
   font-size: 13px;
+  /* Fixed slot so byte sizes stay right-aligned whether or not a line badge
+     precedes them. */
+  min-width: 56px;
+  text-align: right;
 }
 
 /* Inline status rows inside an expanded folder (loading / error / empty).
