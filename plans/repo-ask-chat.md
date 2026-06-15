@@ -188,8 +188,16 @@ switch to the builder to make changes").
    builder still 409s, and an ask turn told to write a file **did not** create it.
    Empirically confirmed `--permission-mode plan` in headless `-p` reads/answers
    but blocks all mutation (Write/Edit/Bash gated behind un-approvable ExitPlanMode).
-2. **Frontend Ask surface** — the always-available Ask chat, own session,
-   not blocked by a running builder; browser-verified. (Next.)
+2. **Frontend Ask surface** — ✅ **DONE (2026-06-15).** A third **Ask** segment
+   in the dual-chat switcher (Advanced mode), next to Project / Claude Web. It
+   follows the active project, has its own `'ask'` conversation key + session,
+   resets on project switch, and threads `lane: 'ask'` through send / stream /
+   stop / reconcile (run keyed `repoId#ask`) so it never blocks or collides with
+   the builder. A one-line read-only note sits under the switcher. Files:
+   `ChatContext.jsx`, `DockContext.jsx`, `Chat.jsx`, `chat.css`, `en.json`.
+   Browser-verified on isolated :5210 (`verify-ask-surface.mjs`): Ask segment
+   shows, selecting it switches view + shows the note, Ask send carries
+   `lane:"ask"` while Project send omits it. Not yet deployed.
 3. (later) polish — unread/working indicators, entry points (dashboard dock,
    header), Simple-mode exposure decision.
 

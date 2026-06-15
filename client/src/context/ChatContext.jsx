@@ -84,10 +84,16 @@ export function ChatProvider({ children }) {
   const visibleTab = view === 'agent' ? activeTab : null;
   const visibleTabId = view === 'agent' ? activeTabId : null;
   const activeKey =
-    view === 'harness' ? 'harness' : view === 'project' ? 'default' : activeTabId || 'default';
-  // The repo to target for API calls.
+    view === 'harness' ? 'harness'
+      : view === 'ask' ? 'ask'
+        : view === 'project' ? 'default' : activeTabId || 'default';
+  // The repo to target for API calls. The Ask side conversation
+  // (plans/repo-ask-chat.md) follows the active project, like the Project chat.
   const activeRepoId =
     view === 'harness' ? selfRepoId : visibleTab ? visibleTab.repoId : currentRepoId;
+  // The run lane: the read-only "ask" lane can run concurrently with the
+  // builder on the same repo; everything else is the full-capability builder.
+  const activeLane = view === 'ask' ? 'ask' : 'builder';
 
   // A conversation "target" bundles the three things every chat action needs:
   // which conversation key, which repo to scope API calls to, and which dock
@@ -97,7 +103,7 @@ export function ChatProvider({ children }) {
   // Dashboard can render several agents' chats live at once (the "wall of
   // phones", plans/agent-dashboard.md). Every action takes an explicit target,
   // so a background phone never touches the active conversation.
-  const activeTarget = { key: activeKey, repoId: activeRepoId, tabId: visibleTabId };
+  const activeTarget = { key: activeKey, repoId: activeRepoId, tabId: visibleTabId, lane: activeLane };
 
   // Ensure a conversation entry exists for the active key. If the tab was
   // restored from localStorage with a stored sessionId (page reload), resume
@@ -108,7 +114,7 @@ export function ChatProvider({ children }) {
     // Tabs arrive async from the backend (plans/dock-sync.md): wait for the
     // dock before seeding a tab conversation, so the tab's stored sessionId
     // is actually known here. The fixed keys don't depend on the dock.
-    if (activeKey !== 'default' && activeKey !== 'harness' && !dockLoaded) return;
+    if (activeKey !== 'default' && activeKey !== 'harness' && activeKey !== 'ask' && !dockLoaded) return;
     const storedSessionId = visibleTab?.sessionId || null;
     setConvos((prev) => {
       if (prev[activeKey]) return prev;
@@ -133,6 +139,9 @@ export function ChatProvider({ children }) {
     if (prevRepoRef.current === currentRepoId) return;
     prevRepoRef.current = currentRepoId;
     resetConversation('default');
+    // The Ask side conversation also follows the active project — start it
+    // fresh for the new repo so its context isn't carried across projects.
+    resetConversation('ask');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentRepoId, activeTabId, view]);
 
@@ -261,7 +270,7 @@ export function ChatProvider({ children }) {
     };
   }
 
-  async function sendTo(text, { key, repoId, tabId }) {
+  async function sendTo(text, { key, repoId, tabId, lane = 'builder' }) {
     updateConvo(key, { error: '' });
     const pendingFile = convos[key]?.attachment;
     updateConvo(key, { draft: '', attachment: null });
@@ -297,6 +306,7 @@ export function ChatProvider({ children }) {
       const body = { message: fullText, model };
       const currentConvo = convos[key];
       if (currentConvo?.sessionId) body.sessionId = currentConvo.sessionId;
+      if (lane && lane !== 'builder') body.lane = lane;
       await apiStream('/chat', body, parse, { signal: controller.signal, repoId });
     } catch (err) {
       if (err.name === 'AbortError') {
@@ -304,7 +314,7 @@ export function ChatProvider({ children }) {
       } else if (err.status === undefined) {
         // Connection lost (screen lock, network drop) — the backend run is
         // still alive. Reattach instead of declaring failure.
-        const recovered = await streamRun(key, tabId, repoId);
+        const recovered = await streamRun(key, tabId, repoId, lane);
         if (!recovered && !stopRefs.current[key]) {
           updateConvo(key, { error: t('chat.sendError') });
           if (tabId) updateTab(tabId, { status: 'error' });
@@ -353,7 +363,8 @@ export function ChatProvider({ children }) {
   // Attach (or reattach) to the backend run for a repo, resuming after the
   // last seq we saw. Retries transient failures; gives up on 404 (no run).
   // Returns true when the stream ended normally or the user stopped it.
-  async function streamRun(key, tabId, repoId, attempts = 5) {
+  async function streamRun(key, tabId, repoId, lane = 'builder', attempts = 5) {
+    const laneQs = lane && lane !== 'builder' ? `&lane=${lane}` : '';
     for (let attempt = 0; attempt < attempts; attempt++) {
       if (attempt > 0) await new Promise((r) => setTimeout(r, 2000));
       if (stopRefs.current[key]) return true;
@@ -362,7 +373,7 @@ export function ChatProvider({ children }) {
       const parse = createSseParser(makeEventHandler(key, tabId));
       try {
         const after = seqRefs.current[key] || 0;
-        await apiStreamGet(`/chat/stream?after=${after}`, parse, {
+        await apiStreamGet(`/chat/stream?after=${after}${laneQs}`, parse, {
           signal: controller.signal, repoId,
         });
         return true;
@@ -379,7 +390,7 @@ export function ChatProvider({ children }) {
 
   // Reattach a conversation that has no live reader to its backend run
   // (after a page reload or phone unlock).
-  async function attachToRun(key, tabId, repoId, run) {
+  async function attachToRun(key, tabId, repoId, run, lane = 'builder') {
     if (abortRefs.current[key]) return;
 
     const existing = convos[key];
@@ -409,7 +420,7 @@ export function ChatProvider({ children }) {
       }
       return { ...c, messages: msgs, streaming: true, error: '' };
     });
-    const recovered = await streamRun(key, tabId, repoId);
+    const recovered = await streamRun(key, tabId, repoId, lane);
     finishStream(key);
     if (!recovered && !stopRefs.current[key]) {
       updateConvo(key, { error: t('chat.sendError') });
@@ -432,27 +443,32 @@ export function ChatProvider({ children }) {
       return;
     }
     let targets = tabs.length > 0
-      ? tabs.map((tab) => ({ key: tab.id, tabId: tab.id, repoId: tab.repoId, tab }))
-      : [{ key: 'default', tabId: null, repoId: currentRepoId, tab: null }];
-    if (dualChat && selfRepoId) {
-      targets.push({ key: 'harness', tabId: null, repoId: selfRepoId, tab: null });
-      // One run per repo: when another conversation also targets the self
-      // repo, only one of them may reattach to its run. Prefer the one
-      // already carrying the run's sessionId; otherwise the harness yields.
-      const shared = targets.filter((tg) => tg.repoId === selfRepoId);
+      ? tabs.map((tab) => ({ key: tab.id, tabId: tab.id, repoId: tab.repoId, tab, lane: 'builder' }))
+      : [{ key: 'default', tabId: null, repoId: currentRepoId, tab: null, lane: 'builder' }];
+    if (dualChat) {
+      if (selfRepoId) targets.push({ key: 'harness', tabId: null, repoId: selfRepoId, tab: null, lane: 'builder' });
+      // The read-only Ask side conversation (plans/repo-ask-chat.md) on its own
+      // lane — its run is keyed repoId#ask, independent of the builder, so it
+      // never collides with the dedup below.
+      if (currentRepoId) targets.push({ key: 'ask', tabId: null, repoId: currentRepoId, tab: null, lane: 'ask' });
+      // One BUILDER run per repo: when another builder conversation also targets
+      // the self repo, only one may reattach. Prefer the one already carrying the
+      // run's sessionId; otherwise the harness yields. (Ask is excluded — it's a
+      // separate lane with its own run.)
+      const shared = targets.filter((tg) => tg.repoId === selfRepoId && tg.lane !== 'ask');
       if (shared.length > 1) {
         const run = runs?.[selfRepoId];
         const match = run?.sessionId
           ? shared.find((tg) => convos[tg.key]?.sessionId === run.sessionId)
           : null;
         const keep = match || shared.find((tg) => tg.key !== 'harness');
-        targets = targets.filter((tg) => tg.repoId !== selfRepoId || tg === keep);
+        targets = targets.filter((tg) => tg.repoId !== selfRepoId || tg.lane === 'ask' || tg === keep);
       }
     }
-    for (const { key, tabId, repoId, tab } of targets) {
-      const run = runs?.[repoId];
+    for (const { key, tabId, repoId, tab, lane = 'builder' } of targets) {
+      const run = runs?.[lane === 'ask' ? `${repoId}#ask` : repoId];
       if (run?.status === 'running') {
-        attachToRun(key, tabId, repoId, run);
+        attachToRun(key, tabId, repoId, run, lane);
       } else if (tab && tab.status === 'running' && !abortRefs.current[key]) {
         // The run finished while no client was attached (page was closed):
         // fix the badge and restore the finished turn from the transcript.
@@ -519,12 +535,14 @@ export function ChatProvider({ children }) {
     if (dockLoaded) reconcileRef.current();
   }, [dockLoaded]);
 
-  function stopTo({ key, repoId, tabId }) {
+  function stopTo({ key, repoId, tabId, lane = 'builder' }) {
     stopRefs.current[key] = true;
     abortRefs.current[key]?.abort();
     // The run is backend-owned now: aborting the local stream detaches us but
-    // leaves the CLI working, so an explicit stop call is required.
-    apiPost('/chat/stop', undefined, { repoId }).catch(() => {});
+    // leaves the CLI working, so an explicit stop call is required. Stop the
+    // matching lane so an ask stop never cancels the builder.
+    const laneQs = lane && lane !== 'builder' ? `?lane=${lane}` : '';
+    apiPost(`/chat/stop${laneQs}`, undefined, { repoId }).catch(() => {});
     if (tabId) updateTab(tabId, { status: 'idle' });
   }
   const stop = () => stopTo(activeTarget);
@@ -632,7 +650,7 @@ export function ChatProvider({ children }) {
     if (!dockLoaded) return;
     const live = new Set(tabs.map((tab) => tab.id));
     const stale = Object.keys(convos).filter(
-      (k) => k !== 'default' && k !== 'harness' && !live.has(k),
+      (k) => k !== 'default' && k !== 'harness' && k !== 'ask' && !live.has(k),
     );
     if (stale.length === 0) return;
     for (const k of stale) {

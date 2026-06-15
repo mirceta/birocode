@@ -58,6 +58,18 @@
   transform: scale(0.97);
 }
 
+/* Read-only Ask lane note (plans/repo-ask-chat.md) — a one-line reminder shown
+   under the switcher while the Ask side conversation is active. */
+.chat__ask-note {
+  margin: 6px 16px 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--color-text-soft);
+  background: var(--color-hover, rgba(0, 0, 0, 0.04));
+  border-radius: var(--radius, 6px);
+}
+
 .chat__conversations {
   flex: 1;
   min-height: 36px;

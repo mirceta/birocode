@@ -166,7 +166,20 @@ export default function Chat({ chat: injected, embedded = false }) {
           >
             {t('chat.tabClaudeWeb')}
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={chatView === 'ask'}
+            className={`chat__scope${chatView === 'ask' ? ' chat__scope--on' : ''}`}
+            title={t('chat.askHint')}
+            onClick={() => setChatView('ask')}
+          >
+            {t('chat.tabAsk')}
+          </button>
         </div>
+      )}
+      {!embedded && showDualChat && chatView === 'ask' && (
+        <p className="chat__ask-note">{t('chat.askHint')}</p>
       )}
       <div className="chat__bar">
         {!embedded && <ClaudeViewToggle />}

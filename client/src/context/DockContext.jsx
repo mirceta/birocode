@@ -60,7 +60,7 @@ export function DockProvider({ children }) {
   const [activeTabId, setActiveTabId] = useState(() => readTabState(ACTIVE_KEY) || null);
   const [chatView, setChatViewState] = useState(() => {
     const stored = readTabState(VIEW_KEY);
-    return stored === 'project' || stored === 'harness' ? stored : 'agent';
+    return stored === 'project' || stored === 'harness' || stored === 'ask' ? stored : 'agent';
   });
 
   const setChatView = useCallback((view) => {
