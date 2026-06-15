@@ -5,6 +5,85 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  /* Fill the host (Ideas tab content area / dashboard dock) so the tall
+     Architectural-plan tab has height to grow into (plans/ideas-arch-plan.md). */
+  flex: 1;
+  min-height: 0;
+}
+
+/* Tabs: Ideas | Architectural plan (plans/ideas-arch-plan.md). */
+.ideas__tabs {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.ideas__tab {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-muted, #666);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ideas__tab--active {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: #fff;
+}
+
+/* The Ideas tab's own content (composer + filter + list) scrolls within. */
+.ideas__tabpanel {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Architectural-plan tab (plans/ideas-arch-plan.md): a single user-written doc,
+   tall — the view / textarea fill the available panel height. */
+.archplan {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Rendered-Markdown view box (plans/ideas-arch-plan.md): tall + scrollable. The
+   inner .markdown (shared renderer) styles the content. */
+.archplan__view {
+  flex: 1;
+  min-height: 50vh;
+  overflow: auto;
+  padding: 10px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius, 10px);
+  background: var(--color-surface);
+}
+
+.archplan__view--empty {
+  border-style: dashed;
+}
+
+/* Markdown defaults to a larger base size; keep the plan compact in the dock. */
+.archplan__view .markdown {
+  font-size: 13px;
+}
+
+.archplan__textarea {
+  flex: 1;
+  min-height: 50vh;
+  resize: vertical;
+}
+
+.archplan__actions {
+  flex-shrink: 0;
 }
 
 .ideas__compose {
