@@ -7,13 +7,6 @@
 read/answer but block all mutation. Surfaces: a third **Ask** segment in the
 main chat switcher, and a **Builder | Ask** toggle on every dashboard dock.
 
-> **Amended 2026-06-15 (plans/ask-handoff.md):** the Ask lane no longer uses
-> `--permission-mode plan`. It now runs in normal `default` mode with a
-> **PreToolUse guard** (`claude --settings`) that allows Write/Edit **only** for
-> `handoff.md` at the repo root and denies every other mutation plus the shell.
-> "Read-only" now means **read-only except it may create/edit `handoff.md`** —
-> see the Safety note below.
-
 ## Problem
 
 A repo's agent is a **builder**: by design the only agent in that repo while it
@@ -164,16 +157,9 @@ list. Either way, prove non-mutation with a test before relying on it.
   The convos map already supports per-key sessions/watermarks, so no new plumbing.
 
 ### Safety — what read-only buys, and the residual risks
-> **Amended 2026-06-15 (plans/ask-handoff.md):** the guarantee below is now
-> "no mutation **except `handoff.md`** at the repo root." The single-file hole is
-> deliberate (an Ask agent can leave a handoff for another agent) and enforced by
-> a PreToolUse hook, not plan mode. The hook's `deny` overrides allow-lists and
-> even a host's `bypassPermissions` default, so the policy can't be loosened by
-> global settings. handoff.md and the builder's other files don't contend
-> (different paths), so the shared-cwd safety case is unchanged.
-- **Prevents** the Ask agent editing files (other than `handoff.md`), committing,
-  or deleting — so it can't corrupt the builder's work or fight it over the
-  working tree. This is the whole reason two `claude` processes can share one cwd.
+- **Prevents** the Ask agent editing files, committing, or deleting — so it can't
+  corrupt the builder's work or fight it over the working tree. This is the whole
+  reason two `claude` processes can share one cwd.
 - **Residual risks to handle / accept:**
   - **Bash is the mutation hole.** "Read-only" via tool-allowlist is only real if
     Bash can't mutate; plan mode closes this holistically — another reason to
