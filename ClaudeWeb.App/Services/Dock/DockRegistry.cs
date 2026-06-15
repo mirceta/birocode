@@ -30,6 +30,14 @@ public class DockTab
     public bool Dashboard { get; set; } = true;
 
     /// <summary>
+    /// Marked "important" from the dashboard (plans/important-agents.md): the
+    /// dock gets a bright-red thick border and sorts first among the dashboard
+    /// docks. Defaults to false so existing tabs are unaffected; shared across
+    /// devices like the rest of the tab.
+    /// </summary>
+    public bool Important { get; set; } = false;
+
+    /// <summary>
     /// Stashed prompt ideas jotted down while the agent runs
     /// (plans/prompt-stash.md). Shared across devices like the rest of the tab.
     /// </summary>
@@ -120,7 +128,7 @@ public class DockRegistry
     /// Partial update. Only non-null fields are applied; per-tab last-write-wins
     /// when two devices race. Returns the updated copy, or null if unknown.
     /// </summary>
-    public DockTab? Update(string id, string? sessionId, string? status, string? repoName, string? color, bool? dashboard)
+    public DockTab? Update(string id, string? sessionId, string? status, string? repoName, string? color, bool? dashboard, bool? important)
     {
         lock (_gate)
         {
@@ -132,6 +140,7 @@ public class DockRegistry
             // Empty string clears the mark; null leaves it untouched.
             if (color != null) tab.Color = color.Length == 0 ? null : color;
             if (dashboard != null) tab.Dashboard = dashboard.Value;
+            if (important != null) tab.Important = important.Value;
             Save();
             return Clone(tab);
         }
@@ -252,6 +261,7 @@ public class DockRegistry
         CreatedAt = t.CreatedAt,
         Color = t.Color,
         Dashboard = t.Dashboard,
+        Important = t.Important,
         Stash = t.Stash.Select(CloneStash).ToList(),
     };
 

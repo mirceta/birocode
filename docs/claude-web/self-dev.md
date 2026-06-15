@@ -9,7 +9,10 @@ or reuse its port. Build to an isolated dir and run on 5200:
 npm --prefix client install
 npm --prefix client run build
 dotnet build ClaudeWeb.App/ClaudeWeb.App.csproj -o .claudeweb-preview/bin
-Copy-Item client/dist .claudeweb-preview/bin/client/dist -Recurse -Force
+# robocopy /MIR, NOT Copy-Item: when the dest client/dist already exists Copy-Item
+# nests the build into client/dist/dist (stale top-level shadows it). /MIR mirrors
+# exactly and purges stale hashes. Exit codes 0-3 are success.
+robocopy client/dist .claudeweb-preview/bin/client/dist /MIR /NFL /NDL /NJH /NP | Out-Null
 $env:CLAUDEWEB_PORT = "5200"
 Start-Process .claudeweb-preview/bin/ClaudeWeb.exe
 ```

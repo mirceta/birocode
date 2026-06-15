@@ -6,6 +6,7 @@ import { useT } from '../i18n/LanguageContext';
 import GitStatusSummary from '../components/git/GitStatusSummary';
 import PinnedAgent from '../components/dashboard/PinnedAgent';
 import CopyPath from '../components/dashboard/CopyPath';
+import ImportantStar from '../components/dashboard/ImportantStar';
 import IdeasPanel from '../components/ideas/IdeasPanel';
 import Scoreboard from '../components/dashboard/Scoreboard';
 import './dashboard.css';
@@ -29,6 +30,26 @@ function readView() {
 // as cheap cards. Same cutoff used for the recency border (recencyTier).
 function isHotTier(tier) {
   return tier === 'fresh' || tier === 'recent' || tier === 'mid';
+}
+
+// Is this repo's Local-tab app actually serving (plans/dock-local-app.md)? We
+// probe the harness's own same-origin reverse proxy (/api/localview/{repoId}/,
+// plans/local-app-proxy.md) so the auth cookie rides along and a 502 from a dead
+// product reads as offline — the same liveness contract ProductFrame uses.
+async function probeLocal(repoId) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 3000);
+  try {
+    const res = await fetch(`/api/localview/${repoId}/`, {
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    return res.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // Dock size is a per-device "bigger/smaller" stepper: an index into SIZE_STEPS
@@ -144,7 +165,7 @@ function recencyTier(at, now) {
 // (setActiveTab + /studio), then closes the overlay.
 export default function Dashboard({ onClose }) {
   const { t } = useT();
-  const { tabs: dockTabs, activeTabId, setActiveTab, repos } = useDock();
+  const { tabs: dockTabs, activeTabId, setActiveTab, updateTab, repos } = useDock();
   // Only agents toggled "show on dashboard" in the Agents tab (default on).
   const tabs = useMemo(() => dockTabs.filter((tab) => tab.dashboard !== false), [dockTabs]);
   // repoId -> filesystem path, for the path line on each dock.
@@ -210,6 +231,9 @@ export default function Dashboard({ onClose }) {
   const [gitInfo, setGitInfo] = useState({});
   // { [repoId]: true } while a per-dock refresh is in flight (spinner + guard).
   const [gitBusy, setGitBusy] = useState({});
+  // { [repoId]: { port, online } } — whether the agent's Local-tab app is being
+  // served (plans/dock-local-app.md). Only repos with a localPort are probed.
+  const [localInfo, setLocalInfo] = useState({});
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
 
@@ -221,12 +245,27 @@ export default function Dashboard({ onClose }) {
   // re-renders via setLive, so the borders age without a separate timer.
   const now = Date.now();
 
-  // Order by "hotness": agents I used most recently (live[id].at) sort first;
-  // ties and not-yet-loaded agents keep their dock order (Array.sort is stable).
-  // Driven by the same poll, so the ordering refreshes live as I work.
-  const orderedTabs = useMemo(
-    () => [...tabs].sort((a, b) => (live[b.id]?.at || 0) - (live[a.id]?.at || 0)),
-    [tabs, live],
+  // Order (plans/important-agents.md): agents flagged "important" are pinned at
+  // the FRONT in their stable dock order — the recency "rearrangement" rule does
+  // NOT apply to them, so they never shuffle amongst themselves. The unimportant
+  // agents follow, still ordered by "hotness" — most recently used first
+  // (live[id].at), refreshed by the same poll. So marking an agent important
+  // parks it at the head of the pack; the churn stays below it.
+  const orderedTabs = useMemo(() => {
+    const important = tabs.filter((t) => t.important);
+    const rest = tabs
+      .filter((t) => !t.important)
+      .sort((a, b) => (live[b.id]?.at || 0) - (live[a.id]?.at || 0));
+    return [...important, ...rest];
+  }, [tabs, live]);
+
+  // Toggle the important mark; optimistic + backend-synced like color/dashboard.
+  const toggleImportant = useCallback(
+    (id) => {
+      const tab = tabsRef.current.find((t) => t.id === id);
+      updateTab(id, { important: !tab?.important });
+    },
+    [updateTab],
   );
 
   // Poll while the overlay is mounted (i.e. open); the effect's teardown stops
@@ -302,6 +341,45 @@ export default function Dashboard({ onClose }) {
   useEffect(() => {
     loadGit();
   }, [loadGit]);
+
+  // Local-app serving state per agent repo (plans/dock-local-app.md). The port
+  // lives on the repo entry (like the Local tab); only repos that assigned one
+  // are probed. `localKey` is a stable string of repoId:port pairs so the poll
+  // only restarts when the set of ports actually changes, not every render.
+  const localPorts = useMemo(() => {
+    const out = {};
+    for (const repoId of new Set(tabs.map((tab) => tab.repoId))) {
+      const port = repos.find((r) => r.id === repoId)?.localPort;
+      if (port) out[repoId] = port;
+    }
+    return out;
+  }, [tabs, repos]);
+  const localKey = Object.entries(localPorts)
+    .map(([id, port]) => `${id}:${port}`)
+    .join(',');
+  useEffect(() => {
+    if (!localKey) {
+      setLocalInfo({});
+      return undefined;
+    }
+    let cancelled = false;
+    const ports = Object.fromEntries(localKey.split(',').map((p) => p.split(':')));
+    async function probeAll() {
+      const pairs = await Promise.all(
+        Object.entries(ports).map(async ([repoId, port]) => [
+          repoId,
+          { port: Number(port), online: await probeLocal(repoId) },
+        ]),
+      );
+      if (!cancelled) setLocalInfo(Object.fromEntries(pairs));
+    }
+    probeAll();
+    const timer = setInterval(probeAll, POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [localKey]);
 
   // Per-dock refresh: re-fetch one repo's git status, hitting origin (fetch=true)
   // like the Git tab's refresh so the origin-relative rows actually update.
@@ -466,10 +544,12 @@ export default function Dashboard({ onClose }) {
                     recency={recency}
                     contentZoom={contentZoom}
                     repoPath={repoPath(tab.repoId)}
+                    localApp={localInfo[tab.repoId]}
                     git={gitInfo[tab.repoId]}
                     gitRefreshing={!!gitBusy[tab.repoId]}
                     onRefreshGit={() => refreshGit(tab.repoId)}
                     onMaximize={handleOpen}
+                    onToggleImportant={toggleImportant}
                   />
                 </li>
               );
@@ -480,7 +560,7 @@ export default function Dashboard({ onClose }) {
               <li key={tab.id}>
                 <button
                   type="button"
-                  className={`dash-cell dash-cell--${status}${tab.id === activeTabId ? ' dash-cell--active' : ''}`}
+                  className={`dash-cell dash-cell--${status}${tab.id === activeTabId ? ' dash-cell--active' : ''}${tab.important ? ' dash-cell--important' : ''}`}
                   data-colored={tab.color ? 'true' : undefined}
                   data-recency={recency}
                   style={tab.color ? { '--agent-color': tab.color } : undefined}
@@ -489,6 +569,11 @@ export default function Dashboard({ onClose }) {
                   <span className="dash-cell__head">
                     <span className="dash-cell__dot" />
                     <span className="dash-cell__name">{tab.repoName}</span>
+                    <ImportantStar
+                      important={!!tab.important}
+                      onToggle={() => toggleImportant(tab.id)}
+                      className="dash-cell__important"
+                    />
                   </span>
                   {repoPath(tab.repoId) && (
                     <CopyPath path={repoPath(tab.repoId)} className="dash-cell__path" />
