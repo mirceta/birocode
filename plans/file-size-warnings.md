@@ -1,10 +1,10 @@
 # File size warnings — refactoring under control
 
-> **Status (2026-06-15):** **Building.** New feature on
-> `feature/file-size-warnings`, branched off `main`. Surfaces per-file **line
-> counts** as a badge on each Files-tab row and **warns** when a file is over
-> **500 lines**. Confirmed design (see `understanding.md`): tree badges (no
-> separate overview), fixed 500-line constant, all text files.
+> **Status (2026-06-15):** **Deployed to live :5099 & merged to main.** On
+> `feature/file-size-warnings`. Surfaces per-file **line counts** as a badge on
+> each Files-tab row and **warns** when a file is over **500 lines**. Design:
+> tree badges (no separate overview), fixed 500-line constant, all text files.
+> Browser-verified on the live app (`GitService.cs` → ⚠️ 763 L).
 
 ## Problem
 

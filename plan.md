@@ -30,12 +30,6 @@
 
 ## Active feature plans
 
-- [File size warnings](plans/file-size-warnings.md) — get refactoring under
-  control: each file row in the **Files tab** shows a **line-count badge** that
-  turns into a red ⚠️ warning when the file is over **500 lines**. Backend adds
-  `Lines` to the `/api/files` listing (streaming newline count; skips binaries
-  and files over a 5 MB cap). Built & browser-verified; not yet merged to main.
-  On `feature/file-size-warnings`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
@@ -65,6 +59,12 @@
 
 ## Recently shipped
 
+- [File size warnings](plans/file-size-warnings.md) — get refactoring under
+  control: each file row in the **Files tab** shows a **line-count badge** that
+  turns red (⚠️) when the file is over **500 lines**. Backend adds `Lines` to the
+  `/api/files` listing (streaming newline count; skips binaries and files over a
+  5 MB cap). Browser-verified; deployed to live :5099 & merged to main
+  2026-06-15. On `feature/file-size-warnings`.
 - [Dock chat refresh](plans/dock-chat-refresh.md) — each dashboard agent dock
   gets a **refresh `↻` for its conversation**, in the chat header next to "New"
   (shown only on docks). It runs a single-key reconcile (`refreshOne`):
