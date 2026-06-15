@@ -1,12 +1,17 @@
 # Local app on the agent dock — pin its serving state, then render it
 
-> **Status (2026-06-15):** **Slice 1 BUILT & browser-verified**, not yet merged
-> or deployed. On `feature/dock-local-app`. Each dock now shows a local-app row
-> above the git section — "serving on :PORT" (live), ":PORT · not serving"
-> (configured but dead), or "none". Verified on an isolated :5201 preview
-> (`.preview-test/dock-local-app-check.mjs`: 7 docks, row above git, a live :5300
-> reads serving, self :5305 reads offline, port-less repos read none). Slice 2
-> (render the product in the dock) follows.
+> **Status (2026-06-15):** **Slices 1 & 2 BUILT & browser-verified.** Slice 1
+> is **merged to `main`** (`b5c086e`); slice 2 is on `feature/dock-local-app`,
+> not yet merged. Each dock shows a local-app row above the git section —
+> "serving on :PORT" (live), ":PORT · not serving" (configured but dead), or
+> "none". When a port is configured the row is a **toggle**: clicking it swaps
+> the dock screen between the chat (default) and the product, iframed via the
+> existing `ProductFrame` against `/api/localview/{repoId}/`; the iframe only
+> mounts once revealed. Verified on an isolated :5201 preview
+> (`.preview-test/dock-local-app-check.mjs` for slice 1;
+> `dock-local-app-slice2-check.mjs` for slice 2: serving row is a button with a
+> caret, click mounts the product iframe at the localview proxy, click again
+> returns to chat, a port-less row stays a non-toggle). Feature complete.
 
 ## Problem
 
@@ -42,7 +47,7 @@ the gap is determining "served" and rendering it.
 
 ## Slices
 
-### Slice 1 — pin the serving state above git
+### Slice 1 — pin the serving state above git ✅ (merged, `b5c086e`)
 
 A `phone__localapp` block above `phone__git` in `PinnedAgent.jsx`:
 
@@ -57,7 +62,7 @@ set AND a liveness probe (reuse `ProductFrame`'s probe / a `/api/localview`
 HEAD) succeeds; start with config-derived state and layer the probe in so a
 configured-but-dead port reads as offline.
 
-### Slice 2 — render the product in the dock
+### Slice 2 — render the product in the dock ✅ (built & verified, on the branch)
 
 Iframe/proxy the local product inside the dock, reusing `ProductFrame` against
 `/api/localview/{repoId}/`, toggleable with the chat view (like the

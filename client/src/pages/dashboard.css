@@ -481,6 +481,33 @@
   font-size: 12px;
 }
 
+/* When a port is configured the row becomes a toggle (slice 2): reset the
+   button chrome so it reads identically to the static row, then reveal it as
+   clickable on hover. */
+button.phone__local {
+  width: 100%;
+  text-align: left;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+button.phone__local:hover {
+  background: var(--color-surface-hover, rgba(127, 127, 127, 0.1));
+}
+
+.phone__local--open {
+  background: var(--color-surface-hover, rgba(127, 127, 127, 0.1));
+}
+
+.phone__local-caret {
+  flex-shrink: 0;
+  color: var(--color-text-soft);
+  font-size: 10px;
+}
+
 .phone__local-dot {
   width: 9px;
   height: 9px;
