@@ -8,7 +8,10 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-15):** **Just merged (not yet deployed):** per-dock
+> **Status (2026-06-15):** **Deployed & confirmed, merged to main:**
+> [remove projects](plans/remove-projects.md) — the Projects tab can now
+> unregister a project (🗑 on each card; folder kept on disk). **Just merged
+> (not yet deployed):** per-dock
 > [chat refresh](plans/dock-chat-refresh.md) on the agent dashboard. **In
 > flight:** Agent dashboard — a top-bar full-screen grid overview of every agent
 > on this machine, on `feature/agent-dashboard` (slice 1 built + browser-verified;
@@ -30,15 +33,6 @@
 
 ## Active feature plans
 
-- [Remove projects](plans/remove-projects.md) — the Projects tab can **add** a
-  project but not remove one; add the mirror **remove** action so the End User
-  can unregister a project from the existing ones (drops the `repositories.json`
-  entry; does **not** delete the folder on disk). Mostly wiring: the registry
-  already has a self-guarded `Remove(id)` and `RepoContext` self-heals the active
-  selection — added a `DELETE /api/repos/{id}` endpoint + a confirm-guarded 🗑
-  Remove control on each card (hidden for the self repo). Built +
-  browser-verified on an isolated :5210 instance; not yet merged/deployed. On
-  `feature/remove-projects`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
@@ -68,6 +62,13 @@
 
 ## Recently shipped
 
+- [Remove projects](plans/remove-projects.md) — the Projects tab can now
+  **remove (unregister)** a project, mirroring its add action: a confirm-guarded
+  🗑 control on each card (hidden for the self repo, shown in both UI modes) hits
+  a new `DELETE /api/repos/{id}`. It drops the `repositories.json` entry only —
+  the folder stays on disk — and `RepoContext` self-heals the active selection.
+  Browser-verified on an isolated :5210 instance; deployed to live :5099 &
+  confirmed, merged to main 2026-06-15. On `feature/remove-projects`.
 - [File size warnings](plans/file-size-warnings.md) — get refactoring under
   control: each file row in the **Files tab** shows a **line-count badge** that
   turns red (⚠️) when the file is over **500 lines**. Backend adds `Lines` to the

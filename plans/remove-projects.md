@@ -1,8 +1,8 @@
 # Remove projects
 
-> **Status (2026-06-15):** Built + browser-verified on an isolated :5210
-> instance (`verify-remove-projects.mjs`, all checks pass). Not yet merged or
-> deployed. Branch `feature/remove-projects`.
+> **Status (2026-06-15):** Shipped — built, browser-verified on an isolated
+> :5210 instance (`verify-remove-projects.mjs`, all checks pass), deployed to
+> live :5099 & confirmed, merged to main. Branch `feature/remove-projects`.
 
 ## Goal
 
