@@ -5,6 +5,7 @@ import { useDock } from '../context/DockContext';
 import { useT } from '../i18n/LanguageContext';
 import GitStatusSummary from '../components/git/GitStatusSummary';
 import PinnedAgent from '../components/dashboard/PinnedAgent';
+import CopyPath from '../components/dashboard/CopyPath';
 import IdeasPanel from '../components/ideas/IdeasPanel';
 import './dashboard.css';
 
@@ -429,7 +430,7 @@ export default function Dashboard({ onClose }) {
                     <span className="dash-cell__name">{tab.repoName}</span>
                   </span>
                   {repoPath(tab.repoId) && (
-                    <span className="dash-cell__path">{repoPath(tab.repoId)}</span>
+                    <CopyPath path={repoPath(tab.repoId)} className="dash-cell__path" />
                   )}
                   <span className="dash-cell__status">
                     {t(`agents.status.${status}`)}

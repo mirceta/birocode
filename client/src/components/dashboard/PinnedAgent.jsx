@@ -2,6 +2,7 @@ import Chat from '../../pages/Chat';
 import { useChatFor } from '../../context/ChatContext';
 import { useT } from '../../i18n/LanguageContext';
 import GitStatusSummary from '../git/GitStatusSummary';
+import CopyPath from './CopyPath';
 
 // One "phone" in the Agent Dashboard's wall of phones (plans/agent-dashboard.md):
 // a single agent's live Chat view, pinned to that agent's repo regardless of
@@ -43,7 +44,7 @@ export default function PinnedAgent({
       >
         <span className="phone__dot" />
         <span className="phone__name">{tab.repoName}</span>
-        {repoPath && <span className="phone__path">{repoPath}</span>}
+        {repoPath && <CopyPath path={repoPath} className="phone__path" />}
         <span className="phone__status">{t(`agents.status.${status}`)}</span>
       </button>
       {git && (
