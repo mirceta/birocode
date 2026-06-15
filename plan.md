@@ -31,11 +31,11 @@
 ## Active feature plans
 
 - [File size warnings](plans/file-size-warnings.md) — get refactoring under
-  control: scan the opened Repo, report per-file **line counts**, and **warn**
-  about files over **500 lines** (offenders listed largest-first; optional
-  line-count badges on the Files-tab rows). Extends the Files module with a
-  repo-wide scan (`/api/files/sizes`) that skips vendor/build dirs. Proposed;
-  awaiting confirmation on `understanding.md`. On `feature/file-size-warnings`.
+  control: each file row in the **Files tab** shows a **line-count badge** that
+  turns into a red ⚠️ warning when the file is over **500 lines**. Backend adds
+  `Lines` to the `/api/files` listing (streaming newline count; skips binaries
+  and files over a 5 MB cap). Built & browser-verified; not yet merged to main.
+  On `feature/file-size-warnings`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
