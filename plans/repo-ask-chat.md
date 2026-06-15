@@ -1,9 +1,10 @@
 # Side "Ask" conversation per repo
 
-**Status:** Planning (branch `feature/repo-ask-chat`). Not built. **Decision
-made:** Approach **A** with a **read-only Ask lane** (`--permission-mode plan`,
-pending build-slice verification). Impact evaluated — see "Impact of the
-read-only decision" below.
+**Status:** Shipped — slices 1 & 2 built, browser/API-verified on isolated :5210
+and on live :5099; **deployed to live :5099 & confirmed by the user 2026-06-15**
+(not yet merged to main) on branch `feature/repo-ask-chat`. Approach **A** with a
+**read-only Ask lane** (`--permission-mode plan`) — verified to read/answer but
+block all mutation.
 
 ## Problem
 

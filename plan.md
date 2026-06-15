@@ -33,14 +33,6 @@
 
 ## Active feature plans
 
-- [Side "Ask" conversation per repo](plans/repo-ask-chat.md) — a persistent,
-  always-available **Ask** chat attached to a repo, separate from its **builder**
-  agent, so you can ask questions about the repo **while the builder is running**
-  (today the per-repo single-run lock returns 409) and **without polluting the
-  builder's context** (own session). Crux: loosen the run gate to per-`(repo,
-  lane)` and run the Ask lane **read-only** so two `claude` processes can share
-  one working dir safely. One decision open (read-only vs full-capability Ask).
-  Planning; not built. On `feature/repo-ask-chat`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
@@ -70,6 +62,16 @@
 
 ## Recently shipped
 
+- [Side "Ask" conversation per repo](plans/repo-ask-chat.md) — a persistent,
+  always-available **Ask** chat (3rd segment next to Project / Claude Web), a
+  **read-only side conversation** that runs on its own lane so you can ask about
+  a repo **while the builder is running** (no 409) and **without polluting the
+  builder's context** (own session). Backend re-keyed the run gate to per-`(repo,
+  lane)`; the ask lane spawns `claude --permission-mode plan` (reads/answers,
+  can't mutate — verified). Browser- + API-verified on isolated :5210 and on live
+  :5099 (`verify-ask-lane.mjs`, `verify-ask-surface.mjs`); **deployed to live
+  :5099 & confirmed 2026-06-15** (not yet merged to main). On
+  `feature/repo-ask-chat`.
 - [Architectural plan in Ideas + expandable dashboard dock](plans/ideas-arch-plan.md)
   — the shared `IdeasPanel` is now **tabbed** (Ideas | Architectural plan); the
   Architectural-plan tab is a single user-written, **very tall** doc (new global
