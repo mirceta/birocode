@@ -1,7 +1,7 @@
 # Dashboard opens from the header title
 
-> **Status (2026-06-15):** **Built, browser-verified & merged to main**
-> (not yet deployed to :5099). On `feature/dashboard-title-button`. Moves the
+> **Status (2026-06-15):** **Deployed to live :5099, confirmed & merged to
+> main.** On `feature/dashboard-title-button`. Moves the
 > agent-dashboard entry point from the standalone top-bar **Dashboard** button
 > onto the top-left `machine · project · branch` title, which becomes a button
 > (accent-filled while the dashboard is open). Verified on an isolated :5210

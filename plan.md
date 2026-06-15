@@ -67,8 +67,8 @@
   button onto the top-left `machine · project · branch` label, now a button
   (same text; accent-filled while the dashboard is open). Keeps the existing
   Advanced-mode + 2-agent gating. Frontend-only (`Layout.jsx` + `global.css`).
-  Browser-verified on an isolated :5210 instance; merged to main 2026-06-15 (not
-  yet deployed). On `feature/dashboard-title-button`.
+  Browser-verified; deployed to live :5099 & confirmed, merged to main
+  2026-06-15. On `feature/dashboard-title-button`.
 - [Taller agent docks](plans/taller-agent-cards.md) — the agent-dashboard "wall
   of phones" docks were locked **square** (`aspect-ratio: 1/1`), so each embedded
   chat showed only a few lines. Made the phones **portrait (3:4)** — height ≈
