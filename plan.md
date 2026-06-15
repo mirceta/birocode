@@ -36,6 +36,13 @@
 
 ## Active feature plans
 
+- [Important agents](plans/important-agents.md) — a ⭐ toggle in the **dashboard
+  agent dock** marks an agent **important**: its dock gets a **bright-red,
+  thicker border** and it sorts **first among the dashboard docks**. A toggle —
+  important agents can be set back to normal; multiple may be important.
+  Persisted as a backend-synced `important` flag on `DockTab` (same path as
+  `color`/`dashboard`). Advanced-mode; PLANNING, not built. On
+  `feature/important-agents`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
