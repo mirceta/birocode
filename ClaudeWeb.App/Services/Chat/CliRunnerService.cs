@@ -159,8 +159,9 @@ public class CliRunnerService
             try { if (process is { HasExited: false }) process.Kill(entireProcessTree: true); }
             catch { /* already gone / race */ }
             process?.Dispose();
-            // Close the scoreboard run interval (matches the "start" above).
-            if (!readOnly) _activity.Append("finish", workingDirectory, record.SessionId);
+            // Close the scoreboard run interval (matches the "start" above),
+            // carrying this run's cost so the scoreboard can total spend.
+            if (!readOnly) _activity.Append("finish", workingDirectory, record.SessionId, record.CostUsd);
         }
     }
 

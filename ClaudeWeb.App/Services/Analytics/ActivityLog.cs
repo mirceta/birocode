@@ -31,12 +31,14 @@ public class ActivityLog
         _path = Path.Combine(dir, "activity.jsonl");
     }
 
-    public sealed record Event(long Ts, string EventType, string Agent, string? Session);
+    // CostUsd is recorded on `finish` events going forward (the CLI's result
+    // carries it); null on `start` events and on pre-cost historical lines.
+    public sealed record Event(long Ts, string EventType, string Agent, string? Session, double? CostUsd = null);
 
     /// <summary>Append one event. Best-effort: a write failure is logged, never thrown.</summary>
-    public void Append(string eventType, string agent, string? session)
+    public void Append(string eventType, string agent, string? session, double? costUsd = null)
     {
-        var evt = new Event(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), eventType, agent ?? "", session);
+        var evt = new Event(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), eventType, agent ?? "", session, costUsd);
         try
         {
             var line = JsonSerializer.Serialize(evt, JsonOpts) + "\n";

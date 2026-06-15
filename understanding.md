@@ -1,50 +1,45 @@
-# Understanding — Scoreboard / analytics
+# Understanding — Scoreboard v2 (redesign)
 
-## Goal
+**Goal:** the scoreboard's numbers are correct but answer the wrong question.
+Redesign it so it gives *actionable, time-aware* usage analytics instead of
+flat all-time scalars. My call (you said "do it my way").
 
-A **scoreboard / analytics** view over agent activity. Metrics the user asked
-for:
+## What's wrong with v1 (why we're redoing it)
 
-1. **Longest-running agent** (single longest run / total).
-2. **Max agents running at the same time** (peak concurrency).
-3. **Prompts sent today** (count).
-4. **Graphs** for the above (timeline / charts).
-5. **Per agent:** the window it was used (from → to), its **idle time** vs
-   **work time**.
-6. **All agents combined:** total work time.
+1. **Work-vs-idle is meaningless** — idle = `(lastFinish − firstStart) − work`
+   over the agent's *all-time* span, so any agent used morning + evening reads
+   ~99% idle. No information. **Dropping it.**
+2. **Mixed timeframes** — `promptsToday` is today; everything else is all-time.
+   No number is comparable to another.
+3. **No graph over time** — peak concurrency is a scalar; the charts are
+   per-agent bars. You asked for graphs; the interesting shapes (concurrency
+   across the day, prompts per day) aren't drawn.
+4. **Fragile pairing** — runs paired per repo folder assuming one-at-a-time; a
+   crashed run (no `finish`) leaks; cost is on the call record but unused.
 
-## This step
+## What I'll build
 
-- On `main` synced with `origin/main` (confirmed); branch
-  `feature/scoreboard-analytics` created.
-- Add an **Active feature plans** entry in `plan.md` + write the plan
-  (`plans/scoreboard-analytics.md`). Design/plan only — not built.
+**Backend** (`AnalyticsService` + `ActivityLog` + controller):
+- `GET /api/analytics?window=today|7d|all` — every scalar scoped to one window.
+- **Concurrency-over-time series** (step points) for the hero chart.
+- **Daily buckets** (last 7 days: prompts + work) for a trend strip.
+- **Per-agent leaderboard**: runs · total work · longest · last used (no idle).
+- Scalars: prompts, peak concurrency, longest run, total work, **total cost**
+  (cost captured into the `finish` event going forward — historical = 0).
+- Firmer pairing: ignore/expire orphan starts; tolerate missing finishes.
 
-## Decisions (locked)
+**Frontend** (`Scoreboard.jsx`):
+- Timeframe toggle (Today / 7 days / All) in the panel header.
+- Stat cards (window-scoped; cost card when > 0).
+- **Concurrency over time** — step-area chart (replaces work/idle).
+- **Activity, last 7 days** — prompts-per-day bars.
+- **Agents leaderboard** — clean ranked table (replaces per-agent bars).
+- Keeps the collapsible panel.
 
-- **Data source:** a new append-only **`activity.jsonl`** events ledger (run
-  start/finish, per repo) — the `deploys.jsonl` pattern. The in-memory `CallLog`
-  is live-only, so the ledger is what makes "today"/history accurate.
-- **Work vs idle:** a *run* is one prompt→answer (CLI start→finish). **Work** =
-  sum of run durations; an agent's **window** = first start→last finish;
-  **idle** = window − work; **peak concurrency** = max overlapping runs.
-- **"Today":** local midnight on the host.
-- **UI:** a **panel on the dashboard, above the agent docks** (not a new tab);
-  hand-rolled **SVG** charts (no lib).
-- **Backfill** (reconstructing pre-ledger history from transcripts): **deferred**
-  to a future feature; noted in the plan.
+## Still deferred
+- **Transcript backfill** (history before the ledger) — its own feature.
+- **Token counts** — only cost is on the call record today; tokens would need
+  transcript parsing.
 
-Design recorded in `plans/scoreboard-analytics.md`.
-
-## Status — built & verified
-
-- Backend: `ActivityLog` (`activity.jsonl`) + `AnalyticsService` + `AnalyticsController`
-  (`GET /api/analytics`); `CliRunnerService` appends run start/finish (read-only
-  "ask" runs excluded so they don't inflate work time).
-- Frontend: `Scoreboard` component (4 stat cards + two hand-rolled SVG charts:
-  usage-window timeline + work/idle bars) rendered atop the agent docks in
-  `Dashboard.jsx`. i18n en/tr.
-- Verified on an isolated :5200 instance with a seeded ledger: `/api/analytics`
-  returns the exact expected metrics (longest run, peak concurrency 2, prompts
-  today 3, per-agent work/idle, total work); dashboard scoreboard 5/5 + screenshot.
-  Live :5099 untouched (synthetic ledger removed). Next: commit.
+Assumptions: timeframe toggle is component state (not persisted); "today"/day
+buckets use local host midnight (unchanged).

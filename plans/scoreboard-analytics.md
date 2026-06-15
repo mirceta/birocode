@@ -1,11 +1,37 @@
 # Scoreboard / analytics
 
-> **Status (2026-06-15):** Plan — design decided, not built. On
-> `feature/scoreboard-analytics`. Decisions locked: **new `activity.jsonl`
-> events ledger**; UI = a **panel on the dashboard, above the agent docks**;
-> **hand-rolled SVG** charts (no lib); "today" = **local midnight on the host**;
-> **backfill deferred** to a future feature. Structured per
+> **Status (2026-06-16):** Built (v2 redesign) on `feature/scoreboard-analytics`,
+> verified on an isolated :5201 preview. Decisions locked: **new `activity.jsonl`
+> events ledger**; UI = a **collapsible panel on the dashboard, above the agent
+> docks**; **hand-rolled SVG/CSS** charts (no lib); "today" = **local midnight on
+> the host**; **backfill deferred**. Structured per
 > [doc-principles.md](doc-principles.md).
+
+## v2 redesign (2026-06-16) — what shipped over the first cut
+
+The first cut's metrics were correct but answered the wrong question, so the
+panel was reworked:
+
+- **Dropped work-vs-idle.** Idle was `(lastFinish − firstStart) − work` over an
+  agent's *all-time* span, so episodic use always read ~99% idle — no signal.
+- **One shared timeframe.** A **Today / 7 days / All** toggle drives the whole
+  panel; `GET /api/analytics?window=…` scopes every scalar (prompts, peak,
+  longest, total work, cost) to it. (v1 mixed "today" with all-time.)
+- **Real time-series.** A **concurrency-over-time** step-area chart (the hero —
+  *agents running at the same time*, with its shape, not just a scalar) and an
+  **activity, last-7-days** prompts-per-day strip. These are the "graphs" the
+  original ask wanted.
+- **Per-agent leaderboard** (runs · total work · longest · last used), ranked by
+  work — replaces v1's per-agent work/idle bars.
+- **Cost.** The CLI result's `CostUsd` now rides the `finish` event; the panel
+  totals spend per window (historical lines lack it ⇒ $0; the card hides at $0).
+- **Firmer folding.** Orphan `start`s (crash / still-running) are dropped from
+  duration metrics; durations are clipped to the window so straddling runs only
+  contribute their in-window slice.
+
+Endpoint shape (v2): `{ window, windowStart, windowEnd, longestRun, peakConcurrency,
+prompts, totalWorkMs, totalCostUsd, totalRuns, concurrency[{ts,level}],
+daily[{date,prompts,workMs}], agents[{agent,workMs,longestMs,lastUsed,runs}] }`.
 
 ## Problem / goal
 
@@ -103,6 +129,10 @@ flowchart TD
 - **Backfill.** Analytics start empty the moment the ledger ships — no history
   before then. Reconstructing past activity from existing **session transcripts**
   is its own future feature; noted here, out of scope for this slice.
+- **Token counts.** Only per-run **cost** is on the call record today; token
+  in/out would need transcript parsing — deferred with backfill.
+- **Note:** the v1 work/idle definition below is **superseded** — see the v2
+  redesign section above. Kept for history.
 
 ## Verification (later)
 

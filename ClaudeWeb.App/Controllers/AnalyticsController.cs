@@ -7,8 +7,10 @@ namespace ClaudeWeb.Controllers;
 /// <summary>
 /// Scoreboard / analytics (plans/scoreboard-analytics.md). Global stats folded
 /// from the activity ledger — not project-scoped.
-///   GET /api/analytics -- { longestRun, peakConcurrency, promptsToday,
-///                           totalWorkMs, totalRuns, agents[...] }
+///   GET /api/analytics?window=today|7d|all -- window-scoped scalars
+///       (prompts, peakConcurrency, longestRun, totalWorkMs, totalCostUsd) plus
+///       the concurrency-over-time series, a 7-day daily rollup, and a per-agent
+///       leaderboard. `window` defaults to "all".
 /// </summary>
 [ApiController]
 [Route("api/analytics")]
@@ -24,9 +26,9 @@ public class AnalyticsController : ControllerBase
     }
 
     [HttpGet]
-    public IActionResult Get()
+    public IActionResult Get([FromQuery] string? window)
     {
         _logger.CountRequest();
-        return Ok(_analytics.Compute());
+        return Ok(_analytics.Compute(window));
     }
 }
