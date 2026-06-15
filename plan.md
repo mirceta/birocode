@@ -30,6 +30,14 @@
 
 ## Active feature plans
 
+- [Remove projects](plans/remove-projects.md) — the Projects tab can **add** a
+  project but not remove one; add the mirror **remove** action so the End User
+  can unregister a project from the existing ones (drops the `repositories.json`
+  entry; does **not** delete the folder on disk). Mostly wiring: the registry
+  already has a self-guarded `Remove(id)` and `RepoContext` self-heals the active
+  selection — needs a `DELETE /api/repos/{id}` endpoint + a confirm-guarded
+  Remove control on each card (hidden for the self repo). Just started, not
+  built. On `feature/remove-projects`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
