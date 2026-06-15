@@ -595,6 +595,99 @@ public class CliRunnerService
         return "claude.cmd"; // previous behavior as a last resort
     }
 
+    // PreToolUse guard for the "ask" lane: read-only EXCEPT it may create/edit
+    // handoff.md at the repo root (the hook resolves the path against the run's
+    // cwd, supplied in the hook payload). All other file mutations and all shell
+    // use are denied. A "deny" decision here overrides allow-lists and even a
+    // bypassPermissions defaultMode, so the policy can't be loosened by the
+    // host's global settings. PowerShell is used (always present on Windows) so
+    // there is no node/runtime dependency on the production box.
+    private const string AskGuardScript = """
+        # PreToolUse guard for the Claude Web "ask" lane (plans/ask-handoff.md).
+        # Reads the hook payload on stdin and emits a permission decision on stdout.
+        $ErrorActionPreference = 'Stop'
+        $raw = [Console]::In.ReadToEnd()
+        try { $inp = $raw | ConvertFrom-Json } catch { $inp = $null }
+
+        $tool = if ($inp) { [string]$inp.tool_name } else { '' }
+        $cwd  = if ($inp -and $inp.cwd) { [string]$inp.cwd } else { (Get-Location).Path }
+
+        function Emit($decision, $reason) {
+          $o = @{ hookSpecificOutput = @{
+              hookEventName            = 'PreToolUse'
+              permissionDecision       = $decision
+              permissionDecisionReason = $reason
+          } }
+          Write-Output ($o | ConvertTo-Json -Compress -Depth 5)
+          exit 0
+        }
+
+        if (@('Bash','BashOutput','KillShell') -contains $tool) {
+          Emit 'deny' 'Ask lane is read-only except handoff.md; the shell is blocked.'
+        }
+
+        if (@('Write','Edit','MultiEdit','NotebookEdit') -contains $tool) {
+          $fp = if ($inp.tool_input.file_path) { [string]$inp.tool_input.file_path }
+                else { [string]$inp.tool_input.notebook_path }
+          if ([string]::IsNullOrWhiteSpace($fp)) { Emit 'deny' 'No file path supplied.' }
+
+          if ([System.IO.Path]::IsPathRooted($fp)) {
+            $resolved = [System.IO.Path]::GetFullPath($fp)
+          } else {
+            $resolved = [System.IO.Path]::GetFullPath((Join-Path $cwd $fp))
+          }
+          $allowed = [System.IO.Path]::GetFullPath((Join-Path $cwd 'handoff.md'))
+
+          if ($resolved -ieq $allowed) {
+            Emit 'allow' 'handoff.md at the repo root is the one writable file.'
+          }
+          Emit 'deny' 'Ask lane may only write handoff.md at the repo root.'
+        }
+
+        # Anything else: stay silent so the normal permission flow applies.
+        exit 0
+        """;
+
+    /// <summary>
+    /// Lazily materializes the ask-lane guard (PowerShell script + a settings.json
+    /// referencing it) under %APPDATA%\ClaudeWeb\ask-guard and returns the
+    /// settings.json path to pass to <c>claude --settings</c>. Written once per
+    /// process; a restart regenerates it, so script edits ship on next launch.
+    /// </summary>
+    private static readonly Lazy<string> AskGuardSettingsPath = new(() =>
+    {
+        var dir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "ClaudeWeb", "ask-guard");
+        Directory.CreateDirectory(dir);
+
+        var scriptPath = Path.Combine(dir, "ask-guard.ps1");
+        File.WriteAllText(scriptPath, AskGuardScript);
+
+        // Forward slashes keep the command clean inside JSON (no \\ escaping) and
+        // PowerShell accepts them on Windows.
+        var command = $"powershell -NoProfile -ExecutionPolicy Bypass -File \"{scriptPath.Replace('\\', '/')}\"";
+        var settings = JsonSerializer.Serialize(new
+        {
+            permissions = new { defaultMode = "default" },
+            hooks = new
+            {
+                PreToolUse = new[]
+                {
+                    new
+                    {
+                        matcher = "Write|Edit|MultiEdit|NotebookEdit|Bash|BashOutput|KillShell",
+                        hooks = new[] { new { type = "command", command } },
+                    },
+                },
+            },
+        }, new JsonSerializerOptions { WriteIndented = true });
+
+        var settingsPath = Path.Combine(dir, "settings.json");
+        File.WriteAllText(settingsPath, settings);
+        return settingsPath;
+    });
+
     private static ProcessStartInfo CreateProcessInfo(string message, string? sessionId, string? workingDirectory, string? model = null, bool readOnly = false)
     {
         var psi = new ProcessStartInfo
@@ -627,15 +720,22 @@ public class CliRunnerService
             psi.ArgumentList.Add(model);
         }
 
-        // Read-only "ask" lane (plans/repo-ask-chat.md): plan mode lets the agent
-        // read/search/answer but structurally blocks every mutation -- in headless
-        // -p mode it can't approve ExitPlanMode, so Write/Edit/Bash never execute.
-        // This is what makes a side conversation safe to run in the SAME working
-        // directory as a building agent. (Verified against claude v2.1.177.)
+        // Read-only "ask" lane (plans/repo-ask-chat.md, plans/ask-handoff.md):
+        // the agent may read/search/answer AND create or edit exactly ONE file --
+        // handoff.md at the repo root -- but nothing else, and no shell. We can't
+        // express "deny all writes except one file" with --allowedTools/
+        // --disallowedTools (deny is absolute and has no path negation), and
+        // --permission-mode plan structurally blocks EVERY mutation. So we run in
+        // normal "default" mode with a PreToolUse guard (--settings) that allows
+        // Write/Edit only for handoff.md and denies every other mutation plus the
+        // shell. The hook decision overrides even a host's bypassPermissions
+        // global config, so the guarantee holds. (Verified against claude v2.1.177.)
         if (readOnly)
         {
             psi.ArgumentList.Add("--permission-mode");
-            psi.ArgumentList.Add("plan");
+            psi.ArgumentList.Add("default");
+            psi.ArgumentList.Add("--settings");
+            psi.ArgumentList.Add(AskGuardSettingsPath.Value);
         }
 
         // Force Max-plan / CLI auth -- never pick up an API key from the env.

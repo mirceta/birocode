@@ -33,6 +33,15 @@
 
 ## Active feature plans
 
+- [Ask lane may write one file (`handoff.md`)](plans/ask-handoff.md) — upgrade the
+  shipped [Ask lane](plans/repo-ask-chat.md) so it stays read-only **except** it
+  may create/edit exactly **`handoff.md`** at the repo root, letting an Ask agent
+  leave a handoff for another agent without general write access. Replaces the
+  all-or-nothing `--permission-mode plan` with an explicit tool policy
+  (Write/Edit scoped to `handoff.md`; all other mutations blocked), verified in a
+  scratch dir. ⚠️ Deliberately opens a single-file hole in the "can't make
+  changes" guarantee — `chat.askHint` + `plans/repo-ask-chat.md` safety section
+  get updated to stay accurate. Planning; not built. On `feature/ask-handoff`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
