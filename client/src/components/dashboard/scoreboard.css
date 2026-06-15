@@ -11,6 +11,48 @@
   background: var(--color-surface);
 }
 
+/* Clickable header — collapses the panel body. Title + chevron, plus a compact
+   one-line summary when collapsed so the bar still tells you something. */
+.scoreboard__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--color-text);
+}
+
+.scoreboard__chevron {
+  font-size: 16px;
+  line-height: 1;
+  color: var(--color-text-soft, #777);
+  transition: transform 0.15s ease;
+}
+
+.scoreboard__chevron--collapsed {
+  transform: rotate(-90deg);
+}
+
+.scoreboard__head-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-soft, #777);
+}
+
+.scoreboard__head-summary {
+  font-size: 12px;
+  color: var(--color-text-muted, #999);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .scoreboard__stats {
   display: flex;
   flex-wrap: wrap;

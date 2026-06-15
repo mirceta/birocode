@@ -7,7 +7,17 @@ import './scoreboard.css';
 // the agent docks showing headline usage numbers + two hand-rolled SVG charts
 // (no chart lib). Reads the global GET /api/analytics, folded from the
 // activity.jsonl run ledger, and polls while the dashboard overlay is open.
+// Collapsible — the open/closed state is remembered per device.
 const POLL_MS = 5000;
+const COLLAPSED_KEY = 'claudeweb_scoreboard_collapsed';
+
+function readCollapsed() {
+  try {
+    return localStorage.getItem(COLLAPSED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 function fmtDur(ms) {
   if (!ms || ms < 0) return '0s';
@@ -30,6 +40,19 @@ function fmtClock(ms) {
 export default function Scoreboard() {
   const { t } = useT();
   const [data, setData] = useState(null);
+  const [collapsed, setCollapsed] = useState(readCollapsed);
+
+  function toggle() {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(COLLAPSED_KEY, next ? '1' : '0');
+      } catch {
+        /* private mode — in-memory only */
+      }
+      return next;
+    });
+  }
 
   const load = useCallback(async () => {
     try {
@@ -50,24 +73,43 @@ export default function Scoreboard() {
 
   return (
     <section className="scoreboard" aria-label={t('scoreboard.title')}>
-      <div className="scoreboard__stats">
-        <Stat label={t('scoreboard.promptsToday')} value={data.promptsToday ?? 0} />
-        <Stat label={t('scoreboard.peak')} value={data.peakConcurrency ?? 0} />
-        <Stat
-          label={t('scoreboard.longest')}
-          value={data.longestRun ? fmtDur(data.longestRun.ms) : '—'}
-          sub={data.longestRun?.agent}
-        />
-        <Stat label={t('scoreboard.totalWork')} value={fmtDur(data.totalWorkMs)} sub={`${data.totalRuns ?? 0} runs`} />
-      </div>
+      <button
+        type="button"
+        className="scoreboard__head"
+        onClick={toggle}
+        aria-expanded={!collapsed}
+      >
+        <span className={`scoreboard__chevron${collapsed ? ' scoreboard__chevron--collapsed' : ''}`} aria-hidden="true">⌄</span>
+        <span className="scoreboard__head-title">{t('scoreboard.title')}</span>
+        {collapsed && (
+          <span className="scoreboard__head-summary">
+            {t('scoreboard.promptsToday')}: {data.promptsToday ?? 0} · {t('scoreboard.totalWork')}: {fmtDur(data.totalWorkMs)}
+          </span>
+        )}
+      </button>
 
-      {agents.length === 0 ? (
-        <p className="scoreboard__empty">{t('scoreboard.empty')}</p>
-      ) : (
-        <div className="scoreboard__charts">
-          <UsageTimeline agents={agents} t={t} />
-          <WorkIdleBars agents={agents} t={t} />
-        </div>
+      {!collapsed && (
+        <>
+          <div className="scoreboard__stats">
+            <Stat label={t('scoreboard.promptsToday')} value={data.promptsToday ?? 0} />
+            <Stat label={t('scoreboard.peak')} value={data.peakConcurrency ?? 0} />
+            <Stat
+              label={t('scoreboard.longest')}
+              value={data.longestRun ? fmtDur(data.longestRun.ms) : '—'}
+              sub={data.longestRun?.agent}
+            />
+            <Stat label={t('scoreboard.totalWork')} value={fmtDur(data.totalWorkMs)} sub={`${data.totalRuns ?? 0} runs`} />
+          </div>
+
+          {agents.length === 0 ? (
+            <p className="scoreboard__empty">{t('scoreboard.empty')}</p>
+          ) : (
+            <div className="scoreboard__charts">
+              <UsageTimeline agents={agents} t={t} />
+              <WorkIdleBars agents={agents} t={t} />
+            </div>
+          )}
+        </>
       )}
     </section>
   );
