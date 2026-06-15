@@ -1,10 +1,11 @@
 # Side "Ask" conversation per repo
 
-**Status:** Shipped — slices 1 & 2 built, browser/API-verified on isolated :5210
-and on live :5099; **deployed to live :5099 & confirmed by the user 2026-06-15**
-(not yet merged to main) on branch `feature/repo-ask-chat`. Approach **A** with a
-**read-only Ask lane** (`--permission-mode plan`) — verified to read/answer but
-block all mutation.
+**Status:** Shipped — **all three slices** built, browser/API-verified on isolated
+:5210 and on live :5099; **deployed to live :5099 & confirmed by the user
+2026-06-15** (not yet merged to main) on branch `feature/repo-ask-chat`. Approach
+**A** with a **read-only Ask lane** (`--permission-mode plan`) — verified to
+read/answer but block all mutation. Surfaces: a third **Ask** segment in the
+main chat switcher, and a **Builder | Ask** toggle on every dashboard dock.
 
 ## Problem
 
@@ -205,9 +206,11 @@ switch to the builder to make changes").
    repo, many visible at once. `useChatFor` gained a `lane`; the ask lane uses key
    `ask:<repoId>` and passes `tabId: null` so it never patches the builder dock's
    badge/session. Browser-verified on isolated :5210 (`verify-ask-dock.mjs`): every
-   phone shows the toggle, Ask send carries `lane:"ask"`, Builder omits it. Not yet
-   deployed. (Answers "multiple Ask conversations": yes, one per repo via the docks;
-   multiple Asks on the *same* repo is intentionally out of scope.)
+   phone shows the toggle, Ask send carries `lane:"ask"`, Builder omits it.
+   **Deployed to live :5099 (frontend-only refresh, no backend restart) &
+   confirmed by the user 2026-06-15.** (Answers "multiple Ask conversations": yes,
+   one per repo via the docks; multiple Asks on the *same* repo is intentionally
+   out of scope.)
 4. (later) further polish — unread/working indicators, header entry point,
    Simple-mode exposure decision.
 
