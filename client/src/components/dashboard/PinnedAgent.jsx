@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import Chat from '../../pages/Chat';
 import { useChatFor } from '../../context/ChatContext';
 import { useT } from '../../i18n/LanguageContext';
@@ -21,11 +22,18 @@ export default function PinnedAgent({
   onMaximize,
 }) {
   const { t } = useT();
+  // Per-dock lane toggle (plans/repo-ask-chat.md slice 3): each phone can switch
+  // its embedded chat between the agent's builder conversation and a read-only
+  // Ask side conversation on the SAME repo. The ask lane uses its own key and
+  // passes tabId null so it never patches the builder dock's badge/session.
+  const [laneView, setLaneView] = useState('builder');
+  const isAsk = laneView === 'ask';
   const chat = useChatFor({
-    key: tab.id,
+    key: isAsk ? `ask:${tab.repoId}` : tab.id,
     repoId: tab.repoId,
-    tabId: tab.id,
-    sessionId: tab.sessionId,
+    tabId: isAsk ? null : tab.id,
+    sessionId: isAsk ? null : tab.sessionId,
+    lane: isAsk ? 'ask' : 'builder',
   });
 
   return (
@@ -46,6 +54,27 @@ export default function PinnedAgent({
         {repoPath && <span className="phone__path">{repoPath}</span>}
         <span className="phone__status">{t(`agents.status.${status}`)}</span>
       </button>
+      <div className="phone__lanes" role="tablist" aria-label={t('chat.scopesAria')}>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={!isAsk}
+          className={`phone__lane${!isAsk ? ' phone__lane--on' : ''}`}
+          onClick={() => setLaneView('builder')}
+        >
+          {t('chat.laneBuilder')}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={isAsk}
+          className={`phone__lane${isAsk ? ' phone__lane--on' : ''}`}
+          title={t('chat.askHint')}
+          onClick={() => setLaneView('ask')}
+        >
+          {t('chat.tabAsk')}
+        </button>
+      </div>
       {git && (
         <div className="phone__git">
           <GitStatusSummary status={git} compact />

@@ -361,6 +361,35 @@
   background: var(--color-hover, rgba(0, 0, 0, 0.04));
 }
 
+/* Per-dock Builder | Ask lane toggle (plans/repo-ask-chat.md slice 3) — a
+   compact segmented control under the phone header. */
+.phone__lanes {
+  display: flex;
+  gap: 2px;
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.phone__lane {
+  flex: 1 1 0;
+  min-height: 26px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-soft);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.phone__lane--on {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
 /* Git status block on the dock — branch + ahead/behind rows, same as the Git
    tab (plans/dashboard-git-status.md). Given its own room above the chat. */
 .phone__git {

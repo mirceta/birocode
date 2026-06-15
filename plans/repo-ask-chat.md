@@ -199,8 +199,17 @@ switch to the builder to make changes").
    Browser-verified on isolated :5210 (`verify-ask-surface.mjs`): Ask segment
    shows, selecting it switches view + shows the note, Ask send carries
    `lane:"ask"` while Project send omits it. Not yet deployed.
-3. (later) polish — unread/working indicators, entry points (dashboard dock,
-   header), Simple-mode exposure decision.
+3. **Ask on the dashboard docks** — ✅ **DONE (2026-06-15).** Each "phone" in the
+   agent-dashboard wall gets a **Builder | Ask** toggle (`PinnedAgent`), so you can
+   flip any dock to a read-only Ask conversation on that agent's repo — one Ask per
+   repo, many visible at once. `useChatFor` gained a `lane`; the ask lane uses key
+   `ask:<repoId>` and passes `tabId: null` so it never patches the builder dock's
+   badge/session. Browser-verified on isolated :5210 (`verify-ask-dock.mjs`): every
+   phone shows the toggle, Ask send carries `lane:"ask"`, Builder omits it. Not yet
+   deployed. (Answers "multiple Ask conversations": yes, one per repo via the docks;
+   multiple Asks on the *same* repo is intentionally out of scope.)
+4. (later) further polish — unread/working indicators, header entry point,
+   Simple-mode exposure decision.
 
 ## Verify
 

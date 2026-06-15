@@ -494,16 +494,16 @@ export function ChatProvider({ children }) {
   // have no reader, otherwise fix a stale badge and re-fetch the transcript so
   // the dock shows the finished turn. A no-op while a live stream is already
   // attached (it's already delivering).
-  async function refreshOne(key, tabId, repoId, sessionId) {
+  async function refreshOne(key, tabId, repoId, sessionId, lane = 'builder') {
     let runs;
     try {
       runs = await apiGet('/runs');
     } catch {
       return;
     }
-    const run = runs?.[repoId];
+    const run = runs?.[lane === 'ask' ? `${repoId}#ask` : repoId];
     if (run?.status === 'running') {
-      if (!abortRefs.current[key]) attachToRun(key, tabId, repoId, run);
+      if (!abortRefs.current[key]) attachToRun(key, tabId, repoId, run, lane);
       return;
     }
     // Not running: correct a stale 'running' badge, then re-pull the transcript.
@@ -650,7 +650,9 @@ export function ChatProvider({ children }) {
     if (!dockLoaded) return;
     const live = new Set(tabs.map((tab) => tab.id));
     const stale = Object.keys(convos).filter(
-      (k) => k !== 'default' && k !== 'harness' && k !== 'ask' && !live.has(k),
+      // Keep the fixed keys and any per-dock ask conversation (key `ask:<repoId>`,
+      // plans/repo-ask-chat.md slice 3) — those aren't dock-tab ids.
+      (k) => k !== 'default' && k !== 'harness' && k !== 'ask' && !k.startsWith('ask:') && !live.has(k),
     );
     if (stale.length === 0) return;
     for (const k of stale) {
@@ -727,7 +729,7 @@ export function ChatProvider({ children }) {
 // All API calls are scoped to `repoId`, so a background phone never reads or
 // writes another agent's repo. The session picker state is kept LOCAL here so
 // each phone has its own, rather than sharing the provider's single picker.
-export function useChatFor({ key, repoId, tabId, sessionId }) {
+export function useChatFor({ key, repoId, tabId, sessionId, lane = 'builder' }) {
   const ctx = useContext(ChatContext);
   if (!ctx) throw new Error('useChatFor must be used within a <ChatProvider>');
   const { t } = useT();
@@ -745,7 +747,10 @@ export function useChatFor({ key, repoId, tabId, sessionId }) {
     streaming: false, error: '', contextTokens: null,
   };
 
-  const target = useMemo(() => ({ key, repoId, tabId }), [key, repoId, tabId]);
+  // `lane` lets a dock drive a read-only Ask conversation on the same repo as its
+  // builder (plans/repo-ask-chat.md slice 3); tabId is passed null for the ask
+  // lane by the caller so the builder dock's badge/session aren't touched.
+  const target = useMemo(() => ({ key, repoId, tabId, lane }), [key, repoId, tabId, lane]);
 
   // This phone's own session picker (not the provider's shared one).
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -779,7 +784,7 @@ export function useChatFor({ key, repoId, tabId, sessionId }) {
     changeModel: ctx.changeModel,
     send: (text) => ctx.sendTo(text, target),
     stop: () => ctx.stopTo(target),
-    refresh: () => ctx.refreshOne(key, tabId, repoId, sessionId),
+    refresh: () => ctx.refreshOne(key, tabId, repoId, sessionId, lane),
     startNewConversation: () => {
       setPickerOpen(false);
       ctx.startNewIn(target);

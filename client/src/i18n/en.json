@@ -268,6 +268,7 @@
   "chat.tabProject": "Project",
   "chat.tabClaudeWeb": "Claude Web",
   "chat.tabAsk": "Ask",
+  "chat.laneBuilder": "Builder",
   "chat.askHint": "Read-only side conversation — ask about this project even while the builder is working. It can't make changes; switch to Project to build.",
   "chat.noSelfRepo": "The Claude Web repo is not registered on this host.",
   "chat.busyError": "Another chat is already running in this project. Wait for it to finish, then try again.",
