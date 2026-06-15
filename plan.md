@@ -75,9 +75,10 @@
   1.33× width, ~⅓ more transcript — without getting wider; cards stay square and
   the size stepper still scales overall. One-line CSS change, no JS (the embedded
   chat's flex sizing fills the taller frame, composer stays reachable).
-  Browser-verified on an isolated :5210 instance (`verify-taller-agent-cards.mjs`:
-  ratio 1.333, composer in-frame); merged to main 2026-06-15 (not yet deployed).
-  On `feature/taller-agent-cards`.
+  Browser-verified on an isolated :5210 instance and on live :5099
+  (`verify-taller-agent-cards.mjs`: ratio 1.333, composer in-frame); merged to
+  main and deployed to live :5099 2026-06-15 (rode along in the b9a0914 deploy
+  alongside dashboard-title-button). On `feature/taller-agent-cards`.
 - [Remove projects](plans/remove-projects.md) — the Projects tab can now
   **remove (unregister)** a project, mirroring its add action: a confirm-guarded
   🗑 control on each card (hidden for the self repo, shown in both UI modes) hits
