@@ -229,6 +229,61 @@
   scroll-behavior: smooth;
 }
 
+/* Pinned "your last prompt" banner (plans/pin-last-prompt.md): a non-scrolling
+   reminder above the transcript so a long answer doesn't bury what you asked.
+   Clamped collapsed; click toggles the full text. */
+.chat__pinned {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 8px 16px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-accent);
+  border-radius: var(--radius-sm, 10px);
+  background: var(--color-accent-soft);
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat__pinned-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-accent);
+}
+
+.chat__pinned-text {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.chat__pinned--expanded .chat__pinned-text {
+  -webkit-line-clamp: unset;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+/* Tighter in the dashboard docks, where vertical space is scarce. */
+.chat--embedded .chat__pinned {
+  margin: 6px 8px 0;
+  padding: 6px 8px;
+}
+
+.chat--embedded .chat__pinned-text {
+  -webkit-line-clamp: 2;
+  font-size: 12px;
+}
+
 /* "Show earlier messages" — only present when the tail window hides history
    (plans/chat-windowing.md). Sits centred at the top of the scroll area. */
 .chat__earlier {

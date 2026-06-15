@@ -65,6 +65,13 @@
 
 ## Recently shipped
 
+- [Pin my last prompt at the top of the chat](plans/pin-last-prompt.md) — the
+  user's **most recent sent prompt** stays pinned in a non-scrolling banner above
+  the transcript (clamped, click-to-expand), so a long agent response doesn't
+  bury "what did I ask?". Shows in the main chat tab **and** the dashboard docks;
+  the message still appears normally below. Frontend-only (`Chat.jsx` +
+  `chat.css`); browser-verified on an isolated :5210 instance; merged to main
+  2026-06-15. On `feature/pin-last-prompt`.
 - [Custom-prompts button on the dashboard docks](plans/dock-prompts-button.md) —
   the custom-prompts **⚙ button** (plans/custom-prompts.md) is now in the
   dashboard agent docks' embedded composer, not just the main chat tab (dropped
