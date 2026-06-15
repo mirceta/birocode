@@ -24,18 +24,16 @@ function relTime(ms, t) {
   return t('ideas.daysAgo', { n: d });
 }
 
-// Forgiving fuzzy match: the query's characters must appear in order somewhere
-// in the target (a classic command-palette subsequence match), case-insensitive
-// and ignoring whitespace in the query. Empty query matches everything.
-function fuzzyMatch(query, target) {
-  const q = query.toLowerCase().replace(/\s+/g, '');
-  if (!q) return true;
+// Literal substring filter: every whitespace-separated token in the query must
+// appear as a contiguous substring of the target (case-insensitive). Multi-word
+// queries are an AND across tokens, in any order. Empty query matches everything.
+// (Was a subsequence match, which kept ideas whose letters only lined up in order
+// across unrelated words — see plans/ideas-substring-filter.md.)
+function substringMatch(query, target) {
+  const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return true;
   const s = (target || '').toLowerCase();
-  let i = 0;
-  for (let j = 0; j < s.length && i < q.length; j++) {
-    if (s[j] === q[i]) i++;
-  }
-  return i === q.length;
+  return tokens.every((tok) => s.includes(tok));
 }
 
 // Priority (plans/idea-priority.md): 0 = none, 1–5 = increasing. The picker
@@ -109,11 +107,11 @@ export default function IdeasPanel() {
     load();
   }, [load]);
 
-  // Fuzzy filter over both the idea text and its project label.
+  // Substring filter over both the idea text and its project label.
   const visible = useMemo(() => {
     const q = filter.trim();
     if (!q) return notes;
-    return notes.filter((n) => fuzzyMatch(q, `${n.text} ${n.project || ''}`));
+    return notes.filter((n) => substringMatch(q, `${n.text} ${n.project || ''}`));
   }, [notes, filter]);
 
   async function add() {

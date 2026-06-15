@@ -9,6 +9,10 @@
 > Files tab to see wrapping mermaid labels etc. in action.
 
 > **Status (2026-06-15):** **Latest — deployed & confirmed, merged to main:**
+> the [Ideas substring filter fix](plans/ideas-substring-filter.md) — the Ideas
+> filter box now does a literal case-insensitive **substring** match (multi-word
+> = AND) instead of the old subsequence match that kept unrelated ideas. **Also
+> deployed & confirmed, merged to main:**
 > the [agent "waiting on" toggle](plans/agent-waiting.md) — an ⏳ dock-header
 > toggle (sibling of the ⭐ important button) that marks a dashboard dock as
 > waiting for another agent, with an optional inline "which agent" field and a
@@ -77,6 +81,17 @@
 
 ## Recently shipped
 
+- [Ideas filter: substring, not subsequence](plans/ideas-substring-filter.md) —
+  the Ideas filter box (Ideas tab + dashboard panel) did a **subsequence** match,
+  so it kept ideas where the query's letters merely appeared in order across
+  unrelated words. Replaced it with a plain case-insensitive **substring** match
+  (multi-word query = AND of substrings) — an idea is hidden unless the typed
+  term actually appears within it; the `project` label is still searched, empty
+  query still shows everything. Frontend-only, one function in the shared
+  `IdeasPanel`. Browser-verified on an isolated :5210 instance
+  (`verify-ideas-substring-filter.mjs` 9/9, incl. the bug repro); deployed to
+  live :5099 & confirmed 2026-06-15, merged to main. On
+  `feature/ideas-substring-filter`.
 - [Agent "waiting on" toggle](plans/agent-waiting.md) — a second dock-header
   toggle (⏳, sibling of the ⭐ important button) marks a **dashboard dock** as
   **waiting for another agent to finish**, with an optional inline free-text field
