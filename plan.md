@@ -48,14 +48,15 @@
 
 ## Active feature plans
 
-- [Serving model clarity](plans/serving-model-clarity.md) — make the **two ways
-  the Harness serves a Product** unmistakable and safe: the **global app**
-  (shared **:5200** Preview Port, iframed by the App tab *and the public, ungated
-  homepage*) vs the **local app** (per-repo **`/api/localview`** proxy, behind the
-  login). Their **inverted threat models** invite real mistakes (private tool
-  exposed publicly; no port blacklist on the proxy → SSRF footgun; silent
-  self-dev/IPv6 traps). Proposed: canonical doc → SSRF port guard → in-app
-  public-vs-private labels, with full unification parked. PROPOSED — not started.
+- [Serving model clarity](plans/serving-model-clarity.md) — help an agent
+  **expose its web app as a local product** and get it right the first time.
+  Centerpiece: a **served exposure-helper product** the harness serves on the
+  Local tab for the active repo — it **dogfoods** the Local path (we serve no
+  local product today) and doubles as the live **"done right" reference**, while
+  **reusing** the shipped Exposure-check probe (`/api/expose/check`) as its
+  engine. Supporting slices: SSRF port-guard + a canonical serving-model doc.
+  Context: the two serving paths & their inverted threat models live in
+  [serving-model-paths](plans/serving-model-paths.md). PROPOSED — not started.
   On `feature/serving-model-clarity`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses

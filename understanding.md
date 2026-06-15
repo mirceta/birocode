@@ -1,48 +1,43 @@
-# Understanding — clarify & make safe how the harness serves a Product
+# Understanding — a served helper that gets agents' local products exposed right
 
 ## What you asked for
 
-> "REALLY REALLY CLEAR UP THE UNDERSTANDING ABOUT SERVING EITHER THE LOCAL APP
-> OR THE GLOBAL APP THROUGH BIROCODE. It is a dangerous feature right now but it
-> really needs to be done right."
+Help an agent **expose its web app as a local product on our application**, and
+get it right the first time. You proposed building this as **a local app that is
+itself purposed toward helping other agents expose their local products
+correctly** — and you're right that it's central, not a side-idea.
 
-You want the two ways the Harness serves a Product to be **unmistakably clear**
-and **safe** — today they're easy to confuse and have real danger gaps.
+## What I got wrong, and corrected
 
-## How I read it (steer me if wrong)
+I first said the shipped **Exposure check** (`/api/expose/check` + the inline
+"Verify exposure" panel) already covers it. It covers the *diagnosis*, but not
+what you're after: a **served helper product**. That's different and better —
+it dogfoods the exact path and becomes the live "done right" reference. So the
+plan is now centered on building it, reusing the probe as the engine.
 
-There are **two distinct serving paths**, with *inverted* threat models:
+## The approach
 
-| | **"Global app"** | **"Local app"** |
-|---|---|---|
-| Mechanism | shared **Preview Port :5200**, iframed by the App tab **and the public homepage** | per-repo **`/api/localview/{repoId}/`** reverse proxy on :5099 |
-| Audience | **public / ungated** (`/preview/` is deliberately open) | **private** — behind the IP allowlist + password gate |
-| Port | one fixed global port (5200) | per-repo `LocalPort` in `repositories.json` |
-| Product contract | the five `/preview/` sub-path traps | bind dual-stack, relative URLs only |
+- **Centerpiece:** a small web app the harness serves on the Local tab for the
+  **active repo**. It's the tool *and* the proof — to exist it must itself be a
+  correctly-exposed local product (dual-stack, `base: './'`, root-serve), so it
+  doubles as the reference an agent copies. We serve no local product today;
+  this fixes that.
+- **Builds on, not rebuilds,** the existing Exposure check probe.
+- **Cross-repo:** the helper follows whichever repo is active (a `repoId`-aware
+  check), so every agent gets it for its own product.
+- **Supporting:** the SSRF port-guard and a canonical serving-model doc now feed
+  this tool instead of standing alone.
 
-The danger surface I found in the code:
-- **SSRF footgun** — the proxy target port is validated only `1..65535`, no
-  blacklist; an operator can point a repo's `LocalPort` at 22/445/3389 and the
-  Harness will proxy it (behind login, but still).
-- **Inverted threat models** — it's easy to put a *private* tool on the *public*
-  :5200 by mistake, or expect the public homepage to be gated.
-- **Self-Development collisions** — Product = Harness fights over :5099/:5200.
-- **IPv6 bind footgun** — an IPv4-only Local product appears "offline".
+Detail: [plans/serving-model-clarity.md](plans/serving-model-clarity.md);
+the two-paths map + danger surface: [plans/serving-model-paths.md](plans/serving-model-paths.md).
 
-## What I'll do (this turn = kickoff only)
+## Open design choice (your call)
 
-1. Branch `feature/serving-model-clarity` off a main synced with origin/main. ✅
-2. Add a **Proposed** entry to `plan.md` → Active feature plans.
-3. Write the detail plan `plans/serving-model-clarity.md` capturing the problem,
-   the danger surface, and a sliced approach (canonical doc → UX clarity →
-   safety hardening), with full re-architecture (unifying the two paths) called
-   out as **out of scope** for now.
+How the harness serves one helper across repos — I proposed: one served product,
+`repoId`-aware check, following the active repo. Steer me if you'd rather it be
+strictly per-repo or built differently.
 
-I am **not** building anything yet — this is the plan/kickoff.
+## Status
 
-## Open scope decision (need your call before slice 1 builds)
-
-What must "done right" prioritize: **safety/hardening**, **in-app UX clarity**,
-**one canonical doc**, or **actually unifying the two paths**? I've planned for
-clarity + safety and parked unification — tell me if you want it reordered or
-widened.
+Plan re-centered. **Not building yet** — say go and I'll start slice 1 (stand up
+the helper and serve it correctly on the Local tab).
