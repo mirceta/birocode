@@ -1,6 +1,17 @@
 # Taller agent docks on the dashboard
 
-**Status:** Planning (branch `feature/taller-agent-cards`). Not built.
+**Status:** Built & browser-verified on an isolated :5210 instance (branch
+`feature/taller-agent-cards`). Awaiting preview-verify on live + "deploy".
+
+## What shipped
+
+Phones-only change: `.dash__phone-cell` aspect-ratio `1 / 1` → **`3 / 4`** in
+`client/src/pages/dashboard.css`, so each dock is portrait (height ≈ 1.33× its
+width — ~⅓ more transcript) without getting any wider. Width is still capped by
+the size stepper; cards (`.dash-cell`) stay square. No JS changes — the embedded
+chat's existing flex sizing fills the taller frame and keeps the composer
+in-flow. Verified: `verify-taller-agent-cards.mjs` (ratio 1.333, composer within
+frame) on :5210.
 
 ## Problem
 
