@@ -20,6 +20,11 @@ public class FileService
     /// <summary>Maximum file size returned by <see cref="ReadFile"/> (1 MB).</summary>
     private const long MaxReadBytes = 1024 * 1024;
 
+    /// <summary>Largest file we'll scan for a line count in a directory listing
+    /// (5 MB). Bigger files (usually data/minified/generated) report no count
+    /// rather than make listing a folder pay a large read.</summary>
+    private const long MaxLineCountBytes = 5 * 1024 * 1024;
+
     public FileService(Logger logger)
     {
         _logger = logger;
@@ -29,8 +34,10 @@ public class FileService
     /// resolved absolute path) or a violation that must map to HTTP 403.</summary>
     public sealed record PathResult(bool IsValid, string FullPath, string Reason);
 
-    /// <summary>An entry in a directory listing.</summary>
-    public sealed record FileEntry(string Name, string Type, long Size);
+    /// <summary>An entry in a directory listing. <c>Lines</c> is the file's line
+    /// count for the size badge (plans/file-size-warnings.md); null for
+    /// directories, binary files, and files over the scan cap.</summary>
+    public sealed record FileEntry(string Name, string Type, long Size, int? Lines);
 
     /// <summary>The content of a read file.</summary>
     public sealed record FileContent(string Content, string Path);
@@ -98,11 +105,15 @@ public class FileService
             throw new DirectoryNotFoundException("Directory not found");
 
         var dirs = Directory.EnumerateDirectories(fullPath)
-            .Select(d => new FileEntry(Path.GetFileName(d), "dir", 0))
+            .Select(d => new FileEntry(Path.GetFileName(d), "dir", 0, null))
             .OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase);
 
         var files = Directory.EnumerateFiles(fullPath)
-            .Select(f => new FileEntry(Path.GetFileName(f), "file", SafeFileLength(f)))
+            .Select(f =>
+            {
+                var size = SafeFileLength(f);
+                return new FileEntry(Path.GetFileName(f), "file", size, CountLines(f, size));
+            })
             .OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase);
 
         return dirs.Concat(files).ToList();
@@ -179,6 +190,54 @@ public class FileService
     {
         try { return new FileInfo(path).Length; }
         catch { return 0; }
+    }
+
+    /// <summary>
+    /// Counts the lines in a text file for the directory listing's size badge
+    /// (plans/file-size-warnings.md). "Lines" = newline count, plus one when the
+    /// final line is unterminated (so a one-line file with no trailing newline
+    /// reports 1). Returns null — meaning "no badge" — for binary files (a NUL
+    /// byte in the first 8 KB, matching <see cref="LooksBinary"/>), files over
+    /// the scan cap, or any read error. Streams in chunks so it never holds the
+    /// whole file in memory.
+    /// </summary>
+    private static int? CountLines(string path, long size)
+    {
+        if (size == 0) return 0;
+        if (size > MaxLineCountBytes) return null;
+
+        try
+        {
+            using var stream = File.OpenRead(path);
+            var buffer = new byte[64 * 1024];
+            long newlines = 0;
+            byte lastByte = 0;
+            bool firstChunk = true;
+            int read;
+
+            while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                // Binary guard on the first chunk only, mirroring LooksBinary.
+                if (firstChunk && buffer.AsSpan(0, Math.Min(read, 8192)).IndexOf((byte)0) >= 0)
+                    return null;
+                firstChunk = false;
+
+                var span = buffer.AsSpan(0, read);
+                int idx;
+                while ((idx = span.IndexOf((byte)'\n')) >= 0)
+                {
+                    newlines++;
+                    span = span[(idx + 1)..];
+                }
+                lastByte = buffer[read - 1];
+            }
+
+            return (int)(newlines + (lastByte == (byte)'\n' ? 0 : 1));
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>Heuristic binary check: a NUL byte in the first 8 KB.</summary>

@@ -4,6 +4,7 @@ import { useLongPress } from '../../hooks/useLongPress';
 
 const INDENT_BASE = 14; // .file-row horizontal padding (px)
 const INDENT_STEP = 14; // extra indent per tree depth (px)
+const OVERSIZE_LINES = 500; // files past this get a refactor warning (plans/file-size-warnings.md)
 
 function formatSize(bytes) {
   if (bytes == null || Number.isNaN(bytes)) return '';
@@ -24,12 +25,17 @@ function indent(depth) {
 // One row. Tap a folder to expand/collapse it in place, tap a file to preview
 // it. Press-and-hold a file to drop an @reference to it into the chat message.
 function TreeRow({ entry, path, depth, isExpanded, onToggleDir, onOpenFile, onReferenceFile }) {
+  const { t } = useT();
   const isDir = entry.type === 'dir';
   const press = useLongPress(
     () => onReferenceFile(path),
     () => (isDir ? onToggleDir(path) : onOpenFile(path)),
     { enabled: !isDir }, // long-press only references files, not folders
   );
+
+  const lines = entry.lines;
+  const hasLines = !isDir && lines != null;
+  const oversize = hasLines && lines > OVERSIZE_LINES;
 
   return (
     <button
@@ -49,6 +55,15 @@ function TreeRow({ entry, path, depth, isExpanded, onToggleDir, onOpenFile, onRe
         {entry.name}
         {isDir ? '/' : ''}
       </span>
+      {hasLines && (
+        <span
+          className={`file-row__lines${oversize ? ' file-row__lines--warn' : ''}`}
+          title={oversize ? t('files.linesWarn', { n: lines, limit: OVERSIZE_LINES }) : t('files.lines', { n: lines })}
+        >
+          {oversize ? '\u26A0\uFE0F ' : ''}
+          {t('files.linesShort', { n: lines })}
+        </span>
+      )}
       {!isDir && <span className="file-row__size">{formatSize(entry.size)}</span>}
     </button>
   );
