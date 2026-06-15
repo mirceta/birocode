@@ -172,6 +172,8 @@
   "dashboard.sizeBigger": "Daha buyuk",
   "dashboard.ideasWide": "Fikirler panelini genislet",
   "dashboard.ideasNarrow": "Fikirler panelini daralt",
+  "dashboard.copyPath": "Klasor yolunu kopyala",
+  "dashboard.copied": "Kopyalandi!",
   "agents.status.idle": "Bosta",
   "agents.status.running": "Calisiyor...",
   "agents.status.done": "Tamamlandi",

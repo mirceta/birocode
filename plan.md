@@ -62,6 +62,13 @@
 
 ## Recently shipped
 
+- [Copyable agent repo path on the dashboard](plans/dock-copy-path.md) — each
+  agent's repository folder path on the dashboard (cards + phone docks) is now
+  **copyable** via a 📋 control with a "Copied!" confirmation, so a path can be
+  handed to another agent without retyping. The copy click is isolated from the
+  card/dock's open-agent button; `copyText()` has an `execCommand` fallback for
+  non-secure HTTP/LAN contexts. Frontend-only; browser-verified on an isolated
+  :5210 instance; merged to main 2026-06-15. On `feature/dock-copy-path`.
 - [Side "Ask" conversation per repo](plans/repo-ask-chat.md) — a persistent,
   always-available **Ask** chat: a **read-only side conversation** that runs on
   its own lane so you can ask about a repo **while the builder is running** (no
