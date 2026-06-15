@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import MessageBubble from '../components/chat/MessageBubble';
 import ChatInput from '../components/chat/ChatInput';
 import ThinkingIndicator from '../components/chat/ThinkingIndicator';
@@ -86,6 +86,17 @@ export default function Chat({ chat: injected, embedded = false }) {
   const total = messages.length;
   const start = Math.max(0, total - visibleCount);
   const hidden = start;
+
+  // Pin the user's most recent prompt at the top so it stays visible no matter
+  // how much the agent writes (plans/pin-last-prompt.md). Clamped, click to
+  // expand. A copy — the message still renders in the transcript below.
+  const lastUserText = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'user' && (messages[i].text || '').trim()) return messages[i].text;
+    }
+    return '';
+  }, [messages]);
+  const [pinnedExpanded, setPinnedExpanded] = useState(false);
 
   // Switching conversations (resume / new / dashboard agent swap) snaps the
   // window back to the tail so we never mount a huge history up front.
@@ -210,6 +221,19 @@ export default function Chat({ chat: injected, embedded = false }) {
       </div>
 
       {!embedded && showUnderstanding && <UnderstandingPanel />}
+
+      {lastUserText && (
+        <button
+          type="button"
+          className={`chat__pinned${pinnedExpanded ? ' chat__pinned--expanded' : ''}`}
+          onClick={() => setPinnedExpanded((v) => !v)}
+          title={pinnedExpanded ? t('chat.pinnedCollapse') : t('chat.pinnedExpand')}
+          aria-expanded={pinnedExpanded}
+        >
+          <span className="chat__pinned-label">{t('chat.lastPrompt')}</span>
+          <span className="chat__pinned-text">{lastUserText}</span>
+        </button>
+      )}
 
       <div className="chat__scroll" ref={scrollRef} onScroll={handleScroll}>
         {hidden > 0 && (
