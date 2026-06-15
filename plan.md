@@ -33,6 +33,13 @@
 
 ## Active feature plans
 
+- [Scoreboard / analytics](plans/scoreboard-analytics.md) — quantify agent
+  usage: longest-running agent, peak concurrent agents, prompts sent today,
+  per-agent used-window with work-vs-idle time, total work time across all
+  agents, plus graphs. **Design decided** (not built): a new append-only
+  `activity.jsonl` events ledger → `/api/analytics`; UI is a panel on the
+  dashboard above the agent docks; hand-rolled SVG charts; backfill deferred.
+  On `feature/scoreboard-analytics`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
