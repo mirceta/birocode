@@ -64,11 +64,41 @@
   gap: 10px;
 }
 
+/* Expanded for the architectural plan (plans/ideas-arch-plan.md): ≥2× width. */
+.dash__ideas--wide {
+  flex-basis: 620px;
+  width: 620px;
+}
+
+.dash__ideas-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .dash__ideas-title {
   font-size: 13px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  color: var(--color-accent);
+}
+
+.dash__ideas-expand {
+  flex-shrink: 0;
+  min-width: 28px;
+  height: 26px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.dash__ideas-expand:hover {
+  border-color: var(--color-accent);
   color: var(--color-accent);
 }
 

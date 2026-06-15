@@ -5,6 +5,84 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  /* Fill the host (Ideas tab content area / dashboard dock) so the tall
+     Architectural-plan tab has height to grow into (plans/ideas-arch-plan.md). */
+  flex: 1;
+  min-height: 0;
+}
+
+/* Tabs: Ideas | Architectural plan (plans/ideas-arch-plan.md). */
+.ideas__tabs {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.ideas__tab {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-muted, #666);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ideas__tab--active {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: #fff;
+}
+
+/* The Ideas tab's own content (composer + filter + list) scrolls within. */
+.ideas__tabpanel {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Architectural-plan tab (plans/ideas-arch-plan.md): a single user-written doc,
+   tall — the view / textarea fill the available panel height. */
+.archplan {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.archplan__text {
+  flex: 1;
+  min-height: 50vh;
+  overflow: auto;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius, 10px);
+  background: var(--color-surface);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+}
+
+.archplan__text--empty {
+  border-style: dashed;
+}
+
+.archplan__textarea {
+  flex: 1;
+  min-height: 50vh;
+  resize: vertical;
+}
+
+.archplan__actions {
+  flex-shrink: 0;
 }
 
 .ideas__compose {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiGet, apiPost, apiPatch, apiDelete } from '../../api/client';
 import ErrorBanner from '../shared/ErrorBanner';
+import ArchPlanSection from './ArchPlanSection';
 import { useT } from '../../i18n/LanguageContext';
 import './ideas.css';
 
@@ -37,8 +38,20 @@ function fuzzyMatch(query, target) {
   return i === q.length;
 }
 
+const TAB_KEY = 'claudeweb_ideas_tab'; // remembered tab: 'ideas' | 'plan'
+
 export default function IdeasPanel() {
   const { t } = useT();
+
+  const [tab, setTab] = useState(() => (localStorage.getItem(TAB_KEY) === 'plan' ? 'plan' : 'ideas'));
+  function chooseTab(next) {
+    setTab(next);
+    try {
+      localStorage.setItem(TAB_KEY, next);
+    } catch {
+      /* private mode — in-memory only */
+    }
+  }
 
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -139,6 +152,31 @@ export default function IdeasPanel() {
 
   return (
     <div className="ideas">
+      <div className="ideas__tabs" role="tablist" aria-label={t('nav.ideas')}>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'ideas'}
+          className={`ideas__tab${tab === 'ideas' ? ' ideas__tab--active' : ''}`}
+          onClick={() => chooseTab('ideas')}
+        >
+          {t('nav.ideas')}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'plan'}
+          className={`ideas__tab${tab === 'plan' ? ' ideas__tab--active' : ''}`}
+          onClick={() => chooseTab('plan')}
+        >
+          {t('archplan.title')}
+        </button>
+      </div>
+
+      {tab === 'plan' ? (
+        <ArchPlanSection />
+      ) : (
+        <div className="ideas__tabpanel">
       <div className="ideas__compose">
         <textarea
           ref={draftRef}
@@ -228,6 +266,8 @@ export default function IdeasPanel() {
           ))
         )}
       </div>
+        </div>
+      )}
     </div>
   );
 }

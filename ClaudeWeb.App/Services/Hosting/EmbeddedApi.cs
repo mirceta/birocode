@@ -1,4 +1,5 @@
 using ClaudeWeb.Models;
+using ClaudeWeb.Services.ArchPlan;
 using ClaudeWeb.Services.Auth;
 using ClaudeWeb.Services.Chat;
 using ClaudeWeb.Services.Deploy;
@@ -129,6 +130,7 @@ public class EmbeddedApi
             builder.Services.AddTerminalModule(); // terminal tab (plans/terminal-tab.md)
             builder.Services.AddSettingsModule(); // UI settings (plans/settings-tab.md)
             builder.Services.AddNotesModule();  // per-project ideas (plans/ideas-tab.md)
+            builder.Services.AddArchPlanModule(); // architectural-plan doc (plans/ideas-arch-plan.md)
             builder.Services.AddPinsModule();   // per-project Files pins (plans/plan-files-merge.md)
             builder.Services.AddPromptsModule(); // user-defined composer prompts (plans/custom-prompts.md)
             builder.Services.AddDeployModule(); // deployments tab (plans/deployments-tab.md)
