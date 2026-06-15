@@ -33,6 +33,14 @@
 
 ## Active feature plans
 
+- [Side "Ask" conversation per repo](plans/repo-ask-chat.md) — a persistent,
+  always-available **Ask** chat attached to a repo, separate from its **builder**
+  agent, so you can ask questions about the repo **while the builder is running**
+  (today the per-repo single-run lock returns 409) and **without polluting the
+  builder's context** (own session). Crux: loosen the run gate to per-`(repo,
+  lane)` and run the Ask lane **read-only** so two `claude` processes can share
+  one working dir safely. One decision open (read-only vs full-capability Ask).
+  Planning; not built. On `feature/repo-ask-chat`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
