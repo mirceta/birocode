@@ -40,6 +40,13 @@
 
 ## Active feature plans
 
+- [Priority for ideas](plans/idea-priority.md) — give each idea a **priority**
+  with **five levels**, settable from the Ideas surface, and tint the idea card's
+  **background more brightly red as the priority rises**. Applies to **both** the
+  Ideas tab and the dashboard Ideas panel (one shared `IdeasPanel`). Backend adds
+  an optional `Priority` (0–5, no migration, like `project`); frontend adds a 1–5
+  picker + `data-priority` tints in `ideas.css`. Visual only (no reordering). On
+  `feature/idea-priority`, not started.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
