@@ -1,7 +1,8 @@
 # Taller agent docks on the dashboard
 
-**Status:** Built & browser-verified on an isolated :5210 instance (branch
-`feature/taller-agent-cards`). Awaiting preview-verify on live + "deploy".
+**Status:** Shipped — browser-verified on an isolated :5210 instance and
+confirmed by the user; merged to main 2026-06-15 (not yet deployed) on branch
+`feature/taller-agent-cards`.
 
 ## What shipped
 
