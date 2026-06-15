@@ -16,6 +16,7 @@ export default function PinnedAgent({
   tab,
   status,
   recency,
+  contentZoom = 1,
   repoPath,
   git,
   gitRefreshing = false,
@@ -93,7 +94,7 @@ export default function PinnedAgent({
           )}
         </div>
       )}
-      <div className="phone__screen">
+      <div className="phone__screen" style={contentZoom !== 1 ? { zoom: contentZoom } : undefined}>
         <Chat chat={chat} embedded />
       </div>
     </div>
