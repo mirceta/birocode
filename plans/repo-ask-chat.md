@@ -48,16 +48,21 @@ time**. Two hard constraints shape every option:
 
 ## Approaches considered
 
-| # | Approach | Dev effort | Dev/safety risk | Concurrent w/ builder? | Context isolation | Conversation continuity | Resource cost | UX clarity | Blast radius |
-|---|----------|-----------|-----------------|------------------------|-------------------|-------------------------|---------------|------------|--------------|
-| **A** | **Read-only Ask lane, shared cwd** — gate per `(repo, lane)`; spawn Ask `claude` read-only in the same dir | **Med** — backend gate change + read-only spawn flag + a chat surface | **Low–Med** — safe *iff* read-only flag truly holds; rests on CLI support | ✅ Yes | ✅ Own session | ✅ Persistent | **Low** — just another process | **High** — one obvious "Ask" surface | Med — touches the core run gate |
-| **B** | **Worktree-isolated Ask agent** — Ask runs full-capability in its own git worktree of the repo | High — worktree lifecycle (create/cleanup), path plumbing, gate change | Med — no file race, but worktree mgmt bugs; Ask can edit (its copy) | ✅ Yes | ✅ Own session | ✅ Persistent | **High** — disk per worktree, setup latency | Med — "why is my Ask on a copy?" / uncommitted builder edits invisible | Med–High — new subsystem |
-| **C** | **Twin repo entry (same path)** — register the path again as an "Ask" project; existing per-repo gate already allows both | **Low** — mostly registration/UX; **no run-gate change** | Med — still shares cwd, so Ask must be read-only anyway; two repoIds for one path is leaky | ✅ Yes | ✅ Own session (separate repoId) | ✅ Persistent | Low | **Low** — two entries for one folder is confusing | **Low** — reuses existing machinery |
-| **D** | **Queued / serialized Ask** — keep one run per repo; Ask waits behind the builder | **Low** — small queue + UI state | **Low** | ❌ **No** — fails the core need | ✅ Own session | ✅ Persistent | Low | Med — "why won't it answer now?" | **Low** |
-| **E** | **Direct Claude API ask service** — in-process Anthropic SDK Q&A with read-only repo tools, bypass the CLI | **High** — new tool loop, context gathering, streaming, model plumbing | Med–High — reimplements what the CLI gives free; diverges from architecture | ✅ Yes (independent of the lock) | ✅ Separate by construction | ⚠️ Build our own history store | Med | Med — different "feel" from CLI agents | High — large new surface |
+Every cell is rated ★ / 5, **oriented so more stars = better**: low dev effort,
+low risk, low resource cost, and a small blast radius score *high* (5★), not low.
+The raw qualitative basis for each is in the per-approach notes below.
 
-Legend: ✅ meets it · ⚠️ partial / needs extra work · ❌ doesn't meet it. Effort/risk
-are relative (Low < Med < High).
+| # | Approach | Dev effort | Dev/safety risk | Concurrent w/ builder | Context isolation | Conversation continuity | Resource cost | UX clarity | Blast radius |
+|---|----------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **A** | **Read-only Ask lane** (shared cwd) | ★★★ | ★★★★ | ★★★★★ | ★★★★★ | ★★★★★ | ★★★★★ | ★★★★★ | ★★★ |
+| **B** | **Worktree-isolated Ask agent** | ★★ | ★★★ | ★★★★★ | ★★★★★ | ★★★★★ | ★★ | ★★★ | ★★ |
+| **C** | **Twin repo entry** (same path) | ★★★★★ | ★★★ | ★★★★★ | ★★★★★ | ★★★★★ | ★★★★★ | ★★ | ★★★★★ |
+| **D** | **Queued / serialized Ask** | ★★★★★ | ★★★★★ | ★ | ★★★★★ | ★★★★★ | ★★★★★ | ★★★ | ★★★★★ |
+| **E** | **Direct Claude API service** | ★★ | ★★ | ★★★★★ | ★★★★★ | ★★★ | ★★★ | ★★★ | ★ |
+
+Reading the inverted dimensions: A's **Blast radius ★★★** = "moderate" (it touches
+the core run gate); C/D's **★★★★★** = "tiny" (no gate change). E's **Dev effort ★★**
+= "high effort." Fewer stars always means the worse outcome.
 
 **Overall rating (★ / 5)** — a single judgement weighing "meets the need" highest,
 then risk and cost:
