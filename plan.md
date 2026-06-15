@@ -36,6 +36,12 @@
 
 ## Active feature plans
 
+- [Local app on the agent dock](plans/dock-local-app.md) — make a Repo's
+  Local-tab product (its `localPort` app) renderable inside the agent dock that
+  hosts it. First slice: pin **whether** the agent serves a local app — a
+  dedicated space **above the git section** on each dock stating whether a
+  Local-tab app was determined to be served there. On `feature/dock-local-app`,
+  not started.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left

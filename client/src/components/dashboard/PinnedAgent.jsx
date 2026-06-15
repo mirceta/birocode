@@ -18,6 +18,7 @@ export default function PinnedAgent({
   recency,
   contentZoom = 1,
   repoPath,
+  localApp,
   git,
   gitRefreshing = false,
   onRefreshGit,
@@ -77,6 +78,26 @@ export default function PinnedAgent({
           {t('chat.tabAsk')}
         </button>
       </div>
+      {/* Local-tab app serving state (plans/dock-local-app.md): a dedicated row
+          above the git section saying whether this agent serves a local app.
+          Configured-but-dead reads "offline"; no localPort reads "no local app". */}
+      {(() => {
+        const port = localApp?.port;
+        const state = !port ? 'none' : localApp.online ? 'serving' : 'offline';
+        const text =
+          state === 'serving'
+            ? t('dashboard.localServing', { port })
+            : state === 'offline'
+              ? t('dashboard.localOffline', { port })
+              : t('dashboard.localNone');
+        return (
+          <div className={`phone__local phone__local--${state}`}>
+            <span className="phone__local-dot" />
+            <span className="phone__local-label">{t('dashboard.localApp')}</span>
+            <span className="phone__local-text">{text}</span>
+          </div>
+        );
+      })()}
       {git && (
         <div className="phone__git">
           <GitStatusSummary status={git} compact />
