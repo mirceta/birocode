@@ -159,33 +159,48 @@ public class RunSessionService
     }
 
     /// <summary>
-    /// Atomically claims the run slot for a repo. False if a run is already in
-    /// progress there; otherwise creates a fresh session (discarding the
-    /// previous finished one) and returns it.
+    /// A run "lane" lets one repo host two independent conversations at once: the
+    /// default <c>builder</c> (full-capability, the only writer) and a read-only
+    /// <c>ask</c> side conversation (plans/repo-ask-chat.md). Lanes get separate
+    /// run slots, sessions, and seq streams. The builder keeps the bare repoId as
+    /// its dictionary key, so existing clients and per-repo seq continuity are
+    /// unaffected; other lanes are suffixed.
     /// </summary>
-    public bool TryBeginRun(string repoId, out RunSession session)
+    private static string Key(string repoId, string lane) =>
+        string.IsNullOrEmpty(lane) || lane == "builder" ? repoId : $"{repoId}#{lane}";
+
+    /// <summary>
+    /// Atomically claims the run slot for a (repo, lane). False if a run is
+    /// already in progress on that lane; otherwise creates a fresh session
+    /// (discarding the previous finished one) and returns it. Different lanes of
+    /// the same repo (builder + ask) can run concurrently.
+    /// </summary>
+    public bool TryBeginRun(string repoId, string lane, out RunSession session)
     {
+        var key = Key(repoId, lane);
         lock (_gate)
         {
-            if (_sessions.TryGetValue(repoId, out var existing) && existing.Status == "running")
+            if (_sessions.TryGetValue(key, out var existing) && existing.Status == "running")
             {
                 session = existing;
                 return false;
             }
             session = new RunSession(repoId, existing?.LastSeq ?? 0);
-            _sessions[repoId] = session;
+            _sessions[key] = session;
             return true;
         }
     }
 
-    public RunSession? Get(string repoId)
+    public RunSession? Get(string repoId, string lane = "builder")
     {
-        lock (_gate) return _sessions.GetValueOrDefault(repoId);
+        lock (_gate) return _sessions.GetValueOrDefault(Key(repoId, lane));
     }
 
-    public bool IsBusy(string repoId) => Get(repoId)?.Status == "running";
+    public bool IsBusy(string repoId, string lane = "builder") => Get(repoId, lane)?.Status == "running";
 
-    /// <summary>Per-repo run state for GET /api/runs.</summary>
+    /// <summary>Per-(repo, lane) run state for GET /api/runs. The builder lane is
+    /// keyed by the bare repoId; other lanes (e.g. ask) are keyed
+    /// <c>repoId#lane</c> so the frontend can reconcile each independently.</summary>
     public Dictionary<string, object> Snapshot()
     {
         lock (_gate)

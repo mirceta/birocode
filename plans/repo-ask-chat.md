@@ -177,12 +177,19 @@ directly resolves the "where do I ask?" confusion. The Ask agent will refuse
 edit requests by design; set that expectation in the surface ("Ask is read-only —
 switch to the builder to make changes").
 
-## Slices (draft)
+## Slices
 
-1. **Backend ask lane** — per-(repo, lane) run gate + read-only spawn; prove two
-   concurrent runs (builder + ask) on one repo via API, ask lane can't write.
+1. **Backend ask lane** — ✅ **DONE (2026-06-15).** Run gate re-keyed by
+   `(repo, lane)` in `RunSessionService` (builder keeps the bare repoId; ask is
+   `repoId#ask`); `lane` threaded through `/api/chat`, `/chat/stream`,
+   `/chat/stop`, `/api/runs`; ask lane spawns `claude --permission-mode plan`.
+   API-verified on isolated :5210 (`verify-ask-lane.mjs`): builder + ask run
+   concurrently on one repo (no 409), both lanes show in `/api/runs`, a 2nd
+   builder still 409s, and an ask turn told to write a file **did not** create it.
+   Empirically confirmed `--permission-mode plan` in headless `-p` reads/answers
+   but blocks all mutation (Write/Edit/Bash gated behind un-approvable ExitPlanMode).
 2. **Frontend Ask surface** — the always-available Ask chat, own session,
-   not blocked by a running builder; browser-verified.
+   not blocked by a running builder; browser-verified. (Next.)
 3. (later) polish — unread/working indicators, entry points (dashboard dock,
    header), Simple-mode exposure decision.
 

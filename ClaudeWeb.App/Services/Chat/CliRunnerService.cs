@@ -63,7 +63,8 @@ public class CliRunnerService
         string workingDirectory,
         string? model = null,
         Func<object, Task>? emit = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        bool readOnly = false)
     {
         var resuming = !string.IsNullOrWhiteSpace(sessionId);
 
@@ -79,7 +80,7 @@ public class CliRunnerService
         Process? process = null;
         try
         {
-            var psi = CreateProcessInfo(message, sessionId, workingDirectory, model);
+            var psi = CreateProcessInfo(message, sessionId, workingDirectory, model, readOnly);
             _logger.Info(resuming
                 ? $"[CLI] Resuming session {Short(sessionId!)} in {workingDirectory}"
                 : $"[CLI] Starting new session in {workingDirectory}");
@@ -594,7 +595,7 @@ public class CliRunnerService
         return "claude.cmd"; // previous behavior as a last resort
     }
 
-    private static ProcessStartInfo CreateProcessInfo(string message, string? sessionId, string? workingDirectory, string? model = null)
+    private static ProcessStartInfo CreateProcessInfo(string message, string? sessionId, string? workingDirectory, string? model = null, bool readOnly = false)
     {
         var psi = new ProcessStartInfo
         {
@@ -624,6 +625,17 @@ public class CliRunnerService
         {
             psi.ArgumentList.Add("--model");
             psi.ArgumentList.Add(model);
+        }
+
+        // Read-only "ask" lane (plans/repo-ask-chat.md): plan mode lets the agent
+        // read/search/answer but structurally blocks every mutation -- in headless
+        // -p mode it can't approve ExitPlanMode, so Write/Edit/Bash never execute.
+        // This is what makes a side conversation safe to run in the SAME working
+        // directory as a building agent. (Verified against claude v2.1.177.)
+        if (readOnly)
+        {
+            psi.ArgumentList.Add("--permission-mode");
+            psi.ArgumentList.Add("plan");
         }
 
         // Force Max-plan / CLI auth -- never pick up an API key from the env.

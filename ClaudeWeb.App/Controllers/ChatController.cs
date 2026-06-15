@@ -40,8 +40,15 @@ public class ChatController : ControllerBase
         _logger = logger;
     }
 
-    /// <summary>Request body for POST /api/chat.</summary>
-    public record ChatRequest(string? Message, string? SessionId, string? Model);
+    /// <summary>Request body for POST /api/chat. <c>Lane</c> selects the run lane:
+    /// <c>builder</c> (default, full capability) or <c>ask</c> (read-only side
+    /// conversation that can run concurrently with the builder — see
+    /// plans/repo-ask-chat.md).</summary>
+    public record ChatRequest(string? Message, string? SessionId, string? Model, string? Lane);
+
+    /// <summary>Only two lanes exist; anything unrecognized falls back to the
+    /// builder so a stray value can never spawn an unexpected run mode.</summary>
+    private static string NormalizeLane(string? lane) => lane == "ask" ? "ask" : "builder";
 
     /// <summary>
     /// Starts one detached chat turn and attaches this response to it as SSE.
@@ -70,11 +77,13 @@ public class ChatController : ControllerBase
             return;
         }
 
-        // Per-repo single-flight: a turn already running in THIS repo is rejected,
-        // but other repos can run concurrently.
-        if (!_runs.TryBeginRun(repo.Id, out var session))
+        // Per-(repo, lane) single-flight: a turn already running on THIS repo's
+        // lane is rejected, but other repos -- and the repo's OTHER lane (builder
+        // vs read-only ask) -- can run concurrently (plans/repo-ask-chat.md).
+        var lane = NormalizeLane(request?.Lane);
+        if (!_runs.TryBeginRun(repo.Id, lane, out var session))
         {
-            _logger.Info($"[CHAT] Rejected: a chat turn is already running for \"{repo.Name}\".");
+            _logger.Info($"[CHAT] Rejected: a {lane} turn is already running for \"{repo.Name}\".");
             Response.StatusCode = StatusCodes.Status409Conflict;
             await Response.WriteAsJsonAsync(new { error = "Another chat request is already in progress for this project." });
             return;
@@ -88,6 +97,7 @@ public class ChatController : ControllerBase
         var sessionId = request?.SessionId;
         var model = request?.Model;
         var path = repo.Path;
+        var readOnly = lane == "ask"; // the ask lane runs claude in read-only plan mode
         _ = Task.Run(async () =>
         {
             try
@@ -98,7 +108,8 @@ public class ChatController : ControllerBase
                     workingDirectory: path,
                     model: model,
                     emit: session.EmitAsync,
-                    ct: session.Cts.Token);
+                    ct: session.Cts.Token,
+                    readOnly: readOnly);
             }
             catch (Exception ex)
             {
@@ -120,12 +131,13 @@ public class ChatController : ControllerBase
     /// after the Run finished (replay only), so a reopened tab can catch up.
     /// </summary>
     [HttpGet("chat/stream")]
-    public async Task ChatStream([FromQuery] int after = 0)
+    public async Task ChatStream([FromQuery] int after = 0, [FromQuery] string? lane = null)
     {
         _logger.CountRequest();
 
+        var laneName = NormalizeLane(lane);
         var repo = _repos.Current();
-        var session = repo is null ? null : _runs.Get(repo.Id);
+        var session = repo is null ? null : _runs.Get(repo.Id, laneName);
         if (session is null)
         {
             Response.StatusCode = StatusCodes.Status404NotFound;
@@ -133,23 +145,24 @@ public class ChatController : ControllerBase
             return;
         }
 
-        _logger.Info($"[CHAT] Reattach to run in \"{repo!.Name}\" (after seq {after}, status {session.Status})");
+        _logger.Info($"[CHAT] Reattach to {laneName} run in \"{repo!.Name}\" (after seq {after}, status {session.Status})");
         await AttachAsync(session, after);
     }
 
     /// <summary>Explicitly stops the repo's running turn (kills the CLI process
     /// tree). The only way a Run dies early -- disconnects no longer stop it.</summary>
     [HttpPost("chat/stop")]
-    public IActionResult ChatStop()
+    public IActionResult ChatStop([FromQuery] string? lane = null)
     {
         _logger.CountRequest();
 
+        var laneName = NormalizeLane(lane);
         var repo = _repos.Current();
-        var session = repo is null ? null : _runs.Get(repo.Id);
+        var session = repo is null ? null : _runs.Get(repo.Id, laneName);
         if (session is null || session.Status != "running")
             return NotFound(new { error = "No running turn for this repository." });
 
-        _logger.Info($"[CHAT] Stop requested for run in \"{repo!.Name}\"");
+        _logger.Info($"[CHAT] Stop requested for {laneName} run in \"{repo!.Name}\"");
         session.Cts.Cancel();
         return Ok(new { stopped = true });
     }
