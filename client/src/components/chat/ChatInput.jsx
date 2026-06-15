@@ -27,8 +27,9 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
   // Prompts (plans/custom-prompts.md): a single ⚙ button opens a modal that holds
   // BOTH the built-in prompts (understanding, kickoff — formerly their own toolbar
   // buttons) and the user's custom ones, each with a "Use" button that prefills
-  // the composer. Modal only on the main composer (not dashboard phones —
-  // `embedded`).
+  // the composer. Available on the main composer AND the dashboard docks
+  // (plans/dock-prompts-button.md) — the modal portals to <body>, so the small
+  // dock window doesn't shrink it.
   const customPromptsEnabled = useFeature('customPrompts');
   const { prompts, addPrompt, updatePrompt, deletePrompt } = usePrompts();
   const [mgrOpen, setMgrOpen] = useState(false);
@@ -100,7 +101,7 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
 
   return (
     <div className="chat-input">
-      {customPromptsEnabled && !embedded && mgrOpen && (
+      {customPromptsEnabled && mgrOpen && (
         <PromptManager
           prompts={prompts}
           onAdd={addPrompt}
@@ -172,7 +173,7 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
           className="chat-input__file-hidden"
           onChange={handleFileChange}
         />
-        {customPromptsEnabled && !embedded && (
+        {customPromptsEnabled && (
           <button
             type="button"
             className="chat-input__manage"

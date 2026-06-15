@@ -62,6 +62,13 @@
 
 ## Recently shipped
 
+- [Custom-prompts button on the dashboard docks](plans/dock-prompts-button.md) —
+  the custom-prompts **⚙ button** (plans/custom-prompts.md) is now in the
+  dashboard agent docks' embedded composer, not just the main chat tab (dropped
+  the `!embedded` gate in `ChatInput.jsx`; the modal already portals to `<body>`,
+  so the small dock doesn't shrink it, and "Use" prefills that dock's composer).
+  Frontend-only; browser-verified on an isolated :5210 instance; merged to main
+  2026-06-15. On `feature/dock-prompts-button`.
 - [Zoom the content inside the agent docks](plans/dashboard-zoom.md) — a header
   **A−/A+** control zooms the **content rendered inside** each dashboard dock (the
   embedded chat's text + controls) smaller/bigger via CSS `zoom` on the phone
