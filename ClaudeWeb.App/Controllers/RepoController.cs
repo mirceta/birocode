@@ -17,6 +17,7 @@ namespace ClaudeWeb.Controllers;
 ///   GET  /api/repos                 -- [{ id, name, path, exists, isGitRepo, isSelf, visibility, localPort }]
 ///   GET  /api/repos/folders?path=   -- { root, path, folders: [{ name, registered, isGitRepo }] }
 ///   POST /api/repos                 -- { folder, name?, visibility?, createFolder? } -> the new repo + created flag
+///   DELETE /api/repos/{id}          -- unregisters a project (keeps the folder on disk); self repo refused
 ///   POST /api/repos/{id}/visibility -- { visibility: "basic"|"advanced" }
 ///   POST /api/repos/{id}/localport  -- { port } 1..65535 sets, null/0 clears (plans/local-app-tab.md)
 ///
@@ -147,6 +148,26 @@ public class RepoController : ControllerBase
             _logger.Error($"[REPO] Add failed: {ex.Message}");
             return BadRequest(new { error = ex.Message });
         }
+    }
+
+    /// <summary>
+    /// Unregisters a project from the harness (drops the repositories.json
+    /// entry). It does NOT delete the folder from disk — the mirror of add,
+    /// which can register a pre-existing folder. The pinned self repo cannot be
+    /// removed (the registry refuses); the client also hides its Remove control.
+    /// </summary>
+    [HttpDelete("{id}")]
+    public IActionResult Remove(string id)
+    {
+        _logger.CountRequest();
+        var repo = _registry.GetAll().FirstOrDefault(r => r.Id == id);
+        if (repo is null)
+            return NotFound(new { error = "Unknown repository id" });
+        if (repo.IsSelf)
+            return BadRequest(new { error = "The Claude Web project cannot be removed" });
+        return _registry.Remove(id)
+            ? Ok(new { removed = true })
+            : NotFound(new { error = "Unknown repository id" });
     }
 
     public record VisibilityRequest(string? Visibility);

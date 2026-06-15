@@ -1,7 +1,8 @@
 # Remove projects
 
-> **Status (2026-06-15):** Proposed — branch `feature/remove-projects`.
-> Not built yet.
+> **Status (2026-06-15):** Built + browser-verified on an isolated :5210
+> instance (`verify-remove-projects.mjs`, all checks pass). Not yet merged or
+> deployed. Branch `feature/remove-projects`.
 
 ## Goal
 
@@ -47,16 +48,22 @@ must say this plainly.
 **i18n** — `projects.remove`, `projects.confirmRemove`, `projects.removing`,
 `projects.removed`, `projects.removeError` in `en.json` + `tr.json`.
 
-## Open questions / to decide while building
+## Decisions made while building
 
-- **Stale dock tabs:** a dock tab keeps `tab.repoId` of a removed repo. Decide
-  whether to close such tabs (or clear the ref) on remove, or rely on the
-  existing self-heal. Check `DockContext` behavior when a tab's repo is gone.
-- **Confirm UX:** native `window.confirm` (matches `Guests.jsx`) vs. the
-  `RestoreConfirm` modal. Lean native for slice 1.
-- **Basic vs Advanced:** should remove be Advanced-only (like the visibility
-  toggle), or available in Basic too? Default: available in both, since adding
-  is.
+- **Confirm UX:** native `window.confirm` (matches `Guests.jsx`), with copy that
+  states the folder is kept on disk.
+- **Basic vs Advanced:** the Remove control shows in **both** modes (adding is
+  available in both); only the visibility toggle stays Advanced-only.
+- **Self repo:** the Remove control is hidden for `r.isSelf`, and the backend
+  refuses it too (`DELETE` returns 400 for the self repo).
+
+## Known limitation (possible follow-up)
+
+- **Stale dock tabs:** a dock/agent tab keeps `tab.repoId` of a removed repo, so
+  after removal that tab points at an unregistered project (its stored
+  `repoName` still renders, `repoPath` resolves to empty). It doesn't crash, but
+  a later slice could close or flag such tabs on remove. Out of scope for
+  slice 1 — removing a project that has a live docked agent is unusual.
 
 ## Verification
 

@@ -54,6 +54,35 @@
   border-color: var(--color-accent);
 }
 
+/* Unregister a project — drops the harness entry, keeps the folder on disk. */
+.project-card__remove {
+  flex-shrink: 0;
+  align-self: center;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  font-size: 14px;
+  line-height: 1;
+  color: var(--color-text-soft);
+  cursor: pointer;
+}
+
+.project-card__remove:hover:not(:disabled) {
+  color: var(--color-danger, #c0392b);
+  border-color: var(--color-danger, #c0392b);
+}
+
+.project-card__remove:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
 .projects__empty {
   font-size: 12px;
   color: var(--color-text-soft);

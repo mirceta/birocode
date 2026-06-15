@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { apiGet, apiPost } from '../api/client';
+import { apiDelete, apiGet, apiPost } from '../api/client';
 import { useRepo } from '../context/RepoContext';
 import { useUiMode } from '../context/UiModeContext';
 import { useT } from '../i18n/LanguageContext';
@@ -30,6 +30,7 @@ export default function Projects() {
   const [nameTouched, setNameTouched] = useState(false);
   const [newFolder, setNewFolder] = useState(''); // "create folder here" input
   const [adding, setAdding] = useState(false);
+  const [removing, setRemoving] = useState(''); // id of the project being removed
   const [notice, setNotice] = useState(null); // { ok: bool, text: string }
   // Picker state: { root, path, folders: [{ name, registered, isGitRepo }] }
   const [picker, setPicker] = useState(null);
@@ -103,6 +104,26 @@ export default function Projects() {
     }
   };
 
+  // Unregister a project from the harness. This only drops the repositories.json
+  // entry — the folder stays on disk (the mirror of add, which can register a
+  // pre-existing folder). RepoContext.reloadRepos() self-heals the active
+  // selection if the removed project was the current one.
+  const remove = async (r) => {
+    if (removing) return;
+    if (!window.confirm(t('projects.confirmRemove', { name: r.name }))) return;
+    setRemoving(r.id);
+    setNotice(null);
+    try {
+      await apiDelete(`/repos/${r.id}`);
+      await reloadRepos();
+      setNotice({ ok: true, text: t('projects.removed', { name: r.name }) });
+    } catch {
+      setNotice({ ok: false, text: t('projects.removeError') });
+    } finally {
+      setRemoving('');
+    }
+  };
+
   const visibleRepos = isAdvanced ? repos : repos.filter((r) => r.visibility === 'basic');
 
   if (loading && repos.length === 0) return <Loading />;
@@ -140,6 +161,18 @@ export default function Projects() {
                 title={t('projects.visToggleHint')}
               >
                 {t(r.visibility === 'basic' ? 'projects.visBasic' : 'projects.visAdvanced')}
+              </button>
+            )}
+            {!r.isSelf && (
+              <button
+                type="button"
+                className="project-card__remove"
+                onClick={() => remove(r)}
+                disabled={removing === r.id}
+                title={t('projects.remove')}
+                aria-label={t('projects.remove')}
+              >
+                {removing === r.id ? '…' : '🗑'}
               </button>
             )}
           </li>
