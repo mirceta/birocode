@@ -9,6 +9,10 @@
 > Files tab to see wrapping mermaid labels etc. in action.
 
 > **Status (2026-06-15):** **Latest — deployed & confirmed, merged to main:**
+> [local app on the agent dock](plans/dock-local-app.md) — each dashboard dock
+> shows whether its agent serves a Local-tab app (a row above git) and can
+> **render that product inside the dock** via a toggle on that row (slices 1 & 2,
+> frontend-only). **Also deployed & confirmed, merged to main:**
 > the **multiline-prompt truncation** bug fix — prompts containing newlines now
 > reach the agent in full (was truncated at the first line by the `claude.cmd`
 > shim). **Also deployed & confirmed, merged to main:**
@@ -72,6 +76,17 @@
 
 ## Recently shipped
 
+- [Local app on the agent dock](plans/dock-local-app.md) — a Repo's Local-tab
+  product (its `localPort` app) is now visible **and renderable** inside the
+  agent dock that hosts it. **Slice 1:** a row **above the git section** on each
+  dock states whether the agent serves a local app — "serving on :PORT",
+  ":PORT · not serving", or "none" (probed via the same-origin
+  `/api/localview/{repoId}/` proxy). **Slice 2:** when a port is set that row is
+  a **toggle** that swaps the dock screen between the chat and the product
+  (iframed via `ProductFrame`, off by default — the iframe only mounts once
+  revealed). Frontend-only; browser-verified on an isolated :5201 preview and on
+  live :5099; deployed & confirmed 2026-06-15, merged to main. On
+  `feature/dock-local-app`.
 - [Pin my last prompt at the top of the chat](plans/pin-last-prompt.md) — the
   user's **most recent sent prompt** stays pinned in a non-scrolling banner above
   the transcript (clamped, click-to-expand), so a long agent response doesn't

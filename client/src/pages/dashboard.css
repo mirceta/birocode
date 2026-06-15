@@ -506,6 +506,81 @@
 
 /* Git status block on the dock — branch + ahead/behind rows, same as the Git
    tab (plans/dashboard-git-status.md). Given its own room above the chat. */
+/* Local-tab app serving state, above the git section (plans/dock-local-app.md). */
+.phone__local {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: 12px;
+}
+
+/* When a port is configured the row becomes a toggle (slice 2): reset the
+   button chrome so it reads identically to the static row, then reveal it as
+   clickable on hover. */
+button.phone__local {
+  width: 100%;
+  text-align: left;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+button.phone__local:hover {
+  background: var(--color-surface-hover, rgba(127, 127, 127, 0.1));
+}
+
+.phone__local--open {
+  background: var(--color-surface-hover, rgba(127, 127, 127, 0.1));
+}
+
+.phone__local-caret {
+  flex-shrink: 0;
+  color: var(--color-text-soft);
+  font-size: 10px;
+}
+
+.phone__local-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #aaa;
+  flex-shrink: 0;
+}
+
+.phone__local--serving .phone__local-dot {
+  background: #22c55e;
+}
+
+.phone__local--offline .phone__local-dot {
+  background: #f59e0b;
+}
+
+.phone__local-label {
+  font-weight: 600;
+  color: var(--color-text);
+  flex-shrink: 0;
+}
+
+.phone__local-text {
+  margin-left: auto;
+  color: var(--color-text-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.phone__local--none .phone__local-text,
+.phone__local--none .phone__local-label {
+  color: var(--color-text-soft);
+  opacity: 0.75;
+}
+
 .phone__git {
   flex: 0 0 auto;
   display: flex;
