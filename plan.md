@@ -40,13 +40,6 @@
 
 ## Active feature plans
 
-- [Important agents](plans/important-agents.md) — a ⭐ toggle in the **dashboard
-  agent dock** marks an agent **important**: its dock gets a **bright-red,
-  thicker border** and it sorts **first among the dashboard docks**. A toggle —
-  important agents can be set back to normal; multiple may be important.
-  Persisted as a backend-synced `important` flag on `DockTab` (same path as
-  `color`/`dashboard`). Advanced-mode; PLANNING, not built. On
-  `feature/important-agents`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
@@ -76,6 +69,17 @@
 
 ## Recently shipped
 
+- [Important agents](plans/important-agents.md) — a ⭐ toggle in each **dashboard
+  agent dock** (phone docks + cards) marks an agent **important**: the dock gets
+  a **bright-red, thicker (6px) border** and is **pinned at the front** of the
+  dashboard in stable dock order (the recency rearrangement rule no longer
+  shuffles important agents amongst themselves; unimportant ones still reorder by
+  recency below them). A toggle — settable back to normal; multiple may be
+  important. Persisted as a backend-synced `important` flag on `DockTab` (same
+  path as `color`/`dashboard`). Advanced-mode. Browser-verified on an isolated
+  :5210 instance (cards + phones + the ordering rule via injected recency);
+  deployed to live :5099 & confirmed 2026-06-15, merged to main. On
+  `feature/important-agents`.
 - [Local app on the agent dock](plans/dock-local-app.md) — a Repo's Local-tab
   product (its `localPort` app) is now visible **and renderable** inside the
   agent dock that hosts it. **Slice 1:** a row **above the git section** on each

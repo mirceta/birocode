@@ -1,8 +1,9 @@
 # Important agents
 
-> **Status:** BUILT + browser-verified on an isolated :5210 instance
+> **Status:** SHIPPED — deployed to live :5099 & confirmed, merged to main
+> 2026-06-15. Browser-verified on an isolated :5210 instance
 > (`verify-important-agents.mjs` 16/16 cards, `verify-important-phones.mjs` 5/5
-> phones); not yet merged or deployed. On `feature/important-agents`.
+> phones, `verify-important-order.mjs` 4/4 ordering). On `feature/important-agents`.
 > Branched from `main` @ `60520ed` (2026-06-15).
 
 ## Goal
