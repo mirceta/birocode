@@ -186,6 +186,43 @@
   border-color: #a855f7;
 }
 
+/* "Important" mark (plans/important-agents.md) — a bright-red, thicker (6px)
+   border that overrides the recency/colour borders (equal specificity, later in
+   source order), so a flagged agent stands out at a glance. Important docks also
+   sort first on the dashboard (handled in Dashboard.jsx). */
+.dash-cell.dash-cell--important,
+.phone.phone--important {
+  border: 6px solid #ef4444;
+}
+
+/* The star toggle itself — a role=button span living inside the card/phone's
+   open-agent button. Hollow + muted when off, filled bright red when on. */
+.important-star {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  padding: 2px 4px;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--color-text-soft);
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s, transform 0.1s;
+}
+
+.important-star:hover {
+  color: #ef4444;
+  transform: scale(1.15);
+}
+
+.important-star--on {
+  color: #ef4444;
+}
+
 .dash-cell__head {
   display: flex;
   align-items: center;

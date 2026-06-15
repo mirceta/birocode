@@ -48,6 +48,9 @@ function toServerPatch(patch) {
   if ('color' in patch) body.color = patch.color ?? '';
   // Whether the agent shows on the Dashboard (toggled from the Agents tab).
   if ('dashboard' in patch) body.dashboard = patch.dashboard;
+  // "Important" mark — red thick border + sorts first on the dashboard
+  // (plans/important-agents.md).
+  if ('important' in patch) body.important = patch.important;
   return Object.keys(body).length > 0 ? body : null;
 }
 

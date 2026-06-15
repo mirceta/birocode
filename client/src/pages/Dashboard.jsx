@@ -6,6 +6,7 @@ import { useT } from '../i18n/LanguageContext';
 import GitStatusSummary from '../components/git/GitStatusSummary';
 import PinnedAgent from '../components/dashboard/PinnedAgent';
 import CopyPath from '../components/dashboard/CopyPath';
+import ImportantStar from '../components/dashboard/ImportantStar';
 import IdeasPanel from '../components/ideas/IdeasPanel';
 import './dashboard.css';
 
@@ -163,7 +164,7 @@ function recencyTier(at, now) {
 // (setActiveTab + /studio), then closes the overlay.
 export default function Dashboard({ onClose }) {
   const { t } = useT();
-  const { tabs: dockTabs, activeTabId, setActiveTab, repos } = useDock();
+  const { tabs: dockTabs, activeTabId, setActiveTab, updateTab, repos } = useDock();
   // Only agents toggled "show on dashboard" in the Agents tab (default on).
   const tabs = useMemo(() => dockTabs.filter((tab) => tab.dashboard !== false), [dockTabs]);
   // repoId -> filesystem path, for the path line on each dock.
@@ -243,12 +244,27 @@ export default function Dashboard({ onClose }) {
   // re-renders via setLive, so the borders age without a separate timer.
   const now = Date.now();
 
-  // Order by "hotness": agents I used most recently (live[id].at) sort first;
-  // ties and not-yet-loaded agents keep their dock order (Array.sort is stable).
-  // Driven by the same poll, so the ordering refreshes live as I work.
-  const orderedTabs = useMemo(
-    () => [...tabs].sort((a, b) => (live[b.id]?.at || 0) - (live[a.id]?.at || 0)),
-    [tabs, live],
+  // Order (plans/important-agents.md): agents flagged "important" are pinned at
+  // the FRONT in their stable dock order — the recency "rearrangement" rule does
+  // NOT apply to them, so they never shuffle amongst themselves. The unimportant
+  // agents follow, still ordered by "hotness" — most recently used first
+  // (live[id].at), refreshed by the same poll. So marking an agent important
+  // parks it at the head of the pack; the churn stays below it.
+  const orderedTabs = useMemo(() => {
+    const important = tabs.filter((t) => t.important);
+    const rest = tabs
+      .filter((t) => !t.important)
+      .sort((a, b) => (live[b.id]?.at || 0) - (live[a.id]?.at || 0));
+    return [...important, ...rest];
+  }, [tabs, live]);
+
+  // Toggle the important mark; optimistic + backend-synced like color/dashboard.
+  const toggleImportant = useCallback(
+    (id) => {
+      const tab = tabsRef.current.find((t) => t.id === id);
+      updateTab(id, { important: !tab?.important });
+    },
+    [updateTab],
   );
 
   // Poll while the overlay is mounted (i.e. open); the effect's teardown stops
@@ -531,6 +547,7 @@ export default function Dashboard({ onClose }) {
                     gitRefreshing={!!gitBusy[tab.repoId]}
                     onRefreshGit={() => refreshGit(tab.repoId)}
                     onMaximize={handleOpen}
+                    onToggleImportant={toggleImportant}
                   />
                 </li>
               );
@@ -541,7 +558,7 @@ export default function Dashboard({ onClose }) {
               <li key={tab.id}>
                 <button
                   type="button"
-                  className={`dash-cell dash-cell--${status}${tab.id === activeTabId ? ' dash-cell--active' : ''}`}
+                  className={`dash-cell dash-cell--${status}${tab.id === activeTabId ? ' dash-cell--active' : ''}${tab.important ? ' dash-cell--important' : ''}`}
                   data-colored={tab.color ? 'true' : undefined}
                   data-recency={recency}
                   style={tab.color ? { '--agent-color': tab.color } : undefined}
@@ -550,6 +567,11 @@ export default function Dashboard({ onClose }) {
                   <span className="dash-cell__head">
                     <span className="dash-cell__dot" />
                     <span className="dash-cell__name">{tab.repoName}</span>
+                    <ImportantStar
+                      important={!!tab.important}
+                      onToggle={() => toggleImportant(tab.id)}
+                      className="dash-cell__important"
+                    />
                   </span>
                   {repoPath(tab.repoId) && (
                     <CopyPath path={repoPath(tab.repoId)} className="dash-cell__path" />

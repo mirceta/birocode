@@ -6,6 +6,7 @@ import { useFeature } from '../../context/UiModeContext';
 import GitStatusSummary from '../git/GitStatusSummary';
 import ProductFrame from '../app/ProductFrame';
 import CopyPath from './CopyPath';
+import ImportantStar from './ImportantStar';
 
 // One "phone" in the Agent Dashboard's wall of phones (plans/agent-dashboard.md):
 // a single agent's live Chat view, pinned to that agent's repo regardless of
@@ -25,6 +26,7 @@ export default function PinnedAgent({
   gitRefreshing = false,
   onRefreshGit,
   onMaximize,
+  onToggleImportant,
 }) {
   const { t } = useT();
   // Per-dock lane toggle (plans/repo-ask-chat.md slice 3): each phone can switch
@@ -56,7 +58,7 @@ export default function PinnedAgent({
 
   return (
     <div
-      className={`phone phone--${status}`}
+      className={`phone phone--${status}${tab.important ? ' phone--important' : ''}`}
       data-colored={tab.color ? 'true' : undefined}
       data-recency={recency}
       style={tab.color ? { '--agent-color': tab.color } : undefined}
@@ -71,6 +73,11 @@ export default function PinnedAgent({
         <span className="phone__name">{tab.repoName}</span>
         {repoPath && <CopyPath path={repoPath} className="phone__path" />}
         <span className="phone__status">{t(`agents.status.${status}`)}</span>
+        <ImportantStar
+          important={!!tab.important}
+          onToggle={() => onToggleImportant?.(tab.id)}
+          className="phone__important"
+        />
       </button>
       <div className="phone__lanes" role="tablist" aria-label={t('chat.scopesAria')}>
         <button

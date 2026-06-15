@@ -69,6 +69,17 @@
 
 ## Recently shipped
 
+- [Important agents](plans/important-agents.md) — a ⭐ toggle in each **dashboard
+  agent dock** (phone docks + cards) marks an agent **important**: the dock gets
+  a **bright-red, thicker (6px) border** and is **pinned at the front** of the
+  dashboard in stable dock order (the recency rearrangement rule no longer
+  shuffles important agents amongst themselves; unimportant ones still reorder by
+  recency below them). A toggle — settable back to normal; multiple may be
+  important. Persisted as a backend-synced `important` flag on `DockTab` (same
+  path as `color`/`dashboard`). Advanced-mode. Browser-verified on an isolated
+  :5210 instance (cards + phones + the ordering rule via injected recency);
+  deployed to live :5099 & confirmed 2026-06-15, merged to main. On
+  `feature/important-agents`.
 - [Local app on the agent dock](plans/dock-local-app.md) — a Repo's Local-tab
   product (its `localPort` app) is now visible **and renderable** inside the
   agent dock that hosts it. **Slice 1:** a row **above the git section** on each

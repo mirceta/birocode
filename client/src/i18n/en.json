@@ -180,6 +180,8 @@
   "dashboard.ideasNarrow": "Narrow the Ideas panel",
   "dashboard.copyPath": "Copy folder path",
   "dashboard.copied": "Copied!",
+  "dashboard.markImportant": "Mark important (red border, sorts first)",
+  "dashboard.unmarkImportant": "Unmark important",
   "dashboard.zoom": "Content zoom",
   "dashboard.zoomIn": "Zoom in dock content",
   "dashboard.zoomOut": "Zoom out dock content",
