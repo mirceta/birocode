@@ -1,0 +1,295 @@
+/* Scoreboard / analytics panel (plans/scoreboard-analytics.md): pinned above the
+   agent docks. Window-scoped stats + hand-rolled SVG/CSS charts. */
+.scoreboard {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius, 12px);
+  background: var(--color-surface);
+}
+
+/* Top bar: collapse header on the left, timeframe toggle on the right. */
+.scoreboard__bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Clickable header — collapses the panel body. Title + chevron, plus a compact
+   one-line summary when collapsed so the bar still tells you something. */
+.scoreboard__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--color-text);
+}
+
+/* Timeframe toggle (Today / 7 days / All). */
+.scoreboard__windows {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.scoreboard__win {
+  padding: 4px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-soft, #777);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.scoreboard__win--on {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.scoreboard__chevron {
+  font-size: 16px;
+  line-height: 1;
+  color: var(--color-text-soft, #777);
+  transition: transform 0.15s ease;
+}
+
+.scoreboard__chevron--collapsed {
+  transform: rotate(-90deg);
+}
+
+.scoreboard__head-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-soft, #777);
+}
+
+.scoreboard__head-summary {
+  font-size: 12px;
+  color: var(--color-text-muted, #999);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scoreboard__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.scoreboard__stat {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 130px;
+  flex: 1;
+  padding: 12px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius, 10px);
+  background: var(--color-bg, #faf7f2);
+  overflow: hidden;
+}
+
+/* A slim accent edge gives each card a little structure without shouting. */
+.scoreboard__stat::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--color-accent);
+  opacity: 0.55;
+}
+
+.scoreboard__stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-text);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+
+.scoreboard__stat-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-soft, #777);
+}
+
+.scoreboard__stat-sub {
+  font-size: 11px;
+  color: var(--color-text-muted, #999);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scoreboard__empty {
+  font-size: 13px;
+  color: var(--color-text-soft, #777);
+  margin: 4px 2px;
+}
+
+/* Stacked full-width: the SVGs render their text in user units, so a narrow
+   column would shrink the labels — keep each chart the full panel width. */
+.scoreboard__charts {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.scoreboard__chart-title {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-soft, #777);
+}
+
+.scoreboard__svg {
+  width: 100%;
+  height: auto;
+  /* The viewBox is ~1000 units wide; pin the text size in user units so labels
+     don't scale up with the box. */
+  font-size: 13px;
+}
+
+.scoreboard__svg-label {
+  fill: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.scoreboard__svg-num {
+  fill: var(--color-text-soft, #777);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.scoreboard__svg-axis {
+  fill: var(--color-text-muted, #999);
+  font-size: 11px;
+}
+
+/* Concurrency-over-time area + its y gridlines. preserveAspectRatio="none" on
+   the SVG stretches it to full width, so strokes use vector-effect to stay 1px. */
+.scoreboard__area {
+  fill: var(--color-accent);
+  fill-opacity: 0.18;
+  stroke: var(--color-accent);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.scoreboard__grid {
+  stroke: var(--color-border);
+  stroke-width: 1;
+  opacity: 0.5;
+  vector-effect: non-scaling-stroke;
+}
+
+/* 7-day activity strip — CSS bars (not SVG): crisper small text. */
+.scoreboard__days {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 120px;
+}
+
+.scoreboard__day {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  height: 100%;
+}
+
+.scoreboard__day-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-soft, #777);
+  min-height: 14px;
+}
+
+.scoreboard__day-track {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.scoreboard__day-bar {
+  width: 60%;
+  max-width: 36px;
+  min-height: 2px;
+  border-radius: 4px 4px 0 0;
+  background: var(--color-accent);
+  opacity: 0.85;
+}
+
+.scoreboard__day-label {
+  font-size: 10px;
+  line-height: 1.2;
+  text-align: center;
+  color: var(--color-text-muted, #999);
+}
+
+/* Per-agent leaderboard table. */
+.scoreboard__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.scoreboard__table th {
+  padding: 4px 8px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-text-muted, #999);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.scoreboard__table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+.scoreboard__table tr:last-child td {
+  border-bottom: 0;
+}
+
+.scoreboard__num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.scoreboard__agent {
+  font-weight: 600;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

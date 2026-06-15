@@ -8,7 +8,12 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-15):** **Latest — deployed & confirmed, merged to main:**
+> **Status (2026-06-16):** **Latest — deployed & confirmed:**
+> the [Scoreboard / analytics](plans/scoreboard-analytics.md) panel above the
+> agent docks (v2 redesign: Today/7d/All timeframe toggle, a
+> concurrency-over-time chart, a 7-day activity strip, and a per-agent
+> leaderboard; per-run cost captured) — live on :5099, merging to main now.
+> **Also deployed & confirmed, merged to main:**
 > the [Ideas substring filter fix](plans/ideas-substring-filter.md) — the Ideas
 > filter box now does a literal case-insensitive **substring** match (multi-word
 > = AND) instead of the old subsequence match that kept unrelated ideas. **Also
@@ -81,6 +86,17 @@
 
 ## Recently shipped
 
+- [Scoreboard / analytics](plans/scoreboard-analytics.md) — a collapsible
+  **analytics panel above the agent docks** that quantifies agent usage from a
+  new append-only `activity.jsonl` run ledger (`/api/analytics?window=…`). After
+  a **v2 redesign**: a **Today / 7 days / All** timeframe toggle scopes every
+  stat; the hero is a **concurrency-over-time** step-area chart (agents running
+  at once, with its shape), beside a **last-7-days** prompts-per-day strip and a
+  **per-agent leaderboard** (runs · work · longest · last used). Per-run **cost**
+  rides the `finish` event. Dropped v1's misleading work-vs-idle. Hand-rolled
+  SVG/CSS (no chart lib); backfill + token counts deferred. Verified across all
+  three windows on an isolated :5201 preview; deployed to live :5099 & confirmed
+  2026-06-16. On `feature/scoreboard-analytics`.
 - [Ideas filter: substring, not subsequence](plans/ideas-substring-filter.md) —
   the Ideas filter box (Ideas tab + dashboard panel) did a **subsequence** match,
   so it kept ideas where the query's letters merely appeared in order across

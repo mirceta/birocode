@@ -10,6 +10,7 @@ import ImportantStar from '../components/dashboard/ImportantStar';
 import WaitingBadge from '../components/dashboard/WaitingBadge';
 import WaitingOnField from '../components/dashboard/WaitingOnField';
 import IdeasPanel from '../components/ideas/IdeasPanel';
+import Scoreboard from '../components/dashboard/Scoreboard';
 import './dashboard.css';
 
 // The dashboard has three layouts (plans/agent-dashboard.md): summary "cards"
@@ -528,6 +529,7 @@ export default function Dashboard({ onClose }) {
           <IdeasPanel />
         </aside>
         <div className="dash__main">
+      <Scoreboard />
       {tabs.length === 0 ? (
         <p className="dash__empty">{t('dashboard.empty')}</p>
       ) : (
