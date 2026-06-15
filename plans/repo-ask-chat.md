@@ -36,35 +36,60 @@ keeps its **own context** so it never pollutes the builder's session.
 ## The crux — concurrency on one working directory
 
 The blocker is the **per-repo single-run lock**. To ask while the builder runs,
-the backend must allow a **second concurrent run on the same repo**. Options:
+something must allow a **second conversation to run against the repo at the same
+time**. Two hard constraints shape every option:
 
-1. **Key the run gate by `(repoId, lane)`** where `lane ∈ {builder, ask}`.
-   `TryBeginRun` then permits one builder run **and** one ask run at once. This
-   is the smallest change that unblocks the need. Each lane keeps its own
-   `RunSession` + sessionId + seq stream.
+- **The lock** — `TryBeginRun(repoId)` allows one running turn per repo (409 on
+  a second). Either loosen it, or sidestep it.
+- **Shared filesystem safety** — two `claude` processes in the **same cwd** is
+  only safe if the second **cannot mutate** the tree (no Write/Edit, no mutating
+  Bash); otherwise they race on files and git. So any concurrent option must
+  either make the Ask agent **read-only** or give it **its own filesystem**.
 
-Running **two `claude` processes in the same cwd** is only safe if the Ask one
-**does not mutate the tree** (no Write/Edit, no mutating Bash) — otherwise the
-two agents race on files and git state. Hence:
+## Approaches considered
 
-### Open decision (need the user)
+| # | Approach | Dev effort | Dev/safety risk | Concurrent w/ builder? | Context isolation | Conversation continuity | Resource cost | UX clarity | Blast radius |
+|---|----------|-----------|-----------------|------------------------|-------------------|-------------------------|---------------|------------|--------------|
+| **A** | **Read-only Ask lane, shared cwd** — gate per `(repo, lane)`; spawn Ask `claude` read-only in the same dir | **Med** — backend gate change + read-only spawn flag + a chat surface | **Low–Med** — safe *iff* read-only flag truly holds; rests on CLI support | ✅ Yes | ✅ Own session | ✅ Persistent | **Low** — just another process | **High** — one obvious "Ask" surface | Med — touches the core run gate |
+| **B** | **Worktree-isolated Ask agent** — Ask runs full-capability in its own git worktree of the repo | High — worktree lifecycle (create/cleanup), path plumbing, gate change | Med — no file race, but worktree mgmt bugs; Ask can edit (its copy) | ✅ Yes | ✅ Own session | ✅ Persistent | **High** — disk per worktree, setup latency | Med — "why is my Ask on a copy?" / uncommitted builder edits invisible | Med–High — new subsystem |
+| **C** | **Twin repo entry (same path)** — register the path again as an "Ask" project; existing per-repo gate already allows both | **Low** — mostly registration/UX; **no run-gate change** | Med — still shares cwd, so Ask must be read-only anyway; two repoIds for one path is leaky | ✅ Yes | ✅ Own session (separate repoId) | ✅ Persistent | Low | **Low** — two entries for one folder is confusing | **Low** — reuses existing machinery |
+| **D** | **Queued / serialized Ask** — keep one run per repo; Ask waits behind the builder | **Low** — small queue + UI state | **Low** | ❌ **No** — fails the core need | ✅ Own session | ✅ Persistent | Low | Med — "why won't it answer now?" | **Low** |
+| **E** | **Direct Claude API ask service** — in-process Anthropic SDK Q&A with read-only repo tools, bypass the CLI | **High** — new tool loop, context gathering, streaming, model plumbing | Med–High — reimplements what the CLI gives free; diverges from architecture | ✅ Yes (independent of the lock) | ✅ Separate by construction | ⚠️ Build our own history store | Med | Med — different "feel" from CLI agents | High — large new surface |
 
-- **Ask lane = read-only (recommended):** spawn the Ask `claude` with a
-  read-only posture so it can read/search/explain but not edit. Matches "I just
-  want to *ask* something," and makes concurrent-with-builder safe. **Needs
-  verifying the CLI flag** — likely `--permission-mode plan` and/or
-  `--disallowedTools Write Edit ...` / `--allowedTools Read Grep Glob Bash(git log:*) ...`
-  passed in `CliRunnerService.CreateProcessInfo()` (`CliRunnerService.cs:597-636`),
-  which currently passes **no** permission flags. Verify against the installed
-  CLI before relying on it.
-- **Ask lane = full capability:** more flexible but two writers in one dir is
-  unsafe; would need worktree isolation or a builder-must-be-idle guard, which
-  defeats "ask while building." Not recommended.
+Legend: ✅ meets it · ⚠️ partial / needs extra work · ❌ doesn't meet it. Effort/risk
+are relative (Low < Med < High).
 
-## Proposed approach (pending the decision above)
+Per-approach notes:
+
+- **A (recommended):** smallest change that fully meets the need. Each lane keeps
+  its own `RunSession` + sessionId + seq stream. **Hinges on the read-only CLI
+  flag** — likely `--permission-mode plan` and/or `--disallowedTools Write Edit …`
+  / `--allowedTools Read Grep Glob Bash(git log:*) …` in
+  `CliRunnerService.CreateProcessInfo()` (`CliRunnerService.cs:597-636`), which
+  today passes **no** permission flags. **Verify against the installed CLI first** —
+  the whole safety case depends on it. If the flag doesn't hold, A degrades toward B.
+- **B:** the safe way to give the Ask agent *full* capability. The Agent/worktree
+  isolation pattern exists in tooling, but managing worktrees for long-lived Ask
+  agents (cleanup, the Ask seeing a snapshot without the builder's uncommitted
+  work) is real overhead for a "just let me ask" feature.
+- **C:** clever — needs **no change to the run gate** because two repoIds = two
+  slots. But it doesn't remove the shared-cwd race (Ask must still be read-only),
+  and surfacing one folder as two projects is confusing. Good fallback if we want
+  to avoid touching `RunSessionService`.
+- **D:** the honest baseline. Cheap and safe, but the user explicitly wants to ask
+  **while** the builder runs, so this fails the primary requirement. Listed for
+  comparison / as a stopgap.
+- **E:** maximum control over the read-only posture and isolation, but it throws
+  away the CLI machinery (sessions, resume, streaming, reattach) we already rely
+  on and would feel different from every other agent. Over-engineered for this.
+
+## Recommended approach
+
+**A — read-only Ask lane, shared cwd**, with **C as the fallback** if we'd rather
+not modify the core run gate. Plan:
 
 - **Backend:** add a `lane` (or `mode`) to `RunSession`/`TryBeginRun` so the gate
-  is per-(repo, lane); plumb a read-only flag through `ChatRequest` →
+  is per-`(repo, lane)`; plumb a read-only flag through `ChatRequest` →
   `CliRunnerService` → `CreateProcessInfo()`. Ask runs get their own sessionId,
   buffered seq stream, stop, and reattach — mirroring builder runs.
 - **Frontend:** add an **Ask** chat surface (third `chatView` alongside
@@ -73,6 +98,12 @@ two agents race on files and git state. Hence:
   the builder shows "running." Make it the obvious answer to "where do I ask?"
 - **Docs:** extend `plans/dual-chat.md`'s one-run-per-repo note; update the
   Glossary if "Ask"/"builder lane" becomes canonical.
+
+### Open decision (need the user)
+
+Confirm the **Ask lane is read-only** (recommended — safe alongside the builder,
+matches "I just want to ask") vs **full capability** (forces approach B's
+worktree isolation). This picks A vs B above.
 
 ## Slices (draft)
 
