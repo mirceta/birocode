@@ -10,9 +10,40 @@
 > frontend changes**. Verified on an isolated `:5210`/`:5298` preview: exposer
 > binds **both 127.0.0.1 and [::1]**, serves at root, relative assets resolve, no
 > absolute refs (OS netstat + curl), and it **renders in a headless browser with
-> its relative JS executing**. Pending: the auth-gated proxy sub-path + Exposure
-> check round-trip (needs the operator's rotated password — see verify note).
-> Slices 2-4 below not started.
+> its relative JS executing**, AND (via the `CLAUDEWEB_DATADIR` isolation knob
+> below) the **fallback happy-path end-to-end: 10/10** — proxy serves the exposer
+> (200, no-store), relative asset resolves under the proxy prefix, Exposure check
+> all 6 rules green, embedded JS runs. Slices 2-4 below not started.
+
+## Slice 1 verification — resolved (10/10)
+
+The one branch that couldn't be tested against the live store — the fallback
+happy path (self-repo Local tab → bundled exposer) — is now fully verified.
+
+**Why it was blocked, and the fix.** Every store (`repositories.json`,
+`auth.json`, ...) lives in `%APPDATA%\ClaudeWeb`, and `Environment.GetFolderPath`
+ignores the `APPDATA` env var on Windows (known-folder API), so a preview could
+not be isolated and always read the live operator's store. That store carried an
+explicit (and stale/dead) self-repo port `5305`, which shadowed the fallback. We
+chose **Option 2**: route every store through a single `AppPaths.DataDir` that
+honors a `CLAUDEWEB_DATADIR` override (see docs/claude-web/self-dev.md). A preview
+on an isolated store has a freshly-pinned self repo with no port, so the fallback
+fires — verified `10/10`, with the live store never touched.
+
+```mermaid
+flowchart LR
+    A["Self-repo Local tab<br/>asks: which port?"] --> B{"Operator port set?"}
+    B -->|"YES (operator override wins)"| C["Use it<br/>-- verified live"]
+    B -->|"NO"| D["Fall back to bundled exposer<br/>-- verified 10/10 on isolated store"]
+
+    style C fill:#bbf7d0,stroke:#16a34a
+    style D fill:#bbf7d0,stroke:#16a34a
+```
+
+> Aside surfaced during verification: your live store's self-repo port `5305` is
+> stale (nothing listens), so the live self-repo Local tab is currently dead.
+> Clearing that override would let the fallback serve the exposer there too —
+> takes effect on the next live-harness restart. Left for you to do out-of-band.
 
 ## The problem we're solving
 

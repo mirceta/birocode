@@ -69,7 +69,7 @@ public class AuthService
     public AuthService(AppConfig config, Logger logger)
     {
         _logger = logger;
-        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ClaudeWeb");
+        var dir = AppPaths.DataDir;
         _authPath = Path.Combine(dir, "auth.json");
         _sessionsPath = Path.Combine(dir, "sessions.json");
         LoadOrSeed(config);

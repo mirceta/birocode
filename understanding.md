@@ -39,10 +39,14 @@ strictly per-repo or built differently.
 
 ## Status
 
-**Slice 1 built.** The harness serves the bundled Exposure Helper (`exposer/`)
-as its own Local-tab product: a loopback dual-stack static server (`ExposerHost`)
-+ a read-time self-repo `LocalPort` fallback, so the existing proxy / Local tab /
-Exposure check all work with **no frontend changes**. Verified on an isolated
-preview (exposer binds 127.0.0.1 **and** [::1], serves at root, relative assets
-resolve, renders in a headless browser with its JS running). One check pending:
-the auth-gated proxy round-trip needs the operator's (rotated) password.
+**Slice 1 built and fully verified (10/10).** The harness serves the bundled
+Exposure Helper (`exposer/`) as its own Local-tab product: a loopback dual-stack
+static server (`ExposerHost`) + a read-time self-repo `LocalPort` fallback, so the
+existing proxy / Local tab / Exposure check all work with **no frontend changes**.
+
+To verify the fallback happy-path without touching the live store, also added a
+`CLAUDEWEB_DATADIR` isolation knob (all stores now resolve through one
+`AppPaths.DataDir`). On an isolated preview the end-to-end check is **10/10**:
+exposer binds 127.0.0.1 **and** [::1], proxy serves it (200, no-store), relative
+asset resolves under the proxy prefix, Exposure check all 6 rules green, embedded
+JS runs. The live store was never touched.

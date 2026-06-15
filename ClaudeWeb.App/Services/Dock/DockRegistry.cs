@@ -265,8 +265,7 @@ public class DockRegistry
 
     private static string ResolveStorePath()
     {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        return Path.Combine(appData, "ClaudeWeb", "dock.json");
+        return Path.Combine(AppPaths.DataDir, "dock.json");
     }
 
     private static DockTab Clone(DockTab t) => new()

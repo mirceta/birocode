@@ -26,7 +26,7 @@ public class PinsService
     public PinsService(Logger logger)
     {
         _logger = logger;
-        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ClaudeWeb");
+        var dir = AppPaths.DataDir;
         Directory.CreateDirectory(dir);
         _path = Path.Combine(dir, "pins.json");
         Load();

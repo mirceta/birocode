@@ -39,7 +39,7 @@ public class IpInfoService
     {
         _logger = logger;
         _http = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
-        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ClaudeWeb");
+        var dir = AppPaths.DataDir;
         Directory.CreateDirectory(dir);
         _path = Path.Combine(dir, "ipinfo-cache.json");
         Load();

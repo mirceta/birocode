@@ -20,6 +20,22 @@ Start-Process .claudeweb-preview/bin/ClaudeWeb.exe
 `.claudeweb-preview/` is gitignored. A second monitoring window appearing is
 expected.
 
+## Isolate the data store too (`CLAUDEWEB_DATADIR`)
+
+A preview shares the live operator's state by default: `repositories.json`,
+`auth.json`, etc. live in `%APPDATA%\ClaudeWeb`, and `Environment.GetFolderPath`
+ignores the `APPDATA` env var on Windows (it uses the known-folder API), so you
+cannot redirect it that way. To run a preview against a throwaway store — fresh
+seeded password (`changeme`), no operator repos/ports bleeding in, and zero risk
+of touching the live files — set `CLAUDEWEB_DATADIR`:
+
+```powershell
+$env:CLAUDEWEB_DATADIR = "$PWD/.claudeweb-preview/appdata-iso"
+```
+
+All stores resolve through `AppPaths.DataDir`, so this redirects every one of
+them at once. Leave it unset for a normal run.
+
 ## Deploy rule — NEVER deploy a tree that is missing origin/main
 
 Three times on 2026-06-11/12, parallel self-dev sessions silently clobbered

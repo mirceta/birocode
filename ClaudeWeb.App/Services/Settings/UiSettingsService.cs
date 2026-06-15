@@ -30,7 +30,7 @@ public class UiSettingsService
     public UiSettingsService(Logger logger)
     {
         _logger = logger;
-        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ClaudeWeb");
+        var dir = AppPaths.DataDir;
         Directory.CreateDirectory(dir);
         _path = Path.Combine(dir, "uisettings.json");
         Load();

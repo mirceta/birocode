@@ -307,8 +307,7 @@ public class RepositoryRegistry
 
     private static string ResolveStorePath()
     {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        return System.IO.Path.Combine(appData, "ClaudeWeb", "repositories.json");
+        return System.IO.Path.Combine(AppPaths.DataDir, "repositories.json");
     }
 
     private RepositoryInfo ToInfo(RepositoryConfig r)
