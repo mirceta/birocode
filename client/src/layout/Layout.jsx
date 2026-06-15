@@ -21,10 +21,17 @@ import PaneStrip, { useMultiPane } from './PaneStrip';
 // Header title: in Advanced Mode shows "machine · project · branch" so the
 // Operator always sees which host/repo/branch they are driving; Basic Mode
 // keeps the friendly app title.
-function HeaderTitle() {
+//
+// The title doubles as the agent-dashboard entry point
+// (plans/dashboard-title-button.md): when the dashboard is available (Advanced
+// + 2+ agents — the same gate the old standalone button used) it renders as a
+// button that toggles the overlay; otherwise it stays a plain label.
+function HeaderTitle({ dashOpen, onToggleDash }) {
   const { t } = useT();
   const show = useFeature('machineName');
+  const dashEnabled = useFeature('agentDashboard');
   const { current } = useRepo();
+  const { tabs } = useDock();
   const [machineName, setMachineName] = useState(null);
   const [branch, setBranch] = useState(null);
 
@@ -45,11 +52,24 @@ function HeaderTitle() {
       .catch(() => setBranch(null));
   }, [show, current]);
 
-  if (!show || !machineName) {
-    return <h1 className="app-header__title">{t('app.title')}</h1>;
+  const text = (!show || !machineName)
+    ? t('app.title')
+    : [machineName, current?.name, branch].filter(Boolean).join(' · ');
+
+  if (dashEnabled && tabs.length >= 2) {
+    return (
+      <button
+        type="button"
+        className={`app-header__title app-header__title--btn${dashOpen ? ' app-header__title--active' : ''}`}
+        onClick={onToggleDash}
+        aria-pressed={dashOpen}
+        title={t('dashboard.shortcutHint')}
+      >
+        {text}
+      </button>
+    );
   }
-  const parts = [machineName, current?.name, branch].filter(Boolean);
-  return <h1 className="app-header__title">{parts.join(' · ')}</h1>;
+  return <h1 className="app-header__title">{text}</h1>;
 }
 
 // HELLO button (user request 2026-06-12, no plan file — flagged): inert,
@@ -57,27 +77,6 @@ function HeaderTitle() {
 function HelloButton() {
   if (!useFeature('helloButton')) return null;
   return <button type="button" className="hello-btn">HELLO</button>;
-}
-
-// Top-bar entry point for the agent dashboard (plans/agent-dashboard.md). The
-// dashboard is a full-screen overview, not a tab — it only earns a button when
-// there is more than one agent to compare. Advanced-gated via 'agentDashboard'.
-function DashboardButton({ open, onToggle }) {
-  const { t } = useT();
-  const enabled = useFeature('agentDashboard');
-  const { tabs } = useDock();
-  if (!enabled || tabs.length < 2) return null;
-  return (
-    <button
-      type="button"
-      className={`dash-btn${open ? ' dash-btn--active' : ''}`}
-      onClick={onToggle}
-      aria-pressed={open}
-      title={t('dashboard.shortcutHint')}
-    >
-      {t('dashboard.open')}
-    </button>
-  );
 }
 
 // The build stamp is an Operator debugging aid — Advanced Mode only.
@@ -124,10 +123,9 @@ function StudioShell() {
       <div className={`app-frame${multi ? ' app-frame--multi' : ''}`}>
         <StaleVersionBanner />
         <header className="app-header">
-          <HeaderTitle />
+          <HeaderTitle dashOpen={dashOpen} onToggleDash={() => setDashOpen((o) => !o)} />
           <div className="app-header__actions">
             <HelloButton />
-            <DashboardButton open={dashOpen} onToggle={() => setDashOpen((o) => !o)} />
             <ProjectChip />
             <LanguageToggle />
             <SaveButton />
