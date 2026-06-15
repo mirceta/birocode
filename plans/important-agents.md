@@ -18,8 +18,11 @@ not involved). Advanced-mode (the dashboard is already Advanced-gated).
 - An important agent's dock gets a **bright-red, thicker border** (vs the normal
   1px border) on the **dashboard phone dock** (`.phone`), coexisting with the
   existing recency border.
-- Important docks sort **first in the dashboard** (currently recency-sorted →
-  important-first, then recency among them).
+- Important docks are **pinned at the front** of the dashboard in their **stable
+  dock order**. The recency "rearrangement" rule does **not** apply to them, so
+  they never shuffle amongst themselves; the unimportant agents follow, still
+  recency-sorted. (Marking an agent important parks it at the head; the churn
+  stays below it.)
 - Clicking the toggle again clears `important` → the dock returns to normal.
 - **Multiple** agents may be important; they cluster at the top, ties keep the
   existing relative (recency) order.
@@ -36,7 +39,7 @@ already take, so it survives reloads and syncs across devices.
 | Client sync | `client/src/context/DockContext.jsx` | include `important` in `toServerPatch()`; read `tab.important` |
 | Toggle button + handler | `client/src/components/dashboard/PinnedAgent.jsx` | ⭐ button in the dock header; `updateTab(id, { important: !tab.important })` |
 | Dock border | `client/src/pages/dashboard.css` | `.phone--important` → thick bright-red border (sits over the recency border) |
-| Dashboard order | `client/src/pages/Dashboard.jsx` | `orderedTabs` memo: important-first, then recency |
+| Dashboard order | `client/src/pages/Dashboard.jsx` | `orderedTabs` memo: important block (stable dock order, no recency) pinned in front, then unimportant by recency |
 
 The unique key per agent is `tab.id` (stable across devices); `important`
 defaults to `false`, so old `dock.json` entries are unaffected.

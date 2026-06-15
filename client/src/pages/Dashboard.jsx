@@ -244,19 +244,19 @@ export default function Dashboard({ onClose }) {
   // re-renders via setLive, so the borders age without a separate timer.
   const now = Date.now();
 
-  // Order: agents flagged "important" (plans/important-agents.md) sort first,
-  // then by "hotness" — agents I used most recently (live[id].at). Ties and
-  // not-yet-loaded agents keep their dock order (Array.sort is stable). Driven
-  // by the same poll, so the ordering refreshes live as I work.
-  const orderedTabs = useMemo(
-    () =>
-      [...tabs].sort((a, b) => {
-        const imp = (b.important ? 1 : 0) - (a.important ? 1 : 0);
-        if (imp !== 0) return imp;
-        return (live[b.id]?.at || 0) - (live[a.id]?.at || 0);
-      }),
-    [tabs, live],
-  );
+  // Order (plans/important-agents.md): agents flagged "important" are pinned at
+  // the FRONT in their stable dock order — the recency "rearrangement" rule does
+  // NOT apply to them, so they never shuffle amongst themselves. The unimportant
+  // agents follow, still ordered by "hotness" — most recently used first
+  // (live[id].at), refreshed by the same poll. So marking an agent important
+  // parks it at the head of the pack; the churn stays below it.
+  const orderedTabs = useMemo(() => {
+    const important = tabs.filter((t) => t.important);
+    const rest = tabs
+      .filter((t) => !t.important)
+      .sort((a, b) => (live[b.id]?.at || 0) - (live[a.id]?.at || 0));
+    return [...important, ...rest];
+  }, [tabs, live]);
 
   // Toggle the important mark; optimistic + backend-synced like color/dashboard.
   const toggleImportant = useCallback(
