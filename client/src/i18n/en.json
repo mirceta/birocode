@@ -172,6 +172,8 @@
   "dashboard.sizeBigger": "Bigger docks",
   "dashboard.ideasWide": "Widen the Ideas panel",
   "dashboard.ideasNarrow": "Narrow the Ideas panel",
+  "dashboard.copyPath": "Copy folder path",
+  "dashboard.copied": "Copied!",
   "agents.status.idle": "Idle",
   "agents.status.running": "Running...",
   "agents.status.done": "Done",
