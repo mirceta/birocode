@@ -1,7 +1,7 @@
 # Priority for ideas — redder card as priority rises
 
-> **Status (2026-06-15):** **BUILT & browser-verified**, not yet merged or
-> deployed. On `feature/idea-priority`. Each idea now carries a `Priority` (0–5);
+> **Status (2026-06-15):** **SHIPPED** — deployed to live :5099 & confirmed,
+> merged to main. On `feature/idea-priority`. Each idea now carries a `Priority` (0–5);
 > a 1–5 picker on the card/composer/edit form sets it, and the card background
 > reddens with the level on both the Ideas tab and the dashboard Ideas panel.
 > Verified on an isolated :5201 preview (`.preview-test/idea-priority-check.mjs`:

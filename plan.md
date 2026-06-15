@@ -9,6 +9,9 @@
 > Files tab to see wrapping mermaid labels etc. in action.
 
 > **Status (2026-06-15):** **Latest — deployed & confirmed, merged to main:**
+> [priority for ideas](plans/idea-priority.md) — each idea gets a 1–5 priority
+> and its card reddens as the priority rises, on both the Ideas tab and the
+> dashboard panel. **Also deployed & confirmed, merged to main:**
 > [local app on the agent dock](plans/dock-local-app.md) — each dashboard dock
 > shows whether its agent serves a Local-tab app (a row above git) and can
 > **render that product inside the dock** via a toggle on that row (slices 1 & 2,
@@ -40,13 +43,6 @@
 
 ## Active feature plans
 
-- [Priority for ideas](plans/idea-priority.md) — give each idea a **priority**
-  with **five levels**, settable from the Ideas surface, and tint the idea card's
-  **background more brightly red as the priority rises**. Applies to **both** the
-  Ideas tab and the dashboard Ideas panel (one shared `IdeasPanel`). Backend adds
-  an optional `Priority` (0–5, no migration, like `project`); frontend adds a 1–5
-  picker + `data-priority` tints in `ideas.css`. Visual only (no reordering). On
-  `feature/idea-priority`, not started.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
@@ -76,6 +72,17 @@
 
 ## Recently shipped
 
+- [Priority for ideas](plans/idea-priority.md) — each idea gets an optional
+  **priority** with **five levels**; a **1–5 picker** on the composer, the edit
+  form, and each card sets it, and the idea card's **background reddens as the
+  priority rises** (faint at 1 → strong bright red at 5). Applies to **both** the
+  Ideas tab and the dashboard Ideas panel (one shared `IdeasPanel`). Backend adds
+  an optional `Priority` (0–5, clamped, no migration — like `project`); frontend
+  adds `data-priority` tints in `ideas.css`. Visual only (no reordering).
+  Browser-verified on an isolated :5201 preview (levels 1→5 redden monotonically,
+  persist across reload + via the API, dashboard panel mirrors the tint);
+  **deployed to live :5099 & confirmed 2026-06-15, merged to main**. On
+  `feature/idea-priority`.
 - [Important agents](plans/important-agents.md) — a ⭐ toggle in each **dashboard
   agent dock** (phone docks + cards) marks an agent **important**: the dock gets
   a **bright-red, thicker (6px) border** and is **pinned at the front** of the
