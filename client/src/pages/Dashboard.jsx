@@ -47,6 +47,17 @@ function readSize() {
   }
 }
 
+// Expandable Ideas dock (plans/ideas-arch-plan.md): the pinned-left dock can be
+// widened (≥2×) so the architectural-plan doc has room. Remembered per device.
+const IDEAS_WIDE_KEY = 'claudeweb_dash_ideas_wide';
+function readIdeasWide() {
+  try {
+    return localStorage.getItem(IDEAS_WIDE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 // Slice 2 liveness (plans/agent-dashboard.md) — while the overlay is open,
 // poll the cheap snapshot endpoints on a timer and keep the result LOCAL to
 // this view (no DockContext writes, no per-cell SSE):
@@ -137,6 +148,19 @@ export default function Dashboard({ onClose }) {
       const next = clampSize(prev + delta);
       try {
         localStorage.setItem(SIZE_KEY, String(next));
+      } catch {
+        /* private mode — fall back to in-memory only */
+      }
+      return next;
+    });
+  }
+  // Wide/narrow Ideas dock (room for the architectural plan), remembered.
+  const [ideasWide, setIdeasWide] = useState(readIdeasWide);
+  function toggleIdeasWide() {
+    setIdeasWide((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(IDEAS_WIDE_KEY, next ? '1' : '0');
       } catch {
         /* private mode — fall back to in-memory only */
       }
@@ -334,8 +358,19 @@ export default function Dashboard({ onClose }) {
       </div>
 
       <div className="dash__body">
-        <aside className="dash__ideas">
-          <div className="dash__ideas-title">💡 {t('nav.ideas')}</div>
+        <aside className={`dash__ideas${ideasWide ? ' dash__ideas--wide' : ''}`}>
+          <div className="dash__ideas-head">
+            <span className="dash__ideas-title">💡 {t('nav.ideas')}</span>
+            <button
+              type="button"
+              className="dash__ideas-expand"
+              onClick={toggleIdeasWide}
+              aria-pressed={ideasWide}
+              title={ideasWide ? t('dashboard.ideasNarrow') : t('dashboard.ideasWide')}
+            >
+              {ideasWide ? '⇤' : '⇥'}
+            </button>
+          </div>
           <IdeasPanel />
         </aside>
         <div className="dash__main">
