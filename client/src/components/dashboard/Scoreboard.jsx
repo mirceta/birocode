@@ -102,11 +102,13 @@ function UsageTimeline({ agents, t }) {
         {agents.map((a, i) => {
           const y = i * rowH + 4;
           const x0 = x(a.firstStart);
-          const w = Math.max(2, x(a.lastFinish) - x0);
+          const w = Math.max(6, x(a.lastFinish) - x0);
           return (
             <g key={a.agent}>
               <text x="0" y={y + 12} className="scoreboard__svg-label">{a.agent}</text>
-              <rect x={labelW} y={y} width={trackW} height="14" rx="3" className="scoreboard__track" />
+              {/* Thin baseline for time context — NOT a full bar (a wide filled
+                  track reads as a giant bar when runs are short/sparse). */}
+              <rect x={labelW} y={y + 6} width={trackW} height="2" className="scoreboard__track" />
               <rect x={x0} y={y} width={w} height="14" rx="3" className="scoreboard__window">
                 <title>{`${a.agent}: ${fmtClock(a.firstStart)} → ${fmtClock(a.lastFinish)}`}</title>
               </rect>
