@@ -1,8 +1,14 @@
 # Priority for ideas — redder card as priority rises
 
-> **Status (2026-06-15):** Proposed. On `feature/idea-priority`, not started.
-> Single primary slice (set priority + tint the card on both surfaces); an
-> optional sort-by-priority follow-up is noted but out of scope for now.
+> **Status (2026-06-15):** **BUILT & browser-verified**, not yet merged or
+> deployed. On `feature/idea-priority`. Each idea now carries a `Priority` (0–5);
+> a 1–5 picker on the card/composer/edit form sets it, and the card background
+> reddens with the level on both the Ideas tab and the dashboard Ideas panel.
+> Verified on an isolated :5201 preview (`.preview-test/idea-priority-check.mjs`:
+> levels 1→5 reden monotonically, persist across reload + via the API, and the
+> dashboard panel mirrors the tint; live :5099 untouched — built to an isolated
+> outDir + bin). Single primary slice; sort-by-priority remains an optional
+> follow-up.
 
 ## Problem
 

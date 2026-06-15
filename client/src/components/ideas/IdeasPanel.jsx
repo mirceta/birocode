@@ -38,6 +38,31 @@ function fuzzyMatch(query, target) {
   return i === q.length;
 }
 
+// Priority (plans/idea-priority.md): 0 = none, 1–5 = increasing. The picker
+// fills every dot up to the chosen level (a rating bar); clicking the current
+// level again clears back to 0 / none.
+const PRIORITY_LEVELS = [1, 2, 3, 4, 5];
+
+function PriorityPicker({ value = 0, onChange, t }) {
+  return (
+    <div className="idea-prio" role="group" aria-label={t('ideas.priorityAria')}>
+      {PRIORITY_LEVELS.map((lvl) => (
+        <button
+          type="button"
+          key={lvl}
+          className={`idea-prio__dot${value >= lvl ? ' idea-prio__dot--on' : ''}`}
+          data-level={lvl}
+          aria-pressed={value === lvl}
+          title={t('ideas.prioritySet', { n: lvl })}
+          onClick={() => onChange(value === lvl ? 0 : lvl)}
+        >
+          {lvl}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 const TAB_KEY = 'claudeweb_ideas_tab'; // remembered tab: 'ideas' | 'plan'
 
 export default function IdeasPanel() {
@@ -58,10 +83,12 @@ export default function IdeasPanel() {
   const [error, setError] = useState('');
   const [draft, setDraft] = useState('');
   const [draftProject, setDraftProject] = useState('');
+  const [draftPriority, setDraftPriority] = useState(0);
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editDraft, setEditDraft] = useState('');
   const [editProject, setEditProject] = useState('');
+  const [editPriority, setEditPriority] = useState(0);
   const [filter, setFilter] = useState('');
   const draftRef = useRef(null);
 
@@ -96,10 +123,11 @@ export default function IdeasPanel() {
     setAdding(true);
     setError('');
     try {
-      const note = await apiPost('/notes', { text, project });
+      const note = await apiPost('/notes', { text, project, priority: draftPriority });
       setNotes((prev) => [note, ...prev]);
       setDraft('');
       setDraftProject('');
+      setDraftPriority(0);
       draftRef.current?.focus();
     } catch {
       setError(t('ideas.saveError'));
@@ -112,13 +140,31 @@ export default function IdeasPanel() {
     const text = editDraft.trim();
     if (!text) return;
     const project = editProject.trim();
+    const priority = editPriority;
     const prev = notes;
     setNotes((ns) =>
-      ns.map((n) => (n.id === id ? { ...n, text, project: project || null, updatedAt: Date.now() } : n)),
+      ns.map((n) =>
+        n.id === id ? { ...n, text, project: project || null, priority, updatedAt: Date.now() } : n,
+      ),
     );
     setEditingId(null);
     try {
-      await apiPatch(`/notes/${id}`, { text, project });
+      await apiPatch(`/notes/${id}`, { text, project, priority });
+    } catch {
+      setNotes(prev);
+      setError(t('ideas.saveError'));
+    }
+  }
+
+  // Quick priority change from the card (view mode), without entering edit: keep
+  // the idea's existing text/project and patch only the level. Optimistic, like
+  // edit/delete.
+  async function changePriority(n, priority) {
+    if ((n.priority || 0) === priority) return;
+    const prev = notes;
+    setNotes((ns) => ns.map((x) => (x.id === n.id ? { ...x, priority } : x)));
+    try {
+      await apiPatch(`/notes/${n.id}`, { text: n.text, project: n.project || '', priority });
     } catch {
       setNotes(prev);
       setError(t('ideas.saveError'));
@@ -140,6 +186,7 @@ export default function IdeasPanel() {
     setEditingId(n.id);
     setEditDraft(n.text);
     setEditProject(n.project || '');
+    setEditPriority(n.priority || 0);
   }
 
   // Ctrl/Cmd+Enter submits the composer (the textarea keeps plain Enter for newlines).
@@ -195,9 +242,13 @@ export default function IdeasPanel() {
           onChange={(e) => setDraftProject(e.target.value)}
           onKeyDown={onDraftKey}
         />
-        <button type="button" className="ideas__add" onClick={add} disabled={adding || !draft.trim()}>
-          {adding ? t('ideas.adding') : t('ideas.add')}
-        </button>
+        <div className="ideas__compose-row">
+          <span className="ideas__prio-label">{t('ideas.priority')}</span>
+          <PriorityPicker value={draftPriority} onChange={setDraftPriority} t={t} />
+          <button type="button" className="ideas__add" onClick={add} disabled={adding || !draft.trim()}>
+            {adding ? t('ideas.adding') : t('ideas.add')}
+          </button>
+        </div>
       </div>
 
       {error && <ErrorBanner message={error} />}
@@ -221,7 +272,7 @@ export default function IdeasPanel() {
           <p className="ideas__muted">{t('ideas.noMatches')}</p>
         ) : (
           visible.map((n) => (
-            <div key={n.id} className="idea">
+            <div key={n.id} className="idea" data-priority={n.priority || 0}>
               {editingId === n.id ? (
                 <div className="idea__edit">
                   <textarea
@@ -238,6 +289,10 @@ export default function IdeasPanel() {
                     value={editProject}
                     onChange={(e) => setEditProject(e.target.value)}
                   />
+                  <div className="idea__prio-edit">
+                    <span className="ideas__prio-label">{t('ideas.priority')}</span>
+                    <PriorityPicker value={editPriority} onChange={setEditPriority} t={t} />
+                  </div>
                   <div className="idea__actions">
                     <button type="button" className="idea__btn idea__btn--primary" onClick={() => saveEdit(n.id)} disabled={!editDraft.trim()}>
                       {t('ideas.save')}
@@ -252,6 +307,7 @@ export default function IdeasPanel() {
                   <p className="idea__text">{n.text}</p>
                   <div className="idea__foot">
                     {n.project && <span className="idea__project">{n.project}</span>}
+                    <PriorityPicker value={n.priority || 0} onChange={(lvl) => changePriority(n, lvl)} t={t} />
                     <span className="idea__time">{relTime(n.updatedAt || n.createdAt, t)}</span>
                     <button type="button" className="idea__btn" onClick={() => startEdit(n)}>
                       {t('ideas.edit')}

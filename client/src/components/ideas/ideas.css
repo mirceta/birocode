@@ -155,6 +155,78 @@
   padding: 12px 14px;
 }
 
+/* Priority tint (plans/idea-priority.md): the card background gets more brightly
+   red as the priority rises (1 = faint, 5 = strong bright red). Level 0/"none"
+   keeps the neutral card above. Dark idea text stays legible at every level. */
+.idea[data-priority="1"] { background: #fdecec; border-color: #f6c9c9; }
+.idea[data-priority="2"] { background: #fbd0d0; border-color: #f0a6a6; }
+.idea[data-priority="3"] { background: #f8a8a8; border-color: #e87f7f; }
+.idea[data-priority="4"] { background: #f56b6b; border-color: #df4d4d; }
+.idea[data-priority="5"] { background: #ef3b3b; border-color: #cf2a2a; }
+
+/* Keep text readable on the strong reds. */
+.idea[data-priority="4"] .idea__text,
+.idea[data-priority="5"] .idea__text {
+  color: #2a0606;
+}
+.idea[data-priority="4"] .idea__time,
+.idea[data-priority="5"] .idea__time {
+  color: #5a1010;
+}
+
+/* Inline 1–5 priority picker (composer, edit form, and quick-set on each card). */
+.idea-prio {
+  display: inline-flex;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.idea-prio__dot {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text-muted, #888);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* Filled dots redden with the level (rating-bar style: every dot up to the
+   chosen level is "on"). */
+.idea-prio__dot--on { color: #fff; border-color: transparent; }
+.idea-prio__dot--on[data-level="1"] { background: #f3a3a3; }
+.idea-prio__dot--on[data-level="2"] { background: #ef7d7d; }
+.idea-prio__dot--on[data-level="3"] { background: #ea5a5a; }
+.idea-prio__dot--on[data-level="4"] { background: #e23b3b; }
+.idea-prio__dot--on[data-level="5"] { background: #cf2020; }
+
+/* Composer row: priority label + picker on the left, Add on the right. */
+.ideas__compose-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ideas__compose-row .ideas__add {
+  margin-left: auto;
+}
+
+.ideas__prio-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted, #666);
+}
+
+.idea__prio-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .idea__text {
   margin: 0 0 8px;
   font-size: 14px;
