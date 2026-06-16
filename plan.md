@@ -8,7 +8,13 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-16):** **Latest — built, browser-verified & merged to main:**
+> **Status (2026-06-16):** **Latest — built, verified & merged to main:** two
+> Understanding/dock upgrades — the [Understanding app now hosts a full agent-authored
+> SPA](plans/understanding-spa.md) (build-less static `understanding-app/`, stack from
+> birokrat-architecture, **no Mermaid fallback**), and the [agent dock shows one button
+> per local app](plans/dock-multi-local-app.md) (a Local-tab-style switcher inside each
+> dock). Both live on :5099 & merged to main.
+> **Previously latest — built, browser-verified & merged to main:**
 > [Reflect multi-app exposure in the local-exposure example](plans/exposure-example-multiapp-note.md)
 > — the example's request-flow explainer now teaches the per-app proxy path
 > `…/app/<appId>/` (bare = the default app), matching the multiple-local-apps
@@ -117,6 +123,21 @@
 
 ## Recently shipped
 
+- [Understanding app → host a full SPA](plans/understanding-spa.md) — the always-on
+  Understanding app now serves an **agent-authored static SPA** from
+  `understanding-app/` at the repo root (build-less folder: `index.html` + JS/CSS +
+  vendored libs + data; stack copied from `birokrat-architecture/viz/`), instead of a
+  single Mermaid diagram. **No Mermaid fallback** — a missing SPA shows an explicit
+  empty state and missing assets 404, so a broken/absent SPA can't masquerade as
+  working. Removed the old renderer + bundled `mermaid.min.js`. Compiles, deployed to
+  live :5099 & confirmed; **merged to main 2026-06-16**. On `feature/understanding-spa`.
+- [Multiple local-app buttons on the agent dock](plans/dock-multi-local-app.md) — the
+  dashboard dock's single default-app toggle is now **one button per local app** the
+  repo defines (incl. the always-on Understanding app), mirroring the Local-tab
+  switcher; click one to render it inside the dock at
+  `/api/localview/{repoId}/app/{appId}/`, click the active one to return to chat.
+  Dropped the now-unused single-port liveness probe. Frontend-only; browser-verified
+  on live :5099; **merged to main 2026-06-16**. On `feature/dock-multi-local-app`.
 - [Reflect multi-app exposure in the local-exposure example](plans/exposure-example-multiapp-note.md)
   — a **light accuracy touch**: the example's animated request-flow explainer
   taught only the bare `/api/localview/<repo>/` path, predating the

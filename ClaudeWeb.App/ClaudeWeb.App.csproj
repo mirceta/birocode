@@ -22,11 +22,6 @@
     <None Update="appsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <!-- Bundled offline assets for the harness-provided Understanding app
-         (plans/multiple-local-apps.md Slice 2). -->
-    <None Update="Understanding\**">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
   </ItemGroup>
 
 </Project>

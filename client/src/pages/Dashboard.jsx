@@ -35,25 +35,6 @@ function isHotTier(tier) {
 }
 
 // Is this repo's Local-tab app actually serving (plans/dock-local-app.md)? We
-// probe the harness's own same-origin reverse proxy (/api/localview/{repoId}/,
-// plans/local-app-proxy.md) so the auth cookie rides along and a 502 from a dead
-// product reads as offline — the same liveness contract ProductFrame uses.
-async function probeLocal(repoId) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 3000);
-  try {
-    const res = await fetch(`/api/localview/${repoId}/`, {
-      cache: 'no-store',
-      signal: controller.signal,
-    });
-    return res.ok;
-  } catch {
-    return false;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 // Dock size is a per-device "bigger/smaller" stepper: an index into SIZE_STEPS
 // that scales the square cells' width cap (height follows via aspect-ratio).
 // Default is the middle step (1.0 = the original 340/460px caps).
@@ -233,9 +214,6 @@ export default function Dashboard({ onClose }) {
   const [gitInfo, setGitInfo] = useState({});
   // { [repoId]: true } while a per-dock refresh is in flight (spinner + guard).
   const [gitBusy, setGitBusy] = useState({});
-  // { [repoId]: { port, online } } — whether the agent's Local-tab app is being
-  // served (plans/dock-local-app.md). Only repos with a localPort are probed.
-  const [localInfo, setLocalInfo] = useState({});
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
 
@@ -358,45 +336,6 @@ export default function Dashboard({ onClose }) {
   useEffect(() => {
     loadGit();
   }, [loadGit]);
-
-  // Local-app serving state per agent repo (plans/dock-local-app.md). The port
-  // lives on the repo entry (like the Local tab); only repos that assigned one
-  // are probed. `localKey` is a stable string of repoId:port pairs so the poll
-  // only restarts when the set of ports actually changes, not every render.
-  const localPorts = useMemo(() => {
-    const out = {};
-    for (const repoId of new Set(tabs.map((tab) => tab.repoId))) {
-      const port = repos.find((r) => r.id === repoId)?.localPort;
-      if (port) out[repoId] = port;
-    }
-    return out;
-  }, [tabs, repos]);
-  const localKey = Object.entries(localPorts)
-    .map(([id, port]) => `${id}:${port}`)
-    .join(',');
-  useEffect(() => {
-    if (!localKey) {
-      setLocalInfo({});
-      return undefined;
-    }
-    let cancelled = false;
-    const ports = Object.fromEntries(localKey.split(',').map((p) => p.split(':')));
-    async function probeAll() {
-      const pairs = await Promise.all(
-        Object.entries(ports).map(async ([repoId, port]) => [
-          repoId,
-          { port: Number(port), online: await probeLocal(repoId) },
-        ]),
-      );
-      if (!cancelled) setLocalInfo(Object.fromEntries(pairs));
-    }
-    probeAll();
-    const timer = setInterval(probeAll, POLL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [localKey]);
 
   // Per-dock refresh: re-fetch one repo's git status, hitting origin (fetch=true)
   // like the Git tab's refresh so the origin-relative rows actually update.
@@ -561,7 +500,7 @@ export default function Dashboard({ onClose }) {
                     recency={recency}
                     contentZoom={contentZoom}
                     repoPath={repoPath(tab.repoId)}
-                    localApp={localInfo[tab.repoId]}
+                    localApps={repos.find((r) => r.id === tab.repoId)?.localApps || []}
                     git={gitInfo[tab.repoId]}
                     gitRefreshing={!!gitBusy[tab.repoId]}
                     onRefreshGit={() => refreshGit(tab.repoId)}

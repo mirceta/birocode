@@ -188,6 +188,7 @@
   "dashboard.viewHot": "Hot",
   "dashboard.refreshGit": "Refresh git status",
   "dashboard.localApp": "Local app",
+  "dashboard.localApps": "Local apps",
   "dashboard.localServing": "serving on :{port}",
   "dashboard.localOffline": ":{port} · not serving",
   "dashboard.localNone": "none",
