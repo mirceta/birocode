@@ -5,6 +5,18 @@
 > (Decision logic is [the brain](loop-autopilot-brain.md); the fences are
 > [safety](loop-autopilot-safety.md).)
 
+## Shipped so far (Slice 1 — discovery half)
+
+`Services/Autopilot/AutopilotDiscoveryService.cs` mines the on-disk
+`~/.claude/projects` transcripts across all repos, groups human messages by a
+normalised key, filters interrupt/system noise, and returns the recurring prompts
+(count, distinct sessions/repos, sample triggering contexts, custom-prompt match)
+via `GET /api/autopilot/discover` (`Controllers/AutopilotController.cs`). The
+**Autopilot** tab (Advanced, `client/src/pages/Autopilot.jsx`) renders the ranked
+list. Browser-verified on :5210 (`verify-autopilot-discover.mjs` 16/16 — 92
+sessions → 38 routines). Not yet built for this slice: **confirm/edit** and
+persist the chosen set.
+
 ## Architecture
 
 ```
