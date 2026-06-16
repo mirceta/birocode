@@ -28,17 +28,58 @@ prompt so it becomes the agent's default reflex.
 
 ## Candidate approaches (to choose from)
 
-1. **Standing nudge + reuse the doc/diagram renderer.** The harness appends a
-   short standing instruction to every agent prompt ("if you're explaining
-   something non-trivial, write a mermaid/HTML diagram to `<path>`"), and the
-   harness auto-renders that file in a dedicated panel (Understanding-panel style).
-   *Lightest; touches prompt-building + a small render surface.*
-2. **Standing nudge + a served diagram product.** The agent writes the diagram to
-   a tiny always-on local server (the `serve.mjs` pattern from
-   [local-exposure-example](local-exposure-example.md)) shown on the Local tab.
-   *Closest to the user's "through our local app" framing; reuses the proxy.*
-3. **CLAUDE.md convention only (no harness change).** Document the reflex as a
-   prompt convention. *Cheapest, but "every prompt" is weaker and per-repo.*
+- **A. CLAUDE.md convention only.** Document the reflex as a prompt convention;
+  the agent writes a mermaid/HTML diagram and we lean on the existing doc viewer to
+  show it. No harness code.
+- **B. Standing nudge → doc viewer.** The harness appends a short instruction to
+  *every* agent prompt ("if you're explaining something non-trivial, write a
+  mermaid/HTML diagram to `<path>`"); the existing doc/Files viewer renders it.
+- **C. Standing nudge → dedicated diagram panel.** Same nudge, plus a new
+  first-class panel that live-polls the known diagram file (the
+  [Understanding panel](understanding-panel.md) pattern) so the picture shows
+  itself without the user navigating to it.
+- **D. Standing nudge → served diagram product on the Local tab.** Same nudge, but
+  the agent writes the diagram to a tiny always-on local server (the `serve.mjs`
+  pattern from [local-exposure-example](local-exposure-example.md)), shown on the
+  Local tab via `/api/localview`. Closest to the user's "through our local app"
+  framing.
+- **E. Diagram tool (tool-call / MCP).** Give the agent an explicit
+  `render_diagram` tool the harness handles, instead of a prose nudge — structured
+  and hard to "forget," but the most plumbing.
+
+### Comparison
+
+Ratings are Low / Med / High. For **Dev effort** and **Dev risk**, lower is
+better; for the rest, higher is better.
+
+| Approach | Dev effort | Dev risk | "Every-prompt" reliability | Reuses existing | Diagram fidelity | Fits "via Local app" | Harness change |
+|---|---|---|---|---|---|---|---|
+| **A. Convention only** | Very low | Very low | Low ¹ | High | Med | Partial | None |
+| **B. Nudge → doc viewer** | Low–Med | Med ² | High | High | Med | Partial | Prompt-build |
+| **C. Nudge → diagram panel** | Med | Med | High | Med | Med–High | Good | Prompt-build + new panel |
+| **D. Nudge → served product** | Med–High | Med–High ³ | High | Med | High | Best | Prompt-build + server lifecycle |
+| **E. Diagram tool** | High | High | High & robust ⁴ | Low | High | Depends | Significant |
+
+¹ Per-repo and prose-only — not literally every prompt; agents can skip it.
+² Touches prompt construction (harness core) — small edit but a central path.
+³ A per-repo always-on server + port lifecycle is more moving parts to manage.
+⁴ A structured tool call resists being "forgotten" better than a prose nudge, but
+needs new tool plumbing.
+
+Other axis worth noting: **cross-repo reach.** A (CLAUDE.md) is per-repo only;
+B–E inject at prompt-build time, so they work for *every* repo the harness drives.
+
+### How to read it / lean
+
+- If the priority is **cheap + robust nudge**, **B** wins — one prompt-build edit,
+  render for free.
+- If the priority is **literally "through our local app"** and rich visuals
+  (animation like the four-variant explainer), **D** fits best, at higher cost.
+- **C** is the middle: a dedicated, self-revealing surface without standing up a
+  per-repo server.
+- **A** is a fine *first step* (zero risk) that can later graduate to B/C/D.
+- **E** is the most durable delivery but the heaviest; park unless prose nudges
+  prove unreliable.
 
 ## Open questions
 
