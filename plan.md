@@ -8,7 +8,11 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-16):** **Latest — built, verified & merged to main:** two
+> **Status (2026-06-17):** **Latest — built, verified & merged to main:** the
+> [Exposure check is now app-aware](plans/expose-check-app-aware.md) — "Verify
+> exposure" probes the **selected** local app's port (and matching freshness path),
+> not always the repo's default `:5300`.
+> **Previously latest — built, verified & merged to main:** two
 > Understanding/dock upgrades — the [Understanding app now hosts a full agent-authored
 > SPA](plans/understanding-spa.md) (build-less static `understanding-app/`, stack from
 > birokrat-architecture, **no Mermaid fallback**), and the [agent dock shows one button
@@ -80,14 +84,6 @@
 
 ## Active feature plans
 
-- [Make the Exposure check app-aware](plans/expose-check-app-aware.md) — **bug fix**:
-  the Local tab's "Verify exposure" always checked the repo's default app
-  (`repo.LocalPort`, e.g. `:5300`), ignoring the switcher. Make it check the
-  **selected** app — `ExposeController.Check` takes an `appId` and probes that app's
-  port; `ExposeCheck.jsx` sends it and points the freshness probe at
-  `/api/localview/{id}/app/{appId}/`. The "per-app Exposure-check awareness" follow-up
-  of [multiple-local-apps](plans/multiple-local-apps.md). **Building.** On
-  `feature/expose-check-app-aware`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
@@ -117,6 +113,15 @@
 
 ## Recently shipped
 
+- [Make the Exposure check app-aware](plans/expose-check-app-aware.md) — **bug fix**:
+  the Local tab's "Verify exposure" always checked the repo's default app
+  (`repo.LocalPort`, e.g. `:5300`), ignoring the switcher. Now `/api/expose/check`
+  takes an `appId` and probes the **selected** app's port (default = first app);
+  `ExposeService.RunAsync`/`BuildFixPrompt` use it, and `ExposeCheck.jsx` sends the
+  id + points its freshness probe at `/api/localview/{id}/app/{appId}/`. The per-app
+  Exposure-check follow-up of [multiple-local-apps](plans/multiple-local-apps.md).
+  Backend + frontend; deployed to live :5099 & confirmed; **merged to main
+  2026-06-17**. On `feature/expose-check-app-aware`.
 - [Understanding app → host a full SPA](plans/understanding-spa.md) — the always-on
   Understanding app now serves an **agent-authored static SPA** from
   `understanding-app/` at the repo root (build-less folder: `index.html` + JS/CSS +
