@@ -44,7 +44,7 @@ public class RepoController : ControllerBase
     {
         _logger.CountRequest();
         var repos = _registry.GetAll()
-            .Select(r => new { id = r.Id, name = r.Name, path = r.Path, exists = r.Exists, isGitRepo = r.IsGitRepo, isSelf = r.IsSelf, visibility = r.Visibility, localPort = r.LocalPort });
+            .Select(r => new { id = r.Id, name = r.Name, path = r.Path, exists = r.Exists, isGitRepo = r.IsGitRepo, isSelf = r.IsSelf, visibility = r.Visibility, localPort = r.LocalPort, localApps = AppsJson(r.LocalApps) });
         return Ok(repos);
     }
 
@@ -141,7 +141,7 @@ public class RepoController : ControllerBase
             }
 
             var r = _registry.Add(path, request!.Name, request.Visibility);
-            return Ok(new { id = r.Id, name = r.Name, path = r.Path, exists = r.Exists, isGitRepo = r.IsGitRepo, isSelf = r.IsSelf, visibility = r.Visibility, localPort = r.LocalPort, created });
+            return Ok(new { id = r.Id, name = r.Name, path = r.Path, exists = r.Exists, isGitRepo = r.IsGitRepo, isSelf = r.IsSelf, visibility = r.Visibility, localPort = r.LocalPort, localApps = AppsJson(r.LocalApps), created });
         }
         catch (Exception ex) when (ex is ArgumentException or DirectoryNotFoundException or IOException or UnauthorizedAccessException)
         {
@@ -199,8 +199,43 @@ public class RepoController : ControllerBase
         if (!_registry.SetLocalPort(id, port))
             return NotFound(new { error = "Unknown repository id" });
         var r = _registry.GetAll().First(x => x.Id == id);
-        return Ok(new { id = r.Id, localPort = r.LocalPort });
+        return Ok(new { id = r.Id, localPort = r.LocalPort, localApps = AppsJson(r.LocalApps) });
     }
+
+    public record AddLocalAppRequest(string? Name, int Port, string? Kind);
+
+    /// <summary>
+    /// Adds a local app to a project (plans/multiple-local-apps.md): a port, a
+    /// friendly name, and an optional kind ("repo" default, or "harness"). A repo
+    /// may expose several, each shown as a switchable app in the Local tab.
+    /// </summary>
+    [HttpPost("{id}/localapps")]
+    public IActionResult AddLocalApp(string id, [FromBody] AddLocalAppRequest request)
+    {
+        _logger.CountRequest();
+        if (request is null || request.Port is < 1 or > 65535)
+            return BadRequest(new { error = "Port must be 1..65535" });
+        var app = _registry.AddLocalApp(id, request.Name, request.Port, request.Kind);
+        if (app is null)
+            return NotFound(new { error = "Unknown repository id" });
+        var r = _registry.GetAll().First(x => x.Id == id);
+        return Ok(new { id = r.Id, localPort = r.LocalPort, localApps = AppsJson(r.LocalApps) });
+    }
+
+    /// <summary>Removes a local app from a project by its app id.</summary>
+    [HttpDelete("{id}/localapps/{appId}")]
+    public IActionResult RemoveLocalApp(string id, string appId)
+    {
+        _logger.CountRequest();
+        if (!_registry.RemoveLocalApp(id, appId))
+            return NotFound(new { error = "Unknown repository or app id" });
+        var r = _registry.GetAll().First(x => x.Id == id);
+        return Ok(new { id = r.Id, localPort = r.LocalPort, localApps = AppsJson(r.LocalApps) });
+    }
+
+    // Projects the registry's app records to stable camelCase JSON shapes.
+    private static IEnumerable<object> AppsJson(IReadOnlyList<RepositoryRegistry.LocalAppInfo> apps) =>
+        apps.Select(a => new { id = a.Id, name = a.Name, port = a.Port, kind = a.Kind });
 
     /// <summary>
     /// The folder new projects live in: the parent of the pinned self repo

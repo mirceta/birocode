@@ -35,8 +35,27 @@ public class RepositoryRegistry
         Load(config);
     }
 
-    /// <summary>A repository plus derived status the picker/UI cares about.</summary>
-    public sealed record RepositoryInfo(string Id, string Name, string Path, bool Exists, bool IsGitRepo, bool IsSelf, string Visibility, int? LocalPort);
+    /// <summary>A repository plus derived status the picker/UI cares about.
+    /// <see cref="LocalPort"/> is the default (first) app's port, kept for
+    /// back-compat; <see cref="LocalApps"/> is the full list
+    /// (plans/multiple-local-apps.md).</summary>
+    public sealed record RepositoryInfo(string Id, string Name, string Path, bool Exists, bool IsGitRepo, bool IsSelf, string Visibility, int? LocalPort, IReadOnlyList<LocalAppInfo> LocalApps);
+
+    /// <summary>One local app exposed by a repo (plans/multiple-local-apps.md).</summary>
+    public sealed record LocalAppInfo(string Id, string Name, int Port, string Kind);
+
+    /// <summary>
+    /// The normalized local-app list for a repo: the explicit <c>LocalApps</c> if
+    /// any, else the legacy single <c>LocalPort</c> read as one app, else empty.
+    /// Pure (never mutates) so reads don't trigger a save.
+    /// </summary>
+    public static List<LocalAppConfig> EffectiveApps(RepositoryConfig r)
+    {
+        if (r.LocalApps is { Count: > 0 }) return r.LocalApps;
+        if (r.LocalPort is int p)
+            return new() { new LocalAppConfig { Id = "app", Name = "App", Port = p, Kind = "repo" } };
+        return new();
+    }
 
     /// <summary>Normalizes a visibility value: anything but "basic" is "advanced".</summary>
     public static string NormalizeVisibility(string? visibility) =>
@@ -177,9 +196,32 @@ public class RepositoryRegistry
         }
     }
 
+    // Moves a legacy single LocalPort into the LocalApps list (idempotent), so
+    // every mutation works against one source of truth. Caller holds _gate.
+    private static void EnsureMigrated(RepositoryConfig r)
+    {
+        if ((r.LocalApps is null || r.LocalApps.Count == 0) && r.LocalPort is int p)
+            r.LocalApps = new() { new LocalAppConfig { Id = "app", Name = "App", Port = p, Kind = "repo" } };
+        r.LocalApps ??= new();
+        r.LocalPort = null; // list is now the source of truth
+    }
+
+    // A URL-safe, repo-unique id derived from a name (falls back to "app").
+    private static string MakeAppId(string? name, IEnumerable<LocalAppConfig> existing)
+    {
+        var basis = new string((name ?? "").ToLowerInvariant().Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray())
+            .Trim('-');
+        if (string.IsNullOrEmpty(basis)) basis = "app";
+        var taken = existing.Select(a => a.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (!taken.Contains(basis)) return basis;
+        for (var i = 2; ; i++)
+            if (!taken.Contains($"{basis}-{i}")) return $"{basis}-{i}";
+    }
+
     /// <summary>
-    /// Sets the project's Local-tab port (plans/local-app-tab.md); null clears
-    /// it. No-op if the id is unknown or the port is out of range.
+    /// LEGACY single-port setter (plans/local-app-tab.md). Now writes through the
+    /// LocalApps list: a port replaces the list with one "repo" app; null clears
+    /// every app. No-op if the id is unknown or the port is out of range.
     /// </summary>
     public bool SetLocalPort(string id, int? port)
     {
@@ -188,10 +230,54 @@ public class RepositoryRegistry
         {
             var repo = _repos.FirstOrDefault(r => string.Equals(r.Id, id, StringComparison.Ordinal));
             if (repo is null) return false;
-            repo.LocalPort = port;
+            repo.LocalPort = null;
+            repo.LocalApps = port is int p
+                ? new() { new LocalAppConfig { Id = "app", Name = "App", Port = p, Kind = "repo" } }
+                : new();
             Save();
             _logger.Info($"[REPO] Local port of \"{repo.Name}\" -> {(port?.ToString() ?? "cleared")}");
             return true;
+        }
+    }
+
+    /// <summary>
+    /// Adds a local app (plans/multiple-local-apps.md) with a generated id.
+    /// Returns the new app, or null if the id is unknown / port out of range.
+    /// </summary>
+    public LocalAppInfo? AddLocalApp(string id, string? name, int port, string? kind)
+    {
+        if (port is < 1 or > 65535) return null;
+        lock (_gate)
+        {
+            var repo = _repos.FirstOrDefault(r => string.Equals(r.Id, id, StringComparison.Ordinal));
+            if (repo is null) return null;
+            EnsureMigrated(repo);
+            var label = string.IsNullOrWhiteSpace(name) ? $"App :{port}" : name.Trim();
+            var app = new LocalAppConfig
+            {
+                Id = MakeAppId(label, repo.LocalApps),
+                Name = label,
+                Port = port,
+                Kind = string.Equals(kind, "harness", StringComparison.OrdinalIgnoreCase) ? "harness" : "repo",
+            };
+            repo.LocalApps.Add(app);
+            Save();
+            _logger.Info($"[REPO] Added local app \"{app.Name}\" (:{port}, {app.Kind}) to \"{repo.Name}\"");
+            return new LocalAppInfo(app.Id, app.Name, app.Port, app.Kind);
+        }
+    }
+
+    /// <summary>Removes a local app by its id. No-op if either id is unknown.</summary>
+    public bool RemoveLocalApp(string id, string appId)
+    {
+        lock (_gate)
+        {
+            var repo = _repos.FirstOrDefault(r => string.Equals(r.Id, id, StringComparison.Ordinal));
+            if (repo is null) return false;
+            EnsureMigrated(repo);
+            var removed = repo.LocalApps.RemoveAll(a => string.Equals(a.Id, appId, StringComparison.Ordinal)) > 0;
+            if (removed) { Save(); _logger.Info($"[REPO] Removed local app \"{appId}\" from \"{repo.Name}\""); }
+            return removed;
         }
     }
 
@@ -286,9 +372,23 @@ public class RepositoryRegistry
     {
         var exists = Directory.Exists(r.Path);
         var isGit = exists && Directory.Exists(System.IO.Path.Combine(r.Path, ".git"));
-        return new RepositoryInfo(r.Id, r.Name, r.Path, exists, isGit, r.IsSelf, NormalizeVisibility(r.Visibility), r.LocalPort);
+        var apps = EffectiveApps(r);
+        var infos = apps.Select(a => new LocalAppInfo(a.Id, a.Name, a.Port, a.Kind)).ToList();
+        int? defaultPort = apps.Count > 0 ? apps[0].Port : null;
+        return new RepositoryInfo(r.Id, r.Name, r.Path, exists, isGit, r.IsSelf, NormalizeVisibility(r.Visibility), defaultPort, infos);
     }
 
-    private static RepositoryConfig Clone(RepositoryConfig r) =>
-        new() { Id = r.Id, Name = r.Name, Path = r.Path, IsSelf = r.IsSelf, Visibility = r.Visibility, LocalPort = r.LocalPort };
+    // Clones normalize too: LocalPort is set to the default app's port so
+    // back-compat consumers (Exposure check, the bare proxy route) keep working
+    // for repos that have migrated to the LocalApps list.
+    private static RepositoryConfig Clone(RepositoryConfig r)
+    {
+        var apps = EffectiveApps(r);
+        return new()
+        {
+            Id = r.Id, Name = r.Name, Path = r.Path, IsSelf = r.IsSelf, Visibility = r.Visibility,
+            LocalPort = apps.Count > 0 ? apps[0].Port : null,
+            LocalApps = apps.Select(a => new LocalAppConfig { Id = a.Id, Name = a.Name, Port = a.Port, Kind = a.Kind }).ToList(),
+        };
+    }
 }

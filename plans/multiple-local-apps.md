@@ -2,10 +2,13 @@
 
 > Editing this plan? First read [doc principles](doc-principles.md).
 
-> **Status (2026-06-16): DESIGN — slicing next.** On `feature/multiple-local-apps`.
-> Reframed from the earlier "explain-with-diagrams" idea: the headline is now a
-> **platform upgrade** (a repo can expose more than one local app), and the
-> diagram/explain feature becomes its **first consumer**.
+> **Status (2026-06-16): SLICE 1 SHIPPED — Slice 2 next.** On
+> `feature/multiple-local-apps`. The multi-local-app platform (data model, proxy,
+> Local-tab switcher) is implemented and verified end-to-end (exposure-example on
+> :5305 + a throwaway second app on :5306, both switchable). Reframed from the
+> earlier "explain-with-diagrams" idea: the headline is a **platform upgrade** (a
+> repo can expose more than one local app), and the diagram/explain feature is its
+> **first consumer** (Slice 2).
 
 ## The problem
 
@@ -101,10 +104,21 @@ harness-provided case). **E** stays parked unless prose nudges prove unreliable.
 
 ## Slices (sequenced)
 
-- **Slice 1 — Multi-local-app platform.** Data model (`LocalApps` list +
-  back-compat), proxy path with an app segment + default, Local-tab switcher, and
-  the dock/Exposure-check ripple. Prove it with the **exposure-example + a
-  throwaway second app** both visible and switchable in one repo's Local tab.
+- **Slice 1 — Multi-local-app platform. ✅ SHIPPED.** Delivered:
+  - **Data model:** `RepositoryConfig.LocalApps: [{ id, name, port, kind }]`; the
+    legacy `LocalPort` is read as one app and migrated into the list on first
+    mutation (`RepositoryRegistry.EffectiveApps` / `EnsureMigrated`). Back-compat
+    consumers still see `localPort` = the default (first) app's port.
+  - **Proxy:** `LocalProxyController` grows `…/{repoId}/app/{appId}/{**rest}`; the
+    bare `…/{repoId}/{**rest}` stays as the **default (first) app** — so old links,
+    the dock, and the Exposure check keep working unchanged (they target the
+    default app). The literal `app/` segment outranks the bare catch-all.
+  - **API:** `POST /repos/{id}/localapps` (add), `DELETE /repos/{id}/localapps/{appId}`
+    (remove); `/api/repos` now returns `localApps`.
+  - **Local-tab UI:** an app switcher (one removable chip per app, "+ Add app"),
+    embedding `…/{repoId}/app/{appId}/`.
+  - **Ripple handled by the default-app rule** (no dock/Exposure-check changes
+    needed yet); making *those* surfaces app-aware is a follow-up, not a blocker.
 - **Slice 2 — The Understanding app (first consumer).** A harness-provided,
   always-on diagram renderer registered as a second app; the prompt nudge that
   makes the agent write a diagram when explaining; lifecycle (one rolling latest
@@ -112,8 +126,11 @@ harness-provided case). **E** stays parked unless prose nudges prove unreliable.
 
 ## Open questions
 
-- **Proxy scheme:** `…/{repoId}/{appId}/` vs. a query param; how the default app is
-  picked so old `/api/localview/{repoId}/` links keep working.
+- ~~**Proxy scheme:**~~ **Decided (Slice 1):** `…/{repoId}/app/{appId}/` (a path
+  segment, not a query param — relative assets must resolve per-app). The bare
+  `…/{repoId}/` is the **first app** in the list (the default), so old links keep
+  working. A query param was rejected: it leaves every app sharing one base path,
+  so their relative `./assets/…` collide.
 - **Nudge delivery:** harness-appended system-reminder at prompt-build time vs. a
   CLAUDE.md convention vs. a tool (A vs. D-style vs. E above).
 - **Trigger threshold:** only non-trivial explanations, so we don't diagram
