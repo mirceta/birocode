@@ -93,6 +93,24 @@
   background: var(--color-surface);
 }
 
+/* Slice 3 (serving-model-clarity): the embedded Exposure Helper shown in the
+   setup state. Wider than the how-to card and tall enough to host the guided
+   checklist; ProductFrame's iframe (flex: 1) fills the frame and scrolls. */
+.localapp__helper {
+  margin: 0 16px 24px;
+  max-width: 820px;
+}
+
+.localapp__helper-frame {
+  display: flex;
+  flex-direction: column;
+  height: 660px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius, 8px);
+  overflow: hidden;
+  background: var(--color-surface);
+}
+
 .localapp__how-title {
   margin: 0 0 8px;
   font-size: 14px;

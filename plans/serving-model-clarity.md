@@ -24,7 +24,21 @@
 > isolated preview: API `why` on every rule, guided render (rows + why + all-green
 > + fix hidden), the fix button posting on a (mocked) failure, and the bridge —
 > foreign-origin ignored, legit message navigates + prefills the composer.
-> Slices 3-4 below not started.
+>
+> **Slice 3 built (2026-06-16):** the served helper now **follows the active
+> repo**. The backend check was already `repoId`-aware (`RepositoryResolver`
+> honors `?repo=`/`X-Repo-Id`); the gap was the helper calling it with no repo,
+> so it always checked the default (itself). Now the helper reads `?repo=<id>`
+> from its own iframe URL and forwards it, and **`LocalApp`'s no-port setup state
+> embeds the helper pointed at THAT repo** (`/api/localview/<selfId>/?repo=<active>`),
+> replacing the static how-to — so every agent gets the guided contract
+> walkthrough for their own product before exposing it. Local tab is already
+> Advanced-only (no new UI-mode gate); if the self localview path isn't the
+> helper (operator self-port override, e.g. the live store's stale 5305),
+> `ProductFrame` degrades to its empty state — no broken iframe. Verified **14/14**
+> on an isolated store with a seeded second repo: backend + helper follow
+> `?repo=` (RepoB shows 0/6, self all green), and the setup state embeds the
+> helper checking the active repo. Slice 4 below not started.
 
 ## Slice 1 verification — resolved (10/10)
 
@@ -105,8 +119,10 @@ served local product, not just harness chrome.
   `/api/expose/check`: per-rule checklist with plain-language explanation + the
   live contract (the `Why` field), run / re-run, and the one-click **agent-fix
   task** (helper → `postMessage` → `LocalApp` prefill+navigate). Verified 14/14.
-- **Slice 3 — Follow the active repo.** Make the check `repoId`-aware so the
-  helper serves every agent for its own repo, not just the selected one.
+- **Slice 3 — Follow the active repo. ✅ Done.** The helper reads `?repo=<id>`
+  from its iframe URL and the (already `repoId`-aware) check follows it;
+  `LocalApp`'s setup state embeds the helper pointed at the active repo. Verified
+  14/14.
 - **Slice 4 — Supporting safety + doc.** The **SSRF port-guard** on
   `POST /api/repos/{id}/localport` (refuse/confirm 22, 25, 137-139, 445, 3389, …
   and `:5099`/`:5200`) and a **canonical serving-model doc** that the helper

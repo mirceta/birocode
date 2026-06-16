@@ -37,10 +37,31 @@ through getting their product correctly exposed — reusing the existing
   served-product surface the plan calls for, not a replacement.
 - Following the active repo (`repoId`-aware check) is **slice 3**, not now.
 
-## Status
+## Status — slice 3 done (14/14)
 
-**Done — verified 14/14** on an isolated preview. Backend `Why` field added and
-single-sourced; helper renders the guided checklist (rows + live-contract why +
-all-green summary + hidden fix area); the one-click fix posts to the harness
-(`LocalApp` bridge, same-origin guarded) which prefills the project chat and
-navigates to the agent. Slice 3 (repo-aware check) is next, not started.
+Slice 3 built and verified on an isolated store with a seeded second repo: the
+helper reads `?repo=` and the check follows it (RepoB 0/6, self all green), and
+LocalApp's setup state embeds the helper pointed at the active repo. The notes
+below describe what was built. Slice 4 (SSRF port-guard + canonical doc) is next.
+
+---
+
+The served helper now checks the **active** repo, not always itself.
+
+- The backend `/api/expose/check` is *already* repo-aware (`RepositoryResolver`
+  honors `?repo=`/`X-Repo-Id`). The gap is the helper calls it with no repo, so
+  it falls back to the default (self) and only ever checks itself.
+- **Helper:** read `?repo=<id>` from its own iframe URL and forward it to the
+  check call — so the helper checks whatever repo it's pointed at.
+- **Placement:** embed the helper in the **no-port setup state of every repo**
+  (checking that repo, via `/api/localview/<selfId>/?repo=<activeId>`), replacing
+  the static how-to. That's exactly when an agent needs guidance getting exposed;
+  the populated tab (with the existing "Verify" panel) is untouched.
+- **Robustness:** the Local tab is already Advanced-only, so no new UI-mode gate.
+  If the self repo carries an operator port override (so its localview path isn't
+  the exposer), `ProductFrame` degrades to its normal "nothing running" empty
+  state — no broken iframe. (Live store's stale self-port 5305 is that case until
+  cleared, per the plan.)
+
+Verify on an isolated store **with a second repo** that the helper checks the
+repo named in `?repo=`, plus the self repo still all-green.

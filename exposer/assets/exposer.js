@@ -106,12 +106,26 @@
     noteEl.textContent = 'The check probes 127.0.0.1 / [::1] server-side and never edits your product.';
   }
 
+  // Which repo to check — slice 3 (plans/serving-model-clarity.md). The harness
+  // embeds the helper with ?repo=<activeId> in the iframe URL so it follows the
+  // agent's own repo, not the registry default (itself). No param => the harness
+  // resolves the selected/default repo, same as before.
+  function targetRepoId() {
+    try {
+      return new URLSearchParams(window.location.search).get('repo') || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
   function run() {
     runBtn.disabled = true;
     setSummary('Running…', '');
+    var repoId = targetRepoId();
+    var checkUrl = '/api/expose/check' + (repoId ? '?repo=' + encodeURIComponent(repoId) : '');
     // Absolute /api path (not a relative asset): this is an API call to the
     // harness, which is same-origin when the helper is opened via the Local tab.
-    fetch('/api/expose/check', { cache: 'no-store', credentials: 'same-origin' })
+    fetch(checkUrl, { cache: 'no-store', credentials: 'same-origin' })
       .then(function (res) {
         if (!res.ok) throw new Error('http ' + res.status);
         return res.json();

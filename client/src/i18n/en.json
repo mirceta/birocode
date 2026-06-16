@@ -331,6 +331,8 @@
   "localapp.howStep2": "Give it the full path to the web app you want to expose.",
   "localapp.howStep3": "Ask it to reconfigure the app so it can be exposed through the Local tab — then enter the port it gives you above.",
   "localapp.howNote": "That's exactly how the apps already shown here were set up.",
+  "localapp.helperTitle": "Get this app exposed right",
+  "localapp.helperIntro": "Before you set a port, the Exposure Helper below walks {name} through the embed contract — and one-clicks an agent fix. It's itself a correctly-exposed local app, so it doubles as the live reference to copy.",
   "expose.verify": "Verify exposure",
   "expose.running": "Checking exposure…",
   "expose.allGood": "Exposed correctly — embeddable here.",

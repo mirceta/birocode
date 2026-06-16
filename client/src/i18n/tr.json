@@ -328,6 +328,8 @@
   "localapp.howStep2": "Gostermek istedigin web uygulamasinin tam yolunu ona ver.",
   "localapp.howStep3": "Uygulamayi Yerel sekme uzerinden gosterilebilecek sekilde yeniden yapilandirmasini iste — sonra verdigi portu yukariya gir.",
   "localapp.howNote": "Burada zaten gosterilen uygulamalar tam olarak boyle ayarlandi.",
+  "localapp.helperTitle": "Bu uygulamayi dogru sekilde goster",
+  "localapp.helperIntro": "Bir port belirlemeden once, asagidaki Exposure Helper {name} uygulamasini gomme sozlesmesi boyunca yonlendirir — ve tek tikla bir ajan duzeltmesi baslatir. Kendisi dogru sekilde sunulan bir yerel uygulamadir, yani kopyalanacak canli referans olarak da is gorur.",
   "expose.verify": "Sunumu dogrula",
   "expose.running": "Sunum kontrol ediliyor…",
   "expose.allGood": "Dogru sunuluyor — burada gomulebilir.",

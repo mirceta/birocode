@@ -16,7 +16,7 @@ export default function LocalApp() {
   const { t } = useT();
   const navigate = useNavigate();
   const { prefillProjectChat } = useChat();
-  const { current, reloadRepos } = useRepo();
+  const { current, repos, reloadRepos } = useRepo();
   const [editing, setEditing] = useState(false);
   const [portDraft, setPortDraft] = useState('');
   const [saving, setSaving] = useState(false);
@@ -36,6 +36,17 @@ export default function LocalApp() {
   const url = port && current
     ? `/api/localview/${current.id}/${bust ? `?_=${bust}` : ''}`
     : null;
+
+  // Slice 3 (plans/serving-model-clarity.md): in the setup state (this repo has
+  // no port yet), embed the Exposure Helper itself — served through the self
+  // repo's localview path — and point it at THIS repo (?repo=) so every agent
+  // gets the guided contract walkthrough for their OWN product before exposing
+  // it. The helper checks the active repo, not the harness. If there is no self
+  // repo to serve it from (or its localview path isn't the helper, e.g. an
+  // operator port override), ProductFrame degrades to the empty state and we
+  // keep the static how-to below.
+  const selfRepo = repos.find((r) => r.isSelf);
+  const helperUrl = selfRepo && current ? `/api/localview/${selfRepo.id}/?repo=${current.id}` : null;
 
   // Force the embed to re-fetch the current build (not the browser's cached
   // copy): bump the cache-bust token AND remount the iframe.
@@ -152,19 +163,33 @@ export default function LocalApp() {
             {error && <p className="localapp__error" role="alert">{error}</p>}
           </form>
 
-          {/* How to make an arbitrary web app embeddable here: point an agent in
-              this (Claude Web) repo at the app and have it reconfigure it — the
-              same one-port/relative-URL setup the proxy needs. */}
-          <section className="localapp__how">
-            <h3 className="localapp__how-title">{t('localapp.howTitle')}</h3>
-            <p className="localapp__how-intro">{t('localapp.howIntro')}</p>
-            <ol className="localapp__how-steps">
-              <li>{t('localapp.howStep1')}</li>
-              <li>{t('localapp.howStep2')}</li>
-              <li>{t('localapp.howStep3')}</li>
-            </ol>
-            <p className="localapp__how-note">{t('localapp.howNote')}</p>
-          </section>
+          {/* The guided onboarding: embed the Exposure Helper pointed at THIS
+              repo so the agent walks the embed contract (and one-click fixes it)
+              before exposing — the served product doubling as the live reference.
+              Falls back to the static how-to when the helper can't be served. */}
+          {helperUrl ? (
+            <section className="localapp__helper">
+              <h3 className="localapp__how-title">{t('localapp.helperTitle')}</h3>
+              <p className="localapp__how-intro">{t('localapp.helperIntro', { name: current.name })}</p>
+              <div className="localapp__helper-frame">
+                <ProductFrame url={helperUrl} />
+              </div>
+            </section>
+          ) : (
+            /* How to make an arbitrary web app embeddable here: point an agent in
+               this (Claude Web) repo at the app and have it reconfigure it — the
+               same one-port/relative-URL setup the proxy needs. */
+            <section className="localapp__how">
+              <h3 className="localapp__how-title">{t('localapp.howTitle')}</h3>
+              <p className="localapp__how-intro">{t('localapp.howIntro')}</p>
+              <ol className="localapp__how-steps">
+                <li>{t('localapp.howStep1')}</li>
+                <li>{t('localapp.howStep2')}</li>
+                <li>{t('localapp.howStep3')}</li>
+              </ol>
+              <p className="localapp__how-note">{t('localapp.howNote')}</p>
+            </section>
+          )}
         </div>
       ) : (
         <div className="localapp__body">
