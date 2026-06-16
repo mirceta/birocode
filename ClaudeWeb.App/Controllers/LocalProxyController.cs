@@ -33,28 +33,68 @@ public class LocalProxyController : ControllerBase
     private readonly IHttpClientFactory _http;
     private readonly RepositoryRegistry _registry;
     private readonly Logger _logger;
+    private readonly Services.Understanding.UnderstandingApp _understanding;
 
-    public LocalProxyController(IHttpClientFactory http, RepositoryRegistry registry, Logger logger)
+    public LocalProxyController(IHttpClientFactory http, RepositoryRegistry registry, Logger logger,
+        Services.Understanding.UnderstandingApp understanding)
     {
         _http = http;
         _registry = registry;
         _logger = logger;
+        _understanding = understanding;
     }
 
+    // Named app: /api/localview/{repoId}/app/{appId}/... — the multi-app form
+    // (plans/multiple-local-apps.md). The literal "app" segment outranks the bare
+    // catch-all below, so this wins when present.
+    [AcceptVerbs("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS")]
+    [Route("{repoId}/app/{appId}/{**rest}")]
+    public async Task ProxyApp(string repoId, string appId, string? rest)
+    {
+        _logger.CountRequest();
+        var repo = _registry.GetAll().FirstOrDefault(r => r.Id == repoId);
+        var app = repo?.LocalApps.FirstOrDefault(a => a.Id == appId);
+        if (app is null)
+        {
+            Response.StatusCode = StatusCodes.Status404NotFound;
+            await Response.WriteAsJsonAsync(new { error = "No such local app for this project." });
+            return;
+        }
+        // Harness-provided apps (the Understanding app) are served internally with
+        // repo context, not dialed on a loopback port (plans/multiple-local-apps.md).
+        if (string.Equals(app.Kind, "harness", StringComparison.OrdinalIgnoreCase))
+        {
+            await _understanding.Serve(HttpContext, repo!, rest);
+            return;
+        }
+        await ProxyTo(repo!.Name, app.Port, rest);
+    }
+
+    // Bare/default app: /api/localview/{repoId}/... — back-compat (the dock,
+    // Exposure check, and old links) and the repo's first/default app.
     [AcceptVerbs("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS")]
     [Route("{repoId}/{**rest}")]
     public async Task Proxy(string repoId, string? rest)
     {
         _logger.CountRequest();
-
         var repo = _registry.GetAll().FirstOrDefault(r => r.Id == repoId);
-        if (repo?.LocalPort is not int port)
+        // The bare route is the default app: the first REAL (kind:repo) app, never
+        // the synthetic harness app (which is only reachable at /app/understanding/).
+        var app = repo?.LocalApps.FirstOrDefault(a =>
+            string.Equals(a.Kind, "repo", StringComparison.OrdinalIgnoreCase));
+        if (app is null)
         {
             Response.StatusCode = StatusCodes.Status404NotFound;
             await Response.WriteAsJsonAsync(new { error = "No local app is configured for this project." });
             return;
         }
+        await ProxyTo(repo!.Name, app.Port, rest);
+    }
 
+    // Forwards the current request to http://127.0.0.1:{port}/{rest}, streaming
+    // the response back. Shared by both routes above.
+    private async Task ProxyTo(string repoName, int port, string? rest)
+    {
         var target = $"http://127.0.0.1:{port}/{rest ?? string.Empty}{Request.QueryString}";
 
         using var msg = new HttpRequestMessage(new HttpMethod(Request.Method), target);
@@ -84,7 +124,7 @@ public class LocalProxyController : ControllerBase
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.Error($"[LOCALVIEW] {repo.Name} :{port} unreachable: {ex.Message}");
+            _logger.Error($"[LOCALVIEW] {repoName} :{port} unreachable: {ex.Message}");
             Response.StatusCode = StatusCodes.Status502BadGateway;
             await Response.WriteAsJsonAsync(new { error = "The local app is not responding." });
             return;

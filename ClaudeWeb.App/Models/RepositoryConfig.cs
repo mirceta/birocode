@@ -33,9 +33,41 @@ public class RepositoryConfig
     public string Visibility { get; set; } = "advanced";
 
     /// <summary>
-    /// Port of this project's Product for the Local tab (plans/local-app-tab.md):
-    /// the UI iframes <c>host:LocalPort</c> directly, LAN-only — unlike the
-    /// Preview Port, nothing forwards it to the internet. Null = not set.
+    /// LEGACY single Local-tab port (plans/local-app-tab.md). Superseded by
+    /// <see cref="LocalApps"/> (plans/multiple-local-apps.md): a repo may now
+    /// expose several local apps. Kept for back-compat — when LocalApps is empty
+    /// but this is set, the registry reads it as one app, and mutating the app
+    /// list migrates it into LocalApps and clears this. Null = not set.
     /// </summary>
     public int? LocalPort { get; set; }
+
+    /// <summary>
+    /// The local apps this repo exposes on the Local tab, each on its own port
+    /// (plans/multiple-local-apps.md). The first is the default (what the bare
+    /// <c>/api/localview/{repoId}/</c> proxy and the Exposure check target).
+    /// Empty = none (or, for an un-migrated entry, see <see cref="LocalPort"/>).
+    /// </summary>
+    public List<LocalAppConfig> LocalApps { get; set; } = new();
+}
+
+/// <summary>
+/// One local app a repo exposes on the Local tab (plans/multiple-local-apps.md).
+/// </summary>
+public class LocalAppConfig
+{
+    /// <summary>Stable, URL-safe id; appears in the proxy path
+    /// <c>/api/localview/{repoId}/app/{Id}/</c>.</summary>
+    public string Id { get; set; } = "";
+
+    /// <summary>Friendly label shown in the Local-tab app switcher.</summary>
+    public string Name { get; set; } = "";
+
+    /// <summary>Loopback port the harness proxy dials for this app.</summary>
+    public int Port { get; set; }
+
+    /// <summary>
+    /// "repo" = a product the repo serves (started on demand); "harness" = a
+    /// harness-provided, always-on app (e.g. the future Understanding app).
+    /// </summary>
+    public string Kind { get; set; } = "repo";
 }

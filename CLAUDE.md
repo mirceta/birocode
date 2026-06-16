@@ -48,6 +48,19 @@ them before you proceed. This is a prompt convention only — there is no extra
 model call. Delete `understanding.md` when the request is done, the same way
 `plan.md` is retired when a feature ships.
 
+## Understanding app — diagram what you explain
+
+When you explain something **non-trivial** (a flow, an architecture, how a few
+pieces fit together — not a one-line answer), **also draw it**: write a
+[Mermaid](https://mermaid.js.org) diagram to **`understanding-diagram.mmd` at the
+Repo root** (rolling latest — overwrite the same file each time). Keep replying in
+prose as well; the diagram is a companion, not a replacement.
+
+The Harness serves this live in the Local tab's always-on **Understanding** app
+(`plans/multiple-local-apps.md`): it renders `understanding-diagram.mmd` and
+auto-refreshes, so each rewrite shows up within a couple of seconds. Write only
+valid Mermaid (e.g. ``flowchart TD``); a syntax error shows as an error in the app.
+
 ## Build / run the harness normally
 
 ```

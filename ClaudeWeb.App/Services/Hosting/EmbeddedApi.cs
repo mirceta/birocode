@@ -104,6 +104,8 @@ public class EmbeddedApi
             // Pre-built so the WinForms UI and the API share one instance.
             builder.Services.AddSingleton(_repositories);
             builder.Services.AddSingleton(_ipAllowlist);
+            // Harness-provided Understanding app (plans/multiple-local-apps.md Slice 2).
+            builder.Services.AddSingleton<Understanding.UnderstandingApp>();
 
             // Controllers auto-discovered here -- new controllers need NO changes.
             builder.Services.AddControllers();
