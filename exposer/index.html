@@ -20,8 +20,8 @@
       <section class="exposer__card">
         <h2 class="exposer__h2">This page is itself correctly exposed</h2>
         <p>
-          Run the Local tab’s <strong>Verify exposure</strong> against it and
-          every row is green. It satisfies the whole contract:
+          It satisfies the whole contract, so running the check below against it
+          shows every row green:
         </p>
         <ul class="exposer__rules">
           <li><strong>Dual-stack bind</strong> — listens on IPv4 (127.0.0.1)
@@ -32,16 +32,41 @@
           <li><strong>Relative URLs</strong> — its CSS/JS load via
             <code>./assets/…</code>, so they resolve under the proxy sub-path.</li>
         </ul>
+        <p id="exposer-status" class="exposer__status">
+          Checking whether the relative script resolved…
+        </p>
       </section>
 
-      <p id="exposer-status" class="exposer__status">
-        Checking whether the relative script resolved…
-      </p>
+      <!-- The guided exposure flow (slice 2): runs the harness's existing
+           /api/expose/check probe for the active project and renders the
+           per-rule checklist, the live contract, and a one-click agent fix. -->
+      <section class="exposer__card exposer__guide" aria-labelledby="guide-h2">
+        <h2 class="exposer__h2" id="guide-h2">Check your product</h2>
+        <p class="exposer__guide-intro">
+          Run the contract check against the project the Local tab is showing.
+          Each row explains the rule and, if it fails, the exact fix.
+        </p>
 
-      <p class="exposer__next">
-        Next: a guided checklist that runs the Exposure check for your active
-        project right here. <span class="exposer__muted">(slice 2)</span>
-      </p>
+        <div class="exposer__toolbar">
+          <button type="button" id="run-check" class="exposer__btn exposer__btn--primary">
+            Run exposure check
+          </button>
+          <span id="check-summary" class="exposer__summary" role="status"></span>
+        </div>
+
+        <ul id="check-list" class="exposer__checks" hidden></ul>
+
+        <!-- Shown only when something fails: the one-click agent task. -->
+        <div id="fix-area" class="exposer__fix-area" hidden>
+          <button type="button" id="fix-with-agent" class="exposer__btn exposer__btn--fix">
+            Fix with an agent
+          </button>
+          <p id="fix-hint" class="exposer__muted"></p>
+          <textarea id="fix-prompt" class="exposer__fix-prompt" readonly hidden></textarea>
+        </div>
+
+        <p id="check-note" class="exposer__muted exposer__note"></p>
+      </section>
     </main>
 
     <!-- RELATIVE src, same reason as the stylesheet above. -->

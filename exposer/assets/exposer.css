@@ -41,6 +41,8 @@ body {
   padding: 1.25rem 1.4rem;
 }
 
+.exposer__card + .exposer__card { margin-top: 1.25rem; }
+
 .exposer__h2 {
   margin: 0 0 .6rem;
   font-size: 1.15rem;
@@ -76,9 +78,94 @@ body {
   color: var(--ok);
 }
 
-.exposer__next {
-  margin: 1.6rem 0 0;
-  color: var(--fg);
+.exposer__muted { color: var(--muted); }
+
+/* --- guided exposure flow (slice 2) -------------------------------------- */
+
+.exposer__status { margin: 1.25rem 0 0; }
+
+.exposer__guide-intro { margin: 0 0 1rem; color: var(--muted); }
+
+.exposer__toolbar {
+  display: flex;
+  align-items: center;
+  gap: .9rem;
+  flex-wrap: wrap;
 }
 
-.exposer__muted { color: var(--muted); }
+.exposer__btn {
+  font: inherit;
+  cursor: pointer;
+  border-radius: 8px;
+  border: 1px solid #2f3442;
+  background: #232734;
+  color: var(--fg);
+  padding: .5rem .9rem;
+}
+
+.exposer__btn:hover { border-color: #3a4150; }
+.exposer__btn:disabled { opacity: .55; cursor: default; }
+
+.exposer__btn--primary {
+  background: #1e3a52;
+  border-color: #2b5778;
+  color: #cfe7ff;
+}
+
+.exposer__btn--fix {
+  background: #143124;
+  border-color: #1f5238;
+  color: #bdf0d0;
+}
+
+.exposer__summary { font-size: .95rem; color: var(--muted); }
+.exposer__summary.is-ok { color: var(--ok); }
+.exposer__summary.is-warn { color: #f0b6c6; }
+
+.exposer__checks {
+  list-style: none;
+  margin: 1.1rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: .7rem;
+}
+
+.exposer__check {
+  display: flex;
+  gap: .65rem;
+  padding: .75rem .85rem;
+  border-radius: 9px;
+  border: 1px solid #262a36;
+  background: #14171f;
+}
+
+.exposer__check.is-ok { border-color: #1f4030; }
+.exposer__check.is-fail { border-color: #4a2230; background: #1a1117; }
+
+.exposer__check-icon { font-weight: 700; line-height: 1.5; }
+.exposer__check.is-ok .exposer__check-icon { color: var(--ok); }
+.exposer__check.is-fail .exposer__check-icon { color: #f0859c; }
+
+.exposer__check-body { display: flex; flex-direction: column; gap: .2rem; }
+.exposer__check-label { font-weight: 600; }
+.exposer__check-detail { font-size: .9rem; color: var(--muted); }
+.exposer__check-why { font-size: .9rem; color: #c5cad6; }
+.exposer__check-fix { font-size: .9rem; color: #ffc9a8; }
+
+.exposer__fix-area { margin: 1.2rem 0 0; }
+.exposer__fix-area .exposer__muted { margin: .6rem 0 0; }
+
+.exposer__fix-prompt {
+  width: 100%;
+  margin-top: .6rem;
+  min-height: 7rem;
+  resize: vertical;
+  font: .85rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--fg);
+  background: #0b0d13;
+  border: 1px solid #262a36;
+  border-radius: 8px;
+  padding: .7rem .8rem;
+}
+
+.exposer__note { margin: 1.1rem 0 0; font-size: .85rem; }

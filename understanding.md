@@ -1,52 +1,46 @@
-# Understanding — a served helper that gets agents' local products exposed right
+# Understanding — serving model clarity (slice 2: guided exposure flow)
 
-## What you asked for
+## Goal
 
-Help an agent **expose its web app as a local product on our application**, and
-get it right the first time. You proposed building this as **a local app that is
-itself purposed toward helping other agents expose their local products
-correctly** — and you're right that it's central, not a side-idea.
+Build the **guided exposure flow inside the helper** (the served `exposer/`
+product), so an agent opens the Local tab and the helper itself walks them
+through getting their product correctly exposed — reusing the existing
+`/api/expose/check` probe as the engine (not rebuilding it).
 
-## What I got wrong, and corrected
+## What I'll do
 
-I first said the shipped **Exposure check** (`/api/expose/check` + the inline
-"Verify exposure" panel) already covers it. It covers the *diagnosis*, but not
-what you're after: a **served helper product**. That's different and better —
-it dogfoods the exact path and becomes the live "done right" reference. So the
-plan is now centered on building it, reusing the probe as the engine.
+1. **Backend — one new field.** Add a `Why` (plain-language, contract-anchored
+   explanation) to `ExposeService.Check`, populated per rule. This keeps the
+   "live contract" single-sourced in the backend (same principle as
+   `BuildFixPrompt`), so the helper never carries a stale copy. Rides along the
+   existing `/api/expose/check` response automatically.
 
-## The approach
+2. **Helper — the guided UI** (vanilla JS/CSS in `exposer/`, still fully
+   relative-URL + root-served so it stays its own "done right" reference):
+   - Keep the existing "this page is itself correctly exposed" proof.
+   - Add a **Run / re-run exposure check** button that calls
+     `/api/expose/check` and renders the per-rule checklist: ✓/✗, label, probe
+     detail, the **why** (live contract), and the fix when failing.
+   - **One-click "Fix with an agent"**: `postMessage` to the parent harness to
+     prefill the project chat + jump to the agent; clipboard-copy fallback when
+     opened outside the Local tab (no parent).
 
-- **Centerpiece:** a small web app the harness serves on the Local tab for the
-  **active repo**. It's the tool *and* the proof — to exist it must itself be a
-  correctly-exposed local product (dual-stack, `base: './'`, root-serve), so it
-  doubles as the reference an agent copies. We serve no local product today;
-  this fixes that.
-- **Builds on, not rebuilds,** the existing Exposure check probe.
-- **Cross-repo:** the helper follows whichever repo is active (a `repoId`-aware
-  check), so every agent gets it for its own product.
-- **Supporting:** the SSRF port-guard and a canonical serving-model doc now feed
-  this tool instead of standing alone.
+3. **Harness bridge** (small): in `LocalApp.jsx`, listen for the helper's
+   same-origin `postMessage` and call the existing `prefillProjectChat` +
+   navigate — the same one-click path `ExposeCheck.jsx` already uses.
 
-Detail: [plans/serving-model-clarity.md](plans/serving-model-clarity.md);
-the two-paths map + danger surface: [plans/serving-model-paths.md](plans/serving-model-paths.md).
+## Assumptions
 
-## Open design choice (your call)
-
-How the harness serves one helper across repos — I proposed: one served product,
-`repoId`-aware check, following the active repo. Steer me if you'd rather it be
-strictly per-repo or built differently.
+- The helper is used via the Local tab (same-origin proxy), so `/api/expose/check`
+  is reachable and the session cookie flows; a direct load degrades gracefully.
+- The existing chrome `ExposeCheck` panel stays — the in-helper flow is the
+  served-product surface the plan calls for, not a replacement.
+- Following the active repo (`repoId`-aware check) is **slice 3**, not now.
 
 ## Status
 
-**Slice 1 built and fully verified (10/10).** The harness serves the bundled
-Exposure Helper (`exposer/`) as its own Local-tab product: a loopback dual-stack
-static server (`ExposerHost`) + a read-time self-repo `LocalPort` fallback, so the
-existing proxy / Local tab / Exposure check all work with **no frontend changes**.
-
-To verify the fallback happy-path without touching the live store, also added a
-`CLAUDEWEB_DATADIR` isolation knob (all stores now resolve through one
-`AppPaths.DataDir`). On an isolated preview the end-to-end check is **10/10**:
-exposer binds 127.0.0.1 **and** [::1], proxy serves it (200, no-store), relative
-asset resolves under the proxy prefix, Exposure check all 6 rules green, embedded
-JS runs. The live store was never touched.
+**Done — verified 14/14** on an isolated preview. Backend `Why` field added and
+single-sourced; helper renders the guided checklist (rows + live-contract why +
+all-green summary + hidden fix area); the one-click fix posts to the harness
+(`LocalApp` bridge, same-origin guarded) which prefills the project chat and
+navigates to the agent. Slice 3 (repo-aware check) is next, not started.

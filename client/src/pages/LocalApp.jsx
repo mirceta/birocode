@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { apiPost } from '../api/client';
 import ProductFrame from '../components/app/ProductFrame';
 import ExposeCheck from '../components/expose/ExposeCheck';
+import { useChat } from '../context/ChatContext';
 import { useRepo } from '../context/RepoContext';
 import { useT } from '../i18n/LanguageContext';
 import './localapp.css';
@@ -12,6 +14,8 @@ import './localapp.css';
 // entry (backend-synced); each project owns its own.
 export default function LocalApp() {
   const { t } = useT();
+  const navigate = useNavigate();
+  const { prefillProjectChat } = useChat();
   const { current, reloadRepos } = useRepo();
   const [editing, setEditing] = useState(false);
   const [portDraft, setPortDraft] = useState('');
@@ -46,6 +50,25 @@ export default function LocalApp() {
     setError('');
     setChecking(false);
   }, [current?.id]);
+
+  // One-click "Fix with an agent" from the embedded Exposure Helper
+  // (exposer/, plans/serving-model-clarity.md, slice 2). The helper runs inside
+  // the same-origin /api/localview proxy iframe and posts its fix prompt up;
+  // we drop it into the project chat and switch to the agent — the same path
+  // ExposeCheck.jsx uses. Same-origin guard: ignore messages from any other
+  // origin, and only act on our own message shape.
+  useEffect(() => {
+    function onMessage(e) {
+      if (e.origin !== window.location.origin) return;
+      const data = e.data;
+      if (!data || data.type !== 'claudeweb:expose-fix' || typeof data.prompt !== 'string') return;
+      if (!data.prompt) return;
+      prefillProjectChat(data.prompt);
+      navigate('/studio');
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [prefillProjectChat, navigate]);
 
   async function savePort(e) {
     e.preventDefault();

@@ -13,7 +13,18 @@
 > its relative JS executing**, AND (via the `CLAUDEWEB_DATADIR` isolation knob
 > below) the **fallback happy-path end-to-end: 10/10** — proxy serves the exposer
 > (200, no-store), relative asset resolves under the proxy prefix, Exposure check
-> all 6 rules green, embedded JS runs. Slices 2-4 below not started.
+> all 6 rules green, embedded JS runs.
+>
+> **Slice 2 built (2026-06-16):** the **guided exposure flow now lives inside the
+> helper** — it runs the existing `/api/expose/check` probe and renders the
+> per-rule checklist with the **live contract** (a new single-sourced `Why` field
+> on each check), run/re-run, and a **one-click "Fix with an agent"** that
+> `postMessage`s its fix prompt up to the harness (`LocalApp` prefills the project
+> chat + jumps to the agent; same-origin guarded). Verified **14/14** on an
+> isolated preview: API `why` on every rule, guided render (rows + why + all-green
+> + fix hidden), the fix button posting on a (mocked) failure, and the bridge —
+> foreign-origin ignored, legit message navigates + prefills the composer.
+> Slices 3-4 below not started.
 
 ## Slice 1 verification — resolved (10/10)
 
@@ -90,9 +101,10 @@ served local product, not just harness chrome.
   and have the harness serve it on the Local tab; prove the path end-to-end
   (dual-stack, `base: './'`, root-serve). At this point it's the live reference,
   even before the guided UI. Browser-verify on an isolated port.
-- **Slice 2 — Guided exposure flow.** Inside the helper, wrap `/api/expose/check`:
-  per-rule checklist with plain-language explanation + the live contract, run /
-  re-run, and the existing one-click **agent-fix task**.
+- **Slice 2 — Guided exposure flow. ✅ Done.** Inside the helper, wrap
+  `/api/expose/check`: per-rule checklist with plain-language explanation + the
+  live contract (the `Why` field), run / re-run, and the one-click **agent-fix
+  task** (helper → `postMessage` → `LocalApp` prefill+navigate). Verified 14/14.
 - **Slice 3 — Follow the active repo.** Make the check `repoId`-aware so the
   helper serves every agent for its own repo, not just the selected one.
 - **Slice 4 — Supporting safety + doc.** The **SSRF port-guard** on

@@ -25,8 +25,27 @@ public class ExposeService
         _logger = logger;
     }
 
-    /// <summary>One row of the checklist. Fix is null when Ok.</summary>
-    public sealed record Check(string Key, string Label, bool Ok, string Detail, string? Fix);
+    /// <summary>
+    /// One row of the checklist. <see cref="Why"/> is the plain-language contract
+    /// rationale (always present, pass or fail) — the single source of the "live
+    /// contract" the helper renders, so the served product never carries a stale
+    /// copy. <see cref="Fix"/> is the remediation, null when Ok.
+    /// </summary>
+    public sealed record Check(string Key, string Label, bool Ok, string Detail, string Why, string? Fix);
+
+    // Plain-language "why this rule exists", anchored to the embed contract
+    // (docs/networking/local-product-guide.md). Kept here so the helper and the
+    // chrome panel share one up-to-date copy. Keyed by check key.
+    private static string Why(string key) => key switch
+    {
+        "portConfigured" => "The Local tab embeds your product through the harness proxy at a fixed port. With no port set, there is nothing to embed.",
+        "listeningIpv4" => "The proxy and this check dial 127.0.0.1 server-side. If the product is not listening there, the embed comes back blank.",
+        "listeningIpv6" => "Browsers resolve localhost to IPv6 [::1] first. An IPv4-only bind answers curl but looks dead to the embed — bind dual-stack.",
+        "servesAtRoot" => "The proxy forwards /api/localview/<repo>/ to your product's root. If the app only serves under its own sub-path, the root returns nothing.",
+        "relativeAssets" => "Assets load under the proxy sub-path. A leading-slash URL (/assets/…) escapes it and 404s; a relative ./assets/… resolves correctly.",
+        "assetResolves" => "Even with relative URLs, the referenced file must exist in the build output — otherwise the page loads but its styles/scripts 404.",
+        _ => "",
+    };
 
     public async Task<IReadOnlyList<Check>> RunAsync(RepositoryConfig repo, CancellationToken ct)
     {
@@ -37,13 +56,13 @@ public class ExposeService
         if (port is not int p)
         {
             results.Add(new("portConfigured", "Local port configured", false,
-                "No port set for this project.", "Set the port on the Local tab."));
+                "No port set for this project.", Why("portConfigured"), "Set the port on the Local tab."));
             // Everything else needs a port — report them as blocked, not failed.
             foreach (var (k, l) in Blocked())
-                results.Add(new(k, l, false, "Needs a configured port first.", null));
+                results.Add(new(k, l, false, "Needs a configured port first.", Why(k), null));
             return results;
         }
-        results.Add(new("portConfigured", "Local port configured", true, $"Port {p}.", null));
+        results.Add(new("portConfigured", "Local port configured", true, $"Port {p}.", Why("portConfigured"), null));
 
         var client = _http.CreateClient("expose");
 
@@ -51,19 +70,21 @@ public class ExposeService
         var v4 = await Probe($"http://127.0.0.1:{p}/", client, ct);
         results.Add(new("listeningIpv4", "Listening (IPv4)", v4.Reached,
             v4.Reached ? "Answers on 127.0.0.1." : $"No answer on 127.0.0.1:{p}.",
+            Why("listeningIpv4"),
             v4.Reached ? null : "Start the product on this port."));
 
         var v6 = await Probe($"http://[::1]:{p}/", client, ct);
         results.Add(new("listeningIpv6", "Listening (IPv6 ::1)", v6.Reached,
             v6.Reached ? "Answers on [::1]." : $"No answer on [::1]:{p} (IPv4-only bind).",
+            Why("listeningIpv6"),
             v6.Reached ? null : "Bind dual-stack (Kestrel ListenAnyIP / listen on '::') — browsers resolve localhost to ::1 first."));
 
         // Without a live root response, the remaining content checks can't run.
         if (!v4.Reached || v4.Response is null)
         {
-            results.Add(new("servesAtRoot", "Serves at root", false, "Could not reach the product.", null));
-            results.Add(new("relativeAssets", "Relative asset URLs", false, "Could not read the page.", null));
-            results.Add(new("assetResolves", "Assets resolve under the proxy", false, "Could not read the page.", null));
+            results.Add(new("servesAtRoot", "Serves at root", false, "Could not reach the product.", Why("servesAtRoot"), null));
+            results.Add(new("relativeAssets", "Relative asset URLs", false, "Could not read the page.", Why("relativeAssets"), null));
+            results.Add(new("assetResolves", "Assets resolve under the proxy", false, "Could not read the page.", Why("assetResolves"), null));
             return results;
         }
 
@@ -73,6 +94,7 @@ public class ExposeService
         var html = await v4.Response.Content.ReadAsStringAsync(ct);
         results.Add(new("servesAtRoot", "Serves at root", rootOk,
             rootOk ? $"GET / → 200 ({ctype})." : $"GET / → {(int)v4.Response.StatusCode}.",
+            Why("servesAtRoot"),
             rootOk ? null : "Serve the app at / (no server-side base path)."));
 
         // 5. Relative asset URLs (no leading-slash absolutes that escape the prefix).
@@ -80,6 +102,7 @@ public class ExposeService
         var relOk = absolute.Count == 0;
         results.Add(new("relativeAssets", "Relative asset URLs", relOk,
             relOk ? "Asset URLs are relative." : $"Absolute asset URL(s): {string.Join(", ", absolute.Take(3))}",
+            Why("relativeAssets"),
             relOk ? null : "Use relative URLs (Vite base: './') — leading-slash paths escape the /api/localview/ prefix."));
 
         // 6. A referenced asset actually resolves at its relative path (what the
@@ -88,7 +111,7 @@ public class ExposeService
         if (asset is null)
         {
             results.Add(new("assetResolves", "Assets resolve under the proxy", true,
-                "No asset references to check.", null));
+                "No asset references to check.", Why("assetResolves"), null));
         }
         else
         {
@@ -96,6 +119,7 @@ public class ExposeService
             var aOk = probe.Reached && probe.Response is not null && (int)probe.Response.StatusCode == 200;
             results.Add(new("assetResolves", "Assets resolve under the proxy", aOk,
                 aOk ? $"{asset} → 200." : $"{asset} did not resolve.",
+                Why("assetResolves"),
                 aOk ? null : "The referenced asset 404s — check the build output / base path."));
         }
 
