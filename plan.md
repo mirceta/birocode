@@ -63,6 +63,15 @@
 
 ## Active feature plans
 
+- [Explain with diagrams](plans/explain-with-diagrams.md) — when an agent is
+  **explaining something**, it should serve a **diagram** of it on the **Local
+  app** instead of relying on prose alone, with the nudge attached to (effectively)
+  **every prompt** so a picture becomes the default. Builds on the
+  [local-exposure-example](plans/local-exposure-example.md) serving pattern, the
+  doc viewer's mermaid/HTML rendering, and the Understanding-panel "agent writes a
+  file → harness renders it" precedent. **DESIGN — not building yet** (approach
+  TBD: standing nudge + reuse the renderer, vs. a served diagram product). On
+  `feature/explain-with-diagrams`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
