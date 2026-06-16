@@ -23,7 +23,7 @@ export default function PinnedAgent({
   recency,
   contentZoom = 1,
   repoPath,
-  localApp,
+  localApps,
   git,
   gitRefreshing = false,
   onRefreshGit,
@@ -47,18 +47,16 @@ export default function PinnedAgent({
     lane: isAsk ? 'ask' : 'builder',
   });
 
-  // Slice 2 (plans/dock-local-app.md): the local-app row is the affordance that
-  // reveals the product IN the dock. Clicking it swaps phone__screen from the
-  // chat to ProductFrame (the same iframe + liveness the Local tab uses), and
-  // back. Off by default so the wall stays light — the iframe only mounts once
-  // revealed. Gated like the Local tab (localAppTab) and only when a port exists.
+  // Per-app switcher (plans/dock-multi-local-app.md): one button per local app the
+  // repo defines (mirrors the Local tab), instead of dock-local-app's single
+  // default-app toggle. Clicking an app swaps phone__screen from the chat to
+  // ProductFrame at /api/localview/{repoId}/app/{appId}/; clicking the active one
+  // returns to the chat. One app at a time, off by default so the wall stays light
+  // (a frame only mounts once an app is picked). Gated like the Local tab.
   const canLocalApp = useFeature('localAppTab');
-  const [showApp, setShowApp] = useState(false);
-  const localPort = localApp?.port;
-  const localState = !localPort ? 'none' : localApp.online ? 'serving' : 'offline';
-  const canReveal = canLocalApp && !!localPort;
-  // If the port disappears (probe drops it), fall back to the chat view.
-  const appOpen = showApp && canReveal;
+  const apps = canLocalApp ? (localApps || []) : [];
+  const [openAppId, setOpenAppId] = useState(null);
+  const openApp = apps.find((a) => a.id === openAppId) || null;
 
   return (
     <div
@@ -116,45 +114,27 @@ export default function PinnedAgent({
           {t('chat.tabAsk')}
         </button>
       </div>
-      {/* Local-tab app serving state (plans/dock-local-app.md): a dedicated row
-          above the git section saying whether this agent serves a local app.
-          Configured-but-dead reads "offline"; no localPort reads "no local app".
-          Slice 2: when a port exists, the row is a toggle that reveals/hides the
-          product inside the dock (phone__screen ↔ ProductFrame). */}
-      {(() => {
-        const text =
-          localState === 'serving'
-            ? t('dashboard.localServing', { port: localPort })
-            : localState === 'offline'
-              ? t('dashboard.localOffline', { port: localPort })
-              : t('dashboard.localNone');
-        const cls = `phone__local phone__local--${localState}${appOpen ? ' phone__local--open' : ''}`;
-        const inner = (
-          <>
-            <span className="phone__local-dot" />
-            <span className="phone__local-label">{t('dashboard.localApp')}</span>
-            <span className="phone__local-text">{text}</span>
-            {canReveal && (
-              <span className="phone__local-caret" aria-hidden="true">
-                {appOpen ? '▾' : '▸'}
-              </span>
-            )}
-          </>
-        );
-        return canReveal ? (
-          <button
-            type="button"
-            className={cls}
-            onClick={() => setShowApp((v) => !v)}
-            aria-pressed={appOpen}
-            title={appOpen ? t('dashboard.localHide') : t('dashboard.localShow')}
-          >
-            {inner}
-          </button>
-        ) : (
-          <div className={cls}>{inner}</div>
-        );
-      })()}
+      {/* Local-app switcher (plans/dock-multi-local-app.md): one button per local
+          app the repo defines (incl. the always-on Understanding app), mirroring the
+          Local tab. The active app renders in phone__screen; clicking it again — or
+          picking another — toggles back to chat / switches. */}
+      {apps.length > 0 && (
+        <div className="phone__apps" role="tablist" aria-label={t('dashboard.localApps')}>
+          {apps.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              role="tab"
+              aria-selected={a.id === openAppId}
+              className={`phone__app${a.id === openAppId ? ' phone__app--on' : ''}`}
+              onClick={() => setOpenAppId((cur) => (cur === a.id ? null : a.id))}
+              title={`:${a.port}${a.kind === 'harness' ? ' · harness' : ''}`}
+            >
+              {a.name}{a.kind === 'repo' && <span className="phone__app-port"> :{a.port}</span>}
+            </button>
+          ))}
+        </div>
+      )}
       {git && (
         <div className="phone__git">
           <GitStatusSummary status={git} compact />
@@ -173,8 +153,8 @@ export default function PinnedAgent({
         </div>
       )}
       <div className="phone__screen" style={contentZoom !== 1 ? { zoom: contentZoom } : undefined}>
-        {appOpen ? (
-          <ProductFrame url={`/api/localview/${tab.repoId}/`} port={localPort} />
+        {openApp ? (
+          <ProductFrame url={`/api/localview/${tab.repoId}/app/${openApp.id}/`} port={openApp.port} />
         ) : (
           <Chat chat={chat} embedded />
         )}

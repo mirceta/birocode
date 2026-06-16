@@ -74,6 +74,13 @@
 
 ## Active feature plans
 
+- [Multiple local-app buttons on the agent dock](plans/dock-multi-local-app.md) —
+  the dashboard dock's single "render the local app" toggle becomes **one button per
+  local app** the repo defines (mirroring the Local-tab switcher); click one to embed
+  that app at `/api/localview/{repoId}/app/{appId}/`, click the active one to return to
+  chat. Realizes the "per-app dock awareness" follow-up of
+  [multiple-local-apps](plans/multiple-local-apps.md). Frontend-only. **DESIGN →
+  building.** On `feature/dock-multi-local-app`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left

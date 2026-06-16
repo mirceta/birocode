@@ -187,6 +187,7 @@
   "dashboard.viewHot": "Sicak",
   "dashboard.refreshGit": "Git durumunu yenile",
   "dashboard.localApp": "Yerel uygulama",
+  "dashboard.localApps": "Yerel uygulamalar",
   "dashboard.localServing": ":{port} üzerinde yayında",
   "dashboard.localOffline": ":{port} · yayında değil",
   "dashboard.localNone": "yok",
