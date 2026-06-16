@@ -48,18 +48,28 @@ them before you proceed. This is a prompt convention only — there is no extra
 model call. Delete `understanding.md` when the request is done, the same way
 `plan.md` is retired when a feature ships.
 
-## Understanding app — diagram what you explain
+## Understanding app — build an SPA for what you explain
 
 When you explain something **non-trivial** (a flow, an architecture, how a few
-pieces fit together — not a one-line answer), **also draw it**: write a
-[Mermaid](https://mermaid.js.org) diagram to **`understanding-diagram.mmd` at the
-Repo root** (rolling latest — overwrite the same file each time). Keep replying in
-prose as well; the diagram is a companion, not a replacement.
+pieces fit together — not a one-line answer), **also visualize it**: author a small
+single-page app at **`understanding-app/` at the Repo root**, with
+**`understanding-app/index.html`** as the entry point (rolling latest — overwrite
+it each time the explanation changes). Keep replying in prose as well; the app is a
+companion, not a replacement.
+
+Build it **build-less and self-contained**, the same way `exposure-example/` is: a
+folder of static assets — `index.html` plus its JS/CSS, any **vendored** libraries
+(no CDN, no `node_modules`), and data files. Use **relative URLs only** (`./app.js`,
+not `/app.js`): the Harness serves the folder under the proxy sub-path
+`/api/localview/<repo>/app/understanding/`, so a leading slash escapes it and 404s —
+the same contract `exposure-example/` teaches. A richer interactive/animated/
+multi-view app is the point; reach beyond a static diagram when it aids understanding.
 
 The Harness serves this live in the Local tab's always-on **Understanding** app
-(`plans/multiple-local-apps.md`): it renders `understanding-diagram.mmd` and
-auto-refreshes, so each rewrite shows up within a couple of seconds. Write only
-valid Mermaid (e.g. ``flowchart TD``); a syntax error shows as an error in the app.
+(`plans/understanding-spa.md`, `plans/multiple-local-apps.md`), no-store so each
+overwrite shows up on reload. There is **no Mermaid (or any) fallback**: if
+`understanding-app/index.html` is missing you get an explicit empty state, and a
+missing asset is a plain 404 — so a broken app is visibly broken, never masked.
 
 ## Build / run the harness normally
 
