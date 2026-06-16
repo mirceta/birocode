@@ -74,6 +74,14 @@
 
 ## Active feature plans
 
+- [Understanding app → host a full SPA](plans/understanding-spa.md) — extend the
+  always-on Understanding app (from [multiple-local-apps](plans/multiple-local-apps.md))
+  beyond a single rolling Mermaid diagram to host an **agent-authored SPA** for
+  rich, interactive understanding/visualization, keeping the Mermaid path as the
+  simple default. Plan is to **copy the stack/architecture** of
+  `…\Administrator\…\birokrat-architecture` — **currently blocked**: that path is on
+  the unreachable Administrator profile, so the stack source needs to be made
+  accessible or confirmed. **DESIGN.** On `feature/understanding-spa`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
