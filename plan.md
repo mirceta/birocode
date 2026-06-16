@@ -74,6 +74,15 @@
 
 ## Active feature plans
 
+- [Dependent agents — "together" groups on the dashboard](plans/dependent-agents.md)
+  — tag a dock as **dependent on a specific primary agent**; the dashboard then
+  renders the pair as a **"together" group** with the dependent **a bit smaller**
+  than the primary, so it reads at a glance that the primary must finish before
+  the dependent's work can continue. New backend-synced `DependsOn` (primary tab
+  id) on `DockTab` + a header picker + grouping/shrink in `Dashboard.jsx`.
+  Distinct from the free-text [waiting-on toggle](plans/agent-waiting.md) (this
+  links the two docks structurally). Design proposed, not built. On
+  `feature/dependent-agents`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
