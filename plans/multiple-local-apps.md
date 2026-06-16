@@ -2,13 +2,14 @@
 
 > Editing this plan? First read [doc principles](doc-principles.md).
 
-> **Status (2026-06-16): SLICE 1 SHIPPED — Slice 2 next.** On
-> `feature/multiple-local-apps`. The multi-local-app platform (data model, proxy,
-> Local-tab switcher) is implemented and verified end-to-end (exposure-example on
-> :5305 + a throwaway second app on :5306, both switchable). Reframed from the
+> **Status (2026-06-16): BOTH SLICES SHIPPED.** On `feature/multiple-local-apps`.
+> Slice 1 (multi-local-app platform: data model, proxy, Local-tab switcher) and
+> Slice 2 (the harness-provided, always-on **Understanding** app that renders a
+> rolling-latest Mermaid diagram the agent writes to `understanding-diagram.mmd`)
+> are both implemented and verified end-to-end in a browser. Reframed from the
 > earlier "explain-with-diagrams" idea: the headline is a **platform upgrade** (a
 > repo can expose more than one local app), and the diagram/explain feature is its
-> **first consumer** (Slice 2).
+> **first consumer**. Follow-ups remain (per-app dock/Exposure-check awareness).
 
 ## The problem
 
@@ -119,10 +120,25 @@ harness-provided case). **E** stays parked unless prose nudges prove unreliable.
     embedding `…/{repoId}/app/{appId}/`.
   - **Ripple handled by the default-app rule** (no dock/Exposure-check changes
     needed yet); making *those* surfaces app-aware is a follow-up, not a blocker.
-- **Slice 2 — The Understanding app (first consumer).** A harness-provided,
-  always-on diagram renderer registered as a second app; the prompt nudge that
-  makes the agent write a diagram when explaining; lifecycle (one rolling latest
-  diagram vs. small history).
+- **Slice 2 — The Understanding app (first consumer). ✅ SHIPPED.** Delivered:
+  - **Hosting:** `Services/Understanding/UnderstandingApp.cs` — served *by the
+    harness*, not a separate process. `RepositoryRegistry.ToInfo` appends a
+    synthetic `kind:harness` app (`id: understanding`, port 0) to every repo's app
+    list — not persisted, not removable. `LocalProxyController` special-cases
+    `kind:harness`: instead of dialing a loopback port it calls `UnderstandingApp`
+    with repo context. The bare route + `localPort` consider only `kind:repo` apps,
+    so the default app / dock / Exposure check are unchanged.
+  - **Renderer:** a self-contained page (bundled offline `mermaid.min.js`) that
+    polls `./diagram` and re-renders, serving three resources under
+    `…/app/understanding/`: the page, the lib, and the repo's raw `.mmd`.
+  - **Lifecycle:** **rolling latest** — one file, `understanding-diagram.mmd` at the
+    repo root, that the agent overwrites; the page shows updates within ~2.5s.
+  - **Nudge:** a **CLAUDE.md convention** ("diagram what you explain" → write
+    `understanding-diagram.mmd`) — the least-invasive delivery (no harness-core
+    prompt change). Escalate to prompt-injection (option D) only if it proves
+    unreliable across repos.
+  - **UI:** the Understanding app shows as a non-removable chip in the Local-tab
+    switcher; the Exposure-check button is hidden for it.
 
 ## Open questions
 
@@ -131,12 +147,15 @@ harness-provided case). **E** stays parked unless prose nudges prove unreliable.
   `…/{repoId}/` is the **first app** in the list (the default), so old links keep
   working. A query param was rejected: it leaves every app sharing one base path,
   so their relative `./assets/…` collide.
-- **Nudge delivery:** harness-appended system-reminder at prompt-build time vs. a
-  CLAUDE.md convention vs. a tool (A vs. D-style vs. E above).
-- **Trigger threshold:** only non-trivial explanations, so we don't diagram
-  one-line answers.
-- **Diagram format & lifecycle:** mermaid vs. hand-authored HTML/SVG; rolling
-  latest vs. history; how it clears.
+- ~~**Nudge delivery:**~~ **Decided (Slice 2): CLAUDE.md convention** (option A) —
+  least invasive, reversible, no harness-core change. Trade-off: per-repo, so it
+  only fires in repos carrying the convention; revisit if that's too weak.
+- ~~**Diagram format & lifecycle:**~~ **Decided (Slice 2): Mermaid, rolling latest**
+  (one overwritten `understanding-diagram.mmd`). Mermaid over hand-authored HTML
+  for agent-friendliness; rolling-latest over history for simplicity (history can
+  come later if wanted).
+- **Trigger threshold (still soft):** the convention says "non-trivial" only, so we
+  don't diagram one-line answers — enforced by agent judgement, not code.
 
 ## Out of scope (for now)
 

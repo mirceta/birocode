@@ -24,12 +24,17 @@ export default function LocalApp() {
   const [checking, setChecking] = useState(false);
 
   const apps = current?.localApps || [];
+  // The harness-provided Understanding app is always present; "real" apps are the
+  // repo's own products. Onboarding/empty-state keys off the real ones.
+  const repoApps = apps.filter((a) => a.kind === 'repo');
   const selected = apps.find((a) => a.id === selectedId) || apps[0] || null;
 
-  // Keep a valid selection as the project / its app list changes.
+  // Keep a valid selection as the project / its app list changes; auto-open the
+  // add form when the repo has no real app yet (the Understanding app stays
+  // viewable behind it via Cancel).
   useEffect(() => {
     setSelectedId(apps[0]?.id || null);
-    setAdding(false);
+    setAdding(repoApps.length === 0);
     setError('');
     setChecking(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -84,8 +89,9 @@ export default function LocalApp() {
     return <div className="localapp"><p className="localapp__none">{t('localapp.noProject')}</p></div>;
   }
 
-  // No apps yet, or the user opened the add form: show the setup surface.
-  const showForm = adding || apps.length === 0;
+  // The setup surface shows only while adding (auto-opened when no real app yet);
+  // the Understanding app means there's always something to fall back to.
+  const showForm = adding;
 
   return (
     <div className="localapp">
@@ -103,15 +109,17 @@ export default function LocalApp() {
                   onClick={() => { setSelectedId(a.id); setChecking(false); }}
                   title={`:${a.port}${a.kind === 'harness' ? ' · harness' : ''}`}
                 >
-                  {a.name} <span className="localapp__app-port">:{a.port}</span>
+                  {a.name}{a.kind === 'repo' && <span className="localapp__app-port"> :{a.port}</span>}
                 </button>
-                <button
-                  type="button"
-                  className="localapp__app-x"
-                  onClick={() => removeApp(a.id)}
-                  title={t('localapp.removeApp')}
-                  aria-label={t('localapp.removeApp')}
-                >×</button>
+                {a.kind === 'repo' && (
+                  <button
+                    type="button"
+                    className="localapp__app-x"
+                    onClick={() => removeApp(a.id)}
+                    title={t('localapp.removeApp')}
+                    aria-label={t('localapp.removeApp')}
+                  >×</button>
+                )}
               </span>
             ))}
             {!adding && (
@@ -128,24 +136,28 @@ export default function LocalApp() {
             <button type="button" className="localapp__btn" onClick={reloadEmbed}>
               {t('apptab.refresh')}
             </button>
-            <button
-              type="button"
-              className={`localapp__btn${checking ? ' localapp__btn--on' : ''}`}
-              onClick={() => setChecking((c) => !c)}
-            >
-              {t('expose.verify')}
-            </button>
+            {/* The Exposure check is about exposing a real product, not the
+                harness-provided Understanding app. */}
+            {selected.kind === 'repo' && (
+              <button
+                type="button"
+                className={`localapp__btn${checking ? ' localapp__btn--on' : ''}`}
+                onClick={() => setChecking((c) => !c)}
+              >
+                {t('expose.verify')}
+              </button>
+            )}
           </>
         )}
         <span className="localapp__hint">{t('localapp.servedHint')}</span>
       </div>
 
-      {checking && selected && !showForm && <ExposeCheck onReloadEmbed={reloadEmbed} />}
+      {checking && selected?.kind === 'repo' && !showForm && <ExposeCheck onReloadEmbed={reloadEmbed} />}
 
       {showForm ? (
         <div className="localapp__setup">
           <form className="localapp__form" onSubmit={addApp}>
-            <h2 className="localapp__form-title">{apps.length === 0 ? t('localapp.formTitle') : t('localapp.addTitle')}</h2>
+            <h2 className="localapp__form-title">{repoApps.length === 0 ? t('localapp.formTitle') : t('localapp.addTitle')}</h2>
             <p className="localapp__form-body">{t('localapp.formBody', { name: current.name })}</p>
             <div className="localapp__form-row">
               <input
@@ -165,13 +177,11 @@ export default function LocalApp() {
                 onChange={(e) => setPortDraft(e.target.value)}
               />
               <button type="submit" className="localapp__btn localapp__btn--primary" disabled={saving || !portDraft.trim()}>
-                {saving ? t('localapp.saving') : (apps.length === 0 ? t('localapp.save') : t('localapp.add'))}
+                {saving ? t('localapp.saving') : (repoApps.length === 0 ? t('localapp.save') : t('localapp.add'))}
               </button>
-              {apps.length > 0 && (
-                <button type="button" className="localapp__btn" onClick={() => { setAdding(false); setError(''); }}>
-                  {t('localapp.cancel')}
-                </button>
-              )}
+              <button type="button" className="localapp__btn" onClick={() => { setAdding(false); setError(''); }}>
+                {t('localapp.cancel')}
+              </button>
             </div>
             {error && <p className="localapp__error" role="alert">{error}</p>}
           </form>

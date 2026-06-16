@@ -33,12 +33,15 @@ public class LocalProxyController : ControllerBase
     private readonly IHttpClientFactory _http;
     private readonly RepositoryRegistry _registry;
     private readonly Logger _logger;
+    private readonly Services.Understanding.UnderstandingApp _understanding;
 
-    public LocalProxyController(IHttpClientFactory http, RepositoryRegistry registry, Logger logger)
+    public LocalProxyController(IHttpClientFactory http, RepositoryRegistry registry, Logger logger,
+        Services.Understanding.UnderstandingApp understanding)
     {
         _http = http;
         _registry = registry;
         _logger = logger;
+        _understanding = understanding;
     }
 
     // Named app: /api/localview/{repoId}/app/{appId}/... — the multi-app form
@@ -57,6 +60,13 @@ public class LocalProxyController : ControllerBase
             await Response.WriteAsJsonAsync(new { error = "No such local app for this project." });
             return;
         }
+        // Harness-provided apps (the Understanding app) are served internally with
+        // repo context, not dialed on a loopback port (plans/multiple-local-apps.md).
+        if (string.Equals(app.Kind, "harness", StringComparison.OrdinalIgnoreCase))
+        {
+            await _understanding.Serve(HttpContext, repo!, rest);
+            return;
+        }
         await ProxyTo(repo!.Name, app.Port, rest);
     }
 
@@ -68,7 +78,10 @@ public class LocalProxyController : ControllerBase
     {
         _logger.CountRequest();
         var repo = _registry.GetAll().FirstOrDefault(r => r.Id == repoId);
-        var app = repo?.LocalApps.FirstOrDefault();
+        // The bare route is the default app: the first REAL (kind:repo) app, never
+        // the synthetic harness app (which is only reachable at /app/understanding/).
+        var app = repo?.LocalApps.FirstOrDefault(a =>
+            string.Equals(a.Kind, "repo", StringComparison.OrdinalIgnoreCase));
         if (app is null)
         {
             Response.StatusCode = StatusCodes.Status404NotFound;

@@ -368,13 +368,21 @@ public class RepositoryRegistry
         return System.IO.Path.Combine(appData, "ClaudeWeb", "repositories.json");
     }
 
+    /// <summary>Id of the always-on, harness-provided Understanding app
+    /// (plans/multiple-local-apps.md Slice 2).</summary>
+    public const string UnderstandingAppId = "understanding";
+
     private RepositoryInfo ToInfo(RepositoryConfig r)
     {
         var exists = Directory.Exists(r.Path);
         var isGit = exists && Directory.Exists(System.IO.Path.Combine(r.Path, ".git"));
-        var apps = EffectiveApps(r);
+        var apps = EffectiveApps(r); // the repo's own (kind:repo) apps
         var infos = apps.Select(a => new LocalAppInfo(a.Id, a.Name, a.Port, a.Kind)).ToList();
+        // Back-compat default is a real app only — never the synthetic harness app.
         int? defaultPort = apps.Count > 0 ? apps[0].Port : null;
+        // Append the synthetic, always-on Understanding app. Not persisted (it's not
+        // in _repos), served internally (port 0, handled by UnderstandingApp).
+        infos.Add(new LocalAppInfo(UnderstandingAppId, "Understanding", 0, "harness"));
         return new RepositoryInfo(r.Id, r.Name, r.Path, exists, isGit, r.IsSelf, NormalizeVisibility(r.Visibility), defaultPort, infos);
     }
 
