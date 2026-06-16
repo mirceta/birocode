@@ -8,7 +8,13 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-16):** **Latest — deployed & confirmed:**
+> **Status (2026-06-16):** **Latest — built, verified & merged to main:**
+> the [Local-exposure example](plans/local-exposure-example.md) — a self-contained
+> product on the self-repo's Local port (`:5305`) that teaches Local-tab exposure
+> by *being* a correct example, with a four-style animated request-flow explainer;
+> **zero harness changes** (the earlier baked-into-the-harness attempt was
+> abandoned, archived on `origin/feature/serving-model-clarity`).
+> **Previously latest — deployed & confirmed:**
 > the [Scoreboard / analytics](plans/scoreboard-analytics.md) panel above the
 > agent docks (v2 redesign: Today/7d/All timeframe toggle, a
 > concurrency-over-time chart, a 7-day activity strip, and a per-agent
@@ -86,6 +92,18 @@
 
 ## Recently shipped
 
+- [Local-exposure example](plans/local-exposure-example.md) — a **real product**
+  under `exposure-example/` that runs on the self-repo's Local port (`:5305`) the
+  normal way and reaches the Local tab through the **existing**
+  `/api/localview/<repo>/` proxy — **zero harness changes**. It teaches Local-tab
+  exposure by *being* a correctly-exposed app (dependency-free dual-stack
+  `serve.mjs`; plain HTML/CSS/JS). Centerpiece: an **animated request-flow
+  explainer** (Browser → harness proxy → `127.0.0.1:5305` → app → back) with
+  **four switchable styles** (Pipeline / Sequence / Layers / Step-through) over one
+  shared data source. Replaces an abandoned baked-into-the-harness attempt
+  (archived on `origin/feature/serving-model-clarity`). Verified dual-stack +
+  root + relative assets, directly and through the proxy; all four variants render
+  clean. On `feature/local-exposure-example`.
 - [Scoreboard / analytics](plans/scoreboard-analytics.md) — a collapsible
   **analytics panel above the agent docks** that quantifies agent usage from a
   new append-only `activity.jsonl` run ledger (`/api/analytics?window=…`). After
