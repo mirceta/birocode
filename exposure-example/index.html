@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Local exposure — how your app reaches the Local tab</title>
+  <!-- Relative URL on purpose: it must resolve UNDER the harness proxy sub-path
+       /api/localview/<repo>/. A leading slash would escape the sub-path and 404.
+       This page practices the very contract it teaches. -->
+  <link rel="stylesheet" href="./assets/styles.css" />
+</head>
+<body>
+  <header class="hero">
+    <div class="hero__title">
+      <span class="hero__glyph">🛰️</span>
+      <div>
+        <h1>Local exposure, done right</h1>
+        <p>A real product running on <code>:5305</code> — and the live, animated
+           explainer for getting <em>any</em> app onto the Local tab.</p>
+      </div>
+    </div>
+    <div class="hero__badge" id="self-badge" title="This page is itself a correctly-exposed local product.">
+      this page is the example
+    </div>
+  </header>
+
+  <nav class="variants" id="variant-tabs" aria-label="Visualization style"></nav>
+
+  <main class="stage" id="stage">
+    <!-- The active variant mounts its visualization here. -->
+  </main>
+
+  <section class="controls" id="controls">
+    <button class="btn btn--primary" id="btn-play">▶ Play</button>
+    <button class="btn" id="btn-pause" disabled>❚❚ Pause</button>
+    <button class="btn" id="btn-reset">↺ Reset</button>
+    <span class="controls__hint" id="variant-blurb"></span>
+  </section>
+
+  <!-- Variant modules: each self-registers into window.ExposureViz. core.js first. -->
+  <script src="./assets/core.js"></script>
+  <script src="./assets/viz-pipeline.js"></script>
+  <script src="./assets/viz-sequence.js"></script>
+  <script src="./assets/viz-layers.js"></script>
+  <script src="./assets/viz-stepper.js"></script>
+  <script src="./assets/app.js"></script>
+</body>
+</html>
