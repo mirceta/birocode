@@ -63,15 +63,16 @@
 
 ## Active feature plans
 
-- [Explain with diagrams](plans/explain-with-diagrams.md) — when an agent is
-  **explaining something**, it should serve a **diagram** of it on the **Local
-  app** instead of relying on prose alone, with the nudge attached to (effectively)
-  **every prompt** so a picture becomes the default. Builds on the
-  [local-exposure-example](plans/local-exposure-example.md) serving pattern, the
-  doc viewer's mermaid/HTML rendering, and the Understanding-panel "agent writes a
-  file → harness renders it" precedent. **DESIGN — not building yet** (approach
-  TBD: standing nudge + reuse the renderer, vs. a served diagram product). On
-  `feature/explain-with-diagrams`.
+- [Multiple local apps per repo](plans/multiple-local-apps.md) — a **platform
+  upgrade**: let a repository expose **more than one local app** (several ports)
+  with a switcher in the Local tab, instead of today's one-port-per-repo
+  (`/api/localview/{repoId}/`). First consumer: a dedicated **Understanding app**
+  (harness-provided, always-on) that the agent feeds a **diagram whenever it
+  explains something** — keeping the minimal
+  [local-exposure-example](plans/local-exposure-example.md) untouched. **DESIGN —
+  slicing next** (Slice 1 = multi-app capability proven with the example + a 2nd
+  app; Slice 2 = Understanding app + prompt nudge). On
+  `feature/multiple-local-apps`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
