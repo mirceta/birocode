@@ -49,16 +49,17 @@ prompt so it becomes the agent's default reflex.
 
 ### Comparison
 
-Ratings are Low / Med / High. For **Dev effort** and **Dev risk**, lower is
-better; for the rest, higher is better.
+★ out of 5, where **more stars is always better**. For **Dev effort**, **Dev
+risk**, and **Low harness impact**, more stars means *less* effort / risk /
+disruption — so the whole table reads the same direction and rows are comparable.
 
-| Approach | Dev effort | Dev risk | "Every-prompt" reliability | Reuses existing | Diagram fidelity | Fits "via Local app" | Harness change |
-|---|---|---|---|---|---|---|---|
-| **A. Convention only** | Very low | Very low | Low ¹ | High | Med | Partial | None |
-| **B. Nudge → doc viewer** | Low–Med | Med ² | High | High | Med | Partial | Prompt-build |
-| **C. Nudge → diagram panel** | Med | Med | High | Med | Med–High | Good | Prompt-build + new panel |
-| **D. Nudge → served product** | Med–High | Med–High ³ | High | Med | High | Best | Prompt-build + server lifecycle |
-| **E. Diagram tool** | High | High | High & robust ⁴ | Low | High | Depends | Significant |
+| Approach | Dev effort | Dev risk | Nudge reliability | Reuse | Fidelity | Local-app fit | Low harness impact | Total /35 |
+|---|---|---|---|---|---|---|---|---|
+| **A. Convention only** | ★★★★★ | ★★★★★ | ★★☆☆☆ ¹ | ★★★★☆ | ★★★☆☆ | ★★½☆☆ | ★★★★★ | 26.5 |
+| **B. Nudge → doc viewer** | ★★★½☆ | ★★★☆☆ ² | ★★★★☆ | ★★★★☆ | ★★★☆☆ | ★★½☆☆ | ★★★☆☆ | 23 |
+| **C. Nudge → diagram panel** | ★★★☆☆ | ★★★☆☆ | ★★★★☆ | ★★★☆☆ | ★★★½☆ | ★★★★☆ | ★★½☆☆ | 23 |
+| **D. Nudge → served product** | ★★½☆☆ | ★★½☆☆ ³ | ★★★★☆ | ★★★☆☆ | ★★★★★ | ★★★★★ | ★★☆☆☆ | 24 |
+| **E. Diagram tool** | ★★☆☆☆ | ★★☆☆☆ | ★★★★★ ⁴ | ★★☆☆☆ | ★★★★★ | ★★★☆☆ | ★☆☆☆☆ | 20 |
 
 ¹ Per-repo and prose-only — not literally every prompt; agents can skip it.
 ² Touches prompt construction (harness core) — small edit but a central path.
@@ -66,8 +67,12 @@ better; for the rest, higher is better.
 ⁴ A structured tool call resists being "forgotten" better than a prose nudge, but
 needs new tool plumbing.
 
-Other axis worth noting: **cross-repo reach.** A (CLAUDE.md) is per-repo only;
-B–E inject at prompt-build time, so they work for *every* repo the harness drives.
+**Reading the Total honestly:** it's an **unweighted** sum, so treat it as an
+eyeball only. It *flatters the cheap/safe options* — A tops it precisely because
+the sum ignores that **nudge reliability** and **local-app fit** are the two
+dimensions this feature exists for. Weight those and B/C/D pull clearly ahead of
+A. Another unscored axis: **cross-repo reach** — A (CLAUDE.md) is per-repo only;
+B–E inject at prompt-build time, so they cover *every* repo the harness drives.
 
 ### How to read it / lean
 
