@@ -17,7 +17,7 @@
     {
       id: 'harness',
       title: 'Claude Web harness',
-      sub: 'Kestrel · :5099 · /api/localview/<repo>/',
+      sub: 'Kestrel · :5099 · /api/localview/<repo>/app/<appId>/',
       glyph: '🧩',
     },
     {
@@ -33,9 +33,12 @@
   var MESSAGES = [
     {
       from: 'browser', to: 'harness', kind: 'req',
-      label: 'GET /api/localview/<repo>/',
+      label: 'GET /api/localview/<repo>/app/<appId>/',
       detail: 'You click the Local tab. The browser asks the harness for your ' +
-        'product, addressed under the per-repo proxy sub-path.',
+        'product, addressed under the per-app proxy sub-path. A repo can expose ' +
+        'several apps, each at …/app/<appId>/ — and the bare /api/localview/<repo>/ ' +
+        'is a shortcut to the default (first) app. Every app follows the same ' +
+        'contract below.',
     },
     {
       from: 'harness', to: 'app', kind: 'req',
@@ -57,7 +60,7 @@
       from: 'harness', to: 'browser', kind: 'res',
       label: '200  (served under the sub-path)',
       detail: 'The harness streams the HTML back to the browser, living under ' +
-        '/api/localview/<repo>/.',
+        '/api/localview/<repo>/app/<appId>/ (the bare path = the default app).',
     },
     {
       from: 'browser', to: 'harness', kind: 'req',

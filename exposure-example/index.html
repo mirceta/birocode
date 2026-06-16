@@ -5,8 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Local exposure — how your app reaches the Local tab</title>
   <!-- Relative URL on purpose: it must resolve UNDER the harness proxy sub-path
-       /api/localview/<repo>/. A leading slash would escape the sub-path and 404.
-       This page practices the very contract it teaches. -->
+       /api/localview/<repo>/app/<appId>/ (the bare /api/localview/<repo>/ is a
+       shortcut to the default app). A leading slash would escape the sub-path and
+       404. This page practices the very contract it teaches — one of possibly
+       several apps a repo exposes, each following it. -->
   <link rel="stylesheet" href="./assets/styles.css" />
 </head>
 <body>

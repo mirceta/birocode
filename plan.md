@@ -69,6 +69,14 @@
 
 ## Active feature plans
 
+- [Reflect multi-app exposure in the local-exposure example](plans/exposure-example-multiapp-note.md)
+  — a **light accuracy touch**: the example's animated request-flow explainer
+  still teaches only the bare `/api/localview/<repo>/` path, predating the
+  [multiple-local-apps](plans/multiple-local-apps.md) upgrade. Update `core.js` +
+  `index.html` to show the per-app `…/app/{appId}/` form (bare = default app) and
+  note a repo can expose several apps, each following the same contract. **Not** a
+  multi-app demo — the example stays single-responsibility. On
+  `feature/exposure-example-multiapp-note`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
