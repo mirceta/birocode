@@ -38,7 +38,23 @@
 > `ProductFrame` degrades to its empty state — no broken iframe. Verified **14/14**
 > on an isolated store with a seeded second repo: backend + helper follow
 > `?repo=` (RepoB shows 0/6, self all green), and the setup state embeds the
-> helper checking the active repo. Slice 4 below not started.
+> helper checking the active repo.
+>
+> **Slice 4 built (2026-06-16) — feature complete.** (1) **SSRF port-guard:**
+> `POST /api/repos/{id}/localport` now runs `Services/Repositories/LocalPortGuard.cs`
+> — a port pointed at a sensitive loopback service (SSH/SMB/RDP/DB/…) or back at
+> the harness/preview port (from `AppConfig`, not hardcoded) is refused with
+> **HTTP 409 + `requiresConfirm`** and only set when the caller re-sends
+> `confirm: true`; `LocalApp.savePort` surfaces the reason via a confirm dialog
+> and retries. Not a hard block — odd dev ports still work, opt-in. (2) **Canonical
+> doc:** the helper links (top-window nav) to `plans/serving-model-paths.md`
+> (already the two-paths map + danger surface; its SSRF gap is updated to
+> "guarded"), opened in the Files viewer via a new `?open=<path>` deep-link.
+> Verified **20/20** (incl. a race fix: the deep-link must be the *stable* view,
+> not transiently shown then clobbered by plan.md). One gotcha caught + fixed: the
+> absolute doc-link href tripped the helper's OWN `relativeAssets` check, so it's
+> assigned from JS to keep the dogfood all-green. **Full suite: 10/10 + 14/14 +
+> 14/14 + 20/20.**
 
 ## Slice 1 verification — resolved (10/10)
 
@@ -123,10 +139,11 @@ served local product, not just harness chrome.
   from its iframe URL and the (already `repoId`-aware) check follows it;
   `LocalApp`'s setup state embeds the helper pointed at the active repo. Verified
   14/14.
-- **Slice 4 — Supporting safety + doc.** The **SSRF port-guard** on
-  `POST /api/repos/{id}/localport` (refuse/confirm 22, 25, 137-139, 445, 3389, …
-  and `:5099`/`:5200`) and a **canonical serving-model doc** that the helper
-  links to — both now feed the same tool instead of standing alone.
+- **Slice 4 — Supporting safety + doc. ✅ Done.** The **SSRF port-guard**
+  (`LocalPortGuard`) on `POST /api/repos/{id}/localport` (refuse-then-confirm for
+  sensitive services + `:5099`/`:5200` from `AppConfig`) and the **canonical
+  serving-model doc** (`serving-model-paths.md`) the helper links to via the Files
+  viewer's new `?open=` deep-link. Verified 20/20.
 
 ## Out of scope (for now)
 

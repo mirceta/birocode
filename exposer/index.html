@@ -67,6 +67,20 @@
 
         <p id="check-note" class="exposer__muted exposer__note"></p>
       </section>
+
+      <!-- Canonical reference (slice 4). This NAVIGATES the harness (the top
+           window) to its Files viewer; it is not a product asset, so the
+           relative-URL contract does not apply. The href is an ABSOLUTE /studio
+           path, set by exposer.js at runtime ON PURPOSE: a leading-slash href in
+           the static HTML would (correctly, for assets) trip this product's own
+           relativeAssets check, but this is a nav link, not an asset — assigning
+           it in JS keeps the dogfood reference all-green. Most useful on the
+           harness's own (self) repo, where the doc lives. -->
+      <p class="exposer__learn exposer__muted">
+        New to this? Read the canonical
+        <a id="learn-link" target="_top" rel="noopener">serving-model &amp; danger-surface doc</a>
+        — the two serving paths, the embed contract, and the SSRF port-guard.
+      </p>
     </main>
 
     <!-- RELATIVE src, same reason as the stylesheet above. -->

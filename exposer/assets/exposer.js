@@ -15,6 +15,13 @@
     statusEl.classList.add('exposer__status--ok');
   }
 
+  // --- canonical-doc link (slice 4) ----------------------------------------
+  // Assigned here rather than in the static HTML so the absolute /studio path
+  // (a harness top-window navigation, not a product asset) doesn't trip this
+  // product's own relativeAssets check — see the note in index.html.
+  var learnLink = document.getElementById('learn-link');
+  if (learnLink) learnLink.href = '/studio/files?open=plans/serving-model-paths.md';
+
   // --- guided check --------------------------------------------------------
   var runBtn = document.getElementById('run-check');
   var summaryEl = document.getElementById('check-summary');

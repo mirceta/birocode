@@ -21,12 +21,17 @@
    Nothing in the UI says which is which, so a **private tool can be put on :5200
    and exposed to the internet unprotected** — or the operator can wrongly assume
    the homepage is behind the password.
-2. **SSRF footgun on the proxy target port.** `POST /api/repos/{id}/localport`
-   validates only `1..65535` (`Controllers/RepoController.cs`); there is **no
-   blacklist**. The proxy then connects to `127.0.0.1:{LocalPort}`
-   (`Controllers/LocalProxyController.cs`). An operator can point a repo at
-   `22`/`445`/`3389`/`:5099` itself and the Harness will proxy it (still behind
-   login, but a real internal-port exposure / footgun).
+2. **SSRF footgun on the proxy target port — GUARDED (serving-model-clarity
+   slice 4).** The proxy connects to `127.0.0.1:{LocalPort}`
+   (`Controllers/LocalProxyController.cs`), so a port pointed at a sensitive
+   loopback service (`22`/`445`/`3389`/a DB) or back at `:5099`/`:5200` turns the
+   authenticated proxy into an internal-port SSRF / loop. `POST
+   /api/repos/{id}/localport` now runs `Services/Repositories/LocalPortGuard.cs`:
+   a guarded port is refused with **HTTP 409 + `requiresConfirm`** (with a
+   human reason) and only set when the caller re-sends `confirm: true`. The
+   harness/preview ports come from `AppConfig`, not a hardcoded list. Not a hard
+   block by design — an operator can still run a dev server on an odd port, but
+   must opt in deliberately. (`1..65535` range check still applies.)
 3. **Self-Development collisions.** When Product = Harness, builds fight over
    `:5099`/`:5200` and a locked `bin/`. The rule is documented
    ([self-dev.md](../docs/claude-web/self-dev.md)) but **nothing enforces it**.

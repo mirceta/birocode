@@ -91,7 +91,19 @@ export default function LocalApp() {
     setSaving(true);
     setError('');
     try {
-      await apiPost(`/repos/${current.id}/localport`, { port: value });
+      try {
+        await apiPost(`/repos/${current.id}/localport`, { port: value });
+      } catch (err) {
+        // SSRF port-guard (plans/serving-model-clarity.md, slice 4): the harness
+        // refuses a risky target (sensitive loopback service, its own/preview
+        // port) with HTTP 409 until we confirm. Surface its reason and let the
+        // operator override deliberately.
+        let guard = null;
+        if (err?.status === 409) { try { guard = JSON.parse(err.message); } catch { /* not the guard */ } }
+        if (!guard?.requiresConfirm) throw err;
+        if (!window.confirm(guard.error)) return;
+        await apiPost(`/repos/${current.id}/localport`, { port: value, confirm: true });
+      }
       await reloadRepos();
       setEditing(false);
     } catch {

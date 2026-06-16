@@ -1,3 +1,4 @@
+using ClaudeWeb.Models;
 using ClaudeWeb.Services.Logging;
 using ClaudeWeb.Services.Repositories;
 using Microsoft.AspNetCore.Mvc;
@@ -32,11 +33,13 @@ public class RepoController : ControllerBase
 {
     private readonly RepositoryRegistry _registry;
     private readonly Logger _logger;
+    private readonly AppConfig _config;
 
-    public RepoController(RepositoryRegistry registry, Logger logger)
+    public RepoController(RepositoryRegistry registry, Logger logger, AppConfig config)
     {
         _registry = registry;
         _logger = logger;
+        _config = config;
     }
 
     [HttpGet]
@@ -183,11 +186,14 @@ public class RepoController : ControllerBase
         return Ok(new { id = r.Id, visibility = r.Visibility });
     }
 
-    public record LocalPortRequest(int? Port);
+    public record LocalPortRequest(int? Port, bool Confirm = false);
 
     /// <summary>
     /// Sets the project's Local-tab port (plans/local-app-tab.md). 1..65535
-    /// sets; null or 0 clears.
+    /// sets; null or 0 clears. Risky targets (sensitive loopback services, the
+    /// harness/preview ports) are refused with HTTP 409 + <c>requiresConfirm</c>
+    /// unless the caller passes <c>confirm: true</c> (plans/serving-model-clarity.md,
+    /// slice 4 — see <see cref="LocalPortGuard"/>).
     /// </summary>
     [HttpPost("{id}/localport")]
     public IActionResult SetLocalPort(string id, [FromBody] LocalPortRequest request)
@@ -196,6 +202,22 @@ public class RepoController : ControllerBase
         var port = request?.Port is > 0 ? request.Port : null;
         if (port is > 65535)
             return BadRequest(new { error = "Port must be 1..65535" });
+
+        if (port is int p && !(request?.Confirm ?? false))
+        {
+            var reason = LocalPortGuard.Reason(p, _config);
+            if (reason is not null)
+            {
+                _logger.Info($"[REPO] localport {p} guarded ({reason}); awaiting confirm");
+                return Conflict(new
+                {
+                    error = $"Port {p} looks like {reason}. The Local tab proxies whatever runs there behind your login — only continue if you're sure a web app serves on it.",
+                    guardedPort = p,
+                    requiresConfirm = true,
+                });
+            }
+        }
+
         if (!_registry.SetLocalPort(id, port))
             return NotFound(new { error = "Unknown repository id" });
         var r = _registry.GetAll().First(x => x.Id == id);

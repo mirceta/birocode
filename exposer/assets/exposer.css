@@ -80,6 +80,10 @@ body {
 
 .exposer__muted { color: var(--muted); }
 
+/* Canonical-doc link (slice 4). */
+.exposer__learn { margin: 1.4rem 0 0; font-size: .9rem; }
+.exposer__learn a { color: var(--accent, #6ea8fe); }
+
 /* --- guided exposure flow (slice 2) -------------------------------------- */
 
 .exposer__status { margin: 1.25rem 0 0; }
