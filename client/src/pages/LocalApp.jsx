@@ -152,7 +152,7 @@ export default function LocalApp() {
         <span className="localapp__hint">{t('localapp.servedHint')}</span>
       </div>
 
-      {checking && selected?.kind === 'repo' && !showForm && <ExposeCheck onReloadEmbed={reloadEmbed} />}
+      {checking && selected?.kind === 'repo' && !showForm && <ExposeCheck onReloadEmbed={reloadEmbed} app={selected} />}
 
       {showForm ? (
         <div className="localapp__setup">
