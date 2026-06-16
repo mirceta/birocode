@@ -1,6 +1,7 @@
 using ClaudeWeb.Models;
 using ClaudeWeb.Services.Analytics;
 using ClaudeWeb.Services.ArchPlan;
+using ClaudeWeb.Services.Autopilot;
 using ClaudeWeb.Services.Auth;
 using ClaudeWeb.Services.Chat;
 using ClaudeWeb.Services.Deploy;
@@ -137,6 +138,7 @@ public class EmbeddedApi
             builder.Services.AddDeployModule(); // deployments tab (plans/deployments-tab.md)
             builder.Services.AddExposeModule(); // exposure check (plans/product-onboarding.md)
             builder.Services.AddAnalyticsModule(); // scoreboard (plans/scoreboard-analytics.md)
+            builder.Services.AddAutopilotModule(); // loop-autopilot discovery (plans/loop-autopilot.md)
             // === END MODULE SERVICE REGISTRATION ===
 
             _app = builder.Build();

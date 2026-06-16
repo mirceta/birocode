@@ -57,6 +57,20 @@
 
 ## Active feature plans
 
+- [Loop autopilot — auto-advance agents through my routine replies](plans/loop-autopilot.md)
+  — across a long agent session the user cycles through a small set (~7) of
+  **routine custom prompts** ("continue", "play it back", "deploy", "keep it", …)
+  until a **genuine hard decision** arises. Autopilot **discovers that set** from
+  the user's history, then at each agent turn **classifies** the situation into a
+  routine prompt or **`escalate`** — auto-sending the routine ones to loop the
+  agent forward and **pausing only at the hard decisions**. The brain is an **LLM
+  classifier over the fixed set + escalate** (not a trained model, not free-form);
+  acting is gated by a confidence threshold + risky-action deny-list + audit +
+  kill switch, and only unlocks once a measured accuracy bar is cleared. Sliced:
+  (1) discover & confirm the set (no acting), (2) suggest-only (pre-fill, measure
+  accuracy), (3) auto-advance. Supersedes the earlier "yes-watcher" framing
+  (answering "yes" is just the simplest routine prompt). Kickoff only, not built.
+  On `feature/loop-autopilot`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
