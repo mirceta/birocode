@@ -8,7 +8,13 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-16):** **Latest — built, verified & merged to main:**
+> **Status (2026-06-16):** **Latest — built, verified, live on :5099 & merged to
+> main (`6721113`):** [Multiple local apps per repo](plans/multiple-local-apps.md)
+> — a repo can now expose **several local apps** (each on its own port, with a
+> Local-tab switcher); first consumer is the harness-provided, always-on
+> **Understanding** app that renders a rolling-latest Mermaid diagram the agent
+> writes. Both slices shipped; follow-ups (per-app dock/Exposure-check awareness)
+> remain. **Previously latest — built, verified & merged to main:**
 > the [Local-exposure example](plans/local-exposure-example.md) — a self-contained
 > product on the self-repo's Local port (`:5305`) that teaches Local-tab exposure
 > by *being* a correct example, with a four-style animated request-flow explainer;
@@ -63,16 +69,6 @@
 
 ## Active feature plans
 
-- [Multiple local apps per repo](plans/multiple-local-apps.md) — a **platform
-  upgrade**: let a repository expose **more than one local app** (several ports)
-  with a switcher in the Local tab, instead of today's one-port-per-repo
-  (`/api/localview/{repoId}/`). First consumer: a dedicated **Understanding app**
-  (harness-provided, always-on) that the agent feeds a **diagram whenever it
-  explains something** — keeping the minimal
-  [local-exposure-example](plans/local-exposure-example.md) untouched. **DESIGN —
-  slicing next** (Slice 1 = multi-app capability proven with the example + a 2nd
-  app; Slice 2 = Understanding app + prompt nudge). On
-  `feature/multiple-local-apps`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
@@ -102,6 +98,15 @@
 
 ## Recently shipped
 
+- [Multiple local apps per repo](plans/multiple-local-apps.md) — a **platform
+  upgrade**: a repository can now expose **more than one local app**, each on its
+  own port, with a **switcher in the Local tab**
+  (`/api/localview/{repoId}/app/{appId}/`; the bare path stays the default/first
+  app for back-compat). First consumer: a harness-provided, **always-on
+  Understanding app** that renders a rolling-latest Mermaid diagram the agent
+  writes to `understanding-diagram.mmd`. Both slices built, browser-verified,
+  **live on :5099 & merged to main 2026-06-16 (`6721113`)**. Follow-ups remain:
+  per-app dock/Exposure-check awareness. Was on `feature/multiple-local-apps`.
 - [Local-exposure example](plans/local-exposure-example.md) — a **real product**
   under `exposure-example/` that runs on the self-repo's Local port (`:5305`) the
   normal way and reaches the Local tab through the **existing**
