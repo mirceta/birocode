@@ -85,6 +85,53 @@ through the repeats and **pauses at exactly the decisions they wanted to keep**.
 3. **Auto-advance** — above the confidence threshold, send automatically and loop;
    escalate otherwise. Audit log + kill switch.
 
+## Where the loop dashboard lives — approaches compared
+
+Once the autopilot *runs* (Slice 2+), it needs a **dashboard**: the surface you
+open to watch the looping agent, see the current step / recent auto-advances, and
+hit the kill switch. Where that surface lives is an open design choice. Four
+distinct approaches, rated below.
+
+> **Legend.** ★ out of 5, and **higher is always better** — even for "risk", where
+> 5★ means *least* risky. Ratings are relative to each other, not absolute.
+
+| Approach | Ease of dev | Low dev risk | Fits "click-into a Local-tab app" | Architecture / convention fit | Live agent-data access | Maintainability |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| **A · Extend the existing harness Autopilot tab** (React, `:5099`) | ★★★★☆ | ★★★★☆ | ★★☆☆☆ | ★★★★★ | ★★★★★ | ★★★★☆ |
+| **B · New standalone Local-tab app** (own folder + port, via `/api/localview`) | ★★★☆☆ | ★★★☆☆ | ★★★★★ | ★★★★☆ | ★★★☆☆ | ★★★☆☆ |
+| **C · A tab inside `exposure-example`** (`:5305`) | ★★★☆☆ | ★★☆☆☆ | ★★★★☆ | ★☆☆☆☆ | ★★★☆☆ | ★★☆☆☆ |
+| **D · A live panel on the existing Dashboard** (beside `PinnedAgent`) | ★★★★☆ | ★★★★☆ | ★★☆☆☆ | ★★★★☆ | ★★★★★ | ★★★★☆ |
+
+**Why each lands where it does:**
+
+- **A — Extend the harness Autopilot tab.** The tab + `GET /api/autopilot/discover`
+  already exist (Slice 1), so it's mostly UI growth. Same origin as the harness →
+  direct, authenticated access to live `RunSession` state for the running loop. The
+  autopilot *is* a harness feature, so this is its natural home (top convention fit).
+  The one weak axis: it's a harness tab, not the "open a Local-tab app" experience
+  you described. Subtracts a build-isolation cost (self-dev rules apply).
+- **B — Standalone Local-tab app.** Nails your stated vision — you click into it like
+  `:5305`, and it reuses the `exposure-example` shell style while staying its own
+  product. Costs: a new app + port config, and it reaches live data only through
+  harness API endpoints (fine for discovery; the running-loop panels need new
+  endpoints). A second, framework-less codebase is more to keep in sync.
+- **C — Tab inside `exposure-example`.** It *is* already a clickable Local-tab app, so
+  it looks cheap — but it **violates that product's explicit zero-coupling design**
+  (`plans/local-exposure-example.md`), repeating the abandoned "Exposure Helper baked
+  into the harness" mistake. Lowest convention fit; listed for completeness, not
+  recommended.
+- **D — Panel on the existing Dashboard.** The Dashboard already renders live agent
+  state via `PinnedAgent`, so a loop-status panel slots in with low effort/risk and
+  full data access. But like A it's a harness surface, not a click-into app, and it
+  crowds an already-busy page.
+
+**Recommendation.** **A** for the real, durable dashboard (lowest risk, reuses what
+Slice 1 built, lives where the feature belongs), with **B** as the option if the
+"click into a dedicated Local-tab app" *experience* is itself the goal — in which
+case B's vanilla shell can mirror `exposure-example`. **C is not recommended.**
+These aren't exclusive: D (a Dashboard glance panel) can coexist with A as the
+quick-status entry point into the full dashboard.
+
 ## Out of scope (for now)
 
 - **Inventing new prompts** — autopilot only ever sends one of your known routine
