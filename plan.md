@@ -8,13 +8,18 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-16):** **Latest — built, verified, live on :5099 & merged to
-> main (`6721113`):** [Multiple local apps per repo](plans/multiple-local-apps.md)
+> **Status (2026-06-16):** **Latest — built, browser-verified & merged to main:**
+> [Reflect multi-app exposure in the local-exposure example](plans/exposure-example-multiapp-note.md)
+> — the example's request-flow explainer now teaches the per-app proxy path
+> `…/app/<appId>/` (bare = the default app), matching the multiple-local-apps
+> upgrade; wording-only, verified across all four explainer variants.
+> **Previously latest — built, verified, live on :5099 & merged to main
+> (`6721113`):** [Multiple local apps per repo](plans/multiple-local-apps.md)
 > — a repo can now expose **several local apps** (each on its own port, with a
 > Local-tab switcher); first consumer is the harness-provided, always-on
 > **Understanding** app that renders a rolling-latest Mermaid diagram the agent
 > writes. Both slices shipped; follow-ups (per-app dock/Exposure-check awareness)
-> remain. **Previously latest — built, verified & merged to main:**
+> remain. **Earlier — built, verified & merged to main:**
 > the [Local-exposure example](plans/local-exposure-example.md) — a self-contained
 > product on the self-repo's Local port (`:5305`) that teaches Local-tab exposure
 > by *being* a correct example, with a four-style animated request-flow explainer;
@@ -69,14 +74,6 @@
 
 ## Active feature plans
 
-- [Reflect multi-app exposure in the local-exposure example](plans/exposure-example-multiapp-note.md)
-  — a **light accuracy touch**: the example's animated request-flow explainer
-  still teaches only the bare `/api/localview/<repo>/` path, predating the
-  [multiple-local-apps](plans/multiple-local-apps.md) upgrade. Update `core.js` +
-  `index.html` to show the per-app `…/app/{appId}/` form (bare = default app) and
-  note a repo can expose several apps, each following the same contract. **Not** a
-  multi-app demo — the example stays single-responsibility. On
-  `feature/exposure-example-multiapp-note`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
@@ -106,6 +103,16 @@
 
 ## Recently shipped
 
+- [Reflect multi-app exposure in the local-exposure example](plans/exposure-example-multiapp-note.md)
+  — a **light accuracy touch**: the example's animated request-flow explainer
+  taught only the bare `/api/localview/<repo>/` path, predating the
+  [multiple-local-apps](plans/multiple-local-apps.md) upgrade. `core.js` +
+  `index.html` now show the per-app `…/app/{appId}/` form (bare = default app) and
+  note a repo can expose several apps, each following the same contract.
+  Wording-only — **not** a multi-app demo (the example stays
+  single-responsibility); the live Local-tab switcher already demos multi-app.
+  Browser-verified across all four explainer variants; **merged to main
+  2026-06-16**. On `feature/exposure-example-multiapp-note`.
 - [Multiple local apps per repo](plans/multiple-local-apps.md) — a **platform
   upgrade**: a repository can now expose **more than one local app**, each on its
   own port, with a **switcher in the Local tab**
