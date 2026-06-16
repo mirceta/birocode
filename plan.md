@@ -80,6 +80,14 @@
 
 ## Active feature plans
 
+- [Make the Exposure check app-aware](plans/expose-check-app-aware.md) — **bug fix**:
+  the Local tab's "Verify exposure" always checked the repo's default app
+  (`repo.LocalPort`, e.g. `:5300`), ignoring the switcher. Make it check the
+  **selected** app — `ExposeController.Check` takes an `appId` and probes that app's
+  port; `ExposeCheck.jsx` sends it and points the freshness probe at
+  `/api/localview/{id}/app/{appId}/`. The "per-app Exposure-check awareness" follow-up
+  of [multiple-local-apps](plans/multiple-local-apps.md). **Building.** On
+  `feature/expose-check-app-aware`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left

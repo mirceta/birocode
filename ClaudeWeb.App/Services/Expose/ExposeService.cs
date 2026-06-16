@@ -28,10 +28,10 @@ public class ExposeService
     /// <summary>One row of the checklist. Fix is null when Ok.</summary>
     public sealed record Check(string Key, string Label, bool Ok, string Detail, string? Fix);
 
-    public async Task<IReadOnlyList<Check>> RunAsync(RepositoryConfig repo, CancellationToken ct)
+    public async Task<IReadOnlyList<Check>> RunAsync(RepositoryConfig repo, int? appPort, CancellationToken ct)
     {
         var results = new List<Check>();
-        var port = repo.LocalPort;
+        var port = appPort;
 
         // 1. Port configured.
         if (port is not int p)
@@ -109,7 +109,7 @@ public class ExposeService
     /// contract text lives here (single source) so the agent always gets the
     /// up-to-date rules, never a stale copy in the product repo.
     /// </summary>
-    public string? BuildFixPrompt(RepositoryConfig repo, IReadOnlyList<Check> checks)
+    public string? BuildFixPrompt(RepositoryConfig repo, int? appPort, IReadOnlyList<Check> checks)
     {
         var failing = checks.Where(c => !c.Ok).ToList();
         if (failing.Count == 0) return null;
@@ -118,7 +118,7 @@ public class ExposeService
             .Select(c => $"- {c.Label}: {c.Fix ?? c.Detail}")
             .ToList();
 
-        var port = repo.LocalPort?.ToString() ?? "<set a port>";
+        var port = appPort?.ToString() ?? "<set a port>";
         return
             $"The local web product for \"{repo.Name}\" (port {port}) isn't correctly exposed to " +
             "Claude Web's Local tab. Fix the items below so it embeds correctly — the full contract is in " +

@@ -30,7 +30,7 @@ function bundleFromDoc(doc) {
 // freshness check (plans/expose-freshness.md): the server checklist probes
 // 127.0.0.1 and is blind to what THIS browser rendered, so a stale/blank
 // cached embed reads as "all green". Read-only — it only probes.
-export default function ExposeCheck({ onReloadEmbed }) {
+export default function ExposeCheck({ onReloadEmbed, app }) {
   const { t } = useT();
   const navigate = useNavigate();
   const { prefillProjectChat } = useChat();
@@ -46,7 +46,7 @@ export default function ExposeCheck({ onReloadEmbed }) {
   // same-origin sibling (/api/localview/…), so its contentDocument is readable.
   const checkFreshness = useCallback(async () => {
     const id = current?.id;
-    if (!id) {
+    if (!id || !app?.id) {
       setFresh({ state: 'na' });
       return;
     }
@@ -54,7 +54,9 @@ export default function ExposeCheck({ onReloadEmbed }) {
 
     let server = null;
     try {
-      const res = await fetch(`/api/localview/${id}/?_=${Date.now()}`, { cache: 'no-store' });
+      // Probe the SELECTED app's path (matching the embedded iframe), not the
+      // bare default-app path (plans/expose-check-app-aware.md).
+      const res = await fetch(`/api/localview/${id}/app/${app.id}/?_=${Date.now()}`, { cache: 'no-store' });
       if (res.ok) server = bundleFromHtml(await res.text());
     } catch {
       // server unreachable here is already covered by the server checklist
@@ -86,20 +88,20 @@ export default function ExposeCheck({ onReloadEmbed }) {
     } else {
       setFresh({ state: 'stale', live, server, blank: blank === true });
     }
-  }, [current?.id]);
+  }, [current?.id, app?.id]);
 
   const run = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      setData(await apiGet('/expose/check'));
+      setData(await apiGet('/expose/check', { appId: app?.id }));
     } catch {
       setError(t('expose.error'));
     } finally {
       setLoading(false);
     }
     checkFreshness();
-  }, [t, checkFreshness]);
+  }, [t, checkFreshness, app?.id]);
 
   useEffect(() => {
     run();
