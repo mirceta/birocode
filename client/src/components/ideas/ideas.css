@@ -296,3 +296,62 @@
 .idea__btn:disabled {
   opacity: 0.5;
 }
+
+/* ---- Active section (plans/ideas-active-section.md) ---------------------------
+   The list splits into an Active group (pinned on top) and the Backlog. The
+   Active accent is GREEN, kept independent of the red priority tint so the two
+   signals never fight: priority still tints the card background, "active" adds a
+   green frame + group box. */
+.ideas__group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ideas__group + .ideas__group {
+  margin-top: 14px;
+}
+.ideas__group--active {
+  background: #f1faf4;
+  border: 1px solid #cdeedd;
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.ideas__group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted, #888);
+  padding: 2px 2px 0;
+}
+.ideas__group--active .ideas__group-head {
+  color: #15a05a;
+}
+.ideas__group-star {
+  color: #15a05a;
+}
+.ideas__group-count {
+  font-weight: 700;
+  font-size: 11px;
+  background: var(--color-border);
+  color: var(--color-text-muted, #888);
+  border-radius: 999px;
+  padding: 0 7px;
+}
+
+/* Active card: a green left frame marks it as current work, on top of any
+   priority tint. */
+.idea[data-active] {
+  border-left: 3px solid #15a05a;
+}
+
+/* The per-card move-in/out toggle. Off = neutral pill (like Edit); on = green. */
+.idea__active-btn--on {
+  background: #15a05a;
+  border-color: #15a05a;
+  color: #fff;
+}

@@ -36,10 +36,12 @@ public class NotesService
     }
 
     // Project is an OPTIONAL free-text label (plans/ideas-filter-project.md).
-    // Priority is 0 = none, 1–5 = increasing (plans/idea-priority.md). Both are
-    // tolerant of older notes that lack the field — System.Text.Json fills the
-    // constructor parameter with its default (null / 0), so no migration is needed.
-    public sealed record Note(string Id, string Text, string? Project, long CreatedAt, long UpdatedAt, int Priority);
+    // Priority is 0 = none, 1–5 = increasing (plans/idea-priority.md). Active marks
+    // an idea as current work, pinning it into the Active section
+    // (plans/ideas-active-section.md). All three are tolerant of older notes that
+    // lack the field — System.Text.Json fills the constructor parameter with its
+    // default (null / 0 / false), so no migration is needed.
+    public sealed record Note(string Id, string Text, string? Project, long CreatedAt, long UpdatedAt, int Priority, bool Active);
 
     // On-disk model. `Ideas` is the current shape; `Notes` is the legacy
     // per-repo map, read once for migration.
@@ -55,12 +57,12 @@ public class NotesService
         lock (_gate) return _ideas.AsEnumerable().Reverse().ToList();
     }
 
-    /// <summary>Adds an idea. Text is trimmed and length-capped; empty text is rejected (null return). Project is optional; priority is clamped to 0–5.</summary>
-    public Note? Add(string? text, string? project, int priority, long now)
+    /// <summary>Adds an idea. Text is trimmed and length-capped; empty text is rejected (null return). Project is optional; priority is clamped to 0–5; active defaults to false.</summary>
+    public Note? Add(string? text, string? project, int priority, bool active, long now)
     {
         var clean = Clean(text);
         if (clean is null) return null;
-        var note = new Note(Guid.NewGuid().ToString("N"), clean, CleanProject(project), now, now, ClampPriority(priority));
+        var note = new Note(Guid.NewGuid().ToString("N"), clean, CleanProject(project), now, now, ClampPriority(priority), active);
         lock (_gate)
         {
             _ideas.Add(note);
@@ -70,8 +72,8 @@ public class NotesService
         return note;
     }
 
-    /// <summary>Edits an idea's text, project and priority. Null return if the id is unknown or the text is empty.</summary>
-    public Note? Update(string id, string? text, string? project, int priority, long now)
+    /// <summary>Edits an idea's text, project, priority and active flag. Null return if the id is unknown or the text is empty.</summary>
+    public Note? Update(string id, string? text, string? project, int priority, bool active, long now)
     {
         var clean = Clean(text);
         if (clean is null) return null;
@@ -79,7 +81,7 @@ public class NotesService
         {
             var i = _ideas.FindIndex(n => n.Id == id);
             if (i < 0) return null;
-            var updated = _ideas[i] with { Text = clean, Project = CleanProject(project), UpdatedAt = now, Priority = ClampPriority(priority) };
+            var updated = _ideas[i] with { Text = clean, Project = CleanProject(project), UpdatedAt = now, Priority = ClampPriority(priority), Active = active };
             _ideas[i] = updated;
             Save();
             _logger.Info($"[NOTES] Updated idea {id}");

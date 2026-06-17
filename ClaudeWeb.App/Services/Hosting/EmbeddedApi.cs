@@ -206,7 +206,7 @@ public class EmbeddedApi
             // unknown API routes return a real 404 instead of HTML.
             if (distProvider != null)
                 _app.MapFallbackToFile("{*path:regex(^(?!api/).*$)}", "index.html",
-                    new StaticFileOptions { FileProvider = distProvider });
+                    new StaticFileOptions { FileProvider = distProvider, OnPrepareResponse = SetSpaCacheHeaders });
 
             IsRunning = true;
             _logger.Info($"[SERVER] Kestrel running on http://0.0.0.0:{_config.Port}");
@@ -237,8 +237,33 @@ public class EmbeddedApi
         // Explicit provider so static files resolve from client/dist regardless
         // of the host's implicit web root.
         app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = distProvider });
-        app.UseStaticFiles(new StaticFileOptions { FileProvider = distProvider });
+        app.UseStaticFiles(new StaticFileOptions { FileProvider = distProvider, OnPrepareResponse = SetSpaCacheHeaders });
         _logger.Info($"[SERVER] Serving static files from {distPath}");
+    }
+
+    /// <summary>
+    /// Cache policy that kills stale-SPA-shell bugs (an open tab/proxy keeping the
+    /// OLD index.html, which pins OLD hashed asset names → "the deploy didn't ship").
+    /// index.html and version.json are served <c>no-store</c> so every reload
+    /// revalidates and picks up the new asset hashes; the content-hashed
+    /// <c>/assets/*</c> files are immutable (the hash changes when content does), so
+    /// they cache for a year. Other files (icons, manifest) keep the default.
+    /// </summary>
+    internal static void SetSpaCacheHeaders(StaticFileResponseContext ctx)
+    {
+        var name = ctx.File.Name;
+        var path = ctx.Context.Request.Path.Value ?? string.Empty;
+        if (string.Equals(name, "index.html", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(name, "version.json", StringComparison.OrdinalIgnoreCase))
+        {
+            ctx.Context.Response.Headers["Cache-Control"] = "no-store, no-cache, must-revalidate";
+            ctx.Context.Response.Headers["Pragma"] = "no-cache";
+            ctx.Context.Response.Headers["Expires"] = "0";
+        }
+        else if (path.StartsWith("/assets/", StringComparison.OrdinalIgnoreCase))
+        {
+            ctx.Context.Response.Headers["Cache-Control"] = "public, max-age=31536000, immutable";
+        }
     }
 
     /// <summary>

@@ -139,6 +139,9 @@ export default function IdeasPanel() {
     if (!text) return;
     const project = editProject.trim();
     const priority = editPriority;
+    // Preserve the active flag — the PATCH overwrites it, so an omitted `active`
+    // would silently clear it (the backend defaults missing -> false).
+    const active = notes.find((n) => n.id === id)?.active ?? false;
     const prev = notes;
     setNotes((ns) =>
       ns.map((n) =>
@@ -147,7 +150,7 @@ export default function IdeasPanel() {
     );
     setEditingId(null);
     try {
-      await apiPatch(`/notes/${id}`, { text, project, priority });
+      await apiPatch(`/notes/${id}`, { text, project, priority, active });
     } catch {
       setNotes(prev);
       setError(t('ideas.saveError'));
@@ -155,14 +158,28 @@ export default function IdeasPanel() {
   }
 
   // Quick priority change from the card (view mode), without entering edit: keep
-  // the idea's existing text/project and patch only the level. Optimistic, like
-  // edit/delete.
+  // the idea's existing text/project/active and patch only the level. Optimistic,
+  // like edit/delete.
   async function changePriority(n, priority) {
     if ((n.priority || 0) === priority) return;
     const prev = notes;
     setNotes((ns) => ns.map((x) => (x.id === n.id ? { ...x, priority } : x)));
     try {
-      await apiPatch(`/notes/${n.id}`, { text: n.text, project: n.project || '', priority });
+      await apiPatch(`/notes/${n.id}`, { text: n.text, project: n.project || '', priority, active: !!n.active });
+    } catch {
+      setNotes(prev);
+      setError(t('ideas.saveError'));
+    }
+  }
+
+  // Move an idea into / out of the Active section. Optimistic, keeps the rest of
+  // the idea unchanged. The grouped render reacts to the flipped `active` flag.
+  async function toggleActive(n) {
+    const active = !n.active;
+    const prev = notes;
+    setNotes((ns) => ns.map((x) => (x.id === n.id ? { ...x, active } : x)));
+    try {
+      await apiPatch(`/notes/${n.id}`, { text: n.text, project: n.project || '', priority: n.priority || 0, active });
     } catch {
       setNotes(prev);
       setError(t('ideas.saveError'));
@@ -193,6 +210,72 @@ export default function IdeasPanel() {
       e.preventDefault();
       add();
     }
+  }
+
+  // The visible list, split into the Active group (pinned on top) and the rest.
+  // Within each group the existing newest-first order is preserved.
+  const activeItems = visible.filter((n) => n.active);
+  const backlogItems = visible.filter((n) => !n.active);
+
+  function renderCard(n) {
+    return (
+      <div key={n.id} className="idea" data-priority={n.priority || 0} data-active={n.active ? '1' : undefined}>
+        {editingId === n.id ? (
+          <div className="idea__edit">
+            <textarea
+              className="ideas__input"
+              value={editDraft}
+              onChange={(e) => setEditDraft(e.target.value)}
+              rows={3}
+              autoFocus
+            />
+            <input
+              className="ideas__input ideas__project"
+              type="text"
+              placeholder={t('ideas.projectPlaceholder')}
+              value={editProject}
+              onChange={(e) => setEditProject(e.target.value)}
+            />
+            <div className="idea__prio-edit">
+              <span className="ideas__prio-label">{t('ideas.priority')}</span>
+              <PriorityPicker value={editPriority} onChange={setEditPriority} t={t} />
+            </div>
+            <div className="idea__actions">
+              <button type="button" className="idea__btn idea__btn--primary" onClick={() => saveEdit(n.id)} disabled={!editDraft.trim()}>
+                {t('ideas.save')}
+              </button>
+              <button type="button" className="idea__btn" onClick={() => setEditingId(null)}>
+                {t('common.cancel')}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <p className="idea__text">{n.text}</p>
+            <div className="idea__foot">
+              {n.project && <span className="idea__project">{n.project}</span>}
+              <PriorityPicker value={n.priority || 0} onChange={(lvl) => changePriority(n, lvl)} t={t} />
+              <span className="idea__time">{relTime(n.updatedAt || n.createdAt, t)}</span>
+              <button
+                type="button"
+                className={`idea__btn idea__active-btn${n.active ? ' idea__active-btn--on' : ''}`}
+                title={n.active ? t('ideas.isActiveTitle') : t('ideas.makeActiveTitle')}
+                aria-pressed={!!n.active}
+                onClick={() => toggleActive(n)}
+              >
+                {n.active ? t('ideas.isActive') : t('ideas.makeActive')}
+              </button>
+              <button type="button" className="idea__btn" onClick={() => startEdit(n)}>
+                {t('ideas.edit')}
+              </button>
+              <button type="button" className="idea__btn idea__btn--danger" onClick={() => remove(n.id)}>
+                {t('ideas.delete')}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -268,56 +351,29 @@ export default function IdeasPanel() {
           <p className="ideas__muted">{t('ideas.empty')}</p>
         ) : visible.length === 0 ? (
           <p className="ideas__muted">{t('ideas.noMatches')}</p>
+        ) : activeItems.length === 0 ? (
+          // Nothing active → the flat list, exactly as before (no group headers).
+          backlogItems.map(renderCard)
         ) : (
-          visible.map((n) => (
-            <div key={n.id} className="idea" data-priority={n.priority || 0}>
-              {editingId === n.id ? (
-                <div className="idea__edit">
-                  <textarea
-                    className="ideas__input"
-                    value={editDraft}
-                    onChange={(e) => setEditDraft(e.target.value)}
-                    rows={3}
-                    autoFocus
-                  />
-                  <input
-                    className="ideas__input ideas__project"
-                    type="text"
-                    placeholder={t('ideas.projectPlaceholder')}
-                    value={editProject}
-                    onChange={(e) => setEditProject(e.target.value)}
-                  />
-                  <div className="idea__prio-edit">
-                    <span className="ideas__prio-label">{t('ideas.priority')}</span>
-                    <PriorityPicker value={editPriority} onChange={setEditPriority} t={t} />
-                  </div>
-                  <div className="idea__actions">
-                    <button type="button" className="idea__btn idea__btn--primary" onClick={() => saveEdit(n.id)} disabled={!editDraft.trim()}>
-                      {t('ideas.save')}
-                    </button>
-                    <button type="button" className="idea__btn" onClick={() => setEditingId(null)}>
-                      {t('common.cancel')}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <p className="idea__text">{n.text}</p>
-                  <div className="idea__foot">
-                    {n.project && <span className="idea__project">{n.project}</span>}
-                    <PriorityPicker value={n.priority || 0} onChange={(lvl) => changePriority(n, lvl)} t={t} />
-                    <span className="idea__time">{relTime(n.updatedAt || n.createdAt, t)}</span>
-                    <button type="button" className="idea__btn" onClick={() => startEdit(n)}>
-                      {t('ideas.edit')}
-                    </button>
-                    <button type="button" className="idea__btn idea__btn--danger" onClick={() => remove(n.id)}>
-                      {t('ideas.delete')}
-                    </button>
-                  </div>
-                </>
-              )}
+          <>
+            <div className="ideas__group ideas__group--active">
+              <div className="ideas__group-head">
+                <span className="ideas__group-star" aria-hidden="true">★</span>
+                {t('ideas.activeSection')}
+                <span className="ideas__group-count">{activeItems.length}</span>
+              </div>
+              {activeItems.map(renderCard)}
             </div>
-          ))
+            {backlogItems.length > 0 && (
+              <div className="ideas__group">
+                <div className="ideas__group-head ideas__group-head--muted">
+                  {t('ideas.backlogSection')}
+                  <span className="ideas__group-count">{backlogItems.length}</span>
+                </div>
+                {backlogItems.map(renderCard)}
+              </div>
+            )}
+          </>
         )}
       </div>
         </div>

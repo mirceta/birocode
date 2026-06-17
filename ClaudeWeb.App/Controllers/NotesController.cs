@@ -8,11 +8,12 @@ namespace ClaudeWeb.Controllers;
 /// Global ideas/notes (plans/ideas-pinned-dashboard.md). ONE master list shared
 /// across the whole app — NOT project-scoped (reverses plans/ideas-tab.md).
 ///   GET    /api/notes        -- all ideas, newest first
-///   POST   /api/notes        -- { text, project?, priority? } create -> the idea
-///   PATCH  /api/notes/{id}   -- { text, project?, priority? } edit  -> the idea
+///   POST   /api/notes        -- { text, project?, priority?, active? } create -> the idea
+///   PATCH  /api/notes/{id}   -- { text, project?, priority?, active? } edit  -> the idea
 ///   DELETE /api/notes/{id}   -- remove one
 /// `project` is an optional free-text label (plans/ideas-filter-project.md);
-/// `priority` is 0 = none, 1–5 = increasing (plans/idea-priority.md).
+/// `priority` is 0 = none, 1–5 = increasing (plans/idea-priority.md);
+/// `active` pins the idea into the Active section (plans/ideas-active-section.md).
 /// </summary>
 [ApiController]
 [Route("api/notes")]
@@ -27,7 +28,7 @@ public class NotesController : ControllerBase
         _logger = logger;
     }
 
-    public record NoteRequest(string? Text, string? Project, int Priority);
+    public record NoteRequest(string? Text, string? Project, int Priority, bool Active);
 
     [HttpGet]
     public IActionResult List()
@@ -40,7 +41,7 @@ public class NotesController : ControllerBase
     public IActionResult Create([FromBody] NoteRequest? request)
     {
         _logger.CountRequest();
-        var note = _notes.Add(request?.Text, request?.Project, request?.Priority ?? 0, Now());
+        var note = _notes.Add(request?.Text, request?.Project, request?.Priority ?? 0, request?.Active ?? false, Now());
         if (note is null) return BadRequest(new { error = "Note text is required." });
         return Ok(note);
     }
@@ -49,7 +50,7 @@ public class NotesController : ControllerBase
     public IActionResult Update(string id, [FromBody] NoteRequest? request)
     {
         _logger.CountRequest();
-        var note = _notes.Update(id, request?.Text, request?.Project, request?.Priority ?? 0, Now());
+        var note = _notes.Update(id, request?.Text, request?.Project, request?.Priority ?? 0, request?.Active ?? false, Now());
         if (note is null) return NotFound(new { error = "Unknown note id or empty text." });
         return Ok(note);
     }
