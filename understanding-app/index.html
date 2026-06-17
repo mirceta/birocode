@@ -3,82 +3,90 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Dock colour tint — how far should it reach?</title>
-  <!-- Relative URLs on purpose: this folder is served under the proxy sub-path
-       /api/localview/<repo>/app/understanding/. A leading slash would escape it
-       and 404 (the contract exposure-example/ teaches). -->
+  <title>Using the stale-cache fix — what to do when a deploy "didn't ship"</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <header class="hero">
-    <div>
-      <h1>Dock colour background</h1>
-      <p class="sub">How far should the agent-colour wash reach into the dock? Toggle and compare.</p>
-    </div>
-    <div class="modes">
-      <div class="seg" id="scope" role="tablist" aria-label="Tint scope">
-        <button data-scope="bar" class="on">Header bar only<small>shipped now</small></button>
-        <button data-scope="chrome">Bar + lanes + git<small>middle ground</small></button>
-        <button data-scope="full">Whole dock<small>original plan</small></button>
-      </div>
-      <div class="seg" id="state" role="group" aria-label="Dock state">
-        <button data-state="colored" class="on">Coloured</button>
-        <button data-state="important">+ Important</button>
-      </div>
-    </div>
+    <h1>“I deployed — why am I still seeing the old version?”</h1>
+    <p class="sub">How to use the stale-cache fix. Short answer: <b>almost always, just reload.</b></p>
   </header>
 
-  <main class="stage">
-    <div class="stage__docks">
-      <!-- Live mock: structure mirrors the real .phone in dashboard.css -->
-      <div class="phone" id="phone" data-colored="true">
-        <button class="phone__bar">
-          <span class="phone__dot"></span>
-          <span class="phone__name">agent-aurora</span>
-          <span class="phone__tag" id="phoneTag">coloured</span>
-          <span class="phone__max">⤢</span>
-        </button>
-        <div class="phone__lanes">
-          <button class="phone__lane phone__lane--on">Builder</button>
-          <button class="phone__lane">Ask</button>
-        </div>
-        <div class="phone__git">main · 3 ahead · clean</div>
-        <div class="phone__screen">
-          <div class="msg msg--user">tint the dock with my colour</div>
-          <div class="msg msg--bot">Which regions get the wash?</div>
-          <div class="msg msg--bot">Use the toggles above to compare.</div>
-        </div>
+  <main>
+    <!-- The escalation ladder: 3 rungs, do the least you can. -->
+    <section class="card">
+      <h2>Three things you can do — try them top-down</h2>
+      <ol class="ladder">
+        <li class="rung" data-rung="0">
+          <span class="rung__lvl">1</span>
+          <div class="rung__body">
+            <h3>Just reload <span class="auto">automatic — no button</span></h3>
+            <p>
+              The server now tells your browser <b>never to cache the app shell</b>
+              (<code>index.html</code> + <code>version.json</code> → <code>no-store</code>).
+              So a plain reload — <kbd>Ctrl</kbd>+<kbd>R</kbd>, or pull-to-refresh on
+              the phone — <b>always</b> lands on the newest build. This covers ~99% of cases.
+              You don't click anything; it just works now.
+            </p>
+          </div>
+        </li>
+        <li class="rung" data-rung="1">
+          <span class="rung__lvl">2</span>
+          <div class="rung__body">
+            <h3>Click <b>Reload</b> on the banner <span class="when">when it appears on its own</span></h3>
+            <p>
+              If a tab has been <b>open for a while</b> when a new build ships, a small
+              bar slides in: <i>“A new version of Claude Web is available.”</i> Tap its
+              <b>Reload</b> and you're current. (A single-page tab never re-fetches the
+              shell by itself, so this banner is how a long-open tab finds out.) It now
+              does the <i>thorough</i> clear — not a plain reload that could re-serve the
+              stale shell.
+            </p>
+          </div>
+        </li>
+        <li class="rung" data-rung="2">
+          <span class="rung__lvl">3</span>
+          <div class="rung__body">
+            <h3>Hit <b>Force refresh</b> <span class="when">Settings ▸ Maintenance</span></h3>
+            <p>
+              The nuclear option, for when you <i>still</i> suspect a stale page (a stubborn
+              proxy, a service-worker cache, a weird mobile browser). One button that
+              <b>wipes all Cache Storage, unregisters service workers, and reloads with a
+              cache-bust</b> — a guaranteed clean slate. Right below it, <b>“This tab's build”</b>
+              shows the timestamp you're actually running, so you can confirm you're current.
+            </p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <!-- Interactive: pick your symptom, get the rung. -->
+    <section class="card picker">
+      <h2>Not sure which one? Pick what you're seeing</h2>
+      <div class="choices">
+        <button class="choice" data-rung="0">I just deployed and want to see it</button>
+        <button class="choice" data-rung="1">A “new version available” bar showed up</button>
+        <button class="choice" data-rung="2">I reloaded and it's <i>still</i> the old version</button>
       </div>
-
-      <div class="swatches" id="swatches" aria-label="Agent colour">
-        <span class="swlabel">colour</span>
+      <div id="answer" class="answer" aria-live="polite">
+        <p class="answer__hint">↑ pick one to see what to do</p>
       </div>
-    </div>
+    </section>
 
-    <aside class="panel">
-      <div class="step-counter"><span id="scopeName">Header bar only</span></div>
-      <p id="scopeDesc" class="desc">—</p>
-
-      <h2 class="legend-h">Dock regions</h2>
-      <ul class="legend">
-        <li><span class="key key--bar"></span> <b>Header bar</b> — name + maximize. The only region tinted today.</li>
-        <li><span class="key key--lanes"></span> <b>Lane toggle</b> — Builder / Ask.</li>
-        <li><span class="key key--git"></span> <b>Git row</b> — branch &amp; status.</li>
-        <li><span class="key key--screen"></span> <b>Screen</b> — the chat transcript.</li>
+    <section class="card aside">
+      <h2>Good to know</h2>
+      <ul class="notes">
+        <li><b>You can't break anything.</b> Force refresh only clears <i>caches</i> — no data, no settings, no agent state is touched.</li>
+        <li><b>Confirm you're current:</b> Settings ▸ Maintenance shows <b>This tab's build</b>; compare it across two tabs if in doubt.</li>
+        <li><b>Why hashed assets still cache forever:</b> <code>/assets/index-<i>abc123</i>.js</code> is safe to keep for a year — its name changes whenever its content does, so it's never stale.</li>
+        <li><b>The proxy caveat:</b> the off-box IIS+ARR proxy could still hold a copy; rung 1's <code>no-store</code> plus rung 3's cache-bust are the belt-and-suspenders against it.</li>
       </ul>
+    </section>
 
-      <p class="why">
-        <b>Why not one <code>background</code> on the whole dock?</b>
-        Each region paints an opaque <code>--color-surface</code>, so a background on the outer
-        <code>.phone</code> is fully covered. More coverage = tint each region individually.
-        That's exactly what these three options trade off.
-      </p>
-      <p class="why why--imp">
-        <b>The point of the wash:</b> when an agent is <em>important</em>, its border turns bright
-        red — erasing the colour. The background tint is a separate property, so the colour
-        survives. Flip <b>+ Important</b> above to see border (red) and wash (colour) coexist.
-      </p>
-    </aside>
+    <footer>
+      <p>Live usage guide · overwritten each time the explanation changes ·
+         plan: <code>plans/cache-hardening.md</code></p>
+    </footer>
   </main>
 
   <script src="./app.js"></script>
