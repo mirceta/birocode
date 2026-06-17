@@ -12,18 +12,23 @@ import PromptManager from './PromptManager';
 // message so Claude can Read it.
 //
 // Typing stays ENABLED while the agent streams — you can draft the next idea
-// mid-run and either wait to send it or stash it (plans/prompt-stash.md):
-// the bookmark button stores the draft on the active agent tab (backend-
-// synced), and the chips above the row bring a stashed idea back into the
-// composer. Tapping a chip while a draft exists swaps them, so nothing is
-// ever lost.
-export default function ChatInput({ value, onChange, onSend, onStop, streaming, attachment, onAttach, embedded = false }) {
+// mid-run and queue it (plans/queued-prompts.md, plans/prompt-stash.md): the
+// bookmark button enqueues the draft (on the active agent tab; the main chat's
+// global queue when no tab is active; or, inside a dashboard dock, that dock's
+// OWN agent via stashTabId — all backend-synced and durable).
+// Each chip above the row has a Send button (approve → send as the next turn,
+// disabled while busy), an × to delete, and tapping its body loads it back into
+// the composer to edit. Nothing ever auto-sends, and nothing is ever lost.
+export default function ChatInput({ value, onChange, onSend, onStop, streaming, attachment, onAttach, embedded = false, stashTabId }) {
   const { t } = useT();
-  const { activeTabId, activeTab, addStash, removeStash } = useDock();
-  // Stash is keyed to the ACTIVE dock tab, so it's meaningless (and would
-  // cross-write) inside a dashboard phone for a background agent — disable it
-  // there (plans/agent-dashboard.md).
-  const stashEnabled = useFeature('promptStash') && !!activeTabId && !embedded;
+  const { tabs, activeTabId, activeTab, addStash, removeStash, globalStash } = useDock();
+  // The queue attaches to a specific agent tab. Normally that's the ACTIVE tab,
+  // or — with no tab (the plain main chat) — the tab-independent global queue
+  // (plans/queued-prompts.md). Inside a dashboard dock it must attach to THIS
+  // dock's OWN agent (stashTabId), never the globally-active tab, or it would
+  // cross-write a background agent (plans/agent-dashboard.md).
+  const queueTabId = embedded ? (stashTabId || null) : activeTabId;
+  const stashEnabled = useFeature('promptStash') && (!embedded || !!stashTabId);
   // Prompts (plans/custom-prompts.md): a single ⚙ button opens a modal that holds
   // BOTH the built-in prompts (understanding, kickoff — formerly their own toolbar
   // buttons) and the user's custom ones, each with a "Use" button that prefills
@@ -33,7 +38,14 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
   const customPromptsEnabled = useFeature('customPrompts');
   const { prompts, addPrompt, updatePrompt, deletePrompt } = usePrompts();
   const [mgrOpen, setMgrOpen] = useState(false);
-  const stash = (stashEnabled && activeTab?.stash) || [];
+  // The queue for the surface in play: this dock's own agent when embedded, else
+  // the active tab's, else the global queue.
+  const embeddedTab = embedded && stashTabId ? tabs.find((tb) => tb.id === stashTabId) : null;
+  const stash = !stashEnabled
+    ? []
+    : embedded
+      ? (embeddedTab?.stash || [])
+      : (activeTabId ? (activeTab?.stash || []) : globalStash);
   const textareaRef = useRef(null);
   const fileRef = useRef(null);
   const sendDisabled = streaming;
@@ -70,7 +82,7 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
   function handleStash() {
     const trimmed = (value || '').trim();
     if (!trimmed || !stashEnabled) return;
-    addStash(activeTabId, trimmed);
+    addStash(queueTabId, trimmed);
     onChange('');
   }
 
@@ -86,14 +98,28 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
   function handleChipTap(item) {
     // Swap: a non-empty draft is stashed before the chip replaces it.
     const trimmed = (value || '').trim();
-    if (trimmed) addStash(activeTabId, trimmed);
+    if (trimmed) addStash(queueTabId, trimmed);
     onChange(item.text);
-    removeStash(activeTabId, item.id);
+    removeStash(queueTabId, item.id);
+  }
+
+  // Approve a queued prompt: send it as the next turn, then drop it from the
+  // queue. Disabled while the agent is busy — you can queue mid-run, but a
+  // queued prompt only sends once the agent is free (it never auto-sends).
+  function handleChipSend(e, item) {
+    e.stopPropagation();
+    if (sendDisabled) return;
+    // Sending clears the composer draft (ChatContext.sendTo); preserve whatever
+    // the user was typing so approving a queued prompt never eats their draft.
+    const draft = (value || '').trim();
+    onSend(item.text);
+    if (draft) onChange(draft);
+    removeStash(queueTabId, item.id);
   }
 
   function handleChipRemove(e, item) {
     e.stopPropagation();
-    removeStash(activeTabId, item.id);
+    removeStash(queueTabId, item.id);
   }
 
   const canSend = ((value || '').trim().length > 0 || !!attachment) && !sendDisabled;
@@ -122,6 +148,16 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
               onClick={() => handleChipTap(item)}
             >
               <span className="chat-stash__text">{item.text}</span>
+              <span
+                className={`chat-stash__send${sendDisabled ? ' chat-stash__send--disabled' : ''}`}
+                role="button"
+                aria-disabled={sendDisabled}
+                aria-label={t('chat.queueSend')}
+                title={sendDisabled ? t('chat.queueSendBusy') : t('chat.queueSend')}
+                onClick={(e) => handleChipSend(e, item)}
+              >
+                {t('chat.send')}
+              </span>
               <span
                 className="chat-stash__remove"
                 role="button"

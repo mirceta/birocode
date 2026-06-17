@@ -156,7 +156,7 @@ export default function PinnedAgent({
         {openApp ? (
           <ProductFrame url={`/api/localview/${tab.repoId}/app/${openApp.id}/`} port={openApp.port} />
         ) : (
-          <Chat chat={chat} embedded />
+          <Chat chat={chat} embedded stashTabId={tab.id} />
         )}
       </div>
     </div>

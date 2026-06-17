@@ -29,7 +29,7 @@ const REVEAL_CHUNK = 50;
 // `chat` facade from useChatFor + `embedded` (drops the app-level chrome —
 // Claude/Term toggle, project/harness scopes, understanding panel — that only
 // makes sense for the one active conversation). See plans/agent-dashboard.md.
-export default function Chat({ chat: injected, embedded = false }) {
+export default function Chat({ chat: injected, embedded = false, stashTabId }) {
   const { t } = useT();
   const active = useChat();
   const {
@@ -263,6 +263,7 @@ export default function Chat({ chat: injected, embedded = false }) {
         attachment={attachment}
         onAttach={setAttachment}
         embedded={embedded}
+        stashTabId={stashTabId}
       />
 
       <SessionPicker

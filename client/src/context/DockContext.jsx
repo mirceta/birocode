@@ -65,6 +65,9 @@ export function DockProvider({ children }) {
   // reconciliation until then (before that the tab list is simply unknown).
   const [loaded, setLoaded] = useState(false);
   const [activeTabId, setActiveTabId] = useState(() => readTabState(ACTIVE_KEY) || null);
+  // The main chat's queue (plans/queued-prompts.md): tab-independent, backend-
+  // synced like the per-tab stash, used when no agent tab is active.
+  const [globalStash, setGlobalStash] = useState([]);
   const [chatView, setChatViewState] = useState(() => {
     const stored = readTabState(VIEW_KEY);
     return stored === 'project' || stored === 'harness' || stored === 'ask' ? stored : 'agent';
@@ -119,6 +122,13 @@ export function DockProvider({ children }) {
       if (prev && list.some((t) => t.id === prev)) return prev;
       return list.length > 0 ? list[0].id : null;
     });
+
+    try {
+      const gs = await apiGet('/dock/stash');
+      if (Array.isArray(gs)) setGlobalStash(gs);
+    } catch {
+      /* keep the last good global queue; retry on next visibility change */
+    }
   }, []);
 
   // Load on mount and whenever the page becomes visible again, mirroring the
@@ -189,8 +199,17 @@ export function DockProvider({ children }) {
   // Prompt stash (plans/prompt-stash.md): ideas jotted down while the agent
   // runs, attached to the tab on the backend. Optimistic, client-supplied id
   // (same pattern as openTab).
+  // A falsy tabId targets the main chat's tab-independent queue (no agent tab
+  // active); otherwise the queue is attached to that agent tab.
   const addStash = useCallback((tabId, text) => {
     const item = { id: genId(), text, createdAt: Date.now() };
+    if (!tabId) {
+      setGlobalStash((prev) => [...prev, item]);
+      apiPost('/dock/stash', item).catch(() => {
+        setGlobalStash((prev) => prev.filter((s) => s.id !== item.id));
+      });
+      return;
+    }
     setTabs((prev) =>
       prev.map((t) => (t.id === tabId ? { ...t, stash: [...(t.stash || []), item] } : t)),
     );
@@ -204,6 +223,13 @@ export function DockProvider({ children }) {
   }, []);
 
   const removeStash = useCallback((tabId, stashId) => {
+    if (!tabId) {
+      setGlobalStash((prev) => prev.filter((s) => s.id !== stashId));
+      apiDelete(`/dock/stash/${stashId}`).catch(() => {
+        /* already gone on the backend; the next refresh re-syncs */
+      });
+      return;
+    }
     setTabs((prev) =>
       prev.map((t) =>
         t.id === tabId ? { ...t, stash: (t.stash || []).filter((s) => s.id !== stashId) } : t,
@@ -241,6 +267,7 @@ export function DockProvider({ children }) {
     updateTab,
     addStash,
     removeStash,
+    globalStash,
     repos,
   };
 

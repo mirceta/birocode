@@ -13,9 +13,9 @@
 
   // ---------- simulator state ----------
   var START = [
-    "Write the backend Queue endpoints",
-    "Add the queue UI to the dock",
-    "Browser-verify the approve + delete flow"
+    "Add a dark-mode toggle to the header",
+    "Write tests for the login flow",
+    "Update the README with the new setup steps"
   ];
   var queue, seq, current, state, progress, log, timer;
 

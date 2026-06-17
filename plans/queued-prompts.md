@@ -2,8 +2,15 @@
 
 > Editing this plan? First read [doc principles](doc-principles.md).
 
-> **Status (2026-06-17): DESIGN.** On `feature/queued-prompts`. Builds on the
-> [prompt-stash](prompt-stash.md) precedent (per-agent, backend-synced list).
+> **Status (2026-06-17): SHIPPED.** Deployed to live :5099 & confirmed; **merged to
+> main 2026-06-17**. On `feature/queued-prompts`. **Merged with
+> [prompt-stash](prompt-stash.md)** — the stash list *is* the queue. Each chip has
+> **Send** (approve, disabled while busy) + **×** delete + tap-to-edit. Works on **all
+> three surfaces**, each correctly scoped: per-agent tab (rides `dock.json`), the plain
+> main chat (tab-independent global queue in `dock-stash.json`, served by
+> `GET/POST/DELETE /api/dock/stash`), and each dashboard dock (its own agent via a
+> `stashTabId` threaded `PinnedAgent → Chat → ChatInput`). Durable across
+> refresh/redeploy by construction.
 
 ## Problem
 
