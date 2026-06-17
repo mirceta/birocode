@@ -83,6 +83,58 @@ function readIdeasWide() {
   }
 }
 
+// Free 2D drag layout (plans/dashboard-drag-layout.md): each panel is positioned
+// absolutely at a saved {x,y} inside the dashboard canvas. Remembered per device.
+// DEFAULT_POS = null means "use the natural flow position" (Ideas left, agents
+// right) until the operator drags something.
+const DASH_POS_KEY = 'claudeweb_dash_pos';
+function readPositions() {
+  try {
+    const raw = localStorage.getItem(DASH_POS_KEY);
+    const v = raw ? JSON.parse(raw) : null;
+    if (v && typeof v === 'object') return v; // { ideas?: {x,y}, agents?: {x,y} }
+  } catch {
+    /* private mode / malformed */
+  }
+  return {};
+}
+function writePositions(v) {
+  try {
+    localStorage.setItem(DASH_POS_KEY, JSON.stringify(v));
+  } catch {
+    /* private mode — in-memory only */
+  }
+}
+
+// Layout mode (plans/dashboard-drag-layout.md): 'free' = drag panels anywhere
+// (desktop); 'grid' = panels snap into the responsive flow, ordered with a tap
+// (the default on touch/narrow screens, where free drag is unreliable).
+const LAYOUT_MODE_KEY = 'claudeweb_dash_layout_mode';
+const GRID_SWAP_KEY = 'claudeweb_dash_grid_swapped';
+function prefersGrid() {
+  try {
+    return !!(window.matchMedia && window.matchMedia('(max-width: 700px)').matches);
+  } catch {
+    return false;
+  }
+}
+function readMode() {
+  try {
+    const v = localStorage.getItem(LAYOUT_MODE_KEY);
+    if (v === 'free' || v === 'grid') return v; // explicit choice wins
+  } catch {
+    /* private mode */
+  }
+  return prefersGrid() ? 'grid' : 'free'; // device default
+}
+function readGridSwapped() {
+  try {
+    return localStorage.getItem(GRID_SWAP_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 // Slice 2 liveness (plans/agent-dashboard.md) — while the overlay is open,
 // poll the cheap snapshot endpoints on a timer and keep the result LOCAL to
 // this view (no DockContext writes, no per-cell SSE):
@@ -203,6 +255,107 @@ export default function Dashboard({ onClose }) {
         localStorage.setItem(IDEAS_WIDE_KEY, next ? '1' : '0');
       } catch {
         /* private mode — fall back to in-memory only */
+      }
+      return next;
+    });
+  }
+
+  // Free 2D drag layout (plans/dashboard-drag-layout.md): saved {x,y} per panel.
+  const [positions, setPositions] = useState(readPositions);
+  const bodyRef = useRef(null);
+  // Active pointer-drag bookkeeping (ref so move/up don't need re-renders);
+  // dragKey state just drives the "lifted" styling.
+  const dragRef = useRef(null);
+  const [dragKey, setDragKey] = useState(null);
+  // Once any panel has been placed, BOTH render absolutely (a free canvas).
+  const freePlaced = !!(positions.ideas || positions.agents);
+
+  const posStyle = (key) =>
+    positions[key] ? { position: 'absolute', left: positions[key].x, top: positions[key].y } : undefined;
+
+  // Keep a panel inside the canvas, leaving a grabbable strip on every edge.
+  function clampPos(key, x, y) {
+    const body = bodyRef.current;
+    const el = body?.querySelector(`[data-panel="${key}"]`);
+    if (!body || !el) return { x: Math.max(0, x), y: Math.max(0, y) };
+    const margin = 48;
+    const maxX = Math.max(0, body.clientWidth - margin);
+    const maxY = Math.max(0, body.clientHeight - margin);
+    const minX = -(el.offsetWidth - margin);
+    return { x: Math.min(maxX, Math.max(minX, x)), y: Math.min(maxY, Math.max(0, y)) };
+  }
+
+  // First drag seeds BOTH panels from their current flow offsets, so switching
+  // flow→absolute doesn't make anything jump.
+  function seededPositions() {
+    const body = bodyRef.current;
+    if (!body || (positions.ideas && positions.agents)) return positions;
+    const seed = { ...positions };
+    for (const key of ['ideas', 'agents']) {
+      if (!seed[key]) {
+        const el = body.querySelector(`[data-panel="${key}"]`);
+        seed[key] = el ? { x: el.offsetLeft, y: el.offsetTop } : { x: 0, y: 0 };
+      }
+    }
+    return seed;
+  }
+
+  function startPanelDrag(key, e) {
+    e.preventDefault();
+    const seeded = seededPositions();
+    const base = seeded[key];
+    dragRef.current = { key, startX: e.clientX, startY: e.clientY, baseX: base.x, baseY: base.y };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    setPositions(seeded);
+    setDragKey(key);
+  }
+
+  function movePanelDrag(e) {
+    const d = dragRef.current;
+    if (!d) return;
+    const next = clampPos(d.key, d.baseX + (e.clientX - d.startX), d.baseY + (e.clientY - d.startY));
+    setPositions((prev) => ({ ...prev, [d.key]: next }));
+  }
+
+  function endPanelDrag() {
+    if (!dragRef.current) return;
+    dragRef.current = null;
+    setDragKey(null);
+    setPositions((prev) => {
+      writePositions(prev);
+      return prev;
+    });
+  }
+
+  function resetLayout() {
+    setPositions({});
+    writePositions({});
+  }
+
+  // Layout mode: 'free' drag vs 'grid' snap (plans/dashboard-drag-layout.md).
+  const [layoutMode, setLayoutMode] = useState(readMode);
+  const free = layoutMode === 'free';
+  function toggleMode() {
+    setLayoutMode((prev) => {
+      const next = prev === 'free' ? 'grid' : 'free';
+      try {
+        localStorage.setItem(LAYOUT_MODE_KEY, next);
+      } catch {
+        /* private mode */
+      }
+      return next;
+    });
+  }
+  // Grid mode order: which panel comes first in the responsive flow. Tap-flip
+  // (the ⇄ button) — no dragging needed, so it works on touch.
+  const [gridSwapped, setGridSwapped] = useState(readGridSwapped);
+  function toggleGridSwap() {
+    setGridSwapped((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(GRID_SWAP_KEY, next ? '1' : '0');
+      } catch {
+        /* private mode */
       }
       return next;
     });
@@ -411,6 +564,43 @@ export default function Dashboard({ onClose }) {
           </div>
         )}
         {tabs.length > 0 && (
+          <div className="dash__layout-ctl" role="group" aria-label={t('dashboard.layoutMode')}>
+            <button
+              type="button"
+              className="dash__swap"
+              onClick={toggleMode}
+              aria-pressed={!free}
+              title={free ? t('dashboard.modeToGrid') : t('dashboard.modeToFree')}
+              aria-label={free ? t('dashboard.modeToGrid') : t('dashboard.modeToFree')}
+            >
+              {free ? '⤢' : '▦'}
+            </button>
+            {free && freePlaced && (
+              <button
+                type="button"
+                className="dash__swap"
+                onClick={resetLayout}
+                title={t('dashboard.resetLayout')}
+                aria-label={t('dashboard.resetLayout')}
+              >
+                ↺
+              </button>
+            )}
+            {!free && (
+              <button
+                type="button"
+                className={`dash__swap${gridSwapped ? ' dash__swap--on' : ''}`}
+                onClick={toggleGridSwap}
+                aria-pressed={gridSwapped}
+                title={t('dashboard.swapSides')}
+                aria-label={t('dashboard.swapSides')}
+              >
+                ⇄
+              </button>
+            )}
+          </div>
+        )}
+        {tabs.length > 0 && (
           <div className="dash__views" role="tablist" aria-label={t('dashboard.title')}>
             <button
               type="button"
@@ -451,9 +641,30 @@ export default function Dashboard({ onClose }) {
         </button>
       </div>
 
-      <div className="dash__body">
-        <aside className={`dash__ideas${ideasWide ? ' dash__ideas--wide' : ''}`}>
+      <div
+        ref={bodyRef}
+        className={`dash__body${free && freePlaced ? ' dash__body--free' : ''}${!free && gridSwapped ? ' dash__body--swapped' : ''}${dragKey ? ' dash__body--dragging' : ''}`}
+      >
+        <aside
+          data-panel="ideas"
+          className={`dash__ideas${ideasWide ? ' dash__ideas--wide' : ''}${dragKey === 'ideas' ? ' dash__panel--lifted' : ''}`}
+          style={free ? posStyle('ideas') : undefined}
+        >
           <div className="dash__ideas-head">
+            {free && (
+              <button
+                type="button"
+                className="dash__drag"
+                onPointerDown={(e) => startPanelDrag('ideas', e)}
+                onPointerMove={movePanelDrag}
+                onPointerUp={endPanelDrag}
+                onPointerCancel={endPanelDrag}
+                title={t('dashboard.dragPanel')}
+                aria-label={t('dashboard.dragPanel')}
+              >
+                ⠿
+              </button>
+            )}
             <span className="dash__ideas-title">💡 {t('nav.ideas')}</span>
             <button
               type="button"
@@ -467,7 +678,27 @@ export default function Dashboard({ onClose }) {
           </div>
           <IdeasPanel />
         </aside>
-        <div className="dash__main">
+        <div
+          data-panel="agents"
+          className={`dash__main${dragKey === 'agents' ? ' dash__panel--lifted' : ''}`}
+          style={free ? posStyle('agents') : undefined}
+        >
+          {free && (
+            <div className="dash__main-head">
+              <button
+                type="button"
+                className="dash__drag"
+                onPointerDown={(e) => startPanelDrag('agents', e)}
+                onPointerMove={movePanelDrag}
+                onPointerUp={endPanelDrag}
+                onPointerCancel={endPanelDrag}
+                title={t('dashboard.dragPanel')}
+                aria-label={t('dashboard.dragPanel')}
+              >
+                ⠿ <span className="dash__main-head-title">{t('dashboard.title')}</span>
+              </button>
+            </div>
+          )}
       <Scoreboard />
       {tabs.length === 0 ? (
         <p className="dash__empty">{t('dashboard.empty')}</p>
