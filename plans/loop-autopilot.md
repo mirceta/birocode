@@ -77,7 +77,16 @@ through the repeats and **pauses at exactly the decisions they wanted to keep**.
    [build internals](loop-autopilot-internals.md#shipped-so-far-slice-1--discovery-half)).
    Still to do: let the user **confirm/edit** and persist the set.
 2. **Suggest-only** — at each turn, predict the routine prompt and pre-fill it;
-   the user sends. Measures live accuracy and builds trust.
+   the user sends. Measures live accuracy and builds trust. ✅ **Built** (engine +
+   gate + dashboard): `AutopilotService` (polling `BackgroundService`) classifies
+   each **armed**, idle agent's last message via a **stub** `PromptClassifier`
+   (keyword match over the routine set; deny-list + threshold gate) and records a
+   suggestion or escalation; `AutopilotConfigStore` (`autopilot.json`) holds the
+   per-agent arm set, threshold, and kill switch; `GET /api/autopilot` +
+   `POST /api/autopilot/config` drive the 3-view Autopilot tab. Browser-verified on
+   :5210 (`verify-autopilot-slice2.mjs`). **Still to do:** swap the stub for a
+   real `claude`-CLI classifier; pre-fill the prompt into the agent's composer
+   (currently surfaced only); i18n strings.
 3. **Auto-advance** — above the confidence threshold, send automatically and loop;
    escalate otherwise. Audit log + kill switch.
 

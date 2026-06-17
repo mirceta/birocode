@@ -156,3 +156,66 @@
   font-style: italic;
   margin-right: 4px;
 }
+
+/* ---- Slice 2 dashboard: sub-tabs, agent rows, controls, log ---- */
+.ap-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--color-border); }
+.ap-tabs button {
+  border: none; background: none; color: var(--color-text-muted, #888);
+  font: inherit; font-size: 13px; padding: 8px 14px; cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.ap-tabs button.on { color: var(--color-text, inherit); font-weight: 600; border-bottom-color: var(--color-accent, #c0392b); }
+
+.ap-bar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  border: 1px solid var(--color-border); border-radius: 12px;
+  background: var(--color-surface); padding: 10px 14px; font-size: 13px;
+}
+.ap-bar__spacer { flex: 1; }
+.ap-muted { color: var(--color-text-muted, #888); }
+.ap-switch { width: 36px; height: 20px; border-radius: 999px; border: none; background: #8a97a8; position: relative; cursor: pointer; padding: 0; }
+.ap-switch.on { background: var(--color-accent, #2bb24c); }
+.ap-switch__knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left 0.15s; }
+.ap-switch.on .ap-switch__knob { left: 18px; }
+.ap-thresh { display: inline-flex; align-items: center; gap: 6px; }
+.ap-thresh button {
+  width: 24px; height: 24px; border: 1px solid var(--color-border);
+  background: var(--color-bg, #f0ece4); color: var(--color-text, inherit);
+  border-radius: 6px; cursor: pointer; font-size: 14px; line-height: 1;
+}
+.ap-thresh button:disabled { opacity: 0.4; cursor: default; }
+
+.ap-agents { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ap-agent {
+  display: grid; grid-template-columns: 92px minmax(120px, 200px) minmax(0, 1fr) 84px;
+  align-items: center; gap: 12px;
+  border: 1px solid var(--color-border); border-radius: 12px;
+  background: var(--color-surface); padding: 10px 14px;
+}
+.ap-agent.is-esc { border-color: #e0a96b; }
+.ap-agent.is-off { opacity: 0.6; }
+.ap-agent__id { font-weight: 600; word-break: break-word; }
+.ap-agent__pred code, .ap-log code { background: var(--color-bg, #f0ece4); padding: 1px 6px; border-radius: 5px; }
+.ap-conf { font-size: 11px; color: var(--color-text-muted, #888); }
+
+.ap-state { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 4px 8px; border-radius: 999px; text-align: center; }
+.st-sugg { background: #dbe9ff; color: #1f4ea8; }
+.st-esc { background: #ffe0c2; color: #b85c00; }
+.st-run { background: #e6eaf1; color: #41506b; }
+.st-idle { background: #eef0f3; color: #6b7787; }
+.st-off { background: #eef0f3; color: #9aa5b3; }
+
+.ap-mini { border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text, inherit); border-radius: 7px; padding: 6px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+.ap-mini.on { background: #d8f3df; border-color: #9ad6ab; color: #1a7f37; font-weight: 600; }
+
+.ap-log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.ap-log li {
+  display: grid; grid-template-columns: 84px minmax(110px, 1fr) 96px minmax(0, 1.4fr) 48px;
+  align-items: center; gap: 10px; padding: 9px 4px; border-bottom: 1px solid var(--color-border); font-size: 13px;
+}
+.ap-log__t { color: var(--color-text-muted, #888); font-variant-numeric: tabular-nums; font-size: 12px; }
+.ap-log__ag { font-weight: 600; }
+.ap-log__cf { text-align: right; color: var(--color-text-muted, #888); font-variant-numeric: tabular-nums; font-size: 12px; }
+.ap-out { font-size: 10.5px; font-weight: 700; text-transform: uppercase; padding: 3px 7px; border-radius: 999px; text-align: center; }
+.out-sugg { background: #dbe9ff; color: #1f4ea8; }
+.out-esc { background: #ffe0c2; color: #b85c00; }
