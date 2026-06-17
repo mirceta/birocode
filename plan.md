@@ -36,6 +36,12 @@
 
 ## Active feature plans
 
+- [Ideas — an "Active" section](plans/ideas-active-section.md) — move an idea into
+  an **Active** group pinned at the top of the Ideas surface, so "what are we
+  working on now" is answerable at a glance; toggle it back out to the backlog. An
+  optional `Active` flag on each idea (same no-migration pattern as `project` /
+  `priority`), shown in both the Ideas tab and the dashboard panel via the shared
+  `IdeasPanel`. KICKOFF — not built. On `feature/ideas-active-section`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left

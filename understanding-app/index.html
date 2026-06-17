@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Loop autopilot — how the loop runs</title>
+  <title>Ideas — an "Active" section (plan)</title>
   <!-- Relative URLs on purpose: this folder is served under the proxy sub-path
        /api/localview/<repo>/app/understanding/. A leading slash would escape it
        and 404 (the contract exposure-example/ teaches). -->
@@ -12,175 +12,164 @@
 <body>
   <header class="hero">
     <div>
-      <h1>Loop autopilot</h1>
-      <p class="sub">How an idle agent gets advanced automatically — or escalated to you.</p>
+      <h1>Ideas — an <span class="hl">“Active”</span> section</h1>
+      <p class="sub">Move an idea into <b>Active</b> so “what are we working on now?” is answerable at a glance.</p>
     </div>
-    <div class="modes">
-      <div class="seg" id="scenario" role="tablist" aria-label="Scenario">
-        <button data-scenario="routine" class="on">Routine reply</button>
-        <button data-scenario="hard">Hard decision</button>
-      </div>
-      <div class="seg" id="slice" role="tablist" aria-label="Acting mode">
-        <button data-slice="2" class="on">Slice 2 · suggest-only</button>
-        <button data-slice="3">Slice 3 · auto-advance</button>
-      </div>
-    </div>
+    <span class="tag">plan · feature/ideas-active-section</span>
   </header>
 
-  <main class="stage">
-    <!-- The diagram. Fixed viewBox so the layout is robust; JS toggles classes
-         to highlight the active node/edge per step. -->
-    <svg id="flow" viewBox="0 0 760 660" aria-label="Autopilot flow diagram"></svg>
+  <nav class="tabs" id="tabs" role="tablist" aria-label="Views">
+    <button data-view="change" class="on">1 · The change</button>
+    <button data-view="flow">2 · How it flows</button>
+    <button data-view="ui">3 · The UI</button>
+    <button data-view="lives">4 · Where it lives</button>
+    <button data-view="scope">5 · Scope & questions</button>
+  </nav>
 
-    <aside class="panel">
-      <div class="step-counter"><span id="stepNum">1</span><span class="muted"> / <span id="stepTot">5</span></span></div>
-      <h2 id="stepTitle">—</h2>
-      <p id="stepDesc" class="desc">—</p>
-      <div class="controls">
-        <button id="prev" class="btn">‹ Back</button>
-        <button id="play" class="btn btn--primary">▶ Play</button>
-        <button id="next" class="btn">Next ›</button>
+  <main>
+    <!-- 1 · THE CHANGE: data model before/after -->
+    <section class="view on" data-view="change">
+      <h2>One new field on an idea</h2>
+      <p class="lead">An idea is a <code>Note</code>. We add an optional <b>Active</b> boolean — the
+        same no-migration pattern as <code>project</code> and <code>priority</code> (old entries
+        default to <code>false</code>).</p>
+      <div class="cards2">
+        <figure class="rec">
+          <figcaption>Before</figcaption>
+          <ul class="fields">
+            <li><span class="f">Id</span><span class="ty">string</span></li>
+            <li><span class="f">Text</span><span class="ty">string</span></li>
+            <li><span class="f">Project</span><span class="ty">string?</span></li>
+            <li><span class="f">CreatedAt</span><span class="ty">long</span></li>
+            <li><span class="f">UpdatedAt</span><span class="ty">long</span></li>
+            <li><span class="f">Priority</span><span class="ty">int 0–5</span></li>
+          </ul>
+        </figure>
+        <div class="arrow" aria-hidden="true">＋</div>
+        <figure class="rec rec--after">
+          <figcaption>After</figcaption>
+          <ul class="fields">
+            <li><span class="f">Id</span><span class="ty">string</span></li>
+            <li><span class="f">Text</span><span class="ty">string</span></li>
+            <li><span class="f">Project</span><span class="ty">string?</span></li>
+            <li><span class="f">CreatedAt</span><span class="ty">long</span></li>
+            <li><span class="f">UpdatedAt</span><span class="ty">long</span></li>
+            <li><span class="f">Priority</span><span class="ty">int 0–5</span></li>
+            <li class="new"><span class="f">Active</span><span class="ty">bool · default false</span></li>
+          </ul>
+        </figure>
       </div>
-      <p class="legend"><span class="dot send"></span> advance &nbsp; <span class="dot esc"></span> escalate</p>
-    </aside>
+      <p class="note">No <code>notes.json</code> migration: System.Text.Json fills the missing field with
+        its default, so existing ideas just read as <b>not active</b>.</p>
+    </section>
+
+    <!-- 2 · HOW IT FLOWS: interactive toggle demo -->
+    <section class="view" data-view="flow">
+      <h2>The lifecycle of one idea</h2>
+      <div class="pipe">
+        <div class="step"><span class="dot">1</span>Capture<small>added to backlog</small></div>
+        <div class="seg-arrow">→</div>
+        <div class="step"><span class="dot">2</span>Move to Active<small>one click on the card</small></div>
+        <div class="seg-arrow">→</div>
+        <div class="step step--accent"><span class="dot">3</span>Pinned on top<small>under the Active header</small></div>
+        <div class="seg-arrow">⟲</div>
+        <div class="step"><span class="dot">4</span>Move out<small>returns to backlog</small></div>
+      </div>
+
+      <p class="lead">Try it — this is a live mock of the behaviour, backed by the same
+        optimistic <code>PATCH</code> pattern the real card uses:</p>
+
+      <div class="demo">
+        <div class="demo__group demo__group--active">
+          <div class="demo__head"><span class="pin">★</span> Active <span class="count" id="demo-active-count">0</span></div>
+          <ul id="demo-active" class="demo__list"></ul>
+          <p class="demo__empty" id="demo-active-empty">Nothing active yet — flip a card below.</p>
+        </div>
+        <div class="demo__group">
+          <div class="demo__head">Backlog <span class="count" id="demo-backlog-count">0</span></div>
+          <ul id="demo-backlog" class="demo__list"></ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3 · THE UI: the split layout -->
+    <section class="view" data-view="ui">
+      <h2>The Ideas surface, grouped</h2>
+      <p class="lead">The shared list splits into two groups. Active ideas pin to the top under a
+        header; the backlog keeps its newest-first order. The filter box narrows <b>both</b>.</p>
+      <div class="mock">
+        <div class="mock__compose">＋ new idea…</div>
+        <div class="mock__filter">🔎 filter…</div>
+        <div class="mock__section mock__section--active">
+          <div class="mock__sec-head"><span class="pin">★</span> Active</div>
+          <div class="mock__idea mock__idea--active">
+            <span>Ship the Active section</span>
+            <button class="mini mini--on">★ Active</button>
+          </div>
+        </div>
+        <div class="mock__section">
+          <div class="mock__sec-head mock__sec-head--muted">Backlog</div>
+          <div class="mock__idea"><span>Replace the autopilot stub brain</span><button class="mini">☆ Activate</button></div>
+          <div class="mock__idea"><span>Drag-order ideas</span><button class="mini">☆ Activate</button></div>
+        </div>
+      </div>
+      <p class="note">The per-card <b>★ / ☆</b> toggle moves an idea in or out of Active — optimistic,
+        like the existing quick priority change.</p>
+    </section>
+
+    <!-- 4 · WHERE IT LIVES: architecture -->
+    <section class="view" data-view="lives">
+      <h2>One component, two surfaces, one endpoint</h2>
+      <p class="lead">Behaviour lives in the shared <code>IdeasPanel</code>, so the feature appears in
+        both places at once; the flag persists through the existing notes API.</p>
+      <div class="arch">
+        <div class="arch__row">
+          <div class="box box--surface">Ideas tab<small>pages/Ideas.jsx</small></div>
+          <div class="box box--surface">Dashboard panel<small>pinned-left</small></div>
+        </div>
+        <div class="arch__down">▼ both render ▼</div>
+        <div class="box box--core">IdeasPanel<small>Active / Backlog split + ★ toggle</small></div>
+        <div class="arch__down">▼ optimistic PATCH ▼</div>
+        <div class="box box--api">PATCH /api/notes/{id}<small>{ text, project, priority, <b>active</b> }</small></div>
+        <div class="arch__down">▼ persists ▼</div>
+        <div class="box box--store">NotesService → notes.json<small>atomic temp+rename write</small></div>
+      </div>
+    </section>
+
+    <!-- 5 · SCOPE & QUESTIONS -->
+    <section class="view" data-view="scope">
+      <h2>Scope &amp; open questions</h2>
+      <div class="cols">
+        <div class="col col--in">
+          <h3>In scope (v1)</h3>
+          <ul>
+            <li>Binary <b>Active</b> flag per idea</li>
+            <li>Active group pinned at the top + per-card toggle</li>
+            <li>Shows in the Ideas tab <b>and</b> dashboard panel</li>
+            <li>Filter narrows both groups</li>
+          </ul>
+        </div>
+        <div class="col col--out">
+          <h3>Out of scope</h3>
+          <ul>
+            <li>Full todo lifecycle (doing / blocked / done)</li>
+            <li>Manual drag-ordering within Active</li>
+            <li>Any coupling to autopilot / agent docks</li>
+          </ul>
+        </div>
+        <div class="col col--q">
+          <h3>Open questions <small>(defaults chosen)</small></h3>
+          <ul>
+            <li>Empty Active header → <b>hidden</b></li>
+            <li>Active × priority → <b>independent</b></li>
+            <li>Collapsible sections → <b>no</b></li>
+          </ul>
+        </div>
+      </div>
+      <p class="note">Defaults are live in the plan — tell me to change any.
+        <span class="muted">plans/ideas-active-section.md</span></p>
+    </section>
   </main>
-
-  <section class="mock">
-    <div class="mock__head">
-      <h2>What you'd see — the Autopilot tab</h2>
-      <span class="mock__tag">interactive preview · click any control to see what it does</span>
-    </div>
-
-    <div class="mock__tab">
-      <nav class="subtabs" id="subtabs">
-        <button data-sub="agents" class="on">Agents</button>
-        <button data-sub="intercepts">Intercepted <span class="subtabs__live"></span></button>
-        <button data-sub="prompts">Routine prompts <span class="subtabs__n">7</span></button>
-        <button data-sub="history">Suggestion history</button>
-      </nav>
-
-      <div class="subpanel" data-panel="agents">
-        <div class="mock__bar">
-          <button class="sw on" data-explain="toggle" aria-label="Autopilot switch"><span class="sw__knob"></span></button>
-          <b>Autopilot</b> <span class="muted">on · this machine's agents</span>
-          <span class="bar__spacer"></span>
-          <button class="thresh" data-explain="threshold">confidence ≥ <b>0.85</b></button>
-          <button class="kill" data-explain="kill">■ Kill switch</button>
-        </div>
-
-        <ul class="agents">
-          <li class="agent">
-            <span class="agent__state st-send">advancing</span>
-            <span class="agent__id">birocode <span class="muted">· builder</span></span>
-            <span class="agent__pred">→ <code>"keep it"</code> <span class="conf">0.94</span></span>
-            <button class="mini on" data-explain="armed">armed</button>
-          </li>
-          <li class="agent">
-            <span class="agent__state st-sugg">suggestion</span>
-            <span class="agent__id">game-arcade <span class="muted">· builder</span></span>
-            <span class="agent__pred"><code>"play it back"</code> <span class="conf">0.88</span></span>
-            <button class="mini send" data-explain="send">Send ›</button>
-          </li>
-          <li class="agent agent--esc">
-            <span class="agent__state st-esc">needs you</span>
-            <span class="agent__id">prg <span class="muted">· builder</span></span>
-            <span class="agent__pred muted">escalated · "Two valid schemas — which?"</span>
-            <button class="mini review" data-explain="review">Review</button>
-          </li>
-          <li class="agent agent--off">
-            <span class="agent__state st-off">off</span>
-            <span class="agent__id">birokrat-ai-platform</span>
-            <span class="agent__pred muted">—</span>
-            <button class="mini" data-explain="arm">Arm</button>
-          </li>
-        </ul>
-      </div>
-
-      <div class="subpanel" data-panel="intercepts" hidden>
-        <div class="loglist__head">
-          <b>Intercepted</b>
-          <span class="muted">every agent message the engine grabs and processes — proof it's live</span>
-          <span class="loglist__live"><span class="pulse"></span>live</span>
-        </div>
-        <ul class="feed">
-          <li class="processing">
-            <span class="t">14:02:51</span><span class="ag">birocode</span>
-            <span class="snip">…deploy is healthy on :5099, all checks green. Keep it or roll back?</span>
-            <span class="status"><span class="spinner"></span><span class="proc-label">processing…</span></span>
-          </li>
-          <li>
-            <span class="t">14:02:18</span><span class="ag">game-arcade</span>
-            <span class="snip">…finished the change. Want me to play back what I touched?</span>
-            <span class="status"><span class="outcome sent">sent</span><code>"play it back"</code></span>
-          </li>
-          <li>
-            <span class="t">14:01:44</span><span class="ag">prg</span>
-            <span class="snip">…two valid schemas here — which one should I follow?</span>
-            <span class="status"><span class="outcome escalated">escalated</span></span>
-          </li>
-          <li>
-            <span class="t">14:01:09</span><span class="ag">birocode</span>
-            <span class="snip">…shall I continue with the next slice?</span>
-            <span class="status"><span class="outcome suggested">suggested</span><code>"continue"</code></span>
-          </li>
-        </ul>
-      </div>
-
-      <div class="subpanel" data-panel="prompts" hidden>
-        <div class="mock__bar">
-          <b>The set the brain may send</b>
-          <span class="muted">your editable list — autopilot only ever sends one of these, or escalates; mined replies below are drafts you can add</span>
-          <span class="bar__spacer"></span>
-          <button class="mini send" data-explain="prompt-add">+ Add prompt</button>
-        </div>
-
-        <ul class="prompts">
-          <li class="prow"><code>"yes"</code>
-            <span class="prow__when muted">a simple confirm — “shall I…?”</span>
-            <span class="prow__src">mined</span><span class="prow__n">×52</span>
-            <button class="mini" data-explain="prompt-edit">Edit</button></li>
-          <li class="prow"><code>"continue"</code>
-            <span class="prow__when muted">agent paused mid-task</span>
-            <span class="prow__src star">★ custom</span><span class="prow__n">×31</span>
-            <button class="mini" data-explain="prompt-edit">Edit</button></li>
-          <li class="prow"><code>"keep it"</code>
-            <span class="prow__when muted">healthy deploy — confirm or roll back</span>
-            <span class="prow__src star">★ custom</span><span class="prow__n">×38</span>
-            <button class="mini" data-explain="prompt-edit">Edit</button></li>
-          <li class="prow"><code>"play it back"</code>
-            <span class="prow__when muted">agent finished — summarize what changed</span>
-            <span class="prow__src star">★ custom</span><span class="prow__n">×19</span>
-            <button class="mini" data-explain="prompt-edit">Edit</button></li>
-          <li class="prow"><code>"now test it"</code>
-            <span class="prow__when muted">a change landed, not yet verified</span>
-            <span class="prow__src">mined</span><span class="prow__n">×15</span>
-            <button class="mini" data-explain="prompt-edit">Edit</button></li>
-          <li class="prow"><code>"deploy"</code>
-            <span class="prow__when muted">built &amp; verified — ready to ship</span>
-            <button class="prow__deny" data-explain="denylist">⚠ deny-listed</button><span class="prow__n">×24</span>
-            <button class="mini" data-explain="prompt-edit">Edit</button></li>
-          <li class="prow"><code>"push it"</code>
-            <span class="prow__when muted">confirmed — merge / push to origin</span>
-            <button class="prow__deny" data-explain="denylist">⚠ deny-listed</button><span class="prow__n">×12</span>
-            <button class="mini" data-explain="prompt-edit">Edit</button></li>
-        </ul>
-      </div>
-
-      <div class="subpanel" data-panel="history" hidden>
-        <div class="loglist__head">
-          <b>Suggestion history</b>
-          <span class="muted">every classification the engine makes, newest first</span>
-          <span class="loglist__live"><span class="pulse"></span>live</span>
-        </div>
-        <ul id="log" class="log"></ul>
-      </div>
-    </div>
-
-    <div class="explain" id="explain" aria-live="polite">
-      <span class="explain__hint">Click any control above — this panel explains what it would do.
-        Nothing actually happens here; it's a preview.</span>
-    </div>
-  </section>
 
   <script src="./app.js"></script>
 </body>
