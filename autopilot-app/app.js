@@ -1,7 +1,11 @@
-// Autopilot dev local app (plans/loop-autopilot.md). Build-less, vanilla JS.
+// Autopilot local app (plans/loop-autopilot.md). Build-less, vanilla JS.
 // Served under /api/localview/{repoId}/app/autopilot/ — so we derive the API base
 // from our own location (handles both direct :5099 and the off-box /preview/ prefix)
 // and call the SAME-ORIGIN /api/autopilot endpoints, which carry the session cookie.
+//
+// The markup + classes mirror the design in understanding-app/ (the "What you'd
+// see — the Autopilot tab" mock): a subtabbed card with a control bar, .agent
+// rows carrying .st-* state pills, and columned .log lists with a flash on new rows.
 
 const API = (() => {
   const path = location.pathname;
@@ -13,28 +17,37 @@ const API = (() => {
 
 const $ = (id) => document.getElementById(id);
 const POLL_MS = 4000;
-let busy = false; // suppress polling reconcile while a mutation is in flight
+let busy = false;          // suppress polling reconcile while a mutation is in flight
+let lastEnabled = true;    // remember kill-switch state for the kill button handler
+const seenLog = new Set(); // keys of log rows already rendered (so only NEW rows flash)
+const seenAudit = new Set();
 
 function show(el, on) { el.hidden = !on; }
+const fmtTime = (ms) => new Date(ms).toLocaleTimeString();
+
+// ---- subtab switching ----
+$('subtabs').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-sub]');
+  if (!btn) return;
+  for (const b of $('subtabs').querySelectorAll('button')) b.classList.toggle('on', b === btn);
+  for (const p of document.querySelectorAll('.subpanel'))
+    p.hidden = p.dataset.panel !== btn.dataset.sub;
+});
 
 async function load() {
   if (busy) return;
   try {
     const res = await fetch(API, { headers: { 'Accept': 'application/json' } });
     if (res.status === 403) {            // operator gate is off
-      show($('gate-off'), true);
-      show($('err'), false);
-      show($('live'), false);
+      show($('gate-off'), true); show($('err'), false); show($('live'), false);
       $('poll').textContent = 'gated';
       return;
     }
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const state = await res.json();
-    show($('gate-off'), false);
-    show($('err'), false);
-    show($('live'), true);
+    show($('gate-off'), false); show($('err'), false); show($('live'), true);
     render(state);
-    $('poll').textContent = 'updated ' + new Date().toLocaleTimeString();
+    $('poll').textContent = 'updated ' + fmtTime(Date.now());
   } catch (e) {
     show($('err'), true);
     $('err').textContent = 'Could not reach the autopilot API: ' + e.message;
@@ -42,75 +55,140 @@ async function load() {
 }
 
 function render(s) {
-  $('enabled').checked = !!s.enabled;
+  lastEnabled = !!s.enabled;
+  const auto = !!s.autoAdvance;
+
+  // Control bar.
+  $('autoAdvance').classList.toggle('on', auto);
+  $('aa-note').textContent = auto ? 'sends confident replies' : 'suggest only';
   $('th-val').textContent = (s.threshold ?? 0).toFixed(2);
-  $('denylist').textContent = (s.denyList || []).join(', ') || '(none)';
+  $('denylist').innerHTML = (s.denyList || []).length
+    ? (s.denyList).map((d) => `<code>${esc(d)}</code>`).join(' ')
+    : '<span class="muted">none</span>';
 
-  const tbody = $('agents');
-  tbody.innerHTML = '';
-  for (const a of (s.agents || [])) {
-    const tr = document.createElement('tr');
-    tr.appendChild(td(a.repoName));
-    tr.appendChild(armCell(a));
-    tr.appendChild(pillCell(a.decision));
-    tr.appendChild(td(a.label || '—'));
-    tr.appendChild(td(a.confidence ? a.confidence.toFixed(2) : '—', 'conf'));
-    tr.appendChild(reasonCell(a));
-    tbody.appendChild(tr);
-  }
+  const kill = $('kill');
+  if (lastEnabled) { kill.textContent = '■ Kill switch'; kill.classList.remove('kill--resume'); }
+  else { kill.textContent = '▶ Resume engine'; kill.classList.add('kill--resume'); }
 
-  const log = $('log');
-  log.innerHTML = '';
-  for (const e of (s.log || [])) {
+  // Agents.
+  const agents = s.agents || [];
+  $('n-agents').textContent = agents.length;
+  const list = $('agents');
+  list.innerHTML = '';
+  if (!agents.length) {
     const li = document.createElement('li');
-    const t = document.createElement('time');
-    t.textContent = new Date(e.at).toLocaleTimeString();
-    const txt = document.createElement('span');
-    txt.textContent = `${e.repoName}: ${e.outcome}` +
-      (e.label ? ` "${e.label}"` : '') +
-      (e.confidence ? ` (${e.confidence.toFixed(2)})` : '');
-    li.append(t, txt);
-    log.appendChild(li);
+    li.className = 'empty';
+    li.textContent = 'No agents discovered on this machine yet.';
+    list.appendChild(li);
   }
+  for (const a of agents) list.appendChild(agentRow(a, auto));
+
+  // Suggestion history (engine log) + auto-sent audit trail.
+  renderLog($('log'), (s.log || []), seenLog, logRow);
+  const audit = s.audit || [];
+  $('n-audit').textContent = audit.length;
+  renderLog($('audit'), audit, seenAudit, auditRow);
 }
 
-function td(text, cls) {
-  const el = document.createElement('td');
-  el.textContent = text;
-  if (cls) el.className = cls;
-  return el;
-}
+// --- agents ---
+function agentRow(a, auto) {
+  const li = document.createElement('li');
+  li.className = 'agent';
+  const d = a.decision;
+  if (d === 'escalate') li.classList.add('agent--esc');
+  if (d === 'off') li.classList.add('agent--off');
 
-function pillCell(decision) {
-  const el = document.createElement('td');
-  const span = document.createElement('span');
-  span.className = 'pill pill--' + decision;
-  span.textContent = decision;
-  el.appendChild(span);
-  return el;
-}
+  // state pill: a confident suggestion shows as "advancing" only when auto-advance is on.
+  let cls = 'st-off', txt = d;
+  if (d === 'escalate') { cls = 'st-esc'; txt = 'needs you'; }
+  else if (d === 'suggestion') { cls = auto ? 'st-send' : 'st-sugg'; txt = auto ? 'advancing' : 'suggestion'; }
 
-function reasonCell(a) {
-  const el = document.createElement('td');
-  el.textContent = a.reason || '';
-  if (a.lastMessage) {
-    const s = document.createElement('div');
-    s.className = 'snippet';
-    s.textContent = a.lastMessage;
-    el.appendChild(s);
-  }
-  return el;
-}
+  li.appendChild(span('agent__state ' + cls, txt));
+  li.appendChild(span('agent__id', a.repoName));
+  li.appendChild(predCell(a, d));
 
-function armCell(a) {
-  const el = document.createElement('td');
   const btn = document.createElement('button');
-  btn.className = 'armbtn' + (a.armed ? ' armbtn--on' : '');
-  btn.textContent = a.armed ? 'Armed' : 'Disarmed';
+  btn.className = 'mini' + (a.armed ? ' on' : '');
+  btn.textContent = a.armed ? 'armed' : 'Arm';
+  btn.title = a.armed ? 'Click to disarm' : 'Click to arm';
   btn.onclick = () => post({ repoId: a.repoId, armed: !a.armed });
-  el.appendChild(btn);
+  li.appendChild(btn);
+  return li;
+}
+
+function predCell(a, d) {
+  const el = document.createElement('span');
+  if (d === 'suggestion') {
+    el.className = 'agent__pred';
+    el.innerHTML = `→ <code>${esc(a.label || '…')}</code>` +
+      (a.confidence ? ` <span class="conf">${a.confidence.toFixed(2)}</span>` : '');
+  } else if (d === 'escalate') {
+    el.className = 'agent__pred muted';
+    el.textContent = 'escalated · ' + (a.reason || a.lastMessage || '');
+  } else {
+    el.className = 'agent__pred muted';
+    el.textContent = a.reason || '—';
+  }
   return el;
 }
+
+// --- log lists ---
+function renderLog(ul, entries, seen, rowFn) {
+  ul.innerHTML = '';
+  if (!entries.length) {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = 'Nothing yet.';
+    ul.appendChild(li);
+    return;
+  }
+  // newest first
+  for (const e of [...entries].reverse()) {
+    const { li, key } = rowFn(e);
+    if (!seen.has(key)) { li.classList.add('new'); seen.add(key); }
+    ul.appendChild(li);
+  }
+}
+
+function logRow(e) {
+  const li = document.createElement('li');
+  const out = outcomeClass(e.outcome);
+  li.appendChild(span('t', fmtTime(e.at)));
+  li.appendChild(span('ag', e.repoName));
+  li.appendChild(span('out ' + out.cls, out.txt));
+  const pred = document.createElement('span');
+  pred.className = 'pred';
+  pred.innerHTML = e.label ? `<code>${esc(e.label)}</code>` : '<span class="muted">—</span>';
+  li.appendChild(pred);
+  li.appendChild(span('cf', e.confidence ? e.confidence.toFixed(2) : ''));
+  return { li, key: e.at + '|' + e.repoName + '|' + (e.label || '') + '|' + e.outcome };
+}
+
+function auditRow(e) {
+  const li = document.createElement('li');
+  li.appendChild(span('t', fmtTime(e.at)));
+  li.appendChild(span('ag', e.repoName));
+  li.appendChild(span('out out-sent', 'sent'));
+  const pred = document.createElement('span');
+  pred.className = 'pred';
+  pred.innerHTML = `<code>${esc(e.prompt || '')}</code>`;
+  pred.title = e.answeredMessage || '';
+  li.appendChild(pred);
+  li.appendChild(span('cf', e.confidence ? e.confidence.toFixed(2) : ''));
+  return { li, key: e.at + '|' + e.repoName + '|' + (e.prompt || '') };
+}
+
+function outcomeClass(o) {
+  const v = (o || '').toLowerCase();
+  if (v.includes('sent') || v.includes('advance')) return { cls: 'out-sent', txt: 'sent' };
+  if (v.includes('esc')) return { cls: 'out-esc', txt: 'escalate' };
+  if (v.includes('skip')) return { cls: 'out-skip', txt: 'skipped' };
+  return { cls: 'out-sugg', txt: 'suggestion' };
+}
+
+// ---- helpers ----
+function span(cls, text) { const el = document.createElement('span'); el.className = cls; el.textContent = text; return el; }
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
 async function post(body) {
   busy = true;
@@ -130,8 +208,9 @@ async function post(body) {
   }
 }
 
-// Controls
-$('enabled').addEventListener('change', (e) => post({ enabled: e.target.checked }));
+// ---- control wiring ----
+$('autoAdvance').addEventListener('click', () => post({ autoAdvance: !$('autoAdvance').classList.contains('on') }));
+$('kill').addEventListener('click', () => post({ enabled: !lastEnabled }));
 $('th-up').addEventListener('click', () => bumpThreshold(+0.05));
 $('th-down').addEventListener('click', () => bumpThreshold(-0.05));
 
