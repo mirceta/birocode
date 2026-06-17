@@ -36,6 +36,14 @@
 
 ## Active feature plans
 
+- [OpenSpec — investigate it and adopt its flow](plans/openspec-flow.md) — investigate
+  [OpenSpec](https://github.com/Fission-AI/OpenSpec) hands-on and **adopt its spec-driven
+  flow**: a living `specs/` baseline (what the system does today) + change proposals as
+  **deltas** (ADDED/MODIFIED/REMOVED), reviewed before code and archived after ship.
+  **Supersedes the proposed [spec-baseline](plans/spec-baseline.md)** (which said borrow one
+  idea, don't adopt the tooling) — we're now deliberately going further; the two-sources-of-
+  truth risk it named is the key thing to resolve. Kickoff: calibrate on one throwaway change
+  first, then decide tooling-vs-convention. On `feature/openspec-flow`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
@@ -54,6 +62,8 @@
   idea (a living "what the system does today" baseline + change-as-delta)
   into our existing plan convention, without adopting its tooling. Slice 1 =
   `docs/capabilities.md` + a delta stanza in each plan + a ritual step.
+  **Superseded by [OpenSpec — adopt its flow](plans/openspec-flow.md)** (Active), which
+  reopens this decision and goes further; kept for its borrow-vs-adopt analysis.
 
 ## Recently shipped
 
