@@ -9,6 +9,7 @@ import CopyPath from './CopyPath';
 import ImportantStar from './ImportantStar';
 import WaitingBadge from './WaitingBadge';
 import WaitingOnField from './WaitingOnField';
+import DependsOnPicker from './DependsOnPicker';
 
 // One "phone" in the Agent Dashboard's wall of phones (plans/agent-dashboard.md):
 // a single agent's live Chat view, pinned to that agent's repo regardless of
@@ -31,6 +32,9 @@ export default function PinnedAgent({
   onToggleImportant,
   onToggleWaiting,
   onSetWaitingOn,
+  dependsOn,
+  dependsCandidates = [],
+  onSetDependsOn,
 }) {
   const { t } = useT();
   // Per-dock lane toggle (plans/repo-ask-chat.md slice 3): each phone can switch
@@ -91,6 +95,14 @@ export default function PinnedAgent({
           value={tab.waitingOn}
           onCommit={(text) => onSetWaitingOn?.(tab.id, text)}
           className="phone__waiting-on"
+        />
+      )}
+      {onSetDependsOn && dependsCandidates.length > 0 && (
+        <DependsOnPicker
+          value={dependsOn}
+          candidates={dependsCandidates}
+          onChange={(primaryId) => onSetDependsOn(tab.id, primaryId)}
+          className="phone__depends"
         />
       )}
       <div className="phone__lanes" role="tablist" aria-label={t('chat.scopesAria')}>

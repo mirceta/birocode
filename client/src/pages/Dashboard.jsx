@@ -7,6 +7,7 @@ import GitStatusSummary from '../components/git/GitStatusSummary';
 import PinnedAgent from '../components/dashboard/PinnedAgent';
 import CopyPath from '../components/dashboard/CopyPath';
 import ImportantStar from '../components/dashboard/ImportantStar';
+import DependsOnPicker from '../components/dashboard/DependsOnPicker';
 import WaitingBadge from '../components/dashboard/WaitingBadge';
 import WaitingOnField from '../components/dashboard/WaitingOnField';
 import IdeasPanel from '../components/ideas/IdeasPanel';
@@ -416,6 +417,128 @@ export default function Dashboard({ onClose }) {
     [updateTab],
   );
 
+  // "Depends on" a primary agent (plans/dependent-agents.md): backend-synced
+  // like the rest. Empty string clears it.
+  const setDependsOn = useCallback(
+    (id, primaryId) => updateTab(id, { dependsOn: primaryId }),
+    [updateTab],
+  );
+
+  // Fold dependents under their primary for the "together" grouping. A dock is
+  // a dependent only when its `dependsOn` points to a visible dock that is
+  // itself independent (so we never recurse into chains in this slice); a
+  // dangling/self/cyclic link is treated as independent. Built over orderedTabs
+  // so dependents keep the dashboard's order under their primary.
+  const { primaryOf, dependentsByPrimary } = useMemo(() => {
+    const byId = new Map(tabs.map((t) => [t.id, t]));
+    const primary = (t) => {
+      const p = t.dependsOn;
+      if (!p || p === t.id || !byId.has(p)) return null;
+      const prim = byId.get(p);
+      if (prim.dependsOn && byId.has(prim.dependsOn)) return null; // primary is itself dependent → no recurse
+      return p;
+    };
+    const deps = new Map();
+    for (const t of orderedTabs) {
+      const p = primary(t);
+      if (p) {
+        if (!deps.has(p)) deps.set(p, []);
+        deps.get(p).push(t);
+      }
+    }
+    return { primaryOf: primary, dependentsByPrimary: deps };
+  }, [tabs, orderedTabs]);
+
+  // Candidate primaries for a dock's "depends on" picker: every other agent.
+  const candidatesFor = useCallback((tab) => tabs.filter((x) => x.id !== tab.id), [tabs]);
+
+  // Render one dock (phone or card) in a `tag` wrapper. `small` marks a
+  // dependent so it renders shrunk inside its "together" group
+  // (plans/dependent-agents.md).
+  const renderDock = (tab, { tag: Wrapper = 'li', small = false } = {}) => {
+    const info = live[tab.id];
+    const status = info?.status || tab.status;
+    const recency = recencyTier(info?.at, now);
+    // Phones view: always a phone. Hot view: phone iff hot. Cards: never.
+    const asPhone = view === 'phones' || (view === 'hot' && isHotTier(recency));
+    const wrapClass = [asPhone ? 'dash__phone-cell' : '', small ? 'dash__dependent' : '']
+      .filter(Boolean)
+      .join(' ');
+
+    if (asPhone) {
+      return (
+        <Wrapper key={tab.id} className={wrapClass || undefined}>
+          <PinnedAgent
+            tab={tab}
+            status={status}
+            recency={recency}
+            contentZoom={contentZoom}
+            repoPath={repoPath(tab.repoId)}
+            localApps={repos.find((r) => r.id === tab.repoId)?.localApps || []}
+            git={gitInfo[tab.repoId]}
+            gitRefreshing={!!gitBusy[tab.repoId]}
+            onRefreshGit={() => refreshGit(tab.repoId)}
+            onMaximize={handleOpen}
+            onToggleImportant={toggleImportant}
+            onToggleWaiting={toggleWaiting}
+            onSetWaitingOn={setWaitingOn}
+            dependsOn={tab.dependsOn}
+            dependsCandidates={candidatesFor(tab)}
+            onSetDependsOn={setDependsOn}
+          />
+        </Wrapper>
+      );
+    }
+    const activity = info?.activity;
+    const git = gitInfo[tab.repoId];
+    return (
+      <Wrapper key={tab.id} className={wrapClass || undefined}>
+        <button
+          type="button"
+          className={`dash-cell dash-cell--${status}${tab.id === activeTabId ? ' dash-cell--active' : ''}${tab.important ? ' dash-cell--important' : ''}${tab.waiting ? ' dash-cell--waiting' : ''}`}
+          data-colored={tab.color ? 'true' : undefined}
+          data-recency={recency}
+          style={tab.color ? { '--agent-color': tab.color } : undefined}
+          onClick={() => handleOpen(tab.id)}
+        >
+          <span className="dash-cell__head">
+            <span className="dash-cell__dot" />
+            <span className="dash-cell__name">{tab.repoName}</span>
+            <ImportantStar
+              important={!!tab.important}
+              onToggle={() => toggleImportant(tab.id)}
+              className="dash-cell__important"
+            />
+            <WaitingBadge
+              waiting={!!tab.waiting}
+              onToggle={() => toggleWaiting(tab.id)}
+              className="dash-cell__waiting"
+            />
+          </span>
+          {repoPath(tab.repoId) && (
+            <CopyPath path={repoPath(tab.repoId)} className="dash-cell__path" />
+          )}
+          <span className="dash-cell__status">{t(`agents.status.${status}`)}</span>
+          {git && <GitStatusSummary status={git} compact />}
+          <span className="dash-cell__activity">{activity || t('dashboard.noActivity')}</span>
+        </button>
+        {tab.waiting && (
+          <WaitingOnField
+            value={tab.waitingOn}
+            onCommit={(text) => setWaitingOn(tab.id, text)}
+            className="dash-cell__waiting-on"
+          />
+        )}
+        <DependsOnPicker
+          value={tab.dependsOn}
+          candidates={candidatesFor(tab)}
+          onChange={(primaryId) => setDependsOn(tab.id, primaryId)}
+          className="dash-cell__depends"
+        />
+      </Wrapper>
+    );
+  };
+
   // Poll while the overlay is mounted (i.e. open); the effect's teardown stops
   // it on close. A `busy` guard skips a tick if the previous one is still in
   // flight, so a slow poll can't pile up.
@@ -717,76 +840,16 @@ export default function Dashboard({ onClose }) {
           }}
         >
           {orderedTabs.map((tab) => {
-            const info = live[tab.id];
-            const status = info?.status || tab.status;
-            const recency = recencyTier(info?.at, now);
-            // Phones view: always a phone. Hot view: phone iff hot. Cards: never.
-            const asPhone = view === 'phones' || (view === 'hot' && isHotTier(recency));
-            if (asPhone) {
-              return (
-                <li key={tab.id} className="dash__phone-cell">
-                  <PinnedAgent
-                    tab={tab}
-                    status={status}
-                    recency={recency}
-                    contentZoom={contentZoom}
-                    repoPath={repoPath(tab.repoId)}
-                    localApps={repos.find((r) => r.id === tab.repoId)?.localApps || []}
-                    git={gitInfo[tab.repoId]}
-                    gitRefreshing={!!gitBusy[tab.repoId]}
-                    onRefreshGit={() => refreshGit(tab.repoId)}
-                    onMaximize={handleOpen}
-                    onToggleImportant={toggleImportant}
-                    onToggleWaiting={toggleWaiting}
-                    onSetWaitingOn={setWaitingOn}
-                  />
-                </li>
-              );
-            }
-            const activity = info?.activity;
-            const git = gitInfo[tab.repoId];
+            // Dependents render INSIDE their primary's "together" group below.
+            if (primaryOf(tab)) return null;
+            const deps = dependentsByPrimary.get(tab.id) || [];
+            if (deps.length === 0) return renderDock(tab);
+            // A "together" group: the primary (full size) followed by its
+            // dependents (smaller), so the ordering reads at a glance.
             return (
-              <li key={tab.id}>
-                <button
-                  type="button"
-                  className={`dash-cell dash-cell--${status}${tab.id === activeTabId ? ' dash-cell--active' : ''}${tab.important ? ' dash-cell--important' : ''}${tab.waiting ? ' dash-cell--waiting' : ''}`}
-                  data-colored={tab.color ? 'true' : undefined}
-                  data-recency={recency}
-                  style={tab.color ? { '--agent-color': tab.color } : undefined}
-                  onClick={() => handleOpen(tab.id)}
-                >
-                  <span className="dash-cell__head">
-                    <span className="dash-cell__dot" />
-                    <span className="dash-cell__name">{tab.repoName}</span>
-                    <ImportantStar
-                      important={!!tab.important}
-                      onToggle={() => toggleImportant(tab.id)}
-                      className="dash-cell__important"
-                    />
-                    <WaitingBadge
-                      waiting={!!tab.waiting}
-                      onToggle={() => toggleWaiting(tab.id)}
-                      className="dash-cell__waiting"
-                    />
-                  </span>
-                  {repoPath(tab.repoId) && (
-                    <CopyPath path={repoPath(tab.repoId)} className="dash-cell__path" />
-                  )}
-                  <span className="dash-cell__status">
-                    {t(`agents.status.${status}`)}
-                  </span>
-                  {git && <GitStatusSummary status={git} compact />}
-                  <span className="dash-cell__activity">
-                    {activity || t('dashboard.noActivity')}
-                  </span>
-                </button>
-                {tab.waiting && (
-                  <WaitingOnField
-                    value={tab.waitingOn}
-                    onCommit={(text) => setWaitingOn(tab.id, text)}
-                    className="dash-cell__waiting-on"
-                  />
-                )}
+              <li key={`grp-${tab.id}`} className="dash__group">
+                {renderDock(tab, { tag: 'div' })}
+                {deps.map((d) => renderDock(d, { tag: 'div', small: true }))}
               </li>
             );
           })}

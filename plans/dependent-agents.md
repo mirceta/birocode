@@ -1,7 +1,14 @@
 # Dependent agents — "together" groups on the dashboard
 
-> **Status (2026-06-16):** Plan — design proposed, not built. On
-> `feature/dependent-agents`. Structured per [doc-principles.md](doc-principles.md).
+> **Status (2026-06-17):** **Slice 1 built & browser-verified** on
+> `feature/dependent-agents` (not yet deployed/merged). A backend-synced
+> `DependsOn` (primary tab id) on `DockTab`, a per-dock "depends on…" picker, and
+> a "together" group in `Dashboard.jsx` that renders the dependent ~0.82× the
+> primary. Defaults locked (no extra questions): primary chosen from a dropdown
+> of the other dashboard agents; group only when the primary is a visible,
+> independent dock (no chains this slice); dangling/cyclic links → independent; a
+> group sorts by its primary's position. Structured per
+> [doc-principles.md](doc-principles.md).
 
 ## Problem / goal
 
