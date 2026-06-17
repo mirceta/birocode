@@ -1,94 +1,164 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Using the stale-cache fix — what to do when a deploy "didn't ship"</title>
-  <link rel="stylesheet" href="./styles.css" />
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dock git actions — sync from the dashboard</title>
+<!-- Self-contained, build-less, vendored-free (CLAUDE.md "Understanding app").
+     All CSS/JS inline; relative URLs only. Served at
+     /api/localview/<repo>/app/understanding/. Overwritten each turn. -->
+<style>
+  :root {
+    --bg:#faf7f2; --surface:#fff; --border:#e7ddd0; --text:#2b2724; --muted:#8a8178;
+    --accent:#c0552d; --accent-soft:rgba(192,85,45,.12);
+    --green:#16a34a; --green-soft:rgba(22,163,74,.12);
+    --amber:#f59e0b; --amber-soft:rgba(245,158,11,.12);
+    --radius:12px; --shadow:0 1px 3px rgba(0,0,0,.06);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);line-height:1.55;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  .wrap{max-width:940px;margin:0 auto;padding:28px 20px 80px}
+  h1{font-size:25px;margin:0 0 4px;letter-spacing:-.02em}
+  .sub{margin:0;color:var(--muted);font-size:15px}
+  .grid{display:grid;grid-template-columns:300px 1fr;gap:18px;margin-top:22px}
+  @media(max-width:760px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:18px 20px;box-shadow:var(--shadow);margin-bottom:16px}
+  h2{font-size:17px;margin:0 0 12px}
+  h3{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 8px}
+  p{margin:0 0 10px}
+  code{background:var(--accent-soft);color:var(--accent);padding:1px 6px;border-radius:5px;font-size:.88em}
+  .muted{color:var(--muted)}
+
+  /* mock dock */
+  .dock{width:260px;margin:0 auto;background:var(--surface);border:1px solid var(--border);
+    border-left:4px solid #6366f1;border-radius:11px;box-shadow:var(--shadow);overflow:hidden}
+  .dock__bar{display:flex;align-items:center;gap:7px;padding:11px 13px;border-bottom:1px solid var(--border)}
+  .dot{width:9px;height:9px;border-radius:50%;background:#22c55e;flex:none}
+  .dock__name{font-weight:700;font-size:14px}
+  .dock__meta{padding:9px 13px;color:var(--muted);font-size:12px}
+  .dock__screen{height:46px;margin:0 13px 11px;border-radius:6px;
+    background:repeating-linear-gradient(180deg,var(--bg),var(--bg) 8px,#f1ece4 8px,#f1ece4 14px)}
+
+  /* the git row — where the feature lives */
+  .gitrow{border-top:1px dashed var(--accent);background:var(--accent-soft);padding:10px 13px}
+  .gitrow__status{display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:8px}
+  .gitrow__status .branch{font-weight:700;color:var(--text)}
+  .badge{font-size:11px;padding:1px 7px;border-radius:999px;font-weight:700}
+  .badge--behind{background:var(--amber-soft);color:#9a6a00}
+  .badge--clean{background:var(--green-soft);color:var(--green)}
+  .badge--busy{background:#eee;color:#777}
+  .gitbtns{display:flex;flex-wrap:wrap;gap:6px}
+  .gitbtn{font-size:11.5px;font-weight:600;padding:4px 9px;border-radius:7px;cursor:pointer;
+    border:1px solid var(--border);background:var(--surface);color:var(--text);transition:.12s}
+  .gitbtn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+  .gitbtn--push{border-style:dashed;color:var(--muted)}
+  .gitbtn:disabled{opacity:.4;cursor:not-allowed}
+  .gitbtn.is-acting{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  .seg{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:12px}
+  .seg button{border:0;background:var(--surface);padding:6px 12px;font-size:12.5px;font-weight:600;
+    color:var(--muted);cursor:pointer}
+  .seg button.on{background:var(--accent);color:#fff}
+  .log{font-size:12px;color:var(--muted);min-height:20px}
+  .log b{color:var(--text)}
+
+  .flow{display:flex;flex-direction:column;gap:8px}
+  .step{border:1px solid var(--border);border-radius:9px;padding:10px 12px;background:var(--bg);font-size:13px}
+  .step b{display:block;font-size:12px;margin-bottom:2px}
+  .ok{display:inline-block;font-size:11px;font-weight:700;color:var(--green);
+    background:var(--green-soft);padding:1px 8px;border-radius:999px;margin-left:6px}
+  .note{border-left:3px solid var(--amber);background:var(--amber-soft);padding:9px 13px;
+    border-radius:0 8px 8px 0;font-size:13px}
+</style>
 </head>
 <body>
-  <header class="hero">
-    <h1>“I deployed — why am I still seeing the old version?”</h1>
-    <p class="sub">How to use the stale-cache fix. Short answer: <b>almost always, just reload.</b></p>
-  </header>
+<div class="wrap">
+  <h1>Dock git actions</h1>
+  <p class="sub">Bring the Git tab's <b>merge / pull main</b> buttons into each agent dock's git row — sync without leaving the dashboard.</p>
 
-  <main>
-    <!-- The escalation ladder: 3 rungs, do the least you can. -->
-    <section class="card">
-      <h2>Three things you can do — try them top-down</h2>
-      <ol class="ladder">
-        <li class="rung" data-rung="0">
-          <span class="rung__lvl">1</span>
-          <div class="rung__body">
-            <h3>Just reload <span class="auto">automatic — no button</span></h3>
-            <p>
-              The server now tells your browser <b>never to cache the app shell</b>
-              (<code>index.html</code> + <code>version.json</code> → <code>no-store</code>).
-              So a plain reload — <kbd>Ctrl</kbd>+<kbd>R</kbd>, or pull-to-refresh on
-              the phone — <b>always</b> lands on the newest build. This covers ~99% of cases.
-              You don't click anything; it just works now.
-            </p>
-          </div>
-        </li>
-        <li class="rung" data-rung="1">
-          <span class="rung__lvl">2</span>
-          <div class="rung__body">
-            <h3>Click <b>Reload</b> on the banner <span class="when">when it appears on its own</span></h3>
-            <p>
-              If a tab has been <b>open for a while</b> when a new build ships, a small
-              bar slides in: <i>“A new version of Claude Web is available.”</i> Tap its
-              <b>Reload</b> and you're current. (A single-page tab never re-fetches the
-              shell by itself, so this banner is how a long-open tab finds out.) It now
-              does the <i>thorough</i> clear — not a plain reload that could re-serve the
-              stale shell.
-            </p>
-          </div>
-        </li>
-        <li class="rung" data-rung="2">
-          <span class="rung__lvl">3</span>
-          <div class="rung__body">
-            <h3>Hit <b>Force refresh</b> <span class="when">Settings ▸ Maintenance</span></h3>
-            <p>
-              The nuclear option, for when you <i>still</i> suspect a stale page (a stubborn
-              proxy, a service-worker cache, a weird mobile browser). One button that
-              <b>wipes all Cache Storage, unregisters service workers, and reloads with a
-              cache-bust</b> — a guaranteed clean slate. Right below it, <b>“This tab's build”</b>
-              shows the timestamp you're actually running, so you can confirm you're current.
-            </p>
-          </div>
-        </li>
-      </ol>
-    </section>
+  <div class="grid">
+    <!-- LEFT: interactive mock dock -->
+    <div>
+      <div class="card">
+        <h3>Try a dock state</h3>
+        <div class="seg" id="states" role="tablist">
+          <button data-state="behind" class="on">Behind main</button>
+          <button data-state="clean">Up to date</button>
+          <button data-state="busy">Run active</button>
+        </div>
 
-    <!-- Interactive: pick your symptom, get the rung. -->
-    <section class="card picker">
-      <h2>Not sure which one? Pick what you're seeing</h2>
-      <div class="choices">
-        <button class="choice" data-rung="0">I just deployed and want to see it</button>
-        <button class="choice" data-rung="1">A “new version available” bar showed up</button>
-        <button class="choice" data-rung="2">I reloaded and it's <i>still</i> the old version</button>
+        <div class="dock">
+          <div class="dock__bar"><span class="dot"></span><span class="dock__name">prg</span></div>
+          <div class="dock__meta">feature/web-api-key-mgmt</div>
+          <div class="dock__screen"></div>
+          <div class="gitrow">
+            <div class="gitrow__status">
+              <span class="branch">feature/web-api-key-mgmt</span>
+              <span class="badge" id="badge">·</span>
+            </div>
+            <div class="gitbtns" id="btns">
+              <button class="gitbtn" data-act="merge">⤵ Merge main</button>
+              <button class="gitbtn" data-act="pullMain">↓ Pull main</button>
+              <button class="gitbtn" data-act="pullBranch">↻ Pull branch</button>
+              <button class="gitbtn gitbtn--push" data-act="push">↑ Push*</button>
+            </div>
+          </div>
+        </div>
+        <p class="log" id="log" style="margin-top:12px">Each button targets <b>this dock's</b> repo via <code>X-Repo-Id</code>.</p>
       </div>
-      <div id="answer" class="answer" aria-live="polite">
-        <p class="answer__hint">↑ pick one to see what to do</p>
+    </div>
+
+    <!-- RIGHT: how it works -->
+    <div>
+      <div class="card">
+        <h2>It's mostly a frontend wire-up</h2>
+        <div class="flow">
+          <div class="step"><b>1 · Click in the dock</b>Buttons live in <code>PinnedAgent.jsx</code>'s <code>.phone__git</code> row, beside the status it already shows.</div>
+          <div class="step"><b>2 · Call the existing endpoint</b><code>apiPost('/git/merge-base', {}, { repoId })</code> — same endpoints the Git tab fires.<span class="ok">already exists</span></div>
+          <div class="step"><b>3 · Scoped to this dock's repo</b><code>repoId</code> → <code>X-Repo-Id</code> header → backend <code>_repos.Current()</code>. <code>Agents.jsx</code> already does this for pull-base.<span class="ok">already exists</span></div>
+          <div class="step"><b>4 · Busy guard + refresh</b>If a chat run is mutating that repo, <code>status.busy</code> greys the buttons and the server rejects. After an action, refresh the dock's <code>/git/status</code>.<span class="ok">already exists</span></div>
+        </div>
       </div>
-    </section>
+      <div class="card">
+        <h3>One thing to decide</h3>
+        <p class="note"><b>* Push publishes.</b> The Git tab keeps push as a separate, deliberate action. A dashboard full of one-tap push buttons is easy to fire by accident — so slice 1 leans to <b>inward-sync only</b> (merge / pull), with push deferred or behind a confirm. Your call.</p>
+      </div>
+    </div>
+  </div>
+</div>
 
-    <section class="card aside">
-      <h2>Good to know</h2>
-      <ul class="notes">
-        <li><b>You can't break anything.</b> Force refresh only clears <i>caches</i> — no data, no settings, no agent state is touched.</li>
-        <li><b>Confirm you're current:</b> Settings ▸ Maintenance shows <b>This tab's build</b>; compare it across two tabs if in doubt.</li>
-        <li><b>Why hashed assets still cache forever:</b> <code>/assets/index-<i>abc123</i>.js</code> is safe to keep for a year — its name changes whenever its content does, so it's never stale.</li>
-        <li><b>The proxy caveat:</b> the off-box IIS+ARR proxy could still hold a copy; rung 1's <code>no-store</code> plus rung 3's cache-bust are the belt-and-suspenders against it.</li>
-      </ul>
-    </section>
-
-    <footer>
-      <p>Live usage guide · overwritten each time the explanation changes ·
-         plan: <code>plans/cache-hardening.md</code></p>
-    </footer>
-  </main>
-
-  <script src="./app.js"></script>
+<script>
+  var STATES = {
+    behind: { badge:'2 behind main', cls:'badge--behind', enable:{merge:1,pullMain:1,pullBranch:1,push:0},
+      log:'Behind <b>main</b> → <b>Merge main</b> / <b>Pull main</b> are the useful actions.' },
+    clean:  { badge:'up to date', cls:'badge--clean', enable:{merge:0,pullMain:0,pullBranch:1,push:0},
+      log:'In sync with base — nothing to merge/pull from main.' },
+    busy:   { badge:'run active', cls:'badge--busy', enable:{merge:0,pullMain:0,pullBranch:0,push:0},
+      log:'A chat run is mutating this repo → all git actions disabled (the <b>busy</b> guard).' }
+  };
+  var badge = document.getElementById('badge'), log = document.getElementById('log');
+  function apply(name){
+    var s = STATES[name];
+    badge.textContent = s.badge; badge.className = 'badge ' + s.cls;
+    document.querySelectorAll('.gitbtn').forEach(function(b){
+      b.disabled = !s.enable[b.dataset.act]; b.classList.remove('is-acting');
+    });
+    log.innerHTML = s.log;
+  }
+  document.getElementById('states').addEventListener('click', function(e){
+    var b = e.target.closest('button'); if(!b) return;
+    document.querySelectorAll('#states button').forEach(function(x){x.classList.toggle('on', x===b);});
+    apply(b.dataset.state);
+  });
+  document.getElementById('btns').addEventListener('click', function(e){
+    var b = e.target.closest('.gitbtn'); if(!b || b.disabled) return;
+    document.querySelectorAll('.gitbtn').forEach(function(x){x.classList.remove('is-acting');});
+    b.classList.add('is-acting');
+    log.innerHTML = 'POST <code>/git/' + ({merge:'merge-base',pullMain:'pull-base',pullBranch:'pull-current',push:'push-current'})[b.dataset.act] + '</code> with this dock\'s <code>repoId</code> → then refresh its status.';
+  });
+  apply('behind');
+</script>
 </body>
 </html>
