@@ -84,6 +84,13 @@
 
 ## Active feature plans
 
+- [Basic mode never shows the dashboard](plans/basic-mode-no-dashboard.md) — **bug fix**:
+  Basic (Simple) mode must always be the plain tabbed view, never the agent-dashboard
+  overlay. The `agentDashboard: 'advanced'` gate only blocks *opening* it; the overlay is
+  driven by `dashOpen` local state, so opening it in Advanced then switching to Basic leaves
+  it showing (`Layout.jsx`). Fix: gate the render on `dashEnabled && dashOpen` and reset
+  `dashOpen` when the feature goes away. **DESIGN**, not built. On
+  `feature/basic-mode-no-dashboard`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
