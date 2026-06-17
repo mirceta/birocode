@@ -3,15 +3,19 @@ import { apiGet, apiPost } from '../api/client';
 import ErrorBanner from '../components/shared/ErrorBanner';
 import './autopilot.css';
 
-// Loop-autopilot, Slice 2 (plans/loop-autopilot.md): the live dashboard. The
-// backend engine (AutopilotService) classifies each armed, idle agent's last
-// message into a routine prompt or "escalate"; this tab surfaces that, lets you
-// arm/disarm agents, set the confidence threshold, and hit the kill switch.
-// SUGGEST-ONLY: nothing is auto-sent — you still press send in the agent's chat.
+// Loop-autopilot (plans/loop-autopilot.md): the live dashboard. The backend engine
+// (AutopilotService) classifies each armed, idle agent's last message into a routine
+// prompt or "escalate"; this tab surfaces that, lets you arm/disarm agents, set the
+// confidence threshold, and hit the kill switch.
+//
+// Two modes (the Auto-advance switch): OFF = suggest-only (it predicts, you press
+// send); ON = auto-advance (Slice 3) — a confident, non-risky suggestion is SENT to
+// the agent on your behalf, every send recorded in the audit trail.
 const POLL_MS = 4000;
 
 const BADGE = {
   suggestion: { cls: 'sugg', label: 'suggestion' },
+  sent: { cls: 'sent', label: 'sent' },
   escalate: { cls: 'esc', label: 'needs you' },
   running: { cls: 'run', label: 'running' },
   idle: { cls: 'idle', label: 'idle' },
@@ -59,7 +63,9 @@ export default function Autopilot() {
 
   const agents = data?.agents ?? [];
   const log = data?.log ?? [];
+  const audit = data?.audit ?? [];
   const enabled = data?.enabled ?? true;
+  const autoAdvance = data?.autoAdvance ?? false;
   const threshold = data?.threshold ?? 0.85;
   const routines = discover?.routines ?? [];
 
@@ -70,7 +76,9 @@ export default function Autopilot() {
           <h2 className="autopilot__title">Autopilot</h2>
           <p className="autopilot__sub">
             Advances idle agents through your routine prompts, or escalates when it
-            hits a real decision. Suggest-only — you still press send.
+            hits a real decision. {autoAdvance
+              ? 'Auto-advance is ON — confident, non-risky prompts are sent for you.'
+              : 'Suggest-only — you still press send.'}
           </p>
         </div>
       </header>
@@ -84,6 +92,9 @@ export default function Autopilot() {
         </button>
         <button className={tab === 'history' ? 'on' : ''} onClick={() => setTab('history')}>
           Suggestion history
+        </button>
+        <button className={tab === 'audit' ? 'on' : ''} onClick={() => setTab('audit')}>
+          Audit{audit.length ? ` ${audit.length}` : ''}
         </button>
       </nav>
 
@@ -99,6 +110,19 @@ export default function Autopilot() {
             </button>
             <b>Autopilot</b>
             <span className="ap-muted">{enabled ? 'on · armed agents only' : 'killed · all manual'}</span>
+
+            <span className="ap-bar__sep" />
+            <button
+              className={`ap-switch ${autoAdvance ? 'on ap-switch--hot' : ''}`}
+              onClick={() => mutate({ autoAdvance: !autoAdvance })}
+              disabled={!enabled}
+              title="Auto-advance: actually send confident, non-risky prompts"
+            >
+              <span className="ap-switch__knob" />
+            </button>
+            <b>Auto-advance</b>
+            <span className="ap-muted">{autoAdvance ? 'sending for you' : 'suggest-only'}</span>
+
             <span className="ap-bar__spacer" />
             <span className="ap-thresh">
               confidence ≥ <b>{threshold.toFixed(2)}</b>
@@ -192,6 +216,32 @@ export default function Autopilot() {
           ))}
           {log.length === 0 && <li className="autopilot__empty">No suggestions yet — arm an agent and wait for its next idle turn.</li>}
         </ul>
+      )}
+
+      {tab === 'audit' && (
+        <>
+          <p className="autopilot__summary">
+            Every prompt autopilot actually <b>sent</b> on your behalf — the durable,
+            append-only record (most recent first).
+          </p>
+          <ul className="ap-log ap-log--audit">
+            {audit.map((e, i) => (
+              <li key={i}>
+                <span className="ap-log__t">{new Date(e.at).toLocaleString()}</span>
+                <span className="ap-log__ag">{e.repoName}</span>
+                <span className="ap-out out-sent">sent</span>
+                <span className="ap-log__pr"><code>{e.prompt}</code></span>
+                <span className="ap-log__cf">{e.confidence ? e.confidence.toFixed(2) : ''}</span>
+                <span className="ap-log__ans" title={e.answeredMessage}>↳ {e.answeredMessage}</span>
+              </li>
+            ))}
+            {audit.length === 0 && (
+              <li className="autopilot__empty">
+                Nothing auto-sent yet. Turn on Auto-advance and arm an agent.
+              </li>
+            )}
+          </ul>
+        </>
       )}
     </div>
   );

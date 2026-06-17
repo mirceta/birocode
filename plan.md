@@ -82,6 +82,30 @@
 > [PWA "older version" warning](plans/pwa-webapk-warning.md) plan on
 > `feature/pwa-webapk-warning` (set aside, not started).
 
+## ⚠️ Known risks to mitigate
+
+- **Autopilot is a confused-deputy / prompt-injection risk — mitigate before we
+  ever trust it to *act* unattended.** Both the agent that *authors* the
+  autopilot's surfaces and the autopilot *brain* itself are Claude, and Claude
+  ingests untrusted input (files, web, PRs, dependency text) as normal work — so
+  a steered session is a realistic vector, not a hypothetical stranger. The
+  feature's whole job is to *send prompts to agents*, i.e. to act, which is
+  exactly the authority an injection would want to borrow.
+  - **Eventual mitigation (NOT done):** a **scoped capability token held by the
+    engine, never by the brain** — the brain only *proposes*, the deterministic
+    engine *executes* under a narrow, expiring token after the gate
+    (threshold + risky-action deny-list). Never expose a send/act primitive that
+    skips that gate. Token authority must be strictly *less* than the operator's
+    own session (don't reuse `claudeweb_session`). The token bounds the *category*
+    of action; the gate bounds *each* action. See
+    [loop-autopilot safety](plans/loop-autopilot-safety.md).
+  - **Interim guard (done):** the autopilot API is **gated operator-side only**,
+    mirroring guest approval — the host (WinForms) turns the `/api/autopilot`
+    endpoints off/on; **the web can never turn them on** (it can only see + shrink).
+    Default **off**. So even a steered web/brain can't enable acting; the operator
+    must physically opt in at the host. Suggest-only for now; no unattended
+    auto-advance until the token mitigation above lands.
+
 ## Active feature plans
 
 - [Loop autopilot — auto-advance agents through my routine replies](plans/loop-autopilot.md)
@@ -96,8 +120,16 @@
   kill switch, and only unlocks once a measured accuracy bar is cleared. Sliced:
   (1) discover & confirm the set (no acting), (2) suggest-only (pre-fill, measure
   accuracy), (3) auto-advance. Supersedes the earlier "yes-watcher" framing
-  (answering "yes" is just the simplest routine prompt). Kickoff only, not built.
-  On `feature/loop-autopilot`.
+  (answering "yes" is just the simplest routine prompt). **Status:** slices 1–2
+  built; **slice 3 (auto-advance) now built** — when its `Auto-advance` switch is
+  on, the engine SENDS a confident, non-risky routine prompt to the agent (resuming
+  its session via the normal `CliRunnerService` path) and records every send in an
+  append-only audit log (`autopilot-audit.jsonl`). **Off by default**, gated behind
+  the existing operator gate + kill switch + threshold + risky-action deny-list; the
+  brain is still the keyword **stub** (the real LLM classifier + its accuracy gate
+  are the remaining work before this is trustworthy unattended). Not yet
+  browser-verified end-to-end (the operator must flip the host gate first). On
+  `feature/loop-autopilot`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left

@@ -43,17 +43,18 @@ public class AutopilotConfigStore
     private sealed class Data
     {
         public bool Enabled { get; set; } = true;          // global kill switch (false = killed)
+        public bool AutoAdvance { get; set; } = false;      // Slice 3: actually SEND, not just suggest. OFF by default.
         public double Threshold { get; set; } = 0.85;       // min confidence to suggest, else escalate
         public List<string> ArmedRepoIds { get; set; } = new();
         public List<string> DenyList { get; set; } = DefaultDenyList.ToList();
     }
 
-    public sealed record Snapshot(bool Enabled, double Threshold, IReadOnlySet<string> ArmedRepoIds, IReadOnlyList<string> DenyList);
+    public sealed record Snapshot(bool Enabled, bool AutoAdvance, double Threshold, IReadOnlySet<string> ArmedRepoIds, IReadOnlyList<string> DenyList);
 
     public Snapshot Get()
     {
         lock (_gate)
-            return new Snapshot(_data.Enabled, _data.Threshold,
+            return new Snapshot(_data.Enabled, _data.AutoAdvance, _data.Threshold,
                 _data.ArmedRepoIds.ToHashSet(), _data.DenyList.ToList());
     }
 
@@ -87,6 +88,14 @@ public class AutopilotConfigStore
     {
         lock (_gate) { _data.Enabled = enabled; Save(); }
         _logger.Info($"[AUTOPILOT] kill switch -> enabled={enabled}");
+    }
+
+    /// <summary>Slice 3 auto-advance. true = a confident, non-risky suggestion is
+    /// actually SENT to the agent; false = suggest-only (Slice 2 behaviour).</summary>
+    public void SetAutoAdvance(bool on)
+    {
+        lock (_gate) { _data.AutoAdvance = on; Save(); }
+        _logger.Info($"[AUTOPILOT] auto-advance -> {on}");
     }
 
     private void Load()

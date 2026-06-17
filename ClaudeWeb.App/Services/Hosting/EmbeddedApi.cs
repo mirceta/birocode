@@ -56,18 +56,20 @@ public class EmbeddedApi
     private readonly CallLog _callLog;
     private readonly RepositoryRegistry _repositories;
     private readonly IpAllowlistService _ipAllowlist;
+    private readonly Autopilot.AutopilotGate _autopilotGate;
     private WebApplication? _app;
 
     public bool IsRunning { get; private set; }
     public int Port => _config.Port;
 
-    public EmbeddedApi(AppConfig config, Logger logger, CallLog callLog, RepositoryRegistry repositories, IpAllowlistService ipAllowlist)
+    public EmbeddedApi(AppConfig config, Logger logger, CallLog callLog, RepositoryRegistry repositories, IpAllowlistService ipAllowlist, Autopilot.AutopilotGate autopilotGate)
     {
         _config = config;
         _logger = logger;
         _callLog = callLog;
         _repositories = repositories;
         _ipAllowlist = ipAllowlist;
+        _autopilotGate = autopilotGate;
     }
 
     public void Start()
@@ -104,8 +106,14 @@ public class EmbeddedApi
             // Pre-built so the WinForms UI and the API share one instance.
             builder.Services.AddSingleton(_repositories);
             builder.Services.AddSingleton(_ipAllowlist);
+            // Pre-built so the WinForms host (the ONLY surface that can flip it) and
+            // the API share one instance (plans/loop-autopilot-safety.md).
+            builder.Services.AddSingleton(_autopilotGate);
             // Harness-provided Understanding app (plans/multiple-local-apps.md Slice 2).
             builder.Services.AddSingleton<Understanding.UnderstandingApp>();
+            // Harness-provided Autopilot dev app (plans/loop-autopilot.md) — build-less
+            // local app we iterate on while autopilot is in development.
+            builder.Services.AddSingleton<Understanding.AutopilotApp>();
 
             // Controllers auto-discovered here -- new controllers need NO changes.
             builder.Services.AddControllers();

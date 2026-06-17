@@ -13,6 +13,7 @@ public static class AutopilotModuleExtensions
     {
         services.AddSingleton<AutopilotDiscoveryService>();
         services.AddSingleton<AutopilotConfigStore>();
+        services.AddSingleton<AutopilotAuditLog>();
         services.AddSingleton<PromptClassifier>();
         services.AddSingleton<AutopilotService>();
         services.AddHostedService(sp => sp.GetRequiredService<AutopilotService>());

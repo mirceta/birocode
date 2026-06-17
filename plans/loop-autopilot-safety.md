@@ -48,3 +48,44 @@ silently. The constrained label set, the escalate-by-default gate, the deny-list
 the audit log, and the kill switch are what make it acceptable. Auto-advance
 (Slice 3) also stays **off until the [accuracy gate](loop-autopilot-brain.md#gate)
 is cleared**.
+
+## The deeper risk: confused deputy / prompt injection
+
+The fences above assume the *brain's verdict* is the thing to constrain. The
+harder risk is that the brain — or the agent that **authors** autopilot's
+surfaces — is **Claude**, which ingests untrusted input (files, web pages, PRs,
+dependency text) as ordinary work. A steered session is a realistic vector, not a
+hypothetical stranger, and autopilot's entire job is *to act* (send prompts), i.e.
+the exact authority an injection wants to borrow. "I trust the apps on my box"
+really reduces to "I trust that no Claude session of mine got steered" — a weaker
+guarantee than trusting shrink-wrapped software.
+
+**Eventual mitigation (NOT built):** a **scoped capability token held by the
+engine, never by the brain.**
+
+- The brain only ever **proposes**; the deterministic engine **executes** under a
+  narrow, expiring token, and only **after** the gate above. If the LLM can read
+  the token, an injection can repurpose it for anything *within scope*, so all the
+  protection collapses to whatever the scope happened to be — keeping the
+  credential out of the model's context is what turns "scope" into a real wall.
+- **Never expose a send/act primitive that skips the gate.** Even a future steered
+  session must, at worst, be fenced by threshold + deny-list — never fire a raw
+  "deploy" directly.
+- The token's authority must be **strictly less** than the operator's own session
+  (do **not** reuse `claudeweb_session`). Token bounds the *category* of action;
+  the gate bounds *each* action; they compose, neither replaces the other.
+
+## Interim guard (BUILT): operator-only endpoint gate
+
+Until the token mitigation lands, the autopilot API is **gated from the host
+only**, mirroring guest approval (plans/auth-ip-filter.md) — the asymmetry that a
+remote/steered web surface can **shrink but never grow** authority:
+
+- `AutopilotGate` (`%APPDATA%\ClaudeWeb\autopilot-gate.json`) holds one operator
+  bool, flipped **only** from the WinForms host UI. **Default off.**
+- When off, every `/api/autopilot*` endpoint returns **403** and the
+  `AutopilotService` loop pauses. There is **no web endpoint that can enable it** —
+  a steered web client or brain cannot turn acting on; the operator must opt in
+  physically at the host.
+- This is a **harder** switch than the web `Enabled` kill switch: `Enabled` can
+  only *shrink* (pause classifying) and only works while the operator gate is on.

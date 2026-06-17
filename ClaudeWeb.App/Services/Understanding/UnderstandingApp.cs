@@ -34,73 +34,8 @@ public class UnderstandingApp
 
     public UnderstandingApp(Logger logger) => _logger = logger;
 
-    private static readonly Dictionary<string, string> Mime = new(StringComparer.OrdinalIgnoreCase)
-    {
-        [".html"] = "text/html; charset=utf-8",
-        [".htm"] = "text/html; charset=utf-8",
-        [".js"] = "text/javascript; charset=utf-8",
-        [".mjs"] = "text/javascript; charset=utf-8",
-        [".css"] = "text/css; charset=utf-8",
-        [".json"] = "application/json; charset=utf-8",
-        [".svg"] = "image/svg+xml",
-        [".png"] = "image/png",
-        [".jpg"] = "image/jpeg",
-        [".jpeg"] = "image/jpeg",
-        [".gif"] = "image/gif",
-        [".webp"] = "image/webp",
-        [".ico"] = "image/x-icon",
-        [".woff"] = "font/woff",
-        [".woff2"] = "font/woff2",
-        [".ttf"] = "font/ttf",
-        [".wasm"] = "application/wasm",
-        [".map"] = "application/json; charset=utf-8",
-        [".txt"] = "text/plain; charset=utf-8",
-    };
-
-    public async Task Serve(HttpContext ctx, RepositoryRegistry.RepositoryInfo repo, string? rest)
-    {
-        var appDir = Path.GetFullPath(Path.Combine(repo.Path, AppDirName));
-        var relRaw = (rest ?? string.Empty).Trim('/');
-        if (relRaw is "" ) relRaw = "index.html";
-
-        // Contain the request to appDir (no traversal).
-        var target = Path.GetFullPath(Path.Combine(appDir, relRaw));
-        var prefix = appDir.EndsWith(Path.DirectorySeparatorChar) ? appDir : appDir + Path.DirectorySeparatorChar;
-        if (!target.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && !target.Equals(appDir, StringComparison.OrdinalIgnoreCase))
-        {
-            ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
-            return;
-        }
-
-        NoStore(ctx);
-
-        if (File.Exists(target))
-        {
-            var ext = Path.GetExtension(target);
-            ctx.Response.ContentType = Mime.TryGetValue(ext, out var m) ? m : "application/octet-stream";
-            try { await ctx.Response.SendFileAsync(target); }
-            catch (Exception ex) { _logger.Error($"[UNDERSTANDING] send {target} failed: {ex.Message}"); ctx.Response.StatusCode = StatusCodes.Status500InternalServerError; }
-            return;
-        }
-
-        // Missing index.html → honest empty state (NOT a fallback to other content).
-        if (relRaw.Equals("index.html", StringComparison.OrdinalIgnoreCase))
-        {
-            ctx.Response.ContentType = "text/html; charset=utf-8";
-            await ctx.Response.WriteAsync(EmptyStateHtml);
-            return;
-        }
-
-        // Any other missing asset → an explicit 404 (so a broken SPA is visibly broken).
-        ctx.Response.StatusCode = StatusCodes.Status404NotFound;
-    }
-
-    private static void NoStore(HttpContext ctx)
-    {
-        ctx.Response.Headers["Cache-Control"] = "no-store, no-cache, must-revalidate";
-        ctx.Response.Headers["Pragma"] = "no-cache";
-        ctx.Response.Headers["Expires"] = "0";
-    }
+    public Task Serve(HttpContext ctx, RepositoryRegistry.RepositoryInfo repo, string? rest) =>
+        HarnessStaticApp.Serve(ctx, Path.Combine(repo.Path, AppDirName), rest, _logger, EmptyStateHtml, "UNDERSTANDING");
 
     // Shown only when there is no understanding-app/index.html yet. Deliberately
     // unmistakable as "nothing here" — never rendered content that could look like a
