@@ -13,6 +13,9 @@ import './autopilot.css';
 // the agent on your behalf, every send recorded in the audit trail.
 const POLL_MS = 4000;
 
+// Intercept outcome → the badge class suffix (reuses .out-* from autopilot.css).
+const OUT_CLS = { suggested: 'sugg', sent: 'sent', escalated: 'esc', skipped: 'skip' };
+
 const BADGE = {
   suggestion: { cls: 'sugg', label: 'suggestion' },
   sent: { cls: 'sent', label: 'sent' },
@@ -142,6 +145,8 @@ export default function Autopilot() {
   const agents = data?.agents ?? [];
   const log = data?.log ?? [];
   const audit = data?.audit ?? [];
+  const intercepts = data?.intercepts ?? [];
+  const denyList = data?.denyList ?? [];
   const enabled = data?.enabled ?? true;
   const autoAdvance = data?.autoAdvance ?? false;
   const threshold = data?.threshold ?? 0.85;
@@ -168,6 +173,9 @@ export default function Autopilot() {
         <button className={tab === 'agents' ? 'on' : ''} onClick={() => setTab('agents')}>Agents</button>
         <button className={tab === 'prompts' ? 'on' : ''} onClick={() => setTab('prompts')}>
           Routine prompts{library.length ? ` ${library.length}` : ''}
+        </button>
+        <button className={tab === 'intercepts' ? 'on' : ''} onClick={() => setTab('intercepts')}>
+          Intercepted
         </button>
         <button className={tab === 'history' ? 'on' : ''} onClick={() => setTab('history')}>
           Suggestion history
@@ -208,6 +216,13 @@ export default function Autopilot() {
               <button onClick={() => mutate({ threshold: +(threshold - 0.05).toFixed(2) })} disabled={threshold <= 0.5}>−</button>
               <button onClick={() => mutate({ threshold: +(threshold + 0.05).toFixed(2) })} disabled={threshold >= 0.99}>+</button>
             </span>
+          </div>
+
+          <div className="ap-deny">
+            Always escalates:{' '}
+            {denyList.length
+              ? denyList.map((d, i) => <code key={i}>{d}</code>)
+              : <span className="ap-muted">—</span>}
           </div>
 
           <ul className="ap-agents">
@@ -386,6 +401,43 @@ export default function Autopilot() {
             ))}
             {discover && mined.length === 0 && <li className="autopilot__empty">No recurring replies found in your history yet.</li>}
           </ol>
+        </>
+      )}
+
+      {tab === 'intercepts' && (
+        <>
+          <p className="autopilot__summary">
+            Every agent message the engine <b>grabs and processes</b>, newest first — a live feed
+            of the loop at work. Each row moves from <b>processing…</b> to its outcome.
+          </p>
+          <ul className="ap-feed">
+            {intercepts.map((e) => {
+              const processing = e.phase === 'processing';
+              const out = e.outcome || 'suggested';
+              return (
+                <li key={e.id} className={`ap-feed__row ${processing ? 'is-proc' : ''}`}>
+                  <span className="ap-log__t">{new Date(e.at).toLocaleTimeString()}</span>
+                  <span className="ap-feed__ag">{e.repoName}</span>
+                  <span className="ap-feed__snip" title={e.snippet}>{e.snippet}</span>
+                  <span className="ap-feed__status">
+                    {processing ? (
+                      <><span className="ap-spinner" /> <span className="ap-muted">processing…</span></>
+                    ) : (
+                      <>
+                        <span className={`ap-out out-${OUT_CLS[out] ?? 'skip'}`}>{out}</span>
+                        {e.label && (out === 'sent' || out === 'suggested') && <code>{e.label}</code>}
+                      </>
+                    )}
+                  </span>
+                </li>
+              );
+            })}
+            {intercepts.length === 0 && (
+              <li className="autopilot__empty">
+                No interceptions yet — arm an agent and the engine will start grabbing its replies.
+              </li>
+            )}
+          </ul>
         </>
       )}
 
