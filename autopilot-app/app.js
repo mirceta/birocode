@@ -7,13 +7,15 @@
 // see — the Autopilot tab" mock): a subtabbed card with a control bar, .agent
 // rows carrying .st-* state pills, and columned .log lists with a flash on new rows.
 
-const API = (() => {
+const PREFIX = (() => {
   const path = location.pathname;
   const marker = '/api/localview/';
   const i = path.indexOf(marker);
-  const prefix = i >= 0 ? path.slice(0, i) : ''; // '' direct, '/preview' behind IIS
-  return prefix + '/api/autopilot';
+  return i >= 0 ? path.slice(0, i) : ''; // '' direct, '/preview' behind IIS
 })();
+const API = PREFIX + '/api/autopilot';
+const DISCOVER_API = PREFIX + '/api/autopilot/discover';
+const PROMPTS_API = PREFIX + '/api/prompts'; // the editable label space (custom-prompts library)
 
 const $ = (id) => document.getElementById(id);
 const POLL_MS = 4000;
@@ -38,6 +40,7 @@ $('subtabs').addEventListener('click', (e) => {
   for (const b of $('subtabs').querySelectorAll('button')) b.classList.toggle('on', b === btn);
   for (const p of document.querySelectorAll('.subpanel'))
     p.hidden = p.dataset.panel !== btn.dataset.sub;
+  if (btn.dataset.sub === 'prompts') loadPrompts(); // lazy: editable set + mined drafts
 });
 
 async function load() {
@@ -283,6 +286,208 @@ async function post(body) {
     busy = false;
   }
 }
+
+// ---- routine prompts: the editable label space + mined drafts ----
+// /api/prompts is the user's custom-prompt library = the brain's label space.
+// /api/autopilot/discover surfaces mined repeats as DRAFTS only (adopt -> star).
+let library = [];     // [{id, emoji, label, text}]
+let mined = [];       // [{text, count, sessions, repos, sampleContexts, matchesCustomPrompt}]
+let editingId = null; // id of the row currently in edit mode
+const openCtx = {};   // mined index -> contexts expanded?
+let pBusy = false;     // suppress double-submits during a prompt mutation
+
+async function loadPrompts() {
+  try {
+    const [lib, disc] = await Promise.all([
+      fetch(PROMPTS_API, { headers: { Accept: 'application/json' } }).then((r) => r.ok ? r.json() : []),
+      // discover shares the operator gate; if it 403s (gate off) just show no drafts.
+      fetch(DISCOVER_API, { headers: { Accept: 'application/json' } }).then((r) => r.ok ? r.json() : { routines: [] }),
+    ]);
+    library = Array.isArray(lib) ? lib : [];
+    mined = (disc && disc.routines) || [];
+    $('n-prompts').textContent = library.length;
+    renderPrompts();
+    renderMined();
+  } catch (e) {
+    show($('err'), true);
+    $('err').textContent = 'Could not load routine prompts: ' + e.message;
+  }
+}
+
+function renderPrompts() {
+  const ul = $('rp-list');
+  ul.innerHTML = '';
+  if (!library.length) {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = 'No routine prompts yet — add one above (or adopt a draft below). Until you do, autopilot escalates every turn.';
+    ul.appendChild(li);
+    return;
+  }
+  for (const p of library) ul.appendChild(p.id === editingId ? promptEditRow(p) : promptRow(p));
+}
+
+function promptRow(p) {
+  const li = document.createElement('li');
+  li.className = 'rp-item';
+
+  const main = document.createElement('div');
+  main.className = 'rp-item__main';
+  if (p.emoji || p.label) {
+    const head = document.createElement('div');
+    head.className = 'rp-item__head';
+    if (p.emoji) head.appendChild(span('rp-item__emoji', p.emoji));
+    if (p.label) head.appendChild(span('rp-item__label', p.label));
+    main.appendChild(head);
+  }
+  const code = document.createElement('code');
+  code.className = 'rp-item__text';
+  code.textContent = p.text;
+  main.appendChild(code);
+  li.appendChild(main);
+
+  const actions = document.createElement('div');
+  actions.className = 'rp-item__actions';
+  const edit = btn('rp-mini', 'Edit', () => { editingId = p.id; renderPrompts(); });
+  const del = btn('rp-mini rp-mini--danger', 'Delete', () => removePrompt(p.id));
+  edit.disabled = del.disabled = pBusy;
+  actions.append(edit, del);
+  li.appendChild(actions);
+  return li;
+}
+
+function promptEditRow(p) {
+  const li = document.createElement('li');
+  li.className = 'rp-item rp-item--edit';
+  const emoji = input('rp-edit__emoji', p.emoji || '', '🙂'); emoji.maxLength = 2;
+  const label = input('rp-edit__label', p.label || '', 'Label (optional)');
+  const text = input('rp-edit__text', p.text || '', 'Prompt text');
+  const save = btn('rp-mini on', 'Save', () =>
+    savePrompt(p.id, { emoji: emoji.value, label: label.value, text: text.value }));
+  const cancel = btn('rp-mini', 'Cancel', () => { editingId = null; renderPrompts(); });
+  const sync = () => { save.disabled = pBusy || !text.value.trim(); };
+  text.addEventListener('input', sync); sync();
+  li.append(emoji, label, text, save, cancel);
+  return li;
+}
+
+function renderMined() {
+  const ol = $('rp-mined');
+  ol.innerHTML = '';
+  if (!mined.length) {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = 'No recurring replies found in your history yet.';
+    ol.appendChild(li);
+    return;
+  }
+  mined.forEach((r, i) => {
+    const li = document.createElement('li');
+    li.className = 'routine';
+    li.appendChild(span('routine__rank', String(i + 1)));
+
+    const body = document.createElement('div');
+    body.className = 'routine__body';
+
+    const line = document.createElement('div');
+    line.className = 'routine__line';
+    line.appendChild(span('routine__text', r.text || ''));
+    line.appendChild(span('routine__count', '×' + (r.count ?? 0)));
+    if (r.matchesCustomPrompt) {
+      line.appendChild(span('routine__tag', '★ added'));
+    } else {
+      const add = btn('rp-mini on routine__add', '+ Add to my prompts', () => adoptMined(r.text));
+      add.disabled = pBusy;
+      line.appendChild(add);
+    }
+    body.appendChild(line);
+
+    const meta = document.createElement('div');
+    meta.className = 'routine__meta';
+    meta.appendChild(document.createTextNode(`${r.sessions ?? 0} sessions · ${r.repos ?? 0} repos`));
+    if (r.sampleContexts && r.sampleContexts.length) {
+      const toggle = btn('routine__toggle', openCtx[i] ? 'hide contexts' : 'show contexts',
+        () => { openCtx[i] = !openCtx[i]; renderMined(); });
+      meta.appendChild(toggle);
+    }
+    body.appendChild(meta);
+
+    if (openCtx[i] && r.sampleContexts && r.sampleContexts.length) {
+      const ctx = document.createElement('ul');
+      ctx.className = 'routine__contexts';
+      for (const c of r.sampleContexts) {
+        const cli = document.createElement('li');
+        cli.className = 'routine__context';
+        cli.appendChild(span('routine__context-label', 'after'));
+        cli.appendChild(document.createTextNode(' ' + c));
+        ctx.appendChild(cli);
+      }
+      body.appendChild(ctx);
+    }
+
+    li.appendChild(body);
+    ol.appendChild(li);
+  });
+}
+
+async function promptMutate(method, url, body) {
+  pBusy = true;
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    show($('err'), false);
+    return true;
+  } catch (e) {
+    show($('err'), true);
+    $('err').textContent = 'Prompt update failed: ' + e.message;
+    return false;
+  } finally {
+    pBusy = false;
+  }
+}
+
+async function addPrompt(emoji, label, text) {
+  if (!text.trim()) return;
+  if (await promptMutate('POST', PROMPTS_API, { emoji, label, text })) await loadPrompts();
+}
+async function savePrompt(id, body) {
+  if (!body.text.trim()) return;
+  editingId = null;
+  if (await promptMutate('PATCH', PROMPTS_API + '/' + encodeURIComponent(id), body)) await loadPrompts();
+}
+async function removePrompt(id) {
+  if (await promptMutate('DELETE', PROMPTS_API + '/' + encodeURIComponent(id))) await loadPrompts();
+}
+async function adoptMined(text) {
+  if (await promptMutate('POST', PROMPTS_API, { text })) await loadPrompts();
+}
+
+function btn(cls, text, onClick) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = cls;
+  b.textContent = text;
+  b.addEventListener('click', onClick);
+  return b;
+}
+function input(cls, value, placeholder) {
+  const el = document.createElement('input');
+  el.className = cls;
+  el.value = value;
+  el.placeholder = placeholder;
+  return el;
+}
+
+$('rp-add').addEventListener('submit', (e) => {
+  e.preventDefault();
+  addPrompt($('rp-add-emoji').value, $('rp-add-label').value, $('rp-add-text').value).then(() => {
+    $('rp-add-emoji').value = ''; $('rp-add-label').value = ''; $('rp-add-text').value = '';
+  });
+});
 
 // ---- control wiring ----
 $('autoAdvance').addEventListener('click', () => post({ autoAdvance: !$('autoAdvance').classList.contains('on') }));

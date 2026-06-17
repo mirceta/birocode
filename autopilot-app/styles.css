@@ -137,3 +137,69 @@ main { max-width: 1140px; margin: 0 auto; padding: 20px 22px 40px; }
 .outcome.sent { background: #d8f3df; color: #1a7f37; }
 .outcome.suggested { background: #dbe9ff; color: #1f4ea8; }
 .outcome.escalated { background: #ffe0c2; color: #b85c00; }
+
+/* ---- routine prompts (editable label space + mined drafts) ---- */
+.rp-intro { display: flex; flex-direction: column; gap: 3px; padding: 12px 16px;
+  background: #fafbfe; border-bottom: 1px solid #eef2f8; }
+.rp-intro b { color: #1c2330; }
+.rp-intro em { font-style: italic; color: #1f4ea8; }
+
+.rp-add { display: flex; gap: 8px; align-items: center; padding: 12px 16px; flex-wrap: wrap; }
+.rp-add__emoji { width: 48px; text-align: center; }
+.rp-add__label { width: 150px; }
+.rp-add__text { flex: 1 1 240px; min-width: 180px; }
+.rp-add input { font: inherit; font-size: 13px; padding: 7px 9px; border: 1px solid #c4cdda;
+  border-radius: 7px; background: #fff; color: #1c2330; }
+.rp-add input:focus { outline: none; border-color: #9ab6e6; }
+
+.rp-mini { border-radius: 7px; padding: 6px 10px; font: inherit; font-size: 12px;
+  border: 1px solid #c4cdda; background: #fff; color: #415062; cursor: pointer; }
+.rp-mini:hover { background: #eef2f8; }
+.rp-mini:disabled { opacity: .5; cursor: default; }
+.rp-mini.on { background: #d8f3df; border-color: #9ad6ab; color: #1a7f37; font-weight: 600; }
+.rp-mini.on:hover { background: #c9eed4; }
+.rp-mini--danger { color: #b3261e; border-color: #e6a8a2; }
+.rp-mini--danger:hover { background: #fdeceb; }
+
+.rp-list { list-style: none; margin: 0; padding: 0; }
+/* stacked layout: label/emoji head on top, prompt text wraps below — so long
+   prompts never render one character per line (the bug on the old surface). */
+.rp-item { display: flex; align-items: flex-start; gap: 12px; padding: 11px 16px;
+  border-top: 1px solid #eef2f8; }
+.rp-item:first-child { border-top: 0; }
+.rp-item__main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.rp-item__head { display: flex; align-items: center; gap: 7px; }
+.rp-item__emoji { font-size: 15px; }
+.rp-item__label { font-weight: 600; color: #1c2330; font-size: 13px; }
+.rp-item__text { display: block; background: #f4f6fb; color: #2b3545; border-radius: 6px;
+  padding: 6px 9px; font-size: 12.5px; white-space: pre-wrap; word-break: break-word; line-height: 1.45; }
+.rp-item__actions { display: flex; gap: 7px; flex: 0 0 auto; }
+
+.rp-item--edit { flex-wrap: wrap; }
+.rp-item--edit input { font: inherit; font-size: 13px; padding: 7px 9px; border: 1px solid #c4cdda;
+  border-radius: 7px; background: #fff; color: #1c2330; }
+.rp-edit__emoji { width: 48px; text-align: center; }
+.rp-edit__label { width: 150px; }
+.rp-edit__text { flex: 1 1 240px; min-width: 180px; }
+
+.rp-section { margin: 18px 0 2px; padding: 0 16px; font-size: 13px; color: #1c2330; }
+.rp-section__sub { margin: 0; padding: 0 16px 8px; font-size: 12px; }
+
+.rp-mined { list-style: none; margin: 0; padding: 0; }
+.routine { display: flex; gap: 12px; padding: 11px 16px; border-top: 1px solid #eef2f8; }
+.routine:first-child { border-top: 0; }
+.routine__rank { flex: 0 0 22px; height: 22px; border-radius: 50%; background: #eef2f8; color: #6b7787;
+  font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.routine__body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.routine__line { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.routine__text { color: #2b3545; font-size: 13px; word-break: break-word; }
+.routine__count { font-size: 11px; color: #5b6675; background: #eef2f8; padding: 1px 7px; border-radius: 999px; }
+.routine__tag { font-size: 11px; font-weight: 700; color: #1a7f37; }
+.routine__add { margin-left: auto; }
+.routine__meta { font-size: 12px; color: #8a97a8; display: flex; align-items: center; gap: 10px; }
+.routine__toggle { background: none; border: 0; color: #1f4ea8; cursor: pointer; font: inherit; font-size: 12px; padding: 0; }
+.routine__toggle:hover { text-decoration: underline; }
+.routine__contexts { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.routine__context { font-size: 12px; color: #5b6675; background: #fafbfe; border: 1px solid #eef2f8;
+  border-radius: 6px; padding: 5px 8px; }
+.routine__context-label { color: #8a97a8; font-style: italic; margin-right: 4px; }

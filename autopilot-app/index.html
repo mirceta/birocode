@@ -32,6 +32,7 @@
     <div id="live" class="tab" hidden>
       <nav class="subtabs" id="subtabs">
         <button data-sub="agents" class="on">Agents <span class="subtabs__n" id="n-agents">0</span></button>
+        <button data-sub="prompts">Routine prompts <span class="subtabs__n" id="n-prompts">0</span></button>
         <button data-sub="intercepts">Intercepted <span class="subtabs__live"></span></button>
         <button data-sub="history">Suggestion history</button>
         <button data-sub="audit">Auto-sent <span class="subtabs__n" id="n-audit">0</span></button>
@@ -48,6 +49,30 @@
           <div class="bar__deny">Always escalates: <span id="denylist" class="muted">—</span></div>
         </div>
         <ul class="agents" id="agents"></ul>
+      </section>
+
+      <!-- ROUTINE PROMPTS (the editable label space the brain chooses from) -->
+      <section class="subpanel" data-panel="prompts" hidden>
+        <div class="rp-intro">
+          <b>The prompts autopilot may send</b>
+          <span class="muted">This editable set <em>is</em> the brain's label space — it only ever
+            sends one of these, or escalates. Edits take effect on the next tick.</span>
+        </div>
+
+        <form class="rp-add" id="rp-add">
+          <input id="rp-add-emoji" class="rp-add__emoji" placeholder="🙂" maxlength="2" aria-label="emoji">
+          <input id="rp-add-label" class="rp-add__label" placeholder="Label (optional)" aria-label="label">
+          <input id="rp-add-text"  class="rp-add__text"  placeholder="Prompt text autopilot will send…" aria-label="prompt text">
+          <button type="submit" class="rp-mini on" id="rp-add-btn">+ Add</button>
+        </form>
+
+        <ul class="rp-list" id="rp-list"></ul>
+
+        <h3 class="rp-section">Suggested from your history</h3>
+        <p class="muted rp-section__sub">Replies you’ve repeated ≥3× across repos.
+          These are <b>drafts only</b> — nothing here is recommendable until you add it
+          to your list. Already-adopted ones are marked ★.</p>
+        <ol class="rp-mined" id="rp-mined"></ol>
       </section>
 
       <!-- INTERCEPTED (live feed: every message the engine grabs + processes) -->
