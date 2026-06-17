@@ -84,6 +84,13 @@
 
 ## Active feature plans
 
+- [Queued prompts](plans/queued-prompts.md) — each agent gets an ordered **prompt
+  queue**: while it's working on the current prompt (and the run gate would 409), the
+  operator lines up the next ones, and the harness **auto-sends the next queued prompt**
+  when the run finishes, until the queue drains. Builds on the
+  [prompt-stash](plans/prompt-stash.md) per-agent backend-synced pattern, adding
+  auto-execution via `ChatContext`'s run-completion hook. **DESIGN** (open: relation to
+  stash, error-pauses-queue, Stop≠next). On `feature/queued-prompts`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
