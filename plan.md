@@ -37,6 +37,15 @@
 
 ## Active feature plans
 
+- [Autopilot goes to the harness](plans/autopilot-to-harness.md) — promote the autopilot
+  **dashboard** out of the build-less per-repo local app (`autopilot-app/`, served via
+  `localview`) and **into the harness itself** as a first-class React surface — finishing the
+  migration to "option A" the [dashboard subdoc](plans/loop-autopilot-dashboard.md) locked but
+  shipped only as an interim local app. Mostly a frontend relocation: port the four subtabs
+  (Agents / Intercepted / Suggestion history / Auto-sent) into `Autopilot.jsx`, then retire the
+  local app; backend (`Services/Autopilot/*`) and the operator gate stay as-is. Scope nuances
+  (harness-level cross-agent op? self-dev target? ungate?) are open questions in the plan. On
+  `feature/autopilot-to-harness`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
