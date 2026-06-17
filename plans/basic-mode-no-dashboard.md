@@ -2,8 +2,8 @@
 
 > Editing this plan? First read [doc principles](doc-principles.md).
 
-> **Status (2026-06-17): DESIGN.** On `feature/basic-mode-no-dashboard`. Bug fix, not
-> built yet.
+> **Status (2026-06-17): SHIPPED.** Deployed to live :5099 & confirmed; **merged to main
+> 2026-06-17**. On `feature/basic-mode-no-dashboard`.
 
 ## The bug
 

@@ -36,13 +36,6 @@
 
 ## Active feature plans
 
-- [Basic mode never shows the dashboard](plans/basic-mode-no-dashboard.md) — **bug fix**:
-  Basic (Simple) mode must always be the plain tabbed view, never the agent-dashboard
-  overlay. The `agentDashboard: 'advanced'` gate only blocks *opening* it; the overlay is
-  driven by `dashOpen` local state, so opening it in Advanced then switching to Basic leaves
-  it showing (`Layout.jsx`). Fix: gate the render on `dashEnabled && dashOpen` and reset
-  `dashOpen` when the feature goes away. **DESIGN**, not built. On
-  `feature/basic-mode-no-dashboard`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
@@ -64,6 +57,13 @@
 
 ## Recently shipped
 
+- [Basic mode never shows the dashboard](plans/basic-mode-no-dashboard.md) — **bug fix**:
+  Basic (Simple) mode is always the plain tabbed view. The `agentDashboard: 'advanced'`
+  gate only blocked *opening* the overlay; it renders from `dashOpen` local state, so
+  opening it in Advanced then switching to Basic left it showing. Now `Layout.jsx` gates the
+  render on `dashEnabled && dashOpen` and resets `dashOpen` when the feature goes away.
+  Frontend only; deployed to live :5099 & confirmed; **merged to main 2026-06-17**. On
+  `feature/basic-mode-no-dashboard`.
 - [Loop autopilot — auto-advance agents through my routine replies](plans/loop-autopilot.md)
   — autopilot mines the user's history for recurring **routine prompts**, then at
   each idle agent turn classifies the situation into one of the user's **editable
