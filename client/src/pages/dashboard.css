@@ -50,6 +50,82 @@
   align-items: flex-start;
   gap: 20px;
   flex-wrap: wrap;
+  position: relative; /* anchors the drag-layout drop-zone overlay */
+}
+
+/* Free 2D drag layout (plans/dashboard-drag-layout.md): once a panel is placed,
+   the body becomes a positioning canvas and both panels render absolutely at
+   their saved {x,y}. Until then the normal flex flow (Ideas left, agents right)
+   is untouched. */
+.dash__body--free {
+  display: block;
+  min-height: calc(100dvh - var(--header-height, 56px) - 80px);
+}
+
+/* In free mode the Ideas aside must not stay sticky (it would fight its absolute
+   {x,y}); the inline position:absolute already overrides, this just drops top. */
+.dash__body--free .dash__ideas {
+  top: auto;
+}
+
+/* Grid mode order flip (the ⇄ shortcut): reverse the responsive flow so agents
+   come first, while DOM/tab order stays Ideas-first. */
+.dash__body--swapped {
+  flex-direction: row-reverse;
+}
+
+.dash__body--dragging {
+  user-select: none;
+  cursor: grabbing;
+}
+
+/* Group the layout-mode switch + its mode-specific action (reset / ⇄). */
+.dash__layout-ctl {
+  display: flex;
+  gap: 6px;
+  margin-right: 12px;
+}
+
+.dash__layout-ctl .dash__swap {
+  margin-right: 0;
+}
+
+/* The panel being dragged lifts above the other. */
+.dash__panel--lifted {
+  z-index: 6;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+/* Per-panel drag handle in each panel's header. */
+.dash__drag {
+  border: none;
+  background: none;
+  cursor: grab;
+  color: var(--color-text-soft);
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+
+.dash__drag:hover {
+  color: var(--color-accent);
+  background: var(--color-bg);
+}
+
+.dash__drag:active {
+  cursor: grabbing;
+}
+
+.dash__main-head {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.dash__main-head-title {
+  font-size: 13px;
+  color: var(--color-text-soft);
 }
 
 .dash__ideas {
@@ -485,6 +561,32 @@
 .dash__zoom-btn:disabled {
   opacity: 0.35;
   cursor: default;
+}
+
+/* Reset-layout button (plans/dashboard-drag-layout.md) — sits in the header
+   controls, same pill look as a zoom button; shown only once panels are moved. */
+.dash__swap {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: 999px;
+  min-width: 30px;
+  height: 30px;
+  margin-right: 12px;
+  padding: 0 8px;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--color-text-soft);
+  cursor: pointer;
+}
+
+.dash__swap:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.dash__swap--on {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
 }
 
 .dash__view {
