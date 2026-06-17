@@ -2,8 +2,10 @@
 
 > Editing this plan? First read [doc principles](doc-principles.md).
 
-> **Status (2026-06-17): BUILT.** On `feature/dock-color-background`. Implemented + frontend
-> rebuilt (`client/dist`). Design adjusted during build — see "Approach" note below.
+> **Status (2026-06-17): BUILT + EXTENDED.** On `feature/dock-color-background`. First shipped
+> as a header-bar tint; then extended on request to wash the **whole dock** (chat included) —
+> see "Update — full-dock wash" below. The earlier header-only reasoning in "Approach" is
+> superseded by it.
 
 ## Goal
 
@@ -48,6 +50,30 @@ This survives the `--important` state: the red border and the bar tint are indep
 properties, so an important + coloured dock shows **red border + colour bar** →
 distinguishable again. Used 16% (vs the card's 12%) so it reads under the red border, plus a
 matching hover variant (the bar doubles as the maximize button). Cards unchanged.
+
+## Update — full-dock wash (supersedes the header-only approach above)
+
+The header-only reasoning ("tinting `.phone` does NOT work because the inner regions paint an
+opaque `var(--color-surface)`") was only true for putting a `background` on `.phone`. The fix
+is to re-tint the **tokens those regions read** rather than paint behind them. On
+`.phone[data-colored='true']` we now redefine:
+
+```css
+--color-bg: color-mix(in srgb, var(--agent-color) 12%, #faf7f2);
+--color-surface: color-mix(in srgb, var(--agent-color) 8%, #ffffff);
+```
+
+Because every dock region **and the same-DOM embedded `<Chat>`** read
+`var(--color-surface)`/`var(--color-bg)`, the agent-colour wash cascades through the entire
+dock — lanes, git row, and the chat background/bubbles — automatically. Notes:
+- Mixed against the **literal theme bases** (`global.css`: `#ffffff` / `#faf7f2`), not the
+  tokens themselves, to avoid a self-referential custom-property cycle. Single light theme
+  today, so the literals are safe; revisit if a dark theme is added.
+- `--color-surface` stays a touch lighter than `--color-bg` so chat bubbles/cards still layer
+  above the chat background.
+- The header-bar rule is kept and still reads the (now tinted) `--color-surface` + more agent
+  colour, so the header stays the most saturated identity anchor. Accent/brand colours, code
+  blocks (hardcoded dark), and borders are untouched.
 
 ## Out of scope
 
