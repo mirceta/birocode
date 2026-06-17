@@ -1,51 +1,52 @@
-// Stale-cache fix — USAGE guide SPA. Self-contained, no libraries, relative
-// URLs (served under /api/localview/<repo>/app/understanding/). Two interactions:
-//   1) the symptom picker maps "what you're seeing" → the right rung + advice;
-//   2) picking a symptom also highlights the matching rung in the ladder above.
-// Mirrors plans/cache-hardening.md (three layers = three things you can do).
+// Understanding app for: "assume the other agent is on the SAME box — what does
+// that change for the paste that teaches the Understanding-app convention?"
+// Answer: it collapses the self-contained copy into a pointer to one on-disk doc.
+// Self-contained, no libraries, relative URLs only.
+
 (function () {
-  const answer = document.getElementById('answer');
-  const choices = Array.from(document.querySelectorAll('.choice'));
-  const rungs = Array.from(document.querySelectorAll('.rung'));
+  var PANES = {
+    copy: {
+      h3: '📋 Self-contained copy',
+      p: 'The old paste re-typed the entire 4-line contract into the prompt, so the ' +
+         'other agent needed nothing from this box to start. Robust anywhere — but it is ' +
+         'a copy, and copies drift.',
+      pills: ['~5 paragraphs', 'works offline', 'duplicated text', 'drifts on change'],
+      pillsNote: 'fine when you can’t assume reachability — not our case',
+    },
+    pointer: {
+      h3: '🎯 Pointer (chosen)',
+      p: 'Same box, so the agent just reads the canonical doc off disk. The paste shrinks ' +
+         'to two lines: “read docs/understanding-app-convention.md and follow it.” One ' +
+         'source of truth, nothing to keep in sync.',
+      pills: ['2 lines', 'reads off disk', 'single source', 'no drift'],
+      pillsNote: 'enabled purely by the same-box assumption',
+    },
+  };
 
-  // One entry per rung — title + the concrete action to take.
-  const ADVICE = [
-    {
-      title: 'Rung 1 — just reload.',
-      body: 'The shell is served <b>no-store</b>, so a normal reload (Ctrl+R, or ' +
-            'pull-to-refresh) already lands on the newest build. Nothing to click.',
-      tone: 'ok',
-    },
-    {
-      title: 'Rung 2 — click Reload on the banner.',
-      body: 'That bar means the server is serving a newer build than this tab is ' +
-            'running. Tap <b>Reload</b>; it runs the thorough clear and you’re current.',
-      tone: 'ok',
-    },
-    {
-      title: 'Rung 3 — Force refresh.',
-      body: 'Go to <b>Settings ▸ Maintenance ▸ Force refresh</b>. It wipes ' +
-            'caches, unregisters service workers, and reloads cache-busted — a ' +
-            'guaranteed clean slate even through a stubborn proxy. Then check ' +
-            '<b>This tab’s build</b> right below the button to confirm.',
-      tone: 'warn',
-    },
-  ];
+  var tabs = document.getElementById('demoTabs');
+  var screen = document.getElementById('demoScreen');
 
-  function select(rung) {
-    const a = ADVICE[rung];
-    answer.innerHTML =
-      '<p class="answer__title">' + a.title + '</p>' +
-      '<p class="answer__body">' + a.body + '</p>';
-    answer.className = 'answer show ' + a.tone;
-    choices.forEach((c) => c.classList.toggle('active', Number(c.dataset.rung) === rung));
-    rungs.forEach((r) => r.classList.toggle('lit', Number(r.dataset.rung) === rung));
-    // Bring the highlighted rung into view on small screens.
-    const target = rungs.find((r) => Number(r.dataset.rung) === rung);
-    if (target && target.scrollIntoView) {
-      target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
+  function render(id) {
+    var d = PANES[id];
+    var pane = document.createElement('div');
+    pane.className = 'pane';
+    pane.innerHTML =
+      '<h3>' + d.h3 + '</h3><p>' + d.p + '</p>' +
+      '<div class="pane__row">' +
+      d.pills.map(function (p) { return '<span class="pane__pill">' + p + '</span>'; }).join('') +
+      '</div><p class="pane__ghost" style="margin-top:10px">' + d.pillsNote + '</p>';
+    screen.innerHTML = '';
+    screen.appendChild(pane);
   }
 
-  choices.forEach((c) => c.addEventListener('click', () => select(Number(c.dataset.rung))));
+  Array.prototype.forEach.call(tabs.children, function (btn) {
+    btn.addEventListener('click', function () {
+      Array.prototype.forEach.call(tabs.children, function (b) {
+        b.classList.toggle('tab--on', b === btn);
+      });
+      render(btn.dataset.tab);
+    });
+  });
+
+  render('pointer');
 })();

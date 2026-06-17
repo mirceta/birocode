@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Claude Web — explainers</title>
+  <!-- Relative URLs on purpose: this page is served UNDER the harness proxy
+       sub-path /api/localview/<repo>/app/<appId>/ (the bare /api/localview/<repo>/
+       is a shortcut to the default app). A leading slash would escape the
+       sub-path and 404. This homepage practices the very contract its first
+       topic teaches. -->
+  <link rel="stylesheet" href="./assets/styles.css" />
+</head>
+<body>
+  <header class="site">
+    <div class="site__title">
+      <span class="site__glyph">🧭</span>
+      <div>
+        <h1>Claude Web — explainers</h1>
+        <p>Live, build-less walkthroughs of how Claude Web works. Each tab is one
+           topic; this homepage is itself a correctly-exposed product on <code>:5305</code>.</p>
+      </div>
+    </div>
+    <div class="site__badge" title="This homepage is itself a correctly-exposed local product.">
+      served live on :5305
+    </div>
+  </header>
+
+  <!-- Top-level topic tabs. Built by home.js from ClaudeWebHome.topics. -->
+  <nav class="topics" id="topic-tabs" role="tablist" aria-label="Explainer topics"></nav>
+
+  <!-- The active topic mounts its whole UI here. -->
+  <div class="topic-stage" id="topic-stage"></div>
+
+  <!-- Load order matters:
+       1) shell registry, 2) exposure data, 3) viz variants (register into
+       ExposureViz), 4) topics (register into ClaudeWebHome), 5) shell builder. -->
+  <script src="./assets/home-core.js"></script>
+  <script src="./assets/core.js"></script>
+  <script src="./assets/viz-pipeline.js"></script>
+  <script src="./assets/viz-sequence.js"></script>
+  <script src="./assets/viz-layers.js"></script>
+  <script src="./assets/viz-stepper.js"></script>
+  <script src="./assets/exposure-topic.js"></script>
+  <script src="./assets/understanding-topic.js"></script>
+  <script src="./assets/home.js"></script>
+</body>
+</html>

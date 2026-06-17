@@ -3,91 +3,107 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Using the stale-cache fix — what to do when a deploy "didn't ship"</title>
+  <title>Understanding — what “same box” changes for the paste</title>
+  <!-- Relative URL only: this folder is served under the proxy sub-path
+       /api/localview/<repo>/app/understanding/ — a leading slash escapes it and 404s. -->
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <header class="hero">
-    <h1>“I deployed — why am I still seeing the old version?”</h1>
-    <p class="sub">How to use the stale-cache fix. Short answer: <b>almost always, just reload.</b></p>
+    <div class="hero__kicker">my understanding of your call</div>
+    <h1>“Same box” turns the paste from a
+        <span class="hl">full copy</span> into a
+        <span class="hl2">pointer</span></h1>
+    <p class="hero__sub">You told me to assume the other agent runs on <strong>this same
+       box</strong>. That single fact collapses the whole self-contained-vs-pointer debate —
+       and it’s simpler than the HTTP idea we were circling.</p>
   </header>
 
-  <main>
-    <!-- The escalation ladder: 3 rungs, do the least you can. -->
-    <section class="card">
-      <h2>Three things you can do — try them top-down</h2>
-      <ol class="ladder">
-        <li class="rung" data-rung="0">
-          <span class="rung__lvl">1</span>
-          <div class="rung__body">
-            <h3>Just reload <span class="auto">automatic — no button</span></h3>
-            <p>
-              The server now tells your browser <b>never to cache the app shell</b>
-              (<code>index.html</code> + <code>version.json</code> → <code>no-store</code>).
-              So a plain reload — <kbd>Ctrl</kbd>+<kbd>R</kbd>, or pull-to-refresh on
-              the phone — <b>always</b> lands on the newest build. This covers ~99% of cases.
-              You don't click anything; it just works now.
-            </p>
-          </div>
-        </li>
-        <li class="rung" data-rung="1">
-          <span class="rung__lvl">2</span>
-          <div class="rung__body">
-            <h3>Click <b>Reload</b> on the banner <span class="when">when it appears on its own</span></h3>
-            <p>
-              If a tab has been <b>open for a while</b> when a new build ships, a small
-              bar slides in: <i>“A new version of Claude Web is available.”</i> Tap its
-              <b>Reload</b> and you're current. (A single-page tab never re-fetches the
-              shell by itself, so this banner is how a long-open tab finds out.) It now
-              does the <i>thorough</i> clear — not a plain reload that could re-serve the
-              stale shell.
-            </p>
-          </div>
-        </li>
-        <li class="rung" data-rung="2">
-          <span class="rung__lvl">3</span>
-          <div class="rung__body">
-            <h3>Hit <b>Force refresh</b> <span class="when">Settings ▸ Maintenance</span></h3>
-            <p>
-              The nuclear option, for when you <i>still</i> suspect a stale page (a stubborn
-              proxy, a service-worker cache, a weird mobile browser). One button that
-              <b>wipes all Cache Storage, unregisters service workers, and reloads with a
-              cache-bust</b> — a guaranteed clean slate. Right below it, <b>“This tab's build”</b>
-              shows the timestamp you're actually running, so you can confirm you're current.
-            </p>
-          </div>
-        </li>
-      </ol>
-    </section>
-
-    <!-- Interactive: pick your symptom, get the rung. -->
-    <section class="card picker">
-      <h2>Not sure which one? Pick what you're seeing</h2>
-      <div class="choices">
-        <button class="choice" data-rung="0">I just deployed and want to see it</button>
-        <button class="choice" data-rung="1">A “new version available” bar showed up</button>
-        <button class="choice" data-rung="2">I reloaded and it's <i>still</i> the old version</button>
+  <!-- ── 1: the shift, before → after ─────────────────────────────── -->
+  <section class="panel">
+    <h2><span class="num">1</span> The shift</h2>
+    <div class="shift">
+      <div class="shift__card shift__card--before">
+        <div class="shift__tag">before</div>
+        <div class="mini">
+          <div class="mini__bar"><span>🚀 paste into other agent — ~5 paragraphs</span></div>
+          <div class="mini__body">the <em>whole</em> 4-line contract, re-typed in the prompt</div>
+        </div>
+        <p class="shift__note"><strong>Self-contained copy.</strong> Safe anywhere, but every
+           agent carries its own copy of the convention — and each copy drifts the moment the
+           real convention changes.</p>
       </div>
-      <div id="answer" class="answer" aria-live="polite">
-        <p class="answer__hint">↑ pick one to see what to do</p>
+
+      <div class="shift__arrow">→</div>
+
+      <div class="shift__card shift__card--after">
+        <div class="shift__tag shift__tag--go">after</div>
+        <div class="mini">
+          <div class="mini__bar"><span>🚀 paste into other agent — 2 lines</span></div>
+          <div class="mini__body">“read <code>docs/understanding-app-convention.md</code> and follow it”</div>
+        </div>
+        <p class="shift__note"><strong>Pointer to one on-disk doc.</strong> Same box → the agent
+           reads the canonical file off the filesystem. One source of truth; change it once and
+           every agent picks it up.</p>
       </div>
-    </section>
+    </div>
+  </section>
 
-    <section class="card aside">
-      <h2>Good to know</h2>
-      <ul class="notes">
-        <li><b>You can't break anything.</b> Force refresh only clears <i>caches</i> — no data, no settings, no agent state is touched.</li>
-        <li><b>Confirm you're current:</b> Settings ▸ Maintenance shows <b>This tab's build</b>; compare it across two tabs if in doubt.</li>
-        <li><b>Why hashed assets still cache forever:</b> <code>/assets/index-<i>abc123</i>.js</code> is safe to keep for a year — its name changes whenever its content does, so it's never stale.</li>
-        <li><b>The proxy caveat:</b> the off-box IIS+ARR proxy could still hold a copy; rung 1's <code>no-store</code> plus rung 3's cache-bust are the belt-and-suspenders against it.</li>
-      </ul>
-    </section>
+  <!-- ── 2: live compare ──────────────────────────────────────────── -->
+  <section class="panel">
+    <h2><span class="num">2</span> The two pastes, side by side <span class="h2sub">— click to compare</span></h2>
+    <div class="demo">
+      <div class="demo__tabs" id="demoTabs">
+        <button class="tab" data-tab="copy">📋 Self-contained copy</button>
+        <button class="tab tab--on" data-tab="pointer">🎯 Pointer (chosen)</button>
+      </div>
+      <div class="demo__screen" id="demoScreen"><!-- panes injected by app.js --></div>
+    </div>
+  </section>
 
-    <footer>
-      <p>Live usage guide · overwritten each time the explanation changes ·
-         plan: <code>plans/cache-hardening.md</code></p>
-    </footer>
-  </main>
+  <!-- ── 3: why same-box unlocks it ───────────────────────────────── -->
+  <section class="panel">
+    <h2><span class="num">3</span> Why “same box” is what unlocks the pointer</h2>
+    <p class="lead">The only reason the paste was a copy was the fear the other agent
+       <em>couldn’t reach</em> the convention. On-box, that fear is gone — for a simpler
+       reason than HTTP:</p>
+    <ol class="contract">
+      <li><b>It reads the doc off disk.</b> No server call at all — just open the file at its
+          absolute path. Always works on-box.</li>
+      <li><b>No WebFetch empty-shell problem.</b> The homepage is JS-rendered, so fetching it
+          over HTTP returns a blank page. A plain markdown file sidesteps that entirely.</li>
+      <li><b>One source of truth.</b> The contract lives in one file; the paste and the
+          homepage tutorial both just <em>point</em> at it.</li>
+      <li><b>No drift.</b> Change the convention once and every agent — and the homepage —
+          reflects it. No stale pasted copies to chase.</li>
+    </ol>
+  </section>
+
+  <!-- ── 4: the one design call ───────────────────────────────────── -->
+  <section class="panel">
+    <h2><span class="num">4</span> One design call I made <span class="h2sub">— where the pointer points</span></h2>
+    <div class="choice">
+      <div class="choice__card choice__card--rec">
+        <div class="choice__tag">chosen</div>
+        <h4>A focused doc: <code>docs/understanding-app-convention.md</code></h4>
+        <p>Agent-agnostic, just the convention. New file; the paste and the homepage topic both
+           point here, and <code>CLAUDE.md</code> references it as the source of truth.</p>
+      </div>
+      <div class="choice__card">
+        <div class="choice__tag choice__tag--big">rejected</div>
+        <h4>Point at <code>CLAUDE.md</code></h4>
+        <p>It works on-box too, but it’s full of harness-only instructions an agent <em>in
+           another repo</em> doesn’t need. Too much noise to point a stranger at.</p>
+      </div>
+    </div>
+    <p class="ask__foot">Trade-off worth naming: the pointer hard-codes this repo’s absolute
+       path, so it breaks if the repo moves. Fine for your box; flag if that ever changes.</p>
+  </section>
+
+  <footer class="foot">
+    This page is my <strong>understanding</strong> of the call, not the build. The change is
+    already in: new doc, shortened paste, CLAUDE.md pointer. Tell me where I’m off.
+  </footer>
 
   <script src="./app.js"></script>
 </body>
