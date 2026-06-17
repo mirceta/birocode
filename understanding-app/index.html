@@ -3,67 +3,89 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Why "the deploy didn't ship" — and the fix</title>
+  <title>Using the stale-cache fix — what to do when a deploy "didn't ship"</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <header class="hero">
-    <h1>“It deployed fine, but my browser showed the old version.”</h1>
-    <p class="sub">Why this kept happening — and the three things that now stop it.</p>
+    <h1>“I deployed — why am I still seeing the old version?”</h1>
+    <p class="sub">How to use the stale-cache fix. Short answer: <b>almost always, just reload.</b></p>
   </header>
 
   <main>
+    <!-- The escalation ladder: 3 rungs, do the least you can. -->
     <section class="card">
-      <h2>The trap: a cacheable <code>index.html</code></h2>
-      <p>
-        The build splits into a tiny <b>index.html</b> shell and big
-        <b>content-hashed</b> JS files (<code>index-<i>BLqz5rzZ</i>.js</code>).
-        The hash <i>is</i> the version. <code>index.html</code> is the one file
-        that points at the current hashes — so if the browser (or the off-box
-        IIS+ARR proxy) caches <code>index.html</code>, it keeps loading
-        <b>yesterday's</b> hashes. The new code sits on the server, untouched.
-      </p>
-      <div class="stage">
-        <div class="row">
-          <div class="box server">SERVER<br /><span id="srvHash">index-NEW.js</span></div>
-          <div class="arrow">→</div>
-          <div class="box cache" id="cacheBox">BROWSER CACHE<br /><span id="cacheHash">index-OLD.js</span></div>
-          <div class="arrow">→</div>
-          <div class="box tab" id="tabBox">YOUR TAB<br /><span id="tabHash">index-OLD.js</span></div>
-        </div>
-        <p class="verdict" id="verdict">⚠ Stale — the cached shell pins the OLD hash.</p>
+      <h2>Three things you can do — try them top-down</h2>
+      <ol class="ladder">
+        <li class="rung" data-rung="0">
+          <span class="rung__lvl">1</span>
+          <div class="rung__body">
+            <h3>Just reload <span class="auto">automatic — no button</span></h3>
+            <p>
+              The server now tells your browser <b>never to cache the app shell</b>
+              (<code>index.html</code> + <code>version.json</code> → <code>no-store</code>).
+              So a plain reload — <kbd>Ctrl</kbd>+<kbd>R</kbd>, or pull-to-refresh on
+              the phone — <b>always</b> lands on the newest build. This covers ~99% of cases.
+              You don't click anything; it just works now.
+            </p>
+          </div>
+        </li>
+        <li class="rung" data-rung="1">
+          <span class="rung__lvl">2</span>
+          <div class="rung__body">
+            <h3>Click <b>Reload</b> on the banner <span class="when">when it appears on its own</span></h3>
+            <p>
+              If a tab has been <b>open for a while</b> when a new build ships, a small
+              bar slides in: <i>“A new version of Claude Web is available.”</i> Tap its
+              <b>Reload</b> and you're current. (A single-page tab never re-fetches the
+              shell by itself, so this banner is how a long-open tab finds out.) It now
+              does the <i>thorough</i> clear — not a plain reload that could re-serve the
+              stale shell.
+            </p>
+          </div>
+        </li>
+        <li class="rung" data-rung="2">
+          <span class="rung__lvl">3</span>
+          <div class="rung__body">
+            <h3>Hit <b>Force refresh</b> <span class="when">Settings ▸ Maintenance</span></h3>
+            <p>
+              The nuclear option, for when you <i>still</i> suspect a stale page (a stubborn
+              proxy, a service-worker cache, a weird mobile browser). One button that
+              <b>wipes all Cache Storage, unregisters service workers, and reloads with a
+              cache-bust</b> — a guaranteed clean slate. Right below it, <b>“This tab's build”</b>
+              shows the timestamp you're actually running, so you can confirm you're current.
+            </p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <!-- Interactive: pick your symptom, get the rung. -->
+    <section class="card picker">
+      <h2>Not sure which one? Pick what you're seeing</h2>
+      <div class="choices">
+        <button class="choice" data-rung="0">I just deployed and want to see it</button>
+        <button class="choice" data-rung="1">A “new version available” bar showed up</button>
+        <button class="choice" data-rung="2">I reloaded and it's <i>still</i> the old version</button>
+      </div>
+      <div id="answer" class="answer" aria-live="polite">
+        <p class="answer__hint">↑ pick one to see what to do</p>
       </div>
     </section>
 
-    <section class="card fix">
-      <h2>The fix — three layers</h2>
-      <ol class="layers">
-        <li id="L1">
-          <b>1 · Server: <code>no-store</code> on the shell.</b>
-          <code>index.html</code> &amp; <code>version.json</code> now say
-          “never cache me”; the hashed <code>/assets/*</code> stay cached forever
-          (the name changes when the content does). So a reload <i>always</i>
-          fetches the fresh shell → fresh hashes. <span class="tag">root cause</span>
-        </li>
-        <li id="L2">
-          <b>2 · Force refresh button (Settings ▸ Maintenance).</b>
-          On demand: wipes Cache Storage, unregisters service workers, and reloads
-          with a cache-bust — a guaranteed clean slate, even through a stubborn
-          proxy. <span class="tag">the button you asked for</span>
-        </li>
-        <li id="L3">
-          <b>3 · The auto-banner now bites.</b>
-          The existing “new version available” banner used a plain reload (which
-          could re-serve the cached shell). It now runs the same thorough clear.
-          <span class="tag">closes the leak</span>
-        </li>
-      </ol>
-      <button id="fixBtn" class="cta">▶ Run the fix on the diagram above</button>
+    <section class="card aside">
+      <h2>Good to know</h2>
+      <ul class="notes">
+        <li><b>You can't break anything.</b> Force refresh only clears <i>caches</i> — no data, no settings, no agent state is touched.</li>
+        <li><b>Confirm you're current:</b> Settings ▸ Maintenance shows <b>This tab's build</b>; compare it across two tabs if in doubt.</li>
+        <li><b>Why hashed assets still cache forever:</b> <code>/assets/index-<i>abc123</i>.js</code> is safe to keep for a year — its name changes whenever its content does, so it's never stale.</li>
+        <li><b>The proxy caveat:</b> the off-box IIS+ARR proxy could still hold a copy; rung 1's <code>no-store</code> plus rung 3's cache-bust are the belt-and-suspenders against it.</li>
+      </ul>
     </section>
 
     <footer>
-      <p>Live explainer · overwritten each time the explanation changes ·
-         see <code>understanding.md</code></p>
+      <p>Live usage guide · overwritten each time the explanation changes ·
+         plan: <code>plans/cache-hardening.md</code></p>
     </footer>
   </main>
 

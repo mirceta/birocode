@@ -1,6 +1,8 @@
 # Ideas — an "Active" section for what you're working on now
 
-> **Status (2026-06-17):** KICKOFF — design proposed, not built. On
+> **Status (2026-06-17):** Built + browser-verified on an isolated port; rode into
+> the live `:5099` build with the cache-hardening deploy (not separately
+> keep-it-confirmed); **merged to main 2026-06-17**. On
 > `feature/ideas-active-section`, branched from `main` @ `71f3778`. Structured per
 > [doc-principles.md](doc-principles.md).
 

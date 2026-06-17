@@ -36,12 +36,6 @@
 
 ## Active feature plans
 
-- [Ideas — an "Active" section](plans/ideas-active-section.md) — move an idea into
-  an **Active** group pinned at the top of the Ideas surface, so "what are we
-  working on now" is answerable at a glance; toggle it back out to the backlog. An
-  optional `Active` flag on each idea (same no-migration pattern as `project` /
-  `priority`), shown in both the Ideas tab and the dashboard panel via the shared
-  `IdeasPanel`. KICKOFF — not built. On `feature/ideas-active-section`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
@@ -63,14 +57,22 @@
 
 ## Recently shipped
 
+- [Ideas — an "Active" section](plans/ideas-active-section.md) — move an idea into
+  an **Active** group pinned at the top of the Ideas surface, so "what are we
+  working on now" is answerable at a glance; toggle it back out to the backlog. An
+  optional `Active` flag on each idea (same no-migration pattern as `project` /
+  `priority`), shown in both the Ideas tab and the dashboard panel via the shared
+  `IdeasPanel`. Built + browser-verified on an isolated port; rode into the live
+  `:5099` build with the cache-hardening deploy (not separately keep-it-confirmed);
+  **merged to main 2026-06-17**. On `feature/ideas-active-section`.
 - [Stop stale code: no-store shell + Force-refresh](plans/cache-hardening.md) —
   kills the recurring "I deployed but my browser shows the old version": the SPA
   `index.html`/`version.json` are now served `no-store` (hashed `/assets/*` stay
   immutable) so a reload always lands on the latest build, a **Force refresh**
   button in Settings ▸ Maintenance wipes caches + service workers on demand, and
   the stale-version banner's Reload reuses that thorough clear. Built + verified on
-  isolated `:5210`; **deployed to live :5099 & confirmed**; not yet merged to main.
-  On `feature/ideas-active-section`.
+  isolated `:5210`; **deployed to live :5099 & confirmed**; **merged to main
+  2026-06-17**. On `feature/ideas-active-section`.
 - [Dock colour background](plans/dock-color-background.md) — a coloured agent's dock is now
   **washed in its colour**, not just bordered. Started as a header-bar tint (so the colour
   survives the **important** star repainting the border red), then extended to wash the
