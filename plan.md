@@ -159,6 +159,16 @@
 
 ## Recently shipped
 
+- [Queued prompts](plans/queued-prompts.md) — **merged with [prompt-stash](plans/prompt-stash.md)**:
+  the per-agent stash list *is* the queue. While the agent is busy (a normal send would
+  409) you line up the next prompts; **nothing auto-runs** — each chip has **Send**
+  (approve → send as the next turn, disabled while busy), **×** (delete), and tap-to-edit.
+  Works on **all three surfaces**, each correctly scoped: the main chat (tab-independent
+  **global queue** in `dock-stash.json` via `GET/POST/DELETE /api/dock/stash`), the active
+  agent tab (per-tab `stash` in `dock.json`), and each **dashboard dock** (its own agent
+  via a `stashTabId` threaded `PinnedAgent → Chat → ChatInput`). Durable across
+  refresh/redeploy. Backend (`DockRegistry`/`DockController`) + frontend; deployed to live
+  :5099 & confirmed; **merged to main 2026-06-17**. On `feature/queued-prompts`.
 - [Make the Exposure check app-aware](plans/expose-check-app-aware.md) — **bug fix**:
   the Local tab's "Verify exposure" always checked the repo's default app
   (`repo.LocalPort`, e.g. `:5300`), ignoring the switcher. Now `/api/expose/check`

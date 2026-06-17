@@ -13,6 +13,9 @@ namespace ClaudeWeb.Controllers;
 ///   DELETE /api/dock/{id} -- close a tab
 ///   POST   /api/dock/{id}/stash           -- stash a prompt idea { text, id?, createdAt? }
 ///   DELETE /api/dock/{id}/stash/{stashId} -- remove a stashed idea
+///   GET    /api/dock/stash               -- the main chat's tab-independent queue
+///   POST   /api/dock/stash               -- enqueue on it { text, id?, createdAt? }
+///   DELETE /api/dock/stash/{stashId}     -- remove from it
 /// </summary>
 [ApiController]
 [Route("api/dock")]
@@ -79,6 +82,38 @@ public class DockController : ControllerBase
     {
         _logger.CountRequest();
         return _dock.Remove(id) ? Ok(new { removed = true }) : NotFound(new { error = "unknown tab" });
+    }
+
+    // --- global (tab-independent) stash: the main chat's queue, which has no
+    // dock tab to attach to (plans/queued-prompts.md).
+    //   GET    /api/dock/stash           -- list the global queue
+    //   POST   /api/dock/stash           -- enqueue { text, id?, createdAt? }
+    //   DELETE /api/dock/stash/{stashId} -- remove one
+
+    [HttpGet("stash")]
+    public IActionResult ListGlobalStash()
+    {
+        _logger.CountRequest();
+        return Ok(_dock.GetGlobalStash().Select(StashDto));
+    }
+
+    [HttpPost("stash")]
+    public IActionResult AddGlobalStash([FromBody] StashRequest req)
+    {
+        _logger.CountRequest();
+        if (string.IsNullOrWhiteSpace(req.Text))
+            return BadRequest(new { error = "text is required" });
+        var item = _dock.AddGlobalStash(req.Text, req.Id, req.CreatedAt);
+        return item is null ? BadRequest(new { error = "text is required" }) : Ok(StashDto(item));
+    }
+
+    [HttpDelete("stash/{stashId}")]
+    public IActionResult RemoveGlobalStash(string stashId)
+    {
+        _logger.CountRequest();
+        return _dock.RemoveGlobalStash(stashId)
+            ? Ok(new { removed = true })
+            : NotFound(new { error = "unknown stash item" });
     }
 
     [HttpPost("{id}/stash")]
