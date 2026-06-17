@@ -40,6 +40,7 @@ public class AutopilotService : BackgroundService
     private readonly AutopilotConfigStore _config;
     private readonly AutopilotGate _operatorGate;
     private readonly PromptClassifier _brain;
+    private readonly AutopilotDiscoveryService _discovery;
     private readonly AutopilotAuditLog _audit;
     private readonly Logger _logger;
 
@@ -59,7 +60,8 @@ public class AutopilotService : BackgroundService
     public AutopilotService(
         RepositoryRegistry repos, SessionService sessions, RunSessionService runs,
         CliRunnerService cli, AutopilotConfigStore config, AutopilotGate operatorGate,
-        PromptClassifier brain, AutopilotAuditLog audit, Logger logger)
+        PromptClassifier brain, AutopilotDiscoveryService discovery,
+        AutopilotAuditLog audit, Logger logger)
     {
         _repos = repos;
         _sessions = sessions;
@@ -68,8 +70,52 @@ public class AutopilotService : BackgroundService
         _config = config;
         _operatorGate = operatorGate;
         _brain = brain;
+        _discovery = discovery;
         _audit = audit;
         _logger = logger;
+    }
+
+    // The brain's label space, mined from the user's own history. Rebuilding it scans
+    // every transcript (the discovery pass), so it's cached and refreshed only every
+    // few minutes — never on the 10s tick. Empty until the first refresh, which makes
+    // the engine escalate everything rather than act on a stale/absent set.
+    private static readonly TimeSpan RoutineRefresh = TimeSpan.FromMinutes(5);
+    private readonly object _routineGate = new();
+    private IReadOnlyList<PromptClassifier.Routine> _routines = Array.Empty<PromptClassifier.Routine>();
+    private DateTimeOffset _routinesBuiltAt = DateTimeOffset.MinValue;
+
+    public IReadOnlyList<PromptClassifier.Routine> Routines()
+    {
+        lock (_routineGate) return _routines;
+    }
+
+    // Rebuild the label space from discovery if it's never been built or has gone
+    // stale. Called from the tick (so it tracks the operator turning the gate on),
+    // but the scan itself runs at most once per RoutineRefresh window.
+    private IReadOnlyList<PromptClassifier.Routine> EnsureRoutines(DateTimeOffset now)
+    {
+        lock (_routineGate)
+            if (now - _routinesBuiltAt < RoutineRefresh)
+                return _routines;
+
+        IReadOnlyList<PromptClassifier.Routine> built;
+        try
+        {
+            built = PromptClassifier.BuildRoutines(_discovery.Discover());
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[AUTOPILOT] routine-set rebuild failed (keeping previous): {ex.Message}");
+            lock (_routineGate) return _routines;
+        }
+
+        lock (_routineGate)
+        {
+            _routines = built;
+            _routinesBuiltAt = now;
+        }
+        _logger.Info($"[AUTOPILOT] routine label space rebuilt: {built.Count} routines mined from history");
+        return built;
     }
 
     /// <param name="Decision">off | running | idle | suggestion | escalate | paused | sent.</param>
@@ -138,7 +184,12 @@ public class AutopilotService : BackgroundService
         }
 
         var cfg = _config.Get();
-        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var nowOffset = DateTimeOffset.UtcNow;
+        var now = nowOffset.ToUnixTimeMilliseconds();
+
+        // The label space the brain may pick from — the user's mined routines, not a
+        // built-in list. Refreshed at most every few minutes inside this call.
+        var routines = EnsureRoutines(nowOffset);
 
         foreach (var repo in _repos.GetAll().Where(r => r.Exists))
         {
@@ -172,7 +223,7 @@ public class AutopilotService : BackgroundService
                 continue;
             }
 
-            var v = _brain.Classify(lastAssistant, cfg.Threshold, cfg.DenyList);
+            var v = _brain.Classify(lastAssistant, cfg.Threshold, cfg.DenyList, routines);
             var snippet = Snippet(lastAssistant);
             var prev = _states.TryGetValue(repo.Id, out var p) ? p : null;
 

@@ -38,6 +38,11 @@ public class AutopilotDiscoveryService
     // A prompt must recur at least this many times across history to count as
     // "routine" — one-off task prompts appear once and are filtered out.
     private const int MinCount = 3;
+    // A genuine routine reply is SHORT ("deploy", "keep it", "continue from where you
+    // left off"). Anything longer is a one-off instruction or a pasted block (skill
+    // files, command output, multi-paragraph rants) — never a sendable routine, even
+    // if its wrapper text recurs. Cap on the normalised key length.
+    private const int MaxRoutineChars = 64;
     // Cap sessions scanned per repo (newest first) so a huge history can't make
     // the scan unbounded; plenty to surface what recurs.
     private const int MaxSessionsPerRepo = 150;
@@ -88,7 +93,10 @@ public class AutopilotDiscoveryService
                     // m.Role == "user": a human-typed reply.
                     userMessages++;
                     var key = Normalise(m.Text);
-                    if (key.Length == 0 || IsNoise(key)) continue;
+                    // Must be short, not system-noise, and contain a letter (drops bare
+                    // list fragments like "1." that normalise to digits/punctuation).
+                    if (key.Length == 0 || key.Length > MaxRoutineChars
+                        || !key.Any(char.IsLetter) || IsNoise(key)) continue;
 
                     if (!groups.TryGetValue(key, out var g))
                     {
@@ -160,13 +168,22 @@ public class AutopilotDiscoveryService
     }
 
     // System-injected "user" lines that aren't anything the human typed — the
-    // CLI records these when a turn is interrupted or a tool is cancelled. They'd
-    // otherwise masquerade as a top routine prompt.
+    // CLI records these when a turn is interrupted, a tool is cancelled, a slash
+    // command runs, or a skill/caveat block is spliced in. They recur structurally
+    // and would otherwise masquerade as a top routine prompt.
     private static bool IsNoise(string normalisedKey) =>
         normalisedKey.StartsWith("[request interrupted") ||
         normalisedKey == "[no response requested]" ||
         normalisedKey.StartsWith("api error") ||
-        normalisedKey.StartsWith("[the user");
+        normalisedKey.StartsWith("[the user") ||
+        // CLI/system wrapper tags: <command-name>, <command-message>,
+        // <local-command-caveat>, <system-reminder>, etc.
+        normalisedKey.StartsWith("<") ||
+        // A slash command the user invoked, not a reply they typed.
+        normalisedKey.StartsWith("/") ||
+        // Pasted skill/instruction blocks the CLI records as a user turn.
+        normalisedKey.StartsWith("base directory for this skill") ||
+        normalisedKey.StartsWith("caveat:");
 
     private static string Snippet(string text)
     {

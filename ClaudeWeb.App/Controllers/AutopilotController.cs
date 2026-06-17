@@ -101,6 +101,14 @@ public class AutopilotController : ControllerBase
             log = _engine.Log(),
             intercepts = _engine.Intercepts(),
             audit = _audit.Recent(),
+            // The brain's actual label space (mined from history), so the UI can show
+            // exactly what autopilot may send — label + trigger words + base confidence.
+            routines = _engine.Routines().Select(r => new
+            {
+                label = r.Label,
+                triggers = r.Triggers,
+                baseConfidence = r.BaseConfidence,
+            }),
         };
     }
 }

@@ -165,8 +165,10 @@ export default function Autopilot() {
       {tab === 'prompts' && (
         <>
           <p className="autopilot__summary">
-            The set the brain may send — confirmed from your custom prompts + mined history.
-            Autopilot only ever sends one of these, or escalates.
+            The brain's entire label space — <b>auto-mined from your own history</b> (replies
+            you've repeated ≥3× across repos). Autopilot can only ever send one of these, or
+            escalate; matches to your saved custom prompts are flagged ★. Manual curation isn't
+            built yet — this set is derived for you.
           </p>
           <ol className="autopilot__list">
             {routines.map((r, i) => (

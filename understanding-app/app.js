@@ -69,7 +69,7 @@ for (const id in NODES) {
 // --- step scripts ---
 const D = {
   engine: ['Engine — find an idle agent', 'A backend service polls (~10s) for agents that finished their turn. It grabs the idle agent’s last message — the situation to act on. No browser needed; it runs even with every tab closed.'],
-  brainOk: ['Brain — classify the situation', 'An LLM classifier maps the last message to ONE of your ~7 routine prompts, with a confidence. It never invents a prompt — it only picks from your known set, which is what makes it safe and auditable.'],
+  brainOk: ['Brain — classify the situation', 'The classifier maps the last message to ONE of your routine prompts, with a confidence. That set is MINED FROM YOUR OWN HISTORY (the replies you keep typing) — it never invents a prompt, only picks from your recurring set, which is what makes it safe and auditable. (Today it is a deterministic word-overlap match; the LLM classifier is the next step.)'],
   brainHard: ['Brain — no confident match', 'The classifier reads the message — e.g. “Two valid schemas, which do you want?” — and finds no confident routine match. Ambiguity deliberately defaults to “escalate.”'],
   gatePass: ['Gate — safe to act?', 'Confidence above your threshold? Not a risky / deny-listed action (deploy, force-push, delete…)? Autopilot enabled for this agent? Here: yes — it passes.'],
   gateFail: ['Gate → escalate', 'Low confidence, a risky/deny-listed action, or a genuine decision → the gate fails. A wrong auto-send is worse than a needless pause, so it stops here.'],
@@ -171,10 +171,10 @@ const EXPLAIN = {
     'Opens prg’s chat at the point autopilot stopped, so you make the hard call yourself. Autopilot won’t touch it until you respond — escalation is the whole safety mechanism.'],
   arm: ['Arm this agent',
     'Enables autopilot for birokrat-ai-platform: the engine starts classifying its turns and suggesting routine prompts. Nothing is sent automatically in Slice 2.'],
-  'prompt-add': ['Add a routine prompt',
-    'Pull one from your custom-prompts list or type a new phrasing. This set is the brain’s entire label space — autopilot can only ever send one of these, or escalate. Nothing free-form.'],
-  'prompt-edit': ['Edit this routine prompt',
-    'Rename it or adjust the situations that trigger it. Because the classifier picks only from this confirmed set, editing here directly changes what autopilot is allowed to send.'],
+  'prompt-add': ['Where the routine set comes from',
+    'This set is MINED FROM YOUR HISTORY — the replies you keep typing across repos (recurring ≥3×), with their trigger words taken from the assistant messages that preceded them. It is the brain’s entire label space: autopilot can only ever send one of these, or escalate. Nothing free-form. (Matches to your saved custom prompts are flagged ★.)'],
+  'prompt-edit': ['Routine detail',
+    'Each routine shows how often it recurred and the contexts it followed. Manual add / edit / rename of routines is NOT built yet — the set is auto-derived today; hand-curation is the next slice.'],
   denylist: ['Deny-listed — never auto-sent',
     'Even on a confident match, prompts that trigger irreversible work (deploy, push, force, delete…) are always escalated to you, never sent automatically. This is the risky-action fence.'],
 };
