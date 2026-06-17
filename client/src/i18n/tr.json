@@ -213,6 +213,8 @@
   "dashboard.unmarkWaiting": "Bekleme isaretini kaldir",
   "dashboard.waitingOnPlaceholder": "hangi ajani bekliyor?",
   "dashboard.waitingOnLabel": "Bu dokun bekledigi ajan",
+  "dashboard.dependsOnLabel": "Hangi birincil ajana bagli",
+  "dashboard.dependsOnNone": "— sunu bekler…",
   "dashboard.zoom": "Icerik yakinlastirma",
   "dashboard.zoomIn": "Dock icerigini buyut",
   "dashboard.zoomOut": "Dock icerigini kucult",

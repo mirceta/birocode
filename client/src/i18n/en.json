@@ -213,6 +213,8 @@
   "dashboard.unmarkWaiting": "Unmark waiting",
   "dashboard.waitingOnPlaceholder": "waiting on which agent?",
   "dashboard.waitingOnLabel": "Which agent this dock is waiting on",
+  "dashboard.dependsOnLabel": "Depends on which primary agent",
+  "dashboard.dependsOnNone": "— depends on…",
   "dashboard.zoom": "Content zoom",
   "dashboard.zoomIn": "Zoom in dock content",
   "dashboard.zoomOut": "Zoom out dock content",

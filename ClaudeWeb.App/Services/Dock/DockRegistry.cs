@@ -53,6 +53,15 @@ public class DockTab
     public string? WaitingOn { get; set; }
 
     /// <summary>
+    /// Optional id of the PRIMARY agent this dock depends on
+    /// (plans/dependent-agents.md): the dashboard renders the two as a "together"
+    /// group with this (dependent) dock shown smaller, signalling the primary
+    /// must finish first. Null = independent. A structural link by tab id —
+    /// distinct from the free-text <see cref="WaitingOn"/>; shared across devices.
+    /// </summary>
+    public string? DependsOn { get; set; }
+
+    /// <summary>
     /// Stashed prompt ideas jotted down while the agent runs
     /// (plans/prompt-stash.md). Shared across devices like the rest of the tab.
     /// </summary>
@@ -149,7 +158,7 @@ public class DockRegistry
     /// Partial update. Only non-null fields are applied; per-tab last-write-wins
     /// when two devices race. Returns the updated copy, or null if unknown.
     /// </summary>
-    public DockTab? Update(string id, string? sessionId, string? status, string? repoName, string? color, bool? dashboard, bool? important, bool? waiting, string? waitingOn)
+    public DockTab? Update(string id, string? sessionId, string? status, string? repoName, string? color, bool? dashboard, bool? important, bool? waiting, string? waitingOn, string? dependsOn)
     {
         lock (_gate)
         {
@@ -165,6 +174,8 @@ public class DockRegistry
             if (waiting != null) tab.Waiting = waiting.Value;
             // Empty string clears the name; null leaves it untouched.
             if (waitingOn != null) tab.WaitingOn = waitingOn.Length == 0 ? null : waitingOn;
+            // Empty string clears the dependency; null leaves it untouched.
+            if (dependsOn != null) tab.DependsOn = dependsOn.Length == 0 ? null : dependsOn;
             Save();
             return Clone(tab);
         }
@@ -376,6 +387,7 @@ public class DockRegistry
         Important = t.Important,
         Waiting = t.Waiting,
         WaitingOn = t.WaitingOn,
+        DependsOn = t.DependsOn,
         Stash = t.Stash.Select(CloneStash).ToList(),
     };
 

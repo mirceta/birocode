@@ -372,6 +372,66 @@
   border-color: #f59e0b;
 }
 
+/* "Depends on…" picker (plans/dependent-agents.md): a small select under a dock
+   that links it to a primary agent. */
+.depends-on {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+}
+
+.dash-cell__depends {
+  margin-top: 4px;
+  border-top: 1px solid var(--color-border);
+}
+
+.depends-on__icon {
+  flex-shrink: 0;
+  font-size: 12px;
+  line-height: 1;
+  opacity: 0.7;
+}
+
+.depends-on__select {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  font-size: 12px;
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+.depends-on__select:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+/* "Together" group (plans/dependent-agents.md): a primary dock with its
+   dependents stacked beneath it; dependents render narrower (height follows via
+   aspect-ratio for phones) so the ordering — primary must finish first — reads
+   at a glance. */
+.dash__group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.dash__group > * {
+  width: 100%;
+}
+
+.dash__group .dash__dependent {
+  width: 82%;
+}
+
 .dash-cell__head {
   display: flex;
   align-items: center;
@@ -627,8 +687,31 @@
   overflow: hidden;
 }
 
+/* Wash the WHOLE dock in the agent colour, not just the border. A background on
+   .phone itself would be hidden — every inner region (bar, lanes, git) and the
+   same-DOM embedded <Chat> paint an opaque --color-surface / --color-bg over it.
+   So instead we re-tint those two surface tokens here: because the regions and the
+   chat all read var(--color-surface)/var(--color-bg), a light agent-colour wash
+   cascades through the entire dock — chat background included — for free.
+   color-mix is against the literal theme bases (global.css: #ffffff / #faf7f2) to
+   avoid a self-referential custom-property cycle (referencing the token while
+   redefining it). Surface stays a touch lighter than bg so chat bubbles/cards
+   still layer above the chat background. The wash is independent of the border, so
+   it survives the "important" rule repainting the border bright red. */
 .phone[data-colored='true'] {
   border-left: 4px solid var(--agent-color);
+  --color-bg: color-mix(in srgb, var(--agent-color) 24%, #faf7f2);
+  --color-surface: color-mix(in srgb, var(--agent-color) 16%, #ffffff);
+}
+
+/* The header bar reads the (now tinted) --color-surface and adds more agent colour
+   on top, so it stays the most saturated part of the dock — the natural identity
+   anchor right beside the colour border, still clear under a red important border. */
+.phone[data-colored='true'] .phone__bar {
+  background: color-mix(in srgb, var(--agent-color) 16%, var(--color-surface));
+}
+.phone[data-colored='true'] .phone__bar:hover {
+  background: color-mix(in srgb, var(--agent-color) 26%, var(--color-surface));
 }
 
 /* Phone header doubles as the maximize affordance. */

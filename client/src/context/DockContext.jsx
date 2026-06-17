@@ -55,6 +55,9 @@ function toServerPatch(patch) {
   // (plans/agent-waiting.md). Empty string clears the name on the backend.
   if ('waiting' in patch) body.waiting = patch.waiting;
   if ('waitingOn' in patch) body.waitingOn = patch.waitingOn ?? '';
+  // "Depends on" a primary agent's tab id (plans/dependent-agents.md). Empty
+  // string clears the dependency on the backend.
+  if ('dependsOn' in patch) body.dependsOn = patch.dependsOn ?? '';
   return Object.keys(body).length > 0 ? body : null;
 }
 

@@ -36,6 +36,15 @@
 
 ## Active feature plans
 
+- [Dependent agents — "together" groups on the dashboard](plans/dependent-agents.md)
+  — tag a dock as **dependent on a specific primary agent**; the dashboard then
+  renders the pair as a **"together" group** with the dependent **a bit smaller**
+  than the primary, so it reads at a glance that the primary must finish before
+  the dependent's work can continue. New backend-synced `DependsOn` (primary tab
+  id) on `DockTab` + a header picker + grouping/shrink in `Dashboard.jsx`.
+  Distinct from the free-text [waiting-on toggle](plans/agent-waiting.md) (this
+  links the two docks structurally). Design proposed, not built. On
+  `feature/dependent-agents`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
@@ -57,6 +66,13 @@
 
 ## Recently shipped
 
+- [Dock colour background](plans/dock-color-background.md) — a coloured agent's dock is now
+  **washed in its colour**, not just bordered. Started as a header-bar tint (so the colour
+  survives the **important** star repainting the border red), then extended to wash the
+  **whole dock incl. the embedded chat** by re-tinting `--color-surface`/`--color-bg` on
+  `.phone[data-colored]` (the regions + same-DOM chat all read those tokens). Tuned to a
+  lively 16%/24% so hues are distinguishable. CSS-only; deployed to live :5099 & confirmed;
+  **merged to main 2026-06-17**. On `feature/dock-color-background`.
 - [Basic mode never shows the dashboard](plans/basic-mode-no-dashboard.md) — **bug fix**:
   Basic (Simple) mode is always the plain tabbed view. The `agentDashboard: 'advanced'`
   gate only blocked *opening* the overlay; it renders from `dashOpen` local state, so
