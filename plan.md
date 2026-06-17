@@ -57,6 +57,14 @@
 
 ## Recently shipped
 
+- [Dock git actions — sync buttons in each agent dock's git row](plans/dock-git-actions.md)
+  — the Git tab's inward-sync actions (**merge main**, **pull main**, **pull branch**)
+  now live in each agent dock's git-status row on the dashboard, scoped per-dock via
+  `X-Repo-Id`, so you can sync an agent's repo without opening its Git tab. Eligibility
+  logic extracted to `components/git/gitActions.js` and shared with `Git.jsx` (no drift);
+  reuses the Git tab's `act()` flow; gated behind a new `dockGitActions` (Advanced) flag.
+  Push deferred (publishing stays a deliberate Git-tab action). Built + **user-confirmed
+  working**; merged to main 2026-06-17. On `feature/dock-git-actions`.
 - [Dependent agents — "together" groups on the dashboard](plans/dependent-agents.md)
   — tag a dock as **dependent on a specific primary agent**; the dashboard renders
   the pair as a **"together" group** with the dependent **a bit smaller** (~0.82×)
