@@ -627,8 +627,31 @@
   overflow: hidden;
 }
 
+/* Wash the WHOLE dock in the agent colour, not just the border. A background on
+   .phone itself would be hidden — every inner region (bar, lanes, git) and the
+   same-DOM embedded <Chat> paint an opaque --color-surface / --color-bg over it.
+   So instead we re-tint those two surface tokens here: because the regions and the
+   chat all read var(--color-surface)/var(--color-bg), a light agent-colour wash
+   cascades through the entire dock — chat background included — for free.
+   color-mix is against the literal theme bases (global.css: #ffffff / #faf7f2) to
+   avoid a self-referential custom-property cycle (referencing the token while
+   redefining it). Surface stays a touch lighter than bg so chat bubbles/cards
+   still layer above the chat background. The wash is independent of the border, so
+   it survives the "important" rule repainting the border bright red. */
 .phone[data-colored='true'] {
   border-left: 4px solid var(--agent-color);
+  --color-bg: color-mix(in srgb, var(--agent-color) 24%, #faf7f2);
+  --color-surface: color-mix(in srgb, var(--agent-color) 16%, #ffffff);
+}
+
+/* The header bar reads the (now tinted) --color-surface and adds more agent colour
+   on top, so it stays the most saturated part of the dock — the natural identity
+   anchor right beside the colour border, still clear under a red important border. */
+.phone[data-colored='true'] .phone__bar {
+  background: color-mix(in srgb, var(--agent-color) 16%, var(--color-surface));
+}
+.phone[data-colored='true'] .phone__bar:hover {
+  background: color-mix(in srgb, var(--agent-color) 26%, var(--color-surface));
 }
 
 /* Phone header doubles as the maximize affordance. */
