@@ -118,6 +118,12 @@ function StudioShell() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [dashEnabled, dashOpen]);
+  // Basic mode is always the plain tabbed view: if the dashboard feature goes
+  // away while the overlay is open (Advanced → Basic), close it so stale
+  // open-state can't keep it showing (plans/basic-mode-no-dashboard.md).
+  useEffect(() => {
+    if (!dashEnabled && dashOpen) setDashOpen(false);
+  }, [dashEnabled, dashOpen]);
   return (
     <div className="app-shell">
       <div className={`app-frame${multi ? ' app-frame--multi' : ''}`}>
@@ -133,10 +139,11 @@ function StudioShell() {
           </div>
         </header>
 
-        {dashOpen ? (
+        {dashEnabled && dashOpen ? (
           // Full-screen overview: replaces the content area and hides the
           // bottom nav / pane strip (plans/agent-dashboard.md). Top bar stays
           // visible so the same button (or Escape, or the in-overlay ×) closes.
+          // Requires dashEnabled too, so Basic mode never renders it.
           <main className="app-content">
             <Dashboard onClose={() => setDashOpen(false)} />
           </main>
