@@ -1,7 +1,8 @@
 # Stop stale code: no-store shell + a Force-refresh button
 
-> **Status (2026-06-17):** Built on `feature/ideas-active-section`, verified on
-> an isolated `:5210` harness; **not yet deployed**. Extends
+> **Status (2026-06-17):** Built on `feature/ideas-active-section`,
+> **deployed to live `:5099` and confirmed** (header check: shell + `version.json`
+> `no-store`, hashed `/assets/*` `immutable`); not yet merged to main. Extends
 > [stale-version-banner](plans/stale-version-banner.md), which detected the
 > problem but couldn't reliably cure it.
 

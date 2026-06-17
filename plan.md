@@ -8,7 +8,7 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-17):** Loop autopilot — the editable Routine-prompts tab now lives in the live local app (`autopilot-app/`), on `feature/loop-autopilot`.
+> **Status (2026-06-17):** Cache hardening (no-store shell + Force-refresh) is **deployed to live `:5099` and confirmed**, on `feature/ideas-active-section`; awaiting merge to main.
 
 ## ⚠️ Known risks to mitigate
 
@@ -36,13 +36,6 @@
 
 ## Active feature plans
 
-- [Stop stale code: no-store shell + Force-refresh](plans/cache-hardening.md) —
-  kills the recurring "I deployed but my browser shows the old version": the SPA
-  `index.html`/`version.json` are now served `no-store` (hashed `/assets/*` stay
-  immutable) so a reload always lands on the latest build, a **Force refresh**
-  button in Settings ▸ Maintenance wipes caches + service workers on demand, and
-  the stale-version banner's Reload reuses that thorough clear. Built + verified
-  on isolated `:5210`; **not yet deployed**. On `feature/ideas-active-section`.
 - [Ideas — an "Active" section](plans/ideas-active-section.md) — move an idea into
   an **Active** group pinned at the top of the Ideas surface, so "what are we
   working on now" is answerable at a glance; toggle it back out to the backlog. An
@@ -70,6 +63,14 @@
 
 ## Recently shipped
 
+- [Stop stale code: no-store shell + Force-refresh](plans/cache-hardening.md) —
+  kills the recurring "I deployed but my browser shows the old version": the SPA
+  `index.html`/`version.json` are now served `no-store` (hashed `/assets/*` stay
+  immutable) so a reload always lands on the latest build, a **Force refresh**
+  button in Settings ▸ Maintenance wipes caches + service workers on demand, and
+  the stale-version banner's Reload reuses that thorough clear. Built + verified on
+  isolated `:5210`; **deployed to live :5099 & confirmed**; not yet merged to main.
+  On `feature/ideas-active-section`.
 - [Dock colour background](plans/dock-color-background.md) — a coloured agent's dock is now
   **washed in its colour**, not just bordered. Started as a header-bar tint (so the colour
   survives the **important** star repainting the border red), then extended to wash the
