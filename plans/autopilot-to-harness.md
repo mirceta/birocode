@@ -5,73 +5,93 @@
 > autopilot dashboard lives*; the brain/engine/safety subdocs are unchanged.
 
 > **Status (2026-06-17): KICKOFF — interpreting + scoping.** On `feature/autopilot-to-harness`,
-> off `main`. Primary interpretation below; alternative readings in **Open questions** (the user
-> declined to pin scope up front, so we proceed on the default and confirm as we go).
+> off `main`. Scope settled — see **Decisions (locked)**.
 
-## Goal (primary interpretation)
+## Goal
 
-Today the autopilot **dashboard** is the build-less local app at `autopilot-app/`, served
-per-repo under `/api/localview/<repo>/app/autopilot/`. Move it **into the harness itself** as a
-first-class React surface — i.e. finish the migration to **option A** that
-[loop-autopilot-dashboard.md](loop-autopilot-dashboard.md) locked but never completed (the
-dashboard shipped as the local app, option B-ish, as an interim home).
+Two parts, both confirmed:
 
-"Goes to the harness" = the autopilot stops being a Product-style local app and becomes part of
-**Claude Web itself** — same origin, authenticated, with direct in-process access to live
-`RunSession`/agent state instead of reaching everything through `/api/autopilot` from a
-sandboxed static folder.
+1. **De-duplicate toward the harness tab.** The autopilot **dashboard is currently DUPLICATED**:
+   a build-less local app at `autopilot-app/` (served per-repo under
+   `/api/localview/<repo>/app/autopilot/`) **and** a first-class routed harness tab
+   (`client/src/pages/Autopilot.jsx`), both reading the same `/api/autopilot`. Bring the harness
+   tab to parity, then delete the local app.
+2. **Elevate to box-level cross-agent operation.** The harness tab becomes a **mission-control
+   over all agents at once** (global controls layered over per-agent arm), not per-repo arm
+   sets. Detail in **Cross-agent operation** below.
 
-## Why now (what the local-app form costs)
+> **Correction (2026-06-17):** an earlier draft of this plan framed it as "the dashboard only
+> shipped as the local app; move it into the harness (finish option A)." That was wrong — option
+> A (the harness tab) *was* built **and** option B (the local app) was built on top of it. Both
+> exist in parallel; this is a consolidation, not a first-time move. Verified in code (see below).
 
-Per the dashboard subdoc's own scoring, the local-app home was always the weaker fit:
+## The duplication, verified in code
 
-- **Live data is second-hand.** The static app only sees what `/api/autopilot` exposes; a
-  harness surface reads autopilot + agent state directly (option A's 5★ vs B's 3★).
-- **A second framework-less codebase** (`autopilot-app/` HTML/CSS/JS) drifts from the harness
-  UI it mirrors (it's already "styled to the design mock in `understanding-app/`").
-- **Per-repo scoping is wrong for a harness-level feature** — autopilot watches agents across
-  the box, but a local app is mounted under one repo's `localview`.
+| | Harness tab — `client/src/pages/Autopilot.jsx` (~434 lines) | Local app — `autopilot-app/` (~822 lines) |
+|---|---|---|
+| Status | Routed: `App.jsx` `Route path="autopilot"` + `tabRegistry.jsx` (key `autopilot`, flag `autopilotTab`) | Build-less app at `/api/localview/<repo>/app/autopilot/` |
+| Subtabs | agents · prompts · history · audit (**4**) | agents · prompts · **intercepts** · history · audit (**5**) |
+| Data | `/api/autopilot`, `/prompts`, `/discover`, `/config` | same `/api/autopilot` + `/discover` |
+
+The **only real gap** is the local app's **Intercepted** live feed (the harness tab has no
+`intercept` view). The local app is, ironically, the *more complete* of the two.
+
+## Why de-duplicate toward the harness tab (not the local app)
+
+- **One source of truth.** Two hand-maintained dashboards over one API is exactly the drift we
+  fight — and they're already diverging (the Intercepted feed exists in only one).
+- **Live data is first-hand in the harness.** The harness tab is same-origin + authenticated
+  with direct access to live state; the static app only sees what `/api/autopilot` exposes.
+- **Per-repo scoping is wrong** for a box-level feature — the local app is mounted under one
+  repo's `localview`; the harness tab is global.
 
 ## Where it is now (don't rebuild)
 
-- **Backend (already in the harness):** `Services/Autopilot/*` (`AutopilotService` polling
+- **Backend (untouched):** `Services/Autopilot/*` (`AutopilotService` polling
   `BackgroundService`, `AutopilotConfigStore` → `autopilot.json`, `AutopilotGate`,
   `AutopilotAuditLog`, `AutopilotDiscoveryService`) + `AutopilotController`
-  (`GET /api/autopilot`, `/discover`, `POST /api/autopilot/config`). **This stays.**
-- **Dashboard (to migrate):** `autopilot-app/` local app with subtabs **Agents /
-  Intercepted / Suggestion history / Auto-sent** (see
-  [dashboard subdoc](loop-autopilot-dashboard.md#live-local-app--tabs-2026-06-17)).
-- **Harness tab (the target home):** `client/src/pages/Autopilot.jsx` already exists from
-  Slice 1 (discovery) — the migration grows it to host the four subtabs.
-
-So this is mostly a **frontend relocation + consolidation**: re-implement the `autopilot-app/`
-views as React inside the harness Autopilot tab, reading the same `/api/autopilot` data (and,
-where it helps, in-process state), then retire the local app.
+  (`GET /api/autopilot`, `/discover`, `POST /api/autopilot/config`).
+- **Two dashboards** as tabulated above — the harness tab is the keeper; the local app is the
+  one to retire (after porting its Intercepted feed).
 
 ## Sketch of the work (refine after scope is confirmed)
 
-1. **Port the four subtabs** (Agents, Intercepted, Suggestion history, Auto-sent) into
-   `Autopilot.jsx` as React components, reusing the live `/api/autopilot` shape.
-2. **Wire arm/disarm, threshold, auto-advance, kill switch** through the existing
-   `POST /api/autopilot/config` (no backend change expected).
-3. **Retire `autopilot-app/`** (and its `localview` app registration) once parity is verified.
+1. **Port the `Intercepted` feed** from `autopilot-app/` into `Autopilot.jsx` as a 5th subtab —
+   the one piece the harness tab is missing (`InterceptEvent` is already in `/api/autopilot`).
+2. **Diff the other four subtabs** (agents/prompts/history/audit) for any local-app-only
+   refinements; fold anything worth keeping into the harness tab.
+3. **Delete `autopilot-app/`** and its `localview` app registration once parity is verified.
 4. **Gating unchanged** — stays operator-side off by default per
-   [safety](loop-autopilot-safety.md); this move is UI-location only, not a trust change.
+   [safety](loop-autopilot-safety.md); this is UI consolidation, not a trust change.
 5. **i18n + self-dev build** as usual.
 
-## Out of scope (unless an Open question says otherwise)
+## Decisions (locked 2026-06-17)
 
-- No change to the **brain/engine/gate/safety** — purely where the dashboard lives.
+- **Cross-agent operation: YES.** The feature is **not just de-dup** — the harness tab becomes a
+  box-level **mission-control over all agents at once**, not per-repo arm sets. This *reinforces*
+  keeping the global harness tab over the per-repo local app, and pushes work into the backend
+  (see "Cross-agent operation" below), so it's no longer frontend-only.
+- **Self-Development: default — no special-casing.** The Harness's own repo works through the
+  same tab like any other agent; we don't build self-dev-specific behaviour.
+- **Always-on / ungate: default — NO.** The operator-side gate stays off by default per
+  [safety](loop-autopilot-safety.md). Consolidation + cross-agent UI is not a trust change.
+
+## Cross-agent operation (what "YES" adds)
+
+Today arming/threshold/kill live per-agent/per-repo in `autopilot.json`
+(`AutopilotConfigStore`); the dashboard shows one repo at a time. Box-level operation means:
+
+- **Global controls** — a single enable + threshold + **kill switch for the whole wall**,
+  layered over (not replacing) per-agent arm so you can still opt individual agents in/out.
+- **One unified view of every agent** on the box (the harness tab is already global; the local
+  app couldn't be — another reason it's the one to retire).
+- **Backend touch (scoped):** extend `AutopilotConfigStore` with a global stanza + have
+  `AutopilotService` honour it; keep per-agent arm as the finer grain. Brain/engine/gate logic
+  otherwise unchanged.
+
+## Out of scope
+
 - Not swapping the stub classifier for the real `claude`-CLI brain (that's
   [loop-autopilot.md](loop-autopilot.md) Slice 2's remaining work, tracked there).
-- No ungating / always-on promotion.
-
-## Open questions (the readings to confirm)
-
-- **Is this UI-relocation only** (primary interpretation), **or** also **harness-level
-  cross-agent operation** — one autopilot watching the whole agent-dashboard wall rather than
-  per-repo arm sets?
-- **Self-Development:** should it explicitly target the Harness's own repo (autopilot driving
-  work on Claude Web itself)?
-- **Always-on:** does "goes to the harness" also mean promoting it from gated experiment to a
-  permanent, ungated capability? (Default: **no** — keep the operator gate.)
+- No ungating / always-on promotion (see Decisions).
+- No self-dev-specific behaviour (see Decisions).

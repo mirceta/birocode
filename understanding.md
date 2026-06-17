@@ -1,32 +1,37 @@
 # Understanding — Autopilot goes to the harness
 
-## Goal
-Promote the autopilot **dashboard** from its current home — the build-less per-repo local app
-`autopilot-app/` (served under `/api/localview/<repo>/app/autopilot/`) — **into the harness
-itself** as a first-class React surface. This finishes the migration to the "option A" home
-that `plans/loop-autopilot-dashboard.md` locked but only shipped as an interim local app.
+## Goal (corrected)
+The autopilot dashboard is currently **DUPLICATED**: it exists both as a first-class, routed
+**harness tab** (`client/src/pages/Autopilot.jsx`) **and** as a separate build-less **local
+app** (`autopilot-app/`, served under `/api/localview/<repo>/app/autopilot/`) — both reading
+the same `/api/autopilot`. "Goes to the harness" = **de-duplicate toward the harness tab**:
+reach parity, then delete the local app.
 
-## What I've done in this kickoff
-- Confirmed `main` was synced with `origin/main` (0/0), then created
-  **`feature/autopilot-to-harness`**.
-- Surveyed the existing autopilot: backend already lives in the harness
-  (`Services/Autopilot/*` + `AutopilotController`); the dashboard lives as the build-less
-  `autopilot-app/` local app with four subtabs; `client/src/pages/Autopilot.jsx` (the Slice-1
-  discovery tab) is the target home.
-- Wrote `plans/autopilot-to-harness.md` + an **Active feature plans** entry in `plan.md`.
+## Correction to my earlier framing
+An earlier draft (and the first understanding-app) said the dashboard "only shipped as the local
+app" and needed to be "moved into the harness." **That was wrong** — you caught it. Verified in
+code: the harness tab *and* the local app both exist. This is a **consolidation**, not a
+first-time move.
 
-## My interpretation (you declined to pin it, so this is the default)
-"Goes to the harness" = **UI relocation/consolidation**: re-implement the four `autopilot-app/`
-subtabs (Agents / Intercepted / Suggestion history / Auto-sent) as React inside the harness
-Autopilot tab, reading the same `/api/autopilot` data (plus in-process state where it helps),
-then retire the local app. Backend and the operator gate stay unchanged.
+## What I verified in code
+| | Harness tab (`Autopilot.jsx`, ~434 lines) | Local app (`autopilot-app/`, ~822 lines) |
+|---|---|---|
+| Status | Routed (`App.jsx` + `tabRegistry.jsx`, flag `autopilotTab`) | `/api/localview/<repo>/app/autopilot/` |
+| Subtabs | agents · prompts · history · audit (4) | agents · prompts · **intercepts** · history · audit (5) |
 
-## Open questions (flagged in the plan — tell me which way)
-- UI-relocation **only**, or also **harness-level cross-agent operation** (one autopilot over
-  the whole dashboard wall rather than per-repo arm sets)?
-- Should it explicitly target the **Harness's own repo** (Self-Development)?
-- Does this also mean **ungating** it into an always-on capability? (Default: no — keep the gate.)
+The **only real gap**: the local app has an **Intercepted** live feed the harness tab lacks.
+The local app is actually the more complete of the two.
 
-## Assumptions
-- This kickoff = branch + plan + interpretation; the build follows once scope is confirmed.
-- The brain/engine/gate/safety are out of scope; only where the dashboard lives changes.
+## The work (sketch)
+1. Port the **Intercepted** feed into `Autopilot.jsx` (the missing 5th subtab).
+2. Diff the other four subtabs; fold any local-app-only refinements into the harness tab.
+3. **Delete `autopilot-app/`** + its localview registration once at parity.
+4. Backend (`Services/Autopilot/*`) and the operator gate stay unchanged.
+
+## Decisions (locked 2026-06-17)
+- **Cross-agent operation: YES** — the harness tab becomes box-level mission-control over all
+  agents (global enable/threshold/kill layered over per-agent arm), not per-repo arm sets. This
+  adds a small backend touch (`AutopilotConfigStore` global stanza + `AutopilotService` honours
+  it), so the feature is no longer frontend-only.
+- **Self-dev: default** — no special-casing; the Harness's own repo is just another agent.
+- **Ungate: default — NO** — operator gate stays off by default.
