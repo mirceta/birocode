@@ -8,6 +8,7 @@ import History from '../pages/History';
 import AppRun from '../pages/AppRun';
 import LocalApp from '../pages/LocalApp';
 import Ideas from '../pages/Ideas';
+import Autopilot from '../pages/Autopilot';
 import Deployments from '../pages/Deployments';
 import Agents from '../pages/Agents';
 import Git from '../pages/Git';
@@ -33,6 +34,7 @@ const STATIC_TABS = [
   { key: 'app', path: '/studio/app', labelKey: 'nav.app', icon: '▶', feature: 'appTab', element: <AppRun /> },
   { key: 'localapp', path: '/studio/local', labelKey: 'nav.localApp', icon: '⌂', feature: 'localAppTab', element: <LocalApp /> },
   { key: 'ideas', path: '/studio/ideas', labelKey: 'nav.ideas', icon: '💡', feature: 'ideasTab', element: <Ideas /> },
+  { key: 'autopilot', path: '/studio/autopilot', labelKey: 'nav.autopilot', icon: '🛞', feature: 'autopilotTab', element: <Autopilot /> },
   { key: 'deploys', path: '/studio/deploys', labelKey: 'nav.deploys', icon: '🚀', feature: 'deploysTab', element: <Deployments /> },
   { key: 'settings', path: '/studio/settings', labelKey: 'nav.settings', icon: '⚙', feature: 'settingsTab', element: <Settings /> },
 ];

@@ -1,4 +1,5 @@
 using ClaudeWeb.Models;
+using ClaudeWeb.Services.Autopilot;
 using ClaudeWeb.Services.Hosting;
 using ClaudeWeb.Services.IpFilter;
 using ClaudeWeb.Services.Logging;
@@ -39,12 +40,18 @@ static class Program
         // one instance — same pattern as RepositoryRegistry.
         var ipAllowlist = new IpAllowlistService(logger);
 
+        // Operator-only autopilot gate (plans/loop-autopilot-safety.md). Built here
+        // so the WinForms host (the ONLY surface that can turn the autopilot
+        // endpoints on/off) and the web API share one instance — same pattern as
+        // IpAllowlistService. Default OFF.
+        var autopilotGate = new AutopilotGate(logger);
+
         // Start the embedded Kestrel server on a background thread.
-        var api = new EmbeddedApi(config, logger, callLog, repositories, ipAllowlist);
+        var api = new EmbeddedApi(config, logger, callLog, repositories, ipAllowlist, autopilotGate);
         api.Start();
 
         // Launch the monitoring GUI (blocks on the WinForms message loop).
-        var form = new MainForm(config, logger, api, callLog, repositories, ipAllowlist);
+        var form = new MainForm(config, logger, api, callLog, repositories, ipAllowlist, autopilotGate);
         Application.Run(form);
 
         // Shut the server down cleanly when the GUI closes.
