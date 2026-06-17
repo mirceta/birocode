@@ -21,6 +21,12 @@ let busy = false;          // suppress polling reconcile while a mutation is in 
 let lastEnabled = true;    // remember kill-switch state for the kill button handler
 const seenLog = new Set(); // keys of log rows already rendered (so only NEW rows flash)
 const seenAudit = new Set();
+// Intercepted feed: keep the latest entries so reveal timers can re-render a single
+// row without waiting for the next poll; track first-seen-by-client for the spinner.
+let lastIntercepts = [];
+const seenIntercept = new Set();
+const interceptFirstSeen = new Map(); // id -> client ms when first rendered
+const REVEAL_MS = 1500;               // brief "processing" spinner on a freshly-arrived row
 
 function show(el, on) { el.hidden = !on; }
 const fmtTime = (ms) => new Date(ms).toLocaleTimeString();
@@ -83,11 +89,81 @@ function render(s) {
   }
   for (const a of agents) list.appendChild(agentRow(a, auto));
 
+  // Intercepted feed (live): every message the engine grabbed and processed.
+  lastIntercepts = s.intercepts || [];
+  renderIntercepts();
+
   // Suggestion history (engine log) + auto-sent audit trail.
   renderLog($('log'), (s.log || []), seenLog, logRow);
   const audit = s.audit || [];
   $('n-audit').textContent = audit.length;
   renderLog($('audit'), audit, seenAudit, auditRow);
+}
+
+// --- intercepted feed ---
+function renderIntercepts() {
+  const ul = $('intercepts');
+  ul.innerHTML = '';
+  if (!lastIntercepts.length) {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = 'No interceptions yet — arm an agent and the engine will start grabbing its replies.';
+    ul.appendChild(li);
+    return;
+  }
+  const now = Date.now(); // backend sends newest-first already
+  for (const e of lastIntercepts) {
+    if (!interceptFirstSeen.has(e.id)) interceptFirstSeen.set(e.id, now);
+    const li = document.createElement('li');
+    if (!seenIntercept.has(e.id)) { li.classList.add('new'); seenIntercept.add(e.id); }
+    li.appendChild(span('t', fmtTime(e.at)));
+    li.appendChild(span('ag', e.repoName));
+    const snip = span('snip', e.snippet || '');
+    snip.title = e.snippet || '';
+    li.appendChild(snip);
+
+    const status = document.createElement('span');
+    status.className = 'status';
+    li.appendChild(status);
+
+    const processing = e.phase === 'processing';
+    const revealLeft = REVEAL_MS - (now - interceptFirstSeen.get(e.id));
+    if (processing) {
+      li.classList.add('processing');
+      fillProcessing(status, 'processing…');
+    } else if (revealLeft > 0) {
+      // freshly arrived & already resolved: show the spinner briefly, then reveal
+      // the outcome in place (no full rebuild, so the flash isn't cut short).
+      li.classList.add('processing');
+      fillProcessing(status, 'intercepted…');
+      setTimeout(() => {
+        if (!status.isConnected) return;
+        li.classList.remove('processing');
+        fillOutcome(status, e);
+      }, revealLeft);
+    } else {
+      fillOutcome(status, e);
+    }
+    ul.appendChild(li);
+  }
+}
+
+function fillProcessing(status, label) {
+  status.innerHTML = '';
+  const sp = document.createElement('span');
+  sp.className = 'spinner';
+  status.append(sp, span('proc-label', label));
+}
+
+function fillOutcome(status, e) {
+  status.innerHTML = '';
+  const out = e.outcome || 'suggested';
+  status.appendChild(span('outcome ' + out, out));
+  if (e.label && (out === 'sent' || out === 'suggested')) {
+    const code = document.createElement('code');
+    code.textContent = e.label;
+    status.appendChild(code);
+  }
 }
 
 // --- agents ---

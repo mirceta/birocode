@@ -48,3 +48,20 @@ trade-offs and what the chosen mechanism buys.
   state, so a loop-status panel slots in cheaply with full data access — but like A
   it's a harness surface, not a click-into app, and it crowds a busy page. Can
   **coexist** with the chosen app as a quick-glance entry point.
+
+## Live local app — tabs (2026-06-17)
+
+The shipped dashboard is the build-less local app at `autopilot-app/` (served by
+the harness under `/api/localview/<repo>/app/autopilot/`), styled to the design
+mock in `understanding-app/`. Its subtabs:
+
+- **Agents** — per-repo state + arm/disarm, auto-advance switch, threshold, kill.
+- **Intercepted** — live feed of every agent message the engine grabs and
+  processes (`intercepts` in `/api/autopilot`). Each row shows the grabbed
+  snippet and a status that moves `processing` (a rolling spinner) → outcome
+  (`suggested`/`escalated`/`sent`). The spinner is real for an auto-advance send
+  (held until the resumed run completes); suggest-only rows resolve instantly and
+  get a brief reveal spinner on arrival. Backed by `InterceptEvent` in
+  `AutopilotService` (ring buffer, dedup by repo+snippet).
+- **Suggestion history** — the engine verdict log. **Auto-sent** — the
+  append-only audit trail of real sends.

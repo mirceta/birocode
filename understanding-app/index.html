@@ -54,8 +54,9 @@
     <div class="mock__tab">
       <nav class="subtabs" id="subtabs">
         <button data-sub="agents" class="on">Agents</button>
+        <button data-sub="intercepts">Intercepted <span class="subtabs__live"></span></button>
         <button data-sub="prompts">Routine prompts <span class="subtabs__n">7</span></button>
-        <button data-sub="history">Suggestion history <span class="subtabs__live"></span></button>
+        <button data-sub="history">Suggestion history</button>
       </nav>
 
       <div class="subpanel" data-panel="agents">
@@ -91,6 +92,36 @@
             <span class="agent__id">birokrat-ai-platform</span>
             <span class="agent__pred muted">—</span>
             <button class="mini" data-explain="arm">Arm</button>
+          </li>
+        </ul>
+      </div>
+
+      <div class="subpanel" data-panel="intercepts" hidden>
+        <div class="loglist__head">
+          <b>Intercepted</b>
+          <span class="muted">every agent message the engine grabs and processes — proof it's live</span>
+          <span class="loglist__live"><span class="pulse"></span>live</span>
+        </div>
+        <ul class="feed">
+          <li class="processing">
+            <span class="t">14:02:51</span><span class="ag">birocode</span>
+            <span class="snip">…deploy is healthy on :5099, all checks green. Keep it or roll back?</span>
+            <span class="status"><span class="spinner"></span><span class="proc-label">processing…</span></span>
+          </li>
+          <li>
+            <span class="t">14:02:18</span><span class="ag">game-arcade</span>
+            <span class="snip">…finished the change. Want me to play back what I touched?</span>
+            <span class="status"><span class="outcome sent">sent</span><code>"play it back"</code></span>
+          </li>
+          <li>
+            <span class="t">14:01:44</span><span class="ag">prg</span>
+            <span class="snip">…two valid schemas here — which one should I follow?</span>
+            <span class="status"><span class="outcome escalated">escalated</span></span>
+          </li>
+          <li>
+            <span class="t">14:01:09</span><span class="ag">birocode</span>
+            <span class="snip">…shall I continue with the next slice?</span>
+            <span class="status"><span class="outcome suggested">suggested</span><code>"continue"</code></span>
           </li>
         </ul>
       </div>

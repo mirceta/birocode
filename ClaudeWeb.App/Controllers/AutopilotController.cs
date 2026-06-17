@@ -99,6 +99,7 @@ public class AutopilotController : ControllerBase
             denyList = cfg.DenyList,
             agents = _engine.States(),
             log = _engine.Log(),
+            intercepts = _engine.Intercepts(),
             audit = _audit.Recent(),
         };
     }

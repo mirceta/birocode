@@ -32,7 +32,8 @@
     <div id="live" class="tab" hidden>
       <nav class="subtabs" id="subtabs">
         <button data-sub="agents" class="on">Agents <span class="subtabs__n" id="n-agents">0</span></button>
-        <button data-sub="history">Suggestion history <span class="subtabs__live"></span></button>
+        <button data-sub="intercepts">Intercepted <span class="subtabs__live"></span></button>
+        <button data-sub="history">Suggestion history</button>
         <button data-sub="audit">Auto-sent <span class="subtabs__n" id="n-audit">0</span></button>
       </nav>
 
@@ -47,6 +48,16 @@
           <div class="bar__deny">Always escalates: <span id="denylist" class="muted">—</span></div>
         </div>
         <ul class="agents" id="agents"></ul>
+      </section>
+
+      <!-- INTERCEPTED (live feed: every message the engine grabs + processes) -->
+      <section class="subpanel" data-panel="intercepts" hidden>
+        <div class="loglist__head">
+          <b>Intercepted</b>
+          <span class="muted">every agent message the engine grabs and processes, newest first</span>
+          <span class="loglist__live"><span class="pulse"></span>live</span>
+        </div>
+        <ul id="intercepts" class="feed"></ul>
       </section>
 
       <!-- SUGGESTION HISTORY (engine log) -->

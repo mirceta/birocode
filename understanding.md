@@ -1,42 +1,46 @@
-# Understanding — build the real autopilot (Slice 3: auto-advance)
+# Understanding — Autopilot "Intercepted" feed
 
-## What you asked for
+## Goal
+Add a new subtab to the Autopilot local app that **proves the engine is really
+intercepting agent prompts**: a live, append-only feed of every message the
+engine grabs off an idle agent, showing it move through `intercepted → now
+processing` (a rolling spinner while in-flight) → its outcome (`suggested` /
+`escalated` / `sent`).
 
-"Just build it" — make the autopilot actually *act*, not just observe. Until now
-the engine only classified an idle agent's last message into a routine prompt or
-"escalate" and **surfaced** it (suggest-only). The missing piece was the part that
-**sends** the prompt on your behalf so an agent loops forward through your routine
-replies without you pressing send each time.
+## What "intercept" means here
+Each engine tick (~10s) the engine looks at every armed, idle agent, reads its
+last assistant message, and asks the brain to classify it. That read+classify
+is the interception. Today only the *verdict* is logged (the `log` =
+"Suggestion history"); the intercepted **message itself** and a **processing
+phase** are not surfaced — so there's no live "it's working right now" signal.
 
-## What I built
+## Backend (`AutopilotService`)
+- Add an in-memory ring buffer of `InterceptEvent` (cap 50), exposed as
+  `intercepts` in the `/api/autopilot` state.
+- An event carries: `id`, `at`, `repoName`, `snippet` (the intercepted message),
+  `phase` (`processing` | `done`), `outcome` (`suggested`/`escalated`/`sent`,
+  null while processing), `label`, `confidence`, `doneAt`.
+- Record one event when a **new** trailing message is intercepted (dedup by
+  repo+snippet — so the feed lists *new* intercepts, not the same idle message
+  every 10s).
+- Suggest-only path: the event resolves to `done`/`suggested|escalated` in the
+  same tick.
+- Auto-advance send: the event stays `processing` until the resumed run
+  actually completes (flipped in the `TrySend` `Task.Run` finally) — so the
+  spinner reflects a *real* in-flight send, not a fake delay.
 
-- **`AutoAdvance` switch** in `AutopilotConfigStore` — the new mode flag, **off by
-  default** (so behaviour is unchanged until you opt in).
-- **Engine auto-send** (`AutopilotService.TrySend`) — when an armed, idle agent's
-  verdict is a **confident, non-risky** suggestion *and* auto-advance is on, the
-  engine resumes that agent's session and sends the routine prompt through the same
-  `CliRunnerService` path the chat UI uses. A per-repo guard + the run single-flight
-  gate prevent double-sends.
-- **Append-only audit log** (`AutopilotAuditLog` → `autopilot-audit.jsonl`) — every
-  real send records when / which agent / the prompt / confidence / the message it
-  answered. This is safety fence #3 from `plans/loop-autopilot-safety.md`.
-- **API + UI** — `autoAdvance` is settable via `POST /api/autopilot/config` and
-  shown on the dashboard as a second (warm-coloured) toggle; a new **Audit** tab
-  lists what was auto-sent; a **sent** badge appears on agents the engine advanced.
+## Frontend (`autopilot-app/`)
+- New `Intercepted` subtab (live pulse dot), newest first.
+- Each row: time · repo · the intercepted message snippet · status.
+- Status: `processing` → a CSS rolling spinner + "processing…"; `done` → the
+  outcome pill (+ the routine label for suggested/sent).
+- A freshly-arrived row shows the spinner briefly on first appearance before
+  revealing its outcome, so every interception is visibly "caught then
+  processed" — honest, since it genuinely was just intercepted this cycle.
 
-## Fences kept (all pre-existing, unchanged)
-
-Operator gate (host-only, default off) → kill switch → confidence threshold →
-risky-action deny-list (`deploy`/`push`/`force`/…) → escalate-by-default. Auto-send
-only ever fires a verdict that already cleared all of them.
-
-## What's still NOT done (called out honestly)
-
-- The **brain is still the keyword stub** — not the real LLM classifier, and its
-  **accuracy gate is not cleared**, so leaving auto-advance on unattended is not yet
-  trustworthy. Off-by-default is deliberate.
-- **No end-to-end browser verification yet**: the operator gate is host-only, so a
-  headless preview returns 403; flipping it touches the shared gate file the live
-  `:5099` reads, which I won't do without your say-so.
-- The **scoped capability token** (engine holds it, brain never does) from the
-  safety doc is still future work.
+## Assumptions
+- Stub brain classifies instantly, so the only multi-second spinner today is a
+  real auto-advance send; suggest-only rows resolve fast (brief reveal spinner).
+- Keep the understanding-app design mock in sync (add the same 4th subtab).
+- Backend change ⇒ a self-dev rebuild + (when you say so) a redeploy of the
+  harness; the `autopilot-app/` static files go live on save.

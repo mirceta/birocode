@@ -31,6 +31,7 @@ public class AutopilotService : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(10);
     private const int MaxLog = 50;
+    private const int MaxIntercepts = 50;
 
     private readonly RepositoryRegistry _repos;
     private readonly SessionService _sessions;
@@ -48,6 +49,12 @@ public class AutopilotService : BackgroundService
     private readonly ConcurrentDictionary<string, string> _lastSent = new();
     private readonly object _logGate = new();
     private readonly LinkedList<LogEntry> _log = new();
+    // The live "Intercepted" feed: one entry per NEW agent message the engine grabs
+    // and processes. Newest-first, capped. Dedup by repo+snippet so the same idle
+    // message isn't re-intercepted every tick.
+    private readonly object _interceptGate = new();
+    private readonly LinkedList<InterceptEvent> _intercepts = new();
+    private readonly ConcurrentDictionary<string, string> _lastIntercepted = new();
 
     public AutopilotService(
         RepositoryRegistry repos, SessionService sessions, RunSessionService runs,
@@ -78,6 +85,30 @@ public class AutopilotService : BackgroundService
     public IReadOnlyList<LogEntry> Log()
     {
         lock (_logGate) return _log.ToList();
+    }
+
+    /// <summary>One intercepted agent message as it moves through the engine.
+    /// Mutable so the auto-send path can flip <see cref="Phase"/> to "done" when
+    /// the resumed run actually finishes (a real, multi-second in-flight window).
+    /// <para><b>Phase</b>: processing | done. <b>Outcome</b> (null while processing):
+    /// suggested | escalated | sent.</para></summary>
+    public sealed class InterceptEvent
+    {
+        public required string Id { get; init; }
+        public required long At { get; init; }
+        public required string RepoId { get; init; }
+        public required string RepoName { get; init; }
+        public required string Snippet { get; init; }
+        public string Phase { get; set; } = "processing";
+        public string? Outcome { get; set; }
+        public string? Label { get; set; }
+        public double Confidence { get; set; }
+        public long? DoneAt { get; set; }
+    }
+
+    public IReadOnlyList<InterceptEvent> Intercepts()
+    {
+        lock (_interceptGate) return _intercepts.ToList();
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -145,6 +176,17 @@ public class AutopilotService : BackgroundService
             var snippet = Snippet(lastAssistant);
             var prev = _states.TryGetValue(repo.Id, out var p) ? p : null;
 
+            // Interception: record one feed entry the first time we see this trailing
+            // message for the repo (so an idle agent isn't re-intercepted every tick).
+            // It starts in "processing"; the resolve below — or, for an auto-send, the
+            // run's completion — flips it to "done".
+            InterceptEvent? intercept = null;
+            if (!_lastIntercepted.TryGetValue(repo.Id, out var li) || li != snippet)
+            {
+                _lastIntercepted[repo.Id] = snippet;
+                intercept = BeginIntercept(repo, snippet, now);
+            }
+
             // Auto-advance (Slice 3): a confident, non-risky suggestion is SENT, not
             // just surfaced. Everything else (escalate, low confidence, deny-listed)
             // has already been folded into v.Escalate by the gate, so we only ever
@@ -152,13 +194,13 @@ public class AutopilotService : BackgroundService
             if (!v.Escalate && cfg.AutoAdvance && cfg.Enabled
                 && !string.IsNullOrWhiteSpace(v.Label) && !string.IsNullOrWhiteSpace(sessionId))
             {
-                if (TrySend(repo, sessionId!, v, snippet, now))
+                if (TrySend(repo, sessionId!, v, snippet, now, intercept))
                 {
                     Set(repo.Id, new AgentState(
                         repo.Id, repo.Name, true, "sent", v.Label, v.Confidence,
                         $"auto-sent \"{v.Label}\"", snippet, now));
                     Append(new LogEntry(now, repo.Name, "sent", v.Label, v.Confidence));
-                    continue;
+                    continue; // intercept stays "processing" until the run completes
                 }
                 // Send didn't fire (already running, or no slot) — fall through to
                 // surfacing the suggestion; next idle tick retries.
@@ -171,6 +213,10 @@ public class AutopilotService : BackgroundService
             // Log only when the verdict for this agent actually changes (not every tick).
             if (prev is null || prev.Decision != decision || prev.Label != v.Label)
                 Append(new LogEntry(now, repo.Name, v.Escalate ? "escalated" : "suggested", v.Label, v.Confidence));
+
+            // Resolve the interception (suggest-only, or a send that didn't fire).
+            if (intercept != null)
+                FinishIntercept(intercept, v.Escalate ? "escalated" : "suggested", v.Label, v.Confidence, now);
         }
     }
 
@@ -182,7 +228,7 @@ public class AutopilotService : BackgroundService
     /// </summary>
     private bool TrySend(
         RepositoryRegistry.RepositoryInfo repo, string sessionId,
-        PromptClassifier.Verdict v, string snippet, long now)
+        PromptClassifier.Verdict v, string snippet, long now, InterceptEvent? intercept)
     {
         // Guard: don't send twice against the same trailing message before the run
         // we just started shows up as busy. A genuinely new agent reply has a new
@@ -203,6 +249,10 @@ public class AutopilotService : BackgroundService
             now, repo.Id, repo.Name, prompt, v.Confidence, snippet, "sent"));
         _logger.Info($"[AUTOPILOT] auto-sent \"{prompt}\" to \"{repo.Name}\" (conf {v.Confidence:0.00})");
 
+        // The intercept stays "processing" (spinner) for the whole resumed run — a
+        // real in-flight window — and flips to "sent" only when the run completes.
+        if (intercept != null) { intercept.Label = prompt; intercept.Confidence = v.Confidence; }
+
         _ = Task.Run(async () =>
         {
             try
@@ -218,9 +268,39 @@ public class AutopilotService : BackgroundService
             finally
             {
                 session.Complete();
+                if (intercept != null)
+                    FinishIntercept(intercept, "sent", prompt, v.Confidence,
+                        DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
             }
         });
         return true;
+    }
+
+    private InterceptEvent BeginIntercept(RepositoryRegistry.RepositoryInfo repo, string snippet, long now)
+    {
+        var ev = new InterceptEvent
+        {
+            Id = Guid.NewGuid().ToString("n"),
+            At = now, RepoId = repo.Id, RepoName = repo.Name, Snippet = snippet,
+        };
+        lock (_interceptGate)
+        {
+            _intercepts.AddFirst(ev);
+            while (_intercepts.Count > MaxIntercepts) _intercepts.RemoveLast();
+        }
+        return ev;
+    }
+
+    private void FinishIntercept(InterceptEvent ev, string outcome, string? label, double confidence, long doneAt)
+    {
+        lock (_interceptGate)
+        {
+            ev.Phase = "done";
+            ev.Outcome = outcome;
+            ev.Label = label;
+            ev.Confidence = confidence;
+            ev.DoneAt = doneAt;
+        }
     }
 
     private void Set(string repoId, AgentState state) => _states[repoId] = state;
