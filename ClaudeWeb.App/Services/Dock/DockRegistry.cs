@@ -80,8 +80,12 @@ public class DockRegistry
 {
     private readonly Logger _logger;
     private readonly string _storePath;
+    private readonly string _globalStorePath;
     private readonly object _gate = new();
     private readonly List<DockTab> _tabs = new();
+    // Tab-independent queue for the main chat, which has no dock tab to attach to
+    // (plans/queued-prompts.md). Persisted to its own dock-stash.json.
+    private readonly List<StashItem> _globalStash = new();
 
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
 
@@ -89,7 +93,9 @@ public class DockRegistry
     {
         _logger = logger;
         _storePath = ResolveStorePath();
+        _globalStorePath = ResolveGlobalStorePath();
         Load();
+        LoadGlobal();
     }
 
     /// <summary>All tabs in creation order. Returns copies.</summary>
@@ -208,6 +214,53 @@ public class DockRegistry
         }
     }
 
+    // --- global (tab-independent) stash --------------------------------------
+    // The main chat has no dock tab, so its queued prompts live here, persisted
+    // separately to dock-stash.json (plans/queued-prompts.md). Same shape and
+    // optimistic-id contract as the per-tab stash above.
+
+    /// <summary>All global stash items, oldest first. Returns copies.</summary>
+    public IReadOnlyList<StashItem> GetGlobalStash()
+    {
+        lock (_gate) return _globalStash.Select(CloneStash).ToList();
+    }
+
+    /// <summary>Adds a global stash item. An existing id returns it unchanged.</summary>
+    public StashItem? AddGlobalStash(string text, string? id = null, long? createdAt = null)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        lock (_gate)
+        {
+            if (!string.IsNullOrWhiteSpace(id))
+            {
+                var existing = _globalStash.FirstOrDefault(s => string.Equals(s.Id, id, StringComparison.Ordinal));
+                if (existing != null) return CloneStash(existing);
+            }
+            var item = new StashItem
+            {
+                Id = string.IsNullOrWhiteSpace(id) ? Guid.NewGuid().ToString("N") : id,
+                Text = text.Length > 4000 ? text[..4000] : text,
+                CreatedAt = createdAt ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            };
+            _globalStash.Add(item);
+            SaveGlobal();
+            return CloneStash(item);
+        }
+    }
+
+    /// <summary>Removes a global stash item. False if unknown.</summary>
+    public bool RemoveGlobalStash(string stashId)
+    {
+        lock (_gate)
+        {
+            var idx = _globalStash.FindIndex(s => string.Equals(s.Id, stashId, StringComparison.Ordinal));
+            if (idx < 0) return false;
+            _globalStash.RemoveAt(idx);
+            SaveGlobal();
+            return true;
+        }
+    }
+
     /// <summary>Closes a tab. False if the id is unknown.</summary>
     public bool Remove(string id)
     {
@@ -263,10 +316,51 @@ public class DockRegistry
         }
     }
 
+    private void LoadGlobal()
+    {
+        try
+        {
+            if (!File.Exists(_globalStorePath)) return;
+            var loaded = JsonSerializer.Deserialize<List<StashItem>>(File.ReadAllText(_globalStorePath)) ?? new();
+            lock (_gate)
+            {
+                _globalStash.Clear();
+                foreach (var s in loaded)
+                    if (!string.IsNullOrWhiteSpace(s.Id) && !string.IsNullOrWhiteSpace(s.Text))
+                        _globalStash.Add(s);
+            }
+            _logger.Info($"[DOCK] Loaded {_globalStash.Count} global stash item(s) from {_globalStorePath}");
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[DOCK] Failed to load {_globalStorePath}: {ex.Message}");
+        }
+    }
+
+    private void SaveGlobal()
+    {
+        // Caller holds _gate.
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(_globalStorePath)!);
+            File.WriteAllText(_globalStorePath, JsonSerializer.Serialize(_globalStash, JsonOpts));
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[DOCK] Failed to persist {_globalStorePath}: {ex.Message}");
+        }
+    }
+
     private static string ResolveStorePath()
     {
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         return Path.Combine(appData, "ClaudeWeb", "dock.json");
+    }
+
+    private static string ResolveGlobalStorePath()
+    {
+        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        return Path.Combine(appData, "ClaudeWeb", "dock-stash.json");
     }
 
     private static DockTab Clone(DockTab t) => new()

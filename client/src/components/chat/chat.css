@@ -1124,6 +1124,30 @@ details.step > summary::-webkit-details-marker {
   white-space: nowrap;
 }
 
+/* Approve button on a queued-prompt chip: sends it as the next turn. */
+.chat-stash__send {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.chat-stash__send:hover {
+  filter: brightness(1.05);
+}
+
+.chat-stash__send--disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .chat-stash__remove {
   flex: 0 0 auto;
   width: 18px;

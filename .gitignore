@@ -19,6 +19,7 @@ settings.json
 
 # Deploy staging/tooling generated at runtime (parallels .claudeweb-preview)
 .claudeweb-deploy/
+.selfdev-build/
 
 # Visual Studio per-machine cache (IntelliSense dbs, layout, .suo)
 .vs/
