@@ -1,8 +1,7 @@
 # Dock git actions — sync buttons in each agent dock's git row
 
-> **Status (2026-06-17):** Built (inward-sync only — push deferred). Frontend
-> compiles clean; live browser verification still pending. On
-> `feature/dock-git-actions`.
+> **Status (2026-06-17):** Shipped (inward-sync only — push deferred). Built,
+> user-confirmed working, merged to main. On `feature/dock-git-actions`.
 >
 > **Decisions taken during build:**
 > - **Push: deferred.** Slice 1 is inward-sync only (merge / pull main / pull
