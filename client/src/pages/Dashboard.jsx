@@ -12,6 +12,7 @@ import WaitingBadge from '../components/dashboard/WaitingBadge';
 import WaitingOnField from '../components/dashboard/WaitingOnField';
 import IdeasPanel from '../components/ideas/IdeasPanel';
 import Scoreboard from '../components/dashboard/Scoreboard';
+import AutopilotPanel from '../components/dashboard/AutopilotPanel';
 import './dashboard.css';
 
 // The dashboard has three layouts (plans/agent-dashboard.md): summary "cards"
@@ -763,6 +764,11 @@ export default function Dashboard({ onClose }) {
           &times;
         </button>
       </div>
+
+      {/* Autopilot as a first-class dashboard section (plans/autopilot-to-harness.md):
+          a full-width band above the Ideas/agents flow — box-level mission-control
+          over every agent. Self-gates on the autopilotTab feature. */}
+      <AutopilotPanel />
 
       <div
         ref={bodyRef}

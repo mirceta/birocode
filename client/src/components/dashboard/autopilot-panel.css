@@ -1,0 +1,60 @@
+/* Autopilot dashboard section (plans/autopilot-to-harness.md, Part 2).
+   A collapsible full-width band pinned above the agent docks, styled like the
+   Scoreboard. The inner controls/agent rows reuse the .ap-* classes from
+   pages/autopilot.css; this file only frames the section + its bar. */
+.ap-panel {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: var(--shadow);
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.ap-panel__bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+}
+
+.ap-panel__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  font: inherit;
+  color: var(--color-text);
+}
+
+.ap-panel__chev {
+  display: inline-block;
+  transition: transform 0.15s ease;
+  color: var(--color-text-soft, #888);
+  font-size: 13px;
+}
+.ap-panel__chev.is-collapsed {
+  transform: rotate(-90deg);
+}
+
+.ap-panel__title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.ap-panel__summary {
+  font-size: 13px;
+  color: var(--color-text-soft, #6b6b66);
+}
+.ap-panel__needs {
+  color: #b85c00;
+  font-weight: 700;
+}
+
+.ap-panel__body {
+  padding: 4px 14px 14px;
+  border-top: 1px solid var(--color-border);
+}

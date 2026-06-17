@@ -5,7 +5,9 @@
 > autopilot dashboard lives*; the brain/engine/safety subdocs are unchanged.
 
 > **Status (2026-06-17): KICKOFF — interpreting + scoping.** On `feature/autopilot-to-harness`,
-> off `main`. Scope settled — see **Decisions (locked)**.
+> off `main`. Scope settled — see **Decisions (locked)**. **Progress:** Part 1 port done
+> (Intercepted feed + deny-list into the harness tab); Part 2 first cut done (a first-class
+> **Autopilot section on the agent dashboard** — `AutopilotPanel`). Both deployed to live :5099.
 
 ## Goal
 
@@ -85,9 +87,26 @@ Today arming/threshold/kill live per-agent/per-repo in `autopilot.json`
   layered over (not replacing) per-agent arm so you can still opt individual agents in/out.
 - **One unified view of every agent** on the box (the harness tab is already global; the local
   app couldn't be — another reason it's the one to retire).
-- **Backend touch (scoped):** extend `AutopilotConfigStore` with a global stanza + have
-  `AutopilotService` honour it; keep per-agent arm as the finer grain. Brain/engine/gate logic
-  otherwise unchanged.
+- **Backend touch (scoped):** ~~extend `AutopilotConfigStore` with a global stanza~~ — **not
+  needed.** Found during build: the backend **already** holds global `enabled` / `autoAdvance` /
+  `threshold` (the tab mutates them with no `repoId`) **plus** per-agent `armed`. So "global
+  controls layered over per-agent arm" is already the data model; cross-agent operation is a
+  **pure surfacing job**.
+
+### Built — Autopilot section on the agent dashboard (2026-06-17)
+
+`components/dashboard/AutopilotPanel.jsx` (+ `autopilot-panel.css`), rendered as a full-width
+collapsible band above the Ideas/agents flow in `Dashboard.jsx` (modeled on `Scoreboard`;
+per-device collapse; gated on the `autopilotTab` feature). It is the box-level mission-control:
+
+- **Global controls** — enable / kill, auto-advance, threshold — over the whole wall.
+- **Deny-list** transparency line.
+- **Compact per-agent row** — state badge + prediction + arm/disarm — for every agent at once,
+  with a **"N need you"** escalation rollup in the collapsed bar.
+
+Reuses `/api/autopilot` + the `ap-*` styles; the Autopilot **tab** stays the detailed surface
+(intercepts / history / audit / prompts). Possible later cleanup: extract the shared bar +
+agent-row into one component used by both tab and panel (currently the JSX is similar).
 
 ## Out of scope
 
