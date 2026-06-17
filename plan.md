@@ -36,6 +36,13 @@
 
 ## Active feature plans
 
+- [Dock colour background](plans/dock-color-background.md) — an agent's assigned colour is
+  shown as a dock **border**; also paint the dock **background a very light shade** of that
+  colour. Needed because the **important** star repaints the border red, which makes a
+  coloured agent indistinguishable from any other important one — the background wash keeps
+  the colour readable. Cards already tint (`.dash-cell[data-colored]`); the gap is phone
+  docks (`.phone[data-colored]`, border-only). CSS-only. **DESIGN**, not built. On
+  `feature/dock-color-background`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left

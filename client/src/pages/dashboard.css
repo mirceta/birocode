@@ -631,6 +631,19 @@
   border-left: 4px solid var(--agent-color);
 }
 
+/* Tint the header bar with the agent colour, mirroring the card wash
+   (.dash-cell[data-colored]) but applied here rather than on .phone — the phone's
+   inner regions (bar, lanes, git) all paint an opaque --color-surface, so a
+   background on .phone itself would be hidden. The bar sits right beside the
+   colour border, and because the tint is a background (not a border) the colour
+   stays identifiable when the "important" rule repaints the border bright red. */
+.phone[data-colored='true'] .phone__bar {
+  background: color-mix(in srgb, var(--agent-color) 16%, var(--color-surface));
+}
+.phone[data-colored='true'] .phone__bar:hover {
+  background: color-mix(in srgb, var(--agent-color) 26%, var(--color-surface));
+}
+
 /* Phone header doubles as the maximize affordance. */
 .phone__bar {
   display: flex;
