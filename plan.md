@@ -36,6 +36,13 @@
 
 ## Active feature plans
 
+- [Stop stale code: no-store shell + Force-refresh](plans/cache-hardening.md) —
+  kills the recurring "I deployed but my browser shows the old version": the SPA
+  `index.html`/`version.json` are now served `no-store` (hashed `/assets/*` stay
+  immutable) so a reload always lands on the latest build, a **Force refresh**
+  button in Settings ▸ Maintenance wipes caches + service workers on demand, and
+  the stale-version banner's Reload reuses that thorough clear. Built + verified
+  on isolated `:5210`; **not yet deployed**. On `feature/ideas-active-section`.
 - [Ideas — an "Active" section](plans/ideas-active-section.md) — move an idea into
   an **Active** group pinned at the top of the Ideas surface, so "what are we
   working on now" is answerable at a glance; toggle it back out to the backlog. An

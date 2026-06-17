@@ -1,58 +1,58 @@
-// Ideas "Active" section — plan explainer SPA. Self-contained, no libraries,
-// relative URLs (served under /api/localview/<repo>/app/understanding/).
-// Two pieces: (1) the view tabs, (2) a live mock of the Active/Backlog toggle so
-// the behaviour is shown, not just described.
+// Stale-cache fix — plan explainer SPA. Self-contained, no libraries, relative
+// URLs (served under /api/localview/<repo>/app/understanding/). One interaction:
+// the "Run the fix" button animates the SERVER→CACHE→TAB diagram from stale to
+// fresh and lights up the three fix layers in turn, mirroring understanding.md.
+(function () {
+  const cacheBox = document.getElementById('cacheBox');
+  const tabBox = document.getElementById('tabBox');
+  const cacheHash = document.getElementById('cacheHash');
+  const tabHash = document.getElementById('tabHash');
+  const verdict = document.getElementById('verdict');
+  const btn = document.getElementById('fixBtn');
+  const layers = ['L1', 'L2', 'L3'].map((id) => document.getElementById(id));
 
-// ---- view tabs ----
-const tabs = document.getElementById('tabs');
-tabs.addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-view]');
-  if (!btn) return;
-  for (const b of tabs.querySelectorAll('button')) b.classList.toggle('on', b === btn);
-  for (const v of document.querySelectorAll('.view')) v.classList.toggle('on', v.dataset.view === btn.dataset.view);
-});
+  function reset() {
+    cacheBox.className = 'box cache';
+    tabBox.className = 'box tab';
+    cacheHash.textContent = 'index-OLD.js';
+    tabHash.textContent = 'index-OLD.js';
+    verdict.textContent = '⚠ Stale — the cached shell pins the OLD hash.';
+    verdict.className = 'verdict';
+    layers.forEach((l) => l && l.classList.remove('lit'));
+  }
 
-// ---- interactive demo (view 2) ----
-// Mirrors the real behaviour: each idea carries an `active` flag; toggling it
-// regroups the list (Active pinned on top, Backlog below). Pure in-memory mock.
-const ideas = [
-  { id: 'a', text: 'Ship the Ideas Active section', active: false },
-  { id: 'b', text: 'Replace the autopilot stub brain', active: false },
-  { id: 'c', text: 'Drag-order ideas within a section', active: false },
-  { id: 'd', text: 'Write the verify-ideas-active script', active: false },
-];
+  const steps = [
+    // 1 · no-store: the cache stops holding the shell.
+    () => {
+      layers[0].classList.add('lit');
+      cacheBox.className = 'box cache purged';
+      cacheHash.textContent = '(no-store — empty)';
+    },
+    // 2 · the tab re-fetches the fresh shell → fresh hash.
+    () => {
+      layers[1].classList.add('lit');
+      tabBox.className = 'box tab fresh';
+      tabHash.textContent = 'index-NEW.js';
+    },
+    // 3 · banner/button guarantee it, even through a proxy.
+    () => {
+      layers[2].classList.add('lit');
+      verdict.textContent = '✓ Fresh — every reload now lands on the latest build.';
+      verdict.className = 'verdict ok';
+    },
+  ];
 
-const elActive = document.getElementById('demo-active');
-const elBacklog = document.getElementById('demo-backlog');
-const elActiveCount = document.getElementById('demo-active-count');
-const elBacklogCount = document.getElementById('demo-backlog-count');
-const elActiveEmpty = document.getElementById('demo-active-empty');
+  let timers = [];
+  btn.addEventListener('click', () => {
+    timers.forEach(clearTimeout);
+    timers = [];
+    reset();
+    btn.disabled = true;
+    steps.forEach((step, i) => {
+      timers.push(setTimeout(step, 650 * (i + 1)));
+    });
+    timers.push(setTimeout(() => { btn.disabled = false; }, 650 * (steps.length + 1)));
+  });
 
-function row(idea) {
-  const li = document.createElement('li');
-  li.className = 'demo__idea';
-  const span = document.createElement('span');
-  span.textContent = idea.text;
-  const btn = document.createElement('button');
-  btn.className = 'mini' + (idea.active ? ' mini--on' : '');
-  btn.textContent = idea.active ? '★ Active' : '☆ Activate';
-  btn.title = idea.active ? 'Move out of Active' : 'Move into Active';
-  btn.addEventListener('click', () => { idea.active = !idea.active; renderDemo(); });
-  li.append(span, btn);
-  return li;
-}
-
-function renderDemo() {
-  if (!elActive) return; // demo only exists on the flow view
-  const active = ideas.filter((i) => i.active);
-  const backlog = ideas.filter((i) => !i.active);
-  elActive.innerHTML = '';
-  elBacklog.innerHTML = '';
-  active.forEach((i) => elActive.appendChild(row(i)));
-  backlog.forEach((i) => elBacklog.appendChild(row(i)));
-  elActiveCount.textContent = active.length;
-  elBacklogCount.textContent = backlog.length;
-  elActiveEmpty.hidden = active.length > 0;
-}
-
-renderDemo();
+  reset();
+})();

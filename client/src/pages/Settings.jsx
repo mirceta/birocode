@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { useUiSettings } from '../context/UiSettingsContext';
 import { useT } from '../i18n/LanguageContext';
 import { useOrderedTabs } from '../layout/tabRegistry';
+import { hardRefresh } from '../lib/hardRefresh';
 import './settings.css';
 
 // Settings tab (plans/settings-tab.md). Section 1: Tab order — drag a card
@@ -201,6 +202,17 @@ export default function Settings() {
         <button type="button" className="settings-restore" onClick={() => saveTabOrder([])}>
           {t('settings.restoreDefault')}
         </button>
+      </section>
+
+      <section className="settings-section">
+        <h3 className="settings-section__title">{t('settings.maintenance')}</h3>
+        <p className="settings-section__hint">{t('settings.forceRefreshHint')}</p>
+        <button type="button" className="settings-refresh" onClick={() => hardRefresh()}>
+          {t('settings.forceRefresh')}
+        </button>
+        <p className="settings-build">
+          {t('settings.buildVersion')}: <code>{__BUILD_TIME__}</code>
+        </p>
       </section>
     </div>
   );

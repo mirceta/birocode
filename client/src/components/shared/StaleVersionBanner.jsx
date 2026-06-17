@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useT } from '../../i18n/LanguageContext';
+import { hardRefresh } from '../../lib/hardRefresh';
 import './staleVersionBanner.css';
 
 // After a redeploy a single-page tab keeps running the bundle it first loaded —
@@ -58,7 +59,7 @@ export default function StaleVersionBanner() {
       <button
         type="button"
         className="stale-banner__reload"
-        onClick={() => window.location.reload()}
+        onClick={() => hardRefresh()}
       >
         {t('staleBanner.reload')}
       </button>
