@@ -59,9 +59,13 @@ is to re-tint the **tokens those regions read** rather than paint behind them. O
 `.phone[data-colored='true']` we now redefine:
 
 ```css
---color-bg: color-mix(in srgb, var(--agent-color) 12%, #faf7f2);
---color-surface: color-mix(in srgb, var(--agent-color) 8%, #ffffff);
+--color-bg: color-mix(in srgb, var(--agent-color) 24%, #faf7f2);
+--color-surface: color-mix(in srgb, var(--agent-color) 16%, #ffffff);
 ```
+
+(First shipped at 12% / 8% but that read as faintly-tinted off-white — hues weren't
+distinguishable — so bumped to 24% / 16% for a livelier, identifiable wash while dark text
+stays readable.)
 
 Because every dock region **and the same-DOM embedded `<Chat>`** read
 `var(--color-surface)`/`var(--color-bg)`, the agent-colour wash cascades through the entire

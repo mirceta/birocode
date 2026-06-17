@@ -640,8 +640,8 @@
    it survives the "important" rule repainting the border bright red. */
 .phone[data-colored='true'] {
   border-left: 4px solid var(--agent-color);
-  --color-bg: color-mix(in srgb, var(--agent-color) 12%, #faf7f2);
-  --color-surface: color-mix(in srgb, var(--agent-color) 8%, #ffffff);
+  --color-bg: color-mix(in srgb, var(--agent-color) 24%, #faf7f2);
+  --color-surface: color-mix(in srgb, var(--agent-color) 16%, #ffffff);
 }
 
 /* The header bar reads the (now tinted) --color-surface and adds more agent colour
