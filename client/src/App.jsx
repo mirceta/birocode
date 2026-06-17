@@ -11,6 +11,7 @@ import History from './pages/History';
 import AppRun from './pages/AppRun';
 import LocalApp from './pages/LocalApp';
 import Ideas from './pages/Ideas';
+import Autopilot from './pages/Autopilot';
 import Deployments from './pages/Deployments';
 import Agents from './pages/Agents';
 import Git from './pages/Git';
@@ -51,6 +52,7 @@ export default function App() {
             <Route path="app" element={<AppRun />} />
             <Route path="local" element={<LocalApp />} />
             <Route path="ideas" element={<Ideas />} />
+            <Route path="autopilot" element={<Autopilot />} />
             <Route path="deploys" element={<Deployments />} />
             <Route path="agents" element={<Agents />} />
             <Route path="git" element={<Git />} />

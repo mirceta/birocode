@@ -8,69 +8,31 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-16):** **Latest — built, browser-verified & merged to main:**
-> [Reflect multi-app exposure in the local-exposure example](plans/exposure-example-multiapp-note.md)
-> — the example's request-flow explainer now teaches the per-app proxy path
-> `…/app/<appId>/` (bare = the default app), matching the multiple-local-apps
-> upgrade; wording-only, verified across all four explainer variants.
-> **Previously latest — built, verified, live on :5099 & merged to main
-> (`6721113`):** [Multiple local apps per repo](plans/multiple-local-apps.md)
-> — a repo can now expose **several local apps** (each on its own port, with a
-> Local-tab switcher); first consumer is the harness-provided, always-on
-> **Understanding** app that renders a rolling-latest Mermaid diagram the agent
-> writes. Both slices shipped; follow-ups (per-app dock/Exposure-check awareness)
-> remain. **Earlier — built, verified & merged to main:**
-> the [Local-exposure example](plans/local-exposure-example.md) — a self-contained
-> product on the self-repo's Local port (`:5305`) that teaches Local-tab exposure
-> by *being* a correct example, with a four-style animated request-flow explainer;
-> **zero harness changes** (the earlier baked-into-the-harness attempt was
-> abandoned, archived on `origin/feature/serving-model-clarity`).
-> **Previously latest — deployed & confirmed:**
-> the [Scoreboard / analytics](plans/scoreboard-analytics.md) panel above the
-> agent docks (v2 redesign: Today/7d/All timeframe toggle, a
-> concurrency-over-time chart, a 7-day activity strip, and a per-agent
-> leaderboard; per-run cost captured) — live on :5099, merging to main now.
-> **Also deployed & confirmed, merged to main:**
-> the [Ideas substring filter fix](plans/ideas-substring-filter.md) — the Ideas
-> filter box now does a literal case-insensitive **substring** match (multi-word
-> = AND) instead of the old subsequence match that kept unrelated ideas. **Also
-> deployed & confirmed, merged to main:**
-> the [agent "waiting on" toggle](plans/agent-waiting.md) — an ⏳ dock-header
-> toggle (sibling of the ⭐ important button) that marks a dashboard dock as
-> waiting for another agent, with an optional inline "which agent" field and a
-> distinct amber cue that coexists with important's red border. **Also deployed &
-> confirmed, merged to main:**
-> [priority for ideas](plans/idea-priority.md) — each idea gets a 1–5 priority
-> and its card reddens as the priority rises, on both the Ideas tab and the
-> dashboard panel. **Also deployed & confirmed, merged to main:**
-> [local app on the agent dock](plans/dock-local-app.md) — each dashboard dock
-> shows whether its agent serves a Local-tab app (a row above git) and can
-> **render that product inside the dock** via a toggle on that row (slices 1 & 2,
-> frontend-only). **Also deployed & confirmed, merged to main:**
-> the **multiline-prompt truncation** bug fix — prompts containing newlines now
-> reach the agent in full (was truncated at the first line by the `claude.cmd`
-> shim). **Also deployed & confirmed, merged to main:**
-> [remove projects](plans/remove-projects.md) — the Projects tab can now
-> unregister a project (🗑 on each card; folder kept on disk). **Just merged
-> (not yet deployed):** per-dock
-> [chat refresh](plans/dock-chat-refresh.md) on the agent dashboard. **In
-> flight:** Agent dashboard — a top-bar full-screen grid overview of every agent
-> on this machine, on `feature/agent-dashboard` (slice 1 built + browser-verified;
-> redirected from a tab to a top-bar overlay). **Deployed &
-> confirmed (cf75052):** the
-> [stale-copy warning banner](plans/stale-version-banner.md) and the Local-tab
-> "how to expose a web app" instructions are live on :5099. The same deploy
-> also shipped Understanding panel **slice 2** and the Git tab **PR preview**
-> (slices 1 & 2) — now deployed & confirmed. Already merged &
-> deployed: Understanding panel slice 1, Deployments tab slice 1, the
-> product-onboarding Exposure check (slices 1-3), and per-tab agent spaces.
-> [Chat windowing](plans/chat-windowing.md) slice 1 — render only the recent
-> tail of long conversations so the app stays fast — is deployed & confirmed on
-> `feature/chat-windowing` (not yet merged). Proposed: a
-> [spec-baseline](plans/spec-baseline.md) DESIGN plan — what to borrow from
-> OpenSpec — on `feature/spec-baseline`. Parked: a
-> [PWA "older version" warning](plans/pwa-webapk-warning.md) plan on
-> `feature/pwa-webapk-warning` (set aside, not started).
+> **Status (2026-06-17):** Loop autopilot — the editable Routine-prompts tab now lives in the live local app (`autopilot-app/`), on `feature/loop-autopilot`.
+
+## ⚠️ Known risks to mitigate
+
+- **Autopilot is a confused-deputy / prompt-injection risk — mitigate before we
+  ever trust it to *act* unattended.** Both the agent that *authors* the
+  autopilot's surfaces and the autopilot *brain* itself are Claude, and Claude
+  ingests untrusted input (files, web, PRs, dependency text) as normal work — so
+  a steered session is a realistic vector, not a hypothetical stranger. The
+  feature's whole job is to *send prompts to agents*, i.e. to act, which is
+  exactly the authority an injection would want to borrow.
+  - **Eventual mitigation (NOT done):** a **scoped capability token held by the
+    engine, never by the brain** — the brain only *proposes*, the deterministic
+    engine *executes* under a narrow, expiring token after the gate
+    (threshold + risky-action deny-list). Never expose a send/act primitive that
+    skips that gate. Token authority must be strictly *less* than the operator's
+    own session (don't reuse `claudeweb_session`). The token bounds the *category*
+    of action; the gate bounds *each* action. See
+    [loop-autopilot safety](plans/loop-autopilot-safety.md).
+  - **Interim guard (done):** the autopilot API is **gated operator-side only**,
+    mirroring guest approval — the host (WinForms) turns the `/api/autopilot`
+    endpoints off/on; **the web can never turn them on** (it can only see + shrink).
+    Default **off**. So even a steered web/brain can't enable acting; the operator
+    must physically opt in at the host. Suggest-only for now; no unattended
+    auto-advance until the token mitigation above lands.
 
 ## Active feature plans
 
@@ -94,14 +56,6 @@
   — so the user doesn't re-describe the ritual and the agent doesn't drop steps.
   Approach decided: composer-prefill buttons (Understanding-panel pattern) that
   fill the chat box with the kickoff/closeout ritual. On `feature/feature-kickoff`.
-- [Agent dashboard](plans/agent-dashboard.md) — a mission-control grid showing
-  every agent on this machine at once (status + what it's doing). Opened from a
-  top-bar button (Advanced + 2+ agents) as a full-screen overlay, not a tab;
-  click a cell to open that agent in the normal `/studio` view. Removes the
-  "open one → look → navigate back" dance. Mostly a new view over existing
-  plumbing (`DockContext`, `/api/runs`, the open-agent flow). Slice 1 = static
-  grid + open-agent (built & browser-verified), slice 2 = liveness, slice 3
-  (later) = live tail.
 
 ## Proposed / design (not building yet)
 
@@ -112,6 +66,74 @@
 
 ## Recently shipped
 
+- [Basic mode never shows the dashboard](plans/basic-mode-no-dashboard.md) — **bug fix**:
+  Basic (Simple) mode is always the plain tabbed view. The `agentDashboard: 'advanced'`
+  gate only blocked *opening* the overlay; it renders from `dashOpen` local state, so
+  opening it in Advanced then switching to Basic left it showing. Now `Layout.jsx` gates the
+  render on `dashEnabled && dashOpen` and resets `dashOpen` when the feature goes away.
+  Frontend only; deployed to live :5099 & confirmed; **merged to main 2026-06-17**. On
+  `feature/basic-mode-no-dashboard`.
+- [Loop autopilot — auto-advance agents through my routine replies](plans/loop-autopilot.md)
+  — autopilot mines the user's history for recurring **routine prompts**, then at
+  each idle agent turn classifies the situation into one of the user's **editable
+  custom prompts** (the brain's label space) or **`escalate`**, looping the agent
+  forward and pausing at the hard decisions. Slices (1) discover, (2) suggest-only,
+  (3) auto-advance all built; gated operator-side (**off by default**) + kill switch +
+  confidence threshold + risky-action deny-list, with an append-only audit log
+  (`autopilot-audit.jsonl`). The dashboard is the build-less local app at
+  `autopilot-app/`; its **editable Routine-prompts tab** (add/edit/delete the
+  recommendable set + one-click adopt of mined drafts) is **browser-verified on live
+  :5099**. Remaining: swap the keyword **stub** brain for the real LLM classifier +
+  its accuracy gate before trusting unattended auto-advance. On `feature/loop-autopilot`.
+- [Agent dashboard](plans/agent-dashboard.md) — a mission-control, full-screen
+  **top-bar overlay** (Advanced + 2+ agents) showing every agent on this machine at
+  once; click a cell to open that agent in the normal `/studio` view. Slice 1 (static
+  grid + open-agent), slice 2 (liveness: per-cell status/activity/git on a 5s timer)
+  and slice 4 (the Chat-only "wall of phones") built & browser-verified; slice 3
+  (live tail) deferred. On `feature/agent-dashboard`, not yet merged.
+- [Dashboard drag layout](plans/dashboard-drag-layout.md) — arrange the **Ideas** and
+  **agents** panels on the dashboard, both participating, with a **mode switch** in the
+  top-right: **free mode** (desktop default) drags either panel anywhere by its `⠿` handle
+  (absolute `{x,y}`, pointer-events, `↺` reset, edge-clamped); **grid mode** (mobile
+  default, since touch-drag is unreliable) keeps the responsive flow and a `⇄` tap-flips
+  order. Device-local; default follows `max-width: 700px` until the operator picks one.
+  Started as a side-swap toggle → snap-zones → this. Frontend only (`Dashboard.jsx` +
+  `dashboard.css` + i18n); deployed to live :5099 & confirmed; **merged to main
+  2026-06-17**. On `feature/dashboard-drag-layout`.
+- [Queued prompts](plans/queued-prompts.md) — **merged with [prompt-stash](plans/prompt-stash.md)**:
+  the per-agent stash list *is* the queue. While the agent is busy (a normal send would
+  409) you line up the next prompts; **nothing auto-runs** — each chip has **Send**
+  (approve → send as the next turn, disabled while busy), **×** (delete), and tap-to-edit.
+  Works on **all three surfaces**, each correctly scoped: the main chat (tab-independent
+  **global queue** in `dock-stash.json` via `GET/POST/DELETE /api/dock/stash`), the active
+  agent tab (per-tab `stash` in `dock.json`), and each **dashboard dock** (its own agent
+  via a `stashTabId` threaded `PinnedAgent → Chat → ChatInput`). Durable across
+  refresh/redeploy. Backend (`DockRegistry`/`DockController`) + frontend; deployed to live
+  :5099 & confirmed; **merged to main 2026-06-17**. On `feature/queued-prompts`.
+- [Make the Exposure check app-aware](plans/expose-check-app-aware.md) — **bug fix**:
+  the Local tab's "Verify exposure" always checked the repo's default app
+  (`repo.LocalPort`, e.g. `:5300`), ignoring the switcher. Now `/api/expose/check`
+  takes an `appId` and probes the **selected** app's port (default = first app);
+  `ExposeService.RunAsync`/`BuildFixPrompt` use it, and `ExposeCheck.jsx` sends the
+  id + points its freshness probe at `/api/localview/{id}/app/{appId}/`. The per-app
+  Exposure-check follow-up of [multiple-local-apps](plans/multiple-local-apps.md).
+  Backend + frontend; deployed to live :5099 & confirmed; **merged to main
+  2026-06-17**. On `feature/expose-check-app-aware`.
+- [Understanding app → host a full SPA](plans/understanding-spa.md) — the always-on
+  Understanding app now serves an **agent-authored static SPA** from
+  `understanding-app/` at the repo root (build-less folder: `index.html` + JS/CSS +
+  vendored libs + data; stack copied from `birokrat-architecture/viz/`), instead of a
+  single Mermaid diagram. **No Mermaid fallback** — a missing SPA shows an explicit
+  empty state and missing assets 404, so a broken/absent SPA can't masquerade as
+  working. Removed the old renderer + bundled `mermaid.min.js`. Compiles, deployed to
+  live :5099 & confirmed; **merged to main 2026-06-16**. On `feature/understanding-spa`.
+- [Multiple local-app buttons on the agent dock](plans/dock-multi-local-app.md) — the
+  dashboard dock's single default-app toggle is now **one button per local app** the
+  repo defines (incl. the always-on Understanding app), mirroring the Local-tab
+  switcher; click one to render it inside the dock at
+  `/api/localview/{repoId}/app/{appId}/`, click the active one to return to chat.
+  Dropped the now-unused single-port liveness probe. Frontend-only; browser-verified
+  on live :5099; **merged to main 2026-06-16**. On `feature/dock-multi-local-app`.
 - [Reflect multi-app exposure in the local-exposure example](plans/exposure-example-multiapp-note.md)
   — a **light accuracy touch**: the example's animated request-flow explainer
   taught only the bare `/api/localview/<repo>/` path, predating the

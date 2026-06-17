@@ -40,6 +40,7 @@ export const FEATURES = {
   dualChat: 'advanced', // Project | Claude Web chat switcher (plans/dual-chat.md)
   localAppTab: 'advanced', // direct-iframe Local tab, per-project port (plans/local-app-tab.md)
   ideasTab: 'advanced', // per-project notes (plans/ideas-tab.md)
+  autopilotTab: 'advanced', // loop-autopilot: discover recurring routine prompts (plans/loop-autopilot.md)
   understandingPanel: 'advanced', // restatement-of-request panel atop chat (plans/understanding-panel.md)
   featureKickoff: 'advanced', // composer button that prefills the "start a new feature" ritual (plans/feature-kickoff.md)
   customPrompts: 'advanced', // user-defined composer prompt presets + manager (plans/custom-prompts.md)

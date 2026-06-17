@@ -1,4 +1,5 @@
 using ClaudeWeb.Models;
+using ClaudeWeb.Services.Autopilot;
 using ClaudeWeb.Services.Hosting;
 using ClaudeWeb.Services.IpFilter;
 using ClaudeWeb.Services.Logging;
@@ -42,6 +43,7 @@ public class MainForm : Form
     private readonly CallLog _callLog;
     private readonly RepositoryRegistry _repositories;
     private readonly IpAllowlistService _ipAllowlist;
+    private readonly AutopilotGate _autopilotGate;
 
     private readonly Label _workingDirLabel;
     private readonly Label _serverLabel;
@@ -54,7 +56,7 @@ public class MainForm : Form
     // Maps a CallRecord.Number to its ListView row for in-place updates.
     private readonly Dictionary<int, ListViewItem> _rowsByNumber = new();
 
-    public MainForm(AppConfig config, Logger logger, EmbeddedApi api, CallLog callLog, RepositoryRegistry repositories, IpAllowlistService ipAllowlist)
+    public MainForm(AppConfig config, Logger logger, EmbeddedApi api, CallLog callLog, RepositoryRegistry repositories, IpAllowlistService ipAllowlist, AutopilotGate autopilotGate)
     {
         _config = config;
         _logger = logger;
@@ -62,6 +64,7 @@ public class MainForm : Form
         _callLog = callLog;
         _repositories = repositories;
         _ipAllowlist = ipAllowlist;
+        _autopilotGate = autopilotGate;
 
         Text = "Claude Web";
         Size = new Size(1200, 720);
@@ -129,6 +132,15 @@ public class MainForm : Form
 
     // --- UI construction ---------------------------------------------------
 
+    // Reflects the operator gate in the toggle: green "ON" vs grey "OFF", so the
+    // host can see at a glance whether the autopilot endpoints are live.
+    private void StyleAutopilotButton(Button b)
+    {
+        var on = _autopilotGate.Enabled;
+        b.Text = on ? "Autopilot: ON" : "Autopilot: OFF";
+        b.BackColor = on ? Color.FromArgb(60, 160, 90) : Color.FromArgb(90, 95, 105);
+    }
+
     private Panel CreateHeaderPanel(out Label workingDirLabel, out Label serverLabel)
     {
         var panel = new Panel
@@ -191,6 +203,36 @@ public class MainForm : Form
             dialog.ShowDialog(this);
         };
         actions.Controls.Add(guestsButton);
+
+        // The ONLY place the autopilot endpoints + engine can be turned on/off
+        // (plans/loop-autopilot-safety.md). Deliberately host-only, mirroring the
+        // Guests button: the web can never enable autopilot.
+        var autopilotButton = new Button
+        {
+            AutoSize = true,
+            Height = 32,
+            Padding = new Padding(12, 5, 12, 5),
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            Cursor = Cursors.Hand,
+            Margin = new Padding(0, 0, 4, 0)
+        };
+        autopilotButton.FlatAppearance.BorderSize = 0;
+        StyleAutopilotButton(autopilotButton);
+        autopilotButton.Click += (_, _) =>
+        {
+            _autopilotGate.Toggle();
+            StyleAutopilotButton(autopilotButton);
+        };
+        // Keep the label honest if the gate changes from elsewhere; marshal to the UI thread.
+        _autopilotGate.Changed += () =>
+        {
+            if (autopilotButton.IsDisposed) return;
+            try { autopilotButton.BeginInvoke(() => StyleAutopilotButton(autopilotButton)); }
+            catch { /* form closing */ }
+        };
+        actions.Controls.Add(autopilotButton);
 
         workingDirLabel = new Label
         {
