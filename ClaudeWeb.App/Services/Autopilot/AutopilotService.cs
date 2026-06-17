@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using ClaudeWeb.Services.Chat;
 using ClaudeWeb.Services.Logging;
+using ClaudeWeb.Services.Prompts;
 using ClaudeWeb.Services.Repositories;
 using Microsoft.Extensions.Hosting;
 
@@ -41,6 +42,7 @@ public class AutopilotService : BackgroundService
     private readonly AutopilotGate _operatorGate;
     private readonly PromptClassifier _brain;
     private readonly AutopilotDiscoveryService _discovery;
+    private readonly PromptsService _prompts;
     private readonly AutopilotAuditLog _audit;
     private readonly Logger _logger;
 
@@ -61,7 +63,7 @@ public class AutopilotService : BackgroundService
         RepositoryRegistry repos, SessionService sessions, RunSessionService runs,
         CliRunnerService cli, AutopilotConfigStore config, AutopilotGate operatorGate,
         PromptClassifier brain, AutopilotDiscoveryService discovery,
-        AutopilotAuditLog audit, Logger logger)
+        PromptsService prompts, AutopilotAuditLog audit, Logger logger)
     {
         _repos = repos;
         _sessions = sessions;
@@ -71,51 +73,47 @@ public class AutopilotService : BackgroundService
         _operatorGate = operatorGate;
         _brain = brain;
         _discovery = discovery;
+        _prompts = prompts;
         _audit = audit;
         _logger = logger;
     }
 
-    // The brain's label space, mined from the user's own history. Rebuilding it scans
-    // every transcript (the discovery pass), so it's cached and refreshed only every
-    // few minutes — never on the 10s tick. Empty until the first refresh, which makes
-    // the engine escalate everything rather than act on a stale/absent set.
-    private static readonly TimeSpan RoutineRefresh = TimeSpan.FromMinutes(5);
+    // The brain's label space is the user's EDITABLE custom prompts, enriched by a
+    // mining pass over history. Mining scans every transcript, so only its RESULT is
+    // cached (refreshed every few minutes); the label space itself is rebuilt from the
+    // CURRENT custom-prompt list on every call (cheap), so an edit on the Routine-prompts
+    // tab takes effect on the very next tick instead of waiting out the cache.
+    private static readonly TimeSpan DiscoveryRefresh = TimeSpan.FromMinutes(5);
     private readonly object _routineGate = new();
-    private IReadOnlyList<PromptClassifier.Routine> _routines = Array.Empty<PromptClassifier.Routine>();
-    private DateTimeOffset _routinesBuiltAt = DateTimeOffset.MinValue;
+    private AutopilotDiscoveryService.DiscoveryResult _mined =
+        new(0, 0, Array.Empty<AutopilotDiscoveryService.RoutinePrompt>());
+    private DateTimeOffset _minedAt = DateTimeOffset.MinValue;
 
-    public IReadOnlyList<PromptClassifier.Routine> Routines()
+    /// <summary>The brain's current label space — the user's custom prompts, enriched by
+    /// the (cached) mining pass. Cheap; safe to call every tick and from the API.</summary>
+    public IReadOnlyList<PromptClassifier.Routine> Routines() => Routines(DateTimeOffset.UtcNow);
+
+    private IReadOnlyList<PromptClassifier.Routine> Routines(DateTimeOffset now)
     {
-        lock (_routineGate) return _routines;
-    }
+        AutopilotDiscoveryService.DiscoveryResult mined;
+        lock (_routineGate) mined = _mined;
 
-    // Rebuild the label space from discovery if it's never been built or has gone
-    // stale. Called from the tick (so it tracks the operator turning the gate on),
-    // but the scan itself runs at most once per RoutineRefresh window.
-    private IReadOnlyList<PromptClassifier.Routine> EnsureRoutines(DateTimeOffset now)
-    {
-        lock (_routineGate)
-            if (now - _routinesBuiltAt < RoutineRefresh)
-                return _routines;
-
-        IReadOnlyList<PromptClassifier.Routine> built;
-        try
+        // Refresh the (expensive) mining cache at most once per window.
+        if (now - _minedAt >= DiscoveryRefresh)
         {
-            built = PromptClassifier.BuildRoutines(_discovery.Discover());
-        }
-        catch (Exception ex)
-        {
-            _logger.Error($"[AUTOPILOT] routine-set rebuild failed (keeping previous): {ex.Message}");
-            lock (_routineGate) return _routines;
+            try
+            {
+                mined = _discovery.Discover();
+                lock (_routineGate) { _mined = mined; _minedAt = now; }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"[AUTOPILOT] discovery refresh failed (keeping previous): {ex.Message}");
+                lock (_routineGate) mined = _mined;
+            }
         }
 
-        lock (_routineGate)
-        {
-            _routines = built;
-            _routinesBuiltAt = now;
-        }
-        _logger.Info($"[AUTOPILOT] routine label space rebuilt: {built.Count} routines mined from history");
-        return built;
+        return PromptClassifier.BuildRoutines(_prompts.List(), mined);
     }
 
     /// <param name="Decision">off | running | idle | suggestion | escalate | paused | sent.</param>
@@ -187,9 +185,9 @@ public class AutopilotService : BackgroundService
         var nowOffset = DateTimeOffset.UtcNow;
         var now = nowOffset.ToUnixTimeMilliseconds();
 
-        // The label space the brain may pick from — the user's mined routines, not a
-        // built-in list. Refreshed at most every few minutes inside this call.
-        var routines = EnsureRoutines(nowOffset);
+        // The label space the brain may pick from — the user's editable custom prompts
+        // (enriched by the cached mining pass), not a built-in list.
+        var routines = Routines(nowOffset);
 
         foreach (var repo in _repos.GetAll().Where(r => r.Exists))
         {

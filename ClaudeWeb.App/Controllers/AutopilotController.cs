@@ -101,8 +101,9 @@ public class AutopilotController : ControllerBase
             log = _engine.Log(),
             intercepts = _engine.Intercepts(),
             audit = _audit.Recent(),
-            // The brain's actual label space (mined from history), so the UI can show
-            // exactly what autopilot may send — label + trigger words + base confidence.
+            // The brain's actual label space (the user's editable custom prompts,
+            // enriched by mining), so the UI can show exactly what autopilot may send —
+            // label + trigger words + base confidence.
             routines = _engine.Routines().Select(r => new
             {
                 label = r.Label,

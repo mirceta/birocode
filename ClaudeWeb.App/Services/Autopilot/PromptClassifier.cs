@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using ClaudeWeb.Services.Prompts;
 
 namespace ClaudeWeb.Services.Autopilot;
 
@@ -6,20 +7,26 @@ namespace ClaudeWeb.Services.Autopilot;
 /// The brain (plans/loop-autopilot-brain.md): given an agent's last assistant
 /// message, pick ONE of the user's routine prompts — or escalate.
 ///
-/// <para><b>The label space is the user's own mined history, not a hardcoded list.</b>
-/// The set of routines is built by <see cref="BuildRoutines"/> from
-/// <see cref="AutopilotDiscoveryService.DiscoveryResult"/>: each routine's
-/// <see cref="Routine.Label"/> is a reply the user actually keeps typing (e.g.
+/// <para><b>The label space is the user's own editable custom prompts, not a
+/// hardcoded list and not raw mined history.</b> The set of routines is built by
+/// <see cref="BuildRoutines"/> from the user's curated prompt library
+/// (<see cref="PromptsService"/> / the "Routine prompts" tab): each routine's
+/// <see cref="Routine.Label"/> is the prompt text autopilot would send (e.g.
 /// "keep it", "deploy"), and its <see cref="Routine.Triggers"/> are the significant
-/// words from the assistant messages that historically preceded that reply. So the
-/// brain can only ever return one of the user's real recurring replies — or
-/// <see cref="Verdict.Escalate"/>. Never free text, never a built-in default.</para>
+/// words of that prompt — enriched, when the prompt matches a mined routine, with
+/// the words from the assistant messages that historically preceded that reply. So
+/// the brain can only ever return a prompt the user explicitly put in their list —
+/// or <see cref="Verdict.Escalate"/>. Never free text, never an un-approved reply.</para>
+///
+/// <para>Mining (<see cref="AutopilotDiscoveryService"/>) still runs, but only to
+/// <i>suggest drafts</i> the user can promote into their list — it no longer feeds
+/// the recommender directly. An empty prompt library means an empty label space:
+/// the brain escalates everything until the user adds prompts.</para>
 ///
 /// <para>This is still the <b>stub</b> matcher (Slice 2): a deterministic word-overlap
-/// score, not the eventual claude-CLI classifier. What changed from the first cut is
-/// the <i>source</i> of the labels — the {label, confidence} → gate contract is
-/// unchanged, so the real classifier can still be swapped in without touching the
-/// engine, API, or UI.</para>
+/// score, not the eventual claude-CLI classifier. The {label, confidence} → gate
+/// contract is unchanged, so the real classifier can still be swapped in without
+/// touching the engine, API, or UI.</para>
 /// </summary>
 public class PromptClassifier
 {
@@ -29,10 +36,11 @@ public class PromptClassifier
     /// <param name="Reason">short human-readable why, for the audit log / UI.</param>
     public sealed record Verdict(bool Escalate, string? Label, double Confidence, string Reason);
 
-    /// <summary>One entry in the brain's label space, derived from the user's history.
-    /// <paramref name="Label"/> is the reply autopilot would send; <paramref name="Triggers"/>
-    /// are the words that, when found in an assistant message, suggest that reply;
-    /// <paramref name="BaseConfidence"/> reflects how routine the reply is (recurrence).</summary>
+    /// <summary>One entry in the brain's label space — one of the user's editable custom
+    /// prompts. <paramref name="Label"/> is the prompt text autopilot would send;
+    /// <paramref name="Triggers"/> are the words that, when found in an assistant message,
+    /// suggest that prompt; <paramref name="BaseConfidence"/> reflects how confident a
+    /// match should score (higher when the prompt matches a frequently-recurring mined reply).</summary>
     public sealed record Routine(string Label, IReadOnlyCollection<string> Triggers, double BaseConfidence);
 
     private static readonly Regex Word = new(@"[a-z0-9]+", RegexOptions.Compiled);
@@ -50,31 +58,54 @@ public class PromptClassifier
     };
 
     /// <summary>
-    /// Turn the mined discovery result into the brain's label space. Each recurring
-    /// routine reply becomes a <see cref="Routine"/> whose triggers are the significant
-    /// words from the assistant messages that preceded it (plus the reply's own words),
-    /// and whose base confidence climbs a little with how often it recurs. Routines
-    /// that yield no usable triggers are dropped (they could never match).
+    /// Build the brain's label space from the user's <b>editable custom prompts</b>
+    /// (their curated library). Each prompt's <see cref="Routine.Label"/> is its text
+    /// (what autopilot sends); its triggers are the significant words of the prompt's
+    /// text + label, <i>enriched</i> with the assistant-context words of a mined routine
+    /// when the prompt matches one — so a hand-typed "deploy" still benefits from the
+    /// real "ready to deploy?"-style contexts discovery already found. Base confidence
+    /// is a solid default for a curated prompt, raised when it maps to a frequently
+    /// recurring mined reply. Prompts that yield no usable triggers are dropped.
+    /// <paramref name="discovery"/> is used only for this enrichment — it never adds
+    /// routines of its own, so the label space is exactly the user's curated list.
     /// </summary>
-    public static IReadOnlyList<Routine> BuildRoutines(AutopilotDiscoveryService.DiscoveryResult discovery)
+    public static IReadOnlyList<Routine> BuildRoutines(
+        IReadOnlyList<PromptsService.Prompt> customPrompts,
+        AutopilotDiscoveryService.DiscoveryResult discovery)
     {
-        var routines = new List<Routine>();
+        // Index mined routines by normalised key, so a custom prompt can borrow the
+        // assistant-context words (and recurrence) of a matching mined reply.
+        var minedByKey = new Dictionary<string, AutopilotDiscoveryService.RoutinePrompt>(StringComparer.Ordinal);
         foreach (var r in discovery.Routines)
         {
+            var k = NormaliseKey(r.Text);
+            if (k.Length > 0) minedByKey[k] = r;
+        }
+
+        var routines = new List<Routine>();
+        foreach (var p in customPrompts)
+        {
+            var text = (p.Text ?? string.Empty).Trim();
+            if (text.Length == 0) continue;
+
             var triggers = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var ctx in r.SampleContexts)
-                foreach (var w in Significant(ctx))
-                    triggers.Add(w);
-            // The reply's own words help when the assistant echoes the action
-            // ("ready to deploy?" → reply "deploy").
-            foreach (var w in Significant(r.Text))
-                triggers.Add(w);
+            foreach (var w in Significant(text)) triggers.Add(w);
+            foreach (var w in Significant(p.Label)) triggers.Add(w);
+
+            // A curated prompt starts confident; if it matches a mined routine, pull in
+            // that routine's preceding-assistant words and let recurrence lift it.
+            double baseConf = 0.85;
+            if (minedByKey.TryGetValue(NormaliseKey(text), out var mined) ||
+                (NormaliseKey(p.Label).Length > 0 && minedByKey.TryGetValue(NormaliseKey(p.Label), out mined)))
+            {
+                foreach (var ctx in mined.SampleContexts)
+                    foreach (var w in Significant(ctx))
+                        triggers.Add(w);
+                baseConf = Math.Min(0.97, 0.82 + 0.02 * Math.Max(0, mined.Count - 3));
+            }
 
             if (triggers.Count == 0) continue;
-
-            // 0.78 at the minimum recurrence, +0.02 per extra occurrence, capped 0.97.
-            var baseConf = Math.Min(0.97, 0.78 + 0.02 * Math.Max(0, r.Count - 3));
-            routines.Add(new Routine(r.Text.Trim(), triggers, baseConf));
+            routines.Add(new Routine(text, triggers, baseConf));
         }
         return routines;
     }
@@ -87,10 +118,10 @@ public class PromptClassifier
         if (string.IsNullOrWhiteSpace(assistantMessage))
             return new Verdict(true, null, 0, "no message to act on");
 
-        // No mined routines yet → there is nothing the brain is allowed to send.
+        // No custom prompts yet → there is nothing the brain is allowed to send.
         // Escalate rather than fall back to any built-in default.
         if (routines.Count == 0)
-            return new Verdict(true, null, 0, "no routine set yet — nothing to send");
+            return new Verdict(true, null, 0, "no routine prompts yet — add some on the Routine prompts tab");
 
         var msgTokens = Significant(assistantMessage).ToHashSet(StringComparer.Ordinal);
         if (msgTokens.Count == 0)
@@ -141,5 +172,17 @@ public class PromptClassifier
             var w = m.Value;
             if (w.Length >= 3 && !Stop.Contains(w)) yield return w;
         }
+    }
+
+    private static readonly Regex Whitespace = new(@"\s+", RegexOptions.Compiled);
+
+    // Mirrors AutopilotDiscoveryService.Normalise so a custom prompt's text/label can
+    // be matched against the mined routine keys (lowercase, whitespace collapsed,
+    // surrounding punctuation trimmed) — "Deploy.", "deploy" and "deploy\n" all equal.
+    private static string NormaliseKey(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return "";
+        var s = Whitespace.Replace(text.Trim().ToLowerInvariant(), " ");
+        return s.Trim(' ', '.', '!', '?', ',', ';', ':');
     }
 }

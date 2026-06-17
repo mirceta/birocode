@@ -69,7 +69,7 @@ for (const id in NODES) {
 // --- step scripts ---
 const D = {
   engine: ['Engine — find an idle agent', 'A backend service polls (~10s) for agents that finished their turn. It grabs the idle agent’s last message — the situation to act on. No browser needed; it runs even with every tab closed.'],
-  brainOk: ['Brain — classify the situation', 'The classifier maps the last message to ONE of your routine prompts, with a confidence. That set is MINED FROM YOUR OWN HISTORY (the replies you keep typing) — it never invents a prompt, only picks from your recurring set, which is what makes it safe and auditable. (Today it is a deterministic word-overlap match; the LLM classifier is the next step.)'],
+  brainOk: ['Brain — classify the situation', 'The classifier maps the last message to ONE of your routine prompts, with a confidence. That set is YOUR EDITABLE LIST (the "Routine prompts" tab) — it never invents a prompt, only picks from prompts you put there, which is what makes it safe and auditable. Your history is mined to SUGGEST drafts you can add in one click, but only what you’ve added is sendable. (Today it is a deterministic word-overlap match; the LLM classifier is the next step.)'],
   brainHard: ['Brain — no confident match', 'The classifier reads the message — e.g. “Two valid schemas, which do you want?” — and finds no confident routine match. Ambiguity deliberately defaults to “escalate.”'],
   gatePass: ['Gate — safe to act?', 'Confidence above your threshold? Not a risky / deny-listed action (deploy, force-push, delete…)? Autopilot enabled for this agent? Here: yes — it passes.'],
   gateFail: ['Gate → escalate', 'Low confidence, a risky/deny-listed action, or a genuine decision → the gate fails. A wrong auto-send is worse than a needless pause, so it stops here.'],
@@ -172,9 +172,9 @@ const EXPLAIN = {
   arm: ['Arm this agent',
     'Enables autopilot for birokrat-ai-platform: the engine starts classifying its turns and suggesting routine prompts. Nothing is sent automatically in Slice 2.'],
   'prompt-add': ['Where the routine set comes from',
-    'This set is MINED FROM YOUR HISTORY — the replies you keep typing across repos (recurring ≥3×), with their trigger words taken from the assistant messages that preceded them. It is the brain’s entire label space: autopilot can only ever send one of these, or escalate. Nothing free-form. (Matches to your saved custom prompts are flagged ★.)'],
-  'prompt-edit': ['Routine detail',
-    'Each routine shows how often it recurred and the contexts it followed. Manual add / edit / rename of routines is NOT built yet — the set is auto-derived today; hand-curation is the next slice.'],
+    'This set is YOUR EDITABLE LIST — add, edit, rename, or delete the prompts autopilot may send, right here on the Routine prompts tab. It is the brain’s entire label space: autopilot can only ever send one of these, or escalate. Nothing free-form, nothing you didn’t put there. (It’s the same library as your composer prompt presets.)'],
+  'prompt-edit': ['Suggested from your history',
+    'Below your list, replies you keep typing across repos (recurring ≥3×) are surfaced as DRAFTS, with the contexts they followed. They are suggestions only — one click adds a draft to your list (then ★), and nothing mined is sendable until you do.'],
   denylist: ['Deny-listed — never auto-sent',
     'Even on a confident match, prompts that trigger irreversible work (deploy, push, force, delete…) are always escalated to you, never sent automatically. This is the risky-action fence.'],
 };
