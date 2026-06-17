@@ -47,6 +47,7 @@
   — so the user doesn't re-describe the ritual and the agent doesn't drop steps.
   Approach decided: composer-prefill buttons (Understanding-panel pattern) that
   fill the chat box with the kickoff/closeout ritual. On `feature/feature-kickoff`.
+
 ## Proposed / design (not building yet)
 
 - [Spec baseline](plans/spec-baseline.md) — borrow OpenSpec's one missing
@@ -74,6 +75,15 @@
   grid + open-agent), slice 2 (liveness: per-cell status/activity/git on a 5s timer)
   and slice 4 (the Chat-only "wall of phones") built & browser-verified; slice 3
   (live tail) deferred. On `feature/agent-dashboard`, not yet merged.
+- [Dashboard drag layout](plans/dashboard-drag-layout.md) — arrange the **Ideas** and
+  **agents** panels on the dashboard, both participating, with a **mode switch** in the
+  top-right: **free mode** (desktop default) drags either panel anywhere by its `⠿` handle
+  (absolute `{x,y}`, pointer-events, `↺` reset, edge-clamped); **grid mode** (mobile
+  default, since touch-drag is unreliable) keeps the responsive flow and a `⇄` tap-flips
+  order. Device-local; default follows `max-width: 700px` until the operator picks one.
+  Started as a side-swap toggle → snap-zones → this. Frontend only (`Dashboard.jsx` +
+  `dashboard.css` + i18n); deployed to live :5099 & confirmed; **merged to main
+  2026-06-17**. On `feature/dashboard-drag-layout`.
 - [Queued prompts](plans/queued-prompts.md) — **merged with [prompt-stash](plans/prompt-stash.md)**:
   the per-agent stash list *is* the queue. While the agent is busy (a normal send would
   409) you line up the next prompts; **nothing auto-runs** — each chip has **Send**
