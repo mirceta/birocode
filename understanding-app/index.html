@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Queued prompts · understanding</title>
+  <!-- Relative URLs only — resolve under /api/localview/<repo>/app/understanding/ -->
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <span class="tag">feature/queued-prompts · design</span>
+      <h1>Queued prompts</h1>
+      <p class="lede">An agent can only run one prompt at a time. <b>Queued prompts</b>
+        let you line up the next ones <em>while it's busy</em>. Nothing runs on its
+        own — when the agent is free you <em>approve</em> each one to send it, or
+        tap <em>×</em> to delete it.</p>
+    </div>
+  </header>
+
+  <nav class="wrap"><div id="tabs"></div></nav>
+  <main class="wrap" id="view"></main>
+  <footer class="wrap" id="foot"></footer>
+
+  <script src="./data.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>

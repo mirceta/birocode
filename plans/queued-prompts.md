@@ -1,62 +1,56 @@
-# Queued prompts — line up what the agent runs next
+# Queued prompts — stack up prompts, approve each when free
 
 > Editing this plan? First read [doc principles](doc-principles.md).
 
 > **Status (2026-06-17): DESIGN.** On `feature/queued-prompts`. Builds on the
-> [prompt-stash](prompt-stash.md) precedent (per-agent, backend-synced list) but adds
-> **auto-execution**.
+> [prompt-stash](prompt-stash.md) precedent (per-agent, backend-synced list).
 
 ## Problem
 
 While an agent is working on the current prompt, the operator can't send the next one
-(the run gate returns 409 — `chat.busyError`). Today they can only **stash** an idea
-([prompt-stash](prompt-stash.md)) and manually re-send it later. The operator wants to
-**queue prompts that run automatically, in order**, as soon as the agent is free —
-so they can line up a sequence of work and walk away.
+(the run gate returns 409 — `chat.busyError`). They want to **line up the next prompts
+while the agent is busy** and not lose the thought.
 
 ## Goal
 
 Each agent has an ordered **prompt queue**. While it's running, the operator enqueues
-prompts; when the current run finishes, the harness **auto-sends the next queued
-prompt**, and continues until the queue is empty.
+prompts. **Nothing auto-runs** — when the agent is free, each queued prompt waits for
+the operator to **approve** it (tap to send). Each item also has an **× to delete** it.
+
+## Behaviour
+
+- **Enqueue** while the agent is busy (when a normal send would 409).
+- **Approve (tap)** a queued item → it sends as the next prompt. Operator-driven only;
+  the harness never sends a queued prompt on its own.
+- **Delete (×)** removes an item without sending it.
+- Order is editable (reorder), head shown as "next".
 
 ## How it fits the current architecture
 
 - **Send + busy:** `ChatContext.sendTo(text, {key, repoId, tabId, lane})` sends a
   prompt and sets the tab `status: 'running'`; sending during a run 409s.
-- **Completion hook:** the stream handler marks `status: 'done'` / `'error'` when a run
-  ends (ChatContext, the `end`/done + error paths). **This is the trigger point**: on
-  a successful finish, if the tab's queue is non-empty, dequeue the head and `sendTo`
-  it.
+- **Approval send:** tapping a queued item calls `sendTo` with its text once the agent
+  is idle (disabled / no-op while a run is in flight).
 - **Per-agent, backend-synced storage:** mirror prompt-stash — a `Queue` list on the
-  `DockTab` in `dock.json`, with `POST /dock/{id}/queue` + `DELETE
-  /dock/{id}/queue/{itemId}` (and reorder), riding the existing dock sync so a queue
+  `DockTab` in `dock.json`, with `POST /dock/{id}/queue`, `DELETE
+  /dock/{id}/queue/{itemId}`, and reorder, riding the existing dock sync so a queue
   built on the phone shows on desktop. Closing an agent discards its queue.
+- **Surfaces:** main Chat tab + dashboard docks (like stash).
 
-## Open design questions (resolve before building)
+## Relationship to prompt-stash
 
-- **Relationship to prompt-stash.** Options: (a) a **separate** queue (stash =
-  passive notes, queue = auto-run) — clearest but two similar UIs; (b) **upgrade
-  stash** with a "run when free" action so a chip can be promoted to the queue;
-  (c) replace stash with the queue. Lean (a) or (b).
-- **Failure handling.** If a queued prompt's run **errors**, do we **pause** the queue
-  (safer — operator inspects) or **continue**? Lean: pause on error, surface it.
-- **Where auto-send fires.** The completion hook runs per conversation `key`; the
-  queue is per `tabId`. Fire only for the builder lane (not the read-only Ask lane),
-  and only on the agent's own dock tab.
-- **Edit/reorder** queued items before they run; and a visible "next up" indicator.
-- **Surfaces:** main Chat tab + dashboard docks (like stash); gating/UI mode.
-- **Guardrails:** cap queue length; confirm-clear; don't auto-send if the operator
-  stopped the run manually (Stop ≠ "run the next one").
+Both are per-agent backend-synced prompt lists. Stash = loose notes you load back into
+the composer; queue = an ordered list of prompts you approve to run next. Open: keep
+them as two lists, or merge (a stash chip gains an "approve/send" action). **TBD.**
 
-## Out of scope (for now)
+## Out of scope
 
-- Cross-agent / global queues; scheduling by time (that's `/schedule`).
-- Branching/conditional queues.
+- Auto-execution of queued prompts (explicitly **not** wanted — every send is approved).
+- Cross-agent / global queues; time scheduling (that's `/schedule`).
 
 ## Verification (planned)
 
 Browser ([browser-testing](../docs/claude-web/browser-testing.md)): while an agent
-runs, enqueue 2 prompts; on finish the first auto-sends, then the second; an errored
-run pauses the queue; queue persists across reload and shows on a second tab; Stop
-doesn't trigger the next.
+runs, enqueue 2 prompts; neither sends on its own; when the agent is free, tapping one
+sends it and tapping × deletes another; queue persists across reload and shows on a
+second tab.
