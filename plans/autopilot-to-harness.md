@@ -4,16 +4,12 @@
 > Part of the **[loop-autopilot](loop-autopilot.md)** family — this plan only covers *where the
 > autopilot dashboard lives*; the brain/engine/safety subdocs are unchanged.
 
-> **Status (2026-06-18): DE-DUP COMPLETE — local app retired.** On `feature/autopilot-to-harness`,
-> off `main`. Scope settled — see **Decisions (locked)**. **Progress:** Part 1 port done
-> (Intercepted feed + deny-list into the harness tab); Part 2 first cut done (a first-class
-> **Autopilot section on the agent dashboard** — `AutopilotPanel`), both earlier deployed to live
-> :5099. **Now:** parity reached and the local app **`autopilot-app/` is deleted** along with all
-> its wiring (`AutopilotApp.cs`, the `EmbeddedApi` DI registration, the `LocalProxyController`
-> dispatch branch, and the `RepositoryRegistry` synthetic-app injection). Before deleting, folded
-> the one genuine gap into the harness tab — an explicit **operator-gate-off state** (a 403 now
-> reads "the host must turn it on", not a generic error). Both builds clean (client + isolated
-> `dotnet build`). **Not yet deployed to :5099.** Remaining: deploy + confirm, then merge.
+> **Status (2026-06-18): FULL PARITY — one console, two mounts.** On `feature/autopilot-to-harness`,
+> off `main`. The local app `autopilot-app/` is retired (see history below); the dashboard dock was
+> then redesigned into a free-floating, resizable, top-z dock; and now the entire Autopilot UI is a
+> **single shared `AutopilotConsole`** rendered by BOTH the routed tab (mobile-first) and the
+> dashboard dock (anywhere) — same detailed surface, no drift. See **Full parity — one console, two
+> mounts**. Client build clean. Deployed to live :5099 via the self-dev swap; merge still pending.
 
 ## Goal
 
@@ -118,9 +114,25 @@ per-device collapse; gated on the `autopilotTab` feature). It is the box-level m
 - **Compact per-agent row** — state badge + prediction + arm/disarm — for every agent at once,
   with a **"N need you"** escalation rollup in the collapsed bar.
 
-Reuses `/api/autopilot` + the `ap-*` styles; the Autopilot **tab** stays the detailed surface
-(intercepts / history / audit / prompts). Possible later cleanup: extract the shared bar +
-agent-row into one component used by both tab and panel (currently the JSX is similar).
+### Full parity — one console, two mounts (2026-06-18)
+
+The earlier split ("the dock is box-level control; the **tab** stays the detailed surface")
+is **retired** — it was an artificial divide. The dashboard view is usable anywhere and the
+routed tab is the mobile-first entry point, but both must offer the **same** detailed surface.
+
+So the whole Autopilot UI is now **one component rendered in two places**:
+
+- `components/autopilot/AutopilotConsole.jsx` — the complete surface (agents · prompts ·
+  intercepts · history · audit), its data/poll/gate handling, over `/api/autopilot`. Its
+  `embedded` prop drops the page header when it lives in the dock.
+- `components/autopilot/AgentsView.jsx` — the Agents sub-tab, split out only for readability.
+- `pages/Autopilot.jsx` — a thin wrapper: `<AutopilotConsole />` (the tab).
+- `components/dashboard/AutopilotPanel.jsx` — the draggable/resizable/collapsible dock chrome
+  wrapping `<AutopilotConsole embedded />`; it keeps a lightweight poll only for its
+  always-visible header summary (armed / "N need you" / mode), live even when collapsed.
+
+There are no longer two hand-maintained dashboards or two copies of the controls — a single
+console can't drift from itself.
 
 ## Out of scope
 

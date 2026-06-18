@@ -73,6 +73,12 @@
   color: var(--ap-accent, #b85c00);
 }
 
+/* The full AutopilotConsole embedded in the dock body: drop its own page padding
+   (the dock body already pads) so it sits flush. */
+.ap-panel__body .autopilot--embedded {
+  padding: 0;
+}
+
 .ap-panel__bar {
   display: flex;
   align-items: center;
