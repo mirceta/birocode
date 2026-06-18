@@ -1,7 +1,7 @@
 /* Autopilot dashboard section (plans/autopilot-to-harness.md, Part 2).
-   A collapsible full-width band pinned above the agent docks, styled like the
-   Scoreboard. The inner controls/agent rows reuse the .ap-* classes from
-   pages/autopilot.css; this file only frames the section + its bar. */
+   A collapsible panel that lives in the dashboard drag layout. The inner
+   controls/agent rows reuse the .ap-* classes from pages/autopilot.css; this
+   file frames the section, its bar, and the dock look. */
 .ap-panel {
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
@@ -9,6 +9,68 @@
   box-shadow: var(--shadow);
   margin-bottom: 16px;
   overflow: hidden;
+}
+
+/* Dock look (Part 2 redesign): adopt the agent-dock card chrome but read as
+   clearly NOT an agent — an accent stripe + tinted header bar in the autopilot
+   colour. Spacing below is handled by the drag-layout flex gap, so drop the
+   band's own bottom margin. */
+.ap-panel--dock {
+  --ap-accent: #b85c00;
+  position: relative; /* anchors the resize grip */
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
+  border-top: 3px solid var(--ap-accent);
+  /* Stay a compact box by default: a narrow width wraps the controls/agent list
+     into a tall column, which would bury the bottom-right resize grip far down
+     the page. Cap the height so the body scrolls instead and the grip stays in
+     reach. Lifted once the operator pins their own height (.is-sized). */
+  max-height: min(440px, 70vh);
+}
+
+.ap-panel--dock.is-sized {
+  max-height: none;
+}
+
+.ap-panel--dock .ap-panel__bar {
+  background: color-mix(in srgb, var(--ap-accent) 8%, var(--color-surface));
+}
+
+/* When the operator pins a height (drag-resize), the controls/header stay put
+   and the agent list scrolls instead of overflowing the dock. */
+.ap-panel--dock .ap-panel__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* Bottom-right drag-resize grip (a corner chevron). */
+.ap-panel__resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+  color: var(--color-text-soft, #8a8a85);
+  touch-action: none; /* pointer-drag on touch without page scroll */
+  z-index: 5;
+}
+.ap-panel__resize::after {
+  content: '';
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  border-bottom-right-radius: 2px;
+  opacity: 0.65;
+}
+.ap-panel__resize:hover {
+  color: var(--ap-accent, #b85c00);
 }
 
 .ap-panel__bar {

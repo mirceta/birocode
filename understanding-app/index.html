@@ -3,131 +3,123 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Understanding — Autopilot goes to the harness</title>
+  <title>Understanding — Autopilot as a free-floating dock</title>
   <!-- Relative URLs only: served under /api/localview/<repo>/app/understanding/. -->
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <header class="hero">
-    <div class="hero__kicker">my understanding — corrected after your catch</div>
-    <h1>The autopilot dashboard is <span class="hl">duplicated</span>.
-        “Goes to the harness” = <span class="hl2">de-duplicate</span></h1>
-    <p class="hero__sub">You were right and I was wrong: it already lives <strong>both</strong> as
-       a first-class harness tab <strong>and</strong> as a separate local app, over the same API.
-       This isn’t a move into the harness — it’s collapsing two dashboards into one.</p>
+    <div class="hero__kicker">my understanding — please confirm before I build</div>
+    <h1>Autopilot → a <span class="hl">free-floating</span>, <span class="hl2">dock-styled</span> panel</h1>
+    <p class="hero__sub">Keep it collapsible, but make it look like an agent dock and let you drag it
+      anywhere on the dashboard — <strong>just like the Ideas panel</strong>. In <b>Proposed</b>
+      the Autopilot dock is really draggable (grab <span class="kbd">⠿</span>) and collapsible.</p>
     <nav class="nav" id="nav">
-      <button class="nav__btn nav__btn--on" data-view="dup">1 · The duplication</button>
-      <button class="nav__btn" data-view="diff">2 · What actually differs</button>
-      <button class="nav__btn" data-view="plan">3 · The plan</button>
-      <button class="nav__btn" data-view="open">4 · Decisions</button>
+      <button class="nav__btn nav__btn--on" data-view="now">1 · Now (band on top)</button>
+      <button class="nav__btn" data-view="proposed">2 · Proposed (drag me)</button>
+      <button class="nav__btn" data-view="changes">3 · What changes</button>
+      <button class="nav__btn" data-view="open">4 · Confirm</button>
     </nav>
   </header>
 
   <main>
-    <!-- ── 1: the duplication (the correction) ─────────────────── -->
-    <section class="view view--on" id="view-dup">
-      <div class="panel panel--ask">
-        <h2><span class="num">!</span> My earlier framing was wrong</h2>
-        <p class="lead">I said the dashboard “only shipped as the local app” and needed to be
-           “moved into the harness.” In fact <strong>both surfaces already exist</strong> — option
-           A (the harness tab) <em>and</em> option B (the local app) were both built. Verified in code:</p>
-      </div>
+    <!-- ── 1: NOW — full-width band ───────────────────────────────── -->
+    <section class="view view--on" id="view-now">
       <div class="panel">
-        <h2><span class="num">1</span> Two dashboards, one backend</h2>
-        <div class="shift">
-          <div class="shift__card shift__card--after">
-            <div class="shift__tag shift__tag--go">first-class · keep</div>
-            <div class="mini">
-              <div class="mini__bar"><span>🏠 harness tab · <code>Autopilot.jsx</code></span></div>
-              <div class="mini__tabs">
-                <span class="chip chip--on">agents</span><span class="chip chip--on">prompts</span>
-                <span class="chip chip--on">history</span><span class="chip chip--on">audit</span>
-              </div>
-              <div class="mini__body">routed in <code>App.jsx</code> + <code>tabRegistry.jsx</code><br/>
-                flag <code>autopilotTab</code> · ~434 lines · <b>4 subtabs</b></div>
-            </div>
+        <h2><span class="num">1</span> Today: a full-width band, pinned to the top</h2>
+        <p class="lead">The Autopilot section spans the whole width above the canvas and can’t be
+           moved. Collapsible — but it always eats vertical room above the conversation.</p>
+        <div class="stage">
+          <div class="mockbar"><span class="dot dot--r"></span><span class="dot dot--y"></span><span class="dot dot--g"></span>
+            <span class="mockbar__t">Agent dashboard</span></div>
+          <div class="band">
+            <span class="band__chev">▾</span>
+            <span class="band__title">🛞 Autopilot</span>
+            <span class="band__sum">2 armed · <b>1 need you</b> · suggest-only</span>
           </div>
-
-          <div class="shift__arrow">＝</div>
-
-          <div class="shift__card shift__card--before">
-            <div class="shift__tag">local app · retire</div>
-            <div class="mini">
-              <div class="mini__bar"><span>📦 local app · <code>autopilot-app/</code></span></div>
-              <div class="mini__tabs">
-                <span class="chip">agents</span><span class="chip">prompts</span>
-                <span class="chip chip--on">intercepts</span><span class="chip">history</span><span class="chip">audit</span>
-              </div>
-              <div class="mini__body"><code>/api/localview/&lt;repo&gt;/app/autopilot/</code><br/>
-                ~822 lines · <b>5 subtabs</b> (has Intercepted)</div>
+          <div class="canvas">
+            <div class="panel-m panel-m--ideas"><div class="panel-m__h">💡 Ideas</div><div class="panel-m__b muted">backlog…</div></div>
+            <div class="panel-m panel-m--agents"><div class="panel-m__h">Agents</div>
+              <div class="wall"><div class="ph"></div><div class="ph"></div><div class="ph"></div><div class="ph"></div></div>
             </div>
           </div>
         </div>
-        <p class="shift__note" style="text-align:center;margin-top:14px">Both call the same
-           <code>/api/autopilot</code>. The local app is, ironically, the <strong>more complete</strong> one.</p>
       </div>
     </section>
 
-    <!-- ── 2: what differs ─────────────────────────────────────── -->
-    <section class="view" id="view-diff">
+    <!-- ── 2: PROPOSED — draggable dock ──────────────────────────── -->
+    <section class="view" id="view-proposed">
       <div class="panel">
-        <h2><span class="num">2</span> What actually differs <span class="h2sub">— click to switch</span></h2>
-        <p class="lead">Near-identical. The decisive gap is one subtab.</p>
-        <div class="demo">
-          <div class="demo__tabs" id="diffTabs">
-            <button class="tab tab--on" data-tab="same">＝ Shared (4 subtabs)</button>
-            <button class="tab" data-tab="gap">＋ Gap (1 subtab)</button>
+        <h2><span class="num">2</span> Proposed: a dock you can drop anywhere <span class="h2sub">— grab ⠿ · click ▾</span></h2>
+        <p class="lead">Same drag system the Ideas/Agents panels already use. The Autopilot dock
+           becomes a third draggable panel — dock-styled, collapsible, position remembered per device.</p>
+        <div class="stage">
+          <div class="mockbar"><span class="dot dot--r"></span><span class="dot dot--y"></span><span class="dot dot--g"></span>
+            <span class="mockbar__t">Agent dashboard</span></div>
+          <div class="canvas canvas--free" id="freeCanvas">
+            <div class="panel-m panel-m--ideas"><div class="panel-m__h">💡 Ideas <span class="grip">⠿</span></div>
+              <div class="panel-m__b muted">backlog…</div></div>
+            <div class="panel-m panel-m--agents"><div class="panel-m__h">Agents <span class="grip">⠿</span></div>
+              <div class="wall"><div class="ph"></div><div class="ph"></div><div class="ph"></div><div class="ph"></div></div>
+            </div>
+
+            <!-- the new Autopilot dock -->
+            <div class="apdock" id="apdock" style="left: 270px; top: 96px;">
+              <div class="apdock__bar" id="apdockBar">
+                <span class="grip grip--lift" id="apdockGrip" title="Drag me anywhere">⠿</span>
+                <button class="apdock__chev" id="apdockChev" title="Collapse / expand">▾</button>
+                <span class="apdock__title">🛞 Autopilot</span>
+                <span class="apdock__sum" id="apdockSum">2 armed · <b>1&nbsp;need&nbsp;you</b></span>
+              </div>
+              <div class="apdock__body" id="apdockBody">
+                <div class="apbar">
+                  <span class="sw sw--on"></span><b>Autopilot</b><span class="muted">on · armed only</span>
+                  <span class="apbar__sp"></span><span class="muted">conf ≥ <b>0.85</b></span>
+                </div>
+                <div class="deny">Always escalates: <code>deploy</code> <code>force-push</code></div>
+                <ul class="aglist">
+                  <li><span class="st st--esc">needs you</span><span class="ag">birocode</span></li>
+                  <li><span class="st st--sugg">suggestion</span><span class="ag">web-pilot</span><span class="muted">→ keep it</span></li>
+                  <li class="off"><span class="st st--off">off</span><span class="ag">docs-site</span></li>
+                </ul>
+              </div>
+            </div>
           </div>
-          <div class="demo__screen" id="diffScreen"><!-- injected --></div>
         </div>
+        <p class="hint" id="dragHint">↑ grab the <span class="kbd">⠿</span> on the Autopilot dock and drop it anywhere.</p>
       </div>
     </section>
 
-    <!-- ── 3: the plan ─────────────────────────────────────────── -->
-    <section class="view" id="view-plan">
+    <!-- ── 3: WHAT CHANGES ───────────────────────────────────────── -->
+    <section class="view" id="view-changes">
       <div class="panel">
-        <h2><span class="num">3</span> The plan — de-duplicate toward the harness tab</h2>
-        <p class="lead">Keep the routed harness tab; retire the local app once it’s at parity.</p>
-        <p class="lead"><b>Part 1 — de-duplicate:</b></p>
-        <ol class="contract">
-          <li><b>Port the Intercepted feed</b> into <code>Autopilot.jsx</code> as a 5th subtab —
-              the one piece it’s missing (<code>InterceptEvent</code> is already in the API).</li>
-          <li><b>Diff the other four subtabs</b> for any local-app-only refinements; fold the
-              good ones into the harness tab.</li>
-          <li><b>Delete <code>autopilot-app/</code></b> and its <code>localview</code> registration
-              once parity is verified.</li>
-        </ol>
-        <p class="lead" style="margin-top:16px"><b>Part 2 — box-level cross-agent operation:</b></p>
-        <ol class="contract" start="4">
-          <li><b>Global controls</b> — one enable + threshold + <b>kill switch for the whole
-              wall</b>, layered over per-agent arm (you can still opt agents in/out).</li>
-          <li><b>One unified view of every agent</b> on the box (the harness tab is already
-              global; the local app couldn’t be — another reason it’s the one to retire).</li>
-          <li><b>Small backend touch</b> — a global stanza in <code>AutopilotConfigStore</code>
-              that <code>AutopilotService</code> honours; brain/gate logic otherwise unchanged.</li>
-        </ol>
-        <p class="ask__foot">Why keep the harness tab over the local app: <b>one source of truth</b>,
-           first-hand live data, and it’s already <b>global</b> (not per-repo) — exactly what
-           cross-agent operation needs.</p>
+        <h2><span class="num">3</span> What changes <span class="h2sub">— frontend only</span></h2>
+        <ol class="contract" id="changes"></ol>
+        <p class="ask__foot">Untouched: the Autopilot <b>tab</b>, the <code>/api/autopilot</code> API,
+           the engine, and the operator gate. Same controls — new container, styling, and placement.</p>
       </div>
     </section>
 
-    <!-- ── 4: decisions (now locked) ───────────────────────────── -->
+    <!-- ── 4: CONFIRM ────────────────────────────────────────────── -->
     <section class="view" id="view-open">
       <div class="panel">
-        <h2><span class="num">4</span> Decisions <span class="h2sub">— now locked · click each</span></h2>
-        <p class="lead">You answered the scope: cross-agent <b>yes</b>, the other two take my defaults.</p>
+        <h2><span class="num">4</span> Confirm <span class="h2sub">— click each</span></h2>
+        <p class="lead">Tell me if any of these are off before I build.</p>
         <ul class="q" id="qs">
-          <li class="q__item q__item--yes" data-a="YES (your call). The harness tab becomes box-level mission-control over all agents at once — global enable/threshold/kill layered over per-agent arm. Adds a small backend touch (global stanza in AutopilotConfigStore that AutopilotService honours), so the feature is no longer frontend-only.">
-            <span class="q__q">① <b>Harness-level cross-agent operation</b> <span class="tagy">✓ YES</span></span>
+          <li class="q__item" data-a="Same mechanism the Ideas/Agents panels use today: a ⠿ drag handle in free mode, grid-mode flow on narrow screens, and the drop position saved per device in claudeweb_dash_pos. Not a new mechanism, not OS-level drag.">
+            <span class="q__q">① “Free-floating like Ideas” = the <b>existing</b> drag system, third panel <span class="tagy">✓ assume</span></span>
             <span class="q__a"></span>
           </li>
-          <li class="q__item" data-a="Default (you took it). No self-dev special-casing — the Harness's own repo is just another agent through the same tab.">
-            <span class="q__q">② Target the <b>Harness’s own repo</b> (self-dev) <span class="tagd">default · no</span></span>
+          <li class="q__item" data-a="It adopts the agent-dock (phone) visual chrome — rounded surface, header bar, body — with a distinct 🛞 title/accent so it reads as separate from real agents. It stays a control surface (global controls + deny-list + per-agent arm), not a chat/git dock.">
+            <span class="q__q">② “Looks like an agent dock” = the dock <b>chrome</b>, still a control surface <span class="tagy">✓ assume</span></span>
             <span class="q__a"></span>
           </li>
-          <li class="q__item" data-a="Default (you took it). The operator-side gate stays OFF by default — consolidation + cross-agent UI is not a trust change. Ungating is a separate safety decision (loop-autopilot-safety.md).">
-            <span class="q__q">③ <b>Ungate</b> to always-on <span class="tagd">default · no</span></span>
+          <li class="q__item" data-a="It stays on feature/autopilot-to-harness — this is a refinement of Part 2 of that plan (where the autopilot dashboard lives), so it's the same feature, not a new branch.">
+            <span class="q__q">③ Stays on <b>feature/autopilot-to-harness</b> (same feature) <span class="tagd">default</span></span>
+            <span class="q__a"></span>
+          </li>
+          <li class="q__item" data-a="OPEN QUESTION: in grid mode (mobile default) should the Autopilot dock sit first (above Ideas/agents) or last? I'll assume FIRST unless you say otherwise.">
+            <span class="q__q">④ Grid-mode default position: <b>first</b>? <span class="tagq">? confirm</span></span>
             <span class="q__a"></span>
           </li>
         </ul>
@@ -136,8 +128,9 @@
   </main>
 
   <footer class="foot">
-    Corrected <strong>understanding</strong>, not the build. You caught a real error — autopilot
-    is duplicated, so this is a <strong>consolidation</strong>. Tell me where I’m still off.
+    My <strong>understanding</strong> of the redesign — not built yet. Companion to
+    <code>understanding.md</code>; refinement of Part 2 of <code>plans/autopilot-to-harness.md</code>.
+    Tell me where I’m off.
   </footer>
 
   <script src="./app.js"></script>

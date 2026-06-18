@@ -1,6 +1,7 @@
-// Understanding app for: "Autopilot goes to the harness" — CORRECTED after the
-// user pointed out the dashboard is duplicated (harness tab + local app). The
-// feature is de-duplication, not a move. Self-contained, no libraries, relative URLs.
+// Understanding app for: "Autopilot as a free-floating, dock-styled panel."
+// Make the dashboard's Autopilot section look like an agent dock and be draggable
+// anywhere (like the Ideas panel), still collapsible. Self-contained, no libs,
+// relative URLs (served under /api/localview/<repo>/app/understanding/).
 
 (function () {
   // ── 1) top-nav view switcher ───────────────────────────────────
@@ -17,51 +18,86 @@
     });
   });
 
-  // ── 2) shared vs gap ────────────────────────────────────────────
-  var PANES = {
-    same: {
-      h3: 'Present in BOTH dashboards',
-      badge: 'duplicated', badgeCls: 'badge--stay', rowCls: 'row--stay', ico: '＝',
-      rows: [
-        ['Agents', 'per-repo state + arm/disarm, auto-advance, threshold, kill'],
-        ['Routine prompts', "the brain's editable label space (add/edit/adopt)"],
-        ['Suggestion history', 'the engine verdict log'],
-        ['Auto-sent', 'append-only audit trail of real sends'],
-      ],
-    },
-    gap: {
-      h3: 'De-duplicated — the local app is retired',
-      badge: 'done', badgeCls: 'badge--stay', rowCls: 'row--stay', ico: '✓',
-      rows: [
-        ['Intercepted feed ported', 'now the 5th subtab in Autopilot.jsx (Part 1) — InterceptEvent was already on /api/autopilot'],
-        ['Gate-off state folded in', 'on a 403 the tab now explains "the operator must turn it on at the host", like the local app did'],
-        ['autopilot-app/ deleted', 'folder + AutopilotApp.cs + DI + localview registration removed — one dashboard, no drift'],
-      ],
-    },
-  };
-  var diffTabs = document.getElementById('diffTabs');
-  var diffScreen = document.getElementById('diffScreen');
-  function renderDiff(id) {
-    var d = PANES[id];
-    diffScreen.innerHTML =
-      '<div class="pane"><h3>' + d.h3 +
-      '<span class="badge ' + d.badgeCls + '">' + d.badge + '</span></h3><div class="rows">' +
-      d.rows.map(function (r) {
-        return '<div class="row ' + d.rowCls + '"><span class="row__ico">' + d.ico +
-          '</span><span class="row__t"><b>' + r[0] + '</b><span>' + r[1] + '</span></span></div>';
-      }).join('') + '</div></div>';
-  }
-  diffTabs.addEventListener('click', function (e) {
-    var btn = e.target.closest('.tab');
-    if (!btn) return;
-    Array.prototype.forEach.call(diffTabs.children, function (b) {
-      b.classList.toggle('tab--on', b === btn);
-    });
-    renderDiff(btn.dataset.tab);
-  });
-  renderDiff('same');
+  // ── 2) the draggable Autopilot dock (mirrors the real drag system) ──
+  var dock = document.getElementById('apdock');
+  var grip = document.getElementById('apdockGrip');
+  var canvas = document.getElementById('freeCanvas');
+  var hint = document.getElementById('dragHint');
+  var drag = null; // { startX, startY, baseX, baseY }
 
-  // ── 3) open-question disclosures ────────────────────────────────
+  function onDown(e) {
+    var r = canvas.getBoundingClientRect();
+    drag = {
+      startX: e.clientX,
+      startY: e.clientY,
+      baseX: dock.offsetLeft,
+      baseY: dock.offsetTop,
+      maxX: r.width - 40,
+      maxY: r.height - 36,
+    };
+    dock.classList.add('apdock--lift');
+    grip.setPointerCapture && grip.setPointerCapture(e.pointerId);
+    if (hint) hint.classList.add('hint--done');
+    e.preventDefault();
+  }
+  function onMove(e) {
+    if (!drag) return;
+    var x = drag.baseX + (e.clientX - drag.startX);
+    var y = drag.baseY + (e.clientY - drag.startY);
+    // clamp inside the canvas, leaving a grabbable strip (mirrors clampPos).
+    x = Math.max(-dock.offsetWidth + 60, Math.min(drag.maxX, x));
+    y = Math.max(0, Math.min(drag.maxY, y));
+    dock.style.left = x + 'px';
+    dock.style.top = y + 'px';
+  }
+  function onUp() {
+    drag = null;
+    dock.classList.remove('apdock--lift');
+  }
+  grip.addEventListener('pointerdown', onDown);
+  grip.addEventListener('pointermove', onMove);
+  grip.addEventListener('pointerup', onUp);
+  grip.addEventListener('pointercancel', onUp);
+
+  // ── 3) collapse / expand (just the bar shows when collapsed) ────
+  var chev = document.getElementById('apdockChev');
+  var body = document.getElementById('apdockBody');
+  chev.addEventListener('click', function () {
+    var collapsed = dock.classList.toggle('apdock--collapsed');
+    chev.textContent = collapsed ? '▸' : '▾';
+    body.hidden = collapsed;
+  });
+
+  // ── 4) "what changes" list (kept in JS so the prose stays in one place) ──
+  var CHANGES = [
+    ['Move the panel into the canvas',
+      'Render <code>&lt;AutopilotPanel/&gt;</code> inside <code>dash__body</code> as a third panel ' +
+      '(<code>data-panel="autopilot"</code>), beside <code>ideas</code> and <code>agents</code> — ' +
+      'no longer a band above the canvas.'],
+    ['Add it to the drag layout',
+      'Extend the free 2D layout to a third key: <code>positions.autopilot</code> saved in ' +
+      '<code>claudeweb_dash_pos</code>; generalize <code>freePlaced</code>, <code>seededPositions</code> ' +
+      '(the <code>[ideas, agents]</code> loop) and reset; add a <code>⠿</code> handle + lifted style.'],
+    ['Dress it as a dock',
+      'Reuse the agent-dock card chrome (rounded surface, header bar, body) with a distinct ' +
+      '🛞 title/accent, so it reads as separate from the real agents.'],
+    ['Keep it collapsible',
+      'The existing toggle + per-device <code>claudeweb_dash_autopilot_collapsed</code> stays; ' +
+      'collapsed = just the dock’s header bar (a minimized dock).'],
+    ['Grid mode',
+      'On narrow screens it snaps into the responsive flow like the other panels ' +
+      '(default order: first — to confirm).'],
+    ['Gating unchanged',
+      'Still self-gates on the <code>autopilotTab</code> feature; renders nothing when off.'],
+  ];
+  var ol = document.getElementById('changes');
+  CHANGES.forEach(function (c) {
+    var li = document.createElement('li');
+    li.innerHTML = '<b>' + c[0] + '</b> — ' + c[1];
+    ol.appendChild(li);
+  });
+
+  // ── 5) confirm disclosures ──────────────────────────────────────
   var qs = document.getElementById('qs');
   qs.addEventListener('click', function (e) {
     var item = e.target.closest('.q__item');

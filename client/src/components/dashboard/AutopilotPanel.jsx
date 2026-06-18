@@ -13,6 +13,12 @@ import './autopilot-panel.css';
 // the tab stays the detailed surface (intercepts / history / audit / prompts).
 const POLL_MS = 4000;
 const COLLAPSED_KEY = 'claudeweb_dash_autopilot_collapsed';
+// Per-device saved size of the dock (plans/autopilot-to-harness.md): the default
+// width is deliberately compact, so let the operator drag it bigger/smaller and
+// remember it. Mirrors how the drag layout persists {x,y} positions.
+const SIZE_KEY = 'claudeweb_dash_autopilot_size';
+const MIN_W = 320;
+const MIN_H = 160;
 
 const BADGE = {
   suggestion: { cls: 'sugg', label: 'suggestion' },
@@ -32,11 +38,78 @@ function readCollapsed() {
   }
 }
 
-export default function AutopilotPanel() {
+function readSize() {
+  try {
+    const raw = localStorage.getItem(SIZE_KEY);
+    const v = raw ? JSON.parse(raw) : null;
+    if (v && typeof v === 'object' && (v.w || v.h)) return v;
+  } catch {
+    /* private mode / malformed */
+  }
+  return null;
+}
+
+// `dragHandle` (optional) is the ⠿ grip the dashboard injects in free-drag mode
+// so this dock joins the 2D layout like Ideas/agents; it lives in the dock's
+// header bar. Omitted (null) in grid mode.
+export default function AutopilotPanel({ dragHandle = null }) {
   const on = useFeature('autopilotTab');
   const [data, setData] = useState(null);
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const timer = useRef(null);
+
+  // Drag-to-resize the dock (bottom-right grip). Size is remembered per device;
+  // double-clicking the grip clears it back to the responsive default.
+  const [size, setSize] = useState(readSize);
+  const sectionRef = useRef(null);
+  const resizeRef = useRef(null);
+
+  function startResize(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = sectionRef.current?.getBoundingClientRect();
+    resizeRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      baseW: rect?.width ?? MIN_W,
+      baseH: rect?.height ?? MIN_H,
+    };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  }
+
+  function moveResize(e) {
+    const r = resizeRef.current;
+    if (!r) return;
+    const maxW = Math.round(window.innerWidth * 0.95);
+    const maxH = Math.round(window.innerHeight * 0.9);
+    const w = Math.max(MIN_W, Math.min(maxW, Math.round(r.baseW + (e.clientX - r.startX))));
+    const h = Math.max(MIN_H, Math.min(maxH, Math.round(r.baseH + (e.clientY - r.startY))));
+    setSize({ w, h });
+  }
+
+  function endResize() {
+    if (!resizeRef.current) return;
+    resizeRef.current = null;
+    setSize((s) => {
+      if (s) {
+        try {
+          localStorage.setItem(SIZE_KEY, JSON.stringify(s));
+        } catch {
+          /* private mode — in-memory only */
+        }
+      }
+      return s;
+    });
+  }
+
+  function resetSize() {
+    setSize(null);
+    try {
+      localStorage.removeItem(SIZE_KEY);
+    } catch {
+      /* private mode */
+    }
+  }
 
   const load = useCallback(async () => {
     try {
@@ -83,9 +156,22 @@ export default function AutopilotPanel() {
   const armed = agents.filter((a) => a.armed).length;
   const needs = agents.filter((a) => a.decision === 'escalate').length;
 
+  // Width sticks in both states; height only when expanded (collapsed = just the
+  // header bar, so a fixed height would leave dead space). A pinned height also
+  // lifts the default max-height cap (.is-sized) so the operator can go taller.
+  const heightApplied = !!(size?.h && !collapsed);
+  const sizeStyle = size
+    ? { width: size.w, ...(heightApplied ? { height: size.h } : {}) }
+    : undefined;
+
   return (
-    <section className="ap-panel">
+    <section
+      ref={sectionRef}
+      className={`ap-panel ap-panel--dock${heightApplied ? ' is-sized' : ''}`}
+      style={sizeStyle}
+    >
       <div className="ap-panel__bar">
+        {dragHandle}
         <button
           type="button"
           className="ap-panel__toggle"
@@ -180,6 +266,20 @@ export default function AutopilotPanel() {
             {agents.length === 0 && <li className="autopilot__empty">No agents yet.</li>}
           </ul>
         </div>
+      )}
+
+      {!collapsed && (
+        <span
+          className="ap-panel__resize"
+          role="separator"
+          aria-label="Resize autopilot panel"
+          title="Drag to resize · double-click to reset"
+          onPointerDown={startResize}
+          onPointerMove={moveResize}
+          onPointerUp={endResize}
+          onPointerCancel={endResize}
+          onDoubleClick={resetSize}
+        />
       )}
     </section>
   );
