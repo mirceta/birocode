@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiGet, apiPost, apiPatch, apiDelete } from '../../api/client';
 import ErrorBanner from '../shared/ErrorBanner';
 import ArchPlanSection from './ArchPlanSection';
+import TaskGraphPanel from '../taskgraph/TaskGraphPanel';
+import { useFeature } from '../../context/UiModeContext';
 import { useT } from '../../i18n/LanguageContext';
 import './ideas.css';
 
@@ -61,12 +63,17 @@ function PriorityPicker({ value = 0, onChange, t }) {
   );
 }
 
-const TAB_KEY = 'claudeweb_ideas_tab'; // remembered tab: 'ideas' | 'plan'
+const TAB_KEY = 'claudeweb_ideas_tab'; // remembered tab: 'ideas' | 'plan' | 'graph'
 
 export default function IdeasPanel() {
   const { t } = useT();
+  // The task graph now lives here as a third tab (plans/ideas-taskgraph-merge.md).
+  const graphOn = useFeature('taskGraph');
 
-  const [tab, setTab] = useState(() => (localStorage.getItem(TAB_KEY) === 'plan' ? 'plan' : 'ideas'));
+  const [tab, setTab] = useState(() => {
+    const stored = localStorage.getItem(TAB_KEY);
+    return stored === 'plan' || stored === 'graph' ? stored : 'ideas';
+  });
   function chooseTab(next) {
     setTab(next);
     try {
@@ -186,6 +193,30 @@ export default function IdeasPanel() {
     }
   }
 
+  // "Send to graph" (plans/ideas-taskgraph-merge.md): create a task-graph step
+  // from this idea, then CONVERT the idea — keep it in the list but clear its
+  // `active` flag (drops out of the Active section; no data loss). Jumps to the
+  // Task graph tab so the new node is visible.
+  async function sendToGraph(n) {
+    setError('');
+    try {
+      await apiPost('/taskgraph/nodes', { title: n.text, note: n.project || undefined });
+    } catch {
+      setError(t('ideas.saveError'));
+      return;
+    }
+    const prev = notes;
+    setNotes((ns) => ns.map((x) => (x.id === n.id ? { ...x, active: false } : x)));
+    try {
+      await apiPatch(`/notes/${n.id}`, { text: n.text, project: n.project || '', priority: n.priority || 0, active: false });
+    } catch {
+      setNotes(prev);
+      setError(t('ideas.saveError'));
+      return;
+    }
+    chooseTab('graph');
+  }
+
   async function remove(id) {
     const prev = notes;
     setNotes((ns) => ns.filter((n) => n.id !== id));
@@ -265,6 +296,16 @@ export default function IdeasPanel() {
               >
                 {n.active ? t('ideas.isActive') : t('ideas.makeActive')}
               </button>
+              {n.active && graphOn && (
+                <button
+                  type="button"
+                  className="idea__btn idea__graph-btn"
+                  title="Create a task-graph step from this idea (keeps the idea, drops it from Active)"
+                  onClick={() => sendToGraph(n)}
+                >
+                  🧩 Send to graph
+                </button>
+              )}
               <button type="button" className="idea__btn" onClick={() => startEdit(n)}>
                 {t('ideas.edit')}
               </button>
@@ -299,10 +340,25 @@ export default function IdeasPanel() {
         >
           {t('archplan.title')}
         </button>
+        {graphOn && (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'graph'}
+            className={`ideas__tab${tab === 'graph' ? ' ideas__tab--active' : ''}`}
+            onClick={() => chooseTab('graph')}
+          >
+            🧩 Task graph
+          </button>
+        )}
       </div>
 
       {tab === 'plan' ? (
         <ArchPlanSection />
+      ) : tab === 'graph' && graphOn ? (
+        <div className="ideas__tabpanel ideas__tabpanel--graph">
+          <TaskGraphPanel />
+        </div>
       ) : (
         <div className="ideas__tabpanel">
       <div className="ideas__compose">
