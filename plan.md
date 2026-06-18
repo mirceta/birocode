@@ -37,16 +37,6 @@
 
 ## Active feature plans
 
-- [Autopilot goes to the harness](plans/autopilot-to-harness.md) — the autopilot dashboard was
-  **DUPLICATED** (a routed harness tab `Autopilot.jsx` **and** a build-less local app
-  `autopilot-app/`, both over `/api/autopilot`). Two confirmed parts: **(1) de-duplicate** toward
-  the harness tab and **(2) elevate to box-level cross-agent operation** (one mission-control over
-  all agents — `AutopilotPanel` on the dashboard). **De-dup now complete:** Intercepted feed +
-  deny-list ported, the operator-**gate-off state** folded into the tab (a 403 now explains "turn
-  it on at the host"), and **`autopilot-app/` deleted** with all its wiring — one dashboard, no
-  drift. Cross-agent backend turned out to already exist (pure surfacing). Self-dev + ungate stay
-  at defaults (gate off by default). Builds clean; **not yet deployed/merged**. On
-  `feature/autopilot-to-harness`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
@@ -68,6 +58,17 @@
 
 ## Recently shipped
 
+- [Autopilot goes to the harness](plans/autopilot-to-harness.md) — the autopilot dashboard was
+  **DUPLICATED** (a routed harness tab `Autopilot.jsx` **and** a build-less local app
+  `autopilot-app/`, both over `/api/autopilot`). Shipped in three steps: **(1) de-dup** — Intercepted
+  feed + deny-list ported, operator-**gate-off state** folded in (a 403 now explains "turn it on at
+  the host"), and **`autopilot-app/` deleted** with all its wiring; **(2)** the dashboard section
+  redesigned into a **free-floating, resizable, top-z dock** (a third citizen of the dashboard drag
+  layout); **(3) full parity** — the entire UI is now **one shared `AutopilotConsole`** rendered by
+  BOTH the routed tab (mobile-first) and the dock (anywhere), so the two surfaces can't drift (the
+  "dock = control / tab = detail" split was retired). Cross-agent backend already existed (pure
+  surfacing); gate stays off by default. Deployed to live :5099 & confirmed; **merged to main
+  2026-06-18**. On `feature/autopilot-to-harness`.
 - **Homepage tabbed explainers + same-box Understanding-app convention pointer** —
   renamed `exposure-example/` → `homepage/` (kept `serve.mjs`/`:5305`) and added a
   **topic-tab shell** (`home-core.js` + `home.js`) above the existing variant layer.
