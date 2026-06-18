@@ -334,6 +334,32 @@ code {
   background: color-mix(in srgb, var(--warn) 30%, var(--panel));
   border-color: color-mix(in srgb, var(--warn) 60%, transparent);
 }
+.ut-prompt__field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--accent) 4%, var(--panel));
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 22%, var(--edge));
+}
+.ut-prompt__label { flex: 0 0 auto; font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.ut-prompt__input {
+  flex: 1 1 220px;
+  min-width: 160px;
+  font: inherit;
+  font-size: 12.5px;
+  padding: 6px 10px;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-sm);
+}
+.ut-prompt__input::placeholder { color: var(--ink-dim); }
+.ut-prompt__input:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--edge));
+}
 .ut-prompt__body {
   border: none;
   border-radius: 0;

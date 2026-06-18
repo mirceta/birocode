@@ -68,6 +68,32 @@
 
 ## Recently shipped
 
+- [Merge Ideas + Task graph](plans/ideas-taskgraph-merge.md) — folded the **Task graph** into the
+  **Ideas** surface so the graph lives in one home. It became a **third tab** inside `IdeasPanel`
+  (Ideas | Plan | 🧩 Task graph), remounting fresh each open; the standalone **dashboard task-graph
+  dock was removed** (its drag-layout citizen + dead CSS deleted). Each **active idea** gained a
+  **🧩 Send to graph** button — decided as **Convert**: it creates a task-graph node
+  (`POST /api/taskgraph/nodes`, `title = idea.text`, project carried into the node note), **keeps the
+  idea but clears its Active flag** (`PATCH /api/notes/{id}`), and jumps to the Task-graph tab. Bundled
+  in (at the user's request, against one-feature-per-branch): the **Ideas dashboard dock is now
+  drag-resizable** via a bottom-right grip (free width+height, remembered per device, double-click to
+  reset; the ⇥/⇤ wide-toggle clears a custom size), switched to inner-scroll so the grip stays pinned.
+  Frontend-only (reuses existing endpoints); built & deployed to live :5099. On
+  `feature/ideas-taskgraph-merge`.
+- [Task dependency graph](plans/task-dependency-graph.md) — a first-class dashboard section (sibling
+  of **Ideas** / **Autopilot**) for the prerequisite chains that used to live only in the operator's
+  head. Built with **React Flow**, a **single global board**, **repo label/colour only** (no live
+  agent telemetry): add step nodes (each optionally attached to an agent), drag **"waits-on"** edges,
+  cycle status (todo/doing/done), rename/delete, see **do-next** (green ring on unblocked steps) and
+  click a step to trace **why** (the chain up to the goal it serves). Backend-synced global store
+  like Ideas (`/api/taskgraph`, `taskgraph.json`, cycle/self/dup-edge guarded); a drag-layout dock
+  citizen gated on a new Advanced flag and **drag-resizable** like Autopilot. Clicking a step opens a
+  **detail/edit view on the bottom half** — title, agent, status and a **per-node notes** box
+  backend-synced via `PATCH /api/taskgraph/nodes/{id}`. (The bottom half first held a *global
+  scratchpad* foil experiment; repurposed into per-node notes 2026-06-18 — the old
+  `/api/taskgraph/scratch` endpoint is now orphaned, pending cleanup.) Core board + node-detail
+  enhancement deployed to live :5099 & **merged to main 2026-06-18**
+  (`feature/task-dependency-graph`, `feature/taskgraph-node-detail`).
 - [Autopilot goes to the harness](plans/autopilot-to-harness.md) — the autopilot dashboard was
   **DUPLICATED** (a routed harness tab `Autopilot.jsx` **and** a build-less local app
   `autopilot-app/`, both over `/api/autopilot`). Shipped in three steps: **(1) de-dup** — Intercepted
@@ -79,6 +105,19 @@
   "dock = control / tab = detail" split was retired). Cross-agent backend already existed (pure
   surfacing); gate stays off by default. Deployed to live :5099 & confirmed; **merged to main
   2026-06-18**. On `feature/autopilot-to-harness`.
+- ["Paste this into the other agent's chat" for the Local-exposure topic](plans/exposure-paste-pointer.md)
+  — gave the homepage's **"🛰️ Local exposure, done right"** topic the same
+  **🚀 Paste this into the other agent's chat** affordance the **"📦 Use the
+  Understanding app in any agent"** topic has, so the operator can bootstrap *another*
+  on-box agent into exposing its Product on the Local tab correctly. Task-framed (a
+  one-shot reconfigure of a real Product the other agent runs), pointing at a new
+  agent-agnostic [docs/local-exposure-convention.md](docs/local-exposure-convention.md)
+  modelled on `docs/understanding-app-convention.md`. Because a repo can run **several**
+  web apps, the paste card carries a **"Which service should it expose?"** field that
+  injects the named service into the prompt live (empty → generic fallback); Copy copies
+  the customized prompt. Build-less; browser-verified on an isolated homepage port
+  (service injection + clipboard match, no console errors). On
+  `feature/exposure-paste-pointer`; **merged to main 2026-06-18**.
 - **Homepage tabbed explainers + same-box Understanding-app convention pointer** —
   renamed `exposure-example/` → `homepage/` (kept `serve.mjs`/`:5305`) and added a
   **topic-tab shell** (`home-core.js` + `home.js`) above the existing variant layer.

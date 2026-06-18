@@ -86,6 +86,23 @@ function readIdeasWide() {
   }
 }
 
+// Drag-to-resize the Ideas dock from a bottom-right grip (same UX as the task
+// graph / autopilot docks). A saved size overrides the two-step wide/narrow
+// toggle; remembered per device, double-click the grip to clear back to it.
+const IDEAS_SIZE_KEY = 'claudeweb_dash_ideas_size';
+const IDEAS_MIN_W = 260;
+const IDEAS_MIN_H = 220;
+function readIdeasSize() {
+  try {
+    const raw = localStorage.getItem(IDEAS_SIZE_KEY);
+    const v = raw ? JSON.parse(raw) : null;
+    if (v && typeof v === 'object' && (v.w || v.h)) return v;
+  } catch {
+    /* private mode / malformed */
+  }
+  return null;
+}
+
 // Free 2D drag layout (plans/dashboard-drag-layout.md): each panel is positioned
 // absolutely at a saved {x,y} inside the dashboard canvas. Remembered per device.
 // DEFAULT_POS = null means "use the natural flow position" (Ideas left, agents
@@ -252,6 +269,7 @@ export default function Dashboard({ onClose }) {
   // Wide/narrow Ideas dock (room for the architectural plan), remembered.
   const [ideasWide, setIdeasWide] = useState(readIdeasWide);
   function toggleIdeasWide() {
+    clearIdeasSize(); // the preset toggle wins over any custom drag size
     setIdeasWide((prev) => {
       const next = !prev;
       try {
@@ -263,13 +281,66 @@ export default function Dashboard({ onClose }) {
     });
   }
 
+  // Free drag-resize of the Ideas dock from its bottom-right grip.
+  const ideasRef = useRef(null);
+  const [ideasSize, setIdeasSize] = useState(readIdeasSize);
+  const ideasResizeRef = useRef(null);
+  function startIdeasResize(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = ideasRef.current?.getBoundingClientRect();
+    ideasResizeRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      baseW: rect?.width ?? IDEAS_MIN_W,
+      baseH: rect?.height ?? IDEAS_MIN_H,
+    };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  }
+  function moveIdeasResize(e) {
+    const r = ideasResizeRef.current;
+    if (!r) return;
+    const maxW = Math.round(window.innerWidth * 0.95);
+    const maxH = Math.round(window.innerHeight * 0.9);
+    const w = Math.max(IDEAS_MIN_W, Math.min(maxW, Math.round(r.baseW + (e.clientX - r.startX))));
+    const h = Math.max(IDEAS_MIN_H, Math.min(maxH, Math.round(r.baseH + (e.clientY - r.startY))));
+    setIdeasSize({ w, h });
+  }
+  function endIdeasResize() {
+    if (!ideasResizeRef.current) return;
+    ideasResizeRef.current = null;
+    setIdeasSize((s) => {
+      if (s) {
+        try {
+          localStorage.setItem(IDEAS_SIZE_KEY, JSON.stringify(s));
+        } catch {
+          /* private mode — in-memory only */
+        }
+      }
+      return s;
+    });
+  }
+  function clearIdeasSize() {
+    setIdeasSize(null);
+    try {
+      localStorage.removeItem(IDEAS_SIZE_KEY);
+    } catch {
+      /* private mode */
+    }
+  }
+
   // Autopilot mission-control joins the dashboard as a third drag-layout citizen
   // (plans/autopilot-to-harness.md) only when its feature is on; otherwise it's
   // absent and the layout is just Ideas + agents, exactly as before.
   const autopilotOn = useFeature('autopilotTab');
-  // The panels the free 2D drag layout manages, in DOM order. Autopilot is first
-  // so it sits on top in grid-mode flow.
-  const dragKeys = autopilotOn ? ['autopilot', 'ideas', 'agents'] : ['ideas', 'agents'];
+  // The panels the free 2D drag layout manages, in DOM order. Autopilot leads so
+  // it sits on top in grid-mode flow. (The task graph used to be a citizen here;
+  // it now lives as a tab inside Ideas — plans/ideas-taskgraph-merge.md.)
+  const dragKeys = [
+    ...(autopilotOn ? ['autopilot'] : []),
+    'ideas',
+    'agents',
+  ];
 
   // Free 2D drag layout (plans/dashboard-drag-layout.md): saved {x,y} per panel.
   const [positions, setPositions] = useState(readPositions);
@@ -810,9 +881,13 @@ export default function Dashboard({ onClose }) {
           </section>
         )}
         <aside
+          ref={ideasRef}
           data-panel="ideas"
-          className={`dash__ideas${ideasWide ? ' dash__ideas--wide' : ''}${dragKey === 'ideas' ? ' dash__panel--lifted' : ''}`}
-          style={free ? posStyle('ideas') : undefined}
+          className={`dash__ideas${ideasWide ? ' dash__ideas--wide' : ''}${ideasSize ? ' dash__ideas--sized' : ''}${dragKey === 'ideas' ? ' dash__panel--lifted' : ''}`}
+          style={{
+            ...(free ? posStyle('ideas') : null),
+            ...(ideasSize ? { width: ideasSize.w, flexBasis: ideasSize.w, height: ideasSize.h, maxHeight: 'none' } : null),
+          }}
         >
           <div className="dash__ideas-head">
             {free && (
@@ -841,6 +916,17 @@ export default function Dashboard({ onClose }) {
             </button>
           </div>
           <IdeasPanel />
+          <span
+            className="dash__ideas-resize"
+            role="separator"
+            aria-label="Resize ideas panel"
+            title="Drag to resize · double-click to reset"
+            onPointerDown={startIdeasResize}
+            onPointerMove={moveIdeasResize}
+            onPointerUp={endIdeasResize}
+            onPointerCancel={endIdeasResize}
+            onDoubleClick={clearIdeasSize}
+          />
         </aside>
         <div
           data-panel="agents"

@@ -1,0 +1,237 @@
+/* Task dependency graph dashboard section (plans/task-dependency-graph.md).
+   The React Flow base styles come from '@xyflow/react/dist/style.css' (imported in
+   the component); this file styles the panel chrome + the custom step node. */
+
+.tg-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  /* Definite default height so React Flow fills it; the saved drag size (applied
+     inline) overrides both width and height. Taller by default now that the
+     node-detail view shares the bottom half. */
+  height: 520px;
+  min-height: 0;
+}
+
+/* Bottom-right drag-to-resize grip (same UX as the autopilot dock). */
+.tg-panel__resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+  color: var(--color-text-soft, #8a8a85);
+  touch-action: none; /* pointer-drag on touch without page scroll */
+  z-index: 10; /* above the React Flow canvas */
+}
+.tg-panel__resize::after {
+  content: '';
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  border-bottom-right-radius: 2px;
+  opacity: 0.65;
+}
+.tg-panel__resize:hover {
+  color: var(--color-accent, #b85c00);
+}
+
+/* Add-a-step row. */
+.tg-add {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.tg-add__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 13px;
+}
+.tg-add__repo {
+  flex: 0 0 auto;
+  max-width: 140px;
+  padding: 6px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 12px;
+}
+.tg-add__btn {
+  flex: 0 0 auto;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.tg-add__btn:disabled { opacity: 0.4; cursor: default; }
+
+.tg-hint {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--color-text-soft, #6b6b66);
+}
+.tg-err { color: #c0392b; font-weight: 600; }
+
+/* The graph canvas — React Flow fills this; it must have a definite height. It
+   takes the top half; the node-detail view takes the bottom half. */
+.tg-canvas {
+  flex: 1 1 50%;
+  min-height: 140px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--color-bg, #faf8f4);
+}
+
+/* Per-node detail/edit view on the bottom half (plans/task-dependency-graph.md):
+   appears when a step is selected; its notes box is the repurposed scratchpad,
+   now scoped to that node. Backend-synced (debounced) via PATCH nodes/{id}. */
+.tg-detail {
+  flex: 1 1 50%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 120px;
+}
+.tg-detail--empty {
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text-soft, #6b6b66);
+  font-size: 12.5px;
+  font-style: italic;
+}
+.tg-detail__head {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.tg-detail__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+.tg-detail__repo {
+  flex: 0 0 auto;
+  max-width: 140px;
+  padding: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 12px;
+}
+.tg-detail__notes {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  resize: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+/* --- the custom step node --- */
+.tg-node {
+  --repo-color: var(--color-border);
+  min-width: 130px;
+  max-width: 220px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--repo-color);
+  border-radius: 10px;
+  background: var(--color-surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  font-size: 12.5px;
+}
+.tg-node.st-doing { border-color: #e0552b; }
+.tg-node.st-done { opacity: 0.62; }
+.tg-node.st-done .tg-node__title { text-decoration: line-through; }
+.tg-node.is-actionable {
+  box-shadow: 0 0 0 2px #16a34a, 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+.tg-node.is-dim { opacity: 0.3; }
+
+.tg-node__row { display: flex; align-items: flex-start; gap: 6px; }
+.tg-node__title { flex: 1 1 auto; font-weight: 600; word-break: break-word; cursor: text; }
+.tg-node__edit {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  border: 1px solid var(--color-accent, #c0392b);
+  border-radius: 6px;
+  padding: 1px 4px;
+}
+.tg-node__x {
+  flex: 0 0 auto;
+  border: none;
+  background: none;
+  color: var(--color-text-soft, #999);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.tg-node__x:hover { color: #c0392b; }
+
+.tg-node__meta { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; align-items: center; }
+.tg-chip {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+}
+.tg-chip--status { cursor: pointer; background: var(--color-bg, #efece6); color: var(--color-text); }
+.tg-chip--status.st-doing { background: #e0552b; color: #fff; border-color: #e0552b; }
+.tg-chip--status.st-done { background: #16a34a; color: #fff; border-color: #16a34a; }
+.tg-chip--repo {
+  background: color-mix(in srgb, var(--repo-color) 16%, var(--color-surface));
+  border-color: color-mix(in srgb, var(--repo-color) 40%, var(--color-border));
+  color: var(--color-text);
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+}
+.tg-chip--go { background: #16a34a; color: #fff; border-color: #16a34a; }
+
+/* Dim non-traced edges while a "why" chain is lit. */
+.tg-edge--dim { opacity: 0.15; }

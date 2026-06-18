@@ -18,6 +18,7 @@ using ClaudeWeb.Services.Prompts;
 using ClaudeWeb.Services.Repositories;
 using ClaudeWeb.Services.Screen;
 using ClaudeWeb.Services.Settings;
+using ClaudeWeb.Services.TaskGraph;
 using ClaudeWeb.Services.Terminal;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -146,6 +147,7 @@ public class EmbeddedApi
             builder.Services.AddExposeModule(); // exposure check (plans/product-onboarding.md)
             builder.Services.AddAnalyticsModule(); // scoreboard (plans/scoreboard-analytics.md)
             builder.Services.AddAutopilotModule(); // loop-autopilot discovery (plans/loop-autopilot.md)
+            builder.Services.AddTaskGraphModule(); // task dependency graph (plans/task-dependency-graph.md)
             // === END MODULE SERVICE REGISTRATION ===
 
             _app = builder.Build();

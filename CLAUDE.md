@@ -78,6 +78,13 @@ this box (including one in another repo) can read off disk. It's what the homepa
 "Use the Understanding app in any agent" topic points other agents at. If the convention
 changes, change it **there**, not by re-describing it here or in the paste.
 
+The sibling case — exposing a **real product you run yourself** (not a harness-served
+static app) on the Local tab — has its own agent-agnostic doc,
+`docs/local-exposure-convention.md`: the three-rule contract (dual-stack bind, serve at
+root, relative URLs) plus the `/api/localview/<repo>/app/<appId>/` proxy path. It's what
+the homepage's "Local exposure, done right" topic points other agents at; same rule —
+change the convention **there**, not here or in the paste.
+
 ## Build / run the harness normally
 
 ```
