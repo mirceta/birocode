@@ -113,36 +113,8 @@
   width: min(560px, 92vw);
 }
 
-/* Task dependency graph dock (plans/task-dependency-graph.md). Like the autopilot
-   dock: a full-width strip in grid/flow, a bounded floating box in free mode. It
-   needs a definite height because React Flow fills its container. */
-.dash__taskgraph {
-  flex: 1 1 100%;
-  min-width: 0;
-  position: relative;
-}
-/* Free mode: the section shrink-wraps the panel, which carries the default
-   (drag-resizable) width — exactly like the autopilot dock. */
-.dash__body--free .dash__taskgraph {
-  flex: none;
-  width: auto;
-}
-.dash__body--free .dash__taskgraph .tg-panel {
-  width: min(620px, 94vw);
-}
-.dash__taskgraph-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
-}
-.dash__taskgraph-title {
-  font-size: 13px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--color-accent);
-}
+/* (The task-graph dashboard dock was removed — the graph now lives as a tab inside
+   Ideas; see plans/ideas-taskgraph-merge.md.) */
 
 /* Group the layout-mode switch + its mode-specific action (reset / ⇄). */
 .dash__layout-ctl {
@@ -199,7 +171,9 @@
   position: sticky;
   top: 16px;
   max-height: calc(100dvh - var(--header-height, 56px) - 56px);
-  overflow: auto;
+  /* Inner-scroll: IdeasPanel's tab area owns the scrollbar so the bottom-right
+     drag-resize grip stays pinned to the dock's corner (plans/ideas-taskgraph-merge.md). */
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -209,6 +183,35 @@
 .dash__ideas--wide {
   flex-basis: 620px;
   width: 620px;
+}
+
+/* Bottom-right drag-to-resize grip on the Ideas dock (same UX as the task-graph
+   panel; plans/ideas-taskgraph-merge.md). */
+.dash__ideas-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+  color: var(--color-text-soft, #8a8a85);
+  touch-action: none; /* pointer-drag on touch without page scroll */
+  z-index: 10;
+}
+.dash__ideas-resize::after {
+  content: '';
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  border-bottom-right-radius: 2px;
+  opacity: 0.65;
+}
+.dash__ideas-resize:hover {
+  color: var(--color-accent, #b85c00);
 }
 
 .dash__ideas-head {

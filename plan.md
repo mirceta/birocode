@@ -58,6 +58,18 @@
 
 ## Recently shipped
 
+- [Merge Ideas + Task graph](plans/ideas-taskgraph-merge.md) — folded the **Task graph** into the
+  **Ideas** surface so the graph lives in one home. It became a **third tab** inside `IdeasPanel`
+  (Ideas | Plan | 🧩 Task graph), remounting fresh each open; the standalone **dashboard task-graph
+  dock was removed** (its drag-layout citizen + dead CSS deleted). Each **active idea** gained a
+  **🧩 Send to graph** button — decided as **Convert**: it creates a task-graph node
+  (`POST /api/taskgraph/nodes`, `title = idea.text`, project carried into the node note), **keeps the
+  idea but clears its Active flag** (`PATCH /api/notes/{id}`), and jumps to the Task-graph tab. Bundled
+  in (at the user's request, against one-feature-per-branch): the **Ideas dashboard dock is now
+  drag-resizable** via a bottom-right grip (free width+height, remembered per device, double-click to
+  reset; the ⇥/⇤ wide-toggle clears a custom size), switched to inner-scroll so the grip stays pinned.
+  Frontend-only (reuses existing endpoints); built & deployed to live :5099. On
+  `feature/ideas-taskgraph-merge`.
 - [Task dependency graph](plans/task-dependency-graph.md) — a first-class dashboard section (sibling
   of **Ideas** / **Autopilot**) for the prerequisite chains that used to live only in the operator's
   head. Built with **React Flow**, a **single global board**, **repo label/colour only** (no live

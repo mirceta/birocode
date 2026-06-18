@@ -45,6 +45,18 @@
   gap: 14px;
 }
 
+/* Task graph tab (plans/ideas-taskgraph-merge.md): let the board fill the Ideas
+   content area rather than scroll inside it; a floor keeps React Flow from
+   collapsing to zero height when the host has no definite height. */
+.ideas__tabpanel--graph {
+  overflow: hidden;
+  padding: 0;
+}
+.ideas__tabpanel--graph .tg-panel {
+  height: 100%;
+  min-height: 380px;
+}
+
 /* Architectural-plan tab (plans/ideas-arch-plan.md): a single user-written doc,
    tall — the view / textarea fill the available panel height. */
 .archplan {
@@ -291,6 +303,12 @@
 
 .idea__btn--danger {
   color: #d1242f;
+}
+
+/* "Send to graph" on active ideas (plans/ideas-taskgraph-merge.md). */
+.idea__graph-btn {
+  border-color: color-mix(in srgb, var(--color-accent) 50%, var(--color-border));
+  color: var(--color-accent);
 }
 
 .idea__btn:disabled {
