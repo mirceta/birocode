@@ -81,6 +81,19 @@
   "dock = control / tab = detail" split was retired). Cross-agent backend already existed (pure
   surfacing); gate stays off by default. Deployed to live :5099 & confirmed; **merged to main
   2026-06-18**. On `feature/autopilot-to-harness`.
+- ["Paste this into the other agent's chat" for the Local-exposure topic](plans/exposure-paste-pointer.md)
+  — gave the homepage's **"🛰️ Local exposure, done right"** topic the same
+  **🚀 Paste this into the other agent's chat** affordance the **"📦 Use the
+  Understanding app in any agent"** topic has, so the operator can bootstrap *another*
+  on-box agent into exposing its Product on the Local tab correctly. Task-framed (a
+  one-shot reconfigure of a real Product the other agent runs), pointing at a new
+  agent-agnostic [docs/local-exposure-convention.md](docs/local-exposure-convention.md)
+  modelled on `docs/understanding-app-convention.md`. Because a repo can run **several**
+  web apps, the paste card carries a **"Which service should it expose?"** field that
+  injects the named service into the prompt live (empty → generic fallback); Copy copies
+  the customized prompt. Build-less; browser-verified on an isolated homepage port
+  (service injection + clipboard match, no console errors). On
+  `feature/exposure-paste-pointer`; **merged to main 2026-06-18**.
 - **Homepage tabbed explainers + same-box Understanding-app convention pointer** —
   renamed `exposure-example/` → `homepage/` (kept `serve.mjs`/`:5305`) and added a
   **topic-tab shell** (`home-core.js` + `home.js`) above the existing variant layer.
