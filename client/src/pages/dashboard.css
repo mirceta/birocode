@@ -113,6 +113,37 @@
   width: min(560px, 92vw);
 }
 
+/* Task dependency graph dock (plans/task-dependency-graph.md). Like the autopilot
+   dock: a full-width strip in grid/flow, a bounded floating box in free mode. It
+   needs a definite height because React Flow fills its container. */
+.dash__taskgraph {
+  flex: 1 1 100%;
+  min-width: 0;
+  position: relative;
+}
+/* Free mode: the section shrink-wraps the panel, which carries the default
+   (drag-resizable) width — exactly like the autopilot dock. */
+.dash__body--free .dash__taskgraph {
+  flex: none;
+  width: auto;
+}
+.dash__body--free .dash__taskgraph .tg-panel {
+  width: min(620px, 94vw);
+}
+.dash__taskgraph-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.dash__taskgraph-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-accent);
+}
+
 /* Group the layout-mode switch + its mode-specific action (reset / ⇄). */
 .dash__layout-ctl {
   display: flex;

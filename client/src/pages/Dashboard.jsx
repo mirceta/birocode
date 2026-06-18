@@ -14,6 +14,7 @@ import WaitingOnField from '../components/dashboard/WaitingOnField';
 import IdeasPanel from '../components/ideas/IdeasPanel';
 import Scoreboard from '../components/dashboard/Scoreboard';
 import AutopilotPanel from '../components/dashboard/AutopilotPanel';
+import TaskGraphPanel from '../components/taskgraph/TaskGraphPanel';
 import './dashboard.css';
 
 // The dashboard has three layouts (plans/agent-dashboard.md): summary "cards"
@@ -267,9 +268,17 @@ export default function Dashboard({ onClose }) {
   // (plans/autopilot-to-harness.md) only when its feature is on; otherwise it's
   // absent and the layout is just Ideas + agents, exactly as before.
   const autopilotOn = useFeature('autopilotTab');
-  // The panels the free 2D drag layout manages, in DOM order. Autopilot is first
-  // so it sits on top in grid-mode flow.
-  const dragKeys = autopilotOn ? ['autopilot', 'ideas', 'agents'] : ['ideas', 'agents'];
+  // Task dependency graph joins the same drag layout when its feature is on
+  // (plans/task-dependency-graph.md).
+  const taskGraphOn = useFeature('taskGraph');
+  // The panels the free 2D drag layout manages, in DOM order. Autopilot + task
+  // graph lead so they sit on top in grid-mode flow.
+  const dragKeys = [
+    ...(autopilotOn ? ['autopilot'] : []),
+    ...(taskGraphOn ? ['taskgraph'] : []),
+    'ideas',
+    'agents',
+  ];
 
   // Free 2D drag layout (plans/dashboard-drag-layout.md): saved {x,y} per panel.
   const [positions, setPositions] = useState(readPositions);
@@ -807,6 +816,35 @@ export default function Dashboard({ onClose }) {
                 ) : null
               }
             />
+          </section>
+        )}
+        {/* Task dependency graph as a drag-layout citizen
+            (plans/task-dependency-graph.md): a board of step nodes + "depends-on"
+            edges, gated on the taskGraph feature. */}
+        {taskGraphOn && (
+          <section
+            data-panel="taskgraph"
+            className={`dash__taskgraph${dragKey === 'taskgraph' ? ' dash__panel--lifted' : ''}`}
+            style={free ? posStyle('taskgraph') : undefined}
+          >
+            <div className="dash__taskgraph-head">
+              {free && (
+                <button
+                  type="button"
+                  className="dash__drag"
+                  onPointerDown={(e) => startPanelDrag('taskgraph', e)}
+                  onPointerMove={movePanelDrag}
+                  onPointerUp={endPanelDrag}
+                  onPointerCancel={endPanelDrag}
+                  title={t('dashboard.dragPanel')}
+                  aria-label={t('dashboard.dragPanel')}
+                >
+                  ⠿
+                </button>
+              )}
+              <span className="dash__taskgraph-title">🧩 Task graph</span>
+            </div>
+            <TaskGraphPanel />
           </section>
         )}
         <aside

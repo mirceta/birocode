@@ -58,6 +58,18 @@
 
 ## Recently shipped
 
+- [Task dependency graph](plans/task-dependency-graph.md) — a first-class dashboard section (sibling
+  of **Ideas** / **Autopilot**) for the prerequisite chains that used to live only in the operator's
+  head. Built with **React Flow**, a **single global board**, **repo label/colour only** (no live
+  agent telemetry): add step nodes (each optionally attached to an agent), drag **"waits-on"** edges,
+  cycle status (todo/doing/done), rename/delete, see **do-next** (green ring on unblocked steps) and
+  click a step to trace **why** (the chain up to the goal it serves). Backend-synced global store
+  like Ideas (`/api/taskgraph`, `taskgraph.json`, cycle/self/dup-edge guarded); a drag-layout dock
+  citizen gated on a new Advanced flag and **drag-resizable** like Autopilot. Also a **persisted
+  free-text scratchpad** on the bottom half (`PATCH /api/taskgraph/scratch`) as a deliberate foil —
+  if the operator lives in the pad instead of the graph, that's the signal the graph isn't earning
+  its keep. Deployed to live :5099 & **user-confirmed working; merged to main 2026-06-18**. On
+  `feature/task-dependency-graph`.
 - [Autopilot goes to the harness](plans/autopilot-to-harness.md) — the autopilot dashboard was
   **DUPLICATED** (a routed harness tab `Autopilot.jsx` **and** a build-less local app
   `autopilot-app/`, both over `/api/autopilot`). Shipped in three steps: **(1) de-dup** — Intercepted
