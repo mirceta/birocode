@@ -7,10 +7,14 @@
 > agent), drag "waits-on" edges, cycle status (todo/doing/done), rename/delete, see **do-next**
 > (green ring on unblocked steps) and trace **why** (click a step → highlights the chain up to its
 > goal). Backend-synced via `/api/taskgraph` (`taskgraph.json`); dock is **drag-resizable** like
-> Autopilot. Added a **persisted free-text scratchpad** on the bottom half (`PATCH
-> /api/taskgraph/scratch`) as a deliberate foil — if the operator lives in the pad instead of the
-> graph, that's the signal the graph isn't earning its keep. Deployed to live `:5099` &
-> user-confirmed working; **merged to main 2026-06-18**. On `feature/task-dependency-graph`.
+> Autopilot. Clicking a step opens a **detail/edit view on the bottom half** — its title, agent and
+> status, plus a **per-node notes** box backend-synced (debounced) via `PATCH
+> /api/taskgraph/nodes/{id}`. (The bottom half originally held a *global scratchpad* meant as a
+> "foil" experiment; on 2026-06-18 it was **repurposed into per-node notes** at user request. The old
+> `Board.Scratch` field + `PATCH /api/taskgraph/scratch` endpoint are now **orphaned** — harmless,
+> pending a cleanup deploy.) Both the core board and the node-detail/per-node-notes enhancement are
+> deployed to live `:5099` and **merged to main 2026-06-18** (branches `feature/task-dependency-graph`,
+> `feature/taskgraph-node-detail`).
 
 ## The problem
 

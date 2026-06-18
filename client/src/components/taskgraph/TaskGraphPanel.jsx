@@ -115,6 +115,74 @@ function StepNode({ id, data }) {
 
 const nodeTypes = { step: StepNode };
 
+// The detail/edit view rendered below the graph for the selected step. The
+// notes box is the repurposed scratchpad — now scoped to this node. Mounted with
+// a `key` of the node id, so switching selection re-initialises its draft state.
+function NodeDetail({ node, repos, onPatch }) {
+  const [title, setTitle] = useState(node.data.title);
+  const [note, setNote] = useState(node.data.note || '');
+  const noteTimer = useRef(null);
+
+  useEffect(() => () => { if (noteTimer.current) clearTimeout(noteTimer.current); }, []);
+
+  function onNoteChange(e) {
+    const v = e.target.value;
+    setNote(v);
+    if (noteTimer.current) clearTimeout(noteTimer.current);
+    noteTimer.current = setTimeout(() => onPatch(node.id, { note: v }), 500);
+  }
+  function flushNote() {
+    if (noteTimer.current) { clearTimeout(noteTimer.current); noteTimer.current = null; }
+    onPatch(node.id, { note });
+  }
+  function commitTitle() {
+    const t = title.trim();
+    if (t && t !== node.data.title) onPatch(node.id, { title: t });
+    else setTitle(node.data.title); // blank/unchanged: revert the draft
+  }
+
+  return (
+    <div className="tg-detail">
+      <div className="tg-detail__head">
+        <input
+          className="tg-detail__title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onBlur={commitTitle}
+          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+          placeholder="Step title"
+        />
+        <select
+          className="tg-detail__repo"
+          value={node.data.repoId || ''}
+          onChange={(e) => onPatch(node.id, { repoId: e.target.value })}
+          title="Agent for this step"
+        >
+          <option value="">(no agent)</option>
+          {repos.map((r) => (
+            <option key={r.id} value={r.id}>{r.name}</option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className={`tg-chip tg-chip--status st-${node.data.status}`}
+          title="Click to change status"
+          onClick={() => onPatch(node.id, { status: NEXT_STATUS[node.data.status] })}
+        >
+          {node.data.status}
+        </button>
+      </div>
+      <textarea
+        className="tg-detail__notes"
+        value={note}
+        onChange={onNoteChange}
+        onBlur={flushNote}
+        placeholder="Notes for this step — what it involves, links, blockers, why it matters…"
+      />
+    </div>
+  );
+}
+
 function TaskGraphBoard() {
   const { repos } = useDock();
   const repoName = useCallback((id) => repos.find((r) => r.id === id)?.name || '', [repos]);
@@ -125,8 +193,6 @@ function TaskGraphBoard() {
   const [draftTitle, setDraftTitle] = useState('');
   const [draftRepo, setDraftRepo] = useState('');
   const [error, setError] = useState('');
-  const [scratch, setScratch] = useState(''); // free-text pad below the graph (persisted)
-  const scratchTimer = useRef(null);
   const wrapRef = useRef(null);
 
   // Drag-to-resize the dock from its bottom-right grip (same UX as the Autopilot
@@ -184,28 +250,11 @@ function TaskGraphBoard() {
       const board = await apiGet('/taskgraph');
       setNodes((board.nodes || []).map(toRfNode));
       setEdges((board.edges || []).map(toRfEdge));
-      setScratch(board.scratch || '');
     } catch {
       setError('Could not load the task graph.');
     }
   }, []);
   useEffect(() => { load(); }, [load]);
-  // Flush any pending scratchpad save on unmount.
-  useEffect(() => () => { if (scratchTimer.current) clearTimeout(scratchTimer.current); }, []);
-
-  // Persist the scratchpad, debounced while typing (and flushed on blur).
-  function onScratchChange(e) {
-    const text = e.target.value;
-    setScratch(text);
-    if (scratchTimer.current) clearTimeout(scratchTimer.current);
-    scratchTimer.current = setTimeout(() => {
-      apiPatch('/taskgraph/scratch', { text }).catch(() => {});
-    }, 500);
-  }
-  function flushScratch() {
-    if (scratchTimer.current) { clearTimeout(scratchTimer.current); scratchTimer.current = null; }
-    apiPatch('/taskgraph/scratch', { text: scratch }).catch(() => {});
-  }
 
   // --- derived: actionable set + the selected node's dependent chain (the "why") ---
   const actionable = useMemo(() => actionableIds(nodes, edges), [nodes, edges]);
@@ -290,9 +339,18 @@ function TaskGraphBoard() {
   function deleteNode(id) {
     setNodes((nds) => nds.filter((n) => n.id !== id));
     setEdges((eds) => eds.filter((e) => e.source !== id && e.target !== id));
+    if (selected === id) setSelected(null);
     apiDelete(`/taskgraph/nodes/${id}`).catch(() => {});
   }
 
+  // Generic partial update for the detail editor: patch local state immediately
+  // (so the graph reflects the edit live) and persist to the backend.
+  function patchNode(id, fields) {
+    setNodes((nds) => nds.map((n) => (n.id === id ? { ...n, data: { ...n.data, ...fields } } : n)));
+    apiPatch(`/taskgraph/nodes/${id}`, fields).catch(() => {});
+  }
+
+  const selectedNode = selected ? nodes.find((n) => n.id === selected) || null : null;
   const sizeStyle = size ? { width: size.w, height: size.h } : undefined;
 
   return (
@@ -315,7 +373,7 @@ function TaskGraphBoard() {
 
       <p className="tg-hint">
         Drag from a step’s bottom dot to the step it <b>waits on</b>. Green ring = <b>do next</b>.
-        Click a step to trace <b>why</b> (the chain up to its goal); click empty space to clear.
+        Click a step to trace <b>why</b> and edit its <b>notes</b> below; click empty space to clear.
         {error && <span className="tg-err"> · {error}</span>}
       </p>
 
@@ -342,16 +400,13 @@ function TaskGraphBoard() {
         </ReactFlow>
       </div>
 
-      <div className="tg-scratch">
-        <span className="tg-scratch__label">Scratchpad</span>
-        <textarea
-          className="tg-scratch__box"
-          value={scratch}
-          onChange={onScratchChange}
-          onBlur={flushScratch}
-          placeholder="Plain-text scratchpad — jot tasks/notes here. (If you find yourself living down here instead of using the graph above, that's the signal the graph isn't pulling its weight.)"
-        />
-      </div>
+      {selectedNode ? (
+        <NodeDetail key={selectedNode.id} node={selectedNode} repos={repos} onPatch={patchNode} />
+      ) : (
+        <div className="tg-detail tg-detail--empty">
+          Click a step above to view and edit its notes.
+        </div>
+      )}
 
       <span
         className="tg-panel__resize"

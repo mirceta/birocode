@@ -10,7 +10,7 @@
   width: 100%;
   /* Definite default height so React Flow fills it; the saved drag size (applied
      inline) overrides both width and height. Taller by default now that the
-     scratchpad shares the bottom half. */
+     node-detail view shares the bottom half. */
   height: 520px;
   min-height: 0;
 }
@@ -93,7 +93,7 @@
 .tg-err { color: #c0392b; font-weight: 600; }
 
 /* The graph canvas — React Flow fills this; it must have a definite height. It
-   takes the top half; the scratchpad takes the bottom half. */
+   takes the top half; the node-detail view takes the bottom half. */
 .tg-canvas {
   flex: 1 1 50%;
   min-height: 140px;
@@ -103,23 +103,54 @@
   background: var(--color-bg, #faf8f4);
 }
 
-/* Free-text scratchpad on the bottom half (plans/task-dependency-graph.md): a
-   deliberate foil for the graph — persisted to the backend, debounced on type. */
-.tg-scratch {
+/* Per-node detail/edit view on the bottom half (plans/task-dependency-graph.md):
+   appears when a step is selected; its notes box is the repurposed scratchpad,
+   now scoped to that node. Backend-synced (debounced) via PATCH nodes/{id}. */
+.tg-detail {
   flex: 1 1 50%;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   min-height: 120px;
 }
-.tg-scratch__label {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+.tg-detail--empty {
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius);
   color: var(--color-text-soft, #6b6b66);
+  font-size: 12.5px;
+  font-style: italic;
 }
-.tg-scratch__box {
+.tg-detail__head {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.tg-detail__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+.tg-detail__repo {
+  flex: 0 0 auto;
+  max-width: 140px;
+  padding: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 12px;
+}
+.tg-detail__notes {
   flex: 1 1 auto;
   width: 100%;
   min-height: 0;

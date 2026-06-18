@@ -65,11 +65,13 @@
   cycle status (todo/doing/done), rename/delete, see **do-next** (green ring on unblocked steps) and
   click a step to trace **why** (the chain up to the goal it serves). Backend-synced global store
   like Ideas (`/api/taskgraph`, `taskgraph.json`, cycle/self/dup-edge guarded); a drag-layout dock
-  citizen gated on a new Advanced flag and **drag-resizable** like Autopilot. Also a **persisted
-  free-text scratchpad** on the bottom half (`PATCH /api/taskgraph/scratch`) as a deliberate foil —
-  if the operator lives in the pad instead of the graph, that's the signal the graph isn't earning
-  its keep. Deployed to live :5099 & **user-confirmed working; merged to main 2026-06-18**. On
-  `feature/task-dependency-graph`.
+  citizen gated on a new Advanced flag and **drag-resizable** like Autopilot. Clicking a step opens a
+  **detail/edit view on the bottom half** — title, agent, status and a **per-node notes** box
+  backend-synced via `PATCH /api/taskgraph/nodes/{id}`. (The bottom half first held a *global
+  scratchpad* foil experiment; repurposed into per-node notes 2026-06-18 — the old
+  `/api/taskgraph/scratch` endpoint is now orphaned, pending cleanup.) Core board + node-detail
+  enhancement deployed to live :5099 & **merged to main 2026-06-18**
+  (`feature/task-dependency-graph`, `feature/taskgraph-node-detail`).
 - [Autopilot goes to the harness](plans/autopilot-to-harness.md) — the autopilot dashboard was
   **DUPLICATED** (a routed harness tab `Autopilot.jsx` **and** a build-less local app
   `autopilot-app/`, both over `/api/autopilot`). Shipped in three steps: **(1) de-dup** — Intercepted
