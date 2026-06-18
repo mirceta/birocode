@@ -37,14 +37,15 @@
 
 ## Active feature plans
 
-- [Autopilot goes to the harness](plans/autopilot-to-harness.md) — the autopilot **dashboard is
-  currently DUPLICATED** (a routed harness tab `Autopilot.jsx` **and** a build-less local app
-  `autopilot-app/`, both over `/api/autopilot`; the local app is the more complete — it has the
-  Intercepted feed). Two confirmed parts: **(1) de-duplicate** toward the harness tab — port the
-  Intercepted feed in, fold any other local-app-only bits, then delete `autopilot-app/`; **(2)
-  elevate to box-level cross-agent operation** — one mission-control over all agents (global
-  enable/threshold/kill layered over per-agent arm; small `AutopilotConfigStore`/`Service`
-  touch). Self-dev + ungate stay at defaults (no special-casing; gate off by default). On
+- [Autopilot goes to the harness](plans/autopilot-to-harness.md) — the autopilot dashboard was
+  **DUPLICATED** (a routed harness tab `Autopilot.jsx` **and** a build-less local app
+  `autopilot-app/`, both over `/api/autopilot`). Two confirmed parts: **(1) de-duplicate** toward
+  the harness tab and **(2) elevate to box-level cross-agent operation** (one mission-control over
+  all agents — `AutopilotPanel` on the dashboard). **De-dup now complete:** Intercepted feed +
+  deny-list ported, the operator-**gate-off state** folded into the tab (a 403 now explains "turn
+  it on at the host"), and **`autopilot-app/` deleted** with all its wiring — one dashboard, no
+  drift. Cross-agent backend turned out to already exist (pure surfacing). Self-dev + ungate stay
+  at defaults (gate off by default). Builds clean; **not yet deployed/merged**. On
   `feature/autopilot-to-harness`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses

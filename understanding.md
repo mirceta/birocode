@@ -22,11 +22,16 @@ first-time move.
 The **only real gap**: the local app has an **Intercepted** live feed the harness tab lacks.
 The local app is actually the more complete of the two.
 
-## The work (sketch)
-1. Port the **Intercepted** feed into `Autopilot.jsx` (the missing 5th subtab).
-2. Diff the other four subtabs; fold any local-app-only refinements into the harness tab.
-3. **Delete `autopilot-app/`** + its localview registration once at parity.
-4. Backend (`Services/Autopilot/*`) and the operator gate stay unchanged.
+## The work (sketch) — de-dup COMPLETE (2026-06-18)
+1. ✅ Ported the **Intercepted** feed into `Autopilot.jsx` (the 5th subtab) — Part 1.
+2. ✅ Diffed the other four subtabs. Folded in the one real gap: the **operator-gate-off state**
+   (a 403 now reads "the host must turn it on", not a generic error — the gate is off by default,
+   so that was the default experience). Dropped cosmetic-only differences (the "advancing"
+   relabel, the intercept reveal animation, an `escalate` `lastMessage` fallback).
+3. ✅ **Deleted `autopilot-app/`** + all wiring (`AutopilotApp.cs`, the `EmbeddedApi` DI line, the
+   `LocalProxyController` dispatch branch, the `RepositoryRegistry` const + self-repo injection).
+4. Backend (`Services/Autopilot/*`) and the operator gate unchanged. Builds clean (client +
+   isolated `dotnet build`). Remaining: deploy to :5099, confirm, then merge.
 
 ## Decisions (locked 2026-06-17)
 - **Cross-agent operation: YES** — the harness tab becomes box-level mission-control over all

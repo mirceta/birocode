@@ -372,11 +372,6 @@ public class RepositoryRegistry
     /// (plans/multiple-local-apps.md Slice 2).</summary>
     public const string UnderstandingAppId = "understanding";
 
-    /// <summary>Id of the always-on, harness-provided Autopilot dev app
-    /// (plans/loop-autopilot.md). Self repo only — autopilot is a single global
-    /// dashboard, not a per-repo surface.</summary>
-    public const string AutopilotAppId = "autopilot";
-
     private RepositoryInfo ToInfo(RepositoryConfig r)
     {
         var exists = Directory.Exists(r.Path);
@@ -388,10 +383,6 @@ public class RepositoryRegistry
         // Append the synthetic, always-on Understanding app. Not persisted (it's not
         // in _repos), served internally (port 0, handled by UnderstandingApp).
         infos.Add(new LocalAppInfo(UnderstandingAppId, "Understanding", 0, "harness"));
-        // The Autopilot dev app rides only on the self repo (the harness's own repo),
-        // since autopilot is a single global dashboard served from autopilot-app/.
-        if (r.IsSelf)
-            infos.Add(new LocalAppInfo(AutopilotAppId, "Autopilot", 0, "harness"));
         return new RepositoryInfo(r.Id, r.Name, r.Path, exists, isGit, r.IsSelf, NormalizeVisibility(r.Visibility), defaultPort, infos);
     }
 

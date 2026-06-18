@@ -4,10 +4,16 @@
 > Part of the **[loop-autopilot](loop-autopilot.md)** family — this plan only covers *where the
 > autopilot dashboard lives*; the brain/engine/safety subdocs are unchanged.
 
-> **Status (2026-06-17): KICKOFF — interpreting + scoping.** On `feature/autopilot-to-harness`,
+> **Status (2026-06-18): DE-DUP COMPLETE — local app retired.** On `feature/autopilot-to-harness`,
 > off `main`. Scope settled — see **Decisions (locked)**. **Progress:** Part 1 port done
 > (Intercepted feed + deny-list into the harness tab); Part 2 first cut done (a first-class
-> **Autopilot section on the agent dashboard** — `AutopilotPanel`). Both deployed to live :5099.
+> **Autopilot section on the agent dashboard** — `AutopilotPanel`), both earlier deployed to live
+> :5099. **Now:** parity reached and the local app **`autopilot-app/` is deleted** along with all
+> its wiring (`AutopilotApp.cs`, the `EmbeddedApi` DI registration, the `LocalProxyController`
+> dispatch branch, and the `RepositoryRegistry` synthetic-app injection). Before deleting, folded
+> the one genuine gap into the harness tab — an explicit **operator-gate-off state** (a 403 now
+> reads "the host must turn it on", not a generic error). Both builds clean (client + isolated
+> `dotnet build`). **Not yet deployed to :5099.** Remaining: deploy + confirm, then merge.
 
 ## Goal
 
@@ -58,14 +64,22 @@ The **only real gap** is the local app's **Intercepted** live feed (the harness 
 
 ## Sketch of the work (refine after scope is confirmed)
 
-1. **Port the `Intercepted` feed** from `autopilot-app/` into `Autopilot.jsx` as a 5th subtab —
-   the one piece the harness tab is missing (`InterceptEvent` is already in `/api/autopilot`).
-2. **Diff the other four subtabs** (agents/prompts/history/audit) for any local-app-only
-   refinements; fold anything worth keeping into the harness tab.
-3. **Delete `autopilot-app/`** and its `localview` app registration once parity is verified.
+1. ✅ **Port the `Intercepted` feed** from `autopilot-app/` into `Autopilot.jsx` as a 5th subtab —
+   the one piece the harness tab was missing (`InterceptEvent` is already in `/api/autopilot`).
+2. ✅ **Diff the other four subtabs** (agents/prompts/history/audit) for local-app-only
+   refinements. **Folded in:** the **operator-gate-off state** — the local app explained a 403
+   ("disabled by the operator"); the harness tab only showed a generic error, even though the gate
+   is **off by default** so that *was* the default experience. The tab now renders an explicit
+   "turn it on at the host" panel on 403. **Deliberately dropped** (cosmetic, not parity gaps):
+   the "advancing" relabel of a suggestion under auto-advance, the brief intercept reveal-spinner
+   animation, and the `escalate` `lastMessage` fallback.
+3. ✅ **Deleted `autopilot-app/`** and its `localview` registration — the folder, `AutopilotApp.cs`,
+   the `EmbeddedApi` DI line, the `LocalProxyController` harness-app dispatch branch (now always
+   `UnderstandingApp`), and the `RepositoryRegistry` `AutopilotAppId` const + self-repo injection.
 4. **Gating unchanged** — stays operator-side off by default per
    [safety](loop-autopilot-safety.md); this is UI consolidation, not a trust change.
-5. **i18n + self-dev build** as usual.
+5. **i18n + self-dev build** — the gate-off copy is inline English (no new i18n keys); both builds
+   clean. Deploy + confirm on :5099 still pending.
 
 ## Decisions (locked 2026-06-17)
 

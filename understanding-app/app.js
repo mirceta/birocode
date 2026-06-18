@@ -30,12 +30,12 @@
       ],
     },
     gap: {
-      h3: 'Only in the local app — the piece to port',
-      badge: 'the gap', badgeCls: 'badge--move', rowCls: 'row--move', ico: '＋',
+      h3: 'De-duplicated — the local app is retired',
+      badge: 'done', badgeCls: 'badge--stay', rowCls: 'row--stay', ico: '✓',
       rows: [
-        ['Intercepted', 'live feed of every message the engine grabs → processing → outcome'],
-        ['→ port into Autopilot.jsx', 'InterceptEvent is already exposed by /api/autopilot, so this is frontend-only'],
-        ['then delete autopilot-app/', 'remove the local app + its localview registration once at parity'],
+        ['Intercepted feed ported', 'now the 5th subtab in Autopilot.jsx (Part 1) — InterceptEvent was already on /api/autopilot'],
+        ['Gate-off state folded in', 'on a 403 the tab now explains "the operator must turn it on at the host", like the local app did'],
+        ['autopilot-app/ deleted', 'folder + AutopilotApp.cs + DI + localview registration removed — one dashboard, no drift'],
       ],
     },
   };

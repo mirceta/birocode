@@ -111,9 +111,6 @@ public class EmbeddedApi
             builder.Services.AddSingleton(_autopilotGate);
             // Harness-provided Understanding app (plans/multiple-local-apps.md Slice 2).
             builder.Services.AddSingleton<Understanding.UnderstandingApp>();
-            // Harness-provided Autopilot dev app (plans/loop-autopilot.md) — build-less
-            // local app we iterate on while autopilot is in development.
-            builder.Services.AddSingleton<Understanding.AutopilotApp>();
 
             // Controllers auto-discovered here -- new controllers need NO changes.
             builder.Services.AddControllers();

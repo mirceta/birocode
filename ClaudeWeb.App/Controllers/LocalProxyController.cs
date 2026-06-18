@@ -34,16 +34,14 @@ public class LocalProxyController : ControllerBase
     private readonly RepositoryRegistry _registry;
     private readonly Logger _logger;
     private readonly Services.Understanding.UnderstandingApp _understanding;
-    private readonly Services.Understanding.AutopilotApp _autopilotApp;
 
     public LocalProxyController(IHttpClientFactory http, RepositoryRegistry registry, Logger logger,
-        Services.Understanding.UnderstandingApp understanding, Services.Understanding.AutopilotApp autopilotApp)
+        Services.Understanding.UnderstandingApp understanding)
     {
         _http = http;
         _registry = registry;
         _logger = logger;
         _understanding = understanding;
-        _autopilotApp = autopilotApp;
     }
 
     // Named app: /api/localview/{repoId}/app/{appId}/... — the multi-app form
@@ -63,13 +61,10 @@ public class LocalProxyController : ControllerBase
             return;
         }
         // Harness-provided apps are served internally with repo context, not dialed
-        // on a loopback port (plans/multiple-local-apps.md). Dispatch by app id.
+        // on a loopback port (plans/multiple-local-apps.md).
         if (string.Equals(app.Kind, "harness", StringComparison.OrdinalIgnoreCase))
         {
-            if (string.Equals(appId, RepositoryRegistry.AutopilotAppId, StringComparison.OrdinalIgnoreCase))
-                await _autopilotApp.Serve(HttpContext, repo!, rest);
-            else
-                await _understanding.Serve(HttpContext, repo!, rest);
+            await _understanding.Serve(HttpContext, repo!, rest);
             return;
         }
         await ProxyTo(repo!.Name, app.Port, rest);

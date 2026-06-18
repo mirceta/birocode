@@ -35,15 +35,25 @@ export default function Autopilot() {
   const [editing, setEditing] = useState(null); // { id, emoji, label, text } | null
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [gated, setGated] = useState(false); // operator gate is off (HTTP 403)
   const [open, setOpen] = useState({});
   const timer = useRef(null);
 
   const load = useCallback(async () => {
     try {
       setData(await apiGet('/autopilot'));
+      setGated(false);
       setError('');
-    } catch {
-      setError('Could not load autopilot state.');
+    } catch (e) {
+      // The whole API is fenced by the operator gate (default off); a 403 isn't a
+      // failure, it's "the host hasn't enabled autopilot" — surface that explicitly
+      // rather than as a generic error (plans/loop-autopilot-safety.md).
+      if (e?.status === 403) {
+        setGated(true);
+        setError('');
+      } else {
+        setError('Could not load autopilot state.');
+      }
     }
   }, []);
 
@@ -169,6 +179,23 @@ export default function Autopilot() {
 
       {error && <ErrorBanner message={error} />}
 
+      {gated ? (
+        <div className="ap-gateoff" role="status">
+          <h3 className="ap-gateoff__title">Autopilot is turned off by the operator</h3>
+          <p>
+            Every <code>/api/autopilot</code> endpoint is fenced by an operator-side
+            gate that defaults to <b>off</b>. The web UI <b>can never turn it on</b> —
+            that switch lives only in the desktop app, so a steered web client or a
+            prompt-injected brain can’t grant autopilot the authority to act.
+          </p>
+          <p>
+            To enable it, open the <b>Claude Web</b> window on the host PC and click the
+            <b> Autopilot: OFF</b> button (it turns green <b>ON</b>). It takes effect
+            immediately — then reload this tab.
+          </p>
+        </div>
+      ) : (
+      <>
       <nav className="ap-tabs">
         <button className={tab === 'agents' ? 'on' : ''} onClick={() => setTab('agents')}>Agents</button>
         <button className={tab === 'prompts' ? 'on' : ''} onClick={() => setTab('prompts')}>
@@ -480,6 +507,8 @@ export default function Autopilot() {
             )}
           </ul>
         </>
+      )}
+      </>
       )}
     </div>
   );
