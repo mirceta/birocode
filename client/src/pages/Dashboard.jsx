@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiGet } from '../api/client';
 import { useDock } from '../context/DockContext';
+import { useFeature } from '../context/UiModeContext';
 import { useT } from '../i18n/LanguageContext';
 import GitStatusSummary from '../components/git/GitStatusSummary';
 import PinnedAgent from '../components/dashboard/PinnedAgent';
@@ -12,6 +13,7 @@ import WaitingBadge from '../components/dashboard/WaitingBadge';
 import WaitingOnField from '../components/dashboard/WaitingOnField';
 import IdeasPanel from '../components/ideas/IdeasPanel';
 import Scoreboard from '../components/dashboard/Scoreboard';
+import AutopilotPanel from '../components/dashboard/AutopilotPanel';
 import './dashboard.css';
 
 // The dashboard has three layouts (plans/agent-dashboard.md): summary "cards"
@@ -261,6 +263,14 @@ export default function Dashboard({ onClose }) {
     });
   }
 
+  // Autopilot mission-control joins the dashboard as a third drag-layout citizen
+  // (plans/autopilot-to-harness.md) only when its feature is on; otherwise it's
+  // absent and the layout is just Ideas + agents, exactly as before.
+  const autopilotOn = useFeature('autopilotTab');
+  // The panels the free 2D drag layout manages, in DOM order. Autopilot is first
+  // so it sits on top in grid-mode flow.
+  const dragKeys = autopilotOn ? ['autopilot', 'ideas', 'agents'] : ['ideas', 'agents'];
+
   // Free 2D drag layout (plans/dashboard-drag-layout.md): saved {x,y} per panel.
   const [positions, setPositions] = useState(readPositions);
   const bodyRef = useRef(null);
@@ -268,8 +278,8 @@ export default function Dashboard({ onClose }) {
   // dragKey state just drives the "lifted" styling.
   const dragRef = useRef(null);
   const [dragKey, setDragKey] = useState(null);
-  // Once any panel has been placed, BOTH render absolutely (a free canvas).
-  const freePlaced = !!(positions.ideas || positions.agents);
+  // Once any panel has been placed, ALL render absolutely (a free canvas).
+  const freePlaced = dragKeys.some((k) => positions[k]);
 
   const posStyle = (key) =>
     positions[key] ? { position: 'absolute', left: positions[key].x, top: positions[key].y } : undefined;
@@ -286,13 +296,13 @@ export default function Dashboard({ onClose }) {
     return { x: Math.min(maxX, Math.max(minX, x)), y: Math.min(maxY, Math.max(0, y)) };
   }
 
-  // First drag seeds BOTH panels from their current flow offsets, so switching
+  // First drag seeds ALL panels from their current flow offsets, so switching
   // flow→absolute doesn't make anything jump.
   function seededPositions() {
     const body = bodyRef.current;
-    if (!body || (positions.ideas && positions.agents)) return positions;
+    if (!body || dragKeys.every((k) => positions[k])) return positions;
     const seed = { ...positions };
-    for (const key of ['ideas', 'agents']) {
+    for (const key of dragKeys) {
       if (!seed[key]) {
         const el = body.querySelector(`[data-panel="${key}"]`);
         seed[key] = el ? { x: el.offsetLeft, y: el.offsetTop } : { x: 0, y: 0 };
@@ -768,6 +778,37 @@ export default function Dashboard({ onClose }) {
         ref={bodyRef}
         className={`dash__body${free && freePlaced ? ' dash__body--free' : ''}${!free && gridSwapped ? ' dash__body--swapped' : ''}${dragKey ? ' dash__body--dragging' : ''}`}
       >
+        {/* Autopilot mission-control as a drag-layout citizen
+            (plans/autopilot-to-harness.md): a dock-styled, free-floating,
+            collapsible panel — box-level control over every agent. First child
+            so it tops the grid-mode flow; absolutely placed in free mode like
+            Ideas/agents. Self-gates on the autopilotTab feature. */}
+        {autopilotOn && (
+          <section
+            data-panel="autopilot"
+            className={`dash__auto${dragKey === 'autopilot' ? ' dash__panel--lifted' : ''}`}
+            style={free ? posStyle('autopilot') : undefined}
+          >
+            <AutopilotPanel
+              dragHandle={
+                free ? (
+                  <button
+                    type="button"
+                    className="dash__drag"
+                    onPointerDown={(e) => startPanelDrag('autopilot', e)}
+                    onPointerMove={movePanelDrag}
+                    onPointerUp={endPanelDrag}
+                    onPointerCancel={endPanelDrag}
+                    title={t('dashboard.dragPanel')}
+                    aria-label={t('dashboard.dragPanel')}
+                  >
+                    ⠿
+                  </button>
+                ) : null
+              }
+            />
+          </section>
+        )}
         <aside
           data-panel="ideas"
           className={`dash__ideas${ideasWide ? ' dash__ideas--wide' : ''}${dragKey === 'ideas' ? ' dash__panel--lifted' : ''}`}

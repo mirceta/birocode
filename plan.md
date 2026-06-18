@@ -8,7 +8,8 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-17):** Cache hardening (no-store shell + Force-refresh) is **deployed to live `:5099` and confirmed**, on `feature/ideas-active-section`; awaiting merge to main.
+> **Status (2026-06-17):** Homepage tabbed explainers + the same-box Understanding-app
+> convention pointer are **deployed to live `:5099` and confirmed**; merged to main.
 
 ## ⚠️ Known risks to mitigate
 
@@ -67,6 +68,37 @@
 
 ## Recently shipped
 
+- [Autopilot goes to the harness](plans/autopilot-to-harness.md) — the autopilot dashboard was
+  **DUPLICATED** (a routed harness tab `Autopilot.jsx` **and** a build-less local app
+  `autopilot-app/`, both over `/api/autopilot`). Shipped in three steps: **(1) de-dup** — Intercepted
+  feed + deny-list ported, operator-**gate-off state** folded in (a 403 now explains "turn it on at
+  the host"), and **`autopilot-app/` deleted** with all its wiring; **(2)** the dashboard section
+  redesigned into a **free-floating, resizable, top-z dock** (a third citizen of the dashboard drag
+  layout); **(3) full parity** — the entire UI is now **one shared `AutopilotConsole`** rendered by
+  BOTH the routed tab (mobile-first) and the dock (anywhere), so the two surfaces can't drift (the
+  "dock = control / tab = detail" split was retired). Cross-agent backend already existed (pure
+  surfacing); gate stays off by default. Deployed to live :5099 & confirmed; **merged to main
+  2026-06-18**. On `feature/autopilot-to-harness`.
+- **Homepage tabbed explainers + same-box Understanding-app convention pointer** —
+  renamed `exposure-example/` → `homepage/` (kept `serve.mjs`/`:5305`) and added a
+  **topic-tab shell** (`home-core.js` + `home.js`) above the existing variant layer.
+  **Tab 1** wraps the existing animated request-flow viz as the "Local exposure, done
+  right" topic; **Tab 2** is a new "Use the Understanding app in any agent" tutorial
+  whose copyable paste is a **2-line pointer** to the new agent-agnostic
+  [docs/understanding-app-convention.md](docs/understanding-app-convention.md) — the
+  single source of truth any on-box agent reads off disk (no HTTP, no drift), instead
+  of a self-contained copy. CLAUDE.md updated to name that doc as the source of truth.
+  Build-less static folder; browser-verified on an isolated port; **deployed to live
+  :5099 & confirmed working 2026-06-17; merged to main**. On
+  `feature/understanding-convention-pointer`.
+- [Dock git actions — sync buttons in each agent dock's git row](plans/dock-git-actions.md)
+  — the Git tab's inward-sync actions (**merge main**, **pull main**, **pull branch**)
+  now live in each agent dock's git-status row on the dashboard, scoped per-dock via
+  `X-Repo-Id`, so you can sync an agent's repo without opening its Git tab. Eligibility
+  logic extracted to `components/git/gitActions.js` and shared with `Git.jsx` (no drift);
+  reuses the Git tab's `act()` flow; gated behind a new `dockGitActions` (Advanced) flag.
+  Push deferred (publishing stays a deliberate Git-tab action). Built + **user-confirmed
+  working**; merged to main 2026-06-17. On `feature/dock-git-actions`.
 - [Dependent agents — "together" groups on the dashboard](plans/dependent-agents.md)
   — tag a dock as **dependent on a specific primary agent**; the dashboard renders
   the pair as a **"together" group** with the dependent **a bit smaller** (~0.82×)

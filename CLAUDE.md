@@ -57,12 +57,13 @@ single-page app at **`understanding-app/` at the Repo root**, with
 it each time the explanation changes). Keep replying in prose as well; the app is a
 companion, not a replacement.
 
-Build it **build-less and self-contained**, the same way `exposure-example/` is: a
+Build it **build-less and self-contained**, the same way `homepage/` is: a
 folder of static assets — `index.html` plus its JS/CSS, any **vendored** libraries
 (no CDN, no `node_modules`), and data files. Use **relative URLs only** (`./app.js`,
 not `/app.js`): the Harness serves the folder under the proxy sub-path
 `/api/localview/<repo>/app/understanding/`, so a leading slash escapes it and 404s —
-the same contract `exposure-example/` teaches. A richer interactive/animated/
+the same contract `homepage/` teaches (its first topic, "Local exposure, done
+right", is exactly this). A richer interactive/animated/
 multi-view app is the point; reach beyond a static diagram when it aids understanding.
 
 The Harness serves this live in the Local tab's always-on **Understanding** app
@@ -70,6 +71,12 @@ The Harness serves this live in the Local tab's always-on **Understanding** app
 overwrite shows up on reload. There is **no Mermaid (or any) fallback**: if
 `understanding-app/index.html` is missing you get an explicit empty state, and a
 missing asset is a plain 404 — so a broken app is visibly broken, never masked.
+
+The **agent-agnostic** statement of this convention lives in
+`docs/understanding-app-convention.md` — the single source of truth that any agent on
+this box (including one in another repo) can read off disk. It's what the homepage's
+"Use the Understanding app in any agent" topic points other agents at. If the convention
+changes, change it **there**, not by re-describing it here or in the paste.
 
 ## Build / run the harness normally
 

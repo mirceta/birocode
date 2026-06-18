@@ -224,6 +224,30 @@
 .out-sugg { background: #dbe9ff; color: #1f4ea8; }
 .out-sent { background: #d8f3df; color: #1a7f37; }
 .out-esc { background: #ffe0c2; color: #b85c00; }
+.out-skip { background: #eef0f3; color: #6b7787; }
+
+/* Deny-list transparency line (ported from autopilot-app/): which risky actions
+   always escalate regardless of confidence. */
+.ap-deny { font-size: 12.5px; color: var(--color-text-muted, #6b7787); margin: 2px 0 12px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ap-deny code { background: var(--color-bg, #f0ece4); padding: 1px 6px; border-radius: 5px; }
+
+/* ---- Intercepted feed (ported from autopilot-app/, plans/autopilot-to-harness.md) ----
+   Live list of every message the engine grabs; each row is processing… then its outcome. */
+.ap-feed { list-style: none; margin: 0; padding: 0; max-height: 460px; overflow-y: auto; }
+.ap-feed__row {
+  display: grid; grid-template-columns: 84px minmax(110px, 1fr) minmax(0, 1.6fr) 176px;
+  align-items: center; gap: 10px; padding: 9px 4px; border-bottom: 1px solid var(--color-border); font-size: 13px;
+}
+.ap-feed__row.is-proc { background: var(--color-bg, #fbfdff); }
+.ap-feed__ag { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-feed__snip { color: var(--color-text-muted, #415062); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-feed__status { justify-self: end; display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; }
+.ap-feed__status code { background: var(--color-bg, #f0ece4); padding: 1px 6px; border-radius: 5px; }
+.ap-spinner {
+  width: 14px; height: 14px; border-radius: 50%; flex: none;
+  border: 2px solid #c9d6ea; border-top-color: #1f6feb; animation: ap-spin 0.7s linear infinite;
+}
+@keyframes ap-spin { to { transform: rotate(360deg); } }
 
 /* Audit rows carry an extra "answered message" column. */
 .ap-log--audit li {
@@ -280,3 +304,16 @@
 
 .rp-section { margin: 18px 0 2px; font-size: 14px; font-weight: 700; }
 .routine__add { margin-left: auto; }
+
+/* Operator-gate-off state (plans/loop-autopilot-safety.md): the whole API 403s
+   when the host hasn't enabled autopilot — explain it instead of erroring. */
+.ap-gateoff {
+  border: 1px solid var(--color-border); border-radius: 12px;
+  background: var(--color-surface); padding: 16px 18px; margin-top: 12px;
+  max-width: 640px; line-height: 1.55;
+}
+.ap-gateoff__title { margin: 0 0 8px; font-size: 15px; font-weight: 700; }
+.ap-gateoff p { margin: 8px 0; color: var(--color-text-muted, #555); }
+.ap-gateoff code {
+  background: var(--color-bg, #f0ece4); padding: 2px 6px; border-radius: 5px; font-size: 12px;
+}

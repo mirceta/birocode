@@ -10,6 +10,7 @@ import { useT } from '../i18n/LanguageContext';
 import { buildGitGraph } from './gitGraph';
 import BranchReview from './BranchReview';
 import GitStatusSummary, { PositionRow } from '../components/git/GitStatusSummary';
+import { deriveGitActions, pullMainPath } from '../components/git/gitActions';
 import './git.css';
 
 // Git tab (plans/git-tab.md + plans/git-actions.md): a fixed position card —
@@ -107,15 +108,8 @@ export default function Git() {
     .filter((g) => g.files.length > 0);
   const clean = status.files.length === 0;
 
-  const onBase = status.branch === status.localBaseBranch;
-  const busy = !!status.busy;
-  const base = status.localBaseBranch || status.baseBranch;
-  const canMerge = !busy && clean && !onBase && status.baseBehind > 0
-    && status.baseBranch === status.localBaseBranch;
-  const canPullMain = !busy && !!base && (onBase ? status.behind > 0 : status.baseDriftBehind > 0);
-  const canPullBranch = !busy && !onBase && !!status.upstream && status.behind > 0;
-  // Publishable (no upstream yet) or carrying unpushed commits.
-  const canPush = !busy && (!status.upstream || status.ahead > 0);
+  const { onBase, busy, base, canMerge, canPullMain, canPullBranch, canPush } =
+    deriveGitActions(status);
 
   return (
     <div className="git-page">
@@ -144,7 +138,7 @@ export default function Git() {
               type="button"
               className="git-action"
               disabled={!canPullMain || !!acting}
-              onClick={() => act('pullMain', onBase ? '/git/pull-current' : '/git/pull-base')}
+              onClick={() => act('pullMain', pullMainPath(onBase))}
             >
               {acting === 'pullMain' ? t('git.acting') : t('git.actPullMain', { base: base || 'main' })}
             </button>

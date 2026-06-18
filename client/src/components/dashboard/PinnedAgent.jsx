@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import Chat from '../../pages/Chat';
+import { apiPost } from '../../api/client';
 import { useChatFor } from '../../context/ChatContext';
 import { useT } from '../../i18n/LanguageContext';
 import { useFeature } from '../../context/UiModeContext';
 import GitStatusSummary from '../git/GitStatusSummary';
+import { deriveGitActions, pullMainPath } from '../git/gitActions';
 import ProductFrame from '../app/ProductFrame';
 import CopyPath from './CopyPath';
 import ImportantStar from './ImportantStar';
@@ -61,6 +63,34 @@ export default function PinnedAgent({
   const apps = canLocalApp ? (localApps || []) : [];
   const [openAppId, setOpenAppId] = useState(null);
   const openApp = apps.find((a) => a.id === openAppId) || null;
+
+  // Inward-sync git actions in the dock's git row (plans/dock-git-actions.md):
+  // the SAME merge / pull-main / pull-branch actions as the Git tab, scoped to
+  // THIS dock's repo via repoId → X-Repo-Id, reusing the Git tab's act() flow
+  // (disable while acting, refresh status when done). Push is intentionally
+  // omitted — publishing stays a deliberate Git-tab action.
+  const showGitActions = useFeature('dockGitActions');
+  const [gitActing, setGitActing] = useState(''); // which action is in flight
+  const [gitActMsg, setGitActMsg] = useState(null); // { ok, text }
+  const ga = git ? deriveGitActions(git) : null;
+
+  const runGitAction = async (name, path) => {
+    setGitActing(name);
+    setGitActMsg(null);
+    try {
+      const r = await apiPost(path, undefined, { repoId: tab.repoId });
+      setGitActMsg({ ok: true, text: r.updated ? t('git.actUpdated') : t('git.actNoop') });
+    } catch (err) {
+      let text = err.message;
+      try {
+        text = JSON.parse(err.message).error || text;
+      } catch { /* raw text */ }
+      setGitActMsg({ ok: false, text });
+    } finally {
+      setGitActing('');
+      onRefreshGit?.(); // re-fetch this dock's status (hits origin) like the Git tab
+    }
+  };
 
   return (
     <div
@@ -149,18 +179,69 @@ export default function PinnedAgent({
       )}
       {git && (
         <div className="phone__git">
-          <GitStatusSummary status={git} compact />
-          {onRefreshGit && (
-            <button
-              type="button"
-              className={`phone__git-refresh${gitRefreshing ? ' is-spinning' : ''}`}
-              onClick={onRefreshGit}
-              disabled={gitRefreshing}
-              title={t('dashboard.refreshGit')}
-              aria-label={t('dashboard.refreshGit')}
+          <div className="phone__git-top">
+            <GitStatusSummary status={git} compact />
+            {onRefreshGit && (
+              <button
+                type="button"
+                className={`phone__git-refresh${gitRefreshing ? ' is-spinning' : ''}`}
+                onClick={onRefreshGit}
+                disabled={gitRefreshing}
+                title={t('dashboard.refreshGit')}
+                aria-label={t('dashboard.refreshGit')}
+              >
+                ↻
+              </button>
+            )}
+          </div>
+          {showGitActions && ga && (
+            <div className="phone__git-actions" role="group" aria-label={t('dashboard.gitActions')}>
+              {!ga.onBase && (
+                <button
+                  type="button"
+                  className="phone__git-action"
+                  disabled={!ga.canMerge || !!gitActing || gitRefreshing}
+                  onClick={() => runGitAction('merge', '/git/merge-base')}
+                >
+                  {gitActing === 'merge'
+                    ? t('dashboard.gitActing')
+                    : t('dashboard.gitMerge', { base: ga.base || 'main' })}
+                </button>
+              )}
+              <button
+                type="button"
+                className="phone__git-action"
+                disabled={!ga.canPullMain || !!gitActing || gitRefreshing}
+                onClick={() => runGitAction('pullMain', pullMainPath(ga.onBase))}
+              >
+                {gitActing === 'pullMain'
+                  ? t('dashboard.gitActing')
+                  : t('dashboard.gitPullMain', { base: ga.base || 'main' })}
+              </button>
+              {!ga.onBase && (
+                <button
+                  type="button"
+                  className="phone__git-action"
+                  disabled={!ga.canPullBranch || !!gitActing || gitRefreshing}
+                  onClick={() => runGitAction('pullBranch', '/git/pull-current')}
+                >
+                  {gitActing === 'pullBranch'
+                    ? t('dashboard.gitActing')
+                    : t('dashboard.gitPullBranch')}
+                </button>
+              )}
+            </div>
+          )}
+          {showGitActions && ga?.busy && (
+            <div className="phone__git-hint">{t('git.actBusy')}</div>
+          )}
+          {gitActMsg && (
+            <div
+              className={`phone__git-msg phone__git-msg--${gitActMsg.ok ? 'ok' : 'err'}`}
+              role="status"
             >
-              ↻
-            </button>
+              {gitActMsg.text}
+            </div>
           )}
         </div>
       )}

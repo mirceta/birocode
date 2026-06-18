@@ -25,6 +25,7 @@ export const FEATURES = {
   contextMeter: 'advanced', // ctx pill in the chat header (plans/context-meter.md)
   gitTab: 'advanced', // git status tab (plans/git-tab.md)
   gitActions: 'advanced', // inward-sync buttons in the Git tab (plans/git-actions.md)
+  dockGitActions: 'advanced', // same inward-sync buttons in each dashboard agent dock's git row (plans/dock-git-actions.md)
   gitBranchList: 'advanced', // other-branches overview in the Git tab (plans/git-branches.md)
   gitGraphView: 'advanced', // mermaid history graph in the Git tab (plans/git-graph.md)
   gitBranchReview: 'advanced', // branch "PR preview" in the Git tab (plans/git-pr-preview.md)
