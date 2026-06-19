@@ -1082,6 +1082,20 @@
   flex-direction: column;
 }
 
+/* Files tab inside the dock (plans/agent-dock-files-tab.md): the shared
+   FilesBrowser renders .files-page (tree) or .file-viewer (open file) with no
+   scroll frame of its own — it leans on a scrolling ancestor, which the routed
+   Files tab has but phone__screen (overflow:hidden flex column) does not. So
+   make the surface a flex child that fills the screen and scrolls internally,
+   otherwise a long tree or file just clips. */
+.phone__screen > .files-page,
+.phone__screen > .file-viewer {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 12px;
+}
+
 /* Embedded chat overrides: the standalone Chat page fills the viewport and
    pins its composer to the bottom of the screen (above the nav). Inside a
    phone it must instead fill its frame and keep the composer in-flow, so
