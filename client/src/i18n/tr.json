@@ -208,6 +208,8 @@
   "dashboard.sizeBigger": "Daha buyuk",
   "dashboard.ideasWide": "Fikirler panelini genislet",
   "dashboard.ideasNarrow": "Fikirler panelini daralt",
+  "dashboard.ideasCollapse": "Fikirler panelini kucult",
+  "dashboard.ideasShow": "Fikirler panelini ac",
   "dashboard.dragPanel": "Bu paneli tasimak icin surukle",
   "dashboard.resetLayout": "Panel duzenini sifirla",
   "dashboard.layoutMode": "Panel yerlesim modu",

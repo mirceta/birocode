@@ -37,6 +37,13 @@
 
 ## Active feature plans
 
+- [Task-graph machine groups](plans/taskgraph-machine-groups.md) — add a **grouping box**
+  (rectangle) to the task graph that **contains** step nodes and represents **one machine** on
+  which agents run; a **cross-machine dependency** is then a depends-on edge between nodes in
+  different boxes, styled to stand out. Maps onto React Flow's parent/group-node feature (drag a
+  box → its nodes follow; drop a node in → it joins). Backend adds a `Machine` record on the board
+  + an optional `MachineId` on each node (additive, no migration); `/api/taskgraph/machines`.
+  **Design written, decisions pending the user; not built.** On `feature/taskgraph-machine-groups`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
