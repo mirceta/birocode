@@ -1,7 +1,12 @@
 # System tests for the Chat feature
 
-> **Status:** Active — discovery + harness. On `feature/chat-system-tests`.
-> Branch off `main` (synced with origin) 2026-06-19.
+> **Status:** Active — **suite built & run; 61/61 checks pass**. On
+> `feature/chat-system-tests`. Branch off `main` 2026-06-19. The black-box suite
+> lives in `tests/chat-systest/` and runs against an isolated instance
+> (fresh `CLAUDEWEB_DATADIR`, own port, throwaway scratch repo) so real CLI turns
+> never touch the live store. All 14 enumerated scenarios are covered; the Chat
+> surface proved robust. Two low-severity semantic findings recorded below —
+> fixes spin out per one-feature-per-branch.
 
 ## Goal
 
@@ -66,10 +71,10 @@ Real-run (token-spending — end-to-end through the CLI):
 
 ## Approach (decided)
 
-- Black-box **Node `.mjs` scripts** under `.preview-test/` (the repo's existing
-  test home), driving the Harness over HTTP/SSE — same transport the frontend
-  uses. Reuse the Playwright dep already vendored there only where a real
-  browser is needed; protocol tests use plain `fetch` + an SSE reader.
+- Black-box **Node `.mjs` scripts** driving the Harness over HTTP/SSE — same
+  transport the frontend uses; protocol tests use plain `fetch` + an SSE reader.
+  Committed under **`tests/chat-systest/`** (NOT `.preview-test/`, which is
+  gitignored — that dir holds local one-off probes, not committed assets).
 - Run against a **self-dev isolated build** (never the live `:5099` store) per
   `docs/claude-web/self-dev.md`, with a throwaway repo registered as the target
   so real CLI turns don't touch anything that matters.
@@ -84,7 +89,42 @@ Real-run (token-spending — end-to-end through the CLI):
   their own branches per the one-feature-per-branch rule.
 - Frontend rendering correctness beyond what the existing windowing test covers.
 
+## Results (2026-06-19)
+
+**61/61 checks pass** across four scripts. The Chat HTTP/SSE surface is robust:
+auth-gated, validates input (4xx never 500), single-flight 409 holds, the ask
+lane runs concurrently on its own slot/seq, stop kills the run, reattach replays
+with no dupes/gaps and strictly-increasing seq, sessions/transcript read back,
+and malformed real inputs (ghost session, bad model/lane/sessionId) all reach a
+clean terminal `error` — no hangs, no 500s, no wedged slots.
+
+- `behavioural.mjs` — 21/21 (scenarios 1-2, 5-9 protocol; no tokens)
+- `smoke.mjs` — 4/4 (one cheap real turn)
+- `realrun.mjs` — 30/30 (scenarios 3,4,5,6,10-14; tokens)
+- `badinput.mjs` — 10/10 (scenario 9 real malformed inputs; tokens)
+
+### Test-infrastructure added
+
+- **`CLAUDEWEB_DATADIR`** override (`AppPaths.DataDir`, all 16 data-dir sites) so
+  an isolated instance keeps its own store — the only production change, additive
+  and no-op when unset. Committed separately.
+
+### Findings (low severity — candidate follow-up branches)
+
+1. **A user-initiated stop is recorded as `status: "error"`** in `/api/runs`
+   (`RunSession.Complete()` sets `done` only if a `done` event was seen, else
+   `error`; a cancel sees none). So a deliberately-stopped run is
+   indistinguishable from a crashed one, and the stop also emits
+   `{type:"error",message:"Run stopped by user."}`. Repro: start a turn, `POST
+   /api/chat/stop`, read `/api/runs` → `error`. Consider a distinct
+   `stopped`/`cancelled` status.
+2. **Resuming a non-existent session yields an opaque `error_during_execution`**
+   (no `session` event, no "session not found" hint). Repro: `POST /api/chat`
+   with a well-formed but unknown `sessionId` → terminal `error` with that
+   generic message. Graceful (no hang/crash) but unfriendly.
+
 ## Open questions
 
-- Isolated-build target repo: register a fresh scratch repo, or point at a
-  disposable temp dir? (Leaning scratch temp dir to keep the live store clean.)
+- (resolved) Isolated-build target: **fresh `CLAUDEWEB_DATADIR` + throwaway
+  scratch git repo, binaries run from outside the repo tree** so no self-repo is
+  auto-pinned. The live store is never touched, so no backup/restore needed.
