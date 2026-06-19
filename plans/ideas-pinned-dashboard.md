@@ -1,6 +1,7 @@
 # Ideas go global, pinned left of the dashboard
 
-> **Status (2026-06-14):** Plan — design set, not built. On
+> **Status (2026-06-19):** Plan — design set, **not built; shelved** off the
+> active list into Proposed/design pending a decision to build. On
 > `feature/ideas-pinned-dashboard`. Structured per
 > [doc-principles.md](doc-principles.md). Visual companion:
 > [ideas-pinned-dashboard.html](ideas-pinned-dashboard.html).

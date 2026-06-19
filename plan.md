@@ -37,20 +37,23 @@
 
 ## Active feature plans
 
+- [Render Files-tab functionality in the agent dock](plans/agent-dock-files-tab.md)
+  — surface the **Files tab**'s browse-and-view capability inside the dashboard
+  **agent dock**, so a repo's files are reachable from the dock, not just the
+  Files tab. Default approach: extract a shared `FilesBrowser` from `Files.jsx`
+  (the "one shared component, two surfaces" `AutopilotConsole` pattern) and
+  render it scoped to an agent's `repoId`. Frontend-only (reuses `FileController`
+  via `X-Repo-Id`). Open forks: per-agent vs. global dock, full parity vs. a
+  lighter subset. Not built. On `feature/agent-dock-files-tab`.
+
+## Proposed / design (not building yet)
+
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
   of the agent-dashboard overlay. Design set (backend de-keying + migration +
-  shared component); not built. On `feature/ideas-pinned-dashboard`.
-- [Feature kickoff & closeout](plans/feature-kickoff.md) — a seamless feature
-  lifecycle for BOTH ends: starting the next feature (branch, plan, understanding)
-  AND finishing one per our flow (keep-it bookkeeping, mark shipped, merge, tidy)
-  — so the user doesn't re-describe the ritual and the agent doesn't drop steps.
-  Approach decided: composer-prefill buttons (Understanding-panel pattern) that
-  fill the chat box with the kickoff/closeout ritual. On `feature/feature-kickoff`.
-
-## Proposed / design (not building yet)
-
+  shared component); **not built** — shelved here off the active list pending a
+  decision to build. On `feature/ideas-pinned-dashboard`.
 - [Spec baseline](plans/spec-baseline.md) — borrow OpenSpec's one missing
   idea (a living "what the system does today" baseline + change-as-delta)
   into our existing plan convention, without adopting its tooling. Slice 1 =
@@ -58,6 +61,13 @@
 
 ## Recently shipped
 
+- [Feature kickoff & closeout](plans/feature-kickoff.md) — a seamless feature
+  lifecycle for both ends of a feature's life. **Kickoff half shipped:** an
+  advanced-gated composer button prefills the "start the next feature" ritual
+  (branch, plan, understanding) into the chat box — no auto-send, hidden in Basic;
+  deployed & confirmed on live :5099, browser-verified (`verify-feature-kickoff.mjs`
+  6/6). **Closeout half dropped** (the finishing ritual was never built).
+  Merged to main. On `feature/feature-kickoff`.
 - [Task-graph machine groups](plans/taskgraph-machine-groups.md) — added a **grouping box**
   (rectangle) to the task graph that **contains** step nodes and represents **one machine** on
   which agents run; a **cross-machine dependency** is a depends-on edge between nodes in different
