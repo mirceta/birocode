@@ -1,35 +1,32 @@
-# Understanding — OpenSpec: investigate it and adopt its flow
+# Understanding — a dedicated Local app for the OpenSpec port
 
 ## Goal
-Investigate [OpenSpec](https://github.com/Fission-AI/OpenSpec) and **adopt its spec-driven
-flow** into Claude Web's working convention — so each feature carries a **living spec
-baseline** ("what the system does today") plus **change proposals as deltas**
-(ADDED/MODIFIED/REMOVED, with scenarios), reviewed before code and archived after ship.
+Build a **new, dedicated Local app** (separate from the rolling, harness-served *Understanding*
+app) whose job is to **explain, analyze, and control** the OpenSpec port — the large feature
+tracked in `plans/openspec-flow.md`. Because the port is big and multi-phase, it earns its own
+persistent control surface rather than living in the overwrite-each-time Understanding app.
 
-## What I've done in this kickoff
-- Verified `main` was behind origin by 13 commits; **fast-forwarded it to origin tip** before
-  branching, then created **`feature/openspec-flow`**.
-- **Investigated OpenSpec**: it's a Node CLI + AI slash-commands with `specs/` (living
-  baseline), `changes/<id>/` (proposal + design + tasks + delta specs), and `archive/`
-  (folds deltas into the baseline on ship). Commands: `openspec init/list/validate/archive`;
-  agent flow `/opsx:propose → /opsx:apply → /opsx:archive`; generates an `AGENTS.md`.
-- Added the plan: `plans/openspec-flow.md` + an **Active feature plans** entry in `plan.md`.
+## What I'll build
+- A folder `openspec-port-app/` at the repo root holding a **self-contained, build-less SPA**
+  (`index.html` + `app.js` + `styles.css`, relative URLs) with three pillars:
+  - **Explain** — scope (OpenSpec = the *planning layer*; the harness stays), the lifecycle, and
+    the five-phase spine.
+  - **Analyze** — the "our system vs OpenSpec" comparison and the single-gap finding.
+  - **Control** — an interactive, **localStorage-backed** tracker: per-phase task checklists with
+    derived status, the four open decisions and their resolution, an overall progress bar.
+- A tiny **dual-stack static server** `openspec-port-app/serve.mjs` (the `homepage/serve.mjs`
+  pattern: listen on `::` dual-stack, serve at root, relative URLs), run **detached** on a free
+  port so it survives the turn.
 
-## Important flag (per repo convention)
-There is already a plan — `plans/spec-baseline.md` (Proposed) — that analyzed OpenSpec and
-recommended **borrow one idea, do NOT adopt the tooling** (to avoid a second toolchain / two
-sources of truth). Your request goes further ("adopt its flow"), so the new plan **explicitly
-supersedes** spec-baseline and I marked it as superseded in the index. The key risk it named —
-**two sources of truth drifting from the harness** — is the central thing we must resolve.
-
-## How I think we should proceed (open to your steer)
-1. **Calibrate first** — run one throwaway `propose → apply → archive` cycle with the real
-   OpenSpec to *feel* the flow before committing.
-2. **Decide tooling-vs-convention** — adopt the real `openspec` CLI + `/opsx:*`, or
-   reimplement the flow in our existing `plans/*` convention so the harness stays the single
-   source of truth.
-3. **Adopt** the chosen baseline + delta mechanism; optionally render it in the harness.
+## How it fits the harness
+- This is a **`kind: repo`** Local app (a product I run), not the harness-provided `kind: harness`
+  Understanding app. Per the multiple-local-apps platform it's served at
+  `/api/localview/<repo>/app/<appId>/` once the **operator registers its port** in the Local
+  setup form. I'll run the server and report the port + the registration step.
 
 ## Assumptions
-- This kickoff = branch + plan + investigation; the actual adoption is the work to follow.
-- Nothing is locked in before the calibration run.
+- Content is sourced from `plans/openspec-flow.md` (the DECIDED Path A port plan + the
+  2026-06-19 scope refinement).
+- "Control" = track/drive the porting work (phases, tasks, decisions) — client-side state via
+  localStorage, since a static app has no backend.
+- I leave the existing `understanding-app/` (the rolling comparison) untouched.

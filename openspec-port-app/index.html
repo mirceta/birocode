@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OpenSpec Port — Control Room</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="hero">
+    <div class="hero__inner">
+      <p class="kicker">Dedicated Local app · feature/openspec-flow · DECIDED — Path A</p>
+      <h1>OpenSpec Port <span class="cr">— Control Room</span></h1>
+      <p class="sub">
+        A standing surface for the one big feature: <b>explain</b> the port, <b>analyze</b> it
+        against what we have, and <b>control</b> it — track every phase, task, and open decision.
+        Companion to <code>plans/openspec-flow.md</code>; your progress saves locally.
+      </p>
+      <nav class="nav" id="nav">
+        <button class="nav__btn is-active" data-view="explain">Explain</button>
+        <button class="nav__btn" data-view="analyze">Analyze</button>
+        <button class="nav__btn" data-view="control">Control</button>
+      </nav>
+      <div class="progress" id="progressBar" title="overall task completion">
+        <div class="progress__fill" id="progressFill"></div>
+        <span class="progress__txt" id="progressTxt">0%</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- ───────────── EXPLAIN ───────────── -->
+    <section class="view is-active" id="view-explain">
+      <div class="wrap">
+        <div class="scope">
+          <b>Scope (clarified 2026-06-19):</b> OpenSpec replaces the <b>planning layer</b>
+          (<code>plans/*</code> + <code>understanding.md</code>) — <i>not</i> the harness. The
+          Claude Web harness stays the dev environment; we plan <i>in</i> OpenSpec and keep reading
+          those plans <i>through</i> the harness. That's why <b>Phase 3 is essential, not optional</b>.
+        </div>
+
+        <h2>The lifecycle we're adopting</h2>
+        <ol class="cycle">
+          <li><span>propose</span> a change folder</li>
+          <li><span>specify</span> deltas + scenarios</li>
+          <li><span>design</span> the approach</li>
+          <li><span>implement</span> from tasks.md</li>
+          <li class="fold"><span>archive</span> → folds the delta into the living baseline</li>
+        </ol>
+        <p class="muted">The <b>fold on archive</b> is the prize — the one thing our forward-looking
+          plans lack: a queryable "what does the system do <i>today</i>?" Only one OpenSpec artifact
+          is net-new to us: <code>specs/&lt;cap&gt;/spec.md</code>. The rest maps onto things we
+          already write.</p>
+
+        <h2 class="mt">The five-phase spine</h2>
+        <p class="muted">Additive &amp; reversible until Phase 4 — <code>openspec/</code> sits beside
+          <code>plans/*</code> the whole way. Tap a phase to open it in <b>Control</b>.</p>
+        <ol class="spine" id="spine"><!-- rendered by app.js --></ol>
+      </div>
+    </section>
+
+    <!-- ───────────── ANALYZE ───────────── -->
+    <section class="view" id="view-analyze">
+      <div class="wrap">
+        <h2>Our system vs OpenSpec — one real gap</h2>
+        <p class="lead">Verdict chips are from <b>our</b> point of view. We tie or beat OpenSpec on
+          most dimensions; the responsibility it owns that we never assigned is a single cell —
+          a living baseline of current behaviour. Tap a row.</p>
+        <div class="legend">
+          <span class="lz have">✓ we cover it</span>
+          <span class="lz partial">~ loose / partial</span>
+          <span class="lz gap">✗ flat gap</span>
+          <span class="lz edge">★ we're stronger</span>
+        </div>
+        <div class="matrix" id="matrix"><!-- rendered by app.js --></div>
+      </div>
+    </section>
+
+    <!-- ───────────── CONTROL ───────────── -->
+    <section class="view" id="view-control">
+      <div class="wrap">
+        <div class="ctrlbar">
+          <h2>Control — drive the port</h2>
+          <button class="reset" id="resetBtn">Reset progress</button>
+        </div>
+        <p class="lead">Check tasks off as they land; phase status and the header bar update live
+          and persist in this browser. Below the phases, the four open decisions and their state.</p>
+
+        <div class="phases" id="phases"><!-- rendered by app.js --></div>
+
+        <h3 class="mt">Open decisions (gate Phase 0)</h3>
+        <div class="decs" id="decs"><!-- rendered by app.js --></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    Dedicated control surface for <code>plans/openspec-flow.md</code> · state is per-browser (localStorage).
+  </footer>
+
+  <script src="./app.js"></script>
+</body>
+</html>

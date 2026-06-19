@@ -3,193 +3,108 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>OpenSpec — reconcile to it, or borrow one idea?</title>
+  <title>Our system vs OpenSpec — do we even cover this job?</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <header class="hero">
     <div class="hero__inner">
-      <p class="kicker">Decision · feature/openspec-flow</p>
-      <h1>Reconcile our system <span class="to">to</span> OpenSpec — or take <span class="one">one idea</span> out of it?</h1>
+      <p class="kicker">feature/openspec-flow · the honest comparison</p>
+      <h1>Our system <span class="vs">vs</span> OpenSpec — and the job neither of us named</h1>
       <p class="sub">
-        The real fork in the road. Two paths, what each truly costs, and — since you asked
-        what I think — a clear recommendation with the reasoning behind it.
+        You're right to be unsure what "our system" even <i>is</i>. It isn't one thing — it's a
+        bundle of conventions. So first: what is it, and what is it <b>for</b>? Then a
+        dimension-by-dimension comparison — including the one row where our column is genuinely <b>empty</b>.
       </p>
       <nav class="nav" id="nav">
-        <button class="nav__btn is-active" data-view="paths">1 · The two paths</button>
-        <button class="nav__btn" data-view="axis">2 · What it really costs</button>
-        <button class="nav__btn" data-view="verdict">3 · My verdict</button>
+        <button class="nav__btn is-active" data-view="ours">1 · What even IS our system?</button>
+        <button class="nav__btn" data-view="matrix">2 · Dimension by dimension</button>
+        <button class="nav__btn" data-view="verdict">3 · The honest answer</button>
       </nav>
     </div>
   </header>
 
   <main>
-    <!-- ───────────── VIEW 1 — THE TWO PATHS ───────────── -->
-    <section class="view is-active" id="view-paths">
+    <!-- ───────────── VIEW 1 — WHAT IS OUR SYSTEM ───────────── -->
+    <section class="view is-active" id="view-ours">
       <div class="wrap">
-        <h2>Same goal, two very different bets</h2>
-        <p class="lead">Both close the gap you now see. They differ in how much they move, what
-          they risk, and how hard they are to undo. Tap the tabs on each card.</p>
+        <h2>"Our system" is five conventions — all about <i>intent</i></h2>
+        <p class="lead">No single tool. Five habits, each rendered live in the harness. Notice what
+          they all have in common: every one captures <b>what we mean to do</b> or <b>how we work</b> —
+          none captures <b>what the thing does once built</b>.</p>
 
-        <div class="paths">
-          <article class="path path--a">
-            <header class="path__head">
-              <span class="path__tag">Path A</span>
-              <h3>Reconcile our system <b>→ to OpenSpec</b></h3>
-              <p class="path__one">Adopt the tool: its <code>specs/</code>/<code>changes/</code>/<code>archive/</code>
-                dirs, its CLI and <code>/opsx</code> flow. Our plans become OpenSpec changes.</p>
-            </header>
-            <div class="path__tabs" data-tabs>
-              <button class="ptab is-active" data-tab="0">What changes</button>
-              <button class="ptab" data-tab="1">You gain</button>
-              <button class="ptab" data-tab="2">You pay</button>
-            </div>
-            <div class="path__panels">
-              <ul class="ppanel is-active" data-panel="0">
-                <li>Restructure <code>plans/*</code> into OpenSpec's folders + naming.</li>
-                <li>Install + learn a second toolchain; agents drive it via <code>/opsx</code>.</li>
-                <li>Author proposals/designs/tasks/deltas in its layout.</li>
-              </ul>
-              <ul class="ppanel" data-panel="1">
-                <li>A proven, maintained flow with 25+ assistant integrations.</li>
-                <li>Strict, uniform structure + GIVEN/WHEN/THEN scenarios.</li>
-                <li>The living baseline comes built-in.</li>
-              </ul>
-              <ul class="ppanel" data-panel="2">
-                <li class="bad"><b>Two sources of truth</b> — its dirs vs our plans + harness —
-                  unless we rebuild harness rendering around it (big project).</li>
-                <li class="bad">Churns existing plans + history for things we already have.</li>
-                <li class="bad">Risks our real moat: <b>harness integration</b>.</li>
-                <li class="bad">Ceremony (scenarios everywhere) we mostly don't need.</li>
-              </ul>
-            </div>
-          </article>
+        <div class="arts" id="arts"><!-- rendered by app.js --></div>
 
-          <article class="path path--b">
-            <header class="path__head">
-              <span class="path__tag path__tag--b">Path B</span>
-              <h3>Take <b>one idea → into our system</b></h3>
-              <p class="path__one">Lift only what we lack — the <b>living baseline + change-as-delta</b> —
-                into our existing convention. No new tool, no new dirs.</p>
-            </header>
-            <div class="path__tabs" data-tabs>
-              <button class="ptab is-active" data-tab="0">What changes</button>
-              <button class="ptab" data-tab="1">You gain</button>
-              <button class="ptab" data-tab="2">You pay</button>
-            </div>
-            <div class="path__panels">
-              <ul class="ppanel is-active" data-panel="0">
-                <li>Add one living doc (<code>docs/capabilities.md</code> = what it does today).</li>
-                <li>Add a one-line <b>delta</b> stanza to each plan (ADDED/CHANGED/REMOVED).</li>
-                <li>Add one ritual step: on ship, fold the delta into the baseline.</li>
-              </ul>
-              <ul class="ppanel" data-panel="1">
-                <li>Closes the <b>only</b> real gap — queryable "what does it do today?".</li>
-                <li>Stays <b>one source of truth</b>, rendered in the harness we already have.</li>
-                <li>Cheap, and trivially reversible if it doesn't earn its keep.</li>
-              </ul>
-              <ul class="ppanel" data-panel="2">
-                <li class="meh">We build the small mechanism ourselves (a doc + a habit).</li>
-                <li class="meh">No CLI / slash-commands / ecosystem.</li>
-                <li class="meh">Discipline rests on our ritual, not a tool gate.</li>
-              </ul>
-            </div>
-          </article>
+        <div class="axisline">
+          <span class="axisline__lbl">what they record →</span>
+          <div class="axisline__track">
+            <span class="tick intent">intent / process<br><i>plans · understanding.md · CLAUDE.md</i></span>
+            <span class="tick now empty">current-state truth<br><b>— nothing —</b></span>
+            <span class="tick past">what shipped<br><i>Recently-shipped · git log</i></span>
+          </div>
         </div>
+        <p class="takeaway">The middle slot is the whole point. To answer <b>"what does Claude Web
+          actually do today?"</b> we have no document — we read the code, scan a changelog, and trust
+          forward-looking plans that may have drifted. <b>That</b> is the responsibility OpenSpec is built
+          around — and the one our notebooks never assigned to anyone.</p>
       </div>
     </section>
 
-    <!-- ───────────── VIEW 2 — WHAT IT REALLY COSTS ───────────── -->
-    <section class="view" id="view-axis">
+    <!-- ───────────── VIEW 2 — THE MATRIX ───────────── -->
+    <section class="view" id="view-matrix">
       <div class="wrap">
-        <h2>The two facts that decide it</h2>
-        <p class="lead">Strip away the detail and the choice rests on just two things.</p>
-
-        <h3>Fact 1 — How much of OpenSpec is actually <i>new</i> to us?</h3>
-        <p class="muted">We already do most of spec-driven development. Of OpenSpec's parts,
-          only one is net-new — so "adopt the whole tool" buys mostly things we have.</p>
-        <ul class="bars">
-          <li><span class="bar__lbl">proposal ≈ understanding.md</span><span class="bar"><i class="bar__fill have" style="--w:8%"></i></span><span class="bar__tag have">have</span></li>
-          <li><span class="bar__lbl">design ≈ plan</span><span class="bar"><i class="bar__fill have" style="--w:8%"></i></span><span class="bar__tag have">have</span></li>
-          <li><span class="bar__lbl">changes/ ≈ branch + plan</span><span class="bar"><i class="bar__fill have" style="--w:8%"></i></span><span class="bar__tag have">have</span></li>
-          <li><span class="bar__lbl">archive ≈ recently-shipped</span><span class="bar"><i class="bar__fill have" style="--w:8%"></i></span><span class="bar__tag have">have</span></li>
-          <li><span class="bar__lbl">CLI/opsx ≈ harness rendering</span><span class="bar"><i class="bar__fill have" style="--w:8%"></i></span><span class="bar__tag have">have</span></li>
-          <li><span class="bar__lbl">tasks.md (tighter checklist)</span><span class="bar"><i class="bar__fill part" style="--w:45%"></i></span><span class="bar__tag part">partial</span></li>
-          <li class="hi"><span class="bar__lbl"><b>specs/ baseline + deltas</b></span><span class="bar"><i class="bar__fill gap" style="--w:100%"></i></span><span class="bar__tag gap">NEW</span></li>
-        </ul>
-        <p class="takeaway">Buying a whole toolchain to obtain <b>one</b> idea is a bad trade —
-          when the idea is separable. And this one is: the baseline needs no CLI and no dirs.</p>
-
-        <h3 class="mt">Fact 2 — Where does the source of truth live?</h3>
-        <p class="muted">Our recurring pain is <b>drift between two stores</b>. Tap each path:</p>
-        <div class="truth">
-          <div class="truth__btns">
-            <button class="tbtn is-active" data-truth="b">Path B — borrow</button>
-            <button class="tbtn" data-truth="a">Path A — adopt</button>
-          </div>
-          <div class="truth__stage" id="truthStage">
-            <div class="store store--harness"><b>Harness</b><span>plans + capabilities.md, rendered live</span></div>
-            <div class="store store--openspec"><b>OpenSpec dirs</b><span>specs / changes / archive</span></div>
-            <div class="truth__verdict" id="truthVerdict"></div>
-          </div>
+        <h2>All the dimensions, side by side</h2>
+        <p class="lead">Verdict chips are from <b>our</b> point of view: where we already cover it,
+          where it's loose, where it's a flat gap — and where we're actually <i>stronger</i>. Tap a row.</p>
+        <div class="legend">
+          <span class="lz have">✓ we cover it</span>
+          <span class="lz partial">~ loose / partial</span>
+          <span class="lz gap">✗ flat gap</span>
+          <span class="lz edge">★ we're stronger</span>
         </div>
+        <div class="matrix" id="matrix"><!-- rendered by app.js --></div>
       </div>
     </section>
 
-    <!-- ───────────── VIEW 3 — MY VERDICT ───────────── -->
+    <!-- ───────────── VIEW 3 — VERDICT ───────────── -->
     <section class="view" id="view-verdict">
       <div class="wrap">
-        <h2>What I'd do</h2>
+        <h2>The honest answer to your question</h2>
 
         <div class="pick">
-          <div class="pick__badge">Path&nbsp;B</div>
+          <div class="pick__badge">1 gap</div>
           <div class="pick__body">
-            <h3>Take the one idea — reconcile it <i>into</i> our system. Don't reconcile our system to the tool.</h3>
-            <p>We already do ~90% of spec-driven development, wired into the harness. OpenSpec's
-              value to <i>us</i> is concentrated in a single thing we lack — a living baseline.
-              Lift that; leave the rest.</p>
+            <h3>We have a strong system — for intent. We have <i>no</i> system for "what does it do today."</h3>
+            <p>Across ~12 dimensions we tie or beat OpenSpec on most: review-before-code, single source
+              of truth, harness visibility, lightness. The responsibility you sensed is missing is
+              <b>real and singular</b> — a living, queryable baseline of current behaviour, kept honest
+              as changes land.</p>
           </div>
         </div>
 
-        <h3>The reasoning</h3>
+        <h3>What this means for the port</h3>
         <ol class="why">
-          <li><b>The value is separable.</b> The baseline + delta works as a plain doc + a ritual
-            step. It does not need the CLI or the dirs — so we don't have to swallow the tool to get it.</li>
-          <li><b>Don't trade away the moat.</b> Our edge is harness integration (Plan tab, doc
-            viewer, Understanding panel, deploy ritual). Path A either loses it or forces a big
-            rebuild to keep it.</li>
-          <li><b>One source of truth.</b> Two stores is the exact drift we keep fighting. Path B
-            keeps everything in the harness; Path A re-introduces the split.</li>
-          <li><b>Cheap and reversible.</b> Path B is an afternoon and undoable; Path A churns
-            history and is hard to walk back.</li>
+          <li><b>The gap is one cell, not the whole table.</b> OpenSpec's value to <i>us</i> concentrates
+            in the living baseline + change-as-delta. The rest of its machinery duplicates habits we have.</li>
+          <li><b>We're stronger where it's weak.</b> Single source of truth and phone visibility are our
+            moat; adopting the tool wholesale puts both at risk until Phase 3 buys them back.</li>
+          <li><b>So the real decision was always "fill one cell vs adopt a toolchain."</b> The plan has
+            chosen Path&nbsp;A (adopt) knowingly — this comparison is the evidence base if you want to
+            sanity-check that against just filling the cell.</li>
         </ol>
 
         <div class="caveat">
-          <b>One honest caveat — calibrate first.</b> Before committing, run <b>one throwaway
-          <code>propose → apply → archive</code> cycle</b> with the real OpenSpec. A flow benefit
-          can hide until you feel it (its <code>tasks.md</code> rigor is the likeliest). If
-          calibration surfaces another worth-having habit, <b>borrow that too</b> — still ideas
-          into our system, not our system into the tool.
-        </div>
-
-        <div class="whenA">
-          <button class="whenA__t" id="whenABtn">When would Path A actually win? ▾</button>
-          <div class="whenA__body" id="whenABody" hidden>
-            <ul>
-              <li>If we had <b>no</b> existing convention to build on.</li>
-              <li>If matching the wider tool ecosystem (25+ assistants) were a hard requirement.</li>
-              <li>If we wanted the strict GIVEN/WHEN/THEN contract style <b>everywhere</b>, not just
-                where a verifier exists.</li>
-            </ul>
-            <p class="muted">None of these hold for us today — which is why the recommendation is B.</p>
-          </div>
+          <b>Not re-opening the decision here.</b> <code>plans/openspec-flow.md</code> records Path&nbsp;A
+          as DECIDED and lists re-litigation as out of scope. This view answers your question —
+          <i>do we even have a system for this?</i> — not <i>which path</i>. If seeing the single-gap
+          shape makes you want to revisit, say so and I'll lay out both honestly.
         </div>
       </div>
     </section>
   </main>
 
   <footer class="foot">
-    Companion to <code>plans/openspec-flow.md</code> · this is my recommendation, your call.
+    Companion to <code>plans/openspec-flow.md</code> · what our system is, and the one job it never assigned.
   </footer>
 
   <script src="./app.js"></script>
