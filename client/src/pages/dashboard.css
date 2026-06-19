@@ -113,6 +113,9 @@
   width: min(560px, 92vw);
 }
 
+/* (Files is not a dashboard citizen — it lives as a tab INSIDE each agent dock;
+   see PinnedAgent and plans/agent-dock-files-tab.md.) */
+
 /* (The task-graph dashboard dock was removed — the graph now lives as a tab inside
    Ideas; see plans/ideas-taskgraph-merge.md.) */
 
@@ -179,7 +182,45 @@
   gap: 10px;
 }
 
-/* Expanded for the architectural plan (plans/ideas-arch-plan.md): ≥2× width. */
+/* The Ideas dock (which holds the 🧩 Task graph tab) floats ABOVE the agent
+   docks, so when it's grown/resized it overlaps them rather than tucking under.
+   It sits just below Autopilot mission-control (z-index:20) and outranks even a
+   lifted agent (.dash__panel--lifted is z-index:6); the two-class selector beats
+   that rule regardless of source order, so dragging Ideas keeps it on top too.
+
+   NOTE: z-index only decides who paints on top once two boxes overlap — and in a
+   flex row a grown dock just pushes the agents aside (or, in the narrow 720px
+   frame, wraps them onto the next line), so they never overlap and z-index has
+   nothing to resolve. The actual overlap comes from --floating below, which lifts
+   the grown dock OUT of flow so the agents reclaim the row and the dock floats on
+   top of them — at which point this z-index puts it on top. */
+.dash__body .dash__ideas {
+  z-index: 15;
+}
+
+/* Grown-dock overlay (grid mode): float the resized/wide Ideas dock over the
+   agent grid instead of letting its flex track shove the agents aside. Absolute
+   in the (position:relative) body; `top` is set inline to the agents-row top so
+   it floats over them, not over the Autopilot strip above. Free mode places it
+   via inline {x,y}; swapped grid keeps plain reflow — neither gets this class. */
+.dash__body:not(.dash__body--free) .dash__ideas--floating {
+  position: absolute;
+  left: 0;
+  right: auto;
+}
+
+/* Collapsed: fold the dock down to just its header bar. The IdeasPanel body and
+   the resize grip are hidden in the JSX; drop the fixed height/scroll box so the
+   aside shrink-wraps the header. */
+.dash__ideas--collapsed {
+  flex-basis: auto;
+  max-height: none;
+  height: auto !important;
+}
+
+/* Expanded for the architectural plan (plans/ideas-arch-plan.md): ≥2× width.
+   When floating (grid + grown) the dock is absolute, so this width drives its
+   size directly; in flow the flex-basis sizes the track. */
 .dash__ideas--wide {
   flex-basis: 620px;
   width: 620px;
@@ -1039,6 +1080,20 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+/* Files tab inside the dock (plans/agent-dock-files-tab.md): the shared
+   FilesBrowser renders .files-page (tree) or .file-viewer (open file) with no
+   scroll frame of its own — it leans on a scrolling ancestor, which the routed
+   Files tab has but phone__screen (overflow:hidden flex column) does not. So
+   make the surface a flex child that fills the screen and scrolls internally,
+   otherwise a long tree or file just clips. */
+.phone__screen > .files-page,
+.phone__screen > .file-viewer {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 12px;
 }
 
 /* Embedded chat overrides: the standalone Chat page fills the viewport and
