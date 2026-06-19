@@ -211,10 +211,11 @@ export default function PinnedAgent({
           ))}
         </div>
       )}
-      {/* The git block is chat-context furniture; hide it while the Files tab is
-          open so the browser gets the full dock height (not just the strip below
-          git) — plans/agent-dock-files-tab.md. */}
-      {git && !showFiles && (
+      {/* The git block is chat-context furniture; hide it while the Files tab OR
+          a local app is open so that surface gets the full dock height (not just
+          the strip below git) — plans/agent-dock-files-tab.md (Files) and
+          plans/dock-local-app-full-height.md (local app). */}
+      {git && !showFiles && !openApp && (
         <div className="phone__git">
           <div className="phone__git-top">
             <GitStatusSummary status={git} compact />

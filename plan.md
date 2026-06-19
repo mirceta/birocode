@@ -8,8 +8,9 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-19):** The **Files tab inside each agent dock** is
-> **user-confirmed working and merged to main**; nothing in flight.
+> **Status (2026-06-19):** **Local app fills the dock** is **user-confirmed
+> working and deployed** from `feature/dock-local-app-full-height`; nothing in
+> flight.
 
 ## ⚠️ Known risks to mitigate
 
@@ -54,6 +55,12 @@ _(none in flight)_
 
 ## Recently shipped
 
+- [Local app fills the dock — hide git while it's open](plans/dock-local-app-full-height.md)
+  — in each agent dock, opening a **local app** now renders it **over** the git
+  section (hide `phone__git`) so the `ProductFrame` gets the **full dock height**,
+  mirroring the Files tab's existing git-hide. Frontend-only one-liner in
+  `PinnedAgent.jsx` (the git gate is now `git && !showFiles && !openApp`).
+  **User-confirmed working and deployed** from `feature/dock-local-app-full-height`.
 - [Render Files-tab functionality in the agent dock](plans/agent-dock-files-tab.md)
   — the **Files tab**'s browse-and-view surface now lives **inside each agent dock**
   (the per-agent "phone"): a **📁 Files** tab beside the Builder/Ask lanes swaps
