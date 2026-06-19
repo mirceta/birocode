@@ -360,7 +360,9 @@ export default function Dashboard({ onClose }) {
   const autopilotOn = useFeature('autopilotTab');
   // The panels the free 2D drag layout manages, in DOM order. Autopilot leads so
   // it sits on top in grid-mode flow. (The task graph used to be a citizen here;
-  // it now lives as a tab inside Ideas — plans/ideas-taskgraph-merge.md.)
+  // it now lives as a tab inside Ideas — plans/ideas-taskgraph-merge.md. Files is
+  // NOT a citizen here: it lives as a tab INSIDE each agent dock — see
+  // PinnedAgent and plans/agent-dock-files-tab.md.)
   const dragKeys = [
     ...(autopilotOn ? ['autopilot'] : []),
     'ideas',

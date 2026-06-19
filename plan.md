@@ -8,8 +8,8 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-17):** Homepage tabbed explainers + the same-box Understanding-app
-> convention pointer are **deployed to live `:5099` and confirmed**; merged to main.
+> **Status (2026-06-19):** The **Files tab inside each agent dock** is
+> **user-confirmed working and merged to main**; nothing in flight.
 
 ## ⚠️ Known risks to mitigate
 
@@ -37,14 +37,7 @@
 
 ## Active feature plans
 
-- [Render Files-tab functionality in the agent dock](plans/agent-dock-files-tab.md)
-  — surface the **Files tab**'s browse-and-view capability inside the dashboard
-  **agent dock**, so a repo's files are reachable from the dock, not just the
-  Files tab. Default approach: extract a shared `FilesBrowser` from `Files.jsx`
-  (the "one shared component, two surfaces" `AutopilotConsole` pattern) and
-  render it scoped to an agent's `repoId`. Frontend-only (reuses `FileController`
-  via `X-Repo-Id`). Open forks: per-agent vs. global dock, full parity vs. a
-  lighter subset. Not built. On `feature/agent-dock-files-tab`.
+_(none in flight)_
 
 ## Proposed / design (not building yet)
 
@@ -61,6 +54,19 @@
 
 ## Recently shipped
 
+- [Render Files-tab functionality in the agent dock](plans/agent-dock-files-tab.md)
+  — the **Files tab**'s browse-and-view surface now lives **inside each agent dock**
+  (the per-agent "phone"): a **📁 Files** tab beside the Builder/Ask lanes swaps
+  `phone__screen` to the shared `FilesBrowser` scoped to **that agent's repo**
+  (tree · viewer · markdown/HTML/image · pins · 5s live poll · doc-links). Extracted
+  `FilesBrowser` from `Files.jsx` so the routed tab and the dock can't drift (the
+  "one shared component, two surfaces" `AutopilotConsole` pattern). **Corrected
+  mid-build** from a first attempt that put a standalone Files dock beside
+  Ideas/Autopilot — that `FilesPanel`/`files-panel.css`/`dash__files` dock was
+  removed. Follow-ups in the same branch: the in-dock surface **scrolls within the
+  phone**, and the **git block is hidden while Files is open** so the browser fills
+  the dock. Frontend-only (reuses `FileController` via `X-Repo-Id`). **User-confirmed
+  working; merged to main 2026-06-19.** On `feature/agent-dock-files-tab`.
 - [Feature kickoff & closeout](plans/feature-kickoff.md) — a seamless feature
   lifecycle for both ends of a feature's life. **Kickoff half shipped:** an
   advanced-gated composer button prefills the "start the next feature" ritual

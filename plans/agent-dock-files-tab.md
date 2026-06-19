@@ -1,13 +1,24 @@
 # Render Files-tab functionality in the agent dock
 
-> **Status:** Active — design, not built. On `feature/agent-dock-files-tab`.
-> Branch off synced `main` 2026-06-19.
+> **Status:** ✅ **Shipped** — user-confirmed working, merged to main 2026-06-19.
+> On `feature/agent-dock-files-tab` (branched off synced `main` 2026-06-19).
+> **Corrected design:** Files is a **tab INSIDE each agent dock** (the
+> `PinnedAgent` phone), a sibling of the Builder/Ask lanes and the local-app
+> buttons that swaps `phone__screen` to the shared `FilesBrowser` scoped to that
+> agent's repo — **not** a standalone dashboard citizen beside Ideas/Autopilot
+> (the first attempt; reverted). Full parity via the shared `FilesBrowser` (tree ·
+> viewer · pins · live poll · doc-links). Follow-ups shipped in the same branch:
+> the in-dock surface **scrolls within the phone** (its roots carry no scroll
+> frame, so they're flex-filled + `overflow-y:auto` under `.phone__screen`), and
+> the **git block is hidden while Files is open** so the browser gets the full
+> dock height. Frontend-only (reuses `FileController` via `X-Repo-Id`).
 
 ## Goal
 
-Surface the **Files tab**'s browse-and-view capability inside the **agent dock**
-on the dashboard, so a repo's files are reachable from the dock — not only from
-the dedicated Files tab.
+Surface the **Files tab**'s browse-and-view capability **inside each agent dock**
+(the per-agent "phone" on the dashboard), so a repo's files are reachable right
+where you watch that agent — not only from the dedicated Files tab. It reads as a
+third screen the dock can show, beside its chat and its local apps.
 
 ## Surfaces (mapped)
 
@@ -35,31 +46,37 @@ the dedicated Files tab.
   grip): `components/dashboard/AutopilotPanel.jsx`,
   `components/taskgraph/TaskGraphPanel.jsx`.
 
-## Approach (default — pending the open questions)
+## Approach (as built)
 
 1. **Extract a shared component.** Pull the Files internals (tree + viewer +
    state) out of `Files.jsx` into a reusable `FilesBrowser` that takes a
    `repoId` prop and scopes every API call to it. The Files **tab** becomes a
    thin wrapper around it — same "one shared component, two surfaces" pattern the
    repo used for `AutopilotConsole`, so the two can't drift.
-2. **Render it in the dock**, scoped to the agent's `repoId` (from
-   `DockContext`), per whichever dock target we pick below.
-3. **UI mode:** register the new surface as **Advanced** in
+   (`components/files/FilesBrowser.jsx`.)
+2. **Render it inside the agent dock.** In `components/dashboard/PinnedAgent.jsx`
+   (the per-agent "phone"), add a **📁 Files** tab to the existing
+   `phone__lanes` row, beside **Builder/Ask**. Picking it sets `showFiles` and
+   swaps `phone__screen` to `<FilesBrowser repoId={tab.repoId} />` — scoped to
+   THAT agent's repo. Files / local-app / chat are mutually exclusive screens:
+   picking a chat lane or a local app clears `showFiles`, and picking Files
+   clears the open app. Gated on the `filesDock` feature.
+3. **UI mode:** `filesDock` registered as **Advanced** in
    `client/src/context/UiModeContext.jsx` (new features default Advanced).
 4. **Build + browser-verify** (`docs/claude-web/browser-testing.md`) before
    claiming it works; self-dev isolated build per `docs/claude-web/self-dev.md`.
 
-## Open questions (defaults chosen; confirm before building)
+## Decisions (resolved)
 
-1. **Dock target / scoping** — default **per-agent** (each agent's card/panel
-   browses *its* repo via `activeTab.repoId`). Alternatives: one **global** Files
-   dock (sibling of Ideas/Autopilot, scoped to the selected repo); or a
-   per-agent **viewer-only** mini panel.
-2. **Feature depth** — default **full parity** via the shared component (tree +
-   viewer + markdown/HTML/image + pins + doc-link nav). Alternative: a lighter
-   **browse + view only** subset (drop pins/polling/doc-links) for a small card.
-3. **Pins/poll in the dock** — keep the 5s live poll and per-project pins in the
-   dock instance, or make them tab-only to keep the dock cheap?
+1. **Dock target / scoping** — **per-agent, in-dock tab.** Each phone browses
+   *its own* repo via `tab.repoId`. (The first attempt put a single standalone
+   Files dock beside Ideas/Autopilot — rejected; the user wanted it *inside* the
+   agent docks. That `FilesPanel.jsx` / `files-panel.css` / `dash__files` dock
+   were removed.)
+2. **Feature depth** — **full parity** via the shared `FilesBrowser` (tree +
+   viewer + markdown/HTML/image + pins + doc-link nav).
+3. **Pins/poll** — kept: the shared component runs its own 5s poll + per-project
+   pins, same as the routed tab.
 
 ## Out of scope
 
