@@ -260,3 +260,27 @@
   padding: 0 2px;
 }
 .tg-machine__x:hover { color: #c0392b; }
+
+/* Fatter resize hit-zones for machine boxes. React Flow's NodeResizer draws a
+   1px edge line and ~4px corner dots by default — almost impossible to grab.
+   The machine box already shows its own dashed/solid border, so we don't need
+   the library's visible line: we drop it and turn each edge control into a
+   ~10px transparent strip straddling the border (the control is centred on the
+   edge via translate, so the grab zone sits half inside / half outside), and
+   enlarge the corner handles to a comfortable 12px. Scoped to machine nodes. */
+.react-flow__node-machine .react-flow__resize-control.line {
+  border-width: 0;
+}
+.react-flow__node-machine .react-flow__resize-control.line.left,
+.react-flow__node-machine .react-flow__resize-control.line.right {
+  width: 10px;
+}
+.react-flow__node-machine .react-flow__resize-control.line.top,
+.react-flow__node-machine .react-flow__resize-control.line.bottom {
+  height: 10px;
+}
+.react-flow__node-machine .react-flow__resize-control.handle {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
