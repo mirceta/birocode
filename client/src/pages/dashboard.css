@@ -113,6 +113,9 @@
   width: min(560px, 92vw);
 }
 
+/* (Files is not a dashboard citizen — it lives as a tab INSIDE each agent dock;
+   see PinnedAgent and plans/agent-dock-files-tab.md.) */
+
 /* (The task-graph dashboard dock was removed — the graph now lives as a tab inside
    Ideas; see plans/ideas-taskgraph-merge.md.) */
 
