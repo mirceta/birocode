@@ -1,13 +1,17 @@
 # Render Files-tab functionality in the agent dock
 
-> **Status:** Active — **built, verifying**. On `feature/agent-dock-files-tab`.
-> Branch off synced `main` 2026-06-19. **Corrected design (2026-06-19):** Files
-> is a **tab INSIDE each agent dock** (the `PinnedAgent` phone), a sibling of the
-> Builder/Ask lanes and the local-app buttons that swaps `phone__screen` to the
-> shared `FilesBrowser` scoped to that agent's repo — **not** a standalone
-> dashboard citizen beside Ideas/Autopilot (the first attempt; reverted). Full
-> parity via the shared `FilesBrowser` (tree · viewer · pins · live poll ·
-> doc-links). Frontend compiles; next step is the browser verify.
+> **Status:** ✅ **Shipped** — user-confirmed working, merged to main 2026-06-19.
+> On `feature/agent-dock-files-tab` (branched off synced `main` 2026-06-19).
+> **Corrected design:** Files is a **tab INSIDE each agent dock** (the
+> `PinnedAgent` phone), a sibling of the Builder/Ask lanes and the local-app
+> buttons that swaps `phone__screen` to the shared `FilesBrowser` scoped to that
+> agent's repo — **not** a standalone dashboard citizen beside Ideas/Autopilot
+> (the first attempt; reverted). Full parity via the shared `FilesBrowser` (tree ·
+> viewer · pins · live poll · doc-links). Follow-ups shipped in the same branch:
+> the in-dock surface **scrolls within the phone** (its roots carry no scroll
+> frame, so they're flex-filled + `overflow-y:auto` under `.phone__screen`), and
+> the **git block is hidden while Files is open** so the browser gets the full
+> dock height. Frontend-only (reuses `FileController` via `X-Repo-Id`).
 
 ## Goal
 
