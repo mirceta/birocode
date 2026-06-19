@@ -58,6 +58,13 @@
 
 ## Recently shipped
 
+- [Task-graph machine groups](plans/taskgraph-machine-groups.md) — added a **grouping box**
+  (rectangle) to the task graph that **contains** step nodes and represents **one machine** on
+  which agents run; a **cross-machine dependency** is a depends-on edge between nodes in different
+  boxes, styled to stand out. Built on React Flow's parent/group-node feature (drag a box → its
+  nodes follow; drop a node in → it joins). Backend added a `Machine` record on the board + an
+  optional `MachineId` on each node (additive, no migration) and `/api/taskgraph/machines`.
+  **User-confirmed working; merged to main 2026-06-19.** On `feature/taskgraph-machine-groups`.
 - [Merge Ideas + Task graph](plans/ideas-taskgraph-merge.md) — folded the **Task graph** into the
   **Ideas** surface so the graph lives in one home. It became a **third tab** inside `IdeasPanel`
   (Ideas | Plan | 🧩 Task graph), remounting fresh each open; the standalone **dashboard task-graph

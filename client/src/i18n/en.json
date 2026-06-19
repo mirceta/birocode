@@ -208,6 +208,8 @@
   "dashboard.sizeBigger": "Bigger docks",
   "dashboard.ideasWide": "Widen the Ideas panel",
   "dashboard.ideasNarrow": "Narrow the Ideas panel",
+  "dashboard.ideasCollapse": "Collapse the Ideas panel",
+  "dashboard.ideasShow": "Expand the Ideas panel",
   "dashboard.dragPanel": "Drag to move this panel",
   "dashboard.resetLayout": "Reset panel layout",
   "dashboard.layoutMode": "Panel layout mode",

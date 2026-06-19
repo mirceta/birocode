@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiGet } from '../api/client';
 import { useDock } from '../context/DockContext';
@@ -81,6 +81,17 @@ const IDEAS_WIDE_KEY = 'claudeweb_dash_ideas_wide';
 function readIdeasWide() {
   try {
     return localStorage.getItem(IDEAS_WIDE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+// Collapsible Ideas dock: fold the whole panel down to just its header bar so it
+// gets out of the way. Remembered per device, like the wide/narrow toggle.
+const IDEAS_COLLAPSED_KEY = 'claudeweb_dash_ideas_collapsed';
+function readIdeasCollapsed() {
+  try {
+    return localStorage.getItem(IDEAS_COLLAPSED_KEY) === '1';
   } catch {
     return false;
   }
@@ -266,6 +277,20 @@ export default function Dashboard({ onClose }) {
     });
   }
 
+  // Collapse the Ideas dock to its header bar, remembered per device.
+  const [ideasCollapsed, setIdeasCollapsed] = useState(readIdeasCollapsed);
+  function toggleIdeasCollapsed() {
+    setIdeasCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(IDEAS_COLLAPSED_KEY, next ? '1' : '0');
+      } catch {
+        /* private mode — fall back to in-memory only */
+      }
+      return next;
+    });
+  }
+
   // Wide/narrow Ideas dock (room for the architectural plan), remembered.
   const [ideasWide, setIdeasWide] = useState(readIdeasWide);
   function toggleIdeasWide() {
@@ -442,6 +467,23 @@ export default function Dashboard({ onClose }) {
       return next;
     });
   }
+  // A GROWN Ideas dock (drag-sized or the wide preset) can't sit beside the agents
+  // in the narrow (720px) dashboard frame — widening its flex track just shoves
+  // them onto the line below, and z-index can't help two boxes that never overlap.
+  // So in grid mode we lift the grown dock OUT of the flex flow and float it as an
+  // absolute overlay (z-index:15) over the agent grid: the agents reclaim the row
+  // and the dock paints on top of them. Swapped/free layouts keep their own logic.
+  const ideasFloating = !free && !gridSwapped && !ideasCollapsed && (!!ideasSize || ideasWide);
+  // The float is anchored to where the agents row starts (just below the
+  // full-width Autopilot strip, if present), measured from the live DOM so it
+  // tracks Autopilot's height without hardcoding it.
+  const [floatTop, setFloatTop] = useState(0);
+  useLayoutEffect(() => {
+    if (!ideasFloating) return;
+    const agentsEl = bodyRef.current?.querySelector('[data-panel="agents"]');
+    if (agentsEl) setFloatTop(agentsEl.offsetTop);
+  }, [ideasFloating, autopilotOn, ideasSize, ideasWide, gridSwapped, tabs.length]);
+
   // { [tabId]: { status, activity } } — fresher than the dock list, view-local.
   const [live, setLive] = useState({});
   // { [repoId]: /git/status payload } — branch + ahead/behind, like the Agents
@@ -883,10 +925,22 @@ export default function Dashboard({ onClose }) {
         <aside
           ref={ideasRef}
           data-panel="ideas"
-          className={`dash__ideas${ideasWide ? ' dash__ideas--wide' : ''}${ideasSize ? ' dash__ideas--sized' : ''}${dragKey === 'ideas' ? ' dash__panel--lifted' : ''}`}
+          className={`dash__ideas${ideasWide ? ' dash__ideas--wide' : ''}${ideasSize ? ' dash__ideas--sized' : ''}${ideasFloating ? ' dash__ideas--floating' : ''}${ideasCollapsed ? ' dash__ideas--collapsed' : ''}${dragKey === 'ideas' ? ' dash__panel--lifted' : ''}`}
           style={{
             ...(free ? posStyle('ideas') : null),
-            ...(ideasSize ? { width: ideasSize.w, flexBasis: ideasSize.w, height: ideasSize.h, maxHeight: 'none' } : null),
+            // A saved drag-size only applies while expanded; collapsed folds to the header.
+            ...(ideasSize && !ideasCollapsed
+              ? {
+                  width: ideasSize.w,
+                  height: ideasSize.h,
+                  maxHeight: 'none',
+                  // Floating (grid + grown) sizes via width above; otherwise size the flex
+                  // track so the dock occupies its width in flow.
+                  ...(ideasFloating ? null : { flexBasis: ideasSize.w }),
+                }
+              : null),
+            // Anchor the grid-mode float to the agents-row top (below Autopilot).
+            ...(ideasFloating ? { top: floatTop } : null),
           }}
         >
           <div className="dash__ideas-head">
@@ -908,25 +962,40 @@ export default function Dashboard({ onClose }) {
             <button
               type="button"
               className="dash__ideas-expand"
-              onClick={toggleIdeasWide}
-              aria-pressed={ideasWide}
-              title={ideasWide ? t('dashboard.ideasNarrow') : t('dashboard.ideasWide')}
+              onClick={toggleIdeasCollapsed}
+              aria-pressed={ideasCollapsed}
+              title={ideasCollapsed ? t('dashboard.ideasShow') : t('dashboard.ideasCollapse')}
             >
-              {ideasWide ? '⇤' : '⇥'}
+              {ideasCollapsed ? '▸' : '▾'}
             </button>
+            {!ideasCollapsed && (
+              <button
+                type="button"
+                className="dash__ideas-expand"
+                onClick={toggleIdeasWide}
+                aria-pressed={ideasWide}
+                title={ideasWide ? t('dashboard.ideasNarrow') : t('dashboard.ideasWide')}
+              >
+                {ideasWide ? '⇤' : '⇥'}
+              </button>
+            )}
           </div>
-          <IdeasPanel />
-          <span
-            className="dash__ideas-resize"
-            role="separator"
-            aria-label="Resize ideas panel"
-            title="Drag to resize · double-click to reset"
-            onPointerDown={startIdeasResize}
-            onPointerMove={moveIdeasResize}
-            onPointerUp={endIdeasResize}
-            onPointerCancel={endIdeasResize}
-            onDoubleClick={clearIdeasSize}
-          />
+          {!ideasCollapsed && (
+            <>
+              <IdeasPanel />
+              <span
+                className="dash__ideas-resize"
+                role="separator"
+                aria-label="Resize ideas panel"
+                title="Drag to resize · double-click to reset"
+                onPointerDown={startIdeasResize}
+                onPointerMove={moveIdeasResize}
+                onPointerUp={endIdeasResize}
+                onPointerCancel={endIdeasResize}
+                onDoubleClick={clearIdeasSize}
+              />
+            </>
+          )}
         </aside>
         <div
           data-panel="agents"
