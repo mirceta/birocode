@@ -362,17 +362,9 @@ public class DockRegistry
         }
     }
 
-    private static string ResolveStorePath()
-    {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        return Path.Combine(appData, "ClaudeWeb", "dock.json");
-    }
+    private static string ResolveStorePath() => Path.Combine(AppPaths.DataDir, "dock.json");
 
-    private static string ResolveGlobalStorePath()
-    {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        return Path.Combine(appData, "ClaudeWeb", "dock-stash.json");
-    }
+    private static string ResolveGlobalStorePath() => Path.Combine(AppPaths.DataDir, "dock-stash.json");
 
     private static DockTab Clone(DockTab t) => new()
     {
