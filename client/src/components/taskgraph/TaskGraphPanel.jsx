@@ -564,6 +564,7 @@ function TaskGraphBoard() {
           onPaneClick={() => setSelected(null)}
           defaultEdgeOptions={{ markerEnd: { type: MarkerType.ArrowClosed, width: 38, height: 38 } }}
           elevateNodesOnSelect={false}
+          connectionRadius={50}
           fitView
           minZoom={0.2}
           proOptions={{ hideAttribution: true }}

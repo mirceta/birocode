@@ -284,3 +284,38 @@
   height: 12px;
   border-radius: 3px;
 }
+
+/* Fatter connection handles for step nodes. React Flow's default handle is a
+   ~6px dot — hard to land on to start dragging a dependency arrow. We grow the
+   visible dot to 14px, and add a transparent ::after that extends the grab area
+   ~7px in every direction (so ~28px of catchable surface) without making the
+   dot itself look huge. Hover swells the dot as feedback. Paired with a larger
+   connectionRadius on <ReactFlow> so the *drop* onto a target snaps from nearby
+   too. Scoped to step nodes (machine boxes have no handles). */
+.react-flow__node-step .react-flow__handle {
+  width: 14px;
+  height: 14px;
+  background: #1a192b;
+  border: 2px solid #fff;
+  /* Don't touch `transform` — React Flow uses it to centre the handle on the
+     edge; overriding it makes the dot jump. Animate colour only. */
+  transition: background 0.1s ease, box-shadow 0.1s ease;
+}
+.react-flow__node-step .react-flow__handle::after {
+  content: '';
+  position: absolute;
+}
+/* Extend the grab area outward (away from the node) and sideways, but NOT deep
+   into the node body — otherwise the invisible zone would swallow clicks meant
+   for the title (double-click to edit) or the × button. Top handle grows up,
+   bottom handle grows down. Inset order: top right bottom left. */
+.react-flow__node-step .react-flow__handle.react-flow__handle-top::after {
+  inset: -10px -10px 0 -10px;
+}
+.react-flow__node-step .react-flow__handle.react-flow__handle-bottom::after {
+  inset: 0 -10px -10px -10px;
+}
+.react-flow__node-step .react-flow__handle:hover {
+  background: #4a90d9;
+  box-shadow: 0 0 0 3px rgba(74, 144, 217, 0.35);
+}
