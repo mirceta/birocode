@@ -37,6 +37,14 @@
 
 ## Active feature plans
 
+- [System tests for the Chat feature](plans/chat-system-tests.md) — discover
+  **every** exercisable Chat behaviour, then run them **all** as black-box system
+  tests against the real HTTP/SSE surface (and the real Claude CLI where it
+  matters) to surface bugs. Token spend on real runs is explicitly authorised —
+  goal is coverage, not frugality. Covers auth/validation/409/stop/reattach/
+  sessions plus end-to-end turns (basic, resume, tools, model, ask read-only).
+  Discovery only; fixes spin out per one-feature-per-branch. Not built. On
+  `feature/chat-system-tests`.
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
