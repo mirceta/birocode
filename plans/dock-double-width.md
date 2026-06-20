@@ -1,14 +1,10 @@
 # Enlarge a dock to two horizontal spaces
 
-> **Status (2026-06-20):** BUILT — compiles clean (frontend `npm run build` +
-> backend `dotnet build`, 0 errors), feature present in the bundle. Frontend
-> serves from the working tree, so it is already live on `:5099` (the ⤢ button
-> shows and widens a dock in-session via optimistic `updateTab`). **Backend
-> `DockTab.Wide` is NOT yet deployed** to the live bin, so a wide mark won't
-> survive a reload until the bin swap (`swap.ps1`, off-sandbox). Not yet
-> browser-verified on an isolated preview (preview-launch commands —
-> robocopy/Start-Process — are blocked by the current sandbox/permissions). On
-> `feature/dock-double-width`.
+> **Status (2026-06-20):** BUILT and **merged to main** (`8cd9630`). Compiles
+> clean (frontend `npm run build` + backend `dotnet build`, 0 errors). **Not yet
+> browser-verified** on an isolated preview, and the backend `DockTab.Wide` bin
+> swap to live `:5099` is still pending (`swap.ps1`, off-sandbox) — a wide mark
+> won't survive a reload on live until that swap. On `feature/dock-double-width`.
 
 ## Problem
 
