@@ -98,7 +98,12 @@ function renderSuites() {
     const stepThrough = el('button', 'btn ghost', 'Step through');
     stepThrough.title = 'Advance one step at a time and watch each step pass/fail';
     stepThrough.onclick = () => runSuite(s, 'interactive');
-    actions.append(run, stepThrough, toggle);
+    // "Explain" opens an interactive diagram of what the suite actually does —
+    // available any time (even mid-run), so it skips the setBusy() disable sweep.
+    const explain = el('button', 'btn ghost diagram', 'Explain ▸');
+    explain.title = 'Interactive diagram of what actually happens during this test';
+    explain.onclick = () => window.SysTestDiagram.open(s);
+    actions.append(run, stepThrough, explain, toggle);
     card.append(actions, list);
     wrap.append(card);
   }
@@ -195,7 +200,7 @@ async function sendCtrl(cmd) {
 function setBusy(b) {
   busy = b;
   document.querySelectorAll('.btn').forEach((x) => {
-    if (x.id === 'btnClear' || CTRL_IDS.includes(x.id)) return;
+    if (x.id === 'btnClear' || CTRL_IDS.includes(x.id) || x.classList.contains('diagram')) return;
     x.disabled = b;
   });
 }

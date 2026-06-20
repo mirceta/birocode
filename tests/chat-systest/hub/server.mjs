@@ -34,6 +34,17 @@ const PORT = Number(process.env.HUB_PORT || 5320);
 const manifest = JSON.parse(readFileSync(join(HERE, 'suites.json'), 'utf8'));
 const suiteById = Object.fromEntries(manifest.suites.map((s) => [s.id, s]));
 
+// Per-suite flow diagrams (hub/flows.json) ride along on the catalog the SPA
+// already fetches, so each card can render "what actually happens" without a new
+// endpoint. A missing/broken flows.json is non-fatal — cards just show the
+// explicit "no diagram" empty state rather than crashing the hub.
+try {
+  const flows = JSON.parse(readFileSync(join(HERE, 'flows.json'), 'utf8'));
+  for (const s of manifest.suites) if (flows[s.id]) s.flow = flows[s.id];
+} catch (e) {
+  console.warn(`[hub] flows.json not loaded (${e.message}) — diagrams disabled`);
+}
+
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
