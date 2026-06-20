@@ -71,11 +71,20 @@ unit of a test — the boundary the harness reports on and can pause at:
 
 ```js
 await step('Auth gate rejects no-cookie', async () => {
+  say('A logged-out client must be turned away from the chat endpoints.');
   const r = await api('/api/chat', { method: 'POST', body: { message: 'x' }, noAuth: true });
   check('POST /api/chat → 401', r.status === 401, `got ${r.status}`);
   // (optional) return a short string to set the step's "observed" summary line
 });
 ```
+
+Narrate as you go with `say(msg)` (from `lib.mjs`): it prints a plain-language
+`→ ...` line so a human watching the run follows the **story** — what the step is
+about to do and why — not just the terse `[PASS]`/`[FAIL]` tags. It is commentary
+only (never records a result, never affects pass/fail) and, like everything else,
+shows in both the raw console and the hub's console pane. `login()` and
+`startTurn()` already narrate the shared actions, so a turn announces its lane,
+model, and message for free.
 
 The same script runs two ways, chosen by the `SYSTEST_MODE` env var:
 
@@ -91,8 +100,8 @@ Either way each step emits machine-readable events (`@@SYSTEST@@ {json}` lines:
 `summary`) **alongside** the human `[PASS]`/`[FAIL]` lines, so nothing that greps
 the console today breaks.
 
-Author new tests the same way: one `step()` per scenario and they are interactive-
-ready for free.
+Author new tests the same way: one `step()` per scenario, a `say()` line or two so
+the run narrates what it's doing, and they are interactive-ready for free.
 
 ## Teardown
 

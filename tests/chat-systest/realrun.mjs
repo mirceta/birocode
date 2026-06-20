@@ -5,7 +5,7 @@
 // hides the rest.
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { api, raw, readSse, login, startTurn, waitFor, sleep, check, note, report, step, MODEL, BASE, RID } from './lib.mjs';
+import { api, raw, readSse, login, startTurn, waitFor, sleep, check, note, report, step, say, MODEL, BASE, RID } from './lib.mjs';
 
 const SCRATCH = process.env.SCRATCH || '';
 console.log(`\n# Chat real-run tests against ${BASE} (repo ${RID}), model ${MODEL}`);
@@ -35,6 +35,7 @@ async function scenario(name, fn) {
 
 // ---- 10. Basic turn: ordered session → token… → done ------------------------
 await scenario('10. Basic turn', async () => {
+  say('A normal turn must stream session → token(s) → done, in that order, with strictly increasing seq.');
   const t = startTurn({ message: 'Reply with exactly: OK', model: MODEL });
   const done = await t.waitFor((e) => e.type === 'done' || e.type === 'error', 120000);
   note(`events: ${t.events.map((e) => e.type).join(' → ')}`);
@@ -50,6 +51,7 @@ await scenario('10. Basic turn', async () => {
 
 // ---- 11. Resume: a 2nd turn appends to the same session ----------------------
 await scenario('11. Resume + sessions/transcript', async () => {
+  say('A second turn that passes the first turn\'s sessionId must append to the SAME session, and the transcript must hold both exchanges.');
   const t1 = startTurn({ message: 'Reply with exactly: ALPHA', model: MODEL });
   const d1 = await t1.waitFor((e) => e.type === 'done', 120000);
   const sid = d1?.sessionId;
@@ -73,6 +75,7 @@ await scenario('11. Resume + sessions/transcript', async () => {
 
 // ---- 3. 409 single-flight (builder) -----------------------------------------
 await scenario('3. 409 single-flight', async () => {
+  say('Only one builder turn may run at a time: while one is live, a second builder turn must be refused with 409.');
   const a = startTurn({ message: 'Count slowly to 20, one number per line.', model: MODEL });
   const sess = await a.waitFor((e) => e.type === 'session', 60000);
   check('first builder turn started (session event)', !!sess);
@@ -84,6 +87,7 @@ await scenario('3. 409 single-flight', async () => {
 
 // ---- 4. Ask concurrency: ask runs alongside a live builder ------------------
 await scenario('4. Ask concurrency', async () => {
+  say('The read-only ask lane runs alongside a live builder — it must NOT be blocked, and gets its own run slot.');
   const a = startTurn({ message: 'Count slowly to 20, one number per line.', model: MODEL });
   await a.waitFor((e) => e.type === 'session', 60000);
   const ask = startTurn({ message: 'Reply with exactly: OK', model: MODEL, lane: 'ask' });
@@ -98,6 +102,7 @@ await scenario('4. Ask concurrency', async () => {
 
 // ---- 5. Stop kills the running turn -----------------------------------------
 await scenario('5. Stop a live turn', async () => {
+  say('Stopping a running turn must return 200, end the stream, and flip the runs snapshot off "running".');
   const a = startTurn({ message: 'Count slowly to 50, one number per line.', model: MODEL });
   await a.waitFor((e) => e.type === 'token' || e.type === 'session', 60000);
   const stop = await api('/api/chat/stop', { method: 'POST' });
@@ -114,6 +119,7 @@ await scenario('5. Stop a live turn', async () => {
 
 // ---- 6. Reattach: replay after seq N, no dupes/gaps -------------------------
 await scenario('6. Reattach replay', async () => {
+  say('After detaching mid-turn and re-subscribing with ?after=N, the replay must return only seq > N with no dupes and no gaps.');
   const a = startTurn({ message: 'Reply with exactly: OK', model: MODEL });
   await a.waitFor((e) => e.events?.length >= 2 || e.type === 'token' || e.type === 'usage', 60000);
   await sleep(300);
@@ -135,6 +141,7 @@ await scenario('6. Reattach replay', async () => {
 
 // ---- 13. Model param honoured (run completes cleanly) -----------------------
 await scenario('13. Model parameter', async () => {
+  say('An explicit model param must complete cleanly and report a numeric cost.');
   const t = startTurn({ message: 'Reply with exactly: OK', model: MODEL });
   const done = await t.waitFor((e) => e.type === 'done' || e.type === 'error', 120000);
   check('explicit model turn completes (no error)', done?.type === 'done', `last=${lastOf(t.events)?.type} ${lastOf(t.events)?.message || ''}`);
@@ -144,6 +151,7 @@ await scenario('13. Model parameter', async () => {
 
 // ---- 12. Tool lifecycle: a forced Read emits tool events --------------------
 await scenario('12. Tool lifecycle', async () => {
+  say('Forcing a Read tool call must surface tool events: a start, and an end carrying an ok flag.');
   const t = startTurn({ message: 'Use the Read tool to read the file README.md, then reply with exactly: DONE', model: MODEL });
   const done = await t.waitFor((e) => e.type === 'done' || e.type === 'error', 150000);
   const tools = t.events.filter((e) => e.type === 'tool');
@@ -155,6 +163,7 @@ await scenario('12. Tool lifecycle', async () => {
 
 // ---- 14. Ask lane is read-only (cannot write files) ------------------------
 await scenario('14. Ask read-only', async () => {
+  say('The ask lane is read-only: even when told to create a file, nothing must land on disk.');
   const canary = 'systest-canary.txt';
   const t = startTurn({ message: `Create a file named ${canary} in the project root containing the text hi. Do it now.`, lane: 'ask', model: MODEL });
   await t.waitFor((e) => e.type === 'done' || e.type === 'error', 150000);

@@ -4,12 +4,13 @@
 // verdict) OR interactive (an operator clicks through it on the hub) from this
 // one definition — see ./README.md and lib.mjs. Exits non-zero if any check
 // fails, so it can gate CI later.
-import { api, raw, login, check, note, report, step, BASE, RID } from './lib.mjs';
+import { api, raw, login, check, note, report, step, say, BASE, RID } from './lib.mjs';
 
 console.log(`\n# Chat behavioural tests against ${BASE} (repo ${RID || '(default)'})`);
 
 // ---- 1. Auth gate: every chat endpoint rejects a cookie-less call -------------
 await step('1. Auth gate — chat endpoints reject calls without the session cookie', async () => {
+  say('A logged-out client must be turned away from every chat endpoint.');
   const calls = [
     ['POST /api/chat', { path: '/api/chat', method: 'POST', body: { message: 'x' } }],
     ['GET /api/runs', { path: '/api/runs' }],
@@ -18,17 +19,20 @@ await step('1. Auth gate — chat endpoints reject calls without the session coo
     ['POST /api/chat/stop', { path: '/api/chat/stop', method: 'POST' }],
     ['GET /api/sessions/x/messages', { path: '/api/sessions/x/messages' }],
   ];
+  say(`Calling ${calls.length} endpoints with NO session cookie — each must answer 401.`);
   for (const [label, opt] of calls) {
     const { status } = await api(opt.path, { method: opt.method, body: opt.body, noAuth: true });
     check(`${label} → 401 without auth`, status === 401, `got ${status}`);
   }
   // Health stays open (it's the probe endpoint).
+  say('But /api/health stays open — it is the unauthenticated liveness probe.');
   const h = await api('/api/health', { noAuth: true });
   check('GET /api/health → 200 without auth', h.status === 200, `got ${h.status}`);
 });
 
 // Authenticate for the rest. A step so the operator sees it happen.
 await step('Authenticate — establish a session cookie', async () => {
+  say('Establishing the session that the rest of the suite reuses.');
   await login();
   check('login establishes a session cookie', true);
   return 'logged in to the isolated instance';
@@ -36,6 +40,7 @@ await step('Authenticate — establish a session cookie', async () => {
 
 // ---- 2. Validation: bad/empty input → 4xx, never 500 -------------------------
 await step('2. Validation — empty / missing message → 4xx, not 500', async () => {
+  say('Empty, whitespace-only, missing, and bodyless requests must be rejected as a clean 4xx — never crash with a 500.');
   const empty = await api('/api/chat', { method: 'POST', body: { message: '' } });
   check('empty message → 400', empty.status === 400, `got ${empty.status} ${empty.text?.slice(0, 80)}`);
 
@@ -52,6 +57,7 @@ await step('2. Validation — empty / missing message → 4xx, not 500', async (
 
 // ---- 5. Stop with nothing running → 404 -------------------------------------
 await step('5. Stop when idle → 404 with an error message', async () => {
+  say('Asking to stop when nothing is running should be a clean 404 carrying a message — not a silent no-op or a crash.');
   const { status, json } = await api('/api/chat/stop', { method: 'POST' });
   check('stop with no running turn → 404', status === 404, `got ${status}`);
   check('stop 404 carries an error message', !!json?.error, JSON.stringify(json));
@@ -59,6 +65,7 @@ await step('5. Stop when idle → 404 with an error message', async () => {
 
 // ---- 6/7. Stream with no run → 404; runs snapshot shape ----------------------
 await step('6/7. Stream-when-idle → 404 + runs snapshot shape', async () => {
+  say('Subscribing to the stream with no active run → 404; and the runs snapshot must always be a JSON object.');
   const stream = await api('/api/chat/stream?after=0', {});
   check('stream with no run → 404', stream.status === 404, `got ${stream.status}`);
 
@@ -69,6 +76,7 @@ await step('6/7. Stream-when-idle → 404 + runs snapshot shape', async () => {
 
 // ---- 8. Sessions list + transcript safety -----------------------------------
 await step('8. Sessions list + transcript safety (no leak, no 500)', async () => {
+  say('The sessions list must be a JSON array; unknown and path-traversal session ids must not leak files or 500.');
   const list = await api('/api/sessions', {});
   check('sessions list → 200 array', list.status === 200 && Array.isArray(list.json), `got ${list.status} ${typeof list.json}`);
 
@@ -84,6 +92,7 @@ await step('8. Sessions list + transcript safety (no leak, no 500)', async () =>
 
 // ---- 9. Bad inputs on idle endpoints ----------------------------------------
 await step('9. Bad inputs on idle endpoints → normalized, not 500', async () => {
+  say('A garbage query param (unknown lane) must be normalised, still yielding a clean 404 — not a 500.');
   // Unknown lane on stream normalizes to builder → still 404 (no run), not 500.
   const badLane = await api('/api/chat/stream?lane=wat&after=0', {});
   check('unknown lane on stream → 404 (normalized, not 500)', badLane.status === 404, `got ${badLane.status}`);

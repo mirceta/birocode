@@ -43,6 +43,14 @@ export function check(name, pass, detail = '') {
 }
 export function note(msg) { console.log(`  ·    ${msg}`); }
 
+// ---- narration ---------------------------------------------------------------
+// A plain-language line describing what the test is about to do, or what it just
+// saw, so a human watching the run can follow the STORY — not just the terse
+// [PASS]/[FAIL] tags. It prints to stdout, so it shows in the raw console and in
+// the hub's console pane (which mirrors stdout verbatim). Narration is
+// commentary only: it never records a result and never affects pass/fail.
+export function say(msg) { console.log(`→ ${msg}`); }
+
 export function report() {
   const fails = results.filter((r) => !r.pass);
   console.log(`\n===== summary: ${results.length - fails.length}/${results.length} passed =====`);
@@ -141,6 +149,7 @@ export async function step(name, fn) {
 
 // ---- auth + scoped fetch -----------------------------------------------------
 export async function login() {
+  say(`Logging in to ${BASE} with the seed password to get a session cookie…`);
   const res = await fetch(`${BASE}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -150,6 +159,7 @@ export async function login() {
   const m = (setCookie.join('; ').match(/claudeweb_session=[^;]+/) || [])[0];
   if (m) cookie = m;
   if (!res.ok || !cookie) throw new Error(`login failed: http ${res.status}, cookie=${!!cookie}`);
+  say('Session established — the rest of the calls are now authenticated.');
   return cookie;
 }
 
@@ -215,6 +225,11 @@ export async function readSse(res, onEvent) {
 // `events` accrues as they arrive; `done` resolves when the SSE ends; call
 // controller.abort() to detach (the run keeps going server-side).
 export function startTurn({ message, lane, model, sessionId, repoId } = {}) {
+  const laneLabel = lane || 'builder';
+  const preview = String(message ?? '').replace(/\s+/g, ' ').trim();
+  const shortMsg = preview.length > 50 ? `${preview.slice(0, 50)}…` : preview;
+  say(`POST /api/chat — ${laneLabel} lane${model ? `, model ${model}` : ''}` +
+      `${sessionId ? ', resuming session' : ''}: "${shortMsg}"`);
   const controller = new AbortController();
   const events = [];
   const body = { message };

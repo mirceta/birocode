@@ -2,7 +2,7 @@
 // The bug-hunt layer: a bad sessionId / model / lane must produce a graceful
 // terminal (error or done) — never a hang, a 500, or a wedged run slot. Spends a
 // little token. Run against an isolated instance (see ./README.md).
-import { api, login, startTurn, waitFor, check, note, report, step, MODEL, BASE, RID } from './lib.mjs';
+import { api, login, startTurn, waitFor, check, note, report, step, say, MODEL, BASE, RID } from './lib.mjs';
 
 console.log(`\n# Chat bad-input tests against ${BASE} (repo ${RID}), model ${MODEL}`);
 await login();
@@ -26,6 +26,7 @@ async function scenario(name, fn) {
 // (done or error) within the timeout — i.e. it neither 500'd nor hung.
 async function expectGracefulTerminal(label, opts, ms = 120000) {
   const t = startTurn(opts);
+  say(`Waiting up to ${ms / 1000}s for "${label}" to reach a terminal — it must not hang, 500, or wedge a run slot.`);
   const term = await t.waitFor((e) => e.type === 'done' || e.type === 'error', ms);
   note(`${label}: ${t.events.map((e) => e.type).join(' → ') || `(http ${t.status})`}`);
   check(`${label}: opened SSE (200), not 4xx/5xx`, t.status === 200, `status ${t.status} ${JSON.stringify(t.headersJson || '')}`);
@@ -35,6 +36,7 @@ async function expectGracefulTerminal(label, opts, ms = 120000) {
 
 // ---- 9a. Resume a non-existent session --------------------------------------
 await scenario('9a. Resume non-existent session', async () => {
+  say('Resuming a sessionId that never existed must terminate gracefully (clean error or a fresh start) — not hang or crash.');
   const { term } = await expectGracefulTerminal('resume-ghost', {
     message: 'Reply with exactly: OK', model: MODEL,
     sessionId: 'deadbeef-0000-0000-0000-000000000000',
@@ -46,6 +48,7 @@ await scenario('9a. Resume non-existent session', async () => {
 
 // ---- 9b. Unknown model -------------------------------------------------------
 await scenario('9b. Unknown model', async () => {
+  say('A bogus model name must surface a clean error event — not a silent success and not a hang.');
   const { term } = await expectGracefulTerminal('bad-model', {
     message: 'Reply with exactly: OK', model: 'claude-totally-not-a-model-9999',
   });
@@ -54,6 +57,7 @@ await scenario('9b. Unknown model', async () => {
 
 // ---- 9c. Unknown lane normalises to builder ---------------------------------
 await scenario('9c. Unknown lane → builder', async () => {
+  say('An unknown lane must normalise to builder: the turn still runs and is recorded under builder, not a new phantom slot.');
   const t = startTurn({ message: 'Reply with exactly: OK', model: MODEL, lane: 'zzz-not-a-lane' });
   const term = await t.waitFor((e) => e.type === 'done' || e.type === 'error', 120000);
   check('unknown lane still runs (200)', t.status === 200, `status ${t.status}`);
@@ -65,6 +69,7 @@ await scenario('9c. Unknown lane → builder', async () => {
 
 // ---- 9d. Malformed sessionId (path-ish) -------------------------------------
 await scenario('9d. Malformed sessionId', async () => {
+  say('A path-ish sessionId (../../etc/passwd) must terminate gracefully — no traversal, no 500, no hang.');
   await expectGracefulTerminal('weird-sid', {
     message: 'Reply with exactly: OK', model: MODEL,
     sessionId: '../../etc/passwd',
