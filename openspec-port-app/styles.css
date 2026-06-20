@@ -27,7 +27,13 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 .hero h1 { margin: 0 0 10px; font-size: 28px; line-height: 1.2; }
 .hero h1 .cr { color: var(--accent); }
 .sub { margin: 0 0 16px; color: var(--soft); max-width: 760px; }
-.nav { display: flex; flex-wrap: wrap; gap: 6px; }
+.nav { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 22px; }
+.navgroup { display: flex; flex-direction: column; gap: 4px; position: relative; }
+/* faint divider between the two clusters */
+.navgroup--op::before { content: ""; position: absolute; left: -12px; top: 6px; bottom: 0; width: 1px; background: var(--border); }
+.navgroup__lbl { font-size: 10.5px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; color: var(--soft); padding-left: 4px; }
+.navgroup--op .navgroup__lbl { color: var(--accent); }
+.navgroup__btns { display: flex; flex-wrap: wrap; gap: 6px; }
 .nav__btn { border: 1px solid var(--border); border-bottom: none; background: var(--bg); color: var(--soft); font: inherit; font-size: 14px; font-weight: 600; padding: 10px 16px; border-radius: 10px 10px 0 0; cursor: pointer; transition: background .15s, color .15s; }
 .nav__btn:hover { color: var(--ink); }
 .nav__btn.is-active { background: var(--surface); color: var(--accent); box-shadow: 0 -2px 0 var(--accent) inset; }
@@ -259,26 +265,30 @@ h3 { font-size: 16px; margin: 0 0 8px; } h3.mt { margin-top: 28px; }
 /* Console — drive real openspec/git */
 .gate { background: #fdf6e8; border: 1px solid #ecd9af; border-left: 4px solid var(--part); border-radius: var(--radius); padding: 12px 15px; font-size: 13.5px; margin: 4px 0 18px; }
 .gate b { color: var(--part); }
-/* Console table — same shape as Adopt's .flow, third column is executable */
-.cflow { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
-.cflow thead th { text-align: left; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; padding: 11px 14px; border-bottom: 1px solid var(--border); background: var(--bg); color: var(--soft); }
-.cflow thead th:nth-child(2) { color: #8a6a5c; }
-.cflow thead th:nth-child(3) { color: var(--accent); background: var(--accent-soft); }
-.cflow tbody tr { border-bottom: 1px solid var(--border); border-left: 4px solid transparent; }
-.cflow tbody tr.cflow--new { border-left-color: var(--part); }
-.cflow tbody tr:last-child { border-bottom: none; }
-.cflow td { vertical-align: top; padding: 11px 14px; font-size: 13px; }
-.cflow__intent { width: 22%; } .cflow__intent b { font-size: 13.5px; }
-.cflow__old { width: 42%; color: #6b4a3f; }
-.cflow__oldt { display: block; margin-top: 5px; }
-.cflow__cap { display: inline-block; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
-.cflow__cap--new { background: #fdf6e8; color: var(--part); }
-.cflow__cap--moved { background: #e8f5ec; color: var(--have); }
-.cflow__cap--same { background: var(--bg); color: var(--soft); border: 1px solid var(--border); }
-.cflow__run { width: 36%; background: var(--accent-soft); border-left: 3px solid var(--accent); }
-.cflow__cmd { display: block; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; color: var(--ink); margin-bottom: 8px; word-break: break-all; }
-.cflow__do { display: flex; gap: 6px; align-items: center; }
-.cflow__do .act { flex: 0 0 auto; }
+/* Console — the executable twin of Workflows: grouped runnable steps */
+.cwf { display: grid; gap: 12px; }
+.cgrp { background: var(--surface); border: 1px solid var(--border); border-left: 5px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+.cgrp--read { border-left-color: var(--edge); }
+.cgrp--write { border-left-color: var(--part); }
+.cgrp--spine { box-shadow: 0 0 0 1.5px var(--part) inset, var(--shadow); }
+.cgrp__hd { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--border); }
+.cgrp__hd b { font-size: 15px; }
+.cgrp__tally { margin-left: auto; font-size: 11.5px; font-weight: 700; color: var(--soft); }
+.cgrp__steps { list-style: none; margin: 0; padding: 0; }
+.cstep { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-top: 1px dashed var(--border); }
+.cstep:first-child { border-top: none; }
+.cstep__body { min-width: 0; flex: 1; }
+.cstep__t { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; color: var(--ink); background: none; padding: 0; word-break: break-word; }
+.cstep--run .cstep__t { color: #8a3d24; }
+.cstep--hand .cstep__t, .cstep--tui .cstep__t { color: var(--soft); }
+.cstep__tag { margin-left: 8px; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--soft); background: var(--bg); border: 1px solid var(--border); padding: 1px 7px; border-radius: 999px; }
+.cstep__d { display: block; color: #5b524b; font-size: 12.5px; margin-top: 2px; }
+.cstep__do { display: flex; gap: 6px; align-items: center; flex: 0 0 auto; }
+.cstep__pill { flex: 0 0 auto; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 8px; white-space: nowrap; }
+.cstep__pill--hand { color: #9a6233; background: #f3e9dd; }
+.cstep__pill--tui { color: var(--soft); background: #eee9e1; }
+/* the change spine: shade the command bookends so they read as bookends */
+.cgrp--spine .cstep--run { background: linear-gradient(90deg, #e7f5ec, transparent 60%); }
 .act { border: 1px solid var(--border); background: var(--bg); color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; padding: 8px 11px; border-radius: 9px; cursor: pointer; text-align: left; transition: border-color .12s, background .12s; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .act:hover { border-color: var(--accent); background: var(--accent-soft); }
 .act:disabled { opacity: .55; cursor: progress; }
@@ -312,10 +322,8 @@ h3 { font-size: 16px; margin: 0 0 8px; } h3.mt { margin-top: 28px; }
   .mrow__cell { grid-column: 1 / -1; }
   .phase__body { padding-left: 14px; }
   .ledger { grid-template-columns: 1fr; }
-  .cflow, .cflow thead, .cflow tbody, .cflow tr, .cflow td { display: block; width: auto; }
-  .cflow thead { display: none; }
-  .cflow tbody tr { padding: 4px 0; }
-  .cflow__run { border-left: 4px solid var(--accent); }
+  .cstep { flex-wrap: wrap; }
+  .cstep__do, .cstep__pill { margin-left: 29px; }
   .wf__head { grid-template-columns: auto 1fr auto; }
   .wf__meta { grid-column: 1 / -1; justify-content: flex-start; }
 }

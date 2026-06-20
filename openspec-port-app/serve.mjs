@@ -20,7 +20,7 @@
 // No dependencies — Node's built-in http/fs/child_process only.
 
 import { createServer } from 'node:http';
-import { readFile, mkdir, writeFile, access } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, normalize } from 'node:path';
 import { execFile } from 'node:child_process';
@@ -59,11 +59,15 @@ function reqName(raw) {
 const ACTIONS = {
   version:           ()  => ['openspec', '--version'],
   list:              ()  => ['openspec', 'list'],
+  'list-specs':      ()  => ['openspec', 'list', '--specs'],
   validate:          ()  => ['openspec', 'validate'],
   'validate-strict': ()  => ['openspec', 'validate', '--strict'],
   show:              (a) => ['openspec', 'show', reqName(a.id)],
+  status:            (a) => ['openspec', 'status', '--change', reqName(a.id)],
+  'new-change':      (a) => ['openspec', 'new', 'change', reqName(a.id)],
   archive:           (a) => ['openspec', 'archive', reqName(a.id)],
   init:              ()  => ['openspec', 'init', '--tools', 'claude'],
+  update:            ()  => ['openspec', 'update'],
   'git-status':      ()  => ['git', 'status', '--short', '--branch'],
 };
 
@@ -90,40 +94,6 @@ function runExec(argv) {
       },
     );
   });
-}
-
-// ── propose: a real scaffold (no CLI verb exists for this; /opsx propose is a
-// Claude slash command). Creates the change folder + the four ceremony files,
-// refusing to clobber an existing change. The content is yours to write — this
-// only removes the folder-creation friction. ──────────────────────
-async function exists(p) { try { await access(p); return true; } catch { return false; } }
-
-async function scaffoldProposal(rawName) {
-  const name = reqName(rawName);
-  const rel = `openspec/changes/${name}`;
-  const dir = join(REPO_ROOT, 'openspec', 'changes', name);
-  if (await exists(dir)) {
-    return { ok: false, code: 1, cmd: `propose ${name}`, stdout: '', stderr: `change "${name}" already exists at ${rel}/ — pick another name` };
-  }
-  const files = {
-    'proposal.md': `# ${name}\n\n## Why\n\nTBD — the problem / motivation (restate-intent role).\n\n## What changes\n\nTBD — bullet the user-visible deltas.\n`,
-    'design.md': `# Design — ${name}\n\n## Approach\n\nTBD — how it works.\n\n## Trade-offs\n\nTBD.\n`,
-    'tasks.md': `# Tasks — ${name}\n\n- [ ] TBD first slice\n`,
-    'specs/README.md': `Delta specs for "${name}" go here, grouped by capability:\n\n  specs/<capability>/spec.md\n\nEach requirement uses SHALL/MUST and carries at least one\n\n  #### Scenario: ...\n    GIVEN ...\n    WHEN ...\n    THEN ...\n`,
-  };
-  const created = [];
-  for (const [rel2, body] of Object.entries(files)) {
-    const full = join(dir, rel2);
-    await mkdir(dirname(full), { recursive: true });
-    await writeFile(full, body, 'utf8');
-    created.push(`${rel}/${rel2}`);
-  }
-  return {
-    ok: true, code: 0, cmd: `propose ${name}`,
-    stdout: `scaffolded ${created.length} files:\n` + created.map((f) => '  + ' + f).join('\n')
-      + `\n\nNext: write the deltas under ${rel}/specs/<cap>/spec.md, then run "validate --strict".`,
-    stderr: '',
-  };
 }
 
 // ── Request body reader (cap size) ───────────────────────────────
@@ -158,7 +128,6 @@ const server = createServer(async (req, res) => {
 
       const action = String(payload.action || '');
       try {
-        if (action === 'propose') { sendJson(res, 200, await scaffoldProposal(payload.id)); return; }
         const build = ACTIONS[action];
         if (!build) { sendJson(res, 400, { error: `unknown action "${action}"` }); return; }
         sendJson(res, 200, await runExec(build(payload)));

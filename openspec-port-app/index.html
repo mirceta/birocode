@@ -20,15 +20,25 @@
         <code>plans/openspec-flow.md</code>; your progress saves locally.
       </p>
       <nav class="nav" id="nav">
-        <button class="nav__btn is-active" data-view="explain">Explain</button>
-        <button class="nav__btn" data-view="system">Our system</button>
-        <button class="nav__btn" data-view="claudemd">CLAUDE.md</button>
-        <button class="nav__btn" data-view="analyze">Analyze</button>
-        <button class="nav__btn" data-view="adopt">Adopt</button>
-        <button class="nav__btn" data-view="decide">Decide</button>
-        <button class="nav__btn" data-view="control">Control</button>
-        <button class="nav__btn" data-view="workflows">Workflows</button>
-        <button class="nav__btn" data-view="console">Console</button>
+        <div class="navgroup">
+          <span class="navgroup__lbl">Understand</span>
+          <div class="navgroup__btns">
+            <button class="nav__btn is-active" data-view="explain">Explain</button>
+            <button class="nav__btn" data-view="system">Our system</button>
+            <button class="nav__btn" data-view="claudemd">CLAUDE.md</button>
+            <button class="nav__btn" data-view="analyze">Analyze</button>
+            <button class="nav__btn" data-view="adopt">Adopt</button>
+            <button class="nav__btn" data-view="workflows">Workflows</button>
+          </div>
+        </div>
+        <div class="navgroup navgroup--op">
+          <span class="navgroup__lbl">Operate</span>
+          <div class="navgroup__btns">
+            <button class="nav__btn" data-view="decide">Decide</button>
+            <button class="nav__btn" data-view="control">Control</button>
+            <button class="nav__btn" data-view="console">Console</button>
+          </div>
+        </div>
       </nav>
       <div class="progress" id="progressBar" title="overall task completion">
         <div class="progress__fill" id="progressFill"></div>
@@ -235,11 +245,12 @@
           <h2>Console — drive OpenSpec for real</h2>
           <button class="reset" id="logClear">Clear log</button>
         </div>
-        <p class="lead">You know the old system cold — <code>plan.md</code>, <code>plans/*.md</code>,
-          the ship ritual — but may be new to OpenSpec. So every row starts from <b>what you did
-          before</b>, then runs the <b>OpenSpec equivalent</b> for real (in the repo root, through this
-          app's server) and prints the output in the log below. Rows tagged <b>New to OpenSpec</b> had
-          no old equivalent — they're the unlocks.</p>
+        <p class="lead">The executable twin of <b>Workflows</b> — the same five jobs, in the same order,
+          but here each command is a real button (run in the repo root, through this app's server, output
+          in the log below). The <span class="wfkb wfkb--cli">✓</span> steps are buttons; the
+          <span class="wfkb wfkb--hand">✍</span> steps you author by hand, shown as context so the
+          <i>sequence</i> stays legible; <span class="wfkb wfkb--tui">⌨</span> is terminal-only. For the
+          before/after against your old system, see <b>Adopt</b>.</p>
 
         <div class="gate">
           <b>Honest scope:</b> this makes the workflow <i>one-tap and auditable</i> — it does
@@ -249,22 +260,15 @@
           the state; CI is what makes it mandatory.
         </div>
 
-        <table class="cflow">
-          <thead><tr>
-            <th>When you want to…</th>
-            <th>In the system you know</th>
-            <th>Run the OpenSpec equivalent</th>
-          </tr></thead>
-          <tbody id="consoleBody"><!-- rendered by app.js --></tbody>
-        </table>
-        <p class="muted flow__foot">The server runs a fixed whitelist — you pick a row, it builds the
-          command — so nothing here can run an arbitrary shell. The <b>writes</b> rows (propose,
-          archive, init) change files in the repo; the reads don't.</p>
+        <div class="cwf" id="consoleBody"><!-- rendered by app.js --></div>
+        <p class="muted flow__foot">The server runs a fixed whitelist — you pick a step, it builds the
+          command — so nothing here can run an arbitrary shell. The <b>WRITE</b> groups change files in
+          the repo; the <b>READ</b> groups don't.</p>
 
         <h3 class="mt">Console log</h3>
         <div class="con__log" id="conLog" aria-live="polite">
-          <div class="con__empty">Output appears here. Start with <b>Confirm the tooling is here</b> —
-            if OpenSpec isn't installed yet you'll see that plainly (that's Phase 0).</div>
+          <div class="con__empty">Output appears here. Start in <b>Set up the tool</b> with
+            <b>openspec --version</b> — if it isn't installed yet you'll see that plainly (that's Phase 0).</div>
         </div>
       </div>
     </section>

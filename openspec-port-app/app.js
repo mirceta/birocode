@@ -522,58 +522,74 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   renderPhases(); renderDecisions(); updateProgress();
 });
 
-// ── Data: Console — same table model as Adopt, made executable ───
-// The reader is an expert in the OLD system but new to OpenSpec, so
-// every row anchors on "what you did before", then runs the OpenSpec
-// equivalent for real. old.kind ∈ 'moved' (same ritual, relocated) |
-// 'new' (no old equivalent — an unlock) | 'same' (literally unchanged).
-const CONSOLE = [
-  { intent: 'Confirm the tooling is even here', action: 'version',
-    cmd: 'openspec --version',
-    old: { kind: 'new', t: 'Nothing to check — planning was habit + the <code>CLAUDE.md</code> prompt; there was no CLI to install or version.' } },
-  { intent: 'See every change in flight', action: 'list',
-    cmd: 'openspec list',
-    old: { kind: 'moved', t: 'Open <code>plan.md</code> and read its <b>Active</b> vs <b>Recently-shipped</b> sections; scan the ~110 <code>plans/*.md</code>.' } },
-  { intent: 'Read one change / spec in detail', action: 'show', input: { id: 'inShow', ph: 'change or spec id' },
-    cmd: 'openspec show &lt;id&gt;',
-    old: { kind: 'moved', t: 'Open that <code>plans/&lt;feature&gt;.md</code> in the Files tab and read the prose.' } },
-  { intent: 'Start a new change', action: 'propose', write: true, input: { id: 'inPropose', ph: 'change-name' },
-    cmd: 'openspec propose &lt;name&gt;',
-    old: { kind: 'moved', t: 'Hand-write a fresh <code>plans/&lt;feature&gt;.md</code> (and, for non-trivial work, an Understanding app).' } },
-  { intent: 'Check a plan is well-formed', action: 'validate',
-    cmd: 'openspec validate',
-    old: { kind: 'new', t: 'Nothing mechanical — you eyeballed the plan. No shape check ever existed.' } },
-  { intent: 'Gate work before any code', action: 'validate-strict',
-    cmd: 'openspec validate --strict',
-    old: { kind: 'new', t: 'Confirm intent in chat, skim the plan — loose, and nothing actually blocked an under-specified plan from reaching code.' } },
-  { intent: 'Ship / mark a change done', action: 'archive', write: true, input: { id: 'inArchive', ph: 'change-name' },
-    cmd: 'openspec archive &lt;name&gt;',
-    old: { kind: 'moved', t: 'Move the plan into the <b>Recently-shipped</b> section of <code>plan.md</code>; the plan then freezes.' } },
-  { intent: 'See the working tree', action: 'git-status',
-    cmd: 'git status --short --branch',
-    old: { kind: 'same', t: 'Exactly the same — <code>git status</code>. OpenSpec doesn’t touch git.' } },
-  { intent: 'Bootstrap the whole system', action: 'init', danger: true,
-    cmd: 'openspec init --tools claude',
-    old: { kind: 'new', t: 'No install step existed — the “system” was just files + habit. This scaffolds <code>openspec/</code> + the <code>/opsx</code> commands (Phase 0).' } },
+// ── Data: Console — the executable twin of the Workflows tab ─────
+// Same five jobs, same order, but each command is a real button. step kinds:
+//   run  = { run:<action>, cmd, input?, write?, danger? } → a Run button
+//   hand = { hand:true, cmd, tag?, d? }  → muted context (you author this)
+//   tui  = { tui:true, cmd, d? }         → terminal-only, not runnable here
+// Mirrors WORKFLOWS; the old→new anchor stays on the Adopt tab on purpose.
+const CONSOLE_WF = [
+  { name: 'Set up the tool', mode: 'write', steps: [
+    { run: 'version', cmd: 'openspec --version', d: 'confirm the CLI is installed' },
+    { run: 'init', cmd: 'openspec init --tools claude', danger: true, d: 'scaffold openspec/ + the /opsx commands (Phase 0)' },
+    { run: 'update', cmd: 'openspec update', d: 'refresh the instruction files after a CLI upgrade' },
+  ] },
+  { name: 'Inspect the living truth', mode: 'read', steps: [
+    { run: 'list', cmd: 'openspec list', d: 'the changes currently in flight' },
+    { run: 'list-specs', cmd: 'openspec list --specs', d: 'the living baseline — capabilities today' },
+    { run: 'show', cmd: 'openspec show &lt;id&gt;', input: { id: 'inShow', ph: 'change or spec id' }, d: 'read one change or spec in full' },
+    { run: 'status', cmd: 'openspec status --change &lt;id&gt;', input: { id: 'inStatus', ph: 'change-name' }, d: 'artifact-completion for a change' },
+    { run: 'git-status', cmd: 'git status --short --branch', d: 'the working tree' },
+    { tui: true, cmd: 'openspec view', d: 'interactive dashboard — terminal only, not runnable here' },
+  ] },
+  { name: 'Make a change, end to end', mode: 'write', spine: true, steps: [
+    { run: 'new-change', cmd: 'openspec new change &lt;name&gt;', input: { id: 'inNew', ph: 'change-name' }, write: true, tag: 'propose', d: 'create the change folder' },
+    { hand: true, cmd: 'write delta specs — ADDED / MODIFIED / REMOVED', tag: 'specify', d: 'diff against the baseline, so review lands on what moves' },
+    { hand: true, cmd: 'write #### Scenario: GIVEN / WHEN / THEN', tag: 'pin “done”', d: 'acceptance criteria beside each requirement' },
+    { hand: true, cmd: 'write design.md + tasks.md', tag: 'design', d: 'the approach, then the slices' },
+    { run: 'validate-strict', cmd: 'openspec validate --strict', tag: 'gate', d: 'structure must hold before any code' },
+    { hand: true, cmd: 'tick tasks.md', tag: 'implement', d: 'as each slice lands — this is the Control tab' },
+    { run: 'archive', cmd: 'openspec archive &lt;name&gt;', input: { id: 'inArchive', ph: 'change-name' }, write: true, tag: 'ship', d: 'fold the delta into the baseline' },
+  ] },
+  { name: 'Backfill the baseline', mode: 'write', steps: [
+    { hand: true, cmd: 'bucket the system into capabilities', d: '~110 plans + docs → chat / files / git / preview …' },
+    { hand: true, cmd: 'author openspec/specs/&lt;cap&gt;/spec.md', d: 'Purpose + SHALL/MUST, each with ≥1 scenario' },
+    { run: 'validate-strict', cmd: 'openspec validate --strict', d: 'until the whole baseline is clean' },
+  ] },
+  { name: 'Hand off to an agent', mode: 'read', steps: [
+    { hand: true, cmd: 'hand over specs/ grouped by capability', d: 'an agent-readable baseline' },
+  ] },
 ];
-const OLDKIND = {
-  moved: { label: 'Reshaped',       cls: 'cflow__cap--moved' },
-  new:   { label: 'New to OpenSpec', cls: 'cflow__cap--new' },
-  same:  { label: 'Unchanged',      cls: 'cflow__cap--same' },
-};
-document.getElementById('consoleBody').innerHTML = CONSOLE.map((c) => {
-  const k = OLDKIND[c.old.kind];
-  const input = c.input ? `<input class="act__in" id="${c.input.id}" placeholder="${c.input.ph}" />` : '';
-  const from = c.input ? ` data-from="${c.input.id}"` : '';
-  const cls = 'act' + (c.write ? ' act--write' : '') + (c.danger ? ' act--danger' : '');
-  return `<tr class="${c.old.kind === 'new' ? 'cflow--new' : ''}">
-    <td class="cflow__intent"><b>${c.intent}</b></td>
-    <td class="cflow__old"><span class="cflow__cap ${k.cls}">${k.label}</span><span class="cflow__oldt">${c.old.t}</span></td>
-    <td class="cflow__run">
-      <code class="cflow__cmd">${c.cmd}</code>
-      <div class="cflow__do">${input}<button class="${cls}" data-action="${c.action}"${from}>Run ▸</button></div>
-    </td>
-  </tr>`;
+document.getElementById('consoleBody').innerHTML = CONSOLE_WF.map((w) => {
+  const runs = w.steps.filter((s) => s.run).length;
+  const steps = w.steps.map((s) => {
+    if (s.run) {
+      const input = s.input ? `<input class="act__in" id="${s.input.id}" placeholder="${s.input.ph}" />` : '';
+      const from = s.input ? ` data-from="${s.input.id}"` : '';
+      const cls = 'act' + (s.write ? ' act--write' : '') + (s.danger ? ' act--danger' : '');
+      return `<li class="cstep cstep--run">
+        <span class="wfkb wfkb--cli">✓</span>
+        <div class="cstep__body"><code class="cstep__t">${s.cmd}</code>${s.tag ? `<span class="cstep__tag">${s.tag}</span>` : ''}<span class="cstep__d">${s.d || ''}</span></div>
+        <div class="cstep__do">${input}<button class="${cls}" data-action="${s.run}"${from}>Run ▸</button></div>
+      </li>`;
+    }
+    const k = s.tui ? 'tui' : 'hand';
+    const kb = s.tui ? '⌨' : '✍';
+    const pill = s.tui ? 'terminal only' : 'by hand';
+    return `<li class="cstep cstep--${k}">
+      <span class="wfkb wfkb--${k}">${kb}</span>
+      <div class="cstep__body"><code class="cstep__t">${s.cmd}</code>${s.tag ? `<span class="cstep__tag">${s.tag}</span>` : ''}<span class="cstep__d">${s.d || ''}</span></div>
+      <span class="cstep__pill cstep__pill--${k}">${pill}</span>
+    </li>`;
+  }).join('');
+  return `<article class="cgrp cgrp--${w.mode} ${w.spine ? 'cgrp--spine' : ''}">
+    <div class="cgrp__hd">
+      <b>${w.name}</b>
+      <span class="wfchip wfchip--${w.mode}">${w.mode === 'read' ? 'READ' : 'WRITE'}</span>
+      <span class="cgrp__tally">${runs} button${runs === 1 ? '' : 's'}</span>
+    </div>
+    <ol class="cgrp__steps">${steps}</ol>
+  </article>`;
 }).join('');
 
 // ── 8) Console — drive real openspec/git via ./api/exec ──────────
