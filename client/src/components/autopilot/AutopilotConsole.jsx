@@ -3,6 +3,7 @@ import { apiGet, apiPost, apiPatch, apiDelete } from '../../api/client';
 import ErrorBanner from '../shared/ErrorBanner';
 import AgentsView from './AgentsView';
 import LoopsView from './LoopsView';
+import SystemTestsView from './SystemTestsView';
 import '../../pages/autopilot.css';
 
 // The full Autopilot console (plans/autopilot-to-harness.md): the complete
@@ -220,11 +221,16 @@ export default function AutopilotConsole({ embedded = false }) {
         <button className={tab === 'audit' ? 'on' : ''} onClick={() => setTab('audit')}>
           Audit{audit.length ? ` ${audit.length}` : ''}
         </button>
+        <button className={tab === 'systests' ? 'on' : ''} onClick={() => setTab('systests')}>
+          System tests
+        </button>
       </nav>
 
       {tab === 'agents' && <AgentsView data={data} mutate={mutate} />}
 
       {tab === 'loops' && <LoopsView data={data} loopAction={loopAction} />}
+
+      {tab === 'systests' && <SystemTestsView />}
 
       {tab === 'prompts' && (
         <>

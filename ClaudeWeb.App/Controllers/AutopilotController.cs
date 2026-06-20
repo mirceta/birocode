@@ -29,12 +29,13 @@ public class AutopilotController : ControllerBase
     private readonly LoopConfigStore _loops;
     private readonly AutopilotGate _operatorGate;
     private readonly AutopilotAuditLog _audit;
+    private readonly SystemTestsService _systests;
     private readonly Logger _logger;
 
     public AutopilotController(
         AutopilotDiscoveryService discovery, AutopilotService engine,
         AutopilotConfigStore config, LoopConfigStore loops, AutopilotGate operatorGate,
-        AutopilotAuditLog audit, Logger logger)
+        AutopilotAuditLog audit, SystemTestsService systests, Logger logger)
     {
         _discovery = discovery;
         _engine = engine;
@@ -42,6 +43,7 @@ public class AutopilotController : ControllerBase
         _loops = loops;
         _operatorGate = operatorGate;
         _audit = audit;
+        _systests = systests;
         _logger = logger;
     }
 
@@ -122,6 +124,47 @@ public class AutopilotController : ControllerBase
         }
 
         return Ok(BuildState());
+    }
+
+    // --- System tests (understanding.md: real-runner) -----------------------
+    // The loop-mode tests, runnable one-click from the System Tests tab. Each
+    // spawns a fixed Node/Playwright script against THIS harness; node (and, for
+    // the browser tests, Playwright) must be installed on the host or the run
+    // reports an honest error. Gated like everything else here.
+
+    /// <summary>GET — every test plus its live/last run state (status, output,
+    /// exit code, screenshot readiness).</summary>
+    [HttpGet("systests")]
+    public IActionResult SysTests()
+    {
+        _logger.CountRequest();
+        if (GateClosed() is { } closed) return closed;
+        return Ok(new { tests = _systests.Snapshot() });
+    }
+
+    /// <summary>POST — start one test by id. Returns immediately; the UI polls
+    /// the list endpoint for progress.</summary>
+    [HttpPost("systests/{id}/run")]
+    public IActionResult RunSysTest(string id)
+    {
+        _logger.CountRequest();
+        if (GateClosed() is { } closed) return closed;
+        if (!_systests.Start(id)) return NotFound(new { error = $"unknown test \"{id}\"" });
+        return Ok(new { tests = _systests.Snapshot() });
+    }
+
+    /// <summary>GET — the PNG screenshot a browser test wrote, if it exists.</summary>
+    [HttpGet("systests/{id}/artifact")]
+    public IActionResult SysTestArtifact(string id)
+    {
+        _logger.CountRequest();
+        if (GateClosed() is { } closed) return closed;
+        var path = _systests.ArtifactPath(id);
+        if (path is null || !System.IO.File.Exists(path))
+            return NotFound(new { error = "no screenshot yet — run the test first" });
+        // no-store so each re-run's fresh screenshot shows on reload.
+        Response.Headers["Cache-Control"] = "no-store";
+        return PhysicalFile(path, "image/png");
     }
 
     private object BuildState()

@@ -16,6 +16,7 @@ public static class AutopilotModuleExtensions
         services.AddSingleton<LoopConfigStore>();
         services.AddSingleton<AutopilotAuditLog>();
         services.AddSingleton<PromptClassifier>();
+        services.AddSingleton<SystemTestsService>();
         services.AddSingleton<AutopilotService>();
         services.AddHostedService(sp => sp.GetRequiredService<AutopilotService>());
         return services;
