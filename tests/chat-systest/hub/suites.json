@@ -1,0 +1,64 @@
+{
+  "scenarios": {
+    "1":  "Auth gate — chat endpoints reject calls without the session cookie",
+    "2":  "Validation — empty message / missing repo → 4xx, not 500",
+    "3":  "409 single-flight — second builder POST while one is live → 409",
+    "4":  "Ask concurrency — lane=ask runs while a builder run is live (own seq/session)",
+    "5":  "Stop — /api/chat/stop returns 200, /api/runs flips terminal, process dies",
+    "6":  "Reattach — GET /api/chat/stream?after=N replays with no dupes/gaps, seq increasing",
+    "7":  "Runs snapshot — /api/runs reflects running → done/error transitions",
+    "8":  "Sessions list/transcript — turn appears; messages read back; traversal id rejected",
+    "9":  "Bad inputs — unknown lane/model, malformed/ghost sessionId → graceful error, no hang/500",
+    "10": "Basic turn — short prompt → ordered session → token… → usage? → done",
+    "11": "Resume — second turn with returned sessionId appends to same JSONL",
+    "12": "Tool lifecycle — a forced Read → tool start/input/end with summary/preview/ok",
+    "13": "Model param — claude-haiku-4-5 honoured by the CLI and reflected in the run record",
+    "14": "Ask read-only — an ask-lane write request does not mutate disk (permission-mode plan)"
+  },
+  "suites": [
+    {
+      "id": "behavioural",
+      "file": "behavioural.mjs",
+      "title": "Behavioural / protocol",
+      "cost": "none",
+      "blurb": "Auth gate, input validation, stop-when-idle, runs/sessions shape, path traversal. Pure HTTP/SSE protocol — no CLI, no tokens.",
+      "scenarios": ["1", "2", "5", "6", "7", "8", "9"]
+    },
+    {
+      "id": "smoke",
+      "file": "smoke.mjs",
+      "title": "Smoke (one real turn)",
+      "cost": "tiny",
+      "blurb": "One cheap real turn to confirm the isolated instance can actually drive the Claude CLI before spending on the full real-run suite.",
+      "scenarios": ["10"]
+    },
+    {
+      "id": "realrun",
+      "file": "realrun.mjs",
+      "title": "Real run (end-to-end CLI)",
+      "cost": "tokens",
+      "blurb": "Drives the real Claude CLI: basic/resume/tool/model/ask-read-only plus 409, ask-concurrency, stop and reattach against live runs. Cheap model, tiny prompts.",
+      "scenarios": ["3", "4", "5", "6", "10", "11", "12", "13", "14"]
+    },
+    {
+      "id": "badinput",
+      "file": "badinput.mjs",
+      "title": "Bad input (bug hunt)",
+      "cost": "small",
+      "blurb": "Malformed real inputs that reach the CLI — ghost session, bad model, unknown lane, malformed sessionId — must reach a clean terminal error, never a hang/500/wedged slot.",
+      "scenarios": ["9"]
+    }
+  ],
+  "findings": [
+    {
+      "severity": "low",
+      "title": "A user-initiated stop is recorded as status:\"error\"",
+      "detail": "RunSession.Complete() marks done only if a done event was seen, else error; a cancel sees none. So a deliberately-stopped run is indistinguishable from a crash, and stop also emits {type:\"error\",message:\"Run stopped by user.\"}. Repro: start a turn, POST /api/chat/stop, read /api/runs → error. Consider a distinct stopped/cancelled status."
+    },
+    {
+      "severity": "low",
+      "title": "Resuming a non-existent session yields an opaque error_during_execution",
+      "detail": "No session event, no \"session not found\" hint. Repro: POST /api/chat with a well-formed but unknown sessionId → terminal error with that generic message. Graceful (no hang/crash) but unfriendly."
+    }
+  ]
+}

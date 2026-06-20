@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chat system-test hub</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="dot" id="brandDot"></span>
+      <h1>Chat system-test hub</h1>
+    </div>
+    <div class="instance" id="instance">
+      <span class="pill" id="instPill">checking…</span>
+      <button class="btn ghost" id="btnUp" title="Build + launch the isolated :5310 instance and register a scratch repo">Launch instance</button>
+      <button class="btn ghost danger" id="btnDown" title="Kill the isolated instance and remove its scratch root">Tear down</button>
+    </div>
+  </header>
+
+  <p class="sub">Keep the <code>tests/chat-systest</code> suite understandable and under control —
+    run each layer, watch PASS/FAIL live, and never forget the feature.
+    <a href="#" id="planLink">plan</a></p>
+
+  <main>
+    <section class="col">
+      <h2>Suites</h2>
+      <div id="suites" class="cards"></div>
+
+      <h2>Known findings <span class="muted" id="findCount"></span></h2>
+      <div id="findings" class="findings"></div>
+
+      <h2>Recent runs</h2>
+      <div id="history" class="history"><span class="muted">none yet</span></div>
+    </section>
+
+    <section class="col console-col">
+      <div class="console-head">
+        <h2 id="consoleTitle">Console</h2>
+        <span class="summary" id="summary"></span>
+        <button class="btn ghost" id="btnClear">clear</button>
+      </div>
+
+      <div id="stepPanel" class="step-panel" hidden>
+        <div class="step-bar" id="stepBar">
+          <span class="step-mode" id="stepMode">stepping through</span>
+          <span class="grow"></span>
+          <button class="btn" id="btnNext">Next step ▸</button>
+          <button class="btn ghost" id="btnSkip">Skip</button>
+          <button class="btn ghost" id="btnRest">Run the rest ⏩</button>
+          <button class="btn ghost danger" id="btnAbort">Abort</button>
+        </div>
+        <ul id="steps" class="steps"></ul>
+      </div>
+
+      <pre id="console" class="console"><span class="muted">Run a suite or launch the instance — output streams here.</span></pre>
+    </section>
+  </main>
+
+  <script src="./diagram.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>

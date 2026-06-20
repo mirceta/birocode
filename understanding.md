@@ -1,34 +1,43 @@
-# Understanding — enlarge a dock to two horizontal spaces
+# Understanding — Hide inactive agents
 
-## Goal
+## What you asked for
 
-On the agent dashboard, let any agent dock **enlarge itself to span two
-horizontal grid spaces** (double width), via a **toggle button placed next to
-the existing "important" (★) and "depends on another agent" (🔗) controls** in
-the dock header. It's a toggle — press again to return to one space. Multiple
-docks can be wide at once.
+A new feature on the **agent dashboard**: a single **toggle switch** labelled
+**"Show only important agents"**. When it's **on**, the dashboard hides every
+agent dock that **isn't** marked ★ important (the star control in a dock's
+top-right corner); when it's **off**, all docks show as they do today. A toggle —
+flip it back any time.
 
-## What I'll do
+"Inactive" here means **not starred important** — it builds on the existing
+important/star feature, just hiding the unimportant ones rather than only pinning
+the important ones to the front.
 
-- **Backend:** add a `Wide` boolean to `DockTab` (default `false`), threaded the
-  same way `Important` is — `DockRegistry.Update` param + DTO mapping,
-  `DockController` `PatchRequest`/GET/Update, and the `toServerPatch` whitelist in
-  `DockContext.jsx`. Backend-synced so the choice survives reload and is shared
-  across devices, exactly like `important`/`color`/`dashboard`.
-- **Frontend control:** a new toggle component (mirroring `ImportantStar`) placed
-  beside the important/depends controls in **both** dock surfaces — the phone
-  dock header (`PinnedAgent.jsx`) and the summary card (`Dashboard.jsx`).
-- **Layout:** a wide dock's grid cell gets `grid-column: span 2` so it occupies
-  two columns of the dashboard grid. Handle the dependent "together" group
-  (`dash__group`) so a wide primary spans correctly.
-- **Wiring:** a `toggleWide` callback in `Dashboard.jsx` (optimistic +
-  backend-synced via `updateTab`, mirroring `toggleImportant`), plus i18n strings
-  (en + tr).
+## What I'll do (this kickoff step)
 
-## Assumptions
+- ✅ Made sure I'm on `main` synced with `origin/main`, then cut
+  **`feature/hide-inactive-agents`**.
+- ✅ Added an **Active feature plans** entry in `plan.md` and wrote the feature
+  plan at `plans/hide-inactive-agents.md`.
+- ⏳ **Not building yet** — waiting for you to confirm this understanding and the
+  design choices below.
 
-- "Two horizontal spaces" = two columns of the dashboard agent grid (double the
-  normal cell width). Height is unchanged.
-- No separate Advanced feature flag: this control lives inside the already
-  Advanced-gated dashboard, alongside important/waiting/depends which have no
-  per-control flag. (Will confirm at build time.)
+## How I plan to build it (confirm before I start)
+
+- A **device-local** toggle (saved per browser, default off), like the existing
+  dashboard size/zoom/layout controls — **not** backend-synced, since it's a
+  per-viewer view preference.
+- Implemented as a **pure view filter**: when on, render only docks whose
+  existing backend-synced `important` flag is set. No new dock data, no backend
+  change. Applies to both the phone docks and the summary cards.
+- An empty-state hint if you turn it on while nothing is starred, so it doesn't
+  look like a blank/broken dashboard.
+
+## Assumptions / open questions
+
+- The switch lives in the dashboard's existing control row, inside the
+  already-Advanced dashboard (no separate gating).
+- **Dependent "together" groups:** if a primary is important but its dependent
+  isn't, I'll hide the non-important half (filter strictly per-dock). Flag if
+  you'd rather keep grouped pairs together.
+- Label wording **"Show only important agents"** taken verbatim from your
+  request (will add English + Turkish i18n).

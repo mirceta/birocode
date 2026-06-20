@@ -76,6 +76,18 @@ function readZoom() {
   }
 }
 
+// "Show only important agents" (plans/hide-inactive-agents.md): a device-local
+// view filter that hides every dock NOT marked ★ important. Default off; a pure
+// view filter over the existing backend-synced `important` flag.
+const ONLY_IMPORTANT_KEY = 'claudeweb_dash_only_important';
+function readOnlyImportant() {
+  try {
+    return localStorage.getItem(ONLY_IMPORTANT_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 // Expandable Ideas dock (plans/ideas-arch-plan.md): the pinned-left dock can be
 // widened (≥2×) so the architectural-plan doc has room. Remembered per device.
 const IDEAS_WIDE_KEY = 'claudeweb_dash_ideas_wide';
@@ -271,6 +283,20 @@ export default function Dashboard({ onClose }) {
       const next = clampZoom(prev + delta);
       try {
         localStorage.setItem(ZOOM_KEY, String(next));
+      } catch {
+        /* private mode — fall back to in-memory only */
+      }
+      return next;
+    });
+  }
+
+  // "Show only important agents" filter — device-local, default off.
+  const [onlyImportant, setOnlyImportant] = useState(readOnlyImportant);
+  function toggleOnlyImportant() {
+    setOnlyImportant((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(ONLY_IMPORTANT_KEY, next ? '1' : '0');
       } catch {
         /* private mode — fall back to in-memory only */
       }
@@ -497,9 +523,15 @@ export default function Dashboard({ onClose }) {
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
 
+  // How many docks are starred important — drives the "show only important"
+  // filter's empty state and the filtered grid's column count.
+  const importantCount = useMemo(() => tabs.filter((t) => t.important).length, [tabs]);
+
   // Lay agents out in a grid that approximates a square (columns = ⌈√n⌉) rather
-  // than one long row: 4 → 2×2, 6 → 3×2, 10 → 4×3.
-  const columns = Math.max(1, Math.ceil(Math.sqrt(tabs.length)));
+  // than one long row: 4 → 2×2, 6 → 3×2, 10 → 4×3. When the filter is on, pack
+  // by the visible (important) count so the grid doesn't keep empty columns.
+  const visibleCount = onlyImportant ? importantCount : tabs.length;
+  const columns = Math.max(1, Math.ceil(Math.sqrt(visibleCount)));
 
   // Recency tiers are derived against "now"; recomputed each render. The 5s poll
   // re-renders via setLive, so the borders age without a separate timer.
@@ -904,6 +936,21 @@ export default function Dashboard({ onClose }) {
             </button>
           </div>
         )}
+        {tabs.length > 0 && (
+          <button
+            type="button"
+            className={`dash__only-important${onlyImportant ? ' dash__only-important--on' : ''}`}
+            onClick={toggleOnlyImportant}
+            role="switch"
+            aria-checked={onlyImportant}
+            title={t('dashboard.onlyImportant')}
+          >
+            <span className="dash__only-important-track" aria-hidden="true">
+              <span className="dash__only-important-knob" />
+            </span>
+            <span className="dash__only-important-label">{t('dashboard.onlyImportant')}</span>
+          </button>
+        )}
         <button
           type="button"
           className="dash__close"
@@ -1048,6 +1095,8 @@ export default function Dashboard({ onClose }) {
       <Scoreboard />
       {tabs.length === 0 ? (
         <p className="dash__empty">{t('dashboard.empty')}</p>
+      ) : onlyImportant && importantCount === 0 ? (
+        <p className="dash__empty">{t('dashboard.onlyImportantEmpty')}</p>
       ) : (
         <ul
           className={`dash__grid${view !== 'cards' ? ' dash__grid--phones' : ''}`}
@@ -1063,6 +1112,13 @@ export default function Dashboard({ onClose }) {
           }}
         >
           {orderedTabs.map((tab) => {
+            // "Show only important" filter (plans/hide-inactive-agents.md): hide
+            // every dock not starred ★ important. In filtered mode we render the
+            // important docks FLAT (no "together" grouping), so an important dock
+            // always shows whether it's a primary, a dependent, or standalone.
+            if (onlyImportant) {
+              return tab.important ? renderDock(tab, { wide: !!tab.wide }) : null;
+            }
             // Dependents render INSIDE their primary's "together" group below.
             if (primaryOf(tab)) return null;
             const deps = dependentsByPrimary.get(tab.id) || [];
