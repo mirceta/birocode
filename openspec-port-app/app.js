@@ -423,6 +423,27 @@ function phaseStatus(n) {
   if (done === total) return { cls: 'done', label: 'done' };
   return { cls: 'doing', label: `${done}/${total}` };
 }
+function phaseProgress(n) {
+  const total = PHASES[n].tasks.length;
+  let done = 0;
+  for (let i = 0; i < total; i++) if (state.tasks[`p${n}-${i}`]) done++;
+  return { done, total };
+}
+// Re-render Control's phases without losing which ones are expanded.
+function refreshPhasesPreservingOpen() {
+  const open = [...phasesEl.querySelectorAll('.phase.open')].map((el) => el.dataset.phase);
+  renderPhases();
+  open.forEach((n) => phasesEl.querySelector(`.phase[data-phase="${n}"]`)?.classList.add('open'));
+}
+// Cross-wire: keep the Console group's "↔ Phase n · done/total" chips in sync.
+function updateConsolePhaseChips() {
+  document.querySelectorAll('.cgrp__phase[data-phase]').forEach((el) => {
+    const n = Number(el.dataset.phase);
+    const { done, total } = phaseProgress(n);
+    el.textContent = `↔ Phase ${n} · ${done}/${total}`;
+    el.classList.toggle('is-done', done === total);
+  });
+}
 function renderPhases() {
   phasesEl.innerHTML = PHASES.map((p) => {
     const st = phaseStatus(p.n);
@@ -470,6 +491,7 @@ phasesEl.addEventListener('change', (e) => {
   badge.className = `pstatus ${st.cls}`; badge.textContent = st.label;
   cb.closest('.task').classList.toggle('done', cb.checked);
   updateProgress();
+  updateConsolePhaseChips();   // keep the Console group chip in sync
 });
 
 // ── 5) Decide — the four open decisions (segmented state + fork) ──
@@ -519,7 +541,7 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   state = { tasks: {}, decisions: {} };
   DECISIONS.forEach((d) => { state.decisions[d.id] = d.init; });
   saveState(state);
-  renderPhases(); renderDecisions(); updateProgress();
+  renderPhases(); renderDecisions(); updateProgress(); updateConsolePhaseChips();
 });
 
 // ── Data: Console — the executable twin of the Workflows tab ─────
@@ -532,7 +554,7 @@ document.getElementById('resetBtn').addEventListener('click', () => {
 // the previous layer is anchored at every step. old.k ∈ 'moved' (same ritual,
 // relocated) | 'new' (no old equivalent — an unlock) | 'same' (unchanged).
 const CONSOLE_WF = [
-  { name: 'Set up the tool', mode: 'write', steps: [
+  { name: 'Set up the tool', mode: 'write', phase: 0, steps: [
     { run: 'version', cmd: 'openspec --version', d: 'confirm the CLI is installed',
       old: { k: 'new', t: 'nothing to check — planning was habit + the <code>CLAUDE.md</code> prompt; there was no CLI.' } },
     { run: 'init', cmd: 'openspec init --tools claude', danger: true, d: 'scaffold openspec/ + the /opsx commands (Phase 0)',
@@ -605,11 +627,17 @@ document.getElementById('consoleBody').innerHTML = CONSOLE_WF.map((w) => {
     }
     return `<li class="cstep cstep--${k}"><span class="wfkb wfkb--${s.run ? 'cli' : k}">${kb}</span>${body}${control}</li>`;
   }).join('');
+  let phaseChip = '';
+  if (w.phase != null) {
+    const { done, total } = phaseProgress(w.phase);
+    phaseChip = `<span class="cgrp__phase ${done === total ? 'is-done' : ''}" data-phase="${w.phase}" title="mirrors Control · Phase ${w.phase}; running a step here ticks it there">↔ Phase ${w.phase} · ${done}/${total}</span>`;
+  }
   return `<article class="cgrp cgrp--${w.mode} ${w.spine ? 'cgrp--spine' : ''}">
     <div class="cgrp__hd">
       <b>${w.name}</b>
       <span class="wfchip wfchip--${w.mode}">${w.mode === 'read' ? 'READ' : 'WRITE'}</span>
       <span class="cgrp__tally">${runs} button${runs === 1 ? '' : 's'}</span>
+      ${phaseChip}
     </div>
     <ol class="cgrp__steps">${steps}</ol>
   </article>`;
@@ -641,6 +669,30 @@ function logBlock({ cmd, code, stdout, stderr, error, ok }) {
 function escapeHtml(s) {
   return String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 }
+// A muted positive line in the log — used to surface the run→track cross-wire.
+function logNote(msg) {
+  const el = document.createElement('div');
+  el.className = 'logb logb--note';
+  el.textContent = msg;
+  conLog.appendChild(el);
+  conLog.scrollTop = conLog.scrollHeight;
+}
+
+// ── Cross-wire: a successful Console run ticks the matching Control task ──
+// Start with the clean 1:1 link (init → Phase 0 · "Run openspec init"). Others
+// (e.g. validate --strict) span two phases, so they're left manual on purpose.
+const RUN_TO_TASK = {
+  init: { key: 'p0-1', label: 'Phase 0 · Run openspec init' },
+};
+function markTask(key) {
+  if (state.tasks[key]) return false;             // already ticked — no-op
+  state.tasks[key] = true;
+  saveState(state);
+  refreshPhasesPreservingOpen();
+  updateProgress();
+  updateConsolePhaseChips();
+  return true;
+}
 
 async function runAction(action, id, btn) {
   if (btn) { btn.disabled = true; btn.classList.add('busy'); }
@@ -651,8 +703,10 @@ async function runAction(action, id, btn) {
       body: JSON.stringify(id != null ? { action, id } : { action }),
     });
     const data = await res.json();
-    if (data.error) logBlock({ cmd: action, error: data.error });
-    else logBlock(data);
+    if (data.error) { logBlock({ cmd: action, error: data.error }); return; }
+    logBlock(data);
+    const link = RUN_TO_TASK[action];
+    if (link && data.ok && markTask(link.key)) logNote(`✓ ticked Control — ${link.label}`);
   } catch (e) {
     logBlock({ cmd: action, error: 'request failed — is the Console server (serve.mjs) running? ' + e.message });
   } finally {
