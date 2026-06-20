@@ -220,6 +220,8 @@
   "dashboard.copied": "Kopyalandi!",
   "dashboard.markImportant": "Onemli olarak isaretle (kirmizi kenarlik, basa siralanir)",
   "dashboard.unmarkImportant": "Onem isaretini kaldir",
+  "dashboard.onlyImportant": "Yalnizca onemli ajanlari goster",
+  "dashboard.onlyImportantEmpty": "Onemli ajan yok. Bir dock'u yildizlayin ★ veya \"Yalnizca onemli ajanlari goster\"i kapatin.",
   "dashboard.markWide": "Iki yatay alana genislet",
   "dashboard.unmarkWide": "Tek alana kucult",
   "dashboard.markWaiting": "Baska bir ajani bekliyor olarak isaretle",
