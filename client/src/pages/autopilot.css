@@ -383,6 +383,17 @@
 /* ---- System Tests tab (understanding.md: real-runner): inner sub-tabs + run panel ---- */
 .st-wrap { display: flex; flex-direction: column; gap: 12px; }
 
+.st-prereq {
+  border: 1px solid #f0c36d;
+  background: #fff8e6;
+  color: #5c4a13;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+.st-prereq strong { color: #8a5a00; }
+
 .st-subtabs { display: flex; gap: 6px; flex-wrap: wrap; }
 .st-subtabs button {
   display: inline-flex; align-items: center; gap: 7px;

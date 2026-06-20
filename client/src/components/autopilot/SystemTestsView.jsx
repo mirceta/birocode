@@ -96,6 +96,11 @@ export default function SystemTestsView() {
 
   return (
     <div className="st-wrap">
+      <div className="st-prereq" role="note">
+        <strong>⚠ Playwright is required.</strong> These tests shell out to Node and the
+        browser tests launch Chromium — <b>Node + Playwright must be installed on the host</b>,
+        or every run here will fail with a prerequisite error.
+      </div>
       <p className="autopilot__summary">
         The loop-mode tests, runnable here. Each spins up a fixed Node/Playwright script
         against <b>this running harness</b>. They need <b>Node</b> on the host (and
