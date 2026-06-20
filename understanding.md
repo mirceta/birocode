@@ -1,25 +1,37 @@
-# Understanding — narrate what the system tests are doing
+# Understanding — full live feedback for the system tests
 
 ## Goal
-Right now a chat system-test run prints only terse `[PASS]/[FAIL]` lines plus a
-summary — there's no plain-language account of *what the test is actually doing*
-or *why*. As a first step toward better feedback, make a single test run tell
-its story in the console (which the hub's console pane mirrors verbatim).
+Make a system-test run *show what it's doing* — not just emit terse
+`[PASS]/[FAIL]` lines. Build the whole feedback experience, not a slice.
 
-## What I'll do
-- Add a `say(msg)` narrator helper to `tests/chat-systest/lib.mjs` — a distinct
-  `→ ...` line, commentary only (never affects pass/fail). It prints to stdout,
-  so it shows in the raw console AND the hub's console pane.
-- Narrate the shared actions so every suite benefits for free:
-  - `login()` — "logging in… / session established".
-  - `startTurn()` — which lane / model / message / resume it's sending.
-- Narrate each scenario: a one-line intent before the checks ("a logged-out
-  client must be refused on every chat endpoint", etc.) across
-  `behavioural.mjs`, `smoke.mjs`, `realrun.mjs`, `badinput.mjs`.
+## What was built
+1. **Narration (`say`)** in `lib.mjs` — a plain-language `→ ...` line that is
+   commentary only (never affects pass/fail). It does double duty: a console line
+   **and** a structured `narrate` event tagged with the current step index.
+   `login()`/`startTurn()` narrate the shared actions; every scenario in all four
+   suites opens with its intent.
+2. **Live step list in the hub for BOTH modes** (`hub/public/`):
+   - Each step streams its `say()` lines into a per-step **activity feed**
+     (`.sfeed`) as it runs, shown beside that step's checks and observed line.
+   - **Headless** runs now also show the step list (read-only — control bar
+     hidden), so you watch steps tick by with their narration, instead of only a
+     console dump. **Step-through** keeps the Next/Skip/Run-the-rest/Abort bar.
+   - No server change needed — `narrate` events ride the existing `@@SYSTEST@@`
+     channel the server already forwards.
 
-## Assumptions
-- "For starters" = console narration now; richer per-step display in the
-  interactive hub UI can follow later. Narration via plain stdout already
-  reaches the hub console pane, so no server/SPA change is needed yet.
-- Narration is descriptive only — it must not change any assertion or the
-  PASS/FAIL/summary contract that the hub parses.
+## Verified
+- `say()` emits `{type:"narrate", i:<step>, msg}` attributed to the right step.
+- Headless browser drive of the hub (`.preview-test/systest-feedback-check.mjs`),
+  **9/9**: interactive feed streams ≥2 narration lines on step 1 with the right
+  human text; resolved step shows feed + 7 checks together; headless shows the
+  list, hides the control bar, labels it "live run", narrates, and finishes
+  21/21. Screenshots in `.preview-test/out/fb-*.png`.
+- Found & fixed a real CSS bug: `.step-bar{display:flex}` overrode the `[hidden]`
+  attribute, so the control bar wouldn't hide in headless — added
+  `.step-bar[hidden]{display:none}`.
+
+## Notes
+- On `feature/systest-interactive` (builds on the chat-systest line, not yet on
+  `main`).
+- Console narration was committed first (9f84f87); the live-feed/headless-list
+  layer is the change to commit next.

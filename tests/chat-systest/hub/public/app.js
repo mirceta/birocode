@@ -126,7 +126,14 @@ const CTRL_IDS = ['btnNext', 'btnSkip', 'btnRest', 'btnAbort'];
 let autoRest = false;   // "Run the rest" auto-advances each awaiting step
 let awaiting = false;   // a step is paused, waiting for the operator
 
-function showStepPanel(show) { $('#stepPanel').hidden = !show; if (show) $('#steps').innerHTML = ''; }
+// The step panel shows in BOTH modes: interactive adds the control bar (Next /
+// Skip / …); headless shows the same live step list read-only (bar hidden).
+function showStepPanel(show, interactive) {
+  $('#stepPanel').hidden = !show;
+  $('#stepBar').hidden = !interactive;
+  $('#stepMode').textContent = interactive ? 'stepping through' : 'live run';
+  if (show) $('#steps').innerHTML = '';
+}
 function setCtrlEnabled(on) { CTRL_IDS.forEach((id) => { const b = $('#' + id); if (b) b.disabled = !on; }); }
 
 function stepCard(i) {
@@ -134,10 +141,21 @@ function stepCard(i) {
   if (!li) {
     li = el('li', 'stp'); li.id = 'step-' + i;
     li.innerHTML = '<span class="sdot"></span><div class="sbody"><div class="sname"></div>'
-      + '<div class="sobs"></div><ul class="schecks"></ul></div><span class="stag"></span>';
+      + '<div class="sobs"></div><ul class="sfeed"></ul><ul class="schecks"></ul></div><span class="stag"></span>';
     $('#steps').append(li);
   }
   return li;
+}
+
+// Stream a say() narration line into its step's live activity feed. Suite-level
+// narration (i < 0, e.g. login before the first step) has no card — it already
+// shows in the console pane, so we just skip it here.
+function addNarration(i, msg) {
+  if (i == null || i < 0) return;
+  const li = document.getElementById('step-' + i);
+  if (!li) return;
+  li.querySelector('.sfeed').append(el('li', null, msg));
+  if (li.classList.contains('running') || li.classList.contains('await')) li.scrollIntoView({ block: 'nearest' });
 }
 function markStep(i, state, data = {}) {
   const li = stepCard(i);
@@ -178,7 +196,7 @@ async function runSuite(s, mode = 'headless') {
   const interactive = mode === 'interactive';
   autoRest = false; awaiting = false;
   setBusy(true); clearConsole(); setSummary(interactive ? 'stepping…' : 'running…');
-  showStepPanel(interactive); setCtrlEnabled(false);
+  showStepPanel(true, interactive); setCtrlEnabled(false);
   $('#consoleTitle').textContent = `Console — ${s.title}`;
   logLine(`▶ ${interactive ? 'stepping through' : 'running'} ${s.file}`, 'step');
   await streamPost(`./api/run/${s.id}?mode=${mode}`, (ev) => {
@@ -194,6 +212,8 @@ async function runSuite(s, mode = 'headless') {
       } else if (ev.phase === 'end') {
         markStep(ev.i, ev.status, { name: ev.name, observed: ev.observed, checks: ev.checks });
       }
+    } else if (ev.type === 'narrate') {
+      addNarration(ev.i, ev.msg);
     } else if (ev.type === 'aborted') {
       logLine(`\n■ aborted at step ${ev.i + 1}`, 'fail');
     } else if (ev.type === 'summary') {

@@ -81,10 +81,12 @@ await step('Auth gate rejects no-cookie', async () => {
 Narrate as you go with `say(msg)` (from `lib.mjs`): it prints a plain-language
 `→ ...` line so a human watching the run follows the **story** — what the step is
 about to do and why — not just the terse `[PASS]`/`[FAIL]` tags. It is commentary
-only (never records a result, never affects pass/fail) and, like everything else,
-shows in both the raw console and the hub's console pane. `login()` and
-`startTurn()` already narrate the shared actions, so a turn announces its lane,
-model, and message for free.
+only (never records a result, never affects pass/fail). Each `say()` does double
+duty: a `→` line on the console **and** a structured `narrate` event tagged with
+the current step, which the hub streams into that step's **live activity feed** —
+in both headless and step-through runs. `login()` and `startTurn()` already
+narrate the shared actions, so a turn announces its lane, model, and message for
+free.
 
 The same script runs two ways, chosen by the `SYSTEST_MODE` env var:
 

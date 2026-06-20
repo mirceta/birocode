@@ -33,11 +33,14 @@ of a test, and the same script runs two ways via `SYSTEST_MODE`:
   **operator** clicks through one step at a time and sees per-step feedback.
 
 Steps emit structured `@@SYSTEST@@` events (step start/end with status + checks +
-an observed line, then a `summary`) **alongside** the existing `[PASS]`/`[FAIL]`
-console lines, so headless consumers are unaffected. The hub's two run buttons
-(**Run headless** / **Step through**) and its live step list are built on these
-events. One definition, no second copy to drift. New tests get this for free by
-using `step()` per scenario.
+an observed line, a `narrate` line per `say()`, then a `summary`) **alongside**
+the existing `[PASS]`/`[FAIL]` console lines, so headless consumers are
+unaffected. The hub's two run buttons (**Run headless** / **Step through**) and
+its live step list are built on these events. The list shows in **both** modes
+(headless is read-only, no control bar); each step streams a plain-language `→`
+activity feed from the test's `say()` calls so a watcher follows the *story*, not
+just terse tags. One definition, no second copy to drift. New tests get this for
+free by using `step()` per scenario and a `say()` line or two.
 
 ## Surface under test (discovered)
 

@@ -75,6 +75,8 @@ main { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.1fr); gap:
 /* interactive step-through panel */
 .step-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; margin: 0 0 12px; overflow: hidden; }
 .step-bar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); background: var(--panel2); }
+/* explicit display:flex above beats the [hidden] UA rule, so hide it explicitly */
+.step-bar[hidden] { display: none; }
 .step-mode { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); font-weight: 600; }
 .step-bar .grow { flex: 1; }
 .steps { list-style: none; margin: 0; padding: 8px; max-height: 52vh; overflow: auto; }
@@ -91,6 +93,11 @@ main { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.1fr); gap:
 .sbody { flex: 1; min-width: 0; }
 .sname { font-weight: 600; font-size: 13px; }
 .sobs { font-size: 11.5px; color: var(--muted); margin-top: 2px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; }
+.sfeed { margin: 5px 0 0; padding: 0; list-style: none; font: 11.5px/1.5 ui-sans-serif, system-ui, sans-serif; }
+.sfeed li { color: var(--fg); opacity: .82; padding: 1px 0 1px 16px; text-indent: -16px; }
+.sfeed li::before { content: "→ "; color: var(--accent); }
+.sfeed li:last-child { color: var(--accent); opacity: 1; }
+.stp.pass .sfeed li:last-child, .stp.fail .sfeed li:last-child { color: var(--fg); opacity: .82; }
 .schecks { margin: 5px 0 0; padding: 0; list-style: none; font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .schecks li { color: var(--muted); padding: 1px 0; }
 .schecks li.p::before { content: "✓ "; color: var(--pass); }

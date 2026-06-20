@@ -34,13 +34,16 @@ Open it and:
    `.state/instance.json`. (Needs `dotnet` + `git` on PATH. Or launch one
    yourself per [`../README.md`](../README.md) — the hub picks up `BASE/RID/PW/
    MODEL/SCRATCH` env vars too.)
-2. **Run** any suite, two ways:
+2. **Run** any suite, two ways — both show the **live step list**, where each
+   step streams a plain-language `→` activity feed (from the test's `say()`
+   calls) plus its checks as it runs:
    - **Run headless** — the suite runs end-to-end and you read the verdict
-     (`N/M passed`). This is how an agent runs it.
-   - **Step through** — interactive: a step list lights up pending → running →
-     pass/fail, each step showing its observed result and checks; advance with
-     **Next step** / **Skip** / **Run the rest** / **Abort**. Output also streams
-     into the console; the run lands in **Recent runs**.
+     (`N/M passed`); the step list is read-only (no controls). This is how an
+     agent runs it.
+   - **Step through** — interactive: the list lights up pending → running →
+     pass/fail and you advance with **Next step** / **Skip** / **Run the rest**
+     / **Abort**. Output also streams into the console; the run lands in
+     **Recent runs**.
 3. **Tear down** — kills the instance tree and deletes its scratch root. Your
    live `:5099` store is never touched (separate datadir).
 

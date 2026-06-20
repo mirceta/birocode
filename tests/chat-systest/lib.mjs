@@ -49,7 +49,16 @@ export function note(msg) { console.log(`  ·    ${msg}`); }
 // [PASS]/[FAIL] tags. It prints to stdout, so it shows in the raw console and in
 // the hub's console pane (which mirrors stdout verbatim). Narration is
 // commentary only: it never records a result and never affects pass/fail.
-export function say(msg) { console.log(`→ ${msg}`); }
+//
+// It does double duty: a human `→ ...` line on stdout (raw console + hub console
+// pane), AND a structured `narrate` event tagged with the current step index, so
+// the hub can stream it into that step's live activity feed as it happens. Before
+// the first step (suite-level narration, e.g. inside login() called at module
+// top), the index is -1 and the hub shows it in the console only.
+export function say(msg) {
+  console.log(`→ ${msg}`);
+  emit({ type: 'narrate', i: stepIndex, msg });
+}
 
 export function report() {
   const fails = results.filter((r) => !r.pass);
