@@ -1,15 +1,14 @@
 # Hide inactive agents — "Show only important" dashboard toggle
 
-> **Status (2026-06-20):** BUILT — frontend compiles clean
-> (`npm --prefix client run build`, 0 errors). The **"Show only important agents"**
-> switch is wired in `Dashboard.jsx`: device-local `claudeweb_dash_only_important`
-> (default off), filters the dock map to `important` docks, empty-state hint, i18n
-> en+tr. **Decisions locked** (were open questions): state is **device-local**;
-> the filter is **strictly per-dock** — filtered mode renders important docks
-> **flat** (no "together" grouping), so an important dock always shows whether it's
-> a primary, a dependent, or standalone. Frontend-only, **no backend change**.
-> **Not yet browser-verified** on an isolated preview (sandbox blocks preview
-> launch). On `feature/hide-inactive-agents`.
+> **Status (2026-06-20):** **User-confirmed working and merged to main.** The
+> **"Show only important agents"** switch is wired in `Dashboard.jsx`: device-local
+> `claudeweb_dash_only_important` (default off), filters the dock map to `important`
+> docks, empty-state hint, i18n en+tr. Frontend compiles clean
+> (`npm --prefix client run build`, 0 errors). **Decisions locked** (were open
+> questions): state is **device-local**; the filter is **strictly per-dock** —
+> filtered mode renders important docks **flat** (no "together" grouping), so an
+> important dock always shows whether it's a primary, a dependent, or standalone.
+> Frontend-only, **no backend change**. On `feature/hide-inactive-agents`.
 
 ## Problem
 
