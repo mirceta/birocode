@@ -25,7 +25,16 @@ function setSummary(text, state) {
 // ---- generic SSE-over-fetch reader ------------------------------------------
 async function streamPost(url, onEvent) {
   const res = await fetch(url, { method: 'POST' });
-  if (!res.ok && !res.body) { onEvent({ type: 'err', msg: `HTTP ${res.status}` }); return; }
+  // Error responses are JSON (e.g. 409 "a run is already in progress"), NOT an
+  // event stream. Surface the message — never fall through and try to parse it
+  // as SSE, which silently emits nothing and leaves the UI stuck on "running…".
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try { const j = await res.json(); if (j && j.error) msg = j.error; } catch { /* keep status */ }
+    onEvent({ type: 'err', status: res.status, msg });
+    return;
+  }
+  if (!res.body) { onEvent({ type: 'err', msg: `HTTP ${res.status} (no response body)` }); return; }
   const reader = res.body.getReader();
   const dec = new TextDecoder();
   let buf = '';
@@ -220,6 +229,11 @@ async function runSuite(s, mode = 'headless') {
       setSummary(`${ev.passed}/${ev.total} passed`, ev.passed === ev.total ? 'ok' : 'bad');
     } else if (ev.type === 'line') {
       logLine(ev.line, ev.kind === 'pass' ? 'pass' : ev.kind === 'fail' ? 'fail' : ev.stream === 'err' ? 'err' : '');
+    } else if (ev.type === 'err') {
+      const busy409 = ev.status === 409;
+      const hint = busy409 ? ' — finish or Abort the active run (it may be parked in another tab), then retry' : '';
+      logLine(`\n✖ ${ev.msg}${hint}`, 'fail');
+      setSummary(busy409 ? 'run already in progress' : 'error', 'bad');
     } else if (ev.type === 'exit') {
       const ok = ev.code === 0;
       setSummary(`${ev.passed}/${ev.total} passed`, ok ? 'ok' : 'bad');
