@@ -47,6 +47,13 @@
   sessions plus end-to-end turns (basic, resume, tools, model, ask read-only).
   Discovery only; fixes spin out per one-feature-per-branch. On
   `feature/systest-interactive` (steppable hub + per-suite interactive diagrams).
+- [Hide inactive agents — "Show only important" dashboard toggle](plans/hide-inactive-agents.md)
+  — a single dashboard-level **toggle** ("Show only important agents") that, when
+  on, **hides every dock that isn't starred ★ important**, leaving just the
+  important ones; toggle off to show all again. Pure **view filter** on the
+  existing backend-synced `important` flag ([important-agents.md](plans/important-agents.md))
+  — device-local pref, no new dock state. Kickoff only, not built. On
+  `feature/hide-inactive-agents`.
 
 ## Proposed / design (not building yet)
 
