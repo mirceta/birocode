@@ -8,8 +8,10 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-19):** **Local app fills the dock** is **user-confirmed
-> working and merged to main**; nothing in flight.
+> **Status (2026-06-20):** **Local app fills the dock** is **user-confirmed
+> working and merged to main**. In flight: **Autopilot loop mode** — **built &
+> verified on an isolated port, not yet merged/deployed** — on
+> `feature/autopilot-loop-mode`.
 
 ## ⚠️ Known risks to mitigate
 
@@ -37,7 +39,19 @@
 
 ## Active feature plans
 
-_(none in flight)_
+- [Autopilot loop mode](plans/autopilot-loop-mode.md) — a **deterministic** autopilot
+  loop that **re-sends one fixed prompt** every time an agent finishes a turn, to push
+  it through "do you want slice A or B?" prompts you've already answered — and **stops
+  when the agent is genuinely done**. Done-detection = a **sentinel phrase**
+  (e.g. `LOOP_DONE`) in the last message, backstopped by a hard **iteration cap**; risky
+  endings escalate via the existing deny-list. Resend/turn-done reuses the
+  `RunSession` busy signal; the send reuses the existing CLI path + audit log. Sits behind
+  the **operator gate** (off by default — it acts unattended) and does **not** need the
+  unbuilt LLM classifier. **BUILT — `LoopConfigStore` + per-turn decision in
+  `AutopilotService` + `POST /api/autopilot/loop` + a Loops sub-tab in the Autopilot
+  console; store/API + all three UI states browser-verified on isolated :5210. Not yet
+  merged/deployed; the live multi-turn resend wasn't run against a real agent (would
+  drive real Claude sessions).** On `feature/autopilot-loop-mode`.
 
 ## Proposed / design (not building yet)
 
