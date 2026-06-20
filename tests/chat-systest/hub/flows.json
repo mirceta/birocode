@@ -1,0 +1,333 @@
+{
+  "_comment": "Per-suite flow diagrams for the hub. Each suite maps to {actors, steps}. A step mirrors a step()/scenario in the matching .mjs and lists the ordered interactions between actors (taken from the suite's say() narration + check() assertions). The hub renders these as an interactive sequence diagram (public/diagram.js). actor ids: test=test harness/driver, api=Harness HTTP/SSE API under test, cli=the Claude CLI the Harness spawns, store=on-disk session/repo store. interaction kind: req (request), res (response; ok=true/false tints it), event (SSE/stream), spawn (Harness starts the CLI), read/write (disk), kill, blocked.",
+  "behavioural": {
+    "actors": [
+      { "id": "test", "label": "Test harness" },
+      { "id": "api", "label": "Harness API" },
+      { "id": "store", "label": "Session store" }
+    ],
+    "steps": [
+      {
+        "title": "1. Auth gate",
+        "scenario": "1",
+        "summary": "A logged-out client must be turned away from every chat endpoint; only /api/health stays open.",
+        "interactions": [
+          { "from": "test", "to": "api", "kind": "req", "label": "POST /api/chat — no session cookie" },
+          { "from": "api", "to": "test", "kind": "res", "ok": true, "label": "401 Unauthorized" },
+          { "from": "test", "to": "api", "kind": "req", "label": "GET /runs, /sessions, /chat/stream, POST /stop, /sessions/x/messages — no cookie" },
+          { "from": "api", "to": "test", "kind": "res", "ok": true, "label": "401 on all 5" },
+          { "from": "test", "to": "api", "kind": "req", "label": "GET /api/health — no cookie" },
+          { "from": "api", "to": "test", "kind": "res", "ok": true, "label": "200 — liveness probe stays open" }
+        ],
+        "checks": ["6 chat endpoints → 401 without auth", "/api/health → 200 without auth"]
+      },
+      {
+        "title": "Authenticate",
+        "summary": "Establish the session cookie the rest of the suite reuses.",
+        "interactions": [
+          { "from": "test", "to": "api", "kind": "req", "label": "POST /api/auth/login { password }" },
+          { "from": "api", "to": "test", "kind": "res", "ok": true, "label": "200 + Set-Cookie: claudeweb_session" }
+        ],
+        "checks": ["login establishes a session cookie"]
+      },
+      {
+        "title": "2. Validation",
+        "scenario": "2",
+        "summary": "Empty, whitespace, missing, and body-less messages must be a clean 4xx — never a 500.",
+        "interactions": [
+          { "from": "test", "to": "api", "kind": "req", "label": "POST /api/chat { message: '' }" },
+          { "from": "api", "to": "test", "kind": "res", "ok": true, "label": "400 Bad Request" },
+          { "from": "test", "to": "api", "kind": "req", "label": "{ message: '   ' } / {} / no body at all" },
+          { "from": "api", "to": "test", "kind": "res", "ok": true, "label": "400 / 400 / 4xx — never 500" }
+        ],
+        "checks": ["empty → 400", "whitespace-only → 400", "missing field → 400", "no body → 4xx (not 500)"]
+      },
+      {
+        "title": "5. Stop when idle",
+        "scenario": "5",
+        "summary": "Stopping with nothing running is a clean 404 carrying an error message.",
+        "interactions": [
+          { "from": "test", "to": "api", "kind": "req", "label": "POST /api/chat/stop (nothing running)" },
+          { "from": "api", "to": "test", "kind": "res", "ok": true, "label": "404 { error }" }
+        ],
+        "checks": ["stop when idle → 404", "404 carries an error message"]
+      },
+      {
+        "title": "6/7. Stream-when-idle + runs shape",
+        "scenario": "6",
+        "summary": "Subscribing with no active run → 404; the runs snapshot is always a JSON object.",
+        "interactions": [
+          { "from": "test", "to": "api", "kind": "req", "label": "GET /api/chat/stream?after=0 (no run)" },
+          { "from": "api", "to": "test", "kind": "res", "ok": true, "label": "404" },
+          { "from": "test", "to": "api", "kind": "req", "label": "GET /api/runs" },
+          { "from": "api", "to": "test", "kind": "res", "ok": true, "label": "200 — a JSON object" }
+        ],
+        "checks": ["stream when idle → 404", "runs snapshot → 200", "runs snapshot is a JSON object"]
+      },
+      {
+        "title": "8. Sessions list + transcript safety",
+        "scenario": "8",
+        "summary": "Sessions list is a JSON array; unknown and path-traversal session ids must not leak files or 500.",
+        "interactions": [
+          { "from": "test", "to": "api", "kind": "req", "label": "GET /api/sessions" },
+          { "from": "api", "to": "store", "kind": "read", "label": "read sessions dir" },
+          { "from": "api", "to": "test", "kind": "res", "ok": true, "label": "200 — JSON array" },
+          { "from": "test", "to": "api", "kind": "req", "label": "GET /api/sessions/<zero-uuid>/messages" },
+          { "from": "api", "to": "test", "kind": "res", "ok": true, "label": "200 — [] (unknown id; no 404/500)" },
+          { "from": "test", "to": "api", "kind": "req", "label": "GET /api/sessions/..%5C..%5Cwin.ini/messages" },
+          { "from": "api", "to": "store", "kind": "read", "label": "id sanitised — no traversal" },
+          { "from": "api", "to": "test", "kind": "res", "ok": true, "label": "no 500, no file contents leaked" }
+        ],
+        "checks": ["sessions list → 200 array", "unknown session id → 200 []", "path-traversal id → no 500 / no leak"]
+      },
+      {
+        "title": "9. Bad query input",
+        "scenario": "9",
+        "summary": "A garbage query param (unknown lane) is normalised — still a clean 404, not a 500.",
+        "interactions": [
+          { "from": "test", "to": "api", "kind": "req", "label": "GET /api/chat/stream?lane=wat&after=0" },
+          { "from": "api", "to": "test", "kind": "res", "ok": true, "label": "404 — lane normalised to builder, no run" }
+        ],
+        "checks": ["unknown lane on stream → 404 (normalised, not 500)"]
+      }
+    ]
+  },
+  "smoke": {
+    "actors": [
+      { "id": "test", "label": "Test harness" },
+      { "id": "api", "label": "Harness API" },
+      { "id": "cli", "label": "Claude CLI" }
+    ],
+    "steps": [
+      {
+        "title": "Smoke — one real turn drives the CLI end-to-end",
+        "scenario": "10",
+        "summary": "The cheapest real check: one tiny turn through the actual Claude CLI returns a clean, ordered event stream.",
+        "interactions": [
+          { "from": "test", "to": "api", "kind": "req", "label": "POST /api/auth/login" },
+          { "from": "api", "to": "test", "kind": "res", "ok": true, "label": "200 + session cookie" },
+          { "from": "test", "to": "api", "kind": "req", "label": "POST /api/chat { 'Reply with exactly: OK', model }" },
+          { "from": "api", "to": "test", "kind": "event", "label": "200 — opens SSE stream" },
+          { "from": "api", "to": "cli", "kind": "spawn", "label": "spawn the Claude CLI turn" },
+          { "from": "cli", "to": "api", "kind": "event", "label": "session, token…, usage, done" },
+          { "from": "api", "to": "test", "kind": "event", "label": "SSE: session → token… → usage → done" },
+          { "from": "test", "to": "api", "kind": "req", "label": "abort() — detach (turn already finished)" }
+        ],
+        "checks": ["POST /api/chat opened an SSE stream (200)", "got a session event", "got a done event (turn completed)", "seq present + strictly increasing"]
+      }
+    ]
+  },
+  "realrun": {
+    "actors": [
+      { "id": "test", "label": "Test harness" },
+      { "id": "api", "label": "Harness API" },
+      { "id": "cli", "label": "Claude CLI" },
+      { "id": "store", "label": "Session store" }
+    ],
+    "steps": [
+      {
+        "title": "Authenticate (suite setup)",
+        "summary": "The real-run suite logs in once, then drives real CLI turns; after every scenario both lanes are stopped to free run slots (see last step).",
+        "interactions": [
+          { "from": "test", "to": "api", "kind": "req", "label": "POST /api/auth/login" },
+          { "from": "api", "to": "test", "kind": "res", "ok": true, "label": "200 + session cookie" }
+        ],
+        "checks": []
+      },
+      {
+        "title": "10. Basic turn",
+        "scenario": "10",
+        "summary": "A normal turn streams session → token(s) → done, ordered, strictly increasing seq, and done carries a sessionId.",
+        "interactions": [
+          { "from": "test", "to": "api", "kind": "req", "label": "POST /api/chat 'Reply with exactly: OK'" },
+          { "from": "api", "to": "cli", "kind": "spawn", "label": "spawn CLI turn" },
+          { "from": "cli", "to": "api", "kind": "event", "label": "session, tokens, done (+ cost, sessionId)" },
+          { "from": "api", "to": "test", "kind": "event", "label": "SSE: session (first) → token… → done" }
+        ],
+        "checks": ["completed with done", "session is first event", "token(s) arrive before done", "seq strictly increasing", "done carries a sessionId"]
+      },
+      {
+        "title": "11. Resume + transcript",
+        "scenario": "11",
+        "summary": "A second turn passing the first turn's sessionId appends to the SAME session; the transcript holds both exchanges.",
+        "interactions": [
+          { "from": "test", "to": "api", "kind": "req", "label": "POST /api/chat 'ALPHA'" },
+          { "from": "api", "to": "test", "kind": "event", "label": "done → sessionId S" },
+          { "from": "test", "to": "api", "kind": "req", "label": "POST /api/chat 'BETA' { sessionId: S }" },
+          { "from": "api", "to": "cli", "kind": "spawn", "label": "resume session S" },
+          { "from": "cli", "to": "store", "kind": "write", "label": "append to the same JSONL" },
+          { "from": "api", "to": "test", "kind": "event", "label": "done → same sessionId S" },
+          { "from": "test", "to": "api", "kind": "req", "label": "GET /api/sessions/S/messages" },
+          { "from": "api", "to": "store", "kind": "read", "label": "read transcript" },
+          { "from": "api", "to": "test", "kind": "res", "ok": true, "label": "200 — ALPHA/BETA + assistant text" }
+        ],
+        "checks": ["first turn produced a sessionId", "resume turn completed", "resume kept the same sessionId", "resumed session appears in /api/sessions", "transcript has user + assistant text"]
+      },
+      {
+        "title": "3. 409 single-flight",
+        "scenario": "3",
+        "summary": "Only one builder turn at a time: while one is live, a second builder POST is refused with 409.",
+        "interactions": [
+          { "from": "test", "to": "api", "kind": "req", "label": "POST /api/chat 'count to 20' (A)" },
+          { "from": "api", "to": "test", "kind": "event", "label": "session — A is live" },
+          { "from": "test", "to": "api", "kind": "req", "label": "POST /api/chat 'OK' (B, builder)" },
+          { "from": "api", "to": "test", "kind": "res", "ok": false, "label": "409 { error } — single-flight" }
+        ],
+        "checks": ["first builder turn started (session)", "second builder turn → 409", "409 carries an error message"]
+      },
+      {
+        "title": "4. Ask concurrency",
+        "scenario": "4",
+        "summary": "The read-only ask lane runs alongside a live builder, with its own run slot — never blocked.",
+        "interactions": [
+          { "from": "test", "to": "api", "kind": "req", "label": "POST /api/chat 'count to 20' (builder A)" },
+          { "from": "api", "to": "test", "kind": "event", "label": "session — builder live" },
+          { "from": "test", "to": "api", "kind": "req", "label": "POST /api/chat 'OK' { lane: 'ask' }" },
+          { "from": "api", "to": "test", "kind": "event", "label": "200 + own session — not blocked" },
+          { "from": "test", "to": "api", "kind": "req", "label": "GET /api/runs" },
+          { "from": "api", "to": "test", "kind": "res", "ok": true, "label": "200 — separate '#ask' slot present" }
+        ],
+        "checks": ["ask lane NOT rejected while builder runs", "ask lane opened its own session", "runs snapshot exposes a separate ask slot"]
+      },
+      {
+        "title": "5. Stop a live turn",
+        "scenario": "5",
+        "summary": "Stopping a running turn returns 200, ends the stream, and flips the runs snapshot off 'running'.",
+        "interactions": [
+          { "from": "test", "to": "api", "kind": "req", "label": "POST /api/chat 'count to 50' (A)" },
+          { "from": "api", "to": "test", "kind": "event", "label": "token/session — A running" },
+          { "from": "test", "to": "api", "kind": "req", "label": "POST /api/chat/stop" },
+          { "from": "api", "to": "cli", "kind": "kill", "label": "terminate the CLI turn" },
+          { "from": "api", "to": "test", "kind": "res", "ok": true, "label": "200 { stopped: true } — stream ends" },
+          { "from": "test", "to": "api", "kind": "req", "label": "GET /api/runs (poll)" },
+          { "from": "api", "to": "test", "kind": "res", "ok": true, "label": "status flips off 'running'" }
+        ],
+        "checks": ["stop returns 200", "stop body says stopped", "runs snapshot flips off running after stop"]
+      },
+      {
+        "title": "6. Reattach replay",
+        "scenario": "6",
+        "summary": "After detaching mid-turn and re-subscribing with ?after=N, replay returns only seq > N — no dupes, no gaps — and still reaches a terminal.",
+        "interactions": [
+          { "from": "test", "to": "api", "kind": "req", "label": "POST /api/chat 'OK' (A)" },
+          { "from": "api", "to": "test", "kind": "event", "label": "session, token… (remember seq N)" },
+          { "from": "test", "to": "api", "kind": "req", "label": "abort() — detach; run continues server-side" },
+          { "from": "test", "to": "api", "kind": "req", "label": "GET /api/chat/stream?after=N" },
+          { "from": "api", "to": "test", "kind": "event", "label": "200 — replay only seq > N, increasing, → done" }
+        ],
+        "checks": ["reattach stream → 200", "replay only returns seq > N", "replay strictly increasing (no dupes)", "no gaps across detach boundary", "reattached stream reaches a terminal event"]
+      },
+      {
+        "title": "13. Model parameter",
+        "scenario": "13",
+        "summary": "An explicit model param must complete cleanly and report a numeric cost.",
+        "interactions": [
+          { "from": "test", "to": "api", "kind": "req", "label": "POST /api/chat 'OK' { model }" },
+          { "from": "api", "to": "cli", "kind": "spawn", "label": "spawn CLI with --model" },
+          { "from": "api", "to": "test", "kind": "event", "label": "done (+ cost) — completes, no error" }
+        ],
+        "checks": ["explicit model turn completes (no error)", "done reports a cost (number)"]
+      },
+      {
+        "title": "12. Tool lifecycle",
+        "scenario": "12",
+        "summary": "Forcing a Read tool call must surface tool events: a start, and an end carrying an ok flag.",
+        "interactions": [
+          { "from": "test", "to": "api", "kind": "req", "label": "POST /api/chat 'Use Read on README.md, then DONE'" },
+          { "from": "api", "to": "cli", "kind": "spawn", "label": "spawn CLI turn" },
+          { "from": "cli", "to": "api", "kind": "event", "label": "tool:start → tool:end(ok) → done" },
+          { "from": "api", "to": "test", "kind": "event", "label": "SSE: tool start, tool end(ok), done" }
+        ],
+        "checks": ["turn completed", "emitted a tool start", "emitted a tool end with ok flag"]
+      },
+      {
+        "title": "14. Ask read-only",
+        "scenario": "14",
+        "summary": "The ask lane is read-only: told to create a file, nothing must land on disk.",
+        "interactions": [
+          { "from": "test", "to": "api", "kind": "req", "label": "POST /api/chat 'create systest-canary.txt' { lane: 'ask' }" },
+          { "from": "api", "to": "cli", "kind": "spawn", "label": "ask lane — plan/permission mode" },
+          { "from": "cli", "to": "store", "kind": "blocked", "ok": false, "label": "write BLOCKED (read-only)" },
+          { "from": "api", "to": "test", "kind": "event", "label": "done" },
+          { "from": "test", "to": "store", "kind": "read", "label": "check SCRATCH for the canary file" },
+          { "from": "store", "to": "test", "kind": "res", "ok": true, "label": "no file written" }
+        ],
+        "checks": ["ask lane did NOT create a file on disk (read-only held)"]
+      },
+      {
+        "title": "Cleanup between scenarios",
+        "summary": "After every scenario the suite stops both lanes and waits for run slots to release, so the next scenario starts clean.",
+        "interactions": [
+          { "from": "test", "to": "api", "kind": "req", "label": "POST /api/chat/stop + /api/chat/stop?lane=ask" },
+          { "from": "test", "to": "api", "kind": "req", "label": "GET /api/runs (poll until none 'running')" },
+          { "from": "api", "to": "test", "kind": "res", "ok": true, "label": "all slots idle" }
+        ],
+        "checks": []
+      }
+    ]
+  },
+  "badinput": {
+    "actors": [
+      { "id": "test", "label": "Test harness" },
+      { "id": "api", "label": "Harness API" },
+      { "id": "cli", "label": "Claude CLI" }
+    ],
+    "steps": [
+      {
+        "title": "Authenticate (suite setup)",
+        "summary": "The bad-input suite logs in, then feeds malformed real inputs to the CLI; each must reach a clean terminal — never hang, 500, or wedge a run slot.",
+        "interactions": [
+          { "from": "test", "to": "api", "kind": "req", "label": "POST /api/auth/login" },
+          { "from": "api", "to": "test", "kind": "res", "ok": true, "label": "200 + session cookie" }
+        ],
+        "checks": []
+      },
+      {
+        "title": "9a. Resume non-existent session",
+        "scenario": "9",
+        "summary": "Resuming a sessionId that never existed must terminate gracefully — clean error or a fresh start, not a hang/crash.",
+        "interactions": [
+          { "from": "test", "to": "api", "kind": "req", "label": "POST /api/chat { sessionId: 'deadbeef-…' }" },
+          { "from": "api", "to": "cli", "kind": "spawn", "label": "attempt resume of ghost session" },
+          { "from": "api", "to": "test", "kind": "event", "label": "200 → terminal (done or error)" }
+        ],
+        "checks": ["opened SSE (200), not 4xx/5xx", "reached a terminal event (no hang)"]
+      },
+      {
+        "title": "9b. Unknown model",
+        "scenario": "9",
+        "summary": "A bogus model name must surface a clean error event — not a silent success, not a hang.",
+        "interactions": [
+          { "from": "test", "to": "api", "kind": "req", "label": "POST /api/chat { model: 'claude-…-9999' }" },
+          { "from": "api", "to": "cli", "kind": "spawn", "label": "spawn with bad model" },
+          { "from": "cli", "to": "api", "kind": "event", "label": "CLI rejects the model" },
+          { "from": "api", "to": "test", "kind": "event", "ok": false, "label": "error event — clean terminal" }
+        ],
+        "checks": ["opened SSE (200)", "reached a terminal event", "surfaces an error event (not a silent success)"]
+      },
+      {
+        "title": "9c. Unknown lane → builder",
+        "scenario": "9",
+        "summary": "An unknown lane normalises to builder: the turn still runs and is recorded under builder, not a phantom slot.",
+        "interactions": [
+          { "from": "test", "to": "api", "kind": "req", "label": "POST /api/chat { lane: 'zzz-not-a-lane' }" },
+          { "from": "api", "to": "test", "kind": "event", "label": "200 — normalised to builder → done" },
+          { "from": "test", "to": "api", "kind": "req", "label": "GET /api/runs" },
+          { "from": "api", "to": "test", "kind": "res", "ok": true, "label": "recorded under builder, no '#zzz' slot" }
+        ],
+        "checks": ["unknown lane still runs (200)", "unknown lane completes", "recorded under builder, not a new slot"]
+      },
+      {
+        "title": "9d. Malformed sessionId",
+        "scenario": "9",
+        "summary": "A path-ish sessionId (../../etc/passwd) must terminate gracefully — no traversal, no 500, no hang.",
+        "interactions": [
+          { "from": "test", "to": "api", "kind": "req", "label": "POST /api/chat { sessionId: '../../etc/passwd' }" },
+          { "from": "api", "to": "cli", "kind": "spawn", "label": "id sanitised — no path traversal" },
+          { "from": "api", "to": "test", "kind": "event", "label": "200 → terminal (no hang)" }
+        ],
+        "checks": ["opened SSE (200)", "reached a terminal event (no hang)"]
+      }
+    ]
+  }
+}

@@ -362,11 +362,8 @@ public class RepositoryRegistry
         }
     }
 
-    private static string ResolveStorePath()
-    {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        return System.IO.Path.Combine(appData, "ClaudeWeb", "repositories.json");
-    }
+    private static string ResolveStorePath() =>
+        System.IO.Path.Combine(AppPaths.DataDir, "repositories.json");
 
     /// <summary>Id of the always-on, harness-provided Understanding app
     /// (plans/multiple-local-apps.md Slice 2).</summary>

@@ -66,7 +66,7 @@ public class IpAllowlistService
     public IpAllowlistService(Logger logger)
     {
         _logger = logger;
-        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ClaudeWeb");
+        var dir = AppPaths.DataDir;
         _path = Path.Combine(dir, "ipallow.json");
         Load();
     }

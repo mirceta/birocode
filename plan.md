@@ -10,8 +10,9 @@
 
 > **Status (2026-06-20):** **Enlarge a dock to two horizontal spaces** is
 > **merged to main** (built, not yet browser-verified). In flight: **Autopilot
-> loop mode** — **built & verified on an isolated port, not yet merged/deployed**
-> — on `feature/autopilot-loop-mode`.
+> loop mode** (built & verified on an isolated port, not yet merged/deployed) on
+> `feature/autopilot-loop-mode`, and **Chat system tests** (steppable hub +
+> per-suite interactive diagrams) on `feature/systest-interactive`.
 
 ## ⚠️ Known risks to mitigate
 
@@ -52,6 +53,14 @@
   console; store/API + all three UI states browser-verified on isolated :5210. Not yet
   merged/deployed; the live multi-turn resend wasn't run against a real agent (would
   drive real Claude sessions).** On `feature/autopilot-loop-mode`.
+- [System tests for the Chat feature](plans/chat-system-tests.md) — discover
+  **every** exercisable Chat behaviour, then run them **all** as black-box system
+  tests against the real HTTP/SSE surface (and the real Claude CLI where it
+  matters) to surface bugs. Token spend on real runs is explicitly authorised —
+  goal is coverage, not frugality. Covers auth/validation/409/stop/reattach/
+  sessions plus end-to-end turns (basic, resume, tools, model, ask read-only).
+  Discovery only; fixes spin out per one-feature-per-branch. On
+  `feature/systest-interactive` (steppable hub + per-suite interactive diagrams).
 
 ## Proposed / design (not building yet)
 
