@@ -3,108 +3,42 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Our system vs OpenSpec — do we even cover this job?</title>
+  <title>OpenSpec workflows — the jobs you'd actually do</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <header class="hero">
-    <div class="hero__inner">
-      <p class="kicker">feature/openspec-flow · the honest comparison</p>
-      <h1>Our system <span class="vs">vs</span> OpenSpec — and the job neither of us named</h1>
-      <p class="sub">
-        You're right to be unsure what "our system" even <i>is</i>. It isn't one thing — it's a
-        bundle of conventions. So first: what is it, and what is it <b>for</b>? Then a
-        dimension-by-dimension comparison — including the one row where our column is genuinely <b>empty</b>.
-      </p>
-      <nav class="nav" id="nav">
-        <button class="nav__btn is-active" data-view="ours">1 · What even IS our system?</button>
-        <button class="nav__btn" data-view="matrix">2 · Dimension by dimension</button>
-        <button class="nav__btn" data-view="verdict">3 · The honest answer</button>
-      </nav>
+    <p class="kicker">Understanding · OpenSpec · the day-to-day jobs</p>
+    <h1>OpenSpec workflows <span>— the jobs you'd actually do</span></h1>
+    <p class="thesis">
+      OpenSpec is really <b>two modes wearing one CLI</b>. You <b class="r">READ</b> the living
+      truth — every read is a command, so it ports cleanly into the Console. You <b class="w">WRITE</b>
+      a change — but the <i>thinking</i> there is authored by hand; only the <b>bookends</b> (scaffold,
+      gate, ship) are commands. Five workflows, and that's the whole job.
+    </p>
+
+    <div class="bar">
+      <div class="filters" id="filters">
+        <button data-mode="all" class="on">All 5</button>
+        <button data-mode="read"><span class="dot r"></span>Read the truth</button>
+        <button data-mode="write"><span class="dot w"></span>Write a change</button>
+      </div>
+      <div class="legend">
+        <span><span class="kb kb--cli">✓</span> runs in Console</span>
+        <span><span class="kb kb--hand">✍</span> authored by hand</span>
+        <span><span class="kb kb--tui">⌨</span> terminal only</span>
+      </div>
     </div>
   </header>
 
-  <main>
-    <!-- ───────────── VIEW 1 — WHAT IS OUR SYSTEM ───────────── -->
-    <section class="view is-active" id="view-ours">
-      <div class="wrap">
-        <h2>"Our system" is five conventions — all about <i>intent</i></h2>
-        <p class="lead">No single tool. Five habits, each rendered live in the harness. Notice what
-          they all have in common: every one captures <b>what we mean to do</b> or <b>how we work</b> —
-          none captures <b>what the thing does once built</b>.</p>
-
-        <div class="arts" id="arts"><!-- rendered by app.js --></div>
-
-        <div class="axisline">
-          <span class="axisline__lbl">what they record →</span>
-          <div class="axisline__track">
-            <span class="tick intent">intent / process<br><i>plans · understanding.md · CLAUDE.md</i></span>
-            <span class="tick now empty">current-state truth<br><b>— nothing —</b></span>
-            <span class="tick past">what shipped<br><i>Recently-shipped · git log</i></span>
-          </div>
-        </div>
-        <p class="takeaway">The middle slot is the whole point. To answer <b>"what does Claude Web
-          actually do today?"</b> we have no document — we read the code, scan a changelog, and trust
-          forward-looking plans that may have drifted. <b>That</b> is the responsibility OpenSpec is built
-          around — and the one our notebooks never assigned to anyone.</p>
-      </div>
-    </section>
-
-    <!-- ───────────── VIEW 2 — THE MATRIX ───────────── -->
-    <section class="view" id="view-matrix">
-      <div class="wrap">
-        <h2>All the dimensions, side by side</h2>
-        <p class="lead">Verdict chips are from <b>our</b> point of view: where we already cover it,
-          where it's loose, where it's a flat gap — and where we're actually <i>stronger</i>. Tap a row.</p>
-        <div class="legend">
-          <span class="lz have">✓ we cover it</span>
-          <span class="lz partial">~ loose / partial</span>
-          <span class="lz gap">✗ flat gap</span>
-          <span class="lz edge">★ we're stronger</span>
-        </div>
-        <div class="matrix" id="matrix"><!-- rendered by app.js --></div>
-      </div>
-    </section>
-
-    <!-- ───────────── VIEW 3 — VERDICT ───────────── -->
-    <section class="view" id="view-verdict">
-      <div class="wrap">
-        <h2>The honest answer to your question</h2>
-
-        <div class="pick">
-          <div class="pick__badge">1 gap</div>
-          <div class="pick__body">
-            <h3>We have a strong system — for intent. We have <i>no</i> system for "what does it do today."</h3>
-            <p>Across ~12 dimensions we tie or beat OpenSpec on most: review-before-code, single source
-              of truth, harness visibility, lightness. The responsibility you sensed is missing is
-              <b>real and singular</b> — a living, queryable baseline of current behaviour, kept honest
-              as changes land.</p>
-          </div>
-        </div>
-
-        <h3>What this means for the port</h3>
-        <ol class="why">
-          <li><b>The gap is one cell, not the whole table.</b> OpenSpec's value to <i>us</i> concentrates
-            in the living baseline + change-as-delta. The rest of its machinery duplicates habits we have.</li>
-          <li><b>We're stronger where it's weak.</b> Single source of truth and phone visibility are our
-            moat; adopting the tool wholesale puts both at risk until Phase 3 buys them back.</li>
-          <li><b>So the real decision was always "fill one cell vs adopt a toolchain."</b> The plan has
-            chosen Path&nbsp;A (adopt) knowingly — this comparison is the evidence base if you want to
-            sanity-check that against just filling the cell.</li>
-        </ol>
-
-        <div class="caveat">
-          <b>Not re-opening the decision here.</b> <code>plans/openspec-flow.md</code> records Path&nbsp;A
-          as DECIDED and lists re-litigation as out of scope. This view answers your question —
-          <i>do we even have a system for this?</i> — not <i>which path</i>. If seeing the single-gap
-          shape makes you want to revisit, say so and I'll lay out both honestly.
-        </div>
-      </div>
-    </section>
-  </main>
+  <main id="flows"><!-- rendered by app.js --></main>
 
   <footer class="foot">
-    Companion to <code>plans/openspec-flow.md</code> · what our system is, and the one job it never assigned.
+    <p><b>How this ties to the app:</b> the <b>Read</b> workflows are pure commands, so the
+      <b>Console</b> tab runs them all. The <b>Write</b> change-loop is exactly where the
+      <b>4-ported / 7-by-hand</b> split on the <b>Adopt</b> tab comes from — its bookends
+      (<code>new change</code>, <code>validate --strict</code>, <code>archive</code>) are buttons; its
+      middle (delta specs, scenarios, design, tasks) you write yourself.</p>
   </footer>
 
   <script src="./app.js"></script>
