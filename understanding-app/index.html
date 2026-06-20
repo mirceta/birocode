@@ -3,53 +3,70 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Should the Console be organized by workflow?</title>
+  <title>Control vs Console — same thing, or two axes?</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <header class="hero">
-    <p class="kicker">Understanding · a design decision, before we build it</p>
-    <h1>Should the Console be organized <span>by workflow?</span></h1>
+    <p class="kicker">Understanding · do Control and Console overlap?</p>
+    <h1>Control vs Console <span>— same thing, or two axes?</span></h1>
     <p class="thesis">
-      The Console today is a <b>flat palette</b> — every OpenSpec command in one list. Fast if you
-      already know what you want. But our reader is an <b>expert in the old system, new to OpenSpec</b>,
-      and their hard question isn't <i>what does <code>validate</code> do</i> — it's <b>when do I run it,
-      and in what order</b>. Flip the toggle to see the same commands answer that question.
+      You spotted real overlap: <b>Control</b>’s Phase 0 and <b>Console</b>’s “Set up the tool” both
+      cover getting OpenSpec installed. But they sit on <b>different axes</b>. Control tracks the
+      <b class="c1">one-time port project</b> — five phases with an end (Phase 4 is the point of no
+      return). Console runs the <b class="c2">recurring jobs</b> you do forever after. They’re the
+      <b>track ↔ run</b> pair, not duplicates. Click any node to see its counterpart.
     </p>
-
-    <div class="seg" id="seg">
-      <button data-mode="flat" class="on">Flat — today</button>
-      <button data-mode="flow">By workflow — proposed</button>
-    </div>
-    <p class="caption" id="caption"><!-- set by app.js --></p>
   </header>
 
   <main>
-    <section class="stage" id="stage"><!-- rendered by app.js --></section>
+    <section class="map" id="map">
+      <div class="col col--phases">
+        <div class="col__hd"><b>Control</b><span>the port project · one-time · ends</span></div>
+        <ol class="track" id="phases"><!-- rendered --></ol>
+      </div>
+      <div class="col col--flows">
+        <div class="col__hd"><b>Console</b><span>the recurring jobs · forever</span></div>
+        <ol class="track" id="flows"><!-- rendered --></ol>
+      </div>
+    </section>
+    <p class="hint" id="hint">Only three rows line up. Phase 3–4 are <b>project-only</b> (nothing to run);
+      Inspect &amp; Hand off are <b>job-only</b> (no phase). The overlap is just where a phase happens to be a job.</p>
 
-    <section class="why">
-      <h2>Why this fits the rest of the app</h2>
-      <p class="lead">The app already pairs a <b>descriptive</b> tab with an <b>executable</b> one. This
-        change just completes the pattern — the Console becomes the executable shadow of the
-        <b>Workflows</b> map, the same way it already shadows <b>Adopt</b>.</p>
-      <div class="pair" id="pair"><!-- rendered by app.js --></div>
+    <section class="zoom">
+      <h2>Zoom: Phase 0 &nbsp;vs&nbsp; “Set up the tool”</h2>
+      <p class="lead">Even where they overlap, they’re not the same. Phase 0 is a <b>5-step milestone
+        checklist</b>; only <i>one</i> step is an OpenSpec command. Console’s set-up is the
+        <b>executable subset</b> — plus two tooling pings Phase 0 doesn’t track.</p>
+      <div class="zgrid">
+        <div class="zcol">
+          <div class="zcol__hd zcol__hd--c1">Control · Phase 0 — 5 tracked steps</div>
+          <ul id="z0"><!-- rendered --></ul>
+        </div>
+        <div class="zcol">
+          <div class="zcol__hd zcol__hd--c2">Console · Set up — 3 buttons</div>
+          <ul id="z1"><!-- rendered --></ul>
+        </div>
+      </div>
     </section>
 
-    <section class="why">
-      <h2>The honest cost</h2>
-      <div class="costs" id="costs"><!-- rendered by app.js --></div>
-      <p class="verdict">Verdict: <b>worth it.</b> Group the Console by workflow, keep it in
-        <b>Operate</b>, keep the by-hand steps as muted context so the sequence reads. The redundancy
-        with the Workflows tab is the <i>good</i> kind — <b>read the job</b> there, <b>run the job</b>
-        here — as long as we keep that line crisp.</p>
+    <section class="verdict">
+      <h2>So — merge them?</h2>
+      <div class="vcard vcard--no"><span class="vtag">No</span>
+        <p><b>Don’t merge the tabs.</b> One is a phased project that finishes; the other is the daily
+          driver that never does. Folding them would conflate <i>“port the system”</i> with <i>“use
+          OpenSpec”</i> — different lifespans, different readers.</p></div>
+      <div class="vcard vcard--yes"><span class="vtag">But do this</span>
+        <p><b>Wire run → track.</b> When you click <code>init</code> in Console, auto-tick Phase 0’s
+          “Run openspec init” in Control, and show <b>Phase 0: n/5</b> in the Console set-up header.
+          One source of truth for state — <i>that’s</i> the “more under control” you’re after.</p>
+        <p class="caveat"><b>Honest caveat:</b> the run→track link is clean for set-up (init → one task),
+          fuzzier elsewhere — <code>validate --strict</code> touches both Phase 1 and Phase 2, so not
+          every button maps to exactly one checkbox.</p></div>
     </section>
   </main>
 
-  <footer class="foot">
-    <p>Companion to the pending Console rework · <b>read this before it ships</b>, then the Console tab
-      becomes the thing this picture describes.</p>
-  </footer>
-
+  <footer class="foot"><p>Companion to the Control/Console overlap question · click the map nodes to trace the track ↔ run pairing.</p></footer>
   <script src="./app.js"></script>
 </body>
 </html>
