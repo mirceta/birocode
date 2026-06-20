@@ -317,3 +317,65 @@
 .ap-gateoff code {
   background: var(--color-bg, #f0ece4); padding: 2px 6px; border-radius: 5px; font-size: 12px;
 }
+
+/* ---- Loop mode (plans/autopilot-loop-mode.md): per-agent fixed-prompt resend ---- */
+.lp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+
+.lp-card {
+  border: 1px solid var(--color-border); border-radius: 12px;
+  background: var(--color-surface); padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.lp-card.is-active { border-color: #41506b; box-shadow: 0 0 0 1px #41506b22; }
+
+.lp-card__head { display: flex; align-items: center; gap: 10px; }
+.lp-card__repo { font-weight: 700; font-size: 14px; }
+
+/* --- arm form --- */
+.lp-form { display: flex; flex-direction: column; gap: 10px; }
+.lp-form__row { display: flex; gap: 10px; flex-wrap: wrap; }
+.lp-form__actions { display: flex; gap: 8px; align-items: center; }
+
+.lp-field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 180px; }
+.lp-field--cap { flex: 0 0 110px; }
+.lp-field__k { font-size: 11px; font-weight: 600; color: var(--color-text-muted, #888); text-transform: uppercase; letter-spacing: 0.03em; }
+.lp-field__prompt, .lp-field__in {
+  border: 1px solid var(--color-border); border-radius: 8px;
+  background: var(--color-bg, #fbf9f5); color: var(--color-text, inherit);
+  padding: 8px 10px; font: inherit; font-size: 13px; width: 100%;
+}
+.lp-field__prompt { resize: vertical; min-height: 42px; }
+
+.lp-arm {
+  border: none; border-radius: 8px; background: #2bb24c; color: #fff;
+  padding: 9px 16px; font: inherit; font-weight: 600; font-size: 13px; cursor: pointer;
+}
+.lp-arm:disabled { opacity: 0.5; cursor: default; }
+.lp-mini {
+  border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text, inherit);
+  border-radius: 7px; padding: 7px 12px; font: inherit; font-size: 12px; cursor: pointer;
+}
+.lp-mini.on { background: var(--color-bg, #f0ece4); font-weight: 600; }
+
+/* --- live status --- */
+.lp-live { display: flex; flex-direction: column; gap: 9px; }
+.lp-live__prompt {
+  display: block; background: var(--color-bg, #f0ece4); padding: 8px 10px; border-radius: 8px;
+  font-size: 13px; white-space: pre-wrap; word-break: break-word;
+}
+.lp-live__meta { display: flex; gap: 18px; flex-wrap: wrap; }
+.lp-stat { display: flex; flex-direction: column; gap: 2px; }
+.lp-stat__k { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-muted, #888); }
+.lp-stat__v { font-size: 14px; font-weight: 700; }
+
+.lp-progress { height: 6px; border-radius: 999px; background: var(--color-bg, #e6eaf1); overflow: hidden; }
+.lp-progress__bar { height: 100%; background: #41506b; border-radius: 999px; transition: width 0.3s ease; }
+
+.lp-stop {
+  align-self: flex-start; border: none; border-radius: 8px; background: #c0392b; color: #fff;
+  padding: 8px 16px; font: inherit; font-weight: 600; font-size: 13px; cursor: pointer;
+}
+.lp-stop:disabled { opacity: 0.5; cursor: default; }
+
+/* --- finished loop --- */
+.lp-done { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 13px; }

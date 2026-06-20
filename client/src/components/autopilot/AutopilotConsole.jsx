@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiGet, apiPost, apiPatch, apiDelete } from '../../api/client';
 import ErrorBanner from '../shared/ErrorBanner';
 import AgentsView from './AgentsView';
+import LoopsView from './LoopsView';
 import '../../pages/autopilot.css';
 
 // The full Autopilot console (plans/autopilot-to-harness.md): the complete
@@ -90,6 +91,17 @@ export default function AutopilotConsole({ embedded = false }) {
     }
   }, []);
 
+  // Loop mode: arm / edit / stop a per-agent fixed-prompt resend loop. Returns the
+  // fresh state so the live counters reconcile without waiting for the next poll.
+  const loopAction = useCallback(async (body) => {
+    try {
+      setData(await apiPost('/autopilot/loop', body));
+      setError('');
+    } catch {
+      setError('Could not update the loop.');
+    }
+  }, []);
+
   // --- editable custom-prompt CRUD (the recommender's label space) ---
   const addPrompt = useCallback(async (body) => {
     if (!body.text?.trim()) return;
@@ -150,6 +162,7 @@ export default function AutopilotConsole({ embedded = false }) {
 
   const log = data?.log ?? [];
   const audit = data?.audit ?? [];
+  const activeLoops = (data?.loops ?? []).filter((l) => l.active).length;
   const intercepts = data?.intercepts ?? [];
   const autoAdvance = data?.autoAdvance ?? false;
   const library = prompts ?? [];
@@ -192,6 +205,9 @@ export default function AutopilotConsole({ embedded = false }) {
       <>
       <nav className="ap-tabs">
         <button className={tab === 'agents' ? 'on' : ''} onClick={() => setTab('agents')}>Agents</button>
+        <button className={tab === 'loops' ? 'on' : ''} onClick={() => setTab('loops')}>
+          Loops{activeLoops ? ` ${activeLoops}` : ''}
+        </button>
         <button className={tab === 'prompts' ? 'on' : ''} onClick={() => setTab('prompts')}>
           Routine prompts{library.length ? ` ${library.length}` : ''}
         </button>
@@ -207,6 +223,8 @@ export default function AutopilotConsole({ embedded = false }) {
       </nav>
 
       {tab === 'agents' && <AgentsView data={data} mutate={mutate} />}
+
+      {tab === 'loops' && <LoopsView data={data} loopAction={loopAction} />}
 
       {tab === 'prompts' && (
         <>
