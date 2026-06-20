@@ -220,6 +220,8 @@
   "dashboard.copied": "Kopyalandi!",
   "dashboard.markImportant": "Onemli olarak isaretle (kirmizi kenarlik, basa siralanir)",
   "dashboard.unmarkImportant": "Onem isaretini kaldir",
+  "dashboard.markWide": "Iki yatay alana genislet",
+  "dashboard.unmarkWide": "Tek alana kucult",
   "dashboard.markWaiting": "Baska bir ajani bekliyor olarak isaretle",
   "dashboard.unmarkWaiting": "Bekleme isaretini kaldir",
   "dashboard.waitingOnPlaceholder": "hangi ajani bekliyor?",
