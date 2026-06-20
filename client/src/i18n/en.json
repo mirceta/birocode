@@ -220,6 +220,8 @@
   "dashboard.copied": "Copied!",
   "dashboard.markImportant": "Mark important (red border, sorts first)",
   "dashboard.unmarkImportant": "Unmark important",
+  "dashboard.markWide": "Enlarge to two horizontal spaces",
+  "dashboard.unmarkWide": "Shrink to one space",
   "dashboard.markWaiting": "Mark waiting for another agent",
   "dashboard.unmarkWaiting": "Unmark waiting",
   "dashboard.waitingOnPlaceholder": "waiting on which agent?",

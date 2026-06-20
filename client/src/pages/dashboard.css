@@ -408,6 +408,54 @@
   color: #ef4444;
 }
 
+/* "Wide" toggle (plans/dock-double-width.md) — a role=button span beside the
+   important star (the ⤢ glyph). Muted when off, filled accent-blue when on.
+   No margin-left:auto: the important star already carries it, so this just
+   clusters next to it on the right of the header. */
+.wide-toggle {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 4px;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--color-text-soft);
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s, transform 0.1s;
+}
+
+.wide-toggle:hover {
+  color: #2f7bf2;
+  transform: scale(1.15);
+}
+
+.wide-toggle--on {
+  color: #2f7bf2;
+}
+
+/* A "wide" dock spans TWO horizontal grid spaces (plans/dock-double-width.md):
+   its grid cell takes two columns. Applies to a standalone phone/card cell and
+   to a "together" group's own <li>. */
+.dash__cell--wide {
+  grid-column: span 2;
+}
+
+/* Only the WIDTH should double — keep the height about the same as a normal
+   cell by widening the aspect-ratio, instead of letting the square (cards) /
+   portrait (phones) ratio scale the height up with the doubled width. */
+.dash__cell--wide.dash__phone-cell,
+.dash__cell--wide.dash__group .dash__phone-cell {
+  aspect-ratio: 3 / 2;
+}
+
+.dash__cell--wide .dash-cell {
+  aspect-ratio: 2 / 1;
+}
+
 /* "Waiting on another agent" mark (plans/agent-waiting.md) — an amber ring drawn
    as a box-shadow (not a border) so it LAYERS over the recency/colour/important
    borders instead of fighting them: a waiting+important dock shows the red border

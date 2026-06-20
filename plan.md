@@ -8,8 +8,8 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-19):** **Local app fills the dock** is **user-confirmed
-> working and merged to main**; nothing in flight.
+> **Status (2026-06-20):** **Enlarge a dock to two horizontal spaces** is
+> **merged to main** (built, not yet browser-verified); nothing in flight.
 
 ## ⚠️ Known risks to mitigate
 
@@ -62,6 +62,15 @@
 
 ## Recently shipped
 
+- [Enlarge a dock to two horizontal spaces](plans/dock-double-width.md) — a
+  per-dock **toggle** (the ⤢ control, beside the ★ important / 🔗 depends-on
+  controls) makes an agent dock span **two horizontal grid spaces** (double
+  width); press again to shrink, multiple may be wide at once. Mirrors the
+  `important` flag end-to-end (backend-synced `Wide` bool on `DockTab`; CSS
+  `grid-column: span 2` with an aspect-ratio override so only width doubles; the
+  span also rides the `dash__group` wrapper so a wide primary widens its
+  "together" group). i18n en+tr. **Merged to main 2026-06-20** (`8cd9630`);
+  built, not yet browser-verified. On `feature/dock-double-width`.
 - [Local app fills the dock — hide git while it's open](plans/dock-local-app-full-height.md)
   — in each agent dock, opening a **local app** now renders it **over** the git
   section (hide `phone__git`) so the `ProductFrame` gets the **full dock height**,

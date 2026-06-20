@@ -10,6 +10,7 @@ import ProductFrame from '../app/ProductFrame';
 import FilesBrowser from '../files/FilesBrowser';
 import CopyPath from './CopyPath';
 import ImportantStar from './ImportantStar';
+import WideToggle from './WideToggle';
 import WaitingBadge from './WaitingBadge';
 import WaitingOnField from './WaitingOnField';
 import DependsOnPicker from './DependsOnPicker';
@@ -33,6 +34,7 @@ export default function PinnedAgent({
   onRefreshGit,
   onMaximize,
   onToggleImportant,
+  onToggleWide,
   onToggleWaiting,
   onSetWaitingOn,
   dependsOn,
@@ -123,6 +125,11 @@ export default function PinnedAgent({
           important={!!tab.important}
           onToggle={() => onToggleImportant?.(tab.id)}
           className="phone__important"
+        />
+        <WideToggle
+          wide={!!tab.wide}
+          onToggle={() => onToggleWide?.(tab.id)}
+          className="phone__wide"
         />
         <WaitingBadge
           waiting={!!tab.waiting}
