@@ -528,59 +528,82 @@ document.getElementById('resetBtn').addEventListener('click', () => {
 //   hand = { hand:true, cmd, tag?, d? }  → muted context (you author this)
 //   tui  = { tui:true, cmd, d? }         → terminal-only, not runnable here
 // Mirrors WORKFLOWS; the old→new anchor stays on the Adopt tab on purpose.
+// Each step also carries how you did it in the OLD system, so an expert of
+// the previous layer is anchored at every step. old.k ∈ 'moved' (same ritual,
+// relocated) | 'new' (no old equivalent — an unlock) | 'same' (unchanged).
 const CONSOLE_WF = [
   { name: 'Set up the tool', mode: 'write', steps: [
-    { run: 'version', cmd: 'openspec --version', d: 'confirm the CLI is installed' },
-    { run: 'init', cmd: 'openspec init --tools claude', danger: true, d: 'scaffold openspec/ + the /opsx commands (Phase 0)' },
-    { run: 'update', cmd: 'openspec update', d: 'refresh the instruction files after a CLI upgrade' },
+    { run: 'version', cmd: 'openspec --version', d: 'confirm the CLI is installed',
+      old: { k: 'new', t: 'nothing to check — planning was habit + the <code>CLAUDE.md</code> prompt; there was no CLI.' } },
+    { run: 'init', cmd: 'openspec init --tools claude', danger: true, d: 'scaffold openspec/ + the /opsx commands (Phase 0)',
+      old: { k: 'new', t: 'no install step existed — the “system” was just files + habit.' } },
+    { run: 'update', cmd: 'openspec update', d: 'refresh the instruction files after a CLI upgrade',
+      old: { k: 'new', t: 'conventions lived in <code>CLAUDE.md</code>, edited by hand — nothing to refresh.' } },
   ] },
   { name: 'Inspect the living truth', mode: 'read', steps: [
-    { run: 'list', cmd: 'openspec list', d: 'the changes currently in flight' },
-    { run: 'list-specs', cmd: 'openspec list --specs', d: 'the living baseline — capabilities today' },
-    { run: 'show', cmd: 'openspec show &lt;id&gt;', input: { id: 'inShow', ph: 'change or spec id' }, d: 'read one change or spec in full' },
-    { run: 'status', cmd: 'openspec status --change &lt;id&gt;', input: { id: 'inStatus', ph: 'change-name' }, d: 'artifact-completion for a change' },
-    { run: 'git-status', cmd: 'git status --short --branch', d: 'the working tree' },
-    { tui: true, cmd: 'openspec view', d: 'interactive dashboard — terminal only, not runnable here' },
+    { run: 'list', cmd: 'openspec list', d: 'the changes currently in flight',
+      old: { k: 'moved', t: 'open <code>plan.md</code>; read its <b>Active</b> vs <b>Recently-shipped</b> sections, scan <code>plans/*.md</code>.' } },
+    { run: 'list-specs', cmd: 'openspec list --specs', d: 'the living baseline — capabilities today',
+      old: { k: 'new', t: 'no living doc — you read the code or the changelog. This is the flat gap OpenSpec fills.' } },
+    { run: 'show', cmd: 'openspec show &lt;id&gt;', input: { id: 'inShow', ph: 'change or spec id' }, d: 'read one change or spec in full',
+      old: { k: 'moved', t: 'open that <code>plans/&lt;feature&gt;.md</code> in the Files tab.' } },
+    { run: 'status', cmd: 'openspec status --change &lt;id&gt;', input: { id: 'inStatus', ph: 'change-name' }, d: 'artifact-completion for a change',
+      old: { k: 'moved', t: 'eyeball the checkboxes in the plan markdown — no per-artifact tracking.' } },
+    { run: 'git-status', cmd: 'git status --short --branch', d: 'the working tree',
+      old: { k: 'same', t: 'exactly the same — <code>git status</code>.' } },
+    { tui: true, cmd: 'openspec view', d: 'interactive dashboard — terminal only, not runnable here',
+      old: { k: 'moved', t: 'the harness Files tab + Understanding app rendered everything live on the phone.' } },
   ] },
   { name: 'Make a change, end to end', mode: 'write', spine: true, steps: [
-    { run: 'new-change', cmd: 'openspec new change &lt;name&gt;', input: { id: 'inNew', ph: 'change-name' }, write: true, tag: 'propose', d: 'create the change folder' },
-    { hand: true, cmd: 'write delta specs — ADDED / MODIFIED / REMOVED', tag: 'specify', d: 'diff against the baseline, so review lands on what moves' },
-    { hand: true, cmd: 'write #### Scenario: GIVEN / WHEN / THEN', tag: 'pin “done”', d: 'acceptance criteria beside each requirement' },
-    { hand: true, cmd: 'write design.md + tasks.md', tag: 'design', d: 'the approach, then the slices' },
-    { run: 'validate-strict', cmd: 'openspec validate --strict', tag: 'gate', d: 'structure must hold before any code' },
-    { hand: true, cmd: 'tick tasks.md', tag: 'implement', d: 'as each slice lands — this is the Control tab' },
-    { run: 'archive', cmd: 'openspec archive &lt;name&gt;', input: { id: 'inArchive', ph: 'change-name' }, write: true, tag: 'ship', d: 'fold the delta into the baseline' },
+    { run: 'new-change', cmd: 'openspec new change &lt;name&gt;', input: { id: 'inNew', ph: 'change-name' }, write: true, tag: 'propose', d: 'create the change folder',
+      old: { k: 'moved', t: 'hand-write a fresh <code>plans/&lt;feature&gt;.md</code> (and, for non-trivial work, an Understanding app).' } },
+    { hand: true, cmd: 'write delta specs — ADDED / MODIFIED / REMOVED', tag: 'specify', d: 'diff against the baseline, so review lands on what moves',
+      old: { k: 'moved', t: 'prose in the plan re-describing the <i>whole</i> feature — the part changing is buried.' } },
+    { hand: true, cmd: 'write #### Scenario: GIVEN / WHEN / THEN', tag: 'pin “done”', d: 'acceptance criteria beside each requirement',
+      old: { k: 'new', t: '“done” was a judgment call — criteria in your head or scattered across a thread.' } },
+    { hand: true, cmd: 'write design.md + tasks.md', tag: 'design', d: 'the approach, then the slices',
+      old: { k: 'moved', t: 'the same plan file — free-form, with a status header.' } },
+    { run: 'validate-strict', cmd: 'openspec validate --strict', tag: 'gate', d: 'structure must hold before any code',
+      old: { k: 'new', t: 'confirm intent in chat, skim the plan — no shape check; under-specified plans sailed through.' } },
+    { hand: true, cmd: 'tick tasks.md', tag: 'implement', d: 'as each slice lands — this is the Control tab',
+      old: { k: 'moved', t: 'checkboxes in the plan markdown (or this Control Room’s Control tab).' } },
+    { run: 'archive', cmd: 'openspec archive &lt;name&gt;', input: { id: 'inArchive', ph: 'change-name' }, write: true, tag: 'ship', d: 'fold the delta into the baseline',
+      old: { k: 'moved', t: 'move the plan to <b>Recently-shipped</b>; it then freezes and drifts from reality.' } },
   ] },
   { name: 'Backfill the baseline', mode: 'write', steps: [
-    { hand: true, cmd: 'bucket the system into capabilities', d: '~110 plans + docs → chat / files / git / preview …' },
-    { hand: true, cmd: 'author openspec/specs/&lt;cap&gt;/spec.md', d: 'Purpose + SHALL/MUST, each with ≥1 scenario' },
-    { run: 'validate-strict', cmd: 'openspec validate --strict', d: 'until the whole baseline is clean' },
+    { hand: true, cmd: 'bucket the system into capabilities', d: '~110 plans + docs → chat / files / git / preview …',
+      old: { k: 'new', t: 'never done — there was no current-state map to build from.' } },
+    { hand: true, cmd: 'author openspec/specs/&lt;cap&gt;/spec.md', d: 'Purpose + SHALL/MUST, each with ≥1 scenario',
+      old: { k: 'new', t: 'no living baseline existed — the flat gap.' } },
+    { run: 'validate-strict', cmd: 'openspec validate --strict', d: 'until the whole baseline is clean',
+      old: { k: 'new', t: 'nothing mechanical — you eyeballed it.' } },
   ] },
   { name: 'Hand off to an agent', mode: 'read', steps: [
-    { hand: true, cmd: 'hand over specs/ grouped by capability', d: 'an agent-readable baseline' },
+    { hand: true, cmd: 'hand over specs/ grouped by capability', d: 'an agent-readable baseline',
+      old: { k: 'new', t: 'reverse-engineer the code + do plan archaeology — no canonical brief to hand over.' } },
   ] },
 ];
+const WAS_LBL = { moved: 'was', new: 'new', same: 'same' };
 document.getElementById('consoleBody').innerHTML = CONSOLE_WF.map((w) => {
   const runs = w.steps.filter((s) => s.run).length;
   const steps = w.steps.map((s) => {
+    const k = s.run ? 'run' : (s.tui ? 'tui' : 'hand');
+    const kb = s.run ? '✓' : (s.tui ? '⌨' : '✍');
+    const ok = s.old ? s.old.k : 'moved';
+    const was = s.old
+      ? `<span class="cstep__was cstep__was--${ok}"><span class="cstep__waslbl">${WAS_LBL[ok]}</span>${s.old.t}</span>`
+      : '';
+    const body = `<div class="cstep__body"><code class="cstep__t">${s.cmd}</code>${s.tag ? `<span class="cstep__tag">${s.tag}</span>` : ''}<span class="cstep__d">${s.d || ''}</span>${was}</div>`;
+    let control;
     if (s.run) {
       const input = s.input ? `<input class="act__in" id="${s.input.id}" placeholder="${s.input.ph}" />` : '';
       const from = s.input ? ` data-from="${s.input.id}"` : '';
       const cls = 'act' + (s.write ? ' act--write' : '') + (s.danger ? ' act--danger' : '');
-      return `<li class="cstep cstep--run">
-        <span class="wfkb wfkb--cli">✓</span>
-        <div class="cstep__body"><code class="cstep__t">${s.cmd}</code>${s.tag ? `<span class="cstep__tag">${s.tag}</span>` : ''}<span class="cstep__d">${s.d || ''}</span></div>
-        <div class="cstep__do">${input}<button class="${cls}" data-action="${s.run}"${from}>Run ▸</button></div>
-      </li>`;
+      control = `<div class="cstep__do">${input}<button class="${cls}" data-action="${s.run}"${from}>Run ▸</button></div>`;
+    } else {
+      control = `<span class="cstep__pill cstep__pill--${k}">${s.tui ? 'terminal only' : 'by hand'}</span>`;
     }
-    const k = s.tui ? 'tui' : 'hand';
-    const kb = s.tui ? '⌨' : '✍';
-    const pill = s.tui ? 'terminal only' : 'by hand';
-    return `<li class="cstep cstep--${k}">
-      <span class="wfkb wfkb--${k}">${kb}</span>
-      <div class="cstep__body"><code class="cstep__t">${s.cmd}</code>${s.tag ? `<span class="cstep__tag">${s.tag}</span>` : ''}<span class="cstep__d">${s.d || ''}</span></div>
-      <span class="cstep__pill cstep__pill--${k}">${pill}</span>
-    </li>`;
+    return `<li class="cstep cstep--${k}"><span class="wfkb wfkb--${s.run ? 'cli' : k}">${kb}</span>${body}${control}</li>`;
   }).join('');
   return `<article class="cgrp cgrp--${w.mode} ${w.spine ? 'cgrp--spine' : ''}">
     <div class="cgrp__hd">
