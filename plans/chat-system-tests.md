@@ -103,6 +103,19 @@ clean terminal `error` — no hangs, no 500s, no wedged slots.
 - `realrun.mjs` — 30/30 (scenarios 3,4,5,6,10-14; tokens)
 - `badinput.mjs` — 10/10 (scenario 9 real malformed inputs; tokens)
 
+### Control hub (keeps the feature visible)
+
+A small build-less web app at **`tests/chat-systest/hub/`** is the single place to
+keep this suite understandable and under control — so it isn't forgotten. It
+renders the scenario catalog + token cost per suite + the findings below, runs
+any suite with a click and **streams PASS/FAIL live**, keeps a run history, and
+can **orchestrate the isolated instance** (build → launch :5310 → register
+scratch repo → teardown via `instance.mjs`). It's a *real product you run*,
+exposed on the **Local tab** per `docs/local-exposure-convention.md` (dual-stack
+bind, serves at `/`, relative URLs). Run: `node tests/chat-systest/hub/server.mjs`
+→ `http://localhost:5320/`. No production C# touched; runtime state is gitignored
+under `hub/.state/`. Wiring port 5320 onto the Local tab is the Operator's step.
+
 ### Test-infrastructure added
 
 - **`CLAUDEWEB_DATADIR`** override (`AppPaths.DataDir`, all 16 data-dir sites) so

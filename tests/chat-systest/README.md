@@ -68,3 +68,11 @@ check, and ends with a findings summary — so they can gate CI later.
 
 Kill the isolated `ClaudeWeb.exe` process tree and delete `$ROOT`. Your live
 `:5099` store is never touched (separate datadir), so there's nothing to restore.
+
+## Control hub (recommended)
+
+Instead of the manual dance above, `hub/` is a small web app that does all of it
+— build/launch/register/teardown the isolated instance, run any suite with a
+click and watch PASS/FAIL stream live, plus the scenario catalog and known
+findings. Run `node tests/chat-systest/hub/server.mjs` → `http://localhost:5320/`.
+See [`hub/README.md`](hub/README.md).
