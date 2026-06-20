@@ -294,6 +294,11 @@ h3 { font-size: 16px; margin: 0 0 8px; } h3.mt { margin-top: 28px; }
 .cstep__pill { flex: 0 0 auto; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 8px; white-space: nowrap; }
 .cstep__pill--hand { color: #9a6233; background: #f3e9dd; }
 .cstep__pill--tui { color: var(--soft); background: #eee9e1; }
+.cstep__copy { flex: 0 0 auto; border: 1px solid #c9b8e6; background: #f0eafb; color: #6a4fb0; font: inherit; font-size: 12px; font-weight: 700; padding: 7px 12px; border-radius: 9px; cursor: pointer; white-space: nowrap; transition: background .12s, border-color .12s, color .12s; }
+.cstep__copy:hover { background: #e7dcf7; border-color: #b49ad6; }
+.cstep__copy.is-copied { background: #e7f5ec; border-color: #a8d8b9; color: var(--have); }
+.cstep__copy.is-warn { background: #fdf6e8; border-color: #ecd9af; color: var(--part); }
+.cstep__param { max-width: 150px; }
 /* the change spine: shade the command bookends so they read as bookends */
 .cgrp--spine .cstep--run { background: linear-gradient(90deg, #e7f5ec, transparent 60%); }
 .act { border: 1px solid var(--border); background: var(--bg); color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; padding: 8px 11px; border-radius: 9px; cursor: pointer; text-align: left; transition: border-color .12s, background .12s; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }

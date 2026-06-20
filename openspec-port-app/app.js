@@ -577,38 +577,48 @@ const CONSOLE_WF = [
       old: { k: 'moved', t: 'the harness Files tab + Understanding app rendered everything live on the phone.' } },
   ] },
   { name: 'Make a change, end to end', mode: 'write', spine: true, steps: [
-    { run: 'new-change', cmd: 'openspec new change &lt;name&gt;', input: { id: 'inNew', ph: 'change-name' }, write: true, tag: 'propose', d: 'create the change folder',
+    { run: 'new-change', cmd: 'openspec new change &lt;name&gt;', input: { id: 'inNew', ph: 'change-name', param: 'change-name' }, write: true, tag: 'propose', d: 'create the change folder',
       old: { k: 'moved', t: 'hand-write a fresh <code>plans/&lt;feature&gt;.md</code> (and, for non-trivial work, an Understanding app).' } },
-    { hand: true, cmd: 'write delta specs — ADDED / MODIFIED / REMOVED', tag: 'specify', d: 'diff against the baseline, so review lands on what moves',
-      old: { k: 'moved', t: 'prose in the plan re-describing the <i>whole</i> feature — the part changing is buried.' } },
-    { hand: true, cmd: 'write #### Scenario: GIVEN / WHEN / THEN', tag: 'pin “done”', d: 'acceptance criteria beside each requirement',
-      old: { k: 'new', t: '“done” was a judgment call — criteria in your head or scattered across a thread.' } },
-    { hand: true, cmd: 'write design.md + tasks.md', tag: 'design', d: 'the approach, then the slices',
-      old: { k: 'moved', t: 'the same plan file — free-form, with a status header.' } },
+    { hand: true, params: ['change-name'], cmd: 'write delta specs — ADDED / MODIFIED / REMOVED', tag: 'specify', d: 'diff against the baseline, so review lands on what moves',
+      old: { k: 'moved', t: 'prose in the plan re-describing the <i>whole</i> feature — the part changing is buried.' },
+      prompt: 'In the OpenSpec change `<change-name>`, write the delta specs. For each capability the change touches, create `openspec/changes/<change-name>/specs/<capability>/spec.md` capturing ONLY what changes — as ADDED / MODIFIED / REMOVED requirements diffed against the baseline in `openspec/specs/` (do not re-describe the whole feature). Every requirement must use SHALL/MUST and carry at least one `#### Scenario:` written GIVEN / WHEN / THEN. When done, run `openspec validate <change-name> --strict` and fix until it passes.' },
+    { hand: true, params: ['change-name'], cmd: 'write #### Scenario: GIVEN / WHEN / THEN', tag: 'pin “done”', d: 'acceptance criteria beside each requirement',
+      old: { k: 'new', t: '“done” was a judgment call — criteria in your head or scattered across a thread.' },
+      prompt: 'For the OpenSpec change `<change-name>`, make sure every requirement in its delta specs has at least one `#### Scenario:` block expressed as GIVEN / WHEN / THEN acceptance criteria. Add any that are missing, keep them concrete and testable (one behavior each), then run `openspec validate <change-name> --strict`.' },
+    { hand: true, params: ['change-name'], cmd: 'write design.md + tasks.md', tag: 'design', d: 'the approach, then the slices',
+      old: { k: 'moved', t: 'the same plan file — free-form, with a status header.' },
+      prompt: 'For the OpenSpec change `<change-name>`, write two files under `openspec/changes/<change-name>/`: `design.md` covering the approach and the key trade-offs, and `tasks.md` breaking the work into ordered, checkable slices as `- [ ]` items. Base both on the proposal and the delta specs already in that change folder.' },
     { run: 'validate-strict', cmd: 'openspec validate --strict', tag: 'gate', d: 'structure must hold before any code',
       old: { k: 'new', t: 'confirm intent in chat, skim the plan — no shape check; under-specified plans sailed through.' } },
-    { hand: true, cmd: 'tick tasks.md', tag: 'implement', d: 'as each slice lands — this is the Control tab',
-      old: { k: 'moved', t: 'checkboxes in the plan markdown (or this Control Room’s Control tab).' } },
-    { run: 'archive', cmd: 'openspec archive &lt;name&gt;', input: { id: 'inArchive', ph: 'change-name' }, write: true, tag: 'ship', d: 'fold the delta into the baseline',
+    { hand: true, params: ['change-name'], cmd: 'tick tasks.md', tag: 'implement', d: 'as each slice lands — this is the Control tab',
+      old: { k: 'moved', t: 'checkboxes in the plan markdown (or this Control Room’s Control tab).' },
+      prompt: 'Implement the next unchecked item in `openspec/changes/<change-name>/tasks.md`: write the code, verify it works, then tick the box to `- [x]`. Repeat until every task is checked. Treat the delta specs in that change as the source of truth for the intended behavior, and keep changes scoped to one task at a time.' },
+    { run: 'archive', cmd: 'openspec archive &lt;name&gt;', input: { id: 'inArchive', ph: 'change-name', param: 'change-name' }, write: true, tag: 'ship', d: 'fold the delta into the baseline',
       old: { k: 'moved', t: 'move the plan to <b>Recently-shipped</b>; it then freezes and drifts from reality.' } },
   ] },
   { name: 'Backfill the baseline', mode: 'write', steps: [
     { hand: true, cmd: 'bucket the system into capabilities', d: '~110 plans + docs → chat / files / git / preview …',
-      old: { k: 'new', t: 'never done — there was no current-state map to build from.' } },
-    { hand: true, cmd: 'author openspec/specs/&lt;cap&gt;/spec.md', d: 'Purpose + SHALL/MUST, each with ≥1 scenario',
-      old: { k: 'new', t: 'no living baseline existed — the flat gap.' } },
+      old: { k: 'new', t: 'never done — there was no current-state map to build from.' },
+      prompt: 'Survey this repository — the running app, `plans/*`, `docs/`, and `CLAUDE.md` — and propose a set of capability buckets for an OpenSpec baseline (for example: chat, files, git, local-app-preview, deploy). Group what the system does TODAY into those buckets and list, per bucket, the existing code and docs that describe it. Do not write specs yet — just produce the bucket map for me to review.' },
+    { hand: true, params: ['capability'], cmd: 'author openspec/specs/&lt;cap&gt;/spec.md', d: 'Purpose + SHALL/MUST, each with ≥1 scenario',
+      old: { k: 'new', t: 'no living baseline existed — the flat gap.' },
+      prompt: 'Author `openspec/specs/<capability>/spec.md` describing what this system does TODAY for the `<capability>` capability — source of truth is the running app and recently-shipped work, NOT aspirational plans. Include a Purpose section and SHALL/MUST requirements, each with at least one `#### Scenario:` (GIVEN / WHEN / THEN). When done, run `openspec validate --strict` and fix until clean.' },
     { run: 'validate-strict', cmd: 'openspec validate --strict', d: 'until the whole baseline is clean',
       old: { k: 'new', t: 'nothing mechanical — you eyeballed it.' } },
   ] },
   { name: 'Hand off to an agent', mode: 'read', steps: [
     { hand: true, cmd: 'hand over specs/ grouped by capability', d: 'an agent-readable baseline',
-      old: { k: 'new', t: 'reverse-engineer the code + do plan archaeology — no canonical brief to hand over.' } },
+      old: { k: 'new', t: 'reverse-engineer the code + do plan archaeology — no canonical brief to hand over.' },
+      prompt: 'Build a concise onboarding brief for this project from `openspec/specs/`. For each capability (grouped by folder), summarize in a few sentences what it does, its key requirements, and where the code lives. Output it as markdown I can hand to a new teammate or agent.' },
   ] },
 ];
 const WAS_LBL = { moved: 'was', new: 'new', same: 'same' };
-document.getElementById('consoleBody').innerHTML = CONSOLE_WF.map((w) => {
+// Paste-ready agent prompts for the by-hand steps, keyed cp-<wf>-<step>.
+// Kept out of the DOM (clipboard text, not HTML) so backticks/brackets survive.
+const COPY_PROMPTS = {};
+document.getElementById('consoleBody').innerHTML = CONSOLE_WF.map((w, wi) => {
   const runs = w.steps.filter((s) => s.run).length;
-  const steps = w.steps.map((s) => {
+  const steps = w.steps.map((s, si) => {
     const k = s.run ? 'run' : (s.tui ? 'tui' : 'hand');
     const kb = s.run ? '✓' : (s.tui ? '⌨' : '✍');
     const ok = s.old ? s.old.k : 'moved';
@@ -618,10 +628,17 @@ document.getElementById('consoleBody').innerHTML = CONSOLE_WF.map((w) => {
     const body = `<div class="cstep__body"><code class="cstep__t">${s.cmd}</code>${s.tag ? `<span class="cstep__tag">${s.tag}</span>` : ''}<span class="cstep__d">${s.d || ''}</span>${was}</div>`;
     let control;
     if (s.run) {
-      const input = s.input ? `<input class="act__in" id="${s.input.id}" placeholder="${s.input.ph}" />` : '';
+      const pp = s.input && s.input.param ? ` data-param="${s.input.param}"` : '';
+      const input = s.input ? `<input class="act__in" id="${s.input.id}"${pp} placeholder="${s.input.ph}" />` : '';
       const from = s.input ? ` data-from="${s.input.id}"` : '';
       const cls = 'act' + (s.write ? ' act--write' : '') + (s.danger ? ' act--danger' : '');
       control = `<div class="cstep__do">${input}<button class="${cls}" data-action="${s.run}"${from}>Run ▸</button></div>`;
+    } else if (s.prompt) {
+      const key = `cp-${wi}-${si}`;
+      COPY_PROMPTS[key] = s.prompt;
+      const params = (s.params || []).map((pn) =>
+        `<input class="act__in cstep__param" data-param="${pn}" placeholder="${pn}" />`).join('');
+      control = `<div class="cstep__do">${params}<button class="cstep__copy" data-copy="${key}" title="fill the field(s), then copy a finished prompt to hand the agent">⧉ Copy prompt</button></div>`;
     } else {
       control = `<span class="cstep__pill cstep__pill--${k}">${s.tui ? 'terminal only' : 'by hand'}</span>`;
     }
@@ -715,6 +732,9 @@ async function runAction(action, id, btn) {
 }
 
 conActions.addEventListener('click', (e) => {
+  // Copy-prompt buttons on the by-hand steps (not .act — no server call).
+  const cp = e.target.closest('.cstep__copy');
+  if (cp) { copyPrompt(cp); return; }
   const btn = e.target.closest('.act');
   if (!btn) return;
   const action = btn.dataset.action;
@@ -725,6 +745,48 @@ conActions.addEventListener('click', (e) => {
     if (!id) { logBlock({ cmd: action, error: `enter a name first` }); input.focus(); return; }
   }
   runAction(action, id, btn);
+});
+
+// ── Copy-prompt: hand a by-hand step to the agent ────────────────
+// Substitutes each <param> from the step's own input(s). Inputs sharing a
+// data-param (e.g. change-name) are kept in sync, so the operator types the
+// value once and every step's copied prompt comes out fully filled in. Blocks
+// the copy until the fields are filled, so the clipboard is never half-templated.
+function copyPrompt(btn) {
+  const step = btn.closest('.cstep');
+  const empty = [...step.querySelectorAll('.cstep__param')].find((i) => !i.value.trim());
+  if (empty) { empty.focus(); flashCopied(btn, 'enter ' + empty.dataset.param, 'warn'); return; }
+  let text = COPY_PROMPTS[btn.dataset.copy] || '';
+  step.querySelectorAll('.cstep__param').forEach((inp) => {
+    text = text.split('<' + inp.dataset.param + '>').join(inp.value.trim());
+  });
+  copyText(text).then(() => flashCopied(btn, '✓ Copied')).catch(() => flashCopied(btn, 'Copy failed', 'warn'));
+}
+function copyText(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text);
+  return new Promise((resolve, reject) => {           // http / older-browser fallback
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      const ok = document.execCommand('copy'); document.body.removeChild(ta);
+      ok ? resolve() : reject(new Error('execCommand copy failed'));
+    } catch (err) { reject(err); }
+  });
+}
+function flashCopied(btn, msg, kind) {
+  if (!btn.dataset.label) btn.dataset.label = btn.textContent;
+  btn.textContent = msg;
+  btn.classList.add(kind === 'warn' ? 'is-warn' : 'is-copied');
+  clearTimeout(btn._t);
+  btn._t = setTimeout(() => { btn.textContent = btn.dataset.label; btn.classList.remove('is-copied', 'is-warn'); }, 1600);
+}
+// Keep all inputs that share a data-param (e.g. change-name) in lockstep, so the
+// value is typed once and flows to every step's copy prompt + the run commands.
+conActions.addEventListener('input', (e) => {
+  const el = e.target.closest('[data-param]');
+  if (!el) return;
+  conActions.querySelectorAll(`[data-param="${el.dataset.param}"]`).forEach((o) => { if (o !== el) o.value = el.value; });
 });
 // Enter inside an input fires its sibling action button.
 conActions.addEventListener('keydown', (e) => {

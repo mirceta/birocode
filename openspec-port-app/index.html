@@ -248,9 +248,11 @@
         <p class="lead">The executable twin of <b>Workflows</b> — the same five jobs, in the same order,
           but here each command is a real button (run in the repo root, through this app's server, output
           in the log below). The <span class="wfkb wfkb--cli">✓</span> steps are buttons; the
-          <span class="wfkb wfkb--hand">✍</span> steps you author by hand, shown as context so the
-          <i>sequence</i> stays legible; <span class="wfkb wfkb--tui">⌨</span> is terminal-only. Every
-          step also notes <b>how you did it in the old system</b> (<span class="cstep__waslbl cstep__was--moved" style="background:#f3e9dd;color:#9a6233">was</span>); <b>Adopt</b> has the fuller side-by-side.</p>
+          <span class="wfkb wfkb--hand">✍</span> steps are authored by hand — fill the small field
+          beside one (e.g. <b>change-name</b>, typed once and shared across the steps) and
+          <b>⧉ Copy prompt</b> puts a <i>fully filled-in</i> instruction on your clipboard to hand
+          straight to the agent; <span class="wfkb wfkb--tui">⌨</span> is terminal-only. Every step also notes <b>how you did it in the old system</b>
+          (<span class="cstep__waslbl cstep__was--moved" style="background:#f3e9dd;color:#9a6233">was</span>); <b>Adopt</b> has the fuller side-by-side.</p>
 
         <div class="gate">
           <b>Honest scope:</b> this makes the workflow <i>one-tap and auditable</i> — it does
