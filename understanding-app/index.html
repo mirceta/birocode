@@ -3,42 +3,51 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>OpenSpec workflows — the jobs you'd actually do</title>
+  <title>Should the Console be organized by workflow?</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <header class="hero">
-    <p class="kicker">Understanding · OpenSpec · the day-to-day jobs</p>
-    <h1>OpenSpec workflows <span>— the jobs you'd actually do</span></h1>
+    <p class="kicker">Understanding · a design decision, before we build it</p>
+    <h1>Should the Console be organized <span>by workflow?</span></h1>
     <p class="thesis">
-      OpenSpec is really <b>two modes wearing one CLI</b>. You <b class="r">READ</b> the living
-      truth — every read is a command, so it ports cleanly into the Console. You <b class="w">WRITE</b>
-      a change — but the <i>thinking</i> there is authored by hand; only the <b>bookends</b> (scaffold,
-      gate, ship) are commands. Five workflows, and that's the whole job.
+      The Console today is a <b>flat palette</b> — every OpenSpec command in one list. Fast if you
+      already know what you want. But our reader is an <b>expert in the old system, new to OpenSpec</b>,
+      and their hard question isn't <i>what does <code>validate</code> do</i> — it's <b>when do I run it,
+      and in what order</b>. Flip the toggle to see the same commands answer that question.
     </p>
 
-    <div class="bar">
-      <div class="filters" id="filters">
-        <button data-mode="all" class="on">All 5</button>
-        <button data-mode="read"><span class="dot r"></span>Read the truth</button>
-        <button data-mode="write"><span class="dot w"></span>Write a change</button>
-      </div>
-      <div class="legend">
-        <span><span class="kb kb--cli">✓</span> runs in Console</span>
-        <span><span class="kb kb--hand">✍</span> authored by hand</span>
-        <span><span class="kb kb--tui">⌨</span> terminal only</span>
-      </div>
+    <div class="seg" id="seg">
+      <button data-mode="flat" class="on">Flat — today</button>
+      <button data-mode="flow">By workflow — proposed</button>
     </div>
+    <p class="caption" id="caption"><!-- set by app.js --></p>
   </header>
 
-  <main id="flows"><!-- rendered by app.js --></main>
+  <main>
+    <section class="stage" id="stage"><!-- rendered by app.js --></section>
+
+    <section class="why">
+      <h2>Why this fits the rest of the app</h2>
+      <p class="lead">The app already pairs a <b>descriptive</b> tab with an <b>executable</b> one. This
+        change just completes the pattern — the Console becomes the executable shadow of the
+        <b>Workflows</b> map, the same way it already shadows <b>Adopt</b>.</p>
+      <div class="pair" id="pair"><!-- rendered by app.js --></div>
+    </section>
+
+    <section class="why">
+      <h2>The honest cost</h2>
+      <div class="costs" id="costs"><!-- rendered by app.js --></div>
+      <p class="verdict">Verdict: <b>worth it.</b> Group the Console by workflow, keep it in
+        <b>Operate</b>, keep the by-hand steps as muted context so the sequence reads. The redundancy
+        with the Workflows tab is the <i>good</i> kind — <b>read the job</b> there, <b>run the job</b>
+        here — as long as we keep that line crisp.</p>
+    </section>
+  </main>
 
   <footer class="foot">
-    <p><b>How this ties to the app:</b> the <b>Read</b> workflows are pure commands, so the
-      <b>Console</b> tab runs them all. The <b>Write</b> change-loop is exactly where the
-      <b>4-ported / 7-by-hand</b> split on the <b>Adopt</b> tab comes from — its bookends
-      (<code>new change</code>, <code>validate --strict</code>, <code>archive</code>) are buttons; its
-      middle (delta specs, scenarios, design, tasks) you write yourself.</p>
+    <p>Companion to the pending Console rework · <b>read this before it ships</b>, then the Console tab
+      becomes the thing this picture describes.</p>
   </footer>
 
   <script src="./app.js"></script>
