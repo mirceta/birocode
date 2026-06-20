@@ -12,13 +12,18 @@
       <p class="kicker">Dedicated Local app · feature/openspec-flow · DECIDED — Path A</p>
       <h1>OpenSpec Port <span class="cr">— Control Room</span></h1>
       <p class="sub">
-        A standing surface for the one big feature: <b>explain</b> the port, <b>analyze</b> it
-        against what we have, and <b>control</b> it — track every phase, task, and open decision.
-        Companion to <code>plans/openspec-flow.md</code>; your progress saves locally.
+        A standing surface for the one big feature: <b>explain</b> the port, pin down what
+        <b>our system</b> even is today, <b>analyze</b> it against what we have, see how your
+        day-to-day changes when you <b>adopt</b> it, <b>decide</b> the four open questions, and
+        <b>control</b> it — track every phase and task. Companion to
+        <code>plans/openspec-flow.md</code>; your progress saves locally.
       </p>
       <nav class="nav" id="nav">
         <button class="nav__btn is-active" data-view="explain">Explain</button>
+        <button class="nav__btn" data-view="system">Our system</button>
         <button class="nav__btn" data-view="analyze">Analyze</button>
+        <button class="nav__btn" data-view="adopt">Adopt</button>
+        <button class="nav__btn" data-view="decide">Decide</button>
         <button class="nav__btn" data-view="control">Control</button>
       </nav>
       <div class="progress" id="progressBar" title="overall task completion">
@@ -34,7 +39,7 @@
       <div class="wrap">
         <div class="scope">
           <b>Scope (clarified 2026-06-19):</b> OpenSpec replaces the <b>planning layer</b>
-          (<code>plans/*</code> + <code>understanding.md</code>) — <i>not</i> the harness. The
+          (<code>plans/*</code>) — <i>not</i> the harness. The
           Claude Web harness stays the dev environment; we plan <i>in</i> OpenSpec and keep reading
           those plans <i>through</i> the harness. That's why <b>Phase 3 is essential, not optional</b>.
         </div>
@@ -59,20 +64,83 @@
       </div>
     </section>
 
+    <!-- ───────────── OUR SYSTEM ───────────── -->
+    <section class="view" id="view-system">
+      <div class="wrap">
+        <h2>"Our system" — what it actually is, and where it lives</h2>
+        <p class="lead">Fair question — it never had a name or an installer, so it feels like
+          "just habits." Half right. There <i>is</i> a real, convention-driven planning layer; it's
+          just <b>unbundled across files</b>, and the only thing enforcing it is habit plus the
+          <code>CLAUDE.md</code> prompt. Here are its four layers and exactly where each one sits on disk.</p>
+        <div class="syslist" id="sysBody"><!-- rendered by app.js --></div>
+        <div class="sys__note">
+          <p><b>So "vibe coding" applies to one layer — the enforcement — not the whole thing.</b>
+            The artifacts and rules are concrete files you can open; what's missing is the machinery
+            that <i>checks</i> them. That single missing layer is precisely what OpenSpec supplies.</p>
+          <p class="muted">Not part of the system, despite the name: <b>custom prompts / prompt-stash</b>
+            is a harness convenience for re-running saved prompts — it doesn't hold any planning convention.</p>
+          <p class="muted">This is also what <b>"dual-write"</b> meant: during migration, each new
+            feature writes <i>both</i> sets — the old artifacts above <i>and</i> the OpenSpec
+            <code>changes/&lt;id&gt;/</code> — until Phase 3/4, so nothing goes dark mid-switch.</p>
+        </div>
+      </div>
+    </section>
+
     <!-- ───────────── ANALYZE ───────────── -->
     <section class="view" id="view-analyze">
       <div class="wrap">
-        <h2>Our system vs OpenSpec — one real gap</h2>
-        <p class="lead">Verdict chips are from <b>our</b> point of view. We tie or beat OpenSpec on
-          most dimensions; the responsibility it owns that we never assigned is a single cell —
-          a living baseline of current behaviour. Tap a row.</p>
-        <div class="legend">
-          <span class="lz have">✓ we cover it</span>
-          <span class="lz partial">~ loose / partial</span>
-          <span class="lz gap">✗ flat gap</span>
-          <span class="lz edge">★ we're stronger</span>
+        <h2>Our system vs OpenSpec — scored</h2>
+        <p class="lead">Each capability rated ★ out of 5 for both sides, from our point of view.
+          The higher score is highlighted; the bottom line is at the end.</p>
+        <table class="cmp">
+          <thead><tr><th>Capability</th><th>Our system</th><th>OpenSpec</th></tr></thead>
+          <tbody id="cmpBody"><!-- rendered by app.js --></tbody>
+        </table>
+        <div class="verdict" id="verdict"><!-- rendered by app.js --></div>
+      </div>
+    </section>
+
+    <!-- ───────────── ADOPT ───────────── -->
+    <section class="view" id="view-adopt">
+      <div class="wrap">
+        <h2>Adopt — your day-to-day, before vs after</h2>
+        <p class="lead">No ritual disappears — each one moves to an OpenSpec equivalent. Left is how
+          you do it today (<code>plans/*</code>); right is how you'll
+          do the same thing once we adopt OpenSpec.</p>
+        <table class="flow">
+          <thead><tr>
+            <th>When you want to…</th>
+            <th>Today</th>
+            <th>After OpenSpec</th>
+          </tr></thead>
+          <tbody id="flowBody"><!-- rendered by app.js --></tbody>
+        </table>
+
+        <h2 class="mt">New powers — things you couldn't do before</h2>
+        <p class="lead">The table above is the same rituals, relocated. This is the genuinely net-new
+          part: capabilities that were impossible, or prohibitively hard, on <code>plans/*</code> alone.</p>
+        <div class="unlocks" id="unlocksBody"><!-- rendered by app.js --></div>
+        <p class="muted unlock__foot">These are what the <i>structure</i> unlocks — the friction goes
+          away, not the thinking. <code>validate</code> checks shape, not correctness; scenarios are
+          specs you still turn into tests.</p>
+
+        <p class="muted flow__foot">Until <b>Phase 3</b> ships, OpenSpec planning lives in files the
+          harness can't render yet — the one rough edge of the transition, and exactly why Phase 3 is
+          essential, not optional.</p>
+      </div>
+    </section>
+
+    <!-- ───────────── DECIDE ───────────── -->
+    <section class="view" id="view-decide">
+      <div class="wrap">
+        <div class="ctrlbar">
+          <h2>Decide — the four questions that gate Phase 0</h2>
+          <span class="decsum" id="decsum"><!-- rendered by app.js --></span>
         </div>
-        <div class="matrix" id="matrix"><!-- rendered by app.js --></div>
+        <p class="lead">Path A (adopt the tooling) is already <b>DECIDED</b>. These are the knobs left
+          before Phase 0 can start. Each shows its two-way fork and my lean — set each to
+          <b>open</b>, <b>leaning</b>, or <b>settled</b>; the choice persists in this browser.</p>
+        <div class="decs" id="decs"><!-- rendered by app.js --></div>
       </div>
     </section>
 
@@ -84,12 +152,9 @@
           <button class="reset" id="resetBtn">Reset progress</button>
         </div>
         <p class="lead">Check tasks off as they land; phase status and the header bar update live
-          and persist in this browser. Below the phases, the four open decisions and their state.</p>
+          and persist in this browser. The four open decisions live in <b>Decide</b>.</p>
 
         <div class="phases" id="phases"><!-- rendered by app.js --></div>
-
-        <h3 class="mt">Open decisions (gate Phase 0)</h3>
-        <div class="decs" id="decs"><!-- rendered by app.js --></div>
       </div>
     </section>
   </main>

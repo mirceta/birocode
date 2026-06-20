@@ -203,15 +203,18 @@ that the user explicitly keeps. That makes this phase non-negotiable, not a nice
 ### Phase 4 — Migrate / retire the old convention (1 day, the point of no return)
 - Decide the fate of `plans/*`: freeze as historical, or archive into `openspec/changes/archive`.
   (Lean: freeze in place, stop adding to it — cheap, preserves history, no churn.)
-- Mark `spec-baseline.md` superseded (already implied) and retire `understanding.md`'s role if
-  `proposal.md` fully replaces it — **or** keep `understanding.md` for the Understanding panel
-  and treat `proposal.md` as its archived twin (open decision below).
+- Mark `spec-baseline.md` superseded (already implied). **`understanding.md` is already retired
+  (DECIDED 2026-06-20):** the user dropped it from the workflow — the "Understanding panel —
+  write your understanding first" section was removed from `CLAUDE.md` and the root
+  `understanding.md` deleted. `proposal.md` now owns the restate-intent-before-code role; the
+  Understanding *app* (`understanding-app/`) is unaffected and stays.
 - Update `CLAUDE.md`, `docs/understanding-app-convention.md`, and `plan.md`'s dashboard to
   describe the OpenSpec flow as the canonical one.
 
 ## Open decisions for the user (before Phase 0)
-1. **Dual-write or hard cut?** Keep `plans/*` + `understanding.md` alive in parallel through
-   Phases 1–3 and only retire at Phase 4 (safe, my recommendation), or stop using them now?
+1. **Dual-write or hard cut?** Keep `plans/*` alive in parallel through Phases 1–3 and only
+   retire at Phase 4 (safe, my recommendation), or stop using it now? *(`understanding.md` is
+   no longer part of this question — retired 2026-06-20, see Phase 4.)*
 2. **Harness rendering — *sequencing*, not whether.** *(Settled 2026-06-19: it happens — the
    harness is retained, so planning must be visible there; see Phase 3.)* The only open knob is
    timing: start planning in OpenSpec via Phases 0–2 now and tolerate planning being dark in the
