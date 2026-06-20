@@ -13,18 +13,21 @@
       <h1>OpenSpec Port <span class="cr">— Control Room</span></h1>
       <p class="sub">
         A standing surface for the one big feature: <b>explain</b> the port, pin down what
-        <b>our system</b> even is today, <b>analyze</b> it against what we have, see how your
-        day-to-day changes when you <b>adopt</b> it, <b>decide</b> the four open questions, and
-        <b>control</b> it — track every phase and task. Companion to
+        <b>our system</b> even is today, see which <b>CLAUDE.md</b> conventions it touches,
+        <b>analyze</b> it against what we have, see how your day-to-day changes when you
+        <b>adopt</b> it, <b>decide</b> the four open questions, and <b>control</b> it — track
+        every phase and task. Companion to
         <code>plans/openspec-flow.md</code>; your progress saves locally.
       </p>
       <nav class="nav" id="nav">
         <button class="nav__btn is-active" data-view="explain">Explain</button>
         <button class="nav__btn" data-view="system">Our system</button>
+        <button class="nav__btn" data-view="claudemd">CLAUDE.md</button>
         <button class="nav__btn" data-view="analyze">Analyze</button>
         <button class="nav__btn" data-view="adopt">Adopt</button>
         <button class="nav__btn" data-view="decide">Decide</button>
         <button class="nav__btn" data-view="control">Control</button>
+        <button class="nav__btn" data-view="console">Console</button>
       </nav>
       <div class="progress" id="progressBar" title="overall task completion">
         <div class="progress__fill" id="progressFill"></div>
@@ -86,6 +89,28 @@
       </div>
     </section>
 
+    <!-- ───────────── CLAUDE.md ───────────── -->
+    <section class="view" id="view-claudemd">
+      <div class="wrap">
+        <h2><code>CLAUDE.md</code> — exactly which conventions OpenSpec touches</h2>
+        <p class="lead">Adoption is narrower than it feels: it hits the <b>planning-convention</b>
+          conventions only — everything else in <code>CLAUDE.md</code> is untouched. Each row is a
+          real section of the file; the <b>in plan / inferred</b> tag says whether
+          <code>plans/openspec-flow.md</code> states it outright or it's a logical consequence.</p>
+        <table class="cmods">
+          <thead><tr><th>Convention</th><th>Impact</th><th>When</th><th>What changes</th></tr></thead>
+          <tbody id="cmodBody"><!-- rendered by app.js --></tbody>
+        </table>
+
+        <h3 class="mt">Left completely alone</h3>
+        <p class="lead">The blast radius stops here — these conventions don't move:</p>
+        <ul class="cm__untouched" id="cmodUntouched"><!-- rendered by app.js --></ul>
+        <p class="muted">Net: of <code>CLAUDE.md</code>'s ~8 convention blocks, OpenSpec rewrites
+          <b>one</b> (the plan convention), <b>adds</b> one, <b>widens</b> two, and one is already
+          done. The harness, previewing, UI-mode, and exposure conventions are all stable.</p>
+      </div>
+    </section>
+
     <!-- ───────────── ANALYZE ───────────── -->
     <section class="view" id="view-analyze">
       <div class="wrap">
@@ -104,29 +129,43 @@
     <section class="view" id="view-adopt">
       <div class="wrap">
         <h2>Adopt — your day-to-day, before vs after</h2>
-        <p class="lead">No ritual disappears — each one moves to an OpenSpec equivalent. Left is how
-          you do it today (<code>plans/*</code>); right is how you'll
-          do the same thing once we adopt OpenSpec.</p>
+        <p class="lead">No ritual disappears — each one moves to an OpenSpec equivalent. The
+          <b>Net-new</b> rows are the genuine unlocks: things you simply <i>can’t do today</i> on
+          <code>plans/*</code> alone. The <b>Reshaped</b> rows are the same ritual, relocated. The
+          <b>In Console</b> column flags which rituals you can run from the <b>Console</b> tab (✓ with
+          its command); the rest are <b>not portable</b> — you author those files by hand.</p>
         <table class="flow">
           <thead><tr>
             <th>When you want to…</th>
+            <th>New capability?</th>
             <th>Today</th>
             <th>After OpenSpec</th>
+            <th>In Console</th>
           </tr></thead>
           <tbody id="flowBody"><!-- rendered by app.js --></tbody>
         </table>
-
-        <h2 class="mt">New powers — things you couldn't do before</h2>
-        <p class="lead">The table above is the same rituals, relocated. This is the genuinely net-new
-          part: capabilities that were impossible, or prohibitively hard, on <code>plans/*</code> alone.</p>
-        <div class="unlocks" id="unlocksBody"><!-- rendered by app.js --></div>
-        <p class="muted unlock__foot">These are what the <i>structure</i> unlocks — the friction goes
-          away, not the thinking. <code>validate</code> checks shape, not correctness; scenarios are
-          specs you still turn into tests.</p>
+        <p class="muted unlock__foot">The net-new rows are what the <i>structure</i> unlocks — the
+          friction goes away, not the thinking. <code>validate</code> checks shape, not correctness;
+          scenarios are specs you still turn into tests.</p>
 
         <p class="muted flow__foot">Until <b>Phase 3</b> ships, OpenSpec planning lives in files the
           harness can't render yet — the one rough edge of the transition, and exactly why Phase 3 is
           essential, not optional.</p>
+
+        <h2 class="mt">The honest ledger — are we really losing nothing?</h2>
+        <p class="lead">Almost, but not quite. Nothing you do today becomes <i>impossible</i> — but
+          adoption isn't free. Both columns are truthful on purpose.</p>
+        <div class="ledger">
+          <div class="ledger__col ledger__col--gain">
+            <h3>What we gain</h3>
+            <ul id="ledgerGains"><!-- rendered by app.js --></ul>
+          </div>
+          <div class="ledger__col ledger__col--cost">
+            <h3>What it costs</h3>
+            <ul id="ledgerCosts"><!-- rendered by app.js --></ul>
+          </div>
+        </div>
+        <p class="ledger__verdict" id="ledgerVerdict"><!-- rendered by app.js --></p>
       </div>
     </section>
 
@@ -155,6 +194,47 @@
           and persist in this browser. The four open decisions live in <b>Decide</b>.</p>
 
         <div class="phases" id="phases"><!-- rendered by app.js --></div>
+      </div>
+    </section>
+
+    <!-- ───────────── CONSOLE ───────────── -->
+    <section class="view" id="view-console">
+      <div class="wrap">
+        <div class="ctrlbar">
+          <h2>Console — drive OpenSpec for real</h2>
+          <button class="reset" id="logClear">Clear log</button>
+        </div>
+        <p class="lead">You know the old system cold — <code>plan.md</code>, <code>plans/*.md</code>,
+          the ship ritual — but may be new to OpenSpec. So every row starts from <b>what you did
+          before</b>, then runs the <b>OpenSpec equivalent</b> for real (in the repo root, through this
+          app's server) and prints the output in the log below. Rows tagged <b>New to OpenSpec</b> had
+          no old equivalent — they're the unlocks.</p>
+
+        <div class="gate">
+          <b>Honest scope:</b> this makes the workflow <i>one-tap and auditable</i> — it does
+          <i>not</i> make the port "under control." A button you may click is a convenience, not a
+          gate. The thing that actually enforces the spec — <code>validate --strict</code> blocking
+          bad work — has to live in <b>CI / a git hook</b>, outside this app. The console shows you
+          the state; CI is what makes it mandatory.
+        </div>
+
+        <table class="cflow">
+          <thead><tr>
+            <th>When you want to…</th>
+            <th>In the system you know</th>
+            <th>Run the OpenSpec equivalent</th>
+          </tr></thead>
+          <tbody id="consoleBody"><!-- rendered by app.js --></tbody>
+        </table>
+        <p class="muted flow__foot">The server runs a fixed whitelist — you pick a row, it builds the
+          command — so nothing here can run an arbitrary shell. The <b>writes</b> rows (propose,
+          archive, init) change files in the repo; the reads don't.</p>
+
+        <h3 class="mt">Console log</h3>
+        <div class="con__log" id="conLog" aria-live="polite">
+          <div class="con__empty">Output appears here. Start with <b>Confirm the tooling is here</b> —
+            if OpenSpec isn't installed yet you'll see that plainly (that's Phase 0).</div>
+        </div>
       </div>
     </section>
   </main>

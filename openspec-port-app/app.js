@@ -100,62 +100,66 @@ const ROWS = [
 ];
 
 // ── Data: Adopt — the same ritual, today vs after OpenSpec ───────
+// ── Data: Adopt — the honest ledger (closing net assessment) ─────
+// Deliberately not "we lose nothing": the Phase-3 gap is a real,
+// if temporary, regression. Keep both columns truthful.
+const LEDGER = {
+  gains: [
+    'A <b>living baseline</b> that can’t drift — <code>archive</code> folds every delta back in',
+    'Review a change as a <b>diff</b>, not a from-scratch re-description',
+    'A <b>machine-checked gate</b> — <code>validate --strict</code>, wireable into CI',
+    '<b>Parallel changes</b> in isolated folders, no contended plan file',
+    'Acceptance criteria (<code>#### Scenario</code>) <b>beside</b> each requirement',
+    '<b>Agent-readable</b> capability specs — hand over the brief, not the codebase',
+  ],
+  costs: [
+    { t: 'Phone-blind until <b>Phase 3</b>', d: 'the harness can’t render <code>openspec/</code> yet — the one genuine regression, and why Phase 3 isn’t optional.', kind: 'real' },
+    { t: 'More ceremony per change', d: 'four files (proposal · design · tasks · deltas) vs one plan — overkill for a one-line tweak, where you’d skip OpenSpec.', kind: 'soft' },
+    { t: 'A one-time migration', d: 'backfilling <code>specs/</code> from ~110 plans is real work — a multi-agent sweep, not free.', kind: 'soft' },
+    { t: 'The gap only half-closes', d: '<code>validate</code> checks <i>shape</i>, not correctness; scenarios are specs you still turn into tests.', kind: 'soft' },
+  ],
+  verdict: 'Nothing you do today becomes impossible — so it’s not "lose nothing, gain a lot" so much as <b>gain a lot, lose little, on a timer</b>: the only true loss is temporary, and Phase 3 closes it.',
+};
+
+// ── Data: Adopt — one table, before/after + is-it-net-new ────────
+// Folds the old "new powers" cards in here so nothing is said twice.
+// cap: 'new'  = a capability you simply can't do today (the TODAY
+//               cell leads with "Can't do today").
+// cap: 'same' = the same capability, just relocated/reshaped.
 const FLOW = [
-  { task: 'Kick off a new feature',
+  { task: 'Kick off a new feature', cap: 'same', port: 'propose',
     old: 'Tell Claude; it confirms intent in chat and (for non-trivial work) builds an Understanding app to visualize it. <i>(<code>understanding.md</code> was retired 2026-06-20.)</i>',
     now: 'Run <code>/opsx propose &lt;name&gt;</code> — scaffolds <code>openspec/changes/&lt;name&gt;/</code> with a <code>proposal.md</code> (the restate-intent role).' },
-  { task: 'Spell out what the change does',
-    old: 'Prose in <code>plans/&lt;feature&gt;.md</code> describing the <i>whole</i> feature from scratch.',
-    now: 'Write <b>delta specs</b> — ADDED / MODIFIED / REMOVED requirements, each with a <code>#### scenario</code>, diffed against the baseline.' },
-  { task: 'Describe the approach & steps',
+  { task: 'Spell out the change as a <i>diff</i>', cap: 'new', port: null,
+    old: 'Prose in <code>plans/&lt;feature&gt;.md</code> re-describing the <i>whole</i> feature from scratch — the part actually changing is buried.',
+    now: '<b>Delta specs</b> — ADDED / MODIFIED / REMOVED, diffed against the baseline, so review (and your eyes) land on exactly what moves.' },
+  { task: 'Pin down "done" per requirement', cap: 'new', port: null,
+    old: '"Done" is a judgment call — criteria live in your head or scattered across a thread.',
+    now: 'Each requirement carries its own <code>#### Scenario: GIVEN / WHEN / THEN</code>. <i>(Honest: it\'s the spec, not an auto-run test — you still wire one up.)</i>' },
+  { task: 'Describe the approach & steps', cap: 'same', port: null,
     old: 'The same plan file — free-form, with a status header.',
     now: '<code>design.md</code> for the approach + <code>tasks.md</code> for the slices.' },
-  { task: 'Review before any code',
-    old: 'Confirm intent in chat + the Understanding app, skim the plan. Loose, no gate.',
-    now: 'Review proposal + deltas; <code>openspec validate --strict</code> checks the shape and can gate the start.' },
-  { task: 'Track build progress',
+  { task: 'Gate work before any code', cap: 'new', port: 'validate --strict',
+    old: 'Confirm intent in chat, skim the plan. Loose, no shape check — an under-specified plan sails straight through to code.',
+    now: '<code>openspec validate --strict</code> enforces structure (SHALL form, ≥1 scenario each) and can gate the start — wire it into CI.' },
+  { task: 'Track build progress', cap: 'same', port: null,
     old: 'Checkboxes in the plan markdown (or this Control Room).',
     now: 'Tick items in <code>tasks.md</code> as each slice lands.' },
-  { task: 'Ask "what does it do today?"',
-    old: 'No living doc — read the code, scan Recently-shipped, and hope the plans haven\'t drifted.',
-    now: '<code>openspec list</code> / open <code>openspec/specs/&lt;cap&gt;/spec.md</code> — a living baseline per capability.' },
-  { task: 'Finish & ship',
-    old: 'Move the plan to "Recently-shipped"; git keeps the diff; the plan freezes.',
-    now: '<code>openspec archive &lt;change&gt;</code> — <b>folds the delta into the baseline</b>, so the spec now reflects reality. Becomes the deploy ritual\'s definition of done.' },
-  { task: 'Read planning on your phone',
+  { task: 'Run several changes at once', cap: 'new', port: null,
+    old: 'One growing plan file (Active vs. Recently-shipped) is a single contended doc — parallel features step on each other.',
+    now: 'Each change is its own folder — <code>changes/add-x/</code> · <code>changes/add-y/</code> — that validates and archives on its own clock.' },
+  { task: 'Ask "what does it do <i>today</i>?"', cap: 'new', port: 'list / show',
+    old: 'No living doc — read the code, scan ~110 forward-looking <code>plans/*</code> that quietly drift from reality.',
+    now: '<code>openspec list</code> / <code>openspec/specs/&lt;cap&gt;/spec.md</code> — a living baseline, kept true because archiving folds each delta in.' },
+  { task: 'Onboard a fresh agent or teammate', cap: 'new', port: null,
+    old: 'Means reverse-engineering the code and doing plan archaeology — no canonical brief to hand over.',
+    now: 'Hand them <code>specs/</code> grouped by capability — an agent-readable baseline OpenSpec is purpose-built to produce.' },
+  { task: 'Finish & ship', cap: 'new', port: 'archive',
+    old: 'Move the plan to "Recently-shipped"; git keeps the diff; the plan freezes and drifts.',
+    now: '<code>openspec archive &lt;change&gt;</code> — <b>folds the delta into the baseline</b>, so the spec reflects reality. Becomes the deploy ritual\'s definition of done.' },
+  { task: 'Read planning on your phone', cap: 'same', port: null,
     old: 'Everything renders live in the harness — Files tab (plan.md) + the Understanding app.',
     now: 'Same place — <b>Phase 3</b> adds a renderer for <code>openspec/specs/</code> + active <code>openspec/changes/</code>.' },
-];
-
-// ── Data: Adopt — net-new powers OpenSpec unlocks ────────────────
-// Each is something you couldn't do before, or that was prohibitively
-// hard/expensive. `note` keeps us honest about what's a structural
-// enable vs. something the tool does for you.
-const UNLOCKS = [
-  { now: 'Ask "what does this do <i>today</i>?" and get a straight answer',
-    before: 'No canonical doc — you read the code and scanned ~110 forward-looking <code>plans/*</code> that quietly drift from reality.',
-    tag: 'openspec list · specs/&lt;cap&gt;/spec.md',
-    why: 'Archiving <b>folds the delta into a living baseline</b>, so the spec always reflects what shipped — the one thing our plans structurally lack.' },
-  { now: 'Review a change as a <i>diff</i>, not a re-description',
-    before: 'Every plan re-described the whole feature from scratch; the part that was actually <i>changing</i> was buried in prose.',
-    tag: 'changes/&lt;id&gt;/specs/ — ADDED / MODIFIED / REMOVED',
-    why: 'Deltas are scoped to exactly what moves against the baseline, so review (and your eyes) land on the change itself.' },
-  { now: 'Gate work on a <i>machine-checked</i> plan',
-    before: 'Prose plans had no shape check and no gate — an under-specified or malformed plan sailed straight through to code.',
-    tag: 'openspec validate --strict',
-    why: 'Validate enforces structure: requirements in SHALL/MUST form, every one carrying ≥1 <code>####</code> scenario. Wire it into CI to block work before a line is written.' },
-  { now: 'Write the acceptance criteria <i>beside</i> the requirement',
-    before: '"Done" was a judgment call; the criteria lived in your head or scattered across a thread.',
-    tag: '#### Scenario: GIVEN / WHEN / THEN',
-    why: 'Each requirement ships with its own scenarios — a definition of done you can read back. (Honest: they’re the spec, not an auto-run test — you still turn them into one.)' },
-  { now: 'Keep several changes in flight without them colliding',
-    before: 'One growing plan file (Active vs. Recently-shipped) was a single contended doc — parallel features stepped on each other.',
-    tag: 'changes/add-x/ · changes/add-y/',
-    why: 'Each change is an isolated folder that validates and archives on its own clock, so work can fan out and land independently.' },
-  { now: 'Hand a fresh agent the <i>spec</i>, not the whole codebase',
-    before: 'Onboarding a teammate — or a new Claude session — meant reverse-engineering code and doing plan archaeology.',
-    tag: 'specs/ grouped by capability, agent-readable',
-    why: 'OpenSpec is built for AI assistants: a capability-grouped baseline a model can read to act correctly. The backfill itself is a multi-agent sweep — one agent per capability.' },
 ];
 
 // ── Data: Our system — what it is and where it physically lives ──
@@ -179,6 +183,36 @@ const SYSTEM = [
     lives: 'habit + prompt — nothing mechanical',
     what: 'No CLI, no schema, no <code>validate</code>, no gate. I follow <code>CLAUDE.md</code> because it\'s re-injected each session, not because anything checks the result. Policy by habit, not by machinery — exactly what OpenSpec\'s <code>validate</code> + <code>archive</code> bolt on.',
     kind: 'gap' },
+];
+
+// ── Data: CLAUDE.md — which conventions OpenSpec actually touches ─
+// Be specific: adoption hits the *planning-convention* conventions
+// only. impact ∈ replace | add | expand | done. `plan` flags whether
+// it's stated in plans/openspec-flow.md or an inferred consequence.
+const CMODS = [
+  { sec: 'The plan convention', loc: 'Docs § — "plans/&lt;feature&gt;.md, one per feature, with a status header"',
+    impact: 'replace', when: 'Phase 2 → 4', plan: 'explicit',
+    detail: 'The core hit. New features move to <code>openspec/changes/&lt;id&gt;/</code> (proposal · design · tasks + delta specs); this pointer is repointed at the <code>/opsx</code> flow and <code>plans/*</code> is frozen as historical.' },
+  { sec: 'New "plan via OpenSpec" section', loc: 'added to CLAUDE.md',
+    impact: 'add', when: 'Phase 2', plan: 'explicit',
+    detail: 'CLAUDE.md gains a section telling agents to <b>propose → specify → design → implement → archive</b> instead of writing a <code>plans/&lt;feature&gt;.md</code>. The plan: "point new work at the <code>/opsx</code> flow."' },
+  { sec: '"Warn before violating conventions"', loc: 'the ⚠️ most-important rule',
+    impact: 'expand', when: 'Phase 2+', plan: 'inferred',
+    detail: 'Its definition of "a convention" — today <i>this file + docs + <code>plans/*.md</code></i> — widens to include <code>openspec/specs/</code> (the baseline) and active <code>changes/</code>, since those become the source of truth. Contradicting a spec becomes a violation to flag.' },
+  { sec: 'Glossary', loc: 'the canonical-terms table',
+    impact: 'expand', when: 'Phase 0–1', plan: 'inferred',
+    detail: 'New shared vocabulary joins it: <b>baseline / spec</b>, <b>change</b>, <b>delta</b> (ADDED / MODIFIED / REMOVED), <b>proposal / design / tasks</b>, <b>archive</b> (the fold), <b>capability</b>.' },
+  { sec: 'Understanding panel', loc: 'former "write your understanding first" §',
+    impact: 'done', when: 'done 2026-06-20', plan: 'explicit',
+    detail: 'Already removed this session — <code>understanding.md</code> retired; <code>proposal.md</code> will own restate-intent once OpenSpec lands.' },
+];
+// Conventions OpenSpec leaves completely alone — stated so the blast radius is clear.
+const CUNTOUCHED = [
+  'Understanding <b>app</b> (the SPA companion) — independent of the planning layer, stays verbatim',
+  'UI modes (Simple / Advanced) — the future OpenSpec viewer just <i>follows</i> it (defaults to Advanced)',
+  'Local-exposure + networking conventions',
+  'Build / run, Previewing, and self-dev guides',
+  'INTEGRATION.md module conventions — Phase 3 <i>follows</i> them to add the viewer',
 ];
 
 // ── State (localStorage) ─────────────────────────────────────────
@@ -251,21 +285,49 @@ document.getElementById('sysBody').innerHTML = SYSTEM.map((s) => `
     <p class="sys__what">${s.what}</p>
   </div>`).join('');
 
-// ── 3b) Adopt — the before/after workflow table ──────────────────
-document.getElementById('flowBody').innerHTML = FLOW.map((f) => `
-  <tr>
-    <td class="flow__task"><b>${f.task}</b></td>
-    <td class="flow__old">${f.old}</td>
-    <td class="flow__now">${f.now}</td>
-  </tr>`).join('');
+// ── 2c) CLAUDE.md — which conventions OpenSpec touches ───────────
+const IMPACT = {
+  replace: { label: 'Replaced', cls: 'cm--replace' },
+  add:     { label: 'Added',    cls: 'cm--add' },
+  expand:  { label: 'Expanded', cls: 'cm--expand' },
+  done:    { label: 'Done',     cls: 'cm--done' },
+};
+document.getElementById('cmodBody').innerHTML = CMODS.map((c) => {
+  const im = IMPACT[c.impact];
+  return `<tr class="${im.cls}">
+    <td class="cm__sec"><b>${c.sec}</b><span>${c.loc}</span></td>
+    <td class="cm__impact"><span class="cm__badge">${im.label}</span></td>
+    <td class="cm__when">${c.when}<span class="cm__src cm__src--${c.plan}">${c.plan === 'explicit' ? 'in plan' : 'inferred'}</span></td>
+    <td class="cm__detail">${c.detail}</td>
+  </tr>`;
+}).join('');
+document.getElementById('cmodUntouched').innerHTML = CUNTOUCHED.map((u) => `<li>${u}</li>`).join('');
 
-document.getElementById('unlocksBody').innerHTML = UNLOCKS.map((u, i) => `
-  <div class="unlock">
-    <div class="unlock__head"><span class="unlock__n">${i + 1}</span><b>${u.now}</b></div>
-    <p class="unlock__why">${u.why}</p>
-    <p class="unlock__before"><span>Before:</span> ${u.before}</p>
-    <code class="unlock__tag">${u.tag}</code>
-  </div>`).join('');
+// ── 3b) Adopt — one before/after table, with a net-new flag ──────
+document.getElementById('flowBody').innerHTML = FLOW.map((f) => {
+  const isNew = f.cap === 'new';
+  const badge = isNew
+    ? '<span class="flow__cap flow__cap--new">Net-new</span>'
+    : '<span class="flow__cap flow__cap--same">Reshaped</span>';
+  const today = isNew
+    ? `<span class="flow__cant">Can’t do today</span> ${f.old}`
+    : f.old;
+  const port = f.port
+    ? `<span class="flow__ported" title="run it in the Console tab">✓ <code>${f.port}</code></span>`
+    : '<span class="flow__noport">not portable</span>';
+  return `<tr class="${isNew ? 'flow--new' : ''}">
+    <td class="flow__task"><b>${f.task}</b></td>
+    <td class="flow__capcol">${badge}</td>
+    <td class="flow__old">${today}</td>
+    <td class="flow__now">${f.now}</td>
+    <td class="flow__portcol">${port}</td>
+  </tr>`;
+}).join('');
+
+document.getElementById('ledgerGains').innerHTML = LEDGER.gains.map((g) => `<li>${g}</li>`).join('');
+document.getElementById('ledgerCosts').innerHTML = LEDGER.costs.map((c) => `
+  <li class="ledger__cost--${c.kind}"><b>${c.t}</b> — ${c.d}</li>`).join('');
+document.getElementById('ledgerVerdict').innerHTML = LEDGER.verdict;
 
 // ── 4) Control — phases with checklists ──────────────────────────
 const phasesEl = document.getElementById('phases');
@@ -374,6 +436,129 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   DECISIONS.forEach((d) => { state.decisions[d.id] = d.init; });
   saveState(state);
   renderPhases(); renderDecisions(); updateProgress();
+});
+
+// ── Data: Console — same table model as Adopt, made executable ───
+// The reader is an expert in the OLD system but new to OpenSpec, so
+// every row anchors on "what you did before", then runs the OpenSpec
+// equivalent for real. old.kind ∈ 'moved' (same ritual, relocated) |
+// 'new' (no old equivalent — an unlock) | 'same' (literally unchanged).
+const CONSOLE = [
+  { intent: 'Confirm the tooling is even here', action: 'version',
+    cmd: 'openspec --version',
+    old: { kind: 'new', t: 'Nothing to check — planning was habit + the <code>CLAUDE.md</code> prompt; there was no CLI to install or version.' } },
+  { intent: 'See every change in flight', action: 'list',
+    cmd: 'openspec list',
+    old: { kind: 'moved', t: 'Open <code>plan.md</code> and read its <b>Active</b> vs <b>Recently-shipped</b> sections; scan the ~110 <code>plans/*.md</code>.' } },
+  { intent: 'Read one change / spec in detail', action: 'show', input: { id: 'inShow', ph: 'change or spec id' },
+    cmd: 'openspec show &lt;id&gt;',
+    old: { kind: 'moved', t: 'Open that <code>plans/&lt;feature&gt;.md</code> in the Files tab and read the prose.' } },
+  { intent: 'Start a new change', action: 'propose', write: true, input: { id: 'inPropose', ph: 'change-name' },
+    cmd: 'openspec propose &lt;name&gt;',
+    old: { kind: 'moved', t: 'Hand-write a fresh <code>plans/&lt;feature&gt;.md</code> (and, for non-trivial work, an Understanding app).' } },
+  { intent: 'Check a plan is well-formed', action: 'validate',
+    cmd: 'openspec validate',
+    old: { kind: 'new', t: 'Nothing mechanical — you eyeballed the plan. No shape check ever existed.' } },
+  { intent: 'Gate work before any code', action: 'validate-strict',
+    cmd: 'openspec validate --strict',
+    old: { kind: 'new', t: 'Confirm intent in chat, skim the plan — loose, and nothing actually blocked an under-specified plan from reaching code.' } },
+  { intent: 'Ship / mark a change done', action: 'archive', write: true, input: { id: 'inArchive', ph: 'change-name' },
+    cmd: 'openspec archive &lt;name&gt;',
+    old: { kind: 'moved', t: 'Move the plan into the <b>Recently-shipped</b> section of <code>plan.md</code>; the plan then freezes.' } },
+  { intent: 'See the working tree', action: 'git-status',
+    cmd: 'git status --short --branch',
+    old: { kind: 'same', t: 'Exactly the same — <code>git status</code>. OpenSpec doesn’t touch git.' } },
+  { intent: 'Bootstrap the whole system', action: 'init', danger: true,
+    cmd: 'openspec init --tools claude',
+    old: { kind: 'new', t: 'No install step existed — the “system” was just files + habit. This scaffolds <code>openspec/</code> + the <code>/opsx</code> commands (Phase 0).' } },
+];
+const OLDKIND = {
+  moved: { label: 'Reshaped',       cls: 'cflow__cap--moved' },
+  new:   { label: 'New to OpenSpec', cls: 'cflow__cap--new' },
+  same:  { label: 'Unchanged',      cls: 'cflow__cap--same' },
+};
+document.getElementById('consoleBody').innerHTML = CONSOLE.map((c) => {
+  const k = OLDKIND[c.old.kind];
+  const input = c.input ? `<input class="act__in" id="${c.input.id}" placeholder="${c.input.ph}" />` : '';
+  const from = c.input ? ` data-from="${c.input.id}"` : '';
+  const cls = 'act' + (c.write ? ' act--write' : '') + (c.danger ? ' act--danger' : '');
+  return `<tr class="${c.old.kind === 'new' ? 'cflow--new' : ''}">
+    <td class="cflow__intent"><b>${c.intent}</b></td>
+    <td class="cflow__old"><span class="cflow__cap ${k.cls}">${k.label}</span><span class="cflow__oldt">${c.old.t}</span></td>
+    <td class="cflow__run">
+      <code class="cflow__cmd">${c.cmd}</code>
+      <div class="cflow__do">${input}<button class="${cls}" data-action="${c.action}"${from}>Run ▸</button></div>
+    </td>
+  </tr>`;
+}).join('');
+
+// ── 8) Console — drive real openspec/git via ./api/exec ──────────
+// Relative URL on purpose: resolves under the proxy sub-path
+// /api/localview/<repo>/app/<appId>/api/exec.
+const conLog = document.getElementById('conLog');
+const conActions = document.getElementById('consoleBody');
+
+function logBlock({ cmd, code, stdout, stderr, error, ok }) {
+  const empty = conLog.querySelector('.con__empty');
+  if (empty) empty.remove();
+  const el = document.createElement('div');
+  const status = error ? 'err' : (ok ? 'ok' : 'err');
+  el.className = `logb logb--${status}`;
+  const out = (stdout || '').trimEnd();
+  const errOut = (stderr || '').trimEnd();
+  el.innerHTML = `
+    <div class="logb__cmd"><span class="logb__prompt">$</span> ${escapeHtml(cmd || error || '')}
+      <span class="logb__code">${error ? 'error' : 'exit ' + code}</span></div>
+    ${out ? `<pre class="logb__out">${escapeHtml(out)}</pre>` : ''}
+    ${errOut ? `<pre class="logb__out logb__out--err">${escapeHtml(errOut)}</pre>` : ''}
+    ${!out && !errOut && !error ? '<pre class="logb__out logb__out--muted">(no output)</pre>' : ''}`;
+  conLog.appendChild(el);
+  conLog.scrollTop = conLog.scrollHeight;
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+}
+
+async function runAction(action, id, btn) {
+  if (btn) { btn.disabled = true; btn.classList.add('busy'); }
+  try {
+    const res = await fetch('./api/exec', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(id != null ? { action, id } : { action }),
+    });
+    const data = await res.json();
+    if (data.error) logBlock({ cmd: action, error: data.error });
+    else logBlock(data);
+  } catch (e) {
+    logBlock({ cmd: action, error: 'request failed — is the Console server (serve.mjs) running? ' + e.message });
+  } finally {
+    if (btn) { btn.disabled = false; btn.classList.remove('busy'); }
+  }
+}
+
+conActions.addEventListener('click', (e) => {
+  const btn = e.target.closest('.act');
+  if (!btn) return;
+  const action = btn.dataset.action;
+  let id = null;
+  if (btn.dataset.from) {
+    const input = document.getElementById(btn.dataset.from);
+    id = (input.value || '').trim();
+    if (!id) { logBlock({ cmd: action, error: `enter a name first` }); input.focus(); return; }
+  }
+  runAction(action, id, btn);
+});
+// Enter inside an input fires its sibling action button.
+conActions.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  const input = e.target.closest('.act__in');
+  if (!input) return;
+  const btn = input.parentElement.querySelector('.act');
+  if (btn) btn.click();
+});
+document.getElementById('logClear').addEventListener('click', () => {
+  conLog.innerHTML = '<div class="con__empty">Log cleared.</div>';
 });
 
 // ── Initial render ───────────────────────────────────────────────
