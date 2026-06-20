@@ -822,6 +822,62 @@
   color: #fff;
 }
 
+/* "Show only important agents" filter (plans/hide-inactive-agents.md): a labelled
+   switch in the header that hides every dock not starred ★ important. */
+.dash__only-important {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 12px;
+  padding: 3px 12px 3px 4px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-soft);
+  cursor: pointer;
+}
+
+.dash__only-important:hover,
+.dash__only-important--on {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+.dash__only-important-track {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--color-border);
+  transition: background 0.15s ease;
+}
+
+.dash__only-important--on .dash__only-important-track {
+  background: var(--color-accent);
+}
+
+.dash__only-important-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 0.15s ease;
+}
+
+.dash__only-important--on .dash__only-important-knob {
+  left: 18px;
+}
+
+.dash__only-important-label {
+  white-space: nowrap;
+}
+
 /* ---- Wall of phones (plans/agent-dashboard.md) ------------------------- */
 /* Each phone is a PORTRAIT frame holding one agent's live <Chat embedded>.
    Width is still capped by the size stepper; height tracks it via a 3:4

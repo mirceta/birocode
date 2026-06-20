@@ -8,11 +8,12 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-20):** **Enlarge a dock to two horizontal spaces** is
-> **merged to main** (built, not yet browser-verified). In flight: **Autopilot
-> loop mode** (built & verified on an isolated port, not yet merged/deployed) on
-> `feature/autopilot-loop-mode`, and **Chat system tests** (steppable hub +
-> per-suite interactive diagrams) on `feature/systest-interactive`.
+> **Status (2026-06-20):** **Hide inactive agents** ("Show only important agents"
+> toggle, user-confirmed) and **Enlarge a dock to two horizontal spaces** are
+> **merged to main**. In flight: **Autopilot loop mode** (built & verified on an
+> isolated port, not yet merged/deployed) on `feature/autopilot-loop-mode`, and
+> **Chat system tests** (steppable hub + per-suite interactive diagrams) on
+> `feature/systest-interactive`.
 
 ## ⚠️ Known risks to mitigate
 
@@ -77,6 +78,18 @@
 
 ## Recently shipped
 
+- [Hide inactive agents — "Show only important" dashboard toggle](plans/hide-inactive-agents.md)
+  — a device-local **switch** in the dashboard header that **hides every dock not
+  starred ★ important**, leaving just the important ones; toggle off to show all.
+  A pure **view filter** on the existing backend-synced `important` flag
+  ([important-agents.md](plans/important-agents.md)) — **no backend change**.
+  State in `localStorage` (`claudeweb_dash_only_important`, default off, like the
+  size/zoom/layout prefs); filtered mode renders important docks **flat** (no
+  "together" grouping) so an important dock always shows whether it's a primary,
+  dependent, or standalone, the grid packs by visible count, and an empty-state
+  hint shows when nothing is starred. Applies to phone docks + cards; i18n en+tr.
+  **User-confirmed working; merged to main 2026-06-20.** On
+  `feature/hide-inactive-agents`.
 - [Enlarge a dock to two horizontal spaces](plans/dock-double-width.md) — a
   per-dock **toggle** (the ⤢ control, beside the ★ important / 🔗 depends-on
   controls) makes an agent dock span **two horizontal grid spaces** (double

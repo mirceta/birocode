@@ -220,6 +220,8 @@
   "dashboard.copied": "Copied!",
   "dashboard.markImportant": "Mark important (red border, sorts first)",
   "dashboard.unmarkImportant": "Unmark important",
+  "dashboard.onlyImportant": "Show only important agents",
+  "dashboard.onlyImportantEmpty": "No important agents. Star a dock ★, or turn off \"Show only important agents\".",
   "dashboard.markWide": "Enlarge to two horizontal spaces",
   "dashboard.unmarkWide": "Shrink to one space",
   "dashboard.markWaiting": "Mark waiting for another agent",
