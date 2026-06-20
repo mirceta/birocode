@@ -1,7 +1,7 @@
-// Understanding app for: "Autopilot as a free-floating, dock-styled panel."
-// Make the dashboard's Autopilot section look like an agent dock and be draggable
-// anywhere (like the Ideas panel), still collapsible. Self-contained, no libs,
-// relative URLs (served under /api/localview/<repo>/app/understanding/).
+// Understanding app for: "Enlarge a dock to two horizontal spaces."
+// A per-dock toggle (next to ★ important / 🔗 depends-on) that gives a dock
+// grid-column: span 2 on the agent dashboard. Self-contained, no libs, relative
+// URLs (served under /api/localview/<repo>/app/understanding/).
 
 (function () {
   // ── 1) top-nav view switcher ───────────────────────────────────
@@ -9,95 +9,107 @@
   nav.addEventListener('click', function (e) {
     var btn = e.target.closest('.nav__btn');
     if (!btn) return;
-    var view = btn.dataset.view;
     Array.prototype.forEach.call(nav.children, function (b) {
       b.classList.toggle('nav__btn--on', b === btn);
     });
     document.querySelectorAll('.view').forEach(function (v) {
-      v.classList.toggle('view--on', v.id === 'view-' + view);
+      v.classList.toggle('view--on', v.id === 'view-' + btn.dataset.view);
     });
   });
 
-  // ── 2) the draggable Autopilot dock (mirrors the real drag system) ──
-  var dock = document.getElementById('apdock');
-  var grip = document.getElementById('apdockGrip');
-  var canvas = document.getElementById('freeCanvas');
-  var hint = document.getElementById('dragHint');
-  var drag = null; // { startX, startY, baseX, baseY }
+  // ── 2) the interactive grid: click ⤢ to give a dock span-2 ──────
+  // Mirrors the real dashboard — a √n-column grid of agent docks; "wide"
+  // toggles grid-column: span 2 so the cell takes two horizontal spaces.
+  var AGENTS = [
+    { name: 'birocode', status: 'running', wide: false },
+    { name: 'web-pilot', status: 'idle', wide: false },
+    { name: 'docs-site', status: 'running', wide: false },
+    { name: 'api-chatbot', status: 'idle', wide: false },
+    { name: 'installer', status: 'done', wide: false },
+    { name: 'homepage', status: 'idle', wide: false },
+  ];
+  var grid = document.getElementById('grid');
+  var countEl = document.getElementById('wideCount');
+  var hint = document.getElementById('demoHint');
 
-  function onDown(e) {
-    var r = canvas.getBoundingClientRect();
-    drag = {
-      startX: e.clientX,
-      startY: e.clientY,
-      baseX: dock.offsetLeft,
-      baseY: dock.offsetTop,
-      maxX: r.width - 40,
-      maxY: r.height - 36,
-    };
-    dock.classList.add('apdock--lift');
-    grip.setPointerCapture && grip.setPointerCapture(e.pointerId);
+  function render() {
+    grid.innerHTML = '';
+    AGENTS.forEach(function (a, i) {
+      var li = document.createElement('li');
+      li.className = 'mini mini--' + a.status + (a.wide ? ' mini--wide' : '');
+      li.innerHTML =
+        '<div class="mini__bar">' +
+          '<span class="mini__dot"></span>' +
+          '<span class="mini__name">' + a.name + '</span>' +
+          '<span class="mini__ctl" title="important">★</span>' +
+          '<span class="mini__ctl" title="depends on">🔗</span>' +
+          '<button class="mini__ctl mini__wide' + (a.wide ? ' mini__wide--on' : '') +
+            '" data-i="' + i + '" aria-pressed="' + a.wide + '" ' +
+            'title="' + (a.wide ? 'shrink to one space' : 'enlarge to two spaces') + '">⤢</button>' +
+        '</div>' +
+        '<div class="mini__screen">' +
+          (a.wide ? '<span class="mini__tag">spans 2 columns</span>' : '') +
+          '<span class="mini__lines"></span>' +
+        '</div>';
+      grid.appendChild(li);
+    });
+    var n = AGENTS.filter(function (a) { return a.wide; }).length;
+    countEl.textContent = n + ' wide';
+    countEl.classList.toggle('mockbar__count--on', n > 0);
+  }
+
+  grid.addEventListener('click', function (e) {
+    var btn = e.target.closest('.mini__wide');
+    if (!btn) return;
+    e.stopPropagation(); // same as the real toggle: don't "open" the agent
+    var i = +btn.dataset.i;
+    AGENTS[i].wide = !AGENTS[i].wide;
     if (hint) hint.classList.add('hint--done');
-    e.preventDefault();
-  }
-  function onMove(e) {
-    if (!drag) return;
-    var x = drag.baseX + (e.clientX - drag.startX);
-    var y = drag.baseY + (e.clientY - drag.startY);
-    // clamp inside the canvas, leaving a grabbable strip (mirrors clampPos).
-    x = Math.max(-dock.offsetWidth + 60, Math.min(drag.maxX, x));
-    y = Math.max(0, Math.min(drag.maxY, y));
-    dock.style.left = x + 'px';
-    dock.style.top = y + 'px';
-  }
-  function onUp() {
-    drag = null;
-    dock.classList.remove('apdock--lift');
-  }
-  grip.addEventListener('pointerdown', onDown);
-  grip.addEventListener('pointermove', onMove);
-  grip.addEventListener('pointerup', onUp);
-  grip.addEventListener('pointercancel', onUp);
+    render();
+  });
+  render();
 
-  // ── 3) collapse / expand (just the bar shows when collapsed) ────
-  var chev = document.getElementById('apdockChev');
-  var body = document.getElementById('apdockBody');
-  chev.addEventListener('click', function () {
-    var collapsed = dock.classList.toggle('apdock--collapsed');
-    chev.textContent = collapsed ? '▸' : '▾';
-    body.hidden = collapsed;
+  // ── 3) "the button" close-up: toggle its on/off state ──────────
+  var hzWide = document.getElementById('hzWide');
+  function toggleHz() {
+    var on = hzWide.getAttribute('aria-pressed') !== 'true';
+    hzWide.setAttribute('aria-pressed', on);
+    hzWide.classList.toggle('hz__ctl--on', on);
+    hzWide.title = on ? 'two spaces · on' : 'enlarge to two spaces (NEW)';
+  }
+  hzWide.addEventListener('click', toggleHz);
+  hzWide.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleHz(); }
   });
 
-  // ── 4) "what changes" list (kept in JS so the prose stays in one place) ──
-  var CHANGES = [
-    ['Move the panel into the canvas',
-      'Render <code>&lt;AutopilotPanel/&gt;</code> inside <code>dash__body</code> as a third panel ' +
-      '(<code>data-panel="autopilot"</code>), beside <code>ideas</code> and <code>agents</code> — ' +
-      'no longer a band above the canvas.'],
-    ['Add it to the drag layout',
-      'Extend the free 2D layout to a third key: <code>positions.autopilot</code> saved in ' +
-      '<code>claudeweb_dash_pos</code>; generalize <code>freePlaced</code>, <code>seededPositions</code> ' +
-      '(the <code>[ideas, agents]</code> loop) and reset; add a <code>⠿</code> handle + lifted style.'],
-    ['Dress it as a dock',
-      'Reuse the agent-dock card chrome (rounded surface, header bar, body) with a distinct ' +
-      '🛞 title/accent, so it reads as separate from the real agents.'],
-    ['Keep it collapsible',
-      'The existing toggle + per-device <code>claudeweb_dash_autopilot_collapsed</code> stays; ' +
-      'collapsed = just the dock’s header bar (a minimized dock).'],
-    ['Grid mode',
-      'On narrow screens it snaps into the responsive flow like the other panels ' +
-      '(default order: first — to confirm).'],
-    ['Gating unchanged',
-      'Still self-gates on the <code>autopilotTab</code> feature; renders nothing when off.'],
+  // ── 4) the build chain (kept in JS so the prose lives in one place) ──
+  var FLOW = [
+    ['Toggle in the dock header',
+      'A small <code>⤢</code> control (copy of <code>ImportantStar</code>) beside ★/🔗 in ' +
+      '<code>PinnedAgent.jsx</code> and the cards in <code>Dashboard.jsx</code>; it ' +
+      '<code>stopPropagation</code>s so it toggles instead of opening the agent.'],
+    ['<code>toggleWide(id)</code> in Dashboard.jsx',
+      'A copy of <code>toggleImportant</code>: optimistic + backend-synced via ' +
+      '<code>updateTab(id, { wide: !tab.wide })</code>.'],
+    ['Client passes it through',
+      '<code>DockContext.toServerPatch</code> gets <code>if (\'wide\' in patch) body.wide = …</code> ' +
+      'so the PATCH reaches the server (anything not whitelisted stays client-local).'],
+    ['Backend stores it',
+      'A new <code>bool Wide</code> on <code>DockTab</code> (default false), threaded like ' +
+      '<code>Important</code>: <code>DockRegistry.Update</code> + <code>ToDto</code>, ' +
+      '<code>DockController</code> <code>PatchRequest</code> / GET / Update.'],
+    ['CSS does the widening',
+      'A wide cell gets <code>grid-column: span 2</code> in <code>dashboard.css</code>; the ' +
+      '<code>dash__group</code> wrapper spans too when a wide dock is a dependent’s primary.'],
   ];
-  var ol = document.getElementById('changes');
-  CHANGES.forEach(function (c) {
+  var ol = document.getElementById('flow');
+  FLOW.forEach(function (c) {
     var li = document.createElement('li');
     li.innerHTML = '<b>' + c[0] + '</b> — ' + c[1];
     ol.appendChild(li);
   });
 
-  // ── 5) confirm disclosures ──────────────────────────────────────
+  // ── 5) confirm disclosures ─────────────────────────────────────
   var qs = document.getElementById('qs');
   qs.addEventListener('click', function (e) {
     var item = e.target.closest('.q__item');

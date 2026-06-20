@@ -3,123 +3,103 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Understanding — Autopilot as a free-floating dock</title>
+  <title>Understanding — enlarge a dock to two horizontal spaces</title>
   <!-- Relative URLs only: served under /api/localview/<repo>/app/understanding/. -->
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <header class="hero">
     <div class="hero__kicker">my understanding — please confirm before I build</div>
-    <h1>Autopilot → a <span class="hl">free-floating</span>, <span class="hl2">dock-styled</span> panel</h1>
-    <p class="hero__sub">Keep it collapsible, but make it look like an agent dock and let you drag it
-      anywhere on the dashboard — <strong>just like the Ideas panel</strong>. In <b>Proposed</b>
-      the Autopilot dock is really draggable (grab <span class="kbd">⠿</span>) and collapsible.</p>
+    <h1>Enlarge a dock to <span class="hl">two horizontal spaces</span></h1>
+    <p class="hero__sub">A per-dock <strong>toggle</strong> — sitting right next to the
+      <span class="kbd">★</span> important and <span class="kbd">🔗</span> depends-on controls — that makes
+      <strong>that one dock</strong> span <b>two grid columns</b> on the agent dashboard. It's a toggle, so
+      press again to shrink back; several docks can be wide at once. The demo below
+      <em>is</em> the feature — click <span class="kbd">⤢</span> on any dock.</p>
     <nav class="nav" id="nav">
-      <button class="nav__btn nav__btn--on" data-view="now">1 · Now (band on top)</button>
-      <button class="nav__btn" data-view="proposed">2 · Proposed (drag me)</button>
-      <button class="nav__btn" data-view="changes">3 · What changes</button>
+      <button class="nav__btn nav__btn--on" data-view="demo">1 · Try it</button>
+      <button class="nav__btn" data-view="button">2 · The button</button>
+      <button class="nav__btn" data-view="build">3 · How it's built</button>
       <button class="nav__btn" data-view="open">4 · Confirm</button>
     </nav>
   </header>
 
   <main>
-    <!-- ── 1: NOW — full-width band ───────────────────────────────── -->
-    <section class="view view--on" id="view-now">
+    <!-- ── 1: DEMO — interactive widen ─────────────────────────────── -->
+    <section class="view view--on" id="view-demo">
       <div class="panel">
-        <h2><span class="num">1</span> Today: a full-width band, pinned to the top</h2>
-        <p class="lead">The Autopilot section spans the whole width above the canvas and can’t be
-           moved. Collapsible — but it always eats vertical room above the conversation.</p>
+        <h2><span class="num">1</span> Click <span class="kbd">⤢</span> to widen a dock <span class="h2sub">— live grid reflow</span></h2>
+        <p class="lead">The dashboard lays agents out in a grid (~√n columns). Marking a dock
+           <b>wide</b> gives its cell <code>grid-column: span 2</code>, so it takes two horizontal
+           spaces and the rest reflow around it. Try toggling a few.</p>
         <div class="stage">
           <div class="mockbar"><span class="dot dot--r"></span><span class="dot dot--y"></span><span class="dot dot--g"></span>
-            <span class="mockbar__t">Agent dashboard</span></div>
-          <div class="band">
-            <span class="band__chev">▾</span>
-            <span class="band__title">🛞 Autopilot</span>
-            <span class="band__sum">2 armed · <b>1 need you</b> · suggest-only</span>
-          </div>
-          <div class="canvas">
-            <div class="panel-m panel-m--ideas"><div class="panel-m__h">💡 Ideas</div><div class="panel-m__b muted">backlog…</div></div>
-            <div class="panel-m panel-m--agents"><div class="panel-m__h">Agents</div>
-              <div class="wall"><div class="ph"></div><div class="ph"></div><div class="ph"></div><div class="ph"></div></div>
-            </div>
-          </div>
+            <span class="mockbar__t">Agent dashboard · wall of phones</span>
+            <span class="mockbar__count" id="wideCount">0 wide</span></div>
+          <ul class="grid" id="grid"><!-- docks injected by app.js --></ul>
         </div>
+        <p class="hint" id="demoHint">↑ each dock's header has <span class="kbd">★</span>
+           <span class="kbd">🔗</span> <span class="kbd">⤢</span> — the new <span class="kbd">⤢</span> is the wide toggle.</p>
       </div>
     </section>
 
-    <!-- ── 2: PROPOSED — draggable dock ──────────────────────────── -->
-    <section class="view" id="view-proposed">
+    <!-- ── 2: THE BUTTON ───────────────────────────────────────────── -->
+    <section class="view" id="view-button">
       <div class="panel">
-        <h2><span class="num">2</span> Proposed: a dock you can drop anywhere <span class="h2sub">— grab ⠿ · click ▾</span></h2>
-        <p class="lead">Same drag system the Ideas/Agents panels already use. The Autopilot dock
-           becomes a third draggable panel — dock-styled, collapsible, position remembered per device.</p>
-        <div class="stage">
-          <div class="mockbar"><span class="dot dot--r"></span><span class="dot dot--y"></span><span class="dot dot--g"></span>
-            <span class="mockbar__t">Agent dashboard</span></div>
-          <div class="canvas canvas--free" id="freeCanvas">
-            <div class="panel-m panel-m--ideas"><div class="panel-m__h">💡 Ideas <span class="grip">⠿</span></div>
-              <div class="panel-m__b muted">backlog…</div></div>
-            <div class="panel-m panel-m--agents"><div class="panel-m__h">Agents <span class="grip">⠿</span></div>
-              <div class="wall"><div class="ph"></div><div class="ph"></div><div class="ph"></div><div class="ph"></div></div>
-            </div>
-
-            <!-- the new Autopilot dock -->
-            <div class="apdock" id="apdock" style="left: 270px; top: 96px;">
-              <div class="apdock__bar" id="apdockBar">
-                <span class="grip grip--lift" id="apdockGrip" title="Drag me anywhere">⠿</span>
-                <button class="apdock__chev" id="apdockChev" title="Collapse / expand">▾</button>
-                <span class="apdock__title">🛞 Autopilot</span>
-                <span class="apdock__sum" id="apdockSum">2 armed · <b>1&nbsp;need&nbsp;you</b></span>
-              </div>
-              <div class="apdock__body" id="apdockBody">
-                <div class="apbar">
-                  <span class="sw sw--on"></span><b>Autopilot</b><span class="muted">on · armed only</span>
-                  <span class="apbar__sp"></span><span class="muted">conf ≥ <b>0.85</b></span>
-                </div>
-                <div class="deny">Always escalates: <code>deploy</code> <code>force-push</code></div>
-                <ul class="aglist">
-                  <li><span class="st st--esc">needs you</span><span class="ag">birocode</span></li>
-                  <li><span class="st st--sugg">suggestion</span><span class="ag">web-pilot</span><span class="muted">→ keep it</span></li>
-                  <li class="off"><span class="st st--off">off</span><span class="ag">docs-site</span></li>
-                </ul>
-              </div>
-            </div>
-          </div>
+        <h2><span class="num">2</span> Where the button lives <span class="h2sub">— in the dock header row</span></h2>
+        <p class="lead">It joins the existing header controls, in order. Same affordance as
+           <b>★ important</b>: a small toggle that <code>stopPropagation</code>s so tapping it widens the
+           dock instead of opening the agent.</p>
+        <div class="headerzoom">
+          <span class="hz__dot"></span>
+          <span class="hz__name">birocode</span>
+          <span class="hz__status">running</span>
+          <span class="hz__ctl hz__ctl--ghost" title="important (exists)">★</span>
+          <span class="hz__ctl hz__ctl--ghost" title="depends on (exists)">🔗</span>
+          <span class="hz__ctl hz__ctl--new" id="hzWide" role="button" tabindex="0" aria-pressed="false"
+                title="enlarge to two spaces (NEW)">⤢</span>
         </div>
-        <p class="hint" id="dragHint">↑ grab the <span class="kbd">⠿</span> on the Autopilot dock and drop it anywhere.</p>
+        <ul class="legend">
+          <li><span class="lg lg--ghost">★ 🔗</span> existing controls — important &amp; depends-on, untouched</li>
+          <li><span class="lg lg--new">⤢</span> <b>new</b> — the wide toggle, this feature</li>
+        </ul>
+        <p class="ask__foot">Rendered in <b>both</b> dock surfaces: the live "phone" docks
+           (<code>PinnedAgent.jsx</code>) and the cheap summary <b>cards</b> (<code>Dashboard.jsx</code>).
+           Click the <span class="kbd">⤢</span> above to see its on/off state.</p>
       </div>
     </section>
 
-    <!-- ── 3: WHAT CHANGES ───────────────────────────────────────── -->
-    <section class="view" id="view-changes">
+    <!-- ── 3: HOW IT'S BUILT ───────────────────────────────────────── -->
+    <section class="view" id="view-build">
       <div class="panel">
-        <h2><span class="num">3</span> What changes <span class="h2sub">— frontend only</span></h2>
-        <ol class="contract" id="changes"></ol>
-        <p class="ask__foot">Untouched: the Autopilot <b>tab</b>, the <code>/api/autopilot</code> API,
-           the engine, and the operator gate. Same controls — new container, styling, and placement.</p>
+        <h2><span class="num">3</span> One boolean, threaded like <code>important</code> <span class="h2sub">— click a step</span></h2>
+        <p class="lead">No new machinery — it copies the existing <b>important</b> flag end-to-end, so it's
+           backend-synced (survives reload, shared across devices). The chain:</p>
+        <ol class="flow" id="flow"></ol>
+        <p class="ask__foot">Net new surface area: one <code>bool</code>, one tiny toggle component, and a
+           CSS rule. Everything else is wiring that already exists for <code>important</code>.</p>
       </div>
     </section>
 
-    <!-- ── 4: CONFIRM ────────────────────────────────────────────── -->
+    <!-- ── 4: CONFIRM ──────────────────────────────────────────────── -->
     <section class="view" id="view-open">
       <div class="panel">
-        <h2><span class="num">4</span> Confirm <span class="h2sub">— click each</span></h2>
-        <p class="lead">Tell me if any of these are off before I build.</p>
+        <h2><span class="num">4</span> Confirm <span class="h2sub">— click each; tell me if any are off</span></h2>
         <ul class="q" id="qs">
-          <li class="q__item" data-a="Same mechanism the Ideas/Agents panels use today: a ⠿ drag handle in free mode, grid-mode flow on narrow screens, and the drop position saved per device in claudeweb_dash_pos. Not a new mechanism, not OS-level drag.">
-            <span class="q__q">① “Free-floating like Ideas” = the <b>existing</b> drag system, third panel <span class="tagy">✓ assume</span></span>
+          <li class="q__item" data-a="Two columns of the dashboard agent grid — literally double the normal cell width via grid-column: span 2. Height is unchanged. Not a free-resize, not a pop-out; just one→two horizontal spaces.">
+            <span class="q__q">① “Two horizontal spaces” = <b>2 grid columns</b>, double width, same height <span class="tagy">✓ assume</span></span>
             <span class="q__a"></span>
           </li>
-          <li class="q__item" data-a="It adopts the agent-dock (phone) visual chrome — rounded surface, header bar, body — with a distinct 🛞 title/accent so it reads as separate from real agents. It stays a control surface (global controls + deny-list + per-agent arm), not a chat/git dock.">
-            <span class="q__q">② “Looks like an agent dock” = the dock <b>chrome</b>, still a control surface <span class="tagy">✓ assume</span></span>
+          <li class="q__item" data-a="A backend-synced bool 'Wide' on DockTab, exactly like 'important' — so it persists across reload and across devices, and multiple docks can be wide at once. Not device-local like the size/zoom steppers.">
+            <span class="q__q">② Backend-synced &amp; persistent (mirrors <code>important</code>), multiple allowed <span class="tagy">✓ assume</span></span>
             <span class="q__a"></span>
           </li>
-          <li class="q__item" data-a="It stays on feature/autopilot-to-harness — this is a refinement of Part 2 of that plan (where the autopilot dashboard lives), so it's the same feature, not a new branch.">
-            <span class="q__q">③ Stays on <b>feature/autopilot-to-harness</b> (same feature) <span class="tagd">default</span></span>
+          <li class="q__item" data-a="No separate Advanced flag — it lives inside the already Advanced-gated dashboard, alongside important/waiting/depends which have no per-control flag of their own.">
+            <span class="q__q">③ No new feature flag — inherits the dashboard's Advanced gate <span class="tagd">default</span></span>
             <span class="q__a"></span>
           </li>
-          <li class="q__item" data-a="OPEN QUESTION: in grid mode (mobile default) should the Autopilot dock sit first (above Ideas/agents) or last? I'll assume FIRST unless you say otherwise.">
-            <span class="q__q">④ Grid-mode default position: <b>first</b>? <span class="tagq">? confirm</span></span>
+          <li class="q__item" data-a="OPEN: the widen glyph. I'm leaning ⤢ (or ⇔). And: should the cheap 'cards' view honour span-2 too, or only the live 'phones' view? I'll assume BOTH for consistency unless you say phones-only.">
+            <span class="q__q">④ Glyph = <b>⤢</b>? &amp; apply in <b>cards</b> view too? <span class="tagq">? confirm</span></span>
             <span class="q__a"></span>
           </li>
         </ul>
@@ -128,9 +108,9 @@
   </main>
 
   <footer class="foot">
-    My <strong>understanding</strong> of the redesign — not built yet. Companion to
-    <code>understanding.md</code>; refinement of Part 2 of <code>plans/autopilot-to-harness.md</code>.
-    Tell me where I’m off.
+    My <strong>understanding</strong> of the feature — not built yet. Companion to
+    <code>understanding.md</code> and <code>plans/dock-double-width.md</code>, on
+    <code>feature/dock-double-width</code>. Tell me where I'm off.
   </footer>
 
   <script src="./app.js"></script>

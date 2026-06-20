@@ -58,6 +58,8 @@ function toServerPatch(patch) {
   // "Depends on" a primary agent's tab id (plans/dependent-agents.md). Empty
   // string clears the dependency on the backend.
   if ('dependsOn' in patch) body.dependsOn = patch.dependsOn ?? '';
+  // "Wide" — the dock spans two horizontal grid spaces (plans/dock-double-width.md).
+  if ('wide' in patch) body.wide = patch.wide;
   return Object.keys(body).length > 0 ? body : null;
 }
 
