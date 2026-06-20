@@ -52,8 +52,8 @@
   on, **hides every dock that isn't starred ★ important**, leaving just the
   important ones; toggle off to show all again. Pure **view filter** on the
   existing backend-synced `important` flag ([important-agents.md](plans/important-agents.md))
-  — device-local pref, no new dock state. Kickoff only, not built. On
-  `feature/hide-inactive-agents`.
+  — device-local pref, no new dock state. **Built** (frontend compiles); not yet
+  browser-verified/deployed. On `feature/hide-inactive-agents`.
 
 ## Proposed / design (not building yet)
 
