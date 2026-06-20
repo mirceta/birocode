@@ -7,6 +7,7 @@ import { useFeature } from '../../context/UiModeContext';
 import GitStatusSummary from '../git/GitStatusSummary';
 import { deriveGitActions, pullMainPath } from '../git/gitActions';
 import ProductFrame from '../app/ProductFrame';
+import FilesBrowser from '../files/FilesBrowser';
 import CopyPath from './CopyPath';
 import ImportantStar from './ImportantStar';
 import WaitingBadge from './WaitingBadge';
@@ -63,6 +64,15 @@ export default function PinnedAgent({
   const apps = canLocalApp ? (localApps || []) : [];
   const [openAppId, setOpenAppId] = useState(null);
   const openApp = apps.find((a) => a.id === openAppId) || null;
+
+  // Files tab on the dock (plans/agent-dock-files-tab.md): a third screen the
+  // phone can show — the SAME browse-and-view surface as the routed Files tab
+  // (tree · viewer · pins · live poll · doc-links), scoped to THIS agent's repo.
+  // It is a sibling of the Builder/Ask lanes and the local-app buttons: picking
+  // it swaps phone__screen to the FilesBrowser; picking a lane or app swaps back.
+  // Gated on the filesDock feature (Advanced by default).
+  const filesOn = useFeature('filesDock');
+  const [showFiles, setShowFiles] = useState(false);
 
   // Inward-sync git actions in the dock's git row (plans/dock-git-actions.md):
   // the SAME merge / pull-main / pull-branch actions as the Git tab, scoped to
@@ -139,22 +149,43 @@ export default function PinnedAgent({
         <button
           type="button"
           role="tab"
-          aria-selected={!isAsk}
-          className={`phone__lane${!isAsk ? ' phone__lane--on' : ''}`}
-          onClick={() => setLaneView('builder')}
+          aria-selected={!isAsk && !showFiles}
+          className={`phone__lane${!isAsk && !showFiles ? ' phone__lane--on' : ''}`}
+          onClick={() => {
+            setShowFiles(false);
+            setLaneView('builder');
+          }}
         >
           {t('chat.laneBuilder')}
         </button>
         <button
           type="button"
           role="tab"
-          aria-selected={isAsk}
-          className={`phone__lane${isAsk ? ' phone__lane--on' : ''}`}
+          aria-selected={isAsk && !showFiles}
+          className={`phone__lane${isAsk && !showFiles ? ' phone__lane--on' : ''}`}
           title={t('chat.askHint')}
-          onClick={() => setLaneView('ask')}
+          onClick={() => {
+            setShowFiles(false);
+            setLaneView('ask');
+          }}
         >
           {t('chat.tabAsk')}
         </button>
+        {filesOn && (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={showFiles}
+            className={`phone__lane${showFiles ? ' phone__lane--on' : ''}`}
+            title={t('files.tabHint')}
+            onClick={() => {
+              setOpenAppId(null);
+              setShowFiles(true);
+            }}
+          >
+            {t('files.tab')}
+          </button>
+        )}
       </div>
       {/* Local-app switcher (plans/dock-multi-local-app.md): one button per local
           app the repo defines (incl. the always-on Understanding app), mirroring the
@@ -169,7 +200,10 @@ export default function PinnedAgent({
               role="tab"
               aria-selected={a.id === openAppId}
               className={`phone__app${a.id === openAppId ? ' phone__app--on' : ''}`}
-              onClick={() => setOpenAppId((cur) => (cur === a.id ? null : a.id))}
+              onClick={() => {
+                setShowFiles(false);
+                setOpenAppId((cur) => (cur === a.id ? null : a.id));
+              }}
               title={`:${a.port}${a.kind === 'harness' ? ' · harness' : ''}`}
             >
               {a.name}{a.kind === 'repo' && <span className="phone__app-port"> :{a.port}</span>}
@@ -177,7 +211,11 @@ export default function PinnedAgent({
           ))}
         </div>
       )}
-      {git && (
+      {/* The git block is chat-context furniture; hide it while the Files tab OR
+          a local app is open so that surface gets the full dock height (not just
+          the strip below git) — plans/agent-dock-files-tab.md (Files) and
+          plans/dock-local-app-full-height.md (local app). */}
+      {git && !showFiles && !openApp && (
         <div className="phone__git">
           <div className="phone__git-top">
             <GitStatusSummary status={git} compact />
@@ -246,7 +284,9 @@ export default function PinnedAgent({
         </div>
       )}
       <div className="phone__screen" style={contentZoom !== 1 ? { zoom: contentZoom } : undefined}>
-        {openApp ? (
+        {showFiles ? (
+          <FilesBrowser repoId={tab.repoId} />
+        ) : openApp ? (
           <ProductFrame url={`/api/localview/${tab.repoId}/app/${openApp.id}/`} port={openApp.port} />
         ) : (
           <Chat chat={chat} embedded stashTabId={tab.id} />

@@ -8,8 +8,8 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-17):** Homepage tabbed explainers + the same-box Understanding-app
-> convention pointer are **deployed to live `:5099` and confirmed**; merged to main.
+> **Status (2026-06-19):** **Local app fills the dock** is **user-confirmed
+> working and merged to main**; nothing in flight.
 
 ## ⚠️ Known risks to mitigate
 
@@ -45,20 +45,15 @@
   sessions plus end-to-end turns (basic, resume, tools, model, ask read-only).
   Discovery only; fixes spin out per one-feature-per-branch. Not built. On
   `feature/chat-system-tests`.
+
+## Proposed / design (not building yet)
+
 - [Ideas go global, pinned left of the dashboard](plans/ideas-pinned-dashboard.md)
   — make Ideas a single **global** master list (no longer per-project; reverses
   ideas-tab.md), keep the Ideas tab showing all of them, and pin that list left
   of the agent-dashboard overlay. Design set (backend de-keying + migration +
-  shared component); not built. On `feature/ideas-pinned-dashboard`.
-- [Feature kickoff & closeout](plans/feature-kickoff.md) — a seamless feature
-  lifecycle for BOTH ends: starting the next feature (branch, plan, understanding)
-  AND finishing one per our flow (keep-it bookkeeping, mark shipped, merge, tidy)
-  — so the user doesn't re-describe the ritual and the agent doesn't drop steps.
-  Approach decided: composer-prefill buttons (Understanding-panel pattern) that
-  fill the chat box with the kickoff/closeout ritual. On `feature/feature-kickoff`.
-
-## Proposed / design (not building yet)
-
+  shared component); **not built** — shelved here off the active list pending a
+  decision to build. On `feature/ideas-pinned-dashboard`.
 - [Spec baseline](plans/spec-baseline.md) — borrow OpenSpec's one missing
   idea (a living "what the system does today" baseline + change-as-delta)
   into our existing plan convention, without adopting its tooling. Slice 1 =
@@ -66,6 +61,39 @@
 
 ## Recently shipped
 
+- [Local app fills the dock — hide git while it's open](plans/dock-local-app-full-height.md)
+  — in each agent dock, opening a **local app** now renders it **over** the git
+  section (hide `phone__git`) so the `ProductFrame` gets the **full dock height**,
+  mirroring the Files tab's existing git-hide. Frontend-only one-liner in
+  `PinnedAgent.jsx` (the git gate is now `git && !showFiles && !openApp`).
+  **User-confirmed working; merged to main 2026-06-19.** On `feature/dock-local-app-full-height`.
+- [Render Files-tab functionality in the agent dock](plans/agent-dock-files-tab.md)
+  — the **Files tab**'s browse-and-view surface now lives **inside each agent dock**
+  (the per-agent "phone"): a **📁 Files** tab beside the Builder/Ask lanes swaps
+  `phone__screen` to the shared `FilesBrowser` scoped to **that agent's repo**
+  (tree · viewer · markdown/HTML/image · pins · 5s live poll · doc-links). Extracted
+  `FilesBrowser` from `Files.jsx` so the routed tab and the dock can't drift (the
+  "one shared component, two surfaces" `AutopilotConsole` pattern). **Corrected
+  mid-build** from a first attempt that put a standalone Files dock beside
+  Ideas/Autopilot — that `FilesPanel`/`files-panel.css`/`dash__files` dock was
+  removed. Follow-ups in the same branch: the in-dock surface **scrolls within the
+  phone**, and the **git block is hidden while Files is open** so the browser fills
+  the dock. Frontend-only (reuses `FileController` via `X-Repo-Id`). **User-confirmed
+  working; merged to main 2026-06-19.** On `feature/agent-dock-files-tab`.
+- [Feature kickoff & closeout](plans/feature-kickoff.md) — a seamless feature
+  lifecycle for both ends of a feature's life. **Kickoff half shipped:** an
+  advanced-gated composer button prefills the "start the next feature" ritual
+  (branch, plan, understanding) into the chat box — no auto-send, hidden in Basic;
+  deployed & confirmed on live :5099, browser-verified (`verify-feature-kickoff.mjs`
+  6/6). **Closeout half dropped** (the finishing ritual was never built).
+  Merged to main. On `feature/feature-kickoff`.
+- [Task-graph machine groups](plans/taskgraph-machine-groups.md) — added a **grouping box**
+  (rectangle) to the task graph that **contains** step nodes and represents **one machine** on
+  which agents run; a **cross-machine dependency** is a depends-on edge between nodes in different
+  boxes, styled to stand out. Built on React Flow's parent/group-node feature (drag a box → its
+  nodes follow; drop a node in → it joins). Backend added a `Machine` record on the board + an
+  optional `MachineId` on each node (additive, no migration) and `/api/taskgraph/machines`.
+  **User-confirmed working; merged to main 2026-06-19.** On `feature/taskgraph-machine-groups`.
 - [Merge Ideas + Task graph](plans/ideas-taskgraph-merge.md) — folded the **Task graph** into the
   **Ideas** surface so the graph lives in one home. It became a **third tab** inside `IdeasPanel`
   (Ideas | Plan | 🧩 Task graph), remounting fresh each open; the standalone **dashboard task-graph

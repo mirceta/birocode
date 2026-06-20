@@ -9,8 +9,7 @@
   gap: 8px;
   width: 100%;
   /* Definite default height so React Flow fills it; the saved drag size (applied
-     inline) overrides both width and height. Taller by default now that the
-     node-detail view shares the bottom half. */
+     inline) overrides both width and height. */
   height: 520px;
   min-height: 0;
 }
@@ -92,77 +91,15 @@
 }
 .tg-err { color: #c0392b; font-weight: 600; }
 
-/* The graph canvas — React Flow fills this; it must have a definite height. It
-   takes the top half; the node-detail view takes the bottom half. */
+/* The graph canvas — React Flow fills the whole panel; it must have a definite
+   height to render. */
 .tg-canvas {
-  flex: 1 1 50%;
-  min-height: 140px;
+  flex: 1 1 auto;
+  min-height: 180px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   overflow: hidden;
   background: var(--color-bg, #faf8f4);
-}
-
-/* Per-node detail/edit view on the bottom half (plans/task-dependency-graph.md):
-   appears when a step is selected; its notes box is the repurposed scratchpad,
-   now scoped to that node. Backend-synced (debounced) via PATCH nodes/{id}. */
-.tg-detail {
-  flex: 1 1 50%;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-height: 120px;
-}
-.tg-detail--empty {
-  align-items: center;
-  justify-content: center;
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius);
-  color: var(--color-text-soft, #6b6b66);
-  font-size: 12.5px;
-  font-style: italic;
-}
-.tg-detail__head {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-.tg-detail__title {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 6px 8px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-surface);
-  color: var(--color-text);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-}
-.tg-detail__repo {
-  flex: 0 0 auto;
-  max-width: 140px;
-  padding: 6px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-surface);
-  color: var(--color-text);
-  font: inherit;
-  font-size: 12px;
-}
-.tg-detail__notes {
-  flex: 1 1 auto;
-  width: 100%;
-  min-height: 0;
-  resize: none;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  padding: 8px 10px;
-  font: inherit;
-  font-size: 13px;
-  line-height: 1.45;
-  background: var(--color-surface);
-  color: var(--color-text);
 }
 
 /* --- the custom step node --- */
@@ -181,9 +118,20 @@
 .tg-node.st-doing { border-color: #e0552b; }
 .tg-node.st-done { opacity: 0.62; }
 .tg-node.st-done .tg-node__title { text-decoration: line-through; }
+/* OPEN FRONTS — steps you can work on right now (not done, every prerequisite
+   done). The actionable set is the genuinely useful "what's workable" notion,
+   so paint it boldly: a green-tinted fill plus a green ring make these pop out
+   from the plain/blocked steps. Keeps the repo-colour left border intact. */
 .tg-node.is-actionable {
-  box-shadow: 0 0 0 2px #16a34a, 0 1px 3px rgba(0, 0, 0, 0.1);
+  background: color-mix(in srgb, #16a34a 16%, var(--color-surface));
+  box-shadow: 0 0 0 2px #16a34a, 0 2px 6px rgba(22, 163, 74, 0.28);
+  /* ~30% bigger than plain steps so the do-next leaves dominate the board */
+  min-width: 170px;
+  max-width: 286px;
+  padding: 11px 13px;
+  font-size: 16px;
 }
+.tg-node.is-actionable .tg-node__title { font-weight: 800; font-size: 16px; }
 .tg-node.is-dim { opacity: 0.3; }
 
 .tg-node__row { display: flex; align-items: flex-start; gap: 6px; }
@@ -230,8 +178,144 @@
   text-transform: none;
   letter-spacing: 0;
   font-weight: 600;
+  cursor: pointer;
+}
+/* "+ agent" affordance on a step with no agent yet — quiet until hovered. */
+.tg-chip--repo-empty {
+  background: transparent;
+  color: var(--color-text-muted, #8a8170);
+  border-style: dashed;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tg-chip--repo-empty:hover { color: var(--color-text); border-color: var(--color-text-muted, #8a8170); }
+/* Inline agent picker — sized to match the chips around it. */
+.tg-chip--repo-edit {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+  padding: 2px 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
 }
 .tg-chip--go { background: #16a34a; color: #fff; border-color: #16a34a; }
 
 /* Dim non-traced edges while a "why" chain is lit. */
 .tg-edge--dim { opacity: 0.15; }
+
+/* --- machine box (plans/taskgraph-machine-groups.md) ---
+   A labelled rectangle that contains step nodes; one box = one host. The React
+   Flow node wrapper carries the size (style width/height); .tg-machine fills it
+   and renders behind its child step nodes. */
+.tg-add__btn--machine { white-space: nowrap; }
+
+.tg-machine {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  border: 1.5px dashed color-mix(in srgb, var(--color-accent, #b85c00) 55%, var(--color-border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-accent, #b85c00) 6%, var(--color-surface));
+}
+.tg-machine.is-selected {
+  border-style: solid;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent, #b85c00) 40%, transparent);
+}
+.tg-machine__head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-accent, #b85c00) 25%, var(--color-border));
+  background: color-mix(in srgb, var(--color-accent, #b85c00) 12%, var(--color-surface));
+  border-radius: 11px 11px 0 0;
+  cursor: grab;
+}
+.tg-machine__icon { flex: 0 0 auto; font-size: 12px; }
+.tg-machine__name { flex: 1 1 auto; word-break: break-word; cursor: text; }
+.tg-machine__edit {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid var(--color-accent, #b85c00);
+  border-radius: 6px;
+  padding: 1px 4px;
+}
+.tg-machine__x {
+  flex: 0 0 auto;
+  border: none;
+  background: none;
+  color: var(--color-text-soft, #999);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.tg-machine__x:hover { color: #c0392b; }
+
+/* Fatter resize hit-zones for machine boxes. React Flow's NodeResizer draws a
+   1px edge line and ~4px corner dots by default — almost impossible to grab.
+   The machine box already shows its own dashed/solid border, so we don't need
+   the library's visible line: we drop it and turn each edge control into a
+   ~10px transparent strip straddling the border (the control is centred on the
+   edge via translate, so the grab zone sits half inside / half outside), and
+   enlarge the corner handles to a comfortable 12px. Scoped to machine nodes. */
+.react-flow__node-machine .react-flow__resize-control.line {
+  border-width: 0;
+}
+.react-flow__node-machine .react-flow__resize-control.line.left,
+.react-flow__node-machine .react-flow__resize-control.line.right {
+  width: 10px;
+}
+.react-flow__node-machine .react-flow__resize-control.line.top,
+.react-flow__node-machine .react-flow__resize-control.line.bottom {
+  height: 10px;
+}
+.react-flow__node-machine .react-flow__resize-control.handle {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+/* Fatter connection handles for step nodes. React Flow's default handle is a
+   ~6px dot — hard to land on to start dragging a dependency arrow. We grow the
+   visible dot to 14px, and add a transparent ::after that extends the grab area
+   ~7px in every direction (so ~28px of catchable surface) without making the
+   dot itself look huge. Hover swells the dot as feedback. Paired with a larger
+   connectionRadius on <ReactFlow> so the *drop* onto a target snaps from nearby
+   too. Scoped to step nodes (machine boxes have no handles). */
+.react-flow__node-step .react-flow__handle {
+  width: 14px;
+  height: 14px;
+  background: #1a192b;
+  border: 2px solid #fff;
+  /* Don't touch `transform` — React Flow uses it to centre the handle on the
+     edge; overriding it makes the dot jump. Animate colour only. */
+  transition: background 0.1s ease, box-shadow 0.1s ease;
+}
+.react-flow__node-step .react-flow__handle::after {
+  content: '';
+  position: absolute;
+}
+/* Extend the grab area outward (away from the node) and sideways, but NOT deep
+   into the node body — otherwise the invisible zone would swallow clicks meant
+   for the title (double-click to edit) or the × button. Top handle grows up,
+   bottom handle grows down. Inset order: top right bottom left. */
+.react-flow__node-step .react-flow__handle.react-flow__handle-top::after {
+  inset: -10px -10px 0 -10px;
+}
+.react-flow__node-step .react-flow__handle.react-flow__handle-bottom::after {
+  inset: 0 -10px -10px -10px;
+}
+.react-flow__node-step .react-flow__handle:hover {
+  background: #4a90d9;
+  box-shadow: 0 0 0 3px rgba(74, 144, 217, 0.35);
+}

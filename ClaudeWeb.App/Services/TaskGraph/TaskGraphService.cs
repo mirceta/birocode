@@ -19,6 +19,10 @@ public class TaskGraphService
 {
     public const int MaxTitleLength = 2_000;
     public const int MaxNoteLength = 20_000;
+    public const int MaxMachineNameLength = 200;
+    // Default box size when a machine is created without explicit dimensions.
+    public const double DefaultMachineW = 360;
+    public const double DefaultMachineH = 240;
     // The free-text scratchpad below the graph (an experiment: if the operator
     // reaches for this instead of the graph, the graph isn't earning its keep).
     public const int MaxScratchLength = 200_000;
@@ -40,25 +44,40 @@ public class TaskGraphService
     }
 
     // A node carries only what the dashboard needs: a title + optional note, an
-    // optional repoId (shown as a label/colour — no live agent telemetry), a
+    // optional repoId (shown as a label/colour — no live agent telemetry), an
+    // optional machineId (the grouping box it lives in — null = unplaced), a
     // status, and its canvas position {x,y} (the operator places nodes by hand).
     public sealed record Node(
-        string Id, string Title, string? Note, string? RepoId, string Status,
+        string Id, string Title, string? Note, string? RepoId, string? MachineId, string Status,
         double X, double Y, long CreatedAt, long UpdatedAt);
 
     // Source depends on Target (Target is the prerequisite).
     public sealed record Edge(string Id, string Source, string Target);
 
+    // A grouping box that represents ONE machine on which agents run
+    // (plans/taskgraph-machine-groups.md). Purely an organizing overlay the
+    // operator draws — own position {x,y} and size {w,h}; nodes reference it by
+    // MachineId. No live host telemetry by design.
+    public sealed record Machine(
+        string Id, string Name, double X, double Y, double W, double H, long CreatedAt, long UpdatedAt);
+
     public sealed class Board
     {
         public List<Node> Nodes { get; set; } = new();
         public List<Edge> Edges { get; set; } = new();
+        public List<Machine> Machines { get; set; } = new();
         public string Scratch { get; set; } = "";
     }
 
     public Board Get()
     {
-        lock (_gate) return new Board { Nodes = _board.Nodes.ToList(), Edges = _board.Edges.ToList(), Scratch = _board.Scratch };
+        lock (_gate) return new Board
+        {
+            Nodes = _board.Nodes.ToList(),
+            Edges = _board.Edges.ToList(),
+            Machines = _board.Machines.ToList(),
+            Scratch = _board.Scratch,
+        };
     }
 
     // Replaces the whole scratchpad text (length-capped). Returns what was stored.
@@ -74,13 +93,13 @@ public class TaskGraphService
         return t;
     }
 
-    public Node? AddNode(string? title, string? note, string? repoId, double x, double y, long now)
+    public Node? AddNode(string? title, string? note, string? repoId, string? machineId, double x, double y, long now)
     {
         var clean = Clean(title, MaxTitleLength);
         if (clean is null) return null;
         var node = new Node(
             Guid.NewGuid().ToString("N"), clean, Clean(note, MaxNoteLength),
-            CleanRepo(repoId), "todo", x, y, now, now);
+            CleanRepo(repoId), CleanRepo(machineId), "todo", x, y, now, now);
         lock (_gate)
         {
             _board.Nodes.Add(node);
@@ -93,7 +112,7 @@ public class TaskGraphService
     // Partial update: only non-null fields are applied. `status` is validated;
     // `repoId` of empty string clears the link. Returns null if the id is unknown
     // (or a supplied title is blank / status invalid).
-    public Node? UpdateNode(string id, string? title, string? note, string? repoId, string? status, double? x, double? y, long now)
+    public Node? UpdateNode(string id, string? title, string? note, string? repoId, string? machineId, string? status, double? x, double? y, long now)
     {
         lock (_gate)
         {
@@ -110,6 +129,7 @@ public class TaskGraphService
             }
             string? newNote = note is null ? cur.Note : Clean(note, MaxNoteLength);
             string? newRepo = repoId is null ? cur.RepoId : CleanRepo(repoId);
+            string? newMachine = machineId is null ? cur.MachineId : CleanRepo(machineId);
             string newStatus = cur.Status;
             if (status is not null)
             {
@@ -122,6 +142,7 @@ public class TaskGraphService
                 Title = newTitle,
                 Note = newNote,
                 RepoId = newRepo,
+                MachineId = newMachine,
                 Status = newStatus,
                 X = x ?? cur.X,
                 Y = y ?? cur.Y,
@@ -144,6 +165,88 @@ public class TaskGraphService
             Save();
             _logger.Info($"[TASKGRAPH] Deleted node {id} (+{dropped} edge(s))");
             return dropped;
+        }
+    }
+
+    // --- machine boxes (plans/taskgraph-machine-groups.md) ---
+
+    public Machine? AddMachine(string? name, double? x, double? y, double? w, double? h, long now)
+    {
+        var clean = Clean(name, MaxMachineNameLength) ?? "machine";
+        var machine = new Machine(
+            Guid.NewGuid().ToString("N"), clean,
+            x ?? 0, y ?? 0,
+            w is > 0 ? w.Value : DefaultMachineW,
+            h is > 0 ? h.Value : DefaultMachineH,
+            now, now);
+        lock (_gate)
+        {
+            _board.Machines.Add(machine);
+            Save();
+        }
+        _logger.Info($"[TASKGRAPH] Added machine {machine.Id}");
+        return machine;
+    }
+
+    // Partial update of a box: only non-null fields apply. A supplied blank name
+    // is rejected (returns null). Returns null if the id is unknown.
+    public Machine? UpdateMachine(string id, string? name, double? x, double? y, double? w, double? h, long now)
+    {
+        lock (_gate)
+        {
+            var i = _board.Machines.FindIndex(m => m.Id == id);
+            if (i < 0) return null;
+            var cur = _board.Machines[i];
+
+            string newName = cur.Name;
+            if (name is not null)
+            {
+                var clean = Clean(name, MaxMachineNameLength);
+                if (clean is null) return null;
+                newName = clean;
+            }
+
+            var updated = cur with
+            {
+                Name = newName,
+                X = x ?? cur.X,
+                Y = y ?? cur.Y,
+                W = w is > 0 ? w.Value : cur.W,
+                H = h is > 0 ? h.Value : cur.H,
+                UpdatedAt = now,
+            };
+            _board.Machines[i] = updated;
+            Save();
+            return updated;
+        }
+    }
+
+    // Removes a machine box and DETACHES its member nodes (sets their MachineId
+    // null) — a box is an organizing overlay, not an owner of the work. A member
+    // node's stored {X,Y} is relative to its box, so on detach we translate it
+    // back to absolute canvas coords (add the box's origin) — otherwise the node
+    // would jump to near (0,0) on the next reload. Returns the count of nodes
+    // detached, or -1 if the machine id was unknown.
+    public int DeleteMachine(string id)
+    {
+        lock (_gate)
+        {
+            var m = _board.Machines.FirstOrDefault(x => x.Id == id);
+            if (m is null) return -1;
+            _board.Machines.RemoveAll(x => x.Id == id);
+            var detached = 0;
+            for (var i = 0; i < _board.Nodes.Count; i++)
+            {
+                if (_board.Nodes[i].MachineId == id)
+                {
+                    var n = _board.Nodes[i];
+                    _board.Nodes[i] = n with { MachineId = null, X = n.X + m.X, Y = n.Y + m.Y };
+                    detached++;
+                }
+            }
+            Save();
+            _logger.Info($"[TASKGRAPH] Deleted machine {id} (detached {detached} node(s))");
+            return detached;
         }
     }
 

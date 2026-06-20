@@ -43,6 +43,7 @@ export const FEATURES = {
   ideasTab: 'advanced', // per-project notes (plans/ideas-tab.md)
   autopilotTab: 'advanced', // loop-autopilot: discover recurring routine prompts (plans/loop-autopilot.md)
   taskGraph: 'advanced', // task dependency graph dashboard section (plans/task-dependency-graph.md)
+  filesDock: 'advanced', // Files browse/view tab INSIDE each agent dock, scoped to that agent's repo (plans/agent-dock-files-tab.md)
   understandingPanel: 'advanced', // restatement-of-request panel atop chat (plans/understanding-panel.md)
   featureKickoff: 'advanced', // composer button that prefills the "start a new feature" ritual (plans/feature-kickoff.md)
   customPrompts: 'advanced', // user-defined composer prompt presets + manager (plans/custom-prompts.md)

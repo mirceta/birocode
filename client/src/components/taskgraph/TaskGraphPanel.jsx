@@ -7,6 +7,7 @@ import {
   Handle,
   Position,
   MarkerType,
+  NodeResizer,
   applyNodeChanges,
   applyEdgeChanges,
 } from '@xyflow/react';
@@ -23,10 +24,21 @@ import './taskgraph.css';
 //     (or has none): the things you can actually do next.
 //   • WHY (the trace) — selecting a step highlights the chain of steps that depend
 //     on it, up to the primary task it serves.
+//
+// MACHINE GROUPS (plans/taskgraph-machine-groups.md): a step can live inside a
+// "machine" box — a React Flow group node that represents one host running agents.
+// Membership is the node's React Flow `parentId` (mirrored to the backend's
+// `machineId`); a child's stored {x,y} is RELATIVE to its box, so dragging the box
+// carries its nodes for free. An edge whose two endpoints sit in DIFFERENT boxes is
+// a cross-machine hand-off and is drawn with a distinct dashed colour.
 // Backend-synced via /api/taskgraph; positions persist on drag-stop.
 
 const STATUSES = ['todo', 'doing', 'done'];
 const NEXT_STATUS = { todo: 'doing', doing: 'done', done: 'todo' };
+
+const CROSS_COLOR = '#e8590c'; // cross-machine edge accent (also in taskgraph.css)
+const MACHINE_MIN_W = 220;
+const MACHINE_MIN_H = 160;
 
 // Per-device saved size of the dock (mirrors the Autopilot dock): drag the
 // bottom-right grip to resize, double-click it to clear back to the default.
@@ -59,6 +71,7 @@ const repoColor = (id) => (id ? `hsl(${repoHue(id)} 60% 45%)` : 'var(--color-bor
 function StepNode({ id, data }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(data.title);
+  const [picking, setPicking] = useState(false); // inline agent (repo) picker open
 
   function commit() {
     setEditing(false);
@@ -101,10 +114,38 @@ function StepNode({ id, data }) {
         >
           {data.status}
         </button>
-        {data.repoId && (
-          <span className="tg-chip tg-chip--repo" style={{ '--repo-color': repoColor(data.repoId) }}>
+        {picking ? (
+          // Inline agent (repo) picker — the only way to (re)assign a step's agent
+          // now that the detail view is gone. Empty value clears it to "no agent".
+          <select
+            className="tg-chip tg-chip--repo-edit nodrag"
+            value={data.repoId || ''}
+            autoFocus
+            onChange={(e) => { data.onSetRepo(id, e.target.value); setPicking(false); }}
+            onBlur={() => setPicking(false)}
+          >
+            <option value="">(no agent)</option>
+            {(data.repos || []).map((r) => (
+              <option key={r.id} value={r.id}>{r.name}</option>
+            ))}
+          </select>
+        ) : data.repoId ? (
+          <button
+            className="tg-chip tg-chip--repo nodrag"
+            style={{ '--repo-color': repoColor(data.repoId) }}
+            title="Click to change agent"
+            onClick={() => setPicking(true)}
+          >
             {data.repoName || data.repoId.slice(0, 6)}
-          </span>
+          </button>
+        ) : (
+          <button
+            className="tg-chip tg-chip--repo-empty nodrag"
+            title="Assign an agent"
+            onClick={() => setPicking(true)}
+          >
+            + agent
+          </button>
         )}
         {data.actionable && <span className="tg-chip tg-chip--go">do next</span>}
       </div>
@@ -113,87 +154,82 @@ function StepNode({ id, data }) {
   );
 }
 
-const nodeTypes = { step: StepNode };
+// A machine box (plans/taskgraph-machine-groups.md): a labelled rectangle that
+// contains step nodes. Rendered behind the steps; drag it to move its members,
+// drag the bottom-right when selected to resize. Rename inline; × deletes the box
+// but KEEPS the nodes inside (they detach to the canvas).
+function MachineNode({ id, data, selected }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(data.name);
 
-// The detail/edit view rendered below the graph for the selected step. The
-// notes box is the repurposed scratchpad — now scoped to this node. Mounted with
-// a `key` of the node id, so switching selection re-initialises its draft state.
-function NodeDetail({ node, repos, onPatch }) {
-  const [title, setTitle] = useState(node.data.title);
-  const [note, setNote] = useState(node.data.note || '');
-  const noteTimer = useRef(null);
-
-  useEffect(() => () => { if (noteTimer.current) clearTimeout(noteTimer.current); }, []);
-
-  function onNoteChange(e) {
-    const v = e.target.value;
-    setNote(v);
-    if (noteTimer.current) clearTimeout(noteTimer.current);
-    noteTimer.current = setTimeout(() => onPatch(node.id, { note: v }), 500);
-  }
-  function flushNote() {
-    if (noteTimer.current) { clearTimeout(noteTimer.current); noteTimer.current = null; }
-    onPatch(node.id, { note });
-  }
-  function commitTitle() {
-    const t = title.trim();
-    if (t && t !== node.data.title) onPatch(node.id, { title: t });
-    else setTitle(node.data.title); // blank/unchanged: revert the draft
+  function commit() {
+    setEditing(false);
+    const t = draft.trim();
+    if (t && t !== data.name) data.onRename(id, t);
+    else setDraft(data.name);
   }
 
   return (
-    <div className="tg-detail">
-      <div className="tg-detail__head">
-        <input
-          className="tg-detail__title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onBlur={commitTitle}
-          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-          placeholder="Step title"
-        />
-        <select
-          className="tg-detail__repo"
-          value={node.data.repoId || ''}
-          onChange={(e) => onPatch(node.id, { repoId: e.target.value })}
-          title="Agent for this step"
-        >
-          <option value="">(no agent)</option>
-          {repos.map((r) => (
-            <option key={r.id} value={r.id}>{r.name}</option>
-          ))}
-        </select>
+    <div className={`tg-machine${selected ? ' is-selected' : ''}`}>
+      <NodeResizer
+        color={CROSS_COLOR}
+        isVisible={selected}
+        minWidth={MACHINE_MIN_W}
+        minHeight={MACHINE_MIN_H}
+        onResizeEnd={(_e, params) => data.onResize(id, params)}
+      />
+      <div className="tg-machine__head">
+        <span className="tg-machine__icon" aria-hidden>🖥️</span>
+        {editing ? (
+          <input
+            className="tg-machine__edit nodrag"
+            value={draft}
+            autoFocus
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commit();
+              if (e.key === 'Escape') { setDraft(data.name); setEditing(false); }
+            }}
+          />
+        ) : (
+          <span className="tg-machine__name" onDoubleClick={() => { setDraft(data.name); setEditing(true); }}>
+            {data.name}
+          </span>
+        )}
         <button
-          type="button"
-          className={`tg-chip tg-chip--status st-${node.data.status}`}
-          title="Click to change status"
-          onClick={() => onPatch(node.id, { status: NEXT_STATUS[node.data.status] })}
+          className="tg-machine__x nodrag"
+          title="Delete machine (the steps inside are kept)"
+          onClick={() => data.onDelete(id)}
         >
-          {node.data.status}
+          ×
         </button>
       </div>
-      <textarea
-        className="tg-detail__notes"
-        value={note}
-        onChange={onNoteChange}
-        onBlur={flushNote}
-        placeholder="Notes for this step — what it involves, links, blockers, why it matters…"
-      />
     </div>
   );
 }
+
+const nodeTypes = { step: StepNode, machine: MachineNode };
 
 function TaskGraphBoard() {
   const { repos } = useDock();
   const repoName = useCallback((id) => repos.find((r) => r.id === id)?.name || '', [repos]);
 
+  // One React Flow node array holding BOTH machine boxes (type 'machine') and
+  // step nodes (type 'step'). Machines are kept ahead of steps in the array so a
+  // child never precedes its parent (a React Flow ordering requirement).
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
-  const [selected, setSelected] = useState(null); // node id whose "why" chain is lit
+  const [selected, setSelected] = useState(null); // step id whose "why" chain is lit
   const [draftTitle, setDraftTitle] = useState('');
   const [draftRepo, setDraftRepo] = useState('');
   const [error, setError] = useState('');
   const wrapRef = useRef(null);
+
+  // Latest-nodes ref so drag-stop reparenting reads current geometry without
+  // re-creating the callback on every node change.
+  const nodesRef = useRef(nodes);
+  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
 
   // Drag-to-resize the dock from its bottom-right grip (same UX as the Autopilot
   // dock). Size is remembered per device; double-clicking the grip resets it.
@@ -248,7 +284,9 @@ function TaskGraphBoard() {
   const load = useCallback(async () => {
     try {
       const board = await apiGet('/taskgraph');
-      setNodes((board.nodes || []).map(toRfNode));
+      const machineNodes = (board.machines || []).map(toRfMachine);
+      const stepNodes = (board.nodes || []).map(toRfNode);
+      setNodes([...machineNodes, ...stepNodes]); // machines first
       setEdges((board.edges || []).map(toRfEdge));
     } catch {
       setError('Could not load the task graph.');
@@ -257,32 +295,62 @@ function TaskGraphBoard() {
   useEffect(() => { load(); }, [load]);
 
   // --- derived: actionable set + the selected node's dependent chain (the "why") ---
-  const actionable = useMemo(() => actionableIds(nodes, edges), [nodes, edges]);
+  const stepNodes = useMemo(() => nodes.filter((n) => n.type === 'step'), [nodes]);
+  const actionable = useMemo(() => actionableIds(stepNodes, edges), [stepNodes, edges]);
   const lit = useMemo(() => (selected ? whyChain(selected, edges) : null), [selected, edges]);
+  // step id -> its machine (parentId or null), for cross-machine edge detection.
+  const nodeMachine = useMemo(() => {
+    const map = new Map();
+    for (const n of stepNodes) map.set(n.id, n.parentId || null);
+    return map;
+  }, [stepNodes]);
 
   // Re-decorate RF nodes/edges with derived state for rendering.
   const viewNodes = useMemo(
-    () => nodes.map((n) => ({
-      ...n,
-      data: {
-        ...n.data,
-        repoName: repoName(n.data.repoId),
-        actionable: actionable.has(n.id),
-        dim: lit ? !lit.nodes.has(n.id) : false,
-        onCycle: cycleStatus,
-        onRename: renameNode,
-        onDelete: deleteNode,
-      },
-    })),
-    [nodes, actionable, lit, repoName],
+    () => nodes.map((n) => {
+      if (n.type === 'machine') {
+        return { ...n, data: { ...n.data, onRename: renameMachine, onDelete: deleteMachine, onResize: resizeMachine } };
+      }
+      return {
+        ...n,
+        data: {
+          ...n.data,
+          repoName: repoName(n.data.repoId),
+          repos,
+          actionable: actionable.has(n.id),
+          dim: lit ? !lit.nodes.has(n.id) : false,
+          onCycle: cycleStatus,
+          onRename: renameNode,
+          onSetRepo: setRepo,
+          onDelete: deleteNode,
+        },
+      };
+    }),
+    [nodes, actionable, lit, repoName, repos],
   );
   const viewEdges = useMemo(
-    () => edges.map((e) => ({
-      ...e,
-      animated: lit ? lit.edges.has(e.id) : false,
-      className: lit && !lit.edges.has(e.id) ? 'tg-edge--dim' : '',
-    })),
-    [edges, lit],
+    () => edges.map((e) => {
+      const a = nodeMachine.get(e.source);
+      const b = nodeMachine.get(e.target);
+      const cross = Boolean(a && b && a !== b); // both placed, different boxes
+      const dim = lit ? !lit.edges.has(e.id) : false;
+      return {
+        ...e,
+        animated: lit ? lit.edges.has(e.id) : false,
+        className: [cross ? 'tg-edge--cross' : '', dim ? 'tg-edge--dim' : ''].filter(Boolean).join(' '),
+        style: cross ? { stroke: CROSS_COLOR, strokeWidth: 2, strokeDasharray: '6 4' } : undefined,
+        // ArrowClosedSymbol fills/strokes with `color`, defaulting to 'none' when
+        // color is undefined — and createMarkerIds spreads our marker object AFTER
+        // its `color || defaultColor` fallback, so an explicit `color: undefined`
+        // own-key clobbers the fallback back to undefined → an INVISIBLE arrowhead.
+        // So OMIT color entirely on same-box edges to let RF's defaultColor render
+        // the head; cross-box edges pass their explicit CROSS_COLOR.
+        markerEnd: cross
+          ? { type: MarkerType.ArrowClosed, color: CROSS_COLOR, width: 38, height: 38 }
+          : { type: MarkerType.ArrowClosed, width: 38, height: 38 },
+      };
+    }),
+    [edges, lit, nodeMachine],
   );
 
   // --- mutations ---
@@ -299,15 +367,74 @@ function TaskGraphBoard() {
     }
   }, []);
 
+  // On drag-stop: machines just persist their new position (children follow for
+  // free). Step nodes re-evaluate which box (if any) they were dropped into and
+  // re-parent, translating between absolute and box-relative coordinates.
   const onNodeDragStop = useCallback((_e, node) => {
-    apiPatch(`/taskgraph/nodes/${node.id}`, { x: node.position.x, y: node.position.y }).catch(() => {});
+    if (node.type === 'machine') {
+      apiPatch(`/taskgraph/machines/${node.id}`, { x: node.position.x, y: node.position.y }).catch(() => {});
+      return;
+    }
+    const all = nodesRef.current;
+    const oldParentId = node.parentId || null;
+    const oldParent = oldParentId ? all.find((n) => n.id === oldParentId) : null;
+    const absX = node.position.x + (oldParent?.position.x ?? 0);
+    const absY = node.position.y + (oldParent?.position.y ?? 0);
+    const w = node.measured?.width ?? 160;
+    const h = node.measured?.height ?? 60;
+    const cx = absX + w / 2;
+    const cy = absY + h / 2;
+
+    let target = null;
+    for (const m of all) {
+      if (m.type !== 'machine') continue;
+      const mw = m.measured?.width ?? m.style?.width ?? 360;
+      const mh = m.measured?.height ?? m.style?.height ?? 240;
+      if (cx >= m.position.x && cx <= m.position.x + mw && cy >= m.position.y && cy <= m.position.y + mh) {
+        target = m; // last match wins (topmost in array)
+      }
+    }
+    const newParentId = target?.id ?? null;
+    if (newParentId === oldParentId) {
+      // Membership unchanged — node.position is already in the right frame.
+      apiPatch(`/taskgraph/nodes/${node.id}`, { x: node.position.x, y: node.position.y }).catch(() => {});
+      return;
+    }
+    const newPos = target
+      ? { x: absX - target.position.x, y: absY - target.position.y }
+      : { x: absX, y: absY };
+    setNodes((nds) => nds.map((n) => (
+      n.id === node.id
+        ? { ...n, parentId: newParentId || undefined, position: newPos, data: { ...n.data, machineId: newParentId } }
+        : n
+    )));
+    apiPatch(`/taskgraph/nodes/${node.id}`, { machineId: newParentId || '', x: newPos.x, y: newPos.y }).catch(() => {});
   }, []);
 
   const onEdgesDelete = useCallback((deleted) => {
     deleted.forEach((e) => apiDelete(`/taskgraph/edges/${e.id}`).catch(() => {}));
   }, []);
+  // Keyboard-deleting nodes: route machines to the machine endpoint (which detaches
+  // their members) and translate any orphaned children back to absolute coords so
+  // they don't snap to the origin once their parent is gone.
   const onNodesDelete = useCallback((deleted) => {
-    deleted.forEach((n) => apiDelete(`/taskgraph/nodes/${n.id}`).catch(() => {}));
+    const machines = deleted.filter((n) => n.type === 'machine');
+    deleted.forEach((n) => {
+      const path = n.type === 'machine' ? 'machines' : 'nodes';
+      apiDelete(`/taskgraph/${path}/${n.id}`).catch(() => {});
+    });
+    if (machines.length) {
+      setNodes((nds) => nds.map((n) => {
+        const dm = machines.find((m) => m.id === n.parentId);
+        if (!dm) return n;
+        return {
+          ...n,
+          parentId: undefined,
+          position: { x: n.position.x + dm.position.x, y: n.position.y + dm.position.y },
+          data: { ...n.data, machineId: null },
+        };
+      }));
+    }
   }, []);
 
   async function addNode(e) {
@@ -321,10 +448,23 @@ function TaskGraphBoard() {
     const y = 40 + (nodes.length % 5) * 30;
     try {
       const node = await apiPost('/taskgraph/nodes', { title, repoId: draftRepo || null, x, y });
-      setNodes((nds) => [...nds, toRfNode(node)]);
+      setNodes((nds) => [...nds, toRfNode(node)]); // steps after machines
       setDraftTitle('');
     } catch {
       setError('Could not add the step.');
+    }
+  }
+
+  async function addMachine() {
+    setError('');
+    const count = nodesRef.current.filter((n) => n.type === 'machine').length;
+    const x = 80 + (count % 4) * 60;
+    const y = 80 + (count % 4) * 60;
+    try {
+      const m = await apiPost('/taskgraph/machines', { name: `machine ${count + 1}`, x, y });
+      setNodes((nds) => [toRfMachine(m), ...nds]); // keep machines ahead of steps
+    } catch {
+      setError('Could not add the machine.');
     }
   }
 
@@ -336,6 +476,12 @@ function TaskGraphBoard() {
     setNodes((nds) => nds.map((n) => (n.id === id ? { ...n, data: { ...n.data, title } } : n)));
     apiPatch(`/taskgraph/nodes/${id}`, { title }).catch(() => {});
   }
+  // (Re)assign a step's agent. Empty string clears it to "no agent" (the backend's
+  // CleanRepo turns blank into null); a repo id sets it.
+  function setRepo(id, repoId) {
+    setNodes((nds) => nds.map((n) => (n.id === id ? { ...n, data: { ...n.data, repoId: repoId || null } } : n)));
+    apiPatch(`/taskgraph/nodes/${id}`, { repoId: repoId || '' }).catch(() => {});
+  }
   function deleteNode(id) {
     setNodes((nds) => nds.filter((n) => n.id !== id));
     setEdges((eds) => eds.filter((e) => e.source !== id && e.target !== id));
@@ -343,14 +489,36 @@ function TaskGraphBoard() {
     apiDelete(`/taskgraph/nodes/${id}`).catch(() => {});
   }
 
-  // Generic partial update for the detail editor: patch local state immediately
-  // (so the graph reflects the edit live) and persist to the backend.
-  function patchNode(id, fields) {
-    setNodes((nds) => nds.map((n) => (n.id === id ? { ...n, data: { ...n.data, ...fields } } : n)));
-    apiPatch(`/taskgraph/nodes/${id}`, fields).catch(() => {});
+  function renameMachine(id, name) {
+    setNodes((nds) => nds.map((n) => (n.id === id ? { ...n, data: { ...n.data, name } } : n)));
+    apiPatch(`/taskgraph/machines/${id}`, { name }).catch(() => {});
+  }
+  function resizeMachine(id, params) {
+    setNodes((nds) => nds.map((n) => (
+      n.id === id
+        ? { ...n, position: { x: params.x, y: params.y }, style: { ...n.style, width: params.width, height: params.height } }
+        : n
+    )));
+    apiPatch(`/taskgraph/machines/${id}`, { x: params.x, y: params.y, w: params.width, h: params.height }).catch(() => {});
+  }
+  // Delete a box but KEEP its steps: detach each child (translate to absolute,
+  // clear parent). The backend mirrors this translation on DELETE.
+  function deleteMachine(id) {
+    setNodes((nds) => {
+      const m = nds.find((n) => n.id === id);
+      const mx = m?.position.x ?? 0;
+      const my = m?.position.y ?? 0;
+      return nds
+        .filter((n) => n.id !== id)
+        .map((n) => (
+          n.parentId === id
+            ? { ...n, parentId: undefined, position: { x: n.position.x + mx, y: n.position.y + my }, data: { ...n.data, machineId: null } }
+            : n
+        ));
+    });
+    apiDelete(`/taskgraph/machines/${id}`).catch(() => {});
   }
 
-  const selectedNode = selected ? nodes.find((n) => n.id === selected) || null : null;
   const sizeStyle = size ? { width: size.w, height: size.h } : undefined;
 
   return (
@@ -369,11 +537,15 @@ function TaskGraphBoard() {
           ))}
         </select>
         <button className="tg-add__btn" type="submit" disabled={!draftTitle.trim()}>Add</button>
+        <button className="tg-add__btn tg-add__btn--machine" type="button" onClick={addMachine} title="Add a machine box">
+          🖥️ Machine
+        </button>
       </form>
 
       <p className="tg-hint">
-        Drag from a step’s bottom dot to the step it <b>waits on</b>. Green ring = <b>do next</b>.
-        Click a step to trace <b>why</b> and edit its <b>notes</b> below; click empty space to clear.
+        Drag from a step’s bottom dot to the step it <b>waits on</b>. Green fill = an <b>open front</b> (do next).
+        Drop a step inside a <b>machine</b> box to place it there; a dependency <b>across</b> boxes is
+        drawn dashed in orange. Click a step to trace <b>why</b>.
         {error && <span className="tg-err"> · {error}</span>}
       </p>
 
@@ -388,9 +560,11 @@ function TaskGraphBoard() {
           onNodeDragStop={onNodeDragStop}
           onNodesDelete={onNodesDelete}
           onEdgesDelete={onEdgesDelete}
-          onNodeClick={(_e, n) => setSelected(n.id)}
+          onNodeClick={(_e, n) => setSelected(n.type === 'step' ? n.id : null)}
           onPaneClick={() => setSelected(null)}
-          defaultEdgeOptions={{ markerEnd: { type: MarkerType.ArrowClosed } }}
+          defaultEdgeOptions={{ markerEnd: { type: MarkerType.ArrowClosed, width: 38, height: 38 } }}
+          elevateNodesOnSelect={false}
+          connectionRadius={50}
           fitView
           minZoom={0.2}
           proOptions={{ hideAttribution: true }}
@@ -399,14 +573,6 @@ function TaskGraphBoard() {
           <Controls showInteractive={false} />
         </ReactFlow>
       </div>
-
-      {selectedNode ? (
-        <NodeDetail key={selectedNode.id} node={selectedNode} repos={repos} onPatch={patchNode} />
-      ) : (
-        <div className="tg-detail tg-detail--empty">
-          Click a step above to view and edit its notes.
-        </div>
-      )}
 
       <span
         className="tg-panel__resize"
@@ -436,11 +602,24 @@ export default function TaskGraphPanel() {
 
 // --- helpers ---
 function toRfNode(n) {
-  return {
+  const node = {
     id: n.id,
     type: 'step',
     position: { x: n.x ?? 0, y: n.y ?? 0 },
-    data: { title: n.title, note: n.note, repoId: n.repoId, status: n.status || 'todo' },
+    data: { title: n.title, note: n.note, repoId: n.repoId, machineId: n.machineId || null, status: n.status || 'todo' },
+  };
+  // A placed step is a React Flow child of its machine box; its {x,y} is already
+  // box-relative (that's how we store it), so no translation is needed here.
+  if (n.machineId) node.parentId = n.machineId;
+  return node;
+}
+function toRfMachine(m) {
+  return {
+    id: m.id,
+    type: 'machine',
+    position: { x: m.x ?? 0, y: m.y ?? 0 },
+    style: { width: m.w ?? 360, height: m.h ?? 240 },
+    data: { name: m.name || 'machine' },
   };
 }
 function toRfEdge(e) {
