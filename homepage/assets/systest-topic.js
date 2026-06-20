@@ -72,10 +72,11 @@
     {
       glyph: '✍️',
       title: 'Writes the test',
-      sub: 'a .mjs using check()/report(), placed by token cost',
-      cap: 'It turns your REPRODUCE steps into a script with lib.mjs, asserts your EXPECTED with ' +
-        'check(), and drops it in the right suite (behavioural = free; smoke/realrun/badinput = ' +
-        'real CLI) — then registers the scenario in hub/suites.json.',
+      sub: 'a .mjs step() using check()/report(), placed by token cost',
+      cap: 'It turns your REPRODUCE steps into a step() in a script with lib.mjs, asserts your ' +
+        'EXPECTED with check(), and drops it in the right suite (behavioural = free; ' +
+        'smoke/realrun/badinput = real CLI) — then registers the scenario in hub/suites.json. ' +
+        'The step() makes it run headless for an agent and interactively for an operator alike.',
     },
     {
       glyph: '▶️',
@@ -116,6 +117,10 @@
       'report), record every assertion with check() so the run collects all results, and run',
       'it against an ISOLATED instance (fresh CLAUDEWEB_DATADIR, own port, throwaway scratch',
       'repo) — never the live :5099 store.',
+      '',
+      'Wrap the scenario in step(name, fn) (also from lib.mjs) so it is steppable: the suite',
+      'must run headless for an agent AND interactively (operator clicks through each step on',
+      'the hub) from this one definition — do not write a second copy.',
       '',
       'The behaviour to test:',
     ];

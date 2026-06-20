@@ -21,6 +21,24 @@ session files) the way the frontend does, asserting on observable behaviour.
 This is broader than the one existing Playwright UI test
 (`.preview-test/chat-windowing-check.mjs`, which mocks the network).
 
+## Run modes — headless + interactive (one definition)
+
+Each scenario is wrapped in `step(name, fn)` (`lib.mjs`). A **step** is the unit
+of a test, and the same script runs two ways via `SYSTEST_MODE`:
+
+- **headless** (default) — steps run back-to-back, ending in a pass/fail summary.
+  This is how an **agent** runs a suite by itself (`node behavioural.mjs`).
+- **interactive** (`SYSTEST_MODE=interactive`) — the runner **blocks before each
+  step** until the hub releases it (`go` / `skip` / `abort` on stdin), so a human
+  **operator** clicks through one step at a time and sees per-step feedback.
+
+Steps emit structured `@@SYSTEST@@` events (step start/end with status + checks +
+an observed line, then a `summary`) **alongside** the existing `[PASS]`/`[FAIL]`
+console lines, so headless consumers are unaffected. The hub's two run buttons
+(**Run headless** / **Step through**) and its live step list are built on these
+events. One definition, no second copy to drift. New tests get this for free by
+using `step()` per scenario.
+
 ## Surface under test (discovered)
 
 Backend (`ClaudeWeb.App/Controllers/ChatController.cs` + `Services/Chat/*`):

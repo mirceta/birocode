@@ -1,42 +1,66 @@
-# Understanding — homepage topic: "Ask an agent to add a system test"
+# Understanding — interactive + headless system tests
 
 ## Goal
-Add a new **homepage explainer topic** (alongside "Use the Understanding app in
-any agent") that hands the user a **copy-paste prompt template**. Pasting that
-prompt into any agent working in this repo makes the agent (a) understand the
-user wants a *new system test added*, and (b) know *exactly which* behaviour to
-test and *how to reproduce* the problem.
+A system test should run in **two modes from one definition**:
 
-## What the prompt template must capture (the three things asked for)
-1. **Intent** — unambiguous "add a new black-box system test to the chat-systest
-   suite" signal.
-2. **Which test** — the specific behaviour/endpoint/scenario under test.
-3. **How to reproduce** — concrete steps, the expected result, and the actual
-   (buggy) result, plus where it should live / which suite.
+- **Headless** — runs end-to-end with no human, emits a pass/fail summary. This is
+  how an **agent** runs the suite by itself (today's behaviour).
+- **Interactive** — a human **Operator** clicks through the test **one step at a
+  time**, and the Harness shows **visual feedback per step**: what the step did,
+  what was expected, and whether it passed, failed, or behaved unexpectedly.
 
-## Concrete things I'll do
-- New `homepage/assets/systest-topic.js` modelled on `understanding-topic.js`:
-  an **interactive form** (WHAT / REPRODUCE / EXPECTED, plus an optional ACTUAL
-  behind a "this is a bug" toggle) that **generates the paste-ready prompt live**
-  as the operator types — no `<…>` placeholders to forget. Copy stays disabled and
-  empty required fields are highlighted in the preview until answered. Then an
-  animated strip of what the agent does, and a pointer to the on-disk convention.
-- The prompt **points the agent at the single source of truth on disk**
-  (`tests/chat-systest/README.md` + `plans/chat-system-tests.md`) so it writes
-  the test the repo's way — isolated instance, `lib.mjs` helpers,
-  `check()/report()`, one `.mjs` per scenario group, register in
-  `hub/suites.json` — rather than copying that whole convention into the paste
-  (same "pointer not copy, no drift" principle the Understanding-app topic uses).
-- Register the new script in `homepage/index.html` load order.
+Same test, same assertions — the only difference is whether a human is driving and
+watching, or it just runs.
+
+## The core problem
+Today a test (`tests/chat-systest/*.mjs`) is an opaque Node script that prints
+`[PASS]`/`[FAIL]` lines; the hub greps those lines into a console log. There is **no
+notion of a step**, so there is nothing to click through and nothing to show per
+step. The whole point of this work is to introduce a **step** as the unit of a test.
+
+## Approach (single source of truth)
+Keep tests as ordinary imperative `.mjs` scripts — do **not** split into a separate
+"interactive" copy (they would drift). Add a `step()` boundary to `lib.mjs`:
+
+- `await step('name', async () => { ... })` wraps a logical scenario. Inside, the
+  existing `check()` calls record results as they do now.
+- Each step emits **structured events** (start / end with status + the checks it
+  made + a short "observed" line), in addition to the human-readable console lines.
+- A `SYSTEST_MODE` env flag selects behaviour:
+  - **headless** — steps run back-to-back (unchanged feel).
+  - **interactive** — before each step the runner **blocks** until the hub sends a
+    "go" signal, so the Operator advances the test by clicking.
+
+## What I'll build
+1. **Step protocol in `lib.mjs`** — `step()`, structured step events, and the
+   interactive pause (wait for a go-ahead between steps via the child's stdin).
+2. **Hub server (`hub/server.mjs`)** — `mode=headless|interactive` on the run
+   endpoint; an interactive run keeps the child alive and exposes a "next step"
+   control that releases the next step; parse the new step events.
+3. **Hub SPA (`hub/public/`)** — each suite gets **Run (headless)** and **Step
+   through** actions; interactive mode renders a **step list** that lights up
+   pending → running → pass/fail with the observed detail and the checks per step,
+   plus **Next step** / **Run the rest** controls.
+4. **Refactor the existing suites** to express their scenarios as `step()`s so they
+   become steppable (behaviour and assertions unchanged).
+5. **Update the convention docs** (`tests/chat-systest/README.md`,
+   `plans/chat-system-tests.md`, and the request-prompt generator) so newly
+   authored tests use `step()` and are interactive-ready by default.
 
 ## Assumptions
-- This targets the existing **chat-systest** suite (the only system-test suite
-  in the repo today).
-- A form (operator supplies the bug specifics) generating a prompt that points
-  at the convention for the HOW — because only the operator knows the bug, but the
-  authoring convention already lives on disk. The form removes the risk of pasting
-  an unfilled placeholder.
+- Interactive mode lives in the existing system-test **hub** (the vanilla SPA on
+  the Local tab) — that's where these tests already live and run.
+- "Headless" for an agent = running the `.mjs` directly (or the hub's headless
+  endpoint); no UI required.
+- Operator advances **each** step manually in interactive mode, with an escape
+  hatch to run all remaining steps at once.
 
-## Branch note
-On `feature/systest-request-prompt`, based on `feature/chat-system-tests`
-because the convention files this topic points at don't exist on `main` yet.
+## Open question (branch)
+This builds on the **chat-systest** infrastructure, which is not on `main` yet.
+So this feature can't branch cleanly off `main` (our usual rule) — it needs to sit
+on the chat-systest line. Flagging before I create the branch.
+
+## Not doing (unless you say so)
+- No declarative/JSON step DSL — steps stay as imperative JS so arbitrary
+  assertions remain expressible.
+- No change to the C# Harness production code; this is all test-harness tooling.

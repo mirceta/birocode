@@ -83,9 +83,13 @@ function renderSuites() {
     toggle.onclick = () => { const open = list.classList.toggle('open'); toggle.textContent = `${open ? 'hide' : 'show'} ${s.scenarios.length} scenarios`; };
 
     const actions = el('div', 'actions');
-    const run = el('button', 'btn', 'Run');
-    run.onclick = () => runSuite(s);
-    actions.append(run, toggle);
+    const run = el('button', 'btn', 'Run headless');
+    run.title = 'Run end-to-end and read the verdict (how an agent runs it)';
+    run.onclick = () => runSuite(s, 'headless');
+    const stepThrough = el('button', 'btn ghost', 'Step through');
+    stepThrough.title = 'Advance one step at a time and watch each step pass/fail';
+    stepThrough.onclick = () => runSuite(s, 'interactive');
+    actions.append(run, stepThrough, toggle);
     card.append(actions, list);
     wrap.append(card);
   }
@@ -117,23 +121,92 @@ async function renderHistory() {
   }
 }
 
-// ---- actions -----------------------------------------------------------------
-function setBusy(b) { busy = b; document.querySelectorAll('.btn').forEach((x) => { if (x.id !== 'btnClear') x.disabled = b; }); }
+// ---- step list (interactive) -------------------------------------------------
+const CTRL_IDS = ['btnNext', 'btnSkip', 'btnRest', 'btnAbort'];
+let autoRest = false;   // "Run the rest" auto-advances each awaiting step
+let awaiting = false;   // a step is paused, waiting for the operator
 
-async function runSuite(s) {
+function showStepPanel(show) { $('#stepPanel').hidden = !show; if (show) $('#steps').innerHTML = ''; }
+function setCtrlEnabled(on) { CTRL_IDS.forEach((id) => { const b = $('#' + id); if (b) b.disabled = !on; }); }
+
+function stepCard(i) {
+  let li = document.getElementById('step-' + i);
+  if (!li) {
+    li = el('li', 'stp'); li.id = 'step-' + i;
+    li.innerHTML = '<span class="sdot"></span><div class="sbody"><div class="sname"></div>'
+      + '<div class="sobs"></div><ul class="schecks"></ul></div><span class="stag"></span>';
+    $('#steps').append(li);
+  }
+  return li;
+}
+function markStep(i, state, data = {}) {
+  const li = stepCard(i);
+  li.className = 'stp ' + state;
+  if (data.name) li.querySelector('.sname').textContent = data.name;
+  li.querySelector('.stag').textContent = state === 'await' ? 'ready' : state;
+  const dot = li.querySelector('.sdot');
+  dot.textContent = state === 'pass' ? '✓' : state === 'fail' ? '✗' : state === 'skip' ? '–' : (i + 1);
+  if (data.observed) li.querySelector('.sobs').textContent = data.observed;
+  if (data.checks) {
+    const ul = li.querySelector('.schecks'); ul.innerHTML = '';
+    for (const c of data.checks) {
+      const ci = el('li', c.pass ? 'p' : 'f', c.name + (c.detail ? ` — ${c.detail}` : ''));
+      ul.append(ci);
+    }
+  }
+  if (state === 'await' || state === 'running') li.scrollIntoView({ block: 'nearest' });
+}
+async function sendCtrl(cmd) {
+  awaiting = false; setCtrlEnabled(false);
+  try { await fetch('./api/run/step', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cmd }) }); }
+  catch (e) { logLine(`control error: ${e.message}`, 'err'); }
+}
+
+// ---- actions -----------------------------------------------------------------
+// Disable suite/lifecycle buttons while busy, but NOT the step controls — the
+// operator needs those live during an interactive run.
+function setBusy(b) {
+  busy = b;
+  document.querySelectorAll('.btn').forEach((x) => {
+    if (x.id === 'btnClear' || CTRL_IDS.includes(x.id)) return;
+    x.disabled = b;
+  });
+}
+
+async function runSuite(s, mode = 'headless') {
   if (busy) return;
-  setBusy(true); clearConsole(); setSummary('running…');
+  const interactive = mode === 'interactive';
+  autoRest = false; awaiting = false;
+  setBusy(true); clearConsole(); setSummary(interactive ? 'stepping…' : 'running…');
+  showStepPanel(interactive); setCtrlEnabled(false);
   $('#consoleTitle').textContent = `Console — ${s.title}`;
-  logLine(`▶ running ${s.file}`, 'step');
-  await streamPost(`./api/run/${s.id}`, (ev) => {
-    if (ev.type === 'start') logLine(`  BASE=${ev.env.BASE} RID=${ev.env.RID || '(none)'} MODEL=${ev.env.MODEL}`, 'warn');
-    else if (ev.type === 'line') logLine(ev.line, ev.kind === 'pass' ? 'pass' : ev.kind === 'fail' ? 'fail' : ev.stream === 'err' ? 'err' : '');
-    else if (ev.type === 'exit') {
+  logLine(`▶ ${interactive ? 'stepping through' : 'running'} ${s.file}`, 'step');
+  await streamPost(`./api/run/${s.id}?mode=${mode}`, (ev) => {
+    if (ev.type === 'start') {
+      logLine(`  mode=${ev.mode} · BASE=${ev.env.BASE} RID=${ev.env.RID || '(none)'} MODEL=${ev.env.MODEL}`, 'warn');
+    } else if (ev.type === 'step') {
+      if (ev.phase === 'await') {
+        markStep(ev.i, 'await', { name: ev.name });
+        if (autoRest) { sendCtrl('go'); }
+        else { awaiting = true; setCtrlEnabled(true); setSummary(`step ${ev.i + 1} ready — click Next`); }
+      } else if (ev.phase === 'start') {
+        markStep(ev.i, 'running', { name: ev.name });
+      } else if (ev.phase === 'end') {
+        markStep(ev.i, ev.status, { name: ev.name, observed: ev.observed, checks: ev.checks });
+      }
+    } else if (ev.type === 'aborted') {
+      logLine(`\n■ aborted at step ${ev.i + 1}`, 'fail');
+    } else if (ev.type === 'summary') {
+      setSummary(`${ev.passed}/${ev.total} passed`, ev.passed === ev.total ? 'ok' : 'bad');
+    } else if (ev.type === 'line') {
+      logLine(ev.line, ev.kind === 'pass' ? 'pass' : ev.kind === 'fail' ? 'fail' : ev.stream === 'err' ? 'err' : '');
+    } else if (ev.type === 'exit') {
       const ok = ev.code === 0;
       setSummary(`${ev.passed}/${ev.total} passed`, ok ? 'ok' : 'bad');
       logLine(`\n■ exit ${ev.code} — ${ev.passed}/${ev.total} passed`, ok ? 'done' : 'fail');
     }
   }).catch((e) => logLine(`stream error: ${e.message}`, 'err'));
+  setCtrlEnabled(false); awaiting = false;
   setBusy(false); await refreshInstance(); await renderHistory();
 }
 
@@ -156,6 +229,10 @@ async function lifecycle(cmd) {
   $('#btnClear').onclick = clearConsole;
   $('#btnUp').onclick = () => lifecycle('up');
   $('#btnDown').onclick = () => lifecycle('down');
+  $('#btnNext').onclick = () => { if (awaiting) sendCtrl('go'); };
+  $('#btnSkip').onclick = () => { if (awaiting) sendCtrl('skip'); };
+  $('#btnAbort').onclick = () => { autoRest = false; sendCtrl('abort'); };
+  $('#btnRest').onclick = () => { autoRest = true; setSummary('running the rest…'); if (awaiting) sendCtrl('go'); };
   $('#planLink').onclick = (e) => { e.preventDefault(); alert('See plans/chat-system-tests.md in the repo for full scenario detail and results.'); };
 
   manifest = await (await fetch('./api/suites')).json();

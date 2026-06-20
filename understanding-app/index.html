@@ -1,138 +1,305 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Understanding — Autopilot as a free-floating dock</title>
-  <!-- Relative URLs only: served under /api/localview/<repo>/app/understanding/. -->
-  <link rel="stylesheet" href="./styles.css" />
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Interactive + headless system tests</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --line:#2b3340;
+    --ink:#e6edf3; --dim:#9aa7b4; --accent:#58a6ff; --accent2:#bc8cff;
+    --pass:#3fb950; --fail:#f85149; --pend:#6e7681; --run:#d29922;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  header{padding:26px 22px 14px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#11161f,transparent)}
+  h1{margin:0 0 4px;font-size:21px}
+  header p{margin:0;color:var(--dim);max-width:70ch}
+  main{max-width:1080px;margin:0 auto;padding:22px}
+  section{margin:0 0 30px}
+  h2{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);
+    margin:0 0 12px;font-weight:600}
+  .sub{color:var(--dim);font-size:13px;margin:-6px 0 14px}
+
+  .modes{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+  .modeBtn{flex:1;min-width:240px;text-align:left;cursor:pointer;border:1px solid var(--line);
+    background:var(--panel);color:var(--ink);border-radius:10px;padding:13px 15px;transition:.15s}
+  .modeBtn:hover{border-color:var(--accent)}
+  .modeBtn.on{border-color:var(--accent);background:var(--panel2);box-shadow:0 0 0 1px var(--accent) inset}
+  .modeBtn b{display:block;font-size:15px;margin-bottom:3px}
+  .modeBtn span{color:var(--dim);font-size:12.5px}
+  .modeBtn .who{display:inline-block;margin-top:8px;font-family:var(--mono);font-size:11px;
+    color:var(--accent2);border:1px solid var(--line);border-radius:6px;padding:1px 7px}
+
+  .runner{border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden}
+  .rbar{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line);
+    background:var(--panel2);flex-wrap:wrap}
+  .rbar .t{font-weight:600}
+  .rbar .grow{flex:1}
+  button.act{cursor:pointer;border:1px solid var(--line);background:#21262d;color:var(--ink);
+    border-radius:8px;padding:7px 13px;font-size:13px;transition:.12s}
+  button.act:hover:not(:disabled){border-color:var(--accent);background:#262d36}
+  button.act:disabled{opacity:.4;cursor:not-allowed}
+  button.prim{background:var(--accent);color:#06121f;border-color:var(--accent);font-weight:600}
+  button.prim:hover:not(:disabled){filter:brightness(1.08)}
+
+  .steps{list-style:none;margin:0;padding:8px}
+  .step{display:flex;gap:12px;align-items:flex-start;padding:11px 12px;border-radius:9px;
+    border:1px solid transparent;transition:.18s}
+  .step+.step{margin-top:4px}
+  .step.cur{border-color:var(--accent);background:var(--panel2)}
+  .dot{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;
+    font-size:12px;font-weight:700;margin-top:1px;border:2px solid var(--pend);color:var(--pend)}
+  .step.pass .dot{border-color:var(--pass);color:var(--pass)}
+  .step.fail .dot{border-color:var(--fail);color:var(--fail)}
+  .step.running .dot{border-color:var(--run);color:var(--run);animation:pulse 1s infinite}
+  @keyframes pulse{50%{opacity:.35}}
+  .body{flex:1;min-width:0}
+  .name{font-weight:600}
+  .obs{font-family:var(--mono);font-size:12px;color:var(--dim);margin-top:3px;white-space:pre-wrap}
+  .checks{margin:6px 0 0;padding:0;list-style:none;font-family:var(--mono);font-size:11.5px}
+  .checks li{color:var(--dim);padding:1px 0}
+  .checks li.p::before{content:"✓ ";color:var(--pass)}
+  .checks li.f::before{content:"✗ ";color:var(--fail)}
+  .tag{flex:none;font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;
+    padding:2px 8px;border-radius:20px;border:1px solid var(--line);color:var(--dim);margin-top:2px}
+  .step.pass .tag{color:var(--pass);border-color:#1c4427}
+  .step.fail .tag{color:var(--fail);border-color:#5c2526}
+  .step.running .tag{color:var(--run);border-color:#5c4a1d}
+
+  .summary{padding:12px 14px;border-top:1px solid var(--line);font-family:var(--mono);font-size:13px;
+    display:flex;align-items:center;gap:10px;background:var(--panel2)}
+  .summary .ok{color:var(--pass)} .summary .bad{color:var(--fail)}
+  .hint{color:var(--dim);font-size:12.5px;margin-top:10px}
+
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:760px){.cols{grid-template-columns:1fr}}
+  pre{margin:0;background:#0a0e14;border:1px solid var(--line);border-radius:10px;padding:13px 14px;
+    font-family:var(--mono);font-size:12.5px;overflow:auto;color:#c9d4e0}
+  pre .k{color:var(--accent2)} pre .s{color:#7ee787} pre .c{color:var(--pend)} pre .f{color:var(--accent)}
+  .card{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:14px}
+  .card h3{margin:0 0 6px;font-size:14px}
+  .card p{margin:0;color:var(--dim);font-size:13px}
+
+  .flow{display:flex;align-items:stretch;gap:0;flex-wrap:wrap}
+  .node{flex:1;min-width:150px;border:1px solid var(--line);border-radius:10px;background:var(--panel);
+    padding:12px;position:relative}
+  .node b{font-size:13px} .node p{margin:5px 0 0;color:var(--dim);font-size:12px}
+  .arrow{align-self:center;color:var(--accent);font-size:20px;padding:0 8px}
+  .pill{display:inline-block;font-family:var(--mono);font-size:11px;color:var(--accent2);
+    border:1px solid var(--line);border-radius:6px;padding:1px 7px;margin-top:7px}
+  footer{color:var(--pend);font-size:12px;text-align:center;padding:18px}
+</style>
 </head>
 <body>
-  <header class="hero">
-    <div class="hero__kicker">my understanding — please confirm before I build</div>
-    <h1>Autopilot → a <span class="hl">free-floating</span>, <span class="hl2">dock-styled</span> panel</h1>
-    <p class="hero__sub">Keep it collapsible, but make it look like an agent dock and let you drag it
-      anywhere on the dashboard — <strong>just like the Ideas panel</strong>. In <b>Proposed</b>
-      the Autopilot dock is really draggable (grab <span class="kbd">⠿</span>) and collapsible.</p>
-    <nav class="nav" id="nav">
-      <button class="nav__btn nav__btn--on" data-view="now">1 · Now (band on top)</button>
-      <button class="nav__btn" data-view="proposed">2 · Proposed (drag me)</button>
-      <button class="nav__btn" data-view="changes">3 · What changes</button>
-      <button class="nav__btn" data-view="open">4 · Confirm</button>
-    </nav>
-  </header>
+<header>
+  <h1>Interactive + headless system tests</h1>
+  <p>One test definition, two ways to run it. An <b>agent</b> runs it headless and
+     gets a verdict. An <b>operator</b> steps through it and watches each step pass
+     or fail. Toggle the mode below and drive the mock runner.</p>
+</header>
 
-  <main>
-    <!-- ── 1: NOW — full-width band ───────────────────────────────── -->
-    <section class="view view--on" id="view-now">
-      <div class="panel">
-        <h2><span class="num">1</span> Today: a full-width band, pinned to the top</h2>
-        <p class="lead">The Autopilot section spans the whole width above the canvas and can’t be
-           moved. Collapsible — but it always eats vertical room above the conversation.</p>
-        <div class="stage">
-          <div class="mockbar"><span class="dot dot--r"></span><span class="dot dot--y"></span><span class="dot dot--g"></span>
-            <span class="mockbar__t">Agent dashboard</span></div>
-          <div class="band">
-            <span class="band__chev">▾</span>
-            <span class="band__title">🛞 Autopilot</span>
-            <span class="band__sum">2 armed · <b>1 need you</b> · suggest-only</span>
-          </div>
-          <div class="canvas">
-            <div class="panel-m panel-m--ideas"><div class="panel-m__h">💡 Ideas</div><div class="panel-m__b muted">backlog…</div></div>
-            <div class="panel-m panel-m--agents"><div class="panel-m__h">Agents</div>
-              <div class="wall"><div class="ph"></div><div class="ph"></div><div class="ph"></div><div class="ph"></div></div>
-            </div>
-          </div>
-        </div>
+<main>
+  <section>
+    <h2>Pick a run mode</h2>
+    <div class="modes">
+      <button class="modeBtn on" id="mHead">
+        <b>⚡ Headless</b>
+        <span>Runs end-to-end, no human. Emits a pass/fail summary.</span>
+        <span class="who">who: an agent, running the suite itself</span>
+      </button>
+      <button class="modeBtn" id="mInter">
+        <b>👆 Interactive</b>
+        <span>Operator clicks through one step at a time; the harness shows what each step did.</span>
+        <span class="who">who: a human operator, watching</span>
+      </button>
+    </div>
+
+    <div class="runner">
+      <div class="rbar">
+        <span class="t">behavioural / protocol</span>
+        <span class="tag" id="modeTag">headless</span>
+        <span class="grow"></span>
+        <button class="act prim" id="go">Run headless</button>
+        <button class="act" id="next" style="display:none">Next step ▸</button>
+        <button class="act" id="rest" style="display:none">Run the rest ⏩</button>
+        <button class="act" id="reset">Reset</button>
       </div>
-    </section>
+      <ul class="steps" id="steps"></ul>
+      <div class="summary" id="summary"><span style="color:var(--dim)">idle — press run</span></div>
+    </div>
+    <p class="hint" id="hint">Headless: every step fires back-to-back, you just read the verdict.</p>
+  </section>
 
-    <!-- ── 2: PROPOSED — draggable dock ──────────────────────────── -->
-    <section class="view" id="view-proposed">
-      <div class="panel">
-        <h2><span class="num">2</span> Proposed: a dock you can drop anywhere <span class="h2sub">— grab ⠿ · click ▾</span></h2>
-        <p class="lead">Same drag system the Ideas/Agents panels already use. The Autopilot dock
-           becomes a third draggable panel — dock-styled, collapsible, position remembered per device.</p>
-        <div class="stage">
-          <div class="mockbar"><span class="dot dot--r"></span><span class="dot dot--y"></span><span class="dot dot--g"></span>
-            <span class="mockbar__t">Agent dashboard</span></div>
-          <div class="canvas canvas--free" id="freeCanvas">
-            <div class="panel-m panel-m--ideas"><div class="panel-m__h">💡 Ideas <span class="grip">⠿</span></div>
-              <div class="panel-m__b muted">backlog…</div></div>
-            <div class="panel-m panel-m--agents"><div class="panel-m__h">Agents <span class="grip">⠿</span></div>
-              <div class="wall"><div class="ph"></div><div class="ph"></div><div class="ph"></div><div class="ph"></div></div>
-            </div>
+  <section>
+    <h2>What makes a test steppable</h2>
+    <p class="sub">The unit is a <b>step</b>. Same <code>check()</code> calls as today —
+       just wrapped so each scenario has a boundary the harness can pause on and report.</p>
+    <div class="cols">
+      <pre><span class="c">// lib.mjs — the new boundary</span>
+<span class="k">await</span> step(<span class="s">'Auth gate rejects no-cookie'</span>, <span class="k">async</span> () => {
+  <span class="k">const</span> r = <span class="k">await</span> api(<span class="s">'/api/chat'</span>, {noAuth:<span class="k">true</span>});
+  check(<span class="s">'POST /api/chat → 401'</span>, r.status===<span class="s">401</span>);
+});
 
-            <!-- the new Autopilot dock -->
-            <div class="apdock" id="apdock" style="left: 270px; top: 96px;">
-              <div class="apdock__bar" id="apdockBar">
-                <span class="grip grip--lift" id="apdockGrip" title="Drag me anywhere">⠿</span>
-                <button class="apdock__chev" id="apdockChev" title="Collapse / expand">▾</button>
-                <span class="apdock__title">🛞 Autopilot</span>
-                <span class="apdock__sum" id="apdockSum">2 armed · <b>1&nbsp;need&nbsp;you</b></span>
-              </div>
-              <div class="apdock__body" id="apdockBody">
-                <div class="apbar">
-                  <span class="sw sw--on"></span><b>Autopilot</b><span class="muted">on · armed only</span>
-                  <span class="apbar__sp"></span><span class="muted">conf ≥ <b>0.85</b></span>
-                </div>
-                <div class="deny">Always escalates: <code>deploy</code> <code>force-push</code></div>
-                <ul class="aglist">
-                  <li><span class="st st--esc">needs you</span><span class="ag">birocode</span></li>
-                  <li><span class="st st--sugg">suggestion</span><span class="ag">web-pilot</span><span class="muted">→ keep it</span></li>
-                  <li class="off"><span class="st st--off">off</span><span class="ag">docs-site</span></li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-        <p class="hint" id="dragHint">↑ grab the <span class="kbd">⠿</span> on the Autopilot dock and drop it anywhere.</p>
-      </div>
-    </section>
+<span class="c">// headless  → steps run back-to-back</span>
+<span class="c">// interactive → blocks here until the</span>
+<span class="c">// operator clicks "Next step"</span></pre>
+      <pre><span class="c">// structured events the hub reads</span>
+{<span class="f">type</span>:<span class="s">"step"</span>,phase:<span class="s">"start"</span>,i:<span class="s">0</span>,name:<span class="s">"Auth gate…"</span>}
+{<span class="f">type</span>:<span class="s">"step"</span>,phase:<span class="s">"end"</span>,i:<span class="s">0</span>,
+   status:<span class="s">"pass"</span>,
+   observed:<span class="s">"401 as expected"</span>,
+   checks:[{name:<span class="s">"… → 401"</span>,pass:<span class="k">true</span>}]}
+<span class="c">// + the old [PASS]/[FAIL] console lines stay,</span>
+<span class="c">// so nothing that reads them today breaks.</span></pre>
+    </div>
+  </section>
 
-    <!-- ── 3: WHAT CHANGES ───────────────────────────────────────── -->
-    <section class="view" id="view-changes">
-      <div class="panel">
-        <h2><span class="num">3</span> What changes <span class="h2sub">— frontend only</span></h2>
-        <ol class="contract" id="changes"></ol>
-        <p class="ask__foot">Untouched: the Autopilot <b>tab</b>, the <code>/api/autopilot</code> API,
-           the engine, and the operator gate. Same controls — new container, styling, and placement.</p>
-      </div>
-    </section>
+  <section>
+    <h2>How a click becomes a step (interactive)</h2>
+    <div class="flow">
+      <div class="node"><b>SPA</b><p>Operator clicks <i>Next step</i>.</p><span class="pill">hub/public</span></div>
+      <div class="arrow">→</div>
+      <div class="node"><b>Hub server</b><p>Writes <code>go</code> to the live child's stdin.</p><span class="pill">server.mjs</span></div>
+      <div class="arrow">→</div>
+      <div class="node"><b>Runner</b><p>Unblocks, runs one <code>step()</code>, emits start/end events.</p><span class="pill">lib.mjs</span></div>
+      <div class="arrow">→</div>
+      <div class="node"><b>SPA</b><p>Step card lights up pass/fail with its observed detail.</p><span class="pill">SSE</span></div>
+    </div>
+    <p class="hint">Headless skips the wait entirely — the runner never blocks, the child just runs to exit.</p>
+  </section>
 
-    <!-- ── 4: CONFIRM ────────────────────────────────────────────── -->
-    <section class="view" id="view-open">
-      <div class="panel">
-        <h2><span class="num">4</span> Confirm <span class="h2sub">— click each</span></h2>
-        <p class="lead">Tell me if any of these are off before I build.</p>
-        <ul class="q" id="qs">
-          <li class="q__item" data-a="Same mechanism the Ideas/Agents panels use today: a ⠿ drag handle in free mode, grid-mode flow on narrow screens, and the drop position saved per device in claudeweb_dash_pos. Not a new mechanism, not OS-level drag.">
-            <span class="q__q">① “Free-floating like Ideas” = the <b>existing</b> drag system, third panel <span class="tagy">✓ assume</span></span>
-            <span class="q__a"></span>
-          </li>
-          <li class="q__item" data-a="It adopts the agent-dock (phone) visual chrome — rounded surface, header bar, body — with a distinct 🛞 title/accent so it reads as separate from real agents. It stays a control surface (global controls + deny-list + per-agent arm), not a chat/git dock.">
-            <span class="q__q">② “Looks like an agent dock” = the dock <b>chrome</b>, still a control surface <span class="tagy">✓ assume</span></span>
-            <span class="q__a"></span>
-          </li>
-          <li class="q__item" data-a="It stays on feature/autopilot-to-harness — this is a refinement of Part 2 of that plan (where the autopilot dashboard lives), so it's the same feature, not a new branch.">
-            <span class="q__q">③ Stays on <b>feature/autopilot-to-harness</b> (same feature) <span class="tagd">default</span></span>
-            <span class="q__a"></span>
-          </li>
-          <li class="q__item" data-a="OPEN QUESTION: in grid mode (mobile default) should the Autopilot dock sit first (above Ideas/agents) or last? I'll assume FIRST unless you say otherwise.">
-            <span class="q__q">④ Grid-mode default position: <b>first</b>? <span class="tagq">? confirm</span></span>
-            <span class="q__a"></span>
-          </li>
-        </ul>
-      </div>
-    </section>
-  </main>
+  <section>
+    <h2>Why one definition, not two</h2>
+    <div class="cols">
+      <div class="card"><h3>✓ Single source</h3><p>The same <code>.mjs</code> drives both modes.
+        Add a step, fix an assertion — both the agent's headless run and the operator's
+        click-through get it. Nothing drifts.</p></div>
+      <div class="card"><h3>✗ Two copies (rejected)</h3><p>A separate "interactive" script would
+        slowly diverge from the headless one until they test different things — the classic
+        test-harness rot. Avoided.</p></div>
+    </div>
+  </section>
+</main>
 
-  <footer class="foot">
-    My <strong>understanding</strong> of the redesign — not built yet. Companion to
-    <code>understanding.md</code>; refinement of Part 2 of <code>plans/autopilot-to-harness.md</code>.
-    Tell me where I’m off.
-  </footer>
+<footer>Companion to understanding.md · mock data, drive the runner above</footer>
 
-  <script src="./app.js"></script>
+<script>
+(function(){
+  const STEPS = [
+    {name:'Auth gate — endpoints reject no-cookie calls', observed:'6 endpoints → 401, health → 200',
+     checks:[['POST /api/chat → 401',1],['GET /api/runs → 401',1],['GET /api/health → 200',1]], pass:true},
+    {name:'Validation — empty / missing message', observed:'empty & whitespace & missing → 400',
+     checks:[['empty message → 400',1],['whitespace → 400',1],['missing field → 400',1]], pass:true},
+    {name:'Stop when idle → 404', observed:'stop with no run → 404 + error body',
+     checks:[['stop idle → 404',1],['404 carries error',1]], pass:true},
+    {name:'Stream when idle → 404', observed:'EXPECTED 404, GOT 500 — candidate bug',
+     checks:[['stream no run → 404',0]], pass:false},
+    {name:'Sessions list + transcript safety', observed:'list ok, traversal id did not leak',
+     checks:[['sessions → 200 array',1],['unknown id → 200 []',1],['traversal → no leak',1]], pass:true},
+  ];
+
+  const $=s=>document.querySelector(s);
+  const stepsEl=$('#steps'), sumEl=$('#summary'), hintEl=$('#hint');
+  const goBtn=$('#go'), nextBtn=$('#next'), restBtn=$('#rest'), resetBtn=$('#reset'), modeTag=$('#modeTag');
+  let mode='headless', cur=-1, running=false;
+
+  function build(){
+    stepsEl.innerHTML='';
+    STEPS.forEach((s,i)=>{
+      const li=document.createElement('li'); li.className='step'; li.id='s'+i;
+      li.innerHTML='<span class="dot">'+(i+1)+'</span>'+
+        '<div class="body"><div class="name"></div><div class="obs"></div>'+
+        '<ul class="checks"></ul></div><span class="tag">pending</span>';
+      li.querySelector('.name').textContent=s.name;
+      stepsEl.appendChild(li);
+    });
+  }
+  function paintStep(i,state){
+    const li=$('#s'+i), s=STEPS[i];
+    li.className='step '+state+(state==='running'?' cur':'');
+    li.querySelector('.tag').textContent=state;
+    if(state==='running'){ li.classList.add('cur'); li.scrollIntoView({block:'nearest'}); }
+    if(state==='pass'||state==='fail'){
+      li.querySelector('.dot').textContent = state==='pass'?'✓':'✗';
+      li.querySelector('.obs').textContent = s.observed;
+      const ul=li.querySelector('.checks'); ul.innerHTML='';
+      s.checks.forEach(function(c){ const li2=document.createElement('li'); li2.className=c[1]?'p':'f'; li2.textContent=c[0]; ul.appendChild(li2); });
+    }
+  }
+  function summarize(){
+    const done=STEPS.slice(0,cur+1);
+    const passed=done.filter(function(s){return s.pass;}).length;
+    const ok=passed===done.length;
+    sumEl.innerHTML = (cur+1<STEPS.length && mode==='interactive')
+      ? '<span style="color:var(--dim)">'+(cur+1)+'/'+STEPS.length+' steps · click <b>Next step</b></span>'
+      : '<span class="'+(ok?'ok':'bad')+'">'+(ok?'✓ all passed':'✗ findings')+'</span>'+
+         '<span style="color:var(--dim)">'+passed+'/'+STEPS.length+' steps passed</span>';
+  }
+  const wait=function(ms){return new Promise(function(r){setTimeout(r,ms);});};
+
+  async function runStep(i){
+    paintStep(i,'running'); await wait(520);
+    paintStep(i,STEPS[i].pass?'pass':'fail'); summarize();
+  }
+  async function runAll(from){
+    running=true; nextBtn.disabled=restBtn.disabled=true;
+    for(let i=from;i<STEPS.length;i++){ cur=i; await runStep(i); }
+    running=false; finish();
+  }
+  function finish(){
+    nextBtn.style.display=restBtn.style.display='none';
+    goBtn.disabled=false; summarize();
+  }
+
+  goBtn.onclick=async function(){
+    if(running) return;
+    if(mode==='headless'){ reset(false); goBtn.disabled=true; await runAll(0); }
+    else {
+      reset(false); goBtn.style.display='none';
+      nextBtn.style.display=restBtn.style.display='';
+      nextBtn.disabled=restBtn.disabled=false;
+      sumEl.innerHTML='<span style="color:var(--dim)">armed · click <b>Next step</b> to advance</span>';
+    }
+  };
+  nextBtn.onclick=async function(){
+    if(running||cur>=STEPS.length-1) return;
+    running=true; nextBtn.disabled=restBtn.disabled=true;
+    cur++; await runStep(cur);
+    running=false;
+    if(cur>=STEPS.length-1){ finish(); }
+    else { nextBtn.disabled=restBtn.disabled=false; }
+  };
+  restBtn.onclick=function(){ if(!running) runAll(cur+1); };
+
+  function reset(repaint){
+    if(repaint===undefined) repaint=true;
+    cur=-1; running=false;
+    goBtn.style.display=''; goBtn.disabled=false;
+    nextBtn.style.display=restBtn.style.display='none';
+    if(repaint){ build(); sumEl.innerHTML='<span style="color:var(--dim)">idle — press run</span>'; }
+  }
+  resetBtn.onclick=function(){reset(true);};
+
+  function setMode(m){
+    mode=m; modeTag.textContent=m;
+    $('#mHead').classList.toggle('on',m==='headless');
+    $('#mInter').classList.toggle('on',m==='interactive');
+    goBtn.textContent = m==='headless'?'Run headless':'Step through';
+    hintEl.textContent = m==='headless'
+      ? 'Headless: every step fires back-to-back, you just read the verdict.'
+      : 'Interactive: arm it, then advance step by step — each card shows what happened before you move on.';
+    reset(true);
+  }
+  $('#mHead').onclick=function(){setMode('headless');};
+  $('#mInter').onclick=function(){setMode('interactive');};
+
+  build(); reset(true);
+})();
+</script>
 </body>
 </html>

@@ -41,6 +41,19 @@
         <span class="summary" id="summary"></span>
         <button class="btn ghost" id="btnClear">clear</button>
       </div>
+
+      <div id="stepPanel" class="step-panel" hidden>
+        <div class="step-bar">
+          <span class="step-mode" id="stepMode">stepping through</span>
+          <span class="grow"></span>
+          <button class="btn" id="btnNext">Next step ▸</button>
+          <button class="btn ghost" id="btnSkip">Skip</button>
+          <button class="btn ghost" id="btnRest">Run the rest ⏩</button>
+          <button class="btn ghost danger" id="btnAbort">Abort</button>
+        </div>
+        <ul id="steps" class="steps"></ul>
+      </div>
+
       <pre id="console" class="console"><span class="muted">Run a suite or launch the instance — output streams here.</span></pre>
     </section>
   </main>

@@ -5,7 +5,7 @@
 // hides the rest.
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { api, raw, readSse, login, startTurn, waitFor, sleep, check, note, report, MODEL, BASE, RID } from './lib.mjs';
+import { api, raw, readSse, login, startTurn, waitFor, sleep, check, note, report, step, MODEL, BASE, RID } from './lib.mjs';
 
 const SCRATCH = process.env.SCRATCH || '';
 console.log(`\n# Chat real-run tests against ${BASE} (repo ${RID}), model ${MODEL}`);
@@ -25,9 +25,11 @@ async function stopBoth() {
   }, 15000);
 }
 
+// A scenario is a step (so the suite is steppable on the hub) followed by a
+// cleanup that releases any run slots before the next one. step() already logs
+// the heading, catches throws, and emits the structured step events.
 async function scenario(name, fn) {
-  console.log(`\n## ${name}`);
-  try { await fn(); } catch (e) { check(`${name} did not throw`, false, e?.message || String(e)); }
+  await step(name, fn);
   await stopBoth();
 }
 

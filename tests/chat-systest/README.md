@@ -64,6 +64,36 @@ node tests/chat-systest/badinput.mjs      # spends a little
 Each script exits non-zero if any check fails, prints a `PASS`/`FAIL` line per
 check, and ends with a findings summary — so they can gate CI later.
 
+## Steps: headless and interactive from one definition
+
+Every scenario is wrapped in `step(name, fn)` (from `lib.mjs`). A **step** is the
+unit of a test — the boundary the harness reports on and can pause at:
+
+```js
+await step('Auth gate rejects no-cookie', async () => {
+  const r = await api('/api/chat', { method: 'POST', body: { message: 'x' }, noAuth: true });
+  check('POST /api/chat → 401', r.status === 401, `got ${r.status}`);
+  // (optional) return a short string to set the step's "observed" summary line
+});
+```
+
+The same script runs two ways, chosen by the `SYSTEST_MODE` env var:
+
+- **headless** (default) — steps run back-to-back; you (or an **agent**) read the
+  verdict. This is plain `node behavioural.mjs`.
+- **interactive** (`SYSTEST_MODE=interactive`) — the runner **blocks before each
+  step** until it reads a line on stdin (`go` / `skip` / `abort`), so a human can
+  click through one step at a time. The hub drives this for you (below); you rarely
+  set the env var by hand.
+
+Either way each step emits machine-readable events (`@@SYSTEST@@ {json}` lines:
+`step` start/end with status + per-step checks + an observed line, and a final
+`summary`) **alongside** the human `[PASS]`/`[FAIL]` lines, so nothing that greps
+the console today breaks.
+
+Author new tests the same way: one `step()` per scenario and they are interactive-
+ready for free.
+
 ## Teardown
 
 Kill the isolated `ClaudeWeb.exe` process tree and delete `$ROOT`. Your live
@@ -76,3 +106,8 @@ Instead of the manual dance above, `hub/` is a small web app that does all of it
 click and watch PASS/FAIL stream live, plus the scenario catalog and known
 findings. Run `node tests/chat-systest/hub/server.mjs` → `http://localhost:5320/`.
 See [`hub/README.md`](hub/README.md).
+
+Each suite has two run buttons: **Run headless** (verdict only — how an agent runs
+it) and **Step through** (interactive: a step list lights up pending → running →
+pass/fail with each step's observed detail and checks, advanced with **Next step**
+/ **Skip** / **Run the rest** / **Abort**).

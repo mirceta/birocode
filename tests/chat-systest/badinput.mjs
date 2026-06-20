@@ -2,7 +2,7 @@
 // The bug-hunt layer: a bad sessionId / model / lane must produce a graceful
 // terminal (error or done) — never a hang, a 500, or a wedged run slot. Spends a
 // little token. Run against an isolated instance (see ./README.md).
-import { api, login, startTurn, waitFor, check, note, report, MODEL, BASE, RID } from './lib.mjs';
+import { api, login, startTurn, waitFor, check, note, report, step, MODEL, BASE, RID } from './lib.mjs';
 
 console.log(`\n# Chat bad-input tests against ${BASE} (repo ${RID}), model ${MODEL}`);
 await login();
@@ -16,9 +16,10 @@ async function stopBoth() {
     return Object.values(r.json || {}).every((v) => v.status !== 'running');
   }, 15000);
 }
+// step() makes the scenario pausable on the hub and records its checks; stopBoth
+// releases any run slot before the next scenario.
 async function scenario(name, fn) {
-  console.log(`\n## ${name}`);
-  try { await fn(); } catch (e) { check(`${name} did not throw`, false, e?.message || String(e)); }
+  await step(name, fn);
   await stopBoth();
 }
 // A run is "graceful" if the SSE opened (200) and reached a terminal event

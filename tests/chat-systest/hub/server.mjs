@@ -22,6 +22,7 @@ import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, dirname, extname, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readState, health, base as cfgBase } from './instance.mjs';
+import { EVENT } from '../lib.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = join(HERE, 'public');
@@ -90,19 +91,40 @@ function serveStatic(req, res, urlPath) {
 }
 
 // ---- suite run (streamed) ----------------------------------------------------
-function runSuite(res, suiteId) {
+// One run at a time. In interactive mode the child blocks before each step and
+// we keep it alive so the operator can release steps via POST /api/run/step
+// (which writes "go"/"skip"/"abort" to the child's stdin). `activeRun` holds the
+// live child so that control endpoint can reach it.
+let activeRun = null;
+
+function runSuite(res, suiteId, mode) {
   const suite = suiteById[suiteId];
   if (!suite) { sendJson(res, 400, { error: `unknown suite ${suiteId}` }); return; }
+  if (activeRun) { sendJson(res, 409, { error: 'a run is already in progress' }); return; }
+  const interactive = mode === 'interactive';
   const env = suiteEnv();
   sseStart(res);
-  sseSend(res, { type: 'start', suite: suiteId, env: { BASE: env.BASE, RID: env.RID, MODEL: env.MODEL } });
+  sseSend(res, { type: 'start', suite: suiteId, mode: interactive ? 'interactive' : 'headless',
+    env: { BASE: env.BASE, RID: env.RID, MODEL: env.MODEL } });
 
   const file = join(SYSTEST, suite.file);
-  const child = spawn(process.execPath, [file], { cwd: join(HERE, '..', '..', '..'), env: { ...process.env, ...env } });
+  const child = spawn(process.execPath, [file], {
+    cwd: join(HERE, '..', '..', '..'),
+    env: { ...process.env, ...env, SYSTEST_MODE: interactive ? 'interactive' : 'headless' },
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  activeRun = { child, suiteId };
 
   let passed = 0, total = 0, summary = null;
   const onLine = (stream) => (chunk) => String(chunk).split(/\r?\n/).forEach((line) => {
     if (line === '') return;
+    // Structured step/summary events ride stdout behind a sentinel prefix.
+    if (line.startsWith(EVENT)) {
+      let ev; try { ev = JSON.parse(line.slice(EVENT.length).trim()); } catch { return; }
+      if (ev.type === 'summary') summary = { passed: ev.passed, total: ev.total };
+      sseSend(res, ev);
+      return;
+    }
     let kind = 'log';
     if (/\[PASS\]/.test(line)) { kind = 'pass'; passed++; total++; }
     else if (/\[FAIL\]/.test(line)) { kind = 'fail'; total++; }
@@ -114,8 +136,9 @@ function runSuite(res, suiteId) {
   child.stderr.on('data', onLine('err'));
 
   const finish = (code) => {
+    activeRun = null;
     const result = summary || { passed, total };
-    const entry = { id: `${suiteId}-${Date.now()}`, suite: suiteId, ts: Date.now(),
+    const entry = { id: `${suiteId}-${Date.now()}`, suite: suiteId, ts: Date.now(), mode: interactive ? 'interactive' : 'headless',
       passed: result.passed, total: result.total, ok: code === 0 };
     pushHistory(entry);
     sseSend(res, { type: 'exit', code, ...entry });
@@ -123,7 +146,17 @@ function runSuite(res, suiteId) {
   };
   child.on('error', (e) => { sseSend(res, { type: 'line', stream: 'err', kind: 'fail', line: `spawn error: ${e.message}` }); finish(1); });
   child.on('close', finish);
-  req_onClose(res, () => { try { child.kill(); } catch { /* */ } });
+  // If the browser disconnects, abort the run (kills the child, clears activeRun).
+  req_onClose(res, () => { if (activeRun?.child === child) { try { child.kill(); } catch { /* */ } } });
+}
+
+// Release the next step of the active interactive run. cmd: go | skip | abort.
+function runStepControl(res, cmd) {
+  if (!activeRun) { sendJson(res, 409, { error: 'no run in progress' }); return; }
+  const c = (cmd || 'go').trim();
+  if (!['go', 'skip', 'abort'].includes(c)) { sendJson(res, 400, { error: `bad control ${c}` }); return; }
+  try { activeRun.child.stdin.write(c + '\n'); } catch (e) { sendJson(res, 500, { error: e.message }); return; }
+  sendJson(res, 200, { ok: true, sent: c });
 }
 
 // abort the child if the browser disconnects mid-run
@@ -155,7 +188,15 @@ const handler = async (req, res) => {
       const up = await health(s?.base || cfgBase());
       return sendJson(res, 200, { up, base: s?.base || cfgBase(), rid: s?.rid || '', model: s?.model || '', scratch: s?.scratch || '', hasState: !!s });
     }
-    if (url.startsWith('/api/run/') && req.method === 'POST') return runSuite(res, url.slice('/api/run/'.length));
+    if (url.startsWith('/api/run/step') && req.method === 'POST') {
+      const body = await readBody(req);
+      return runStepControl(res, body.cmd || new URL(url, 'http://x').searchParams.get('cmd') || 'go');
+    }
+    if (url.startsWith('/api/run/') && req.method === 'POST') {
+      const u = new URL(url, 'http://x');
+      const id = u.pathname.slice('/api/run/'.length);
+      return runSuite(res, id, u.searchParams.get('mode'));
+    }
     if (url === '/api/instance/up' && req.method === 'POST') return runInstance(res, 'up');
     if (url === '/api/instance/down' && req.method === 'POST') return runInstance(res, 'down');
     if (url.startsWith('/api/')) return sendJson(res, 404, { error: 'no such endpoint' });

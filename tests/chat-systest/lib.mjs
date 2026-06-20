@@ -18,6 +18,18 @@ export const MODEL = process.env.MODEL || 'claude-haiku-4-5';
 
 let cookie = ''; // claudeweb_session=... captured at login
 
+// ---- structured events -------------------------------------------------------
+// Tests are driven two ways from ONE definition (plans/chat-system-tests.md):
+//   • headless    — run end-to-end, emit a verdict (an agent runs the suite).
+//   • interactive — a human steps through, the hub shows feedback per step.
+// To make that possible without a second copy of each test, steps emit
+// single-line JSON events with a sentinel prefix. The hub parses these to draw
+// the step list; the human-readable [PASS]/[FAIL] lines keep flowing alongside,
+// so anything that greps the console today still works.
+export const EVENT = '@@SYSTEST@@';
+export const MODE = process.env.SYSTEST_MODE || 'headless';
+function emit(obj) { console.log(`${EVENT} ${JSON.stringify(obj)}`); }
+
 // ---- findings ----------------------------------------------------------------
 // Every check records a result; a failing check is a candidate bug. We never
 // throw on a failed assertion — the point is to run ALL scenarios and collect
@@ -38,7 +50,93 @@ export function report() {
     console.log('FINDINGS (candidate bugs):');
     for (const f of fails) console.log(`  - ${f.name}${f.detail ? ` — ${f.detail}` : ''}`);
   }
+  emit({ type: 'summary', passed: results.length - fails.length, total: results.length });
   return fails.length;
+}
+
+// ---- steps -------------------------------------------------------------------
+// A step is the unit of a test: a named scenario the harness can pause on and
+// report on individually. Inside a step, use check()/note() exactly as before —
+// the checks recorded during the step are attributed to it. A step may `return`
+// a short string to set its "observed" summary line (otherwise one is derived).
+//
+//   await step('Auth gate rejects no-cookie', async () => { ... check(...) ... });
+//
+// Headless runs steps back-to-back. Interactive blocks before each step until
+// the hub releases it (see interactive control below), so the operator advances
+// the test by clicking.
+let stepIndex = -1;
+
+// Interactive control channel: the hub writes a line to our stdin when the
+// operator clicks — "go" (run the next step), "skip" (skip it), "abort" (stop).
+// Headless never reads stdin.
+const goQueue = [];
+let goResolve = null;
+let stdinWired = false;
+function wireStdin() {
+  if (stdinWired) return;
+  stdinWired = true;
+  let buf = '';
+  process.stdin.setEncoding('utf8');
+  process.stdin.on('data', (chunk) => {
+    buf += chunk;
+    let i;
+    while ((i = buf.indexOf('\n')) !== -1) {
+      const cmd = buf.slice(0, i).trim();
+      buf = buf.slice(i + 1);
+      if (!cmd) continue;
+      if (goResolve) { const r = goResolve; goResolve = null; r(cmd); }
+      else goQueue.push(cmd);
+    }
+  });
+  process.stdin.resume();
+}
+function waitForControl() {
+  return new Promise((resolve) => {
+    if (goQueue.length) return resolve(goQueue.shift());
+    goResolve = resolve;
+  });
+}
+
+export async function step(name, fn) {
+  const i = ++stepIndex;
+
+  let control = 'go';
+  if (MODE === 'interactive') {
+    wireStdin();
+    emit({ type: 'step', phase: 'await', i, name }); // SPA: this step is ready
+    control = await waitForControl();
+  }
+  if (control === 'abort') {
+    emit({ type: 'aborted', i });
+    process.exit(report() === 0 ? 0 : 1);
+  }
+  if (control === 'skip') {
+    console.log(`\n## (skipped) ${name}`);
+    emit({ type: 'step', phase: 'end', i, name, status: 'skip', observed: 'skipped by operator', checks: [] });
+    return;
+  }
+
+  emit({ type: 'step', phase: 'start', i, name });
+  console.log(`\n## ${name}`);
+  const mark = results.length;
+  let observed = '';
+  try {
+    const r = await fn();
+    if (typeof r === 'string') observed = r;
+  } catch (e) {
+    check(`${name} threw`, false, e?.message || String(e));
+  }
+  const mine = results.slice(mark);
+  const failed = mine.filter((r) => !r.pass);
+  const status = failed.length ? 'fail' : 'pass';
+  if (!observed) {
+    observed = status === 'pass'
+      ? `${mine.length} check${mine.length === 1 ? '' : 's'} passed`
+      : `${failed.length}/${mine.length} checks failed`;
+  }
+  emit({ type: 'step', phase: 'end', i, name, status, observed,
+    checks: mine.map((r) => ({ name: r.name, pass: r.pass, detail: r.detail })) });
 }
 
 // ---- auth + scoped fetch -----------------------------------------------------
