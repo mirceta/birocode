@@ -329,6 +329,90 @@ document.getElementById('ledgerCosts').innerHTML = LEDGER.costs.map((c) => `
   <li class="ledger__cost--${c.kind}"><b>${c.t}</b> — ${c.d}</li>`).join('');
 document.getElementById('ledgerVerdict').innerHTML = LEDGER.verdict;
 
+// ── 3c) Workflows — the five jobs, in two modes ──────────────────
+// Grounded in the real CLI surface (openspec --help, v1.4.1). step.k:
+//   cli = a real command → runs in the Console tab (✓)
+//   hand = a file you author yourself (✍)   tui = terminal-only (⌨)
+const WF_KIND = { cli: '✓', hand: '✍', tui: '⌨' };
+const WORKFLOWS = [
+  { id: 'setup', mode: 'write', name: 'Set up the tool', cadence: 'once per repo',
+    goal: 'Get OpenSpec scaffolded into the repo and keep its instructions current.',
+    steps: [
+      { t: 'openspec init --tools claude', k: 'cli', d: 'scaffolds openspec/ + the /opsx commands and skills' },
+      { t: 'openspec update', k: 'cli', d: 'refresh the instruction files after a CLI upgrade' },
+    ] },
+  { id: 'inspect', mode: 'read', name: 'Inspect the living truth', cadence: 'anytime',
+    goal: 'Answer “what’s in flight?” and “what does it actually do today?” — all read-only.',
+    steps: [
+      { t: 'openspec list', k: 'cli', d: 'the changes currently in flight' },
+      { t: 'openspec list --specs', k: 'cli', d: 'the living baseline — the capabilities as they stand today' },
+      { t: 'openspec show &lt;id&gt;', k: 'cli', d: 'read one change or one spec in full' },
+      { t: 'openspec status --change &lt;id&gt;', k: 'cli', d: 'artifact-completion status for a change' },
+      { t: 'openspec view', k: 'tui', d: 'an interactive dashboard — terminal only, won’t embed in this web app' },
+    ] },
+  { id: 'change', mode: 'write', name: 'Make a change, end to end', cadence: 'every feature', spine: true,
+    goal: 'Take a feature from idea to a delta the baseline absorbs. The spine — and where parallel changes live, each its own folder.',
+    steps: [
+      { t: 'openspec new change &lt;name&gt;  ·  /opsx propose', k: 'cli', name: 'propose', d: 'scaffold changes/&lt;name&gt;/ — the command bookend at the start' },
+      { t: 'delta specs — ADDED / MODIFIED / REMOVED', k: 'hand', name: 'specify', d: 'diff the change against the baseline, so review lands on what moves' },
+      { t: '#### Scenario: GIVEN / WHEN / THEN', k: 'hand', name: 'pin “done”', d: 'acceptance criteria beside each requirement (the spec, not an auto-test)' },
+      { t: 'design.md + tasks.md', k: 'hand', name: 'design', d: 'the approach, then the slices to build' },
+      { t: 'openspec validate --strict', k: 'cli', name: 'gate', d: 'structure must hold (SHALL form, ≥1 scenario) before any code' },
+      { t: 'tick tasks.md', k: 'hand', name: 'implement', d: 'as each slice lands — this is the Control tab’s checklist' },
+      { t: 'openspec archive &lt;name&gt;', k: 'cli', name: 'ship', d: 'folds the delta into the baseline so the spec reflects reality' },
+    ] },
+  { id: 'backfill', mode: 'write', name: 'Backfill the baseline', cadence: 'one-time migration',
+    goal: 'Seed openspec/specs/ from the system that already exists — the Phase-1 lift.',
+    steps: [
+      { t: 'bucket the system into capabilities', k: 'hand', d: '~110 plans + docs → chat / files / git / preview / deploy …' },
+      { t: 'author openspec/specs/&lt;cap&gt;/spec.md', k: 'hand', d: 'Purpose + SHALL/MUST requirements, each with ≥1 scenario' },
+      { t: 'openspec validate --strict', k: 'cli', d: 'run until the whole baseline is clean' },
+    ] },
+  { id: 'handoff', mode: 'read', name: 'Hand off to an agent or teammate', cadence: 'as needed',
+    goal: 'Give a readable brief instead of the codebase.',
+    steps: [
+      { t: 'hand over specs/ grouped by capability', k: 'hand', d: 'an agent-readable baseline OpenSpec is purpose-built to produce' },
+    ] },
+];
+const wfFlows = document.getElementById('wfFlows');
+wfFlows.innerHTML = WORKFLOWS.map((w, i) => {
+  const cmds = w.steps.filter((s) => s.k === 'cli').length;
+  const steps = w.steps.map((s) => `
+    <li class="wfstep wfstep--${s.k}">
+      <span class="wfkb wfkb--${s.k}" title="${s.k}">${WF_KIND[s.k]}</span>
+      <div class="wfstep__body">
+        <code class="wfstep__t">${s.t}</code>${s.name ? `<span class="wfstep__name">${s.name}</span>` : ''}
+        <span class="wfstep__d">${s.d}</span>
+      </div>
+    </li>`).join('');
+  return `<article class="wf wf--${w.mode} ${w.spine ? 'wf--spine' : ''} ${i === 0 ? 'open' : ''}" data-mode="${w.mode}">
+    <button class="wf__head" aria-expanded="${i === 0}">
+      <span class="wf__num">${i + 1}</span>
+      <span class="wf__title"><b>${w.name}</b><span class="wf__goal">${w.goal}</span></span>
+      <span class="wf__meta">
+        <span class="wfchip wfchip--${w.mode}">${w.mode === 'read' ? 'READ' : 'WRITE'}</span>
+        <span class="wfchip wfchip--cad">${w.cadence}</span>
+        <span class="wfchip wfchip--tally">${cmds}/${w.steps.length} commands</span>
+      </span>
+      <span class="wf__caret">▾</span>
+    </button>
+    <ol class="wf__steps">${steps}</ol>
+  </article>`;
+}).join('');
+wfFlows.addEventListener('click', (e) => {
+  const head = e.target.closest('.wf__head');
+  if (!head) return;
+  const card = head.closest('.wf');
+  head.setAttribute('aria-expanded', String(card.classList.toggle('open')));
+});
+document.getElementById('wfFilters').addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  const mode = btn.dataset.mode;
+  document.querySelectorAll('#wfFilters button').forEach((b) => b.classList.toggle('on', b === btn));
+  wfFlows.querySelectorAll('.wf').forEach((f) => f.classList.toggle('dim', mode !== 'all' && f.dataset.mode !== mode));
+});
+
 // ── 4) Control — phases with checklists ──────────────────────────
 const phasesEl = document.getElementById('phases');
 function phaseStatus(n) {

@@ -27,6 +27,7 @@
         <button class="nav__btn" data-view="adopt">Adopt</button>
         <button class="nav__btn" data-view="decide">Decide</button>
         <button class="nav__btn" data-view="control">Control</button>
+        <button class="nav__btn" data-view="workflows">Workflows</button>
         <button class="nav__btn" data-view="console">Console</button>
       </nav>
       <div class="progress" id="progressBar" title="overall task completion">
@@ -194,6 +195,36 @@
           and persist in this browser. The four open decisions live in <b>Decide</b>.</p>
 
         <div class="phases" id="phases"><!-- rendered by app.js --></div>
+      </div>
+    </section>
+
+    <!-- ───────────── WORKFLOWS ───────────── -->
+    <section class="view" id="view-workflows">
+      <div class="wrap">
+        <h2>Workflows — the five jobs you'd actually do</h2>
+        <p class="lead">OpenSpec is <b>two modes wearing one CLI</b>. You <b class="wf-r">read</b> the
+          living truth — every read is a command, so the <b>Console</b> runs it all. You
+          <b class="wf-w">write</b> a change — but the <i>thinking</i> is authored by hand; only the
+          <b>bookends</b> (scaffold, gate, ship) are commands. Tap a workflow for its steps.</p>
+
+        <div class="wfbar">
+          <div class="wffilters" id="wfFilters">
+            <button data-mode="all" class="on">All 5</button>
+            <button data-mode="read"><span class="wfdot wf-rb"></span>Read the truth</button>
+            <button data-mode="write"><span class="wfdot wf-wb"></span>Write a change</button>
+          </div>
+          <div class="wflegend">
+            <span><span class="wfkb wfkb--cli">✓</span> runs in Console</span>
+            <span><span class="wfkb wfkb--hand">✍</span> authored by hand</span>
+            <span><span class="wfkb wfkb--tui">⌨</span> terminal only</span>
+          </div>
+        </div>
+
+        <div class="wflist" id="wfFlows"><!-- rendered by app.js --></div>
+
+        <p class="muted flow__foot">The <b>read</b> workflows are pure commands — the Console covers
+          them completely. The <b>change</b> loop is where the <b>4-ported / 7-by-hand</b> split on the
+          <b>Adopt</b> tab comes from: its bookends are buttons, its middle you write yourself.</p>
       </div>
     </section>
 
