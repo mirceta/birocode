@@ -1,10 +1,9 @@
-// Understanding app for: "Autopilot as a free-floating, dock-styled panel."
-// Make the dashboard's Autopilot section look like an agent dock and be draggable
-// anywhere (like the Ideas panel), still collapsible. Self-contained, no libs,
-// relative URLs (served under /api/localview/<repo>/app/understanding/).
+// Understanding app for: "Autopilot loop mode — re-send one fixed prompt until
+// the agent is genuinely done." Self-contained, no libs, relative URLs
+// (served under /api/localview/<repo>/app/understanding/).
 
 (function () {
-  // ── 1) top-nav view switcher ───────────────────────────────────
+  // ── view switcher ───────────────────────────────────────────────
   var nav = document.getElementById('nav');
   nav.addEventListener('click', function (e) {
     var btn = e.target.closest('.nav__btn');
@@ -18,93 +17,220 @@
     });
   });
 
-  // ── 2) the draggable Autopilot dock (mirrors the real drag system) ──
-  var dock = document.getElementById('apdock');
-  var grip = document.getElementById('apdockGrip');
-  var canvas = document.getElementById('freeCanvas');
-  var hint = document.getElementById('dragHint');
-  var drag = null; // { startX, startY, baseX, baseY }
-
-  function onDown(e) {
-    var r = canvas.getBoundingClientRect();
-    drag = {
-      startX: e.clientX,
-      startY: e.clientY,
-      baseX: dock.offsetLeft,
-      baseY: dock.offsetTop,
-      maxX: r.width - 40,
-      maxY: r.height - 36,
-    };
-    dock.classList.add('apdock--lift');
-    grip.setPointerCapture && grip.setPointerCapture(e.pointerId);
-    if (hint) hint.classList.add('hint--done');
-    e.preventDefault();
-  }
-  function onMove(e) {
-    if (!drag) return;
-    var x = drag.baseX + (e.clientX - drag.startX);
-    var y = drag.baseY + (e.clientY - drag.startY);
-    // clamp inside the canvas, leaving a grabbable strip (mirrors clampPos).
-    x = Math.max(-dock.offsetWidth + 60, Math.min(drag.maxX, x));
-    y = Math.max(0, Math.min(drag.maxY, y));
-    dock.style.left = x + 'px';
-    dock.style.top = y + 'px';
-  }
-  function onUp() {
-    drag = null;
-    dock.classList.remove('apdock--lift');
-  }
-  grip.addEventListener('pointerdown', onDown);
-  grip.addEventListener('pointermove', onMove);
-  grip.addEventListener('pointerup', onUp);
-  grip.addEventListener('pointercancel', onUp);
-
-  // ── 3) collapse / expand (just the bar shows when collapsed) ────
-  var chev = document.getElementById('apdockChev');
-  var body = document.getElementById('apdockBody');
-  chev.addEventListener('click', function () {
-    var collapsed = dock.classList.toggle('apdock--collapsed');
-    chev.textContent = collapsed ? '▸' : '▾';
-    body.hidden = collapsed;
-  });
-
-  // ── 4) "what changes" list (kept in JS so the prose stays in one place) ──
-  var CHANGES = [
-    ['Move the panel into the canvas',
-      'Render <code>&lt;AutopilotPanel/&gt;</code> inside <code>dash__body</code> as a third panel ' +
-      '(<code>data-panel="autopilot"</code>), beside <code>ideas</code> and <code>agents</code> — ' +
-      'no longer a band above the canvas.'],
-    ['Add it to the drag layout',
-      'Extend the free 2D layout to a third key: <code>positions.autopilot</code> saved in ' +
-      '<code>claudeweb_dash_pos</code>; generalize <code>freePlaced</code>, <code>seededPositions</code> ' +
-      '(the <code>[ideas, agents]</code> loop) and reset; add a <code>⠿</code> handle + lifted style.'],
-    ['Dress it as a dock',
-      'Reuse the agent-dock card chrome (rounded surface, header bar, body) with a distinct ' +
-      '🛞 title/accent, so it reads as separate from the real agents.'],
-    ['Keep it collapsible',
-      'The existing toggle + per-device <code>claudeweb_dash_autopilot_collapsed</code> stays; ' +
-      'collapsed = just the dock’s header bar (a minimized dock).'],
-    ['Grid mode',
-      'On narrow screens it snaps into the responsive flow like the other panels ' +
-      '(default order: first — to confirm).'],
-    ['Gating unchanged',
-      'Still self-gates on the <code>autopilotTab</code> feature; renders nothing when off.'],
+  // ── HOW: the per-turn decision (kept here so prose lives in one place) ──
+  var FLOW = [
+    ['stop', 'STOP · done', 'Last message contains the <b>sentinel</b> (e.g. <code>LOOP_DONE</code>) → stop, mark <b>done</b>. The job is finished.'],
+    ['esc', 'STOP · escalate', 'Last message mentions a <b>risky action</b> (the existing deny-list: deploy / push / <code>reset --hard</code> …) → stop and hand back to you. Never auto-resend into danger.'],
+    ['cap', 'STOP · capped', 'The <b>iteration cap</b> is reached → stop, mark <b>capped</b>. The runaway backstop.'],
+    ['err', 'PAUSE · error', 'The run ended in <code>error</code> → pause, mark <b>error</b>, wait for you.'],
+    ['go',  'RESEND', 'Otherwise → <b>resend the one fixed prompt</b>, bump the counter, write an audit entry. The loop continues.'],
   ];
-  var ol = document.getElementById('changes');
-  CHANGES.forEach(function (c) {
+  var flow = document.getElementById('flow');
+  FLOW.forEach(function (f) {
     var li = document.createElement('li');
-    li.innerHTML = '<b>' + c[0] + '</b> — ' + c[1];
-    ol.appendChild(li);
+    li.dataset.k = f[0];
+    li.innerHTML = '<span class="res">' + f[1] + '</span>' + f[2];
+    flow.appendChild(li);
   });
 
-  // ── 5) confirm disclosures ──────────────────────────────────────
-  var qs = document.getElementById('qs');
-  qs.addEventListener('click', function (e) {
-    var item = e.target.closest('.q__item');
-    if (!item) return;
-    var open = item.classList.toggle('q__item--open');
-    if (open && !item.querySelector('.q__a').textContent) {
-      item.querySelector('.q__a').textContent = item.dataset.a;
+  // ── SAFETY ──────────────────────────────────────────────────────
+  var SAFETY = [
+    ['🔒', false, '<b>Operator gate, off by default.</b> The web can start/stop a loop only when the <b>host</b> has opened the gate — and the web can never open it. Same fence as every other autopilot endpoint.'],
+    ['🧱', true,  '<b>Sentinel + cap, not an LLM judge.</b> Done-detection is deliberately deterministic and free — and adds <b>no new prompt-injection surface</b>. An LLM judge reading untrusted agent output would.'],
+    ['🛑', false, '<b>Hard <code>maxIterations</code> cap</b> (default 10). The loop refuses to run past it, no matter what.'],
+    ['🚧', false, '<b>Deny-list escalation.</b> A risky-looking ending pauses the loop and hands control back to you instead of resending.'],
+    ['✋', false, '<b>Per-loop Stop button</b>, and auto-pause on any run <code>error</code> — not just clean completions.'],
+    ['📒', false, '<b>Every send is audited</b> to the append-only <code>autopilot-audit.jsonl</code> (<code>outcome = "loop"</code>), so unattended sends are durably recorded.'],
+  ];
+  var safety = document.getElementById('safety');
+  SAFETY.forEach(function (s) {
+    var li = document.createElement('li');
+    if (s[1]) li.className = 'star';
+    li.innerHTML = '<span class="ic">' + s[0] + '</span><span>' + s[2] + '</span>';
+    safety.appendChild(li);
+  });
+
+  // ── PLAN: slices ────────────────────────────────────────────────
+  var SLICES = [
+    ['Backend engine + config', 'The <code>LoopConfig</code> model + persistence; drive the per-turn decision from the autopilot tick. Reuse <code>RunSession.TryBeginRun</code> + <code>CliRunnerService.RunAsync</code> for the send, and the audit log. All gated.'],
+    ['API', '<code>POST /api/autopilot/loop</code> (start / update / stop); loop state folded into <code>GET /api/autopilot</code>.'],
+    ['Frontend', 'Per-agent loop controls in <code>AutopilotConsole</code> (prompt + cap + sentinel; live iteration count, state badge, <b>Stop</b>). Live via the existing 4&thinsp;s poll. Advanced-gated.'],
+    ['Verify', 'On an isolated port with Playwright: resend-on-done, sentinel-stop, cap-stop, deny-list escalate, Stop button. Plus an honesty pass on this app.'],
+  ];
+  var slices = document.getElementById('slices');
+  SLICES.forEach(function (s) {
+    var li = document.createElement('li');
+    li.innerHTML = '<b>' + s[0] + '</b> — ' + s[1];
+    slices.appendChild(li);
+  });
+
+  // ── PLAN: schema ────────────────────────────────────────────────
+  var SCHEMA = [
+    ['repoId', 'string', 'which agent'],
+    ['prompt', 'string', 'the fixed text to resend (seedable from a routine / custom prompt)'],
+    ['sentinel', 'string', 'stop phrase to watch for (default "LOOP_DONE")'],
+    ['maxIterations', 'int', 'hard cap (default 10)'],
+    ['active', 'bool', 'loop running?'],
+    ['iterationsDone', 'int', 'live counter'],
+    ['status', 'string', 'looping | done | escalate | capped | error | stopped'],
+    ['lastSentAt', 'long', 'timestamp of the last resend'],
+  ];
+  var schema = document.getElementById('schema');
+  schema.innerHTML = '<div class="schema__row schema__head"><span class="f">field</span><span class="t">type</span><span class="d">meaning</span></div>';
+  SCHEMA.forEach(function (r) {
+    var div = document.createElement('div');
+    div.className = 'schema__row';
+    div.innerHTML = '<span class="f">' + r[0] + '</span><span class="t">' + r[1] + '</span><span class="d">' + r[2] + '</span>';
+    schema.appendChild(div);
+  });
+
+  // ── PLAN: open questions ────────────────────────────────────────
+  var OPENS = [
+    ['default', '<b>Done-detection = sentinel + cap</b> (vs LLM judge / no-progress / manual). Picked the deterministic, injection-free default.'],
+    ['default', '<b>Resend trigger = after <i>every</i> completed turn</b> (not only question-endings) — that’s what pushes through the “slice A or B?” prompts.'],
+    ['default', '<b>One loop per agent</b> at a time.'],
+  ];
+  var opens = document.getElementById('opens');
+  OPENS.forEach(function (o) {
+    var li = document.createElement('li');
+    li.innerHTML = '<span class="tagd">default</span><span>' + o[1] + '</span>';
+    opens.appendChild(li);
+  });
+
+  // ── UX: the interactive loop simulator ──────────────────────────
+  var S = { armed: false, iter: 0, cap: 5, sentinel: 'LOOP_DONE', prompt: '', ending: 'work', done: false };
+
+  var el = {
+    form: document.getElementById('simForm'),
+    live: document.getElementById('simLive'),
+    badge: document.getElementById('simBadge'),
+    fPrompt: document.getElementById('fPrompt'),
+    fSentinel: document.getElementById('fSentinel'),
+    fCap: document.getElementById('fCap'),
+    btnArm: document.getElementById('btnArm'),
+    btnStop: document.getElementById('btnStop'),
+    btnReset: document.getElementById('btnReset'),
+    btnTurn: document.getElementById('btnTurn'),
+    feed: document.getElementById('feed'),
+    liveStatus: document.getElementById('liveStatus'),
+    liveIter: document.getElementById('liveIter'),
+    liveCap: document.getElementById('liveCap'),
+    liveSent: document.getElementById('liveSent'),
+    liveMeter: document.getElementById('liveMeter'),
+    chips: Array.prototype.slice.call(document.querySelectorAll('.chip')),
+  };
+
+  function addMsg(cls, tag, html) {
+    var d = document.createElement('div');
+    d.className = 'msg msg--' + cls;
+    d.innerHTML = (tag ? '<span class="msg__tag">' + tag + '</span>' : '') + html;
+    el.feed.appendChild(d);
+    el.feed.scrollTop = el.feed.scrollHeight;
+  }
+  function setStatus(s) {
+    el.liveStatus.textContent = s;
+    el.liveStatus.dataset.s = s;
+    el.badge.textContent = s;
+  }
+  function setChipsEnabled(on) {
+    el.chips.forEach(function (c) { c.disabled = !on; });
+    el.btnTurn.disabled = !on;
+  }
+  function refreshMeter() {
+    el.liveIter.textContent = S.iter;
+    el.liveCap.textContent = S.cap;
+    el.liveMeter.style.width = Math.min(100, (S.iter / S.cap) * 100) + '%';
+  }
+
+  // arm
+  el.btnArm.addEventListener('click', function () {
+    S.armed = true; S.iter = 0; S.done = false;
+    S.prompt = el.fPrompt.value.trim() || 'Keep going.';
+    S.sentinel = (el.fSentinel.value.trim() || 'LOOP_DONE');
+    S.cap = Math.max(1, parseInt(el.fCap.value, 10) || 5);
+    el.form.hidden = true; el.live.hidden = false;
+    setStatus('looping'); refreshMeter();
+    el.liveSent.textContent = 'just now';
+    el.feed.innerHTML = '';
+    addMsg('sys', 'gate', 'Operator gate open · loop armed for <b>birocode</b>.');
+    addMsg('sys', 'send #1', S.prompt);
+    el.liveSent.textContent = 'sent #1';
+    setChipsEnabled(true);
+  });
+
+  // pick how the next turn ends
+  el.chips.forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      S.ending = chip.dataset.end;
+      el.chips.forEach(function (c) { c.setAttribute('aria-pressed', String(c === chip)); });
+    });
+  });
+
+  // run one turn-completion through the decision
+  el.btnTurn.addEventListener('click', function () {
+    if (!S.armed || S.done) return;
+
+    // 1) the agent emits its turn-ending message
+    if (S.ending === 'sentinel') {
+      addMsg('ai', 'agent', 'All slices shipped. <b>' + S.sentinel + '</b>');
+    } else if (S.ending === 'deny') {
+      addMsg('ai', 'agent', 'Looks good — I’ll <b>deploy to prod and force-push</b> now.');
+    } else if (S.ending === 'error') {
+      addMsg('ai', 'agent', 'Run crashed: <b>build failed</b> (non-zero exit).');
+    } else {
+      addMsg('ai', 'agent', 'Did the next slice. Should I do slice ' + (S.iter + 1) + ' or refactor first?');
+    }
+
+    // 2) the engine decides (mirrors the per-turn flow)
+    if (S.ending === 'sentinel') {
+      finish('done', 'stop', 'Sentinel “' + S.sentinel + '” seen → loop <b>done</b>. No resend.');
+    } else if (S.ending === 'deny') {
+      finish('escalate', 'esc', 'Deny-list hit (deploy / force-push) → <b>escalated to you</b>. No resend.');
+    } else if (S.ending === 'error') {
+      finish('error', 'err', 'Run <code>error</code> → loop <b>paused</b>, waiting for you.');
+    } else {
+      // more work → resend, unless that send would exceed the cap
+      S.iter += 1;
+      refreshMeter();
+      if (S.iter >= S.cap) {
+        setStatus('capped');
+        addMsg('esc', 'engine', 'Iteration cap (' + S.cap + ') reached → loop <b>capped</b>. No further resend.');
+        endLoop();
+      } else {
+        addMsg('sys', 'send #' + (S.iter + 1), 'Resend → ' + S.prompt);
+        el.liveSent.textContent = 'sent #' + (S.iter + 1);
+      }
     }
   });
+
+  function finish(status, cls, msg) {
+    setStatus(status);
+    addMsg(cls === 'stop' ? 'stop' : cls, 'engine', msg);
+    endLoop();
+  }
+  function endLoop() {
+    S.done = true;
+    setChipsEnabled(false);
+  }
+
+  // stop button
+  el.btnStop.addEventListener('click', function () {
+    if (S.done) return;
+    setStatus('stopped');
+    addMsg('esc', 'you', 'Stopped the loop manually.');
+    endLoop();
+  });
+
+  // reset demo
+  el.btnReset.addEventListener('click', function () {
+    S.armed = false; S.done = false; S.iter = 0;
+    el.form.hidden = false; el.live.hidden = true;
+    el.feed.innerHTML = '';
+    el.badge.textContent = 'idle';
+    setChipsEnabled(false);
+    el.chips.forEach(function (c) { c.setAttribute('aria-pressed', 'false'); });
+  });
+
+  // default the "more work" chip as pressed
+  (el.chips[0] || {}).setAttribute && el.chips[0].setAttribute('aria-pressed', 'true');
 })();

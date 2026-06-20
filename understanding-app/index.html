@@ -3,134 +3,177 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Understanding — Autopilot as a free-floating dock</title>
+  <title>Understanding — Autopilot loop mode</title>
   <!-- Relative URLs only: served under /api/localview/<repo>/app/understanding/. -->
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <header class="hero">
     <div class="hero__kicker">my understanding — please confirm before I build</div>
-    <h1>Autopilot → a <span class="hl">free-floating</span>, <span class="hl2">dock-styled</span> panel</h1>
-    <p class="hero__sub">Keep it collapsible, but make it look like an agent dock and let you drag it
-      anywhere on the dashboard — <strong>just like the Ideas panel</strong>. In <b>Proposed</b>
-      the Autopilot dock is really draggable (grab <span class="kbd">⠿</span>) and collapsible.</p>
+    <h1>Autopilot <span class="hl">loop mode</span>: re-send <span class="hl2">one fixed prompt</span> until the agent is genuinely done</h1>
+    <p class="hero__sub">You’ve already told Claude everything it needs — but it <strong>still stops to ask</strong>
+       “slice A or B?” and waits. Loop mode keeps <strong>re-sending your one prompt</strong> every time the
+       agent finishes a turn, so it bulldozes through those questions, and <strong>stops the instant the job is
+       genuinely done</strong>.</p>
+    <span class="statuschip">BUILT · verified, not yet merged/deployed</span>
     <nav class="nav" id="nav">
-      <button class="nav__btn nav__btn--on" data-view="now">1 · Now (band on top)</button>
-      <button class="nav__btn" data-view="proposed">2 · Proposed (drag me)</button>
-      <button class="nav__btn" data-view="changes">3 · What changes</button>
-      <button class="nav__btn" data-view="open">4 · Confirm</button>
+      <button class="nav__btn nav__btn--on" data-view="why">1 · Why</button>
+      <button class="nav__btn" data-view="how">2 · How it works</button>
+      <button class="nav__btn" data-view="ux">3 · User experience</button>
+      <button class="nav__btn" data-view="safety">4 · Safety</button>
+      <button class="nav__btn" data-view="plan">5 · Plan</button>
     </nav>
   </header>
 
   <main>
-    <!-- ── 1: NOW — full-width band ───────────────────────────────── -->
-    <section class="view view--on" id="view-now">
+    <!-- ── 1 · WHY ───────────────────────────────────────────────── -->
+    <section class="view view--on" id="view-why">
       <div class="panel">
-        <h2><span class="num">1</span> Today: a full-width band, pinned to the top</h2>
-        <p class="lead">The Autopilot section spans the whole width above the canvas and can’t be
-           moved. Collapsible — but it always eats vertical room above the conversation.</p>
-        <div class="stage">
-          <div class="mockbar"><span class="dot dot--r"></span><span class="dot dot--y"></span><span class="dot dot--g"></span>
-            <span class="mockbar__t">Agent dashboard</span></div>
-          <div class="band">
-            <span class="band__chev">▾</span>
-            <span class="band__title">🛞 Autopilot</span>
-            <span class="band__sum">2 armed · <b>1 need you</b> · suggest-only</span>
+        <h2><span class="num">1</span> The problem &amp; the idea</h2>
+        <div class="split">
+          <div class="card card--pain">
+            <div class="card__h">😤 Today</div>
+            <div class="chatmock">
+              <div class="bubble bubble--you">Build the dock Files tab — pins, default-open, the lot.</div>
+              <div class="bubble bubble--ai">Done with pins. Should I do <b>default-open</b> next, or the <b>5s poll</b> first?</div>
+              <div class="bubble bubble--wait">⏳ waiting on you…</div>
+            </div>
+            <p class="card__cap">It had everything it needed — and still stopped to ask. You answer the
+               same “which slice?” question over and over.</p>
           </div>
-          <div class="canvas">
-            <div class="panel-m panel-m--ideas"><div class="panel-m__h">💡 Ideas</div><div class="panel-m__b muted">backlog…</div></div>
-            <div class="panel-m panel-m--agents"><div class="panel-m__h">Agents</div>
-              <div class="wall"><div class="ph"></div><div class="ph"></div><div class="ph"></div><div class="ph"></div></div>
+          <div class="card card--fix">
+            <div class="card__h">🛞 With loop mode</div>
+            <div class="chatmock">
+              <div class="bubble bubble--you bubble--loop">“Keep going. Do the next slice yourself. Print <code>LOOP_DONE</code> when nothing’s left.”</div>
+              <div class="bubble bubble--ai">Did default-open. <span class="muted">↻ resent</span></div>
+              <div class="bubble bubble--ai">Did the 5s poll. <span class="muted">↻ resent</span></div>
+              <div class="bubble bubble--ai">All slices shipped. <b>LOOP_DONE</b> <span class="stop">■ loop stopped</span></div>
+            </div>
+            <p class="card__cap">One prompt, resent automatically after every turn — until the agent
+               signals it’s finished.</p>
+          </div>
+        </div>
+        <div class="kvs">
+          <div class="kv"><div class="kv__k">What it is</div><div class="kv__v">A <b>deterministic</b> loop. It does <b>not</b> classify or use any LLM “brain” — it resends one fixed prompt you define.</div></div>
+          <div class="kv"><div class="kv__k">How it’s different</div><div class="kv__v">The shipped autopilot <i>guesses which</i> routine prompt fits (a classifier, brain still unbuilt). Loop mode is its simpler sibling — so it can ship <b>now</b>.</div></div>
+          <div class="kv"><div class="kv__k">When the loop ends</div><div class="kv__v">A <b>sentinel</b> phrase in the agent’s reply (default <code>LOOP_DONE</code>), a risky-action <b>deny-list</b> hit, a hard <b>iteration cap</b>, or a run <b>error</b>.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 2 · HOW IT WORKS ──────────────────────────────────────── -->
+    <section class="view" id="view-how">
+      <div class="panel">
+        <h2><span class="num">2</span> Two detections, one decision <span class="h2sub">— all reusing existing plumbing</span></h2>
+        <div class="detect">
+          <div class="detect__row">
+            <div class="detect__tag detect__tag--trig">trigger</div>
+            <div class="detect__body"><b>Turn done</b> → time to resend.<br/>
+              <span class="muted">The run’s status flips <code>running → done</code> — the same
+              <code>RunSession</code> busy signal the dashboard already watches.</span></div>
+          </div>
+          <div class="detect__row">
+            <div class="detect__tag detect__tag--stop">stop test</div>
+            <div class="detect__body"><b>Genuinely done</b> → stop looping.<br/>
+              <span class="muted">A <b>sentinel phrase</b> in the last assistant message
+              (read via the engine’s existing <code>LastAssistantMessage</code>), backstopped by a hard cap.</span></div>
+          </div>
+        </div>
+
+        <h3 class="flow__title">Every time a looping agent finishes a turn, the engine decides:</h3>
+        <ol class="flow" id="flow"></ol>
+        <p class="ask__foot">Each branch maps to a stored <code>status</code>:
+          <code>looping</code> · <code>done</code> · <code>escalate</code> · <code>capped</code> · <code>error</code> · <code>stopped</code>.
+          Every resend is written to the append-only <code>autopilot-audit.jsonl</code>.</p>
+      </div>
+    </section>
+
+    <!-- ── 3 · USER EXPERIENCE (interactive simulator) ───────────── -->
+    <section class="view" id="view-ux">
+      <div class="panel">
+        <h2><span class="num">3</span> What you’d do <span class="h2sub">— interactive: drive a fake agent through a loop</span></h2>
+        <p class="lead">This mirrors the per-agent loop control now shipped as the <b>Loops</b> sub-tab of the
+           <b>Autopilot console</b>. Arm a loop, then press <b>“agent finishes a turn”</b> to watch it resend —
+           and stop on each condition.</p>
+
+        <div class="sim">
+          <!-- left: the control surface -->
+          <div class="sim__panel">
+            <div class="sim__dockbar">🛞 Loop · <span id="simRepo">birocode</span>
+              <span class="sim__badge" id="simBadge">idle</span></div>
+
+            <div class="sim__form" id="simForm">
+              <label class="fld"><span>Prompt to resend</span>
+                <textarea id="fPrompt" rows="2">Keep going. Do the next slice yourself. Print LOOP_DONE when nothing is left.</textarea></label>
+              <div class="fld2">
+                <label class="fld"><span>Sentinel</span><input id="fSentinel" value="LOOP_DONE" /></label>
+                <label class="fld"><span>Max iterations</span><input id="fCap" type="number" value="5" min="1" /></label>
+              </div>
+              <button class="btn btn--go" id="btnArm">Arm loop</button>
+              <p class="fld__hint">Off by default · only armable when the host has opened the operator gate.</p>
+            </div>
+
+            <div class="sim__live" id="simLive" hidden>
+              <div class="live__row"><span class="live__k">Status</span><span class="live__v" id="liveStatus">looping</span></div>
+              <div class="live__row"><span class="live__k">Iterations</span>
+                <span class="live__v"><b id="liveIter">0</b> / <span id="liveCap">5</span></span></div>
+              <div class="meter"><div class="meter__fill" id="liveMeter"></div></div>
+              <div class="live__row"><span class="live__k">Last sent</span><span class="live__v muted" id="liveSent">—</span></div>
+              <button class="btn btn--stop" id="btnStop">■ Stop loop</button>
+              <button class="btn btn--ghost" id="btnReset">Reset demo</button>
+            </div>
+          </div>
+
+          <!-- right: agent transcript + the turn driver -->
+          <div class="sim__panel sim__panel--feed">
+            <div class="sim__dockbar">Agent transcript</div>
+            <div class="feed" id="feed"></div>
+            <div class="driver">
+              <div class="driver__lbl">Make the fake agent end its next turn with:</div>
+              <div class="driver__btns">
+                <button class="chip" data-end="work" disabled>…more work (a question)</button>
+                <button class="chip" data-end="sentinel" disabled>…the sentinel</button>
+                <button class="chip chip--warn" data-end="deny" disabled>…a risky action</button>
+                <button class="chip chip--warn" data-end="error" disabled>…a run error</button>
+              </div>
+              <button class="btn btn--turn" id="btnTurn" disabled>▶ agent finishes a turn</button>
             </div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- ── 2: PROPOSED — draggable dock ──────────────────────────── -->
-    <section class="view" id="view-proposed">
+    <!-- ── 4 · SAFETY ────────────────────────────────────────────── -->
+    <section class="view" id="view-safety">
       <div class="panel">
-        <h2><span class="num">2</span> Proposed: a dock you can drop anywhere <span class="h2sub">— grab ⠿ · click ▾</span></h2>
-        <p class="lead">Same drag system the Ideas/Agents panels already use. The Autopilot dock
-           becomes a third draggable panel — dock-styled, collapsible, position remembered per device.</p>
-        <div class="stage">
-          <div class="mockbar"><span class="dot dot--r"></span><span class="dot dot--y"></span><span class="dot dot--g"></span>
-            <span class="mockbar__t">Agent dashboard</span></div>
-          <div class="canvas canvas--free" id="freeCanvas">
-            <div class="panel-m panel-m--ideas"><div class="panel-m__h">💡 Ideas <span class="grip">⠿</span></div>
-              <div class="panel-m__b muted">backlog…</div></div>
-            <div class="panel-m panel-m--agents"><div class="panel-m__h">Agents <span class="grip">⠿</span></div>
-              <div class="wall"><div class="ph"></div><div class="ph"></div><div class="ph"></div><div class="ph"></div></div>
-            </div>
-
-            <!-- the new Autopilot dock -->
-            <div class="apdock" id="apdock" style="left: 270px; top: 96px;">
-              <div class="apdock__bar" id="apdockBar">
-                <span class="grip grip--lift" id="apdockGrip" title="Drag me anywhere">⠿</span>
-                <button class="apdock__chev" id="apdockChev" title="Collapse / expand">▾</button>
-                <span class="apdock__title">🛞 Autopilot</span>
-                <span class="apdock__sum" id="apdockSum">2 armed · <b>1&nbsp;need&nbsp;you</b></span>
-              </div>
-              <div class="apdock__body" id="apdockBody">
-                <div class="apbar">
-                  <span class="sw sw--on"></span><b>Autopilot</b><span class="muted">on · armed only</span>
-                  <span class="apbar__sp"></span><span class="muted">conf ≥ <b>0.85</b></span>
-                </div>
-                <div class="deny">Always escalates: <code>deploy</code> <code>force-push</code></div>
-                <ul class="aglist">
-                  <li><span class="st st--esc">needs you</span><span class="ag">birocode</span></li>
-                  <li><span class="st st--sugg">suggestion</span><span class="ag">web-pilot</span><span class="muted">→ keep it</span></li>
-                  <li class="off"><span class="st st--off">off</span><span class="ag">docs-site</span></li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-        <p class="hint" id="dragHint">↑ grab the <span class="kbd">⠿</span> on the Autopilot dock and drop it anywhere.</p>
+        <h2><span class="num">4</span> It acts unattended — so it’s fenced <span class="h2sub">— per the confused-deputy risk in plan.md</span></h2>
+        <p class="lead">Loop mode <b>sends prompts to agents with no human in the loop</b>. That is exactly the
+           authority the repo’s risk section warns about, so every existing autopilot fence applies — plus one
+           deliberate design choice.</p>
+        <ul class="safety" id="safety"></ul>
       </div>
     </section>
 
-    <!-- ── 3: WHAT CHANGES ───────────────────────────────────────── -->
-    <section class="view" id="view-changes">
+    <!-- ── 5 · PLAN ──────────────────────────────────────────────── -->
+    <section class="view" id="view-plan">
       <div class="panel">
-        <h2><span class="num">3</span> What changes <span class="h2sub">— frontend only</span></h2>
-        <ol class="contract" id="changes"></ol>
-        <p class="ask__foot">Untouched: the Autopilot <b>tab</b>, the <code>/api/autopilot</code> API,
-           the engine, and the operator gate. Same controls — new container, styling, and placement.</p>
-      </div>
-    </section>
+        <h2><span class="num">5</span> The plan <span class="h2sub">— 4 slices · companion to plans/autopilot-loop-mode.md</span></h2>
+        <ol class="slices" id="slices"></ol>
 
-    <!-- ── 4: CONFIRM ────────────────────────────────────────────── -->
-    <section class="view" id="view-open">
-      <div class="panel">
-        <h2><span class="num">4</span> Confirm <span class="h2sub">— click each</span></h2>
-        <p class="lead">Tell me if any of these are off before I build.</p>
-        <ul class="q" id="qs">
-          <li class="q__item" data-a="Same mechanism the Ideas/Agents panels use today: a ⠿ drag handle in free mode, grid-mode flow on narrow screens, and the drop position saved per device in claudeweb_dash_pos. Not a new mechanism, not OS-level drag.">
-            <span class="q__q">① “Free-floating like Ideas” = the <b>existing</b> drag system, third panel <span class="tagy">✓ assume</span></span>
-            <span class="q__a"></span>
-          </li>
-          <li class="q__item" data-a="It adopts the agent-dock (phone) visual chrome — rounded surface, header bar, body — with a distinct 🛞 title/accent so it reads as separate from real agents. It stays a control surface (global controls + deny-list + per-agent arm), not a chat/git dock.">
-            <span class="q__q">② “Looks like an agent dock” = the dock <b>chrome</b>, still a control surface <span class="tagy">✓ assume</span></span>
-            <span class="q__a"></span>
-          </li>
-          <li class="q__item" data-a="It stays on feature/autopilot-to-harness — this is a refinement of Part 2 of that plan (where the autopilot dashboard lives), so it's the same feature, not a new branch.">
-            <span class="q__q">③ Stays on <b>feature/autopilot-to-harness</b> (same feature) <span class="tagd">default</span></span>
-            <span class="q__a"></span>
-          </li>
-          <li class="q__item" data-a="OPEN QUESTION: in grid mode (mobile default) should the Autopilot dock sit first (above Ideas/agents) or last? I'll assume FIRST unless you say otherwise.">
-            <span class="q__q">④ Grid-mode default position: <b>first</b>? <span class="tagq">? confirm</span></span>
-            <span class="q__a"></span>
-          </li>
-        </ul>
+        <h3 class="flow__title">Data model — one <code>LoopConfig</code> per armed agent</h3>
+        <div class="schema" id="schema"></div>
+
+        <h3 class="flow__title">Open questions <span class="h2sub">(defaulted — override anytime)</span></h3>
+        <ul class="opens" id="opens"></ul>
       </div>
     </section>
   </main>
 
   <footer class="foot">
-    My <strong>understanding</strong> of the redesign — not built yet. Companion to
-    <code>understanding.md</code>; refinement of Part 2 of <code>plans/autopilot-to-harness.md</code>.
-    Tell me where I’m off.
+    Loop mode — <strong>built &amp; verified</strong> on <code>feature/autopilot-loop-mode</code>,
+    not yet merged/deployed. The tab&nbsp;3 simulator models the real per-turn decision; the
+    shipped control is the <strong>Loops</strong> sub-tab of the Autopilot console. Companion to
+    <code>understanding.md</code> &amp; <code>plans/autopilot-loop-mode.md</code>.
   </footer>
 
   <script src="./app.js"></script>
