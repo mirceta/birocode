@@ -39,6 +39,7 @@ public class AutopilotService : BackgroundService
     private readonly RunSessionService _runs;
     private readonly CliRunnerService _cli;
     private readonly AutopilotConfigStore _config;
+    private readonly LoopConfigStore _loops;
     private readonly AutopilotGate _operatorGate;
     private readonly PromptClassifier _brain;
     private readonly AutopilotDiscoveryService _discovery;
@@ -50,6 +51,8 @@ public class AutopilotService : BackgroundService
     // Per-repo guard: the assistant-message snippet we last auto-sent against, so a
     // tick that fires before the new run registers as busy can't double-send.
     private readonly ConcurrentDictionary<string, string> _lastSent = new();
+    // Same guard, but for loop-mode resends (plans/autopilot-loop-mode.md).
+    private readonly ConcurrentDictionary<string, string> _lastLoopSent = new();
     private readonly object _logGate = new();
     private readonly LinkedList<LogEntry> _log = new();
     // The live "Intercepted" feed: one entry per NEW agent message the engine grabs
@@ -61,8 +64,8 @@ public class AutopilotService : BackgroundService
 
     public AutopilotService(
         RepositoryRegistry repos, SessionService sessions, RunSessionService runs,
-        CliRunnerService cli, AutopilotConfigStore config, AutopilotGate operatorGate,
-        PromptClassifier brain, AutopilotDiscoveryService discovery,
+        CliRunnerService cli, AutopilotConfigStore config, LoopConfigStore loops,
+        AutopilotGate operatorGate, PromptClassifier brain, AutopilotDiscoveryService discovery,
         PromptsService prompts, AutopilotAuditLog audit, Logger logger)
     {
         _repos = repos;
@@ -70,6 +73,7 @@ public class AutopilotService : BackgroundService
         _runs = runs;
         _cli = cli;
         _config = config;
+        _loops = loops;
         _operatorGate = operatorGate;
         _brain = brain;
         _discovery = discovery;
@@ -191,6 +195,19 @@ public class AutopilotService : BackgroundService
 
         foreach (var repo in _repos.GetAll().Where(r => r.Exists))
         {
+            // Loop mode (plans/autopilot-loop-mode.md) takes precedence and is its own
+            // arming, independent of the classifier. A repo with an ACTIVE loop is driven
+            // deterministically here and skips classification entirely, so the two can
+            // never both send to the same agent. The kill switch still pauses sends.
+            if (_loops.Get(repo.Id) is { Active: true } loop)
+            {
+                if (cfg.Enabled) HandleLoop(repo, loop, cfg.DenyList, now);
+                Set(repo.Id, new AgentState(
+                    repo.Id, repo.Name, cfg.ArmedRepoIds.Contains(repo.Id), "off",
+                    null, 0, cfg.Enabled ? "loop mode running" : "loop paused (kill switch off)", "", now));
+                continue;
+            }
+
             var armed = cfg.ArmedRepoIds.Contains(repo.Id);
 
             // Not armed → it's listed as "off"; we don't classify it.
@@ -320,6 +337,124 @@ public class AutopilotService : BackgroundService
                 if (intercept != null)
                     FinishIntercept(intercept, "sent", prompt, v.Confidence,
                         DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+            }
+        });
+        return true;
+    }
+
+    /// <summary>
+    /// Loop mode's deterministic per-turn decision (plans/autopilot-loop-mode.md). The
+    /// agent's turn is done (we only get here when the repo isn't busy); read its last
+    /// message and either stop the loop or resend the one fixed prompt:
+    /// <list type="number">
+    /// <item>run errored → pause (mark <c>error</c>);</item>
+    /// <item>sentinel phrase present → the job is genuinely done (mark <c>done</c>);</item>
+    /// <item>deny-listed risky action mentioned → hand back to the human (mark <c>escalate</c>);</item>
+    /// <item>iteration cap reached → stop (mark <c>capped</c>);</item>
+    /// <item>otherwise → resend the fixed prompt, bump the counter, audit it.</item>
+    /// </list>
+    /// No classifier and no LLM judge — sentinel + cap are deterministic and add no new
+    /// prompt-injection surface. Risk fails safe: a deny-list hit stops rather than sends.
+    /// </summary>
+    private void HandleLoop(
+        RepositoryRegistry.RepositoryInfo repo, LoopConfigStore.LoopState loop,
+        IReadOnlyList<string> denyList, long now)
+    {
+        // The agent's current turn is still running — wait for it to finish.
+        if (_runs.IsBusy(repo.Id)) return;
+
+        var run = _runs.Get(repo.Id);
+        var (sessionId, lastAssistant) = LastAssistantMessage(repo.Path);
+
+        // 1. The last run errored → pause; don't resend into a broken run.
+        if (run?.Status == "error")
+        {
+            if (loop.Status != "error") _loops.Resolve(repo.Id, "error");
+            return;
+        }
+
+        // No transcript/session yet → nothing to resume into; wait for the agent to speak.
+        if (string.IsNullOrWhiteSpace(sessionId)) return;
+
+        var snippet = Snippet(lastAssistant ?? "");
+
+        // Already acted on this exact trailing message (a tick that fired before the new
+        // run registered busy) → don't double-handle. A real new agent reply has a new
+        // snippet, so the loop still advances.
+        if (_lastLoopSent.TryGetValue(repo.Id, out var ls) && ls == snippet) return;
+
+        // 2. Sentinel present → the agent declared the whole job done. Stop.
+        if (!string.IsNullOrEmpty(loop.Sentinel)
+            && lastAssistant != null
+            && lastAssistant.Contains(loop.Sentinel, StringComparison.OrdinalIgnoreCase))
+        {
+            _loops.Resolve(repo.Id, "done");
+            _logger.Info($"[LOOP] {repo.Name} hit sentinel \"{loop.Sentinel}\" — done");
+            return;
+        }
+
+        // 3. Deny-list hit → the reply mentions a risky action. Hand back to the human.
+        if (lastAssistant != null)
+        {
+            var hit = denyList.FirstOrDefault(d =>
+                !string.IsNullOrEmpty(d) && lastAssistant.Contains(d, StringComparison.OrdinalIgnoreCase));
+            if (hit != null)
+            {
+                _loops.Resolve(repo.Id, "escalate");
+                _logger.Info($"[LOOP] {repo.Name} escalated — deny-listed \"{hit}\" in reply");
+                return;
+            }
+        }
+
+        // 4. Iteration cap reached → refuse to run past it.
+        if (loop.IterationsDone >= loop.MaxIterations)
+        {
+            _loops.Resolve(repo.Id, "capped");
+            return;
+        }
+
+        // 5. Otherwise → resend the fixed prompt.
+        TrySendLoop(repo, sessionId!, loop, snippet, now);
+    }
+
+    /// <summary>
+    /// Resends the loop's fixed prompt, resuming the agent's session through the same
+    /// detached-run path the chat UI uses. Returns false without sending if the run slot
+    /// is already claimed. Every resend bumps the iteration counter and is audited with
+    /// <c>outcome = "loop"</c> so unattended sends are durably recorded.
+    /// </summary>
+    private bool TrySendLoop(
+        RepositoryRegistry.RepositoryInfo repo, string sessionId,
+        LoopConfigStore.LoopState loop, string snippet, long now)
+    {
+        // Atomically claim the builder slot. If a turn is already running, don't pile on.
+        if (!_runs.TryBeginRun(repo.Id, "builder", out var session)) return false;
+
+        _lastLoopSent[repo.Id] = snippet;
+        var state = _loops.RecordSend(repo.Id, now);
+        var iter = state?.IterationsDone ?? loop.IterationsDone + 1;
+        var prompt = loop.Prompt;
+        var path = repo.Path;
+
+        _audit.Record(new AutopilotAuditLog.Entry(
+            now, repo.Id, repo.Name, prompt, 1.0, snippet, "loop"));
+        _logger.Info($"[LOOP] resent to \"{repo.Name}\" (iteration {iter}/{loop.MaxIterations})");
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _cli.RunAsync(
+                    prompt, sessionId, workingDirectory: path,
+                    emit: session.EmitAsync, ct: session.Cts.Token);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"[LOOP] resend run for \"{repo.Name}\" crashed: {ex.Message}");
+            }
+            finally
+            {
+                session.Complete();
             }
         });
         return true;

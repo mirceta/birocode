@@ -26,18 +26,20 @@ public class AutopilotController : ControllerBase
     private readonly AutopilotDiscoveryService _discovery;
     private readonly AutopilotService _engine;
     private readonly AutopilotConfigStore _config;
+    private readonly LoopConfigStore _loops;
     private readonly AutopilotGate _operatorGate;
     private readonly AutopilotAuditLog _audit;
     private readonly Logger _logger;
 
     public AutopilotController(
         AutopilotDiscoveryService discovery, AutopilotService engine,
-        AutopilotConfigStore config, AutopilotGate operatorGate,
+        AutopilotConfigStore config, LoopConfigStore loops, AutopilotGate operatorGate,
         AutopilotAuditLog audit, Logger logger)
     {
         _discovery = discovery;
         _engine = engine;
         _config = config;
+        _loops = loops;
         _operatorGate = operatorGate;
         _audit = audit;
         _logger = logger;
@@ -88,6 +90,40 @@ public class AutopilotController : ControllerBase
         return Ok(BuildState());
     }
 
+    public sealed record LoopRequest(
+        string? RepoId, string? Action, string? Prompt, string? Sentinel, int? MaxIterations);
+
+    /// <summary>Loop mode (plans/autopilot-loop-mode.md): arm / edit / stop the
+    /// per-agent fixed-prompt resend loop. <c>action</c> = start | update | stop.
+    /// Gated like every other autopilot endpoint; returns the fresh state.</summary>
+    [HttpPost("loop")]
+    public IActionResult Loop([FromBody] LoopRequest req)
+    {
+        _logger.CountRequest();
+        if (GateClosed() is { } closed) return closed;
+        if (req is null || string.IsNullOrWhiteSpace(req.RepoId))
+            return BadRequest(new { error = "missing repoId" });
+
+        switch ((req.Action ?? "start").ToLowerInvariant())
+        {
+            case "start":
+                if (string.IsNullOrWhiteSpace(req.Prompt))
+                    return BadRequest(new { error = "a loop needs a prompt to resend" });
+                _loops.Start(req.RepoId, req.Prompt.Trim(), req.Sentinel, req.MaxIterations);
+                break;
+            case "update":
+                _loops.Update(req.RepoId, req.Prompt, req.Sentinel, req.MaxIterations);
+                break;
+            case "stop":
+                _loops.Stop(req.RepoId);
+                break;
+            default:
+                return BadRequest(new { error = $"unknown action \"{req.Action}\"" });
+        }
+
+        return Ok(BuildState());
+    }
+
     private object BuildState()
     {
         var cfg = _config.Get();
@@ -98,6 +134,7 @@ public class AutopilotController : ControllerBase
             threshold = cfg.Threshold,
             denyList = cfg.DenyList,
             agents = _engine.States(),
+            loops = _loops.All(),
             log = _engine.Log(),
             intercepts = _engine.Intercepts(),
             audit = _audit.Recent(),
