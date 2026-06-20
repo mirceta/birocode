@@ -62,6 +62,15 @@ public class DockTab
     public string? DependsOn { get; set; }
 
     /// <summary>
+    /// Marked "wide" from the dashboard (plans/dock-double-width.md): the dock's
+    /// grid cell spans two horizontal spaces (CSS grid-column: span 2) so this one
+    /// agent gets double the width while the rest stay compact. A toggle, sibling
+    /// of <see cref="Important"/>. Defaults to false so existing tabs are
+    /// unaffected; shared across devices like the rest of the tab.
+    /// </summary>
+    public bool Wide { get; set; } = false;
+
+    /// <summary>
     /// Stashed prompt ideas jotted down while the agent runs
     /// (plans/prompt-stash.md). Shared across devices like the rest of the tab.
     /// </summary>
@@ -158,7 +167,7 @@ public class DockRegistry
     /// Partial update. Only non-null fields are applied; per-tab last-write-wins
     /// when two devices race. Returns the updated copy, or null if unknown.
     /// </summary>
-    public DockTab? Update(string id, string? sessionId, string? status, string? repoName, string? color, bool? dashboard, bool? important, bool? waiting, string? waitingOn, string? dependsOn)
+    public DockTab? Update(string id, string? sessionId, string? status, string? repoName, string? color, bool? dashboard, bool? important, bool? waiting, string? waitingOn, string? dependsOn, bool? wide)
     {
         lock (_gate)
         {
@@ -176,6 +185,7 @@ public class DockRegistry
             if (waitingOn != null) tab.WaitingOn = waitingOn.Length == 0 ? null : waitingOn;
             // Empty string clears the dependency; null leaves it untouched.
             if (dependsOn != null) tab.DependsOn = dependsOn.Length == 0 ? null : dependsOn;
+            if (wide != null) tab.Wide = wide.Value;
             Save();
             return Clone(tab);
         }
@@ -388,6 +398,7 @@ public class DockRegistry
         Waiting = t.Waiting,
         WaitingOn = t.WaitingOn,
         DependsOn = t.DependsOn,
+        Wide = t.Wide,
         Stash = t.Stash.Select(CloneStash).ToList(),
     };
 

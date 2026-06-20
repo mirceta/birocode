@@ -37,7 +37,12 @@
 
 ## Active feature plans
 
-_(none in flight)_
+- [Enlarge a dock to two horizontal spaces](plans/dock-double-width.md) — a
+  per-dock **toggle** that makes an agent dock span **two horizontal grid
+  spaces** (double width), with the button **next to the ★ important / 🔗
+  depends-on controls** in the dock header. Mirrors the `important` flag
+  end-to-end (backend-synced `Wide` bool on `DockTab`; CSS `grid-column: span
+  2`). Kickoff only, not built. On `feature/dock-double-width`.
 
 ## Proposed / design (not building yet)
 

@@ -8,6 +8,7 @@ import GitStatusSummary from '../components/git/GitStatusSummary';
 import PinnedAgent from '../components/dashboard/PinnedAgent';
 import CopyPath from '../components/dashboard/CopyPath';
 import ImportantStar from '../components/dashboard/ImportantStar';
+import WideToggle from '../components/dashboard/WideToggle';
 import DependsOnPicker from '../components/dashboard/DependsOnPicker';
 import WaitingBadge from '../components/dashboard/WaitingBadge';
 import WaitingOnField from '../components/dashboard/WaitingOnField';
@@ -549,6 +550,17 @@ export default function Dashboard({ onClose }) {
     [updateTab],
   );
 
+  // "Wide" — enlarge a dock to two horizontal grid spaces
+  // (plans/dock-double-width.md): a toggle, optimistic + backend-synced like
+  // important. The span itself is CSS (dash__cell--wide → grid-column: span 2).
+  const toggleWide = useCallback(
+    (id) => {
+      const tab = tabsRef.current.find((t) => t.id === id);
+      updateTab(id, { wide: !tab?.wide });
+    },
+    [updateTab],
+  );
+
   // Fold dependents under their primary for the "together" grouping. A dock is
   // a dependent only when its `dependsOn` points to a visible dock that is
   // itself independent (so we never recurse into chains in this slice); a
@@ -580,13 +592,20 @@ export default function Dashboard({ onClose }) {
   // Render one dock (phone or card) in a `tag` wrapper. `small` marks a
   // dependent so it renders shrunk inside its "together" group
   // (plans/dependent-agents.md).
-  const renderDock = (tab, { tag: Wrapper = 'li', small = false } = {}) => {
+  const renderDock = (tab, { tag: Wrapper = 'li', small = false, wide = false } = {}) => {
     const info = live[tab.id];
     const status = info?.status || tab.status;
     const recency = recencyTier(info?.at, now);
     // Phones view: always a phone. Hot view: phone iff hot. Cards: never.
     const asPhone = view === 'phones' || (view === 'hot' && isHotTier(recency));
-    const wrapClass = [asPhone ? 'dash__phone-cell' : '', small ? 'dash__dependent' : '']
+    // `wide` makes this grid cell span two columns (plans/dock-double-width.md).
+    // Only meaningful on a top-level grid child, so the caller opts in (standalone
+    // docks pass it; a "together" group carries it on its own <li> instead).
+    const wrapClass = [
+      asPhone ? 'dash__phone-cell' : '',
+      small ? 'dash__dependent' : '',
+      wide ? 'dash__cell--wide' : '',
+    ]
       .filter(Boolean)
       .join(' ');
 
@@ -605,6 +624,7 @@ export default function Dashboard({ onClose }) {
             onRefreshGit={() => refreshGit(tab.repoId)}
             onMaximize={handleOpen}
             onToggleImportant={toggleImportant}
+            onToggleWide={toggleWide}
             onToggleWaiting={toggleWaiting}
             onSetWaitingOn={setWaitingOn}
             dependsOn={tab.dependsOn}
@@ -633,6 +653,11 @@ export default function Dashboard({ onClose }) {
               important={!!tab.important}
               onToggle={() => toggleImportant(tab.id)}
               className="dash-cell__important"
+            />
+            <WideToggle
+              wide={!!tab.wide}
+              onToggle={() => toggleWide(tab.id)}
+              className="dash-cell__wide"
             />
             <WaitingBadge
               waiting={!!tab.waiting}
@@ -1041,11 +1066,13 @@ export default function Dashboard({ onClose }) {
             // Dependents render INSIDE their primary's "together" group below.
             if (primaryOf(tab)) return null;
             const deps = dependentsByPrimary.get(tab.id) || [];
-            if (deps.length === 0) return renderDock(tab);
+            // A wide dock spans two columns; for a group, the span rides on the
+            // group's own <li> so the whole "together" group widens together.
+            if (deps.length === 0) return renderDock(tab, { wide: !!tab.wide });
             // A "together" group: the primary (full size) followed by its
             // dependents (smaller), so the ordering reads at a glance.
             return (
-              <li key={`grp-${tab.id}`} className="dash__group">
+              <li key={`grp-${tab.id}`} className={`dash__group${tab.wide ? ' dash__cell--wide' : ''}`}>
                 {renderDock(tab, { tag: 'div' })}
                 {deps.map((d) => renderDock(d, { tag: 'div', small: true }))}
               </li>
