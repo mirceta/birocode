@@ -285,7 +285,8 @@ code {
    Topic 2 — "Use the Understanding app in any agent"
    =================================================================== */
 
-.topic--understanding { padding-bottom: 30px; }
+.topic--understanding,
+.topic--systest { padding-bottom: 30px; }
 
 .ut-h {
   margin: 26px clamp(18px, 4vw, 44px) 0;
@@ -454,6 +455,66 @@ code {
   color: var(--ink-dim);
 }
 .ut-starter .ut-code { border: none; border-radius: 0; }
+
+/* ===================================================================
+   Topic 3 — "Ask an agent to add a system test": the request form
+   =================================================================== */
+
+.systf {
+  margin: 16px clamp(18px, 4vw, 44px) 0;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius);
+  padding: 18px clamp(14px, 2.5vw, 22px);
+  display: grid;
+  gap: 16px;
+}
+.systf-field { display: grid; gap: 6px; }
+.systf-label { font-weight: 700; font-size: 13.5px; display: flex; align-items: baseline; gap: 8px; }
+.systf-req, .systf-opt {
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+}
+.systf-req { color: color-mix(in srgb, var(--accent) 75%, var(--ink)); }
+.systf-opt { color: var(--ink-dim); }
+.systf-hint { margin: 0; font-size: 12px; color: var(--ink-dim); max-width: 78ch; }
+.systf-input, .systf-textarea {
+  font: inherit; font-size: 13px;
+  color: var(--ink); background: var(--bg);
+  border: 1px solid var(--edge); border-radius: var(--radius-sm);
+  padding: 8px 11px; width: 100%; box-sizing: border-box;
+}
+.systf-textarea {
+  resize: vertical; min-height: 60px; line-height: 1.5;
+  font-family: var(--mono); font-size: 12.5px;
+}
+.systf-input::placeholder, .systf-textarea::placeholder {
+  color: color-mix(in srgb, var(--ink-dim) 75%, transparent);
+}
+.systf-input:focus, .systf-textarea:focus {
+  outline: none; border-color: color-mix(in srgb, var(--accent) 60%, var(--edge));
+}
+.systf-field.is-missing .systf-input,
+.systf-field.is-missing .systf-textarea {
+  border-color: color-mix(in srgb, var(--warn) 55%, var(--edge));
+}
+.systf-actual[hidden] { display: none; }
+.systf-bug {
+  display: flex; align-items: center; gap: 9px;
+  font-size: 12.5px; color: var(--ink-dim);
+  cursor: pointer; user-select: none;
+}
+.systf-bug input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; flex: 0 0 auto; }
+
+/* highlighted "still-empty required field" marker inside the generated prompt */
+.systf-missing {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
+  border-radius: 3px; padding: 0 3px; font-style: italic;
+}
+
+/* disabled Copy while required fields are blank */
+.ut-prompt__copy[disabled] { opacity: 0.5; cursor: not-allowed; }
+.ut-prompt__copy[disabled]:hover { background: color-mix(in srgb, var(--accent) 28%, var(--panel)); }
 
 /* gotchas note */
 .ut-note {
