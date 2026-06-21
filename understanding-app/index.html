@@ -3,70 +3,81 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Control vs Console — same thing, or two axes?</title>
+  <title>The OpenSpec transition — flip on a branch, catch the stragglers</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <header class="hero">
-    <p class="kicker">Understanding · do Control and Console overlap?</p>
-    <h1>Control vs Console <span>— same thing, or two axes?</span></h1>
+    <p class="kicker">Understanding · how the port actually lands</p>
+    <h1>The OpenSpec transition <span>— flip on a branch, catch the stragglers</span></h1>
     <p class="thesis">
-      You spotted real overlap: <b>Control</b>’s Phase 0 and <b>Console</b>’s “Set up the tool” both
-      cover getting OpenSpec installed. But they sit on <b>different axes</b>. Control tracks the
-      <b class="c1">one-time port project</b> — five phases with an end (Phase 4 is the point of no
-      return). Console runs the <b class="c2">recurring jobs</b> you do forever after. They’re the
-      <b>track ↔ run</b> pair, not duplicates. Click any node to see its counterpart.
+      Solo repo, but agents are working other features in parallel. The plan: do the <b>whole</b>
+      OpenSpec port on <code>feature/openspec-flow</code>, merge it to <code>main</code> only when it's
+      complete, and let <code>CLAUDE.md</code> + a migration recipe turn every straggler branch's
+      <b>merge-conflict</b> into a <b>guided translation</b> — so nobody is left wondering what broke.
     </p>
   </header>
 
   <main>
-    <section class="map" id="map">
-      <div class="col col--phases">
-        <div class="col__hd"><b>Control</b><span>the port project · one-time · ends</span></div>
-        <ol class="track" id="phases"><!-- rendered --></ol>
-      </div>
-      <div class="col col--flows">
-        <div class="col__hd"><b>Console</b><span>the recurring jobs · forever</span></div>
-        <ol class="track" id="flows"><!-- rendered --></ol>
-      </div>
-    </section>
-    <p class="hint" id="hint">Only three rows line up. Phase 3–4 are <b>project-only</b> (nothing to run);
-      Inspect &amp; Hand off are <b>job-only</b> (no phase). The overlap is just where a phase happens to be a job.</p>
-
-    <section class="zoom">
-      <h2>Zoom: Phase 0 &nbsp;vs&nbsp; “Set up the tool”</h2>
-      <p class="lead">Even where they overlap, they’re not the same. Phase 0 is a <b>5-step milestone
-        checklist</b>; only <i>one</i> step is an OpenSpec command. Console’s set-up is the
-        <b>executable subset</b> — plus two tooling pings Phase 0 doesn’t track.</p>
-      <div class="zgrid">
-        <div class="zcol">
-          <div class="zcol__hd zcol__hd--c1">Control · Phase 0 — 5 tracked steps</div>
-          <ul id="z0"><!-- rendered --></ul>
-        </div>
-        <div class="zcol">
-          <div class="zcol__hd zcol__hd--c2">Console · Set up — 3 buttons</div>
-          <ul id="z1"><!-- rendered --></ul>
-        </div>
-      </div>
+    <!-- strategy: three beats -->
+    <section class="strip">
+      <div class="beat beat--branch"><span class="beat__n">1</span><b>Transition on the branch</b>
+        <span>Phases 0–3 land on <code>feature/openspec-flow</code>. <code>plans/*</code> stays alive
+          there until it's done. Nothing on <code>main</code> changes yet.</span></div>
+      <div class="beat__arrow">→</div>
+      <div class="beat beat--flip"><span class="beat__n">2</span><b>Merge → the convention flips</b>
+        <span><code>CLAUDE.md</code>'s interim disclaimer is swapped for the OpenSpec block;
+          <code>plans/*</code> freezes; <code>openspec list</code> becomes the dashboard.</span></div>
+      <div class="beat__arrow">→</div>
+      <div class="beat beat--strag"><span class="beat__n">3</span><b>Stragglers translate &amp; merge</b>
+        <span>A branch still on <code>plans/*</code> merges <code>main</code>, hits a conflict, reads the
+          new convention, and follows the recipe. Walk it below.</span></div>
     </section>
 
-    <section class="verdict">
-      <h2>So — merge them?</h2>
-      <div class="vcard vcard--no"><span class="vtag">No</span>
-        <p><b>Don’t merge the tabs.</b> One is a phased project that finishes; the other is the daily
-          driver that never does. Folding them would conflate <i>“port the system”</i> with <i>“use
-          OpenSpec”</i> — different lifespans, different readers.</p></div>
-      <div class="vcard vcard--yes"><span class="vtag">But do this</span>
-        <p><b>Wire run → track.</b> When you click <code>init</code> in Console, auto-tick Phase 0’s
-          “Run openspec init” in Control, and show <b>Phase 0: n/5</b> in the Console set-up header.
-          One source of truth for state — <i>that’s</i> the “more under control” you’re after.</p>
-        <p class="caveat"><b>Honest caveat:</b> the run→track link is clean for set-up (init → one task),
-          fuzzier elsewhere — <code>validate --strict</code> touches both Phase 1 and Phase 2, so not
-          every button maps to exactly one checkbox.</p></div>
+    <!-- the straggler walkthrough -->
+    <section class="walk">
+      <div class="walk__head">
+        <h2>A straggler branch, step by step</h2>
+        <span class="walk__count" id="walkCount"></span>
+      </div>
+      <p class="lead">This is the experience the <b>Migrate</b> tab hands to an agent as a paste-ready
+        prompt. Click through what happens to <code>feature/add-foo</code> when it meets the flipped
+        convention.</p>
+
+      <div class="stage">
+        <div class="card" id="card"><!-- rendered --></div>
+        <div class="dots" id="dots"><!-- rendered --></div>
+        <div class="nav">
+          <button id="prev">‹ Prev</button>
+          <button id="next">Next ›</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- where it lives -->
+    <section class="arts">
+      <h2>Three artifacts, three jobs</h2>
+      <div class="art">
+        <code>CLAUDE.md</code>
+        <p><b>The signal.</b> Injected into every agent. Today: "in transition — keep using
+          <code>plans/*</code>." At merge it flips to the OpenSpec block (parked in
+          <code>plans/openspec-flow.md</code>) that routes stragglers to the recipe.</p>
+      </div>
+      <div class="art">
+        <code>docs/openspec-migration.md</code>
+        <p><b>The recipe (source of truth).</b> Agent-agnostic, read off disk: old→new map + the exact
+          steps to convert a <code>plans/*</code> feature into an OpenSpec change and resolve the merge.</p>
+      </div>
+      <div class="art">
+        <code>openspec-port-app · Migrate tab</code>
+        <p><b>The operate surface.</b> Type the feature name, copy a finished prompt that walks an agent
+          through the recipe end-to-end. Operationalizes the doc; doesn't restate it.</p>
+      </div>
     </section>
   </main>
 
-  <footer class="foot"><p>Companion to the Control/Console overlap question · click the map nodes to trace the track ↔ run pairing.</p></footer>
+  <footer class="foot"><p>Companion to <code>plans/openspec-flow.md</code> (Phase 4) and
+    <code>docs/openspec-migration.md</code> · the transition is staged, not yet merged.</p></footer>
   <script src="./app.js"></script>
 </body>
 </html>
