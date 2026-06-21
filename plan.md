@@ -39,13 +39,12 @@
 
 ## Active feature plans
 
-- [OpenSpec — investigate it and adopt its flow](plans/openspec-flow.md) — **DECIDED: Path A
-  (adopt the tooling).** Adopt OpenSpec's spec-driven flow: a living `specs/` baseline (what the
-  system does today) + change proposals as **deltas** (ADDED/MODIFIED/REMOVED), reviewed before
-  code and archived after ship. Scope (2026-06-19) = the **planning layer** (`plans/*` +
-  `understanding.md`), with the harness retained — so Phase 3 (harness rendering) is essential.
-  **Supersedes the proposed [spec-baseline](plans/spec-baseline.md).** Port plan + a dedicated
-  `openspec-port-app/` Control Room landed. On `feature/openspec-flow`.
+- [OpenSpec — execute the port](plans/openspec-flow.md) — **Path A decided; the tooling +
+  migration recipe already shipped (see Recently shipped).** What's left is the actual convention
+  flip — Phases 0–4: `openspec init` + committed `openspec/`, **seed-and-grow** the `specs/`
+  baseline, swap `CLAUDE.md` to the OpenSpec block, and freeze `plans/*`. Solo **hard cut** (no
+  team to dual-write for). Phase 3 (harness rendering) deferred — `openspec/*.md` is already
+  phone-visible via the Files tab. On `feature/openspec-adopt`.
 - [System tests for the Chat feature](plans/chat-system-tests.md) — discover
   **every** exercisable Chat behaviour, then run them **all** as black-box system
   tests against the real HTTP/SSE surface (and the real Claude CLI where it
@@ -72,6 +71,14 @@
 
 ## Recently shipped
 
+- [OpenSpec adoption — investigation, tooling & migration recipe](plans/openspec-flow.md) —
+  **DECIDED: Path A.** Shipped the groundwork (not the convention flip itself): a dedicated
+  `openspec-port-app/` **Control Room** — Explain / Analyze / Adopt / **Workflows** + an executable
+  **Console** that drives real `openspec`/`git` with paste-ready agent prompts, a **Migrate** tab,
+  and an Understand/Operate split — plus the agent-agnostic `docs/openspec-migration.md` recipe, the
+  staged Phase-4 `CLAUDE.md` block, and an **interim `CLAUDE.md` disclaimer** telling agents to keep
+  using `plans/*` until the port lands. The actual execution is tracked above on
+  `feature/openspec-adopt`. Merged from `feature/openspec-flow`.
 - [Hide inactive agents — "Show only important" dashboard toggle](plans/hide-inactive-agents.md)
   — a device-local **switch** in the dashboard header that **hides every dock not
   starred ★ important**, leaving just the important ones; toggle off to show all.
