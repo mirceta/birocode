@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useT } from '../../i18n/LanguageContext';
+import { useRepo } from '../../context/RepoContext';
+import { getPromptSystem, setPromptSystem } from './promptSystem';
 import PromptPlansPanel from './PromptPlansPanel';
 
 // Add/edit/delete UI for custom composer prompts (plans/custom-prompts.md),
@@ -25,15 +27,22 @@ export default function PromptManager({
   onInsert, onClose,
 }) {
   const { t } = useT();
+  const { currentRepoId } = useRepo();
   // Two tabs in one modal (plans/prompt-plans.md): one-off Prompts and ordered
   // Plans. Plans live ALONGSIDE prompts; neither replaces the other.
   const [tab, setTab] = useState('prompts');
+  // Per-repo planning system (openspec/changes/prompt-system-toggle): swaps the
+  // two system-specific built-ins between OpenSpec and legacy wording, so a repo
+  // still on plans/* keeps the old prompts until it ports. Per repo, default OpenSpec.
+  const [system, setSystem] = useState(() => getPromptSystem(currentRepoId));
+  function changeSystem(s) { setSystem(s); setPromptSystem(currentRepoId, s); }
+  const legacy = system === 'old';
   // The two former hardcoded composer buttons (understanding 📝, kickoff 🚀) now
   // live here as built-in entries — insert-only (no edit/delete), text from i18n
   // so they stay translatable. They sit above the user's own prompts.
   const builtins = [
-    { id: '__understanding', emoji: '\u{1F4DD}', label: t('understanding.prefill'), text: t('understanding.prefillPrompt'), builtin: true },
-    { id: '__kickoff', emoji: '\u{1F680}', label: t('feature.kickoff'), text: t('feature.kickoffPrompt'), builtin: true },
+    { id: '__understanding', emoji: '\u{1F4DD}', label: t('understanding.prefill'), text: t(legacy ? 'understanding.prefillPrompt.legacy' : 'understanding.prefillPrompt'), builtin: true },
+    { id: '__kickoff', emoji: '\u{1F680}', label: t('feature.kickoff'), text: t(legacy ? 'feature.kickoffPrompt.legacy' : 'feature.kickoffPrompt'), builtin: true },
   ];
   const items = [...builtins, ...prompts];
   const [editingId, setEditingId] = useState(null);
@@ -110,6 +119,26 @@ export default function PromptManager({
         </div>
         <button type="button" className="prompt-mgr__close" onClick={onClose} aria-label={t('common.close')}>
           &times;
+        </button>
+      </div>
+
+      <div className="prompt-mgr__systembar" role="group" aria-label={t('prompts.system')}>
+        <span className="prompt-mgr__systembar-lbl">{t('prompts.system')}</span>
+        <button
+          type="button"
+          className={`prompt-mgr__sysbtn${system === 'openspec' ? ' prompt-mgr__sysbtn--on' : ''}`}
+          aria-pressed={system === 'openspec'}
+          onClick={() => changeSystem('openspec')}
+        >
+          {t('prompts.systemOpenspec')}
+        </button>
+        <button
+          type="button"
+          className={`prompt-mgr__sysbtn${system === 'old' ? ' prompt-mgr__sysbtn--on' : ''}`}
+          aria-pressed={system === 'old'}
+          onClick={() => changeSystem('old')}
+        >
+          {t('prompts.systemOld')}
         </button>
       </div>
 
