@@ -1,0 +1,110 @@
+[
+  {
+    "id": "stale-process-masks-build",
+    "kind": "learned",
+    "title": "A stale running process can mask a correct build",
+    "body": "The live Understanding app served the *old* Mermaid empty state even though the code on disk was already fixed. Root cause: the **running** harness process predated the current `bin/Release` build — so the fix was compiled but never loaded.\n\n**Lesson:** when a deployed change \"doesn't show up,\" check the *process start time* against the *build timestamp* before re-debugging the code. The disk can be right while memory is stale.",
+    "tags": ["deploy", "process", "debugging"],
+    "links": [{ "label": "self-dev guide", "href": "../../../../files" }],
+    "created": "2026-06-21"
+  },
+  {
+    "id": "verify-in-a-real-browser",
+    "kind": "learned",
+    "title": "Verify UI / proxy fixes in a real browser, not just curl",
+    "body": "`curl` proves the *bytes* are served; it does not prove the *page renders*. Stale caches, service workers, and proxy sub-path traps only show up in a real browser.\n\n**Lesson:** before claiming a UI or proxy fix works, drive it with a headless browser (Playwright) and observe behaviour — not just an HTTP status code.",
+    "tags": ["verification", "browser", "proxy"],
+    "links": [{ "label": "browser-testing.md", "href": "../../../../files" }],
+    "created": "2026-06-14"
+  },
+  {
+    "id": "isolated-preview-before-swap",
+    "kind": "learned",
+    "title": "Prove it on an isolated preview before the live swap",
+    "body": "Self-development is risky: the Repo *is* the running Harness. Building into the live `bin/` or restarting `:5099` blind can strand the operator.\n\n**Lesson:** build to an isolated dir and run on a throwaway port with an isolated data dir first. Confirm the exact behaviour there, *then* do the disruptive swap on `:5099`.",
+    "tags": ["self-dev", "deploy", "safety"],
+    "links": [],
+    "created": "2026-06-16"
+  },
+  {
+    "id": "dist-served-from-repo-root",
+    "kind": "found",
+    "title": "The harness serves client/dist straight from the repo root",
+    "body": "`ResolveDistPath()` resolves `client/dist` relative to the repo root (`../../../../client/dist` from the exe), and static files are read per-request.\n\n**Consequence:** a **frontend** rebuild shows up on reload with **no restart**. Only a **compiled C#** change needs the process restarted. Knowing which layer changed tells you whether a restart is even required.",
+    "tags": ["hosting", "frontend", "deploy"],
+    "links": [],
+    "created": "2026-06-21"
+  },
+  {
+    "id": "no-store-defeats-stale-cache",
+    "kind": "found",
+    "title": "no-store on the SPA shell defeats \"I deployed but see the old version\"",
+    "body": "Serving `index.html` / `version.json` as `no-store` (while hashed `/assets/*` stay immutable) means a reload always lands on the latest build. The proxy also sets `no-store` on proxied HTML so a fixed product is never shadowed by a cached pre-fix page.",
+    "tags": ["caching", "deploy"],
+    "links": [{ "label": "cache-hardening.md", "href": "../../../../files" }],
+    "created": "2026-06-17"
+  },
+  {
+    "id": "companion-spa-per-feature",
+    "kind": "testing",
+    "title": "A companion Understanding-app SPA for every non-trivial explanation",
+    "body": "The convention: when I explain something non-trivial, I also *visualize* it as a small build-less SPA at `understanding-app/`. This Lab is itself an instance of the build-less local-app pattern.\n\n**Under test:** does authoring a throwaway SPA per feature pay for itself in shared understanding, or is it overhead? Tracking which features actually got opened.",
+    "tags": ["explanation", "habit", "spa"],
+    "links": [{ "label": "understanding-app-convention.md", "href": "../../../../files" }],
+    "created": "2026-06-16"
+  },
+  {
+    "id": "plan-index-plus-detail",
+    "kind": "testing",
+    "title": "Plan = a root index linking one detail file per feature",
+    "body": "`plan.md` at the repo root is a thin index; each feature gets its own `plans/<feature>.md` with a status header. Active / proposed / shipped are sections in the index.\n\n**Under test:** whether this scales as shipped features pile up (the index is already long). Candidate refinement: archive shipped entries to a separate file.",
+    "tags": ["docs", "process"],
+    "links": [{ "label": "doc-principles.md", "href": "../../../../files" }],
+    "created": "2026-06-12"
+  },
+  {
+    "id": "one-feature-per-branch",
+    "kind": "good",
+    "title": "One feature per branch, off main",
+    "body": "Every feature gets its own branch cut from `main`; features are never bundled. Merges stay atomic, history reads cleanly, and a feature can be abandoned without dragging others down.",
+    "tags": ["git", "process"],
+    "links": [],
+    "created": "2026-06-12"
+  },
+  {
+    "id": "no-silent-fallback",
+    "kind": "good",
+    "title": "No silent fallback — empty means empty",
+    "body": "The Understanding app (and now this Lab) show an **explicit empty state** when no SPA is present, and a plain **404** for any missing asset. There is deliberately no diagram/other-content fallback.\n\n**Why it's good:** a broken or absent app is *visibly* broken and can never masquerade as working.",
+    "tags": ["honesty", "design"],
+    "links": [],
+    "created": "2026-06-16"
+  },
+  {
+    "id": "understanding-first",
+    "kind": "good",
+    "title": "Understanding-first: restate the request before building",
+    "body": "For any substantive request I write my understanding to `understanding.md` first; the Harness renders it in a panel so the operator can confirm \"you understood me\" before work proceeds. Cheap to write, catches misreads before they cost a build.",
+    "tags": ["process", "communication"],
+    "links": [{ "label": "understanding-panel.md", "href": "../../../../files" }],
+    "created": "2026-06-13"
+  },
+  {
+    "id": "duplicate-checkout-mislabel",
+    "kind": "bad",
+    "title": "A duplicate checkout produced self-mislabeled dashboard cards",
+    "body": "Keeping two checkouts of the same repo (`birocode` + `birocode-copy`) caused **duplicate dashboard cards**, one mislabeled as the self repo.\n\n**Fix / rule:** one canonical live checkout (`birocode`); the copy was retired. Always deploy from the canonical checkout.",
+    "tags": ["dashboard", "deploy", "anti-pattern"],
+    "links": [],
+    "created": "2026-06-16"
+  },
+  {
+    "id": "cmd-truncates-multiline",
+    "kind": "bad",
+    "title": "Launching claude.cmd via cmd.exe truncated multiline prompts",
+    "body": "A chat message with newlines reached the agent only up to its **first line**: launching the npm `claude.cmd` shim routes through `cmd.exe`, which ends the command at the first newline, cutting off the `-p \"<prompt>\"` argument.\n\n**Fix:** resolve to the real `claude.exe`; keep `claude.cmd` only as a last resort.",
+    "tags": ["cli", "windows", "bug"],
+    "links": [],
+    "created": "2026-06-15"
+  }
+]

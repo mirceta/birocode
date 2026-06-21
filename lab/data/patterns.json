@@ -1,0 +1,79 @@
+[
+  {
+    "id": "understanding-first",
+    "name": "Understanding-first",
+    "summary": "Before building anything substantive, write a restatement of the request (goal + concrete steps + assumptions) to a file the operator can read, and let them confirm before work proceeds.",
+    "status": "good",
+    "evidence": [
+      "Caught several misreads at zero cost — a panel confirmation is cheaper than a wrong build.",
+      "Now a standing CLAUDE.md convention (understanding.md + the Understanding panel)."
+    ],
+    "related": ["companion-spa", "build-less-local-app"]
+  },
+  {
+    "id": "build-less-local-app",
+    "name": "Build-less local app",
+    "summary": "Ship a UI as a self-contained folder of static assets (index.html + JS/CSS + vendored libs + data) served under `/api/localview/{repo}/app/{appId}/`. No build step, no node_modules, no CDN.",
+    "status": "good",
+    "evidence": [
+      "homepage/, the Understanding app, and this Lab all use it.",
+      "Zero build tooling to break; full git history of the content; instant edits."
+    ],
+    "related": ["relative-urls-only", "synthetic-harness-app"]
+  },
+  {
+    "id": "synthetic-harness-app",
+    "name": "Synthetic harness app",
+    "summary": "A `kind:harness` local app that the harness serves internally with repo context, instead of dialing a loopback port. It appears in the app switcher like any local app but needs no running process.",
+    "status": "good",
+    "evidence": [
+      "The always-on Understanding app proved it.",
+      "This Lab reuses the exact mechanism (HarnessStaticApp.Serve), scoped to the self repo."
+    ],
+    "related": ["build-less-local-app"]
+  },
+  {
+    "id": "shared-component-two-surfaces",
+    "name": "Shared component, two surfaces",
+    "summary": "When the same UI must appear in two places (e.g. a routed tab and a dashboard dock), extract ONE component both render — so the surfaces can never drift apart.",
+    "status": "good",
+    "evidence": [
+      "AutopilotConsole (tab + dock), FilesBrowser (Files tab + dock), IdeasPanel (Ideas tab + dashboard).",
+      "Each was a correction after an earlier duplicated implementation drifted."
+    ],
+    "related": []
+  },
+  {
+    "id": "relative-urls-only",
+    "name": "Relative URLs only (under a proxy sub-path)",
+    "summary": "Inside a proxied app, reference assets with relative URLs (`./app.js`), never a leading slash. A leading slash escapes the `/api/localview/<repo>/app/<id>/` sub-path and 404s.",
+    "status": "good",
+    "evidence": [
+      "Codified in docs/local-exposure-convention.md and the homepage's first topic.",
+      "Every build-less app here follows it; violations fail loudly (404), not silently."
+    ],
+    "related": ["build-less-local-app"]
+  },
+  {
+    "id": "isolated-preview-verification",
+    "name": "Isolated preview verification",
+    "summary": "Before a disruptive change to the live harness, run the new build on a throwaway port with an isolated data dir, confirm the exact behaviour, THEN swap `:5099`.",
+    "status": "good",
+    "evidence": [
+      "Repeatedly caught issues before they reached the operator's live session.",
+      "Used today to confirm the Understanding-app fix before restarting :5099."
+    ],
+    "related": ["operator-side-gate"]
+  },
+  {
+    "id": "operator-side-gate",
+    "name": "Operator-side gate for risky capability",
+    "summary": "For any capability that can *act* (e.g. autopilot sending prompts), the web UI may see and shrink it but can never enable it. Only the host (WinForms) flips it on. Default off.",
+    "status": "testing",
+    "evidence": [
+      "Interim guard shipped (autopilot endpoints gated host-side, default off).",
+      "Still under test: the full mitigation (a scoped capability token held by the engine, not the brain) is NOT built yet."
+    ],
+    "related": ["isolated-preview-verification"]
+  }
+]

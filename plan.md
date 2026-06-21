@@ -39,6 +39,23 @@
 
 ## Active feature plans
 
+- [Agentic Engineering Lab — a personal hub for principles & patterns](plans/agentic-lab.md)
+  — a **new build-less local app** (`lab/`, served like `homepage/` and the
+  Understanding app via `/api/localview/{repo}/app/lab/`) that is the operator's
+  **home for learning about agentic engineering**: what I've learned, what I've
+  found, what patterns/principles I'm currently **testing**, what's turned out
+  **good** vs **bad**, how I'll test new patterns, and a **repository of the
+  patterns & principles** themselves. Decided as its **own local app** (not a
+  homepage topic) — different audience (the researcher, not onboarding agents),
+  a structured/growing data model, and the platform already supports multi-app
+  per repo. **MVP = agent-curated static data** (entries + patterns as JSON/MD
+  in the repo, edited on request; full git history, zero backend); a live
+  backend-CRUD slice (add/edit from the browser like Ideas) is a possible
+  follow-up. **Slice 1 built & deployed to live :5099** — `lab/` SPA + seed
+  data + a `lab` synthetic `kind:harness` app registered for the **self repo
+  only**; browser-verified on an isolated `:5251` preview, awaiting in-browser
+  confirmation; not yet merged. On `feature/agentic-lab`.
+
 - [System tests for the Chat feature](plans/chat-system-tests.md) — discover
   **every** exercisable Chat behaviour, then run them **all** as black-box system
   tests against the real HTTP/SSE surface (and the real Claude CLI where it

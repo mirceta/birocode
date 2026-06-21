@@ -1,43 +1,63 @@
-# Understanding — Hide inactive agents
+# Understanding — Agentic Engineering Lab
 
 ## What you asked for
 
-A new feature on the **agent dashboard**: a single **toggle switch** labelled
-**"Show only important agents"**. When it's **on**, the dashboard hides every
-agent dock that **isn't** marked ★ important (the star control in a dock's
-top-right corner); when it's **off**, all docks show as they do today. A toggle —
-flip it back any time.
+A **hub / home for your own development of learning about agentic engineering
+principles** — a living, personal knowledge base inside the Claude Web repo
+that holds:
 
-"Inactive" here means **not starred important** — it builds on the existing
-important/star feature, just hiding the unimportant ones rather than only pinning
-the important ones to the front.
+- **What I've learned** — settled lessons.
+- **What I've found** — observations/discoveries not yet generalized.
+- **What I'm currently testing** — patterns & principles in flight.
+- **What's turned out bad** — anti-patterns, things that didn't work.
+- **What's turned out good** — ideas worth keeping.
+- **How I'll test** patterns & principles I'm using — a testing methodology.
+- A **repository of the patterns & principles** themselves.
 
-## What I'll do (this kickoff step)
+You also asked for my feedback on whether this should be a **new local app** or
+folded into the existing **homepage** local app.
 
-- ✅ Made sure I'm on `main` synced with `origin/main`, then cut
-  **`feature/hide-inactive-agents`**.
-- ✅ Added an **Active feature plans** entry in `plan.md` and wrote the feature
-  plan at `plans/hide-inactive-agents.md`.
-- ⏳ **Not building yet** — waiting for you to confirm this understanding and the
-  design choices below.
+## My recommendation (and the decision I'm proceeding on)
 
-## How I plan to build it (confirm before I start)
+**A new local app**, not a homepage topic — because:
 
-- A **device-local** toggle (saved per browser, default off), like the existing
-  dashboard size/zoom/layout controls — **not** backend-synced, since it's a
-  per-viewer view preference.
-- Implemented as a **pure view filter**: when on, render only docks whose
-  existing backend-synced `important` flag is set. No new dock data, no backend
-  change. Applies to both the phone docks and the summary cards.
-- An empty-state hint if you turn it on while nothing is starred, so it doesn't
-  look like a blank/broken dashboard.
+1. **Different audience/purpose.** `homepage/` is onboarding doctrine *for
+   agents*; this is *your* evolving lab notebook + pattern library.
+2. **Different data model & cadence.** This wants structured, growing,
+   append-heavy records (entries by status + a pattern repository), not static
+   topic prose.
+3. **The platform already supports it** — multiple local apps per repo
+   (`/api/localview/{repo}/app/{appId}/`); the Understanding app proves the
+   build-less pattern.
+4. **Independent lifecycle** — a journal grows forever; homepage topics freeze.
 
-## Assumptions / open questions
+I asked you to confirm two forks (surface, storage); the question prompt was
+dismissed, so I'm proceeding on the **recommended defaults** and will adjust if
+you say otherwise:
 
-- The switch lives in the dashboard's existing control row, inside the
-  already-Advanced dashboard (no separate gating).
-- **Dependent "together" groups:** if a primary is important but its dependent
-  isn't, I'll hide the non-important half (filter strictly per-dock). Flag if
-  you'd rather keep grouped pairs together.
-- Label wording **"Show only important agents"** taken verbatim from your
-  request (will add English + Turkish i18n).
+- **Surface:** new build-less local app at `lab/` (entry `lab/index.html`,
+  relative URLs only), served the way `homepage/` is.
+- **Storage (MVP):** **agent-curated static data** — entries & patterns as
+  JSON/Markdown files in the repo that I add/edit on request (full git history,
+  zero backend). A live backend-CRUD slice (edit from the browser, like Ideas)
+  is a possible later slice.
+
+## What I'll do (this kickoff)
+
+- [x] Confirm on `main` synced with `origin/main`, branch off → `feature/agentic-lab`.
+- [x] Add an **Active feature plans** entry in `plan.md`.
+- [x] Write this `understanding.md`.
+- [x] Write the detail plan `plans/agentic-lab.md` (sections, data shape, how
+      it's registered as a local app, MVP vs follow-up slices).
+- [x] Build the build-less SPA under `lab/` + its seed data (7 sections:
+      Learned / Found / Testing / Good / Bad + How-I-test + Repository).
+- [x] Register it as a local app (`lab`, synthetic `kind:harness`, **self repo
+      only**); browser-verified on an isolated `:5251` preview; rebuilt +
+      restarted live `:5099`. **Awaiting your in-browser confirmation.**
+
+## Assumptions
+
+- New local app + agent-curated static MVP (per above) until you say otherwise.
+- App folder name `lab/`, appId `lab`, title "Agentic Engineering Lab" — easy to
+  rename; tell me if you'd prefer another.
+- One-feature-per-branch holds: this is its own feature on its own branch.

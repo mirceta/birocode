@@ -112,6 +112,8 @@ public class EmbeddedApi
             builder.Services.AddSingleton(_autopilotGate);
             // Harness-provided Understanding app (plans/multiple-local-apps.md Slice 2).
             builder.Services.AddSingleton<Understanding.UnderstandingApp>();
+            // Harness-provided Agentic Engineering Lab app (plans/agentic-lab.md).
+            builder.Services.AddSingleton<Understanding.LabApp>();
 
             // Controllers auto-discovered here -- new controllers need NO changes.
             builder.Services.AddControllers();
