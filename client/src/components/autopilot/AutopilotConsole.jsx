@@ -4,6 +4,7 @@ import ErrorBanner from '../shared/ErrorBanner';
 import AgentsView from './AgentsView';
 import LoopsView from './LoopsView';
 import SystemTestsView from './SystemTestsView';
+import ChatArchitectureView from './ChatArchitectureView';
 import '../../pages/autopilot.css';
 
 // The full Autopilot console (plans/autopilot-to-harness.md): the complete
@@ -224,6 +225,9 @@ export default function AutopilotConsole({ embedded = false }) {
         <button className={tab === 'systests' ? 'on' : ''} onClick={() => setTab('systests')}>
           System tests
         </button>
+        <button className={tab === 'chatarch' ? 'on' : ''} onClick={() => setTab('chatarch')}>
+          How chat works
+        </button>
       </nav>
 
       {tab === 'agents' && <AgentsView data={data} mutate={mutate} />}
@@ -231,6 +235,8 @@ export default function AutopilotConsole({ embedded = false }) {
       {tab === 'loops' && <LoopsView data={data} loopAction={loopAction} />}
 
       {tab === 'systests' && <SystemTestsView />}
+
+      {tab === 'chatarch' && <ChatArchitectureView />}
 
       {tab === 'prompts' && (
         <>
