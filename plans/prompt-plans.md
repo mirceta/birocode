@@ -1,9 +1,9 @@
 # Prompt plans — named, ordered sequences of prompt steps
 
-> **Status (2026-06-21):** **Slice 1 BUILT & DEPLOYED to live :5099.** Author
-> plans + Use a single step (+ paste-to-split) shipped; slice 2 (run a whole plan
-> into the send queue, in order) is explicitly deferred. On `feature/prompt-plans`
-> (off `main`, contains origin/main). Extends [custom-prompts](custom-prompts.md):
+> **Status (2026-06-21):** **Slice 1 SHIPPED — user-confirmed working, merged to
+> main.** Author plans + Use a single step (+ paste-to-split) shipped; slice 2 (run
+> a whole plan into the send queue, in order) is explicitly deferred. Was on
+> `feature/prompt-plans` (off `main`). Extends [custom-prompts](custom-prompts.md):
 > same ⚙ pop-up (new **Prompts | Plans** tab), same global backend-synced pattern.
 >
 > Browser-verified on the staged build on an isolated `:5252` instance
@@ -12,7 +12,7 @@
 > modal closes, plan + step order **persist across reload**, the **Prompts tab
 > still renders**, **0 console errors**; backend CRUD + reorder confirmed over
 > HTTP. The same binaries were swapped to live `run-bin` (deploy.ps1); live health
-> 200 and the exact verified bundle is served. Not yet committed/merged.
+> 200 and the exact verified bundle is served.
 
 ## Problem
 
