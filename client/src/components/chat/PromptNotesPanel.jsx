@@ -20,6 +20,11 @@ export default function PromptNotesPanel({ text, loaded, onSave }) {
   const [status, setStatus] = useState('idle'); // idle | saving | saved | error
   const timer = useRef(null);
 
+  // Latest draft/saved/onSave for the unmount flush, which only runs once and must
+  // not capture stale closure values.
+  const latest = useRef({ draft, saved, onSave });
+  latest.current = { draft, saved, onSave };
+
   // Adopt the backend value once it loads (or changes underneath us) — but only when
   // there are no unsaved local edits, so we never stomp what the user is typing.
   useEffect(() => {
@@ -30,8 +35,13 @@ export default function PromptNotesPanel({ text, loaded, onSave }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text, loaded]);
 
-  // Flush any pending autosave timer on unmount.
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  // On unmount (modal closed / tab switched), FLUSH any unsaved edit rather than
+  // dropping it — losing a note you just typed would be the worst failure here.
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+    const cur = latest.current;
+    if (cur.draft !== cur.saved) cur.onSave(cur.draft).catch(() => {});
+  }, []);
 
   const dirty = draft !== saved;
 
@@ -55,6 +65,12 @@ export default function PromptNotesPanel({ text, loaded, onSave }) {
     timer.current = setTimeout(() => { persist(value); }, AUTOSAVE_MS);
   }
 
+  // Save immediately when focus leaves the canvas (e.g. reaching for the Save button
+  // or clicking elsewhere) so the debounce window can't swallow a quick edit.
+  function onBlur() {
+    if (draft !== saved && status !== 'saving') persist(draft);
+  }
+
   function saveNow() {
     persist(draft);
   }
@@ -72,6 +88,7 @@ export default function PromptNotesPanel({ text, loaded, onSave }) {
         placeholder={t('notes.canvasPlaceholder')}
         value={draft}
         onChange={onChange}
+        onBlur={onBlur}
         disabled={!loaded}
         spellCheck={false}
       />
