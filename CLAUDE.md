@@ -99,6 +99,26 @@ npm --prefix client run build      # build the frontend (client/dist)
 dotnet run --project ClaudeWeb.App # run the harness (GUI + Kestrel on :5099)
 ```
 
+## Deploy to live (:5099) — use the committed `swap.ps1`
+
+When asked to **deploy / push / ship this app to live**, do NOT hand-roll it. The
+one canonical, machine-independent deploy is **`swap.ps1` at the repo root** (it
+resolves all paths from its own location, so it works on any checkout — no local
+setup). It enforces the origin/main guard, **stages the build before stopping**,
+swaps into the standard run dir while preserving `logs/` + `appsettings.json`, then
+restarts and health-checks.
+
+```
+pwsh -File .\swap.ps1 -DryRun                       # preview build + guard, never touches live
+cmd /c start "" /b pwsh -NoProfile -File .\swap.ps1 # real deploy, launched DETACHED so it
+                                                    # outlives the harness it restarts
+```
+
+This is **Self-Development** (Product = Harness), so read
+`docs/claude-web/self-dev.md` first — it explains the run-from-copy model, the
+detached launch, and why the guard exists. Never bypass the guard or hand-copy
+binaries.
+
 ## Docs
 
 - `README.md` — setup, build, deploy for human operators
@@ -129,8 +149,10 @@ preview"). Read the right one for the task at hand:
   of the /preview/ sub-path.
 - **docs/claude-web/browser-testing.md** — read BEFORE claiming a UI or proxy fix
   works: verify with a headless Playwright browser, not just curl.
-- **docs/claude-web/self-dev.md** — read before building or running this repo:
-  it is Claude Web itself, so build to an isolated dir, never into the
-  running app's own bin/ or port.
+- **docs/claude-web/self-dev.md** — read before building, running, OR DEPLOYING
+  this repo: it is Claude Web itself, so build to an isolated dir (never into
+  the running app's own bin/ or port), and deploy to live with the committed
+  `swap.ps1` (origin/main guard + stage-before-stop). To deploy/ship to live,
+  run `swap.ps1` — see that doc.
 
 <!-- /claude-web:preview -->

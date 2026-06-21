@@ -47,9 +47,11 @@ public static class PreviewDoc
         if (isSelf)
         {
             bullets +=
-                $"- **{DocsDir}/self-dev.md** — read before building or running this repo:\n" +
-                "  it is Claude Web itself, so build to an isolated dir, never into the\n" +
-                "  running app's own bin/ or port.\n";
+                $"- **{DocsDir}/self-dev.md** — read before building, running, OR DEPLOYING\n" +
+                "  this repo: it is Claude Web itself, so build to an isolated dir (never into\n" +
+                "  the running app's own bin/ or port), and deploy to live with the committed\n" +
+                "  `swap.ps1` (origin/main guard + stage-before-stop). To deploy/ship to live,\n" +
+                "  run `swap.ps1` — see that doc.\n";
         }
 
         var body =
