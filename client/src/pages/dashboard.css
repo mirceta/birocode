@@ -1200,6 +1200,14 @@
   padding: 10px 12px;
 }
 
+/* IDE mode (plans/files-ide-mode.md) renders .files-ide instead, which already
+   manages its own internal scrolling per pane — so just let it fill the screen
+   (no extra padding/scroll, which would double up or clip the split). */
+.phone__screen > .files-ide {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 /* Embedded chat overrides: the standalone Chat page fills the viewport and
    pins its composer to the bottom of the screen (above the nav). Inside a
    phone it must instead fill its frame and keep the composer in-flow, so

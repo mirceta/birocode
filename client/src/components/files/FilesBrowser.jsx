@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiGet, apiGetBlob, apiPost } from '../../api/client';
 import Loading from '../shared/Loading';
 import ErrorBanner from '../shared/ErrorBanner';
@@ -30,6 +30,71 @@ const DEFAULT_PINS = ['plan.md', 'CLAUDE.md'];
 
 const norm = (p) => (p || '').replace(/^\/+/, '');
 const isPlan = (p) => p === 'plan.md' || (p || '').endsWith('/plan.md');
+
+// IDE mode (plans/files-ide-mode.md): show/hide the folder browser is a layout
+// preference, device-local and shared across repos (like the UI mode itself),
+// not a per-project navigation position — so it lives under its own key.
+const BROWSER_KEY = 'claudeweb_files_browser_open';
+const readBrowserOpen = () => {
+  try { return localStorage.getItem(BROWSER_KEY) !== '0'; } catch { return true; }
+};
+const writeBrowserOpen = (open) => {
+  try { localStorage.setItem(BROWSER_KEY, open ? '1' : '0'); } catch { /* private mode */ }
+};
+
+// Drag-to-resize: the folder browser's width in px, device-local (a layout
+// preference, like the open/closed state). null = use the CSS default clamp.
+const BROWSER_WIDTH_KEY = 'claudeweb_files_browser_width';
+const readBrowserWidth = () => {
+  try {
+    const v = parseInt(localStorage.getItem(BROWSER_WIDTH_KEY), 10);
+    return Number.isFinite(v) ? v : null;
+  } catch { return null; }
+};
+const writeBrowserWidth = (px) => {
+  try { localStorage.setItem(BROWSER_WIDTH_KEY, String(Math.round(px))); } catch { /* private mode */ }
+};
+const MIN_BROWSER_WIDTH = 140; // never let the browser collapse to nothing by drag
+const MIN_VIEW_WIDTH = 120; // always keep this much for the file view
+
+// Tree zoom: a font/row scale factor for the folder browser only, device-local.
+const TREE_ZOOM_KEY = 'claudeweb_files_tree_zoom';
+const ZOOM_MIN = 0.4;
+const ZOOM_MAX = 1.8;
+const ZOOM_STEP = 0.1;
+const clampZoom = (z) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(z * 10) / 10));
+const readTreeZoom = () => {
+  try {
+    const v = parseFloat(localStorage.getItem(TREE_ZOOM_KEY));
+    return Number.isFinite(v) ? clampZoom(v) : 1;
+  } catch { return 1; }
+};
+const writeTreeZoom = (z) => {
+  try { localStorage.setItem(TREE_ZOOM_KEY, String(z)); } catch { /* private mode */ }
+};
+
+const SEARCH_LIMIT = 200; // cap rendered fuzzy results so a short query can't render thousands
+
+// Subsequence fuzzy match: every char of the (lowercased) query must appear in
+// order somewhere in the path. Returns a score (lower = tighter/earlier match)
+// or null when it doesn't match. Used to rank the search results.
+function fuzzyScore(query, path) {
+  const q = query.toLowerCase();
+  const s = path.toLowerCase();
+  let qi = 0;
+  let first = -1;
+  let last = -1;
+  for (let i = 0; i < s.length && qi < q.length; i += 1) {
+    if (s[i] === q[qi]) {
+      if (first < 0) first = i;
+      last = i;
+      qi += 1;
+    }
+  }
+  if (qi < q.length) return null;
+  // Prefer matches that start early and span tightly; break ties by shorter path.
+  return first * 4 + (last - first) + path.length * 0.01;
+}
 // Images are fetched as bytes from /files/raw (the text /read can't carry them)
 // and rendered via an object URL (plans/files-image-preview.md).
 const IMAGE_RE = /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)$/i;
@@ -75,6 +140,60 @@ export default function FilesBrowser({ repoId }) {
   // Per-project pins (slice 2). Seeded from the backend; defaults on failure.
   const [pins, setPins] = useState(DEFAULT_PINS);
 
+  // IDE mode (plans/files-ide-mode.md): one split layout — tree + fuzzy search
+  // on the left, the open file on the right — used identically on the Files tab
+  // and inside the agent dock. Gated behind the filesIdeMode capability.
+  const ide = useFeature('filesIdeMode');
+  const [browserOpen, setBrowserOpen] = useState(readBrowserOpen);
+  const [query, setQuery] = useState('');
+  const [allFiles, setAllFiles] = useState([]); // recursive index for fuzzy search
+  const [indexTruncated, setIndexTruncated] = useState(false);
+  const [indexing, setIndexing] = useState(false);
+
+  // Adjustable folder browser (IDE mode): a drag-resizable width and a tree zoom
+  // factor, both device-local prefs scoped to the left pane.
+  const [browserWidth, setBrowserWidth] = useState(readBrowserWidth);
+  const [treeZoom, setTreeZoom] = useState(readTreeZoom);
+  const browserRef = useRef(null);
+  const dragWidthRef = useRef(null); // latest width during a drag, persisted on release
+
+  const toggleBrowser = useCallback(() => {
+    setBrowserOpen((open) => { const next = !open; writeBrowserOpen(next); return next; });
+  }, []);
+
+  // Zoom the tree text/rows up or down (or reset). Persisted immediately.
+  const zoomBy = useCallback((delta) => {
+    setTreeZoom((z) => { const next = clampZoom(z + delta); writeTreeZoom(next); return next; });
+  }, []);
+  const zoomReset = useCallback(() => { setTreeZoom(1); writeTreeZoom(1); }, []);
+
+  // Drag the divider between the browser and the file view. Pointer events cover
+  // mouse and touch; width is clamped so the view always keeps MIN_VIEW_WIDTH.
+  const onResizeDown = useCallback((e) => {
+    e.preventDefault();
+    const browserEl = browserRef.current;
+    if (!browserEl) return;
+    const startX = e.clientX;
+    const startW = browserEl.getBoundingClientRect().width;
+    const container = browserEl.parentElement; // .files-ide
+    const move = (ev) => {
+      const containerW = container ? container.getBoundingClientRect().width : Infinity;
+      const maxW = Math.max(MIN_BROWSER_WIDTH, containerW - MIN_VIEW_WIDTH);
+      const next = Math.min(maxW, Math.max(MIN_BROWSER_WIDTH, startW + (ev.clientX - startX)));
+      dragWidthRef.current = next;
+      setBrowserWidth(next);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      document.body.style.userSelect = '';
+      if (dragWidthRef.current != null) writeBrowserWidth(dragWidthRef.current);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    document.body.style.userSelect = 'none';
+  }, []);
+
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
   // Load this project's pins; fall back to defaults if the API is unavailable.
@@ -86,6 +205,25 @@ export default function FilesBrowser({ repoId }) {
       .catch(() => { if (!cancelled) setPins(DEFAULT_PINS); });
     return () => { cancelled = true; };
   }, [repoId]);
+
+  // IDE fuzzy search needs a whole-repo file list, not just the lazily-expanded
+  // tree, so fetch a recursive index once per project. Only when IDE mode is on,
+  // so Basic mode pays nothing. Reset the search box on a project switch.
+  useEffect(() => {
+    setQuery('');
+    if (!ide || !repoId) { setAllFiles([]); setIndexTruncated(false); return undefined; }
+    let cancelled = false;
+    setIndexing(true);
+    apiGet('/files/all', { repoId })
+      .then((res) => {
+        if (cancelled) return;
+        setAllFiles(Array.isArray(res?.files) ? res.files : []);
+        setIndexTruncated(!!res?.truncated);
+      })
+      .catch(() => { if (!cancelled) { setAllFiles([]); setIndexTruncated(false); } })
+      .finally(() => { if (!cancelled) setIndexing(false); });
+    return () => { cancelled = true; };
+  }, [ide, repoId]);
 
   // Pin/unpin the open file; the backend returns the new set.
   async function togglePin(filePath) {
@@ -272,6 +410,109 @@ export default function FilesBrowser({ repoId }) {
     writeView(repoId, TREE);
   }
 
+  // Fuzzy search results over the recursive index (IDE mode). Ranked by
+  // fuzzyScore, capped so a one-char query can't render the whole repo.
+  const searchResults = useMemo(() => {
+    const q = query.trim();
+    if (!q) return null;
+    const scored = [];
+    for (const path of allFiles) {
+      const score = fuzzyScore(q, path);
+      if (score != null) scored.push({ path, score });
+    }
+    scored.sort((a, b) => a.score - b.score);
+    return scored;
+  }, [query, allFiles]);
+
+  const root = nodes['/'];
+
+  // The viewer content for IDE mode's right pane — same states as the legacy
+  // full-screen viewer, but without the "back to tree" button (the tree is
+  // always present on the left).
+  function renderViewerPane() {
+    if (!openFile) {
+      return (
+        <div className="files-empty">
+          <div className="files-empty__emoji" aria-hidden="true">{'\u{1F4C4}'}</div>
+          <p className="files-empty__title">{t('files.pickFile')}</p>
+          <p>{t('files.pickFileHint')}</p>
+        </div>
+      );
+    }
+    if (fileLoading) return <Loading label={t('files.opening')} />;
+    if (fileError && isPlan(openFile.path)) {
+      return (
+        <div className="files-noplan">
+          <p className="files-noplan__title">{t('plan.none')}</p>
+          <p className="files-noplan__hint">{t('plan.noneHint')}</p>
+        </div>
+      );
+    }
+    if (fileError) return <ErrorBanner message={fileError} />;
+    return (
+      <FileViewer
+        name={openFile.name}
+        content={fileContent}
+        imageUrl={imageUrl}
+        onNavigate={docLinks ? followLink : undefined}
+        canBack={docLinks && histIdx > 0}
+        canForward={docLinks && histIdx < hist.length - 1}
+        onHistBack={() => histGo(-1)}
+        onHistForward={() => histGo(1)}
+        pinned={pins.map(norm).includes(norm(openFile.path))}
+        onTogglePin={() => togglePin(openFile.path)}
+      />
+    );
+  }
+
+  // The left-pane tree (or fuzzy results when searching). Pins ride above it.
+  function renderBrowserBody() {
+    if (searchResults) {
+      if (indexing) return <Loading label={t('files.searchLoading')} />;
+      if (searchResults.length === 0) {
+        return <p className="files-ide__noresults">{t('files.searchNoResults', { q: query.trim() })}</p>;
+      }
+      const shown = searchResults.slice(0, SEARCH_LIMIT);
+      const extra = searchResults.length - shown.length;
+      return (
+        <div className="files-ide__results" role="list">
+          <p className="files-ide__rescount">{t('files.searchResults', { n: searchResults.length })}</p>
+          {shown.map(({ path }) => {
+            const name = path.split('/').pop();
+            const dir = path.slice(0, path.length - name.length).replace(/\/$/, '');
+            return (
+              <button
+                key={path}
+                type="button"
+                className={`files-ide__result${norm(openFile?.path) === norm(path) ? ' files-ide__result--active' : ''}`}
+                role="listitem"
+                onClick={() => openFileAt(path)}
+                title={path}
+              >
+                <span aria-hidden="true">📄</span>
+                <span className="files-ide__result-name">{name}</span>
+                {dir && <span className="files-ide__result-dir">{dir}</span>}
+              </button>
+            );
+          })}
+          {extra > 0 && <p className="files-ide__more">{t('files.searchMore', { n: extra })}</p>}
+        </div>
+      );
+    }
+    if (!root || root.state === 'loading') return <Loading label={t('files.loadingList')} />;
+    if (root.state === 'error') return <ErrorBanner message={t('files.loadError')} onRetry={() => loadDir('/')} />;
+    return (
+      <FileTree
+        nodes={nodes}
+        expanded={expanded}
+        onToggleDir={toggleDir}
+        onOpenFile={openFileAt}
+        onReferenceFile={referenceFile}
+        onRetryDir={loadDir}
+      />
+    );
+  }
+
   // No repo to browse (e.g. the dock before any agent is active).
   if (!repoId) {
     return (
@@ -280,6 +521,119 @@ export default function FilesBrowser({ repoId }) {
           <div className="files-empty__emoji" aria-hidden="true">{'\u{1F4C2}'}</div>
           <p className="files-empty__title">{t('files.noRepo')}</p>
         </div>
+      </div>
+    );
+  }
+
+  // IDE mode: one split layout — tree + fuzzy search on the left (collapsible),
+  // the open file on the right — used identically on the tab and in the dock.
+  if (ide) {
+    return (
+      <div className={`files-ide${browserOpen ? '' : ' files-ide--collapsed'}`}>
+        <div className="files-ide__rail">
+          <button
+            type="button"
+            className="files-ide__toggle"
+            onClick={toggleBrowser}
+            title={browserOpen ? t('files.hideBrowser') : t('files.showBrowser')}
+            aria-label={browserOpen ? t('files.hideBrowser') : t('files.showBrowser')}
+            aria-pressed={browserOpen}
+          >
+            {browserOpen ? '«' : '»'}
+          </button>
+        </div>
+        {browserOpen && (
+          <div
+            className="files-ide__browser"
+            ref={browserRef}
+            style={{
+              ...(browserWidth != null ? { flexBasis: `${browserWidth}px` } : null),
+              '--tree-zoom': treeZoom,
+            }}
+          >
+            <div className="files-ide__search">
+              <span className="files-ide__search-icon" aria-hidden="true">🔎</span>
+              <input
+                type="text"
+                className="files-ide__search-input"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={t('files.search')}
+                aria-label={t('files.search')}
+              />
+              {query && (
+                <button
+                  type="button"
+                  className="files-ide__search-clear"
+                  onClick={() => setQuery('')}
+                  aria-label="Clear"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            {pins.length > 0 && !searchResults && (
+              <div className="files-pins" role="list" aria-label={t('files.pinned')}>
+                <span className="files-pins__label">{t('files.pinned')}</span>
+                {pins.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    className="files-pin"
+                    role="listitem"
+                    onClick={() => openFileAt(p)}
+                  >
+                    <span aria-hidden="true">📌</span> {p.split('/').pop()}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="files-ide__scroll">{renderBrowserBody()}</div>
+            <div className="files-ide__zoom" role="group" aria-label={t('files.zoom')}>
+              <button
+                type="button"
+                className="files-ide__zoom-btn"
+                onClick={() => zoomBy(-ZOOM_STEP)}
+                disabled={treeZoom <= ZOOM_MIN}
+                title={t('files.zoomOut')}
+                aria-label={t('files.zoomOut')}
+              >
+                A−
+              </button>
+              <button
+                type="button"
+                className="files-ide__zoom-val"
+                onClick={zoomReset}
+                title={t('files.zoomReset')}
+                aria-label={t('files.zoomReset')}
+              >
+                {Math.round(treeZoom * 100)}%
+              </button>
+              <button
+                type="button"
+                className="files-ide__zoom-btn"
+                onClick={() => zoomBy(ZOOM_STEP)}
+                disabled={treeZoom >= ZOOM_MAX}
+                title={t('files.zoomIn')}
+                aria-label={t('files.zoomIn')}
+              >
+                A+
+              </button>
+            </div>
+          </div>
+        )}
+        {browserOpen && (
+          <div
+            className="files-ide__resizer"
+            role="separator"
+            aria-orientation="vertical"
+            onPointerDown={onResizeDown}
+            title={t('files.resize')}
+            aria-label={t('files.resize')}
+          />
+        )}
+        <div className="files-ide__view">{renderViewerPane()}</div>
+        {toast && <div className="files-toast" role="status">{toast}</div>}
       </div>
     );
   }
@@ -337,8 +691,6 @@ export default function FilesBrowser({ repoId }) {
       />
     );
   }
-
-  const root = nodes['/'];
 
   return (
     <div className="files-page">

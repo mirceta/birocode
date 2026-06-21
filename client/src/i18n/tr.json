@@ -513,5 +513,19 @@
   "date.yesterday": "Dun",
   "date.unknown": "Bilinmeyen tarih",
   "files.histBack": "Onceki belgeye geri don",
-  "files.histForward": "Sonraki belgeye ilerle"
+  "files.histForward": "Sonraki belgeye ilerle",
+  "files.search": "Dosyalarda ara…",
+  "files.searchNoResults": "“{q}” ile eslesen dosya yok",
+  "files.searchResults": "{n} eslesme",
+  "files.searchMore": "+{n} daha — aramayi daralt",
+  "files.searchLoading": "Dosyalar dizinleniyor…",
+  "files.pickFile": "Soldaki agactan bir dosya secin.",
+  "files.pickFileHint": "Veya dogrudan birine atlamak icin yukarida arayin.",
+  "files.hideBrowser": "Klasor tarayicisini gizle",
+  "files.showBrowser": "Klasor tarayicisini goster",
+  "files.resize": "Klasor tarayicisini yeniden boyutlandirmak icin surukleyin",
+  "files.zoom": "Klasor agaci yakinlastirma",
+  "files.zoomIn": "Yakinlastir",
+  "files.zoomOut": "Uzaklastir",
+  "files.zoomReset": "Yakinlastirmayi %100'e sifirla"
 }

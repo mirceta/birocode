@@ -39,6 +39,22 @@
 
 ## Active feature plans
 
+- [Files tab — IDE mode (split tree/viewer + fuzzy search)](plans/files-ide-mode.md)
+  — give the **Files tab** an **IDE-style split layout**: the folder/file **tree
+  on the left**, the **selected file's view on the right** (instead of today's
+  single column where the viewer *replaces* the tree, forcing a ← back-and-refind
+  to open the next file). Plus a **fuzzy search over the tree + files** to jump
+  straight to a file by typing part of its path. Built **inside the shared
+  `FilesBrowser`** (used by both the routed tab and the agent dock) as a layout
+  flag, not a fork; gated behind a new **`'advanced'`** capability so Basic mode
+  keeps the simpler stacked view, and the **narrow agent dock falls back to
+  stacked** so the split can't clip it. Frontend-only MVP (reuses `/api/files`,
+  `/api/files/raw`, pins); a whole-repo recursive search index is a possible
+  follow-up. **Slice 1 built & browser-verified on an isolated `:5252` preview**
+  (tab + dock, split + fuzzy search + collapse, 0 console errors); a backend
+  recursive index (`GET /api/files/all`) powers whole-repo search. Not yet
+  deployed or committed. On `feature/files-ide-mode`.
+
 - [System tests for the Chat feature](plans/chat-system-tests.md) — discover
   **every** exercisable Chat behaviour, then run them **all** as black-box system
   tests against the real HTTP/SSE surface (and the real Claude CLI where it
