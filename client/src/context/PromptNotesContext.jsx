@@ -1,10 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { apiGet, apiPost, apiPatch, apiDelete } from '../api/client';
+import { apiGet, apiPut } from '../api/client';
 
-// User-defined prompt NOTES — freeform working notes drafted before being ported
-// into a prompt PLAN. The third sibling of PromptsContext / PromptPlansContext:
+// The user's prompt NOTES — a SINGLE freeform scratch canvas drafted before being
+// ported into a prompt PLAN. The third sibling of PromptsContext / PromptPlansContext:
 // GLOBAL + backend-synced (/api/prompt-notes), shared by every chat composer, so we
-// fetch once here. A note is { id, title, body }. Distinct from the Ideas store.
+// fetch the canvas once here. One document (a string), not a list. Distinct from the
+// Ideas store.
 const PromptNotesContext = createContext(null);
 
 export function usePromptNotes() {
@@ -14,36 +15,32 @@ export function usePromptNotes() {
 }
 
 export function PromptNotesProvider({ children }) {
-  const [notes, setNotes] = useState([]);
+  const [text, setText] = useState('');
+  // loaded gates the editor so an in-flight initial fetch can't be clobbered by an
+  // autosave of the still-empty default (which would wipe the stored canvas).
+  const [loaded, setLoaded] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
-      const list = await apiGet('/prompt-notes');
-      if (Array.isArray(list)) setNotes(list);
+      const res = await apiGet('/prompt-notes');
+      if (res && typeof res.text === 'string') setText(res.text);
     } catch {
-      /* leave the current list; the manager surfaces write errors itself */
+      /* leave the current text; the panel surfaces write errors itself */
+    } finally {
+      setLoaded(true);
     }
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  const addNote = useCallback(async (title, body) => {
-    const n = await apiPost('/prompt-notes', { title, body });
-    setNotes((cur) => [...cur, n]);
-    return n;
+  // Persist the whole canvas. Returns the stored value so the panel can confirm.
+  const saveNotes = useCallback(async (next) => {
+    const res = await apiPut('/prompt-notes', { text: next });
+    const stored = res && typeof res.text === 'string' ? res.text : next;
+    setText(stored);
+    return stored;
   }, []);
 
-  const updateNote = useCallback(async (id, title, body) => {
-    const n = await apiPatch(`/prompt-notes/${id}`, { title, body });
-    setNotes((cur) => cur.map((x) => (x.id === id ? n : x)));
-    return n;
-  }, []);
-
-  const deleteNote = useCallback(async (id) => {
-    await apiDelete(`/prompt-notes/${id}`);
-    setNotes((cur) => cur.filter((x) => x.id !== id));
-  }, []);
-
-  const value = { notes, refresh, addNote, updateNote, deleteNote };
+  const value = { text, loaded, refresh, saveNotes };
   return <PromptNotesContext.Provider value={value}>{children}</PromptNotesContext.Provider>;
 }

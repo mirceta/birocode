@@ -1,133 +1,91 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useT } from '../../i18n/LanguageContext';
 
-// The "Notes" tab of the ⚙ modal (openspec add-prompt-notes-tab). A NOTE is a
-// titled, freeform block of text the user is drafting that hasn't yet been ported
-// into a prompt PLAN — the messy first step of planning. Create / edit / delete /
-// list, nothing more: notes are drafts, not send-ready text, so there's no "Use →
-// composer" action (unlike the Plans tab). Notes are global + backend-synced
-// (parent passes them in from PromptNotesContext), like the prompts and plans tabs,
-// and live in their OWN store — separate from the Ideas feature.
+// The "Notes" tab of the ⚙ modal (openspec add-prompt-notes-tab). ONE freeform white
+// canvas — a single document the user reads and edits, drafting the messy first step
+// of planning before it's ported into a prompt PLAN. The canvas is resizable (drag the
+// corner to make it as big as you like), autosaves a short moment after you stop
+// typing, and has an explicit Save button too. Global + backend-synced via
+// PromptNotesContext, in its OWN store (separate from the Ideas feature).
 
-const EMPTY = { title: '', body: '' };
+const AUTOSAVE_MS = 1000;
 
-export default function PromptNotesPanel({ notes, onAddNote, onUpdateNote, onDeleteNote }) {
+export default function PromptNotesPanel({ text, loaded, onSave }) {
   const { t } = useT();
 
-  // editingId: null → list view; '' → adding a new note; an id → editing that note.
-  const [editingId, setEditingId] = useState(null);
-  const [draft, setDraft] = useState(EMPTY);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  // Local draft mirrors the canvas; `saved` is the last value known to be on the
+  // backend, so we can show clean/dirty and skip no-op saves.
+  const [draft, setDraft] = useState(text);
+  const [saved, setSaved] = useState(text);
+  const [status, setStatus] = useState('idle'); // idle | saving | saved | error
+  const timer = useRef(null);
 
-  function reset() {
-    setEditingId(null);
-    setDraft(EMPTY);
-    setError('');
-  }
+  // Adopt the backend value once it loads (or changes underneath us) — but only when
+  // there are no unsaved local edits, so we never stomp what the user is typing.
+  useEffect(() => {
+    if (draft === saved) {
+      setDraft(text);
+      setSaved(text);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text, loaded]);
 
-  function startAdd() {
-    setEditingId('');
-    setDraft(EMPTY);
-    setError('');
-  }
+  // Flush any pending autosave timer on unmount.
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
-  function startEdit(n) {
-    setEditingId(n.id);
-    setDraft({ title: n.title || '', body: n.body || '' });
-    setError('');
-  }
+  const dirty = draft !== saved;
 
-  async function save(e) {
-    e.preventDefault();
-    const title = draft.title.trim();
-    const body = draft.body.trim();
-    if (!title && !body) { setError(t('notes.needsContent')); return; }
-    setBusy(true);
-    setError('');
+  async function persist(value) {
+    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+    setStatus('saving');
     try {
-      if (editingId) await onUpdateNote(editingId, title, body);
-      else await onAddNote(title, body);
-      reset();
+      const stored = await onSave(value);
+      setSaved(stored);
+      setStatus('saved');
     } catch {
-      setError(t('notes.saveError'));
-    } finally {
-      setBusy(false);
+      setStatus('error');
     }
   }
 
-  async function remove(id) {
-    try {
-      await onDeleteNote(id);
-      if (editingId === id) reset();
-    } catch {
-      setError(t('notes.saveError'));
-    }
+  function onChange(e) {
+    const value = e.target.value;
+    setDraft(value);
+    setStatus('idle');
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => { persist(value); }, AUTOSAVE_MS);
   }
 
-  // ---- EDITOR (adding or editing) ----
-  if (editingId !== null) {
-    return (
-      <div className="note-mgr">
-        <button type="button" className="plan-mgr__back" onClick={reset}>
-          &larr; {t('notes.back')}
-        </button>
-        <form className="prompt-mgr__form" onSubmit={save}>
-          <p className="prompt-mgr__formhint">{editingId ? t('notes.editNote') : t('notes.newNote')}</p>
-          <input
-            className="prompt-mgr__label-input"
-            type="text"
-            placeholder={t('notes.titlePlaceholder')}
-            value={draft.title}
-            onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
-          />
-          <textarea
-            className="prompt-mgr__text-input"
-            placeholder={t('notes.bodyPlaceholder')}
-            rows={6}
-            value={draft.body}
-            onChange={(e) => setDraft((d) => ({ ...d, body: e.target.value }))}
-          />
-          {error && <p className="prompt-mgr__error" role="alert">{error}</p>}
-          <div className="prompt-mgr__actions">
-            <button type="submit" className="prompt-mgr__save" disabled={busy || (!draft.title.trim() && !draft.body.trim())}>
-              {editingId ? t('notes.save') : t('notes.add')}
-            </button>
-            <button type="button" className="prompt-mgr__cancel" onClick={reset}>{t('notes.cancel')}</button>
-          </div>
-        </form>
-      </div>
-    );
+  function saveNow() {
+    persist(draft);
   }
 
-  // ---- LIST VIEW ----
+  const statusText =
+    status === 'saving' ? t('notes.saving')
+      : status === 'error' ? t('notes.saveError')
+        : dirty ? t('notes.unsaved')
+          : t('notes.saved');
+
   return (
     <div className="note-mgr">
-      {notes.length === 0 && <p className="prompt-mgr__empty">{t('notes.empty')}</p>}
-      <ul className="prompt-mgr__list">
-        {notes.map((n) => (
-          <li key={n.id} className="prompt-mgr__item">
-            <div className="prompt-mgr__item-main">
-              {n.title && <span className="prompt-mgr__item-label">{n.title}</span>}
-              {n.body && <span className="prompt-mgr__item-text">{n.body}</span>}
-            </div>
-            <div className="prompt-mgr__item-actions">
-              <button type="button" className="prompt-mgr__item-btn" onClick={() => startEdit(n)}>
-                {t('notes.edit')}
-              </button>
-              <button type="button" className="prompt-mgr__item-btn" onClick={() => remove(n.id)}>
-                {t('notes.delete')}
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
-
-      {error && <p className="prompt-mgr__error" role="alert">{error}</p>}
-      <p className="prompt-mgr__formhint">{t('notes.newHint')}</p>
-      <div className="prompt-mgr__actions">
-        <button type="button" className="prompt-mgr__save" onClick={startAdd}>
-          + {t('notes.create')}
+      <textarea
+        className="note-mgr__canvas"
+        placeholder={t('notes.canvasPlaceholder')}
+        value={draft}
+        onChange={onChange}
+        disabled={!loaded}
+        spellCheck={false}
+      />
+      <div className="note-mgr__bar">
+        <span className={`note-mgr__status${status === 'error' ? ' note-mgr__status--error' : ''}`} role="status">
+          {statusText}
+        </span>
+        <button
+          type="button"
+          className="prompt-mgr__save"
+          onClick={saveNow}
+          disabled={!loaded || status === 'saving' || !dirty}
+        >
+          {t('notes.save')}
         </button>
       </div>
     </div>

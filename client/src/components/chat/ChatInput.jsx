@@ -43,9 +43,9 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
   // shown as a second tab in the SAME ⚙ modal. "Use" on a step composes its
   // details + expected result into the composer (same insertPrompt path).
   const { plans, addPlan, updatePlan, deletePlan } = usePromptPlans();
-  // Prompt NOTES (openspec add-prompt-notes-tab): freeform working notes drafted
+  // Prompt NOTES (openspec add-prompt-notes-tab): a single freeform canvas drafted
   // before being shaped into a plan, shown as a THIRD tab in the SAME ⚙ modal.
-  const { notes, addNote, updateNote, deleteNote } = usePromptNotes();
+  const { text: notesText, loaded: notesLoaded, saveNotes } = usePromptNotes();
   const [mgrOpen, setMgrOpen] = useState(false);
   // The queue for the surface in play: this dock's own agent when embedded, else
   // the active tab's, else the global queue.
@@ -146,10 +146,9 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
           onAddPlan={addPlan}
           onUpdatePlan={updatePlan}
           onDeletePlan={deletePlan}
-          notes={notes}
-          onAddNote={addNote}
-          onUpdateNote={updateNote}
-          onDeleteNote={deleteNote}
+          notesText={notesText}
+          notesLoaded={notesLoaded}
+          onSaveNotes={saveNotes}
           onInsert={insertPrompt}
           onClose={() => setMgrOpen(false)}
         />

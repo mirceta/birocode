@@ -23,7 +23,7 @@ const EMOJIS = [
 export default function PromptManager({
   prompts, onAdd, onUpdate, onDelete,
   plans, onAddPlan, onUpdatePlan, onDeletePlan,
-  notes, onAddNote, onUpdateNote, onDeleteNote,
+  notesText, notesLoaded, onSaveNotes,
   onInsert, onClose,
 }) {
   const { t } = useT();
@@ -89,7 +89,7 @@ export default function PromptManager({
 
   return createPortal(
     <div className="prompt-mgr-backdrop" onClick={onClose}>
-    <div className="prompt-mgr" role="dialog" aria-modal="true" aria-label={t('prompts.title')} onClick={(e) => e.stopPropagation()}>
+    <div className={`prompt-mgr${tab === 'notes' ? ' prompt-mgr--notes' : ''}`} role="dialog" aria-modal="true" aria-label={t('prompts.title')} onClick={(e) => e.stopPropagation()}>
       <div className="prompt-mgr__head">
         <div className="prompt-mgr__tabs" role="tablist">
           <button
@@ -135,10 +135,9 @@ export default function PromptManager({
         />
       ) : tab === 'notes' ? (
         <PromptNotesPanel
-          notes={notes}
-          onAddNote={onAddNote}
-          onUpdateNote={onUpdateNote}
-          onDeleteNote={onDeleteNote}
+          text={notesText}
+          loaded={notesLoaded}
+          onSave={onSaveNotes}
         />
       ) : (
       <>

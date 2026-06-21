@@ -4,23 +4,23 @@ using ClaudeWeb.Services.Logging;
 namespace ClaudeWeb.Services.PromptNotes;
 
 /// <summary>
-/// User-defined prompt NOTES — freeform working notes the user is drafting before
-/// porting them into a prompt PLAN (the "first messy step" of planning). The third
-/// sibling of <see cref="ClaudeWeb.Services.Prompts.PromptsService"/> and
+/// The user's prompt NOTES — a SINGLE freeform scratch canvas the user is drafting
+/// before porting it into a prompt PLAN (the "first messy step" of planning). One
+/// document, not a list: the Notes tab is one white canvas you read and edit. The
+/// third sibling of <see cref="ClaudeWeb.Services.Prompts.PromptsService"/> and
 /// <see cref="ClaudeWeb.Services.PromptPlans.PromptPlansService"/>: GLOBAL (not
-/// per-repo) and backend-synced so the personal note library follows the user across
-/// devices and projects. Persisted to %APPDATA%\ClaudeWeb\prompt-notes.json with the
-/// ATOMIC temp+rename write and never-reseed-on-unreadable load guard (the
+/// per-repo) and backend-synced so the canvas follows the user across devices and
+/// projects. Persisted to %APPDATA%\ClaudeWeb\prompt-notes.json with the ATOMIC
+/// temp+rename write and never-reseed-on-unreadable load guard (the
 /// PromptsService/PromptPlansService pattern). DELIBERATELY separate from the Ideas
 /// NotesService (notes.json) — a different feature with its own store — so the two
-/// never collide. Each note is a short title + a freeform body; a note with NEITHER
-/// is dropped (an empty note is never persisted).
+/// never collide.
 /// </summary>
 public class PromptNotesService
 {
-    public const int MaxTitleLength = 120;
-    public const int MaxBodyLength = 20_000;
-    public const int MaxNotes = 500;
+    // The canvas can hold a real working document, so the cap is generous; it only
+    // exists to keep a runaway paste from bloating the store unbounded.
+    public const int MaxLength = 200_000;
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
 
     private readonly Logger _logger;
@@ -37,78 +37,31 @@ public class PromptNotesService
         Load();
     }
 
-    public sealed record PromptNote(string Id, string Title, string Body);
-
     private sealed class Store
     {
-        // Insertion order; the API returns notes in that order.
-        public List<PromptNote> Notes { get; set; } = new();
+        // The single canvas. Empty string = nothing written yet.
+        public string Text { get; set; } = string.Empty;
     }
 
-    /// <summary>The whole note library (insertion order).</summary>
-    public List<PromptNote> List()
+    /// <summary>The current canvas text (empty string if nothing written yet).</summary>
+    public string Get()
     {
-        lock (_gate) return new List<PromptNote>(_store.Notes);
+        lock (_gate) return _store.Text;
     }
 
-    /// <summary>Adds a note. Null if both title and body are empty (an empty note is
-    /// never persisted).</summary>
-    public PromptNote? Add(string? title, string? body)
+    /// <summary>Replaces the canvas with <paramref name="text"/> (capped) and returns
+    /// the stored value. An empty/whitespace canvas is allowed — the user may clear it.</summary>
+    public string Set(string? text)
     {
-        var note = Build(Guid.NewGuid().ToString("N"), title, body);
-        if (note is null) return null;
+        var clean = (text ?? string.Empty).Replace("\0", string.Empty);
+        if (clean.Length > MaxLength) clean = clean[..MaxLength];
         lock (_gate)
         {
-            if (_store.Notes.Count >= MaxNotes) return null;
-            _store.Notes.Add(note);
+            _store.Text = clean;
             Save();
         }
-        _logger.Info($"[PROMPT-NOTES] Added note {note.Id}");
-        return note;
-    }
-
-    /// <summary>Edits a note (title + body). Null if the id is unknown or both fields
-    /// are empty.</summary>
-    public PromptNote? Update(string id, string? title, string? body)
-    {
-        var built = Build(id, title, body);
-        if (built is null) return null;
-        lock (_gate)
-        {
-            var i = _store.Notes.FindIndex(n => n.Id == id);
-            if (i < 0) return null;
-            _store.Notes[i] = built;
-            Save();
-            _logger.Info($"[PROMPT-NOTES] Updated note {id}");
-            return built;
-        }
-    }
-
-    /// <summary>Removes a note. False if the id is unknown.</summary>
-    public bool Delete(string id)
-    {
-        lock (_gate)
-        {
-            var removed = _store.Notes.RemoveAll(n => n.Id == id) > 0;
-            if (removed) { Save(); _logger.Info($"[PROMPT-NOTES] Deleted note {id}"); }
-            return removed;
-        }
-    }
-
-    // Trim + cap; return null when BOTH fields are empty so an empty note is never
-    // stored (the one required-ish constraint — a note needs a title or a body).
-    private static PromptNote? Build(string id, string? title, string? body)
-    {
-        var t = CleanField(title, MaxTitleLength);
-        var b = CleanField(body, MaxBodyLength);
-        if (t.Length == 0 && b.Length == 0) return null;
-        return new PromptNote(id, t, b);
-    }
-
-    private static string CleanField(string? text, int max)
-    {
-        var t = (text ?? string.Empty).Trim();
-        return t.Length > max ? t[..max] : t;
+        _logger.Info($"[PROMPT-NOTES] Saved canvas ({clean.Length} chars)");
+        return clean;
     }
 
     private void Load()
@@ -117,7 +70,9 @@ public class PromptNotesService
         {
             if (!File.Exists(_path)) return;
             var store = JsonSerializer.Deserialize<Store>(File.ReadAllText(_path));
-            if (store?.Notes != null) _store = store;
+            // store?.Text is null only on an older list-shaped file (no real data shipped) —
+            // fall back to an empty canvas in that case rather than throwing.
+            if (store?.Text != null) _store = store;
         }
         catch (Exception ex)
         {

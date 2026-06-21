@@ -5,53 +5,57 @@
 ### Requirement: Notes tab in the prompt pop-up
 
 The system SHALL provide a third "Notes" tab in the chat composer's saved-prompts
-pop-up, alongside the existing Prompts and Plans tabs, where the End User can create,
-edit, delete, and list freeform working notes that have not yet been ported into a
-prompt plan. Adding the Notes tab SHALL NOT remove or alter the Prompts or Plans tabs.
+pop-up, alongside the existing Prompts and Plans tabs, that presents a SINGLE freeform
+text canvas the End User reads and edits — working notes not yet ported into a prompt
+plan. Adding the Notes tab SHALL NOT remove or alter the Prompts or Plans tabs.
 
-A note SHALL consist of a short title and a freeform text body.
+The canvas SHALL be resizable so the End User can enlarge it for reading and editing.
 
-#### Scenario: Create a note
+The canvas SHALL autosave shortly after the End User stops typing, AND the tab SHALL
+also provide an explicit Save control; both persist the same single document. The tab
+SHALL surface save state (e.g. saving / saved / unsaved).
 
-- **WHEN** the End User opens the pop-up, switches to the Notes tab, enters a title and body, and saves
-- **THEN** the note appears in the Notes list and the Prompts and Plans tabs remain unchanged
+#### Scenario: Edit the canvas
 
-#### Scenario: Edit and delete a note
+- **WHEN** the End User opens the pop-up, switches to the Notes tab, and types into the canvas
+- **THEN** the text autosaves shortly after they stop typing, the Save control also persists on demand, and the Prompts and Plans tabs remain unchanged
 
-- **WHEN** the End User edits an existing note's title or body and saves, or deletes a note
-- **THEN** the change is reflected in the Notes list immediately
+#### Scenario: Resize the canvas
 
-#### Scenario: Empty note is rejected
+- **WHEN** the End User drags the canvas larger
+- **THEN** the canvas grows so more text is visible for reading and editing
 
-- **WHEN** the End User tries to save a note with neither a title nor a body
-- **THEN** the system does not persist an empty note
+#### Scenario: Clearing the canvas is allowed
+
+- **WHEN** the End User deletes all text and saves
+- **THEN** the system persists an empty canvas (there is no required content)
 
 ### Requirement: Notes are global and backend-synced
 
-The system SHALL persist notes globally (not per-repo) on the backend so the note
-library is shared across every chat composer and survives reloads and redeploys, using
-the same durability as Prompts and Plans (atomic writes; an unreadable store is left
-untouched rather than reseeded).
+The system SHALL persist the notes canvas globally (not per-repo) on the backend so it
+is shared across every chat composer and survives reloads and redeploys, using the same
+durability as Prompts and Plans (atomic writes; an unreadable store is left untouched
+rather than reseeded).
 
-#### Scenario: Notes persist across reload
+#### Scenario: Canvas persists across reload
 
-- **WHEN** the End User creates notes and later reloads the web UI
-- **THEN** the previously created notes are still present
+- **WHEN** the End User edits the canvas and later reloads the web UI
+- **THEN** the previously saved canvas text is still present
 
-#### Scenario: Notes are shared across surfaces
+#### Scenario: Canvas is shared across surfaces
 
 - **WHEN** the End User opens the pop-up from a different chat surface on the same account
-- **THEN** the same notes are listed
+- **THEN** the same canvas text is shown
 
 ### Requirement: Notes are distinct from Ideas
 
-The system SHALL keep prompt Notes in a separate store from the Ideas feature, so the
-two never share or overwrite each other's data.
+The system SHALL keep the prompt-notes canvas in a separate store from the Ideas
+feature, so the two never share or overwrite each other's data.
 
 #### Scenario: Separate stores
 
-- **WHEN** the End User saves a prompt Note and also has Ideas entries
-- **THEN** the Note is written to the prompt-notes store and the Ideas list is unaffected
+- **WHEN** the End User saves the prompt-notes canvas and also has Ideas entries
+- **THEN** the canvas is written to the prompt-notes store and the Ideas list is unaffected
 
 ### Requirement: Notes tab respects the Advanced-mode gate
 
