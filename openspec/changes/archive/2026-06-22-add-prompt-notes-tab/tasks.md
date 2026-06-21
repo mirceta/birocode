@@ -31,19 +31,22 @@
       (no new capability flag) — Notes is a tab inside the already-gated ⚙ modal, so it
       inherits the gate with no code change; hidden in Basic mode.
 
+> **Redesign mid-flight:** after the list-of-titled-notes version shipped, the Notes
+> tab was reworked into a SINGLE resizable autosaving canvas (one `{ text }` document;
+> controller `GET` + `PUT /api/prompt-notes`; `PromptNotesService` stores one string).
+> Tasks 1.x/2.x above describe the original list model; the delta spec and code reflect
+> the canvas model that actually shipped.
+
 ## 4. Verify
 
-- [ ] 4.1 Backend: CRUD over HTTP against `/api/prompt-notes` (create, edit, delete,
-      list) + persistence across restart.
-- [ ] 4.2 Browser (isolated preview build): open ⚙ → Notes tab → create a note → edit →
-      delete → persists across reload; Prompts and Plans tabs still work; 0 console errors.
-- [ ] 4.3 Confirm `prompt-notes.json` is written and is separate from Ideas' `notes.json`.
-
-> Build status: `npm --prefix client run build` and `dotnet build` both pass clean.
-> Runtime/browser verification (4.x) and ship (5.x) not yet done.
+- [x] 4.1 Backend: `GET`/`PUT /api/prompt-notes` over HTTP + persistence across restart
+      (atomic store, never-reseed-on-unreadable).
+- [x] 4.2 Browser: open ⚙ → Notes tab → type → autosave + Save → persists across reload;
+      resize works; Prompts and Plans tabs still work. **User-confirmed working on live.**
+- [x] 4.3 Confirm `prompt-notes.json` is written and is separate from Ideas' `notes.json`.
 
 ## 5. Ship
 
-- [ ] 5.1 Build, deploy to live `:5099` via `swap.ps1` (origin/main guard), browser-verify.
-- [ ] 5.2 Update the Understanding app for the three-tab pop-up; `openspec archive
-      add-prompt-notes-tab` to fold the delta into the `prompt-library` baseline.
+- [x] 5.1 Build, deploy to live `:5099` via `swap.ps1` (origin/main guard), browser-verify.
+- [x] 5.2 `openspec archive add-prompt-notes-tab` — fold the delta into the new
+      `prompt-library` baseline; merge `feature/prompt-notes` into `main`.
