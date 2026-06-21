@@ -5,6 +5,7 @@ import ThinkingIndicator from '../components/chat/ThinkingIndicator';
 import ActivitySteps from '../components/chat/ActivitySteps';
 import SessionPicker from '../components/chat/SessionPicker';
 import UnderstandingPanel from '../components/chat/UnderstandingPanel';
+import ToolCallsPanel from '../components/chat/ToolCallsPanel';
 import ErrorBanner from '../components/shared/ErrorBanner';
 import ClaudeViewToggle from '../components/shared/ClaudeViewToggle';
 import ModelSelector from '../components/chat/ModelSelector';
@@ -63,6 +64,8 @@ export default function Chat({ chat: injected, embedded = false, stashTabId }) {
   const showContextMeter = useFeature('contextMeter');
   const showDualChat = useFeature('dualChat');
   const showUnderstanding = useFeature('understandingPanel');
+  const showToolCalls = useFeature('toolCallHistory');
+  const [toolsOpen, setToolsOpen] = useState(false);
 
   const scrollRef = useRef(null);
   const stickToBottom = useRef(true);
@@ -203,6 +206,17 @@ export default function Chat({ chat: injected, embedded = false, stashTabId }) {
           </span>
         )}
         <ModelSelector value={model} onChange={changeModel} />
+        {!embedded && showToolCalls && (
+          <button
+            type="button"
+            className="chat__tools"
+            onClick={() => setToolsOpen(true)}
+            title={t('chat.toolCalls')}
+            aria-label={t('chat.toolCalls')}
+          >
+            {t('chat.toolCalls')}
+          </button>
+        )}
         {refresh && (
           <button
             type="button"
@@ -276,6 +290,10 @@ export default function Chat({ chat: injected, embedded = false, stashTabId }) {
         onNew={startNewConversation}
         onClose={() => setPickerOpen(false)}
       />
+
+      {!embedded && showToolCalls && (
+        <ToolCallsPanel open={toolsOpen} onClose={() => setToolsOpen(false)} />
+      )}
     </div>
   );
 }

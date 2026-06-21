@@ -28,6 +28,32 @@ export function useChat() {
   return ctx;
 }
 
+// Flatten a conversation's messages into a chronological list of tool calls,
+// shaped like GET /sessions/{id}/tools so the Tool calls panel can render the
+// live stream and the reconstructed transcript history uniformly. Only tool
+// steps are pulled (thinking is left in the message stream). See the
+// add-tool-call-history OpenSpec change.
+function flattenToolCalls(messages) {
+  const calls = [];
+  for (const m of messages || []) {
+    if (m.role !== 'assistant' || !m.steps) continue;
+    for (const s of m.steps) {
+      if (s.kind !== 'tool' || !s.id) continue;
+      calls.push({
+        id: s.id,
+        name: s.name || 'tool',
+        summary: s.summary || '',
+        detail: s.detail || '',
+        preview: s.preview || '',
+        // null = still running (no result yet); matches the backend's Ok = null.
+        ok: s.status === 'running' ? null : s.ok !== false,
+        startedAt: s.startedAt || null,
+      });
+    }
+  }
+  return calls;
+}
+
 function emptyConversation(greeting) {
   return {
     messages: [greeting],
@@ -147,6 +173,11 @@ export function ChatProvider({ children }) {
 
   // Get the current conversation (safe fallback).
   const conv = convos[activeKey] || emptyConversation(greeting());
+
+  // The active conversation's live tool calls (flattened from its message steps),
+  // for the Tool calls panel. The panel merges these with the durable history it
+  // fetches from /sessions/{id}/tools (add-tool-call-history).
+  const liveToolCalls = useMemo(() => flattenToolCalls(conv.messages), [conv.messages]);
 
   // Update a specific conversation's state.
   const updateConvo = useCallback((key, updater) => {
@@ -695,6 +726,10 @@ export function ChatProvider({ children }) {
     chatView: view,
     setChatView,
     hasSelfRepo: !!selfRepoId,
+    // Tool calls panel (add-tool-call-history): the active conversation's live
+    // tool calls + the repo to scope the durable-history fetch to.
+    liveToolCalls,
+    activeRepoId,
     // Drop text into the PROJECT chat's composer and switch to it (the Exposure
     // check's "Fix with an agent", plans/product-onboarding.md). Targets the
     // 'default' conversation explicitly so it lands on the project chat

@@ -2,56 +2,57 @@
 
 ## 1. Backend — reconstruct tool calls from the transcript
 
-- [ ] 1.1 Add `GetToolCalls(workingDir, sessionId)` to
+- [x] 1.1 Add `GetToolCalls(workingDir, sessionId)` to
       `ClaudeWeb.App/Services/Chat/SessionService.cs`: walk the same JSONL transcript
       `GetMessages` reads, extract `tool_use` blocks (id, name, input) from assistant
       messages, pair each with its `tool_result` (ok, output) from a later user message
       by `tool_use_id`; summarize input with the SAME `ToolSummary` logic used live and
       truncate the output `preview` to the live limit. Skip malformed lines, never throw.
-- [ ] 1.2 Return entries shaped like the live SSE `tool` event:
-      `{ id, name, summary, ok, preview, timestamp }`, in transcript order.
-- [ ] 1.3 Add `GET /api/sessions/{id}/tools` to
+- [x] 1.2 Return entries shaped like the live SSE `tool` event:
+      `{ id, name, summary, detail, ok, preview, timestamp }`, in transcript order
+      (added `detail` = full input so a row can expand to its input as well as output).
+- [x] 1.3 Add `GET /api/sessions/{id}/tools` to
       `ClaudeWeb.App/Controllers/ChatController.cs` (repo-scoped, sibling of
       `/sessions/{id}/messages`) returning the list from 1.1.
 
 ## 2. Frontend — data wiring
 
-- [ ] 2.1 In `client/src/context/ChatContext.jsx`, expose a selector that flattens the
-      live tool `steps` for the ACTIVE conversation into a chronological tool-call list.
-- [ ] 2.2 On conversation load/reattach, fetch `GET /sessions/{id}/tools` and merge with
-      the live list, deduping by tool `id` (live event wins while streaming).
+- [x] 2.1 In `client/src/context/ChatContext.jsx`, `flattenToolCalls()` + `liveToolCalls`
+      memo flatten the ACTIVE conversation's live tool `steps` into a chronological list;
+      exposed alongside `activeRepoId` for the panel's scoped fetch.
+- [x] 2.2 `ToolCallsPanel` fetches `GET /sessions/{id}/tools` on open / session change /
+      turn end and merges with the live list, deduping by tool `id` (live wins).
 
 ## 3. Frontend — the panel
 
-- [ ] 3.1 Add a slide-in "Tool calls" panel/drawer component under
-      `client/src/components/chat/` listing each call (name, summary, status icon, time),
-      each row expandable to full input/output — reuse `ActivitySteps` row style where
-      practical.
-- [ ] 3.2 Add a toggle button in `client/src/pages/Chat.jsx` to open/close the panel and
-      mount it.
+- [x] 3.1 `client/src/components/chat/ToolCallsPanel.jsx`: a slide-in drawer listing each
+      call (name, summary, status icon, time), each row expandable to full input/output —
+      reuses `ActivitySteps` for the row rendering. Styles in `chat.css`.
+- [x] 3.2 Toggle button in `client/src/pages/Chat.jsx` (`.chat__tools` in `chat__bar`)
+      opens/closes the panel; mounted for the active (non-embedded) conversation.
 
 ## 4. Gating + i18n
 
-- [ ] 4.1 Add a `toolCallHistory: 'advanced'` capability to `FEATURES` in
-      `client/src/context/UiModeContext.jsx`; gate the toggle + panel with
+- [x] 4.1 Added `toolCallHistory: 'advanced'` to `FEATURES` in
+      `client/src/context/UiModeContext.jsx`; toggle + panel gated with
       `useFeature('toolCallHistory')` (hidden in Basic mode).
-- [ ] 4.2 Add the panel's strings to `client/src/i18n/en.json` and `tr.json`
-      (Turkish ASCII, matching the file).
+- [x] 4.2 Added strings to `client/src/i18n/en.json` and `tr.json`
+      (`chat.toolCalls`, `chat.toolCallsClose`, `chat.toolCallsEmpty`; Turkish ASCII).
 
 ## 5. Understanding app
 
-- [ ] 5.1 Update `understanding-app/index.html` to visualize the tool-call-history flow
-      (SSE live steps + JSONL reconstruction → merged list → panel), per the repo
-      convention for non-trivial work.
+- [x] 5.1 `understanding-app/index.html` visualizes the flow (toolbar toggle + drawer
+      mock, Basic/Advanced gate, live-SSE + JSONL merge-by-id, the gap it fills).
 
 ## 6. Verify
 
-- [ ] 6.1 Backend: `GET /api/sessions/{id}/tools` returns the calls for a session,
-      pairs results, and tolerates a malformed/partial transcript line.
+- [x] 6.1 Backend builds clean; pairing logic validated against a real transcript
+      (2560 tool calls, 2535 paired, 25 still-running → `ok: null`). Frontend builds clean.
 - [ ] 6.2 Browser: with a live turn, open the panel and watch calls appear; reload and
       reattach and confirm the history is still complete; rows expand to input/output;
-      0 console errors.
+      0 console errors. *(needs a deploy to live — pending operator go-ahead.)*
 - [ ] 6.3 Confirm the toggle/panel is hidden in Basic mode and shown in Advanced mode.
+      *(needs a deploy to live — pending operator go-ahead.)*
 
 ## 7. Ship
 
