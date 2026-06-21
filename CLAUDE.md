@@ -13,6 +13,27 @@ where it is written, then let the user decide. Never silently comply, and
 never silently refuse — surface the conflict every single time. This applies
 to every request, no matter how small.
 
+## ⚠️ Planning convention is in transition — keep using the OLD way for now
+
+We have **decided** to adopt OpenSpec's spec-driven flow as the planning layer
+(Path A, see `plans/openspec-flow.md`), but the port **has not happened yet**.
+As of now: `openspec/` is **not** initialized or committed, there are **no**
+`specs/`, the `/opsx` commands do **not** exist, and this file still points
+planning at `plans/*`. So:
+
+- **Plan the current way — unchanged.** Keep writing `plans/<feature>.md` with a
+  status header, build an Understanding app for non-trivial work (see below), and
+  follow the existing rituals. This is still the only convention that works.
+- **Do NOT reach for OpenSpec yet.** Don't run `/opsx`, don't expect an
+  `openspec/specs/` baseline, don't author delta specs — none of it is wired up,
+  so you'd be building on nothing.
+- **Context on what's coming:** the port plan and its phases live in
+  `plans/openspec-flow.md`; a standing explainer + executable Console for it lives
+  in the `openspec-port-app/` Control Room (a Local app on `feature/openspec-flow`).
+- When the port actually lands (Phase 0: `openspec init` + committed `openspec/` +
+  this section repointed at the `/opsx` flow), **this disclaimer gets replaced**
+  with the real OpenSpec instructions. Until you see that, assume the old way.
+
 ## Glossary
 
 These terms are used consistently across the docs, plans, and code comments:

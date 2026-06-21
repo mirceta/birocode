@@ -227,3 +227,36 @@ that the user explicitly keeps. That makes this phase non-negotiable, not a nice
 ## Out of scope
 - Re-litigating the decision — Path A is chosen.
 - Replacing the harness's existing markdown/Mermaid rendering engine (Phase 3 reuses it).
+
+## Phase 4 — ready-to-swap `CLAUDE.md` block (paste at merge)
+
+When the transition completes and this branch merges to `main`, **replace** the
+interim "Planning convention is in transition" section in `CLAUDE.md` with the block
+below. It flips the convention to OpenSpec and tells any straggler agent (whose branch
+predates the merge and still uses `plans/*`) exactly how to cope — pointing at the
+concrete recipe in `docs/openspec-migration.md`. Drafted now so the Phase-4 swap is a
+paste, not a rewrite.
+
+```markdown
+## Planning convention — OpenSpec (spec-driven)
+
+Plan **in OpenSpec**, not `plans/*`. A change goes **propose → specify → design →
+implement → archive** via the `/opsx` commands:
+
+- `openspec/specs/<cap>/spec.md` — the **living baseline** ("what the system does
+  today"); `openspec list --specs` / `openspec show` to read it.
+- `openspec/changes/<id>/` — an in-flight change: `proposal.md` (intent), `design.md`,
+  `tasks.md`, and **delta specs** (`specs/<cap>/spec.md` as ADDED/MODIFIED/REMOVED).
+- `openspec validate --strict` gates shape before code; `openspec archive <id>` folds
+  the delta into the baseline on ship.
+- `plans/*` and the `plan.md` dashboard are **frozen/historical** — do not add to them.
+  `openspec list` is the new dashboard. The **Understanding app** convention is
+  unchanged (still build one for non-trivial work).
+
+**Merging in a branch that still uses the old `plans/*` system?** You'll hit a
+conflict in `plan.md` and/or `CLAUDE.md` — that's expected, nothing is broken. Before
+you merge, translate your plan into an OpenSpec change: follow
+**`docs/openspec-migration.md`** step by step (it's written for exactly this), then
+resolve the conflicts (take theirs for `plan.md`/`CLAUDE.md`, drop your dashboard row)
+and merge.
+```
