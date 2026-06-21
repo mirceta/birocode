@@ -38,6 +38,18 @@
 
 ## Active feature plans
 
+- [Global apps — "Global exposure, done right" homepage topic](plans/global-apps-exposure.md)
+  — the homepage explainer teaches **Local** exposure (the behind-login Local tab) but has
+  **no companion for the public surface**. Add a parallel topic teaching **global** exposure:
+  getting a product onto the **public Homepage `/`** (no login) as the App product on Preview
+  Port **`:5200`**, fronted by off-box **IIS/ARR** at `/preview/`. Global is a *different,
+  trickier* contract than local — it crosses a public reverse proxy and adds traps local
+  doesn't have (absolute-URL escaping, body-less-POST `411`, ARR's GET output-cache
+  staleness). Mirror `exposure-topic.js`: a new canonical `docs/global-exposure-convention.md`,
+  `homepage/assets/global-data.js` + `global-topic.js`, **reusing** the four data-agnostic viz
+  variants with a global `ctx`. **Built + headless-verified** (parses, registers, data
+  consistent, assets serve 200); browser-render still to eyeball. On
+  `feature/global-apps-exposure`.
 - [Portable deploy — one committed `swap.ps1` any agent can run](plans/portable-deploy.md)
   — deploying the Harness to live `:5099` only worked on one machine because the deploy
   script was **local + untracked** (`.selfdev-build/deploy.ps1`, hardcoded paths) and
