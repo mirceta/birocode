@@ -1068,6 +1068,131 @@ details.step > summary::-webkit-details-marker {
   cursor: pointer;
 }
 
+/* Prompts | Plans tab switch in the modal head (plans/prompt-plans.md). */
+.prompt-mgr__tabs { display: flex; gap: 4px; }
+
+.prompt-mgr__tab {
+  border: none;
+  background: none;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-soft);
+  cursor: pointer;
+}
+
+.prompt-mgr__tab--on {
+  background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface));
+  color: var(--color-accent);
+}
+
+/* ---- Plans tab (PromptPlansPanel.jsx) ---- */
+.plan-mgr { display: flex; flex-direction: column; }
+
+/* A plan row in the list: name+count on the left, delete on the right. */
+.plan-mgr__row { align-items: center; }
+
+.plan-mgr__open {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+.plan-mgr__count { font-size: 12px; color: var(--color-text-soft); }
+
+.plan-mgr__editor-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.plan-mgr__back {
+  flex: 0 0 auto;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.plan-mgr__name-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 6px);
+  padding: 6px 10px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.plan-mgr__steps {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* A step row: number, body, actions. Mirrors .prompt-mgr__item. */
+.plan-mgr__step { display: flex; align-items: flex-start; gap: 8px; }
+
+.plan-mgr__step-num {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface));
+  color: var(--color-accent);
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.plan-mgr__step-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.plan-mgr__step-expected {
+  font-size: 12px;
+  color: var(--color-text-soft);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.plan-mgr__step-expected em { font-style: normal; font-weight: 600; }
+
+.plan-mgr__reorder { display: flex; gap: 4px; }
+
+.plan-mgr__reorder .prompt-mgr__item-btn {
+  min-width: 28px;
+  padding: 0 6px;
+  text-align: center;
+}
+
+.plan-mgr__reorder .prompt-mgr__item-btn:disabled { opacity: 0.4; cursor: default; }
+
+.plan-mgr__editor-actions { display: flex; gap: 8px; }
+
 /* Stash button — bookmark a draft mid-run (plans/prompt-stash.md) */
 .chat-input__stash {
   min-width: var(--touch);

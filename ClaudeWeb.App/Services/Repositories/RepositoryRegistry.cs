@@ -369,6 +369,10 @@ public class RepositoryRegistry
     /// (plans/multiple-local-apps.md Slice 2).</summary>
     public const string UnderstandingAppId = "understanding";
 
+    /// <summary>Id of the harness-provided Agentic Engineering Lab app, attached to the
+    /// self repo only — the operator's single personal hub (plans/agentic-lab.md).</summary>
+    public const string LabAppId = "lab";
+
     private RepositoryInfo ToInfo(RepositoryConfig r)
     {
         var exists = Directory.Exists(r.Path);
@@ -380,6 +384,11 @@ public class RepositoryRegistry
         // Append the synthetic, always-on Understanding app. Not persisted (it's not
         // in _repos), served internally (port 0, handled by UnderstandingApp).
         infos.Add(new LocalAppInfo(UnderstandingAppId, "Understanding", 0, "harness"));
+        // The Agentic Engineering Lab is the operator's single personal hub, so it is
+        // attached to the self repo only (served internally by LabApp; same synthetic
+        // kind:harness mechanism). plans/agentic-lab.md.
+        if (r.IsSelf)
+            infos.Add(new LocalAppInfo(LabAppId, "Agentic Engineering Lab", 0, "harness"));
         return new RepositoryInfo(r.Id, r.Name, r.Path, exists, isGit, r.IsSelf, NormalizeVisibility(r.Visibility), defaultPort, infos);
     }
 

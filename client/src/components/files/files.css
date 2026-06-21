@@ -357,3 +357,256 @@
   word-break: break-word;
   color: var(--color-text);
 }
+
+/* ---- IDE mode (plans/files-ide-mode.md) -------------------------------- */
+/* One split layout used on BOTH the Files tab and the agent dock: a slim rail
+   with the show/hide toggle, the collapsible folder browser (search + pins +
+   tree), and the file view filling the rest. Each region scrolls on its own so
+   the page itself doesn't — the IDE feel. The same markup renders in the narrow
+   dock (cramped, by design); collapsing the browser hands the view its width. */
+.files-ide {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  align-items: stretch;
+}
+
+.files-ide__rail {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 5px;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.files-ide__toggle {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-accent);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.files-ide__toggle:hover {
+  background: var(--color-accent-soft);
+}
+
+.files-ide__browser {
+  /* proportionate in the narrow dock, capped on the wide tab */
+  flex: 0 0 clamp(160px, 38%, 280px);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--color-border);
+  overflow: hidden;
+}
+
+.files-ide__search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.files-ide__search-icon {
+  font-size: 13px;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.files-ide__search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+.files-ide__search-clear {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  color: var(--color-text-soft);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.files-ide__search-clear:hover {
+  color: var(--color-text);
+}
+
+/* The pins strip is borrowed from legacy mode; tighten its spacing for the
+   narrow browser column. */
+.files-ide__browser .files-pins {
+  padding: 8px 10px;
+  margin: 0;
+}
+
+.files-ide__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 10px;
+}
+
+.files-ide__view {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 16px;
+}
+
+/* Drag-to-resize divider between the folder browser and the file view. A thin
+   bar with a wide-enough hit area; pointer events drive the drag (mouse+touch),
+   so suppress touch scrolling/gestures over it. */
+.files-ide__resizer {
+  flex: 0 0 6px;
+  cursor: col-resize;
+  background: var(--color-border);
+  touch-action: none;
+  align-self: stretch;
+  transition: background 0.12s ease;
+}
+
+.files-ide__resizer:hover,
+.files-ide__resizer:active {
+  background: var(--color-accent);
+}
+
+/* Zoom controls pinned to the bottom of the browser: scale the tree text/rows. */
+.files-ide__zoom {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.files-ide__zoom-btn,
+.files-ide__zoom-val {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.files-ide__zoom-btn {
+  width: 28px;
+  height: 24px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.files-ide__zoom-val {
+  min-width: 48px;
+  height: 24px;
+  font-size: 12px;
+  color: var(--color-text-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.files-ide__zoom-btn:hover:not(:disabled),
+.files-ide__zoom-val:hover {
+  background: var(--color-accent-soft);
+}
+
+.files-ide__zoom-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Tree zoom: scale the folder rows, search results and pins by --tree-zoom
+   (default 1), scoped to the browser pane so the file view is never affected.
+   The search box and zoom controls stay fixed-size for usability. */
+.files-ide__browser { --tree-zoom: 1; }
+
+.files-ide__browser .file-list { gap: calc(4px * var(--tree-zoom)); }
+
+.files-ide__browser .file-row {
+  min-height: calc(var(--touch) * var(--tree-zoom));
+  padding: calc(8px * var(--tree-zoom)) calc(12px * var(--tree-zoom));
+  gap: calc(10px * var(--tree-zoom));
+}
+
+.files-ide__browser .file-row__name { font-size: calc(15px * var(--tree-zoom)); }
+.files-ide__browser .file-row__icon { font-size: calc(20px * var(--tree-zoom)); }
+.files-ide__browser .file-row__chevron { font-size: calc(12px * var(--tree-zoom)); }
+.files-ide__browser .file-row__lines,
+.files-ide__browser .file-row__size { font-size: calc(12px * var(--tree-zoom)); }
+
+.files-ide__browser .files-ide__result-name { font-size: calc(14px * var(--tree-zoom)); }
+.files-ide__browser .files-ide__result-dir { font-size: calc(11px * var(--tree-zoom)); }
+.files-ide__browser .files-pin { font-size: calc(13px * var(--tree-zoom)); }
+
+/* Fuzzy search results (flat list replaces the tree while searching). */
+.files-ide__results {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.files-ide__rescount,
+.files-ide__more,
+.files-ide__noresults {
+  color: var(--color-text-soft);
+  font-size: 12px;
+  margin: 4px 2px;
+}
+
+.files-ide__result {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.files-ide__result:hover {
+  background: var(--color-accent-soft);
+}
+
+.files-ide__result--active {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+.files-ide__result-name {
+  flex-shrink: 0;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.files-ide__result-dir {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--color-text-soft);
+}

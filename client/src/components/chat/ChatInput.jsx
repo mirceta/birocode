@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useDock } from '../../context/DockContext';
 import { useFeature } from '../../context/UiModeContext';
 import { usePrompts } from '../../context/PromptsContext';
+import { usePromptPlans } from '../../context/PromptPlansContext';
 import { useT } from '../../i18n/LanguageContext';
 import PromptManager from './PromptManager';
 
@@ -37,6 +38,10 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
   // dock window doesn't shrink it.
   const customPromptsEnabled = useFeature('customPrompts');
   const { prompts, addPrompt, updatePrompt, deletePrompt } = usePrompts();
+  // Prompt PLANS (plans/prompt-plans.md): named, ordered prompt-step sequences,
+  // shown as a second tab in the SAME ⚙ modal. "Use" on a step composes its
+  // details + expected result into the composer (same insertPrompt path).
+  const { plans, addPlan, updatePlan, deletePlan } = usePromptPlans();
   const [mgrOpen, setMgrOpen] = useState(false);
   // The queue for the surface in play: this dock's own agent when embedded, else
   // the active tab's, else the global queue.
@@ -133,6 +138,10 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
           onAdd={addPrompt}
           onUpdate={updatePrompt}
           onDelete={deletePrompt}
+          plans={plans}
+          onAddPlan={addPlan}
+          onUpdatePlan={updatePlan}
+          onDeletePlan={deletePlan}
           onInsert={insertPrompt}
           onClose={() => setMgrOpen(false)}
         />

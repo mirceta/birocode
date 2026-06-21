@@ -35,9 +35,13 @@ export default function FileViewer({
   return (
     <div className="file-viewer">
       <div className="file-viewer__bar">
-        <button type="button" className="file-viewer__back" onClick={onBack}>
-          <span aria-hidden="true">&larr;</span> {t('common.back')}
-        </button>
+        {/* In IDE mode the tree is always present on the left, so there's no
+            "back to tree" — onBack is omitted and the button is hidden. */}
+        {onBack && (
+          <button type="button" className="file-viewer__back" onClick={onBack}>
+            <span aria-hidden="true">&larr;</span> {t('common.back')}
+          </button>
+        )}
         {onNavigate && (
           <span className="file-viewer__hist">
             <button

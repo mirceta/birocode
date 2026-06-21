@@ -8,10 +8,9 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-20):** **Hide inactive agents** ("Show only important agents"
-> toggle) is **user-confirmed working and merged to main**. In flight:
-> **Chat system tests** on `feature/systest-interactive` (steppable hub +
-> per-suite interactive diagrams).
+> **Status (2026-06-21):** **Prompt plans** (slice 1) is **user-confirmed
+> working and merged to main**. In flight: **Chat system tests** on
+> `feature/systest-interactive` (steppable hub + per-suite interactive diagrams).
 
 ## ⚠️ Known risks to mitigate
 
@@ -79,6 +78,58 @@
   staged Phase-4 `CLAUDE.md` block, and an **interim `CLAUDE.md` disclaimer** telling agents to keep
   using `plans/*` until the port lands. The actual execution is tracked above on
   `feature/openspec-adopt`. Merged from `feature/openspec-flow`.
+- [Prompt plans — named, ordered prompt-step sequences](plans/prompt-plans.md) —
+  extended the saved-prompts **⚙ pop-up** with **prompt plans**: a *plan* is a
+  **named, ordered list of prompt steps** worked through in sequence, where each
+  **step** has a short **name**, a **details** body, and an **expected result**.
+  Many named plans (pick one from a list), authored/edited right in the pop-up via
+  a new **Prompts | Plans** tab *alongside* the existing prompts (doesn't replace
+  them); steps are **reorderable** (the order is the send sequence) and **Use** on
+  a step drops its composed text — details **plus** the `Expected result:` line —
+  into the composer. Saved **globally, backend-synced** exactly like prompts (new
+  `PromptPlansService` + `/api/prompt-plans` + `prompt-plans.json`, mirroring
+  `PromptsService`); reuses the existing `customPrompts` Advanced gate (so the ⚙
+  shows in Advanced mode only). i18n en+tr. **Slice 1 shipped** = author plans +
+  Use a single step (plus a paste-`PROMPT/DETAILS/EXPECTED RESULT`-to-split
+  nice-to-have); **slice 2** (deferred) = run a whole plan into the per-agent send
+  queue in order. Browser-verified on an isolated `:5252` build (create → add steps
+  → reorder → Use → reload-persist, 0 console errors), swapped onto live `:5099`
+  (health 200). **User-confirmed working; merged to main 2026-06-21.** On
+  `feature/prompt-plans`.
+- [Files tab — IDE mode (split tree/viewer + fuzzy search)](plans/files-ide-mode.md)
+  — gave the **Files tab** (and the agent dock) an **IDE-style split layout**: the
+  folder/file **tree on the left**, the **selected file's view on the right**
+  (instead of the old single column where the viewer *replaced* the tree, forcing a
+  ← back-and-refind to open the next file), plus a **fuzzy search over the tree +
+  files** (backed by a recursive `GET /api/files/all` index) to jump straight to a
+  file by typing part of its path. Built **inside the shared `FilesBrowser`** (used
+  by both the routed tab and the dock) as a layout flag, not a fork; gated behind an
+  **`'advanced'`** capability so Basic mode keeps the stacked view, and the narrow
+  dock falls back to stacked so the split can't clip it. Follow-up: an **adjustable
+  folder browser** — a **drag-to-resize divider** (mouse + touch; viewer keeps
+  ≥120px) and a **tree zoom** (A−/%/A+, **40%–180%**, scoped via `--tree-zoom`,
+  click % to reset); both prefs device-local and persist across reload. i18n en+tr;
+  understanding-app mockup mirrors both. Browser-verified on an isolated `:5252`
+  preview (tab + dock, split + fuzzy search + collapse + resize/zoom, 0 console
+  errors). **User-confirmed working; merged to main 2026-06-21** (`b818582`). On
+  `feature/files-ide-mode`.
+- [Agentic Engineering Lab — a personal hub for principles & patterns](plans/agentic-lab.md)
+  — a **build-less local app** (`lab/`, served like `homepage/` and the
+  Understanding app) that is the operator's **home for learning about agentic
+  engineering**: what I've learned, what I've found, what patterns/principles
+  I'm currently **testing**, what's turned out **good** vs **bad**, how I test
+  new patterns, and a **repository of the patterns & principles** themselves.
+  Decided as its **own local app** (not a homepage topic) — different audience
+  (the researcher, not onboarding agents), a structured/growing data model, and
+  the platform already supports multi-app per repo. Shipped as a synthetic
+  `kind:harness` app `lab` (`LabApp` over the shared `HarnessStaticApp`,
+  dispatched by `appId` in `LocalProxyController`), **registered for the self
+  repo only**. **Slice 1 = agent-curated static data** (entries + patterns as
+  JSON/MD in `lab/data/`, edited on request; full git history, zero backend);
+  a live backend-CRUD slice (add/edit from the browser like Ideas) is a
+  possible follow-up. Browser-verified on an isolated `:5251` preview (0 console
+  errors / 0 failed requests), deployed to live :5099 & **user-confirmed
+  working; merged to main 2026-06-21**. On `feature/agentic-lab`.
 - [Hide inactive agents — "Show only important" dashboard toggle](plans/hide-inactive-agents.md)
   — a device-local **switch** in the dashboard header that **hides every dock not
   starred ★ important**, leaving just the important ones; toggle off to show all.
