@@ -12,6 +12,7 @@ import { RepoProvider, useRepo } from '../context/RepoContext';
 import { DockProvider, useDock } from '../context/DockContext';
 import { PromptsProvider } from '../context/PromptsContext';
 import { PromptPlansProvider } from '../context/PromptPlansContext';
+import { PromptNotesProvider } from '../context/PromptNotesContext';
 import { UiModeProvider, useFeature } from '../context/UiModeContext';
 import { UiSettingsProvider } from '../context/UiSettingsContext';
 import { useT } from '../i18n/LanguageContext';
@@ -173,7 +174,9 @@ export default function Layout() {
               <ChatProvider>
                 <PromptsProvider>
                   <PromptPlansProvider>
-                    <StudioShell />
+                    <PromptNotesProvider>
+                      <StudioShell />
+                    </PromptNotesProvider>
                   </PromptPlansProvider>
                 </PromptsProvider>
               </ChatProvider>
