@@ -125,5 +125,8 @@ preview"). Read the right one for the task at hand:
 - **docs/claude-web/self-dev.md** — read before building or running this repo:
   it is Claude Web itself, so build to an isolated dir, never into the
   running app's own bin/ or port.
+- **docs/claude-web/redeploy.md** — read before deploying this harness to live
+  (:5099): the snapshot → build → gated-swap → keep/rollback runbook and
+  the self-seeding swap.ps1 / arm.ps1 / rollback.ps1 tooling.
 
 <!-- /claude-web:preview -->
