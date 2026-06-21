@@ -1,13 +1,20 @@
 # Portable deploy — one committed `swap.ps1` any agent can run
 
-> **Status (2026-06-21):** **BUILT & VALIDATED (dry-run); live cutover pending the
-> operator.** A committed, machine-independent deploy script (`swap.ps1` at the repo
-> root) replaces the untracked, hardcoded `.selfdev-build/deploy.ps1` that existed on
-> only one machine. Parses under Windows PowerShell 5.1 and pwsh; `-DryRun` validated
-> end-to-end (guard + full staged build); the origin/main guard already caught a real
-> divergence mid-work. The destructive kill→swap→restart path mirrors the proven
-> local deploy 1:1 (plus logs/appsettings protection) but has not been run against
-> live yet. On `feature/portable-deploy`.
+> **Status (2026-06-21):** **SHIPPED to live + dead-man's switch restored.** The
+> committed `swap.ps1` ran a real cutover to `:5099` (the autopilot "How chat works"
+> deploy). Then we found the port had **dropped the auto-rollback safety** the old
+> off-box deploy had — the whole reason the rollback machinery existed — so it's now
+> ported into the committed model too (`rollback.ps1` / `arm-rollback.ps1` /
+> `keep.ps1`, all `$PSScriptRoot`-relative). Verified end-to-end on isolated temp dirs
+> + a TEST-named scheduled task (17/17): parse/ASCII clean, snapshot+restore round-trip,
+> `/MIR` mirror-away, `/XF`+`/XD` runtime-state protection, no-snapshot guard, and
+> arm/disarm with a real-`DateTime` trigger (no locale bug). On
+> `feature/autopilot-loop-mode`.
+>
+> _History:_ originally **BUILT & VALIDATED (dry-run)** on `feature/portable-deploy`
+> as a committed, machine-independent replacement for the untracked, hardcoded
+> `.selfdev-build/deploy.ps1` that existed on only one machine. Parses under Windows
+> PowerShell 5.1 and pwsh; the origin/main guard caught a real divergence mid-work.
 
 ## Problem
 
@@ -54,6 +61,33 @@ Robustness: **pure-ASCII** (BOM-less UTF-8 + em-dashes broke Windows PowerShell 
 **UTF-8 log**; `-DryRun`, `-Port`, `-Configuration`, `-SkipGuard` flags. Meant to be
 launched **detached**: `cmd /c start "" /b pwsh -NoProfile -File .\swap.ps1`.
 
+## Dead-man's switch (restored 2026-06-21)
+
+`swap.ps1`'s stage-before-stop only protects against a **build** failure. It does
+**not** protect against a build that swaps in cleanly, health-checks green, and then
+**breaks down minutes later** with no operator at the keyboard — the exact failure the
+original off-box deploy guarded with a timed auto-rollback. The portable port dropped
+it. Now re-added, fully inside the committed model:
+
+1. **Snapshot before swap** — after stopping live and *before* the destructive `/MIR`,
+   `swap.ps1` mirrors the current `run-bin` → **`run-bin.lastgood`** (excludes `logs/`).
+   This is the "previous good build to roll back to" the `/MIR` swap otherwise destroys.
+   Skipped on a cold deploy (nothing good to capture).
+2. **`rollback.ps1`** — restores `run-bin.lastgood` → `run-bin` with `robocopy /MIR`
+   (preserving `logs/` + `appsettings.json`), restarts, health-checks, and self-deletes
+   the task. Aborts (exit 1, live untouched) if no snapshot exists. `-NoStart` restores
+   files only (used by the test).
+3. **`arm-rollback.ps1`** — registers a one-time scheduled task `ClaudeWebAutoRollback`
+   to run `rollback.ps1` in `-RollbackMinutes` (default 15). Uses `Register-ScheduledTask`
+   with a real `DateTime`, **never `schtasks /SD`** (locale-parsed; armed `06/12` as
+   Dec 6th on this dd.MM box — 2026-06-12 incident, harness down, rollback never fired).
+4. **`keep.ps1`** — the "keep it" disarm; deletes the task so the deploy stays live.
+
+`swap.ps1` wiring after restart: **health FAILED** → roll back immediately (inline);
+**health OK** → arm the timer; **`-NoArm`** or **no snapshot** → don't arm. The two
+hard-won lessons (`/MIR` over copy; real `DateTime` over `/SD`) are ported verbatim
+from `claudeweb-rollback/` and recorded in the script headers.
+
 ## Validation
 
 - ASCII parse confirmed under the strict 5.1 `ParseFile` reader (the failure mode that
@@ -72,8 +106,10 @@ actual guard — closing the dangling reference.
 
 ## Deferred
 
-- **Live cutover** (the real kill→swap→restart + browser re-verify) — pending the
-  operator's go-ahead; on this machine live already serves the current feature, so the
-  cutover is low-value here and high-value on the other agent's box.
-- Optionally retire/redirect the untracked `.selfdev-build/deploy.ps1` +
-  `restart-harness.ps1` to thin shims that call `swap.ps1`.
+- **Real auto-rollback fire drill on live** — the dead-man's switch is verified on
+  isolated temp dirs + a TEST task, not yet observed firing against an actually-broken
+  live deploy (would require intentionally shipping a broken build). The mechanics are
+  proven; the live fire path is the same code.
+- Optionally retire the off-box `claudeweb-rollback/` (old `swap.ps1`/`arm.ps1`/
+  `rollback.ps1`) and the `.claudeweb-deploy/deploy-run.ps1` + `ClaudeWebDeployOnce`
+  task that still point at it — superseded by the committed in-repo scripts.
