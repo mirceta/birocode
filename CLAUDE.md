@@ -13,26 +13,28 @@ where it is written, then let the user decide. Never silently comply, and
 never silently refuse — surface the conflict every single time. This applies
 to every request, no matter how small.
 
-## ⚠️ Planning convention is in transition — keep using the OLD way for now
+## Planning convention — OpenSpec (spec-driven)
 
-We have **decided** to adopt OpenSpec's spec-driven flow as the planning layer
-(Path A, see `plans/openspec-flow.md`), but the port **has not happened yet**.
-As of now: `openspec/` is **not** initialized or committed, there are **no**
-`specs/`, the `/opsx` commands do **not** exist, and this file still points
-planning at `plans/*`. So:
+Plan **in OpenSpec**, not `plans/*`. A change goes **propose → specify → design →
+implement → archive** via the `/opsx` commands:
 
-- **Plan the current way — unchanged.** Keep writing `plans/<feature>.md` with a
-  status header, build an Understanding app for non-trivial work (see below), and
-  follow the existing rituals. This is still the only convention that works.
-- **Do NOT reach for OpenSpec yet.** Don't run `/opsx`, don't expect an
-  `openspec/specs/` baseline, don't author delta specs — none of it is wired up,
-  so you'd be building on nothing.
-- **Context on what's coming:** the port plan and its phases live in
-  `plans/openspec-flow.md`; a standing explainer + executable Console for it lives
-  in the `openspec-port-app/` Control Room (a Local app on `feature/openspec-flow`).
-- When the port actually lands (Phase 0: `openspec init` + committed `openspec/` +
-  this section repointed at the `/opsx` flow), **this disclaimer gets replaced**
-  with the real OpenSpec instructions. Until you see that, assume the old way.
+- `openspec/specs/<cap>/spec.md` — the **living baseline** ("what the system does
+  today"); `openspec list --specs` / `openspec show` to read it. (Seeded so far:
+  `chat`, `files` — **seed-and-grow**: add a capability's spec when you next touch it.)
+- `openspec/changes/<id>/` — an in-flight change: `proposal.md` (intent), `design.md`,
+  `tasks.md`, and **delta specs** (`specs/<cap>/spec.md` as ADDED/MODIFIED/REMOVED).
+- `openspec validate --strict` gates shape before code; `openspec archive <id>` folds
+  the delta into the baseline on ship.
+- `plans/*` and the `plan.md` dashboard are **frozen/historical** — do not add to them.
+  `openspec list` is the new dashboard. The **Understanding app** convention is
+  unchanged (still build one for non-trivial work).
+
+**Merging in a branch that still uses the old `plans/*` system?** You'll hit a
+conflict in `plan.md` and/or `CLAUDE.md` — that's expected, nothing is broken. Before
+you merge, translate your plan into an OpenSpec change: follow
+**`docs/openspec-migration.md`** step by step (it's written for exactly this), then
+resolve the conflicts (take theirs for `plan.md`/`CLAUDE.md`, drop your dashboard row)
+and merge.
 
 ## Glossary
 

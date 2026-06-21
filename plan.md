@@ -1,5 +1,11 @@
 # Claude Web — working plan
 
+> **⚠️ FROZEN — planning moved to OpenSpec (2026-06-21).** This dashboard and
+> `plans/*` are **historical**; do not add to them. Plan in OpenSpec — see the
+> **Planning convention** section in `CLAUDE.md`, and `openspec list` /
+> `openspec/specs/`. Migrating an in-flight `plans/*` branch? Follow
+> `docs/openspec-migration.md`. Kept for history; existing links still resolve.
+
 > Editing any plan? First read
 > [doc principles](plans/doc-principles.md) — cohesion by unit,
 > progressive disclosure, reference-don't-duplicate.
