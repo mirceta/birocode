@@ -800,6 +800,14 @@ document.getElementById('logClear').addEventListener('click', () => {
   conLog.innerHTML = '<div class="con__empty">Log cleared.</div>';
 });
 
+// ── Migrate tab — staged Phase-4 recipe, reusing the copy-prompt machinery ──
+COPY_PROMPTS['mig-translate'] =
+  'You merged the OpenSpec branch into your in-flight feature branch and hit a conflict in `plan.md` and/or `CLAUDE.md` — that is expected, nothing is broken. The planning convention switched from `plans/*` to OpenSpec. Translate your feature `<feature>` by following `docs/openspec-migration.md`: run `openspec new change <feature>`, port `plans/<feature>.md` into `proposal.md` (intent) + `design.md` (approach) + `tasks.md` (checklist), and write the delta specs under `openspec/changes/<feature>/specs/<cap>/spec.md` as ADDED / MODIFIED / REMOVED requirements, each using SHALL/MUST with at least one `#### Scenario:` (GIVEN / WHEN / THEN). Then resolve the conflicts — take theirs for `plan.md` and `CLAUDE.md`, and delete your feature row from the retired `plan.md` dashboard — delete `plans/<feature>.md`, run `openspec validate <feature> --strict` until clean, and finish the merge.';
+const migOp = document.getElementById('migOp');
+if (migOp) {
+  migOp.addEventListener('click', (e) => { const cp = e.target.closest('.cstep__copy'); if (cp) copyPrompt(cp); });
+}
+
 // ── Initial render ───────────────────────────────────────────────
 renderPhases();
 renderDecisions();

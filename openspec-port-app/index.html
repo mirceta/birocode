@@ -37,6 +37,7 @@
             <button class="nav__btn" data-view="decide">Decide</button>
             <button class="nav__btn" data-view="control">Control</button>
             <button class="nav__btn" data-view="console">Console</button>
+            <button class="nav__btn" data-view="migrate">Migrate</button>
           </div>
         </div>
       </nav>
@@ -272,6 +273,58 @@
           <div class="con__empty">Output appears here. Start in <b>Set up the tool</b> with
             <b>openspec --version</b> — if it isn't installed yet you'll see that plainly (that's Phase 0).</div>
         </div>
+      </div>
+    </section>
+
+    <!-- ───────────── MIGRATE ───────────── -->
+    <section class="view" id="view-migrate">
+      <div class="wrap">
+        <h2>Migrate — flip the convention, catch the stragglers</h2>
+        <p class="lead">The strategy for a <b>solo repo with agent branches in flight</b>: finish the
+          whole transition <i>on</i> <code>feature/openspec-flow</code>, merge it to <code>main</code>
+          only when complete, and let <code>CLAUDE.md</code> guide any branch that was still planning
+          the old way. Source of truth for the steps lives in
+          <code>docs/openspec-migration.md</code> and <code>plans/openspec-flow.md</code> (Phase 4) —
+          this tab just makes it <b>operable</b>.</p>
+
+        <ol class="mig">
+          <li class="mig__step"><span class="mig__n">1</span>
+            <div><b>Complete the transition on the branch</b><span>Phases 0–3 land on
+              <code>feature/openspec-flow</code>: <code>openspec init</code> + committed
+              <code>openspec/</code>, the backfilled <code>specs/</code> baseline, the harness renderer.
+              <code>plans/*</code> stays alive here until then.</span></div></li>
+          <li class="mig__step"><span class="mig__n">2</span>
+            <div><b>Merge to <code>main</code> — the convention flips</b><span><code>CLAUDE.md</code>'s
+              interim disclaimer is swapped for the OpenSpec block (parked in
+              <code>plans/openspec-flow.md</code>). <code>plans/*</code> freezes; <code>openspec list</code>
+              becomes the dashboard.</span></div></li>
+          <li class="mig__step"><span class="mig__n">3</span>
+            <div><b>Straggler branches translate, then merge</b><span>A branch still on
+              <code>plans/*</code> merges <code>main</code>, hits a conflict in <code>plan.md</code> /
+              <code>CLAUDE.md</code>, reads the new convention, and follows the recipe below to convert
+              its plan into an OpenSpec change before finishing the merge.</span></div></li>
+        </ol>
+
+        <h3 class="mt">Operate it — hand the translation to an agent</h3>
+        <p class="lead">Fill the in-flight feature's name and copy a paste-ready prompt that walks the
+          agent through <code>docs/openspec-migration.md</code> end to end.</p>
+        <ol class="cgrp__steps mig__op">
+          <li class="cstep cstep--hand">
+            <span class="wfkb wfkb--hand">✍</span>
+            <div class="cstep__body">
+              <code class="cstep__t">translate plans/&lt;feature&gt;.md → openspec/changes/&lt;feature&gt;/</code>
+              <span class="cstep__tag">migrate</span>
+              <span class="cstep__d">proposal · design · tasks + delta specs, resolve the conflict, validate, merge</span>
+            </div>
+            <div class="cstep__do" id="migOp">
+              <input class="act__in cstep__param" data-param="feature" placeholder="feature" />
+              <button class="cstep__copy" data-copy="mig-translate"
+                title="fill the feature name, then copy a finished prompt for the agent">⧉ Copy prompt</button>
+            </div>
+          </li>
+        </ol>
+        <p class="muted flow__foot">This is the <b>Phase 4</b> operating procedure. Until the branch
+          actually merges, no straggler exists yet — the recipe is staged and ready.</p>
       </div>
     </section>
   </main>

@@ -299,6 +299,14 @@ h3 { font-size: 16px; margin: 0 0 8px; } h3.mt { margin-top: 28px; }
 .cstep__copy.is-copied { background: #e7f5ec; border-color: #a8d8b9; color: var(--have); }
 .cstep__copy.is-warn { background: #fdf6e8; border-color: #ecd9af; color: var(--part); }
 .cstep__param { max-width: 150px; }
+
+/* Migrate tab — the flip-and-translate strategy */
+.mig { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 10px; }
+.mig__step { display: flex; gap: 12px; align-items: flex-start; background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--edge); border-radius: var(--radius); box-shadow: var(--shadow); padding: 12px 14px; }
+.mig__n { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; background: #e7eff7; color: var(--edge); font-weight: 800; font-size: 14px; display: grid; place-items: center; }
+.mig__step b { font-size: 14.5px; }
+.mig__step span { display: block; color: #5b524b; font-size: 13px; margin-top: 3px; }
+.mig__op { border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); background: var(--surface); }
 /* the change spine: shade the command bookends so they read as bookends */
 .cgrp--spine .cstep--run { background: linear-gradient(90deg, #e7f5ec, transparent 60%); }
 .act { border: 1px solid var(--border); background: var(--bg); color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; padding: 8px 11px; border-radius: 9px; cursor: pointer; text-align: left; transition: border-color .12s, background .12s; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
