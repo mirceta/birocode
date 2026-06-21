@@ -29,25 +29,33 @@ namespace ClaudeWeb.Services.Autopilot;
 /// </summary>
 public sealed class SystemTestsService
 {
-    /// <summary>A runnable test: id → fixed script + metadata for the UI.</summary>
+    /// <summary>A runnable test: id → fixed script + metadata for the UI.
+    /// <c>Checks</c> = what the test verifies, in plain language; <c>Why</c> =
+    /// why it matters / what breaks for you if it fails.</summary>
     public sealed record TestDef(
-        string Id, string Title, string Checks, string Script, bool Browser, string? Artifact);
+        string Id, string Title, string Checks, string Why, string Script, bool Browser, string? Artifact);
 
     // The four loop-mode tests, one per sub-tab. Paths are relative to the self
     // repo root; Artifact is the screenshot a browser test writes (null = none).
+    // Descriptions are written for a reader who does NOT know the code — say what
+    // each test proves and why you'd care, not which endpoints it pokes.
     private static readonly IReadOnlyList<TestDef> Tests = new[]
     {
-        new TestDef("api", "API contract",
-            "POST /api/autopilot/loop start/update/stop and the loop state folded into GET /api/autopilot, against a fake repoId (no real agent driven).",
+        new TestDef("api", "Loop controls work (server side)",
+            "Exercises the commands behind the Loops tab — arm a loop, change its prompt/cap, and stop it — then confirms an armed loop shows up in the autopilot status. It runs against a pretend agent, so no real Claude session is driven.",
+            "If this fails, the Arm / Stop buttons on the Loops tab can't reliably talk to the server, so loops might not start, update, or stop when you ask.",
             "verify-loopmode-api.mjs", false, null),
-        new TestDef("ui", "UI states",
-            "The Loops tab renders the arm / live / finished states and posts the correct bodies (stubs /api/autopilot).",
+        new TestDef("ui", "Loops tab looks right",
+            "Opens the Loops tab in a real browser and checks it draws all three screens correctly — the arm form, a loop that's running, and a finished loop — and that pressing the buttons sends the right request. The server is faked here, so this is purely about what's on screen.",
+            "Catches a visually broken Loops tab — a missing button, a wrong field, a screen that won't render — before you depend on it to drive an agent.",
             "verify-loopmode-ui.mjs", true, ".claudeweb-preview/out-loopmode-ui.png"),
-        new TestDef("spa", "SPA honesty",
-            "The understanding-app/ explainer renders and its loop simulator hits cap, sentinel-stop and deny-escalate.",
+        new TestDef("spa", "Explainer matches reality",
+            "Loads the Autopilot explainer page (the animated “how loop mode works” demo) and runs its built-in simulator through all three ways a loop ends: hitting the iteration cap, seeing the done-phrase, and escalating on a risky word.",
+            "Keeps the teaching diagram honest — it makes sure the animation that explains loop mode still matches how the real loop behaves, so the docs don't quietly drift from the code.",
             "verify-loopmode-spa.mjs", true, ".claudeweb-preview/out-loopmode-spa.png"),
-        new TestDef("probe", "Probe",
-            "Ad-hoc probe of the live Autopilot page (tabs present, no console errors) with a full-page screenshot.",
+        new TestDef("probe", "Page isn't broken",
+            "A quick smoke test: opens the live Autopilot page, confirms its tabs are present and the browser console is free of errors, and saves a full-page screenshot you can eyeball below.",
+            "A fast “is the Autopilot page broken?” check after a deploy — it flags a blank page or a JavaScript crash without you having to click around.",
             "probe-loopmode.mjs", true, ".claudeweb-preview/out-loopmode-probe.png"),
     };
 
@@ -113,6 +121,7 @@ public sealed class SystemTestsService
                     id = def.Id,
                     title = def.Title,
                     checks = def.Checks,
+                    why = def.Why,
                     script = $"{ScriptDir}/{def.Script}",
                     browser = def.Browser,
                     hasArtifact = def.Artifact is not null,

@@ -416,6 +416,8 @@
 .st-panel__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
 .st-panel__title { margin: 0; font-size: 15px; font-weight: 700; }
 .st-panel__checks { margin: 5px 0 0; font-size: 13px; color: var(--color-text-muted, #666); max-width: 60ch; line-height: 1.45; }
+.st-panel__why { margin: 6px 0 0; font-size: 13px; color: var(--color-text-muted, #666); max-width: 60ch; line-height: 1.45; }
+.st-panel__label { font-weight: 700; color: var(--color-text, #222); }
 
 .st-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
 .st-script { background: var(--color-bg, #f0ece4); padding: 2px 7px; border-radius: 5px; font-size: 12px; }

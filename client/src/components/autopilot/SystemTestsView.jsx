@@ -102,11 +102,14 @@ export default function SystemTestsView() {
         or every run here will fail with a prerequisite error.
       </div>
       <p className="autopilot__summary">
-        The loop-mode tests, runnable here. Each spins up a fixed Node/Playwright script
-        against <b>this running harness</b>. They need <b>Node</b> on the host (and
-        <b> Playwright</b> for the browser tests) — if that’s missing the run says so
-        plainly instead of faking a pass. “Passed” = the script exited cleanly; read its
-        output to confirm the values look right.
+        Automated checks for Autopilot’s <b>loop mode</b> — the feature that re-sends one
+        prompt to an agent until it’s done. Pick a test below to see <b>what it checks</b>
+        and <b>why it matters</b>, then press <b>Run</b> to run it against <b>this running
+        harness</b>. Each test is a fixed Node/Playwright script, so the host needs
+        <b> Node</b> installed (and <b>Playwright</b> for the browser tests) — if it’s
+        missing, the run says so plainly instead of faking a pass. <b>“Passed”</b> just
+        means the script finished without errors; the output pane below shows what it
+        actually saw.
       </p>
 
       {error && <p className="autopilot__summary" style={{ color: '#b3261e' }}>{error}</p>}
@@ -129,7 +132,14 @@ export default function SystemTestsView() {
           <div className="st-panel__head">
             <div>
               <h3 className="st-panel__title">{current.title}</h3>
-              <p className="st-panel__checks">{current.checks}</p>
+              <p className="st-panel__checks">
+                <span className="st-panel__label">Checks:</span> {current.checks}
+              </p>
+              {current.why && (
+                <p className="st-panel__why">
+                  <span className="st-panel__label">Why it matters:</span> {current.why}
+                </p>
+              )}
               <div className="st-meta">
                 <code className="st-script">{current.script}</code>
                 <span className={`st-tag ${current.browser ? 'st-tag--browser' : 'st-tag--api'}`}>
