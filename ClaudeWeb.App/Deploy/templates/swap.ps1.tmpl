@@ -1,0 +1,78 @@
+# Deploy swap: kill all ClaudeWeb instances, mirror the staged Release build
+# into bin/Release, restart the live :5099 exe. Runs detached because the
+# CLI run driving the deploy dies when the harness stops.
+#
+# SEEDED FILE — generated from ClaudeWeb.App/Deploy/templates/swap.ps1.tmpl by
+# DeployScriptProvisioner on first run. Edit the template in the repo, not this
+# copy: a missing script is re-seeded, but an existing one is never overwritten.
+$ErrorActionPreference = 'Continue'
+$repo = '__REPO__'
+$bin = Join-Path $repo 'ClaudeWeb.App\bin\Release\net8.0-windows'
+$staged = Join-Path $repo '.claudeweb-deploy\bin'
+$log = '__DEPLOYDIR__\swap.log'
+
+"[$(Get-Date -Format o)] Swap started" | Out-File $log -Append
+
+# ENFORCED deploy rule (docs/claude-web/self-dev.md): never deploy a tree
+# that is missing origin/main — parallel sessions clobbered each other's
+# deployed features off live three times on 2026-06-11/12 (incl. a security
+# gate). Abort BEFORE touching the running harness. Best-effort fetch first;
+# offline, the locally-known origin/main still catches stale trees.
+git -C $repo fetch origin 2>$null | Out-Null
+git -C $repo merge-base --is-ancestor origin/main HEAD 2>$null
+if ($LASTEXITCODE -ne 0) {
+    "[$(Get-Date -Format o)] BLOCKED: working tree does not contain origin/main -- merge main first. Harness untouched." | Out-File $log -Append
+    exit 1
+}
+"[$(Get-Date -Format o)] origin/main ancestry check passed" | Out-File $log -Append
+
+Stop-Process -Name ClaudeWeb -Force -ErrorAction SilentlyContinue
+
+# Wait until :5099 is genuinely free (max 30s) — Kestrel's bind failure is
+# swallowed by EmbeddedApi (GUI alive, server dead), so a lingering port
+# turns into a silent dead deploy rather than a visible crash.
+$free = $false
+for ($i = 0; $i -lt 30; $i++) {
+    Start-Sleep -Seconds 1
+    if (-not (Get-NetTCPConnection -LocalPort 5099 -ErrorAction SilentlyContinue)) { $free = $true; break }
+}
+"[$(Get-Date -Format o)] port 5099 free=$free after wait" | Out-File $log -Append
+# robocopy /MIR replaces the contents even when a leftover child process holds
+# a handle on the bin directory itself (Remove-Item+Copy-Item nested the build
+# into bin\bin on 2026-06-12 and the harness never came back up).
+robocopy $staged $bin /MIR /NFL /NDL /NJH | Out-Null
+if (-not (Test-Path (Join-Path $bin 'ClaudeWeb.exe'))) {
+    "[$(Get-Date -Format o)] FATAL: ClaudeWeb.exe missing after mirror, aborting" | Out-File $log -Append
+    exit 1
+}
+"[$(Get-Date -Format o)] bin swapped" | Out-File $log -Append
+Start-Process (Join-Path $bin 'ClaudeWeb.exe') -WorkingDirectory $bin
+
+# A running process is NOT a working deploy (EmbeddedApi catches startup
+# exceptions and keeps the GUI alive with a dead server). Only HTTP 200
+# counts; anything else auto-rolls-back instead of leaving :5099 dark.
+$healthy = $false
+for ($i = 0; $i -lt 30; $i++) {
+    Start-Sleep -Seconds 1
+    try {
+        $r = Invoke-WebRequest -UseBasicParsing 'http://localhost:5099/api/health' -TimeoutSec 2
+        if ($r.StatusCode -eq 200) { $healthy = $true; break }
+    } catch { }
+}
+"[$(Get-Date -Format o)] health=$healthy" | Out-File $log -Append
+
+# Deploy ledger (plans/deployments-tab.md): append-only record the Deployments
+# tab reads to show what's live + history. ADDITIVE — does not affect the swap
+# or the rollback below.
+try {
+    $commit = (git -C $repo rev-parse --short HEAD 2>$null)
+    $subject = (git -C $repo log -1 --pretty=%s 2>$null)
+    $entry = @{ at = (Get-Date).ToString('o'); commit = "$commit"; subject = "$subject"; healthOk = $healthy; event = 'deploy' } | ConvertTo-Json -Compress
+    Add-Content -Path '__DEPLOYDIR__\deploys.jsonl' -Value $entry -Encoding utf8
+} catch { "[$(Get-Date -Format o)] ledger write failed: $_" | Out-File $log -Append }
+
+if (-not $healthy) {
+    "[$(Get-Date -Format o)] HEALTH CHECK FAILED -- auto-rollback" | Out-File $log -Append
+    & '__DEPLOYDIR__\rollback.ps1'
+}
+"[$(Get-Date -Format o)] Swap finished" | Out-File $log -Append
