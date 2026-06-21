@@ -8,8 +8,8 @@
 > [doc-viewer examples](plans/doc-viewer-examples.md) — open it in the
 > Files tab to see wrapping mermaid labels etc. in action.
 
-> **Status (2026-06-20):** **Hide inactive agents** ("Show only important agents"
-> toggle) is **user-confirmed working and merged to main**. In flight:
+> **Status (2026-06-21):** **Agentic Engineering Lab** (slice 1) is
+> **user-confirmed working and merged to main**. In flight:
 > **Chat system tests** on `feature/systest-interactive` (steppable hub +
 > per-suite interactive diagrams).
 
@@ -63,6 +63,23 @@
 
 ## Recently shipped
 
+- [Agentic Engineering Lab — a personal hub for principles & patterns](plans/agentic-lab.md)
+  — a **build-less local app** (`lab/`, served like `homepage/` and the
+  Understanding app) that is the operator's **home for learning about agentic
+  engineering**: what I've learned, what I've found, what patterns/principles
+  I'm currently **testing**, what's turned out **good** vs **bad**, how I test
+  new patterns, and a **repository of the patterns & principles** themselves.
+  Decided as its **own local app** (not a homepage topic) — different audience
+  (the researcher, not onboarding agents), a structured/growing data model, and
+  the platform already supports multi-app per repo. Shipped as a synthetic
+  `kind:harness` app `lab` (`LabApp` over the shared `HarnessStaticApp`,
+  dispatched by `appId` in `LocalProxyController`), **registered for the self
+  repo only**. **Slice 1 = agent-curated static data** (entries + patterns as
+  JSON/MD in `lab/data/`, edited on request; full git history, zero backend);
+  a live backend-CRUD slice (add/edit from the browser like Ideas) is a
+  possible follow-up. Browser-verified on an isolated `:5251` preview (0 console
+  errors / 0 failed requests), deployed to live :5099 & **user-confirmed
+  working; merged to main 2026-06-21**. On `feature/agentic-lab`.
 - [Hide inactive agents — "Show only important" dashboard toggle](plans/hide-inactive-agents.md)
   — a device-local **switch** in the dashboard header that **hides every dock not
   starred ★ important**, leaving just the important ones; toggle off to show all.

@@ -34,6 +34,7 @@ public static class HarnessStaticApp
         [".wasm"] = "application/wasm",
         [".map"] = "application/json; charset=utf-8",
         [".txt"] = "text/plain; charset=utf-8",
+        [".md"] = "text/markdown; charset=utf-8",
     };
 
     /// <summary>
