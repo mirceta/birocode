@@ -3,6 +3,7 @@ import { useDock } from '../../context/DockContext';
 import { useFeature } from '../../context/UiModeContext';
 import { usePrompts } from '../../context/PromptsContext';
 import { usePromptPlans } from '../../context/PromptPlansContext';
+import { usePromptNotes } from '../../context/PromptNotesContext';
 import { useT } from '../../i18n/LanguageContext';
 import PromptManager from './PromptManager';
 
@@ -42,6 +43,9 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
   // shown as a second tab in the SAME ⚙ modal. "Use" on a step composes its
   // details + expected result into the composer (same insertPrompt path).
   const { plans, addPlan, updatePlan, deletePlan } = usePromptPlans();
+  // Prompt NOTES (openspec add-prompt-notes-tab): freeform working notes drafted
+  // before being shaped into a plan, shown as a THIRD tab in the SAME ⚙ modal.
+  const { notes, addNote, updateNote, deleteNote } = usePromptNotes();
   const [mgrOpen, setMgrOpen] = useState(false);
   // The queue for the surface in play: this dock's own agent when embedded, else
   // the active tab's, else the global queue.
@@ -142,6 +146,10 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
           onAddPlan={addPlan}
           onUpdatePlan={updatePlan}
           onDeletePlan={deletePlan}
+          notes={notes}
+          onAddNote={addNote}
+          onUpdateNote={updateNote}
+          onDeleteNote={deleteNote}
           onInsert={insertPrompt}
           onClose={() => setMgrOpen(false)}
         />
