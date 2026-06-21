@@ -38,6 +38,12 @@
 
 ## Active feature plans
 
+- [OpenSpec — execute the port](plans/openspec-flow.md) — **Path A decided; the tooling +
+  migration recipe already shipped (see Recently shipped).** What's left is the actual convention
+  flip — Phases 0–4: `openspec init` + committed `openspec/`, **seed-and-grow** the `specs/`
+  baseline, swap `CLAUDE.md` to the OpenSpec block, and freeze `plans/*`. Solo **hard cut** (no
+  team to dual-write for). Phase 3 (harness rendering) deferred — `openspec/*.md` is already
+  phone-visible via the Files tab. On `feature/openspec-adopt`.
 - [System tests for the Chat feature](plans/chat-system-tests.md) — discover
   **every** exercisable Chat behaviour, then run them **all** as black-box system
   tests against the real HTTP/SSE surface (and the real Claude CLI where it
@@ -59,9 +65,19 @@
   idea (a living "what the system does today" baseline + change-as-delta)
   into our existing plan convention, without adopting its tooling. Slice 1 =
   `docs/capabilities.md` + a delta stanza in each plan + a ritual step.
+  **Superseded by [OpenSpec — adopt its flow](plans/openspec-flow.md)** (Active), which
+  reopens this decision and goes further; kept for its borrow-vs-adopt analysis.
 
 ## Recently shipped
 
+- [OpenSpec adoption — investigation, tooling & migration recipe](plans/openspec-flow.md) —
+  **DECIDED: Path A.** Shipped the groundwork (not the convention flip itself): a dedicated
+  `openspec-port-app/` **Control Room** — Explain / Analyze / Adopt / **Workflows** + an executable
+  **Console** that drives real `openspec`/`git` with paste-ready agent prompts, a **Migrate** tab,
+  and an Understand/Operate split — plus the agent-agnostic `docs/openspec-migration.md` recipe, the
+  staged Phase-4 `CLAUDE.md` block, and an **interim `CLAUDE.md` disclaimer** telling agents to keep
+  using `plans/*` until the port lands. The actual execution is tracked above on
+  `feature/openspec-adopt`. Merged from `feature/openspec-flow`.
 - [Prompt plans — named, ordered prompt-step sequences](plans/prompt-plans.md) —
   extended the saved-prompts **⚙ pop-up** with **prompt plans**: a *plan* is a
   **named, ordered list of prompt steps** worked through in sequence, where each
