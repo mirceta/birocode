@@ -39,6 +39,21 @@
 
 ## Active feature plans
 
+- [Prompt plans — named, ordered prompt-step sequences](plans/prompt-plans.md) —
+  extend the saved-prompts **⚙ pop-up** with **prompt plans**: a *plan* is a
+  **named, ordered list of prompt steps** worked through in sequence, where each
+  **step** has a short **name**, a **details** body, and an **expected result**.
+  Many named plans (pick one from a list), authored/edited right in the pop-up via
+  a new **Prompts | Plans** tab *alongside* the existing prompts (doesn't replace
+  them); steps are **reorderable** (the order is the send sequence) and **Use** on
+  a step drops its composed text — details **plus** the expected result — into the
+  composer. Saved **globally, backend-synced** exactly like prompts today (new
+  `PromptPlansService` + `/api/prompt-plans` + `prompt-plans.json`, mirroring
+  `PromptsService`); reuses the existing `customPrompts` Advanced gate. **Slice 1**
+  = author plans + Use a single step (plus a paste-`PROMPT/DETAILS/EXPECTED RESULT`
+  -to-split nice-to-have); **slice 2** (deferred) = run a whole plan into the
+  per-agent send queue in order. On `feature/prompt-plans`.
+
 - [System tests for the Chat feature](plans/chat-system-tests.md) — discover
   **every** exercisable Chat behaviour, then run them **all** as black-box system
   tests against the real HTTP/SSE surface (and the real Claude CLI where it

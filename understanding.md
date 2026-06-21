@@ -1,56 +1,67 @@
-# Understanding — Files tab "IDE mode"
-
-## Latest request (2026-06-21): make the folder pane adjustable
-
-On top of the shipped IDE split, add two ways to size the **left folder browser**:
-
-- **Drag-to-resize border** — a draggable divider between the folder browser and
-  the file view; drag it to set the browser's width. Width is remembered per
-  device, clamped so the file view always keeps room (works on the tab and,
-  via pointer events, on touch in the dock).
-- **Zoom the folder tree** — small **A− / % / A+** controls that scale the tree
-  (and search-result) text + rows up/down, so you can fit more rows or read them
-  bigger. Zoom level is remembered per device and scoped to the browser pane only
-  (the file view is untouched). Clicking the % resets to 100%.
-
-Both are device-local prefs (like the show/hide-browser toggle) and only exist in
-IDE mode.
+# Understanding — Prompt plans in the saved-prompts pop-up
 
 ## The goal
 
-Give the **Files tab** an **IDE-style split layout**: the folder/file tree on
-the **left**, the selected file's view on the **right** (instead of today's
-single column where the viewer *replaces* the tree). Add a **fuzzy search** over
-the folder tree and files so you can jump to a file by typing part of its name.
+Extend the saved-prompts pop-up (the **⚙** button by the chat box) with
+**prompt plans**. A *plan* is a **named, ordered list of prompt steps** I work
+through in sequence — richer than today's one-off saved prompts.
 
-## What I'll do
+Each **step** has:
+- a short **prompt name** (the step's caption),
+- a **details** body (the prompt itself),
+- an **expected result**.
 
-- **Split-pane layout** in `FilesBrowser` (the shared core used by both the
-  routed Files tab and the agent dock): tree pane left, viewer pane right, with
-  the viewer staying mounted while you click around the tree.
-- **Same layout on both surfaces** — the Files tab *and* the agent dock get the
-  **identical** split, even though it's cramped in the narrow dock (confirmed:
-  that's wanted, no per-surface drawer/fork).
-- **Show/hide the folder browser** — a toggle that collapses the whole left pane
-  (tree + search) so the file view takes the **full width**; remembered per
-  device.
-- **Fuzzy file search**: a search box above the tree that filters/jumps to files
-  by fuzzy-matching the path; picking a result opens it in the right pane.
-- **Gate it behind a new `'advanced'` capability flag** (new features default to
-  Advanced) so Basic mode keeps today's simpler single-column behaviour.
+I author and edit plans **right there in the pop-up**.
 
-## Assumptions (tell me if any are wrong)
+## What we settled on
 
-- IDE mode uses the **same split layout on both** the routed Files tab and each
-  agent dock — no responsive drawer, no per-surface fork; it's just narrower in
-  the dock and that's accepted. (See it in the Understanding app: both surfaces
-  mocked up, clickable, with the show/hide-browser toggle.)
-- Fuzzy search matches against the **file path** (folder + name), is
-  client-side, and is **subsequence** fuzzy (since you said "fuzzy"; the repo
-  also has a substring filter for Ideas — easy to switch the feel if wanted).
-- Search needs the tree's file list; an early slice may search **already-loaded**
-  folders, with a follow-up to fetch a full recursive index if you want
-  whole-repo search from a cold tree.
-- MVP is **frontend-only** (reuses the existing `/api/files`, `/api/files/raw`,
-  pins endpoints); no backend change unless whole-repo search needs a recursive
-  listing endpoint.
+- **Many named plans**, picked from a list — *not* one global plan.
+- Lives **alongside** the existing saved prompts: a **Prompts | Plans tab** in
+  the *same* pop-up. It doesn't replace the prompts.
+- **Steps are reorderable** — the order is the sequence I'll send them in.
+- **Use** on a step drops its text into the composer, and that text includes the
+  **expected result**, not just the prompt details.
+- Plans are **saved globally**, the same way prompts are today (backend-synced
+  JSON, not repo-scoped).
+- **Nice-to-have:** paste a `PROMPT / DETAILS / EXPECTED RESULT` block and have
+  it split into steps automatically.
+
+## Scope
+
+- **Slice 1 (this branch):** author/edit/delete/reorder plans + their steps, and
+  **Use** a single step (drop its composed text into the composer). Plus the
+  paste-to-split nice-to-have if cheap.
+- **Slice 2 (later, NOT now):** run a whole plan into the **send queue** in order
+  automatically. Do not build this yet.
+
+## How I'll build it (mirror the existing prompts feature exactly)
+
+The existing custom-prompts feature is the template (`plans/custom-prompts.md`):
+
+- **Backend** — a new `PromptPlansService` + `PromptPlansController` exposing
+  `GET/POST/PATCH/DELETE /api/prompt-plans`, persisted to
+  `%APPDATA%\ClaudeWeb\prompt-plans.json` via `AppPaths.DataDir` (atomic write,
+  thread-safe, safe-load — same as `PromptsService`). Registered with an
+  `AddPromptPlansModule()` DI extension wired in `EmbeddedApi.cs`.
+  - Model: `PromptPlan(Id, Name, Steps[])` where
+    `PlanStep(Name, Details, Expected)`.
+- **Frontend** — a `PromptPlansContext` (mirrors `PromptsContext`), and the
+  existing `PromptManager.jsx` modal gains a **Prompts | Plans** tab switch. The
+  Plans tab lists plans, lets me pick/author one, edit its steps, reorder them
+  (↑/↓), and **Use** a step → composes `<details>\n\nExpected result:\n<expected>`
+  into the composer via the existing `onInsert`.
+- **i18n** — `plans.*` strings in `en.json` + `tr.json`.
+- **Gating** — reuse the existing `customPrompts` Advanced capability (the whole
+  pop-up is already Advanced-gated), so no new flag unless needed.
+
+## Assumptions
+
+- The composed text a step inserts = the **details** followed by an
+  **"Expected result:"** line with the expected text (so what I send carries the
+  expectation). I'll confirm the exact wording in the build and keep it tweakable.
+- New endpoint path `/api/prompt-plans` (kebab) to avoid colliding with
+  `/api/prompts`.
+- Reordering via simple ↑/↓ buttons (no drag-drop dependency), consistent with
+  the repo's build-less, dependency-light style.
+- Slice 1 ships behind the same Advanced gate and is deployed to live `:5099`
+  and browser-verified before I call it done.
