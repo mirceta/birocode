@@ -63,6 +63,23 @@
 
 ## Recently shipped
 
+- [Files tab — IDE mode (split tree/viewer + fuzzy search)](plans/files-ide-mode.md)
+  — gave the **Files tab** (and the agent dock) an **IDE-style split layout**: the
+  folder/file **tree on the left**, the **selected file's view on the right**
+  (instead of the old single column where the viewer *replaced* the tree, forcing a
+  ← back-and-refind to open the next file), plus a **fuzzy search over the tree +
+  files** (backed by a recursive `GET /api/files/all` index) to jump straight to a
+  file by typing part of its path. Built **inside the shared `FilesBrowser`** (used
+  by both the routed tab and the dock) as a layout flag, not a fork; gated behind an
+  **`'advanced'`** capability so Basic mode keeps the stacked view, and the narrow
+  dock falls back to stacked so the split can't clip it. Follow-up: an **adjustable
+  folder browser** — a **drag-to-resize divider** (mouse + touch; viewer keeps
+  ≥120px) and a **tree zoom** (A−/%/A+, **40%–180%**, scoped via `--tree-zoom`,
+  click % to reset); both prefs device-local and persist across reload. i18n en+tr;
+  understanding-app mockup mirrors both. Browser-verified on an isolated `:5252`
+  preview (tab + dock, split + fuzzy search + collapse + resize/zoom, 0 console
+  errors). **User-confirmed working; merged to main 2026-06-21** (`b818582`). On
+  `feature/files-ide-mode`.
 - [Agentic Engineering Lab — a personal hub for principles & patterns](plans/agentic-lab.md)
   — a **build-less local app** (`lab/`, served like `homepage/` and the
   Understanding app) that is the operator's **home for learning about agentic

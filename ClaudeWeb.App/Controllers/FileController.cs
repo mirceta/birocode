@@ -79,6 +79,32 @@ public class FileController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// GET /api/files/all -- a flat, recursive index of every file path in the
+    /// repo (relative, forward-slashed), powering the Files tab's fuzzy search
+    /// (plans/files-ide-mode.md). Skips VCS/build/dependency dirs and caps the
+    /// count; `truncated` is true when the cap was hit.
+    /// </summary>
+    [HttpGet("all")]
+    public IActionResult All()
+    {
+        _logger.CountRequest();
+        var repo = _repos.Current();
+        if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
+
+        try
+        {
+            var index = _files.ListAllFiles(repo.Path);
+            _logger.Info($"[FILE] Index -> {index.Files.Count} files{(index.Truncated ? " (truncated)" : "")}");
+            return Ok(new { files = index.Files, truncated = index.Truncated });
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[FILE] Index failed: {ex.Message}");
+            return StatusCode(500, new { error = "Could not index files" });
+        }
+    }
+
     /// <summary>GET /api/files/read?path= -- read a text file (max 1 MB, text only).</summary>
     [HttpGet("read")]
     public IActionResult Read([FromQuery] string? path)

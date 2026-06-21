@@ -1,63 +1,56 @@
-# Understanding — Agentic Engineering Lab
+# Understanding — Files tab "IDE mode"
 
-## What you asked for
+## Latest request (2026-06-21): make the folder pane adjustable
 
-A **hub / home for your own development of learning about agentic engineering
-principles** — a living, personal knowledge base inside the Claude Web repo
-that holds:
+On top of the shipped IDE split, add two ways to size the **left folder browser**:
 
-- **What I've learned** — settled lessons.
-- **What I've found** — observations/discoveries not yet generalized.
-- **What I'm currently testing** — patterns & principles in flight.
-- **What's turned out bad** — anti-patterns, things that didn't work.
-- **What's turned out good** — ideas worth keeping.
-- **How I'll test** patterns & principles I'm using — a testing methodology.
-- A **repository of the patterns & principles** themselves.
+- **Drag-to-resize border** — a draggable divider between the folder browser and
+  the file view; drag it to set the browser's width. Width is remembered per
+  device, clamped so the file view always keeps room (works on the tab and,
+  via pointer events, on touch in the dock).
+- **Zoom the folder tree** — small **A− / % / A+** controls that scale the tree
+  (and search-result) text + rows up/down, so you can fit more rows or read them
+  bigger. Zoom level is remembered per device and scoped to the browser pane only
+  (the file view is untouched). Clicking the % resets to 100%.
 
-You also asked for my feedback on whether this should be a **new local app** or
-folded into the existing **homepage** local app.
+Both are device-local prefs (like the show/hide-browser toggle) and only exist in
+IDE mode.
 
-## My recommendation (and the decision I'm proceeding on)
+## The goal
 
-**A new local app**, not a homepage topic — because:
+Give the **Files tab** an **IDE-style split layout**: the folder/file tree on
+the **left**, the selected file's view on the **right** (instead of today's
+single column where the viewer *replaces* the tree). Add a **fuzzy search** over
+the folder tree and files so you can jump to a file by typing part of its name.
 
-1. **Different audience/purpose.** `homepage/` is onboarding doctrine *for
-   agents*; this is *your* evolving lab notebook + pattern library.
-2. **Different data model & cadence.** This wants structured, growing,
-   append-heavy records (entries by status + a pattern repository), not static
-   topic prose.
-3. **The platform already supports it** — multiple local apps per repo
-   (`/api/localview/{repo}/app/{appId}/`); the Understanding app proves the
-   build-less pattern.
-4. **Independent lifecycle** — a journal grows forever; homepage topics freeze.
+## What I'll do
 
-I asked you to confirm two forks (surface, storage); the question prompt was
-dismissed, so I'm proceeding on the **recommended defaults** and will adjust if
-you say otherwise:
+- **Split-pane layout** in `FilesBrowser` (the shared core used by both the
+  routed Files tab and the agent dock): tree pane left, viewer pane right, with
+  the viewer staying mounted while you click around the tree.
+- **Same layout on both surfaces** — the Files tab *and* the agent dock get the
+  **identical** split, even though it's cramped in the narrow dock (confirmed:
+  that's wanted, no per-surface drawer/fork).
+- **Show/hide the folder browser** — a toggle that collapses the whole left pane
+  (tree + search) so the file view takes the **full width**; remembered per
+  device.
+- **Fuzzy file search**: a search box above the tree that filters/jumps to files
+  by fuzzy-matching the path; picking a result opens it in the right pane.
+- **Gate it behind a new `'advanced'` capability flag** (new features default to
+  Advanced) so Basic mode keeps today's simpler single-column behaviour.
 
-- **Surface:** new build-less local app at `lab/` (entry `lab/index.html`,
-  relative URLs only), served the way `homepage/` is.
-- **Storage (MVP):** **agent-curated static data** — entries & patterns as
-  JSON/Markdown files in the repo that I add/edit on request (full git history,
-  zero backend). A live backend-CRUD slice (edit from the browser, like Ideas)
-  is a possible later slice.
+## Assumptions (tell me if any are wrong)
 
-## What I'll do (this kickoff)
-
-- [x] Confirm on `main` synced with `origin/main`, branch off → `feature/agentic-lab`.
-- [x] Add an **Active feature plans** entry in `plan.md`.
-- [x] Write this `understanding.md`.
-- [x] Write the detail plan `plans/agentic-lab.md` (sections, data shape, how
-      it's registered as a local app, MVP vs follow-up slices).
-- [x] Build the build-less SPA under `lab/` + its seed data (7 sections:
-      Learned / Found / Testing / Good / Bad + How-I-test + Repository).
-- [x] Register it as a local app (`lab`, synthetic `kind:harness`, **self repo
-      only**); browser-verified on an isolated `:5251` preview; rebuilt +
-      restarted live `:5099`. **Awaiting your in-browser confirmation.**
-
-## Assumptions
-
-- New local app + agent-curated static MVP (per above) until you say otherwise.
-- App folder name `lab/`, appId `lab`, title "Agentic Engineering Lab" — easy to
-  rename; tell me if you'd prefer another.
-- One-feature-per-branch holds: this is its own feature on its own branch.
+- IDE mode uses the **same split layout on both** the routed Files tab and each
+  agent dock — no responsive drawer, no per-surface fork; it's just narrower in
+  the dock and that's accepted. (See it in the Understanding app: both surfaces
+  mocked up, clickable, with the show/hide-browser toggle.)
+- Fuzzy search matches against the **file path** (folder + name), is
+  client-side, and is **subsequence** fuzzy (since you said "fuzzy"; the repo
+  also has a substring filter for Ideas — easy to switch the feel if wanted).
+- Search needs the tree's file list; an early slice may search **already-loaded**
+  folders, with a follow-up to fetch a full recursive index if you want
+  whole-repo search from a cold tree.
+- MVP is **frontend-only** (reuses the existing `/api/files`, `/api/files/raw`,
+  pins endpoints); no backend change unless whole-repo search needs a recursive
+  listing endpoint.

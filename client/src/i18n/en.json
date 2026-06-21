@@ -516,5 +516,19 @@
   "date.yesterday": "Yesterday",
   "date.unknown": "Unknown date",
   "files.histBack": "Back to the previous document",
-  "files.histForward": "Forward to the next document"
+  "files.histForward": "Forward to the next document",
+  "files.search": "Search files…",
+  "files.searchNoResults": "No files match “{q}”",
+  "files.searchResults": "{n} matches",
+  "files.searchMore": "+{n} more — refine your search",
+  "files.searchLoading": "Indexing files…",
+  "files.pickFile": "Select a file from the tree on the left.",
+  "files.pickFileHint": "Or search above to jump straight to one.",
+  "files.hideBrowser": "Hide the folder browser",
+  "files.showBrowser": "Show the folder browser",
+  "files.resize": "Drag to resize the folder browser",
+  "files.zoom": "Folder tree zoom",
+  "files.zoomIn": "Zoom in",
+  "files.zoomOut": "Zoom out",
+  "files.zoomReset": "Reset zoom to 100%"
 }
