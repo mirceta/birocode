@@ -15,6 +15,7 @@ using ClaudeWeb.Services.Monitoring;
 using ClaudeWeb.Services.Notes;
 using ClaudeWeb.Services.Pins;
 using ClaudeWeb.Services.Prompts;
+using ClaudeWeb.Services.PromptPlans;
 using ClaudeWeb.Services.Repositories;
 using ClaudeWeb.Services.Screen;
 using ClaudeWeb.Services.Settings;
@@ -112,6 +113,8 @@ public class EmbeddedApi
             builder.Services.AddSingleton(_autopilotGate);
             // Harness-provided Understanding app (plans/multiple-local-apps.md Slice 2).
             builder.Services.AddSingleton<Understanding.UnderstandingApp>();
+            // Harness-provided Agentic Engineering Lab app (plans/agentic-lab.md).
+            builder.Services.AddSingleton<Understanding.LabApp>();
 
             // Controllers auto-discovered here -- new controllers need NO changes.
             builder.Services.AddControllers();
@@ -143,6 +146,7 @@ public class EmbeddedApi
             builder.Services.AddArchPlanModule(); // architectural-plan doc (plans/ideas-arch-plan.md)
             builder.Services.AddPinsModule();   // per-project Files pins (plans/plan-files-merge.md)
             builder.Services.AddPromptsModule(); // user-defined composer prompts (plans/custom-prompts.md)
+            builder.Services.AddPromptPlansModule(); // user-defined prompt plans (plans/prompt-plans.md)
             builder.Services.AddDeployModule(); // deployments tab (plans/deployments-tab.md)
             builder.Services.AddExposeModule(); // exposure check (plans/product-onboarding.md)
             builder.Services.AddAnalyticsModule(); // scoreboard (plans/scoreboard-analytics.md)

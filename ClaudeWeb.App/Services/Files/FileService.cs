@@ -119,6 +119,72 @@ public class FileService
         return dirs.Concat(files).ToList();
     }
 
+    /// <summary>Result of a recursive file index: the relative paths plus
+    /// whether the walk hit the cap (so the UI can say "refine your search").</summary>
+    public sealed record FileIndex(IReadOnlyList<string> Files, bool Truncated);
+
+    /// <summary>Directory names skipped by the recursive index — VCS, build
+    /// output, and dependency trees that would bloat a fuzzy file search with
+    /// noise no one searches for. Matched case-insensitively on the dir name.</summary>
+    private static readonly HashSet<string> SkipDirs = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".git", ".hg", ".svn", "node_modules", "bin", "obj", "dist", "build",
+        "out", "target", ".vs", ".vscode", ".idea", ".next", ".nuxt", ".cache",
+        ".selfdev-build", ".preview-test", ".claudeweb-preview",
+    };
+
+    /// <summary>Cap on indexed files. Big enough for any real repo's source,
+    /// bounded so a pathological tree can't make the walk run away.</summary>
+    private const int MaxIndexedFiles = 20000;
+
+    /// <summary>
+    /// Walks the repository root recursively and returns every file's path
+    /// relative to the root (forward-slashed), for the Files tab's fuzzy search
+    /// (plans/files-ide-mode.md). Skips VCS/build/dependency dirs
+    /// (<see cref="SkipDirs"/>) and stops at <see cref="MaxIndexedFiles"/>.
+    /// </summary>
+    public FileIndex ListAllFiles(string fullRoot)
+    {
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(fullRoot));
+        var files = new List<string>();
+        var truncated = false;
+
+        var stack = new Stack<string>();
+        stack.Push(root);
+        while (stack.Count > 0)
+        {
+            var dir = stack.Pop();
+
+            IEnumerable<string> subDirs;
+            try { subDirs = Directory.EnumerateDirectories(dir); }
+            catch { continue; } // unreadable dir — skip rather than fail the whole index
+            foreach (var sub in subDirs)
+            {
+                var name = Path.GetFileName(sub);
+                if (SkipDirs.Contains(name)) continue;
+                // Don't follow reparse points (symlinks/junctions) — they can loop
+                // or escape the root; the safe-path check covers reads, not walks.
+                try { if (new DirectoryInfo(sub).Attributes.HasFlag(FileAttributes.ReparsePoint)) continue; }
+                catch { continue; }
+                stack.Push(sub);
+            }
+
+            IEnumerable<string> dirFiles;
+            try { dirFiles = Directory.EnumerateFiles(dir); }
+            catch { continue; }
+            foreach (var f in dirFiles)
+            {
+                if (files.Count >= MaxIndexedFiles) { truncated = true; break; }
+                var rel = Path.GetRelativePath(root, f).Replace('\\', '/');
+                files.Add(rel);
+            }
+            if (truncated) break;
+        }
+
+        files.Sort(StringComparer.OrdinalIgnoreCase);
+        return new FileIndex(files, truncated);
+    }
+
     /// <summary>
     /// Reads a UTF-8 text file. Returns null when the file is missing, too
     /// large (>1 MB), or detected as binary -- the caller maps null to an

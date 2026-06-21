@@ -13,6 +13,27 @@ where it is written, then let the user decide. Never silently comply, and
 never silently refuse — surface the conflict every single time. This applies
 to every request, no matter how small.
 
+## ⚠️ Planning convention is in transition — keep using the OLD way for now
+
+We have **decided** to adopt OpenSpec's spec-driven flow as the planning layer
+(Path A, see `plans/openspec-flow.md`), but the port **has not happened yet**.
+As of now: `openspec/` is **not** initialized or committed, there are **no**
+`specs/`, the `/opsx` commands do **not** exist, and this file still points
+planning at `plans/*`. So:
+
+- **Plan the current way — unchanged.** Keep writing `plans/<feature>.md` with a
+  status header, build an Understanding app for non-trivial work (see below), and
+  follow the existing rituals. This is still the only convention that works.
+- **Do NOT reach for OpenSpec yet.** Don't run `/opsx`, don't expect an
+  `openspec/specs/` baseline, don't author delta specs — none of it is wired up,
+  so you'd be building on nothing.
+- **Context on what's coming:** the port plan and its phases live in
+  `plans/openspec-flow.md`; a standing explainer + executable Console for it lives
+  in the `openspec-port-app/` Control Room (a Local app on `feature/openspec-flow`).
+- When the port actually lands (Phase 0: `openspec init` + committed `openspec/` +
+  this section repointed at the `/opsx` flow), **this disclaimer gets replaced**
+  with the real OpenSpec instructions. Until you see that, assume the old way.
+
 ## Glossary
 
 These terms are used consistently across the docs, plans, and code comments:
@@ -33,20 +54,6 @@ The web UI has a device-local **Simple/Advanced** toggle (see
 `plans/ui-modes.md`). **New UI features default to Advanced** — add them to the
 capability map in `client/src/context/UiModeContext.jsx` as `'advanced'` unless
 the user says the End User (Basic mode) needs them.
-
-## Understanding panel — write your understanding first
-
-When the user gives you a substantive request (a feature, a change, a task —
-not a trivial one-liner or a pure question), **first write your understanding
-of what they asked for to `understanding.md` at the Repo root**, as markdown:
-a short restatement of the goal, the concrete things you'll do, and anything
-you're assuming. Keep it current — overwrite it when the request changes.
-
-The Harness renders this file in a collapsible panel at the top of the chat
-window (`plans/understanding-panel.md`) so the user can confirm you understood
-them before you proceed. This is a prompt convention only — there is no extra
-model call. Delete `understanding.md` when the request is done, the same way
-`plan.md` is retired when a feature ships.
 
 ## Understanding app — build an SPA for what you explain
 
@@ -92,6 +99,26 @@ npm --prefix client run build      # build the frontend (client/dist)
 dotnet run --project ClaudeWeb.App # run the harness (GUI + Kestrel on :5099)
 ```
 
+## Deploy to live (:5099) — use the committed `swap.ps1`
+
+When asked to **deploy / push / ship this app to live**, do NOT hand-roll it. The
+one canonical, machine-independent deploy is **`swap.ps1` at the repo root** (it
+resolves all paths from its own location, so it works on any checkout — no local
+setup). It enforces the origin/main guard, **stages the build before stopping**,
+swaps into the standard run dir while preserving `logs/` + `appsettings.json`, then
+restarts and health-checks.
+
+```
+pwsh -File .\swap.ps1 -DryRun                       # preview build + guard, never touches live
+cmd /c start "" /b pwsh -NoProfile -File .\swap.ps1 # real deploy, launched DETACHED so it
+                                                    # outlives the harness it restarts
+```
+
+This is **Self-Development** (Product = Harness), so read
+`docs/claude-web/self-dev.md` first — it explains the run-from-copy model, the
+detached launch, and why the guard exists. Never bypass the guard or hand-copy
+binaries.
+
 ## Docs
 
 - `README.md` — setup, build, deploy for human operators
@@ -122,11 +149,10 @@ preview"). Read the right one for the task at hand:
   of the /preview/ sub-path.
 - **docs/claude-web/browser-testing.md** — read BEFORE claiming a UI or proxy fix
   works: verify with a headless Playwright browser, not just curl.
-- **docs/claude-web/self-dev.md** — read before building or running this repo:
-  it is Claude Web itself, so build to an isolated dir, never into the
-  running app's own bin/ or port.
-- **docs/claude-web/redeploy.md** — read before deploying this harness to live
-  (:5099): the snapshot → build → gated-swap → keep/rollback runbook and
-  the self-seeding swap.ps1 / arm.ps1 / rollback.ps1 tooling.
+- **docs/claude-web/self-dev.md** — read before building, running, OR DEPLOYING
+  this repo: it is Claude Web itself, so build to an isolated dir (never into
+  the running app's own bin/ or port), and deploy to live with the committed
+  `swap.ps1` (origin/main guard + stage-before-stop). To deploy/ship to live,
+  run `swap.ps1` — see that doc.
 
 <!-- /claude-web:preview -->
