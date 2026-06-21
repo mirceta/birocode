@@ -38,6 +38,18 @@
 
 ## Active feature plans
 
+- [Portable deploy — one committed `swap.ps1` any agent can run](plans/portable-deploy.md)
+  — deploying the Harness to live `:5099` only worked on one machine because the deploy
+  script was **local + untracked** (`.selfdev-build/deploy.ps1`, hardcoded paths) and
+  the chokepoint `self-dev.md` promised (`swap.ps1`) **never existed in git**. Replaced
+  with a committed, machine-independent **`swap.ps1`** at the repo root: paths from
+  `$PSScriptRoot`, the **real origin/main guard**, stage-before-stop, **discover** the
+  live process + swap into a standard `.selfdev-build/run-bin` (migrating in-place
+  installs), `robocopy /MIR` **protecting `logs/`+`appsettings.json`**, restart +
+  health-check; **pure-ASCII** so it parses under Windows PowerShell 5.1, `-DryRun` for
+  safe preview. `PreviewDoc.cs:SelfDoc` + on-disk `self-dev.md` rewritten to match.
+  `-DryRun` validated end-to-end and the guard already caught a real origin/main
+  divergence; **live cutover pending the operator**. On `feature/portable-deploy`.
 - [OpenSpec — execute the port](plans/openspec-flow.md) — **Path A decided; the tooling +
   migration recipe already shipped (see Recently shipped).** What's left is the actual convention
   flip — Phases 0–4: `openspec init` + committed `openspec/`, **seed-and-grow** the `specs/`
