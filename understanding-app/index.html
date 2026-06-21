@@ -3,235 +3,308 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Portable deploy — understanding</title>
+<title>How chat works — interactive map</title>
 <style>
   :root{
     --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --line:#2b3340;
     --ink:#e6edf3; --dim:#9aa7b4; --accent:#58a6ff; --accent2:#bc8cff;
-    --good:#3fb950; --warn:#d29922; --bad:#f85149;
+    --good:#3fb950; --warn:#d29922; --bad:#f85149; --loop:#39c5cf;
     --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; --radius:12px;
   }
   *{box-sizing:border-box}
   html,body{height:100%}
   body{margin:0;background:
       radial-gradient(1200px 600px at 80% -10%,rgba(88,166,255,.10),transparent),
-      radial-gradient(900px 500px at -10% 110%,rgba(63,185,80,.08),transparent),
+      radial-gradient(900px 500px at -10% 110%,rgba(57,197,207,.07),transparent),
       var(--bg);
     color:var(--ink);font:14px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
-  .wrap{max-width:1080px;margin:0 auto;padding:26px 20px 90px}
+  .wrap{max-width:1120px;margin:0 auto;padding:24px 20px 90px}
+  /* graph tabs go full-bleed so the canvas uses the whole width */
+  .tabpanel.wide{max-width:none}
+  body.graphtab .wrap{max-width:none}
   h1{margin:0 0 6px;font-size:25px}
-  .lede{margin:0;color:var(--dim);max-width:820px}
+  .lede{margin:0;color:var(--dim);max-width:880px}
   .pill{display:inline-block;font-size:11px;color:var(--dim);border:1px solid var(--line);
     border-radius:999px;padding:2px 9px;margin:10px 6px 0 0}
   .pill b{color:var(--accent)}
-  h2{font-size:13px;text-transform:uppercase;letter-spacing:.13em;color:var(--dim);
-    margin:36px 0 14px;font-weight:600;border-bottom:1px solid var(--line);padding-bottom:7px}
   code{font-family:var(--mono);font-size:12.5px;background:#0e141d;border:1px solid var(--line);
     border-radius:5px;padding:1px 5px;color:#cdd9e5}
-  p.note{color:var(--dim);max-width:840px}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.13em;color:var(--dim);
+    margin:34px 0 14px;font-weight:600;border-bottom:1px solid var(--line);padding-bottom:7px}
+  p.note{color:var(--dim);max-width:880px}
+  b.you{color:var(--accent)} b.cls{color:var(--accent2)} b.lp{color:var(--loop)}
 
-  /* before/after machines */
-  .machines{display:flex;gap:16px;flex-wrap:wrap}
-  .mach{flex:1 1 320px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);overflow:hidden}
-  .mach h3{margin:0;padding:10px 13px;font-size:13px;background:var(--panel2);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
-  .mach .body{padding:12px 13px}
-  .row{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px}
-  .row .ic{width:18px;text-align:center}
-  .yes{color:var(--good)} .no{color:var(--bad)} .dimr{color:var(--dim)}
-  .verdict{margin-top:8px;font-size:12px;font-weight:600;border-radius:8px;padding:6px 9px}
-  .verdict.ok{background:rgba(63,185,80,.12);color:#7ee2a8;border:1px solid rgba(63,185,80,.4)}
-  .verdict.fail{background:rgba(248,81,73,.12);color:#ff9b95;border:1px solid rgba(248,81,73,.4)}
+  /* ---- tab nav ---- */
+  nav{position:sticky;top:0;z-index:30;background:rgba(13,17,23,.86);backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line);margin:0 -20px 0;padding:0 20px}
+  .tabs{max-width:1120px;margin:0 auto;display:flex;gap:4px;flex-wrap:wrap;overflow-x:auto}
+  body.graphtab .tabs{max-width:none}
+  .tabbtn{font:inherit;font-size:13px;cursor:pointer;background:transparent;color:var(--dim);
+    border:0;border-bottom:2px solid transparent;padding:11px 14px;white-space:nowrap}
+  .tabbtn:hover{color:var(--ink)}
+  .tabbtn.active{color:var(--ink);border-bottom-color:var(--accent)}
+  .tabpanel{display:none}
+  .tabpanel.active{display:block}
 
-  /* causes */
-  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px 14px}
-  .card h3{margin:0 0 6px;font-size:13.5px}
-  .card p{margin:0;color:var(--dim);font-size:12.5px}
-  .card .tag{font-size:10px;color:var(--bad);border:1px solid rgba(248,81,73,.4);border-radius:5px;padding:1px 6px}
-  .card .fix{display:block;margin-top:8px;color:#7ee2a8;font-size:12px}
+  /* ---- graph + detail ---- */
+  .graphrow{display:grid;grid-template-columns:1fr 320px;gap:14px;align-items:start}
+  @media(max-width:820px){.graphrow{grid-template-columns:1fr}}
+  .cy{height:78vh;min-height:520px;border:1px solid var(--line);border-radius:var(--radius);background:
+      radial-gradient(900px 480px at 60% -20%,rgba(88,166,255,.05),transparent),#0b0f16;}
+  #cy-life,#cy-sse{height:72vh;min-height:460px}
+  .detail{border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);
+    padding:14px;min-height:160px;position:sticky;top:64px}
+  .detail .md-empty{color:var(--dim);font-size:12.5px;line-height:1.6}
+  .detail h4{margin:6px 0 4px;font-size:15px}
+  .detail .md-grp{font-size:10px;text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:var(--dim)}
+  .detail .md-grp[data-grp="client"]{color:var(--accent)}
+  .detail .md-grp[data-grp="backend"]{color:var(--accent2)}
+  .detail .md-grp[data-grp="store"]{color:var(--good)}
+  .detail .md-grp[data-grp="cli"]{color:var(--warn)}
+  .detail .md-grp[data-grp="auto"]{color:var(--loop)}
+  .detail .md-role{font-size:12.5px;color:var(--ink);font-weight:600;margin-bottom:6px}
+  .detail .md-desc{font-size:12.5px;color:var(--dim);line-height:1.55}
+  .detail .md-src{margin-top:9px;font-size:11.5px;color:var(--dim)}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin:12px 0 0;font-size:11.5px;color:var(--dim)}
+  .legend .sw{display:inline-block;width:11px;height:11px;border-radius:3px;border:1.6px solid;vertical-align:-1px;margin-right:5px;background:#0e141d}
+  .legend .c-client{border-color:var(--accent)} .legend .c-backend{border-color:var(--accent2)}
+  .legend .c-store{border-color:var(--good)} .legend .c-cli{border-color:var(--warn)}
+  .legend .c-auto{border-color:var(--loop)} .legend .c-actor{border-color:var(--actor,#7d8db0);border-radius:50%}
 
-  /* pipeline */
-  .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
-  button.btn{border:1px solid var(--line);background:#0e141d;color:var(--ink);border-radius:8px;padding:7px 13px;font-size:13px;cursor:pointer}
-  button.btn:hover{border-color:var(--accent)}
-  button.btn.primary{background:rgba(88,166,255,.15);border-color:var(--accent);color:#cfe6ff}
-  .toggle{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--dim);margin-left:auto}
-  .switch{width:38px;height:22px;border-radius:999px;background:#30363d;position:relative;cursor:pointer;transition:.2s;border:1px solid var(--line)}
-  .switch.on{background:rgba(248,81,73,.5)}
-  .switch .knob{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#cdd9e5;transition:.2s}
-  .switch.on .knob{left:18px}
+  /* ---- driver simulator ---- */
+  .sim{border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:16px}
+  .drivers{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+  .driver{flex:1 1 220px;border:1px solid var(--line);border-radius:10px;background:#0e141d;padding:12px;display:flex;flex-direction:column;gap:8px;transition:.18s}
+  .driver h4{margin:0;font-size:13px;display:flex;align-items:center;gap:7px}
+  .driver .dot{width:9px;height:9px;border-radius:50%}
+  .driver.you .dot{background:var(--accent)} .driver.cls .dot{background:var(--accent2)} .driver.lp .dot{background:var(--loop)}
+  .driver p{margin:0;font-size:12px;color:var(--dim);flex:1}
+  .driver .call{font-family:var(--mono);font-size:11px;color:#8aa0b6}
+  .driver button{font:inherit;font-size:12.5px;cursor:pointer;border-radius:7px;padding:7px 10px;border:1px solid var(--line);background:#1b2230;color:var(--ink);transition:.15s}
+  .driver.you button{border-color:#2b4a6b} .driver.cls button{border-color:#4a3a6b} .driver.lp button{border-color:#2a5a5e}
+  .driver button:hover:not(:disabled){filter:brightness(1.3)}
+  .driver button:disabled{opacity:.45;cursor:not-allowed}
+  .driver.win{box-shadow:0 0 0 2px currentColor inset}
+  .driver.you.win{color:var(--accent)} .driver.cls.win{color:var(--accent2)} .driver.lp.win{color:var(--loop)}
+  .slot{margin-top:6px;border:1px dashed var(--line);border-radius:10px;background:#0b0f16;padding:14px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+  .slotbox{flex:1 1 260px;min-height:64px;border:2px solid var(--line);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:3px;transition:.25s;background:#0e141d;text-align:center;padding:10px}
+  .slotbox .lab{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim)}
+  .slotbox .who{font-size:15px;font-weight:600}
+  .slotbox.busy{border-color:currentColor}
+  .slotbox.idle .who{color:var(--dim)}
+  .ask{flex:0 0 200px;border:1px solid #2f5132;border-radius:9px;background:#0f1a12;padding:10px;font-size:12px;color:var(--dim)}
+  .ask b{color:var(--good)}
+  .log{margin-top:12px;border:1px solid var(--line);border-radius:9px;background:#0b0f16;font-family:var(--mono);font-size:12px;max-height:160px;overflow:auto}
+  .log .ln{padding:5px 11px;border-bottom:1px solid #161c26;white-space:pre-wrap}
+  .log .ln:last-child{border-bottom:0}
+  .log .ok{color:var(--good)} .log .rej{color:var(--bad)} .log .ev{color:#8aa0b6} .log .sys{color:var(--dim)}
+  .ctl{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+  .ctl button{font:inherit;font-size:12.5px;cursor:pointer;border-radius:7px;padding:6px 11px;border:1px solid var(--line);background:#161b22;color:var(--ink)}
+  .ctl button:hover{filter:brightness(1.25)}
+  .ctl .gate{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dim)}
+  .switch{position:relative;width:38px;height:21px;border-radius:999px;background:#30363d;cursor:pointer;transition:.2s;border:1px solid var(--line)}
+  .switch.on{background:#1f6f37}
+  .switch i{position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:#cdd9e5;transition:.2s}
+  .switch.on i{left:19px}
 
-  .pipe{display:flex;flex-direction:column;gap:0}
-  .stage{display:flex;gap:12px;align-items:flex-start;padding:11px 13px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;background:var(--panel);opacity:.45;transition:.25s}
-  .stage.active{opacity:1;border-color:var(--accent);box-shadow:0 0 0 1px rgba(88,166,255,.3)}
-  .stage.done{opacity:1}
-  .stage.failed{opacity:1;border-color:var(--bad);box-shadow:0 0 0 1px rgba(248,81,73,.35)}
-  .stage.skipped{opacity:.3}
-  .stage .dot{flex:0 0 24px;height:24px;border-radius:50%;background:#0e141d;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:12px}
-  .stage.done .dot{background:rgba(63,185,80,.18);border-color:var(--good);color:var(--good)}
-  .stage.failed .dot{background:rgba(248,81,73,.18);border-color:var(--bad);color:var(--bad)}
-  .stage.active .dot{border-color:var(--accent);color:var(--accent)}
-  .stage .t{font-weight:600}
-  .stage .d{color:var(--dim);font-size:12.5px;margin-top:2px}
-  .stage .badge{font-size:10px;border-radius:5px;padding:1px 6px;margin-left:6px;border:1px solid var(--line);color:var(--dim)}
-  .stage .badge.guard{color:var(--warn);border-color:rgba(210,153,34,.4)}
-  .stage .badge.safe{color:var(--good);border-color:rgba(63,185,80,.4)}
-  .live{margin-top:12px;padding:10px 13px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);font-size:13px;display:flex;align-items:center;gap:9px}
-  .live .lampi{width:11px;height:11px;border-radius:50%;background:var(--good);box-shadow:0 0 8px var(--good)}
-  .live.down .lampi{background:var(--bad);box-shadow:0 0 8px var(--bad)}
-  .live.swapping .lampi{background:var(--warn);box-shadow:0 0 8px var(--warn)}
-  .mono{font-family:var(--mono)}
+  /* ---- overview cards ---- */
+  .ov{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:13px;margin-top:6px}
+  .ovcard{border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:14px}
+  .ovcard h3{margin:0 0 6px;font-size:14px}
+  .ovcard p{margin:0;color:var(--dim);font-size:12.5px}
+  .ovcard.a{border-left:3px solid var(--accent)} .ovcard.b{border-left:3px solid var(--accent2)}
+  .ovcard.c{border-left:3px solid var(--loop)} .ovcard.d{border-left:3px solid var(--good)}
+
+  /* ---- table ---- */
+  table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
+  th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--dim);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+  td code{font-size:11.5px}
+  .foot{margin-top:42px;color:var(--dim);font-size:12px;border-top:1px solid var(--line);padding-top:14px}
+  .foot code{font-size:11.5px}
 </style>
 </head>
 <body>
+<nav>
+  <div class="tabs" role="tablist">
+    <button class="tabbtn" data-tab="overview">Overview</button>
+    <button class="tabbtn" data-tab="map">System map</button>
+    <button class="tabbtn" data-tab="drive">Drive a turn</button>
+    <button class="tabbtn" data-tab="life">Life of a turn</button>
+    <button class="tabbtn" data-tab="sse">SSE contract</button>
+  </div>
+</nav>
+
 <div class="wrap">
-  <h1>Portable deploy &mdash; one <span class="mono">swap.ps1</span> any agent can run</h1>
-  <p class="lede">Deploying the Harness to live <b>:5099</b> worked for one agent and was
-  <b>impossible</b> for another &mdash; the classic machine-dependent trap. The deploy
-  &ldquo;mechanism&rdquo; was a <b>local, untracked</b> script with hardcoded paths, and the
-  safety chokepoint the docs promised <b>didn&rsquo;t exist in git</b>. The fix: one committed,
-  path-independent <span class="mono">swap.ps1</span> with a real guard.</p>
-  <div>
-    <span class="pill">branch <b>feature/portable-deploy</b></span>
-    <span class="pill">spec <b>plans/portable-deploy.md</b></span>
-    <span class="pill">dry-run verified ✓</span>
-    <span class="pill">live cutover: operator</span>
+
+  <!-- ============ OVERVIEW ============ -->
+  <div class="tabpanel" id="tab-overview">
+    <h1>How chat works — and who can drive a turn</h1>
+    <p class="lede">
+      A chat in Claude Web is not owned by your browser tab — it's a backend-owned
+      <b>Run</b>. That one fact is what lets your phone disconnect mid-turn, and it's
+      also what lets the <b class="cls">autopilot</b> drive an agent: the autopilot is
+      not a separate chat path, it <em>reuses the same machinery you do</em>. These tabs
+      map it out interactively; everything is drawn from the real code (cited at the bottom).
+    </p>
+    <span class="pill">backend: <b>Kestrel :5099</b></span>
+    <span class="pill">one writer per <b>(repo · lane)</b></span>
+    <span class="pill"><b>seq</b> monotonic per repo across runs</span>
+
+    <h2>Start here</h2>
+    <div class="ov">
+      <div class="ovcard a"><h3>🗺️ System map</h3><p>The whole journey of a turn — your device → backend → CLI + disk — as one interactive graph. Hover any box to isolate its connections; click for detail.</p></div>
+      <div class="ovcard b"><h3>🎛️ Drive a turn</h3><p>A live simulator of the <b>one writer slot, three drivers</b> rule. Open the operator gate and watch you, the classifier and loop mode contend for the same slot.</p></div>
+      <div class="ovcard c"><h3>🔁 Life of a turn</h3><p>The five stages of a single turn, the reject branch, and the loop-back that makes the autopilot possible.</p></div>
+      <div class="ovcard d"><h3>📡 SSE contract</h3><p>How raw CLI <code>stream-json</code> is reduced to seven stable event shapes the client understands.</p></div>
+    </div>
+
+    <h2>The one idea everything hangs on</h2>
+    <p class="note">A turn runs on a background <code>Task.Run</code> tied to the
+      RunSession's own <code>Cts</code> token — <b>never</b> the HTTP request's
+      <code>RequestAborted</code>. Lock your phone and the SSE attachment drops; the CLI
+      keeps working and billing, and you reattach later via <code>stream?after=N</code>.
+      Because every writer — you, the classifier, loop mode — goes through the same
+      <code>TryBeginRun</code>, the autopilot can never collide with you on an agent.</p>
   </div>
 
-  <h2>Why one machine could deploy and the other couldn&rsquo;t</h2>
-  <div class="machines">
-    <div class="mach">
-      <h3>🖥️ Machine A (mine) &mdash; before</h3>
-      <div class="body">
-        <div class="row"><span class="ic yes">✓</span> Has <code>.selfdev-build/deploy.ps1</code> <span class="dimr">(untracked, local)</span></div>
-        <div class="row"><span class="ic yes">✓</span> Hardcoded <code>C:\Users\km\…</code> happens to match</div>
-        <div class="row"><span class="ic yes">✓</span> Knows live runs from <code>run-bin</code> copy</div>
-        <div class="verdict ok">Deploys fine &mdash; by luck of local setup</div>
+  <!-- ============ SYSTEM MAP ============ -->
+  <div class="tabpanel" id="tab-map">
+    <h2>System map — one chat turn, end to end</h2>
+    <p class="note">Read it left to right: <b class="you">your device</b> → the
+      <b class="cls">backend on :5099</b> → the <b>CLI + disk</b>. Each <b>box is a place
+      something runs</b> — the solid tier boxes are separate processes/devices; the dashed
+      boxes inside the backend are its four components. Notice the
+      <b class="lp">autopilot</b> sits <i>inside the backend box</i> too: it is just
+      another component calling the same <code>TryBeginRun</code>, with no private path to
+      the CLI.</p>
+    <div class="graphrow">
+      <div class="cy" id="cy-map"></div>
+      <div class="detail" id="map-detail"></div>
+    </div>
+    <div class="legend">
+      <span><span class="sw c-client"></span>client / device</span>
+      <span><span class="sw c-backend"></span>backend :5099</span>
+      <span><span class="sw c-store"></span>persistent (disk)</span>
+      <span><span class="sw c-cli"></span>CLI process</span>
+      <span><span class="sw c-auto"></span>autopilot</span>
+      <span><span class="sw c-actor"></span>actor</span>
+      <span>⬡ process · 🛢 barrel = store · ▢ dashed = slot</span>
+      <span>▭ <b>boxes = where it runs</b> — solid tier (device · backend · CLI · disk); dashed = a backend component</span>
+    </div>
+  </div>
+
+  <!-- ============ DRIVE A TURN ============ -->
+  <div class="tabpanel" id="tab-drive">
+    <h2>Who can drive a turn — one slot, three drivers</h2>
+    <p class="note">
+      Every turn must first claim the repo's <code>builder</code> slot via
+      <code>RunSessionService.TryBeginRun(repoId,&nbsp;"builder")</code>. Three different
+      drivers call that same method — so they <b>can never run concurrently on one
+      agent</b>. First caller wins; the rest are turned away. Open the operator gate,
+      then press each driver's button (try two fast) to see the single-flight in action.
+    </p>
+    <div class="sim">
+      <div class="drivers">
+        <div class="driver you" id="d-you">
+          <h4><span class="dot"></span> You · the phone</h4>
+          <p>A human send from the chat box.</p>
+          <div class="call">POST /api/chat</div>
+          <button data-driver="you">Send a turn</button>
+        </div>
+        <div class="driver cls" id="d-cls">
+          <h4><span class="dot"></span> Classifier · auto-advance</h4>
+          <p>Reads the last reply, picks a routine prompt, sends only if confident, non-risky &amp; gated.</p>
+          <div class="call">Tick → TrySend → TryBeginRun</div>
+          <button data-driver="cls">Auto-advance</button>
+        </div>
+        <div class="driver lp" id="d-lp">
+          <h4><span class="dot"></span> Loop mode · resend</h4>
+          <p>Deterministically resends one fixed prompt each turn until a sentinel / cap / deny-list stop.</p>
+          <div class="call">Tick → TrySendLoop → TryBeginRun</div>
+          <button data-driver="lp">Resend (loop)</button>
+        </div>
       </div>
-    </div>
-    <div class="mach">
-      <h3>🖥️ Machine B (other agent) &mdash; before</h3>
-      <div class="body">
-        <div class="row"><span class="ic no">✗</span> No deploy script in the checkout</div>
-        <div class="row"><span class="ic no">✗</span> <code>self-dev.md</code> points to a <code>swap.ps1</code> that doesn&rsquo;t exist</div>
-        <div class="row"><span class="ic no">✗</span> Assumes locked in-place <code>bin\Debug</code></div>
-        <div class="verdict fail">Can&rsquo;t deploy &mdash; nothing committed to run</div>
+      <div class="slot">
+        <div class="slotbox idle" id="slot">
+          <div class="lab">builder slot · this repo</div>
+          <div class="who" id="slotwho">idle — open for one writer</div>
+        </div>
+        <div class="ask">
+          <b>ask lane</b> = a <em>separate</em> slot. The read-only
+          (<code>--permission-mode plan</code>) side conversation runs
+          <b>concurrently</b> — it can't write, so it's safe.
+        </div>
       </div>
+      <div class="ctl">
+        <button id="finish" disabled>▸ Finish current turn</button>
+        <button id="reset">↺ Reset</button>
+        <div class="gate">
+          operator gate
+          <div class="switch" id="gate"><i></i></div>
+          <span id="gatelbl">off</span>
+        </div>
+      </div>
+      <div class="log" id="log"></div>
+    </div>
+    <p class="note">
+      With the gate <b>off</b> (the default) the autopilot does nothing at all — only you
+      can send. While a turn runs, a second <b class="you">you</b> send gets
+      <b style="color:var(--bad)">409 Conflict</b>; the autopilot drivers simply
+      <b>skip</b>. And <b class="lp">loop mode takes precedence</b>: a repo with an active
+      loop skips classification entirely.
+    </p>
+  </div>
+
+  <!-- ============ LIFE OF A TURN ============ -->
+  <div class="tabpanel" id="tab-life">
+    <h2>The life of one turn</h2>
+    <p class="note">Five stages, one reject branch, and a loop-back. Hover a stage to
+      isolate it; click for the exact code behaviour.</p>
+    <div class="graphrow">
+      <div class="cy" id="cy-life"></div>
+      <div class="detail" id="life-detail"></div>
     </div>
   </div>
 
-  <h2>The five root causes &mdash; and the fix for each</h2>
-  <div class="cards">
-    <div class="card"><span class="tag">untracked</span><h3>Script lived in a gitignored dir</h3>
-      <p>The working deploy was <code>.selfdev-build/deploy.ps1</code> &mdash; never committed, so no other checkout had it.</p>
-      <span class="fix">→ Commit <code>swap.ps1</code> at the repo root.</span></div>
-    <div class="card"><span class="tag">hardcoded</span><h3>Absolute machine paths</h3>
-      <p>Pinned to <code>C:\Users\km\…</code>; broke on any other user or folder.</p>
-      <span class="fix">→ Resolve everything from <code>$PSScriptRoot</code>.</span></div>
-    <div class="card"><span class="tag">fiction</span><h3>Chokepoint that didn&rsquo;t exist</h3>
-      <p><code>self-dev.md</code> promised a <code>swap.ps1</code> enforcing the origin/main guard. No such file in git.</p>
-      <span class="fix">→ Make it real; rewrite the doc at its source (<code>PreviewDoc.cs</code>).</span></div>
-    <div class="card"><span class="tag">wrong target</span><h3>Assumed the locked bin</h3>
-      <p>Live runs from a <em>copy</em> (<code>run-bin</code>), not in-place <code>bin\Debug</code> (locked while serving).</p>
-      <span class="fix">→ Discover the live process; swap into a standard <code>run-bin</code>.</span></div>
-    <div class="card"><span class="tag">unsafe</span><h3>Guard was never implemented</h3>
-      <p>Even the local script skipped the origin/main check the doc claimed it enforced.</p>
-      <span class="fix">→ Real <code>git merge-base --is-ancestor</code> guard; abort = live untouched.</span></div>
+  <!-- ============ SSE CONTRACT ============ -->
+  <div class="tabpanel" id="tab-sse">
+    <h2>Raw CLI → the stable SSE contract</h2>
+    <p class="note">The frontend never sees raw CLI internals. <code>CliRunnerService</code>
+      reduces <code>stream-json</code> to seven event shapes (one JSON object per
+      <code>data:</code> line). Hover the reducer to fan out all seven.</p>
+    <div class="graphrow">
+      <div class="cy" id="cy-sse"></div>
+      <div class="detail" id="sse-detail"></div>
+    </div>
+    <table>
+      <thead><tr><th>SSE event</th><th>From</th><th>Carries</th></tr></thead>
+      <tbody>
+        <tr><td><code>session</code></td><td>system/init</td><td>the <code>sessionId</code> (resume key)</td></tr>
+        <tr><td><code>token</code></td><td>text_delta</td><td>visible answer text, streamed</td></tr>
+        <tr><td><code>thinking</code></td><td>thinking delta</td><td>reasoning (dimmed; never in the answer bubble)</td></tr>
+        <tr><td><code>tool</code></td><td>tool_use / tool_result</td><td><code>start</code> → <code>input</code> (summary+detail) → <code>end</code> (ok, preview)</td></tr>
+        <tr><td><code>usage</code></td><td>message.usage</td><td>context-fill token count</td></tr>
+        <tr><td><code>done</code></td><td>result</td><td><code>sessionId</code>, cost</td></tr>
+        <tr><td><code>error</code></td><td>is_error / throttle / exit≠0</td><td>a message</td></tr>
+      </tbody>
+    </table>
   </div>
 
-  <h2>Run the deploy &mdash; watch the guard and the staging</h2>
-  <p class="note">Try a <b>dry-run</b> (build + guard only, live never stops) vs a <b>full deploy</b>.
-  Flip <b>&ldquo;origin/main advanced&rdquo;</b> to simulate another session pushing while you work &mdash;
-  the guard aborts <em>before touching live</em>, exactly as it did for real during this build.</p>
-  <div class="controls">
-    <button class="btn primary" id="run">▶ Run dry-run</button>
-    <button class="btn" id="runFull">▶ Run full deploy</button>
-    <button class="btn" id="reset">↺ Reset</button>
-    <div class="toggle">origin/main advanced
-      <div class="switch" id="sw"><div class="knob"></div></div>
-    </div>
-  </div>
-  <div class="pipe" id="pipe"></div>
-  <div class="live" id="live"><span class="lampi"></span><span id="liveTxt">live :5099 &mdash; serving (200)</span></div>
+  <p class="foot">
+    Sources — <code>ChatController.cs</code> (chat / stream / runs / stop),
+    <code>RunSessionService.cs</code> (<code>TryBeginRun</code>, per-(repo,lane) slot, seq buffer &amp; replay),
+    <code>CliRunnerService.cs</code> (spawn + stream-json→SSE translation),
+    <code>AutopilotService.cs</code> (the tick; <code>TrySend</code> / <code>TrySendLoop</code> reuse <code>TryBeginRun</code> + <code>CliRunnerService.RunAsync</code>; reads the last reply from the JSONL transcript),
+    <code>ChatContext.jsx</code> (reconcile / attachToRun / seq dedup).
+    This page calls no backend; it's a rolling-latest explainer served by the Understanding app.
+    Interactive graphs via vendored Cytoscape (no CDN).
+  </p>
 </div>
 
-<script>
-const STAGES = [
-  { key:'guard',    t:'1 · Guard',          d:'git fetch + merge-base --is-ancestor origin/main HEAD. Abort (live untouched) if the tree predates origin/main.', badge:['guard','GUARD'] },
-  { key:'build',    t:'2 · Build + stage',  d:'Build client + backend into .claudeweb-deploy/ BEFORE stopping anything. A broken build can only abort, never half-write live.', badge:['safe','STAGE FIRST'] },
-  { key:'discover', t:'3 · Discover target',d:'Find the process serving :5099; swap into the standard repo-relative .selfdev-build/run-bin (migrating in-place installs).' },
-  { key:'stop',     t:'4 · Stop live',      d:'Kill the listener on :5099 to release the exe lock. (This is why it runs detached — it outlives the harness it kills.)' },
-  { key:'swap',     t:'5 · Swap binaries',  d:'robocopy /MIR staged into run-bin, but /XD logs and /XF appsettings.json. Data lives in %APPDATA%\\ClaudeWeb — never touched.', badge:['safe','PROTECT STATE'] },
-  { key:'restart',  t:'6 · Restart + health',d:'Relaunch from run-bin, poll http://localhost:5099/api/auth/check until it answers.' },
-];
-const pipe = document.getElementById('pipe');
-const liveEl = document.getElementById('live');
-const liveTxt = document.getElementById('liveTxt');
-const sw = document.getElementById('sw');
-let advanced = false;
-let timer = null;
-
-function build(){
-  pipe.innerHTML = STAGES.map(s => {
-    const b = s.badge ? `<span class="badge ${s.badge[0]}">${s.badge[1]}</span>` : '';
-    return `<div class="stage" data-k="${s.key}">
-      <div class="dot">${STAGES.indexOf(s)+1}</div>
-      <div><div class="t">${s.t}${b}</div><div class="d">${s.d}</div></div>
-    </div>`;
-  }).join('');
-}
-function setLive(state, txt){
-  liveEl.className = 'live' + (state==='down'?' down':state==='swapping'?' swapping':'');
-  liveTxt.innerHTML = txt;
-}
-function reset(){
-  if(timer){ clearTimeout(timer); timer=null; }
-  build();
-  setLive('up','live :5099 &mdash; serving (200)');
-}
-function setStage(k, cls){
-  const el = pipe.querySelector(`[data-k="${k}"]`);
-  if(el){ el.className = 'stage ' + cls; const d=el.querySelector('.dot'); if(cls==='done')d.textContent='✓'; if(cls==='failed')d.textContent='✕'; }
-}
-
-function run(full){
-  reset();
-  const seq = [];
-  seq.push(()=>{ setStage('guard','active'); });
-  if(advanced){
-    seq.push(()=>{ setStage('guard','failed');
-      STAGES.slice(1).forEach(s=>setStage(s.key,'skipped'));
-      setLive('up','live :5099 &mdash; <b style="color:#7ee2a8">untouched</b> (guard aborted: tree missing origin/main)');
-    });
-    runSeq(seq); return;
-  }
-  seq.push(()=>{ setStage('guard','done'); setStage('build','active'); });
-  seq.push(()=>{ setStage('build','done');
-    if(full){ setStage('discover','active'); }
-    else {
-      STAGES.slice(2).forEach(s=>setStage(s.key,'skipped'));
-      setLive('up','live :5099 &mdash; <b style="color:#7ee2a8">untouched</b> (dry-run stops after staging)');
-    }
-  });
-  if(full){
-    seq.push(()=>{ setStage('discover','done'); setStage('stop','active'); setLive('swapping','live :5099 &mdash; stopping…'); });
-    seq.push(()=>{ setStage('stop','done'); setStage('swap','active'); setLive('down','live :5099 &mdash; down (swapping binaries, logs preserved)'); });
-    seq.push(()=>{ setStage('swap','done'); setStage('restart','active'); setLive('swapping','live :5099 &mdash; restarting…'); });
-    seq.push(()=>{ setStage('restart','done'); setLive('up','live :5099 &mdash; serving (200) ✓ new build'); });
-  }
-  runSeq(seq);
-}
-function runSeq(seq){
-  let i=0;
-  const step = ()=>{ if(i>=seq.length){timer=null;return;} seq[i++](); timer=setTimeout(step, 850); };
-  step();
-}
-
-document.getElementById('run').onclick = ()=>run(false);
-document.getElementById('runFull').onclick = ()=>run(true);
-document.getElementById('reset').onclick = reset;
-sw.onclick = ()=>{ advanced=!advanced; sw.className='switch'+(advanced?' on':''); reset(); };
-reset();
-</script>
+<script src="./data.js?v=4"></script>
+<script src="./lib/cytoscape.min.js"></script>
+<script src="./mapcore.js?v=4"></script>
+<script src="./app.js?v=4"></script>
 </body>
 </html>
