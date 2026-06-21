@@ -1,236 +1,407 @@
-// Understanding app for: "Autopilot loop mode — re-send one fixed prompt until
-// the agent is genuinely done." Self-contained, no libs, relative URLs
-// (served under /api/localview/<repo>/app/understanding/).
+// Understanding app for: "Make the redeploy procedure reproducible — the harness
+// seeds its deploy scripts (swap/rollback/arm) on first run from in-repo templates,
+// substituting this machine's paths, missing-only so an existing box is untouched."
+// Self-contained, no libs, relative URLs (served under
+// /api/localview/<repo>/app/understanding/).
 
-(function () {
-  // ── view switcher ───────────────────────────────────────────────
-  var nav = document.getElementById('nav');
-  nav.addEventListener('click', function (e) {
-    var btn = e.target.closest('.nav__btn');
-    if (!btn) return;
-    var view = btn.dataset.view;
-    Array.prototype.forEach.call(nav.children, function (b) {
-      b.classList.toggle('nav__btn--on', b === btn);
-    });
-    document.querySelectorAll('.view').forEach(function (v) {
-      v.classList.toggle('view--on', v.id === 'view-' + view);
-    });
-  });
+const el = (tag, attrs = {}, ...kids) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") n.className = v;
+    else if (k === "html") n.innerHTML = v;
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else n.setAttribute(k, v);
+  }
+  for (const kid of kids) n.append(kid && kid.nodeType ? kid : document.createTextNode(kid ?? ""));
+  return n;
+};
 
-  // ── HOW: the per-turn decision (kept here so prose lives in one place) ──
-  var FLOW = [
-    ['stop', 'STOP · done', 'Last message contains the <b>sentinel</b> (e.g. <code>LOOP_DONE</code>) → stop, mark <b>done</b>. The job is finished.'],
-    ['esc', 'STOP · escalate', 'Last message mentions a <b>risky action</b> (the existing deny-list: deploy / push / <code>reset --hard</code> …) → stop and hand back to you. Never auto-resend into danger.'],
-    ['cap', 'STOP · capped', 'The <b>iteration cap</b> is reached → stop, mark <b>capped</b>. The runaway backstop.'],
-    ['err', 'PAUSE · error', 'The run ended in <code>error</code> → pause, mark <b>error</b>, wait for you.'],
-    ['go',  'RESEND', 'Otherwise → <b>resend the one fixed prompt</b>, bump the counter, write an audit entry. The loop continues.'],
+// ----------------------------------------------------------------------------
+// VIEW: problem
+// ----------------------------------------------------------------------------
+function viewProblem() {
+  const root = el("div");
+  root.append(el("p", {
+    class: "lead",
+    html: `Before this change, the Deployments tab and the rollback code were committed —
+      but the <span class="hl">tooling they drive was not</span>. A fresh checkout had the
+      buttons and none of the scripts. Three things made the procedure impossible to reproduce
+      on another machine:`,
+  }));
+
+  root.append(el("div", { class: "grid3" },
+    problemCard("📍", "Off-repo & untracked", "bad",
+      `The scripts and the <code>deploys.jsonl</code> ledger lived in a sibling folder
+       <span class="path">playground/claudeweb-rollback</span> — outside the repo and not in git.`),
+    problemCard("🔧", "Hardcoded paths", "bad",
+      `Every script was full of absolute paths tied to this box's profile, e.g.
+       <span class="path">C:\\Users\\Administrator\\…\\birocode</span>.`),
+    problemCard("🕳️", "Assumed to exist", "bad",
+      `The committed <code>DeployService.cs</code> just <em>assumed</em> the scripts were there.
+       On a new box: dead buttons.`),
+  ));
+
+  root.append(el("h2", { class: "section-title" }, "What a fresh checkout looked like"));
+
+  const before = el("div", { class: "beforewrap" });
+  before.append(
+    el("div", { class: "box repo" },
+      el("div", { class: "boxhd" }, "📦 The git repo (cloned anywhere)"),
+      fileRow("ClaudeWeb.App/Services/Deploy/DeployService.cs", "tracked", "tracked"),
+      fileRow("ClaudeWeb.App/.../Deployments tab UI", "tracked", "tracked"),
+      el("div", { class: "brokenlink" }, "⤓ calls scripts that aren't here ⤓"),
+    ),
+    el("div", { class: "box" },
+      el("div", { class: "boxhd" }, "🗂️ ../claudeweb-rollback (sibling)"),
+      fileRow("swap.ps1", "untracked", "MISSING"),
+      fileRow("rollback.ps1", "untracked", "MISSING"),
+      fileRow("arm.ps1", "untracked", "MISSING"),
+      el("div", { class: "brokenlink" }, "✗ never cloned — lived only on this PC"),
+    ),
+  );
+  root.append(before);
+
+  root.append(el("div", { class: "callout warn", html:
+    `<b>The constraint:</b> the scripts genuinely <em>must</em> live outside the repo —
+     rollback reverts the working tree, so its own scripts can't sit inside the thing it
+     reverts. So we can't just commit them in place. We need them to <b>self-install</b> per machine.` }));
+  return root;
+}
+
+function problemCard(icon, title, tone, bodyHtml) {
+  return el("div", { class: "card" },
+    el("h3", {}, el("span", {}, icon), title, el("span", { class: `pill ${tone}`, style: "margin-left:auto" }, "gap")),
+    el("p", { html: bodyHtml }),
+  );
+}
+function fileRow(name, cls, tag) {
+  return el("div", { class: `fileitem ${cls}` }, el("span", {}, "📄"), el("span", {}, name),
+    el("span", { class: "tag" }, tag));
+}
+
+// ----------------------------------------------------------------------------
+// VIEW: solution (startup flow)
+// ----------------------------------------------------------------------------
+function viewSolution() {
+  const root = el("div");
+  root.append(el("p", {
+    class: "lead",
+    html: `The fix mirrors the pattern the app already uses for <code>auth.json</code>
+      (<span class="hl">LoadOrSeed on startup</span>): keep the canonical scripts in the
+      repo as <span class="hl">embedded-resource templates</span>, and have a new
+      <code>DeployScriptProvisioner</code> write any <span class="hl">missing</span> script
+      for <em>this</em> machine when the harness boots.`,
+  }));
+
+  root.append(el("div", { class: "grid2" },
+    el("div", { class: "card" },
+      el("h3", {}, el("span", {}, "🌱"), "What's now in the repo"),
+      el("ul", { class: "clean", html:
+        `<li><b>Templates</b> — <span class="path">Deploy/templates/{swap,rollback,arm}.ps1.tmpl</span>,
+          tracked & embedded in the exe. Machine bits replaced by tokens.</li>
+         <li><b>Provisioner</b> — <code>DeployScriptProvisioner</code>: <code>ResolveDir</code> +
+          <code>EnsureSeeded</code>.</li>
+         <li><b>Portable default</b> — <code>DeployScriptsDir</code> now resolves at runtime to
+          <span class="path">&lt;parent-of-repo&gt;/claudeweb-rollback</span>.</li>` }),
+    ),
+    el("div", { class: "card" },
+      el("h3", {}, el("span", {}, "🧭"), "Why this shape"),
+      el("ul", { class: "clean", html:
+        `<li>Runtime scripts stay <b>off-repo</b> (rollback-safety) — only the templates are in-repo.</li>
+         <li>Follows the existing <b>LoadOrSeed-on-startup</b> convention.</li>
+         <li><b>Backward compatible</b>: missing-only writes + a default that resolves to the
+           current dir ⇒ this box is untouched.</li>` }),
+    ),
+  ));
+
+  root.append(el("h2", { class: "section-title" }, "What happens on startup (Program.cs)"));
+
+  const steps = [
+    ["1", "Self-repo is known", "is-decision",
+      `<code>FindRepoRoot()</code> locates the harness's own source tree (or returns null on a
+       source-less install).`, ""],
+    ["2", "Resolve the deploy dir", "",
+      `<code>ResolveDir(config.DeployScriptsDir, repoRoot)</code> → an explicit config value if set,
+       else <span class="path">&lt;parent-of-repo&gt;/claudeweb-rollback</span>.`,
+      "On this box that resolves to the existing folder — behavior unchanged."],
+    ["3", "Ensure dir exists", "",
+      `<code>EnsureSeeded</code> creates the deploy directory if it isn't there yet.`, ""],
+    ["loop", "For each script: swap · rollback · arm", "is-decision",
+      `Check whether the target file already exists…`, ""],
+    ["a", "exists → skip", "is-skip",
+      `An existing script is <b>never</b> overwritten — a hand-tuned box keeps its scripts.`, ""],
+    ["b", "missing → write", "is-write",
+      `Read the embedded template, substitute <span class="tok">__REPO__</span> and
+       <span class="tok">__DEPLOYDIR__</span> for this machine, write the file.`, ""],
+    ["4", "API starts", "",
+      `The Deployments tab now drives real, correct-for-this-machine scripts. Best-effort:
+       seeding never throws into startup.`, ""],
   ];
-  var flow = document.getElementById('flow');
-  FLOW.forEach(function (f) {
-    var li = document.createElement('li');
-    li.dataset.k = f[0];
-    li.innerHTML = '<span class="res">' + f[1] + '</span>' + f[2];
-    flow.appendChild(li);
-  });
 
-  // ── SAFETY ──────────────────────────────────────────────────────
-  var SAFETY = [
-    ['🔒', false, '<b>Operator gate, off by default.</b> The web can start/stop a loop only when the <b>host</b> has opened the gate — and the web can never open it. Same fence as every other autopilot endpoint.'],
-    ['🧱', true,  '<b>Sentinel + cap, not an LLM judge.</b> Done-detection is deliberately deterministic and free — and adds <b>no new prompt-injection surface</b>. An LLM judge reading untrusted agent output would.'],
-    ['🛑', false, '<b>Hard <code>maxIterations</code> cap</b> (default 10). The loop refuses to run past it, no matter what.'],
-    ['🚧', false, '<b>Deny-list escalation.</b> A risky-looking ending pauses the loop and hands control back to you instead of resending.'],
-    ['✋', false, '<b>Per-loop Stop button</b>, and auto-pause on any run <code>error</code> — not just clean completions.'],
-    ['📒', false, '<b>Every send is audited</b> to the append-only <code>autopilot-audit.jsonl</code> (<code>outcome = "loop"</code>), so unattended sends are durably recorded.'],
+  const flow = el("div", { class: "flow" });
+  steps.forEach((s, i) => {
+    flow.append(el("div", { class: `step ${s[2]}` },
+      el("div", { class: "dot" }, s[0] === "loop" ? "⟳" : s[0]),
+      el("div", { class: "body" },
+        el("h4", {}, s[1]),
+        el("p", { html: s[3] }),
+        s[4] ? el("p", { class: "note", html: "→ " + s[4] }) : "",
+      ),
+    ));
+    if (i < steps.length - 1) flow.append(el("div", { class: "connector" }));
+  });
+  root.append(el("div", { class: "card" }, flow));
+  return root;
+}
+
+// ----------------------------------------------------------------------------
+// VIEW: tokens (interactive substitution)
+// ----------------------------------------------------------------------------
+const TEMPLATES = {
+  swap: `$repo = '__REPO__'
+$bin = Join-Path $repo 'ClaudeWeb.App\\bin\\Release\\net8.0-windows'
+$log = '__DEPLOYDIR__\\swap.log'
+
+# Gate: refuse to deploy a tree missing origin/main
+git -C $repo merge-base --is-ancestor origin/main HEAD
+...
+robocopy $staged $bin /MIR
+# health check; on failure:
+& '__DEPLOYDIR__\\rollback.ps1'`,
+  rollback: `$repo = '__REPO__'
+$bin = Join-Path $repo 'ClaudeWeb.App\\bin\\Release\\net8.0-windows'
+$log = '__DEPLOYDIR__\\rollback.log'
+
+robocopy "$bin.lastgood" $bin /MIR
+robocopy "$dist.lastgood" $dist /MIR
+Start-Process (Join-Path $bin 'ClaudeWeb.exe')
+Add-Content '__DEPLOYDIR__\\deploys.jsonl' $entry`,
+  arm: `# arm the 15-min dead-man's switch
+$action = New-ScheduledTaskAction -Execute 'powershell' \`
+  -Argument '-File __DEPLOYDIR__\\rollback.ps1'
+Register-ScheduledTask -TaskName ClaudeWebAutoRollback ...
+# (note: arm.ps1 only references the deploy dir, not __REPO__)`,
+};
+
+let tokState = { repo: "D:\\work\\birocode", dir: "D:\\work\\claudeweb-rollback", script: "swap", filled: false };
+
+function viewTokens() {
+  const root = el("div");
+  root.append(el("p", {
+    class: "lead",
+    html: `Seeding is just <code>template.Replace("__REPO__", repoRoot).Replace("__DEPLOYDIR__", deployDir)</code>.
+      Edit the machine paths below and press <b>Seed →</b> to watch the tokens fill in.
+      Pick a script to see its template.`,
+  }));
+
+  const bar = el("div", { class: "tokbar" });
+  bar.append(
+    el("div", { class: "field" },
+      el("label", {}, "repoRoot (this machine)"),
+      el("input", { id: "inRepo", value: tokState.repo, oninput: e => { tokState.repo = e.target.value; } }),
+    ),
+    el("div", { class: "field" },
+      el("label", {}, "deployDir (resolved off-repo)"),
+      el("input", { id: "inDir", value: tokState.dir, oninput: e => { tokState.dir = e.target.value; } }),
+    ),
+  );
+  root.append(bar);
+
+  const ctl = el("div", { class: "tokbar" });
+  const seg = el("div", { class: "seg" });
+  ["swap", "rollback", "arm"].forEach(s => {
+    seg.append(el("button", {
+      class: tokState.script === s ? "active" : "",
+      onclick: () => { tokState.script = s; render(); },
+    }, s + ".ps1"));
+  });
+  ctl.append(seg);
+  ctl.append(el("button", {
+    class: "seg",
+    style: "cursor:pointer",
+    onclick: () => { tokState.filled = !tokState.filled; render(); },
+  }, el("button", { class: tokState.filled ? "active" : "" }, tokState.filled ? "↺ Reset to template" : "Seed → substitute")));
+  root.append(ctl);
+
+  const panes = el("div", { class: "codepanes" });
+  panes.append(
+    codePane("Template (in git)", tokState.script + ".ps1.tmpl", renderTemplate(false)),
+    codePane(tokState.filled ? "Seeded on this machine" : "After seeding (press Seed →)",
+      tokState.script + ".ps1", renderTemplate(tokState.filled)),
+  );
+  root.append(panes);
+
+  root.append(el("div", { class: "legend" },
+    el("span", { html: `<span class="sw" style="background:var(--tok-bg);border:1px solid var(--tok)"></span>unfilled token` }),
+    el("span", { html: `<span class="sw" style="background:var(--good-bg);border:1px solid var(--good)"></span>substituted for this machine` }),
+  ));
+
+  root.append(el("div", { class: "callout", html:
+    `<b>Verified against the real compiled method:</b> the seeded <code>swap.ps1</code> contains the
+     repo path and deploy dir, with <b>no leftover tokens</b>. <code>arm.ps1</code> legitimately
+     references only the deploy dir.` }));
+
+  const view = document.getElementById("view");
+  view.innerHTML = "";
+  view.append(root);
+
+  function render() {
+    // keep input values across re-render
+    viewTokensReRender();
+  }
+  return root;
+}
+
+function viewTokensReRender() {
+  routeTo("tokens", true);
+}
+
+function renderTemplate(filled) {
+  let t = TEMPLATES[tokState.script];
+  // escape HTML
+  t = t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  if (!filled) {
+    t = t.replace(/__REPO__/g, `<span class="tok">__REPO__</span>`)
+         .replace(/__DEPLOYDIR__/g, `<span class="tok">__DEPLOYDIR__</span>`);
+  } else {
+    const r = escapeHtml(tokState.repo);
+    const d = escapeHtml(tokState.dir);
+    t = t.replace(/__REPO__/g, `<span class="tok filled">${r}</span>`)
+         .replace(/__DEPLOYDIR__/g, `<span class="tok filled">${d}</span>`);
+  }
+  return t;
+}
+function escapeHtml(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function codePane(label, which, html) {
+  return el("div", { class: "codepane" },
+    el("div", { class: "cphd" }, el("span", {}, label), el("span", { class: "which" }, which)),
+    el("pre", { class: "code", html }),
+  );
+}
+
+// ----------------------------------------------------------------------------
+// VIEW: safety / verification
+// ----------------------------------------------------------------------------
+function viewSafety() {
+  const root = el("div");
+  root.append(el("p", {
+    class: "lead",
+    html: `Two properties make this safe to ship to the <span class="hl">live box</span> without
+      touching its working deploy — and I proved each against the <span class="hl">real compiled
+      method</span> via a throwaway console harness, not just by reading the code.`,
+  }));
+
+  root.append(el("div", { class: "grid2" },
+    el("div", { class: "card" },
+      el("h3", {}, el("span", {}, "🛡️"), "Missing-only"),
+      el("p", { html: `A <code>File.Exists</code> guard means an existing script is never clobbered.
+        This box's hand-tuned <span class="path">claudeweb-rollback</span> scripts stay exactly as they are.` }),
+    ),
+    el("div", { class: "card" },
+      el("h3", {}, el("span", {}, "🎯"), "Default lands on the same dir"),
+      el("p", { html: `On this box, <code>ResolveDir</code> computes
+        <span class="path">&lt;parent-of-repo&gt;/claudeweb-rollback</span> — the already-existing
+        folder. So nothing new is written here; only a <em>fresh</em> machine gets seeds.` }),
+    ),
+  ));
+
+  root.append(el("h2", { class: "section-title" }, "Verification — real method, real assertions"));
+  const checks = el("div", { class: "checks" });
+  [
+    ["Build", "ClaudeWeb.App compiles clean (only pre-existing CliRunner warnings)", "0 errors"],
+    ["Templates embed", "All 3 templates present as ClaudeWeb.Deploy.templates.*.tmpl", "3/3"],
+    ["ResolveDir('', repo)", "Computes the off-repo sibling path", "…/claudeweb-rollback"],
+    ["ResolveDir(explicit)", "Honors an explicit config override", "C:\\explicit"],
+    ["ResolveDir(no repo)", "Source-less install handled", "null"],
+    ["EnsureSeeded writes", "All 3 scripts written, no leftover tokens, real paths in", "swap+rollback+arm"],
+    ["Missing-only guard", "A pre-placed SENTINEL file was NOT overwritten", "preserved ✓"],
+  ].forEach(c => {
+    checks.append(el("div", { class: "check" },
+      el("div", { class: "ic" }, "✓"),
+      el("div", { class: "ct" }, el("strong", {}, c[0]), el("span", {}, c[1])),
+      el("div", { class: "out" }, c[2]),
+    ));
+  });
+  root.append(checks);
+
+  root.append(el("div", { class: "callout warn", html:
+    `<b>One honest caveat:</b> I couldn't boot the full WinForms harness (it'd fight the live :5099),
+     so the <code>Program.cs</code> wiring is verified by build + the provisioner's own end-to-end test,
+     not by a real startup. It runs for real on the next deploy/restart. <b>No deploy was done</b> —
+     that's your call.` }));
+  return root;
+}
+
+// ----------------------------------------------------------------------------
+// VIEW: files
+// ----------------------------------------------------------------------------
+function viewFiles() {
+  const root = el("div");
+  root.append(el("p", { class: "lead", html:
+    `Everything that changed for this feature. New files are tracked; runtime scripts are still
+     produced off-repo at startup.` }));
+
+  const rows = [
+    ["new", "Deploy/templates/swap.ps1.tmpl", "Canonical swap script, paths tokenized, embedded in the exe"],
+    ["new", "Deploy/templates/rollback.ps1.tmpl", "Canonical rollback script, tokenized"],
+    ["new", "Deploy/templates/arm.ps1.tmpl", "Canonical dead-man's-switch arm script, tokenized"],
+    ["new", "Services/Deploy/DeployScriptProvisioner.cs", "ResolveDir + EnsureSeeded (missing-only, token substitution)"],
+    ["edit", "ClaudeWeb.App.csproj", "Embed Deploy/templates/*.tmpl as resources"],
+    ["edit", "Program.cs", "Resolve DeployScriptsDir + EnsureSeeded after self-repo, before API start"],
+    ["edit", "Models/AppConfig.cs", "DeployScriptsDir default → \"\" (resolves at runtime, portable)"],
+    ["edit", "Services/Deploy/DeployService.cs", "Stale \"both already exist\" doc comment fixed"],
+    ["edit", "understanding.md", "Records the task"],
   ];
-  var safety = document.getElementById('safety');
-  SAFETY.forEach(function (s) {
-    var li = document.createElement('li');
-    if (s[1]) li.className = 'star';
-    li.innerHTML = '<span class="ic">' + s[0] + '</span><span>' + s[2] + '</span>';
-    safety.appendChild(li);
+  const tbl = el("table", { class: "files" });
+  tbl.append(el("tr", {}, el("th", {}, ""), el("th", {}, "File (under ClaudeWeb.App/)"), el("th", {}, "What")));
+  rows.forEach(r => {
+    tbl.append(el("tr", {},
+      el("td", {}, el("span", { class: `badge ${r[0]}` }, r[0] === "new" ? "NEW" : "EDIT")),
+      el("td", { class: "f" }, r[1]),
+      el("td", {}, r[2]),
+    ));
   });
+  root.append(el("div", { class: "card" }, tbl));
 
-  // ── PLAN: slices ────────────────────────────────────────────────
-  var SLICES = [
-    ['Backend engine + config', 'The <code>LoopConfig</code> model + persistence; drive the per-turn decision from the autopilot tick. Reuse <code>RunSession.TryBeginRun</code> + <code>CliRunnerService.RunAsync</code> for the send, and the audit log. All gated.'],
-    ['API', '<code>POST /api/autopilot/loop</code> (start / update / stop); loop state folded into <code>GET /api/autopilot</code>.'],
-    ['Frontend', 'Per-agent loop controls in <code>AutopilotConsole</code> (prompt + cap + sentinel; live iteration count, state badge, <b>Stop</b>). Live via the existing 4&thinsp;s poll. Advanced-gated.'],
-    ['Verify', 'On an isolated port with Playwright: resend-on-done, sentinel-stop, cap-stop, deny-list escalate, Stop button. Plus an honesty pass on this app.'],
-  ];
-  var slices = document.getElementById('slices');
-  SLICES.forEach(function (s) {
-    var li = document.createElement('li');
-    li.innerHTML = '<b>' + s[0] + '</b> — ' + s[1];
-    slices.appendChild(li);
-  });
+  root.append(el("div", { class: "callout", html:
+    `<b>Follow-ups (not done):</b> the human-readable runbook via <code>PreviewDoc.cs</code> +
+     a CLAUDE.md pointer, and the deploy itself. Staging left to you (the <code>git add -A</code> rule).` }));
+  return root;
+}
 
-  // ── PLAN: schema ────────────────────────────────────────────────
-  var SCHEMA = [
-    ['repoId', 'string', 'which agent'],
-    ['prompt', 'string', 'the fixed text to resend (seedable from a routine / custom prompt)'],
-    ['sentinel', 'string', 'stop phrase to watch for (default "LOOP_DONE")'],
-    ['maxIterations', 'int', 'hard cap (default 10)'],
-    ['active', 'bool', 'loop running?'],
-    ['iterationsDone', 'int', 'live counter'],
-    ['status', 'string', 'looping | done | escalate | capped | error | stopped'],
-    ['lastSentAt', 'long', 'timestamp of the last resend'],
-  ];
-  var schema = document.getElementById('schema');
-  schema.innerHTML = '<div class="schema__row schema__head"><span class="f">field</span><span class="t">type</span><span class="d">meaning</span></div>';
-  SCHEMA.forEach(function (r) {
-    var div = document.createElement('div');
-    div.className = 'schema__row';
-    div.innerHTML = '<span class="f">' + r[0] + '</span><span class="t">' + r[1] + '</span><span class="d">' + r[2] + '</span>';
-    schema.appendChild(div);
-  });
+// ----------------------------------------------------------------------------
+// router
+// ----------------------------------------------------------------------------
+const VIEWS = {
+  problem: viewProblem,
+  solution: viewSolution,
+  tokens: viewTokens,
+  safety: viewSafety,
+  files: viewFiles,
+};
 
-  // ── PLAN: open questions ────────────────────────────────────────
-  var OPENS = [
-    ['default', '<b>Done-detection = sentinel + cap</b> (vs LLM judge / no-progress / manual). Picked the deterministic, injection-free default.'],
-    ['default', '<b>Resend trigger = after <i>every</i> completed turn</b> (not only question-endings) — that’s what pushes through the “slice A or B?” prompts.'],
-    ['default', '<b>One loop per agent</b> at a time.'],
-  ];
-  var opens = document.getElementById('opens');
-  OPENS.forEach(function (o) {
-    var li = document.createElement('li');
-    li.innerHTML = '<span class="tagd">default</span><span>' + o[1] + '</span>';
-    opens.appendChild(li);
-  });
-
-  // ── UX: the interactive loop simulator ──────────────────────────
-  var S = { armed: false, iter: 0, cap: 5, sentinel: 'LOOP_DONE', prompt: '', ending: 'work', done: false };
-
-  var el = {
-    form: document.getElementById('simForm'),
-    live: document.getElementById('simLive'),
-    badge: document.getElementById('simBadge'),
-    fPrompt: document.getElementById('fPrompt'),
-    fSentinel: document.getElementById('fSentinel'),
-    fCap: document.getElementById('fCap'),
-    btnArm: document.getElementById('btnArm'),
-    btnStop: document.getElementById('btnStop'),
-    btnReset: document.getElementById('btnReset'),
-    btnTurn: document.getElementById('btnTurn'),
-    feed: document.getElementById('feed'),
-    liveStatus: document.getElementById('liveStatus'),
-    liveIter: document.getElementById('liveIter'),
-    liveCap: document.getElementById('liveCap'),
-    liveSent: document.getElementById('liveSent'),
-    liveMeter: document.getElementById('liveMeter'),
-    chips: Array.prototype.slice.call(document.querySelectorAll('.chip')),
-  };
-
-  function addMsg(cls, tag, html) {
-    var d = document.createElement('div');
-    d.className = 'msg msg--' + cls;
-    d.innerHTML = (tag ? '<span class="msg__tag">' + tag + '</span>' : '') + html;
-    el.feed.appendChild(d);
-    el.feed.scrollTop = el.feed.scrollHeight;
+function routeTo(name, isTokenReRender) {
+  document.querySelectorAll(".tab").forEach(t =>
+    t.classList.toggle("active", t.dataset.view === name));
+  const view = document.getElementById("view");
+  if (name === "tokens") {
+    // viewTokens manages its own mount (interactive)
+    const built = VIEWS.tokens();
+    if (!isTokenReRender) { /* already mounted inside viewTokens */ }
+    return;
   }
-  function setStatus(s) {
-    el.liveStatus.textContent = s;
-    el.liveStatus.dataset.s = s;
-    el.badge.textContent = s;
-  }
-  function setChipsEnabled(on) {
-    el.chips.forEach(function (c) { c.disabled = !on; });
-    el.btnTurn.disabled = !on;
-  }
-  function refreshMeter() {
-    el.liveIter.textContent = S.iter;
-    el.liveCap.textContent = S.cap;
-    el.liveMeter.style.width = Math.min(100, (S.iter / S.cap) * 100) + '%';
-  }
+  view.innerHTML = "";
+  view.append(VIEWS[name]());
+  view.scrollTo?.(0, 0);
+  window.scrollTo(0, 0);
+}
 
-  // arm
-  el.btnArm.addEventListener('click', function () {
-    S.armed = true; S.iter = 0; S.done = false;
-    S.prompt = el.fPrompt.value.trim() || 'Keep going.';
-    S.sentinel = (el.fSentinel.value.trim() || 'LOOP_DONE');
-    S.cap = Math.max(1, parseInt(el.fCap.value, 10) || 5);
-    el.form.hidden = true; el.live.hidden = false;
-    setStatus('looping'); refreshMeter();
-    el.liveSent.textContent = 'just now';
-    el.feed.innerHTML = '';
-    addMsg('sys', 'gate', 'Operator gate open · loop armed for <b>birocode</b>.');
-    addMsg('sys', 'send #1', S.prompt);
-    el.liveSent.textContent = 'sent #1';
-    setChipsEnabled(true);
-  });
+document.getElementById("tabs").addEventListener("click", e => {
+  const btn = e.target.closest(".tab");
+  if (!btn) return;
+  routeTo(btn.dataset.view);
+});
 
-  // pick how the next turn ends
-  el.chips.forEach(function (chip) {
-    chip.addEventListener('click', function () {
-      S.ending = chip.dataset.end;
-      el.chips.forEach(function (c) { c.setAttribute('aria-pressed', String(c === chip)); });
-    });
-  });
-
-  // run one turn-completion through the decision
-  el.btnTurn.addEventListener('click', function () {
-    if (!S.armed || S.done) return;
-
-    // 1) the agent emits its turn-ending message
-    if (S.ending === 'sentinel') {
-      addMsg('ai', 'agent', 'All slices shipped. <b>' + S.sentinel + '</b>');
-    } else if (S.ending === 'deny') {
-      addMsg('ai', 'agent', 'Looks good — I’ll <b>deploy to prod and force-push</b> now.');
-    } else if (S.ending === 'error') {
-      addMsg('ai', 'agent', 'Run crashed: <b>build failed</b> (non-zero exit).');
-    } else {
-      addMsg('ai', 'agent', 'Did the next slice. Should I do slice ' + (S.iter + 1) + ' or refactor first?');
-    }
-
-    // 2) the engine decides (mirrors the per-turn flow)
-    if (S.ending === 'sentinel') {
-      finish('done', 'stop', 'Sentinel “' + S.sentinel + '” seen → loop <b>done</b>. No resend.');
-    } else if (S.ending === 'deny') {
-      finish('escalate', 'esc', 'Deny-list hit (deploy / force-push) → <b>escalated to you</b>. No resend.');
-    } else if (S.ending === 'error') {
-      finish('error', 'err', 'Run <code>error</code> → loop <b>paused</b>, waiting for you.');
-    } else {
-      // more work → resend, unless that send would exceed the cap
-      S.iter += 1;
-      refreshMeter();
-      if (S.iter >= S.cap) {
-        setStatus('capped');
-        addMsg('esc', 'engine', 'Iteration cap (' + S.cap + ') reached → loop <b>capped</b>. No further resend.');
-        endLoop();
-      } else {
-        addMsg('sys', 'send #' + (S.iter + 1), 'Resend → ' + S.prompt);
-        el.liveSent.textContent = 'sent #' + (S.iter + 1);
-      }
-    }
-  });
-
-  function finish(status, cls, msg) {
-    setStatus(status);
-    addMsg(cls === 'stop' ? 'stop' : cls, 'engine', msg);
-    endLoop();
-  }
-  function endLoop() {
-    S.done = true;
-    setChipsEnabled(false);
-  }
-
-  // stop button
-  el.btnStop.addEventListener('click', function () {
-    if (S.done) return;
-    setStatus('stopped');
-    addMsg('esc', 'you', 'Stopped the loop manually.');
-    endLoop();
-  });
-
-  // reset demo
-  el.btnReset.addEventListener('click', function () {
-    S.armed = false; S.done = false; S.iter = 0;
-    el.form.hidden = false; el.live.hidden = true;
-    el.feed.innerHTML = '';
-    el.badge.textContent = 'idle';
-    setChipsEnabled(false);
-    el.chips.forEach(function (c) { c.setAttribute('aria-pressed', 'false'); });
-  });
-
-  // default the "more work" chip as pressed
-  (el.chips[0] || {}).setAttribute && el.chips[0].setAttribute('aria-pressed', 'true');
-})();
+routeTo("problem");
