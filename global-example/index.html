@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Global-exposure example — live on :5200</title>
+<!-- RULE 3 (the relative-URL half): every asset URL below is ./… not /…, so it
+     rides the /preview/ base when IIS/ARR fronts this page. A leading slash
+     would escape the prefix (→ 404 for assets, → 401 to the harness for /api).
+     This page is the demonstration — open devtools and watch the request URLs. -->
+<link rel="stylesheet" href="./assets/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="title">
+        <span class="glyph">🌐</span>
+        <div>
+          <h1>Global-exposure example</h1>
+          <p class="lede">A minimal product that <b>is</b> the five-rule public-exposure
+            contract — the public twin of <code>homepage/</code>. Run it on <code>:5200</code>,
+            reach it through IIS/ARR at <code>/preview/</code>, and it proves each rule by
+            behaving correctly. Canonical contract:
+            <code>docs/global-exposure-convention.md</code>.</p>
+        </div>
+      </div>
+      <div class="badge" id="badge">checking…</div>
+    </header>
+
+    <!-- live demo: a body-ful POST then a cache-busted GET -->
+    <section class="card demo">
+      <h2>Live · the two rules that make global ≠ local</h2>
+      <p class="muted">Press <b>Bump</b>: it fires a body-ful <code>POST ./api/bump</code>
+        (rule 4) then a cache-busted <code>GET ./api/state?_=…</code> (rule 5) — the exact two
+        traps loopback never had. Watch the counter and the call log.</p>
+      <div class="counter" id="count">—</div>
+      <div class="cbar">
+        <button class="btn primary" id="bump">＋ Bump</button>
+        <button class="btn" id="refresh">↻ Refresh (GET)</button>
+        <span class="status" id="status"></span>
+      </div>
+      <div class="calls">
+        <div class="call" id="c-post">
+          <span class="r">rule 4 · body-ful POST</span>
+          <code>POST ./api/bump</code> <span class="bd">{ }</span>
+          <span class="note">send a body (even empty) or IIS/ARR answers <b>411</b></span>
+        </div>
+        <div class="call" id="c-get">
+          <span class="r">rule 5 · beat ARR cache</span>
+          <code>GET ./api/state?_=&lt;ts&gt;</code>
+          <span class="note">cache-bust every GET or ARR serves the <b>frozen</b> old state</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- the five rules, and how THIS app satisfies each (built by app.js) -->
+    <section class="card">
+      <h2>How this app satisfies all five rules</h2>
+      <ul class="rules" id="rules"></ul>
+    </section>
+
+    <!-- paste-into-the-other-agent prompt (built by prompt.js) -->
+    <section class="card" id="prompt-host"></section>
+
+    <footer>
+      Build-less · dependency-free · run <code>node serve.mjs</code> (or
+      <code>launch-detached.vbs</code>). Local twin: <code>homepage/</code> on :5305 ·
+      larger real specimen: the <code>game-arcade</code> repo.
+    </footer>
+  </div>
+
+  <!-- RULE 3 again: ./assets/… relative. prompt.js before app.js (independent). -->
+  <script src="./assets/prompt.js"></script>
+  <script src="./assets/app.js"></script>
+</body>
+</html>

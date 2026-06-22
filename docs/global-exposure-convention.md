@@ -76,3 +76,14 @@ curl https://<domain>/preview/api/<state>?_=1       # always FRESH
 ```
 
 If the bare GET disagrees with the `?_=1` GET, you're hitting ARR's cache (rule 5).
+
+## Worked example
+
+A minimal product that **is** this contract lives in the Claude Web repo at **`global-example/`**
+— the public twin of `homepage/` (which is the worked example for [Local
+exposure](local-exposure-convention.md)). It binds `0.0.0.0:5200`, serves at root with relative
+URLs, strips a leading `/preview/` so it works both through ARR and on direct-LAN, and exercises
+rules 4 & 5 live with a tiny counter API (`POST /api/bump` → `GET /api/state?_=…`). Reproduce a
+globally-exposed app by doing what it does; see `global-example/README.md`. The larger
+real-world specimen is the `game-arcade` repo's `minesweeper/server.js` (a full arcade behind
+the same `/preview/` door).

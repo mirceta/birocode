@@ -50,6 +50,16 @@
   variants with a global `ctx`. **Built + headless-verified** (parses, registers, data
   consistent, assets serve 200); browser-render still to eyeball. On
   `feature/global-apps-exposure`.
+- [Global-exposure example — a real product that teaches public exposure](plans/global-exposure-example.md)
+  — the companion to the topic above. The global *explainer* lived inside `homepage/`, which is
+  itself a **local** product (`:5305`, behind login) — so the public contract was taught by an
+  exemplar that doesn't practice it. Local has a live specimen (`homepage/`); global had none.
+  Adds **`global-example/`**, the public twin of `homepage/`: a build-less, dependency-free
+  product that binds `0.0.0.0:5200`, is reached through `/preview/`, and **practices all five
+  rules** (live body-ful POST + cache-busted GET over a tiny counter API) instead of only
+  explaining them — hosting its own paste-prompt like `homepage/` does for local. **Built +
+  server-verified** (every rule probe passes); browser-render + the real public hop still to
+  eyeball. On `feature/global-apps-exposure`.
 - [Portable deploy — one committed `swap.ps1` any agent can run](plans/portable-deploy.md)
   — deploying the Harness to live `:5099` only worked on one machine because the deploy
   script was **local + untracked** (`.selfdev-build/deploy.ps1`, hardcoded paths) and

@@ -106,7 +106,10 @@
       'when the backend says <code>no-store</code>. <b>Why a pointer, not the whole contract:</b> ' +
       'the other agent is on the <b>same box</b>, so it reads ' +
       '<code>docs/global-exposure-convention.md</code> off disk — change the convention there ' +
-      'and every agent picks it up. The five rules are animated below.';
+      'and every agent picks it up. <b>See it for real:</b> run <code>global-example/</code> ' +
+      '(the public twin of this homepage) on <code>:5200</code> — a minimal product that ' +
+      '<em>practices</em> all five rules live, not just animates them. The five rules are ' +
+      'animated below.';
     root.appendChild(why);
 
     var copyReset = null;
