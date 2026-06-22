@@ -34,11 +34,11 @@
 
 ## 6. Verify end to end
 
-- [x] 6.0 ClaudeMonitor gateway running on `localhost:5123` — `/api/health` returns 200 (`IsAvailable()` true). **BUT** the gateway cannot spawn `claude`: `Process.Start("claude")` fails ("cannot find the file specified") because only the npm shim `claude.cmd` exists (no native `claude.exe`), and the gateway doesn't resolve `.cmd`. Gateway-side env issue (birokrat-ai-platform), out of scope for this change — blocks the live runs below.
+- [x] 6.0 ClaudeMonitor gateway running on `localhost:5123` — `/api/health` 200 and a trivial prompt now returns `success:true` (the earlier "cannot spawn claude" issue was fixed gateway-side in birokrat-ai-platform).
 - [x] 6.1 Build the harness to an isolated dir per `docs/claude-web/self-dev.md` (do not build into the running app's bin/port); confirm the cross-repo `prg` reference resolves in that build — *backend built clean to `.claudeweb-preview/bin`*
-- [ ] 6.2 Trigger discovery for this repo (via the dock button, or the endpoint directly) and confirm it returns `homepage` (:5305) and `openspec-port-app` (:5310) discovered from source — without those names appearing in the prompt
-- [ ] 6.3 Trigger discovery from a dock pinned to a *different* repository and confirm only that repo is scanned and its apps returned (cross-repo coverage is per-dock, not a fan-out)
-- [~] 6.4 Clean-failure half VERIFIED: a gateway error surfaced through `StructuredAskRunner` as a typed failure (not thrown), with the correct `WorkingDirectory` echoed back. Read-only-during-a-successful-scan half still pending a working gateway.
+- [x] 6.2 Ran discovery against this repo via the real path (`LocalAppDiscoveryAsk` → `StructuredAskRunner` → gateway): returned `homepage`:5305 and `openspec-port-app`:5310 — plus `global-example`:5200 and `chat-systest-hub`:5320, found by signature (not named in the prompt), each with real `file:line` evidence.
+- [x] 6.3 Ran discovery against a *different* repo (web-flow-autodev): returned only that repo's apps (`Autodev.Web`:5300, `homepage`:5307) — scoped to the requested repo, no fan-out.
+- [x] 6.4 Read-only held: no tracked files modified by either scan. Clean-failure also verified earlier (a gateway error surfaced through `StructuredAskRunner` as a typed failure, not thrown).
 
 ## 7. Understanding app + docs
 
