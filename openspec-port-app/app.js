@@ -940,8 +940,8 @@ function renderCockpit(d) {
   const errBox = (e) => e ? `<div class="ck__err">couldn’t read — ${escapeHtml(String(e).split('\n')[0])}</div>` : '';
 
   ckBody.innerHTML = `
-    <div class="ck__legend">
-      <div class="ck__legendhd">Your old <code>plans/*</code> moves → where they live now</div>
+    <details class="ck__legend">
+      <summary class="ck__legendhd">Your old <code>plans/*</code> moves → where they live now</summary>
       <table class="ck__map"><tbody>
         ${CK_MAP.map((m) => `<tr>
           <td class="ck__mapold">${m.old}</td>
@@ -949,7 +949,7 @@ function renderCockpit(d) {
           <td class="ck__mapblk"><span class="ck-tag ck-tag--${m.blk}">${m.lbl}</span></td>
         </tr>`).join('')}
       </tbody></table>
-    </div>
+    </details>
 
     <div class="ck__detail" id="ckDetail"></div>
 
