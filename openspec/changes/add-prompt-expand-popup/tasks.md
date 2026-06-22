@@ -26,7 +26,8 @@
 ## 4. Verify + ship
 
 - [x] 4.1 `npm --prefix client run build` clean.
-- [ ] 4.2 Browser-verify (phone-width viewport, Playwright per `docs/claude-web/browser-testing.md`):
+- [x] 4.2 Browser-verify (phone-width viewport, Playwright per `docs/claude-web/browser-testing.md`):
       open popup, edit a long draft, close via each of button/backdrop/Esc, confirm the edit
       survives and Send sends the edited text. Verify nothing sends on close.
-- [ ] 4.3 Deploy to live `:5099` via `swap.ps1` and re-verify.
+- [x] 4.3 Deploy to live `:5099` via `swap.ps1` and re-verify. Deployed from `main`
+      (commit 89de31c); swap health-checked 200 on :5099.
