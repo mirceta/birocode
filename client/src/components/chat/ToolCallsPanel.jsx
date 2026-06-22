@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import ActivitySteps from './ActivitySteps';
 import { apiGet } from '../../api/client';
-import { useChat } from '../../context/ChatContext';
 import { useT } from '../../i18n/LanguageContext';
 
 // Tool calls panel (openspec: add-tool-call-history). An overlay that covers the
@@ -16,9 +15,11 @@ import { useT } from '../../i18n/LanguageContext';
 //             (the message transcript strips tool blocks, so this fills the gap
 //             after a reload / reattach).
 // Rows reuse ActivitySteps so they look exactly like the inline tool steps.
-export default function ToolCallsPanel({ open, onClose }) {
+//
+// Data comes via props (not useChat) so the SAME panel serves both the active
+// chat and an embedded Agent Dashboard dock — each bound to its own agent.
+export default function ToolCallsPanel({ open, onClose, sessionId, streaming, liveToolCalls = [], repoId }) {
   const { t } = useT();
-  const { liveToolCalls, activeRepoId, sessionId, streaming } = useChat();
   const [fetched, setFetched] = useState([]);
 
   // Pull the durable history from disk whenever the panel opens or the
@@ -30,11 +31,11 @@ export default function ToolCallsPanel({ open, onClose }) {
       return;
     }
     let cancelled = false;
-    apiGet(`/sessions/${sessionId}/tools`, { repoId: activeRepoId })
+    apiGet(`/sessions/${sessionId}/tools`, { repoId })
       .then((d) => { if (!cancelled) setFetched(Array.isArray(d) ? d : []); })
       .catch(() => { if (!cancelled) setFetched([]); });
     return () => { cancelled = true; };
-  }, [open, sessionId, activeRepoId, streaming]);
+  }, [open, sessionId, repoId, streaming]);
 
   // Merge by id: transcript order first, live overlaid (it's fresher — carries
   // the running spinner and the latest result), then any live-only calls that

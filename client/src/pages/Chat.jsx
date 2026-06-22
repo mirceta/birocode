@@ -59,6 +59,8 @@ export default function Chat({ chat: injected, embedded = false, stashTabId }) {
     chatView,
     setChatView,
     hasSelfRepo,
+    liveToolCalls,
+    activeRepoId,
   } = injected || active;
 
   const showContextMeter = useFeature('contextMeter');
@@ -206,7 +208,7 @@ export default function Chat({ chat: injected, embedded = false, stashTabId }) {
           </span>
         )}
         <ModelSelector value={model} onChange={changeModel} />
-        {!embedded && showToolCalls && (
+        {showToolCalls && (
           <button
             type="button"
             className={`chat__tools${toolsOpen ? ' chat__tools--on' : ''}`}
@@ -271,9 +273,18 @@ export default function Chat({ chat: injected, embedded = false, stashTabId }) {
         </div>
 
         {/* Tool-call history overlays the chat message area (not a separate
-            drawer); the same toolbar button toggles it back to the chat. */}
-        {!embedded && showToolCalls && (
-          <ToolCallsPanel open={toolsOpen} onClose={() => setToolsOpen(false)} />
+            drawer); the same toolbar button toggles it back to the chat. Works
+            for the active chat and an embedded dashboard dock alike — the data
+            comes from whichever chat source drives this view. */}
+        {showToolCalls && (
+          <ToolCallsPanel
+            open={toolsOpen}
+            onClose={() => setToolsOpen(false)}
+            sessionId={sessionId}
+            streaming={streaming}
+            liveToolCalls={liveToolCalls}
+            repoId={activeRepoId}
+          />
         )}
       </div>
 

@@ -782,6 +782,11 @@ export function useChatFor({ key, repoId, tabId, sessionId, lane = 'builder' }) 
     streaming: false, error: '', contextTokens: null,
   };
 
+  // This agent's own live tool calls (add-tool-call-history). Flattened from its
+  // conversation's steps so the dock's Tool calls overlay is bound to THIS agent,
+  // not the active chat. Same shape as the active conversation exposes.
+  const liveToolCalls = useMemo(() => flattenToolCalls(conv.messages), [conv.messages]);
+
   // `lane` lets a dock drive a read-only Ask conversation on the same repo as its
   // builder (plans/repo-ask-chat.md slice 3); tabId is passed null for the ask
   // lane by the caller so the builder dock's badge/session aren't touched.
@@ -838,5 +843,10 @@ export function useChatFor({ key, repoId, tabId, sessionId, lane = 'builder' }) 
     chatView: 'agent',
     setChatView: () => {},
     hasSelfRepo: false,
+    // Tool calls overlay (add-tool-call-history): this agent's live calls + the
+    // repo to scope the durable-history fetch to. activeRepoId mirrors the active
+    // conversation's field name so <Chat> can read it uniformly.
+    liveToolCalls,
+    activeRepoId: repoId,
   };
 }

@@ -187,8 +187,9 @@
           <ul class="tight muted">
             <li>It's a <b>companion to the live chat</b>, so it covers the chat area in place and the <b>same toolbar button toggles back</b> &mdash; one control, no navigation.</li>
             <li>The toolbar + composer stay put; only the message section swaps, so returning to the chat is one tap and your context is right there.</li>
-            <li>It belongs to the <b>active conversation</b> only (v1) &mdash; no global dashboard, so it doesn't need its own page.</li>
+            <li>It belongs to <b>one conversation</b> &mdash; so the same overlay rides along wherever a conversation is shown.</li>
           </ul>
+          <div class="note">Same component in <b>two places</b>: the main chat tab <i>and</i> each <b>Agent Dashboard dock</b> ("wall of phones"). <code>&lt;Chat&gt;</code> renders both; the dock passes its agent's <code>liveToolCalls</code> + <code>repoId</code> as props (via <code>useChatFor</code>), so each dock's overlay is bound to <b>its own</b> agent, not the active chat.</div>
         </div>
       </div>
     </div>
