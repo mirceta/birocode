@@ -21,7 +21,10 @@
 //                                     (openspec list --json + spec list --json +
 //                                      validate --all --strict --json stamped onto
 //                                      each item as {valid,issues} + a direct read
-//                                      of openspec/changes/archive/).
+//                                      of openspec/changes/archive/). Each active
+//                                      change also carries touches:[{spec,operations}]
+//                                      — the baseline caps its deltas edit, so the
+//                                      Cockpit can draw the change↔baseline cross-link.
 //   • GET ./api/cockpit/show?id=…  → openspec show <id> --json (id SAFE_NAME-gated),
 //                                     plus the tasks.md / proposal.md / design.md
 //                                     artifacts show --json omits.
@@ -220,6 +223,28 @@ async function readArchivedChange(id) {
   return { ok: true, json: { id, title, archived: true, deltaCount: deltas.length, deltas }, tasks, proposal, design };
 }
 
+// Which baseline capabilities does an active change touch, and how? Reads the
+// change's delta-spec dirs (openspec/changes/<name>/specs/<cap>/spec.md) and
+// reuses parseDeltaSpec to fold each cap's requirements into its set of
+// operations (ADDED / MODIFIED / REMOVED). Cheap — active changes are few, and
+// it's the same on-disk read the drill-in already does. Lets the Cockpit draw
+// the change↔baseline cross-link without a second round-trip. Reads only.
+async function changeTouches(name) {
+  const base = join(REPO_ROOT, 'openspec', 'changes', name);
+  let caps = [];
+  try { caps = await readdir(join(base, 'specs'), { withFileTypes: true }); } catch { return []; }
+  const touches = [];
+  for (const cap of caps) {
+    if (!cap.isDirectory()) continue;
+    try {
+      const md = await readFile(join(base, 'specs', cap.name, 'spec.md'), 'utf8');
+      const ops = [...new Set(parseDeltaSpec(md, cap.name).map((d) => d.operation).filter(Boolean))];
+      touches.push({ spec: cap.name, operations: ops });
+    } catch { /* skip unreadable cap */ }
+  }
+  return touches;
+}
+
 // Read one of a change's prose artifacts (proposal.md / design.md) as raw
 // markdown for the drill-in — these are real OpenSpec artifacts that `openspec
 // show --json` omits. Returns null when absent (design.md is optional). Reads only.
@@ -250,8 +275,12 @@ async function cockpitState() {
   });
   const activeChanges = changesR.json && Array.isArray(changesR.json.changes) ? changesR.json.changes : [];
   const specs = Array.isArray(specsR.json) ? specsR.json : [];
+  // Enrich each active change with the baseline capabilities its delta specs
+  // touch, so the Cockpit can wire the in-flight ↔ baseline cross-link.
+  const activeStamped = stamp(activeChanges, 'change', 'name');
+  await Promise.all(activeStamped.map(async (c) => { c.touches = await changeTouches(c.name); }));
   return {
-    activeChanges: stamp(activeChanges, 'change', 'name'),
+    activeChanges: activeStamped,
     specs: stamp(specs, 'spec', 'id'),
     archived,
     errors: {

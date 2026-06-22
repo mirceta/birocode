@@ -394,6 +394,13 @@ button.ck-item:hover { transform: translateY(-2px); box-shadow: var(--shadow); b
 .ck-date { flex: none; font-size: 11px; font-weight: 700; color: var(--edge); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; width: 78px; }
 .ck-count { flex: none; width: 34px; height: 34px; border-radius: 9px; background: #e8f5ec; color: var(--have); font-weight: 800; font-size: 15px; display: grid; place-items: center; }
 
+/* change ↔ baseline cross-link */
+.ck-item__touch { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; font-size: 11px; }
+.ck-touch__lbl { font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--soft); }
+.ck-touch__cap { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px 1px 2px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); color: var(--ink); font-weight: 600; }
+.ck-touch__cap .ck__op { font-size: 8.5px; padding: 1px 5px; }
+.ck-flux { font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: #8a3d24; white-space: nowrap; }
+
 /* drill-in detail */
 .ck__detail { display: none; }
 .ck__detail.show { display: block; position: relative; background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 12px; box-shadow: var(--shadow); padding: 16px 18px; margin-bottom: 16px; animation: fade .2s ease; }

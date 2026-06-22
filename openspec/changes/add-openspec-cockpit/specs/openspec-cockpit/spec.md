@@ -58,6 +58,27 @@ is the Cockpit's answer to "what does the system do today?".
 - **WHEN** the operator opens a capability from the baseline list
 - **THEN** the Cockpit shows that capability's requirements and their scenarios
 
+### Requirement: Cross-link in-flight changes to the baseline they touch
+
+The Cockpit SHALL surface the delta relationship between active changes and the baseline:
+each in-flight change SHALL show the capabilities its delta specs touch (each badged by its
+ADDED / MODIFIED / REMOVED operation), and each baseline capability SHALL indicate how many
+active changes are currently editing it. The data SHALL come from the existing
+`GET ./api/cockpit` aggregation — each active change carries the capabilities it touches — so
+no new endpoint or mutating verb is introduced. A capability with no active change against it
+SHALL show no indicator, and a net-new (ADDED) capability not yet in the baseline SHALL appear
+only on its change's forward tags.
+
+#### Scenario: See which baseline capability a change edits
+
+- **WHEN** the operator views an in-flight change whose delta specs touch a capability
+- **THEN** the change's card shows that capability tagged with its delta operation
+
+#### Scenario: See a baseline capability has work in flight
+
+- **WHEN** an active change has a delta against a capability that exists in the baseline
+- **THEN** that capability's baseline card shows that one or more changes are in flight against it, naming them on hover
+
 ### Requirement: Teach the old-system → OpenSpec mapping in-app
 
 The Cockpit SHALL render a legend mapping each old `plans/*` operator move — viewing the

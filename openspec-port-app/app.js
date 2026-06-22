@@ -922,8 +922,43 @@ function ckTasks(tasks) {
   return `${html}</div>`;
 }
 
+// The change ↔ baseline cross-link, computed once per render from the deltas the
+// server stamps onto each active change. `touchesBySpec[capId]` lists the active
+// changes editing that capability (with their ADDED/MODIFIED/REMOVED ops) — the
+// reverse of each change's own `touches`. This is what turns three side-by-side
+// lists into a loop: a baseline card can say "1 change in flight is editing me".
+function ckCrossLink(activeChanges) {
+  const bySpec = {};
+  (activeChanges || []).forEach((c) => (c.touches || []).forEach((t) => {
+    (bySpec[t.spec] = bySpec[t.spec] || []).push({ change: c.name, operations: t.operations || [] });
+  }));
+  return bySpec;
+}
+// Forward tags on an in-flight card: the capabilities this change's deltas touch,
+// each badged by operation. Surfaces the delta relationship on the card itself —
+// it was previously only visible after drilling in.
+function ckTouches(touches) {
+  if (!touches || !touches.length) return '';
+  const tags = touches.map((t) => {
+    const ops = t.operations || [];
+    const op = (ops[0] || '').toLowerCase();
+    return `<span class="ck-touch__cap" title="${escapeHtml(ops.join(' · ') || 'delta')} → ${escapeHtml(t.spec)}">
+      <span class="ck__op ck__op--${op}">${escapeHtml(ops[0] || '∆')}</span>${escapeHtml(t.spec)}</span>`;
+  }).join('');
+  return `<span class="ck-item__touch"><span class="ck-touch__lbl">touches</span>${tags}</span>`;
+}
+// Reverse pill on a baseline card: how many active changes are editing this
+// capability right now (tooltip names them + their ops). Absent when none.
+function ckFlux(specId, bySpec) {
+  const list = bySpec[specId];
+  if (!list || !list.length) return '';
+  const tip = list.map((x) => `${x.change}${x.operations.length ? ` (${x.operations.join(', ')})` : ''}`).join(' · ');
+  return `<span class="ck-flux" title="in flight: ${escapeHtml(tip)}">⚠ ${list.length} in flight</span>`;
+}
+
 function renderCockpit(d) {
   const errs = d.errors || {};
+  const bySpec = ckCrossLink(d.activeChanges);
   const flight = (d.activeChanges || []).map((c) => `
     <button class="ck-item ck-item--flight" data-id="${escapeHtml(c.name)}" data-kind="change">
       ${ckRing(c.completedTasks || 0, c.totalTasks || 0)}
@@ -935,6 +970,7 @@ function renderCockpit(d) {
           <span>${c.completedTasks || 0}/${c.totalTasks || 0} tasks</span>
           <span class="ck-item__time">${relTime(c.lastModified)}</span>
         </span>
+        ${ckTouches(c.touches)}
       </span>
     </button>`).join('');
 
@@ -950,7 +986,7 @@ function renderCockpit(d) {
     <button class="ck-item ck-item--base" data-id="${escapeHtml(s.id)}" data-kind="spec">
       <span class="ck-count">${s.requirementCount}</span>
       <span class="ck-item__body"><b>${escapeHtml(s.title || s.id)}</b>
-        <span class="ck-item__meta">${s.requirementCount} requirement${s.requirementCount === 1 ? '' : 's'} ${ckValid(s)}</span>
+        <span class="ck-item__meta">${s.requirementCount} requirement${s.requirementCount === 1 ? '' : 's'} ${ckValid(s)} ${ckFlux(s.id, bySpec)}</span>
       </span>
     </button>`).join('');
 

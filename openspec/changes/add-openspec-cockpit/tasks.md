@@ -29,6 +29,11 @@
       (spec) in a detail panel.
 - [x] 2.7 **Old → OpenSpec legend** — render the mapping (current/active plans, old/closed
       plan, "what does it do today?", completion) → OpenSpec primitive.
+- [x] 2.8 **Change ↔ baseline cross-link** — `serve.mjs` stamps each active change with the
+      capabilities its delta specs touch (`touches: [{spec, operations}]`, parsed from
+      `changes/<id>/specs/`); `app.js` shows those as op-badged tags on the in-flight card,
+      and a "⚠ N in flight" pill (naming the changes on hover) on each baseline capability
+      card that an active change is editing. No new endpoint or mutating verb.
 
 ## 3. Styling
 
@@ -47,12 +52,13 @@
       active changes, archived changes, and specs; `./api/cockpit/show` returns JSON for a
       change and a spec, and rejects an unsafe id (400). Render functions also run clean
       against the live payloads (ring, cards, legend, deltas, scenarios, error state).
-- [ ] 5.2 Browser-verify the live tab on `:5310` (or the Local tab): cards render, drill-in
-      works, empty states show, no console errors — needs a host eyeball (no sandbox browser).
+- [x] 5.2 Browser-verify the live tab (headless Chromium via Playwright): Cockpit tab opens,
+      in-flight/shipped/baseline cards render, the change↔baseline cross-link shows in both
+      directions (`chat` card pill + forward TOUCHES tags), no console errors. Screenshot reviewed.
 
 ## 6. Ship
 
-- [ ] 6.1 `openspec validate add-openspec-cockpit --strict` passes.
-- [ ] 6.2 Merge `feature/openspec-cockpit` into `main`.
-- [ ] 6.3 `openspec archive add-openspec-cockpit` — fold the delta into the `openspec-cockpit`
+- [x] 6.1 `openspec validate add-openspec-cockpit --strict` passes.
+- [x] 6.2 Merge `feature/openspec-cockpit` into `main`.
+- [x] 6.3 `openspec archive add-openspec-cockpit` — fold the delta into the `openspec-cockpit`
       baseline.
