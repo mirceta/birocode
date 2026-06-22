@@ -239,6 +239,7 @@ nav.addEventListener('click', (e) => {
 function showView(view) {
   nav.querySelectorAll('.nav__btn').forEach((b) => b.classList.toggle('is-active', b.dataset.view === view));
   document.querySelectorAll('.view').forEach((v) => v.classList.toggle('is-active', v.id === `view-${view}`));
+  if (view === 'cockpit') loadCockpit();        // lazy: fetch state on first open
 }
 
 // ── 2) Explain — the spine ───────────────────────────────────────
@@ -807,6 +808,232 @@ const migOp = document.getElementById('migOp');
 if (migOp) {
   migOp.addEventListener('click', (e) => { const cp = e.target.closest('.cstep__copy'); if (cp) copyPrompt(cp); });
 }
+
+// ── 9) Cockpit — read-only OpenSpec state (the inspect-twin of Console) ──
+// One fetch (./api/cockpit) → three blocks (in flight · shipped · baseline) +
+// the old→OpenSpec legend. Drill-in hits ./api/cockpit/show?id=. Pure reader:
+// nothing here mutates an artifact — that all stays on the Console tab.
+const CK_MAP = [
+  { old: 'Look at the current / active plans', prim: 'openspec list', blk: 'flight', lbl: 'In flight' },
+  { old: 'Inspect an old / closed plan', prim: 'read changes/archive/&lt;id&gt;/', blk: 'ship', lbl: 'Shipped' },
+  { old: '“What does the system do <i>today</i>?”', prim: 'openspec spec list · show &lt;cap&gt;', blk: 'base', lbl: 'Baseline' },
+  { old: 'A feature’s completion status', prim: 'openspec list task counts', blk: 'flight', lbl: 'In flight' },
+];
+const ckBody = document.getElementById('ckBody');
+let ckLoaded = false;
+
+function relTime(iso) {
+  const t = Date.parse(iso);
+  if (!t) return '';
+  const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+  if (s < 60) return 'just now';
+  const m = Math.round(s / 60); if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60); if (h < 24) return `${h}h ago`;
+  return `${Math.round(h / 24)}d ago`;
+}
+// A small SVG completion donut. Green when complete, accent while in progress.
+function ckRing(done, total) {
+  const frac = total ? done / total : 0;
+  const r = 15, c = 2 * Math.PI * r, off = c * (1 - frac);
+  const col = total && done === total ? 'var(--have)' : 'var(--accent)';
+  return `<svg class="ck__ring" viewBox="0 0 40 40" width="40" height="40" aria-hidden="true">
+    <circle cx="20" cy="20" r="${r}" fill="none" stroke="var(--border)" stroke-width="4"/>
+    <circle cx="20" cy="20" r="${r}" fill="none" stroke="${col}" stroke-width="4" stroke-linecap="round"
+      stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" transform="rotate(-90 20 20)"/>
+    <text x="20" y="21" text-anchor="middle" dominant-baseline="middle" class="ck__ringtxt">${total ? Math.round(frac * 100) : 0}%</text>
+  </svg>`;
+}
+function ckScenarios(list) {
+  if (!list || !list.length) return '';
+  return `<div class="ck__scn">${list.map((s) => `<pre>${escapeHtml(s.rawText || s.text || '')}</pre>`).join('')}</div>`;
+}
+// Light inline markdown for spec/task text: `code` and **bold** only (escaped first).
+function ckInline(s) {
+  return escapeHtml(String(s || ''))
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+}
+// Block markdown for the proposal.md / design.md panes: headings, unordered
+// lists, fenced code, rules and paragraphs. Inline spans reuse ckInline, so the
+// same escape-first rule holds. Numbered lists fall through to paragraphs.
+function ckMarkdown(md) {
+  if (!md) return '';
+  let html = '', inList = false, inCode = false, code = [], para = [];
+  const flushPara = () => { if (para.length) { html += `<p>${para.map(ckInline).join(' ')}</p>`; para = []; } };
+  const flushList = () => { if (inList) { html += '</ul>'; inList = false; } };
+  for (const raw of String(md).replace(/\r\n/g, '\n').split('\n')) {
+    const line = raw.replace(/\s+$/, '');
+    if (/^```/.test(line)) {
+      if (inCode) { html += `<pre>${escapeHtml(code.join('\n'))}</pre>`; code = []; inCode = false; }
+      else { flushPara(); flushList(); inCode = true; }
+      continue;
+    }
+    if (inCode) { code.push(raw); continue; }
+    let m;
+    if ((m = line.match(/^(#{1,6})\s+(.+)$/))) { flushPara(); flushList(); html += `<div class="ck__doch ck__doch--${Math.min(m[1].length, 4)}">${ckInline(m[2])}</div>`; continue; }
+    if (/^(---+|\*\*\*+)$/.test(line)) { flushPara(); flushList(); html += '<hr>'; continue; }
+    if ((m = line.match(/^\s*[-*]\s+(.+)$/))) { flushPara(); if (!inList) { html += '<ul>'; inList = true; } html += `<li>${ckInline(m[1])}</li>`; continue; }
+    if (line.trim() === '') { flushPara(); flushList(); continue; }
+    para.push(line.trim());
+  }
+  if (inCode) html += `<pre>${escapeHtml(code.join('\n'))}</pre>`;
+  flushPara(); flushList();
+  return html;
+}
+// A collapsed prose artifact (proposal / design) — native <details>, no JS.
+function ckDoc(label, md) {
+  return md ? `<details class="ck__doc"><summary>${label}</summary><div class="ck__docbody">${ckMarkdown(md)}</div></details>` : '';
+}
+// validate --strict badge for a change/spec card. Absent when validate didn't run.
+function ckValid(o) {
+  if (o.valid === true) return '<span class="ck-vald ck-vald--ok" title="passes openspec validate --strict">✓ valid</span>';
+  if (o.valid === false) { const n = o.issues || 0; return `<span class="ck-vald ck-vald--bad" title="from openspec validate --strict">⚠ ${n} issue${n === 1 ? '' : 's'}</span>`; }
+  return '';
+}
+// The change's tasks.md checklist (read-only), grouped by its `## ` sections.
+function ckTasks(tasks) {
+  if (!tasks) return '<p class="ck__dsub">No <code>tasks.md</code> in this change.</p>';
+  if (!tasks.length) return '<p class="ck__dsub"><code>tasks.md</code> has no checklist items yet.</p>';
+  const done = tasks.filter((t) => t.done).length;
+  let html = `<div class="ck__tasks"><div class="ck__taskshd">Tasks <span>${done}/${tasks.length}</span></div>`;
+  let cur = null;
+  tasks.forEach((t) => {
+    if (t.section !== cur) { cur = t.section; if (cur) html += `<div class="ck__tasksec">${escapeHtml(cur)}</div>`; }
+    html += `<div class="ck__task ${t.done ? 'is-done' : ''}"><span class="ck__taskbox">${t.done ? '✓' : ''}</span><span>${ckInline(t.text)}</span></div>`;
+  });
+  return `${html}</div>`;
+}
+
+function renderCockpit(d) {
+  const errs = d.errors || {};
+  const flight = (d.activeChanges || []).map((c) => `
+    <button class="ck-item ck-item--flight" data-id="${escapeHtml(c.name)}" data-kind="change">
+      ${ckRing(c.completedTasks || 0, c.totalTasks || 0)}
+      <span class="ck-item__body">
+        <b>${escapeHtml(c.name)}</b>
+        <span class="ck-item__meta">
+          <span class="ck-pill ck-pill--${(c.status || '').replace(/[^a-z-]/gi, '')}">${escapeHtml(c.status || '—')}</span>
+          ${ckValid(c)}
+          <span>${c.completedTasks || 0}/${c.totalTasks || 0} tasks</span>
+          <span class="ck-item__time">${relTime(c.lastModified)}</span>
+        </span>
+      </span>
+    </button>`).join('');
+
+  const shipped = (d.archived || []).map((a) => `
+    <button class="ck-item ck-item--ship" data-id="${escapeHtml(a.id)}" data-kind="archived">
+      <span class="ck-date">${escapeHtml(a.date || '—')}</span>
+      <span class="ck-item__body"><b>${escapeHtml(a.title || a.slug)}</b>
+        <span class="ck-item__meta"><code>${escapeHtml(a.slug)}</code></span>
+      </span>
+    </button>`).join('');
+
+  const base = (d.specs || []).map((s) => `
+    <button class="ck-item ck-item--base" data-id="${escapeHtml(s.id)}" data-kind="spec">
+      <span class="ck-count">${s.requirementCount}</span>
+      <span class="ck-item__body"><b>${escapeHtml(s.title || s.id)}</b>
+        <span class="ck-item__meta">${s.requirementCount} requirement${s.requirementCount === 1 ? '' : 's'} ${ckValid(s)}</span>
+      </span>
+    </button>`).join('');
+
+  const empty = (msg) => `<div class="ck-empty">${msg}</div>`;
+  const errBox = (e) => e ? `<div class="ck__err">couldn’t read — ${escapeHtml(String(e).split('\n')[0])}</div>` : '';
+
+  ckBody.innerHTML = `
+    <div class="ck__legend">
+      <div class="ck__legendhd">Your old <code>plans/*</code> moves → where they live now</div>
+      <table class="ck__map"><tbody>
+        ${CK_MAP.map((m) => `<tr>
+          <td class="ck__mapold">${m.old}</td>
+          <td class="ck__mapprim"><code>${m.prim}</code></td>
+          <td class="ck__mapblk"><span class="ck-tag ck-tag--${m.blk}">${m.lbl}</span></td>
+        </tr>`).join('')}
+      </tbody></table>
+    </div>
+
+    <div class="ck__detail" id="ckDetail"></div>
+
+    <div class="ck__grid">
+      <section class="ck__col ck__col--flight">
+        <h3>🚧 In flight <span class="ck__n">${(d.activeChanges || []).length}</span></h3>
+        ${errBox(errs.changes)}
+        ${flight || empty('No active changes. Start one in the Console — <code>openspec new change</code>.')}
+      </section>
+      <section class="ck__col ck__col--ship">
+        <h3>📦 Shipped <span class="ck__n">${(d.archived || []).length}</span></h3>
+        ${shipped || empty('Nothing archived yet. <code>openspec archive &lt;id&gt;</code> folds a change into the baseline.')}
+      </section>
+      <section class="ck__col ck__col--base">
+        <h3>📚 Living baseline <span class="ck__n">${(d.specs || []).length}</span></h3>
+        ${errBox(errs.specs)}
+        ${base || empty('No capabilities yet — the baseline grows as changes archive.')}
+      </section>
+    </div>`;
+}
+
+function renderCkDetail(d) {
+  const panel = document.getElementById('ckDetail');
+  if (!panel) return;
+  if (!d || !d.ok || !d.json) {
+    panel.innerHTML = `<button class="ck__detailx">✕</button><div class="ck__err">couldn’t load — ${escapeHtml((d && (d.stderr || d.parseError)) || 'not found')}</div>`;
+    panel.classList.add('show'); return;
+  }
+  const j = d.json;
+  let inner;
+  if (Array.isArray(j.deltas)) {                 // a change (active or archived)
+    const kind = j.archived ? 'shipped' : 'change';
+    const sub = j.archived
+      ? `${j.deltaCount} delta${j.deltaCount === 1 ? '' : 's'} folded into the baseline · tasks from the archived <code>tasks.md</code>`
+      : `${j.deltaCount} delta${j.deltaCount === 1 ? '' : 's'} against the baseline · tasks from <code>tasks.md</code>`;
+    inner = `<span class="ck__detailkind">${kind}</span><h3>${escapeHtml(j.title || j.id)}</h3>
+      <p class="ck__dsub">${sub}</p>
+      ${ckDoc('📄 Proposal', d.proposal)}
+      ${ckDoc('🛠 Design', d.design)}
+      <h4 class="ck__dsec">Deltas</h4>
+      ${j.deltas.map((dl) => `<div class="ck__delta">
+        <div class="ck__deltahd"><span class="ck__op ck__op--${String(dl.operation || '').toLowerCase()}">${escapeHtml(dl.operation || '')}</span><code>${escapeHtml(dl.spec || '')}</code></div>
+        ${(dl.requirements || (dl.requirement ? [dl.requirement] : [])).map((r) => `<div class="ck__req"><b>${ckInline(r.text)}</b>${ckScenarios(r.scenarios)}</div>`).join('')}
+      </div>`).join('')}
+      <h4 class="ck__dsec">Task checklist</h4>
+      ${ckTasks(d.tasks)}`;
+  } else {                                        // a spec/capability
+    inner = `<span class="ck__detailkind">capability</span><h3>${escapeHtml(j.title || j.id)}</h3>
+      ${j.overview ? `<p class="ck__dsub">${escapeHtml(j.overview)}</p>` : ''}
+      <p class="ck__dsub">${j.requirementCount || (j.requirements || []).length} requirement${(j.requirementCount || 0) === 1 ? '' : 's'}</p>
+      ${(j.requirements || []).map((r) => `<div class="ck__req"><b>${ckInline(r.text)}</b>${ckScenarios(r.scenarios)}</div>`).join('')}`;
+  }
+  panel.innerHTML = `<button class="ck__detailx" title="close">✕</button>${inner}`;
+  panel.classList.add('show');
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+async function loadCockpit(force) {
+  if (ckLoaded && !force) return;
+  ckLoaded = true;
+  ckBody.innerHTML = '<div class="ck__loading">Reading OpenSpec state…</div>';
+  try {
+    const res = await fetch('./api/cockpit');
+    renderCockpit(await res.json());
+  } catch (e) {
+    ckLoaded = false;
+    ckBody.innerHTML = `<div class="ck__err">Couldn’t reach the server (serve.mjs running?) — ${escapeHtml(e.message)}</div>`;
+  }
+}
+ckBody.addEventListener('click', async (e) => {
+  if (e.target.closest('.ck__detailx')) { document.getElementById('ckDetail').classList.remove('show'); return; }
+  const item = e.target.closest('.ck-item[data-id]');
+  if (!item) return;
+  const panel = document.getElementById('ckDetail');
+  panel.innerHTML = '<div class="ck__loading">Loading…</div>'; panel.classList.add('show');
+  try {
+    const ep = item.dataset.kind === 'archived' ? 'archived' : 'show';
+    const res = await fetch(`./api/cockpit/${ep}?id=${encodeURIComponent(item.dataset.id)}`);
+    renderCkDetail(await res.json());
+  } catch (e2) {
+    renderCkDetail({ ok: false, stderr: e2.message });
+  }
+});
+document.getElementById('ckRefresh').addEventListener('click', () => loadCockpit(true));
 
 // ── Initial render ───────────────────────────────────────────────
 renderPhases();

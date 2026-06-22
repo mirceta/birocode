@@ -29,6 +29,7 @@
             <button class="nav__btn" data-view="analyze">Analyze</button>
             <button class="nav__btn" data-view="adopt">Adopt</button>
             <button class="nav__btn" data-view="workflows">Workflows</button>
+            <button class="nav__btn" data-view="cockpit">Cockpit</button>
           </div>
         </div>
         <div class="navgroup navgroup--op">
@@ -273,6 +274,25 @@
           <div class="con__empty">Output appears here. Start in <b>Set up the tool</b> with
             <b>openspec --version</b> — if it isn't installed yet you'll see that plainly (that's Phase 0).</div>
         </div>
+      </div>
+    </section>
+
+    <!-- ───────────── COCKPIT ───────────── -->
+    <section class="view" id="view-cockpit">
+      <div class="wrap">
+        <div class="ctrlbar">
+          <h2>Cockpit — read OpenSpec at a glance</h2>
+          <button class="reset" id="ckRefresh">↻ Refresh</button>
+        </div>
+        <p class="lead">The <b>inspect-twin</b> of the Console: this reads live OpenSpec state and
+          <b>never mutates it</b>. See what's <b>in flight</b>, what <b>shipped</b>, and what the system
+          <b>does today</b> — every authoring action stays in the Console tab. Click an active change or a
+          capability to drill in.</p>
+        <div class="ck" id="ckBody"><!-- rendered by app.js --></div>
+        <p class="muted flow__foot">One read-only fetch — <code>GET ./api/cockpit</code> — aggregates
+          <code>openspec list --json</code>, <code>openspec spec list --json</code>, and a direct read of
+          <code>openspec/changes/archive/</code> (no CLI lists shipped changes). No new write verb joins
+          the server whitelist.</p>
       </div>
     </section>
 
