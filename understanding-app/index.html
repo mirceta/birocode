@@ -3,307 +3,179 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>The underscore bug — why a repo's chats vanish</title>
+<title>Prompt templates — fill the holes, then insert</title>
 <style>
-  :root{
-    --bg:#0d1117; --panel:#161b22; --panel2:#1c232c; --ink:#e6edf3; --dim:#8b949e;
-    --line:#30363d; --good:#3fb950; --bad:#f85149; --warn:#d29922; --accent:#58a6ff;
-    --mono:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;
+  :root {
+    --bg: #0f1117; --surface: #171a23; --surface2: #1f2330; --border: #2b3040;
+    --text: #e6e9f0; --soft: #9aa3b8; --accent: #6ea8fe; --accent-dim: #2a3550;
+    --ok: #5dd1a0; --hole: #f0b86e;
   }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);
-    font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.5}
-  header{padding:28px 22px 14px;border-bottom:1px solid var(--line);
-    background:linear-gradient(180deg,#11161d,#0d1117)}
-  h1{margin:0 0 6px;font-size:1.5rem}
-  .sub{color:var(--dim);font-size:.95rem;max-width:780px}
-  main{max-width:980px;margin:0 auto;padding:22px 18px 80px}
-  section{background:var(--panel);border:1px solid var(--line);border-radius:12px;
-    padding:20px;margin:18px 0}
-  h2{margin:0 0 4px;font-size:1.15rem}
-  h2 .n{color:var(--accent);font-variant-numeric:tabular-nums;margin-right:8px}
-  .hint{color:var(--dim);font-size:.88rem;margin:0 0 14px}
-  .mono{font-family:var(--mono)}
-  .tag{display:inline-block;font-size:.72rem;padding:2px 8px;border-radius:999px;
-    border:1px solid var(--line);color:var(--dim);vertical-align:middle}
-  .tag.bad{color:var(--bad);border-color:#5b2222;background:#2a1414}
-  .tag.good{color:var(--good);border-color:#1f4023;background:#102015}
-
-  .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
-  button{background:var(--panel2);color:var(--ink);border:1px solid var(--line);
-    border-radius:8px;padding:8px 12px;font-size:.86rem;cursor:pointer}
-  button:hover{border-color:var(--accent)}
-  button.active{border-color:var(--accent);color:var(--accent);background:#0f2033}
-  .field{display:flex;flex-direction:column;gap:4px;flex:1;min-width:260px}
-  .field label{font-size:.74rem;color:var(--dim);text-transform:uppercase;letter-spacing:.04em}
-  input[type=text]{background:#0b0f14;border:1px solid var(--line);color:var(--ink);
-    border-radius:8px;padding:9px 11px;font-family:var(--mono);font-size:.9rem}
-  input[type=text]:focus{outline:none;border-color:var(--accent)}
-
-  .chars{display:flex;flex-wrap:wrap;gap:3px;margin:14px 0 4px}
-  .ch{display:flex;flex-direction:column;align-items:center;font-family:var(--mono);
-    border-radius:6px;padding:6px 2px;min-width:22px;background:#0b0f14;border:1px solid transparent}
-  .ch .in{font-size:.95rem}
-  .ch .arr{font-size:.6rem;color:var(--dim);line-height:1}
-  .ch .out{font-size:.95rem;color:var(--dim)}
-  .ch.changed{border-color:#2d4a63}
-  .ch.changed .out{color:var(--accent)}
-  .ch.diverge{border-color:var(--bad);background:#1d1113}
-  .ch.diverge .out{color:var(--bad);font-weight:700}
-  .legend{font-size:.78rem;color:var(--dim);display:flex;gap:16px;flex-wrap:wrap;margin-top:8px}
-  .dot{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:middle}
-
-  .folders{display:grid;grid-template-columns:1fr;gap:10px;margin-top:16px}
-  @media(min-width:720px){.folders{grid-template-columns:1fr 1fr}}
-  .fcard{border:1px solid var(--line);border-radius:10px;padding:12px;background:#0b0f14}
-  .fcard h3{margin:0 0 8px;font-size:.82rem;text-transform:uppercase;letter-spacing:.04em;color:var(--dim)}
-  .fcard .path{font-family:var(--mono);font-size:.82rem;word-break:break-all}
-  .fcard .verdict{margin-top:10px;font-size:.85rem;font-weight:600}
-  .fcard.ok{border-color:#1f4023}.fcard.ok .verdict{color:var(--good)}
-  .fcard.miss{border-color:#5b2222}.fcard.miss .verdict{color:var(--bad)}
-  .u{color:var(--bad);font-weight:700;background:#2a1414;padding:0 2px;border-radius:3px}
-  .h{color:var(--good);font-weight:700;background:#102015;padding:0 2px;border-radius:3px}
-
-  .flow{display:flex;flex-direction:column;gap:0}
-  .step{display:flex;gap:12px;align-items:flex-start;padding:10px 0}
-  .step .ic{flex:0 0 30px;height:30px;border-radius:50%;display:grid;place-items:center;
-    border:1px solid var(--line);background:#0b0f14;font-size:.85rem}
-  .step .bd{flex:1}
-  .step .bd .t{font-weight:600}
-  .step .bd .d{color:var(--dim);font-size:.88rem}
-  .step .conn{margin-left:14px;height:14px;border-left:2px dashed var(--line)}
-  .step.err .ic{border-color:#5b2222;color:var(--bad)}
-  .step.err .bd .t{color:var(--bad)}
-
-  pre{background:#0b0f14;border:1px solid var(--line);border-radius:10px;padding:14px;
-    overflow:auto;font-family:var(--mono);font-size:.83rem;margin:10px 0}
-  pre .del{color:var(--bad)} pre .add{color:var(--good)} pre .cmt{color:var(--dim)}
-  ul.tight{margin:8px 0;padding-left:20px} ul.tight li{margin:4px 0}
-  .callout{border-left:3px solid var(--warn);background:#1c1810;padding:10px 14px;
-    border-radius:0 8px 8px 0;font-size:.9rem;margin:12px 0}
-  .footer{color:var(--dim);font-size:.8rem;text-align:center;margin-top:30px}
-  code{background:#0b0f14;border:1px solid var(--line);border-radius:4px;padding:1px 5px;
-    font-family:var(--mono);font-size:.85em}
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.55 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 28px 20px 64px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  .lede { color: var(--soft); margin: 0 0 24px; }
+  .flow { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; margin: 0 0 28px; }
+  .step {
+    flex: 1 1 160px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px;
+  }
+  .step b { display: block; font-size: 13px; color: var(--accent); margin-bottom: 4px; }
+  .step span { font-size: 13px; color: var(--soft); }
+  .arrow { align-self: center; color: var(--soft); font-size: 20px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 18px 20px; margin: 0 0 18px;
+  }
+  .card h2 { font-size: 15px; margin: 0 0 10px; letter-spacing: .02em; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+  label.fld { display: block; font-size: 13px; color: var(--soft); margin: 0 0 4px; }
+  textarea, input {
+    width: 100%; background: var(--surface2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px;
+    font: inherit; font-size: 13.5px; resize: vertical;
+  }
+  textarea { min-height: 150px; line-height: 1.5; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 2px; min-height: 24px; }
+  .chip {
+    font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px;
+    background: var(--accent-dim); color: var(--accent); border: 1px solid var(--accent);
+  }
+  .chip.empty { background: transparent; color: var(--soft); border-color: var(--border); font-weight: 500; }
+  .fillrow { margin: 0 0 10px; }
+  .out {
+    white-space: pre-wrap; word-break: break-word; background: var(--surface2);
+    border: 1px solid var(--border); border-radius: 8px; padding: 12px 13px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13.5px;
+    min-height: 150px;
+  }
+  .out mark { background: color-mix(in srgb, var(--ok) 28%, transparent); color: var(--ok); border-radius: 3px; padding: 0 2px; }
+  .hl-hole { background: color-mix(in srgb, var(--hole) 26%, transparent); color: var(--hole); border-radius: 3px; padding: 0 2px; }
+  .note { font-size: 13px; color: var(--soft); margin: 14px 0 0; }
+  .note code { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 12.5px; }
+  .rule { display: flex; gap: 8px; margin: 6px 0; font-size: 13.5px; }
+  .rule .k { color: var(--hole); font-family: ui-monospace, monospace; flex: 0 0 auto; }
+  footer { color: var(--soft); font-size: 12.5px; margin-top: 26px; border-top: 1px solid var(--border); padding-top: 12px; }
 </style>
 </head>
 <body>
-<header>
-  <h1>The underscore bug 🪲</h1>
-  <div class="sub">Why one repo's Claude conversations show as <b>"no conversations"</b> and a new chat is
-  <b>forgotten on refresh</b> — even though the transcripts are sitting safely on disk. It comes down to
-  <b>one character</b> in how a folder name is spelled.</div>
-</header>
+<div class="wrap">
+  <h1>Prompt templates</h1>
+  <p class="lede">A long custom prompt is mostly boilerplate with a few holes. Keep the template once;
+  at use time, fill <em>just the holes</em> on a form — then the finished text drops into the composer.</p>
 
-<main>
-
-<section>
-  <h2><span class="n">1</span>Try it: encode a repo path</h2>
-  <p class="hint">Claude CLI and the harness each turn a working-directory path into a folder name under
-    <span class="mono">~/.claude/projects/</span>. Pick a path and watch where they <i>disagree</i>.</p>
-
-  <div class="controls" id="presets"></div>
-  <div class="field">
-    <label for="pathIn">Repo path</label>
-    <input type="text" id="pathIn" value="C:\Users\Administrator\Desktop\playground\prg_worktrees\prg" spellcheck="false"/>
+  <div class="flow">
+    <div class="step"><b>1 · Template</b><span>A custom prompt whose body carries <code>{{name}}</code> holes.</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>2 · Detect</b><span>Distinct hole names, in first-appearance order, become the fields.</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>3 · Fill</b><span>"Use" opens a form — one field per hole.</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>4 · Insert</b><span>Every <code>{{hole}}</code> is replaced; the result lands in the draft.</span></div>
   </div>
 
-  <div style="margin-top:18px">
-    <div class="mono" style="font-size:.78rem;color:var(--dim)">per-character transform</div>
-    <div class="chars" id="chars"></div>
-    <div class="legend">
-      <span><span class="dot" style="background:#0b0f14;border:1px solid var(--line)"></span>unchanged</span>
-      <span><span class="dot" style="background:#2d4a63"></span>both replace with <b>-</b></span>
-      <span><span class="dot" style="background:var(--bad)"></span><b>they disagree</b> — CLI &rarr; <span class="h">-</span>, harness keeps it</span>
+  <div class="card">
+    <h2>Try it — this is the real substitution logic</h2>
+    <div class="grid">
+      <div>
+        <label class="fld" for="tpl">Template body (edit me — type <code>{{anything}}</code>)</label>
+        <textarea id="tpl"></textarea>
+        <div class="chips" id="chips" aria-live="polite"></div>
+        <div id="fills"></div>
+      </div>
+      <div>
+        <label class="fld">Inserted into the composer</label>
+        <div class="out" id="out"></div>
+        <p class="note">Holes you haven't filled stay <span class="hl-hole">{{like&nbsp;this}}</span>;
+        filled ones show <mark>highlighted</mark>. A template with <em>no</em> holes skips the form and inserts verbatim.</p>
+      </div>
     </div>
   </div>
 
-  <div class="folders">
-    <div class="fcard miss" id="cardHarness">
-      <h3>Harness looks here <span class="tag bad">EncodeCwd</span></h3>
-      <div class="path" id="pathHarness"></div>
-      <div class="verdict" id="verdictHarness"></div>
-    </div>
-    <div class="fcard ok" id="cardCli">
-      <h3>Claude CLI writes here <span class="tag good">actual</span></h3>
-      <div class="path" id="pathCli"></div>
-      <div class="verdict" id="verdictCli"></div>
-    </div>
+  <div class="card">
+    <h2>Why double braces</h2>
+    <div class="rule"><span class="k">{{name}}</span><span>A hole. Letters, digits, <code>_</code>, spaces and dashes; surrounding spaces ignored, so <code>{{ ticket }}</code> = <code>{{ticket}}</code>.</span></div>
+    <div class="rule"><span class="k">${VAR}</span><span>Left alone — prompt bodies are full of shell/code, so single <code>{ }</code> and <code>${ }</code> must never be mistaken for holes.</span></div>
+    <div class="rule"><span class="k">{{file}}×3</span><span>Repeated name = one field; filling it substitutes every occurrence.</span></div>
+    <p class="note">The fields are <em>derived from the body</em> — never stored separately — so the holes and the
+    declared fields can't drift apart. The backend record (<code>Id, Emoji, Label, Text</code>) is unchanged.</p>
   </div>
-  <div class="callout" id="matchNote"></div>
-</section>
 
-<section>
-  <h2><span class="n">2</span>The two encoding rules, side by side</h2>
-  <p class="hint">Same intent, different alphabets. The harness was written to handle only the three obvious
-    path characters; the CLI sanitizes <i>everything</i> that isn't a letter or digit.</p>
-  <div class="folders">
-    <div class="fcard">
-      <h3>Harness &mdash; <span class="mono">SessionService.EncodeCwd</span></h3>
-      <pre class="mono">workingDirectory
-  .Replace(':','-')
-  .Replace('\\','-')
-  .Replace('/','-')</pre>
-      <div style="font-size:.85rem;color:var(--dim)">Replaces only <code>:</code> <code>\</code> <code>/</code>.
-      An <span class="u">_</span> &nbsp;(or <code>.</code>, space, &hellip;) <b>survives untouched.</b></div>
-    </div>
-    <div class="fcard">
-      <h3>Claude CLI &mdash; what it really does</h3>
-      <pre class="mono">cwd.replace(/[^A-Za-z0-9]/g, '-')</pre>
-      <div style="font-size:.85rem;color:var(--dim)">Every non-alphanumeric character becomes
-      <span class="h">-</span>. Confirmed on disk:
-      <code>net8.0-windows</code> &rarr; <code>net8-0-windows</code>,
-      <code>prg_worktrees</code> &rarr; <code>prg-worktrees</code>.</div>
-    </div>
-  </div>
-</section>
-
-<section>
-  <h2><span class="n">3</span>How that one character makes chats "vanish"</h2>
-  <p class="hint">The data is never lost — the harness is just reading the wrong drawer.</p>
-  <div class="flow" id="flow"></div>
-</section>
-
-<section>
-  <h2><span class="n">4</span>Proposed fix <span class="tag good">one line</span></h2>
-  <p class="hint">Make the harness encode paths exactly the way the CLI does. Toggle to see the diff.</p>
-  <div class="controls">
-    <button id="fixBefore" class="active">Before (buggy)</button>
-    <button id="fixAfter">After (fixed)</button>
-  </div>
-  <pre id="fixCode" class="mono"></pre>
-  <ul class="tight">
-    <li><b>Identical output for every repo that works today</b> — paths without <code>_</code>/<code>.</code>/space
-      encode the same, so no regression and no migration.</li>
-    <li>Fixes <b>every</b> affected repo at once: <code>prg_worktrees</code>, plus any future path with
-      punctuation — not just this one.</li>
-    <li>It's the <b>only</b> place the harness encodes a cwd. The CLI's own <code>--resume</code> path doesn't
-      go through it, so it's untouched.</li>
-    <li><b>Verify after:</b> open the worktree repo, start a chat, hard-refresh, confirm the session picker
-      lists it (currently it shows "no conversations yet").</li>
-  </ul>
-  <div class="callout">
-    Why only the worktree repo broke: <span class="mono">playground\prg</span> has no underscore, so harness
-    and CLI agree on its folder — it works. <span class="mono">playground\prg_worktrees\prg</span> is simply
-    your first repo whose path carries a character the harness forgot to sanitize.
-  </div>
-</section>
-
-<div class="footer">Understanding app · birocode harness · the underscore bug</div>
-</main>
+  <footer>Companion to the <code>add-prompt-templates</code> OpenSpec change · the substitution here is the same
+  <code>extractParams</code>/<code>fillParams</code> logic shipped in <code>client/src/components/chat/promptTemplate.js</code>.</footer>
+</div>
 
 <script>
-function harnessEncode(p){ return p.replace(/[:\\/]/g,'-'); }
-function cliEncode(p){ return p.replace(/[^A-Za-z0-9]/g,'-'); }
-function isAlnum(c){ return /[A-Za-z0-9]/.test(c); }
-function isHarnessSep(c){ return c===':'||c==='\\'||c==='/'; }
+  // Mirror of promptTemplate.js — kept tiny and identical so the demo IS the feature.
+  var PARAM_RE = /\{\{\s*([A-Za-z0-9_ -]+?)\s*\}\}/g;
+  function extractParams(body) {
+    var out = [], seen = {}, m; PARAM_RE.lastIndex = 0;
+    while ((m = PARAM_RE.exec(body)) !== null) {
+      var name = m[1].trim();
+      if (name && !seen[name]) { seen[name] = 1; out.push(name); }
+    }
+    return out;
+  }
+  function esc(s) { return s.replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
 
-const presets = [
-  {name:'prg_worktrees (broken)', path:'C:\\Users\\Administrator\\Desktop\\playground\\prg_worktrees\\prg'},
-  {name:'plain prg (works)',      path:'C:\\Users\\Administrator\\Desktop\\playground\\prg'},
-  {name:'net8.0-windows',         path:'C:\\app\\bin\\Debug\\net8.0-windows'},
-  {name:'has a space',            path:'C:\\Users\\km\\My Repos\\demo'},
-];
+  var tpl = document.getElementById('tpl');
+  var chips = document.getElementById('chips');
+  var fills = document.getElementById('fills');
+  var out = document.getElementById('out');
+  var values = {};
 
-const $ = s=>document.querySelector(s);
-const pathIn = $('#pathIn');
+  tpl.value =
+    'Review the change in {{file}} for the ticket {{ticket}}.\n\n' +
+    'Focus on {{concern}}. If {{file}} touches public API, note it.\n' +
+    'Summarise findings for {{ticket}} in one paragraph.';
 
-const pbox = $('#presets');
-presets.forEach(p=>{
-  const b=document.createElement('button');
-  b.textContent=p.name;
-  b.onclick=()=>{ pathIn.value=p.path; render(); markPreset(b); };
-  pbox.appendChild(b);
-});
-function markPreset(active){ [...pbox.children].forEach(c=>c.classList.toggle('active',c===active)); }
+  function render() {
+    var params = extractParams(tpl.value);
 
-function render(){
-  const p = pathIn.value;
-  const h = harnessEncode(p), c = cliEncode(p);
+    // chips
+    chips.innerHTML = '';
+    if (!params.length) {
+      var c = document.createElement('span');
+      c.className = 'chip empty'; c.textContent = 'no fields — inserts as-is';
+      chips.appendChild(c);
+    } else {
+      params.forEach(function (p) {
+        var c = document.createElement('span'); c.className = 'chip'; c.textContent = p; chips.appendChild(c);
+      });
+    }
 
-  const chars = $('#chars'); chars.innerHTML='';
-  for(const ch of p){
-    const out = isAlnum(ch)?ch:'-';
-    const harnessOut = isHarnessSep(ch)?'-':ch;
-    const diverge = (harnessOut!==out);
-    const changed = isHarnessSep(ch);
-    const cell=document.createElement('div');
-    cell.className='ch'+(diverge?' diverge':(changed?' changed':''));
-    const showIn = ch===' '?'␣':ch;
-    const showOut = (out===ch)?ch:out;
-    cell.innerHTML='<span class="in">'+esc(showIn)+'</span>'+
-      (out!==ch?'<span class="arr">▼</span><span class="out">'+esc(showOut)+'</span>':
-                '<span class="arr">·</span><span class="out">'+esc(showOut)+'</span>');
-    cell.title = diverge ? ('CLI → "-",  harness keeps "'+ch+'"') :
-                 changed ? 'both → "-"' : 'unchanged';
-    chars.appendChild(cell);
+    // fill inputs (one per distinct param, first-appearance order), preserving typed values
+    fills.innerHTML = '';
+    params.forEach(function (p) {
+      var row = document.createElement('div'); row.className = 'fillrow';
+      var lab = document.createElement('label'); lab.className = 'fld'; lab.textContent = p;
+      var inp = document.createElement('input'); inp.type = 'text';
+      inp.placeholder = 'value for ' + p;
+      inp.value = values[p] || '';
+      inp.addEventListener('input', function () { values[p] = inp.value; paint(); });
+      row.appendChild(lab); row.appendChild(inp); fills.appendChild(row);
+    });
+
+    paint();
   }
 
-  $('#pathHarness').innerHTML = colorize(h, 'harness');
-  $('#pathCli').innerHTML     = colorize(c, 'cli');
-
-  const match = (h===c);
-  const cardH=$('#cardHarness'), cardC=$('#cardCli');
-  if(match){
-    cardH.className='fcard ok'; $('#verdictHarness').textContent='✓ same folder — finds the transcripts';
-    cardC.className='fcard ok'; $('#verdictCli').textContent='✓ transcripts live here';
-    $('#matchNote').innerHTML='<b style="color:var(--good)">Folders match.</b> Harness and CLI agree, so this repo\'s conversations load fine.';
-    $('#matchNote').style.borderColor='var(--good)';
-  }else{
-    cardH.className='fcard miss'; $('#verdictHarness').textContent='✗ this folder does not exist → 0 sessions';
-    cardC.className='fcard ok';   $('#verdictCli').textContent='✓ transcripts really live here';
-    $('#matchNote').innerHTML='<b style="color:var(--bad)">Folders differ by the highlighted character.</b> '+
-      'The harness scans a folder that was never created, finds nothing, and shows "no conversations."';
-    $('#matchNote').style.borderColor='var(--warn)';
+  function paint() {
+    // Build the inserted output, highlighting filled holes (mark) and unfilled ones (hl-hole).
+    var html = esc(tpl.value).replace(/\{\{\s*([A-Za-z0-9_ -]+?)\s*\}\}/g, function (full, raw) {
+      var name = raw.trim();
+      var v = values[name];
+      if (v !== undefined && v !== '') return '<mark>' + esc(v) + '</mark>';
+      return '<span class="hl-hole">' + esc(full) + '</span>';
+    });
+    out.innerHTML = html;
   }
-}
 
-function colorize(s, kind){
-  const other = kind==='harness'? cliEncode(pathIn.value) : harnessEncode(pathIn.value);
-  let out='';
-  for(let i=0;i<s.length;i++){
-    const ch=s[i];
-    const differs = other[i]!==ch;
-    if(differs && kind==='harness') out+='<span class="u">'+esc(ch)+'</span>';
-    else if(differs && kind==='cli') out+='<span class="h">'+esc(ch)+'</span>';
-    else out+=esc(ch);
-  }
-  return out;
-}
-function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-
-pathIn.addEventListener('input', ()=>{ render(); markPreset(null); });
-
-const flow = [
-  {ic:'📁', t:'You open the prg_worktrees repo', d:'Repo path: C:\\…\\playground\\prg_worktrees\\prg'},
-  {ic:'🔤', t:'Harness builds the folder name', d:'EncodeCwd keeps the "_" → …-playground-prg_worktrees-prg'},
-  {ic:'🔎', t:'Harness scans that folder', d:'…-prg_worktrees-prg does not exist on disk', err:true},
-  {ic:'🪹', t:'ListSessions returns empty', d:'Session picker shows "no conversations yet"', err:true},
-  {ic:'💬', t:'You start a new chat', d:'CLI writes the transcript to …-prg-worktrees-prg (correct, with "-")'},
-  {ic:'🔄', t:'You refresh', d:'Harness reads back from the "_" folder again → still empty → chat "forgotten"', err:true},
-];
-const fEl=$('#flow');
-flow.forEach((s,i)=>{
-  const row=document.createElement('div'); row.className='step'+(s.err?' err':'');
-  row.innerHTML='<div class="ic">'+s.ic+'</div><div class="bd"><div class="t">'+s.t+'</div><div class="d mono" style="font-size:.82rem">'+esc(s.d)+'</div></div>';
-  fEl.appendChild(row);
-  if(i<flow.length-1){const c=document.createElement('div');c.className='conn';fEl.appendChild(c);}
-});
-
-const before =
-'<span class="cmt">// SessionService.cs — only handles : \\ /</span>\n'+
-'public static string EncodeCwd(string workingDirectory) =>\n'+
-'    workingDirectory'+
-'<span class="del">.Replace(\':\',\'-\').Replace(\'\\\\\',\'-\').Replace(\'/\',\'-\')</span>;';
-const after =
-'<span class="cmt">// match the Claude CLI: any non-alphanumeric → \'-\'</span>\n'+
-'public static string EncodeCwd(string workingDirectory) =>\n'+
-'    <span class="add">Regex.Replace(workingDirectory, "[^A-Za-z0-9]", "-")</span>;';
-const fixCode=$('#fixCode');
-$('#fixBefore').onclick=function(){fixCode.innerHTML=before;this.classList.add('active');$('#fixAfter').classList.remove('active');};
-$('#fixAfter').onclick=function(){fixCode.innerHTML=after;this.classList.add('active');$('#fixBefore').classList.remove('active');};
-fixCode.innerHTML=before;
-
-render();
+  tpl.addEventListener('input', render);
+  render();
 </script>
 </body>
 </html>
