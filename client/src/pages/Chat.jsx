@@ -5,6 +5,7 @@ import ThinkingIndicator from '../components/chat/ThinkingIndicator';
 import ActivitySteps from '../components/chat/ActivitySteps';
 import SessionPicker from '../components/chat/SessionPicker';
 import UnderstandingPanel from '../components/chat/UnderstandingPanel';
+import ToolCallsPanel from '../components/chat/ToolCallsPanel';
 import ErrorBanner from '../components/shared/ErrorBanner';
 import ClaudeViewToggle from '../components/shared/ClaudeViewToggle';
 import ModelSelector from '../components/chat/ModelSelector';
@@ -58,11 +59,15 @@ export default function Chat({ chat: injected, embedded = false, stashTabId }) {
     chatView,
     setChatView,
     hasSelfRepo,
+    liveToolCalls,
+    activeRepoId,
   } = injected || active;
 
   const showContextMeter = useFeature('contextMeter');
   const showDualChat = useFeature('dualChat');
   const showUnderstanding = useFeature('understandingPanel');
+  const showToolCalls = useFeature('toolCallHistory');
+  const [toolsOpen, setToolsOpen] = useState(false);
 
   const scrollRef = useRef(null);
   const stickToBottom = useRef(true);
@@ -203,6 +208,18 @@ export default function Chat({ chat: injected, embedded = false, stashTabId }) {
           </span>
         )}
         <ModelSelector value={model} onChange={changeModel} />
+        {showToolCalls && (
+          <button
+            type="button"
+            className={`chat__tools${toolsOpen ? ' chat__tools--on' : ''}`}
+            onClick={() => setToolsOpen((v) => !v)}
+            title={t('chat.toolCalls')}
+            aria-label={t('chat.toolCalls')}
+            aria-pressed={toolsOpen}
+          >
+            {t('chat.toolCalls')}
+          </button>
+        )}
         {refresh && (
           <button
             type="button"
@@ -235,23 +252,40 @@ export default function Chat({ chat: injected, embedded = false, stashTabId }) {
         </button>
       )}
 
-      <div className="chat__scroll" ref={scrollRef} onScroll={handleScroll}>
-        {hidden > 0 && (
-          <button type="button" className="chat__earlier" onClick={revealEarlier}>
-            {t('chat.showEarlier')} ({hidden})
-          </button>
+      <div className="chat__body">
+        <div className="chat__scroll" ref={scrollRef} onScroll={handleScroll}>
+          {hidden > 0 && (
+            <button type="button" className="chat__earlier" onClick={revealEarlier}>
+              {t('chat.showEarlier')} ({hidden})
+            </button>
+          )}
+          {messages.slice(start).map((m, i) => {
+            const key = start + i; // absolute index — stable as the window slides
+            return (
+              <div key={key} className="turn">
+                {m.role === 'assistant' && m.steps?.length > 0 && <ActivitySteps steps={m.steps} />}
+                {(m.text || m.role === 'user') && <MessageBubble role={m.role} text={m.text} />}
+              </div>
+            );
+          })}
+          {awaitingFirst && <ThinkingIndicator />}
+          {error && <ErrorBanner message={error} />}
+        </div>
+
+        {/* Tool-call history overlays the chat message area (not a separate
+            drawer); the same toolbar button toggles it back to the chat. Works
+            for the active chat and an embedded dashboard dock alike — the data
+            comes from whichever chat source drives this view. */}
+        {showToolCalls && (
+          <ToolCallsPanel
+            open={toolsOpen}
+            onClose={() => setToolsOpen(false)}
+            sessionId={sessionId}
+            streaming={streaming}
+            liveToolCalls={liveToolCalls}
+            repoId={activeRepoId}
+          />
         )}
-        {messages.slice(start).map((m, i) => {
-          const key = start + i; // absolute index — stable as the window slides
-          return (
-            <div key={key} className="turn">
-              {m.role === 'assistant' && m.steps?.length > 0 && <ActivitySteps steps={m.steps} />}
-              {(m.text || m.role === 'user') && <MessageBubble role={m.role} text={m.text} />}
-            </div>
-          );
-        })}
-        {awaitingFirst && <ThinkingIndicator />}
-        {error && <ErrorBanner message={error} />}
       </div>
 
       <ChatInput

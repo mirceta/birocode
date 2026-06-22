@@ -1,0 +1,16 @@
+flowchart TD
+    PICK["Dock header: 'depends on…' picker<br/>(pick a primary agent)"] --> PATCH["PATCH /api/dock/{id}<br/>set DependsOn = primary tab id"]
+    PATCH --> STORE[("DockTab.DependsOn<br/>backend-synced")]
+    STORE --> DASH["Dashboard.jsx<br/>fold dependents under their primary"]
+    DASH --> GROUP
+
+    subgraph GROUP["'together' group"]
+        PRIMARY["Primary agent<br/>full size"]
+        DEP["Dependent agent<br/>~0.8x smaller"]
+    end
+    PRIMARY -. "must finish first" .-> DEP
+
+    INDEP["Independent agents<br/>(no DependsOn)"] --> GRID["normal dashboard grid<br/>unchanged"]
+
+    style GROUP fill:#eef7ee,stroke:#4f9d69
+    style STORE fill:#eef2ff,stroke:#5b6cf0
