@@ -16,6 +16,7 @@ using ClaudeWeb.Services.Notes;
 using ClaudeWeb.Services.Pins;
 using ClaudeWeb.Services.Prompts;
 using ClaudeWeb.Services.PromptPlans;
+using ClaudeWeb.Services.PromptNotes;
 using ClaudeWeb.Services.Repositories;
 using ClaudeWeb.Services.Screen;
 using ClaudeWeb.Services.Settings;
@@ -147,6 +148,7 @@ public class EmbeddedApi
             builder.Services.AddPinsModule();   // per-project Files pins (plans/plan-files-merge.md)
             builder.Services.AddPromptsModule(); // user-defined composer prompts (plans/custom-prompts.md)
             builder.Services.AddPromptPlansModule(); // user-defined prompt plans (plans/prompt-plans.md)
+            builder.Services.AddPromptNotesModule(); // user-defined prompt notes — ⚙ pop-up Notes tab (openspec add-prompt-notes-tab)
             builder.Services.AddDeployModule(); // deployments tab (plans/deployments-tab.md)
             builder.Services.AddExposeModule(); // exposure check (plans/product-onboarding.md)
             builder.Services.AddAnalyticsModule(); // scoreboard (plans/scoreboard-analytics.md)

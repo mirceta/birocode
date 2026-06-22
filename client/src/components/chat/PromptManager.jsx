@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useT } from '../../i18n/LanguageContext';
 import PromptPlansPanel from './PromptPlansPanel';
+import PromptNotesPanel from './PromptNotesPanel';
 
 // Add/edit/delete UI for custom composer prompts (plans/custom-prompts.md),
 // shown as a CENTERED MODAL rendered via a portal to document.body. It must NOT
@@ -22,11 +23,13 @@ const EMOJIS = [
 export default function PromptManager({
   prompts, onAdd, onUpdate, onDelete,
   plans, onAddPlan, onUpdatePlan, onDeletePlan,
+  notesText, notesLoaded, onSaveNotes,
   onInsert, onClose,
 }) {
   const { t } = useT();
-  // Two tabs in one modal (plans/prompt-plans.md): one-off Prompts and ordered
-  // Plans. Plans live ALONGSIDE prompts; neither replaces the other.
+  // Three tabs in one modal: one-off Prompts, ordered Plans (plans/prompt-plans.md),
+  // and freeform Notes (openspec add-prompt-notes-tab). They live ALONGSIDE each
+  // other; none replaces another.
   const [tab, setTab] = useState('prompts');
   // The two former hardcoded composer buttons (understanding 📝, kickoff 🚀) now
   // live here as built-in entries — insert-only (no edit/delete), text from i18n
@@ -86,7 +89,7 @@ export default function PromptManager({
 
   return createPortal(
     <div className="prompt-mgr-backdrop" onClick={onClose}>
-    <div className="prompt-mgr" role="dialog" aria-modal="true" aria-label={t('prompts.title')} onClick={(e) => e.stopPropagation()}>
+    <div className={`prompt-mgr${tab === 'notes' ? ' prompt-mgr--notes' : ''}`} role="dialog" aria-modal="true" aria-label={t('prompts.title')} onClick={(e) => e.stopPropagation()}>
       <div className="prompt-mgr__head">
         <div className="prompt-mgr__tabs" role="tablist">
           <button
@@ -107,6 +110,15 @@ export default function PromptManager({
           >
             {t('plans.title')}
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'notes'}
+            className={`prompt-mgr__tab${tab === 'notes' ? ' prompt-mgr__tab--on' : ''}`}
+            onClick={() => setTab('notes')}
+          >
+            {t('notes.tab')}
+          </button>
         </div>
         <button type="button" className="prompt-mgr__close" onClick={onClose} aria-label={t('common.close')}>
           &times;
@@ -120,6 +132,12 @@ export default function PromptManager({
           onUpdatePlan={onUpdatePlan}
           onDeletePlan={onDeletePlan}
           onUse={(text) => { onInsert(text); onClose(); }}
+        />
+      ) : tab === 'notes' ? (
+        <PromptNotesPanel
+          text={notesText}
+          loaded={notesLoaded}
+          onSave={onSaveNotes}
         />
       ) : (
       <>
