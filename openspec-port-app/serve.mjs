@@ -15,12 +15,26 @@
 // root bound to loopback only. This is the local-app equivalent of typing the
 // command yourself — it does NOT add an enforcement gate (that lives in CI).
 //
+// It also exposes a READ-ONLY pair for the Cockpit tab (the inspect-twin of the
+// Console's run) — these only read state, and add NO new mutating verb:
+//   • GET ./api/cockpit            → { activeChanges, specs, archived, errors }
+//                                     (openspec list --json + spec list --json +
+//                                      validate --all --strict --json stamped onto
+//                                      each item as {valid,issues} + a direct read
+//                                      of openspec/changes/archive/).
+//   • GET ./api/cockpit/show?id=…  → openspec show <id> --json (id SAFE_NAME-gated),
+//                                     plus the tasks.md / proposal.md / design.md
+//                                     artifacts show --json omits.
+//   • GET ./api/cockpit/archived?id=… → an archived change parsed straight from
+//                                     openspec/changes/archive/<id>/ (the CLI can't
+//                                     show archives), in the same drill-in shape.
+//
 // Run:  node serve.mjs            (defaults to port 5310)
 //       PORT=1234 node serve.mjs  (any other port)
 // No dependencies — Node's built-in http/fs/child_process only.
 
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, normalize } from 'node:path';
 import { execFile } from 'node:child_process';
@@ -96,6 +110,157 @@ function runExec(argv) {
   });
 }
 
+// ── Cockpit: read-only state aggregation ─────────────────────────
+// Runs a whitelisted argv and parses its stdout as JSON. Returns the parsed
+// value plus the raw exec result so callers can surface a clean error.
+async function execJson(argv) {
+  const r = await runExec(argv);
+  let json = null, parseError = null;
+  if (r.stdout) { try { json = JSON.parse(r.stdout); } catch (e) { parseError = e.message; } }
+  return { ok: r.ok && json != null, code: r.code, cmd: r.cmd, json, stderr: r.stderr, parseError };
+}
+
+// Shipped changes have no CLI listing — read openspec/changes/archive/ directly.
+// Each entry is a `YYYY-MM-DD-<slug>` folder; date = prefix, title = the folder's
+// proposal.md first `# ` heading (falls back to the slug). Newest first.
+async function readArchive() {
+  const dir = join(REPO_ROOT, 'openspec', 'changes', 'archive');
+  let entries;
+  try { entries = await readdir(dir, { withFileTypes: true }); }
+  catch { return []; }                       // no archive yet → empty, not an error
+  const out = [];
+  for (const ent of entries) {
+    if (!ent.isDirectory()) continue;
+    const m = ent.name.match(/^(\d{4}-\d{2}-\d{2})-(.+)$/);
+    const date = m ? m[1] : '';
+    const slug = m ? m[2] : ent.name;
+    let title = slug;
+    try {
+      const md = await readFile(join(dir, ent.name, 'proposal.md'), 'utf8');
+      const h = md.match(/^#\s+(.+?)\s*$/m);
+      if (h) title = h[1].trim();
+    } catch { /* no proposal.md → keep slug */ }
+    out.push({ id: ent.name, date, slug, title });
+  }
+  out.sort((a, b) => (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));   // date-prefix sorts newest-first
+  return out;
+}
+
+// The task checklist isn't in `openspec show --json` (which returns only id /
+// title / deltas), so read the change's tasks.md directly — the same file the
+// completion ring is computed from. Parses `- [ ]` / `- [x]` items, grouped by
+// their `## ` section heading. Returns null when the change has no tasks.md.
+// Works off any change directory so it serves both active changes and the
+// archived folders under archive/.
+async function readTasksFromDir(changeDir) {
+  let md;
+  try { md = await readFile(join(changeDir, 'tasks.md'), 'utf8'); } catch { return null; }
+  const tasks = [];
+  let section = '';
+  for (const line of md.split(/\r?\n/)) {
+    const h = line.match(/^##\s+(.+?)\s*$/);
+    if (h) { section = h[1].trim(); continue; }
+    const m = line.match(/^\s*-\s+\[([ xX])\]\s*(.+?)\s*$/);
+    if (m) tasks.push({ done: m[1].toLowerCase() === 'x', text: m[2].trim(), section });
+  }
+  return tasks;
+}
+const readTasks = (id) => readTasksFromDir(join(REPO_ROOT, 'openspec', 'changes', id));
+
+// Archived changes can't be read via `openspec show` (the CLI only knows active
+// changes), so parse a delta `spec.md` straight from disk into the SAME shape the
+// active drill-in renders: an array of { operation, spec, requirements:[{text,
+// scenarios:[{rawText}]}] }. We mirror `openspec show --json`'s conventions —
+// `text` is the first body line under each `### Requirement:` heading (falling
+// back to the heading itself), and each `#### Scenario:` block's bullet lines
+// become one scenario's rawText.
+function parseDeltaSpec(md, specName) {
+  const deltas = [];
+  let op = null, reqs = null, curReq = null, curScn = null, needText = false;
+  const flushScn = () => { if (curReq && curScn) { curReq.scenarios.push({ rawText: curScn.join('\n').trim() }); curScn = null; } };
+  const flushReq = () => { flushScn(); if (curReq && !curReq.text) curReq.text = curReq.title; curReq = null; needText = false; };
+  const flushOp = () => { flushReq(); if (op && reqs && reqs.length) deltas.push({ operation: op, spec: specName, requirements: reqs }); op = null; reqs = null; };
+  for (const line of md.split(/\r?\n/)) {
+    let m;
+    if ((m = line.match(/^##\s+(ADDED|MODIFIED|REMOVED|RENAMED)\b/i))) { flushOp(); op = m[1].toUpperCase(); reqs = []; continue; }
+    if ((m = line.match(/^###\s+Requirement:\s*(.*)$/i))) { flushReq(); curReq = { text: '', title: m[1].trim(), scenarios: [] }; if (reqs) reqs.push(curReq); needText = true; continue; }
+    if ((m = line.match(/^####\s+Scenario:\s*(.*)$/i))) { flushScn(); curScn = []; continue; }
+    if (curScn) { curScn.push(line); continue; }
+    if (needText && curReq && line.trim()) { curReq.text = line.trim(); needText = false; }
+  }
+  flushOp();
+  return deltas;
+}
+
+// Read one archived change folder (openspec/changes/archive/<id>/) into the
+// drill-in payload: its title (proposal.md `# ` heading, else the slug), the
+// delta specs parsed from specs/<cap>/spec.md, and its tasks.md checklist.
+// Returns { ok:false } when the folder isn't there — the inspect-twin of show's
+// not-found path. Reads only; never mutates an archived artifact.
+async function readArchivedChange(id) {
+  const base = join(REPO_ROOT, 'openspec', 'changes', 'archive', id);
+  try { await readdir(base); }
+  catch { return { ok: false, json: null, stderr: `archived change "${id}" not found` }; }
+  const slug = (id.match(/^\d{4}-\d{2}-\d{2}-(.+)$/) || [, id])[1];
+  const proposal = await readDoc(base, 'proposal.md');
+  const design = await readDoc(base, 'design.md');
+  let title = slug;
+  if (proposal) { const h = proposal.match(/^#\s+(.+?)\s*$/m); if (h) title = h[1].trim(); }
+  const deltas = [];
+  let caps = [];
+  try { caps = await readdir(join(base, 'specs'), { withFileTypes: true }); } catch { /* no delta specs */ }
+  for (const cap of caps) {
+    if (!cap.isDirectory()) continue;
+    try {
+      const md = await readFile(join(base, 'specs', cap.name, 'spec.md'), 'utf8');
+      deltas.push(...parseDeltaSpec(md, cap.name));
+    } catch { /* skip unreadable cap */ }
+  }
+  const tasks = await readTasksFromDir(base);
+  return { ok: true, json: { id, title, archived: true, deltaCount: deltas.length, deltas }, tasks, proposal, design };
+}
+
+// Read one of a change's prose artifacts (proposal.md / design.md) as raw
+// markdown for the drill-in — these are real OpenSpec artifacts that `openspec
+// show --json` omits. Returns null when absent (design.md is optional). Reads only.
+async function readDoc(changeDir, name) {
+  try { return await readFile(join(changeDir, name), 'utf8'); }
+  catch { return null; }
+}
+
+// One fetch, four sources. Reads only — never mutates an OpenSpec artifact.
+// `validate --all --strict --json` returns every active change and spec's
+// validity in a single pass; we stamp it onto each item as { valid, issues }.
+async function cockpitState() {
+  const [changesR, specsR, validR] = await Promise.all([
+    execJson(['openspec', 'list', '--json']),
+    execJson(['openspec', 'spec', 'list', '--json']),
+    execJson(['openspec', 'validate', '--all', '--strict', '--json']),
+  ]);
+  const archived = await readArchive();
+  // validate exits non-zero when something is invalid, so trust json.items
+  // regardless of exit code. Key by type:id — validate's id is the change name / spec id.
+  const validity = {};
+  if (validR.json && Array.isArray(validR.json.items)) {
+    for (const it of validR.json.items) validity[`${it.type}:${it.id}`] = { valid: !!it.valid, issues: (it.issues || []).length };
+  }
+  const stamp = (arr, type, key) => arr.map((o) => {
+    const v = validity[`${type}:${o[key]}`];
+    return v ? { ...o, valid: v.valid, issues: v.issues } : o;
+  });
+  const activeChanges = changesR.json && Array.isArray(changesR.json.changes) ? changesR.json.changes : [];
+  const specs = Array.isArray(specsR.json) ? specsR.json : [];
+  return {
+    activeChanges: stamp(activeChanges, 'change', 'name'),
+    specs: stamp(specs, 'spec', 'id'),
+    archived,
+    errors: {
+      changes: changesR.ok ? null : (changesR.stderr || changesR.parseError || `exit ${changesR.code}`),
+      specs:   specsR.ok   ? null : (specsR.stderr   || specsR.parseError   || `exit ${specsR.code}`),
+    },
+  };
+}
+
 // ── Request body reader (cap size) ───────────────────────────────
 function readBody(req, limit = 64 * 1024) {
   return new Promise((resolve, reject) => {
@@ -135,6 +300,43 @@ const server = createServer(async (req, res) => {
         if (e && e.userFacing) { sendJson(res, 200, { ok: false, code: 1, cmd: action, stdout: '', stderr: e.message }); return; }
         sendJson(res, 500, { error: 'exec failed' });
       }
+      return;
+    }
+
+    // ── API: GET ./api/cockpit (read-only aggregation) ──
+    if (urlPath === '/api/cockpit') {
+      if (req.method !== 'GET') { sendJson(res, 405, { error: 'GET only' }); return; }
+      sendJson(res, 200, await cockpitState());
+      return;
+    }
+
+    // ── API: GET ./api/cockpit/show?id=<name> (read-only drill-in) ──
+    if (urlPath === '/api/cockpit/show') {
+      if (req.method !== 'GET') { sendJson(res, 405, { error: 'GET only' }); return; }
+      let id;
+      try { id = reqName(new URL(req.url, 'http://localhost').searchParams.get('id')); }
+      catch (e) { sendJson(res, 400, { error: e.message }); return; }
+      const data = await execJson(['openspec', 'show', id, '--json']);
+      // For a change (has deltas), attach the artifacts show --json omits: the
+      // tasks.md checklist and the proposal.md / design.md prose.
+      if (data.json && Array.isArray(data.json.deltas)) {
+        const dir = join(REPO_ROOT, 'openspec', 'changes', id);
+        data.tasks = await readTasks(id);
+        data.proposal = await readDoc(dir, 'proposal.md');
+        data.design = await readDoc(dir, 'design.md');
+      }
+      sendJson(res, 200, data);
+      return;
+    }
+
+    // ── API: GET ./api/cockpit/archived?id=<name> (read-only archived drill-in) ──
+    // Archived changes are invisible to `openspec show`, so read the folder directly.
+    if (urlPath === '/api/cockpit/archived') {
+      if (req.method !== 'GET') { sendJson(res, 405, { error: 'GET only' }); return; }
+      let id;
+      try { id = reqName(new URL(req.url, 'http://localhost').searchParams.get('id')); }
+      catch (e) { sendJson(res, 400, { error: e.message }); return; }
+      sendJson(res, 200, await readArchivedChange(id));
       return;
     }
 
