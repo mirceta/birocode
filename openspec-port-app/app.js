@@ -236,23 +236,29 @@ nav.addEventListener('click', (e) => {
   if (!btn) return;
   showView(btn.dataset.view);
 });
-function showView(view) {
+function showView(view, sub) {
   nav.querySelectorAll('.nav__btn').forEach((b) => b.classList.toggle('is-active', b.dataset.view === view));
   document.querySelectorAll('.view').forEach((v) => v.classList.toggle('is-active', v.id === `view-${view}`));
+  if (sub) activateSub(view, sub);              // also open a sub-tab within the cluster
   if (view === 'cockpit') loadCockpit();        // lazy: fetch state on first open
 }
 
-// ── 1a) Sub-view switcher (inside the Understand tab) ────────────
-const subnav = document.getElementById('subnav');
-subnav.addEventListener('click', (e) => {
-  const btn = e.target.closest('.subnav__btn');
-  if (!btn) return;
-  showSub(btn.dataset.sub);
-});
-function showSub(sub) {
-  subnav.querySelectorAll('.subnav__btn').forEach((b) => b.classList.toggle('is-active', b.dataset.sub === sub));
-  document.querySelectorAll('.subview').forEach((v) => v.classList.toggle('is-active', v.id === `subview-${sub}`));
+// ── 1a) Sub-view switcher — each cluster (Understand · Port · Operate) ───
+// owns its own .subnav strip; toggling is scoped to that cluster's .view so
+// the strips don't fight over the shared .subview class.
+function activateSub(view, sub) {
+  const root = document.getElementById(`view-${view}`);
+  if (!root) return;
+  root.querySelectorAll('.subnav__btn').forEach((b) => b.classList.toggle('is-active', b.dataset.sub === sub));
+  root.querySelectorAll('.subview').forEach((v) => v.classList.toggle('is-active', v.id === `subview-${sub}`));
 }
+document.querySelectorAll('.subnav').forEach((strip) => {
+  strip.addEventListener('click', (e) => {
+    const btn = e.target.closest('.subnav__btn');
+    if (!btn) return;
+    activateSub(strip.closest('.view').id.replace('view-', ''), btn.dataset.sub);
+  });
+});
 
 // ── 2) Explain — the spine ───────────────────────────────────────
 document.getElementById('spine').innerHTML = PHASES.map((p) => `
@@ -262,7 +268,7 @@ document.getElementById('spine').innerHTML = PHASES.map((p) => `
 document.getElementById('spine').addEventListener('click', (e) => {
   const node = e.target.closest('.snode');
   if (!node) return;
-  showView('control');
+  showView('port', 'control');                  // Control now lives under the Port cluster
   openPhase(Number(node.dataset.go));
 });
 
