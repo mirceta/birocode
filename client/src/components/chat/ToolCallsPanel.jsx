@@ -4,9 +4,10 @@ import { apiGet } from '../../api/client';
 import { useChat } from '../../context/ChatContext';
 import { useT } from '../../i18n/LanguageContext';
 
-// Tool calls drawer (openspec: add-tool-call-history). A slide-in panel that
-// lists every tool call the agent made in the ACTIVE conversation, in order,
-// each row expandable to its full input/output.
+// Tool calls panel (openspec: add-tool-call-history). An overlay that covers the
+// chat message area and lists every tool call the agent made in the ACTIVE
+// conversation, in order, each row expandable to its full input/output. The
+// toolbar's "Tool calls" button toggles it on/off over the chat.
 //
 // It is fed by two sources, merged by tool id so the list is complete whether
 // the turn is live, reattached, or fully historical:
@@ -66,32 +67,29 @@ export default function ToolCallsPanel({ open, onClose }) {
   if (!open) return null;
 
   return (
-    <>
-      <div className="toolcalls__backdrop" onClick={onClose} />
-      <aside className="toolcalls" role="dialog" aria-label={t('chat.toolCalls')}>
-        <div className="toolcalls__head">
-          <span className="toolcalls__title">
-            {t('chat.toolCalls')}
-            {steps.length > 0 && <span className="toolcalls__count">{steps.length}</span>}
-          </span>
-          <button
-            type="button"
-            className="toolcalls__close"
-            onClick={onClose}
-            aria-label={t('chat.toolCallsClose')}
-            title={t('chat.toolCallsClose')}
-          >
-            ✕
-          </button>
-        </div>
-        <div className="toolcalls__body">
-          {steps.length === 0 ? (
-            <p className="toolcalls__empty">{t('chat.toolCallsEmpty')}</p>
-          ) : (
-            <ActivitySteps steps={steps} />
-          )}
-        </div>
-      </aside>
-    </>
+    <section className="toolcalls" role="region" aria-label={t('chat.toolCalls')}>
+      <div className="toolcalls__head">
+        <span className="toolcalls__title">
+          {t('chat.toolCalls')}
+          {steps.length > 0 && <span className="toolcalls__count">{steps.length}</span>}
+        </span>
+        <button
+          type="button"
+          className="toolcalls__close"
+          onClick={onClose}
+          aria-label={t('chat.toolCallsClose')}
+          title={t('chat.toolCallsClose')}
+        >
+          ✕
+        </button>
+      </div>
+      <div className="toolcalls__body">
+        {steps.length === 0 ? (
+          <p className="toolcalls__empty">{t('chat.toolCallsEmpty')}</p>
+        ) : (
+          <ActivitySteps steps={steps} />
+        )}
+      </div>
+    </section>
   );
 }

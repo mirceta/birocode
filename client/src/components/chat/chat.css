@@ -1526,39 +1526,47 @@ details.step > summary::-webkit-details-marker {
   transform: scale(0.97);
 }
 
-/* Dim the transcript behind the drawer; click to dismiss. */
-.toolcalls__backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.35);
-  z-index: 40;
-  animation: toolcalls-fade 0.18s ease;
+/* When the panel is showing, the toggle reads as a pressed/active control. */
+.chat__tools--on {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
 }
 
-@keyframes toolcalls-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
+.chat__tools--on:hover {
+  color: #fff;
 }
 
-/* The drawer itself: slides in from the right, overlaying the chat. */
+/* The message area that the tool-call overlay covers. It wraps .chat__scroll so
+   the overlay can fill exactly the chat region (below the toolbar, above the
+   composer) — not the whole viewport. */
+.chat__body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat__body .chat__scroll {
+  flex: 1;
+}
+
+/* The panel: an overlay filling the chat message area. The same toolbar button
+   toggles it back to the chat. */
 .toolcalls {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: min(420px, 88vw);
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
   background: var(--color-bg, var(--color-surface));
-  border-left: 1px solid var(--color-border);
-  box-shadow: -12px 0 30px rgba(0, 0, 0, 0.25);
-  z-index: 41;
-  animation: toolcalls-slide 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  z-index: 5;
+  animation: toolcalls-slide 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 @keyframes toolcalls-slide {
-  from { transform: translateX(100%); }
-  to { transform: translateX(0); }
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .toolcalls__head {

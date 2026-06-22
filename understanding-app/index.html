@@ -59,6 +59,7 @@
     border-radius: 7px; padding: 4px 8px; font-size: 11px; cursor: pointer; white-space: nowrap;
   }
   .btn.accent { border-color: var(--accent); color: var(--accent); }
+  .btn.on { background: var(--accent); border-color: var(--accent); color: #0b0e14; }
   .btn.flash { animation: flash 1.2s ease; }
   @keyframes flash { 0%,100% { box-shadow: none; } 30% { box-shadow: 0 0 0 3px rgba(124,156,255,.4); } }
   .ctx { font-size: 10px; color: var(--dim); }
@@ -69,15 +70,15 @@
   .step-inline { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--dim); padding: 2px 0; }
   .composer { position: absolute; bottom: 8px; left: 8px; right: 8px; height: 34px; background: var(--panel2); border: 1px solid var(--line); border-radius: 9px; display: flex; align-items: center; padding: 0 10px; font-size: 11px; color: var(--dim); }
 
-  /* ---- the drawer ---- */
+  /* ---- the panel: an overlay over the chat message area ---- */
   .drawer {
-    position: absolute; top: 0; right: 0; bottom: 0; width: 84%;
-    background: var(--panel); border-left: 1px solid var(--accent);
-    transform: translateX(102%); transition: transform .32s cubic-bezier(.2,.8,.2,1);
+    position: absolute; inset: 0;
+    background: var(--panel);
+    opacity: 0; transform: translateY(6px); pointer-events: none;
+    transition: opacity .2s ease, transform .2s cubic-bezier(.2,.8,.2,1);
     display: flex; flex-direction: column; z-index: 5;
-    box-shadow: -12px 0 30px rgba(0,0,0,.5);
   }
-  .drawer.open { transform: translateX(0); }
+  .drawer.open { opacity: 1; transform: translateY(0); pointer-events: auto; }
   .drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 10px; border-bottom: 1px solid var(--line); }
   .drawer-head b { font-size: 12.5px; }
   .drawer-body { overflow: auto; padding: 6px; flex: 1; }
@@ -137,8 +138,8 @@
   <!-- ============ VIEW 1: UI ============ -->
   <section class="view on" data-v="ui">
     <div class="card">
-      <h2>A slide-in drawer, opened from the chat toolbar</h2>
-      <p class="muted">The new <span class="pill new">Tool calls</span> button sits in the top <code>chat__bar</code>, next to <i>Conversations / Model / New</i>. Tap it to slide a panel over the transcript. Try it:</p>
+      <h2>An overlay over the chat, toggled from the toolbar</h2>
+      <p class="muted">The new <span class="pill new">Tool calls</span> button sits in the top <code>chat__bar</code>, next to <i>Conversations / Model / New</i>. Tap it to cover the chat message area with the tool-call list; tap it again to flip back to the chat. Try it:</p>
       <div class="stage">
         <div class="phone" id="phone">
           <div class="scopes">
@@ -174,7 +175,7 @@
         </div>
 
         <div class="controls">
-          <h3>What the drawer is</h3>
+          <h3>What the panel is</h3>
           <ul class="tight muted">
             <li>One <b>chronological list</b> of every tool call in this conversation &mdash; not split across message bubbles.</li>
             <li>Each row: <span class="ico ok">&#10003;</span>/<span class="ico err">&#10007;</span>/<span class="ico run">&#9679;</span> status, <b>tool name</b>, <code>input summary</code>, and time.</li>
@@ -182,9 +183,10 @@
             <li>Each row is tagged by source: <span class="src live">live</span> (streaming now) or <span class="src jsonl">jsonl</span> (rebuilt from the transcript).</li>
           </ul>
           <div class="note">Reuses the existing tool-event shape + <code>ActivitySteps</code> row look &mdash; no new visual language invented.</div>
-          <h3>Why a drawer, not a route or new tab</h3>
+          <h3>Why an in-place overlay, not a route or new tab</h3>
           <ul class="tight muted">
-            <li>It's a <b>companion to the live chat</b>, so it overlays in place &mdash; you keep your scroll position in the transcript.</li>
+            <li>It's a <b>companion to the live chat</b>, so it covers the chat area in place and the <b>same toolbar button toggles back</b> &mdash; one control, no navigation.</li>
+            <li>The toolbar + composer stay put; only the message section swaps, so returning to the chat is one tap and your context is right there.</li>
             <li>It belongs to the <b>active conversation</b> only (v1) &mdash; no global dashboard, so it doesn't need its own page.</li>
           </ul>
         </div>
@@ -309,11 +311,16 @@
     tc.classList.toggle('open');
   });
 
-  // --- open / close drawer ---
+  // --- toggle the overlay (same button flips it on/off, like the real UI) ---
   const drawer = document.getElementById('drawer');
   const tcBtn = document.getElementById('tcBtn');
-  tcBtn.addEventListener('click', () => { drawer.classList.add('open'); tcBtn.classList.remove('flash'); });
-  document.getElementById('closeDrawer').addEventListener('click', () => drawer.classList.remove('open'));
+  function setOpen(on) {
+    drawer.classList.toggle('open', on);
+    tcBtn.classList.toggle('on', on);
+    if (on) tcBtn.classList.remove('flash');
+  }
+  tcBtn.addEventListener('click', () => setOpen(!drawer.classList.contains('open')));
+  document.getElementById('closeDrawer').addEventListener('click', () => setOpen(false));
   setTimeout(() => tcBtn.classList.add('flash'), 600);
 
   // --- mode toggle ---

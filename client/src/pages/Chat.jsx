@@ -209,10 +209,11 @@ export default function Chat({ chat: injected, embedded = false, stashTabId }) {
         {!embedded && showToolCalls && (
           <button
             type="button"
-            className="chat__tools"
-            onClick={() => setToolsOpen(true)}
+            className={`chat__tools${toolsOpen ? ' chat__tools--on' : ''}`}
+            onClick={() => setToolsOpen((v) => !v)}
             title={t('chat.toolCalls')}
             aria-label={t('chat.toolCalls')}
+            aria-pressed={toolsOpen}
           >
             {t('chat.toolCalls')}
           </button>
@@ -249,23 +250,31 @@ export default function Chat({ chat: injected, embedded = false, stashTabId }) {
         </button>
       )}
 
-      <div className="chat__scroll" ref={scrollRef} onScroll={handleScroll}>
-        {hidden > 0 && (
-          <button type="button" className="chat__earlier" onClick={revealEarlier}>
-            {t('chat.showEarlier')} ({hidden})
-          </button>
+      <div className="chat__body">
+        <div className="chat__scroll" ref={scrollRef} onScroll={handleScroll}>
+          {hidden > 0 && (
+            <button type="button" className="chat__earlier" onClick={revealEarlier}>
+              {t('chat.showEarlier')} ({hidden})
+            </button>
+          )}
+          {messages.slice(start).map((m, i) => {
+            const key = start + i; // absolute index — stable as the window slides
+            return (
+              <div key={key} className="turn">
+                {m.role === 'assistant' && m.steps?.length > 0 && <ActivitySteps steps={m.steps} />}
+                {(m.text || m.role === 'user') && <MessageBubble role={m.role} text={m.text} />}
+              </div>
+            );
+          })}
+          {awaitingFirst && <ThinkingIndicator />}
+          {error && <ErrorBanner message={error} />}
+        </div>
+
+        {/* Tool-call history overlays the chat message area (not a separate
+            drawer); the same toolbar button toggles it back to the chat. */}
+        {!embedded && showToolCalls && (
+          <ToolCallsPanel open={toolsOpen} onClose={() => setToolsOpen(false)} />
         )}
-        {messages.slice(start).map((m, i) => {
-          const key = start + i; // absolute index — stable as the window slides
-          return (
-            <div key={key} className="turn">
-              {m.role === 'assistant' && m.steps?.length > 0 && <ActivitySteps steps={m.steps} />}
-              {(m.text || m.role === 'user') && <MessageBubble role={m.role} text={m.text} />}
-            </div>
-          );
-        })}
-        {awaitingFirst && <ThinkingIndicator />}
-        {error && <ErrorBanner message={error} />}
       </div>
 
       <ChatInput
@@ -290,10 +299,6 @@ export default function Chat({ chat: injected, embedded = false, stashTabId }) {
         onNew={startNewConversation}
         onClose={() => setPickerOpen(false)}
       />
-
-      {!embedded && showToolCalls && (
-        <ToolCallsPanel open={toolsOpen} onClose={() => setToolsOpen(false)} />
-      )}
     </div>
   );
 }
