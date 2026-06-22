@@ -1087,6 +1087,76 @@
   color: #dc2626;
 }
 
+/* Discover local apps (openspec discover-local-apps): button + result list, chat-
+   context furniture below the lanes, styled like the git action row. */
+.phone__discover {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.phone__discover-btn {
+  align-self: flex-start;
+  padding: 3px 9px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-soft);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.phone__discover-btn:hover:not(:disabled) {
+  color: var(--color-text);
+  border-color: var(--color-accent);
+}
+
+.phone__discover-btn:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.phone__discover-msg {
+  font-size: 11.5px;
+  color: var(--color-text-soft);
+}
+
+.phone__discover-msg--err {
+  color: #dc2626;
+}
+
+.phone__discover-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.phone__discover-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11.5px;
+}
+
+.phone__discover-name {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.phone__discover-port {
+  font-family: var(--font-mono, monospace);
+  color: var(--color-accent);
+}
+
 /* Per-dock git refresh — re-fetches this agent's git status (hits origin). */
 .phone__git-refresh {
   flex: 0 0 auto;

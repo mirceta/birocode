@@ -19,6 +19,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Reused, shared Claude gateway client (openspec change discover-local-apps).
+         Same client web-flow-autodev uses; requires the prg checkout at this sibling
+         path and the ClaudeMonitor gateway running on :5123. See
+         openspec/changes/discover-local-apps/design.md (D2). -->
+    <ProjectReference Include="..\..\prg\agentic-workflows\ClaudeMonitor.Client\ClaudeMonitor.Client.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Update="appsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
