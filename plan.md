@@ -44,28 +44,10 @@
 
 ## Active feature plans
 
-- [Global apps — "Global exposure, done right" homepage topic](plans/global-apps-exposure.md)
-  — the homepage explainer teaches **Local** exposure (the behind-login Local tab) but has
-  **no companion for the public surface**. Add a parallel topic teaching **global** exposure:
-  getting a product onto the **public Homepage `/`** (no login) as the App product on Preview
-  Port **`:5200`**, fronted by off-box **IIS/ARR** at `/preview/`. Global is a *different,
-  trickier* contract than local — it crosses a public reverse proxy and adds traps local
-  doesn't have (absolute-URL escaping, body-less-POST `411`, ARR's GET output-cache
-  staleness). Mirror `exposure-topic.js`: a new canonical `docs/global-exposure-convention.md`,
-  `homepage/assets/global-data.js` + `global-topic.js`, **reusing** the four data-agnostic viz
-  variants with a global `ctx`. **Built + headless-verified** (parses, registers, data
-  consistent, assets serve 200); browser-render still to eyeball. On
-  `feature/global-apps-exposure`.
-- [Global-exposure example — a real product that teaches public exposure](plans/global-exposure-example.md)
-  — the companion to the topic above. The global *explainer* lived inside `homepage/`, which is
-  itself a **local** product (`:5305`, behind login) — so the public contract was taught by an
-  exemplar that doesn't practice it. Local has a live specimen (`homepage/`); global had none.
-  Adds **`global-example/`**, the public twin of `homepage/`: a build-less, dependency-free
-  product that binds `0.0.0.0:5200`, is reached through `/preview/`, and **practices all five
-  rules** (live body-ful POST + cache-busted GET over a tiny counter API) instead of only
-  explaining them — hosting its own paste-prompt like `homepage/` does for local. **Built +
-  server-verified** (every rule probe passes); browser-render + the real public hop still to
-  eyeball. On `feature/global-apps-exposure`.
+> Global-exposure planning (the "Global exposure, done right" homepage topic **and** the
+> `global-example/` worked example) **moved to OpenSpec** — see
+> `openspec/changes/add-global-exposure/` (`openspec list`). On `feature/global-apps-exposure`.
+
 - [Portable deploy — one committed `swap.ps1` any agent can run](plans/portable-deploy.md)
   — deploying the Harness to live `:5099` only worked on one machine because the deploy
   script was **local + untracked** (`.selfdev-build/deploy.ps1`, hardcoded paths) and
