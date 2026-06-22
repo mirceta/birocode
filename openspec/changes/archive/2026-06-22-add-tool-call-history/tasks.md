@@ -48,14 +48,26 @@
 
 - [x] 6.1 Backend builds clean; pairing logic validated against a real transcript
       (2560 tool calls, 2535 paired, 25 still-running → `ok: null`). Frontend builds clean.
-- [ ] 6.2 Browser: with a live turn, open the panel and watch calls appear; reload and
+- [x] 6.2 Browser: with a live turn, open the panel and watch calls appear; reload and
       reattach and confirm the history is still complete; rows expand to input/output;
-      0 console errors. *(needs a deploy to live — pending operator go-ahead.)*
-- [ ] 6.3 Confirm the toggle/panel is hidden in Basic mode and shown in Advanced mode.
-      *(needs a deploy to live — pending operator go-ahead.)*
+      0 console errors. *(operator confirmed live: "it works".)*
+- [x] 6.3 Confirm the toggle/panel is hidden in Basic mode and shown in Advanced mode.
+      *(operator confirmed live.)*
 
 ## 7. Ship
 
-- [ ] 7.1 Build, deploy to live `:5099` via `swap.ps1` (origin/main guard), browser-verify.
-- [ ] 7.2 Archive: fold the delta into the `tool-call-history` baseline; merge
-      `feature/tool-call-history` into `main`.
+- [x] 7.1 Build, deploy to live `:5099` via `swap.ps1` (origin/main guard), browser-verify.
+      Deployed across three iterations (endpoint+drawer, overlay-toggle, dashboard docks);
+      each health-checked 200 with the served asset matching the fresh build.
+- [x] 7.2 Archive: delta folded into the `tool-call-history` baseline
+      (`openspec/specs/tool-call-history/spec.md`); change moved to
+      `changes/archive/2026-06-22-add-tool-call-history`; `feature/tool-call-history`
+      merged into `main`.
+
+## Post-archive refinements (operator follow-ups, same change)
+
+- [x] R1 Panel renders as an in-place overlay over the chat message area, toggled by the
+      same toolbar button (was a right-hand slide-in drawer).
+- [x] R2 The overlay is also available in each Agent Dashboard dock, bound to that dock's
+      own agent (`useChatFor` exposes `liveToolCalls`/`activeRepoId`; `ToolCallsPanel`
+      takes them as props).
