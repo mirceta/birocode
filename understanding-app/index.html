@@ -3,308 +3,374 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>How chat works — interactive map</title>
+<title>Folding the prose into the map — a design view</title>
 <style>
+  /* Build-less, self-contained, relative-URL-only. No CDN, no node_modules.
+     This is the rolling understanding-app: the LATEST explanation. It captured the
+     design question "should the two prose sections fold into the interactive map?"
+     — and that fold-in is now SHIPPED. The live 'How chat works' tab is native React
+     (client/src/components/autopilot/ChatMap.jsx + ChatGraph.jsx + chatArchitectureData.js,
+     bundled cytoscape — NOT an iframe of a frozen snapshot; client/public/chat-architecture/
+     no longer exists). §2/§3 are now two overlays on the System-map view. This page is kept
+     as the rationale record, updated to past tense. */
   :root{
-    --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --line:#2b3340;
-    --ink:#e6edf3; --dim:#9aa7b4; --accent:#58a6ff; --accent2:#bc8cff;
-    --good:#3fb950; --warn:#d29922; --bad:#f85149; --loop:#39c5cf;
-    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; --radius:12px;
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --ink:#e6edf3; --dim:#8b949e;
+    --line:#30363d; --accent:#58a6ff; --convo:#d2a8ff; --run:#7ee787; --sess:#ffa657;
+    --wiped:#f85149; --survive:#3fb950; --warn:#e3b341;
+    --shadow:0 6px 22px rgba(0,0,0,.45);
+    font-synthesis:none;
   }
   *{box-sizing:border-box}
-  html,body{height:100%}
-  body{margin:0;background:
-      radial-gradient(1200px 600px at 80% -10%,rgba(88,166,255,.10),transparent),
-      radial-gradient(900px 500px at -10% 110%,rgba(57,197,207,.07),transparent),
-      var(--bg);
-    color:var(--ink);font:14px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
-  .wrap{max-width:1120px;margin:0 auto;padding:24px 20px 90px}
-  /* graph tabs go full-bleed so the canvas uses the whole width */
-  .tabpanel.wide{max-width:none}
-  body.graphtab .wrap{max-width:none}
-  h1{margin:0 0 6px;font-size:25px}
-  .lede{margin:0;color:var(--dim);max-width:880px}
-  .pill{display:inline-block;font-size:11px;color:var(--dim);border:1px solid var(--line);
-    border-radius:999px;padding:2px 9px;margin:10px 6px 0 0}
-  .pill b{color:var(--accent)}
-  code{font-family:var(--mono);font-size:12.5px;background:#0e141d;border:1px solid var(--line);
-    border-radius:5px;padding:1px 5px;color:#cdd9e5}
-  h2{font-size:13px;text-transform:uppercase;letter-spacing:.13em;color:var(--dim);
-    margin:34px 0 14px;font-weight:600;border-bottom:1px solid var(--line);padding-bottom:7px}
-  p.note{color:var(--dim);max-width:880px}
-  b.you{color:var(--accent)} b.cls{color:var(--accent2)} b.lp{color:var(--loop)}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.5}
+  code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86em;
+    background:#0b1622;border:1px solid var(--line);border-radius:5px;padding:.05em .35em;color:#9fd0ff}
+  .wrap{max-width:1040px;margin:0 auto;padding:22px 18px 80px}
+  header.hd{margin-bottom:14px}
+  .hd h1{font-size:1.42rem;margin:.1em 0 .25em;letter-spacing:.2px}
+  .hd p{color:var(--dim);margin:.2em 0;max-width:78ch}
+  .tag{display:inline-block;font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;
+    color:#0d1117;background:linear-gradient(90deg,#58a6ff,#7ee787);padding:.2em .6em;border-radius:99px;font-weight:700}
 
-  /* ---- tab nav ---- */
-  nav{position:sticky;top:0;z-index:30;background:rgba(13,17,23,.86);backdrop-filter:blur(8px);
-    border-bottom:1px solid var(--line);margin:0 -20px 0;padding:0 20px}
-  .tabs{max-width:1120px;margin:0 auto;display:flex;gap:4px;flex-wrap:wrap;overflow-x:auto}
-  body.graphtab .tabs{max-width:none}
-  .tabbtn{font:inherit;font-size:13px;cursor:pointer;background:transparent;color:var(--dim);
-    border:0;border-bottom:2px solid transparent;padding:11px 14px;white-space:nowrap}
-  .tabbtn:hover{color:var(--ink)}
-  .tabbtn.active{color:var(--ink);border-bottom-color:var(--accent)}
-  .tabpanel{display:none}
-  .tabpanel.active{display:block}
+  /* tabs */
+  nav.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:18px 0 16px;border-bottom:1px solid var(--line)}
+  .tabbtn{appearance:none;background:transparent;color:var(--dim);border:0;border-bottom:2px solid transparent;
+    padding:9px 14px;font-size:.95rem;cursor:pointer;border-radius:7px 7px 0 0;font-weight:600}
+  .tabbtn:hover{color:var(--ink);background:#11161e}
+  .tabbtn.active{color:var(--ink);border-bottom-color:var(--accent);background:#11161e}
+  .panel{display:none;animation:fade .25s ease}
+  .panel.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 
-  /* ---- graph + detail ---- */
-  .graphrow{display:grid;grid-template-columns:1fr 320px;gap:14px;align-items:start}
-  @media(max-width:820px){.graphrow{grid-template-columns:1fr}}
-  .cy{height:78vh;min-height:520px;border:1px solid var(--line);border-radius:var(--radius);background:
-      radial-gradient(900px 480px at 60% -20%,rgba(88,166,255,.05),transparent),#0b0f16;}
-  #cy-life,#cy-sse{height:72vh;min-height:460px}
-  .detail{border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);
-    padding:14px;min-height:160px;position:sticky;top:64px}
-  .detail .md-empty{color:var(--dim);font-size:12.5px;line-height:1.6}
-  .detail h4{margin:6px 0 4px;font-size:15px}
-  .detail .md-grp{font-size:10px;text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:var(--dim)}
-  .detail .md-grp[data-grp="client"]{color:var(--accent)}
-  .detail .md-grp[data-grp="backend"]{color:var(--accent2)}
-  .detail .md-grp[data-grp="store"]{color:var(--good)}
-  .detail .md-grp[data-grp="cli"]{color:var(--warn)}
-  .detail .md-grp[data-grp="auto"]{color:var(--loop)}
-  .detail .md-role{font-size:12.5px;color:var(--ink);font-weight:600;margin-bottom:6px}
-  .detail .md-desc{font-size:12.5px;color:var(--dim);line-height:1.55}
-  .detail .md-src{margin-top:9px;font-size:11.5px;color:var(--dim)}
-  .legend{display:flex;gap:14px;flex-wrap:wrap;margin:12px 0 0;font-size:11.5px;color:var(--dim)}
-  .legend .sw{display:inline-block;width:11px;height:11px;border-radius:3px;border:1.6px solid;vertical-align:-1px;margin-right:5px;background:#0e141d}
-  .legend .c-client{border-color:var(--accent)} .legend .c-backend{border-color:var(--accent2)}
-  .legend .c-store{border-color:var(--good)} .legend .c-cli{border-color:var(--warn)}
-  .legend .c-auto{border-color:var(--loop)} .legend .c-actor{border-color:var(--actor,#7d8db0);border-radius:50%}
+  h2.sec{font-size:1.1rem;margin:.2em 0 .5em}
+  p.lead{color:var(--dim);max-width:80ch}
 
-  /* ---- driver simulator ---- */
-  .sim{border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:16px}
-  .drivers{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px}
-  .driver{flex:1 1 220px;border:1px solid var(--line);border-radius:10px;background:#0e141d;padding:12px;display:flex;flex-direction:column;gap:8px;transition:.18s}
-  .driver h4{margin:0;font-size:13px;display:flex;align-items:center;gap:7px}
-  .driver .dot{width:9px;height:9px;border-radius:50%}
-  .driver.you .dot{background:var(--accent)} .driver.cls .dot{background:var(--accent2)} .driver.lp .dot{background:var(--loop)}
-  .driver p{margin:0;font-size:12px;color:var(--dim);flex:1}
-  .driver .call{font-family:var(--mono);font-size:11px;color:#8aa0b6}
-  .driver button{font:inherit;font-size:12.5px;cursor:pointer;border-radius:7px;padding:7px 10px;border:1px solid var(--line);background:#1b2230;color:var(--ink);transition:.15s}
-  .driver.you button{border-color:#2b4a6b} .driver.cls button{border-color:#4a3a6b} .driver.lp button{border-color:#2a5a5e}
-  .driver button:hover:not(:disabled){filter:brightness(1.3)}
-  .driver button:disabled{opacity:.45;cursor:not-allowed}
-  .driver.win{box-shadow:0 0 0 2px currentColor inset}
-  .driver.you.win{color:var(--accent)} .driver.cls.win{color:var(--accent2)} .driver.lp.win{color:var(--loop)}
-  .slot{margin-top:6px;border:1px dashed var(--line);border-radius:10px;background:#0b0f16;padding:14px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
-  .slotbox{flex:1 1 260px;min-height:64px;border:2px solid var(--line);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:3px;transition:.25s;background:#0e141d;text-align:center;padding:10px}
-  .slotbox .lab{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim)}
-  .slotbox .who{font-size:15px;font-weight:600}
-  .slotbox.busy{border-color:currentColor}
-  .slotbox.idle .who{color:var(--dim)}
-  .ask{flex:0 0 200px;border:1px solid #2f5132;border-radius:9px;background:#0f1a12;padding:10px;font-size:12px;color:var(--dim)}
-  .ask b{color:var(--good)}
-  .log{margin-top:12px;border:1px solid var(--line);border-radius:9px;background:#0b0f16;font-family:var(--mono);font-size:12px;max-height:160px;overflow:auto}
-  .log .ln{padding:5px 11px;border-bottom:1px solid #161c26;white-space:pre-wrap}
-  .log .ln:last-child{border-bottom:0}
-  .log .ok{color:var(--good)} .log .rej{color:var(--bad)} .log .ev{color:#8aa0b6} .log .sys{color:var(--dim)}
-  .ctl{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
-  .ctl button{font:inherit;font-size:12.5px;cursor:pointer;border-radius:7px;padding:6px 11px;border:1px solid var(--line);background:#161b22;color:var(--ink)}
-  .ctl button:hover{filter:brightness(1.25)}
-  .ctl .gate{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dim)}
-  .switch{position:relative;width:38px;height:21px;border-radius:999px;background:#30363d;cursor:pointer;transition:.2s;border:1px solid var(--line)}
-  .switch.on{background:#1f6f37}
-  .switch i{position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:#cdd9e5;transition:.2s}
-  .switch.on i{left:19px}
+  /* generic cards */
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:var(--shadow)}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  @media(max-width:760px){.grid3{grid-template-columns:1fr}}
 
-  /* ---- overview cards ---- */
-  .ov{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:13px;margin-top:6px}
-  .ovcard{border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);padding:14px}
-  .ovcard h3{margin:0 0 6px;font-size:14px}
-  .ovcard p{margin:0;color:var(--dim);font-size:12.5px}
-  .ovcard.a{border-left:3px solid var(--accent)} .ovcard.b{border-left:3px solid var(--accent2)}
-  .ovcard.c{border-left:3px solid var(--loop)} .ovcard.d{border-left:3px solid var(--good)}
+  /* ---- the "three idioms" exhibit ---- */
+  .idiom{border:1px dashed var(--line);border-radius:10px;padding:12px;background:var(--panel2);position:relative}
+  .idiom h3{margin:.1em 0 .5em;font-size:.95rem}
+  .idiom .kind{position:absolute;top:8px;right:10px;font-size:.66rem;color:var(--dim);letter-spacing:.1em;text-transform:uppercase}
+  .mini-map{display:flex;gap:6px;align-items:center;justify-content:center;height:64px;color:var(--dim);font-size:.8rem;
+    border:1px solid var(--line);border-radius:8px;background:#0b1018}
+  .mini-map .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent)}
+  .pillrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:center;height:64px}
+  .pill{font-size:.74rem;border-radius:99px;padding:.25em .6em;border:1px solid var(--line)}
+  .pill.c{color:var(--convo);border-color:var(--convo)}
+  .pill.r{color:var(--run);border-color:var(--run)}
+  .pill.s{color:var(--sess);border-color:var(--sess)}
+  .cellrow{display:flex;gap:5px;height:64px}
+  .cellrow .c{flex:1;border-radius:6px;border:1px solid var(--line);font-size:.62rem;display:flex;align-items:center;justify-content:center;text-align:center;padding:2px}
+  .cellrow .c.red{border-color:var(--wiped);color:var(--wiped)}
+  .cellrow .c.grn{border-color:var(--survive);color:var(--survive)}
+  .verdict-line{margin-top:12px;padding:10px 12px;border-left:3px solid var(--warn);background:#1d1a10;border-radius:0 8px 8px 0;color:#f2e3b8}
 
-  /* ---- table ---- */
-  table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
-  th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
-  th{color:var(--dim);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.06em}
-  td code{font-size:11.5px}
-  .foot{margin-top:42px;color:var(--dim);font-size:12px;border-top:1px solid var(--line);padding-top:14px}
-  .foot code{font-size:11.5px}
+  /* ---- the shared "where it runs" diagram ---- */
+  .tiers{display:grid;grid-template-columns:1.15fr 1.3fr .9fr .9fr;gap:10px;margin-top:6px}
+  @media(max-width:820px){.tiers{grid-template-columns:1fr 1fr}}
+  .tier{border:1px solid var(--line);border-radius:12px;padding:10px;background:var(--panel2);min-height:150px}
+  .tier h4{margin:0 0 8px;font-size:.74rem;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);display:flex;justify-content:space-between}
+  .tier .lbl{font-size:.62rem;color:#6b7686}
+  .node{border:1px solid var(--line);border-radius:8px;padding:7px 9px;margin:7px 0;background:#0c1320;
+    transition:all .35s ease;cursor:pointer;position:relative}
+  .node b{font-size:.84rem}
+  .node small{display:block;color:var(--dim);font-size:.72rem;margin-top:2px}
+  .node:hover{border-color:var(--accent)}
+  .node .badge{position:absolute;top:6px;right:7px;font-size:.6rem;font-weight:700;opacity:0;transition:opacity .35s;border-radius:5px;padding:.05em .35em}
+
+  /* refresh overlay states */
+  body.flash .node[data-fate="wiped"]{border-color:var(--wiped);background:#2a1213;box-shadow:0 0 0 1px var(--wiped) inset}
+  body.flash .node[data-fate="wiped"] b{color:#ff9a93}
+  body.flash .node[data-fate="survive"]{border-color:var(--survive);background:#0f2417}
+  body.flash .node[data-fate="survive"] b{color:#9af0b6}
+  body.flash .node[data-fate="wiped"] .badge{opacity:1;background:#5a1b1b;color:#ffb4ad}
+  body.flash .node[data-fate="survive"] .badge{opacity:1;background:#173d27;color:#9af0b6}
+  body.flash .tier[data-tier="device"]{box-shadow:0 0 0 1px var(--wiped) inset}
+  /* the subtlety: localStorage is in the device box but SURVIVES */
+  body.flash .node[data-twist="1"]{animation:pulse 1.1s ease-in-out infinite}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 1px var(--survive) inset}50%{box-shadow:0 0 14px 1px var(--survive)}}
+
+  /* section-mapping highlight (binding path) */
+  body.showbind .node[data-bind]{opacity:.28}
+  body.showbind .node[data-bind="1"]{opacity:1;border-color:var(--convo);box-shadow:0 0 12px rgba(210,168,255,.4)}
+  body.showbind .node[data-bind="2"]{opacity:1;border-color:var(--run);box-shadow:0 0 12px rgba(126,231,135,.4)}
+  body.showbind .node[data-bind="3"]{opacity:1;border-color:var(--sess);box-shadow:0 0 12px rgba(255,166,87,.4)}
+
+  .controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0}
+  button.act{appearance:none;cursor:pointer;border-radius:9px;border:1px solid var(--line);background:#1b2330;color:var(--ink);
+    padding:9px 15px;font-size:.9rem;font-weight:650}
+  button.act:hover{border-color:var(--accent)}
+  button.act.on{background:linear-gradient(90deg,#21314a,#15233a);border-color:var(--accent);color:#cfe6ff}
+  .hint{color:var(--dim);font-size:.85rem}
+
+  /* reconcile stepper */
+  .recon{margin-top:16px;border-top:1px dashed var(--line);padding-top:14px}
+  .steps{display:flex;flex-direction:column;gap:8px;margin:10px 0}
+  .step{display:flex;gap:10px;align-items:flex-start;opacity:.34;transition:opacity .3s,transform .3s;transform:translateX(-4px)}
+  .step.on{opacity:1;transform:none}
+  .step .n{flex:none;width:24px;height:24px;border-radius:50%;background:#15233a;border:1px solid var(--accent);
+    display:flex;align-items:center;justify-content:center;font-size:.8rem;color:#cfe6ff;font-weight:700}
+  .step.on .n{background:var(--accent);color:#0d1117}
+  .step div small{color:var(--dim)}
+  .edge{margin-top:8px;font-size:.84rem;color:#f2e3b8;background:#1d1a10;border-left:3px solid var(--warn);border-radius:0 8px 8px 0;padding:8px 11px}
+
+  ul.tight{margin:.4em 0;padding-left:1.2em}
+  ul.tight li{margin:.3em 0}
+  .twocol{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:760px){.twocol{grid-template-columns:1fr}}
+  .keepbox{border:1px solid var(--survive);border-radius:10px;padding:12px;background:#0f1c14}
+  .keepbox h4{margin:.1em 0 .4em;color:#9af0b6}
+  .costbox{border:1px solid var(--warn);border-radius:10px;padding:12px;background:#1d1a10}
+  .costbox h4{margin:.1em 0 .4em;color:#f2e3b8}
+  .foot{margin-top:26px;color:#6b7686;font-size:.8rem;border-top:1px solid var(--line);padding-top:12px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.78rem;color:var(--dim);margin:6px 0 2px}
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .sw{width:11px;height:11px;border-radius:3px;display:inline-block}
 </style>
 </head>
 <body>
-<nav>
-  <div class="tabs" role="tablist">
-    <button class="tabbtn" data-tab="overview">Overview</button>
-    <button class="tabbtn" data-tab="map">System map</button>
-    <button class="tabbtn" data-tab="drive">Drive a turn</button>
-    <button class="tabbtn" data-tab="life">Life of a turn</button>
-    <button class="tabbtn" data-tab="sse">SSE contract</button>
-  </div>
-</nav>
-
 <div class="wrap">
+  <header class="hd">
+    <span class="tag">✅ shipped · how chat works tab</span>
+    <h1>The two prose sections folded into the interactive map</h1>
+    <p>The “How chat works” tab used to be <b>one rich cytoscape map</b> followed by <b>two
+    hand-built prose sections</b>. They are now <b>two overlays on the System-map view</b>
+    (“Show the binding” for §2, “⟳ Refresh!” for §3) — one visual grammar, the map as the single
+    source. This page records why, and how. It worked out because the map already contained
+    every node those sections talked about, so it was wiring, not modelling.</p>
+    <div class="verdict-line" style="margin-top:10px">Done in native React —
+    <code>ChatMap.jsx</code> / <code>ChatGraph.jsx</code> (overlay layer) +
+    <code>chatArchitectureData.js</code> (<code>bind</code>/<code>fate</code>/<code>twist</code>
+    annotations). No frozen snapshot to keep in sync.</div>
+  </header>
 
-  <!-- ============ OVERVIEW ============ -->
-  <div class="tabpanel" id="tab-overview">
-    <h1>How chat works — and who can drive a turn</h1>
-    <p class="lede">
-      A chat in Claude Web is not owned by your browser tab — it's a backend-owned
-      <b>Run</b>. That one fact is what lets your phone disconnect mid-turn, and it's
-      also what lets the <b class="cls">autopilot</b> drive an agent: the autopilot is
-      not a separate chat path, it <em>reuses the same machinery you do</em>. These tabs
-      map it out interactively; everything is drawn from the real code (cited at the bottom).
-    </p>
-    <span class="pill">backend: <b>Kestrel :5099</b></span>
-    <span class="pill">one writer per <b>(repo · lane)</b></span>
-    <span class="pill"><b>seq</b> monotonic per repo across runs</span>
+  <nav class="tabs" id="tabs">
+    <button class="tabbtn active" data-tab="problem">1 · The problem</button>
+    <button class="tabbtn" data-tab="knows">2 · The map already knows</button>
+    <button class="tabbtn" data-tab="refresh">3 · Refresh, visualized</button>
+    <button class="tabbtn" data-tab="verdict">4 · Verdict</button>
+  </nav>
 
-    <h2>Start here</h2>
-    <div class="ov">
-      <div class="ovcard a"><h3>🗺️ System map</h3><p>The whole journey of a turn — your device → backend → CLI + disk — as one interactive graph. Hover any box to isolate its connections; click for detail.</p></div>
-      <div class="ovcard b"><h3>🎛️ Drive a turn</h3><p>A live simulator of the <b>one writer slot, three drivers</b> rule. Open the operator gate and watch you, the classifier and loop mode contend for the same slot.</p></div>
-      <div class="ovcard c"><h3>🔁 Life of a turn</h3><p>The five stages of a single turn, the reject branch, and the loop-back that makes the autopilot possible.</p></div>
-      <div class="ovcard d"><h3>📡 SSE contract</h3><p>How raw CLI <code>stream-json</code> is reduced to seven stable event shapes the client understands.</p></div>
-    </div>
-
-    <h2>The one idea everything hangs on</h2>
-    <p class="note">A turn runs on a background <code>Task.Run</code> tied to the
-      RunSession's own <code>Cts</code> token — <b>never</b> the HTTP request's
-      <code>RequestAborted</code>. Lock your phone and the SSE attachment drops; the CLI
-      keeps working and billing, and you reattach later via <code>stream?after=N</code>.
-      Because every writer — you, the classifier, loop mode — goes through the same
-      <code>TryBeginRun</code>, the autopilot can never collide with you on an agent.</p>
-  </div>
-
-  <!-- ============ SYSTEM MAP ============ -->
-  <div class="tabpanel" id="tab-map">
-    <h2>System map — one chat turn, end to end</h2>
-    <p class="note">Read it left to right: <b class="you">your device</b> → the
-      <b class="cls">backend on :5099</b> → the <b>CLI + disk</b>. Each <b>box is a place
-      something runs</b> — the solid tier boxes are separate processes/devices; the dashed
-      boxes inside the backend are its four components. Notice the
-      <b class="lp">autopilot</b> sits <i>inside the backend box</i> too: it is just
-      another component calling the same <code>TryBeginRun</code>, with no private path to
-      the CLI.</p>
-    <div class="graphrow">
-      <div class="cy" id="cy-map"></div>
-      <div class="detail" id="map-detail"></div>
-    </div>
-    <div class="legend">
-      <span><span class="sw c-client"></span>client / device</span>
-      <span><span class="sw c-backend"></span>backend :5099</span>
-      <span><span class="sw c-store"></span>persistent (disk)</span>
-      <span><span class="sw c-cli"></span>CLI process</span>
-      <span><span class="sw c-auto"></span>autopilot</span>
-      <span><span class="sw c-actor"></span>actor</span>
-      <span>⬡ process · 🛢 barrel = store · ▢ dashed = slot</span>
-      <span>▭ <b>boxes = where it runs</b> — solid tier (device · backend · CLI · disk); dashed = a backend component</span>
-    </div>
-  </div>
-
-  <!-- ============ DRIVE A TURN ============ -->
-  <div class="tabpanel" id="tab-drive">
-    <h2>Who can drive a turn — one slot, three drivers</h2>
-    <p class="note">
-      Every turn must first claim the repo's <code>builder</code> slot via
-      <code>RunSessionService.TryBeginRun(repoId,&nbsp;"builder")</code>. Three different
-      drivers call that same method — so they <b>can never run concurrently on one
-      agent</b>. First caller wins; the rest are turned away. Open the operator gate,
-      then press each driver's button (try two fast) to see the single-flight in action.
-    </p>
-    <div class="sim">
-      <div class="drivers">
-        <div class="driver you" id="d-you">
-          <h4><span class="dot"></span> You · the phone</h4>
-          <p>A human send from the chat box.</p>
-          <div class="call">POST /api/chat</div>
-          <button data-driver="you">Send a turn</button>
-        </div>
-        <div class="driver cls" id="d-cls">
-          <h4><span class="dot"></span> Classifier · auto-advance</h4>
-          <p>Reads the last reply, picks a routine prompt, sends only if confident, non-risky &amp; gated.</p>
-          <div class="call">Tick → TrySend → TryBeginRun</div>
-          <button data-driver="cls">Auto-advance</button>
-        </div>
-        <div class="driver lp" id="d-lp">
-          <h4><span class="dot"></span> Loop mode · resend</h4>
-          <p>Deterministically resends one fixed prompt each turn until a sentinel / cap / deny-list stop.</p>
-          <div class="call">Tick → TrySendLoop → TryBeginRun</div>
-          <button data-driver="lp">Resend (loop)</button>
-        </div>
+  <!-- ───────────────── TAB 1 ───────────────── -->
+  <section class="panel active" id="tab-problem">
+    <h2 class="sec">One topic, three visual idioms</h2>
+    <p class="lead">That mismatch is the real smell — not that the content is wrong, but that the
+    eye has to re-learn the visual language three times on a single tab.</p>
+    <div class="grid3" style="margin-top:12px">
+      <div class="idiom">
+        <span class="kind">§1 · cytoscape</span>
+        <h3>The interactive map</h3>
+        <div class="mini-map"><span class="dot"></span>—<span class="dot"></span>—<span class="dot"></span></div>
+        <p class="hint" style="margin:.6em 0 0">Live graph: nested “where it runs” boxes, hover-to-trace, click-to-read.</p>
       </div>
-      <div class="slot">
-        <div class="slotbox idle" id="slot">
-          <div class="lab">builder slot · this repo</div>
-          <div class="who" id="slotwho">idle — open for one writer</div>
-        </div>
-        <div class="ask">
-          <b>ask lane</b> = a <em>separate</em> slot. The read-only
-          (<code>--permission-mode plan</code>) side conversation runs
-          <b>concurrently</b> — it can't write, so it's safe.
-        </div>
+      <div class="idiom">
+        <span class="kind">§2 · HTML pills</span>
+        <h3>Conversation ↔ repo ↔ run</h3>
+        <div class="pillrow"><span class="pill c">conversation</span><span class="pill r">RunSession</span><span class="pill s">sessionId</span></div>
+        <p class="hint" style="margin:.6em 0 0">Three static pills with arrows — a relationship drawn by hand.</p>
       </div>
-      <div class="ctl">
-        <button id="finish" disabled>▸ Finish current turn</button>
-        <button id="reset">↺ Reset</button>
-        <div class="gate">
-          operator gate
-          <div class="switch" id="gate"><i></i></div>
-          <span id="gatelbl">off</span>
-        </div>
+      <div class="idiom">
+        <span class="kind">§3 · HTML cells</span>
+        <h3>What a refresh does</h3>
+        <div class="cellrow"><div class="c red">wiped</div><div class="c red">wiped</div><div class="c grn">survives</div><div class="c grn">survives</div></div>
+        <p class="hint" style="margin:.6em 0 0">A grid of cells a button turns red/green — a third grammar.</p>
       </div>
-      <div class="log" id="log"></div>
     </div>
-    <p class="note">
-      With the gate <b>off</b> (the default) the autopilot does nothing at all — only you
-      can send. While a turn runs, a second <b class="you">you</b> send gets
-      <b style="color:var(--bad)">409 Conflict</b>; the autopilot drivers simply
-      <b>skip</b>. And <b class="lp">loop mode takes precedence</b>: a repo with an active
-      loop skips classification entirely.
-    </p>
-  </div>
+    <div class="verdict-line">The win you’re sensing isn’t “less text” — it’s <b>coherence</b>:
+    collapse three idioms into one (the map), and the frozen snapshot becomes the single source.</div>
+  </section>
 
-  <!-- ============ LIFE OF A TURN ============ -->
-  <div class="tabpanel" id="tab-life">
-    <h2>The life of one turn</h2>
-    <p class="note">Five stages, one reject branch, and a loop-back. Hover a stage to
-      isolate it; click for the exact code behaviour.</p>
-    <div class="graphrow">
-      <div class="cy" id="cy-life"></div>
-      <div class="detail" id="life-detail"></div>
+  <!-- ───────────────── TAB 2 ───────────────── -->
+  <section class="panel" id="tab-knows">
+    <h2 class="sec">The System map already holds these nodes</h2>
+    <p class="lead">From <code>data.js</code>: the hero view is four nested <b>where-it-runs</b> boxes,
+    and every piece §2 and §3 mention already lives in one of them. So folding in is mostly
+    <i>highlighting</i>, not <i>drawing</i>.</p>
+
+    <div class="controls">
+      <button class="act" id="btn-bind">Show the §2 binding path</button>
+      <span class="hint">conversation → run slot → session, traced through nodes that already exist.</span>
     </div>
-  </div>
 
-  <!-- ============ SSE CONTRACT ============ -->
-  <div class="tabpanel" id="tab-sse">
-    <h2>Raw CLI → the stable SSE contract</h2>
-    <p class="note">The frontend never sees raw CLI internals. <code>CliRunnerService</code>
-      reduces <code>stream-json</code> to seven event shapes (one JSON object per
-      <code>data:</code> line). Hover the reducer to fan out all seven.</p>
-    <div class="graphrow">
-      <div class="cy" id="cy-sse"></div>
-      <div class="detail" id="sse-detail"></div>
+    <div id="diagram-host"></div>
+
+    <p class="hint" style="margin-top:12px">Click any node — its <code>role</code>/<code>desc</code>
+    panel already exists in the real map, so the §2 prose becomes a hover/click trace and the binding
+    is just a colored path. Nothing new to model.</p>
+  </section>
+
+  <!-- ───────────────── TAB 3 ───────────────── -->
+  <section class="panel" id="tab-refresh">
+    <h2 class="sec">§3 is almost the map’s existing thesis</h2>
+    <p class="lead">The map already says it: “everything in the device box is RAM/storage on YOUR device —
+    the turn does not live here.” That <b>is</b> the refresh story. So §3 becomes a <b>toggle overlay</b>
+    on the same diagram, not a separate cell grid.</p>
+
+    <div class="controls">
+      <button class="act" id="btn-flash">⟳ Refresh!</button>
+      <span class="legend">
+        <span><i class="sw" style="background:var(--wiped)"></i> wiped</span>
+        <span><i class="sw" style="background:var(--survive)"></i> survives</span>
+        <span><i class="sw" style="background:var(--warn)"></i> the twist</span>
+      </span>
     </div>
-    <table>
-      <thead><tr><th>SSE event</th><th>From</th><th>Carries</th></tr></thead>
-      <tbody>
-        <tr><td><code>session</code></td><td>system/init</td><td>the <code>sessionId</code> (resume key)</td></tr>
-        <tr><td><code>token</code></td><td>text_delta</td><td>visible answer text, streamed</td></tr>
-        <tr><td><code>thinking</code></td><td>thinking delta</td><td>reasoning (dimmed; never in the answer bubble)</td></tr>
-        <tr><td><code>tool</code></td><td>tool_use / tool_result</td><td><code>start</code> → <code>input</code> (summary+detail) → <code>end</code> (ok, preview)</td></tr>
-        <tr><td><code>usage</code></td><td>message.usage</td><td>context-fill token count</td></tr>
-        <tr><td><code>done</code></td><td>result</td><td><code>sessionId</code>, cost</td></tr>
-        <tr><td><code>error</code></td><td>is_error / throttle / exit≠0</td><td>a message</td></tr>
-      </tbody>
-    </table>
-  </div>
 
-  <p class="foot">
-    Sources — <code>ChatController.cs</code> (chat / stream / runs / stop),
-    <code>RunSessionService.cs</code> (<code>TryBeginRun</code>, per-(repo,lane) slot, seq buffer &amp; replay),
-    <code>CliRunnerService.cs</code> (spawn + stream-json→SSE translation),
-    <code>AutopilotService.cs</code> (the tick; <code>TrySend</code> / <code>TrySendLoop</code> reuse <code>TryBeginRun</code> + <code>CliRunnerService.RunAsync</code>; reads the last reply from the JSONL transcript),
-    <code>ChatContext.jsx</code> (reconcile / attachToRun / seq dedup).
-    This page calls no backend; it's a rolling-latest explainer served by the Understanding app.
-    Interactive graphs via vendored Cytoscape (no CDN).
-  </p>
+    <div id="diagram-host2"></div>
+
+    <div class="verdict-line" id="twist-note" style="display:none">
+      The one thing the spatial layout <b>doesn’t</b> already tell you:
+      <code>localStorage</code> sits inside the device box yet <b>survives</b> (it holds the
+      <code>sessionId</code>). That single exception is the part worth a glowing highlight — everything
+      else the box boundaries explain for free.
+    </div>
+
+    <div class="recon">
+      <h2 class="sec" style="font-size:1rem">…then reconcile rebuilds it — a stepped sim, like “Drive a turn”</h2>
+      <div class="controls">
+        <button class="act" id="btn-step">Step ▶</button>
+        <button class="act" id="btn-reset-step">Reset</button>
+      </div>
+      <div class="steps" id="steps">
+        <div class="step"><span class="n">1</span><div><b>On mount</b>, <code>reconcile()</code> calls <code>GET /api/runs</code> — which repos are still running?<br><small>after the dock list lands</small></div></div>
+        <div class="step"><span class="n">2</span><div><b>Attach.</b> The wiped convo looks fresh, so it first <code>loadTranscript(sessionId)</code> from disk — your prompt &amp; finished output reappear.</div></div>
+        <div class="step"><span class="n">3</span><div><b>Stream.</b> <code>stream?after=N</code> with N=0 (seqRefs wiped) → backend <b>replays the whole buffer</b> and continues live.</div></div>
+        <div class="step"><span class="n">4</span><div><b>Done?</b> If <code>/runs</code> says finished, just fix the badge + replay transcript. Either way: <b>nothing lost, run never interrupted.</b></div></div>
+      </div>
+      <div class="edge">Caveat that stays as <i>text</i> (a node footnote, not a box): the buffer is capped
+      (~10k events, oldest trimmed). A very long turn can’t fully replay from <code>after=0</code> — but
+      <code>loadTranscript</code> already pulled the persisted part from disk, so only the live tail streams fresh.</div>
+    </div>
+  </section>
+
+  <!-- ───────────────── TAB 4 ───────────────── -->
+  <section class="panel" id="tab-verdict">
+    <h2 class="sec">Verdict</h2>
+    <p class="lead"><b>Fold both in.</b> §3 → a red/green overlay + a stepped reconcile sim on the System map.
+    §2 → a highlighted path. The nodes already exist, so it’s wiring, not modelling.</p>
+
+    <div class="twocol" style="margin-top:8px">
+      <div class="keepbox">
+        <h4>“Only the visualization” — mostly true</h4>
+        <p style="margin:.2em 0;color:#cfe6ff">Structure reduces to the map. Two things still earn prose
+        (best as the map’s click-to-read node panels):</p>
+        <ul class="tight">
+          <li>the <b>edge-case caveat</b> (buffer cap ~10k) — a footnote, not a box;</li>
+          <li>a <b>one-line orientation caption</b> per view.</li>
+        </ul>
+        <p style="margin:.4em 0 0;color:#9af0b6">House rule: the app is a <i>companion, not a replacement</i> —
+        so a thin prose layer stays. Pure-viz-only would cut against it.</p>
+      </div>
+      <div class="costbox">
+        <h4>The honest cost — how it actually landed</h4>
+        <p style="margin:.2em 0;color:#cfe6ff">This was written assuming the live tab still
+        iframed a <b>frozen snapshot</b>. It doesn’t any more — the tab became native React first,
+        so the cost <b>inverted in our favour</b>:</p>
+        <ul class="tight">
+          <li>work stayed in <b>real React</b> — <code>ChatGraph.jsx</code> gained a small data-driven
+          overlay layer; <code>ChatMap.jsx</code> the toggle UI + reconcile steps;</li>
+          <li>§2/§3 became <code>bind</code>/<code>fate</code>/<code>twist</code> annotations on the
+          existing <code>chatArchitectureData.js</code> nodes — highlighting, not new modelling;</li>
+          <li><b>no frozen snapshot, no <code>SNAPSHOT.md</code> sync</b> — one source of truth;</li>
+          <li>still a normal <b>build + redeploy</b> cycle (it’s bundled JS), not a hot tweak.</li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="lead" style="margin-top:14px">Net: removed the bind-pills and the refresh-cell grid,
+    leaving one visual grammar — the map is the single source of truth, and it’s edited as ordinary
+    React, not a vendored snapshot.</p>
+  </section>
+
+  <div class="foot">
+    Rolling understanding-app · this is the <i>latest</i> explanation, overwriting the prior chat map.
+    The live “How chat works” tab is <b>native React with bundled cytoscape</b> — there is no longer
+    a frozen snapshot (<code>client/public/chat-architecture/</code> is gone). Cited code:
+    <code>ChatMap.jsx</code>, <code>ChatGraph.jsx</code>, <code>chatArchitectureData.js</code>,
+    <code>RunSessionService.cs</code>.
+  </div>
 </div>
 
-<script src="./data.js?v=4"></script>
-<script src="./lib/cytoscape.min.js"></script>
-<script src="./mapcore.js?v=4"></script>
-<script src="./app.js?v=4"></script>
+<script>
+/* ----- the shared "where it runs" diagram, built once and cloned into both hosts ----
+   Mirrors the four tiers + node identities from chat-architecture/data.js so the
+   explanation stays honest about what already exists. */
+var TIERS = [
+  { key:'device', title:'YOUR DEVICE · browser', lbl:'RAM / storage on your device', nodes:[
+      { b:'ChatContext.jsx', s:'client state · RAM', fate:'wiped',   bind:'1', badge:'wiped' },
+      { b:'localStorage',    s:'holds sessionId',    fate:'survive', bind:'',  badge:'survives', twist:'1' },
+      { b:'SSE connection',  s:'browser ↔ server',   fate:'wiped',   bind:'',  badge:'wiped' }
+  ]},
+  { key:'backend', title:'BACKEND · Kestrel :5099', lbl:'RunSession owns the turn', nodes:[
+      { b:'RunSession + buffer', s:'seq-numbered events', fate:'survive', bind:'2', badge:'survives' },
+      { b:'builder slot',        s:'one writer per repo·lane', fate:'survive', bind:'2', badge:'survives' }
+  ]},
+  { key:'cli', title:'CLI PROCESS', lbl:'spawned detached', nodes:[
+      { b:'claude process', s:'runs on RunSession token', fate:'survive', bind:'', badge:'survives' }
+  ]},
+  { key:'disk', title:'DISK · persistent', lbl:'outlives everything', nodes:[
+      { b:'<sid>.jsonl', s:'append-only transcript', fate:'survive', bind:'3', badge:'survives' }
+  ]}
+];
+
+function buildDiagram(){
+  var wrap = document.createElement('div'); wrap.className='tiers';
+  TIERS.forEach(function(t){
+    var tier=document.createElement('div'); tier.className='tier'; tier.dataset.tier=t.key;
+    tier.innerHTML='<h4>'+t.title+'<span class="lbl">'+t.lbl+'</span></h4>';
+    t.nodes.forEach(function(n){
+      var node=document.createElement('div'); node.className='node';
+      node.dataset.fate=n.fate; if(n.bind) node.dataset.bind=n.bind; if(n.twist) node.dataset.twist=n.twist;
+      node.innerHTML='<span class="badge">'+n.badge+'</span><b>'+n.b+'</b><small>'+n.s+'</small>';
+      tier.appendChild(node);
+    });
+    wrap.appendChild(tier);
+  });
+  return wrap;
+}
+document.getElementById('diagram-host').appendChild(buildDiagram());
+document.getElementById('diagram-host2').appendChild(buildDiagram());
+
+/* ----- tab router ----- */
+var btns=[].slice.call(document.querySelectorAll('.tabbtn'));
+var panels=[].slice.call(document.querySelectorAll('.panel'));
+function show(id){
+  btns.forEach(function(b){b.classList.toggle('active',b.dataset.tab===id);});
+  panels.forEach(function(p){p.classList.toggle('active',p.id==='tab-'+id);});
+  if(location.hash.slice(1)!==id) history.replaceState(null,'','#'+id);
+}
+btns.forEach(function(b){b.addEventListener('click',function(){show(b.dataset.tab);});});
+window.addEventListener('hashchange',function(){show((location.hash||'#problem').slice(1));});
+
+/* ----- §2 binding highlight ----- */
+var bindOn=false, bbtn=document.getElementById('btn-bind');
+bbtn.addEventListener('click',function(){
+  bindOn=!bindOn; document.body.classList.toggle('showbind',bindOn);
+  bbtn.classList.toggle('on',bindOn);
+  bbtn.textContent=bindOn?'Hide the §2 binding path':'Show the §2 binding path';
+});
+
+/* ----- §3 refresh overlay ----- */
+var flashOn=false, fbtn=document.getElementById('btn-flash'), twist=document.getElementById('twist-note');
+fbtn.addEventListener('click',function(){
+  flashOn=!flashOn; document.body.classList.toggle('flash',flashOn);
+  fbtn.classList.toggle('on',flashOn);
+  fbtn.textContent=flashOn?'↺ Reset':'⟳ Refresh!';
+  twist.style.display=flashOn?'block':'none';
+});
+
+/* ----- reconcile stepper ----- */
+var steps=[].slice.call(document.querySelectorAll('#steps .step')), cur=0;
+function renderSteps(){steps.forEach(function(s,i){s.classList.toggle('on',i<cur);});}
+document.getElementById('btn-step').addEventListener('click',function(){
+  if(cur<steps.length){cur++;renderSteps();}
+});
+document.getElementById('btn-reset-step').addEventListener('click',function(){cur=0;renderSteps();});
+
+/* deep-link support */
+show((location.hash||'#problem').slice(1));
+</script>
 </body>
 </html>
