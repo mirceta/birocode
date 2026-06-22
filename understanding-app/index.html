@@ -1,465 +1,309 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Global exposure — the public twin of Local</title>
-<!-- Self-contained: all CSS/JS inline, no CDN, no node_modules. Served by the
-     harness under /api/localview/<repo>/app/understanding/ — so any URL it
-     referenced would have to be relative (./…). It references none. -->
+<title>The underscore bug — why a repo's chats vanish</title>
 <style>
   :root{
-    --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --line:#2b3340;
-    --ink:#e6edf3; --dim:#9aa7b4; --accent:#58a6ff; --accent2:#bc8cff;
-    --good:#3fb950; --warn:#d29922; --bad:#f85149; --glob:#f0883e;
-    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; --radius:12px;
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c232c; --ink:#e6edf3; --dim:#8b949e;
+    --line:#30363d; --good:#3fb950; --bad:#f85149; --warn:#d29922; --accent:#58a6ff;
+    --mono:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;
   }
   *{box-sizing:border-box}
-  html,body{height:100%}
-  body{margin:0;background:
-      radial-gradient(1200px 600px at 82% -12%,rgba(240,136,62,.10),transparent),
-      radial-gradient(900px 500px at -10% 110%,rgba(88,166,255,.09),transparent),
-      var(--bg);
-    color:var(--ink);font:14px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
-  .wrap{max-width:1120px;margin:0 auto;padding:26px 20px 90px}
-  h1{margin:0 0 6px;font-size:25px;letter-spacing:-.01em}
-  .lede{margin:0;color:var(--dim);max-width:880px}
-  .pills{margin-top:12px}
-  .pill{display:inline-block;font-size:11px;color:var(--dim);border:1px solid var(--line);
-    border-radius:999px;padding:3px 10px;margin:0 6px 6px 0}
-  .pill b{color:var(--ink)}
-  .pill.loc b{color:var(--accent)} .pill.glb b{color:var(--glob)}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.5}
+  header{padding:28px 22px 14px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#11161d,#0d1117)}
+  h1{margin:0 0 6px;font-size:1.5rem}
+  .sub{color:var(--dim);font-size:.95rem;max-width:780px}
+  main{max-width:980px;margin:0 auto;padding:22px 18px 80px}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:20px;margin:18px 0}
+  h2{margin:0 0 4px;font-size:1.15rem}
+  h2 .n{color:var(--accent);font-variant-numeric:tabular-nums;margin-right:8px}
+  .hint{color:var(--dim);font-size:.88rem;margin:0 0 14px}
+  .mono{font-family:var(--mono)}
+  .tag{display:inline-block;font-size:.72rem;padding:2px 8px;border-radius:999px;
+    border:1px solid var(--line);color:var(--dim);vertical-align:middle}
+  .tag.bad{color:var(--bad);border-color:#5b2222;background:#2a1414}
+  .tag.good{color:var(--good);border-color:#1f4023;background:#102015}
 
-  /* tabs */
-  nav.tabs{display:flex;flex-wrap:wrap;gap:8px;margin:22px 0 20px}
-  .tab{appearance:none;cursor:pointer;border:1px solid var(--line);background:var(--panel);
-    color:var(--dim);border-radius:999px;padding:8px 15px;font-size:13px;font-weight:600;
-    transition:.15s}
-  .tab:hover{color:var(--ink);border-color:#3a4452}
-  .tab.is-active{background:linear-gradient(180deg,#22405f,#1a2c41);color:#fff;border-color:#3a5a80}
-  .view{display:none;animation:fade .25s ease}
-  .view.is-active{display:block}
-  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  button{background:var(--panel2);color:var(--ink);border:1px solid var(--line);
+    border-radius:8px;padding:8px 12px;font-size:.86rem;cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  button.active{border-color:var(--accent);color:var(--accent);background:#0f2033}
+  .field{display:flex;flex-direction:column;gap:4px;flex:1;min-width:260px}
+  .field label{font-size:.74rem;color:var(--dim);text-transform:uppercase;letter-spacing:.04em}
+  input[type=text]{background:#0b0f14;border:1px solid var(--line);color:var(--ink);
+    border-radius:8px;padding:9px 11px;font-family:var(--mono);font-size:.9rem}
+  input[type=text]:focus{outline:none;border-color:var(--accent)}
 
-  h2{font-size:12px;text-transform:uppercase;letter-spacing:.13em;color:var(--dim);
-    margin:30px 0 14px;font-weight:700;border-bottom:1px solid var(--line);padding-bottom:7px}
-  code{font-family:var(--mono);font-size:12.5px;background:#0e141d;border:1px solid var(--line);
-    border-radius:5px;padding:1px 5px;color:#cdd9e5}
-  p{max-width:880px}
-  .muted{color:var(--dim)}
+  .chars{display:flex;flex-wrap:wrap;gap:3px;margin:14px 0 4px}
+  .ch{display:flex;flex-direction:column;align-items:center;font-family:var(--mono);
+    border-radius:6px;padding:6px 2px;min-width:22px;background:#0b0f14;border:1px solid transparent}
+  .ch .in{font-size:.95rem}
+  .ch .arr{font-size:.6rem;color:var(--dim);line-height:1}
+  .ch .out{font-size:.95rem;color:var(--dim)}
+  .ch.changed{border-color:#2d4a63}
+  .ch.changed .out{color:var(--accent)}
+  .ch.diverge{border-color:var(--bad);background:#1d1113}
+  .ch.diverge .out{color:var(--bad);font-weight:700}
+  .legend{font-size:.78rem;color:var(--dim);display:flex;gap:16px;flex-wrap:wrap;margin-top:8px}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:middle}
 
-  /* ===== two-paths diagram ===== */
-  .paths{display:grid;grid-template-columns:1fr 1fr;gap:18px}
-  @media(max-width:780px){.paths{grid-template-columns:1fr}}
-  .path{position:relative;border:1px solid var(--line);border-radius:var(--radius);
-    padding:18px 16px 16px;background:linear-gradient(180deg,var(--panel),#12161d);overflow:hidden}
-  .path.local{box-shadow:inset 0 0 0 1px rgba(88,166,255,.06)}
-  .path.global{box-shadow:inset 0 0 0 1px rgba(240,136,62,.07)}
-  .path h3{margin:0 0 2px;font-size:15px;display:flex;align-items:center;gap:8px}
-  .path .door{font-size:11.5px;color:var(--dim);margin:0 0 16px}
-  .tagdot{width:9px;height:9px;border-radius:50%;display:inline-block}
-  .local .tagdot{background:var(--accent)} .global .tagdot{background:var(--glob)}
+  .folders{display:grid;grid-template-columns:1fr;gap:10px;margin-top:16px}
+  @media(min-width:720px){.folders{grid-template-columns:1fr 1fr}}
+  .fcard{border:1px solid var(--line);border-radius:10px;padding:12px;background:#0b0f14}
+  .fcard h3{margin:0 0 8px;font-size:.82rem;text-transform:uppercase;letter-spacing:.04em;color:var(--dim)}
+  .fcard .path{font-family:var(--mono);font-size:.82rem;word-break:break-all}
+  .fcard .verdict{margin-top:10px;font-size:.85rem;font-weight:600}
+  .fcard.ok{border-color:#1f4023}.fcard.ok .verdict{color:var(--good)}
+  .fcard.miss{border-color:#5b2222}.fcard.miss .verdict{color:var(--bad)}
+  .u{color:var(--bad);font-weight:700;background:#2a1414;padding:0 2px;border-radius:3px}
+  .h{color:var(--good);font-weight:700;background:#102015;padding:0 2px;border-radius:3px}
 
-  .chain{position:relative;display:flex;justify-content:space-between;gap:6px;margin:8px 2px 4px;
-    min-height:96px}
-  .node{position:relative;z-index:2;flex:1;text-align:center;border:1px solid var(--line);
-    border-radius:10px;padding:10px 6px;background:#121821;transition:.2s}
-  .node .g{font-size:22px;display:block;line-height:1.1}
-  .node .t{font-size:11.5px;font-weight:700;margin-top:3px}
-  .node .s{font-size:10px;color:var(--dim);margin-top:2px;font-family:var(--mono)}
-  .node.hot{border-color:#5a7fa8;background:#172435;box-shadow:0 0 0 1px #5a7fa8,0 6px 18px rgba(0,0,0,.4);transform:translateY(-2px)}
-  .global .node.hot{border-color:#a8682f;background:#27190f;box-shadow:0 0 0 1px #a8682f,0 6px 18px rgba(0,0,0,.4)}
-  .wire{position:absolute;top:50%;left:6%;right:6%;height:2px;background:var(--line);z-index:1}
-  .packet{position:absolute;top:0;left:0;width:14px;height:14px;border-radius:50%;z-index:3;
-    background:var(--accent);box-shadow:0 0 12px 3px rgba(88,166,255,.7);opacity:0;
-    transition:transform .5s cubic-bezier(.5,.05,.3,1),opacity .3s}
-  .global .packet{background:var(--glob);box-shadow:0 0 12px 3px rgba(240,136,62,.7)}
+  .flow{display:flex;flex-direction:column;gap:0}
+  .step{display:flex;gap:12px;align-items:flex-start;padding:10px 0}
+  .step .ic{flex:0 0 30px;height:30px;border-radius:50%;display:grid;place-items:center;
+    border:1px solid var(--line);background:#0b0f14;font-size:.85rem}
+  .step .bd{flex:1}
+  .step .bd .t{font-weight:600}
+  .step .bd .d{color:var(--dim);font-size:.88rem}
+  .step .conn{margin-left:14px;height:14px;border-left:2px dashed var(--line)}
+  .step.err .ic{border-color:#5b2222;color:var(--bad)}
+  .step.err .bd .t{color:var(--bad)}
 
-  .ruleline{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px;min-height:26px}
-  .rchip{font-size:10.5px;border:1px solid var(--line);border-radius:999px;padding:2px 9px;color:var(--dim);
-    transition:.2s}
-  .rchip.on{color:#fff;border-color:#5a7fa8;background:#1c2c40}
-  .global .rchip.on{border-color:#a8682f;background:#2a1c10}
-  .rchip.trap{border-style:dashed}
-  .rchip.trap::before{content:"⚠ ";color:var(--glob)}
-
-  .cap{margin-top:14px;min-height:54px;border-top:1px dashed var(--line);padding-top:12px;
-    font-size:13px}
-  .cap b{color:var(--ink)}
-  .cap .step{font-family:var(--mono);font-size:11px;color:var(--dim);display:block;margin-bottom:3px}
-
-  .controls{display:flex;gap:8px;align-items:center;margin:18px 0 6px;flex-wrap:wrap}
-  .btn{appearance:none;cursor:pointer;border:1px solid var(--line);background:var(--panel2);
-    color:var(--ink);border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600}
-  .btn:hover{border-color:#3a4452}
-  .btn.primary{background:linear-gradient(180deg,#2f5380,#21405f);border-color:#3a5a80}
-  .btn:disabled{opacity:.45;cursor:default}
-  .hint{font-size:12px;color:var(--dim)}
-
-  /* ===== rule cards ===== */
-  .rules{display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:14px}
-  .rule{border:1px solid var(--line);border-radius:var(--radius);padding:15px 15px 14px;background:var(--panel)}
-  .rule .num{font-family:var(--mono);font-size:11px;color:var(--dim)}
-  .rule .ttl{font-weight:700;font-size:15px;margin:3px 0 8px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
-  .badge{font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;border-radius:6px;padding:2px 6px;font-weight:700}
-  .badge.shared{background:#13283b;color:#7fb3e6;border:1px solid #244a6b}
-  .badge.glob{background:#2a1a0d;color:#f0a868;border:1px solid #5a3a1c}
-  .rule .body{font-size:12.5px;color:#c6d2de;margin:0 0 9px}
-  .rule .break{font-size:11.5px;color:var(--dim)}
-  .rule .break b{color:var(--bad)}
-  .rule .probe{margin-top:9px;font-family:var(--mono);font-size:11px;background:#0e141d;border:1px solid var(--line);
-    border-radius:6px;padding:7px 8px;color:#9fd0a0;white-space:pre-wrap;word-break:break-all}
-
-  /* ===== gap view ===== */
-  .gap{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-  @media(max-width:780px){.gap{grid-template-columns:1fr}}
-  .gcard{border:1px solid var(--line);border-radius:var(--radius);padding:18px;background:var(--panel)}
-  .gcard h3{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
-  .gcard .state{font-size:12px;font-weight:700;border-radius:999px;padding:3px 10px}
-  .state.ok{background:#0f2a17;color:var(--good);border:1px solid #1d4a2b}
-  .state.miss{background:#2a1414;color:var(--bad);border:1px solid #4a1d1d}
-  .gcard ul{margin:12px 0 0;padding-left:18px;color:#c6d2de;font-size:12.5px}
-  .gcard li{margin:4px 0}
-  .arrowrow{text-align:center;color:var(--glob);font-size:13px;margin:14px 0 0;font-weight:600}
-
-  /* ===== example view ===== */
-  .ex{display:grid;grid-template-columns:300px 1fr;gap:18px}
-  @media(max-width:780px){.ex{grid-template-columns:1fr}}
-  .tree{font-family:var(--mono);font-size:12px;background:#0e141d;border:1px solid var(--line);
-    border-radius:var(--radius);padding:16px;color:#c6d2de;white-space:pre;overflow:auto}
-  .tree .c{color:var(--dim)}
-  .demo{border:1px solid var(--line);border-radius:var(--radius);padding:18px;background:var(--panel)}
-  .counter{font-size:42px;font-weight:800;font-family:var(--mono);text-align:center;margin:6px 0 2px;color:var(--glob)}
-  .clabel{text-align:center;color:var(--dim);font-size:11px;margin-bottom:14px}
-  .calls{font-family:var(--mono);font-size:11.5px}
-  .call{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:8px 0;background:#0e141d;opacity:.4;transition:.25s}
-  .call.fire{opacity:1;border-color:#a8682f;background:#1c130a}
-  .call .r{color:var(--glob);font-size:10px;float:right}
-  .foot{margin-top:40px;color:var(--dim);font-size:12px;border-top:1px solid var(--line);padding-top:14px}
+  pre{background:#0b0f14;border:1px solid var(--line);border-radius:10px;padding:14px;
+    overflow:auto;font-family:var(--mono);font-size:.83rem;margin:10px 0}
+  pre .del{color:var(--bad)} pre .add{color:var(--good)} pre .cmt{color:var(--dim)}
+  ul.tight{margin:8px 0;padding-left:20px} ul.tight li{margin:4px 0}
+  .callout{border-left:3px solid var(--warn);background:#1c1810;padding:10px 14px;
+    border-radius:0 8px 8px 0;font-size:.9rem;margin:12px 0}
+  .footer{color:var(--dim);font-size:.8rem;text-align:center;margin-top:30px}
+  code{background:#0b0f14;border:1px solid var(--line);border-radius:4px;padding:1px 5px;
+    font-family:var(--mono);font-size:.85em}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>Global exposure — the public twin of Local</h1>
-  <p class="lede">Claude Web teaches two ways to expose a product. <b>Local</b> already has a
-    live worked example you can copy (<code>homepage/</code>). <b>Global</b> has the explainer
-    but <b>no live example</b> — that's the gap this work fills with <code>global-example/</code>.
-    Below: the two paths side by side, the 3-vs-5 rule split, the gap, and the example app.</p>
-  <div class="pills">
-    <span class="pill loc">Local · <b>:5305</b> · behind login · 3 rules</span>
-    <span class="pill glb">Global · <b>:5200</b> · /preview/ · no login · 5 rules</span>
-    <span class="pill">single source of truth · <b>docs/global-exposure-convention.md</b></span>
+<header>
+  <h1>The underscore bug 🪲</h1>
+  <div class="sub">Why one repo's Claude conversations show as <b>"no conversations"</b> and a new chat is
+  <b>forgotten on refresh</b> — even though the transcripts are sitting safely on disk. It comes down to
+  <b>one character</b> in how a folder name is spelled.</div>
+</header>
+
+<main>
+
+<section>
+  <h2><span class="n">1</span>Try it: encode a repo path</h2>
+  <p class="hint">Claude CLI and the harness each turn a working-directory path into a folder name under
+    <span class="mono">~/.claude/projects/</span>. Pick a path and watch where they <i>disagree</i>.</p>
+
+  <div class="controls" id="presets"></div>
+  <div class="field">
+    <label for="pathIn">Repo path</label>
+    <input type="text" id="pathIn" value="C:\Users\Administrator\Desktop\playground\prg_worktrees\prg" spellcheck="false"/>
   </div>
 
-  <nav class="tabs" id="tabs"></nav>
-
-  <!-- ============ VIEW 1: TWO PATHS ============ -->
-  <section class="view is-active" data-view="paths">
-    <p class="muted">Two reverse-proxy journeys to the same product. The <b style="color:var(--accent)">Local</b>
-      tab proxies over <b>loopback, behind login</b> — 3 rules. The <b style="color:var(--glob)">Global</b>
-      homepage crosses an <b>off-box IIS+ARR</b> proxy on the public internet — same 3 rules
-      <i>plus two traps</i> loopback never had. Press play and watch each checkpoint light up.</p>
-
-    <div class="controls">
-      <button class="btn primary" id="play">▶ Play</button>
-      <button class="btn" id="step">Step ›</button>
-      <button class="btn" id="reset">↺ Reset</button>
-      <span class="hint" id="hint">Local first (3 rules), then Global (5 rules), then it loops.</span>
+  <div style="margin-top:18px">
+    <div class="mono" style="font-size:.78rem;color:var(--dim)">per-character transform</div>
+    <div class="chars" id="chars"></div>
+    <div class="legend">
+      <span><span class="dot" style="background:#0b0f14;border:1px solid var(--line)"></span>unchanged</span>
+      <span><span class="dot" style="background:#2d4a63"></span>both replace with <b>-</b></span>
+      <span><span class="dot" style="background:var(--bad)"></span><b>they disagree</b> — CLI &rarr; <span class="h">-</span>, harness keeps it</span>
     </div>
+  </div>
 
-    <div class="paths">
-      <div class="path local" id="path-local">
-        <h3><span class="tagdot"></span> Local tab</h3>
-        <p class="door">harness proxy · <code>/api/localview/&lt;repo&gt;/</code> · loopback · behind login</p>
-        <div class="chain">
-          <div class="wire"></div><div class="packet"></div>
-          <div class="node"><span class="g">🙋</span><span class="t">You</span><span class="s">logged in</span></div>
-          <div class="node"><span class="g">🔒</span><span class="t">Harness proxy</span><span class="s">:5099</span></div>
-          <div class="node"><span class="g">🖥️</span><span class="t">Your app</span><span class="s">127.0.0.1:5305</span></div>
-        </div>
-        <div class="ruleline" id="rules-local"></div>
-        <div class="cap" id="cap-local"><span class="step">idle</span>Press play to send a request down the loopback path.</div>
-      </div>
-
-      <div class="path global" id="path-global">
-        <h3><span class="tagdot"></span> Public homepage</h3>
-        <p class="door">IIS + ARR · <code>https://&lt;domain&gt;/preview/</code> · off-box · no login</p>
-        <div class="chain">
-          <div class="wire"></div><div class="packet"></div>
-          <div class="node"><span class="g">🌍</span><span class="t">Anyone</span><span class="s">no login</span></div>
-          <div class="node"><span class="g">🛡️</span><span class="t">IIS + ARR</span><span class="s">strip /preview/</span></div>
-          <div class="node"><span class="g">🚀</span><span class="t">Your app</span><span class="s">0.0.0.0:5200</span></div>
-        </div>
-        <div class="ruleline" id="rules-global"></div>
-        <div class="cap" id="cap-global"><span class="step">idle</span>Same product, but reached by a stranger through a real public proxy.</div>
-      </div>
+  <div class="folders">
+    <div class="fcard miss" id="cardHarness">
+      <h3>Harness looks here <span class="tag bad">EncodeCwd</span></h3>
+      <div class="path" id="pathHarness"></div>
+      <div class="verdict" id="verdictHarness"></div>
     </div>
-  </section>
-
-  <!-- ============ VIEW 2: FIVE RULES ============ -->
-  <section class="view" data-view="rules">
-    <p class="muted">Local needs the first three. The public proxy adds rules <b style="color:var(--glob)">4</b>
-      and <b style="color:var(--glob)">5</b> — the two traps that make a global deploy break in ways a
-      local one never does. <span class="muted">Source: <code>docs/global-exposure-convention.md</code>.</span></p>
-    <div class="rules" id="rulecards"></div>
-  </section>
-
-  <!-- ============ VIEW 3: THE GAP ============ -->
-  <section class="view" data-view="gap">
-    <p class="muted">Why this work exists: the two sides are <b>asymmetric</b>. Local is taught by a
-      product that genuinely practices its own contract. Global is taught from inside that same
-      <i>local</i> product — so nothing in the repo actually demonstrates the public path.</p>
-    <div class="gap">
-      <div class="gcard">
-        <h3>🛰️ Local <span class="state ok">has a live example ✓</span></h3>
-        <p class="muted" style="font-size:12.5px"><code>homepage/</code> is a real product that
-          binds <code>:5305</code> dual-stack and is served on the Local tab — it <b>practices the
-          3-rule contract it teaches</b>.</p>
-        <ul>
-          <li>Live specimen: <code>homepage/serve.mjs</code> + assets</li>
-          <li>Hosts the "Local exposure" topic + copy-paste prompt</li>
-          <li>An agent reproduces it by doing what the page itself does</li>
-        </ul>
-      </div>
-      <div class="gcard">
-        <h3>🌐 Global <span class="state miss">explainer only ✗</span></h3>
-        <p class="muted" style="font-size:12.5px">The "Global exposure" topic + prompt exist — but
-          <b>inside <code>homepage/</code></b>, a product on <code>:5305</code> behind login. <b>Nothing
-          binds <code>:5200</code> and crosses <code>/preview/</code> for real.</b></p>
-        <ul>
-          <li>Has: <code>docs/global-exposure-convention.md</code>, the homepage topic + prompt</li>
-          <li>Missing: a live product that practices the 5-rule contract</li>
-          <li>The real specimen (<code>game-arcade</code>) lives in a <i>different</i> repo</li>
-        </ul>
-      </div>
+    <div class="fcard ok" id="cardCli">
+      <h3>Claude CLI writes here <span class="tag good">actual</span></h3>
+      <div class="path" id="pathCli"></div>
+      <div class="verdict" id="verdictCli"></div>
     </div>
-    <p class="arrowrow">▼ the fix ▼</p>
-    <div class="gcard" style="border-color:#5a3a1c">
-      <h3>🚀 Build <code>global-example/</code> — the public twin of <code>homepage/</code></h3>
-      <p class="muted" style="font-size:12.5px;margin-bottom:0">A tiny, build-less, self-contained
-        product that binds <code>0.0.0.0:5200</code>, is reachable through <code>/preview/</code>, and
-        <b>practices all five rules</b> instead of only explaining them — hosting its own tutorial +
-        paste-prompt, exactly like <code>homepage/</code> does for local. See the
-        <b>Example app</b> tab.</p>
-    </div>
-  </section>
+  </div>
+  <div class="callout" id="matchNote"></div>
+</section>
 
-  <!-- ============ VIEW 4: EXAMPLE APP ============ -->
-  <section class="view" data-view="example">
-    <p class="muted">What makes <code>global-example/</code> a <i>faithful</i> minimal example: it has a
-      tiny stateful backend, so it doesn't just <i>describe</i> rules 4 &amp; 5 — it <b>fires them
-      live</b>. A "Bump" sends a body-ful <code>POST</code>, then a cache-busted <code>GET</code>.</p>
-    <div class="ex">
-      <div class="tree">global-example/
-├─ serve.mjs        <span class="c"># binds 0.0.0.0:5200 (r1)</span>
-│                   <span class="c"># strips /preview/ both ways</span>
-│                   <span class="c"># GET / → page (r2)</span>
-│                   <span class="c"># no-store + real 404</span>
-│                   <span class="c"># POST /api/bump (r4)</span>
-│                   <span class="c"># GET /api/state  (r5)</span>
-├─ index.html       <span class="c"># ./ relative URLs (r3)</span>
-├─ assets/
-│   ├─ app.js       <span class="c"># live POST + cached GET</span>
-│   ├─ prompt.js    <span class="c"># paste-into-agent prompt</span>
-│   └─ styles.css
-├─ launch-detached.vbs  <span class="c"># detached (r1)</span>
-└─ README.md</div>
-      <div class="demo">
-        <div class="counter" id="count">0</div>
-        <div class="clabel">shared counter (simulated here — the real one lives on :5200)</div>
-        <div class="controls" style="margin:6px 0 4px">
-          <button class="btn primary" id="bump">＋ Bump</button>
-          <span class="hint">watch which rule each call exercises</span>
-        </div>
-        <div class="calls">
-          <div class="call" id="c-post"><span class="r">rule 4</span>POST ./api/bump <b>{ }</b> <span class="muted">← body, even empty, or ARR 411s</span></div>
-          <div class="call" id="c-get"><span class="r">rule 5</span>GET ./api/state<b>?_=&lt;ts&gt;</b> <span class="muted">← cache-bust, or ARR serves stale</span></div>
-        </div>
-        <p class="muted" style="font-size:11.5px;margin-bottom:0">Rule 3 is proven by the calls being
-          <code>./api/…</code> (relative → ride the <code>/preview/</code> base). Rules 1 &amp; 2 are
-          proven by the server answering at <code>0.0.0.0:5200</code> root at all.</p>
-      </div>
+<section>
+  <h2><span class="n">2</span>The two encoding rules, side by side</h2>
+  <p class="hint">Same intent, different alphabets. The harness was written to handle only the three obvious
+    path characters; the CLI sanitizes <i>everything</i> that isn't a letter or digit.</p>
+  <div class="folders">
+    <div class="fcard">
+      <h3>Harness &mdash; <span class="mono">SessionService.EncodeCwd</span></h3>
+      <pre class="mono">workingDirectory
+  .Replace(':','-')
+  .Replace('\\','-')
+  .Replace('/','-')</pre>
+      <div style="font-size:.85rem;color:var(--dim)">Replaces only <code>:</code> <code>\</code> <code>/</code>.
+      An <span class="u">_</span> &nbsp;(or <code>.</code>, space, &hellip;) <b>survives untouched.</b></div>
     </div>
-  </section>
+    <div class="fcard">
+      <h3>Claude CLI &mdash; what it really does</h3>
+      <pre class="mono">cwd.replace(/[^A-Za-z0-9]/g, '-')</pre>
+      <div style="font-size:.85rem;color:var(--dim)">Every non-alphanumeric character becomes
+      <span class="h">-</span>. Confirmed on disk:
+      <code>net8.0-windows</code> &rarr; <code>net8-0-windows</code>,
+      <code>prg_worktrees</code> &rarr; <code>prg-worktrees</code>.</div>
+    </div>
+  </div>
+</section>
 
-  <div class="foot">Companion to the chat explanation · overwrite-on-change per the Understanding-app
-    convention (<code>docs/understanding-app-convention.md</code>) · change: <code>openspec/changes/add-global-exposure/</code>.</div>
-</div>
+<section>
+  <h2><span class="n">3</span>How that one character makes chats "vanish"</h2>
+  <p class="hint">The data is never lost — the harness is just reading the wrong drawer.</p>
+  <div class="flow" id="flow"></div>
+</section>
+
+<section>
+  <h2><span class="n">4</span>Proposed fix <span class="tag good">one line</span></h2>
+  <p class="hint">Make the harness encode paths exactly the way the CLI does. Toggle to see the diff.</p>
+  <div class="controls">
+    <button id="fixBefore" class="active">Before (buggy)</button>
+    <button id="fixAfter">After (fixed)</button>
+  </div>
+  <pre id="fixCode" class="mono"></pre>
+  <ul class="tight">
+    <li><b>Identical output for every repo that works today</b> — paths without <code>_</code>/<code>.</code>/space
+      encode the same, so no regression and no migration.</li>
+    <li>Fixes <b>every</b> affected repo at once: <code>prg_worktrees</code>, plus any future path with
+      punctuation — not just this one.</li>
+    <li>It's the <b>only</b> place the harness encodes a cwd. The CLI's own <code>--resume</code> path doesn't
+      go through it, so it's untouched.</li>
+    <li><b>Verify after:</b> open the worktree repo, start a chat, hard-refresh, confirm the session picker
+      lists it (currently it shows "no conversations yet").</li>
+  </ul>
+  <div class="callout">
+    Why only the worktree repo broke: <span class="mono">playground\prg</span> has no underscore, so harness
+    and CLI agree on its folder — it works. <span class="mono">playground\prg_worktrees\prg</span> is simply
+    your first repo whose path carries a character the harness forgot to sanitize.
+  </div>
+</section>
+
+<div class="footer">Understanding app · birocode harness · the underscore bug</div>
+</main>
 
 <script>
-(function(){
-  // ---------- tab switching ----------
-  var VIEWS = [
-    {id:'paths',   label:'① Two paths'},
-    {id:'rules',   label:'② Five rules'},
-    {id:'gap',     label:'③ The gap'},
-    {id:'example', label:'④ Example app'},
-  ];
-  var tabs = document.getElementById('tabs');
-  VIEWS.forEach(function(v,i){
-    var b=document.createElement('button');
-    b.className='tab'+(i===0?' is-active':''); b.textContent=v.label; b.dataset.id=v.id;
-    b.onclick=function(){
-      document.querySelectorAll('.tab').forEach(function(t){t.classList.toggle('is-active',t===b);});
-      document.querySelectorAll('.view').forEach(function(s){s.classList.toggle('is-active',s.dataset.view===v.id);});
-    };
-    tabs.appendChild(b);
-  });
+function harnessEncode(p){ return p.replace(/[:\\/]/g,'-'); }
+function cliEncode(p){ return p.replace(/[^A-Za-z0-9]/g,'-'); }
+function isAlnum(c){ return /[A-Za-z0-9]/.test(c); }
+function isHarnessSep(c){ return c===':'||c==='\\'||c==='/'; }
 
-  // ---------- rule definitions (shared by chips + cards) ----------
-  var RULES = [
-    {n:1, key:'Bind 0.0.0.0:5200', scope:'glob',
-     body:'Listen on ALL interfaces, not localhost — the off-box proxy dials the machine. Launch detached, free the port first.',
-     brk:'loopback-only bind → <b>proxy can’t reach it</b>',
-     probe:'curl -I http://localhost:5200/   # 200'},
-    {n:2, key:'Serve at root', scope:'shared',
-     body:'GET / returns your page HTML. The proxy forwards the stripped request to /.',
-     brk:'serve under a sub-path → <b>blank embed</b>',
-     probe:'curl -I http://localhost:5200/   # text/html'},
-    {n:3, key:'Base + relative URLs', scope:'shared',
-     body:'Every asset AND runtime fetch carries the /preview/ base (Vite base, or ./ for plain HTML).',
-     brk:'absolute /asset → <b>404</b>; absolute /api → <b>401</b> (escapes to harness)',
-     probe:'href="./assets/app.js"  fetch("./api/state")'},
-    {n:4, key:'Body-ful POSTs', scope:'glob',
-     body:'Always send a body (even {}) with Content-Type. Works on :5200 directly — but through the public door…',
-     brk:'no body → IIS+ARR <b>411 Length Required</b>',
-     probe:'curl -X POST -d \'{}\' .../api/bump'},
-    {n:5, key:'Beat ARR’s GET cache', scope:'glob',
-     body:'ARR caches GETs by exact URL and ignores backend no-store. Cache-bust every GET (?_=Date.now()).',
-     brk:'no cache-bust → GET after POST returns <b>frozen old state</b> (looks like a race, isn’t)',
-     probe:'curl .../api/state?_=1   # always fresh'},
-  ];
+const presets = [
+  {name:'prg_worktrees (broken)', path:'C:\\Users\\Administrator\\Desktop\\playground\\prg_worktrees\\prg'},
+  {name:'plain prg (works)',      path:'C:\\Users\\Administrator\\Desktop\\playground\\prg'},
+  {name:'net8.0-windows',         path:'C:\\app\\bin\\Debug\\net8.0-windows'},
+  {name:'has a space',            path:'C:\\Users\\km\\My Repos\\demo'},
+];
 
-  // ---------- rule cards (view 2) ----------
-  var rc = document.getElementById('rulecards');
-  RULES.forEach(function(r){
-    var d=document.createElement('div'); d.className='rule';
-    var badge = r.scope==='glob'
-      ? '<span class="badge glob">global-only</span>'
-      : '<span class="badge shared">shared with local</span>';
-    d.innerHTML =
-      '<div class="num">RULE '+r.n+'</div>'+
-      '<div class="ttl">'+r.key+' '+badge+'</div>'+
-      '<div class="body">'+r.body+'</div>'+
-      '<div class="break">Without it: '+r.brk+'</div>'+
-      '<div class="probe">'+r.probe+'</div>';
-    rc.appendChild(d);
-  });
+const $ = s=>document.querySelector(s);
+const pathIn = $('#pathIn');
 
-  // ---------- chips under each path ----------
-  // Local surfaces 3 rules; global surfaces 5. Build chip rows.
-  var localRuleKeys  = ['Dual-stack bind (::)','Serve at root','Base + relative URLs'];
-  var globalChips = RULES.map(function(r){return {key:r.key, trap:r.scope==='glob'&&r.n>=4};});
-  function chipRow(el, items){
-    items.forEach(function(it){
-      var s=document.createElement('span');
-      s.className='rchip'+(it.trap?' trap':''); s.textContent=it.key; s.dataset.key=it.key;
-      el.appendChild(s);
-    });
-  }
-  chipRow(document.getElementById('rules-local'),  localRuleKeys.map(function(k){return {key:k};}));
-  chipRow(document.getElementById('rules-global'), globalChips);
+const pbox = $('#presets');
+presets.forEach(p=>{
+  const b=document.createElement('button');
+  b.textContent=p.name;
+  b.onclick=()=>{ pathIn.value=p.path; render(); markPreset(b); };
+  pbox.appendChild(b);
+});
+function markPreset(active){ [...pbox.children].forEach(c=>c.classList.toggle('active',c===active)); }
 
-  // ---------- the animated storyline (view 1) ----------
-  // Each beat: which path, which node index lights, optional rule chip, caption.
-  var L='local', Gx='global';
-  var BEATS = [
-    {p:L,node:0,cap:'<b>Local = behind login.</b> Only you, already authenticated on the box’s network. No stranger ever reaches this.'},
-    {p:L,node:1,cap:'The <b>harness</b> reverse-proxies <code>/api/localview/&lt;repo&gt;/</code> to your app over <b>loopback</b>.'},
-    {p:L,node:2,rule:'Dual-stack bind (::)',cap:'Your app binds <code>::</code> dual-stack → answers <b>127.0.0.1 AND [::1]</b>. The check probes both.'},
-    {p:L,node:2,rule:'Serve at root',cap:'<code>GET /</code> returns the page.'},
-    {p:L,node:2,rule:'Base + relative URLs',cap:'Assets are <code>./…</code> so they resolve under the proxy sub-path. <b>3 rules, done.</b>'},
+function render(){
+  const p = pathIn.value;
+  const h = harnessEncode(p), c = cliEncode(p);
 
-    {p:Gx,node:0,cap:'<b>Global = NO login.</b> Anyone past the IP gate opens the public homepage — the one surface a stranger can see.'},
-    {p:Gx,node:1,cap:'The <b>off-box IIS + ARR</b> door terminates TLS, <b>strips <code>/preview/</code></b>, and forwards to the box on <code>:5200</code>.'},
-    {p:Gx,node:2,rule:'Bind 0.0.0.0:5200',cap:'<b>Rule 1.</b> Bind <b>all interfaces</b> (not localhost) — the off-box proxy dials the machine’s address. Detached, port freed.'},
-    {p:Gx,node:2,rule:'Serve at root',cap:'<b>Rule 2.</b> <code>GET /</code> returns the page (prefix already stripped). Same as local.'},
-    {p:Gx,node:2,rule:'Base + relative URLs',cap:'<b>Rule 3.</b> Asset AND fetch URLs carry <code>/preview/</code>. Absolute <code>/asset</code>→404, <code>/api</code>→401 (escapes to the harness).'},
-    {p:Gx,node:2,rule:'Body-ful POSTs',cap:'<b>Rule 4 ⚠ global-only.</b> Send a body (even <code>{}</code>) — IIS+ARR <b>411</b>s a length-less POST. Works on :5200 direct, 411s through the door.'},
-    {p:Gx,node:2,rule:'Beat ARR’s GET cache',cap:'<b>Rule 5 ⚠ global-only.</b> Cache-bust GETs — ARR serves <b>stale</b> state, ignoring <code>no-store</code>. UI seems to "revert" — it’s the cache, not a race.'},
-    {p:Gx,node:0,cap:'<b>5 rules.</b> The public proxy added the two ⚠ traps loopback never had. Now your product is live on the public homepage.'},
-  ];
-
-  var nodesL = document.querySelectorAll('#path-local .node');
-  var nodesG = document.querySelectorAll('#path-global .node');
-  var packetL = document.querySelector('#path-local .packet');
-  var packetG = document.querySelector('#path-global .packet');
-  var capL = document.getElementById('cap-local');
-  var capG = document.getElementById('cap-global');
-
-  function movePacket(pathSel, packet, idx){
-    var path=document.querySelector(pathSel);
-    var node=path.querySelectorAll('.node')[idx];
-    var pr=path.querySelector('.chain').getBoundingClientRect();
-    var nr=node.getBoundingClientRect();
-    var x=(nr.left-pr.left)+nr.width/2-7;
-    var y=(nr.top-pr.top)+nr.height/2-7;
-    packet.style.opacity='1';
-    packet.style.transform='translate('+x+'px,'+y+'px)';
-  }
-  function clearHot(nodes){nodes.forEach(function(n){n.classList.remove('hot');});}
-  function setChips(rowId,key){
-    document.querySelectorAll('#'+rowId+' .rchip').forEach(function(c){
-      c.classList.toggle('on', !!key && c.dataset.key===key);
-    });
+  const chars = $('#chars'); chars.innerHTML='';
+  for(const ch of p){
+    const out = isAlnum(ch)?ch:'-';
+    const harnessOut = isHarnessSep(ch)?'-':ch;
+    const diverge = (harnessOut!==out);
+    const changed = isHarnessSep(ch);
+    const cell=document.createElement('div');
+    cell.className='ch'+(diverge?' diverge':(changed?' changed':''));
+    const showIn = ch===' '?'␣':ch;
+    const showOut = (out===ch)?ch:out;
+    cell.innerHTML='<span class="in">'+esc(showIn)+'</span>'+
+      (out!==ch?'<span class="arr">▼</span><span class="out">'+esc(showOut)+'</span>':
+                '<span class="arr">·</span><span class="out">'+esc(showOut)+'</span>');
+    cell.title = diverge ? ('CLI → "-",  harness keeps "'+ch+'"') :
+                 changed ? 'both → "-"' : 'unchanged';
+    chars.appendChild(cell);
   }
 
-  var i=-1, timer=null;
-  function render(){
-    var b=BEATS[i]; if(!b) return;
-    var stepTxt='beat '+(i+1)+' / '+BEATS.length;
-    if(b.p===L){
-      clearHot(nodesL); nodesL[b.node].classList.add('hot');
-      movePacket('#path-local',packetL,b.node);
-      setChips('rules-local', b.rule);
-      capL.innerHTML='<span class="step">'+stepTxt+' · local</span>'+b.cap;
-    }else{
-      clearHot(nodesG); nodesG[b.node].classList.add('hot');
-      movePacket('#path-global',packetG,b.node);
-      setChips('rules-global', b.rule);
-      capG.innerHTML='<span class="step">'+stepTxt+' · global</span>'+b.cap;
-    }
-  }
-  function next(){ i=(i+1)%BEATS.length; if(i===0){softReset();} render(); }
-  // reset visuals without touching the play timer (used when the loop wraps)
-  function softReset(){
-    clearHot(nodesL); clearHot(nodesG);
-    packetL.style.opacity='0'; packetG.style.opacity='0';
-    setChips('rules-local',null); setChips('rules-global',null);
-  }
-  function fullReset(){
-    i=-1; softReset();
-    capL.innerHTML='<span class="step">idle</span>Press play to send a request down the loopback path.';
-    capG.innerHTML='<span class="step">idle</span>Same product, but reached by a stranger through a real public proxy.';
-  }
-  var playBtn=document.getElementById('play');
-  function play(){
-    if(timer) return;
-    playBtn.textContent='❚❚ Pause';
-    if(i<0) next();
-    timer=setInterval(next, 2100);
-  }
-  function stop(){ if(timer){clearInterval(timer);timer=null;} playBtn.textContent='▶ Play'; }
-  playBtn.onclick=function(){ timer?stop():play(); };
-  document.getElementById('step').onclick=function(){ stop(); next(); };
-  document.getElementById('reset').onclick=function(){ stop(); fullReset(); };
-  // recompute packet position on resize (layout-based)
-  window.addEventListener('resize', function(){ if(i>=0) render(); });
+  $('#pathHarness').innerHTML = colorize(h, 'harness');
+  $('#pathCli').innerHTML     = colorize(c, 'cli');
 
-  // ---------- example demo (view 4) ----------
-  var count=0;
-  var cnt=document.getElementById('count');
-  var cPost=document.getElementById('c-post'), cGet=document.getElementById('c-get');
-  document.getElementById('bump').onclick=function(){
-    // simulate the real round trip: body-ful POST, then cache-busted GET
-    cPost.classList.add('fire');
-    setTimeout(function(){
-      count++; cPost.classList.remove('fire'); cGet.classList.add('fire');
-      cnt.textContent=count;
-      setTimeout(function(){cGet.classList.remove('fire');},650);
-    },420);
-  };
-})();
+  const match = (h===c);
+  const cardH=$('#cardHarness'), cardC=$('#cardCli');
+  if(match){
+    cardH.className='fcard ok'; $('#verdictHarness').textContent='✓ same folder — finds the transcripts';
+    cardC.className='fcard ok'; $('#verdictCli').textContent='✓ transcripts live here';
+    $('#matchNote').innerHTML='<b style="color:var(--good)">Folders match.</b> Harness and CLI agree, so this repo\'s conversations load fine.';
+    $('#matchNote').style.borderColor='var(--good)';
+  }else{
+    cardH.className='fcard miss'; $('#verdictHarness').textContent='✗ this folder does not exist → 0 sessions';
+    cardC.className='fcard ok';   $('#verdictCli').textContent='✓ transcripts really live here';
+    $('#matchNote').innerHTML='<b style="color:var(--bad)">Folders differ by the highlighted character.</b> '+
+      'The harness scans a folder that was never created, finds nothing, and shows "no conversations."';
+    $('#matchNote').style.borderColor='var(--warn)';
+  }
+}
+
+function colorize(s, kind){
+  const other = kind==='harness'? cliEncode(pathIn.value) : harnessEncode(pathIn.value);
+  let out='';
+  for(let i=0;i<s.length;i++){
+    const ch=s[i];
+    const differs = other[i]!==ch;
+    if(differs && kind==='harness') out+='<span class="u">'+esc(ch)+'</span>';
+    else if(differs && kind==='cli') out+='<span class="h">'+esc(ch)+'</span>';
+    else out+=esc(ch);
+  }
+  return out;
+}
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+pathIn.addEventListener('input', ()=>{ render(); markPreset(null); });
+
+const flow = [
+  {ic:'📁', t:'You open the prg_worktrees repo', d:'Repo path: C:\\…\\playground\\prg_worktrees\\prg'},
+  {ic:'🔤', t:'Harness builds the folder name', d:'EncodeCwd keeps the "_" → …-playground-prg_worktrees-prg'},
+  {ic:'🔎', t:'Harness scans that folder', d:'…-prg_worktrees-prg does not exist on disk', err:true},
+  {ic:'🪹', t:'ListSessions returns empty', d:'Session picker shows "no conversations yet"', err:true},
+  {ic:'💬', t:'You start a new chat', d:'CLI writes the transcript to …-prg-worktrees-prg (correct, with "-")'},
+  {ic:'🔄', t:'You refresh', d:'Harness reads back from the "_" folder again → still empty → chat "forgotten"', err:true},
+];
+const fEl=$('#flow');
+flow.forEach((s,i)=>{
+  const row=document.createElement('div'); row.className='step'+(s.err?' err':'');
+  row.innerHTML='<div class="ic">'+s.ic+'</div><div class="bd"><div class="t">'+s.t+'</div><div class="d mono" style="font-size:.82rem">'+esc(s.d)+'</div></div>';
+  fEl.appendChild(row);
+  if(i<flow.length-1){const c=document.createElement('div');c.className='conn';fEl.appendChild(c);}
+});
+
+const before =
+'<span class="cmt">// SessionService.cs — only handles : \\ /</span>\n'+
+'public static string EncodeCwd(string workingDirectory) =>\n'+
+'    workingDirectory'+
+'<span class="del">.Replace(\':\',\'-\').Replace(\'\\\\\',\'-\').Replace(\'/\',\'-\')</span>;';
+const after =
+'<span class="cmt">// match the Claude CLI: any non-alphanumeric → \'-\'</span>\n'+
+'public static string EncodeCwd(string workingDirectory) =>\n'+
+'    <span class="add">Regex.Replace(workingDirectory, "[^A-Za-z0-9]", "-")</span>;';
+const fixCode=$('#fixCode');
+$('#fixBefore').onclick=function(){fixCode.innerHTML=before;this.classList.add('active');$('#fixAfter').classList.remove('active');};
+$('#fixAfter').onclick=function(){fixCode.innerHTML=after;this.classList.add('active');$('#fixBefore').classList.remove('active');};
+fixCode.innerHTML=before;
+
+render();
 </script>
 </body>
 </html>
