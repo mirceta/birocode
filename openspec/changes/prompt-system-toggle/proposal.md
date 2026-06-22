@@ -11,15 +11,17 @@ it is actually on.
 
 - Add a top-level **OpenSpec / Old system** toggle (two tabs) to the custom-prompts
   ⚙ pop-up.
-- The toggle swaps the **system-specific built-in prompts** — kickoff and
-  write-understanding-first — between their **OpenSpec** wording (start an OpenSpec
-  change, write to `proposal.md`) and the **legacy** wording (add a `plan.md` entry,
-  write `understanding.md`).
-- The selected system is remembered **per repository**, so a repo still on the old
-  system keeps the legacy prompts until it ports.
-- The user's own **saved prompts and prompt plans are unaffected** — they show under
-  both tabs.
-- Default for a repo with no stored choice: **OpenSpec** (the canonical convention).
+- **Hard-code the whole one-off prompt library** as a fixed, version-controlled
+  built-in set and **retire the editable, JSON-backed list** (remove add/edit/delete;
+  the prior saved prompts become built-ins). The `PromptsService` / `/api/prompts`
+  backend is left dormant; the **Plans** and **Notes** tabs are untouched.
+- The **system-specific** built-ins — kickoff, write-understanding-first, close-a-
+  feature, evaluate-options — swap between **OpenSpec** wording (OpenSpec change /
+  `proposal.md` / `design.md` / `archive`) and **legacy** wording (`plan.md` entry,
+  `understanding.md`, the old close-out). The system-agnostic ones are identical under
+  both.
+- The selected system is remembered **per repository** (default **OpenSpec**), so a
+  repo still on the old system keeps the legacy prompts until it ports.
 
 ## Capabilities
 
