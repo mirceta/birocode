@@ -14,7 +14,8 @@ namespace ClaudeWeb.Services.Deploy;
 /// <c>deploys.jsonl</c> ledger that swap.ps1/rollback.ps1 write, the git
 /// ancestry of the live commit, and the <c>ClaudeWebAutoRollback</c> scheduled
 /// task. The only writes are disarm (delete the task) and rollback (run
-/// rollback.ps1) — both already exist as scripts.
+/// rollback.ps1) — the scripts are seeded on first run by
+/// <see cref="DeployScriptProvisioner"/> if missing, so a fresh checkout has them.
 /// </summary>
 public class DeployService
 {
