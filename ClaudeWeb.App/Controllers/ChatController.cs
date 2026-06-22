@@ -230,4 +230,22 @@ public class ChatController : ControllerBase
         return Ok(messages);
     }
 
+    /// <summary>
+    /// Returns the tool-call history (tool_use paired with tool_result, in order)
+    /// for one session, reconstructed from the JSONL transcript. Unlike the
+    /// message transcript above, this keeps the tool blocks — it's the durable
+    /// source for the Tool calls panel after a reload (plans: add-tool-call-history).
+    /// </summary>
+    [HttpGet("sessions/{id}/tools")]
+    public IActionResult SessionTools(string id)
+    {
+        _logger.CountRequest();
+        var repo = _repos.Current();
+        if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
+
+        var tools = _sessions.GetToolCalls(repo.Path, id);
+        _logger.Info($"[CHAT] Loaded {tools.Count} tool call(s) for session {id}");
+        return Ok(tools);
+    }
+
 }
