@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using ClaudeWeb.Models;
 using ClaudeWeb.Services.Logging;
 
@@ -38,7 +39,7 @@ public record ToolCall(
 /// Lists and parses Claude Code session transcripts (JSONL) for the current
 /// working directory. Claude stores them under
 /// <c>~/.claude/projects/&lt;encoded-cwd&gt;/&lt;session-id&gt;.jsonl</c> where the
-/// encoded cwd replaces ':' '\' '/' with '-'.
+/// encoded cwd replaces every non-alphanumeric character with '-'.
 ///
 /// JSONL parsing follows ConversationStore.ExtractMetadata in ClaudeMonitor:
 /// pull the sessionId, first user prompt, turn counts and timestamps from the
@@ -57,11 +58,16 @@ public class SessionService
 
     /// <summary>
     /// Encodes a working directory the way the Claude CLI does for its project
-    /// folder name: replace ':', '\' and '/' with '-'. Example:
-    /// <c>c:\Users\km\proj</c> -> <c>c--Users-km-proj</c>.
+    /// folder name: replace every character that is not an ASCII letter or digit
+    /// with '-' (so ':', '\', '/', '_', '.', spaces, etc. all collapse to '-',
+    /// one '-' per character — runs are not coalesced). Example:
+    /// <c>c:\Users\km\my_proj</c> -> <c>c--Users-km-my-proj</c>.
+    /// Matching the CLI exactly matters: any path with '_'/'.'/space (e.g. a
+    /// worktree under <c>prg_worktrees</c>) would otherwise point at a folder
+    /// the CLI never created, so the repo's transcripts would read as empty.
     /// </summary>
     public static string EncodeCwd(string workingDirectory) =>
-        workingDirectory.Replace(':', '-').Replace('\\', '-').Replace('/', '-');
+        Regex.Replace(workingDirectory, "[^A-Za-z0-9]", "-");
 
     /// <summary>Absolute path to the project's session folder for the given cwd.</summary>
     public static string ProjectsDirectoryFor(string workingDirectory)
