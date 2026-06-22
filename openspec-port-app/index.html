@@ -281,13 +281,12 @@
     <section class="view" id="view-cockpit">
       <div class="wrap">
         <div class="ctrlbar">
-          <h2>Cockpit — read OpenSpec at a glance</h2>
+          <h2>Cockpit — read OpenSpec at a glance<span class="hint" tabindex="0" role="note" aria-label="The inspect-twin of the Console: this reads live OpenSpec state and never mutates it. See what's in flight, what shipped, and what the system does today — every authoring action stays in the Console tab. Click an active change or a capability to drill in.">?<span class="hint__tip">The <b>inspect-twin</b> of the Console: this reads live OpenSpec state and
+            <b>never mutates it</b>. See what's <b>in flight</b>, what <b>shipped</b>, and what the system
+            <b>does today</b> — every authoring action stays in the Console tab. Click an active change or a
+            capability to drill in.</span></span></h2>
           <button class="reset" id="ckRefresh">↻ Refresh</button>
         </div>
-        <p class="lead">The <b>inspect-twin</b> of the Console: this reads live OpenSpec state and
-          <b>never mutates it</b>. See what's <b>in flight</b>, what <b>shipped</b>, and what the system
-          <b>does today</b> — every authoring action stays in the Console tab. Click an active change or a
-          capability to drill in.</p>
         <div class="ck" id="ckBody"><!-- rendered by app.js --></div>
         <p class="muted flow__foot">One read-only fetch — <code>GET ./api/cockpit</code> — aggregates
           <code>openspec list --json</code>, <code>openspec spec list --json</code>, and a direct read of

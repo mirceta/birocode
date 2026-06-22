@@ -50,6 +50,14 @@ main { max-width: 1000px; margin: 0 auto; padding: 0 20px; }
 h2 { font-size: 22px; margin: 0 0 8px; } h2.mt { margin-top: 28px; }
 h3 { font-size: 16px; margin: 0 0 8px; } h3.mt { margin-top: 28px; }
 .lead { color: var(--soft); max-width: 760px; margin: 0 0 16px; }
+
+/* (?) hover-hint — reclaims space the lead paragraph used to take */
+.hint { position: relative; display: inline-grid; place-items: center; width: 18px; height: 18px; margin-left: 8px; vertical-align: middle; border-radius: 50%; background: var(--accent-soft); color: #8a3d24; font-size: 12px; font-weight: 700; cursor: help; user-select: none; }
+.hint:hover, .hint:focus-visible { background: var(--accent); color: #fff; outline: none; }
+.hint__tip { position: absolute; top: calc(100% + 9px); left: 0; z-index: 20; width: max-content; max-width: 340px; padding: 10px 12px; background: var(--ink); color: #f4efe8; font-size: 13px; font-weight: 400; line-height: 1.5; text-align: left; border-radius: 10px; box-shadow: var(--shadow); opacity: 0; visibility: hidden; transform: translateY(-4px); transition: opacity .15s, transform .15s, visibility .15s; }
+.hint__tip b { color: #fff; }
+.hint__tip::before { content: ""; position: absolute; bottom: 100%; left: 5px; border: 6px solid transparent; border-bottom-color: var(--ink); }
+.hint:hover .hint__tip, .hint:focus-visible .hint__tip { opacity: 1; visibility: visible; transform: translateY(0); }
 .muted { color: var(--soft); font-size: 13.5px; }
 
 /* Explain */
