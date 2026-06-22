@@ -184,12 +184,17 @@ export default function ChatGraph({ spec, intro, className, overlay = 'none' }) 
     });
 
     cy.ready(() => cy.fit(undefined, 34));
+    // A deferred second fit: when this graph mounts on a tab-switch the container is
+    // already at its final size, so no ResizeObserver callback fires to correct the
+    // initial (pre-layout) fit. Re-fit once the box has settled so every view lands
+    // centred and filled, not just the first one viewed. Idempotent.
+    const refit = setTimeout(() => { try { cy.resize(); cy.fit(undefined, 34); } catch { /* destroyed */ } }, 80);
 
     // keep the canvas filling its box on container resize (tab show / window resize)
     const ro = new ResizeObserver(() => { cy.resize(); cy.fit(undefined, 34); });
     ro.observe(hostRef.current);
 
-    return () => { ro.disconnect(); cy.destroy(); cyRef.current = null; };
+    return () => { clearTimeout(refit); ro.disconnect(); cy.destroy(); cyRef.current = null; };
   }, [elements]);
 
   // Apply the active overlay (binding path / refresh fate) as persistent classes,

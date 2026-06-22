@@ -580,3 +580,33 @@
 .cm-steps li { display: flex; gap: 10px; font-size: 12.5px; line-height: 1.5; color: var(--cm-ink); }
 .cm-steps__n { flex: none; width: 22px; height: 22px; border-radius: 50%; background: #1f6f37; color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
 .cm-edge { margin: 11px 0 0; font-size: 12px; line-height: 1.5; color: var(--cm-dim); }
+
+/* Step-a-loop simulator (How autopilot works). Reuses the .cm-sim / .cm-slot / .cm-ctl /
+   .cm-log shell; adds the reply chooser, the loop status box and the iteration meter. */
+.cm-replies { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.cm-reply { flex: 1 1 200px; text-align: left; font: inherit; cursor: pointer; border-radius: 10px;
+  border: 1px solid var(--cm-line); background: #0e141d; color: var(--cm-ink); padding: 11px 12px;
+  display: flex; flex-direction: column; gap: 3px; transition: .15s; border-left-width: 3px; }
+.cm-reply b { font-size: 12.5px; font-weight: 600; }
+.cm-reply span { font-size: 11.5px; color: var(--cm-dim); }
+.cm-reply:hover:not(:disabled) { filter: brightness(1.3); }
+.cm-reply:disabled { opacity: .45; cursor: not-allowed; }
+.cm-reply--work  { border-left-color: var(--cm-accent2); }
+.cm-reply--done  { border-left-color: var(--cm-good); }
+.cm-reply--deny  { border-left-color: var(--cm-bad); }
+.cm-reply--error { border-left-color: var(--cm-warn); }
+
+.cm-loopstat { flex: 1 1 260px; min-height: 64px; border: 2px solid var(--cm-line); border-radius: 9px;
+  background: #0e141d; padding: 11px 13px; display: flex; flex-direction: column; gap: 6px; transition: .25s; }
+.cm-loopstat__lab { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--cm-dim); }
+.cm-loopstat__val { font-size: 15px; font-weight: 600; color: var(--cm-dim); }
+.cm-loopstat--looping  { border-color: var(--cm-loop); } .cm-loopstat--looping  .cm-loopstat__val { color: var(--cm-loop); }
+.cm-loopstat--done     { border-color: var(--cm-good); } .cm-loopstat--done     .cm-loopstat__val { color: var(--cm-good); }
+.cm-loopstat--escalate { border-color: var(--cm-bad); }  .cm-loopstat--escalate .cm-loopstat__val { color: var(--cm-bad); }
+.cm-loopstat--error    { border-color: var(--cm-bad); }  .cm-loopstat--error    .cm-loopstat__val { color: var(--cm-bad); }
+.cm-loopstat--capped   { border-color: var(--cm-warn); } .cm-loopstat--capped   .cm-loopstat__val { color: var(--cm-warn); }
+
+.cm-iters { display: flex; align-items: center; gap: 6px; }
+.cm-iters__dot { width: 12px; height: 12px; border-radius: 50%; border: 1.6px solid var(--cm-line); background: #0b0f16; transition: .2s; }
+.cm-iters__dot.on { background: var(--cm-loop); border-color: var(--cm-loop); }
+.cm-iters__txt { font-size: 11.5px; color: var(--cm-dim); margin-left: 4px; }
