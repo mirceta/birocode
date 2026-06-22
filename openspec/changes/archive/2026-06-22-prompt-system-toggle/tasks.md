@@ -21,5 +21,5 @@
 
 ## 5. Verify
 
-- [ ] 5.1 Browser-verify on a preview: 7 built-ins listed, no editor, toggle swaps the 4 system-specific ones + persists per repo, generic 3 identical, 0 console errors. (PENDING — deploy/preview.)
+- [x] 5.1 Browser-verify on a preview: 7 built-ins listed, no editor, toggle swaps the 4 system-specific ones + persists per repo, generic 3 identical, 0 console errors. (Verified on live :5099 deploy.)
 - [x] 5.2 `openspec validate prompt-system-toggle --strict` clean; client builds clean.
