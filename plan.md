@@ -15,8 +15,11 @@
 > Files tab to see wrapping mermaid labels etc. in action.
 
 > **Status (2026-06-21):** **Prompt plans** (slice 1) is **user-confirmed
-> working and merged to main**. In flight: **Chat system tests** on
-> `feature/systest-interactive` (steppable hub + per-suite interactive diagrams).
+> working and merged to main**. In flight: **Autopilot loop mode** + a **"How
+> chat works" explainer tab** in the Autopilot console (built & verified on an
+> isolated port; deploying to live now) on `feature/autopilot-loop-mode`, and
+> **Chat system tests** (steppable hub + per-suite interactive diagrams) on
+> `feature/systest-interactive`.
 
 ## ⚠️ Known risks to mitigate
 
@@ -43,6 +46,28 @@
     auto-advance until the token mitigation above lands.
 
 ## Active feature plans
+
+- [Autopilot loop mode](plans/autopilot-loop-mode.md) — a **deterministic** autopilot
+  loop that **re-sends one fixed prompt** every time an agent finishes a turn, to push
+  it through "do you want slice A or B?" prompts you've already answered — and **stops
+  when the agent is genuinely done**. Done-detection = a **sentinel phrase**
+  (e.g. `LOOP_DONE`) in the last message, backstopped by a hard **iteration cap**; risky
+  endings escalate via the existing deny-list. Resend/turn-done reuses the
+  `RunSession` busy signal; the send reuses the existing CLI path + audit log. Sits behind
+  the **operator gate** (off by default — it acts unattended) and does **not** need the
+  unbuilt LLM classifier. **BUILT — `LoopConfigStore` + per-turn decision in
+  `AutopilotService` + `POST /api/autopilot/loop` + a Loops sub-tab in the Autopilot
+  console; store/API + all three UI states browser-verified on isolated :5210. Not yet
+  merged/deployed; the live multi-turn resend wasn't run against a real agent (would
+  drive real Claude sessions).** Also on this branch: a **"How chat works" explainer
+  tab** in the Autopilot console (`ChatArchitectureView.jsx`) — a self-contained,
+  no-backend diagram of the four layers, conversation/repo/session grains, the life of
+  one turn, and an interactive refresh wiped-vs-survives toggle. On
+  `feature/autopilot-loop-mode`.
+
+> Global-exposure planning (the "Global exposure, done right" homepage topic **and** the
+> `global-example/` worked example) **moved to OpenSpec** — see
+> `openspec/changes/add-global-exposure/` (`openspec list`). On `feature/global-apps-exposure`.
 
 - [Portable deploy — one committed `swap.ps1` any agent can run](plans/portable-deploy.md)
   — deploying the Harness to live `:5099` only worked on one machine because the deploy

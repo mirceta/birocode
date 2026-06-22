@@ -3,8 +3,10 @@ import { useDock } from '../../context/DockContext';
 import { useFeature } from '../../context/UiModeContext';
 import { usePrompts } from '../../context/PromptsContext';
 import { usePromptPlans } from '../../context/PromptPlansContext';
+import { usePromptNotes } from '../../context/PromptNotesContext';
 import { useT } from '../../i18n/LanguageContext';
 import PromptManager from './PromptManager';
+import PromptExpandModal from './PromptExpandModal';
 
 // Controlled composer. The draft text lives in ChatContext (so it persists
 // across tab navigation and can be appended to by other tabs), and is passed
@@ -37,11 +39,20 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
   // (plans/dock-prompts-button.md) — the modal portals to <body>, so the small
   // dock window doesn't shrink it.
   const customPromptsEnabled = useFeature('customPrompts');
+  // Prompt EXPAND (openspec: add-prompt-expand-popup): a composer button that
+  // opens the current draft in a large editor popup. The popup edits the SAME
+  // draft (value/onChange), so it's just a bigger view — nothing to merge on
+  // close. Available on the main composer and the dashboard docks.
+  const promptExpandEnabled = useFeature('promptExpand');
+  const [expandOpen, setExpandOpen] = useState(false);
   const { prompts, addPrompt, updatePrompt, deletePrompt } = usePrompts();
   // Prompt PLANS (plans/prompt-plans.md): named, ordered prompt-step sequences,
   // shown as a second tab in the SAME ⚙ modal. "Use" on a step composes its
   // details + expected result into the composer (same insertPrompt path).
   const { plans, addPlan, updatePlan, deletePlan } = usePromptPlans();
+  // Prompt NOTES (openspec add-prompt-notes-tab): a single freeform canvas drafted
+  // before being shaped into a plan, shown as a THIRD tab in the SAME ⚙ modal.
+  const { text: notesText, loaded: notesLoaded, saveNotes } = usePromptNotes();
   const [mgrOpen, setMgrOpen] = useState(false);
   // The queue for the surface in play: this dock's own agent when embedded, else
   // the active tab's, else the global queue.
@@ -142,8 +153,21 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
           onAddPlan={addPlan}
           onUpdatePlan={updatePlan}
           onDeletePlan={deletePlan}
+          notesText={notesText}
+          notesLoaded={notesLoaded}
+          onSaveNotes={saveNotes}
           onInsert={insertPrompt}
           onClose={() => setMgrOpen(false)}
+        />
+      )}
+      {promptExpandEnabled && expandOpen && (
+        <PromptExpandModal
+          value={value}
+          onChange={onChange}
+          onClose={() => {
+            setExpandOpen(false);
+            requestAnimationFrame(() => textareaRef.current?.focus());
+          }}
         />
       )}
       {stash.length > 0 && (
@@ -228,6 +252,18 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
             aria-expanded={mgrOpen}
           >
             &#9881;
+          </button>
+        )}
+        {promptExpandEnabled && (
+          <button
+            type="button"
+            className="chat-input__expand"
+            onClick={() => setExpandOpen(true)}
+            aria-label={t('chat.expand')}
+            title={t('chat.expand')}
+            aria-expanded={expandOpen}
+          >
+            &#9974;
           </button>
         )}
         <textarea

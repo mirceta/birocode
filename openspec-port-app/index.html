@@ -9,37 +9,12 @@
 <body>
   <header class="hero">
     <div class="hero__inner">
-      <p class="kicker">Dedicated Local app · feature/openspec-flow · DECIDED — Path A</p>
       <h1>OpenSpec Port <span class="cr">— Control Room</span></h1>
-      <p class="sub">
-        A standing surface for the one big feature: <b>explain</b> the port, pin down what
-        <b>our system</b> even is today, see which <b>CLAUDE.md</b> conventions it touches,
-        <b>analyze</b> it against what we have, see how your day-to-day changes when you
-        <b>adopt</b> it, <b>decide</b> the four open questions, and <b>control</b> it — track
-        every phase and task. Companion to
-        <code>plans/openspec-flow.md</code>; your progress saves locally.
-      </p>
       <nav class="nav" id="nav">
-        <div class="navgroup">
-          <span class="navgroup__lbl">Understand</span>
-          <div class="navgroup__btns">
-            <button class="nav__btn is-active" data-view="explain">Explain</button>
-            <button class="nav__btn" data-view="system">Our system</button>
-            <button class="nav__btn" data-view="claudemd">CLAUDE.md</button>
-            <button class="nav__btn" data-view="analyze">Analyze</button>
-            <button class="nav__btn" data-view="adopt">Adopt</button>
-            <button class="nav__btn" data-view="workflows">Workflows</button>
-          </div>
-        </div>
-        <div class="navgroup navgroup--op">
-          <span class="navgroup__lbl">Operate</span>
-          <div class="navgroup__btns">
-            <button class="nav__btn" data-view="decide">Decide</button>
-            <button class="nav__btn" data-view="control">Control</button>
-            <button class="nav__btn" data-view="console">Console</button>
-            <button class="nav__btn" data-view="migrate">Migrate</button>
-          </div>
-        </div>
+        <button class="nav__btn is-active" data-view="understand">Understand</button>
+        <button class="nav__btn" data-view="port">Port</button>
+        <button class="nav__btn" data-view="operate">Operate</button>
+        <button class="nav__btn" data-view="cockpit">Cockpit</button>
       </nav>
       <div class="progress" id="progressBar" title="overall task completion">
         <div class="progress__fill" id="progressFill"></div>
@@ -49,8 +24,27 @@
   </header>
 
   <main>
+    <!-- ═════════════ UNDERSTAND (groups Explain · Our system · CLAUDE.md · Analyze · Decide) ═════════════ -->
+    <section class="view is-active" id="view-understand">
+      <div class="wrap understand__top">
+        <p class="sub">
+          Understand the port itself: <b>explain</b> the lifecycle we're adopting, pin down what
+          <b>our system</b> even is today, see which <b>CLAUDE.md</b> conventions it touches,
+          <b>analyze</b> it against what we have, and <b>decide</b> the four open questions.
+          Companion to <code>plans/openspec-flow.md</code>; the <b>Port</b> and <b>Operate</b>
+          tabs are where you act on it.
+        </p>
+        <nav class="subnav">
+          <button class="subnav__btn is-active" data-sub="explain">Explain</button>
+          <button class="subnav__btn" data-sub="system">Our system</button>
+          <button class="subnav__btn" data-sub="claudemd">CLAUDE.md</button>
+          <button class="subnav__btn" data-sub="analyze">Analyze</button>
+          <button class="subnav__btn" data-sub="decide">Decide</button>
+        </nav>
+      </div>
+
     <!-- ───────────── EXPLAIN ───────────── -->
-    <section class="view is-active" id="view-explain">
+    <section class="subview is-active" id="subview-explain">
       <div class="wrap">
         <div class="scope">
           <b>Scope (clarified 2026-06-19):</b> OpenSpec replaces the <b>planning layer</b>
@@ -80,7 +74,7 @@
     </section>
 
     <!-- ───────────── OUR SYSTEM ───────────── -->
-    <section class="view" id="view-system">
+    <section class="subview" id="subview-system">
       <div class="wrap">
         <h2>"Our system" — what it actually is, and where it lives</h2>
         <p class="lead">Fair question — it never had a name or an installer, so it feels like
@@ -102,7 +96,7 @@
     </section>
 
     <!-- ───────────── CLAUDE.md ───────────── -->
-    <section class="view" id="view-claudemd">
+    <section class="subview" id="subview-claudemd">
       <div class="wrap">
         <h2><code>CLAUDE.md</code> — exactly which conventions OpenSpec touches</h2>
         <p class="lead">Adoption is narrower than it feels: it hits the <b>planning-convention</b>
@@ -124,7 +118,7 @@
     </section>
 
     <!-- ───────────── ANALYZE ───────────── -->
-    <section class="view" id="view-analyze">
+    <section class="subview" id="subview-analyze">
       <div class="wrap">
         <h2>Our system vs OpenSpec — scored</h2>
         <p class="lead">Each capability rated ★ out of 5 for both sides, from our point of view.
@@ -137,8 +131,39 @@
       </div>
     </section>
 
+    <!-- ───────────── DECIDE ───────────── -->
+    <section class="subview" id="subview-decide">
+      <div class="wrap">
+        <div class="ctrlbar">
+          <h2>Decide — the four questions that gate Phase 0</h2>
+          <span class="decsum" id="decsum"><!-- rendered by app.js --></span>
+        </div>
+        <p class="lead">Path A (adopt the tooling) is already <b>DECIDED</b>. These are the knobs left
+          before Phase 0 can start. Each shows its two-way fork and my lean — set each to
+          <b>open</b>, <b>leaning</b>, or <b>settled</b>; the choice persists in this browser.</p>
+        <div class="decs" id="decs"><!-- rendered by app.js --></div>
+      </div>
+    </section>
+    </section>
+    <!-- ═════════════ /UNDERSTAND ═════════════ -->
+
+    <!-- ═════════════ PORT (groups Adopt · Control · Migrate) ═════════════ -->
+    <section class="view" id="view-port">
+      <div class="wrap understand__top">
+        <p class="sub">
+          Make the switch from <code>plans/*</code> to OpenSpec: see how your day-to-day changes
+          when you <b>adopt</b> it, <b>control</b> the port — track every phase and task — and
+          <b>migrate</b> any straggler branch still planning the old way. Your progress saves locally.
+        </p>
+        <nav class="subnav">
+          <button class="subnav__btn is-active" data-sub="adopt">Adopt</button>
+          <button class="subnav__btn" data-sub="control">Control</button>
+          <button class="subnav__btn" data-sub="migrate">Migrate</button>
+        </nav>
+      </div>
+
     <!-- ───────────── ADOPT ───────────── -->
-    <section class="view" id="view-adopt">
+    <section class="subview is-active" id="subview-adopt">
       <div class="wrap">
         <h2>Adopt — your day-to-day, before vs after</h2>
         <p class="lead">No ritual disappears — each one moves to an OpenSpec equivalent. The
@@ -181,22 +206,8 @@
       </div>
     </section>
 
-    <!-- ───────────── DECIDE ───────────── -->
-    <section class="view" id="view-decide">
-      <div class="wrap">
-        <div class="ctrlbar">
-          <h2>Decide — the four questions that gate Phase 0</h2>
-          <span class="decsum" id="decsum"><!-- rendered by app.js --></span>
-        </div>
-        <p class="lead">Path A (adopt the tooling) is already <b>DECIDED</b>. These are the knobs left
-          before Phase 0 can start. Each shows its two-way fork and my lean — set each to
-          <b>open</b>, <b>leaning</b>, or <b>settled</b>; the choice persists in this browser.</p>
-        <div class="decs" id="decs"><!-- rendered by app.js --></div>
-      </div>
-    </section>
-
     <!-- ───────────── CONTROL ───────────── -->
-    <section class="view" id="view-control">
+    <section class="subview" id="subview-control">
       <div class="wrap">
         <div class="ctrlbar">
           <h2>Control — drive the port</h2>
@@ -209,75 +220,8 @@
       </div>
     </section>
 
-    <!-- ───────────── WORKFLOWS ───────────── -->
-    <section class="view" id="view-workflows">
-      <div class="wrap">
-        <h2>Workflows — the five jobs you'd actually do</h2>
-        <p class="lead">OpenSpec is <b>two modes wearing one CLI</b>. You <b class="wf-r">read</b> the
-          living truth — every read is a command, so the <b>Console</b> runs it all. You
-          <b class="wf-w">write</b> a change — but the <i>thinking</i> is authored by hand; only the
-          <b>bookends</b> (scaffold, gate, ship) are commands. Tap a workflow for its steps.</p>
-
-        <div class="wfbar">
-          <div class="wffilters" id="wfFilters">
-            <button data-mode="all" class="on">All 5</button>
-            <button data-mode="read"><span class="wfdot wf-rb"></span>Read the truth</button>
-            <button data-mode="write"><span class="wfdot wf-wb"></span>Write a change</button>
-          </div>
-          <div class="wflegend">
-            <span><span class="wfkb wfkb--cli">✓</span> runs in Console</span>
-            <span><span class="wfkb wfkb--hand">✍</span> authored by hand</span>
-            <span><span class="wfkb wfkb--tui">⌨</span> terminal only</span>
-          </div>
-        </div>
-
-        <div class="wflist" id="wfFlows"><!-- rendered by app.js --></div>
-
-        <p class="muted flow__foot">The <b>read</b> workflows are pure commands — the Console covers
-          them completely. The <b>change</b> loop is where the <b>4-ported / 7-by-hand</b> split on the
-          <b>Adopt</b> tab comes from: its bookends are buttons, its middle you write yourself.</p>
-      </div>
-    </section>
-
-    <!-- ───────────── CONSOLE ───────────── -->
-    <section class="view" id="view-console">
-      <div class="wrap">
-        <div class="ctrlbar">
-          <h2>Console — drive OpenSpec for real</h2>
-          <button class="reset" id="logClear">Clear log</button>
-        </div>
-        <p class="lead">The executable twin of <b>Workflows</b> — the same five jobs, in the same order,
-          but here each command is a real button (run in the repo root, through this app's server, output
-          in the log below). The <span class="wfkb wfkb--cli">✓</span> steps are buttons; the
-          <span class="wfkb wfkb--hand">✍</span> steps are authored by hand — fill the small field
-          beside one (e.g. <b>change-name</b>, typed once and shared across the steps) and
-          <b>⧉ Copy prompt</b> puts a <i>fully filled-in</i> instruction on your clipboard to hand
-          straight to the agent; <span class="wfkb wfkb--tui">⌨</span> is terminal-only. Every step also notes <b>how you did it in the old system</b>
-          (<span class="cstep__waslbl cstep__was--moved" style="background:#f3e9dd;color:#9a6233">was</span>); <b>Adopt</b> has the fuller side-by-side.</p>
-
-        <div class="gate">
-          <b>Honest scope:</b> this makes the workflow <i>one-tap and auditable</i> — it does
-          <i>not</i> make the port "under control." A button you may click is a convenience, not a
-          gate. The thing that actually enforces the spec — <code>validate --strict</code> blocking
-          bad work — has to live in <b>CI / a git hook</b>, outside this app. The console shows you
-          the state; CI is what makes it mandatory.
-        </div>
-
-        <div class="cwf" id="consoleBody"><!-- rendered by app.js --></div>
-        <p class="muted flow__foot">The server runs a fixed whitelist — you pick a step, it builds the
-          command — so nothing here can run an arbitrary shell. The <b>WRITE</b> groups change files in
-          the repo; the <b>READ</b> groups don't.</p>
-
-        <h3 class="mt">Console log</h3>
-        <div class="con__log" id="conLog" aria-live="polite">
-          <div class="con__empty">Output appears here. Start in <b>Set up the tool</b> with
-            <b>openspec --version</b> — if it isn't installed yet you'll see that plainly (that's Phase 0).</div>
-        </div>
-      </div>
-    </section>
-
     <!-- ───────────── MIGRATE ───────────── -->
-    <section class="view" id="view-migrate">
+    <section class="subview" id="subview-migrate">
       <div class="wrap">
         <h2>Migrate — flip the convention, catch the stragglers</h2>
         <p class="lead">The strategy for a <b>solo repo with agent branches in flight</b>: finish the
@@ -325,6 +269,109 @@
         </ol>
         <p class="muted flow__foot">This is the <b>Phase 4</b> operating procedure. Until the branch
           actually merges, no straggler exists yet — the recipe is staged and ready.</p>
+      </div>
+    </section>
+    <!-- ═════════════ /PORT ═════════════ -->
+    </section>
+
+    <!-- ═════════════ OPERATE (groups Workflows · Console) ═════════════ -->
+    <section class="view" id="view-operate">
+      <div class="wrap understand__top">
+        <p class="sub">
+          Drive OpenSpec day-to-day: the five <b>workflows</b> you'd actually run — read the living
+          truth, or write a change end to end — and the <b>console</b> that runs the command bookends
+          for real and copies paste-ready prompts for the by-hand steps.
+        </p>
+        <nav class="subnav">
+          <button class="subnav__btn is-active" data-sub="workflows">Workflows</button>
+          <button class="subnav__btn" data-sub="console">Console</button>
+        </nav>
+      </div>
+
+    <!-- ───────────── WORKFLOWS ───────────── -->
+    <section class="subview is-active" id="subview-workflows">
+      <div class="wrap">
+        <h2>Workflows — the five jobs you'd actually do</h2>
+        <p class="lead">OpenSpec is <b>two modes wearing one CLI</b>. You <b class="wf-r">read</b> the
+          living truth — every read is a command, so the <b>Console</b> runs it all. You
+          <b class="wf-w">write</b> a change — but the <i>thinking</i> is authored by hand; only the
+          <b>bookends</b> (scaffold, gate, ship) are commands. Tap a workflow for its steps.</p>
+
+        <div class="wfbar">
+          <div class="wffilters" id="wfFilters">
+            <button data-mode="all" class="on">All 5</button>
+            <button data-mode="read"><span class="wfdot wf-rb"></span>Read the truth</button>
+            <button data-mode="write"><span class="wfdot wf-wb"></span>Write a change</button>
+          </div>
+          <div class="wflegend">
+            <span><span class="wfkb wfkb--cli">✓</span> runs in Console</span>
+            <span><span class="wfkb wfkb--hand">✍</span> authored by hand</span>
+            <span><span class="wfkb wfkb--tui">⌨</span> terminal only</span>
+          </div>
+        </div>
+
+        <div class="wflist" id="wfFlows"><!-- rendered by app.js --></div>
+
+        <p class="muted flow__foot">The <b>read</b> workflows are pure commands — the Console covers
+          them completely. The <b>change</b> loop is where the <b>4-ported / 7-by-hand</b> split on the
+          <b>Adopt</b> tab comes from: its bookends are buttons, its middle you write yourself.</p>
+      </div>
+    </section>
+
+    <!-- ───────────── CONSOLE ───────────── -->
+    <section class="subview" id="subview-console">
+      <div class="wrap">
+        <div class="ctrlbar">
+          <h2>Console — drive OpenSpec for real</h2>
+          <button class="reset" id="logClear">Clear log</button>
+        </div>
+        <p class="lead">The executable twin of <b>Workflows</b> — the same five jobs, in the same order,
+          but here each command is a real button (run in the repo root, through this app's server, output
+          in the log below). The <span class="wfkb wfkb--cli">✓</span> steps are buttons; the
+          <span class="wfkb wfkb--hand">✍</span> steps are authored by hand — fill the small field
+          beside one (e.g. <b>change-name</b>, typed once and shared across the steps) and
+          <b>⧉ Copy prompt</b> puts a <i>fully filled-in</i> instruction on your clipboard to hand
+          straight to the agent; <span class="wfkb wfkb--tui">⌨</span> is terminal-only. Every step also notes <b>how you did it in the old system</b>
+          (<span class="cstep__waslbl cstep__was--moved" style="background:#f3e9dd;color:#9a6233">was</span>); <b>Adopt</b> has the fuller side-by-side.</p>
+
+        <div class="gate">
+          <b>Honest scope:</b> this makes the workflow <i>one-tap and auditable</i> — it does
+          <i>not</i> make the port "under control." A button you may click is a convenience, not a
+          gate. The thing that actually enforces the spec — <code>validate --strict</code> blocking
+          bad work — has to live in <b>CI / a git hook</b>, outside this app. The console shows you
+          the state; CI is what makes it mandatory.
+        </div>
+
+        <div class="cwf" id="consoleBody"><!-- rendered by app.js --></div>
+        <p class="muted flow__foot">The server runs a fixed whitelist — you pick a step, it builds the
+          command — so nothing here can run an arbitrary shell. The <b>WRITE</b> groups change files in
+          the repo; the <b>READ</b> groups don't.</p>
+
+        <h3 class="mt">Console log</h3>
+        <div class="con__log" id="conLog" aria-live="polite">
+          <div class="con__empty">Output appears here. Start in <b>Set up the tool</b> with
+            <b>openspec --version</b> — if it isn't installed yet you'll see that plainly (that's Phase 0).</div>
+        </div>
+      </div>
+    </section>
+    <!-- ═════════════ /OPERATE ═════════════ -->
+    </section>
+
+    <!-- ───────────── COCKPIT ───────────── -->
+    <section class="view" id="view-cockpit">
+      <div class="wrap">
+        <div class="ctrlbar">
+          <h2>Cockpit — read OpenSpec at a glance<span class="hint" tabindex="0" role="note" aria-label="The inspect-twin of the Console: this reads live OpenSpec state and never mutates it. See what's in flight, what shipped, and what the system does today — every authoring action stays in the Console tab. Click an active change or a capability to drill in.">?<span class="hint__tip">The <b>inspect-twin</b> of the Console: this reads live OpenSpec state and
+            <b>never mutates it</b>. See what's <b>in flight</b>, what <b>shipped</b>, and what the system
+            <b>does today</b> — every authoring action stays in the Console tab. Click an active change or a
+            capability to drill in.</span></span></h2>
+          <button class="reset" id="ckRefresh">↻ Refresh</button>
+        </div>
+        <div class="ck" id="ckBody"><!-- rendered by app.js --></div>
+        <p class="muted flow__foot">One read-only fetch — <code>GET ./api/cockpit</code> — aggregates
+          <code>openspec list --json</code>, <code>openspec spec list --json</code>, and a direct read of
+          <code>openspec/changes/archive/</code> (no CLI lists shipped changes). No new write verb joins
+          the server whitelist.</p>
       </div>
     </section>
   </main>

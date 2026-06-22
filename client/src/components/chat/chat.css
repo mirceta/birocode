@@ -874,9 +874,103 @@ details.step > summary::-webkit-details-marker {
   flex: 0 0 auto;
 }
 
+/* Expand-to-large-editor button (openspec: add-prompt-expand-popup) — same
+   round chip as the ⚙ manager button. */
+.chat-input__expand {
+  min-width: var(--touch);
+  min-height: var(--touch);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 18px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
 .chat-input__preset:hover,
-.chat-input__manage:hover {
+.chat-input__manage:hover,
+.chat-input__expand:hover {
   border-color: var(--color-accent);
+}
+
+/* Prompt-expand popup — a CENTERED MODAL portaled to <body> (see
+   PromptExpandModal.jsx), same stacking-context-proof contract as the prompt
+   manager. The card and its textarea are sized with viewport-relative units so
+   it stays usable with the on-screen keyboard up: the editor fills the card and
+   scrolls rather than assuming full height. */
+.prompt-expand-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.prompt-expand {
+  width: min(820px, 100%);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius, 8px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  padding: 16px;
+}
+
+.prompt-expand__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.prompt-expand__title { font-weight: 600; font-size: 14px; }
+
+.prompt-expand__close {
+  border: none;
+  background: none;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.prompt-expand__field {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 40vh;
+  resize: vertical;
+  box-sizing: border-box;
+  padding: 12px;
+  font: inherit;
+  line-height: 1.5;
+  color: var(--color-text);
+  background: var(--color-bg, var(--color-surface));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius, 8px);
+  overflow-y: auto;
+}
+
+.prompt-expand__foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.prompt-expand__done {
+  min-height: var(--touch);
+  padding: 0 20px;
+  border: 1px solid var(--color-accent);
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 /* Custom-prompts manager — a CENTERED MODAL portaled to <body> (see
@@ -903,6 +997,10 @@ details.step > summary::-webkit-details-marker {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
   padding: 16px;
 }
+
+/* The Notes tab is one big editing canvas, so its modal is wider than the
+   prompt/plan lists. The canvas itself is resizable (below). */
+.prompt-mgr--notes { width: min(820px, 100%); }
 
 .prompt-mgr__head {
   display: flex;
@@ -1042,6 +1140,36 @@ details.step > summary::-webkit-details-marker {
 
 .prompt-mgr__text-input { resize: vertical; }
 .prompt-mgr__error { color: #d1242f; font-size: 12px; margin: 0; }
+
+/* ---- Notes tab: one resizable white canvas + a save bar ---- */
+.note-mgr { display: flex; flex-direction: column; gap: 8px; }
+
+.note-mgr__canvas {
+  width: 100%;
+  max-width: 100%;
+  min-height: 50vh;
+  /* Drag the corner to make it as big as you like, so it's actually readable. */
+  resize: both;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-surface);
+  color: inherit;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.note-mgr__canvas:disabled { opacity: 0.6; }
+
+.note-mgr__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.note-mgr__status { font-size: 12px; color: var(--color-text-soft); }
+.note-mgr__status--error { color: #d1242f; }
 .prompt-mgr__actions { display: flex; gap: 8px; }
 
 .prompt-mgr__save {
@@ -1084,6 +1212,40 @@ details.step > summary::-webkit-details-marker {
 
 .prompt-mgr__tab--on {
   background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface));
+  color: var(--color-accent);
+}
+
+/* Per-repo planning-system selector (prompt-system-toggle): a distinct axis from
+   the Prompts|Plans tabs above — picks which system's built-in prompts are shown. */
+.prompt-mgr__systembar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--color-border);
+  flex-wrap: wrap;
+}
+.prompt-mgr__systembar-lbl {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-soft);
+  margin-right: 2px;
+}
+.prompt-mgr__sysbtn {
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text-soft);
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.prompt-mgr__sysbtn--on {
+  background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface));
+  border-color: var(--color-accent);
   color: var(--color-accent);
 }
 
@@ -1464,4 +1626,145 @@ details.step > summary::-webkit-details-marker {
 .picker__item-meta {
   font-size: 13px;
   color: var(--color-text-soft);
+}
+
+/* ---- Tool calls drawer (openspec: add-tool-call-history) -------------- */
+
+/* Toolbar toggle — a pill in .chat__bar next to the model selector. */
+.chat__tools {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.chat__tools:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.chat__tools:active {
+  transform: scale(0.97);
+}
+
+/* When the panel is showing, the toggle reads as a pressed/active control. */
+.chat__tools--on {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
+.chat__tools--on:hover {
+  color: #fff;
+}
+
+/* The message area that the tool-call overlay covers. It wraps .chat__scroll so
+   the overlay can fill exactly the chat region (below the toolbar, above the
+   composer) — not the whole viewport. */
+.chat__body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat__body .chat__scroll {
+  flex: 1;
+}
+
+/* The panel: an overlay filling the chat message area. The same toolbar button
+   toggles it back to the chat. */
+.toolcalls {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg, var(--color-surface));
+  z-index: 5;
+  animation: toolcalls-slide 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes toolcalls-slide {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.toolcalls__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.toolcalls__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--color-text);
+}
+
+.toolcalls__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.toolcalls__close {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-soft);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.toolcalls__close:hover {
+  color: var(--color-text);
+  border-color: var(--color-accent);
+}
+
+.toolcalls__body {
+  flex: 1;
+  overflow: auto;
+  padding: 12px;
+}
+
+/* Inside the drawer the step list should fill the width, not the 92% cap it
+   uses inline in the transcript. */
+.toolcalls__body .steps {
+  max-width: 100%;
+}
+
+.toolcalls__empty {
+  margin: 24px 8px;
+  color: var(--color-text-soft);
+  font-size: 14px;
+  text-align: center;
 }

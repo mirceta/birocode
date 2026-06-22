@@ -1,0 +1,56 @@
+# Auto-rollback for Claude Web harness on :5099.
+# Restores the .lastgood snapshot (bin + client/dist) and restarts the exe.
+# Safe to run manually at any time.
+#
+# SEEDED FILE — generated from ClaudeWeb.App/Deploy/templates/rollback.ps1.tmpl by
+# DeployScriptProvisioner on first run. Edit the template in the repo, not this
+# copy: a missing script is re-seeded, but an existing one is never overwritten.
+$ErrorActionPreference = 'Continue'
+$repo = '__REPO__'
+$bin = Join-Path $repo 'ClaudeWeb.App\bin\Release\net8.0-windows'
+$dist = Join-Path $repo 'client\dist'
+$log = '__DEPLOYDIR__\rollback.log'
+
+"[$(Get-Date -Format o)] Rollback started" | Out-File $log -Append
+
+Stop-Process -Name ClaudeWeb -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 3
+
+# robocopy /MIR instead of Remove-Item+Copy-Item: survives a held handle on
+# the target directory itself (the 2026-06-12 swap nested the build into
+# bin\bin that way and the harness never came back up).
+if (Test-Path "$bin.lastgood") {
+    robocopy "$bin.lastgood" $bin /MIR /NFL /NDL /NJH | Out-Null
+    "[$(Get-Date -Format o)] bin restored" | Out-File $log -Append
+} else {
+    "[$(Get-Date -Format o)] WARNING: $bin.lastgood missing, bin left as-is" | Out-File $log -Append
+}
+
+if (Test-Path "$dist.lastgood") {
+    robocopy "$dist.lastgood" $dist /MIR /NFL /NDL /NJH | Out-Null
+    "[$(Get-Date -Format o)] dist restored" | Out-File $log -Append
+} else {
+    "[$(Get-Date -Format o)] WARNING: $dist.lastgood missing, dist left as-is" | Out-File $log -Append
+}
+
+if (Test-Path (Join-Path $bin 'ClaudeWeb.exe')) {
+    Start-Process (Join-Path $bin 'ClaudeWeb.exe') -WorkingDirectory $bin
+    Start-Sleep -Seconds 5
+    if (Get-Process ClaudeWeb -ErrorAction SilentlyContinue) {
+        "[$(Get-Date -Format o)] ClaudeWeb.exe running" | Out-File $log -Append
+    } else {
+        "[$(Get-Date -Format o)] FATAL: ClaudeWeb.exe not running 5s after start" | Out-File $log -Append
+    }
+} else {
+    "[$(Get-Date -Format o)] FATAL: ClaudeWeb.exe missing, nothing to start" | Out-File $log -Append
+}
+
+schtasks /Delete /TN ClaudeWebAutoRollback /F 2>$null
+
+# Deploy ledger (plans/deployments-tab.md): record the rollback. ADDITIVE.
+try {
+    $rb = @{ at = (Get-Date).ToString('o'); event = 'rollback' } | ConvertTo-Json -Compress
+    Add-Content -Path '__DEPLOYDIR__\deploys.jsonl' -Value $rb -Encoding utf8
+} catch { "[$(Get-Date -Format o)] ledger write failed: $_" | Out-File $log -Append }
+
+"[$(Get-Date -Format o)] Rollback finished" | Out-File $log -Append

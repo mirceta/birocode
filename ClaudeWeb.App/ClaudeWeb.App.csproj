@@ -24,4 +24,10 @@
     </None>
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Canonical deploy scripts, seeded to the off-repo DeployScriptsDir on first
+         run by DeployScriptProvisioner (makes the deploy procedure reproducible). -->
+    <EmbeddedResource Include="Deploy\templates\*.tmpl" />
+  </ItemGroup>
+
 </Project>

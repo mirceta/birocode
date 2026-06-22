@@ -1,5 +1,6 @@
 using ClaudeWeb.Models;
 using ClaudeWeb.Services.Autopilot;
+using ClaudeWeb.Services.Deploy;
 using ClaudeWeb.Services.Hosting;
 using ClaudeWeb.Services.IpFilter;
 using ClaudeWeb.Services.Logging;
@@ -33,7 +34,14 @@ static class Program
         // Pin the harness's own source repo as the default project, so the app can
         // be opened (and improved) in itself via the App tab. No-op for installs
         // that ship without the source tree.
-        repositories.EnsureSelfRepo(FindRepoRoot(), "Claude Web (this app)");
+        var repoRoot = FindRepoRoot();
+        repositories.EnsureSelfRepo(repoRoot, "Claude Web (this app)");
+
+        // Resolve + seed the off-repo deploy tooling (swap/rollback/arm) so the
+        // deploy procedure is reproducible on a fresh machine — same LoadOrSeed
+        // pattern as auth.json. Missing-only, so an existing box is untouched.
+        config.DeployScriptsDir = DeployScriptProvisioner.ResolveDir(config.DeployScriptsDir, repoRoot) ?? config.DeployScriptsDir;
+        DeployScriptProvisioner.EnsureSeeded(config.DeployScriptsDir, repoRoot, logger);
 
         // IP allowlist (plans/auth-ip-filter.md). Built here so the WinForms
         // GUI (the ONLY surface that can approve IPs) and the web API share

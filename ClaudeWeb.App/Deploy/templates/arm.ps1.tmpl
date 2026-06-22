@@ -1,0 +1,13 @@
+# Arm the dead-man's switch: rollback.ps1 fires in 15 minutes unless disarmed.
+# Uses Register-ScheduledTask with a real DateTime — schtasks /SD takes a
+# locale-parsed string, and 'MM/dd/yyyy' on this dd.MM.yyyy box armed
+# 06/12 as December 6th (2026-06-12 incident: harness down, no rollback).
+#
+# SEEDED FILE — generated from ClaudeWeb.App/Deploy/templates/arm.ps1.tmpl by
+# DeployScriptProvisioner on first run. Edit the template in the repo, not this
+# copy: a missing script is re-seeded, but an existing one is never overwritten.
+$when = (Get-Date).AddMinutes(15)
+$action = New-ScheduledTaskAction -Execute 'powershell' -Argument '-ExecutionPolicy Bypass -File __DEPLOYDIR__\rollback.ps1'
+$trigger = New-ScheduledTaskTrigger -Once -At $when
+Register-ScheduledTask -TaskName ClaudeWebAutoRollback -Action $action -Trigger $trigger -Force | Out-Null
+Write-Output "armed for $($when.ToString('yyyy-MM-dd HH:mm'))"

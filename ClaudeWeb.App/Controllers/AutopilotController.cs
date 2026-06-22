@@ -26,20 +26,24 @@ public class AutopilotController : ControllerBase
     private readonly AutopilotDiscoveryService _discovery;
     private readonly AutopilotService _engine;
     private readonly AutopilotConfigStore _config;
+    private readonly LoopConfigStore _loops;
     private readonly AutopilotGate _operatorGate;
     private readonly AutopilotAuditLog _audit;
+    private readonly SystemTestsService _systests;
     private readonly Logger _logger;
 
     public AutopilotController(
         AutopilotDiscoveryService discovery, AutopilotService engine,
-        AutopilotConfigStore config, AutopilotGate operatorGate,
-        AutopilotAuditLog audit, Logger logger)
+        AutopilotConfigStore config, LoopConfigStore loops, AutopilotGate operatorGate,
+        AutopilotAuditLog audit, SystemTestsService systests, Logger logger)
     {
         _discovery = discovery;
         _engine = engine;
         _config = config;
+        _loops = loops;
         _operatorGate = operatorGate;
         _audit = audit;
+        _systests = systests;
         _logger = logger;
     }
 
@@ -88,6 +92,81 @@ public class AutopilotController : ControllerBase
         return Ok(BuildState());
     }
 
+    public sealed record LoopRequest(
+        string? RepoId, string? Action, string? Prompt, string? Sentinel, int? MaxIterations);
+
+    /// <summary>Loop mode (plans/autopilot-loop-mode.md): arm / edit / stop the
+    /// per-agent fixed-prompt resend loop. <c>action</c> = start | update | stop.
+    /// Gated like every other autopilot endpoint; returns the fresh state.</summary>
+    [HttpPost("loop")]
+    public IActionResult Loop([FromBody] LoopRequest req)
+    {
+        _logger.CountRequest();
+        if (GateClosed() is { } closed) return closed;
+        if (req is null || string.IsNullOrWhiteSpace(req.RepoId))
+            return BadRequest(new { error = "missing repoId" });
+
+        switch ((req.Action ?? "start").ToLowerInvariant())
+        {
+            case "start":
+                if (string.IsNullOrWhiteSpace(req.Prompt))
+                    return BadRequest(new { error = "a loop needs a prompt to resend" });
+                _loops.Start(req.RepoId, req.Prompt.Trim(), req.Sentinel, req.MaxIterations);
+                break;
+            case "update":
+                _loops.Update(req.RepoId, req.Prompt, req.Sentinel, req.MaxIterations);
+                break;
+            case "stop":
+                _loops.Stop(req.RepoId);
+                break;
+            default:
+                return BadRequest(new { error = $"unknown action \"{req.Action}\"" });
+        }
+
+        return Ok(BuildState());
+    }
+
+    // --- System tests (understanding.md: real-runner) -----------------------
+    // The loop-mode tests, runnable one-click from the System Tests tab. Each
+    // spawns a fixed Node/Playwright script against THIS harness; node (and, for
+    // the browser tests, Playwright) must be installed on the host or the run
+    // reports an honest error. Gated like everything else here.
+
+    /// <summary>GET — every test plus its live/last run state (status, output,
+    /// exit code, screenshot readiness).</summary>
+    [HttpGet("systests")]
+    public IActionResult SysTests()
+    {
+        _logger.CountRequest();
+        if (GateClosed() is { } closed) return closed;
+        return Ok(new { tests = _systests.Snapshot() });
+    }
+
+    /// <summary>POST — start one test by id. Returns immediately; the UI polls
+    /// the list endpoint for progress.</summary>
+    [HttpPost("systests/{id}/run")]
+    public IActionResult RunSysTest(string id)
+    {
+        _logger.CountRequest();
+        if (GateClosed() is { } closed) return closed;
+        if (!_systests.Start(id)) return NotFound(new { error = $"unknown test \"{id}\"" });
+        return Ok(new { tests = _systests.Snapshot() });
+    }
+
+    /// <summary>GET — the PNG screenshot a browser test wrote, if it exists.</summary>
+    [HttpGet("systests/{id}/artifact")]
+    public IActionResult SysTestArtifact(string id)
+    {
+        _logger.CountRequest();
+        if (GateClosed() is { } closed) return closed;
+        var path = _systests.ArtifactPath(id);
+        if (path is null || !System.IO.File.Exists(path))
+            return NotFound(new { error = "no screenshot yet — run the test first" });
+        // no-store so each re-run's fresh screenshot shows on reload.
+        Response.Headers["Cache-Control"] = "no-store";
+        return PhysicalFile(path, "image/png");
+    }
+
     private object BuildState()
     {
         var cfg = _config.Get();
@@ -98,6 +177,7 @@ public class AutopilotController : ControllerBase
             threshold = cfg.Threshold,
             denyList = cfg.DenyList,
             agents = _engine.States(),
+            loops = _loops.All(),
             log = _engine.Log(),
             intercepts = _engine.Intercepts(),
             audit = _audit.Recent(),

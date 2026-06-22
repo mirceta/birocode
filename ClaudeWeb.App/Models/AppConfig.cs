@@ -21,9 +21,16 @@ public class AppConfig
     /// Directory holding the deploy scripts (arm/swap/rollback) and the
     /// append-only <c>deploys.jsonl</c> ledger the Deployments tab reads
     /// (plans/deployments-tab.md). Off-repo by design — the deploy tooling
-    /// lives outside the tree it deploys.
+    /// lives outside the tree it deploys (rollback reverts the tree, so its own
+    /// scripts must not sit inside it).
+    ///
+    /// Empty by default = resolve at runtime to <c>&lt;parent-of-repo&gt;/claudeweb-rollback</c>
+    /// and seed the scripts there on first run (see
+    /// <see cref="ClaudeWeb.Services.Deploy.DeployScriptProvisioner"/>), so the deploy
+    /// procedure is reproducible on a fresh machine. Set an explicit path here to
+    /// override the location.
     /// </summary>
-    public string DeployScriptsDir { get; set; } = @"C:\Users\Administrator\Desktop\playground\claudeweb-rollback";
+    public string DeployScriptsDir { get; set; } = "";
 
     /// <summary>
     /// Port the "App" tab previews. Claude is expected to start the product

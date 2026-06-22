@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using ClaudeWeb.Models;
 using ClaudeWeb.Services.Logging;
 
@@ -21,10 +22,24 @@ public record SessionSummary(
 public record ChatMessage(string Role, string Text, DateTime? Timestamp = null);
 
 /// <summary>
+/// One tool call reconstructed from a transcript, in the same shape the live SSE
+/// "tool" events carry so the frontend renders both sources uniformly. <c>Ok</c>
+/// is null when no matching tool_result was found (still running / truncated).
+/// </summary>
+public record ToolCall(
+    string Id,
+    string Name,
+    string Summary,
+    string Detail,
+    bool? Ok,
+    string Preview,
+    DateTime? Timestamp = null);
+
+/// <summary>
 /// Lists and parses Claude Code session transcripts (JSONL) for the current
 /// working directory. Claude stores them under
 /// <c>~/.claude/projects/&lt;encoded-cwd&gt;/&lt;session-id&gt;.jsonl</c> where the
-/// encoded cwd replaces ':' '\' '/' with '-'.
+/// encoded cwd replaces every non-alphanumeric character with '-'.
 ///
 /// JSONL parsing follows ConversationStore.ExtractMetadata in ClaudeMonitor:
 /// pull the sessionId, first user prompt, turn counts and timestamps from the
@@ -43,11 +58,16 @@ public class SessionService
 
     /// <summary>
     /// Encodes a working directory the way the Claude CLI does for its project
-    /// folder name: replace ':', '\' and '/' with '-'. Example:
-    /// <c>c:\Users\km\proj</c> -> <c>c--Users-km-proj</c>.
+    /// folder name: replace every character that is not an ASCII letter or digit
+    /// with '-' (so ':', '\', '/', '_', '.', spaces, etc. all collapse to '-',
+    /// one '-' per character — runs are not coalesced). Example:
+    /// <c>c:\Users\km\my_proj</c> -> <c>c--Users-km-my-proj</c>.
+    /// Matching the CLI exactly matters: any path with '_'/'.'/space (e.g. a
+    /// worktree under <c>prg_worktrees</c>) would otherwise point at a folder
+    /// the CLI never created, so the repo's transcripts would read as empty.
     /// </summary>
     public static string EncodeCwd(string workingDirectory) =>
-        workingDirectory.Replace(':', '-').Replace('\\', '-').Replace('/', '-');
+        Regex.Replace(workingDirectory, "[^A-Za-z0-9]", "-");
 
     /// <summary>Absolute path to the project's session folder for the given cwd.</summary>
     public static string ProjectsDirectoryFor(string workingDirectory)
@@ -132,6 +152,154 @@ public class SessionService
         }
 
         return messages;
+    }
+
+    /// <summary>
+    /// Reconstructs the tool-call history of a session from its JSONL transcript,
+    /// in chronological order. <c>tool_use</c> blocks (assistant messages) are
+    /// paired with their later <c>tool_result</c> (user messages) by
+    /// <c>tool_use_id</c>. This is the durable source the live SSE stream cannot
+    /// provide after a reload: the transcript endpoint (GetMessages) strips these
+    /// blocks, but they still exist on disk here. Mirrors the live "tool" event
+    /// shape (CliRunnerService) so the UI renders both the same way. A malformed
+    /// line is skipped, never fatal; a call with no result keeps Ok = null.
+    /// </summary>
+    public List<ToolCall> GetToolCalls(string workingDir, string sessionId)
+    {
+        var calls = new List<ToolCall>();
+        if (string.IsNullOrWhiteSpace(sessionId)) return calls;
+
+        // sessionId is a UUID file name; reject anything that could escape the folder.
+        if (sessionId.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) return calls;
+
+        var path = Path.Combine(ProjectsDirectoryFor(workingDir), sessionId + ".jsonl");
+        if (!File.Exists(path))
+        {
+            _logger.Info($"[CHAT] Transcript not found: {path}");
+            return calls;
+        }
+
+        // id -> index into `calls`, so a tool_result can patch its tool_use in place
+        // while preserving the order tool calls first appeared.
+        var byId = new Dictionary<string, int>();
+
+        try
+        {
+            foreach (var line in File.ReadLines(path))
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+
+                JsonDocument doc;
+                try { doc = JsonDocument.Parse(line); }
+                catch { continue; } // skip a malformed transcript line, keep going
+                using (doc)
+                {
+                    var root = doc.RootElement;
+                    if (!root.TryGetProperty("type", out var typeProp)) continue;
+                    var type = typeProp.GetString();
+                    if (type != "user" && type != "assistant") continue;
+                    if (!root.TryGetProperty("message", out var msg) ||
+                        !msg.TryGetProperty("content", out var content) ||
+                        content.ValueKind != JsonValueKind.Array)
+                        continue;
+
+                    DateTime? ts = null;
+                    if (root.TryGetProperty("timestamp", out var tsProp) &&
+                        DateTime.TryParse(tsProp.GetString(), out var parsed))
+                        ts = parsed;
+
+                    foreach (var block in content.EnumerateArray())
+                    {
+                        var bt = block.TryGetProperty("type", out var btp) ? btp.GetString() : "";
+                        if (type == "assistant" && bt == "tool_use")
+                        {
+                            var id = block.TryGetProperty("id", out var ip) ? ip.GetString() ?? "" : "";
+                            if (string.IsNullOrEmpty(id) || byId.ContainsKey(id)) continue;
+                            var name = block.TryGetProperty("name", out var np) ? np.GetString() ?? "tool" : "tool";
+                            string summary = "", detail = "";
+                            if (block.TryGetProperty("input", out var input) && input.ValueKind == JsonValueKind.Object)
+                            {
+                                summary = ToolSummary(name, input);
+                                detail = Truncate(input.GetRawText(), 1200);
+                            }
+                            byId[id] = calls.Count;
+                            calls.Add(new ToolCall(id, name, summary, detail, Ok: null, Preview: "", Timestamp: ts));
+                        }
+                        else if (type == "user" && bt == "tool_result")
+                        {
+                            var id = block.TryGetProperty("tool_use_id", out var ip) ? ip.GetString() ?? "" : "";
+                            if (string.IsNullOrEmpty(id) || !byId.TryGetValue(id, out var idx)) continue;
+                            var ok = !(block.TryGetProperty("is_error", out var ep) && ep.ValueKind == JsonValueKind.True);
+                            var preview = Truncate(ExtractToolResultText(block), 800, maxLines: 15);
+                            calls[idx] = calls[idx] with { Ok = ok, Preview = preview };
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[CHAT] Failed to read tool calls for {sessionId}: {ex.Message}");
+        }
+
+        return calls;
+    }
+
+    /// <summary>Pulls the text of a tool_result whose content may be a plain string
+    /// or an array of typed blocks. Mirrors CliRunnerService.ExtractToolResultText.</summary>
+    private static string ExtractToolResultText(JsonElement block)
+    {
+        if (!block.TryGetProperty("content", out var content)) return "";
+        if (content.ValueKind == JsonValueKind.String) return content.GetString() ?? "";
+        if (content.ValueKind == JsonValueKind.Array)
+        {
+            var parts = new List<string>();
+            foreach (var b in content.EnumerateArray())
+            {
+                if (b.TryGetProperty("type", out var t) && t.GetString() == "text" &&
+                    b.TryGetProperty("text", out var tx))
+                    parts.Add(tx.GetString() ?? "");
+            }
+            return string.Join("\n", parts);
+        }
+        return "";
+    }
+
+    /// <summary>One-line, human-readable summary of a tool call's input. Kept in
+    /// sync with CliRunnerService.ToolSummary so the reconstructed history reads
+    /// exactly like the live stream.</summary>
+    private static string ToolSummary(string name, JsonElement input)
+    {
+        string Get(string key) =>
+            input.TryGetProperty(key, out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() ?? "" : "";
+
+        var s = name switch
+        {
+            "Bash" => Get("command"),
+            "Read" or "Write" or "Edit" or "NotebookEdit" => Get("file_path"),
+            "Glob" or "Grep" => Get("pattern"),
+            "Task" or "Agent" => Get("description"),
+            "WebFetch" or "WebSearch" => Get("url") + Get("query"),
+            "Skill" => Get("skill"),
+            _ => Get("command") + Get("file_path") + Get("path") + Get("pattern") + Get("url") + Get("description"),
+        };
+        return Truncate(s.Replace("\r", " ").Replace("\n", " "), 140);
+    }
+
+    /// <summary>Truncates to a char budget and (optionally) a line budget, adding
+    /// an ellipsis when clipped. Mirrors CliRunnerService.Truncate.</summary>
+    private static string Truncate(string? text, int maxChars, int maxLines = 0)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+        var s = text;
+        if (maxLines > 0)
+        {
+            var lines = s.Split('\n');
+            if (lines.Length > maxLines)
+                s = string.Join("\n", lines.Take(maxLines)) + "\n...";
+        }
+        if (s.Length > maxChars) s = s[..maxChars] + "...";
+        return s;
     }
 
     /// <summary>
