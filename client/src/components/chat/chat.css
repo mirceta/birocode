@@ -1121,6 +1121,40 @@ details.step > summary::-webkit-details-marker {
   color: var(--color-accent);
 }
 
+/* Per-repo planning-system selector (prompt-system-toggle): a distinct axis from
+   the Prompts|Plans tabs above — picks which system's built-in prompts are shown. */
+.prompt-mgr__systembar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--color-border);
+  flex-wrap: wrap;
+}
+.prompt-mgr__systembar-lbl {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-soft);
+  margin-right: 2px;
+}
+.prompt-mgr__sysbtn {
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text-soft);
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.prompt-mgr__sysbtn--on {
+  background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface));
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
 /* ---- Plans tab (PromptPlansPanel.jsx) ---- */
 .plan-mgr { display: flex; flex-direction: column; }
 
@@ -1498,4 +1532,145 @@ details.step > summary::-webkit-details-marker {
 .picker__item-meta {
   font-size: 13px;
   color: var(--color-text-soft);
+}
+
+/* ---- Tool calls drawer (openspec: add-tool-call-history) -------------- */
+
+/* Toolbar toggle — a pill in .chat__bar next to the model selector. */
+.chat__tools {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.chat__tools:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.chat__tools:active {
+  transform: scale(0.97);
+}
+
+/* When the panel is showing, the toggle reads as a pressed/active control. */
+.chat__tools--on {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
+.chat__tools--on:hover {
+  color: #fff;
+}
+
+/* The message area that the tool-call overlay covers. It wraps .chat__scroll so
+   the overlay can fill exactly the chat region (below the toolbar, above the
+   composer) — not the whole viewport. */
+.chat__body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat__body .chat__scroll {
+  flex: 1;
+}
+
+/* The panel: an overlay filling the chat message area. The same toolbar button
+   toggles it back to the chat. */
+.toolcalls {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg, var(--color-surface));
+  z-index: 5;
+  animation: toolcalls-slide 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes toolcalls-slide {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.toolcalls__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.toolcalls__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--color-text);
+}
+
+.toolcalls__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.toolcalls__close {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-soft);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.toolcalls__close:hover {
+  color: var(--color-text);
+  border-color: var(--color-accent);
+}
+
+.toolcalls__body {
+  flex: 1;
+  overflow: auto;
+  padding: 12px;
+}
+
+/* Inside the drawer the step list should fill the width, not the 92% cap it
+   uses inline in the transcript. */
+.toolcalls__body .steps {
+  max-width: 100%;
+}
+
+.toolcalls__empty {
+  margin: 24px 8px;
+  color: var(--color-text-soft);
+  font-size: 14px;
+  text-align: center;
 }

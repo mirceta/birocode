@@ -49,6 +49,7 @@ export const FEATURES = {
   featureKickoff: 'advanced', // composer button that prefills the "start a new feature" ritual (plans/feature-kickoff.md)
   customPrompts: 'advanced', // user-defined composer prompt presets + manager (plans/custom-prompts.md)
   deploysTab: 'advanced', // deploy status + rollback control (plans/deployments-tab.md)
+  toolCallHistory: 'advanced', // Tool calls drawer: consolidated tool-call list for the active conversation (openspec: add-tool-call-history)
 };
 
 const MODE_KEY = 'claudeweb_ui_mode';

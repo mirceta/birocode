@@ -1,0 +1,4 @@
+# Build-less, dependency-free — there is nothing to install. These only appear
+# if someone runs tooling here by mistake.
+node_modules/
+*.log

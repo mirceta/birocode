@@ -64,6 +64,11 @@
   no-backend diagram of the four layers, conversation/repo/session grains, the life of
   one turn, and an interactive refresh wiped-vs-survives toggle. On
   `feature/autopilot-loop-mode`.
+
+> Global-exposure planning (the "Global exposure, done right" homepage topic **and** the
+> `global-example/` worked example) **moved to OpenSpec** — see
+> `openspec/changes/add-global-exposure/` (`openspec list`). On `feature/global-apps-exposure`.
+
 - [Portable deploy — one committed `swap.ps1` any agent can run](plans/portable-deploy.md)
   — deploying the Harness to live `:5099` only worked on one machine because the deploy
   script was **local + untracked** (`.selfdev-build/deploy.ps1`, hardcoded paths) and
