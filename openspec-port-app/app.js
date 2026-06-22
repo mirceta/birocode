@@ -242,6 +242,18 @@ function showView(view) {
   if (view === 'cockpit') loadCockpit();        // lazy: fetch state on first open
 }
 
+// ── 1a) Sub-view switcher (inside the Understand tab) ────────────
+const subnav = document.getElementById('subnav');
+subnav.addEventListener('click', (e) => {
+  const btn = e.target.closest('.subnav__btn');
+  if (!btn) return;
+  showSub(btn.dataset.sub);
+});
+function showSub(sub) {
+  subnav.querySelectorAll('.subnav__btn').forEach((b) => b.classList.toggle('is-active', b.dataset.sub === sub));
+  document.querySelectorAll('.subview').forEach((v) => v.classList.toggle('is-active', v.id === `subview-${sub}`));
+}
+
 // ── 2) Explain — the spine ───────────────────────────────────────
 document.getElementById('spine').innerHTML = PHASES.map((p) => `
   <li class="snode ${p.danger ? 'danger' : ''}" data-go="${p.n}">

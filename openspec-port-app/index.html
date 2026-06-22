@@ -9,38 +9,15 @@
 <body>
   <header class="hero">
     <div class="hero__inner">
-      <p class="kicker">Dedicated Local app · feature/openspec-flow · DECIDED — Path A</p>
       <h1>OpenSpec Port <span class="cr">— Control Room</span></h1>
-      <p class="sub">
-        A standing surface for the one big feature: <b>explain</b> the port, pin down what
-        <b>our system</b> even is today, see which <b>CLAUDE.md</b> conventions it touches,
-        <b>analyze</b> it against what we have, see how your day-to-day changes when you
-        <b>adopt</b> it, <b>decide</b> the four open questions, and <b>control</b> it — track
-        every phase and task. Companion to
-        <code>plans/openspec-flow.md</code>; your progress saves locally.
-      </p>
       <nav class="nav" id="nav">
-        <div class="navgroup">
-          <span class="navgroup__lbl">Understand</span>
-          <div class="navgroup__btns">
-            <button class="nav__btn is-active" data-view="explain">Explain</button>
-            <button class="nav__btn" data-view="system">Our system</button>
-            <button class="nav__btn" data-view="claudemd">CLAUDE.md</button>
-            <button class="nav__btn" data-view="analyze">Analyze</button>
-            <button class="nav__btn" data-view="adopt">Adopt</button>
-            <button class="nav__btn" data-view="workflows">Workflows</button>
-            <button class="nav__btn" data-view="cockpit">Cockpit</button>
-          </div>
-        </div>
-        <div class="navgroup navgroup--op">
-          <span class="navgroup__lbl">Operate</span>
-          <div class="navgroup__btns">
-            <button class="nav__btn" data-view="decide">Decide</button>
-            <button class="nav__btn" data-view="control">Control</button>
-            <button class="nav__btn" data-view="console">Console</button>
-            <button class="nav__btn" data-view="migrate">Migrate</button>
-          </div>
-        </div>
+        <button class="nav__btn is-active" data-view="understand">Understand</button>
+        <button class="nav__btn" data-view="adopt">Adopt</button>
+        <button class="nav__btn" data-view="workflows">Workflows</button>
+        <button class="nav__btn" data-view="cockpit">Cockpit</button>
+        <button class="nav__btn" data-view="control">Control</button>
+        <button class="nav__btn" data-view="console">Console</button>
+        <button class="nav__btn" data-view="migrate">Migrate</button>
       </nav>
       <div class="progress" id="progressBar" title="overall task completion">
         <div class="progress__fill" id="progressFill"></div>
@@ -50,8 +27,28 @@
   </header>
 
   <main>
+    <!-- ═════════════ UNDERSTAND (groups Explain · Our system · CLAUDE.md · Analyze · Decide) ═════════════ -->
+    <section class="view is-active" id="view-understand">
+      <div class="wrap understand__top">
+        <p class="sub">
+          A standing surface for the one big feature: <b>explain</b> the port, pin down what
+          <b>our system</b> even is today, see which <b>CLAUDE.md</b> conventions it touches,
+          <b>analyze</b> it against what we have, see how your day-to-day changes when you
+          <b>adopt</b> it, <b>decide</b> the four open questions, and <b>control</b> it — track
+          every phase and task. Companion to
+          <code>plans/openspec-flow.md</code>; your progress saves locally.
+        </p>
+        <nav class="subnav" id="subnav">
+          <button class="subnav__btn is-active" data-sub="explain">Explain</button>
+          <button class="subnav__btn" data-sub="system">Our system</button>
+          <button class="subnav__btn" data-sub="claudemd">CLAUDE.md</button>
+          <button class="subnav__btn" data-sub="analyze">Analyze</button>
+          <button class="subnav__btn" data-sub="decide">Decide</button>
+        </nav>
+      </div>
+
     <!-- ───────────── EXPLAIN ───────────── -->
-    <section class="view is-active" id="view-explain">
+    <section class="subview is-active" id="subview-explain">
       <div class="wrap">
         <div class="scope">
           <b>Scope (clarified 2026-06-19):</b> OpenSpec replaces the <b>planning layer</b>
@@ -81,7 +78,7 @@
     </section>
 
     <!-- ───────────── OUR SYSTEM ───────────── -->
-    <section class="view" id="view-system">
+    <section class="subview" id="subview-system">
       <div class="wrap">
         <h2>"Our system" — what it actually is, and where it lives</h2>
         <p class="lead">Fair question — it never had a name or an installer, so it feels like
@@ -103,7 +100,7 @@
     </section>
 
     <!-- ───────────── CLAUDE.md ───────────── -->
-    <section class="view" id="view-claudemd">
+    <section class="subview" id="subview-claudemd">
       <div class="wrap">
         <h2><code>CLAUDE.md</code> — exactly which conventions OpenSpec touches</h2>
         <p class="lead">Adoption is narrower than it feels: it hits the <b>planning-convention</b>
@@ -125,7 +122,7 @@
     </section>
 
     <!-- ───────────── ANALYZE ───────────── -->
-    <section class="view" id="view-analyze">
+    <section class="subview" id="subview-analyze">
       <div class="wrap">
         <h2>Our system vs OpenSpec — scored</h2>
         <p class="lead">Each capability rated ★ out of 5 for both sides, from our point of view.
@@ -137,6 +134,22 @@
         <div class="verdict" id="verdict"><!-- rendered by app.js --></div>
       </div>
     </section>
+
+    <!-- ───────────── DECIDE ───────────── -->
+    <section class="subview" id="subview-decide">
+      <div class="wrap">
+        <div class="ctrlbar">
+          <h2>Decide — the four questions that gate Phase 0</h2>
+          <span class="decsum" id="decsum"><!-- rendered by app.js --></span>
+        </div>
+        <p class="lead">Path A (adopt the tooling) is already <b>DECIDED</b>. These are the knobs left
+          before Phase 0 can start. Each shows its two-way fork and my lean — set each to
+          <b>open</b>, <b>leaning</b>, or <b>settled</b>; the choice persists in this browser.</p>
+        <div class="decs" id="decs"><!-- rendered by app.js --></div>
+      </div>
+    </section>
+    </section>
+    <!-- ═════════════ /UNDERSTAND ═════════════ -->
 
     <!-- ───────────── ADOPT ───────────── -->
     <section class="view" id="view-adopt">
@@ -179,20 +192,6 @@
           </div>
         </div>
         <p class="ledger__verdict" id="ledgerVerdict"><!-- rendered by app.js --></p>
-      </div>
-    </section>
-
-    <!-- ───────────── DECIDE ───────────── -->
-    <section class="view" id="view-decide">
-      <div class="wrap">
-        <div class="ctrlbar">
-          <h2>Decide — the four questions that gate Phase 0</h2>
-          <span class="decsum" id="decsum"><!-- rendered by app.js --></span>
-        </div>
-        <p class="lead">Path A (adopt the tooling) is already <b>DECIDED</b>. These are the knobs left
-          before Phase 0 can start. Each shows its two-way fork and my lean — set each to
-          <b>open</b>, <b>leaning</b>, or <b>settled</b>; the choice persists in this browser.</p>
-        <div class="decs" id="decs"><!-- rendered by app.js --></div>
       </div>
     </section>
 
