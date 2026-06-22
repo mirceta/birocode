@@ -874,9 +874,103 @@ details.step > summary::-webkit-details-marker {
   flex: 0 0 auto;
 }
 
+/* Expand-to-large-editor button (openspec: add-prompt-expand-popup) — same
+   round chip as the ⚙ manager button. */
+.chat-input__expand {
+  min-width: var(--touch);
+  min-height: var(--touch);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 18px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
 .chat-input__preset:hover,
-.chat-input__manage:hover {
+.chat-input__manage:hover,
+.chat-input__expand:hover {
   border-color: var(--color-accent);
+}
+
+/* Prompt-expand popup — a CENTERED MODAL portaled to <body> (see
+   PromptExpandModal.jsx), same stacking-context-proof contract as the prompt
+   manager. The card and its textarea are sized with viewport-relative units so
+   it stays usable with the on-screen keyboard up: the editor fills the card and
+   scrolls rather than assuming full height. */
+.prompt-expand-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.prompt-expand {
+  width: min(820px, 100%);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius, 8px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  padding: 16px;
+}
+
+.prompt-expand__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.prompt-expand__title { font-weight: 600; font-size: 14px; }
+
+.prompt-expand__close {
+  border: none;
+  background: none;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.prompt-expand__field {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 40vh;
+  resize: vertical;
+  box-sizing: border-box;
+  padding: 12px;
+  font: inherit;
+  line-height: 1.5;
+  color: var(--color-text);
+  background: var(--color-bg, var(--color-surface));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius, 8px);
+  overflow-y: auto;
+}
+
+.prompt-expand__foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.prompt-expand__done {
+  min-height: var(--touch);
+  padding: 0 20px;
+  border: 1px solid var(--color-accent);
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 /* Custom-prompts manager — a CENTERED MODAL portaled to <body> (see
