@@ -3,131 +3,289 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Queued-prompt dock border — spot agents with work waiting</title>
+<title>Per-project Claude permissions — proposal understanding</title>
 <style>
-  :root {
-    --bg:#0f1117; --surface:#171a23; --surface2:#1f2330; --border:#2b3040;
-    --text:#e6e9f0; --soft:#9aa3b8; --accent:#6ea8fe;
-    --important:#ef4444; --recency:#3b82f6; --queued:#000;
+  :root{
+    --bg:#0f1117; --panel:#171a23; --panel2:#1f2330; --line:#2b3040; --ink:#e6e9f0;
+    --soft:#9aa3b8; --accent:#6ea8fe; --green:#5dd1a0; --red:#f0676b; --amber:#f0b86e;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   }
-  * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--text);
-    font:15px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
-  .wrap { max-width:960px; margin:0 auto; padding:28px 20px 64px; }
-  h1 { font-size:25px; margin:0 0 4px; }
-  .lede { color:var(--soft); margin:0 0 22px; }
-  .card { background:var(--surface); border:1px solid var(--border); border-radius:12px;
-    padding:18px; margin:0 0 18px; }
-  .card h2 { font-size:15px; margin:0 0 12px; letter-spacing:.02em; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:14px; }
-  /* A dock tile — mirrors the real .dash-cell: 1px default border, thick states layer by precedence. */
-  .tile { position:relative; background:var(--surface2); border:1px solid var(--border);
-    border-radius:10px; padding:12px 12px 14px; cursor:pointer; user-select:none;
-    transition:border-color .12s; min-height:92px; }
-  .tile[data-recency] { border:5px solid var(--recency); }
-  .tile.important { border:6px solid var(--important); }
-  .tile.queued { border:6px solid var(--queued); }      /* placed last → wins precedence */
-  .tile.waiting { box-shadow:0 0 0 3px rgba(245,158,11,.9); } /* different property → layers on top */
-  .tile .dot { width:9px; height:9px; border-radius:50%; background:#3fb950; display:inline-block; margin-right:6px; }
-  .tile .nm { font-weight:600; font-size:13.5px; }
-  .tile .meta { color:var(--soft); font-size:12px; margin-top:6px; }
-  .tile .q { position:absolute; top:8px; right:8px; font-size:11px; font-weight:700;
-    background:#000; color:#fff; border-radius:999px; padding:1px 7px; }
-  .tile .hint { color:var(--soft); font-size:11px; margin-top:8px; }
-  .legend { display:flex; flex-wrap:wrap; gap:14px; margin-top:14px; font-size:12.5px; color:var(--soft); }
-  .legend .sw { display:inline-block; width:24px; height:14px; border-radius:3px; vertical-align:middle; margin-right:6px; }
-  .note { color:var(--soft); font-size:13px; margin:14px 0 0; }
-  .note code { background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1px 5px; font-size:12.5px; }
-  .rule { display:flex; gap:8px; margin:7px 0; font-size:13.5px; align-items:baseline; }
-  .rule .k { color:var(--accent); font-family:ui-monospace,Menlo,monospace; flex:0 0 auto; }
-  footer { color:var(--soft); font-size:12.5px; margin-top:26px; border-top:1px solid var(--border); padding-top:12px; }
-  button.mini { background:var(--surface2); color:var(--text); border:1px solid var(--border);
-    border-radius:7px; padding:5px 10px; font-size:12.5px; cursor:pointer; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  .wrap{max-width:1000px;margin:0 auto;padding:26px 20px 70px}
+  h1{font-size:24px;margin:0 0 3px}
+  .lede{color:var(--soft);margin:0 0 6px;max-width:760px}
+  .status{display:inline-block;font-size:12px;font-weight:600;color:var(--amber);
+    border:1px solid #4a3a1e;background:#1d1810;border-radius:999px;padding:3px 10px;margin:6px 0 18px}
+  nav{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-bottom:18px}
+  nav button{background:none;border:none;color:var(--soft);padding:10px 15px;font-size:14px;
+    font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+  nav button:hover{color:var(--ink)}
+  nav button.on{color:var(--accent);border-bottom-color:var(--accent)}
+  .view{display:none}.view.on{display:block}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin:0 0 16px}
+  .card h2{font-size:15px;margin:0 0 12px}
+  .soft{color:var(--soft)} code{background:var(--panel2);border:1px solid var(--line);
+    border-radius:4px;padding:1px 5px;font:12.5px var(--mono)}
+  /* flow pipeline */
+  .pipe{display:flex;flex-direction:column;gap:0}
+  .pn{display:flex;gap:12px;align-items:flex-start}
+  .pn .ic{flex:0 0 34px;height:34px;border-radius:9px;display:grid;place-items:center;
+    background:var(--panel2);border:1px solid var(--line);font-size:16px}
+  .pn .bd{flex:1;padding-bottom:4px}
+  .pn .bd .t{font-weight:600}
+  .pn .bd .d{color:var(--soft);font-size:13px}
+  .pn .bd .f{font:11.5px var(--mono);color:var(--accent);margin-top:2px}
+  .conn{margin-left:16px;height:14px;border-left:2px dashed var(--line)}
+  .lanes{display:grid;grid-template-columns:1fr;gap:12px;margin-top:6px}
+  @media(min-width:740px){.lanes{grid-template-columns:1fr 1fr}}
+  .lane{border:1px solid var(--line);border-radius:10px;padding:14px;background:var(--panel2)}
+  .lane.scoped{border-color:#2c5a45}.lane.oos{border-color:#5b2222}
+  .lane h3{margin:0 0 6px;font-size:14px}
+  .pill{font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px;vertical-align:middle}
+  .pill.ok{background:#102015;color:var(--green);border:1px solid #2c5a45}
+  .pill.no{background:#1d1113;color:var(--red);border:1px solid #5b2222}
+  /* presets */
+  .seg{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .seg button{background:var(--panel2);border:1px solid var(--line);color:var(--soft);
+    border-radius:9px;padding:9px 14px;font-size:13.5px;font-weight:600;cursor:pointer}
+  .seg button.on{border-color:var(--accent);color:var(--accent);background:#0f2033}
+  .seg button .def{font-size:10px;color:var(--green);display:block;font-weight:700}
+  .grid2{display:grid;grid-template-columns:1fr;gap:14px}
+  @media(min-width:720px){.grid2{grid-template-columns:1.1fr 1fr}}
+  .tools{display:flex;flex-direction:column;gap:5px}
+  .trow{display:flex;align-items:center;gap:9px;font-size:13.5px;padding:5px 8px;border-radius:7px;background:var(--panel2)}
+  .trow .nm{font:12.5px var(--mono);flex:1}
+  .trow .v{font-size:11px;font-weight:700;border-radius:999px;padding:2px 9px}
+  .v.allow{background:#102015;color:var(--green)} .v.ask{background:#1d1810;color:var(--amber)}
+  .v.deny{background:#1d1113;color:var(--red)}
+  pre{background:#0b0e14;border:1px solid var(--line);border-radius:9px;padding:13px;
+    overflow:auto;font:12.5px var(--mono);margin:0;line-height:1.5}
+  pre .k{color:var(--accent)} pre .s{color:var(--green)} pre .c{color:var(--soft)} pre .d{color:var(--red)}
+  .note{color:var(--soft);font-size:13px;margin:12px 0 0}
+  .colhd{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--soft);margin:0 0 6px}
+  /* per-project */
+  .prow{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);
+    border-radius:10px;background:var(--panel2);margin-bottom:8px}
+  .prow .nm{font-weight:600;flex:1}.prow .nm small{display:block;color:var(--soft);font-weight:400;font:11.5px var(--mono)}
+  select{background:#0b0e14;color:var(--ink);border:1px solid var(--line);border-radius:8px;
+    padding:7px 9px;font:13px system-ui;cursor:pointer}
+  .scope{font-size:11.5px;font-weight:700;border-radius:999px;padding:3px 10px;min-width:96px;text-align:center}
+  .scope.ro{background:#102015;color:var(--green)} .scope.std{background:#101a2a;color:var(--accent)}
+  .scope.eo{background:#13202a;color:#6ad0c0} .scope.full{background:#1d1113;color:var(--red)}
+  /* decisions */
+  .dec{display:flex;gap:11px;padding:11px 0;border-top:1px solid var(--line)}
+  .dec:first-child{border-top:none}
+  .dec .k{flex:0 0 22px;height:22px;border-radius:6px;background:#102015;color:var(--green);
+    display:grid;place-items:center;font-weight:800;font-size:12px}
+  .dec .bd{flex:1;font-size:13.5px}.dec .bd b{font-size:13.5px}
+  footer{color:var(--soft);font-size:12px;margin-top:24px;border-top:1px solid var(--line);padding-top:12px}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Queued-prompt dock border</h1>
-  <p class="lede">When an agent has prompts <em>queued</em> (waiting to send once it's free), its dock
-  tile is painted with a <strong>thick black border</strong> — so in a grid of many agents you can
-  see at a glance which ones have work lined up, without opening each.</p>
+  <h1>Per-project Claude permissions</h1>
+  <p class="lede">Set a permission scope <strong>per project</strong>, from the WinForms desktop app
+  (like the IP guest list), and the harness injects it into that project's <code>claude -p</code> chat calls.</p>
+  <div class="status">PROPOSAL · decisions A–F confirmed · awaiting go-ahead to implement</div>
 
-  <div class="card">
-    <h2>Live dock — click a tile to queue / clear prompts</h2>
-    <div class="grid" id="grid"></div>
-    <div class="legend">
-      <span><span class="sw" style="background:var(--queued)"></span>queued prompts (black, 6px)</span>
-      <span><span class="sw" style="background:var(--important)"></span>important (red, 6px)</span>
-      <span><span class="sw" style="background:var(--recency)"></span>recency (blue, 5px)</span>
-      <span><span class="sw" style="background:#fff;box-shadow:0 0 0 2px rgba(245,158,11,.9)"></span>waiting (amber glow)</span>
+  <nav>
+    <button class="on" data-v="flow">How it flows</button>
+    <button data-v="presets">Presets</button>
+    <button data-v="projects">Per-project</button>
+    <button data-v="decisions">Decisions</button>
+  </nav>
+
+  <!-- FLOW -->
+  <section class="view on" id="flow">
+    <div class="card">
+      <h2>From the desktop dial to the spawned process</h2>
+      <div class="pipe" id="pipe"></div>
     </div>
-    <p class="note">Click any tile to toggle a queued prompt on it. Notice the <em>important</em> and
-    <em>recency</em> tiles: the moment they have a queued prompt, the black border <strong>wins</strong>
-    — because a pending prompt is actionable and rarer. The amber <em>waiting</em> glow is a
-    box-shadow, so it still layers around the black border.</p>
-  </div>
+    <div class="card">
+      <h2>Two call paths — only one is in scope for v1</h2>
+      <div class="lanes">
+        <div class="lane scoped">
+          <h3>Chat <span class="pill ok">SCOPED (v1)</span></h3>
+          <p class="soft" style="margin:0;font-size:13px">Every chat turn spawns
+          <code>claude -p … --output-format stream-json</code> via <code>CreateProcessInfo</code>.
+          The repo's policy is injected here as <code>--settings</code>. <strong>This is what we're adding.</strong></p>
+        </div>
+        <div class="lane oos">
+          <h3>Structured asks <span class="pill no">OUT OF SCOPE</span></h3>
+          <p class="soft" style="margin:0;font-size:13px">Routed through the ClaudeMonitor gateway, used
+          only by local-app discovery — a fixed, compile-time prompt with <em>no End-User text</em>.
+          Verified: no prompt-injection vector, so it's left for a later pass.</p>
+        </div>
+      </div>
+      <p class="note">The harness also strips <code>ANTHROPIC_API_KEY</code> before spawning, so the
+      injected policy is the whole permission story for these calls — nothing else overrides it.</p>
+    </div>
+  </section>
 
-  <div class="card">
-    <h2>How it's decided</h2>
-    <div class="rule"><span class="k">tab.stash.length &gt; 0</span><span>The tile reads the agent's own queued-prompt list (the per-agent stash from <code>/api/dock</code>). Non-empty → add the <code>--queued</code> modifier.</span></div>
-    <div class="rule"><span class="k">6px solid #000</span><span>Matches the dock's thick-border scale (the red <code>--important</code> border is also 6px), and black is reserved for this one state.</span></div>
-    <div class="rule"><span class="k">precedence</span><span>The <code>--queued</code> CSS rule sits after important / recency / colour with equal specificity, so it overrides them while prompts are queued.</span></div>
-    <p class="note">Pure presentation — one className modifier + one CSS rule, on all three tile
-    renderers (dashboard <strong>phones</strong>, dashboard <strong>cards</strong>, and the
-    <strong>Agents</strong> list). No backend or state change; the stash already drives re-renders.</p>
-  </div>
+  <!-- PRESETS -->
+  <section class="view" id="presets">
+    <div class="card">
+      <h2>Three presets, backed by a pinned <code>--settings</code> policy (deny wins)</h2>
+      <div class="seg" id="seg"></div>
+      <div class="grid2">
+        <div>
+          <p class="colhd">What the agent may do</p>
+          <div class="tools" id="tools"></div>
+        </div>
+        <div>
+          <p class="colhd">Injected into <code>claude -p</code></p>
+          <pre id="json"></pre>
+        </div>
+      </div>
+      <p class="note" id="presetNote"></p>
+    </div>
+  </section>
 
-  <footer>Companion to the <code>add-queued-prompt-dock-border</code> OpenSpec change · the precedence
-  shown here matches <code>client/src/pages/dashboard.css</code> (<code>.dash-cell--queued</code> after
-  <code>.dash-cell--important</code>).</footer>
+  <!-- PER-PROJECT -->
+  <section class="view" id="projects">
+    <div class="card">
+      <h2>One dial per project · unset → Read-only (safe default)</h2>
+      <div id="projlist"></div>
+      <p class="note">Editable <strong>only</strong> from the desktop GUI — the phone/web End User can
+      never widen their own scope. A brand-new project starts <strong>Read-only</strong> until you opt it up.</p>
+    </div>
+  </section>
+
+  <!-- DECISIONS -->
+  <section class="view" id="decisions">
+    <div class="card">
+      <h2>Confirmed decisions</h2>
+      <div id="declist"></div>
+    </div>
+  </section>
+
+  <footer>Companion to the <code>add-per-project-claude-permissions</code> OpenSpec change ·
+  illustrative preset rules; exact tool rules are finalized in <code>design.md</code>.</footer>
 </div>
 
 <script>
-  // A few sample agents with assorted pre-existing states, to show precedence.
-  var AGENTS = [
-    { nm:'birocode',      st:'running', states:[] },
-    { nm:'game-arcade',   st:'idle',    states:['important'] },
-    { nm:'some',          st:'done',    states:['recency'] },
-    { nm:'birokrat-ai',   st:'running', states:['waiting'] },
-    { nm:'claudeweb',     st:'idle',    states:[] },
-    { nm:'sandbox',       st:'error',   states:['important'] },
-  ];
-  // Per-agent queued count (the "stash"). Start with one already queued to show the border.
-  var stash = AGENTS.map(function (a, i) { return i === 4 ? 2 : 0; });
+// ---- data ---------------------------------------------------------------
+var PIPE = [
+  {ic:'🧑‍💻',t:'Operator picks a preset',d:'In the desktop RepositoriesForm — per project, like the IP guest list.',f:'UI/RepositoriesForm.cs'},
+  {ic:'💾',t:'Saved on the repo record',d:'PermissionPolicy field, atomic write (same path as the IP allowlist).',f:'Models/RepositoryConfig.cs → %APPDATA%/ClaudeWeb/repositories.json'},
+  {ic:'🔗',t:'Shared singleton',d:'One in-memory registry shared by the WinForms GUI and Kestrel.',f:'Services/Repositories/RepositoryRegistry.cs'},
+  {ic:'💬',t:'End User sends a chat turn',d:'ChatController resolves the repo (X-Repo-Id) and starts a run.',f:'Controllers/ChatController.cs'},
+  {ic:'⚙️',t:'Runner injects the policy',d:'repoId is threaded in; the policy becomes --settings on the argv.',f:'Services/Chat/CliRunnerService.cs : CreateProcessInfo'},
+  {ic:'🤖',t:'claude -p runs in scope',d:'The agent can only use what the preset allows. Deny always wins.',f:'claude -p … --settings <policy> --output-format stream-json'}
+];
 
-  var grid = document.getElementById('grid');
+var TOOLS = ['Read / Glob / Grep','Edit / Write (in repo)','Bash — safe (git status, build, test)','Bash — destructive (rm, push --force)','WebFetch / network egress','Write outside the repo'];
+var PRESETS = {
+  ro:{label:'Read-only', def:true, rules:['allow','deny','deny','deny','deny','deny'],
+    cli:'--permission-mode plan',
+    note:'The SAFE DEFAULT. The agent can read, search and answer, but every mutation is blocked — the same posture as the existing read-only "ask" lane. A new project stays here until you opt it up.'},
+  eo:{label:'Edit-only', def:false, rules:['allow','allow','deny','deny','deny','deny'],
+    cli:'--permission-mode acceptEdits --disallowedTools Bash WebFetch WebSearch',
+    note:'Repo-scoped, NO execution. The agent may read and edit files inside this repo, but cannot run scripts/exes (Bash is denied) or reach the network. Edits stay confined to the working directory. Verified live: edits land, Bash blocked.'},
+  std:{label:'Standard', def:false, rules:['allow','allow','allow','deny','ask','deny'],
+    cli:'--settings \'{"permissions":{"deny":["Bash(rm:*)","Bash(git push --force:*)","Bash(curl:*)","WebFetch", …]}}\'',
+    note:'Safe-but-can-build: read + edit within the repo and run safe shell commands; destructive shell and writes outside the repo are denied, network access asks. The "normal development" scope.'},
+  full:{label:'Full access', def:false, rules:['allow','allow','allow','allow','allow','allow'],
+    cli:'(no added flags — today’s default behavior)',
+    note:'No added restriction — the Operator’s explicit, deliberate choice for a trusted project. Everything the agent could do by default.'}
+};
+var SCOPE={ro:['ro','READ-ONLY'],eo:['eo','EDIT-ONLY'],std:['std','STANDARD'],full:['full','FULL']};
+var PROJECTS=[
+  {nm:'birocode', sub:'the harness itself', preset:'full'},
+  {nm:'game-arcade', sub:'a built product', preset:'std'},
+  {nm:'birokrat-ai-platform', sub:'review only — no exec', preset:'eo'},
+  {nm:'sevda-temu', sub:'fresh — never configured', preset:'ro'}
+];
+var DECS=[
+  {k:'A',h:'Mechanism',b:'Four named presets — Read-only, <b>Edit-only</b> (repo, no exec), Standard, Full — injected as <code>claude -p</code> permission flags (deny always wins).'},
+  {k:'B',h:'UI',b:'Start with a per-project preset dropdown in the desktop RepositoriesForm; full rule editor deferred.'},
+  {k:'C',h:'Default → SAFE',b:'Unconfigured repos default to <b>Read-only</b>, not today\'s unrestricted behavior. Opt up per project.'},
+  {k:'D',h:'Operator-only',b:'<b>Set</b> only from the desktop GUI (RepositoriesForm → "Permissions…"); the web End User can never widen their own scope. The web may <b>display</b> it read-only (see G).'},
+  {k:'E',h:'Scope (verified)',b:'v1 = the <code>claude -p</code> chat path only. The structured-ask gateway takes no End-User text (fixed prompt) — no injection vector, left out of scope.'},
+  {k:'F',h:'Ask-lane',b:'The read-only ask lane stays read-only regardless; the per-repo policy further restricts the build lane (most-restrictive wins).'},
+  {k:'G',h:'Where it shows',b:'<b>Desktop configures · web displays.</b> The desktop Repositories dialog has a "Chat permissions" column + "Permissions…" button. The web Dashboard shows a read-only <b>badge</b> (RO/EO/STD/FULL) on each agent dock — reflecting, never changing, the preset.'}
+];
 
-  function classesFor(a, i) {
-    var c = ['tile'];
-    if (a.states.indexOf('important') > -1) c.push('important');
-    if (a.states.indexOf('waiting') > -1) c.push('waiting');
-    if (stash[i] > 0) c.push('queued');   // mirrors tab.stash?.length toggling --queued
-    return c.join(' ');
-  }
+// ---- render -------------------------------------------------------------
+function el(tag,cls,html){var e=document.createElement(tag);if(cls)e.className=cls;if(html!=null)e.innerHTML=html;return e;}
 
-  function render() {
-    grid.innerHTML = '';
-    AGENTS.forEach(function (a, i) {
-      var el = document.createElement('div');
-      el.className = classesFor(a, i);
-      if (a.states.indexOf('recency') > -1) el.setAttribute('data-recency', 'mid');
-      var badges = [];
-      if (a.states.indexOf('important') > -1) badges.push('★ important');
-      if (a.states.indexOf('recency') > -1) badges.push('recency');
-      if (a.states.indexOf('waiting') > -1) badges.push('waiting');
-      el.innerHTML =
-        (stash[i] > 0 ? '<span class="q">' + stash[i] + ' queued</span>' : '') +
-        '<div><span class="dot"></span><span class="nm">' + a.nm + '</span></div>' +
-        '<div class="meta">' + a.st + (badges.length ? ' · ' + badges.join(' · ') : '') + '</div>' +
-        '<div class="hint">' + (stash[i] > 0 ? 'click to clear queue' : 'click to queue a prompt') + '</div>';
-      el.addEventListener('click', function () {
-        stash[i] = stash[i] > 0 ? 0 : 1;   // toggle: queue one / clear
-        render();
-      });
-      grid.appendChild(el);
+(function flow(){
+  var p=document.getElementById('pipe');
+  PIPE.forEach(function(n,i){
+    var row=el('div','pn');
+    row.appendChild(el('div','ic',n.ic));
+    row.appendChild(el('div','bd','<div class="t">'+n.t+'</div><div class="d">'+n.d+'</div><div class="f">'+n.f+'</div>'));
+    p.appendChild(row);
+    if(i<PIPE.length-1) p.appendChild(el('div','conn'));
+  });
+})();
+
+(function presets(){
+  var seg=document.getElementById('seg');
+  Object.keys(PRESETS).forEach(function(key){
+    var b=el('button',null,PRESETS[key].label+(PRESETS[key].def?'<span class="def">SAFE DEFAULT</span>':''));
+    b.dataset.k=key; if(key==='ro') b.classList.add('on');
+    b.onclick=function(){[].forEach.call(seg.children,function(c){c.classList.remove('on')});b.classList.add('on');paintPreset(key);};
+    seg.appendChild(b);
+  });
+  paintPreset('ro');
+})();
+
+function paintPreset(key){
+  var p=PRESETS[key], t=document.getElementById('tools'); t.innerHTML='';
+  TOOLS.forEach(function(nm,i){
+    var v=p.rules[i];
+    var r=el('div','trow');
+    r.appendChild(el('span','nm',nm));
+    r.appendChild(el('span','v '+v, v.toUpperCase()));
+    t.appendChild(r);
+  });
+  // Show the ACTUAL flags this preset injects (each preset uses a different mechanism).
+  var cli = p.cli.replace(/[&<>]/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];});
+  document.getElementById('json').innerHTML =
+    'claude -p "&lt;msg&gt;" \\\n'+
+    '  <span class="k">'+cli+'</span> \\\n'+
+    '  --output-format stream-json <span class="c"># deny always wins</span>';
+  document.getElementById('presetNote').innerHTML = p.note;
+}
+
+(function projects(){
+  var list=document.getElementById('projlist');
+  PROJECTS.forEach(function(pr){
+    var row=el('div','prow');
+    row.appendChild(el('div','nm',pr.nm+'<small>'+pr.sub+'</small>'));
+    var sel=el('select');
+    [['ro','Read-only'],['eo','Edit-only'],['std','Standard'],['full','Full access']].forEach(function(o){
+      var op=el('option',null,o[1]); op.value=o[0]; if(o[0]===pr.preset)op.selected=true; sel.appendChild(op);
     });
-  }
-  render();
+    var scope=el('span');
+    function paint(){var s=SCOPE[sel.value]||SCOPE.ro;scope.className='scope '+s[0];scope.textContent=s[1];}
+    sel.onchange=paint; paint();
+    row.appendChild(scope); row.appendChild(sel);
+    list.appendChild(row);
+  });
+})();
+
+(function decisions(){
+  var d=document.getElementById('declist');
+  DECS.forEach(function(x){
+    var row=el('div','dec');
+    row.appendChild(el('div','k',x.k));
+    row.appendChild(el('div','bd','<b>'+x.h+'.</b> '+x.b));
+    d.appendChild(row);
+  });
+})();
+
+// ---- tabs ---------------------------------------------------------------
+[].forEach.call(document.querySelectorAll('nav button'),function(b){
+  b.onclick=function(){
+    [].forEach.call(document.querySelectorAll('nav button'),function(x){x.classList.remove('on')});
+    [].forEach.call(document.querySelectorAll('.view'),function(x){x.classList.remove('on')});
+    b.classList.add('on'); document.getElementById(b.dataset.v).classList.add('on');
+  };
+});
 </script>
 </body>
 </html>
