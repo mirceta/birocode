@@ -192,7 +192,7 @@ export default function Agents() {
           <li key={tab.id}>
             <button
               type="button"
-              className={`agent-card agent-card--${tab.status}${tab.id === activeTabId ? ' agent-card--active' : ''}`}
+              className={`agent-card agent-card--${tab.status}${tab.id === activeTabId ? ' agent-card--active' : ''}${tab.stash?.length ? ' agent-card--queued' : ''}`}
               data-colored={tab.color ? 'true' : undefined}
               style={tab.color ? { '--agent-color': tab.color } : undefined}
               onClick={() => handleOpen(tab.id)}

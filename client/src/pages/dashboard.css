@@ -380,6 +380,16 @@
   border: 6px solid #ef4444;
 }
 
+/* Queued-prompt mark (openspec: add-queued-prompt-dock-border) — a thick BLACK
+   border whenever the agent has one or more queued prompts (a non-empty per-agent
+   stash). Matching specificity (two classes) and placed AFTER important/recency/
+   colour so it takes precedence while prompts are queued; the --waiting box-shadow
+   uses a different property and still layers on top. */
+.dash-cell.dash-cell--queued,
+.phone.phone--queued {
+  border: 6px solid #000;
+}
+
 /* The star toggle itself — a role=button span living inside the card/phone's
    open-agent button. Hollow + muted when off, filled bright red when on. */
 .important-star {
