@@ -48,6 +48,16 @@ public class RepositoryConfig
     /// Empty = none (or, for an un-migrated entry, see <see cref="LocalPort"/>).
     /// </summary>
     public List<LocalAppConfig> LocalApps { get; set; } = new();
+
+    /// <summary>
+    /// Per-project permission preset for this repo's chat <c>claude -p</c> calls
+    /// (openspec add-per-project-claude-permissions): "readonly" | "standard" |
+    /// "full". Null/absent ⇒ Read-only — the SAFE DEFAULT — so both existing
+    /// entries and freshly-added projects are read-only until the Operator opts
+    /// them up in the desktop app. Set only from the WinForms GUI; the web reads
+    /// but never mutates it.
+    /// </summary>
+    public string? PermissionPolicy { get; set; }
 }
 
 /// <summary>
