@@ -51,6 +51,7 @@ export const FEATURES = {
   deploysTab: 'advanced', // deploy status + rollback control (plans/deployments-tab.md)
   toolCallHistory: 'advanced', // Tool calls drawer: consolidated tool-call list for the active conversation (openspec: add-tool-call-history)
   promptExpand: 'advanced', // composer button that opens the current draft in a large editor popup (openspec: add-prompt-expand-popup)
+  localAppDiscovery: 'advanced', // "Discover local apps" button in each agent dock: read-only agent scan → {name,port} (openspec: discover-local-apps)
 };
 
 const MODE_KEY = 'claudeweb_ui_mode';

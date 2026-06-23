@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import Chat from '../../pages/Chat';
-import { apiPost } from '../../api/client';
+import { apiGet, apiPost } from '../../api/client';
 import { useChatFor } from '../../context/ChatContext';
+import { useRepo } from '../../context/RepoContext';
 import { useT } from '../../i18n/LanguageContext';
 import { useFeature } from '../../context/UiModeContext';
 import GitStatusSummary from '../git/GitStatusSummary';
@@ -76,6 +77,43 @@ export default function PinnedAgent({
   const filesOn = useFeature('filesDock');
   const [showFiles, setShowFiles] = useState(false);
 
+  // "Discover local apps" (openspec discover-local-apps): a read-only agent scan of
+  // THIS dock's repo for self-serving local-app exposures, returning a typed
+  // { name, port } list. Single repo per click (the dock's), via
+  // GET /api/local-apps/discover scoped by X-Repo-Id. Advanced-mode only.
+  const canDiscover = useFeature('localAppDiscovery');
+  const [discovering, setDiscovering] = useState(false);
+  const [discovery, setDiscovery] = useState(null); // { apps } | { error } | null
+
+  // Register a discovered app as a real local app, closing the loop with the Local
+  // tab's name+port form (POST /repos/{id}/localapps). A discovered row whose port
+  // already matches a registered app shows "✓ Registered" instead of a button — that
+  // state is derived from the localApps prop, so a freshly-registered row flips on
+  // its own once reloadRepos refreshes the dock's app list (and switcher above).
+  const { reloadRepos } = useRepo();
+  const [registering, setRegistering] = useState(null); // port currently being registered
+  const [registerErr, setRegisterErr] = useState(null); // { port, text } | null
+  const registeredPorts = new Set((localApps || []).map((a) => a.port));
+
+  const registerApp = async (app) => {
+    setRegistering(app.port);
+    setRegisterErr(null);
+    try {
+      // The endpoint resolves the repo by URL id, not X-Repo-Id — same call the
+      // Local tab's add-app form makes.
+      await apiPost(`/repos/${tab.repoId}/localapps`, { name: app.name, port: app.port });
+      await reloadRepos(); // refreshes repos → this dock's localApps prop → row flips to registered
+    } catch (err) {
+      let text = err.message;
+      try {
+        text = JSON.parse(err.message).error || text;
+      } catch { /* raw text */ }
+      setRegisterErr({ port: app.port, text });
+    } finally {
+      setRegistering(null);
+    }
+  };
+
   // Inward-sync git actions in the dock's git row (plans/dock-git-actions.md):
   // the SAME merge / pull-main / pull-branch actions as the Git tab, scoped to
   // THIS dock's repo via repoId → X-Repo-Id, reusing the Git tab's act() flow
@@ -101,6 +139,24 @@ export default function PinnedAgent({
     } finally {
       setGitActing('');
       onRefreshGit?.(); // re-fetch this dock's status (hits origin) like the Git tab
+    }
+  };
+
+  const discover = async () => {
+    setDiscovering(true);
+    setDiscovery(null);
+    try {
+      // X-Repo-Id = this dock's repo, so the server scans only that repo.
+      const r = await apiGet('/local-apps/discover', { repoId: tab.repoId });
+      setDiscovery({ apps: r.apps || [] });
+    } catch (err) {
+      let text = err.message;
+      try {
+        text = JSON.parse(err.message).error || text;
+      } catch { /* raw text */ }
+      setDiscovery({ error: text });
+    } finally {
+      setDiscovering(false);
     }
   };
 
@@ -216,6 +272,62 @@ export default function PinnedAgent({
               {a.name}{a.kind === 'repo' && <span className="phone__app-port"> :{a.port}</span>}
             </button>
           ))}
+        </div>
+      )}
+      {/* Discover local apps (openspec discover-local-apps): one read-only agent
+          scan of THIS dock's repo → typed { name, port } list. Chat-context
+          furniture like the git block; hidden while Files / a local app is open. */}
+      {canDiscover && !showFiles && !openApp && (
+        <div className="phone__discover">
+          <button
+            type="button"
+            className="phone__discover-btn"
+            onClick={discover}
+            disabled={discovering}
+            title={t('dashboard.discoverHint')}
+          >
+            {discovering ? t('dashboard.discovering') : `🛰️ ${t('dashboard.discoverLocalApps')}`}
+          </button>
+          {discovery?.error && (
+            <div className="phone__discover-msg phone__discover-msg--err" role="status">
+              {t('dashboard.discoverError', { error: discovery.error })}
+            </div>
+          )}
+          {discovery?.apps && (discovery.apps.length === 0 ? (
+            <div className="phone__discover-msg" role="status">{t('dashboard.discoverNone')}</div>
+          ) : (
+            <ul className="phone__discover-list">
+              {discovery.apps.map((a, i) => {
+                const isRegistered = registeredPorts.has(a.port);
+                const busy = registering === a.port;
+                return (
+                  <li key={i} title={a.evidence || a.folder || ''}>
+                    <span className="phone__discover-name">{a.name}</span>
+                    <span className="phone__discover-port">:{a.port}</span>
+                    {isRegistered ? (
+                      <span className="phone__discover-reg" title={t('dashboard.discoverRegistered')}>
+                        ✓ {t('dashboard.discoverRegistered')}
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="phone__discover-add"
+                        onClick={() => registerApp(a)}
+                        disabled={busy}
+                      >
+                        {busy ? t('dashboard.discoverRegistering') : t('dashboard.discoverRegister')}
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          ))}
+          {registerErr && (
+            <div className="phone__discover-msg phone__discover-msg--err" role="status">
+              {t('dashboard.discoverRegisterError', { error: registerErr.text })}
+            </div>
+          )}
         </div>
       )}
       {/* The git block is chat-context furniture; hide it while the Files tab OR

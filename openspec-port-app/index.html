@@ -36,6 +36,7 @@
         </p>
         <nav class="subnav">
           <button class="subnav__btn is-active" data-sub="explain">Explain</button>
+          <button class="subnav__btn" data-sub="howto">How it works</button>
           <button class="subnav__btn" data-sub="system">Our system</button>
           <button class="subnav__btn" data-sub="claudemd">CLAUDE.md</button>
           <button class="subnav__btn" data-sub="analyze">Analyze</button>
@@ -70,6 +71,108 @@
         <p class="muted">Additive &amp; reversible until Phase 4 — <code>openspec/</code> sits beside
           <code>plans/*</code> the whole way. Tap a phase to open it in <b>Control</b>.</p>
         <ol class="spine" id="spine"><!-- rendered by app.js --></ol>
+      </div>
+    </section>
+
+    <!-- ───────────── HOW IT WORKS ───────────── -->
+    <section class="subview" id="subview-howto">
+      <div class="wrap">
+        <h2>How OpenSpec works — the mechanics</h2>
+        <p class="lead">Beneath the port project: how the tool itself is built. OpenSpec keeps
+          <b>what's true now</b> strictly apart from <b>what we propose to change</b>, and ships only by
+          folding one into the other. The <b>Cockpit</b> tab is a live, read-only window onto exactly the
+          files described here.</p>
+
+        <div class="scope">
+          <b>Mental model:</b> the <b>baseline</b> is the current truth, a <b>change</b> is a diff against
+          that truth, and the <b>archive</b> is applied diffs. Shipping is literally
+          <code>baseline + delta → new baseline</code>.
+        </div>
+
+        <h3 class="mt">Two worlds, plus an archive</h3>
+        <div class="hw__worlds">
+          <div class="hw__world hw__world--base">
+            <div class="hw__wh">📚 The baseline</div>
+            <code>openspec/specs/&lt;cap&gt;/</code>
+            <p>"What the system <b>does today</b>." One folder per <b>capability</b> (<code>chat</code>,
+              <code>files</code>, <code>openspec-cockpit</code>…), each a list of <b>Requirements</b> +
+              <b>Scenarios</b>. Read it with <code>openspec spec list</code>.</p>
+          </div>
+          <div class="hw__world hw__world--chg">
+            <div class="hw__wh">🛠️ In-flight changes</div>
+            <code>openspec/changes/&lt;id&gt;/</code>
+            <p>A proposal <b>not yet true</b>: intent, design, a task checklist, and <b>delta specs</b> that
+              list requirements to <b>ADD / MODIFY / REMOVE</b>. Listed by <code>openspec list</code>.</p>
+          </div>
+          <div class="hw__world hw__world--arc">
+            <div class="hw__wh">📦 The archive</div>
+            <code>openspec/changes/archive/</code>
+            <p>Shipped changes, date-stamped (<code>2026-06-22-&lt;id&gt;</code>). On archive the delta is
+              <b>folded into the baseline</b> and the change retires here — the record of how the baseline
+              got its shape.</p>
+          </div>
+        </div>
+
+        <h3 class="mt">On disk</h3>
+        <pre class="hw__tree">openspec/
+├─ <b class="hw-b">specs/</b>                       <i># the living baseline — "what we do today"</i>
+│  ├─ chat/spec.md
+│  ├─ files/spec.md
+│  ├─ <b class="hw-b">openspec-cockpit/</b>spec.md     <i># ← the Cockpit's own spec</i>
+│  └─ …
+├─ <b class="hw-a">changes/</b>                     <i># in-flight proposals</i>
+│  └─ <b class="hw-a">add-prompt-expand-popup/</b>
+│     ├─ proposal.md            <i># why + what changes + impact</i>
+│     ├─ design.md              <i># technical approach</i>
+│     ├─ tasks.md               <i># [ ] / [x] checklist</i>
+│     └─ specs/chat/spec.md     <i># the DELTA (ADDED/MODIFIED/REMOVED)</i>
+└─ <b class="hw-g">changes/archive/</b>             <i># shipped, newest by date prefix</i>
+   └─ 2026-06-22-add-openspec-cockpit/</pre>
+
+        <h3 class="mt">Anatomy of one change</h3>
+        <p class="lead">The four files inside a <code>changes/&lt;id&gt;/</code> folder — each answers a
+          different question.</p>
+        <div class="hw__files">
+          <div class="hw__file"><b>proposal.md</b><span class="hw__q">why + what</span>
+            <p>The pitch: <i>Why</i>, <i>What Changes</i>, <i>Impact</i> (which specs + code it touches).
+              Created by <code>/opsx propose</code>.</p></div>
+          <div class="hw__file hw__file--delta"><b>specs/&lt;cap&gt;/spec.md</b><span class="hw__q">the delta</span>
+            <p>The contract the code must meet: requirements to <b>ADD / MODIFY / REMOVE</b>, each with
+              WHEN/THEN scenarios. The only net-new artifact OpenSpec adds.</p></div>
+          <div class="hw__file"><b>tasks.md</b><span class="hw__q">the checklist</span>
+            <p><code>[ ]</code>/<code>[x]</code> items. The Cockpit reads these boxes for its
+              "15 of 19"-style completion — <code>openspec show --json</code> omits them, so it reads the
+              file directly.</p></div>
+          <div class="hw__file"><b>design.md</b><span class="hw__q">how</span>
+            <p>The technical approach — component shape, state flow, trade-offs. Required for non-trivial
+              changes; a trivial one may skip it.</p></div>
+        </div>
+
+        <h3 class="mt">The spec grammar</h3>
+        <p class="lead">Every requirement has the same shape in both the baseline and the deltas — that
+          regularity is what lets the CLI (and the Cockpit) parse it.</p>
+        <pre class="hw__code"><i># Capability heading (e.g. "Chat")</i>
+
+### Requirement: &lt;imperative, testable statement&gt;
+The system <b>SHALL</b> …            <i># normative "must"; SHALL NOT for prohibitions</i>
+
+#### Scenario: &lt;a concrete case&gt;
+- <b>WHEN</b> &lt;trigger&gt;            <i># the situation</i>
+- <b>THEN</b> &lt;observable result&gt;   <i># what must be true after</i></pre>
+
+        <h3 class="mt">The delta fold — what <code>archive</code> does</h3>
+        <p class="lead">A change never edits the baseline directly. Its delta lists <i>operations</i>;
+          <code>openspec archive &lt;id&gt;</code> replays them onto <code>specs/&lt;cap&gt;/</code> and
+          moves the change to the dated archive.</p>
+        <div class="hw__ops">
+          <div class="hw__op hw__op--add"><span class="hw__opb">ADDED</span> a new requirement appears in the baseline</div>
+          <div class="hw__op hw__op--mod"><span class="hw__opb">MODIFIED</span> an existing requirement is replaced in place</div>
+          <div class="hw__op hw__op--rem"><span class="hw__opb">REMOVED</span> a requirement is deleted from the baseline</div>
+        </div>
+        <p class="muted hw__foot"><code>openspec validate --strict</code> gates the delta's <i>shape</i>
+          before any code is written; <code>archive</code> applies the ops and stamps the change into
+          <code>changes/archive/</code>. After that, the baseline reflects the new truth and
+          <code>openspec list</code> no longer shows the change as active.</p>
       </div>
     </section>
 

@@ -20,6 +20,7 @@ using ClaudeWeb.Services.PromptNotes;
 using ClaudeWeb.Services.Repositories;
 using ClaudeWeb.Services.Screen;
 using ClaudeWeb.Services.Settings;
+using ClaudeWeb.Services.StructuredAsk;
 using ClaudeWeb.Services.TaskGraph;
 using ClaudeWeb.Services.Terminal;
 using Microsoft.AspNetCore.Builder;
@@ -154,6 +155,7 @@ public class EmbeddedApi
             builder.Services.AddAnalyticsModule(); // scoreboard (plans/scoreboard-analytics.md)
             builder.Services.AddAutopilotModule(); // loop-autopilot discovery (plans/loop-autopilot.md)
             builder.Services.AddTaskGraphModule(); // task dependency graph (plans/task-dependency-graph.md)
+            builder.Services.AddStructuredAskModule(); // discover local apps (openspec discover-local-apps)
             // === END MODULE SERVICE REGISTRATION ===
 
             _app = builder.Build();

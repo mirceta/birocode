@@ -1141,6 +1141,31 @@ details.step > summary::-webkit-details-marker {
 .prompt-mgr__text-input { resize: vertical; }
 .prompt-mgr__error { color: #d1242f; font-size: 12px; margin: 0; }
 
+/* Prompt templates (openspec: add-prompt-templates). A list row's detected
+   fill-in fields, and the live read-out under the add/edit body. */
+.prompt-mgr__item-params {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-accent);
+  overflow-wrap: anywhere;
+}
+.prompt-mgr__params-hint {
+  font-size: 12px;
+  color: var(--color-text-soft);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The fill-in form is layered OVER the prompts pop-up as a second modal. */
+.prompt-mgr-backdrop--stack { z-index: 1100; }
+.prompt-mgr--fill { width: min(440px, 100%); }
+.prompt-mgr__fill-field { display: flex; flex-direction: column; gap: 4px; }
+.prompt-mgr__fill-name {
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
 /* ---- Notes tab: one resizable white canvas + a save bar ---- */
 .note-mgr { display: flex; flex-direction: column; gap: 8px; }
 

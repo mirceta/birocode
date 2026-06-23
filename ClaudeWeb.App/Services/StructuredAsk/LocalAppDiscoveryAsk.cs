@@ -1,0 +1,63 @@
+namespace ClaudeWeb.Services.StructuredAsk;
+
+/// <summary>
+/// The "stage": owns the GENERIC, signature-based discovery prompt and runs it for
+/// one repository. The prompt names NO app and assumes NO layout -- it describes the
+/// shape of a local-app exposure (per docs/local-exposure-convention.md) so it keeps
+/// working as apps are added and in any repository. The required-output schema is
+/// rendered from <see cref="LocalAppExposureReport"/>, so prompt and parser cannot
+/// drift. See openspec/changes/discover-local-apps/.
+/// </summary>
+public class LocalAppDiscoveryAsk
+{
+    private readonly StructuredAskRunner _runner;
+
+    public LocalAppDiscoveryAsk(StructuredAskRunner runner) => _runner = runner;
+
+    /// <summary>Discover local-app exposures in the single repository rooted at
+    /// <paramref name="workingDirectory"/>.</summary>
+    public Task<StructuredAskResult<LocalAppExposureReport>> DiscoverAsync(
+        string workingDirectory, CancellationToken ct = default)
+    {
+        var prompt = Prompt.Replace(
+            "{{OUTPUT_FORMAT}}",
+            OutputFormatRenderer.Render(typeof(LocalAppExposureReport)));
+        return _runner.RunAsync(prompt, LocalAppExposureReport.Parse, workingDirectory, ct);
+    }
+
+    private const string Prompt = @"
+Scan THIS repository for every web app in it that exposes itself as a **local app** --
+a self-serving HTTP server the Claude Web harness can reach on its Local tab.
+
+A local-app exposure is a directory in this repository that:
+  - runs its OWN HTTP server (e.g. a Node serve.mjs / server.js, a serve.ps1, or an
+    embedded server) that LISTENS on a FIXED port;
+  - binds dual-stack loopback -- 127.0.0.1 AND [::1] (or 0.0.0.0 / [::] / `::` with
+    dualstack enabled);
+  - serves its page at the root path GET /;
+  - references its assets with RELATIVE URLs (./... not /...).
+
+The canonical contract is `docs/local-exposure-convention.md` in this repository --
+read it if present, then go find the apps.
+
+Find EVERY such directory. Do NOT assume any particular app exists, and do NOT assume a
+particular layout -- discover them by locating the server's listen/bind call and the
+fixed port it uses. Search the repository (look for files like serve.mjs, server.js,
+serve.ps1, and calls such as `.listen(`, `createServer`, `HttpListener`, `app.listen`).
+
+For each app you find, report:
+  - name: the app's name (its directory name is a good default)
+  - port: the fixed port it listens on (an integer)
+  - folder: the repo-relative folder it lives in
+  - evidence: the file and line where the port is bound (e.g. homepage/serve.mjs:22)
+
+If the repository has no such directory, return an empty ""apps"" array. Do not invent
+entries.
+
+### Output format
+
+Respond with ONLY valid JSON in this exact structure:
+
+{{OUTPUT_FORMAT}}
+";
+}
