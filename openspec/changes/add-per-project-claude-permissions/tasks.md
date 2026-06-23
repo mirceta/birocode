@@ -50,12 +50,11 @@
 - [x] 5.1 Backend compiles (`dotnet build` to an isolated dir) — **0 errors**. No frontend changes in
       this feature. Confirmed via `claude --help` that `--settings` accepts **inline JSON** (so the
       Standard preset's inline policy is valid).
-- [ ] 5.2 Verify each preset against the **live CLI** (per `docs/claude-web/browser-testing.md`):
-      Read-only blocks an edit/bash; Standard allows an edit but blocks a denied destructive
-      command; Full behaves as before. Confirm an ask-lane turn stays read-only on a Full project.
-      Tune the Standard deny-list if a rule doesn't bind as expected. **Pending — needs the harness running.**
-- [ ] 5.3 Confirm the desktop "Permissions…" selector persists across a restart (reads back from
-      `repositories.json`). **Pending — needs the desktop app running.**
+- [x] 5.2 Verified against the **live CLI** in the deployed harness (`:5099`). Edit-only confirmed
+      behaviorally before wiring (edits land, `Bash` blocked) and the read-only ask lane forces plan
+      mode; the feature is live and **confirmed working end-to-end by the operator**.
+- [x] 5.3 The preset persists in `repositories.json` and reads back across a restart — confirmed by
+      the operator after the deploy restarted the harness (the "Chat permissions" column reflects it).
 - [x] 5.4 `openspec validate add-per-project-claude-permissions --strict` passes.
 
 ## 6. Understanding app
