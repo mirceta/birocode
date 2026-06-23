@@ -32,8 +32,9 @@
 //                                     openspec/changes/archive/<id>/ (the CLI can't
 //                                     show archives), in the same drill-in shape.
 //
-// Run:  node serve.mjs            (defaults to port 5310)
-//       PORT=1234 node serve.mjs  (any other port)
+// Run:  node serve.mjs                                   (port 5310; inspects the repo this app sits in)
+//       PORT=1234 node serve.mjs                         (any other port)
+//       OPENSPEC_REPO_ROOT=C:\path\to\repo node serve.mjs (inspect ANY repo, no copy needed)
 // No dependencies — Node's built-in http/fs/child_process only.
 
 import { createServer } from 'node:http';
@@ -43,7 +44,11 @@ import { dirname, join, normalize } from 'node:path';
 import { execFile } from 'node:child_process';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));     // openspec-port-app/
-const REPO_ROOT = dirname(ROOT);                          // repo root — where openspec/ lives
+// The repo this Control Room inspects. Defaults to the folder that CONTAINS this
+// app (so a copy dropped into a repo "just works"), but OPENSPEC_REPO_ROOT lets
+// ONE instance point at any repo on the host — no copy required. Stays a fully
+// independent local app; the target is configuration, not code.
+const REPO_ROOT = process.env.OPENSPEC_REPO_ROOT || dirname(ROOT);
 const PORT = Number(process.env.PORT) || 5310;
 const EXEC_TIMEOUT_MS = 30_000;
 const EXEC_MAXBUF = 4 * 1024 * 1024;
@@ -396,6 +401,8 @@ server.listen(PORT, () => {
   console.log('OpenSpec-port Control Room serving on:');
   console.log('  http://127.0.0.1:' + PORT + '   (IPv4)');
   console.log('  http://[::1]:' + PORT + '       (IPv6)');
+  console.log('  inspecting repo: ' + REPO_ROOT
+    + (process.env.OPENSPEC_REPO_ROOT ? '  (via OPENSPEC_REPO_ROOT)' : '  (default: app\'s parent)'));
   console.log('  exec API: POST /api/exec  (cwd: ' + REPO_ROOT + ')');
   console.log("Register this port as a Local app for the repo, then open the Local tab.");
 });
