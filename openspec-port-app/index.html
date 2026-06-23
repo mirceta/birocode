@@ -470,6 +470,13 @@ The system <b>SHALL</b> …            <i># normative "must"; SHALL NOT for proh
             capability to drill in.</span></span></h2>
           <button class="reset" id="ckRefresh">↻ Refresh</button>
         </div>
+        <form class="ck__root" id="ckRootForm">
+          <label class="ck__root-lbl" for="ckRoot">Repo root</label>
+          <input class="ck__root-in" id="ckRoot" type="text" spellcheck="false" autocomplete="off"
+                 placeholder="(loading…)" title="Absolute path to the repository to inspect — leave to read the default">
+          <button class="ck__root-go" id="ckRootGo" type="submit">Inspect</button>
+          <button class="ck__root-reset" id="ckRootReset" type="button" title="Back to the default repo">Default</button>
+        </form>
         <div class="ck" id="ckBody"><!-- rendered by app.js --></div>
         <p class="muted flow__foot">One read-only fetch — <code>GET ./api/cockpit</code> — aggregates
           <code>openspec list --json</code>, <code>openspec spec list --json</code>, and a direct read of

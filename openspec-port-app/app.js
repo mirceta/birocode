@@ -839,6 +839,14 @@ const CK_MAP = [
 ];
 const ckBody = document.getElementById('ckBody');
 let ckLoaded = false;
+// The repo the Cockpit is currently inspecting. '' means "the server's default"
+// (env var / app parent); a non-empty value is sent as ?root= on every Cockpit
+// read so one running instance can inspect any repo, no restart. Scoped to the
+// Cockpit's read-only fetches — the Console's authoring verbs are untouched.
+let ckRoot = '';
+const ckRootInput = document.getElementById('ckRoot');
+// Build the ?root= / &root= suffix for a Cockpit fetch (empty when on default).
+const rootParam = (lead) => (ckRoot ? `${lead}root=${encodeURIComponent(ckRoot)}` : '');
 
 function relTime(iso) {
   const t = Date.parse(iso);
@@ -1066,8 +1074,17 @@ async function loadCockpit(force) {
   ckLoaded = true;
   ckBody.innerHTML = '<div class="ck__loading">Reading OpenSpec state…</div>';
   try {
-    const res = await fetch('./api/cockpit');
-    renderCockpit(await res.json());
+    const res = await fetch(`./api/cockpit${rootParam('?')}`);
+    const j = await res.json();
+    if (!res.ok) {
+      ckLoaded = false;
+      ckBody.innerHTML = `<div class="ck__err">Can’t inspect that repo — ${escapeHtml(j.error || ('HTTP ' + res.status))}</div>`;
+      return;
+    }
+    // Pre-fill the textbox with the repo the server actually resolved, so the box
+    // shows the live default when the user hasn't typed an override yet.
+    if (j.repoRoot && document.activeElement !== ckRootInput && !ckRoot) ckRootInput.value = j.repoRoot;
+    renderCockpit(j);
   } catch (e) {
     ckLoaded = false;
     ckBody.innerHTML = `<div class="ck__err">Couldn’t reach the server (serve.mjs running?) — ${escapeHtml(e.message)}</div>`;
@@ -1081,13 +1098,29 @@ ckBody.addEventListener('click', async (e) => {
   panel.innerHTML = '<div class="ck__loading">Loading…</div>'; panel.classList.add('show');
   try {
     const ep = item.dataset.kind === 'archived' ? 'archived' : 'show';
-    const res = await fetch(`./api/cockpit/${ep}?id=${encodeURIComponent(item.dataset.id)}`);
+    const res = await fetch(`./api/cockpit/${ep}?id=${encodeURIComponent(item.dataset.id)}${rootParam('&')}`);
     renderCkDetail(await res.json());
   } catch (e2) {
     renderCkDetail({ ok: false, stderr: e2.message });
   }
 });
 document.getElementById('ckRefresh').addEventListener('click', () => loadCockpit(true));
+
+// Repo-root textbox: submit (Enter / Inspect) reads against the typed path; the
+// drill-in panel is closed since its contents belong to the previous repo.
+document.getElementById('ckRootForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  ckRoot = ckRootInput.value.trim();
+  document.getElementById('ckDetail')?.classList.remove('show');
+  loadCockpit(true);
+});
+// "Default" clears the override and re-reads the server's default repo.
+document.getElementById('ckRootReset').addEventListener('click', () => {
+  ckRoot = '';
+  ckRootInput.value = '';
+  document.getElementById('ckDetail')?.classList.remove('show');
+  loadCockpit(true);
+});
 
 // ── Initial render ───────────────────────────────────────────────
 renderPhases();
