@@ -162,7 +162,7 @@ export default function PinnedAgent({
 
   return (
     <div
-      className={`phone phone--${status}${tab.important ? ' phone--important' : ''}${tab.waiting ? ' phone--waiting' : ''}`}
+      className={`phone phone--${status}${tab.important ? ' phone--important' : ''}${tab.waiting ? ' phone--waiting' : ''}${tab.stash?.length ? ' phone--queued' : ''}`}
       data-colored={tab.color ? 'true' : undefined}
       data-recency={recency}
       style={tab.color ? { '--agent-color': tab.color } : undefined}

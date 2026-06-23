@@ -196,6 +196,13 @@
   background: color-mix(in srgb, var(--agent-color) 18%, var(--color-surface));
 }
 
+/* Queued-prompt mark (openspec: add-queued-prompt-dock-border) — a thick BLACK
+   border whenever the agent has one or more queued prompts. Two classes + placed
+   after the active/colour rules so it takes precedence while prompts are queued. */
+.agent-card.agent-card--queued {
+  border: 6px solid #000;
+}
+
 /* Swatch button that opens the palette. Hollow ring when unmarked. */
 .agent-card__swatch {
   width: 18px;
