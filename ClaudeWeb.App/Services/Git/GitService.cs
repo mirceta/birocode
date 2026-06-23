@@ -611,6 +611,49 @@ public partial class GitService
         bool IsFeatureBranch, string? Base, string? BaseRef, string? MergeBase,
         IReadOnlyList<ReviewCommit> Commits, IReadOnlyList<ReviewFile> Files, bool Truncated);
     public sealed record ReviewFilePatch(string Path, string Patch, bool Truncated);
+    public sealed record ReviewBase(string Ref, string Kind);
+    public sealed record ReviewBasesResult(string? Default, IReadOnlyList<ReviewBase> Bases);
+
+    /// <summary>Pre-checks a chosen base ref (rejects empty / option-like /
+    /// whitespace / control / `..`) then verifies it peels to a commit. The
+    /// strict pre-check stops a bad value from being spliced as a git option;
+    /// rev-parse is the authoritative existence check.</summary>
+    private bool TryValidateRef(string workingDir, string candidate)
+    {
+        if (string.IsNullOrWhiteSpace(candidate)) return false;
+        if (candidate.StartsWith('-') || candidate.Contains("..")) return false;
+        foreach (var ch in candidate)
+            if (char.IsWhiteSpace(ch) || char.IsControl(ch)) return false;
+        return RunGit(workingDir, "rev-parse --verify --quiet", $"{candidate}^{{commit}}").ExitCode == 0;
+    }
+
+    /// <summary>Candidate base branches for the review picker: local heads +
+    /// `origin/*` (excluding `origin/HEAD`), plus the auto-detected default
+    /// (the same one Review() would fall back to). Read-only.</summary>
+    public ReviewBasesResult ListReviewBases(string workingDir)
+    {
+        var (localBase, originBase) = DetectBases(workingDir);
+        var defaultBase = originBase ?? localBase;
+
+        var bases = new List<ReviewBase>();
+        var locals = RunGit(workingDir, "for-each-ref refs/heads --format=%(refname:short)");
+        if (locals.ExitCode == 0)
+            foreach (var line in locals.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var name = line.Trim();
+                if (name.Length > 0) bases.Add(new ReviewBase(name, "local"));
+            }
+        var remotes = RunGit(workingDir, "for-each-ref refs/remotes/origin --format=%(refname:short)");
+        if (remotes.ExitCode == 0)
+            foreach (var line in remotes.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var name = line.Trim();
+                if (name.Length == 0 || name == "origin/HEAD") continue;
+                bases.Add(new ReviewBase(name, "remote"));
+            }
+        _logger.Info($"[GIT] ListReviewBases -> default={defaultBase ?? "(none)"}, {bases.Count} base(s)");
+        return new ReviewBasesResult(defaultBase, bases);
+    }
 
     /// <summary>
     /// What a GitHub pull request would show for the checked-out feature branch
@@ -622,7 +665,7 @@ public partial class GitService
     /// (mirrors GitHub), else the local base. On the base branch itself there is
     /// nothing to review -> IsFeatureBranch=false. Read-only.
     /// </summary>
-    public ReviewResult Review(string workingDir)
+    public ReviewResult Review(string workingDir, string? baseOverride = null)
     {
         var empty = new ReviewResult(false, null, null, null,
             Array.Empty<ReviewCommit>(), Array.Empty<ReviewFile>(), false);
@@ -630,13 +673,24 @@ public partial class GitService
         var current = CurrentBranch(workingDir);
         if (current is "unknown" or "(detached)") return empty;
 
-        var (localBase, originBase) = DetectBases(workingDir);
-        var baseRef = originBase ?? localBase;
-        if (baseRef is null) return empty;
+        string? baseRef;
+        if (!string.IsNullOrWhiteSpace(baseOverride))
+        {
+            if (!TryValidateRef(workingDir, baseOverride))
+                throw new ArgumentException("unknown base branch");
+            baseRef = baseOverride;
+        }
+        else
+        {
+            var (localBase, originBase) = DetectBases(workingDir);
+            baseRef = originBase ?? localBase;
+            if (baseRef is null) return empty;
 
-        // On the base branch itself? Nothing to PR.
-        var baseBranchName = baseRef.StartsWith("origin/") ? baseRef["origin/".Length..] : baseRef;
-        if (current == baseBranchName || current == localBase) return empty;
+            // On the base branch itself? Nothing to PR. (Only enforced for
+            // auto-detect; an explicit Operator pick is honored.)
+            var baseBranchName = baseRef.StartsWith("origin/") ? baseRef["origin/".Length..] : baseRef;
+            if (current == baseBranchName || current == localBase) return empty;
+        }
 
         var mb = RunGit(workingDir, $"merge-base {baseRef} HEAD");
         var mergeBase = mb.ExitCode == 0 && !string.IsNullOrWhiteSpace(mb.StdOut)
@@ -702,13 +756,23 @@ public partial class GitService
     /// <see cref="ReviewPatchMaxChars"/> chars (Truncated marks the cut). The
     /// path is passed via the ArgumentList, never the shell.
     /// </summary>
-    public ReviewFilePatch ReviewFileDiff(string workingDir, string path)
+    public ReviewFilePatch ReviewFileDiff(string workingDir, string path, string? baseOverride = null)
     {
         if (string.IsNullOrWhiteSpace(path)) throw new ArgumentException("path required");
 
-        var (localBase, originBase) = DetectBases(workingDir);
-        var baseRef = originBase ?? localBase;
-        if (baseRef is null) throw new InvalidOperationException("no base branch to diff against");
+        string? baseRef;
+        if (!string.IsNullOrWhiteSpace(baseOverride))
+        {
+            if (!TryValidateRef(workingDir, baseOverride))
+                throw new ArgumentException("unknown base branch");
+            baseRef = baseOverride;
+        }
+        else
+        {
+            var (localBase, originBase) = DetectBases(workingDir);
+            baseRef = originBase ?? localBase;
+            if (baseRef is null) throw new InvalidOperationException("no base branch to diff against");
+        }
 
         var run = RunGit(workingDir, $"diff {baseRef}...HEAD --", path);
         if (run.ExitCode != 0)
