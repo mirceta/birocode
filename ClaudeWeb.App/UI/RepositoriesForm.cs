@@ -18,7 +18,7 @@ public class RepositoriesForm : Form
         _registry = registry;
 
         Text = "Repositories";
-        Size = new Size(720, 420);
+        Size = new Size(800, 420);
         MinimumSize = new Size(560, 320);
         StartPosition = FormStartPosition.CenterParent;
         BackColor = Color.White;
@@ -32,9 +32,10 @@ public class RepositoriesForm : Form
             HideSelection = false,
             Font = new Font("Segoe UI", 9f),
         };
-        _list.Columns.Add("Name", 160);
-        _list.Columns.Add("Path", 380);
-        _list.Columns.Add("Status", 120);
+        _list.Columns.Add("Name", 150);
+        _list.Columns.Add("Path", 340);
+        _list.Columns.Add("Status", 110);
+        _list.Columns.Add("Chat permissions", 160);
 
         var buttonBar = new FlowLayoutPanel
         {
@@ -51,10 +52,13 @@ public class RepositoriesForm : Form
         renameButton.Click += OnRename;
         var removeButton = MakeButton("Remove");
         removeButton.Click += OnRemove;
+        var permsButton = MakeButton("Permissions...");
+        permsButton.Click += OnPermissions;
 
         buttonBar.Controls.Add(addButton);
         buttonBar.Controls.Add(renameButton);
         buttonBar.Controls.Add(removeButton);
+        buttonBar.Controls.Add(permsButton);
 
         Controls.Add(_list);
         Controls.Add(buttonBar);
@@ -78,7 +82,7 @@ public class RepositoriesForm : Form
         foreach (var r in _registry.GetAll())
         {
             var status = !r.Exists ? "Missing" : r.IsGitRepo ? "Git repo" : "Not a git repo";
-            var item = new ListViewItem(new[] { r.Name, r.Path, status }) { Tag = r.Id };
+            var item = new ListViewItem(new[] { r.Name, r.Path, status, PresetLabel(r.PermissionPolicy) }) { Tag = r.Id };
             if (!r.Exists)
                 item.ForeColor = Color.FromArgb(180, 60, 60);
             else if (!r.IsGitRepo)
@@ -142,6 +146,88 @@ public class RepositoriesForm : Form
 
         _registry.Remove(id);
         Refresh_();
+    }
+
+    // The three chat permission presets (openspec add-per-project-claude-permissions),
+    // operator-set per project. value <-> label.
+    private static readonly (string Value, string Label)[] Presets =
+    {
+        ("readonly", "Read-only (safe default)"),
+        ("editonly", "Edit-only (repo, no exec)"),
+        ("standard", "Standard"),
+        ("full",     "Full access"),
+    };
+
+    private static string PresetLabel(string? policy)
+    {
+        var v = RepositoryRegistry.NormalizePolicy(policy);
+        foreach (var p in Presets)
+            if (p.Value == v) return p.Label;
+        return Presets[0].Label;
+    }
+
+    private void OnPermissions(object? sender, EventArgs e)
+    {
+        var id = SelectedId();
+        if (id is null) return;
+
+        var info = _registry.GetAll().FirstOrDefault(r => r.Id == id);
+        if (info is null) return;
+
+        var chosen = ChoosePreset(info.Name, info.PermissionPolicy);
+        if (chosen is null) return;
+
+        _registry.SetPermissionPolicy(id, chosen);
+        Refresh_();
+    }
+
+    /// <summary>Modal preset chooser for the selected repo's chat permissions.
+    /// Returns the chosen value ("readonly"/"standard"/"full") or null if cancelled.</summary>
+    private string? ChoosePreset(string repoName, string currentPolicy)
+    {
+        using var form = new Form
+        {
+            Text = $"Chat permissions — {repoName}",
+            Size = new Size(450, 240),
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            StartPosition = FormStartPosition.CenterParent,
+            MaximizeBox = false,
+            MinimizeBox = false,
+            BackColor = Color.White,
+        };
+
+        var label = new Label
+        {
+            Text = "Permission scope applied to this project's chat (claude -p) calls:",
+            Left = 12, Top = 14, Width = 420, Height = 20,
+        };
+        var combo = new ComboBox
+        {
+            Left = 12, Top = 40, Width = 420, DropDownStyle = ComboBoxStyle.DropDownList,
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+        };
+        foreach (var p in Presets) combo.Items.Add(p.Label);
+        var cur = RepositoryRegistry.NormalizePolicy(currentPolicy);
+        var idx = Array.FindIndex(Presets, p => p.Value == cur);
+        combo.SelectedIndex = idx >= 0 ? idx : 0;
+
+        var note = new Label
+        {
+            Text = "Read-only blocks edits and commands. Edit-only lets the agent edit this repo "
+                 + "but run no scripts/exes and reach no network. Standard allows in-repo development "
+                 + "but denies destructive/exfiltration actions. Full applies no added restriction. "
+                 + "Set here only — the web UI cannot change it.",
+            Left = 12, Top = 74, Width = 420, Height = 70,
+            ForeColor = Color.FromArgb(110, 110, 120),
+        };
+        var ok = new Button { Text = "OK", DialogResult = DialogResult.OK, Left = 262, Top = 162, Width = 75, Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
+        var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Left = 347, Top = 162, Width = 75, Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
+
+        form.Controls.AddRange(new Control[] { label, combo, note, ok, cancel });
+        form.AcceptButton = ok;
+        form.CancelButton = cancel;
+
+        return form.ShowDialog(this) == DialogResult.OK ? Presets[combo.SelectedIndex].Value : null;
     }
 
     /// <summary>Minimal single-line text prompt (WinForms has no built-in InputBox).</summary>
