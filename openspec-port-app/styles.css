@@ -454,6 +454,39 @@ button.ck-item:hover { transform: translateY(-2px); box-shadow: var(--shadow); b
 .ck__doch--2 { font-size: 12.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--soft); }
 .ck__doch--3, .ck__doch--4 { font-size: 12px; color: var(--soft); }
 
+/* How it works — the OpenSpec mechanics primer */
+.hw__worlds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 4px 0 6px; }
+.hw__world { background: var(--surface); border: 1px solid var(--border); border-top: 4px solid var(--edge); border-radius: 12px; box-shadow: var(--shadow); padding: 13px 15px 14px; }
+.hw__world--base { border-top-color: #7c5cbf; }
+.hw__world--chg { border-top-color: var(--part); }
+.hw__world--arc { border-top-color: var(--edge); }
+.hw__wh { font-size: 14.5px; font-weight: 700; margin-bottom: 8px; }
+.hw__world > code { display: inline-block; margin-bottom: 8px; background: var(--bg); border: 1px solid var(--border); color: var(--edge); font-size: 12px; }
+.hw__world p { margin: 0; font-size: 13px; }
+
+.hw__tree { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 14px 16px; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.7; color: var(--ink); white-space: pre; }
+.hw__tree i { color: var(--soft); font-style: normal; }
+.hw__tree .hw-b { color: #7c5cbf; } .hw__tree .hw-a { color: var(--edge); } .hw__tree .hw-g { color: var(--have); }
+
+.hw__files { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.hw__file { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 12px 14px; }
+.hw__file > b { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
+.hw__file--delta { border-left: 4px solid #7c5cbf; }
+.hw__q { display: inline-block; margin-left: 8px; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--soft); background: var(--bg); border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; vertical-align: 1px; }
+.hw__file p { margin: 8px 0 0; font-size: 13px; }
+
+.hw__code { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 14px 16px; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.7; color: var(--ink); white-space: pre; }
+.hw__code i { color: var(--soft); font-style: normal; }
+.hw__code b { color: var(--accent); }
+
+.hw__ops { display: grid; gap: 8px; margin: 4px 0 0; }
+.hw__op { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--border); border-radius: 10px; padding: 9px 13px; font-size: 13.5px; }
+.hw__opb { display: inline-block; min-width: 88px; margin-right: 10px; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; padding: 3px 9px; border-radius: 999px; text-align: center; }
+.hw__op--add { border-left-color: var(--have); } .hw__op--add .hw__opb { background: #e8f5ec; color: var(--have); }
+.hw__op--mod { border-left-color: var(--part); } .hw__op--mod .hw__opb { background: #fdf6e8; color: var(--part); }
+.hw__op--rem { border-left-color: var(--gap); } .hw__op--rem .hw__opb { background: #fdecea; color: var(--gap); }
+.hw__foot { margin-top: 14px; }
+
 .foot { max-width: 1000px; margin: 30px auto 50px; padding: 0 20px; color: var(--soft); font-size: 12.5px; }
 
 @media (max-width: 800px) {
@@ -468,4 +501,6 @@ button.ck-item:hover { transform: translateY(-2px); box-shadow: var(--shadow); b
   .wf__head { grid-template-columns: auto 1fr auto; }
   .wf__meta { grid-column: 1 / -1; justify-content: flex-start; }
   .ck__grid { grid-template-columns: 1fr; }
+  .hw__worlds { grid-template-columns: 1fr; }
+  .hw__files { grid-template-columns: 1fr; }
 }
