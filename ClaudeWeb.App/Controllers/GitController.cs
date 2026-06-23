@@ -276,14 +276,14 @@ public class GitController : ControllerBase
     /// unique to the branch, and the cumulative changed-file list with counts.
     /// On the base branch returns isFeatureBranch:false. No busy guard.</summary>
     [HttpGet("git/review")]
-    public IActionResult Review()
+    public IActionResult Review([FromQuery(Name = "base")] string? baseOverride)
     {
         _logger.CountRequest();
         var repo = _repos.Current();
         if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
         try
         {
-            var r = _git.Review(repo.Path);
+            var r = _git.Review(repo.Path, baseOverride);
             return Ok(new
             {
                 isFeatureBranch = r.IsFeatureBranch,
@@ -309,9 +309,38 @@ public class GitController : ControllerBase
                 }),
             });
         }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
         catch (Exception ex)
         {
             _logger.Error($"[GIT] Review failed: {ex.Message}");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    /// <summary>GET /api/git/review/bases -- candidate base branches for the
+    /// review picker (local heads + origin/*) with the auto-detected default
+    /// flagged. Read-only.</summary>
+    [HttpGet("git/review/bases")]
+    public IActionResult ReviewBases()
+    {
+        _logger.CountRequest();
+        var repo = _repos.Current();
+        if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
+        try
+        {
+            var r = _git.ListReviewBases(repo.Path);
+            return Ok(new
+            {
+                @default = r.Default,
+                bases = r.Bases.Select(b => new { @ref = b.Ref, kind = b.Kind }),
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[GIT] ReviewBases failed: {ex.Message}");
             return StatusCode(500, new { error = ex.Message });
         }
     }
@@ -320,7 +349,7 @@ public class GitController : ControllerBase
     /// file of the branch review (plans/git-pr-preview.md), fetched lazily on
     /// expand. Bounded; truncated:true marks a cut. Read-only.</summary>
     [HttpGet("git/review/file")]
-    public IActionResult ReviewFile([FromQuery] string? path)
+    public IActionResult ReviewFile([FromQuery] string? path, [FromQuery(Name = "base")] string? baseOverride)
     {
         _logger.CountRequest();
         var repo = _repos.Current();
@@ -328,7 +357,7 @@ public class GitController : ControllerBase
         if (string.IsNullOrWhiteSpace(path)) return BadRequest(new { error = "path is required" });
         try
         {
-            var r = _git.ReviewFileDiff(repo.Path, path);
+            var r = _git.ReviewFileDiff(repo.Path, path, baseOverride);
             return Ok(new { path = r.Path, patch = r.Patch, truncated = r.Truncated });
         }
         catch (ArgumentException ex)
