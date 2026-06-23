@@ -38,4 +38,4 @@
       (`.claudeweb-preview/playwright/check-review-base-picker.mjs`)
 - [x] 4.3 Confirm the no-`base` URLs still behave exactly as before (back-compat), and an
       invalid `?base=` returns 400.
-- [ ] 4.4 Deploy to live `:5099` via `swap.ps1` and re-verify.
+- [x] 4.4 Deploy to live `:5099` via `swap.ps1` and re-verify.
