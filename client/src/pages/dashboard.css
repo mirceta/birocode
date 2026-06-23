@@ -418,6 +418,32 @@
   color: #ef4444;
 }
 
+/* Read-only per-project permission badge (openspec add-per-project-claude-permissions).
+   A small pill reflecting the desktop-set preset; display-only, no toggle. Colors
+   mirror the understanding-app: RO=green, EO=teal, STD=blue, FULL=red. */
+.perm-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  cursor: default;
+  user-select: none;
+}
+
+/* The important-star carries `margin-left:auto`, so it already pushes the trailing
+   badges to the right edge of the head row; the perm pill rides along at the end. */
+.perm-badge--readonly { color: #15803d; background: #dcfce7; }
+.perm-badge--editonly { color: #0f766e; background: #ccfbf1; }
+.perm-badge--standard { color: #1d4ed8; background: #dbeafe; }
+.perm-badge--full     { color: #b91c1c; background: #fee2e2; }
+
 /* "Wide" toggle (plans/dock-double-width.md) — a role=button span beside the
    important star (the ⤢ glyph). Muted when off, filled accent-blue when on.
    No margin-left:auto: the important star already carries it, so this just
