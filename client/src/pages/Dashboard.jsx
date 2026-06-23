@@ -672,7 +672,7 @@ export default function Dashboard({ onClose }) {
       <Wrapper key={tab.id} className={wrapClass || undefined}>
         <button
           type="button"
-          className={`dash-cell dash-cell--${status}${tab.id === activeTabId ? ' dash-cell--active' : ''}${tab.important ? ' dash-cell--important' : ''}${tab.waiting ? ' dash-cell--waiting' : ''}`}
+          className={`dash-cell dash-cell--${status}${tab.id === activeTabId ? ' dash-cell--active' : ''}${tab.important ? ' dash-cell--important' : ''}${tab.waiting ? ' dash-cell--waiting' : ''}${tab.stash?.length ? ' dash-cell--queued' : ''}`}
           data-colored={tab.color ? 'true' : undefined}
           data-recency={recency}
           style={tab.color ? { '--agent-color': tab.color } : undefined}
