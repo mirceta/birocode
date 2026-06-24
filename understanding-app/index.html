@@ -1,291 +1,243 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Per-project Claude permissions — proposal understanding</title>
+<title>Pane-span buttons — how they work</title>
 <style>
-  :root{
-    --bg:#0f1117; --panel:#171a23; --panel2:#1f2330; --line:#2b3040; --ink:#e6e9f0;
-    --soft:#9aa3b8; --accent:#6ea8fe; --green:#5dd1a0; --red:#f0676b; --amber:#f0b86e;
-    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  :root {
+    --bg: #0f1115; --surface: #1a1d24; --surface2: #232733; --border: #333a48;
+    --text: #e7e9ee; --soft: #9aa3b2; --accent: #e8674c; --accent-soft: #f2a594;
+    --ok: #4caf7d; --warn: #d9a441;
   }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);
-    font:15px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-  .wrap{max-width:1000px;margin:0 auto;padding:26px 20px 70px}
-  h1{font-size:24px;margin:0 0 3px}
-  .lede{color:var(--soft);margin:0 0 6px;max-width:760px}
-  .status{display:inline-block;font-size:12px;font-weight:600;color:var(--amber);
-    border:1px solid #4a3a1e;background:#1d1810;border-radius:999px;padding:3px 10px;margin:6px 0 18px}
-  nav{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-bottom:18px}
-  nav button{background:none;border:none;color:var(--soft);padding:10px 15px;font-size:14px;
-    font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
-  nav button:hover{color:var(--ink)}
-  nav button.on{color:var(--accent);border-bottom-color:var(--accent)}
-  .view{display:none}.view.on{display:block}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin:0 0 16px}
-  .card h2{font-size:15px;margin:0 0 12px}
-  .soft{color:var(--soft)} code{background:var(--panel2);border:1px solid var(--line);
-    border-radius:4px;padding:1px 5px;font:12.5px var(--mono)}
-  /* flow pipeline */
-  .pipe{display:flex;flex-direction:column;gap:0}
-  .pn{display:flex;gap:12px;align-items:flex-start}
-  .pn .ic{flex:0 0 34px;height:34px;border-radius:9px;display:grid;place-items:center;
-    background:var(--panel2);border:1px solid var(--line);font-size:16px}
-  .pn .bd{flex:1;padding-bottom:4px}
-  .pn .bd .t{font-weight:600}
-  .pn .bd .d{color:var(--soft);font-size:13px}
-  .pn .bd .f{font:11.5px var(--mono);color:var(--accent);margin-top:2px}
-  .conn{margin-left:16px;height:14px;border-left:2px dashed var(--line)}
-  .lanes{display:grid;grid-template-columns:1fr;gap:12px;margin-top:6px}
-  @media(min-width:740px){.lanes{grid-template-columns:1fr 1fr}}
-  .lane{border:1px solid var(--line);border-radius:10px;padding:14px;background:var(--panel2)}
-  .lane.scoped{border-color:#2c5a45}.lane.oos{border-color:#5b2222}
-  .lane h3{margin:0 0 6px;font-size:14px}
-  .pill{font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px;vertical-align:middle}
-  .pill.ok{background:#102015;color:var(--green);border:1px solid #2c5a45}
-  .pill.no{background:#1d1113;color:var(--red);border:1px solid #5b2222}
-  /* presets */
-  .seg{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
-  .seg button{background:var(--panel2);border:1px solid var(--line);color:var(--soft);
-    border-radius:9px;padding:9px 14px;font-size:13.5px;font-weight:600;cursor:pointer}
-  .seg button.on{border-color:var(--accent);color:var(--accent);background:#0f2033}
-  .seg button .def{font-size:10px;color:var(--green);display:block;font-weight:700}
-  .grid2{display:grid;grid-template-columns:1fr;gap:14px}
-  @media(min-width:720px){.grid2{grid-template-columns:1.1fr 1fr}}
-  .tools{display:flex;flex-direction:column;gap:5px}
-  .trow{display:flex;align-items:center;gap:9px;font-size:13.5px;padding:5px 8px;border-radius:7px;background:var(--panel2)}
-  .trow .nm{font:12.5px var(--mono);flex:1}
-  .trow .v{font-size:11px;font-weight:700;border-radius:999px;padding:2px 9px}
-  .v.allow{background:#102015;color:var(--green)} .v.ask{background:#1d1810;color:var(--amber)}
-  .v.deny{background:#1d1113;color:var(--red)}
-  pre{background:#0b0e14;border:1px solid var(--line);border-radius:9px;padding:13px;
-    overflow:auto;font:12.5px var(--mono);margin:0;line-height:1.5}
-  pre .k{color:var(--accent)} pre .s{color:var(--green)} pre .c{color:var(--soft)} pre .d{color:var(--red)}
-  .note{color:var(--soft);font-size:13px;margin:12px 0 0}
-  .colhd{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--soft);margin:0 0 6px}
-  /* per-project */
-  .prow{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);
-    border-radius:10px;background:var(--panel2);margin-bottom:8px}
-  .prow .nm{font-weight:600;flex:1}.prow .nm small{display:block;color:var(--soft);font-weight:400;font:11.5px var(--mono)}
-  select{background:#0b0e14;color:var(--ink);border:1px solid var(--line);border-radius:8px;
-    padding:7px 9px;font:13px system-ui;cursor:pointer}
-  .scope{font-size:11.5px;font-weight:700;border-radius:999px;padding:3px 10px;min-width:96px;text-align:center}
-  .scope.ro{background:#102015;color:var(--green)} .scope.std{background:#101a2a;color:var(--accent)}
-  .scope.eo{background:#13202a;color:#6ad0c0} .scope.full{background:#1d1113;color:var(--red)}
-  /* decisions */
-  .dec{display:flex;gap:11px;padding:11px 0;border-top:1px solid var(--line)}
-  .dec:first-child{border-top:none}
-  .dec .k{flex:0 0 22px;height:22px;border-radius:6px;background:#102015;color:var(--green);
-    display:grid;place-items:center;font-weight:800;font-size:12px}
-  .dec .bd{flex:1;font-size:13.5px}.dec .bd b{font-size:13.5px}
-  footer{color:var(--soft);font-size:12px;margin-top:24px;border-top:1px solid var(--line);padding-top:12px}
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.55 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 28px 20px 80px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  .sub { color: var(--soft); margin: 0 0 24px; }
+  h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .08em; color: var(--soft); margin: 30px 0 12px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 22px; align-items: center; }
+  .ctl { display: flex; flex-direction: column; gap: 6px; }
+  .ctl label { font-size: 12px; color: var(--soft); text-transform: uppercase; letter-spacing: .05em; }
+  input[type=range] { width: 240px; accent-color: var(--accent); }
+  .pill { font-variant-numeric: tabular-nums; background: var(--surface2); border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; font-size: 13px; }
+  select { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 14px; }
+
+  /* The simulated multi-pane strip */
+  .stage { margin-top: 18px; }
+  .strip { display: flex; align-items: stretch; gap: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; min-height: 150px; }
+  .pane { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--surface); }
+  .pane:last-child { border-right: none; }
+  .pane.active .bar { color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
+  .bar { display: flex; align-items: center; height: 34px; padding: 0 10px; font-size: 11px; font-weight: 700;
+         letter-spacing: .06em; text-transform: uppercase; color: var(--soft); background: var(--surface2);
+         border-bottom: 1px solid var(--border); }
+  .bar .label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+  .bar .span { flex: 0 0 auto; display: flex; gap: 4px; margin-left: 8px; }
+  .bar button { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+                font-size: 14px; line-height: 1; color: var(--soft); background: transparent;
+                border: 1px solid var(--border); border-radius: 4px; cursor: pointer; }
+  .bar button:hover:not([disabled]) { color: var(--accent); border-color: var(--accent); }
+  .bar button[disabled] { opacity: .3; cursor: default; }
+  .body { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--soft); font-size: 13px; }
+  .body .w { font-size: 28px; font-weight: 700; color: var(--text); }
+
+  .single { padding: 30px; text-align: center; border: 1px dashed var(--warn); border-radius: 10px; color: var(--warn); }
+  .note { margin-top: 14px; font-size: 13.5px; color: var(--soft); }
+  .note b { color: var(--text); }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+  .tag.multi { background: rgba(76,175,125,.16); color: var(--ok); }
+  .tag.coll { background: rgba(217,164,65,.16); color: var(--warn); }
+
+  /* The full tab list editor */
+  .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .tab { display: flex; align-items: center; gap: 8px; background: var(--surface2); border: 1px solid var(--border);
+         border-radius: 8px; padding: 6px 8px 6px 10px; font-size: 13px; }
+  .tab.act { border-color: var(--accent); }
+  .tab .nm { min-width: 64px; }
+  .tab .stp { display: flex; gap: 3px; }
+  .tab .stp button { width: 20px; height: 20px; border: 1px solid var(--border); background: transparent; color: var(--soft);
+                     border-radius: 4px; cursor: pointer; font-size: 13px; line-height: 1; }
+  .tab .stp button[disabled] { opacity: .3; cursor: default; }
+  .tab .v { width: 18px; text-align: center; font-variant-numeric: tabular-nums; color: var(--text); }
+  .vis { width: 8px; height: 8px; border-radius: 50%; background: #444; }
+  .vis.on { background: var(--ok); }
+
+  ul.steps { padding-left: 20px; } ul.steps li { margin: 6px 0; }
+  code { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 13px; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12.5px; color: var(--soft); margin-top: 10px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Per-project Claude permissions</h1>
-  <p class="lede">Set a permission scope <strong>per project</strong>, from the WinForms desktop app
-  (like the IP guest list), and the harness injects it into that project's <code>claude -p</code> chat calls.</p>
-  <div class="status">PROPOSAL · decisions A–F confirmed · awaiting go-ahead to implement</div>
+  <h1>Pane-span buttons in the multi-pane top bar</h1>
+  <p class="sub">A <code>−</code>/<code>+</code> button pair on each visible pane's bar that grows or shrinks
+  how many tab-spaces that tab occupies — a second front-end onto the one per-tab span the Settings tab
+  already configures. Drag the width, pick the active tab, and press the buttons to feel the layout react.</p>
 
-  <nav>
-    <button class="on" data-v="flow">How it flows</button>
-    <button data-v="presets">Presets</button>
-    <button data-v="projects">Per-project</button>
-    <button data-v="decisions">Decisions</button>
-  </nav>
-
-  <!-- FLOW -->
-  <section class="view on" id="flow">
-    <div class="card">
-      <h2>From the desktop dial to the spawned process</h2>
-      <div class="pipe" id="pipe"></div>
-    </div>
-    <div class="card">
-      <h2>Two call paths — only one is in scope for v1</h2>
-      <div class="lanes">
-        <div class="lane scoped">
-          <h3>Chat <span class="pill ok">SCOPED (v1)</span></h3>
-          <p class="soft" style="margin:0;font-size:13px">Every chat turn spawns
-          <code>claude -p … --output-format stream-json</code> via <code>CreateProcessInfo</code>.
-          The repo's policy is injected here as <code>--settings</code>. <strong>This is what we're adding.</strong></p>
-        </div>
-        <div class="lane oos">
-          <h3>Structured asks <span class="pill no">OUT OF SCOPE</span></h3>
-          <p class="soft" style="margin:0;font-size:13px">Routed through the ClaudeMonitor gateway, used
-          only by local-app discovery — a fixed, compile-time prompt with <em>no End-User text</em>.
-          Verified: no prompt-injection vector, so it's left for a later pass.</p>
-        </div>
+  <div class="card">
+    <div class="controls">
+      <div class="ctl">
+        <label>Viewport width — <span id="wlab" class="pill"></span></label>
+        <input id="w" type="range" min="500" max="2300" step="20" value="1600" />
       </div>
-      <p class="note">The harness also strips <code>ANTHROPIC_API_KEY</code> before spawning, so the
-      injected policy is the whole permission story for these calls — nothing else overrides it.</p>
-    </div>
-  </section>
-
-  <!-- PRESETS -->
-  <section class="view" id="presets">
-    <div class="card">
-      <h2>Three presets, backed by a pinned <code>--settings</code> policy (deny wins)</h2>
-      <div class="seg" id="seg"></div>
-      <div class="grid2">
-        <div>
-          <p class="colhd">What the agent may do</p>
-          <div class="tools" id="tools"></div>
-        </div>
-        <div>
-          <p class="colhd">Injected into <code>claude -p</code></p>
-          <pre id="json"></pre>
-        </div>
+      <div class="ctl">
+        <label>Pane budget <code>floor(w / 420)</code>, 1–5</label>
+        <span id="budget" class="pill"></span>
       </div>
-      <p class="note" id="presetNote"></p>
+      <div class="ctl">
+        <label>Active tab (the window centres on it)</label>
+        <select id="active"></select>
+      </div>
     </div>
-  </section>
 
-  <!-- PER-PROJECT -->
-  <section class="view" id="projects">
-    <div class="card">
-      <h2>One dial per project · unset → Read-only (safe default)</h2>
-      <div id="projlist"></div>
-      <p class="note">Editable <strong>only</strong> from the desktop GUI — the phone/web End User can
-      never widen their own scope. A brand-new project starts <strong>Read-only</strong> until you opt it up.</p>
+    <div class="stage" id="stage"></div>
+
+    <div class="note" id="status"></div>
+    <div class="legend">
+      <span><span class="tag multi">multi</span> ≥ 2 panes side by side — bars show the buttons</span>
+      <span><span class="tag coll">collapsed</span> budget spent → single full-width view, no buttons</span>
+      <span><span class="vis on"></span> visible &nbsp; <span class="vis"></span> off-window</span>
     </div>
-  </section>
 
-  <!-- DECISIONS -->
-  <section class="view" id="decisions">
-    <div class="card">
-      <h2>Confirmed decisions</h2>
-      <div id="declist"></div>
-    </div>
-  </section>
+    <h2 style="margin-top:24px">The full tab list &amp; each tab's span (1–4)</h2>
+    <div class="tabs" id="tablist"></div>
+  </div>
 
-  <footer>Companion to the <code>add-per-project-claude-permissions</code> OpenSpec change ·
-  illustrative preset rules; exact tool rules are finalized in <code>design.md</code>.</footer>
+  <h2>Why the buttons only appear with two or more tabs</h2>
+  <p>The pane strip is a sliding window over your tab list, centred on the active tab. It grows outward,
+  spending a slot <b>budget</b> (the pane count) on each tab's <b>weight</b> (its 1–4 span). Three gates decide
+  whether you even see a strip — and they're exactly the "at least two tabs visible" condition the feature rides on:</p>
+  <ul class="steps">
+    <li><code>multiPane</code> feature on (Advanced mode) <b>and</b> <code>floor(window.innerWidth / 420) ≥ 2</code></li>
+    <li>the budget actually fits a neighbour beside the active tab — otherwise <code>lo === hi</code> and it
+      <span class="tag coll">collapses</span> to the single full-width view</li>
+  </ul>
+  <p>Because the buttons live <i>inside</i> the pane bar, and the bar only exists in that multi-pane strip,
+  the gating is automatic: shrink the viewport (or grow one tab until it eats the budget) and the strip
+  collapses, taking the buttons with it. That's the one edge to know — <b>growing a tab far enough removes
+  its own buttons</b>; you shrink it again from the Settings tab.</p>
+
+  <h2>One span, two front-ends</h2>
+  <p>Both the pane buttons and the Settings stepper read and write the same sparse map
+  (<code>tabWidths: key → 1–4, absent = 1</code>) through the same <code>saveTabWidths</code> →
+  <code>PUT /settings/ui</code>. Change a span here and the Settings stepper shows the same number, and vice
+  versa — there is no second store. The buttons clamp to 1–4 (<code>−</code> off at 1, <code>+</code> off at 4)
+  so the two UIs can never disagree.</p>
 </div>
 
 <script>
-// ---- data ---------------------------------------------------------------
-var PIPE = [
-  {ic:'🧑‍💻',t:'Operator picks a preset',d:'In the desktop RepositoriesForm — per project, like the IP guest list.',f:'UI/RepositoriesForm.cs'},
-  {ic:'💾',t:'Saved on the repo record',d:'PermissionPolicy field, atomic write (same path as the IP allowlist).',f:'Models/RepositoryConfig.cs → %APPDATA%/ClaudeWeb/repositories.json'},
-  {ic:'🔗',t:'Shared singleton',d:'One in-memory registry shared by the WinForms GUI and Kestrel.',f:'Services/Repositories/RepositoryRegistry.cs'},
-  {ic:'💬',t:'End User sends a chat turn',d:'ChatController resolves the repo (X-Repo-Id) and starts a run.',f:'Controllers/ChatController.cs'},
-  {ic:'⚙️',t:'Runner injects the policy',d:'repoId is threaded in; the policy becomes --settings on the argv.',f:'Services/Chat/CliRunnerService.cs : CreateProcessInfo'},
-  {ic:'🤖',t:'claude -p runs in scope',d:'The agent can only use what the preset allows. Deny always wins.',f:'claude -p … --settings <policy> --output-format stream-json'}
+// Faithful mirror of useMultiPane() in client/src/layout/PaneStrip.jsx.
+const MIN_PANE_WIDTH = 420, MAX_PANES = 5;
+const TABS = [
+  { key:'claude', name:'Chat' }, { key:'files', name:'Files' }, { key:'git', name:'Git' },
+  { key:'history', name:'History' }, { key:'agents', name:'Agents' }, { key:'app', name:'App' },
+  { key:'settings', name:'Settings' },
 ];
+const widths = {};                 // sparse: key -> 2..4 (1 omitted)
+let activeIdx = 0;
+let vw = 1600;
 
-var TOOLS = ['Read / Glob / Grep','Edit / Write (in repo)','Bash — safe (git status, build, test)','Bash — destructive (rm, push --force)','WebFetch / network egress','Write outside the repo'];
-var PRESETS = {
-  ro:{label:'Read-only', def:true, rules:['allow','deny','deny','deny','deny','deny'],
-    cli:'--permission-mode plan',
-    note:'The SAFE DEFAULT. The agent can read, search and answer, but every mutation is blocked — the same posture as the existing read-only "ask" lane. A new project stays here until you opt it up.'},
-  eo:{label:'Edit-only', def:false, rules:['allow','allow','deny','deny','deny','deny'],
-    cli:'--permission-mode acceptEdits --disallowedTools Bash WebFetch WebSearch',
-    note:'Repo-scoped, NO execution. The agent may read and edit files inside this repo, but cannot run scripts/exes (Bash is denied) or reach the network. Edits stay confined to the working directory. Verified live: edits land, Bash blocked.'},
-  std:{label:'Standard', def:false, rules:['allow','allow','allow','deny','ask','deny'],
-    cli:'--settings \'{"permissions":{"deny":["Bash(rm:*)","Bash(git push --force:*)","Bash(curl:*)","WebFetch", …]}}\'',
-    note:'Safe-but-can-build: read + edit within the repo and run safe shell commands; destructive shell and writes outside the repo are denied, network access asks. The "normal development" scope.'},
-  full:{label:'Full access', def:false, rules:['allow','allow','allow','allow','allow','allow'],
-    cli:'(no added flags — today’s default behavior)',
-    note:'No added restriction — the Operator’s explicit, deliberate choice for a trusted project. Everything the agent could do by default.'}
-};
-var SCOPE={ro:['ro','READ-ONLY'],eo:['eo','EDIT-ONLY'],std:['std','STANDARD'],full:['full','FULL']};
-var PROJECTS=[
-  {nm:'birocode', sub:'the harness itself', preset:'full'},
-  {nm:'game-arcade', sub:'a built product', preset:'std'},
-  {nm:'birokrat-ai-platform', sub:'review only — no exec', preset:'eo'},
-  {nm:'sevda-temu', sub:'fresh — never configured', preset:'ro'}
-];
-var DECS=[
-  {k:'A',h:'Mechanism',b:'Four named presets — Read-only, <b>Edit-only</b> (repo, no exec), Standard, Full — injected as <code>claude -p</code> permission flags (deny always wins).'},
-  {k:'B',h:'UI',b:'Start with a per-project preset dropdown in the desktop RepositoriesForm; full rule editor deferred.'},
-  {k:'C',h:'Default → SAFE',b:'Unconfigured repos default to <b>Read-only</b>, not today\'s unrestricted behavior. Opt up per project.'},
-  {k:'D',h:'Operator-only',b:'<b>Set</b> only from the desktop GUI (RepositoriesForm → "Permissions…"); the web End User can never widen their own scope. The web may <b>display</b> it read-only (see G).'},
-  {k:'E',h:'Scope (verified)',b:'v1 = the <code>claude -p</code> chat path only. The structured-ask gateway takes no End-User text (fixed prompt) — no injection vector, left out of scope.'},
-  {k:'F',h:'Ask-lane',b:'The read-only ask lane stays read-only regardless; the per-repo policy further restricts the build lane (most-restrictive wins).'},
-  {k:'G',h:'Where it shows',b:'<b>Desktop configures · web displays.</b> The desktop Repositories dialog has a "Chat permissions" column + "Permissions…" button. The web Dashboard shows a read-only <b>badge</b> (RO/EO/STD/FULL) on each agent dock — reflecting, never changing, the preset.'}
-];
+const paneCountNow = () => Math.max(1, Math.min(MAX_PANES, Math.floor(vw / MIN_PANE_WIDTH)));
+const weight = (i) => Math.max(1, Math.min(4, widths[TABS[i].key] || 1));
 
-// ---- render -------------------------------------------------------------
-function el(tag,cls,html){var e=document.createElement(tag);if(cls)e.className=cls;if(html!=null)e.innerHTML=html;return e;}
-
-(function flow(){
-  var p=document.getElementById('pipe');
-  PIPE.forEach(function(n,i){
-    var row=el('div','pn');
-    row.appendChild(el('div','ic',n.ic));
-    row.appendChild(el('div','bd','<div class="t">'+n.t+'</div><div class="d">'+n.d+'</div><div class="f">'+n.f+'</div>'));
-    p.appendChild(row);
-    if(i<PIPE.length-1) p.appendChild(el('div','conn'));
-  });
-})();
-
-(function presets(){
-  var seg=document.getElementById('seg');
-  Object.keys(PRESETS).forEach(function(key){
-    var b=el('button',null,PRESETS[key].label+(PRESETS[key].def?'<span class="def">SAFE DEFAULT</span>':''));
-    b.dataset.k=key; if(key==='ro') b.classList.add('on');
-    b.onclick=function(){[].forEach.call(seg.children,function(c){c.classList.remove('on')});b.classList.add('on');paintPreset(key);};
-    seg.appendChild(b);
-  });
-  paintPreset('ro');
-})();
-
-function paintPreset(key){
-  var p=PRESETS[key], t=document.getElementById('tools'); t.innerHTML='';
-  TOOLS.forEach(function(nm,i){
-    var v=p.rules[i];
-    var r=el('div','trow');
-    r.appendChild(el('span','nm',nm));
-    r.appendChild(el('span','v '+v, v.toUpperCase()));
-    t.appendChild(r);
-  });
-  // Show the ACTUAL flags this preset injects (each preset uses a different mechanism).
-  var cli = p.cli.replace(/[&<>]/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];});
-  document.getElementById('json').innerHTML =
-    'claude -p "&lt;msg&gt;" \\\n'+
-    '  <span class="k">'+cli+'</span> \\\n'+
-    '  --output-format stream-json <span class="c"># deny always wins</span>';
-  document.getElementById('presetNote').innerHTML = p.note;
+function computeWindow() {
+  const paneCount = paneCountNow();
+  if (paneCount < 2) return { multi:false, lo:activeIdx, hi:activeIdx, paneCount };
+  let lo = activeIdx, hi = activeIdx, budget = paneCount - weight(activeIdx);
+  for (;;) {
+    const left = lo > 0 && budget >= weight(lo - 1);
+    const right = hi < TABS.length - 1 && budget >= weight(hi + 1);
+    if (!left && !right) break;
+    if (right && (!left || hi - activeIdx <= activeIdx - lo)) { hi += 1; budget -= weight(hi); }
+    else { lo -= 1; budget -= weight(lo); }
+  }
+  if (lo === hi) return { multi:false, lo, hi, paneCount };
+  return { multi:true, lo, hi, paneCount };
 }
 
-(function projects(){
-  var list=document.getElementById('projlist');
-  PROJECTS.forEach(function(pr){
-    var row=el('div','prow');
-    row.appendChild(el('div','nm',pr.nm+'<small>'+pr.sub+'</small>'));
-    var sel=el('select');
-    [['ro','Read-only'],['eo','Edit-only'],['std','Standard'],['full','Full access']].forEach(function(o){
-      var op=el('option',null,o[1]); op.value=o[0]; if(o[0]===pr.preset)op.selected=true; sel.appendChild(op);
-    });
-    var scope=el('span');
-    function paint(){var s=SCOPE[sel.value]||SCOPE.ro;scope.className='scope '+s[0];scope.textContent=s[1];}
-    sel.onchange=paint; paint();
-    row.appendChild(scope); row.appendChild(sel);
-    list.appendChild(row);
-  });
-})();
+function setSpan(key, v) {
+  const c = Math.max(1, Math.min(4, v));
+  if (c <= 1) delete widths[key]; else widths[key] = c;
+  render();
+}
 
-(function decisions(){
-  var d=document.getElementById('declist');
-  DECS.forEach(function(x){
-    var row=el('div','dec');
-    row.appendChild(el('div','k',x.k));
-    row.appendChild(el('div','bd','<b>'+x.h+'.</b> '+x.b));
-    d.appendChild(row);
-  });
-})();
+const $ = (id) => document.getElementById(id);
 
-// ---- tabs ---------------------------------------------------------------
-[].forEach.call(document.querySelectorAll('nav button'),function(b){
-  b.onclick=function(){
-    [].forEach.call(document.querySelectorAll('nav button'),function(x){x.classList.remove('on')});
-    [].forEach.call(document.querySelectorAll('.view'),function(x){x.classList.remove('on')});
-    b.classList.add('on'); document.getElementById(b.dataset.v).classList.add('on');
-  };
+function render() {
+  vw = +$('w').value;
+  $('wlab').textContent = vw + 'px';
+  const win = computeWindow();
+  $('budget').textContent = win.paneCount + (win.paneCount === 1 ? ' pane' : ' panes');
+
+  // active selector
+  const sel = $('active');
+  if (sel.options.length !== TABS.length) {
+    sel.innerHTML = TABS.map((t,i)=>`<option value="${i}">${t.name}</option>`).join('');
+  }
+  sel.value = String(activeIdx);
+
+  // stage
+  const stage = $('stage');
+  const status = $('status');
+  if (!win.multi) {
+    stage.innerHTML = `<div class="single">Single full-width view — <b>${TABS[activeIdx].name}</b><br>
+      <span style="font-size:12.5px">no pane bar here, so no span buttons</span></div>`;
+    status.innerHTML = `<span class="tag coll">collapsed</span> &nbsp;
+      ${win.paneCount < 2 ? 'viewport too narrow for two tabs' :
+        `<b>${TABS[activeIdx].name}</b> (span ${weight(activeIdx)}) spends the whole budget — no neighbour fits`}.`;
+  } else {
+    let html = '<div class="strip">';
+    for (let i = win.lo; i <= win.hi; i++) {
+      const w = weight(i), act = i === activeIdx;
+      html += `<section class="pane${act?' active':''}" style="${w>1?`flex-grow:${w}`:''}">
+        <div class="bar">
+          <span class="label" data-act="${i}">${TABS[i].name}</span>
+          <span class="span">
+            <button data-dec="${TABS[i].key}" ${w<=1?'disabled':''}>−</button>
+            <button data-inc="${TABS[i].key}" ${w>=4?'disabled':''}>+</button>
+          </span>
+        </div>
+        <div class="body"><div><div class="w">${w}×</div>tab-space${w>1?'s':''}</div></div>
+      </section>`;
+    }
+    html += '</div>';
+    stage.innerHTML = html;
+    const shown = win.hi - win.lo + 1;
+    status.innerHTML = `<span class="tag multi">multi</span> &nbsp; ${shown} panes visible
+      (tabs ${win.lo+1}–${win.hi+1} of ${TABS.length}); each bar carries its own −/+.`;
+  }
+
+  // full tab list
+  $('tablist').innerHTML = TABS.map((t,i)=>{
+    const w = weight(i), on = win.multi && i >= win.lo && i <= win.hi;
+    return `<div class="tab${i===activeIdx?' act':''}">
+      <span class="vis ${on?'on':''}"></span>
+      <span class="nm" data-act="${i}" style="cursor:pointer">${t.name}</span>
+      <span class="stp">
+        <button data-dec="${t.key}" ${w<=1?'disabled':''}>−</button>
+        <span class="v">${w}</span>
+        <button data-inc="${t.key}" ${w>=4?'disabled':''}>+</button>
+      </span></div>`;
+  }).join('');
+}
+
+document.addEventListener('click', (e) => {
+  const inc = e.target.getAttribute && e.target.getAttribute('data-inc');
+  const dec = e.target.getAttribute && e.target.getAttribute('data-dec');
+  const act = e.target.getAttribute && e.target.getAttribute('data-act');
+  if (inc) setSpan(inc, (widths[inc]||1) + 1);
+  else if (dec) setSpan(dec, (widths[dec]||1) - 1);
+  else if (act !== null && act !== undefined && act !== '') { activeIdx = +act; render(); }
 });
+$('w').addEventListener('input', render);
+$('active').addEventListener('change', (e) => { activeIdx = +e.target.value; render(); });
+render();
 </script>
 </body>
 </html>

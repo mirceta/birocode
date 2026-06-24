@@ -70,6 +70,8 @@
   "settings.paneWidthHint": "Masaustu coklu panelde panel genisligi: 1-4 birim",
   "settings.widthDec": "Paneli daralt",
   "settings.widthInc": "Paneli genislet",
+  "pane.spanDec": "Bu paneli daralt",
+  "pane.spanInc": "Bu paneli genislet",
   "settings.tabHiddenHint": "Bu sekmeyi gezinmede goster veya gizle (yalnizca gelismis mod)",
   "settings.tabShow": "Sekmeyi goster",
   "settings.tabHide": "Sekmeyi gizle",

@@ -376,6 +376,55 @@ button.app-header__title.app-header__title--active:hover {
   box-shadow: inset 0 -2px 0 var(--color-accent);
 }
 
+/* The label is a Link that fills the bar (full-height click target); the
+   span steppers sit at the right. Both live inside .pane__bar. */
+.pane__bar-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  color: inherit;
+  text-decoration: none;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pane__span {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+}
+
+.pane__span-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--color-text-soft, #666);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.pane__span-btn:hover:not(:disabled) {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.pane__span-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 /* Each pane scrolls on its own; the strip itself never scrolls. */
 .pane > .app-content {
   flex: 1;
