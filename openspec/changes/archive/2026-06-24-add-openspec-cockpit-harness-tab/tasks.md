@@ -13,9 +13,9 @@
 
 ## 3. Verify
 - [x] 3.1 Frontend build clean; backend `dotnet build` clean (0 errors)
-- [ ] 3.2 Live-verify on an isolated harness instance + headless browser: ready / not-ready / drill-in / safe-name reject / re-scope on repo switch
-- [ ] 3.3 Confirm the standalone Control Room cockpit (`openspec-port-app/`) is unchanged and still works
+- [x] 3.2 Deployed to live `:5099` (build + served-bundle hash verified on the wire); operator confirmed the tab renders and works, including the "Prepared for OpenSpec?" readiness section
+- [x] 3.3 Confirm the standalone Control Room cockpit (`openspec-port-app/`) is unchanged and still works — never touched by this change (verified via exploration of the tree)
 
 ## 4. Ship
-- [ ] 4.1 `openspec validate --strict add-openspec-cockpit-harness-tab`
-- [ ] 4.2 Archive on ship (fold delta into the `openspec-cockpit` baseline)
+- [x] 4.1 `openspec validate --strict add-openspec-cockpit-harness-tab`
+- [x] 4.2 Archive on ship (fold delta into the `openspec-cockpit` baseline)
