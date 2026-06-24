@@ -1661,7 +1661,8 @@ details.step > summary::-webkit-details-marker {
 
 /* Toolbar toggles — pills in .chat__bar next to the model selector. */
 .chat__tools,
-.chat__operators {
+.chat__operators,
+.chat__maximize {
   flex: 0 0 auto;
   min-height: 28px;
   padding: 0 12px;
@@ -1675,27 +1676,38 @@ details.step > summary::-webkit-details-marker {
   cursor: pointer;
 }
 
+/* The maximize toggle is icon-only — a tighter pill so the glyph stays centered
+   next to the wider Tool Calls button. */
+.chat__maximize {
+  padding: 0 10px;
+  line-height: 1;
+}
+
 .chat__tools:hover,
-.chat__operators:hover {
+.chat__operators:hover,
+.chat__maximize:hover {
   border-color: var(--color-accent);
   color: var(--color-accent);
 }
 
 .chat__tools:active,
-.chat__operators:active {
+.chat__operators:active,
+.chat__maximize:active {
   transform: scale(0.97);
 }
 
 /* When the panel is showing, the toggle reads as a pressed/active control. */
 .chat__tools--on,
-.chat__operators--on {
+.chat__operators--on,
+.chat__maximize--on {
   background: var(--color-accent);
   border-color: var(--color-accent);
   color: #fff;
 }
 
 .chat__tools--on:hover,
-.chat__operators--on:hover {
+.chat__operators--on:hover,
+.chat__maximize--on:hover {
   color: #fff;
 }
 

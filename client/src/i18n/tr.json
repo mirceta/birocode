@@ -362,6 +362,8 @@
   "chat.operatorMessages": "Operator mesajlari",
   "chat.operatorMessagesClose": "Operator mesajlarini kapat",
   "chat.operatorMessagesEmpty": "Bu sohbette henuz operator mesaji yok.",
+  "chat.maximizeChat": "Sohbeti buyut",
+  "chat.restoreChat": "Duzeni geri yukle",
   "understanding.title": "Anlama",
   "understanding.collapse": "Gizle",
   "understanding.expand": "Goster",

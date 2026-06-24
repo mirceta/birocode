@@ -365,6 +365,8 @@
   "chat.operatorMessages": "Operator messages",
   "chat.operatorMessagesClose": "Close operator messages",
   "chat.operatorMessagesEmpty": "No operator messages in this conversation yet.",
+  "chat.maximizeChat": "Maximize chat",
+  "chat.restoreChat": "Restore layout",
   "understanding.title": "Understanding",
   "understanding.collapse": "Hide",
   "understanding.expand": "Show",

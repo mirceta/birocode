@@ -1327,6 +1327,20 @@
   flex-direction: column;
 }
 
+/* Maximize chat to fill the dock (openspec add-maximize-chat-dock): collapse the
+   non-chat chrome so .phone__screen (and the embedded chat within) gets the dock's
+   full height. The regions stay mounted but hidden — CSS owns visibility — so the
+   <Chat> subtree (state, scroll, live stream) is never remounted across a toggle.
+   The chat toolbar and composer live inside .phone__screen, so they stay visible
+   and usable; only the dock chrome above the screen is hidden. */
+.phone--chat-max > .phone__bar,
+.phone--chat-max > .phone__lanes,
+.phone--chat-max > .phone__apps,
+.phone--chat-max > .phone__git,
+.phone--chat-max > .phone__discover {
+  display: none;
+}
+
 /* Files tab inside the dock (plans/agent-dock-files-tab.md): the shared
    FilesBrowser renders .files-page (tree) or .file-viewer (open file) with no
    scroll frame of its own — it leans on a scrolling ancestor, which the routed

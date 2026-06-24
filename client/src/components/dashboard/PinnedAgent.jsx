@@ -79,6 +79,18 @@ export default function PinnedAgent({
   const filesOn = useFeature('filesDock');
   const [showFiles, setShowFiles] = useState(false);
 
+  // Maximize chat to fill the dock (openspec add-maximize-chat-dock): an ephemeral,
+  // per-dock toggle that collapses the non-chat chrome (bar, lanes, apps, git,
+  // discover) so the embedded chat gets the dock's full height. State lives here
+  // because this component owns the .phone__* chrome being hidden; the toggle is
+  // passed down into <Chat> so its button can sit in the chat toolbar. Not
+  // persisted — resets to normal on reload. Only meaningful while the chat lane is
+  // showing (not Files / a local app), so we gate the modifier on that.
+  const [chatMaximized, setChatMaximized] = useState(false);
+  const toggleChatMaximized = () => setChatMaximized((v) => !v);
+  const chatShowing = !showFiles && !openApp;
+  const maximized = chatMaximized && chatShowing;
+
   // "Discover local apps" (openspec discover-local-apps): a read-only agent scan of
   // THIS dock's repo for self-serving local-app exposures, returning a typed
   // { name, port } list. Single repo per click (the dock's), via
@@ -164,7 +176,7 @@ export default function PinnedAgent({
 
   return (
     <div
-      className={`phone phone--${status}${tab.important ? ' phone--important' : ''}${tab.waiting ? ' phone--waiting' : ''}${tab.stash?.length ? ' phone--queued' : ''}`}
+      className={`phone phone--${status}${tab.important ? ' phone--important' : ''}${tab.waiting ? ' phone--waiting' : ''}${tab.stash?.length ? ' phone--queued' : ''}${maximized ? ' phone--chat-max' : ''}`}
       data-colored={tab.color ? 'true' : undefined}
       data-recency={recency}
       style={tab.color ? { '--agent-color': tab.color } : undefined}
@@ -411,7 +423,13 @@ export default function PinnedAgent({
         ) : openApp ? (
           <ProductFrame url={`/api/localview/${tab.repoId}/app/${openApp.id}/`} port={openApp.port} />
         ) : (
-          <Chat chat={chat} embedded stashTabId={tab.id} />
+          <Chat
+            chat={chat}
+            embedded
+            stashTabId={tab.id}
+            chatMaximized={maximized}
+            toggleChatMaximized={toggleChatMaximized}
+          />
         )}
       </div>
     </div>

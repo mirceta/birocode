@@ -31,7 +31,16 @@ const REVEAL_CHUNK = 50;
 // `chat` facade from useChatFor + `embedded` (drops the app-level chrome —
 // Claude/Term toggle, project/harness scopes, understanding panel — that only
 // makes sense for the one active conversation). See plans/agent-dashboard.md.
-export default function Chat({ chat: injected, embedded = false, stashTabId }) {
+export default function Chat({
+  chat: injected,
+  embedded = false,
+  stashTabId,
+  // Per-dock "maximize chat" toggle (openspec add-maximize-chat-dock): owned by
+  // PinnedAgent (which collapses the .phone__* chrome). Only passed in the
+  // embedded dock chat context, so the button below renders only there.
+  chatMaximized = false,
+  toggleChatMaximized,
+}) {
   const { t } = useT();
   const active = useChat();
   const {
@@ -222,6 +231,18 @@ export default function Chat({ chat: injected, embedded = false, stashTabId }) {
           </span>
         )}
         <ModelSelector value={model} onChange={changeModel} />
+        {toggleChatMaximized && (
+          <button
+            type="button"
+            className={`chat__maximize${chatMaximized ? ' chat__maximize--on' : ''}`}
+            onClick={toggleChatMaximized}
+            title={chatMaximized ? t('chat.restoreChat') : t('chat.maximizeChat')}
+            aria-label={chatMaximized ? t('chat.restoreChat') : t('chat.maximizeChat')}
+            aria-pressed={chatMaximized}
+          >
+            {chatMaximized ? '⤡' : '⤢'}
+          </button>
+        )}
         {showToolCalls && (
           <button
             type="button"

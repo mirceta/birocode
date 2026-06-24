@@ -3,21 +3,15 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>How the OpenSpec flow writes its documents — Understanding</title>
+<title>Maximize chat to fill the dock — Understanding</title>
 <style>
   :root{
     --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --line:#30363d;
     --ink:#e6edf3; --dim:#9aa7b4; --faint:#6b7681;
-    --change:#58a6ff; --change-bg:#13283f;
-    --base:#d2a8ff; --base-bg:#241a37;
-    --hist:#8b949e; --hist-bg:#21262d;
-    --create:#3fb950; --create-bg:#11301c;
-    --update:#58a6ff; --update-bg:#102945;
-    --tick:#39d3c0; --tick-bg:#0d2f2c;
-    --fold:#d2a8ff; --fold-bg:#281a3a;
-    --move:#8b949e; --move-bg:#20252c;
-    --read:#6b7681;
     --accent:#ffd866;
+    --chat:#3fb950; --chat-bg:#11301c; --chat-line:#1c5130;
+    --chrome:#58a6ff; --chrome-bg:#102945; --chrome-line:#1d456f;
+    --gate:#d2a8ff; --gate-bg:#241a37;
   }
   *{box-sizing:border-box}
   html,body{margin:0}
@@ -27,320 +21,249 @@
     padding:24px clamp(14px,4vw,48px) 64px;
   }
   h1{font-size:clamp(20px,3vw,30px); margin:0 0 6px; letter-spacing:-.01em}
-  .sub{color:var(--dim); max-width:74ch; margin:0 0 22px}
-  code{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; font-size:.88em}
+  .sub{color:var(--dim); max-width:78ch; margin:0 0 22px}
+  code{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; font-size:.88em; color:var(--chrome)}
   .mono{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace}
   .wrap{max-width:1180px; margin:0 auto}
+  b{color:var(--ink)}
 
-  /* pipeline */
-  .pipe{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:0 0 10px; position:relative}
-  .stage{
-    background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:13px 14px;
-    cursor:pointer; transition:.18s; position:relative; overflow:hidden;
+  .grid{display:grid; grid-template-columns:minmax(300px,360px) 1fr; gap:24px; align-items:start}
+  @media(max-width:880px){ .grid{grid-template-columns:1fr} }
+
+  /* ---- the mock dock (the phone tile) ---- */
+  .stage{display:flex; flex-direction:column; align-items:center; gap:14px}
+  .phone{
+    width:300px; height:520px; background:#0a0e14; border:1px solid var(--line);
+    border-radius:22px; padding:10px; display:flex; flex-direction:column; gap:6px;
+    box-shadow:0 18px 50px #0009; transition:.2s; position:relative; overflow:hidden;
   }
-  .stage:hover{border-color:#3d4654; transform:translateY(-2px)}
-  .stage.on{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent), 0 8px 30px #0008}
-  .stage .n{font-size:11px; color:var(--faint); letter-spacing:.08em; text-transform:uppercase}
-  .stage .t{font-weight:650; margin:3px 0 6px; font-size:15px}
-  .stage .c{font-size:11.5px; color:var(--accent); word-break:break-word}
-  .stage .bar{position:absolute; left:0; bottom:0; height:3px; width:0; background:var(--accent); transition:width .2s}
-  .stage.on .bar{width:100%}
-  .flowline{height:2px; background:linear-gradient(90deg,var(--change),var(--base)); border-radius:2px; margin:2px 0 18px; opacity:.4}
+  .region{
+    flex:0 0 auto; border-radius:9px; padding:7px 10px; font-size:11px;
+    border:1px solid var(--chrome-line); background:var(--chrome-bg); color:#bcd6f5;
+    display:flex; align-items:center; gap:7px; transition:.28s ease;
+    max-height:60px; opacity:1;
+  }
+  .region .lbl{font-weight:650; letter-spacing:.01em}
+  .region .sel{margin-left:auto; color:var(--faint); font-size:9.5px}
+  .region.bar{background:#11161e; border-color:#222a35; color:#cdd7e2}
+  .region.bar .dot{width:8px;height:8px;border-radius:50%;background:var(--chat);box-shadow:0 0 6px var(--chat)}
 
-  .controls{display:flex; gap:10px; align-items:center; margin:0 0 22px; flex-wrap:wrap}
-  button.ctl{
+  /* the chat screen fills remaining space */
+  .screen{flex:1 1 auto; display:flex; flex-direction:column; min-height:0;
+    border:1px solid var(--chat-line); border-radius:9px; background:#0c130e; overflow:hidden}
+  .chatbar{flex:0 0 auto; display:flex; align-items:center; gap:6px; padding:6px 8px;
+    border-bottom:1px solid #16241a; background:#0e1712}
+  .chatbar .title{font-size:10.5px; color:var(--chat); font-weight:650; letter-spacing:.04em}
+  .chatbar .spacer{flex:1}
+  .tbtn{font-size:10px; padding:3px 8px; border-radius:7px; border:1px solid #24402c;
+    background:#10271a; color:#9fe0b4; cursor:default; display:flex; align-items:center; gap:4px}
+  .mbtn{font-size:10px; padding:3px 8px; border-radius:7px; border:1px solid var(--accent);
+    background:#1c2330; color:var(--accent); cursor:pointer; transition:.15s; display:flex; align-items:center; gap:4px}
+  .mbtn:hover{background:#2a2310}
+  .mbtn.on{background:var(--accent); color:#1a1400; font-weight:700}
+  .body{flex:1 1 auto; padding:10px; overflow:hidden; display:flex; flex-direction:column; gap:7px}
+  .msg{border-radius:8px; padding:6px 9px; font-size:11px; max-width:85%}
+  .msg.u{align-self:flex-end; background:#15324a; color:#cfe6fb}
+  .msg.a{align-self:flex-start; background:#16201a; color:#cfe9d6; border:1px solid #1c2b21}
+  .composer{flex:0 0 auto; margin:8px; border:1px solid #1d2b22; border-radius:9px; background:#0e1712;
+    padding:7px 9px; font-size:10.5px; color:var(--faint); display:flex; align-items:center; gap:6px}
+  .composer .send{margin-left:auto; background:var(--chat); color:#04210e; border-radius:6px;
+    padding:2px 9px; font-weight:700; font-size:10px}
+
+  /* maximized: collapse the chrome regions */
+  .phone.max .region{
+    max-height:0; opacity:0; padding-top:0; padding-bottom:0; margin:0;
+    border-width:0; pointer-events:none; overflow:hidden;
+  }
+  .phone.max{box-shadow:0 0 0 1px var(--accent), 0 18px 50px #0009}
+
+  .flash{position:absolute; inset:0; pointer-events:none; border-radius:22px;
+    box-shadow:0 0 0 2px var(--accent) inset; opacity:0; transition:opacity .25s}
+  .phone.pulse .flash{opacity:.55}
+
+  .ctl{display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:center}
+  button.act{
     background:var(--panel2); color:var(--ink); border:1px solid var(--line); border-radius:8px;
-    padding:7px 14px; cursor:pointer; font:inherit; font-size:13px; transition:.15s;
+    padding:8px 16px; cursor:pointer; font:inherit; font-size:13px; transition:.15s;
   }
-  button.ctl:hover{border-color:var(--accent); color:var(--accent)}
-  .hint{color:var(--faint); font-size:12.5px}
+  button.act:hover{border-color:var(--accent); color:var(--accent)}
+  .stateline{font-size:12px; color:var(--faint); text-align:center}
+  .stateline b{color:var(--accent)}
 
-  .grid{display:grid; grid-template-columns:1.15fr .85fr; gap:18px; align-items:start}
-  @media(max-width:880px){ .grid{grid-template-columns:1fr} .pipe{grid-template-columns:repeat(2,1fr)} }
-
-  .card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px 18px}
+  /* ---- right column cards ---- */
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin-bottom:16px}
   .card h2{font-size:13px; text-transform:uppercase; letter-spacing:.07em; color:var(--dim); margin:0 0 12px}
+  .card p{margin:0 0 10px; color:var(--dim)}
+  .card ul{margin:0; padding-left:18px; color:var(--dim)}
+  .card li{margin:6px 0}
 
-  /* matrix */
-  table{border-collapse:collapse; width:100%; font-size:13px}
-  th,td{padding:0; text-align:center}
-  thead th{color:var(--dim); font-weight:600; font-size:11.5px; padding:0 4px 9px; vertical-align:bottom}
-  thead th.doch{text-align:left}
-  tbody td.doc{
-    text-align:left; padding:6px 8px 6px 0; white-space:nowrap; color:var(--ink); font-size:12.5px;
-  }
-  tbody td.doc .where{display:block; color:var(--faint); font-size:10.5px; margin-top:1px}
-  .cell{margin:3px; height:38px; border-radius:8px; display:flex; align-items:center; justify-content:center;
-        font-size:10.5px; font-weight:600; border:1px solid transparent; transition:.18s; letter-spacing:.02em}
-  .cell.create{background:var(--create-bg); color:var(--create); border-color:#1c5130}
-  .cell.update{background:var(--update-bg); color:var(--update); border-color:#1d456f}
-  .cell.tick{background:var(--tick-bg); color:var(--tick); border-color:#175b54}
-  .cell.fold{background:var(--fold-bg); color:var(--fold); border-color:#4a2f6b}
-  .cell.move{background:var(--move-bg); color:var(--hist); border-color:#343b44}
-  .cell.read{background:transparent; color:var(--read); border:1px dashed #2a313a}
-  .cell.none{background:transparent; color:#39414b}
-  td.colon .cell{outline:2px solid var(--accent); outline-offset:-2px}
-  th.colon{color:var(--accent)}
-  .rowdim{opacity:.32}
+  .tags{display:flex; gap:8px; flex-wrap:wrap; margin:0 0 22px}
+  .tag{font-size:11px; padding:4px 11px; border-radius:999px; border:1px solid var(--line); color:var(--dim)}
+  .tag b{color:var(--ink); font-weight:650}
 
-  /* file tree */
-  .tree{font-size:12.5px; line-height:1.95}
-  .tree .row{display:flex; align-items:center; gap:7px; padding:1px 6px; border-radius:6px; transition:.15s}
-  .tree .row.hot{background:#1d2632}
-  .tree .row.hot .name{color:var(--ink)}
-  .tree .tag{margin-left:auto; font-size:10px; font-weight:700; padding:1px 7px; border-radius:999px}
-  .tree .name{color:var(--dim)}
-  .tree .ind{color:#39414b}
-  .t-create{background:var(--create-bg); color:var(--create)}
-  .t-update{background:var(--update-bg); color:var(--update)}
-  .t-tick{background:var(--tick-bg); color:var(--tick)}
-  .t-fold{background:var(--fold-bg); color:var(--fold)}
-  .t-move{background:var(--move-bg); color:var(--hist)}
-  .grp{color:var(--faint); font-size:11px; text-transform:uppercase; letter-spacing:.06em; margin:12px 0 3px}
-  .grp:first-child{margin-top:0}
+  /* decision rows */
+  .dec{display:grid; grid-template-columns:130px 1fr; gap:12px; padding:10px 0; border-top:1px solid #20262e}
+  .dec:first-of-type{border-top:0}
+  .dec .k{font-weight:650; color:var(--ink); font-size:13px}
+  .dec .v{color:var(--dim); font-size:13px}
+  .dec .v .why{color:var(--faint); font-size:12px; display:block; margin-top:3px}
 
-  .detail h3{margin:0 0 4px; font-size:17px}
-  .detail .cmd{display:inline-block; background:#0b1f17; border:1px solid #1c5130; color:#7ee2a0;
-    padding:3px 10px; border-radius:7px; font-size:12.5px; margin:2px 0 12px}
-  .detail p{margin:0 0 10px; color:var(--dim)}
-  .detail ul{margin:0; padding-left:18px; color:var(--dim)}
-  .detail li{margin:5px 0}
-  .detail b{color:var(--ink); font-weight:600}
-  .pill{display:inline-block; font-size:10.5px; font-weight:700; padding:1px 7px; border-radius:999px; vertical-align:middle}
+  .props{display:flex; gap:18px; flex-wrap:wrap; font-size:12px}
+  .props .p{display:flex; flex-direction:column; gap:2px}
+  .props .p .pk{color:var(--gate); font-weight:650}
+  .props .p .pv{color:var(--dim)}
 
-  .legend{display:flex; gap:14px; flex-wrap:wrap; margin:16px 0 0; font-size:11.5px; color:var(--dim)}
-  .legend span{display:inline-flex; align-items:center; gap:6px}
-  .sw{width:13px; height:13px; border-radius:4px; display:inline-block}
-
-  .takeaway{margin-top:22px; background:linear-gradient(180deg,#16203022,#0d1117); border:1px solid var(--line);
+  .takeaway{margin-top:6px; background:linear-gradient(180deg,#16203022,#0d1117); border:1px solid var(--line);
     border-left:3px solid var(--accent); border-radius:12px; padding:14px 18px}
   .takeaway b{color:var(--accent)}
   .takeaway ul{margin:8px 0 0; padding-left:18px; color:var(--dim)}
-  .live{margin-top:18px; font-size:12.5px; color:var(--faint)}
-  .live code{color:var(--change)}
+  .legend{display:flex; gap:16px; flex-wrap:wrap; font-size:11.5px; color:var(--dim); margin:14px 0 0; justify-content:center}
+  .legend span{display:inline-flex; align-items:center; gap:6px}
+  .sw{width:13px;height:13px;border-radius:4px;display:inline-block}
+  .status{font-size:12px; color:var(--faint); margin-top:18px}
+  .status code{color:var(--chat)}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>How the OpenSpec flow writes its documents</h1>
+  <h1>Maximize chat to fill the dock</h1>
   <p class="sub">
-    A change moves <b>Propose → Specify → Implement → Archive</b>. The trick is knowing
-    <i>which file is written when</i>. Click a phase (or press <b>Play</b>) — the matrix column,
-    the file tree, and the notes all update to show exactly what gets created, edited, or moved.
+    An agent dock (the "phone" tile on the dashboard) stacks several <b>non-chat chrome</b> regions
+    above the chat — they eat ~40% of the tile's height. This change adds <b>one toggle</b>, next to
+    <b>Tool Calls</b> in the chat toolbar, that collapses that chrome so the chat fills the dock. Click
+    the same button again to restore. <b>Try it →</b> press the <span style="color:var(--accent)">⤢</span>
+    button in the mock, or use the buttons below it.
   </p>
 
-  <div class="pipe" id="pipe"></div>
-  <div class="flowline"></div>
-
-  <div class="controls">
-    <button class="ctl" id="play">▶ Play the lifecycle</button>
-    <button class="ctl" id="reset">↺ Reset</button>
-    <span class="hint" id="hint"></span>
+  <div class="tags">
+    <span class="tag"><b>Change:</b> add-maximize-chat-dock</span>
+    <span class="tag"><b>Capability:</b> agent-dock (modified)</span>
+    <span class="tag"><b>Scope:</b> frontend only · no backend</span>
+    <span class="tag"><b>State:</b> per-dock · ephemeral</span>
+    <span class="tag"><b>Gate:</b> Advanced mode</span>
   </div>
 
   <div class="grid">
-    <div class="card">
-      <h2>When is each document written?</h2>
-      <table id="matrix"></table>
+    <!-- LEFT: interactive mock dock -->
+    <div class="stage">
+      <div class="phone" id="phone">
+        <div class="flash"></div>
+        <div class="region bar"><span class="dot"></span><span class="lbl">phone bar</span><span class="sel">header · repo · path</span></div>
+        <div class="region"><span class="lbl">lanes</span><span class="sel">Builder · Ask · Files</span></div>
+        <div class="region"><span class="lbl">local apps</span><span class="sel">app switcher</span></div>
+        <div class="region"><span class="lbl">git status</span><span class="sel">branch · ahead/behind</span></div>
+        <div class="region"><span class="lbl">discover</span><span class="sel">local apps</span></div>
+        <div class="screen">
+          <div class="chatbar">
+            <span class="title">CHAT</span>
+            <span class="spacer"></span>
+            <span class="tbtn">⛭ Tool Calls</span>
+            <span class="mbtn" id="mbtn" title="Maximize chat" role="button" aria-pressed="false">⤢ <span id="mbtn-t">Max</span></span>
+          </div>
+          <div class="body">
+            <div class="msg a">Which files changed on this branch?</div>
+            <div class="msg u">Show me the dock layout</div>
+            <div class="msg a">The chat lives in <code>.phone__screen</code> …</div>
+          </div>
+          <div class="composer">Type a message… <span class="send">Send</span></div>
+        </div>
+      </div>
+
+      <div class="ctl">
+        <button class="act" id="toggle">⤢ Toggle maximize</button>
+        <button class="act" id="reset">↺ Reset</button>
+      </div>
+      <div class="stateline" id="stateline"></div>
+
       <div class="legend">
-        <span><i class="sw" style="background:var(--create-bg);border:1px solid #1c5130"></i> Created</span>
-        <span><i class="sw" style="background:var(--update-bg);border:1px solid #1d456f"></i> Edited</span>
-        <span><i class="sw" style="background:var(--tick-bg);border:1px solid #175b54"></i> Tasks ticked</span>
-        <span><i class="sw" style="background:var(--fold-bg);border:1px solid #4a2f6b"></i> Folded → baseline</span>
-        <span><i class="sw" style="background:var(--move-bg);border:1px solid #343b44"></i> Moved to history</span>
-        <span><i class="sw" style="border:1px dashed #2a313a"></i> Read-only</span>
+        <span><i class="sw" style="background:var(--chrome-bg);border:1px solid var(--chrome-line)"></i> non-chat chrome (collapses)</span>
+        <span><i class="sw" style="background:var(--chat-bg);border:1px solid var(--chat-line)"></i> chat (fills the dock)</span>
       </div>
     </div>
 
-    <div class="card">
-      <h2>openspec/ — what's touched now</h2>
-      <div class="tree" id="tree"></div>
+    <!-- RIGHT: the why + how -->
+    <div>
+      <div class="card">
+        <h2>The problem &amp; the rule</h2>
+        <p>Top-to-bottom, <code>.phone</code> is a flex column: fixed-height chrome regions, then a
+          flex-filling <code>.phone__screen</code> that holds the embedded <code>&lt;Chat&gt;</code>.
+          The chrome is useful but always-on — there was no way to reclaim its space to focus on the
+          conversation.</p>
+        <ul>
+          <li><b>One button, two states.</b> The same toggle maximizes and restores — pressed/active when maximized, with an aria-label.</li>
+          <li><b>Collapse, don't unmount.</b> A <code>phone--chat-max</code> modifier sets the chrome to <code>display:none</code>; the <code>&lt;Chat&gt;</code> subtree stays mounted, so scroll position, chat state, and the live stream survive the toggle.</li>
+          <li><b>The composer never hides.</b> It lives inside <code>.phone__screen</code>, not the chrome — so it (and the toolbar) stay usable while maximized.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Key design decisions</h2>
+        <div class="dec"><div class="k">State owner</div><div class="v"><code>PinnedAgent</code>, not <code>Chat</code>.
+          <span class="why">It renders the <code>.phone__*</code> chrome, so the <code>chatMaximized</code> boolean + toggle live there and pass down into the embedded chat.</span></div></div>
+        <div class="dec"><div class="k">Collapse via</div><div class="v">CSS modifier class, not a remount.
+          <span class="why">Single source of truth in CSS; mounted-but-hidden chrome is cheap and avoids layout churn / lost chat state.</span></div></div>
+        <div class="dec"><div class="k">Button home</div><div class="v">In <code>.chat__bar</code>, beside <code>.chat__tools</code>.
+          <span class="why">Mirrors the Tool Calls button's pattern: <code>aria-pressed</code> + an active class + i18n title.</span></div></div>
+        <div class="dec"><div class="k">Gate</div><div class="v">Advanced mode only.
+          <span class="why">The dock and Tool Calls button are already Advanced-only — no extra gate needed.</span></div></div>
+      </div>
+
+      <div class="card">
+        <h2>What flows down to the toolbar button</h2>
+        <div class="props">
+          <div class="p"><span class="pk">chatMaximized</span><span class="pv">boolean — drives <code>aria-pressed</code> &amp; the active class</span></div>
+          <div class="p"><span class="pk">toggleChatMaximized</span><span class="pv">onClick — flips the state in <code>PinnedAgent</code></span></div>
+          <div class="p"><span class="pk">i18n</span><span class="pv"><code>chat.maximizeChat</code> / <code>chat.restoreChat</code></span></div>
+        </div>
+      </div>
+
+      <div class="takeaway">
+        <b>The one rule that explains the whole thing:</b>
+        <ul>
+          <li>The chrome (<code>.phone__bar/lanes/apps/git/discover</code>) is what collapses; the chat in <code>.phone__screen</code> is what grows.</li>
+          <li>State is <b>per-dock</b> (one tile maximizing leaves the others alone) and <b>ephemeral</b> (resets to normal on reload — nothing is persisted, no API).</li>
+          <li>It's a <b>pure additive frontend change</b>: revert the commit to roll back, nothing to migrate.</li>
+        </ul>
+      </div>
     </div>
   </div>
 
-  <div class="card detail" id="detail" style="margin-top:18px"></div>
-
-  <div class="takeaway">
-    <b>The one rule that explains the whole diagram:</b>
-    <ul>
-      <li>Everything in <code class="mono">changes/&lt;id&gt;/</code> — proposal, design, tasks, <b>delta</b> spec —
-        is written while the change is <b>in flight</b> (propose + implement).</li>
-      <li>The <b>living baseline</b> <code class="mono">openspec/specs/&lt;cap&gt;/spec.md</code>
-        ("what the system does today") is written <b>only at Archive</b>, when the delta is folded in.</li>
-      <li><b>Archive does two moves at once:</b> it <i>folds</i> the delta into the baseline, then
-        <i>relocates</i> the whole change folder to <code class="mono">changes/archive/&lt;date&gt;-&lt;id&gt;/</code> (the history).</li>
-    </ul>
-  </div>
-
-  <p class="live">
-    Live example in this repo: <code>add-operator-message-history</code> sits at <b>Phase 1 (Propose)</b> right now —
-    its <code>proposal.md</code>, <code>tasks.md</code> (0/10) and delta <code>specs/operator-message-history/spec.md</code>
-    exist under <code>openspec/changes/</code>; nothing in <code>openspec/specs/</code> has changed yet. It only will at Archive.
+  <p class="status">
+    Live in this repo: <code>add-maximize-chat-dock</code> is at <b>Phase&nbsp;1 (Propose)</b> — its
+    <code>proposal.md</code>, <code>design.md</code>, delta <code>specs/agent-dock/spec.md</code> and
+    <code>tasks.md</code> (0/13) live under <code>openspec/changes/</code> and pass
+    <code>validate --strict</code>. No code has been written yet.
   </p>
 </div>
 
 <script>
-const PHASES = [
-  { id:'propose', n:'Phase 1', t:'Propose', cmd:'openspec new change <id>  ·  /opsx propose',
-    h:'Author the change folder.',
-    head:'Scaffold the change, then write the intent, plan, and the delta.',
-    body:[
-      'A NEW folder <b>openspec/changes/&lt;id&gt;/</b> is born. <code>openspec new change</code> drops the <code>.openspec.yaml</code> marker; you write the rest.',
-      'You <b>create</b> all four authored docs here: <code>proposal.md</code> (why + what), <code>design.md</code> (approach/trade-offs), <code>tasks.md</code> (the <code>- [ ]</code> checklist), and the <b>delta spec</b> <code>specs/&lt;cap&gt;/spec.md</code> (ADDED / MODIFIED / REMOVED requirements).',
-      'Nothing in the <b>baseline</b> (<code>openspec/specs/</code>) is touched — the delta only <i>describes</i> a change against it.'
-    ]},
-  { id:'specify', n:'Phase 2', t:'Specify & Validate', cmd:'openspec validate <id> --strict',
-    h:'Refine + gate the shape.',
-    head:'Tighten the delta and design until the shape is valid.',
-    body:[
-      'Still all inside <b>changes/&lt;id&gt;/</b>: you <b>edit</b> the delta spec (every requirement uses SHALL/MUST and carries at least one <code>#### Scenario:</code>), and refine <code>design.md</code> / <code>proposal.md</code>.',
-      '<b>validate --strict</b> reads the delta and diffs it against the baseline to check structure — it is a <b>gate, not a write</b>. Run it until clean before any code.',
-      'The baseline is still untouched; the change is just being made precise.'
-    ]},
-  { id:'implement', n:'Phase 3', t:'Implement', cmd:'/opsx apply  →  write code  +  tick tasks',
-    h:'Build it; check the boxes.',
-    head:'Write the actual product code and tick tasks as you finish them.',
-    body:[
-      'The only OpenSpec file that changes here is <code>tasks.md</code> — you flip <code>- [ ]</code> → <code>- [x]</code> as each task lands.',
-      '<code>proposal.md</code>, <code>design.md</code> and the delta spec are now <b>read-only references</b> — the contract you build against.',
-      'All the real edits happen <b>outside openspec/</b>, in the codebase (e.g. <code>client/…</code>, <code>ClaudeWeb.App/…</code>).'
-    ]},
-  { id:'archive', n:'Phase 4', t:'Archive', cmd:'openspec archive <id>',
-    h:'Fold in + retire.',
-    head:'Fold the delta into the living baseline, then move the change to history.',
-    body:[
-      'This is the <b>only</b> moment the <b>baseline</b> <code>openspec/specs/&lt;cap&gt;/spec.md</code> is written: the delta’s ADDED/MODIFIED/REMOVED requirements are applied to "what the system does today" (a new capability spec is created if it’s the first one).',
-      'Then the entire <b>changes/&lt;id&gt;/</b> folder is <b>moved</b> to <code>changes/archive/&lt;date&gt;-&lt;id&gt;/</code> — the proposal/design/tasks/delta live on there as the historical record.',
-      'After this, <code>openspec list</code> no longer shows it as active; <code>openspec list --specs</code> shows the grown baseline.'
-    ]},
-];
+const phone = document.getElementById('phone');
+const mbtn  = document.getElementById('mbtn');
+const mbtnT = document.getElementById('mbtn-t');
+const line  = document.getElementById('stateline');
+let maximized = false;
 
-// action per [docId][phaseId]
-const DOCS = [
-  { id:'yaml',     label:'.openspec.yaml',          where:'changes/<id>/' },
-  { id:'proposal', label:'proposal.md',             where:'changes/<id>/' },
-  { id:'design',   label:'design.md',               where:'changes/<id>/' },
-  { id:'tasks',    label:'tasks.md',                where:'changes/<id>/' },
-  { id:'delta',    label:'specs/<cap>/spec.md',     where:'changes/<id>/specs/  · the DELTA' },
-  { id:'baseline', label:'specs/<cap>/spec.md',     where:'openspec/specs/  · the BASELINE' },
-  { id:'history',  label:'archive/<date>-<id>/',    where:'openspec/changes/archive/  · HISTORY' },
-];
-const M = {
-  yaml:     { propose:'create', specify:'none',   implement:'none', archive:'move'  },
-  proposal: { propose:'create', specify:'update', implement:'read', archive:'move'  },
-  design:   { propose:'create', specify:'update', implement:'read', archive:'move'  },
-  tasks:    { propose:'create', specify:'update', implement:'tick', archive:'move'  },
-  delta:    { propose:'create', specify:'update', implement:'read', archive:'fold'  },
-  baseline: { propose:'none',   specify:'read',   implement:'read', archive:'update'},
-  history:  { propose:'none',   specify:'none',   implement:'none', archive:'create'},
-};
-const LABEL = { create:'CREATE', update:'EDIT', tick:'TICK ✓', fold:'FOLD →', move:'MOVE', read:'read', none:'·' };
-const TREEACT = { create:'t-create', update:'t-update', tick:'t-tick', fold:'t-fold', move:'t-move' };
-const TREELABEL = { create:'new', update:'edit', tick:'tick', fold:'fold→base', move:'→history' };
-
-let cur = 'propose', timer = null;
-
-// ---- pipeline ----
-const pipe = document.getElementById('pipe');
-PHASES.forEach(p=>{
-  const d=document.createElement('div'); d.className='stage'; d.dataset.id=p.id;
-  d.innerHTML=`<div class="n">${p.n}</div><div class="t">${p.t}</div><div class="c mono">${p.cmd}</div><div class="bar"></div>`;
-  d.onclick=()=>{ stop(); select(p.id); };
-  pipe.appendChild(d);
-});
-
-// ---- matrix ----
-function buildMatrix(){
-  const mx=document.getElementById('matrix');
-  let h='<thead><tr><th class="doch">Document</th>';
-  PHASES.forEach(p=> h+=`<th data-col="${p.id}">${p.t}</th>`);
-  h+='</tr></thead><tbody>';
-  DOCS.forEach(doc=>{
-    h+=`<tr data-doc="${doc.id}"><td class="doc">${doc.label}<span class="where mono">${doc.where}</span></td>`;
-    PHASES.forEach(p=>{
-      const a=M[doc.id][p.id];
-      h+=`<td data-col="${p.id}"><div class="cell ${a}">${LABEL[a]}</div></td>`;
-    });
-    h+='</tr>';
-  });
-  mx.innerHTML=h+'</tbody>';
+function render(){
+  phone.classList.toggle('max', maximized);
+  mbtn.classList.toggle('on', maximized);
+  mbtn.setAttribute('aria-pressed', String(maximized));
+  mbtn.title = maximized ? 'Restore layout' : 'Maximize chat';
+  mbtnT.textContent = maximized ? 'Restore' : 'Max';
+  line.innerHTML = maximized
+    ? 'State: <b>maximized</b> — chrome collapsed, chat fills the dock. Button is pressed.'
+    : 'State: <b>normal</b> — chrome shown above the chat.';
 }
-buildMatrix();
-
-// ---- file tree ----
-function buildTree(){
-  const t=document.getElementById('tree');
-  const rows=[
-    {grp:'openspec/changes/<id>/  — the in-flight change'},
-    {doc:'yaml',  ind:'  ', name:'.openspec.yaml'},
-    {doc:'proposal', ind:'  ', name:'proposal.md'},
-    {doc:'design', ind:'  ', name:'design.md'},
-    {doc:'tasks', ind:'  ', name:'tasks.md'},
-    {doc:'delta', ind:'  ', name:'specs/<cap>/spec.md  (delta)'},
-    {grp:'openspec/specs/  — the living baseline'},
-    {doc:'baseline', ind:'  ', name:'<cap>/spec.md  (what it does today)'},
-    {grp:'openspec/changes/archive/  — history'},
-    {doc:'history', ind:'  ', name:'<date>-<id>/  (frozen record)'},
-  ];
-  let h='';
-  rows.forEach(r=>{
-    if(r.grp){ h+=`<div class="grp">${r.grp}</div>`; return; }
-    h+=`<div class="row" data-doc="${r.doc}"><span class="ind">${r.ind}</span><span class="name mono">${r.name}</span><span class="tag" data-tag></span></div>`;
-  });
-  t.innerHTML=h;
+function pulse(){
+  phone.classList.add('pulse');
+  setTimeout(()=>phone.classList.remove('pulse'), 260);
 }
-buildTree();
+function toggle(){ maximized = !maximized; pulse(); render(); }
 
-// ---- detail ----
-function renderDetail(p){
-  const d=document.getElementById('detail');
-  d.innerHTML=`<h3>${p.n} · ${p.t}</h3><div class="cmd mono">${p.cmd}</div>
-    <p><b>${p.head}</b></p><ul>${p.body.map(b=>`<li>${b}</li>`).join('')}</ul>`;
-}
+mbtn.addEventListener('click', toggle);
+document.getElementById('toggle').addEventListener('click', toggle);
+document.getElementById('reset').addEventListener('click', ()=>{ maximized=false; render(); });
 
-// ---- select ----
-function select(id){
-  cur=id;
-  document.querySelectorAll('.stage').forEach(s=> s.classList.toggle('on', s.dataset.id===id));
-  // matrix column highlight
-  document.querySelectorAll('#matrix th,#matrix td').forEach(c=>{
-    const on=c.dataset.col===id; c.classList.toggle('colon', on);
-  });
-  document.querySelectorAll('#matrix tbody tr').forEach(tr=>{
-    const a=M[tr.dataset.doc][id];
-    tr.classList.toggle('rowdim', a==='none');
-  });
-  // tree
-  document.querySelectorAll('#tree .row').forEach(row=>{
-    const a=M[row.dataset.doc][id];
-    const tag=row.querySelector('[data-tag]');
-    row.classList.remove('hot');
-    tag.className='tag'; tag.textContent='';
-    if(a && a!=='none' && a!=='read'){
-      row.classList.add('hot');
-      tag.classList.add(TREEACT[a]); tag.textContent=TREELABEL[a];
-    }
-  });
-  const p=PHASES.find(x=>x.id===id);
-  renderDetail(p);
-  document.getElementById('hint').textContent = p.h;
-}
-
-// ---- play ----
-function stop(){ if(timer){clearInterval(timer); timer=null;} document.getElementById('play').textContent='▶ Play the lifecycle'; }
-document.getElementById('play').onclick=function(){
-  if(timer){ stop(); return; }
-  this.textContent='⏸ Pause';
-  let i=PHASES.findIndex(p=>p.id===cur);
-  select(PHASES[i].id);
-  timer=setInterval(()=>{
-    i=(i+1)%PHASES.length;
-    select(PHASES[i].id);
-  },2600);
-};
-document.getElementById('reset').onclick=()=>{ stop(); select('propose'); };
-
-select('propose');
+render();
 </script>
 </body>
 </html>
