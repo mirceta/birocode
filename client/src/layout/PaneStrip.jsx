@@ -66,6 +66,24 @@ export function useMultiPane() {
 
 export default function PaneStrip({ panes, activeKey }) {
   const { t } = useT();
+  const { tabWidths, saveTabWidths } = useUiSettings();
+  const orderKeys = useOrderedTabs({ includeHidden: true }).map((tab) => tab.key);
+  const showSpan = useFeature('paneSpanButtons');
+
+  // The pane bar's -/+ buttons are a second front-end onto the one per-tab
+  // span the Settings tab configures — same map, same store. Mirror Settings'
+  // setWidth (Settings.jsx): keep the map sparse (1 = absent) and clamp 1-4.
+  // saveTabWidths' PUT replaces tabOrder, so send the FULL current order
+  // (include hidden, like Settings does) — sending only the visible panes
+  // would truncate the saved order.
+  const setSpan = (key, v) => {
+    const clamped = Math.max(1, Math.min(4, v));
+    const next = { ...tabWidths };
+    if (clamped <= 1) delete next[key];
+    else next[key] = clamped;
+    saveTabWidths(orderKeys, next);
+  };
+
   return (
     <main className="pane-strip">
       {panes.map((pane) => (
@@ -74,7 +92,31 @@ export default function PaneStrip({ panes, activeKey }) {
           className={`pane${pane.key === activeKey ? ' pane--active' : ''}`}
           style={pane.width > 1 ? { flexGrow: pane.width } : undefined}
         >
-          <Link to={pane.path} className="pane__bar">{t(pane.labelKey)}</Link>
+          <div className="pane__bar">
+            <Link to={pane.path} className="pane__bar-label">{t(pane.labelKey)}</Link>
+            {showSpan && (
+              <span className="pane__span">
+                <button
+                  type="button"
+                  className="pane__span-btn"
+                  aria-label={t('pane.spanDec')}
+                  disabled={pane.width <= 1}
+                  onClick={() => setSpan(pane.key, pane.width - 1)}
+                >
+                  −
+                </button>
+                <button
+                  type="button"
+                  className="pane__span-btn"
+                  aria-label={t('pane.spanInc')}
+                  disabled={pane.width >= 4}
+                  onClick={() => setSpan(pane.key, pane.width + 1)}
+                >
+                  +
+                </button>
+              </span>
+            )}
+          </div>
           <div className="app-content">{pane.element}</div>
         </section>
       ))}

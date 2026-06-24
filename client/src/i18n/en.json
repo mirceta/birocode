@@ -69,6 +69,8 @@
   "settings.paneWidthHint": "Pane width on desktop multi-pane: 1-4 slot units",
   "settings.widthDec": "Narrower pane",
   "settings.widthInc": "Wider pane",
+  "pane.spanDec": "Narrow this pane",
+  "pane.spanInc": "Widen this pane",
   "settings.tabHiddenHint": "Show or hide this tab in the navigation (advanced mode only)",
   "settings.tabShow": "Show tab",
   "settings.tabHide": "Hide tab",
