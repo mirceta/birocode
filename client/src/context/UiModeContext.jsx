@@ -53,6 +53,7 @@ export const FEATURES = {
   promptExpand: 'advanced', // composer button that opens the current draft in a large editor popup (openspec: add-prompt-expand-popup)
   localAppDiscovery: 'advanced', // "Discover local apps" button in each agent dock: read-only agent scan → {name,port} (openspec: discover-local-apps)
   permissionBadge: 'advanced', // read-only preset badge on each dashboard agent dock; config stays desktop-only (openspec: add-per-project-claude-permissions)
+  cockpitTab: 'advanced', // read-only OpenSpec Cockpit tab, scoped to the selected repo (openspec: openspec-cockpit-in-harness)
   paneSpanButtons: 'advanced', // -/+ span steppers in each multi-pane top bar; reuses the Settings tabWidths span (openspec: add-pane-span-buttons)
 };
 
