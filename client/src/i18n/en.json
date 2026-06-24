@@ -28,6 +28,7 @@
   "nav.deploys": "Deploys",
   "nav.agents": "Agents",
   "nav.git": "Git",
+  "nav.cockpit": "Cockpit",
   "plan.none": "No active plan",
   "plan.noneHint": "When work on a feature starts, the plan appears here (plan.md at the project root) and updates live.",
   "nav.screen": "Screen",

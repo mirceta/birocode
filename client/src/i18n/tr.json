@@ -28,6 +28,7 @@
   "nav.deploys": "Dagitim",
   "nav.agents": "Ajanlar",
   "nav.git": "Git",
+  "nav.cockpit": "Kokpit",
   "plan.none": "Aktif plan yok",
   "plan.noneHint": "Bir ozellik uzerinde calisma basladiginda plan burada gorunur (proje kokundeki plan.md) ve canli guncellenir.",
   "nav.screen": "Ekran",

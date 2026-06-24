@@ -1,0 +1,111 @@
+/* OpenSpec Cockpit tab (openspec change openspec-cockpit-in-harness).
+   Scoped under .ck so it never leaks into other tabs. */
+.ck {
+  --ck-bg: #0d1117; --ck-panel: #161b22; --ck-panel2: #1c2330; --ck-ink: #e6edf3;
+  --ck-dim: #8b949e; --ck-border: #30363d; --ck-accent: #58a6ff; --ck-good: #3fb950;
+  --ck-warn: #d29922; --ck-bad: #f85149;
+  padding: 14px 14px 60px; color: var(--ck-ink); max-width: 1200px; margin: 0 auto;
+  font-size: 14px;
+}
+.ck__head { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; }
+.ck__head h2 { font-size: 18px; margin: 0; }
+.ck__repo { color: var(--ck-dim); font-size: 13px; background: var(--ck-panel2);
+  border: 1px solid var(--ck-border); border-radius: 6px; padding: 2px 8px; }
+.ck__refresh { margin-left: auto; background: var(--ck-panel); color: var(--ck-ink);
+  border: 1px solid var(--ck-border); border-radius: 6px; width: 32px; height: 32px; cursor: pointer; }
+.ck__refresh:hover { border-color: var(--ck-accent); }
+
+.ck__empty { color: var(--ck-dim); padding: 14px; text-align: center; }
+.ck__empty--err { color: var(--ck-bad); }
+
+.ck__notready { display: flex; gap: 14px; align-items: flex-start; background: var(--ck-panel);
+  border: 1px solid var(--ck-border); border-left: 3px solid var(--ck-warn);
+  border-radius: 10px; padding: 16px 18px; }
+.ck__notready-icon { font-size: 24px; color: var(--ck-warn); }
+.ck__notready b { color: var(--ck-ink); }
+.ck__notready p { color: var(--ck-dim); margin: 6px 0 0; }
+
+/* legend */
+.ck__legend { background: var(--ck-panel); border: 1px solid var(--ck-border);
+  border-radius: 10px; padding: 10px 12px; margin: 0 0 14px; display: grid; gap: 6px; }
+.ck__legrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
+.ck__legold { color: var(--ck-dim); min-width: 0; }
+.ck__legarrow { color: var(--ck-accent); }
+.ck__legprim { background: var(--ck-panel2); border: 1px solid var(--ck-border);
+  border-radius: 5px; padding: 1px 6px; color: #a5d6ff; font-size: 12px; }
+.ck__legblk { margin-left: auto; color: var(--ck-dim); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+
+/* three columns */
+.ck__grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+@media (max-width: 820px) { .ck__grid { grid-template-columns: 1fr; } }
+.ck__col h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--ck-dim); margin: 0 0 8px; display: flex; align-items: center; gap: 6px; }
+.ck__count { background: var(--ck-panel2); border: 1px solid var(--ck-border);
+  border-radius: 999px; padding: 0 7px; font-size: 11px; color: var(--ck-ink); }
+
+.ck-item { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left;
+  background: var(--ck-panel); border: 1px solid var(--ck-border); border-radius: 9px;
+  padding: 10px; margin: 0 0 8px; cursor: pointer; color: var(--ck-ink); }
+.ck-item:hover { border-color: var(--ck-accent); }
+.ck-item.is-sel { border-color: var(--ck-accent); box-shadow: 0 0 0 1px var(--ck-accent); }
+.ck-item__body { flex: 1; min-width: 0; }
+.ck-item__top { display: flex; align-items: center; gap: 8px; }
+.ck-item__name { font-weight: 600; word-break: break-word; }
+.ck-item__meta { display: flex; gap: 10px; flex-wrap: wrap; color: var(--ck-dim);
+  font-size: 12px; margin-top: 3px; }
+.ck-item__time { margin-left: auto; }
+
+.ck__ring { flex: none; }
+.ck__ringtxt { fill: var(--ck-ink); font-size: 11px; font-weight: 600; }
+
+.ck-status { text-transform: capitalize; }
+.ck-status--in-progress { color: var(--ck-accent); }
+.ck-status--draft, .ck-status--proposed { color: var(--ck-warn); }
+
+.ck-vald { font-size: 11px; border-radius: 5px; padding: 1px 6px; white-space: nowrap; }
+.ck-vald--ok { background: #3fb95022; color: #7ee787; border: 1px solid #2ea04355; }
+.ck-vald--bad { background: #d2992222; color: #e3b341; border: 1px solid #9e6a0355; }
+
+.ck-touch { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+.ck-touch__lbl { font-size: 10px; text-transform: uppercase; color: var(--ck-dim); letter-spacing: .05em; }
+.ck-touch__cap { display: inline-flex; align-items: center; gap: 4px; font-size: 11px;
+  background: var(--ck-panel2); border: 1px solid var(--ck-border); border-radius: 5px; padding: 1px 6px; }
+.ck__op { font-size: 10px; font-weight: 700; border-radius: 3px; padding: 0 4px; }
+.ck__op--added { background: #3fb95022; color: #7ee787; }
+.ck__op--modified { background: #58a6ff22; color: #79c0ff; }
+.ck__op--removed { background: #f8514922; color: #ff7b72; }
+.ck__op--renamed { background: #d2992222; color: #e3b341; }
+
+.ck-item--ship { gap: 8px; }
+.ck-ship__date { color: var(--ck-dim); font-size: 12px; font-variant-numeric: tabular-nums; flex: none; }
+.ck-ship__title { word-break: break-word; }
+
+.ck-inflight { color: var(--ck-accent); }
+
+/* drill-in detail */
+.ck__detail { background: var(--ck-panel); border: 1px solid var(--ck-border);
+  border-radius: 10px; padding: 14px 16px; margin-top: 14px; }
+.ck__detail--load, .ck__detail--err { color: var(--ck-dim); }
+.ck__detail--err { color: var(--ck-bad); }
+.ck__detailhd { font-size: 15px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+.ck__chip { font-size: 11px; background: var(--ck-panel2); border: 1px solid var(--ck-border);
+  border-radius: 5px; padding: 1px 6px; color: var(--ck-dim); }
+.ck__dsub { color: var(--ck-dim); }
+
+.ck__tasks { background: var(--ck-bg); border: 1px solid var(--ck-border); border-radius: 8px; padding: 10px; margin-bottom: 12px; }
+.ck__taskshd { font-weight: 600; margin-bottom: 6px; display: flex; gap: 6px; }
+.ck__taskshd span { color: var(--ck-dim); }
+.ck__tasksec { color: var(--ck-dim); font-size: 12px; margin: 8px 0 3px; }
+.ck__task { display: flex; gap: 8px; align-items: flex-start; padding: 2px 0; }
+.ck__task.is-done { color: var(--ck-dim); }
+.ck__taskbox { width: 16px; color: var(--ck-good); flex: none; }
+
+.ck__delta { margin-bottom: 12px; }
+.ck__deltahd { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.ck__deltacap { font-weight: 600; }
+.ck__req { border-left: 2px solid var(--ck-border); padding-left: 10px; margin: 8px 0; }
+.ck__reqtitle { font-weight: 600; margin-bottom: 4px; }
+.ck__scn pre, .ck__doc pre { background: #010409; border: 1px solid var(--ck-border);
+  border-radius: 6px; padding: 8px 10px; overflow: auto; font-size: 12px; white-space: pre-wrap; margin: 4px 0; }
+.ck__doc { margin-top: 8px; }
+.ck__doc summary { cursor: pointer; color: var(--ck-accent); font-size: 13px; }

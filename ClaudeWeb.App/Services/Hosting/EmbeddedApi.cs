@@ -19,6 +19,7 @@ using ClaudeWeb.Services.PromptPlans;
 using ClaudeWeb.Services.PromptNotes;
 using ClaudeWeb.Services.Repositories;
 using ClaudeWeb.Services.Screen;
+using ClaudeWeb.Services.OpenspecCockpit;
 using ClaudeWeb.Services.Settings;
 using ClaudeWeb.Services.StructuredAsk;
 using ClaudeWeb.Services.TaskGraph;
@@ -156,6 +157,7 @@ public class EmbeddedApi
             builder.Services.AddAutopilotModule(); // loop-autopilot discovery (plans/loop-autopilot.md)
             builder.Services.AddTaskGraphModule(); // task dependency graph (plans/task-dependency-graph.md)
             builder.Services.AddStructuredAskModule(); // discover local apps (openspec discover-local-apps)
+            builder.Services.AddOpenspecCockpitModule(); // harness OpenSpec Cockpit (openspec openspec-cockpit-in-harness)
             // === END MODULE SERVICE REGISTRATION ===
 
             _app = builder.Build();

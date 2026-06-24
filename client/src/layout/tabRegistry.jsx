@@ -12,6 +12,7 @@ import Autopilot from '../pages/Autopilot';
 import Deployments from '../pages/Deployments';
 import Agents from '../pages/Agents';
 import Git from '../pages/Git';
+import Cockpit from '../pages/Cockpit';
 import Screen from '../pages/Screen';
 import Terminal from '../pages/Terminal';
 import Projects from '../pages/Projects';
@@ -26,6 +27,7 @@ import Settings from '../pages/Settings';
 const STATIC_TABS = [
   { key: 'files', path: '/studio/files', labelKey: 'nav.files', icon: 'F', feature: null, element: <Files /> },
   { key: 'git', path: '/studio/git', labelKey: 'nav.git', icon: '⎇', feature: 'gitTab', element: <Git /> },
+  { key: 'cockpit', path: '/studio/cockpit', labelKey: 'nav.cockpit', icon: '🛰️', feature: 'cockpitTab', element: <Cockpit /> },
   { key: 'history', path: '/studio/history', labelKey: 'nav.history', icon: 'H', feature: null, element: <History /> },
   { key: 'agents', path: '/studio/agents', labelKey: 'nav.agents', icon: 'A', feature: 'agentDock', element: <Agents /> },
   { key: 'screen', path: '/studio/screen', labelKey: 'nav.screen', icon: 'S', feature: 'screenTab', element: <Screen /> },
