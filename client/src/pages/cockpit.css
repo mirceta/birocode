@@ -18,12 +18,25 @@
 .ck__empty { color: var(--ck-dim); padding: 14px; text-align: center; }
 .ck__empty--err { color: var(--ck-bad); }
 
-.ck__notready { display: flex; gap: 14px; align-items: flex-start; background: var(--ck-panel);
-  border: 1px solid var(--ck-border); border-left: 3px solid var(--ck-warn);
-  border-radius: 10px; padding: 16px 18px; }
-.ck__notready-icon { font-size: 24px; color: var(--ck-warn); }
-.ck__notready b { color: var(--ck-ink); }
-.ck__notready p { color: var(--ck-dim); margin: 6px 0 0; }
+/* "Prepared for OpenSpec?" readiness section (top of the tab). Driven by the
+   payload's ready node; green left-accent when set up, warn when not. */
+.ck__prep { background: var(--ck-panel); border: 1px solid var(--ck-border);
+  border-left: 3px solid var(--ck-border); border-radius: 10px; padding: 12px 16px; margin: 0 0 14px; }
+.ck__prep--ok { border-left-color: var(--ck-good); }
+.ck__prep--bad { border-left-color: var(--ck-warn); }
+.ck__prep-hd { display: flex; align-items: center; gap: 9px; }
+.ck__prep-icon { font-size: 18px; line-height: 1; }
+.ck__prep--ok .ck__prep-icon { color: var(--ck-good); }
+.ck__prep--bad .ck__prep-icon { color: var(--ck-warn); }
+.ck__prep-title { font-weight: 600; color: var(--ck-ink); }
+.ck__prep-checks { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 5px; }
+.ck__prep-chk { display: flex; align-items: baseline; gap: 8px; font-size: 13px; color: var(--ck-ink); }
+.ck__prep-mark { flex: none; width: 14px; text-align: center; font-weight: 700; }
+.ck__prep-chk.is-ok .ck__prep-mark { color: var(--ck-good); }
+.ck__prep-chk.is-bad .ck__prep-mark { color: var(--ck-bad); }
+.ck__prep-text code { background: var(--ck-panel2); border: 1px solid var(--ck-border);
+  border-radius: 4px; padding: 0 4px; font-size: 12px; }
+.ck__prep-fix { display: block; color: var(--ck-dim); font-size: 12px; margin-top: 2px; }
 
 /* legend */
 .ck__legend { background: var(--ck-panel); border: 1px solid var(--ck-border);

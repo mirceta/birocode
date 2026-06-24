@@ -158,6 +158,46 @@ function Detail({ detail }) {
   );
 }
 
+// Top "is this repo prepared for OpenSpec?" section. Both checks come straight
+// from the cockpit payload's `ready` node (openspec on PATH + openspec/ present) —
+// the same readiness the backend gates aggregation on — surfaced affirmatively
+// here, not only when something is missing.
+function Readiness({ ready, repoName }) {
+  const cli = !!ready.openspecOnPath;
+  const dir = !!ready.openspecDirPresent;
+  const prepared = cli && dir;
+  const checks = [
+    {
+      ok: cli,
+      label: <><b>OpenSpec CLI</b> {cli ? 'available on the harness host' : 'not found on PATH'}</>,
+      fix: cli ? null : <>Install the <code>openspec</code> CLI on the host, then reload.</>,
+    },
+    {
+      ok: dir,
+      label: <><code>openspec/</code> {dir ? <>initialised in <b>{repoName}</b></> : <>missing in <b>{repoName}</b></>}</>,
+      fix: dir || !cli ? null : <>Run <code>openspec init</code> in this repo, then reload.</>, // only actionable once the CLI exists
+    },
+  ];
+  return (
+    <section className={`ck__prep ${prepared ? 'ck__prep--ok' : 'ck__prep--bad'}`}>
+      <div className="ck__prep-hd">
+        <span className="ck__prep-icon">{prepared ? '✓' : '⚠'}</span>
+        <span className="ck__prep-title">
+          {prepared ? 'This repository is set up for OpenSpec' : 'This repository is not ready for OpenSpec'}
+        </span>
+      </div>
+      <ul className="ck__prep-checks">
+        {checks.map((c, i) => (
+          <li key={i} className={`ck__prep-chk ${c.ok ? 'is-ok' : 'is-bad'}`}>
+            <span className="ck__prep-mark">{c.ok ? '✓' : '✗'}</span>
+            <span className="ck__prep-text">{c.label}{c.fix ? <span className="ck__prep-fix">{c.fix}</span> : null}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export default function Cockpit() {
   const { currentRepoId, current } = useRepo();
   const [state, setState] = useState({ loading: true });
@@ -204,24 +244,12 @@ export default function Cockpit() {
   if (state.error) return <div className="ck"><div className="ck__empty ck__empty--err">{state.error}</div></div>;
 
   const ready = data.ready || {};
+  const repoName = data.repoName || current?.name;
   if (!ready.openspecOnPath || !ready.openspecDirPresent) {
     return (
       <div className="ck">
-        <div className="ck__head"><h2>OpenSpec Cockpit</h2><span className="ck__repo">{data.repoName || current?.name}</span></div>
-        <div className="ck__notready">
-          <div className="ck__notready-icon">⚠</div>
-          {!ready.openspecOnPath ? (
-            <div>
-              <b>OpenSpec CLI not available on this host.</b>
-              <p>The <code>openspec</code> command could not be run. Install it on the harness host and reload.</p>
-            </div>
-          ) : (
-            <div>
-              <b>OpenSpec is not initialised in this repository.</b>
-              <p>No <code>openspec/</code> directory was found in <code>{data.repoName || current?.name}</code>. Run <code>openspec init</code> in that repo, then reload.</p>
-            </div>
-          )}
-        </div>
+        <div className="ck__head"><h2>OpenSpec Cockpit</h2><span className="ck__repo">{repoName}</span></div>
+        <Readiness ready={ready} repoName={repoName} />
       </div>
     );
   }
@@ -234,9 +262,11 @@ export default function Cockpit() {
     <div className="ck">
       <div className="ck__head">
         <h2>OpenSpec Cockpit</h2>
-        <span className="ck__repo">{data.repoName || current?.name}</span>
+        <span className="ck__repo">{repoName}</span>
         <button className="ck__refresh" onClick={load} title="Re-read OpenSpec state">↻</button>
       </div>
+
+      <Readiness ready={ready} repoName={repoName} />
 
       <div className="ck__legend">
         {LEGEND.map((l, i) => (

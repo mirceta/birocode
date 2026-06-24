@@ -23,10 +23,15 @@ Advanced-mode feature (`cockpitTab`).
 - **WHEN** the Operator switches to a different repository
 - **THEN** the Cockpit re-fetches and shows the newly selected repository's OpenSpec state, with no per-repo copy of the Cockpit code
 
+#### Scenario: Readiness shown at the top in every state
+
+- **WHEN** the operator opens the Cockpit for any selected repository
+- **THEN** a readiness section at the top reports, affirmatively, whether the repository is set up for OpenSpec — both the openspec-on-PATH check and the `openspec/`-present check — confirming when ready, not only warning when not
+
 #### Scenario: Repository not OpenSpec-ready
 
 - **WHEN** the selected repository has no `openspec/` directory or `openspec` is not on PATH
-- **THEN** the Cockpit shows an explicit not-ready state (reporting openspec-on-PATH and `openspec/`-present) rather than CLI stderr noise
+- **THEN** the readiness section shows an explicit not-ready state (which check failed, with the remediation: install the CLI, or run `openspec init`) rather than CLI stderr noise
 
 #### Scenario: Drill-in id is safe-name gated
 
