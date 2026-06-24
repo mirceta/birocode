@@ -55,6 +55,7 @@ export const FEATURES = {
   permissionBadge: 'advanced', // read-only preset badge on each dashboard agent dock; config stays desktop-only (openspec: add-per-project-claude-permissions)
   cockpitTab: 'advanced', // read-only OpenSpec Cockpit tab, scoped to the selected repo (openspec: openspec-cockpit-in-harness)
   paneSpanButtons: 'advanced', // -/+ span steppers in each multi-pane top bar; reuses the Settings tabWidths span (openspec: add-pane-span-buttons)
+  operatorMessages: 'advanced', // Operator messages drawer: consolidated list of the active conversation's user-role messages (openspec: add-operator-message-history)
 };
 
 const MODE_KEY = 'claudeweb_ui_mode';

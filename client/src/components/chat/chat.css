@@ -1653,10 +1653,15 @@ details.step > summary::-webkit-details-marker {
   color: var(--color-text-soft);
 }
 
-/* ---- Tool calls drawer (openspec: add-tool-call-history) -------------- */
+/* ---- Tool calls + Operator messages drawers --------------------------------
+   add-tool-call-history (tool calls) and add-operator-message-history (operator
+   messages) are sibling overlay drawers over the chat message area, each toggled
+   by a pill in .chat__bar. They share one set of styles via grouped selectors;
+   only the toolbar buttons differ by name. */
 
-/* Toolbar toggle — a pill in .chat__bar next to the model selector. */
-.chat__tools {
+/* Toolbar toggles — pills in .chat__bar next to the model selector. */
+.chat__tools,
+.chat__operators {
   flex: 0 0 auto;
   min-height: 28px;
   padding: 0 12px;
@@ -1670,29 +1675,33 @@ details.step > summary::-webkit-details-marker {
   cursor: pointer;
 }
 
-.chat__tools:hover {
+.chat__tools:hover,
+.chat__operators:hover {
   border-color: var(--color-accent);
   color: var(--color-accent);
 }
 
-.chat__tools:active {
+.chat__tools:active,
+.chat__operators:active {
   transform: scale(0.97);
 }
 
 /* When the panel is showing, the toggle reads as a pressed/active control. */
-.chat__tools--on {
+.chat__tools--on,
+.chat__operators--on {
   background: var(--color-accent);
   border-color: var(--color-accent);
   color: #fff;
 }
 
-.chat__tools--on:hover {
+.chat__tools--on:hover,
+.chat__operators--on:hover {
   color: #fff;
 }
 
-/* The message area that the tool-call overlay covers. It wraps .chat__scroll so
-   the overlay can fill exactly the chat region (below the toolbar, above the
-   composer) — not the whole viewport. */
+/* The message area that the overlays cover. It wraps .chat__scroll so an overlay
+   can fill exactly the chat region (below the toolbar, above the composer) —
+   not the whole viewport. */
 .chat__body {
   position: relative;
   flex: 1;
@@ -1707,7 +1716,8 @@ details.step > summary::-webkit-details-marker {
 
 /* The panel: an overlay filling the chat message area. The same toolbar button
    toggles it back to the chat. */
-.toolcalls {
+.toolcalls,
+.operators {
   position: absolute;
   inset: 0;
   display: flex;
@@ -1722,7 +1732,8 @@ details.step > summary::-webkit-details-marker {
   to { opacity: 1; transform: translateY(0); }
 }
 
-.toolcalls__head {
+.toolcalls__head,
+.operators__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1731,7 +1742,8 @@ details.step > summary::-webkit-details-marker {
   background: var(--color-surface);
 }
 
-.toolcalls__title {
+.toolcalls__title,
+.operators__title {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -1740,7 +1752,8 @@ details.step > summary::-webkit-details-marker {
   color: var(--color-text);
 }
 
-.toolcalls__count {
+.toolcalls__count,
+.operators__count {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1754,7 +1767,8 @@ details.step > summary::-webkit-details-marker {
   font-weight: 700;
 }
 
-.toolcalls__close {
+.toolcalls__close,
+.operators__close {
   flex: 0 0 auto;
   width: 30px;
   height: 30px;
@@ -1770,12 +1784,14 @@ details.step > summary::-webkit-details-marker {
   cursor: pointer;
 }
 
-.toolcalls__close:hover {
+.toolcalls__close:hover,
+.operators__close:hover {
   color: var(--color-text);
   border-color: var(--color-accent);
 }
 
-.toolcalls__body {
+.toolcalls__body,
+.operators__body {
   flex: 1;
   overflow: auto;
   padding: 12px;
@@ -1787,7 +1803,8 @@ details.step > summary::-webkit-details-marker {
   max-width: 100%;
 }
 
-.toolcalls__empty {
+.toolcalls__empty,
+.operators__empty {
   margin: 24px 8px;
   color: var(--color-text-soft);
   font-size: 14px;

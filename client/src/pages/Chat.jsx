@@ -6,6 +6,7 @@ import ActivitySteps from '../components/chat/ActivitySteps';
 import SessionPicker from '../components/chat/SessionPicker';
 import UnderstandingPanel from '../components/chat/UnderstandingPanel';
 import ToolCallsPanel from '../components/chat/ToolCallsPanel';
+import OperatorMessagesPanel from '../components/chat/OperatorMessagesPanel';
 import ErrorBanner from '../components/shared/ErrorBanner';
 import ClaudeViewToggle from '../components/shared/ClaudeViewToggle';
 import ModelSelector from '../components/chat/ModelSelector';
@@ -67,7 +68,20 @@ export default function Chat({ chat: injected, embedded = false, stashTabId }) {
   const showDualChat = useFeature('dualChat');
   const showUnderstanding = useFeature('understandingPanel');
   const showToolCalls = useFeature('toolCallHistory');
+  const showOperators = useFeature('operatorMessages');
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [operatorsOpen, setOperatorsOpen] = useState(false);
+
+  // The tool-calls and operator-messages panels both overlay the chat area, so
+  // only one can be open at a time — opening either closes the other.
+  function toggleTools() {
+    setToolsOpen((v) => !v);
+    setOperatorsOpen(false);
+  }
+  function toggleOperators() {
+    setOperatorsOpen((v) => !v);
+    setToolsOpen(false);
+  }
 
   const scrollRef = useRef(null);
   const stickToBottom = useRef(true);
@@ -212,12 +226,24 @@ export default function Chat({ chat: injected, embedded = false, stashTabId }) {
           <button
             type="button"
             className={`chat__tools${toolsOpen ? ' chat__tools--on' : ''}`}
-            onClick={() => setToolsOpen((v) => !v)}
+            onClick={toggleTools}
             title={t('chat.toolCalls')}
             aria-label={t('chat.toolCalls')}
             aria-pressed={toolsOpen}
           >
             {t('chat.toolCalls')}
+          </button>
+        )}
+        {showOperators && (
+          <button
+            type="button"
+            className={`chat__operators${operatorsOpen ? ' chat__operators--on' : ''}`}
+            onClick={toggleOperators}
+            title={t('chat.operatorMessages')}
+            aria-label={t('chat.operatorMessages')}
+            aria-pressed={operatorsOpen}
+          >
+            {t('chat.operatorMessages')}
           </button>
         )}
         {refresh && (
@@ -284,6 +310,16 @@ export default function Chat({ chat: injected, embedded = false, stashTabId }) {
             streaming={streaming}
             liveToolCalls={liveToolCalls}
             repoId={activeRepoId}
+          />
+        )}
+
+        {/* Operator messages overlay the same chat area as the tool-call drawer
+            (mutually exclusive). Purely client-side over the loaded messages. */}
+        {showOperators && (
+          <OperatorMessagesPanel
+            open={operatorsOpen}
+            onClose={() => setOperatorsOpen(false)}
+            messages={messages}
           />
         )}
       </div>
