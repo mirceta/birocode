@@ -20,10 +20,11 @@
 
   <ItemGroup>
     <!-- Reused, shared Claude gateway client (openspec change discover-local-apps).
-         Same client web-flow-autodev uses; requires the prg checkout at this sibling
-         path and the ClaudeMonitor gateway running on :5123. See
+         Same client web-flow-autodev uses; needs the ClaudeMonitor gateway on :5123.
+         The client project lives WITH the ClaudeMonitor backend in birokrat-ai-platform
+         (it was previously mis-filed under a `prg/agentic-workflows` checkout). See
          openspec/changes/discover-local-apps/design.md (D2). -->
-    <ProjectReference Include="..\..\prg\agentic-workflows\ClaudeMonitor.Client\ClaudeMonitor.Client.csproj" />
+    <ProjectReference Include="..\..\birokrat-ai-platform\ClaudeMonitor\ClaudeMonitor.Client\ClaudeMonitor.Client.csproj" />
   </ItemGroup>
 
   <ItemGroup>

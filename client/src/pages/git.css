@@ -278,6 +278,40 @@
   border-top: 1px solid var(--color-border);
 }
 
+.git-review__picker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 4px;
+}
+
+.git-review__picker-label {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.git-review__picker-select {
+  font: inherit;
+  font-size: 12px;
+  background: var(--color-bg);
+  color: inherit;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 3px 6px;
+  max-width: 320px;
+}
+
+.git-review__picker-select:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.git-review__picker-error {
+  font-size: 12px;
+  color: #b58900;
+}
+
 .git-review__hint {
   margin: 10px 0 8px;
   font-size: 12px;

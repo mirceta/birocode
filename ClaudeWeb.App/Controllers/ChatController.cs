@@ -98,6 +98,9 @@ public class ChatController : ControllerBase
         var model = request?.Model;
         var path = repo.Path;
         var readOnly = lane == "ask"; // the ask lane runs claude in read-only plan mode
+        // Per-project permission preset (openspec add-per-project-claude-permissions):
+        // scopes this repo's chat claude -p call. Null ⇒ Read-only (the safe default).
+        var permissionPolicy = repo.PermissionPolicy;
         _ = Task.Run(async () =>
         {
             try
@@ -109,7 +112,8 @@ public class ChatController : ControllerBase
                     model: model,
                     emit: session.EmitAsync,
                     ct: session.Cts.Token,
-                    readOnly: readOnly);
+                    readOnly: readOnly,
+                    permissionPolicy: permissionPolicy);
             }
             catch (Exception ex)
             {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiGet } from '../api/client';
 import { friendlyDate } from '../components/chat/formatDate';
 import { useT } from '../i18n/LanguageContext';
@@ -8,7 +8,8 @@ import { useT } from '../i18n/LanguageContext';
 // commits unique to it (base..HEAD) and the cumulative changed-file list
 // (base...HEAD). Read-only; distinct from the working-tree status above. Each
 // file's full patch is fetched lazily on expand so a huge diff never ships up
-// front.
+// front. The base is auto-detected but Operator-overridable via the picker
+// (plans/.../add-selectable-review-base).
 function statusClass(s) {
   switch (s) {
     case 'A': return 'add';
@@ -19,19 +20,23 @@ function statusClass(s) {
   }
 }
 
-function FileRow({ file }) {
+function FileRow({ file, baseRef }) {
   const { t } = useT();
   const [open, setOpen] = useState(false);
   const [patch, setPatch] = useState(null); // { text, truncated } | 'error' | null
   const [loading, setLoading] = useState(false);
 
+  // A base change above resets this row entirely (key= path|base in the parent),
+  // so we never need to invalidate within a row instance.
   const toggle = async () => {
     const next = !open;
     setOpen(next);
     if (next && patch === null && !loading) {
       setLoading(true);
       try {
-        const r = await apiGet(`/git/review/file?path=${encodeURIComponent(file.path)}`);
+        const q = `path=${encodeURIComponent(file.path)}`
+          + (baseRef ? `&base=${encodeURIComponent(baseRef)}` : '');
+        const r = await apiGet(`/git/review/file?${q}`);
         setPatch({ text: r.patch, truncated: r.truncated });
       } catch {
         setPatch('error');
@@ -79,26 +84,93 @@ function FileRow({ file }) {
   );
 }
 
+const STORAGE_PREFIX = 'claudeweb_reviewBase_';
+function readStoredBase(repoId) {
+  if (!repoId) return null;
+  try {
+    return localStorage.getItem(STORAGE_PREFIX + repoId) || null;
+  } catch {
+    return null;
+  }
+}
+function writeStoredBase(repoId, ref) {
+  if (!repoId) return;
+  try {
+    if (ref) localStorage.setItem(STORAGE_PREFIX + repoId, ref);
+    else localStorage.removeItem(STORAGE_PREFIX + repoId);
+  } catch { /* private mode etc. — silently skip */ }
+}
+
 export default function BranchReview({ branch, repoId }) {
   const { t } = useT();
   const [review, setReview] = useState(null);
   const [open, setOpen] = useState(false);
+  const [bases, setBases] = useState(null); // { default, bases:[{ref,kind}] } | 'error' | null
+  // null = "use server default once review loads"; string = explicit pick.
+  const [selectedBase, setSelectedBase] = useState(null);
 
-  const load = useCallback(async () => {
+  // Reset picker state when the repo changes; rehydrate the stored pick.
+  useEffect(() => {
+    setSelectedBase(readStoredBase(repoId));
+    setBases(null);
+  }, [repoId]);
+
+  const load = useCallback(async (baseParam) => {
     try {
-      setReview(await apiGet('/git/review'));
+      const q = baseParam ? `?base=${encodeURIComponent(baseParam)}` : '';
+      setReview(await apiGet(`/git/review${q}`));
     } catch {
       setReview(null);
     }
   }, []);
 
-  // Reload when the branch or repo changes (best-effort, never blocks the tab).
-  useEffect(() => { load(); }, [load, branch, repoId]);
+  useEffect(() => {
+    load(selectedBase);
+  }, [load, branch, repoId, selectedBase]);
+
+  // Fetch the candidate-bases list once per repo (lazy: only when the review
+  // is actually shown — saves the call on non-feature branches).
+  useEffect(() => {
+    if (!review?.isFeatureBranch || bases) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await apiGet('/git/review/bases');
+        if (!cancelled) setBases(r);
+      } catch {
+        if (!cancelled) setBases('error');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [review?.isFeatureBranch, bases]);
+
+  // Pre-select stored base if still present in the list; else fall back to the
+  // server default. Only runs when selectedBase is null (no explicit pick yet).
+  useEffect(() => {
+    if (selectedBase || !bases || bases === 'error') return;
+    const stored = readStoredBase(repoId);
+    const known = bases.bases?.some((b) => b.ref === stored);
+    if (stored && known) setSelectedBase(stored);
+    else if (bases.default) setSelectedBase(bases.default);
+  }, [bases, repoId, selectedBase]);
+
+  const onPickBase = useCallback((ref) => {
+    setSelectedBase(ref || null);
+    writeStoredBase(repoId, ref || null);
+  }, [repoId]);
+
+  // The base actually used by the displayed review (server-truthful).
+  const usedBase = review?.base || selectedBase || null;
+
+  // Stable key so each file row resets its expanded patch when the base changes.
+  const fileKeySuffix = useMemo(() => usedBase || '', [usedBase]);
 
   if (!review || !review.isFeatureBranch) return null;
 
   const commits = review.commits || [];
   const files = review.files || [];
+  const basesList = bases && bases !== 'error' ? bases.bases || [] : [];
+  const serverDefault = bases && bases !== 'error' ? bases.default : null;
 
   return (
     <section className="git-review">
@@ -120,6 +192,39 @@ export default function BranchReview({ branch, repoId }) {
 
       {open && (
         <div className="git-review__body">
+          <div className="git-review__picker">
+            <label className="git-review__picker-label" htmlFor="git-review-base">
+              {t('git.reviewBaseLabel')}
+            </label>
+            <select
+              id="git-review-base"
+              className="git-review__picker-select"
+              aria-label={t('git.reviewBaseAria')}
+              value={usedBase || ''}
+              disabled={!bases || bases === 'error'}
+              onChange={(e) => onPickBase(e.target.value)}
+            >
+              {/* Always include the currently-used base — covers the case where
+                  the list hasn't loaded yet or the server picked something the
+                  list doesn't echo (it always should, but be defensive). */}
+              {usedBase && !basesList.some((b) => b.ref === usedBase) && (
+                <option value={usedBase}>{usedBase}</option>
+              )}
+              {basesList.map((b) => (
+                <option key={`${b.kind}:${b.ref}`} value={b.ref}>
+                  {b.ref === serverDefault
+                    ? t('git.reviewBaseDefault', { ref: b.ref })
+                    : b.ref}
+                </option>
+              ))}
+            </select>
+            {bases === 'error' && (
+              <span className="git-review__picker-error">
+                {t('git.reviewBaseLoadError')}
+              </span>
+            )}
+          </div>
+
           <p className="git-review__hint">
             {t('git.reviewHint', { base: review.base })}
             {review.mergeBase
@@ -155,7 +260,7 @@ export default function BranchReview({ branch, repoId }) {
           ) : (
             <ul className="git-rvfiles">
               {files.map((f) => (
-                <FileRow key={f.path} file={f} />
+                <FileRow key={`${f.path}|${fileKeySuffix}`} file={f} baseRef={usedBase} />
               ))}
             </ul>
           )}

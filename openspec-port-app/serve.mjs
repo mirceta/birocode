@@ -32,18 +32,50 @@
 //                                     openspec/changes/archive/<id>/ (the CLI can't
 //                                     show archives), in the same drill-in shape.
 //
-// Run:  node serve.mjs            (defaults to port 5310)
-//       PORT=1234 node serve.mjs  (any other port)
+// Run:  node serve.mjs                                   (port 5310; inspects the repo this app sits in)
+//       PORT=1234 node serve.mjs                         (any other port)
+//       OPENSPEC_REPO_ROOT=C:\path\to\repo node serve.mjs (default target = ANY repo, no copy)
+// The Cockpit tab can also override the target per request via a `root` textbox —
+// no restart; the env var / app-parent is just the pre-filled default.
 // No dependencies — Node's built-in http/fs/child_process only.
 
 import { createServer } from 'node:http';
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, normalize } from 'node:path';
 import { execFile } from 'node:child_process';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));     // openspec-port-app/
-const REPO_ROOT = dirname(ROOT);                          // repo root — where openspec/ lives
+// The repo this Control Room inspects, by precedence: a per-request `root` from
+// the Cockpit UI (see resolveRoot), then OPENSPEC_REPO_ROOT set at launch, then
+// the folder that CONTAINS this app (so a copy dropped into a repo "just works").
+// One running instance can thus point at any repo on the host — env var at launch
+// OR typed into the Cockpit at runtime, no restart. Stays a fully independent
+// local app; the target is configuration, not code.
+const DEFAULT_ROOT = process.env.OPENSPEC_REPO_ROOT || dirname(ROOT);
+
+// Resolve the repo a single request targets. Empty → the launch default (trusted,
+// no check). A supplied path must be an existing directory; anything else is a
+// clean userFacing error so the UI never silently reads the wrong place. Loopback
+// only and operator-driven, so an arbitrary existing dir is acceptable — the same
+// trust the env var already granted; we only reject non-directories.
+async function resolveRoot(raw) {
+  const v = String(raw || '').trim();
+  if (!v) return DEFAULT_ROOT;
+  let st;
+  try { st = await stat(v); }
+  catch {
+    const err = new Error(`repo root not found: "${v}"`);
+    err.userFacing = true;
+    throw err;
+  }
+  if (!st.isDirectory()) {
+    const err = new Error(`repo root is not a directory: "${v}"`);
+    err.userFacing = true;
+    throw err;
+  }
+  return normalize(v);
+}
 const PORT = Number(process.env.PORT) || 5310;
 const EXEC_TIMEOUT_MS = 30_000;
 const EXEC_MAXBUF = 4 * 1024 * 1024;
@@ -88,14 +120,14 @@ const ACTIONS = {
   'git-status':      ()  => ['git', 'status', '--short', '--branch'],
 };
 
-function runExec(argv) {
+function runExec(argv, cwd = DEFAULT_ROOT) {
   return new Promise((resolve) => {
     const [file, ...args] = argv;
     // shell:true so Windows resolves npm shims (openspec.cmd / git.cmd). Safe
     // because every token is a server constant or a SAFE_NAME-validated id.
     execFile(
       file, args,
-      { cwd: REPO_ROOT, timeout: EXEC_TIMEOUT_MS, maxBuffer: EXEC_MAXBUF, shell: true, windowsHide: true },
+      { cwd, timeout: EXEC_TIMEOUT_MS, maxBuffer: EXEC_MAXBUF, shell: true, windowsHide: true },
       (err, stdout, stderr) => {
         const code = err && typeof err.code === 'number' ? err.code : (err ? 1 : 0);
         let extra = '';
@@ -116,8 +148,8 @@ function runExec(argv) {
 // ── Cockpit: read-only state aggregation ─────────────────────────
 // Runs a whitelisted argv and parses its stdout as JSON. Returns the parsed
 // value plus the raw exec result so callers can surface a clean error.
-async function execJson(argv) {
-  const r = await runExec(argv);
+async function execJson(argv, cwd = DEFAULT_ROOT) {
+  const r = await runExec(argv, cwd);
   let json = null, parseError = null;
   if (r.stdout) { try { json = JSON.parse(r.stdout); } catch (e) { parseError = e.message; } }
   return { ok: r.ok && json != null, code: r.code, cmd: r.cmd, json, stderr: r.stderr, parseError };
@@ -126,8 +158,8 @@ async function execJson(argv) {
 // Shipped changes have no CLI listing — read openspec/changes/archive/ directly.
 // Each entry is a `YYYY-MM-DD-<slug>` folder; date = prefix, title = the folder's
 // proposal.md first `# ` heading (falls back to the slug). Newest first.
-async function readArchive() {
-  const dir = join(REPO_ROOT, 'openspec', 'changes', 'archive');
+async function readArchive(root = DEFAULT_ROOT) {
+  const dir = join(root, 'openspec', 'changes', 'archive');
   let entries;
   try { entries = await readdir(dir, { withFileTypes: true }); }
   catch { return []; }                       // no archive yet → empty, not an error
@@ -168,7 +200,7 @@ async function readTasksFromDir(changeDir) {
   }
   return tasks;
 }
-const readTasks = (id) => readTasksFromDir(join(REPO_ROOT, 'openspec', 'changes', id));
+const readTasks = (id, root = DEFAULT_ROOT) => readTasksFromDir(join(root, 'openspec', 'changes', id));
 
 // Archived changes can't be read via `openspec show` (the CLI only knows active
 // changes), so parse a delta `spec.md` straight from disk into the SAME shape the
@@ -200,8 +232,8 @@ function parseDeltaSpec(md, specName) {
 // delta specs parsed from specs/<cap>/spec.md, and its tasks.md checklist.
 // Returns { ok:false } when the folder isn't there — the inspect-twin of show's
 // not-found path. Reads only; never mutates an archived artifact.
-async function readArchivedChange(id) {
-  const base = join(REPO_ROOT, 'openspec', 'changes', 'archive', id);
+async function readArchivedChange(id, root = DEFAULT_ROOT) {
+  const base = join(root, 'openspec', 'changes', 'archive', id);
   try { await readdir(base); }
   catch { return { ok: false, json: null, stderr: `archived change "${id}" not found` }; }
   const slug = (id.match(/^\d{4}-\d{2}-\d{2}-(.+)$/) || [, id])[1];
@@ -229,8 +261,8 @@ async function readArchivedChange(id) {
 // operations (ADDED / MODIFIED / REMOVED). Cheap — active changes are few, and
 // it's the same on-disk read the drill-in already does. Lets the Cockpit draw
 // the change↔baseline cross-link without a second round-trip. Reads only.
-async function changeTouches(name) {
-  const base = join(REPO_ROOT, 'openspec', 'changes', name);
+async function changeTouches(name, root = DEFAULT_ROOT) {
+  const base = join(root, 'openspec', 'changes', name);
   let caps = [];
   try { caps = await readdir(join(base, 'specs'), { withFileTypes: true }); } catch { return []; }
   const touches = [];
@@ -256,13 +288,13 @@ async function readDoc(changeDir, name) {
 // One fetch, four sources. Reads only — never mutates an OpenSpec artifact.
 // `validate --all --strict --json` returns every active change and spec's
 // validity in a single pass; we stamp it onto each item as { valid, issues }.
-async function cockpitState() {
+async function cockpitState(root = DEFAULT_ROOT) {
   const [changesR, specsR, validR] = await Promise.all([
-    execJson(['openspec', 'list', '--json']),
-    execJson(['openspec', 'spec', 'list', '--json']),
-    execJson(['openspec', 'validate', '--all', '--strict', '--json']),
+    execJson(['openspec', 'list', '--json'], root),
+    execJson(['openspec', 'spec', 'list', '--json'], root),
+    execJson(['openspec', 'validate', '--all', '--strict', '--json'], root),
   ]);
-  const archived = await readArchive();
+  const archived = await readArchive(root);
   // validate exits non-zero when something is invalid, so trust json.items
   // regardless of exit code. Key by type:id — validate's id is the change name / spec id.
   const validity = {};
@@ -278,8 +310,9 @@ async function cockpitState() {
   // Enrich each active change with the baseline capabilities its delta specs
   // touch, so the Cockpit can wire the in-flight ↔ baseline cross-link.
   const activeStamped = stamp(activeChanges, 'change', 'name');
-  await Promise.all(activeStamped.map(async (c) => { c.touches = await changeTouches(c.name); }));
+  await Promise.all(activeStamped.map(async (c) => { c.touches = await changeTouches(c.name, root); }));
   return {
+    repoRoot: root,
     activeChanges: activeStamped,
     specs: stamp(specs, 'spec', 'id'),
     archived,
@@ -335,22 +368,26 @@ const server = createServer(async (req, res) => {
     // ── API: GET ./api/cockpit (read-only aggregation) ──
     if (urlPath === '/api/cockpit') {
       if (req.method !== 'GET') { sendJson(res, 405, { error: 'GET only' }); return; }
-      sendJson(res, 200, await cockpitState());
+      let root;
+      try { root = await resolveRoot(new URL(req.url, 'http://localhost').searchParams.get('root')); }
+      catch (e) { sendJson(res, e.userFacing ? 400 : 500, { error: e.userFacing ? e.message : 'resolve failed' }); return; }
+      sendJson(res, 200, await cockpitState(root));
       return;
     }
 
     // ── API: GET ./api/cockpit/show?id=<name> (read-only drill-in) ──
     if (urlPath === '/api/cockpit/show') {
       if (req.method !== 'GET') { sendJson(res, 405, { error: 'GET only' }); return; }
-      let id;
-      try { id = reqName(new URL(req.url, 'http://localhost').searchParams.get('id')); }
-      catch (e) { sendJson(res, 400, { error: e.message }); return; }
-      const data = await execJson(['openspec', 'show', id, '--json']);
+      const params = new URL(req.url, 'http://localhost').searchParams;
+      let id, root;
+      try { id = reqName(params.get('id')); root = await resolveRoot(params.get('root')); }
+      catch (e) { sendJson(res, e.userFacing ? 400 : 500, { error: e.userFacing ? e.message : 'resolve failed' }); return; }
+      const data = await execJson(['openspec', 'show', id, '--json'], root);
       // For a change (has deltas), attach the artifacts show --json omits: the
       // tasks.md checklist and the proposal.md / design.md prose.
       if (data.json && Array.isArray(data.json.deltas)) {
-        const dir = join(REPO_ROOT, 'openspec', 'changes', id);
-        data.tasks = await readTasks(id);
+        const dir = join(root, 'openspec', 'changes', id);
+        data.tasks = await readTasks(id, root);
         data.proposal = await readDoc(dir, 'proposal.md');
         data.design = await readDoc(dir, 'design.md');
       }
@@ -362,10 +399,11 @@ const server = createServer(async (req, res) => {
     // Archived changes are invisible to `openspec show`, so read the folder directly.
     if (urlPath === '/api/cockpit/archived') {
       if (req.method !== 'GET') { sendJson(res, 405, { error: 'GET only' }); return; }
-      let id;
-      try { id = reqName(new URL(req.url, 'http://localhost').searchParams.get('id')); }
-      catch (e) { sendJson(res, 400, { error: e.message }); return; }
-      sendJson(res, 200, await readArchivedChange(id));
+      const params = new URL(req.url, 'http://localhost').searchParams;
+      let id, root;
+      try { id = reqName(params.get('id')); root = await resolveRoot(params.get('root')); }
+      catch (e) { sendJson(res, e.userFacing ? 400 : 500, { error: e.userFacing ? e.message : 'resolve failed' }); return; }
+      sendJson(res, 200, await readArchivedChange(id, root));
       return;
     }
 
@@ -396,6 +434,9 @@ server.listen(PORT, () => {
   console.log('OpenSpec-port Control Room serving on:');
   console.log('  http://127.0.0.1:' + PORT + '   (IPv4)');
   console.log('  http://[::1]:' + PORT + '       (IPv6)');
-  console.log('  exec API: POST /api/exec  (cwd: ' + REPO_ROOT + ')');
+  console.log('  default repo: ' + DEFAULT_ROOT
+    + (process.env.OPENSPEC_REPO_ROOT ? '  (via OPENSPEC_REPO_ROOT)' : '  (default: app\'s parent)')
+    + '  — Cockpit can override per request');
+  console.log('  exec API: POST /api/exec  (cwd: ' + DEFAULT_ROOT + ')');
   console.log("Register this port as a Local app for the repo, then open the Local tab.");
 });

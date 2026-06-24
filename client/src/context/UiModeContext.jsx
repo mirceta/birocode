@@ -52,6 +52,8 @@ export const FEATURES = {
   toolCallHistory: 'advanced', // Tool calls drawer: consolidated tool-call list for the active conversation (openspec: add-tool-call-history)
   promptExpand: 'advanced', // composer button that opens the current draft in a large editor popup (openspec: add-prompt-expand-popup)
   localAppDiscovery: 'advanced', // "Discover local apps" button in each agent dock: read-only agent scan → {name,port} (openspec: discover-local-apps)
+  permissionBadge: 'advanced', // read-only preset badge on each dashboard agent dock; config stays desktop-only (openspec: add-per-project-claude-permissions)
+  paneSpanButtons: 'advanced', // -/+ span steppers in each multi-pane top bar; reuses the Settings tabWidths span (openspec: add-pane-span-buttons)
 };
 
 const MODE_KEY = 'claudeweb_ui_mode';
