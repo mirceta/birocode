@@ -58,14 +58,17 @@
 > project** (manual/headless verification throughout), so 7.1 is recorded as compile + reasoned
 > verification; 7.2/7.4 need the running app + a phone and are left for the Operator.
 
-- [~] 7.1 No test project in the repo. Verified by construction/inspection instead: gate logic
-      (approved-IP pass / cookie pass / no-cookie 403), mint guard (only on approved IP + no existing
-      cookie), revoke paths, sliding expiry. Standing up an xUnit project is a separate decision.
+- [x] 7.1 No test project in the repo (an xUnit suite is a separate decision), so verified by a
+      **runtime smoke test** — isolated instance (own port + `CLAUDEWEB_DATADIR`), curl: health 200;
+      unapproved IP no-cookie → 403; approved login → 200 + `claudeweb_device` set (HttpOnly,
+      SameSite, 180d); unapproved IP + valid cookie → 200 (bypass); unapproved IP + bogus cookie →
+      403; second login with cookie → no re-mint; `devices.json` holds one hashed token tagged
+      "localhost" with the admitted `LastIp`. Revoke/RevokeByName remain code-verified (desktop-only).
 - [ ] 7.2 Manual (Operator): phone approved once → confirm cookie set → Wi-Fi→4G IP change keeps access
       with no desktop action → clear cookies → confirm new-IP visit is `403`'d → revoke device in GUI →
       confirm next new-IP visit is `403`'d.
 - [x] 7.3 `127.0.0.1` seed is untouched (`IpAllowlistService.Load` still seeds it) — host never self-locked.
-- [~] 7.4 Permission removal — code-verified: `GET /api/repos` no longer emits `permissionPolicy`;
-      preset picker + web badge removed; `RepositoryConfig` drops the field so old `repositories.json`
-      loads (System.Text.Json ignores the unknown key). Runtime check (a formerly Read-only project
-      now edits + runs shell) needs the running app — left for the Operator with 7.2.
+- [x] 7.4 Permission removal — **runtime-confirmed** `GET /api/repos` no longer emits
+      `permissionPolicy` (smoke test); preset picker + web badge removed; `RepositoryConfig` drops the
+      field so old `repositories.json` loads (System.Text.Json ignores the unknown key). The behavioural
+      check (a formerly Read-only project now edits + runs shell) rides along with the 7.2 phone session.
