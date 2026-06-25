@@ -35,13 +35,33 @@
 - [ ] 5.1 Add `DeviceCookieDays` (default e.g. 180) to `appsettings.json` + `Models/AppConfig.cs`; wire into
       the cookie Max-Age and sliding window.
 
-## 6. Verify
+## 6. Remove the per-project permission system
 
-- [ ] 6.1 Integration tests: approved-IP pass; unapproved-IP + valid cookie pass (+ optional record);
+- [ ] 6.1 `CliRunnerService` — delete `ApplyPermissionFlags` + `StandardDenySettings`; stop passing
+      `permissionPolicy`; chat runs with no `--permission-mode` / deny `--settings` injected.
+- [ ] 6.2 `ChatController` — stop reading/threading `repo.PermissionPolicy`; keep the user-selectable
+      read-only "ask" mode as-is.
+- [ ] 6.3 `RepositoryConfig` / `RepositoryRegistry` — remove `PermissionPolicy`, `NormalizePolicy`,
+      `SetPermissionPolicy`; load existing `repositories.json` ignoring any stored field.
+- [ ] 6.4 `RepoController` — drop `permissionPolicy` from `GET /api/repos`.
+- [ ] 6.5 Desktop `RepositoriesForm` — remove the "Chat permissions" column, the "Permissions…"
+      button, and the preset dialog.
+- [ ] 6.6 Frontend — delete `PermissionBadge.jsx` and its dock usage; drop `permissionBadge` from the
+      UiMode feature map.
+- [ ] 6.7 Docs/spec — on archive, the `project-permissions` baseline spec is removed (this change's
+      REMOVED delta drives it).
+- [ ] 6.8 README/self-dev note — recommend running the harness under a **dedicated least-privilege OS
+      account** (the trust boundary is now that account).
+
+## 7. Verify
+
+- [ ] 7.1 Integration tests: approved-IP pass; unapproved-IP + valid cookie pass (+ optional record);
       unapproved-IP + no cookie → `403` + rejection page; unapproved-IP + revoked/expired cookie →
       `403`; cookie minted only on an admitted login, never on a `403`'d attempt; revoke → device
       `403`s next time; sliding-expiry renews on use.
-- [ ] 6.2 Manual: phone approved once → confirm cookie set → Wi-Fi→4G IP change keeps access with no
+- [ ] 7.2 Manual: phone approved once → confirm cookie set → Wi-Fi→4G IP change keeps access with no
       desktop action → clear cookies → confirm new-IP visit is `403`'d → revoke device in GUI →
       confirm next new-IP visit is `403`'d.
-- [ ] 6.3 Confirm `127.0.0.1` stays seeded/approved so the host is never self-locked.
+- [ ] 7.3 Confirm `127.0.0.1` stays seeded/approved so the host is never self-locked.
+- [ ] 7.4 Permission removal: a formerly Read-only project can now edit + run shell; `GET /api/repos`
+      omits `permissionPolicy`; preset picker + web badge gone; old `repositories.json` still loads.

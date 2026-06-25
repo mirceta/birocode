@@ -162,6 +162,54 @@ loses it and must be re-approved. This is the trade `proposal.md` flags under th
 "warn before breaking a convention" rule — here, knowingly making the gate trust a cookie as well
 as an IP.
 
+## Removing the permission system — the trust boundary becomes the OS account
+
+This change also removes the `project-permissions` capability. The rationale is that we are
+redefining the access model wholesale: **the two gates are the entire authorization system.**
+Once a request clears the IP/cookie gate and the password gate, it is fully trusted; there is no
+second, in-app layer deciding what it may *do*. The only remaining boundary is the OS account the
+harness process runs as.
+
+**What exists today.** `project-permissions` assigns each registered project a preset —
+Read-only / Edit-only / Standard / Full — and `CliRunnerService.ApplyPermissionFlags` injects the
+matching `--permission-mode` / deny-list `--settings` into every `claude -p` call. Unconfigured
+projects default to **Read-only** ("safe-by-default"), and **Standard** carries a denylist against
+destructive/exfiltration shell (`rm -rf`, `git push --force`, `curl`/`wget`). After this change all
+of that is gone: every chat call runs unrestricted.
+
+**Why it's defensible.** The presets were a *second* trust tier *inside* an already-authenticated
+session — useful when you don't fully trust who's past the gates, but redundant once the model is
+"only my hand-approved friends get in, and I trust them completely." For a single-Operator harness
+with a handful of vetted devices, one clear boundary (the gates) beats two overlapping ones.
+
+**What it honestly costs — surfaced per the repo's first convention.** It inverts the documented
+*Read-only default* to **full access by default** and deletes the destructive-action denylist. So:
+
+- A passed-both-gates user (or a compromised cookie+password) can now run **arbitrary shell and
+  network actions as the harness's OS account, machine-wide** — not just within a repo, and not
+  read-only. The worst-case blast radius of the auth layer failing grows accordingly.
+- **The boundary is the *process* account, not a per-user OS identity.** The End User never logs
+  into Windows; "bounded by the OS account you log in as" really means *the account that launched
+  the harness*. If that's the Operator's everyday admin account, "full access" inherits admin
+  rights over the whole box.
+
+**Mitigation of record.** Run the harness under a **dedicated least-privilege Windows account**
+(its own user, access only to the workspace and what the Product needs). Then "do whatever you want,
+bounded by the OS account" is a *sized* sandbox you chose, not inherited admin. This pairs with the
+auth layer: revocable HttpOnly cookies + a small OS account keep a worst-case breach contained.
+
+**Scope boundary (what is *not* removed, and why).** These are not per-user authorization, so they
+stay unless separately decided:
+
+- the **IP + password gates** (the auth model itself);
+- **`X-Repo-Id`** — repo *routing*, not access control (it only selects which project a request
+  targets; everyone past the gates can already target any repo);
+- repo **visibility** (basic/advanced) — a client-side UI filter, never a server boundary;
+- the **AutopilotGate** master-switch — a host-only on/off for a whole experimental feature, not a
+  per-user permission;
+- the user-**selectable** read-only "ask" mode — a tool the user opts into, not a restriction
+  imposed on them.
+
 ## Verification posture
 
 - **Unit/integration:** approved-IP pass; unapproved-IP + valid cookie pass (+ optional IP record);
@@ -175,6 +223,10 @@ as an IP.
 - **Self-lockout guard:** B only ever *adds* an admit path for already-approved devices and leaves
   the desktop approve/remove path untouched; `127.0.0.1` stays seeded, so the host is never
   self-locked.
+- **Permission removal:** a chat turn on a formerly Read-only/Standard project can now edit files
+  and run shell/network actions; `GET /api/repos` no longer returns `permissionPolicy`; the desktop
+  preset picker and the web badge are gone; `repositories.json` records load fine with the
+  `PermissionPolicy` field ignored/dropped.
 
 ## Sources (research grounding for the alternatives)
 

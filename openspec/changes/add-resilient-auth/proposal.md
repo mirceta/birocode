@@ -42,6 +42,29 @@ forgotten.
 - **The password/session layer is unchanged** and remains the second factor behind the gate, so
   a leaked cookie still faces the password.
 
+### Also in this change: remove the per-project permission system
+
+Since this change rewrites the access model, it also **removes the `project-permissions`
+capability entirely**. The premise is deliberate: the two gates *are* the whole authorization
+model. Anyone who clears both gates is fully trusted, and the only remaining boundary is the **OS
+account the harness process runs as** — there is no second, in-app layer rationing what a passed
+user may do.
+
+- **Drop the per-project presets.** Remove the Read-only / Edit-only / Standard / Full preset, its
+  storage (`RepositoryConfig.PermissionPolicy` in `repositories.json`), the desktop preset picker,
+  and the read-only web badge.
+- **Every chat runs unrestricted.** `CliRunnerService.ApplyPermissionFlags` stops injecting
+  `--permission-mode` / deny-list `--settings` into `claude -p`; calls run at full access, bounded
+  only by the harness's OS account.
+- **Explicitly *not* removed** (these are not per-user authorization): the IP + password gates;
+  `X-Repo-Id` repo routing; the basic/advanced repo **visibility** (UI-only); the **AutopilotGate**
+  feature master-switch; and the user-*selectable* read-only "ask" mode (a chosen tool, not an
+  imposed restriction). Any of these can be folded in later if wanted.
+
+This is a real reduction in safety-by-default (see `design.md` → "Removing the permission system");
+the recommended mitigation — running the harness under a **dedicated least-privilege OS account** —
+is what makes "bounded by the OS account" a sized boundary rather than inherited admin rights.
+
 The full set of alternatives considered — drop the IP gate, the earlier *soft fall-through* idea
 (rejected: it would have exposed the login to strangers), a knowledge-based questionnaire
 (rejected: weak), TOTP, passkeys/WebAuthn, Cloudflare Access / Tailscale, client-cert mTLS — and
@@ -49,7 +72,17 @@ the dimension-by-dimension comparison are in **`design.md`**.
 
 ## Impact
 
-- **Affected specs:** `access-control` (new capability, seeded by this change's delta).
+- **Affected specs:** `access-control` (new capability, seeded by this change's delta);
+  `project-permissions` (**removed** — its requirements are deleted via this change's delta and the
+  baseline spec is dropped on archive).
+- **Affected code (removed):** `ClaudeWeb.App/Models/RepositoryConfig.cs` (`PermissionPolicy` field);
+  `ClaudeWeb.App/Services/Repositories/RepositoryRegistry.cs` (`PermissionPolicy` / `NormalizePolicy`
+  / `SetPermissionPolicy`); `ClaudeWeb.App/Services/Chat/CliRunnerService.cs`
+  (`ApplyPermissionFlags` + `StandardDenySettings` — runs unrestricted);
+  `ClaudeWeb.App/Controllers/ChatController.cs` (stop threading `permissionPolicy`);
+  `ClaudeWeb.App/Controllers/RepoController.cs` (drop `permissionPolicy` from `GET /api/repos`);
+  `ClaudeWeb.App/UI/RepositoriesForm.cs` (preset picker + column);
+  `client/src/components/dashboard/PermissionBadge.jsx` (delete) and its dock usage.
 - **Affected code (edited):** `ClaudeWeb.App/Services/IpFilter/IpFilterMiddleware.cs` (admit on a
   valid device cookie as well as an approved IP; otherwise `403` exactly as today);
   `ClaudeWeb.App/Services/Auth/AuthService.cs` + `AuthController.cs` (mint/validate/revoke the
@@ -62,6 +95,15 @@ the dimension-by-dimension comparison are in **`design.md`**.
   alternatives/follow-ups in `design.md`, not built here. No change to the PBKDF2/throttle internals.
 - **Security note (surfaced per the repo's first convention):** this change *preserves* the strict
   IP gate from `plans/auth-ip-filter.md` for strangers — it does **not** soften it. The only new
-  exposure is that a **stolen, un-revoked, HttpOnly device cookie** can skip the IP check from a new
+  *exposure* is that a **stolen, un-revoked, HttpOnly device cookie** can skip the IP check from a new
   address; `design.md` quantifies that delta and the mitigations (HttpOnly+Secure, server-side
   revocation, the password second factor, device≠person re-approval on a wiped device).
+- **Security note 2 — removing `project-permissions` (surfaced per the repo's first convention):**
+  this knowingly inverts the spec's documented *safe-by-default Read-only* posture to **full access
+  by default**, and deletes the Standard denylist that blocked destructive/exfiltration shell
+  (`rm -rf`, `git push --force`, `curl`/`wget`). Combined with the cookie, the worst-case blast
+  radius of a compromised cookie+password grows from "read-only on one repo" to **full control of
+  the machine as the harness's OS account**. This is an accepted trade (the two gates are the whole
+  trust model); the mitigation of record is to run the harness under a **dedicated least-privilege
+  OS account** so that boundary is sized deliberately. The End User never authenticates to Windows,
+  so the boundary is the *harness process's* account, not any per-user OS identity.

@@ -77,3 +77,20 @@ guest SHALL still immediately terminate that IP's in-flight connections.
 
 - **WHEN** a new visitor is `403`'d and the Operator approves their IP from the desktop GUI
 - **THEN** the visitor is admitted and, on a successful login, receives a trusted-device cookie for later IP changes
+
+### Requirement: Authorization ends at the two gates
+
+The system SHALL treat the IP/cookie gate and the password gate as the entire authorization model:
+any request that clears both is fully trusted and SHALL NOT be subject to any further in-app
+permission, role, or per-project scope check. Chat calls SHALL run unrestricted, bounded only by the
+operating-system account the harness process runs as.
+
+#### Scenario: A passed request runs unrestricted
+
+- **WHEN** a request has cleared both the IP/cookie gate and the password gate and drives a chat turn
+- **THEN** no per-project permission preset or other in-app authorization limits the actions it may take, and the agent may read, edit, and run shell/network actions subject only to the harness's OS account
+
+#### Scenario: No project is restricted by a stored preset
+
+- **WHEN** a chat turn runs for any registered project, regardless of any previously stored permission preset
+- **THEN** no permission flags are injected into the `claude -p` call and the project is not constrained beyond the OS account
