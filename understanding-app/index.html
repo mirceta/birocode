@@ -111,6 +111,16 @@
   .chk{font-size:13px;margin:5px 0;display:flex;gap:8px;align-items:start}
   .chk .t{color:var(--ok);flex:none;font-weight:700}
   .chk .w{color:var(--warn);flex:none;font-weight:700}
+  .chk .x{color:var(--bad);flex:none;font-weight:700}
+  /* whole-model view */
+  .stack{display:flex;flex-direction:column;gap:6px}
+  .slayer{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12px}
+  .slayer.gone{opacity:.5;border-style:dashed}
+  .slayer.gone s{color:var(--mut)}
+  .slayer.changed{border-color:var(--ok);background:#13211a}
+  .reach{font-size:12px;padding:7px 9px;border-radius:8px;margin:5px 0;border:1px solid var(--line);display:flex;gap:8px;align-items:center}
+  .reach.hit{background:#2b1d1d;border-left:3px solid var(--bad)}
+  .reach.safe{opacity:.55;border-left:3px solid #3a4250}
 </style>
 </head>
 <body>
@@ -127,6 +137,7 @@
     <button class="tab" data-v="tj">⑤ Two jobs: invisibility vs. the lock</button>
     <button class="tab" data-v="ta">⑥ Who actually attacks you</button>
     <button class="tab" data-v="sol">✅ The solution</button>
+    <button class="tab" data-v="model">⑧ The whole model — proposal &amp; design</button>
   </div>
 
   <!-- VIEW 1 -->
@@ -361,6 +372,69 @@
         un-revoked, HttpOnly cookie + the password — a targeted attack only, the reassuringly hard
         chain from tab ⑥. Closeable later by swapping the password factor for a passkey (tab ④).</span></p>
     </div>
+  </section>
+
+  <!-- VIEW 8 -->
+  <section class="view" id="model">
+    <h2>The whole model — what the proposal &amp; design actually change</h2>
+    <p class="note">The change has two halves: <b>(1)</b> remember the device (trusted-device cookie,
+      tabs ①–⑦) and <b>(2)</b> <b>delete the in-app permission layer</b> so the two gates are the
+      <i>entire</i> authorization model. Here's the shape of both.</p>
+
+    <h2 style="margin-top:18px">Before → after: the authorization stack</h2>
+    <div class="solgrid">
+      <div class="solcard"><h4>Before</h4>
+        <div class="stack">
+          <div class="slayer">🕶️ Gate 1 — strict IP allowlist</div>
+          <div class="slayer">🔒 Gate 2 — password / session</div>
+          <div class="slayer">🎚️ Per-project permission preset — Read-only <i>default</i>, Standard denylist (no <code>rm -rf</code>, <code>curl</code>…)</div>
+          <div class="slayer">💻 Runs as the OS account</div>
+        </div></div>
+      <div class="solcard"><h4>After</h4>
+        <div class="stack">
+          <div class="slayer changed">🕶️ Gate 1 — strict IP allowlist <b>OR trusted-device cookie</b></div>
+          <div class="slayer">🔒 Gate 2 — password / session</div>
+          <div class="slayer gone">🎚️ <s>Per-project permission preset</s> — <b>REMOVED</b></div>
+          <div class="slayer changed">💻 <b>Full access</b> — bounded only by the OS account</div>
+        </div></div>
+    </div>
+    <p class="legend">Two edits: Gate 1 gains the cookie (so a rotated IP isn't a re-bar), and the
+      whole permission tier is deleted (so there's no second gate on <i>what</i> a passed user does).</p>
+
+    <h2 style="margin-top:22px">Removing the permission system — what goes, what stays</h2>
+    <div class="solgrid">
+      <div class="solcard" style="border-color:#5a2d2d"><h4>🗑️ Removed</h4>
+        <p class="chk"><span class="x">✗</span><span>The presets (Read-only / Edit-only / Standard / Full)</span></p>
+        <p class="chk"><span class="x">✗</span><span><code>ApplyPermissionFlags</code> + the Standard denylist — chat runs unrestricted</span></p>
+        <p class="chk"><span class="x">✗</span><span>The Read-only <i>safe default</i> for unconfigured projects</span></p>
+        <p class="chk"><span class="x">✗</span><span>Desktop preset picker + the read-only web badge</span></p>
+        <p class="chk"><span class="x">✗</span><span>The <code>project-permissions</code> spec capability</span></p></div>
+      <div class="solcard" style="border-color:#2d5a35"><h4>✅ Kept (not per-user authorization)</h4>
+        <p class="chk"><span class="t">✓</span><span>The IP + password gates — the auth model itself</span></p>
+        <p class="chk"><span class="t">✓</span><span><code>X-Repo-Id</code> — repo <i>routing</i>, not access control</span></p>
+        <p class="chk"><span class="t">✓</span><span>Repo visibility (basic/advanced) — a UI filter only</span></p>
+        <p class="chk"><span class="t">✓</span><span>AutopilotGate — a host-only feature on/off switch</span></p>
+        <p class="chk"><span class="t">✓</span><span>The user-<i>selectable</i> read-only "ask" mode — a chosen tool</span></p></div>
+    </div>
+
+    <h2 style="margin-top:22px">The boundary becomes the OS account — so size it</h2>
+    <p class="note">With the permission tier gone, the only thing limiting a passed user (or a breached
+      cookie + password) is <b>the Windows account the harness process runs as</b> — <i>not</i> a
+      per-user login; the End User never authenticates to Windows. Pick a scenario and see how far a
+      breach reaches:</p>
+    <div class="scen" id="brSel">
+      <button data-s="today" class="active">Today (permissions on)</button>
+      <button data-s="admin">After · harness as your admin account</button>
+      <button data-s="dedi">After · dedicated least-privilege account</button>
+    </div>
+    <div id="brList"></div>
+    <div class="verdict" id="brVerdict" style="margin-top:10px"></div>
+
+    <div class="reframe"><b>The thesis of the design:</b> for a single-Operator harness with a few
+      hand-approved devices, two overlapping trust tiers are redundant — one clear boundary (the
+      gates) beats two. The price is full-access-by-default, so the design's paired recommendation is
+      to run the harness under a <b>dedicated least-privilege OS account</b>: that's what turns
+      "bounded by the OS account" into a sandbox you chose, and keeps a worst-case breach contained.</div>
   </section>
 </main>
 
@@ -717,6 +791,34 @@ document.getElementById('solDots').addEventListener('click',e=>{
 document.getElementById('solPrev').addEventListener('click',()=>{solI=(solI-1+SOL_STEPS.length)%SOL_STEPS.length; renderSol();});
 document.getElementById('solNext').addEventListener('click',()=>{solI=(solI+1)%SOL_STEPS.length; renderSol();});
 
+//// VIEW 8: whole model — blast radius ////
+const BR_ITEMS=['Read repo files','Edit repo files','Run shell in the repo (rm -rf …)',
+  'Network / exfiltrate data','Reach other registered repos','The rest of the machine (other users, system, apps)'];
+const BR_SCEN={
+ today:{name:'Today — permissions on (Read-only safe default)', reach:[1,0,0,0,0,0],
+   v:'A breach is contained to read-only on the selected repo: the preset blocks edits, shell, and exfiltration. Smallest blast radius — but it\'s the safety net this change removes.'},
+ admin:{name:'After removal — harness runs as your everyday admin account', reach:[1,1,1,1,1,1],
+   v:'A breach (stolen cookie + password) becomes full machine control — edit, shell, network, every repo, and everything your admin account can touch. Largest blast radius; this is the setup to avoid.'},
+ dedi:{name:'After removal — harness runs as a dedicated least-privilege account', reach:[1,1,1,1,1,0],
+   v:'Full power inside the harness sandbox (edit / shell / network / all its repos), but the rest of the machine — other users, system config, installed apps — stays out of reach. The recommended setup: "bounded by the OS account" becomes a boundary you actually sized.'},
+};
+let brS='today';
+function renderBR(){
+  const S=BR_SCEN[brS];
+  document.getElementById('brList').innerHTML=BR_ITEMS.map((it,i)=>{
+    const hit=S.reach[i];
+    return `<div class="reach ${hit?'hit':'safe'}"><span>${hit?'⚠️':'🔒'}</span><span>${it}</span>
+      <span style="margin-left:auto;color:${hit?'var(--bad)':'var(--mut)'};font-weight:600">${hit?'reachable':'blocked'}</span></div>`;
+  }).join('');
+  document.getElementById('brVerdict').innerHTML=`<b>${S.name}.</b> ${S.v}`;
+}
+document.getElementById('brSel').addEventListener('click',e=>{
+  if(!e.target.dataset.s)return;
+  brS=e.target.dataset.s;
+  [...document.querySelectorAll('#brSel button')].forEach(b=>b.classList.toggle('active',b===e.target));
+  renderBR();
+});
+
 //// tabs ////
 document.querySelector('.tabs').addEventListener('click',e=>{
   if(!e.target.dataset.v)return;
@@ -724,7 +826,7 @@ document.querySelector('.tabs').addEventListener('click',e=>{
   [...document.querySelectorAll('.view')].forEach(v=>v.classList.toggle('active',v.id===e.target.dataset.v));
 });
 
-renderPipe(); buildMatrix(); renderKba('trivia'); renderHH(0); renderTJ(0); renderTA(); renderSol();
+renderPipe(); buildMatrix(); renderKba('trivia'); renderHH(0); renderTJ(0); renderTA(); renderSol(); renderBR();
 </script>
 </body>
 </html>
