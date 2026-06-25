@@ -98,9 +98,9 @@ public class ChatController : ControllerBase
         var model = request?.Model;
         var path = repo.Path;
         var readOnly = lane == "ask"; // the ask lane runs claude in read-only plan mode
-        // Per-project permission preset (openspec add-per-project-claude-permissions):
-        // scopes this repo's chat claude -p call. Null ⇒ Read-only (the safe default).
-        var permissionPolicy = repo.PermissionPolicy;
+        // Per-project permission presets were removed (openspec add-resilient-auth):
+        // a user past both gates is fully trusted, bounded only by the OS account. The
+        // read-only "ask" lane above remains as a user-selected mode.
         _ = Task.Run(async () =>
         {
             try
@@ -112,8 +112,7 @@ public class ChatController : ControllerBase
                     model: model,
                     emit: session.EmitAsync,
                     ct: session.Cts.Token,
-                    readOnly: readOnly,
-                    permissionPolicy: permissionPolicy);
+                    readOnly: readOnly);
             }
             catch (Exception ex)
             {

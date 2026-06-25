@@ -57,6 +57,16 @@ public class AppConfig
     public string AuthPassword { get; set; } = "changeme";
 
     /// <summary>
+    /// Lifetime, in days, of the trusted-device cookie (openspec add-resilient-auth).
+    /// Minted on a friend's first approved login; thereafter the IP gate admits an
+    /// approved IP OR a valid device cookie, so a rotated 4G IP does not re-bar an
+    /// already-approved device. Sliding — renewed on use. Long by design so the
+    /// "call the Operator" event is rare; a quiet device past the window re-approves
+    /// once. &lt;= 0 falls back to 180.
+    /// </summary>
+    public int DeviceCookieDays { get; set; } = 180;
+
+    /// <summary>
     /// Reverse-proxy addresses whose X-Forwarded-For header is trusted, in
     /// addition to loopback (plans/auth-ip-filter.md §1). Needed when IIS/ARR
     /// runs on a DIFFERENT machine than the harness: without it, every visitor

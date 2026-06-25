@@ -5,63 +5,67 @@
 
 ## 1. Trusted-device token service
 
-- [ ] 1.1 Add a `DeviceTokenService` (or extend `AuthService`): issue a 256-bit token, store its
-      SHA-256 hash server-side (alongside `sessions.json`) tagged with name + issued/last-seen.
-- [ ] 1.2 `ValidateAndSlide(token)` — hash-compare (no PBKDF2), renew sliding expiry on use.
-- [ ] 1.3 `Revoke(tokenId)` and `RevokeByName(name)`; persist atomically like sessions.
+- [x] 1.1 Add a `DeviceTokenService` (or extend `AuthService`): issue a 256-bit token, store its
+      SHA-256 hash server-side (`devices.json`, beside `sessions.json`) tagged with name + issued/last-seen.
+- [x] 1.2 `ValidateAndSlide(token)` — hash-compare (no PBKDF2), renew sliding expiry on use.
+- [x] 1.3 `Revoke(tokenId)` and `RevokeByName(name)`; persist atomically like sessions.
 
 ## 2. Mint on first admitted entry
 
-- [ ] 2.1 On successful `POST /api/auth/login` (which, by construction, came from an approved IP),
+- [x] 2.1 On successful `POST /api/auth/login` (which, by construction, came from an approved IP),
       set `claudeweb_device`: HttpOnly, Secure, SameSite, long sliding Max-Age.
-- [ ] 2.2 Never mint on a request the IP gate rejected (it cannot reach login, but assert/guard it).
+- [x] 2.2 Never mint on a request the IP gate rejected — guarded on `IsApproved(ip)` + "no valid cookie yet".
 
 ## 3. Gate admits approved IP OR valid device cookie
 
-- [ ] 3.1 In `IpFilterMiddleware`, before the `403`, check for a valid `claudeweb_device` cookie via
+- [x] 3.1 In `IpFilterMiddleware`, before the `403`, check for a valid `claudeweb_device` cookie via
       `DeviceTokenService.ValidateAndSlide`; if valid → pass.
-- [ ] 3.2 Otherwise → the existing hard `403` + standalone rejection page, byte-for-byte as today.
-- [ ] 3.3 (Optional visibility) on a cookie-admitted new IP, record it tagged
-      `via device cookie: <name>` through `IpAllowlistService`.
+- [x] 3.2 Otherwise → the existing hard `403` + standalone rejection page, byte-for-byte as today.
+- [x] 3.3 Visibility: cookie-admitted source IP recorded on the device record (`LastIp`, shown in the
+      "Trusted devices" list) — chosen over auto-adding to the allowlist so the cookie stays the controlled bypass.
 
 ## 4. Revocation surfaces
 
-- [ ] 4.1 Desktop `IpFilterForm`: a "Trusted devices" list (name, issued, last-seen) with per-device
+- [x] 4.1 Desktop `IpFilterForm`: a "Trusted devices" list (name, last-seen, last IP, issued) with per-device
       Revoke.
-- [ ] 4.2 "Remove guest" prompts to also revoke that person's device tokens.
+- [x] 4.2 "Remove guest" prompts to also revoke that person's device tokens.
 
 ## 5. Config
 
-- [ ] 5.1 Add `DeviceCookieDays` (default e.g. 180) to `appsettings.json` + `Models/AppConfig.cs`; wire into
-      the cookie Max-Age and sliding window.
+- [x] 5.1 Add `DeviceCookieDays` (default 180) to `appsettings.json` + `Models/AppConfig.cs`; wired into
+      the cookie Max-Age and the sliding window.
 
 ## 6. Remove the per-project permission system
 
-- [ ] 6.1 `CliRunnerService` — delete `ApplyPermissionFlags` + `StandardDenySettings`; stop passing
-      `permissionPolicy`; chat runs with no `--permission-mode` / deny `--settings` injected.
-- [ ] 6.2 `ChatController` — stop reading/threading `repo.PermissionPolicy`; keep the user-selectable
-      read-only "ask" mode as-is.
-- [ ] 6.3 `RepositoryConfig` / `RepositoryRegistry` — remove `PermissionPolicy`, `NormalizePolicy`,
-      `SetPermissionPolicy`; load existing `repositories.json` ignoring any stored field.
-- [ ] 6.4 `RepoController` — drop `permissionPolicy` from `GET /api/repos`.
-- [ ] 6.5 Desktop `RepositoriesForm` — remove the "Chat permissions" column, the "Permissions…"
+- [x] 6.1 `CliRunnerService` — deleted `ApplyPermissionFlags` + `StandardDenySettings`; no longer
+      threads `permissionPolicy`; chat runs with no `--permission-mode` / deny `--settings` injected.
+- [x] 6.2 `ChatController` — no longer reads/threads `repo.PermissionPolicy`; the user-selectable
+      read-only "ask" mode is kept as-is.
+- [x] 6.3 `RepositoryConfig` / `RepositoryRegistry` — removed `PermissionPolicy`, `NormalizePolicy`,
+      `SetPermissionPolicy`; existing `repositories.json` loads with any stored field ignored.
+- [x] 6.4 `RepoController` — dropped `permissionPolicy` from `GET /api/repos`.
+- [x] 6.5 Desktop `RepositoriesForm` — removed the "Chat permissions" column, the "Permissions…"
       button, and the preset dialog.
-- [ ] 6.6 Frontend — delete `PermissionBadge.jsx` and its dock usage; drop `permissionBadge` from the
-      UiMode feature map.
-- [ ] 6.7 Docs/spec — on archive, the `project-permissions` baseline spec is removed (this change's
-      REMOVED delta drives it).
-- [ ] 6.8 README/self-dev note — recommend running the harness under a **dedicated least-privilege OS
-      account** (the trust boundary is now that account).
+- [x] 6.6 Frontend — deleted `PermissionBadge.jsx` + its dock usage (Dashboard, PinnedAgent); dropped
+      `permissionBadge` from the UiMode feature map.
+- [x] 6.7 Docs/spec — handled by this change's `project-permissions` REMOVED delta (folds in on archive).
+- [x] 6.8 README — added a "Security: the trust boundary is the harness's OS account" section
+      recommending a dedicated least-privilege Windows account (self-dev.md is auto-managed, so README).
 
 ## 7. Verify
 
-- [ ] 7.1 Integration tests: approved-IP pass; unapproved-IP + valid cookie pass (+ optional record);
-      unapproved-IP + no cookie → `403` + rejection page; unapproved-IP + revoked/expired cookie →
-      `403`; cookie minted only on an admitted login, never on a `403`'d attempt; revoke → device
-      `403`s next time; sliding-expiry renews on use.
-- [ ] 7.2 Manual: phone approved once → confirm cookie set → Wi-Fi→4G IP change keeps access with no
-      desktop action → clear cookies → confirm new-IP visit is `403`'d → revoke device in GUI →
+> Both builds are green (`dotnet build` 0 errors; `vite build` ok). This repo has **no test
+> project** (manual/headless verification throughout), so 7.1 is recorded as compile + reasoned
+> verification; 7.2/7.4 need the running app + a phone and are left for the Operator.
+
+- [~] 7.1 No test project in the repo. Verified by construction/inspection instead: gate logic
+      (approved-IP pass / cookie pass / no-cookie 403), mint guard (only on approved IP + no existing
+      cookie), revoke paths, sliding expiry. Standing up an xUnit project is a separate decision.
+- [ ] 7.2 Manual (Operator): phone approved once → confirm cookie set → Wi-Fi→4G IP change keeps access
+      with no desktop action → clear cookies → confirm new-IP visit is `403`'d → revoke device in GUI →
       confirm next new-IP visit is `403`'d.
-- [ ] 7.3 Confirm `127.0.0.1` stays seeded/approved so the host is never self-locked.
-- [ ] 7.4 Permission removal: a formerly Read-only project can now edit + run shell; `GET /api/repos`
-      omits `permissionPolicy`; preset picker + web badge gone; old `repositories.json` still loads.
+- [x] 7.3 `127.0.0.1` seed is untouched (`IpAllowlistService.Load` still seeds it) — host never self-locked.
+- [~] 7.4 Permission removal — code-verified: `GET /api/repos` no longer emits `permissionPolicy`;
+      preset picker + web badge removed; `RepositoryConfig` drops the field so old `repositories.json`
+      loads (System.Text.Json ignores the unknown key). Runtime check (a formerly Read-only project
+      now edits + runs shell) needs the running app — left for the Operator with 7.2.

@@ -67,8 +67,7 @@ public class CliRunnerService
         string? model = null,
         Func<object, Task>? emit = null,
         CancellationToken ct = default,
-        bool readOnly = false,
-        string? permissionPolicy = null)
+        bool readOnly = false)
     {
         var resuming = !string.IsNullOrWhiteSpace(sessionId);
 
@@ -90,7 +89,7 @@ public class CliRunnerService
         Process? process = null;
         try
         {
-            var psi = CreateProcessInfo(message, sessionId, workingDirectory, model, readOnly, permissionPolicy);
+            var psi = CreateProcessInfo(message, sessionId, workingDirectory, model, readOnly);
             _logger.Info(resuming
                 ? $"[CLI] Resuming session {Short(sessionId!)} in {workingDirectory}"
                 : $"[CLI] Starting new session in {workingDirectory}");
@@ -632,7 +631,7 @@ public class CliRunnerService
         return cmdFallback ?? "claude.cmd";
     }
 
-    private static ProcessStartInfo CreateProcessInfo(string message, string? sessionId, string? workingDirectory, string? model = null, bool readOnly = false, string? permissionPolicy = null)
+    private static ProcessStartInfo CreateProcessInfo(string message, string? sessionId, string? workingDirectory, string? model = null, bool readOnly = false)
     {
         var psi = new ProcessStartInfo
         {
@@ -664,14 +663,19 @@ public class CliRunnerService
             psi.ArgumentList.Add(model);
         }
 
-        // Permission scope (plans/repo-ask-chat.md + openspec add-per-project-claude-permissions):
-        // the read-only "ask" lane and the per-project preset are composed here as
-        // most-restrictive-wins. Read-only uses plan mode -- it lets the agent read/
-        // search/answer but structurally blocks every mutation (in headless -p mode it
-        // can't approve ExitPlanMode, so Write/Edit/Bash never execute), which is what
+        // Read-only "ask" lane (plans/repo-ask-chat.md): plan mode lets the agent
+        // read/search/answer but structurally blocks every mutation (in headless -p
+        // mode it can't approve ExitPlanMode, so Write/Edit/Bash never execute), which
         // makes a side conversation safe in a building agent's working directory.
-        // (plan verified against claude v2.1.177.)
-        ApplyPermissionFlags(psi, permissionPolicy, readOnly);
+        // This is the ONLY permission scoping left: the per-project preset system was
+        // removed (openspec add-resilient-auth) — a user past both gates is fully
+        // trusted, bounded only by the OS account the harness runs as. The ask lane is
+        // a tool the user opts into, not a restriction imposed on them.
+        if (readOnly)
+        {
+            psi.ArgumentList.Add("--permission-mode");
+            psi.ArgumentList.Add("plan");
+        }
 
         // Force Max-plan / CLI auth -- never pick up an API key from the env.
         psi.EnvironmentVariables.Remove("ANTHROPIC_API_KEY");
@@ -680,56 +684,6 @@ public class CliRunnerService
             psi.WorkingDirectory = workingDirectory;
 
         return psi;
-    }
-
-    // Claude CLI deny-list for the "standard" preset: ordinary in-repo development is
-    // allowed, but destructive/exfiltration actions are denied. Deny rules always win,
-    // so this can only NARROW what the repo's own settings allow. Passed inline to
-    // --settings as a JSON string (per the CLI contract). Curated + conservative;
-    // tune this one constant (verify each rule binds against the live CLI).
-    private const string StandardDenySettings =
-        "{\"permissions\":{\"deny\":[" +
-        "\"Bash(rm:*)\",\"Bash(rmdir:*)\",\"Bash(sudo:*)\"," +
-        "\"Bash(git push --force:*)\",\"Bash(git push -f:*)\"," +
-        "\"Bash(curl:*)\",\"Bash(wget:*)\",\"WebFetch\"]}}";
-
-    // Maps the per-project preset (+ the read-only ask lane) to permission args, applying
-    // most-restrictive-wins (openspec add-per-project-claude-permissions):
-    //   ask lane / "readonly" (the safe default) -> --permission-mode plan (no mutations)
-    //   "editonly"                               -> acceptEdits + deny Bash/WebFetch/WebSearch
-    //                                               (edit this repo only, no scripts/exes/network)
-    //   "standard"                               -> --settings <deny-list> (today + guardrails)
-    //   "full"                                   -> no added restriction
-    private static void ApplyPermissionFlags(ProcessStartInfo psi, string? permissionPolicy, bool readOnly)
-    {
-        var policy = permissionPolicy?.Trim().ToLowerInvariant();
-        if (policy is not ("editonly" or "standard" or "full")) policy = "readonly"; // null/unknown -> safe default
-
-        if (readOnly || policy == "readonly")
-        {
-            psi.ArgumentList.Add("--permission-mode");
-            psi.ArgumentList.Add("plan");
-        }
-        else if (policy == "editonly")
-        {
-            // Repo-scoped, no execution: file edits within the working directory flow
-            // (acceptEdits), but Bash -- the only primitive for running scripts/exes --
-            // and the network tools are denied outright. File tools stay confined to the
-            // working directory by Claude Code's own cwd scoping. (Verified: edits land,
-            // Bash blocked.)
-            psi.ArgumentList.Add("--permission-mode");
-            psi.ArgumentList.Add("acceptEdits");
-            psi.ArgumentList.Add("--disallowedTools");
-            psi.ArgumentList.Add("Bash");
-            psi.ArgumentList.Add("WebFetch");
-            psi.ArgumentList.Add("WebSearch");
-        }
-        else if (policy == "standard")
-        {
-            psi.ArgumentList.Add("--settings");
-            psi.ArgumentList.Add(StandardDenySettings);
-        }
-        // "full" -> no added restriction
     }
 
     private static string Short(string id) => id.Length > 12 ? id[..12] + "..." : id;
