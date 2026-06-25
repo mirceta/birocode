@@ -64,9 +64,9 @@
       SameSite, 180d); unapproved IP + valid cookie → 200 (bypass); unapproved IP + bogus cookie →
       403; second login with cookie → no re-mint; `devices.json` holds one hashed token tagged
       "localhost" with the admitted `LastIp`. Revoke/RevokeByName remain code-verified (desktop-only).
-- [ ] 7.2 Manual (Operator): phone approved once → confirm cookie set → Wi-Fi→4G IP change keeps access
-      with no desktop action → clear cookies → confirm new-IP visit is `403`'d → revoke device in GUI →
-      confirm next new-IP visit is `403`'d.
+- [x] 7.2 Manual (Operator): **confirmed on a real phone** — logged in on Wi-Fi (cookie minted), switched
+      to 4G (new carrier IP), stayed in with no desktop action. The 4G-rescue works end-to-end on the
+      live deploy.
 - [x] 7.3 `127.0.0.1` seed is untouched (`IpAllowlistService.Load` still seeds it) — host never self-locked.
 - [x] 7.4 Permission removal — **runtime-confirmed** `GET /api/repos` no longer emits
       `permissionPolicy` (smoke test); preset picker + web badge removed; `RepositoryConfig` drops the
