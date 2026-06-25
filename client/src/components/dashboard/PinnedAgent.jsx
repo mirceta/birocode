@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Chat from '../../pages/Chat';
 import { apiGet, apiPost } from '../../api/client';
 import { useChatFor } from '../../context/ChatContext';
@@ -91,13 +91,19 @@ export default function PinnedAgent({
   const chatShowing = !showFiles && !openApp;
   const maximized = chatMaximized && chatShowing;
 
-  // "Discover local apps" (openspec discover-local-apps): a read-only agent scan of
-  // THIS dock's repo for self-serving local-app exposures, returning a typed
-  // { name, port } list. Single repo per click (the dock's), via
-  // GET /api/local-apps/discover scoped by X-Repo-Id. Advanced-mode only.
+  // "Discover local apps" (openspec discover-local-apps + discover-local-apps-resilient):
+  // a read-only agent scan of THIS dock's repo for self-serving local-app exposures,
+  // returning a typed { name, port } list. Discovery is now BACKEND-OWNED: the scan
+  // is a per-repo server job, so a refresh mid-scan no longer cancels it or loses the
+  // result. We drive the UI from server state instead of fire-and-forget local state —
+  // on mount/repo-change we GET .../discover/status to reattach (spinner if running,
+  // result/error if it finished while we were away), and the Discover button hits the
+  // start-or-join endpoint then polls status at the dock cadence until terminal.
+  // Single repo per click (the dock's), scoped by X-Repo-Id. Advanced-mode only.
   const canDiscover = useFeature('localAppDiscovery');
-  const [discovering, setDiscovering] = useState(false);
-  const [discovery, setDiscovery] = useState(null); // { apps } | { error } | null
+  const [discovery, setDiscovery] = useState(null); // { status, apps?, error? } | null
+  const discovering = discovery?.status === 'running';
+  const pollRef = useRef(null);
 
   // Register a discovered app as a real local app, closing the loop with the Local
   // tab's name+port form (POST /repos/{id}/localapps). A discovered row whose port
@@ -156,21 +162,65 @@ export default function PinnedAgent({
     }
   };
 
-  const discover = async () => {
-    setDiscovering(true);
-    setDiscovery(null);
+  const stopPoll = () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  };
+
+  // Read the server's current job state for this dock's repo. Stops polling once
+  // the job is no longer running (done/error/idle), so a finished scan settles.
+  const fetchDiscoverStatus = useCallback(async () => {
     try {
-      // X-Repo-Id = this dock's repo, so the server scans only that repo.
+      const r = await apiGet('/local-apps/discover/status', { repoId: tab.repoId });
+      setDiscovery(r);
+      if (r.status !== 'running') stopPoll();
+      return r;
+    } catch {
+      stopPoll();
+      return null;
+    }
+  }, [tab.repoId]);
+
+  const startPoll = () => {
+    if (pollRef.current) return;
+    pollRef.current = setInterval(fetchDiscoverStatus, 5000); // dock cadence
+  };
+
+  // Reattach on mount / repo-change: observe a running scan (show spinner + poll)
+  // or pick up a result/error that landed while this dock was away — without
+  // starting a new scan. Idle (no recent job) just renders the bare button.
+  useEffect(() => {
+    if (!canDiscover) return undefined;
+    let alive = true;
+    setDiscovery(null);
+    (async () => {
+      const r = await fetchDiscoverStatus();
+      if (alive && r?.status === 'running') startPoll();
+    })();
+    return () => {
+      alive = false;
+      stopPoll();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canDiscover, tab.repoId, fetchDiscoverStatus]);
+
+  const discover = async () => {
+    setRegisterErr(null);
+    try {
+      // Start-or-join: X-Repo-Id = this dock's repo, so the server scans only that
+      // repo. Returns the current job state immediately; we drive off server state
+      // and poll until terminal, so a refresh mid-scan re-derives it.
       const r = await apiGet('/local-apps/discover', { repoId: tab.repoId });
-      setDiscovery({ apps: r.apps || [] });
+      setDiscovery(r);
+      if (r.status === 'running') startPoll();
     } catch (err) {
       let text = err.message;
       try {
         text = JSON.parse(err.message).error || text;
       } catch { /* raw text */ }
-      setDiscovery({ error: text });
-    } finally {
-      setDiscovering(false);
+      setDiscovery({ status: 'error', error: text });
     }
   };
 

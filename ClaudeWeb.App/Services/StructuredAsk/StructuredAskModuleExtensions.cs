@@ -16,6 +16,10 @@ public static class StructuredAskModuleExtensions
         // ClaudeMonitor gateway; the ask owns the discovery prompt.
         services.AddSingleton<StructuredAskRunner>();
         services.AddSingleton<LocalAppDiscoveryAsk>();
+        // Backend-owned per-repo discovery job registry (openspec change
+        // discover-local-apps-resilient): singleton so one scan survives client
+        // disconnects and the dock can reattach to it on load.
+        services.AddSingleton<LocalAppDiscoveryJobs>();
         return services;
     }
 }

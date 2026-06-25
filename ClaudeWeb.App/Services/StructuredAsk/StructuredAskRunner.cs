@@ -48,7 +48,19 @@ public class StructuredAskRunner
         string workingDirectory,
         CancellationToken ct = default) where T : class
     {
-        using var claude = new ClaudeMonitorClient(_appName);
+        // Per-call gateway identity (openspec change discover-local-apps-resilient,
+        // task 3): give every call a UNIQUE app name (claudeweb-structured-ask#<id>)
+        // rather than the shared base name. The ClaudeMonitor gateway resolves a
+        // call's response metadata (call number, tokens, cost, duration) via
+        // FindLatestRecord(app) = the highest-CallNumber record for that app name.
+        // Under the shared name, two concurrent discoveries could each pick up the
+        // OTHER's latest record and cross-wire their metadata. A name unique to this
+        // call makes "latest record for this app" unambiguously THIS call's own —
+        // fixing the cross-wiring without any gateway/client change (the gateway
+        // already keys on the app name). Retries within this call reuse the same
+        // unique client, so the final record resolved is still this call's.
+        var callApp = $"{_appName}#{Guid.NewGuid():N}";
+        using var claude = new ClaudeMonitorClient(callApp);
 
         if (!await claude.IsAvailable())
             return StructuredAskResult<T>.Fail(

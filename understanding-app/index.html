@@ -3,14 +3,15 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Maximize chat to fill the dock — Understanding</title>
+<title>Discovery that survives a refresh — Understanding</title>
 <style>
   :root{
     --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --line:#30363d;
     --ink:#e6edf3; --dim:#9aa7b4; --faint:#6b7681;
     --accent:#ffd866;
-    --chat:#3fb950; --chat-bg:#11301c; --chat-line:#1c5130;
-    --chrome:#58a6ff; --chrome-bg:#102945; --chrome-line:#1d456f;
+    --ok:#3fb950; --ok-bg:#11301c; --ok-line:#1c5130;
+    --run:#58a6ff; --run-bg:#102945; --run-line:#1d456f;
+    --bad:#f85149; --bad-bg:#2a1414; --bad-line:#5a2222;
     --gate:#d2a8ff; --gate-bg:#241a37;
   }
   *{box-sizing:border-box}
@@ -21,249 +22,486 @@
     padding:24px clamp(14px,4vw,48px) 64px;
   }
   h1{font-size:clamp(20px,3vw,30px); margin:0 0 6px; letter-spacing:-.01em}
-  .sub{color:var(--dim); max-width:78ch; margin:0 0 22px}
-  code{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; font-size:.88em; color:var(--chrome)}
+  .sub{color:var(--dim); max-width:80ch; margin:0 0 20px}
+  code{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; font-size:.86em; color:var(--run)}
   .mono{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace}
-  .wrap{max-width:1180px; margin:0 auto}
+  .wrap{max-width:1200px; margin:0 auto}
   b{color:var(--ink)}
 
-  .grid{display:grid; grid-template-columns:minmax(300px,360px) 1fr; gap:24px; align-items:start}
-  @media(max-width:880px){ .grid{grid-template-columns:1fr} }
+  .tags{display:flex; gap:8px; flex-wrap:wrap; margin:0 0 24px}
+  .tag{font-size:11px; padding:4px 11px; border-radius:999px; border:1px solid var(--line); color:var(--dim)}
+  .tag b{color:var(--ink); font-weight:650}
 
-  /* ---- the mock dock (the phone tile) ---- */
-  .stage{display:flex; flex-direction:column; align-items:center; gap:14px}
+  /* before/after master toggle */
+  .modebar{display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin:0 0 22px;
+    background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 16px}
+  .modebar .q{color:var(--dim); font-size:13px}
+  .seg{display:inline-flex; border:1px solid var(--line); border-radius:9px; overflow:hidden}
+  .seg button{background:transparent; color:var(--dim); border:0; padding:8px 16px; cursor:pointer;
+    font:inherit; font-size:13px; transition:.15s; font-weight:650}
+  .seg button.on{background:var(--accent); color:#1a1400}
+  .seg button:not(.on):hover{color:var(--ink); background:#222a35}
+  .modetag{margin-left:auto; font-size:12px; color:var(--faint)}
+  .modetag b{color:var(--accent)}
+
+  h2.sec{font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--dim);
+    margin:30px 0 14px; border-top:1px solid var(--line); padding-top:18px}
+
+  .grid{display:grid; grid-template-columns:minmax(290px,330px) 1fr; gap:26px; align-items:start}
+  @media(max-width:900px){ .grid{grid-template-columns:1fr} }
+
+  /* ---- the mock dock ---- */
+  .stage{display:flex; flex-direction:column; align-items:center; gap:13px}
   .phone{
-    width:300px; height:520px; background:#0a0e14; border:1px solid var(--line);
-    border-radius:22px; padding:10px; display:flex; flex-direction:column; gap:6px;
-    box-shadow:0 18px 50px #0009; transition:.2s; position:relative; overflow:hidden;
+    width:300px; background:#0a0e14; border:1px solid var(--line);
+    border-radius:20px; padding:12px; display:flex; flex-direction:column; gap:8px;
+    box-shadow:0 18px 50px #0009; position:relative; min-height:340px;
   }
-  .region{
-    flex:0 0 auto; border-radius:9px; padding:7px 10px; font-size:11px;
-    border:1px solid var(--chrome-line); background:var(--chrome-bg); color:#bcd6f5;
-    display:flex; align-items:center; gap:7px; transition:.28s ease;
-    max-height:60px; opacity:1;
-  }
-  .region .lbl{font-weight:650; letter-spacing:.01em}
-  .region .sel{margin-left:auto; color:var(--faint); font-size:9.5px}
-  .region.bar{background:#11161e; border-color:#222a35; color:#cdd7e2}
-  .region.bar .dot{width:8px;height:8px;border-radius:50%;background:var(--chat);box-shadow:0 0 6px var(--chat)}
-
-  /* the chat screen fills remaining space */
-  .screen{flex:1 1 auto; display:flex; flex-direction:column; min-height:0;
-    border:1px solid var(--chat-line); border-radius:9px; background:#0c130e; overflow:hidden}
-  .chatbar{flex:0 0 auto; display:flex; align-items:center; gap:6px; padding:6px 8px;
-    border-bottom:1px solid #16241a; background:#0e1712}
-  .chatbar .title{font-size:10.5px; color:var(--chat); font-weight:650; letter-spacing:.04em}
-  .chatbar .spacer{flex:1}
-  .tbtn{font-size:10px; padding:3px 8px; border-radius:7px; border:1px solid #24402c;
-    background:#10271a; color:#9fe0b4; cursor:default; display:flex; align-items:center; gap:4px}
-  .mbtn{font-size:10px; padding:3px 8px; border-radius:7px; border:1px solid var(--accent);
-    background:#1c2330; color:var(--accent); cursor:pointer; transition:.15s; display:flex; align-items:center; gap:4px}
-  .mbtn:hover{background:#2a2310}
-  .mbtn.on{background:var(--accent); color:#1a1400; font-weight:700}
-  .body{flex:1 1 auto; padding:10px; overflow:hidden; display:flex; flex-direction:column; gap:7px}
-  .msg{border-radius:8px; padding:6px 9px; font-size:11px; max-width:85%}
-  .msg.u{align-self:flex-end; background:#15324a; color:#cfe6fb}
-  .msg.a{align-self:flex-start; background:#16201a; color:#cfe9d6; border:1px solid #1c2b21}
-  .composer{flex:0 0 auto; margin:8px; border:1px solid #1d2b22; border-radius:9px; background:#0e1712;
-    padding:7px 9px; font-size:10.5px; color:var(--faint); display:flex; align-items:center; gap:6px}
-  .composer .send{margin-left:auto; background:var(--chat); color:#04210e; border-radius:6px;
-    padding:2px 9px; font-weight:700; font-size:10px}
-
-  /* maximized: collapse the chrome regions */
-  .phone.max .region{
-    max-height:0; opacity:0; padding-top:0; padding-bottom:0; margin:0;
-    border-width:0; pointer-events:none; overflow:hidden;
-  }
-  .phone.max{box-shadow:0 0 0 1px var(--accent), 0 18px 50px #0009}
-
-  .flash{position:absolute; inset:0; pointer-events:none; border-radius:22px;
-    box-shadow:0 0 0 2px var(--accent) inset; opacity:0; transition:opacity .25s}
-  .phone.pulse .flash{opacity:.55}
+  .phone.flip{animation:flip .5s ease}
+  @keyframes flip{0%{transform:rotateY(0)}50%{transform:rotateY(-12deg);opacity:.4}100%{transform:rotateY(0)}}
+  .pbar{font-size:10.5px; color:var(--faint); display:flex; align-items:center; gap:7px;
+    border-bottom:1px solid #1a212b; padding-bottom:8px}
+  .pbar .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 6px var(--ok)}
+  .pbar .repo{color:#cdd7e2; font-weight:650}
+  .disc-h{display:flex; align-items:center; gap:8px; font-size:11px; color:var(--dim)}
+  .disc-h .ic{font-size:13px}
+  .dbtn{font-size:12px; padding:7px 12px; border-radius:9px; border:1px solid var(--run-line);
+    background:var(--run-bg); color:#bcd6f5; cursor:pointer; font:inherit; transition:.15s;
+    display:flex; align-items:center; justify-content:center; gap:7px; font-weight:650}
+  .dbtn:hover:not(:disabled){border-color:var(--run); color:#fff}
+  .dbtn:disabled{opacity:.55; cursor:default}
+  .panelbox{flex:1 1 auto; border:1px solid #1a212b; border-radius:11px; background:#0c1118;
+    padding:11px; min-height:150px; display:flex; flex-direction:column; gap:8px}
+  .ph-state{font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--faint)}
+  .spin{display:inline-block; width:13px;height:13px; border-radius:50%;
+    border:2px solid #24364d; border-top-color:var(--run); animation:sp .8s linear infinite; vertical-align:-2px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .runrow{display:flex; align-items:center; gap:8px; font-size:12px; color:var(--run)}
+  .app{display:flex; align-items:center; gap:8px; font-size:11.5px; padding:6px 8px; border-radius:8px;
+    background:var(--ok-bg); border:1px solid var(--ok-line); color:#c8ecd2; animation:in .3s ease}
+  @keyframes in{from{opacity:0;transform:translateY(4px)}to{opacity:1}}
+  .app .port{margin-left:auto; color:var(--ok); font-family:ui-monospace,monospace; font-size:10.5px}
+  .idle{color:var(--faint); font-size:11.5px; font-style:italic; margin:auto}
+  .errbox{font-size:11.5px; color:#f7a8a3; background:var(--bad-bg); border:1px solid var(--bad-line);
+    border-radius:8px; padding:8px 10px}
 
   .ctl{display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:center}
   button.act{
     background:var(--panel2); color:var(--ink); border:1px solid var(--line); border-radius:8px;
-    padding:8px 16px; cursor:pointer; font:inherit; font-size:13px; transition:.15s;
+    padding:9px 16px; cursor:pointer; font:inherit; font-size:13px; transition:.15s;
   }
-  button.act:hover{border-color:var(--accent); color:var(--accent)}
-  .stateline{font-size:12px; color:var(--faint); text-align:center}
-  .stateline b{color:var(--accent)}
+  button.act:hover:not(:disabled){border-color:var(--accent); color:var(--accent)}
+  button.act:disabled{opacity:.45; cursor:default}
+  button.act.warn:hover:not(:disabled){border-color:var(--bad); color:var(--bad)}
+
+  /* server side strip */
+  .server{width:100%; max-width:300px; border:1px dashed var(--gate); background:var(--gate-bg);
+    border-radius:11px; padding:10px 12px; font-size:11px; color:#d8c6f5}
+  .server .sh{font-weight:700; color:var(--gate); letter-spacing:.05em; font-size:10px; text-transform:uppercase; margin-bottom:6px}
+  .server .job{display:flex; align-items:center; gap:7px; font-family:ui-monospace,monospace; font-size:10.5px}
+  .server .job .badge{padding:1px 7px; border-radius:999px; font-size:9.5px; font-weight:700}
+  .badge.running{background:var(--run-bg); color:var(--run); border:1px solid var(--run-line)}
+  .badge.done{background:var(--ok-bg); color:var(--ok); border:1px solid var(--ok-line)}
+  .badge.error{background:var(--bad-bg); color:var(--bad); border:1px solid var(--bad-line)}
+  .badge.empty{background:#1a212b; color:var(--faint); border:1px solid #2a333f}
+
+  .logline{font-size:11px; color:var(--faint); min-height:34px; text-align:center; max-width:300px}
+  .logline b{color:var(--accent)}
+  .logline .good{color:var(--ok)} .logline .bad{color:var(--bad)}
 
   /* ---- right column cards ---- */
   .card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin-bottom:16px}
-  .card h2{font-size:13px; text-transform:uppercase; letter-spacing:.07em; color:var(--dim); margin:0 0 12px}
+  .card h3{font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); margin:0 0 12px}
   .card p{margin:0 0 10px; color:var(--dim)}
   .card ul{margin:0; padding-left:18px; color:var(--dim)}
   .card li{margin:6px 0}
 
-  .tags{display:flex; gap:8px; flex-wrap:wrap; margin:0 0 22px}
-  .tag{font-size:11px; padding:4px 11px; border-radius:999px; border:1px solid var(--line); color:var(--dim)}
-  .tag b{color:var(--ink); font-weight:650}
+  .flow{display:flex; flex-direction:column; gap:0}
+  .step{display:grid; grid-template-columns:26px 1fr; gap:10px; padding:7px 0}
+  .step .n{width:22px;height:22px;border-radius:50%; background:var(--panel2); border:1px solid var(--line);
+    color:var(--accent); font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center}
+  .step .t{color:var(--dim); font-size:13px}
+  .step .t b{color:var(--ink)}
 
-  /* decision rows */
-  .dec{display:grid; grid-template-columns:130px 1fr; gap:12px; padding:10px 0; border-top:1px solid #20262e}
+  .dec{display:grid; grid-template-columns:140px 1fr; gap:12px; padding:10px 0; border-top:1px solid #20262e}
   .dec:first-of-type{border-top:0}
   .dec .k{font-weight:650; color:var(--ink); font-size:13px}
   .dec .v{color:var(--dim); font-size:13px}
   .dec .v .why{color:var(--faint); font-size:12px; display:block; margin-top:3px}
 
-  .props{display:flex; gap:18px; flex-wrap:wrap; font-size:12px}
-  .props .p{display:flex; flex-direction:column; gap:2px}
-  .props .p .pk{color:var(--gate); font-weight:650}
-  .props .p .pv{color:var(--dim)}
+  /* concurrency demo */
+  .conc{display:grid; grid-template-columns:1fr 220px 1fr; gap:14px; align-items:center}
+  @media(max-width:760px){ .conc{grid-template-columns:1fr} }
+  .repo2{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:13px}
+  .repo2 .rn{font-weight:700; font-size:13px; margin-bottom:8px; display:flex; align-items:center; gap:8px}
+  .repo2 .rn .cid{font-family:ui-monospace,monospace; font-size:10px; color:var(--gate); margin-left:auto}
+  .meta{font-family:ui-monospace,monospace; font-size:11px; color:var(--dim); display:grid; gap:3px}
+  .meta .row{display:flex; justify-content:space-between}
+  .meta .row span:last-child{color:var(--ink)}
+  .meta.wrong{border-left:3px solid var(--bad); padding-left:9px}
+  .meta.right{border-left:3px solid var(--ok); padding-left:9px}
+  .gw{background:#0c1118; border:1px solid var(--line); border-radius:12px; padding:12px; text-align:center; font-size:11px; color:var(--dim)}
+  .gw .gwt{color:var(--gate); font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px}
+  .gw code{display:block; margin:7px 0; font-size:10.5px; white-space:pre-wrap}
+  .verdict{font-size:12px; margin-top:6px; font-weight:650}
+  .verdict.bad{color:var(--bad)} .verdict.good{color:var(--ok)}
 
-  .takeaway{margin-top:6px; background:linear-gradient(180deg,#16203022,#0d1117); border:1px solid var(--line);
+  .takeaway{margin-top:10px; background:linear-gradient(180deg,#16203022,#0d1117); border:1px solid var(--line);
     border-left:3px solid var(--accent); border-radius:12px; padding:14px 18px}
   .takeaway b{color:var(--accent)}
   .takeaway ul{margin:8px 0 0; padding-left:18px; color:var(--dim)}
-  .legend{display:flex; gap:16px; flex-wrap:wrap; font-size:11.5px; color:var(--dim); margin:14px 0 0; justify-content:center}
-  .legend span{display:inline-flex; align-items:center; gap:6px}
-  .sw{width:13px;height:13px;border-radius:4px;display:inline-block}
-  .status{font-size:12px; color:var(--faint); margin-top:18px}
-  .status code{color:var(--chat)}
+  .takeaway li{margin:5px 0}
+  .status{font-size:12px; color:var(--faint); margin-top:22px; border-top:1px solid var(--line); padding-top:14px}
+  .status code{color:var(--ok)}
+  .pill{font-size:10px; padding:1px 8px; border-radius:999px; border:1px solid var(--bad-line); background:var(--bad-bg); color:var(--bad); font-weight:700}
+  .pill.ok{border-color:var(--ok-line); background:var(--ok-bg); color:var(--ok)}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Maximize chat to fill the dock</h1>
+  <h1>Discovery that survives a refresh</h1>
   <p class="sub">
-    An agent dock (the "phone" tile on the dashboard) stacks several <b>non-chat chrome</b> regions
-    above the chat — they eat ~40% of the tile's height. This change adds <b>one toggle</b>, next to
-    <b>Tool Calls</b> in the chat toolbar, that collapses that chrome so the chat fills the dock. Click
-    the same button again to restore. <b>Try it →</b> press the <span style="color:var(--accent)">⤢</span>
-    button in the mock, or use the buttons below it.
+    "Discover local apps" is a per-repo, read-only <b>agent scan</b> fired from a dock's button. Today the whole scan is
+    <b>bound to the HTTP request</b> and its result lives only in the browser. So a mid-scan page refresh does two bad things:
+    it <b>cancels the still-running agent call</b> (wasting it) and <b>throws away</b> any result that already landed. Separately,
+    when several docks scan at once, the reported <b>metadata gets cross-wired</b>. This change makes discovery <b>backend-owned</b>:
+    the scan runs to completion regardless of the browser, the dock <b>reattaches</b> on load, and each call gets its <b>own metadata</b>.
   </p>
 
   <div class="tags">
-    <span class="tag"><b>Change:</b> add-maximize-chat-dock</span>
-    <span class="tag"><b>Capability:</b> agent-dock (modified)</span>
-    <span class="tag"><b>Scope:</b> frontend only · no backend</span>
-    <span class="tag"><b>State:</b> per-dock · ephemeral</span>
-    <span class="tag"><b>Gate:</b> Advanced mode</span>
+    <span class="tag"><b>Change:</b> discover-local-apps-resilient</span>
+    <span class="tag"><b>Capability:</b> discover-local-apps (modified)</span>
+    <span class="tag"><b>Branch:</b> feature/discover-local-apps-concurrency</span>
+    <span class="tag"><b>Gate:</b> Advanced mode (unchanged)</span>
+    <span class="tag"><b>State:</b> in-memory · per-repo · 1 job</span>
   </div>
 
+  <!-- master Before / After toggle -->
+  <div class="modebar">
+    <span class="q">Watch the same actions under:</span>
+    <div class="seg" id="seg">
+      <button data-mode="before">Before (today)</button>
+      <button data-mode="after" class="on">After (this change)</button>
+    </div>
+    <span class="modetag" id="modetag"></span>
+  </div>
+
+  <!-- ======================= DEMO A ======================= -->
+  <h2 class="sec">Demo A — refresh the page mid-scan</h2>
   <div class="grid">
-    <!-- LEFT: interactive mock dock -->
+    <!-- LEFT: interactive dock -->
     <div class="stage">
       <div class="phone" id="phone">
-        <div class="flash"></div>
-        <div class="region bar"><span class="dot"></span><span class="lbl">phone bar</span><span class="sel">header · repo · path</span></div>
-        <div class="region"><span class="lbl">lanes</span><span class="sel">Builder · Ask · Files</span></div>
-        <div class="region"><span class="lbl">local apps</span><span class="sel">app switcher</span></div>
-        <div class="region"><span class="lbl">git status</span><span class="sel">branch · ahead/behind</span></div>
-        <div class="region"><span class="lbl">discover</span><span class="sel">local apps</span></div>
-        <div class="screen">
-          <div class="chatbar">
-            <span class="title">CHAT</span>
-            <span class="spacer"></span>
-            <span class="tbtn">⛭ Tool Calls</span>
-            <span class="mbtn" id="mbtn" title="Maximize chat" role="button" aria-pressed="false">⤢ <span id="mbtn-t">Max</span></span>
-          </div>
-          <div class="body">
-            <div class="msg a">Which files changed on this branch?</div>
-            <div class="msg u">Show me the dock layout</div>
-            <div class="msg a">The chat lives in <code>.phone__screen</code> …</div>
-          </div>
-          <div class="composer">Type a message… <span class="send">Send</span></div>
+        <div class="pbar"><span class="dot"></span><span class="repo">birocode</span><span style="margin-left:auto">dock · phone tile</span></div>
+        <div class="disc-h"><span class="ic">🔎</span> Discover local apps</div>
+        <button class="dbtn" id="discBtn">Discover</button>
+        <div class="panelbox" id="panel">
+          <div class="ph-state" id="phState">idle</div>
+          <div id="phBody"><div class="idle">No discovery yet — press Discover.</div></div>
         </div>
+      </div>
+
+      <!-- the server's job registry, always visible -->
+      <div class="server">
+        <div class="sh">backend · LocalAppDiscoveryJobs</div>
+        <div class="job">job[birocode] = <span class="badge empty" id="jobBadge">none</span></div>
       </div>
 
       <div class="ctl">
-        <button class="act" id="toggle">⤢ Toggle maximize</button>
-        <button class="act" id="reset">↺ Reset</button>
+        <button class="act" id="discBtn2">▶ Discover</button>
+        <button class="act warn" id="refreshBtn">🔄 Refresh page</button>
+        <button class="act" id="resetBtn">↺ Reset</button>
       </div>
-      <div class="stateline" id="stateline"></div>
-
-      <div class="legend">
-        <span><i class="sw" style="background:var(--chrome-bg);border:1px solid var(--chrome-line)"></i> non-chat chrome (collapses)</span>
-        <span><i class="sw" style="background:var(--chat-bg);border:1px solid var(--chat-line)"></i> chat (fills the dock)</span>
-      </div>
+      <div class="logline" id="log">Press <b>Discover</b>, then hit <b>Refresh page</b> while it's still scanning.</div>
     </div>
 
-    <!-- RIGHT: the why + how -->
+    <!-- RIGHT: the why -->
     <div>
       <div class="card">
-        <h2>The problem &amp; the rule</h2>
-        <p>Top-to-bottom, <code>.phone</code> is a flex column: fixed-height chrome regions, then a
-          flex-filling <code>.phone__screen</code> that holds the embedded <code>&lt;Chat&gt;</code>.
-          The chrome is useful but always-on — there was no way to reclaim its space to focus on the
-          conversation.</p>
-        <ul>
-          <li><b>One button, two states.</b> The same toggle maximizes and restores — pressed/active when maximized, with an aria-label.</li>
-          <li><b>Collapse, don't unmount.</b> A <code>phone--chat-max</code> modifier sets the chrome to <code>display:none</code>; the <code>&lt;Chat&gt;</code> subtree stays mounted, so scroll position, chat state, and the live stream survive the toggle.</li>
-          <li><b>The composer never hides.</b> It lives inside <code>.phone__screen</code>, not the chrome — so it (and the toolbar) stay usable while maximized.</li>
-        </ul>
+        <h3 id="flowTitle">What happens on refresh — After</h3>
+        <div class="flow" id="flow"></div>
       </div>
-
       <div class="card">
-        <h2>Key design decisions</h2>
-        <div class="dec"><div class="k">State owner</div><div class="v"><code>PinnedAgent</code>, not <code>Chat</code>.
-          <span class="why">It renders the <code>.phone__*</code> chrome, so the <code>chatMaximized</code> boolean + toggle live there and pass down into the embedded chat.</span></div></div>
-        <div class="dec"><div class="k">Collapse via</div><div class="v">CSS modifier class, not a remount.
-          <span class="why">Single source of truth in CSS; mounted-but-hidden chrome is cheap and avoids layout churn / lost chat state.</span></div></div>
-        <div class="dec"><div class="k">Button home</div><div class="v">In <code>.chat__bar</code>, beside <code>.chat__tools</code>.
-          <span class="why">Mirrors the Tool Calls button's pattern: <code>aria-pressed</code> + an active class + i18n title.</span></div></div>
-        <div class="dec"><div class="k">Gate</div><div class="v">Advanced mode only.
-          <span class="why">The dock and Tool Calls button are already Advanced-only — no extra gate needed.</span></div></div>
-      </div>
-
-      <div class="card">
-        <h2>What flows down to the toolbar button</h2>
-        <div class="props">
-          <div class="p"><span class="pk">chatMaximized</span><span class="pv">boolean — drives <code>aria-pressed</code> &amp; the active class</span></div>
-          <div class="p"><span class="pk">toggleChatMaximized</span><span class="pv">onClick — flips the state in <code>PinnedAgent</code></span></div>
-          <div class="p"><span class="pk">i18n</span><span class="pv"><code>chat.maximizeChat</code> / <code>chat.restoreChat</code></span></div>
-        </div>
-      </div>
-
-      <div class="takeaway">
-        <b>The one rule that explains the whole thing:</b>
+        <h3>The core fix</h3>
         <ul>
-          <li>The chrome (<code>.phone__bar/lanes/apps/git/discover</code>) is what collapses; the chat in <code>.phone__screen</code> is what grows.</li>
-          <li>State is <b>per-dock</b> (one tile maximizing leaves the others alone) and <b>ephemeral</b> (resets to normal on reload — nothing is persisted, no API).</li>
-          <li>It's a <b>pure additive frontend change</b>: revert the commit to roll back, nothing to migrate.</li>
+          <li><b>Backend owns the run.</b> A singleton <code>LocalAppDiscoveryJobs</code> holds one <code>DiscoveryJob</code> per repo —
+            <code>status (running|done|error)</code>, <code>result</code>, timestamps — and the scan runs on a background task with the
+            job's <b>own</b> cancellation token, never <code>HttpContext.RequestAborted</code>.</li>
+          <li><b>Start-or-join.</b> <code>GET /api/local-apps/discover</code> registers or joins the repo's job and returns the current
+            state immediately; it no longer blocks the run on the request.</li>
+          <li><b>Reattach.</b> <code>GET /api/local-apps/discover/status</code> lets the dock, on mount, rejoin a running scan (spinner) or
+            pick up a result/error that landed while the page was away — driven by the existing ~5s dock poll.</li>
         </ul>
       </div>
     </div>
   </div>
 
+  <!-- ======================= DEMO B ======================= -->
+  <h2 class="sec">Demo B — two docks scan at once (metadata cross-wiring)</h2>
+  <div class="grid">
+    <div class="stage">
+      <div class="ctl" style="margin-top:4px">
+        <button class="act" id="concBtn">▶ Fire both discoveries</button>
+        <button class="act" id="concReset">↺ Reset</button>
+      </div>
+      <div class="logline" id="concLog">Both calls hit the shared ClaudeMonitor gateway. Watch which metadata each call gets back.</div>
+      <div class="server" style="border-style:solid;border-color:var(--line);background:var(--panel)">
+        <div class="sh" style="color:var(--dim)">why it happens</div>
+        <div style="font-size:11px;color:var(--dim);line-height:1.5">
+          Every call reaches the gateway under the <b>same</b> app name <code>claudeweb-structured-ask</code>. The gateway builds each
+          call's response metadata with <code>FindLatestRecord(app)</code> = highest <code>CallNumber</code> for that name — so a sibling
+          call's record can be handed back.
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="conc">
+        <div class="repo2">
+          <div class="rn">repo A · birocode <span class="cid" id="cidA">—</span></div>
+          <div class="meta" id="metaA"><div class="idle" style="font-style:italic;color:var(--faint)">idle</div></div>
+        </div>
+        <div class="gw">
+          <div class="gwt">ClaudeMonitor gateway</div>
+          <code id="gwCode">resolve: FindLatestRecord("claudeweb-structured-ask")</code>
+          <div class="verdict" id="gwVerdict"></div>
+        </div>
+        <div class="repo2">
+          <div class="rn">repo B · minesweeper <span class="cid" id="cidB">—</span></div>
+          <div class="meta" id="metaB"><div class="idle" style="font-style:italic;color:var(--faint)">idle</div></div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <h3>The fix — per-call identity (no gateway change)</h3>
+        <p>Give every call a <b>unique app name</b> — <code>StructuredAskRunner</code> sends
+          <code>claudeweb-structured-ask#&lt;callId&gt;</code> (a fresh GUID per call) instead of the shared base name. The gateway already
+          resolves a call's record with <code>FindLatestRecord(app)</code>; because the name is now unique to this call, "latest record for
+          <i>this</i> app" is unambiguously <b>this call's own</b> record. The cross-wiring is fixed <b>entirely in birocode</b> — zero edits
+          to the shared <code>ClaudeMonitor</code> gateway or client. Trade-off: the gateway's stats/dashboard gains one
+          <code>#&lt;id&gt;</code> entry per discovery call.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= DESIGN ======================= -->
+  <h2 class="sec">Key design decisions</h2>
+  <div class="grid">
+    <div class="stage" style="align-items:stretch">
+      <div class="card" style="width:100%">
+        <h3>Scope held fixed</h3>
+        <ul>
+          <li>Discovered-apps payload <code>{ name, port, folder, evidence }</code> — <b>unchanged</b>.</li>
+          <li>Read-only scan policy — <b>unchanged</b>.</li>
+          <li>Single-repo-per-call scoping — <b>unchanged</b>.</li>
+          <li><code>GET /api/local-apps/discover</code> stays <b>backward-compatible</b> (completed shape unchanged).</li>
+        </ul>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <h3>Decisions &amp; trade-offs</h3>
+        <div class="dec"><div class="k">Reuse RunSession?</div><div class="v">No — borrow the <b>idea</b>, not the machinery.
+          <span class="why">RunSessionService is built for seq-numbered streaming chat turns; discovery is one-shot with a typed JSON result. A smaller purpose-built store fits.</span></div></div>
+        <div class="dec"><div class="k">Persist state?</div><div class="v">No — <b>in-memory</b>, one job per repo.
+          <span class="why">A harness restart just means "no recent discovery." Latest-only overwrite avoids unbounded job leak.</span></div></div>
+        <div class="dec"><div class="k">Streaming?</div><div class="v">No — only <b>running/done/error</b>.
+          <span class="why">Simple interval polling for parity with the existing dock poll; no held connections.</span></div></div>
+        <div class="dec"><div class="k">User cancel?</div><div class="v"><span class="pill">v1 gap</span> none.
+          <span class="why">We removed the only cancellation source. A stuck run relies on the CLI runner's existing timeout; a cancel endpoint is out of scope, addable later.</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="takeaway">
+    <b>The one rule that explains the whole thing:</b>
+    <ul>
+      <li><b>The browser no longer owns the scan — the backend does.</b> The request can come and go (refresh, disconnect); the job and its result live server-side, so the agent call is never wasted and the dock just re-derives its view on load.</li>
+      <li><b>Each call gets its own identity at the gateway</b>, so concurrent discoveries can't swap metadata.</li>
+      <li>Everything else (payload, read-only policy, per-repo scoping, the route's completed shape) is <b>held fixed</b> — it's an additive change; rollback is a straight revert with no persisted state to undo.</li>
+    </ul>
+  </div>
+
   <p class="status">
-    Live in this repo: <code>add-maximize-chat-dock</code> is at <b>Phase&nbsp;1 (Propose)</b> — its
-    <code>proposal.md</code>, <code>design.md</code>, delta <code>specs/agent-dock/spec.md</code> and
-    <code>tasks.md</code> (0/13) live under <code>openspec/changes/</code> and pass
-    <code>validate --strict</code>. No code has been written yet.
+    Live in this repo: <code>discover-local-apps-resilient</code> is at <b>Phase&nbsp;1 (Propose)</b> — <code>proposal.md</code>,
+    <code>design.md</code>, delta <code>specs/discover-local-apps/spec.md</code> (3 ADDED requirements) and <code>tasks.md</code> (0/13)
+    live under <code>openspec/changes/</code> and pass <code>validate --strict</code>. No code written yet.
   </p>
 </div>
 
 <script>
-const phone = document.getElementById('phone');
-const mbtn  = document.getElementById('mbtn');
-const mbtnT = document.getElementById('mbtn-t');
-const line  = document.getElementById('stateline');
-let maximized = false;
-
-function render(){
-  phone.classList.toggle('max', maximized);
-  mbtn.classList.toggle('on', maximized);
-  mbtn.setAttribute('aria-pressed', String(maximized));
-  mbtn.title = maximized ? 'Restore layout' : 'Maximize chat';
-  mbtnT.textContent = maximized ? 'Restore' : 'Max';
-  line.innerHTML = maximized
-    ? 'State: <b>maximized</b> — chrome collapsed, chat fills the dock. Button is pressed.'
-    : 'State: <b>normal</b> — chrome shown above the chat.';
+// ---------- shared mode ----------
+let mode = 'after';            // 'before' | 'after'
+const modetag = document.getElementById('modetag');
+function setMode(m){
+  mode = m;
+  document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on', b.dataset.mode===m));
+  modetag.innerHTML = m==='after'
+    ? 'Showing: <b>After</b> — backend-owned, reattach-on-load.'
+    : 'Showing: <b>Before</b> — request-bound, result lives in the browser.';
+  resetA(); renderFlow();
 }
-function pulse(){
-  phone.classList.add('pulse');
-  setTimeout(()=>phone.classList.remove('pulse'), 260);
+document.querySelectorAll('#seg button').forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.mode)));
+
+// ---------- DEMO A: refresh mid-scan ----------
+const phState = document.getElementById('phState');
+const phBody  = document.getElementById('phBody');
+const jobBadge= document.getElementById('jobBadge');
+const logEl   = document.getElementById('log');
+const phone   = document.getElementById('phone');
+const flowEl  = document.getElementById('flow');
+const flowTitle = document.getElementById('flowTitle');
+
+// clientState: what the browser is showing.   jobState: server registry.
+let clientState='idle';        // idle | running | done
+let jobState='none';           // none | running | done   (server-side)
+let scanTimer=null;            // the running agent call (server completes it)
+
+const APPS = [
+  {n:'web client (Vite)', p:5173},
+  {n:'preview product',   p:5200},
+];
+
+function setBadge(s){
+  jobState=s;
+  const map={none:['none','empty'],running:['running','running'],done:['done','done'],error:['error','error']};
+  const [txt,cls]=map[s];
+  jobBadge.className='badge '+cls;
+  jobBadge.textContent=txt;
 }
-function toggle(){ maximized = !maximized; pulse(); render(); }
+function renderPanel(){
+  if(clientState==='idle'){ phState.textContent='idle';
+    phBody.innerHTML='<div class="idle">No discovery yet — press Discover.</div>'; return; }
+  if(clientState==='running'){ phState.textContent='scanning';
+    phBody.innerHTML='<div class="runrow"><span class="spin"></span> agent scanning the repo…</div>'; return; }
+  if(clientState==='done'){ phState.textContent='done · '+APPS.length+' apps';
+    phBody.innerHTML=APPS.map(a=>`<div class="app">🟢 ${a.n}<span class="port">:${a.p}</span></div>`).join(''); }
+}
+function log(html){ logEl.innerHTML=html; }
 
-mbtn.addEventListener('click', toggle);
-document.getElementById('toggle').addEventListener('click', toggle);
-document.getElementById('reset').addEventListener('click', ()=>{ maximized=false; render(); });
+function startDiscover(){
+  if(clientState==='running') return;
+  clientState='running'; renderPanel();
+  setBadge('running');
+  log('Scan started. The <b>backend job</b> is now <span class="good">running</span>. Try <b>Refresh page</b> now →');
+  clearTimeout(scanTimer);
+  scanTimer=setTimeout(()=>{          // the agent call completes server-side
+    setBadge('done');
+    if(clientState==='running'){ clientState='done'; renderPanel(); }
+    log('Agent call finished — backend job is <span class="good">done</span>. Result is cached server-side.');
+  }, 2600);
+}
 
-render();
+function refresh(){
+  phone.classList.remove('flip'); void phone.offsetWidth; phone.classList.add('flip');
+  if(mode==='before'){
+    // request-bound: the abort kills the run AND the browser loses the result
+    const wasRunning = jobState==='running';
+    clearTimeout(scanTimer);
+    setBadge('none');                 // RequestAborted -> run cancelled, nothing stored
+    clientState='idle'; renderPanel();
+    log(wasRunning
+      ? '<span class="bad">✗ Refresh aborted the fetch → <b>RequestAborted</b> cancelled the running agent call.</span> The scan is killed and the result is lost. Back to idle — <b>agent call wasted</b>.'
+      : '<span class="bad">✗ Result lived only in browser state — refresh discarded it.</span> Back to idle; you must re-run.');
+    return;
+  }
+  // AFTER: browser unmounts, but the job lives on. On mount we call /status and reattach.
+  clientState='idle'; renderPanel();           // momentary blank (page reloaded)
+  log('Page reloaded → dock calls <code>/discover/status</code> on mount…');
+  setTimeout(()=>{
+    if(jobState==='running'){ clientState='running'; renderPanel();
+      log('<span class="good">✓ Reattached to the running job</span> — spinner is back, the agent call kept going.'); }
+    else if(jobState==='done'){ clientState='done'; renderPanel();
+      log('<span class="good">✓ Picked up the cached result</span> that completed while the page was away — no re-scan.'); }
+    else { clientState='idle'; renderPanel();
+      log('No recent job for this repo — idle. (A harness restart looks like this.)'); }
+  }, 650);
+}
+
+function resetA(){
+  clearTimeout(scanTimer); clientState='idle'; setBadge('none'); renderPanel();
+  log('Press <b>Discover</b>, then hit <b>Refresh page</b> while it\'s still scanning.');
+}
+
+document.getElementById('discBtn').addEventListener('click', startDiscover);
+document.getElementById('discBtn2').addEventListener('click', startDiscover);
+document.getElementById('refreshBtn').addEventListener('click', refresh);
+document.getElementById('resetBtn').addEventListener('click', resetA);
+
+const FLOWS={
+  after:[
+    ['1','Dock mounts → <b>GET /discover/status</b> for this repo.'],
+    ['2','Button → <b>GET /discover</b> = <b>start-or-join</b>; returns current state at once.'],
+    ['3','Scan runs on a background task with the <b>job\'s own token</b> — request abort can\'t touch it.'],
+    ['4','Refresh unmounts the browser; the <b>job keeps running</b>.'],
+    ['5','New page mounts → status says <b>running</b> (spinner) or <b>done</b> (cached apps). <b>Reattach.</b>'],
+  ],
+  before:[
+    ['1','Button → <b>GET /discover</b> blocks; <code>ct = HttpContext.RequestAborted</code>.'],
+    ['2','That <code>ct</code> is threaded straight into the <b>claude CLI run</b>.'],
+    ['3','Result is held only in <code>PinnedAgent.jsx</code> local <code>useState</code>.'],
+    ['4','Refresh aborts the fetch → <code>ct</code> fires → <b>the agent scan is cancelled</b>.'],
+    ['5','Unmount drops the local state → <b>any finished result is lost</b>. Back to idle.'],
+  ],
+};
+function renderFlow(){
+  flowTitle.textContent = mode==='after' ? 'What happens on refresh — After' : 'What happens on refresh — Before';
+  flowEl.innerHTML = FLOWS[mode].map(([n,t])=>`<div class="step"><div class="n">${n}</div><div class="t">${t}</div></div>`).join('');
+}
+
+// ---------- DEMO B: concurrency metadata ----------
+const metaA=document.getElementById('metaA'), metaB=document.getElementById('metaB');
+const cidA=document.getElementById('cidA'), cidB=document.getElementById('cidB');
+const gwCode=document.getElementById('gwCode'), gwVerdict=document.getElementById('gwVerdict'), concLog=document.getElementById('concLog');
+
+// truth: each call's OWN metadata
+const TRUTH={
+  A:{call:'#41', tokens:'8.2k', cost:'$0.06', dur:'7.1s'},
+  B:{call:'#42', tokens:'5.4k', cost:'$0.04', dur:'4.3s'},
+};
+function metaHtml(m,cls){
+  return `<div class="meta ${cls}">
+    <div class="row"><span>call</span><span>${m.call}</span></div>
+    <div class="row"><span>tokens</span><span>${m.tokens}</span></div>
+    <div class="row"><span>cost</span><span>${m.cost}</span></div>
+    <div class="row"><span>duration</span><span>${m.dur}</span></div></div>`;
+}
+function fireConc(){
+  if(mode==='before'){
+    cidA.textContent='(shared name)'; cidB.textContent='(shared name)';
+    gwCode.textContent='resolve: FindLatestRecord("claudeweb-structured-ask")\n→ both get highest CallNumber = #42';
+    // cross-wired: A (slower, finishes 2nd) ends up reading B's latest record
+    metaA.innerHTML=metaHtml(TRUTH.B,'wrong');   // A wrongly shows B's metadata
+    metaB.innerHTML=metaHtml(TRUTH.B,'right');
+    gwVerdict.className='verdict bad';
+    gwVerdict.textContent='✗ repo A reported repo B\'s call #42 — cross-wired';
+    concLog.innerHTML='<span class="bad">✗ Both calls share the app name; "latest record" hands #42 to repo A too.</span>';
+    return;
+  }
+  cidA.textContent='#a1f3'; cidB.textContent='#b7e0';
+  gwCode.textContent='FindLatestRecord("…#a1f3")  ·  FindLatestRecord("…#b7e0")\n→ each unique name resolves its own record (no gateway change)';
+  metaA.innerHTML=metaHtml(TRUTH.A,'right');
+  metaB.innerHTML=metaHtml(TRUTH.B,'right');
+  gwVerdict.className='verdict good';
+  gwVerdict.textContent='✓ each call resolves its own record';
+  concLog.innerHTML='<span class="good">✓ Distinct correlation id per call → repo A reports #41, repo B reports #42.</span>';
+}
+function resetConc(){
+  cidA.textContent='—'; cidB.textContent='—';
+  metaA.innerHTML='<div class="idle" style="font-style:italic;color:var(--faint)">idle</div>';
+  metaB.innerHTML='<div class="idle" style="font-style:italic;color:var(--faint)">idle</div>';
+  gwCode.textContent= mode==='before'
+    ? 'resolve: FindLatestRecord("claudeweb-structured-ask")'
+    : 'resolve: FindLatestRecord("claudeweb-structured-ask#<callId>")';
+  gwVerdict.textContent='';
+  concLog.innerHTML='Both calls hit the shared ClaudeMonitor gateway. Watch which metadata each call gets back.';
+}
+document.getElementById('concBtn').addEventListener('click', fireConc);
+document.getElementById('concReset').addEventListener('click', resetConc);
+
+// init
+setMode('after');
+renderFlow();
+resetConc();
 </script>
 </body>
 </html>
