@@ -141,6 +141,7 @@
     <button class="tab" data-v="audit">⑨ Action audit — trust but verify</button>
     <button class="tab" data-v="impl">⑩ Action audit — how it's built</button>
     <button class="tab" data-v="try">⑪ Try it out</button>
+    <button class="tab" data-v="bug">🐞 Why writes failed (&amp; the deploy loop)</button>
   </div>
 
   <!-- VIEW 1 -->
@@ -555,6 +556,49 @@
     <div class="reframe"><b>Where to click on the host PC:</b> the main Claude Web window now has a
       <span class="schip">Guests (IPs)</span> button (→ the new "Trusted devices" list) and an
       <span class="schip">Activity</span> button (→ the action audit). Both are desktop-only.</div>
+  </section>
+
+  <!-- VIEW 12 -->
+  <section class="view" id="bug">
+    <h2>Why writes failed in a project — and the deploy loop it triggered</h2>
+    <div class="lead"><b>The symptom:</b> in the <code>sevda-temu</code> project the agent could
+      <i>read</i> files but every <b>write/Bash failed</b> — even though we'd removed the per-project
+      permission system, so "full access" was supposed to be on. Two separate bugs, one chasing the
+      other.</div>
+
+    <h2 style="margin-top:20px">Walk the diagnosis</h2>
+    <p class="note">Click through how it was found and fixed.</p>
+    <div class="scen" id="bugSel">
+      <button data-i="0" class="active">1 · Symptom</button>
+      <button data-i="1">2 · The audit paid off</button>
+      <button data-i="2">3 · Root cause</button>
+      <button data-i="3">4 · The fix</button>
+      <button data-i="4">5 · Deploy loop</button>
+      <button data-i="5">6 · Resolved</button>
+    </div>
+    <div class="solcard" id="bugCard"></div>
+
+    <h2 style="margin-top:22px">The key insight</h2>
+    <div class="solgrid">
+      <div class="solcard" style="border-color:#5a2d2d"><h4>❌ What I'd done</h4>
+        <p class="note">Removed the permission flags entirely — the builder lane passed <b>no</b>
+          <code>--permission-mode</code>. I assumed "no restriction = full access."</p>
+        <p class="chk"><span class="x">→</span><span><code>claude -p</code> with no flag falls back to
+          its <b>default</b> mode, which <b>asks for approval</b> on Write/Bash. Headless <code>-p</code>
+          can't approve → those tools silently fail. Reads need no approval → they work.</span></p></div>
+      <div class="solcard" style="border-color:#2d5a35"><h4>✅ The fix</h4>
+        <p class="note">The builder lane now passes <code>--dangerously-skip-permissions</code>
+          (the ask lane keeps <code>--permission-mode plan</code>).</p>
+        <p class="chk"><span class="t">→</span><span><b>Removing the restriction wasn't enough — I had
+          to explicitly grant the bypass.</b> Verified with a real <code>claude -p</code>: no flag →
+          write blocked; with the flag → file written.</span></p></div>
+    </div>
+
+    <div class="reframe"><b>Two lessons:</b> (1) "remove the guardrail" ≠ "open the gate" — the CLI's
+      <i>default</i> is itself a guardrail, so full access had to be requested, not just un-restricted.
+      (2) The <b>action audit we'd just built</b> is what cracked it — the log plainly showed the
+      <code>Write</code> tool firing in the builder lane while the file never appeared, pointing
+      straight at a tool-permission denial rather than a harness or filesystem problem.</div>
   </section>
 </main>
 
@@ -1061,6 +1105,31 @@ document.getElementById('trySel').addEventListener('click',e=>{
   renderTry();
 });
 
+//// VIEW 12: the writes-failed bug ////
+const BUG_STEPS = [
+  { t:'1 · The symptom',
+    b:'In the <code>sevda-temu</code> project the agent kept trying to write <code>temu-links.md</code> and it never appeared. Reads worked fine; writes, Bash, even a subagent all failed with permission/sandbox errors. But we\'d <i>removed</i> the per-project permission system, so this should have been full access.' },
+  { t:'2 · The audit paid off',
+    b:'Rather than guess, I read the <b>action audit</b> (the feature we\'d just shipped). It showed, for <code>sevda-temu</code>: prompts in the <b>builder</b> lane (not the read-only ask lane), and the <code>Write</code> tool <b>firing twice</b> — yet the file never existed. That ruled out the ask lane, the harness permission flags, and a missing/locked directory, and pointed straight at the tool being <b>denied at the CLI level</b>.' },
+  { t:'3 · Root cause',
+    b:'Removing the permission presets left the builder lane passing <b>no</b> <code>--permission-mode</code> at all. With no flag, <code>claude -p</code> uses its <b>default</b> mode — which requires interactive approval for Write/Bash. Headless <code>-p</code> has no one to approve, so those tools fail while reads (no approval needed) succeed. <b>"No restriction" silently became "restricted."</b> Confirmed by running <code>claude -p</code> directly in a temp dir: no flag → file not written.' },
+  { t:'4 · The fix',
+    b:'One line in <code>CliRunnerService</code>: the builder lane now passes <code>--dangerously-skip-permissions</code> (the ask lane still gets <code>--permission-mode plan</code>). Re-ran the temp-dir test <i>with</i> the flag → the file was written. That makes the code finally deliver what the <code>access-control</code> spec already promised: "a passed request runs unrestricted, subject only to the OS account."' },
+  { t:'5 · The deploy loop',
+    b:'Shipping the fix hit a <b>second, unrelated</b> bug. During the earlier IP testing, <code>127.0.0.1</code> (localhost) had been removed from the guest allowlist. <code>swap.ps1</code>\'s post-restart <b>health check probes localhost</b> → it got <b>403</b> → the deploy thought the new build was broken and <b>auto-rolled-back</b>… whose health check <i>also</i> 403\'d. Every deploy failed the same way. The app itself was fine (the phone, an approved IP, still worked) — only localhost was rejected.' },
+  { t:'6 · Resolved',
+    b:'Re-approved <code>127.0.0.1</code> as a guest in the allowlist (stopping the harness first so it couldn\'t overwrite the file), then redeployed → <b>health 200</b>, rollback armed, then disarmed with <code>keep.ps1</code> so the fix stays live. Writes now work in every project — bounded only by the OS account, as designed.' },
+];
+function renderBug(i){
+  const s = BUG_STEPS[i];
+  document.getElementById('bugCard').innerHTML = `<h4>${s.t}</h4><div style="font-size:13px;line-height:1.6">${s.b}</div>`;
+}
+document.getElementById('bugSel').addEventListener('click',e=>{
+  if(e.target.dataset.i===undefined)return;
+  [...document.querySelectorAll('#bugSel button')].forEach(b=>b.classList.toggle('active',b===e.target));
+  renderBug(+e.target.dataset.i);
+});
+
 //// tabs ////
 document.querySelector('.tabs').addEventListener('click',e=>{
   if(!e.target.dataset.v)return;
@@ -1068,7 +1137,7 @@ document.querySelector('.tabs').addEventListener('click',e=>{
   [...document.querySelectorAll('.view')].forEach(v=>v.classList.toggle('active',v.id===e.target.dataset.v));
 });
 
-renderPipe(); buildMatrix(); renderKba('trivia'); renderHH(0); renderTJ(0); renderTA(); renderSol(); renderBR(); renderAudit(); renderImpl(0); renderTry();
+renderPipe(); buildMatrix(); renderKba('trivia'); renderHH(0); renderTJ(0); renderTA(); renderSol(); renderBR(); renderAudit(); renderImpl(0); renderTry(); renderBug(0);
 </script>
 </body>
 </html>
