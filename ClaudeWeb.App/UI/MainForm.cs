@@ -46,6 +46,7 @@ public class MainForm : Form
     private readonly AutopilotGate _autopilotGate;
     private readonly Services.Auth.DeviceTokenService _deviceTokens;
     private readonly Services.Audit.AuditService _audit;
+    private readonly Services.Auth.AuthService _auth;
 
     private readonly Label _workingDirLabel;
     private readonly Label _serverLabel;
@@ -58,7 +59,7 @@ public class MainForm : Form
     // Maps a CallRecord.Number to its ListView row for in-place updates.
     private readonly Dictionary<int, ListViewItem> _rowsByNumber = new();
 
-    public MainForm(AppConfig config, Logger logger, EmbeddedApi api, CallLog callLog, RepositoryRegistry repositories, IpAllowlistService ipAllowlist, AutopilotGate autopilotGate, Services.Auth.DeviceTokenService deviceTokens, Services.Audit.AuditService audit)
+    public MainForm(AppConfig config, Logger logger, EmbeddedApi api, CallLog callLog, RepositoryRegistry repositories, IpAllowlistService ipAllowlist, AutopilotGate autopilotGate, Services.Auth.DeviceTokenService deviceTokens, Services.Audit.AuditService audit, Services.Auth.AuthService auth)
     {
         _config = config;
         _logger = logger;
@@ -69,6 +70,7 @@ public class MainForm : Form
         _autopilotGate = autopilotGate;
         _deviceTokens = deviceTokens;
         _audit = audit;
+        _auth = auth;
 
         Text = "Claude Web";
         Size = new Size(1200, 720);
@@ -143,6 +145,56 @@ public class MainForm : Form
         var on = _autopilotGate.Enabled;
         b.Text = on ? "Autopilot: ON" : "Autopilot: OFF";
         b.BackColor = on ? Color.FromArgb(60, 160, 90) : Color.FromArgb(90, 95, 105);
+    }
+
+    /// <summary>Operator dialog to set the harness access code (openspec add-desktop-access-code):
+    /// no current code required (desktop authority); revokes all sessions on success.</summary>
+    private void SetAccessCode()
+    {
+        using var form = new Form
+        {
+            Text = "Set access code",
+            Size = new Size(420, 210),
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            StartPosition = FormStartPosition.CenterParent,
+            MaximizeBox = false,
+            MinimizeBox = false,
+            BackColor = Color.White,
+        };
+
+        var info = new Label
+        {
+            Text = "Sets the shared login code with no current code needed. All logged-in sessions are signed out.",
+            Left = 12, Top = 10, Width = 390, Height = 34,
+            ForeColor = Color.FromArgb(110, 110, 120),
+        };
+        var l1 = new Label { Text = "New access code (min 8):", Left = 12, Top = 50, AutoSize = true };
+        var newBox = new TextBox { Left = 12, Top = 70, Width = 390, UseSystemPasswordChar = true, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
+        var l2 = new Label { Text = "Confirm:", Left = 12, Top = 100, AutoSize = true };
+        var confirmBox = new TextBox { Left = 12, Top = 120, Width = 390, UseSystemPasswordChar = true, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
+        var ok = new Button { Text = "Set", DialogResult = DialogResult.OK, Left = 232, Top = 150, Width = 75, Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
+        var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Left = 317, Top = 150, Width = 75, Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
+
+        form.Controls.AddRange(new Control[] { info, l1, newBox, l2, confirmBox, ok, cancel });
+        form.AcceptButton = ok;
+        form.CancelButton = cancel;
+
+        if (form.ShowDialog(this) != DialogResult.OK) return;
+
+        if (newBox.Text != confirmBox.Text)
+        {
+            MessageBox.Show(this, "The two codes don't match.", "Set access code",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        if (_auth.SetPassword(newBox.Text) is { } error)
+        {
+            MessageBox.Show(this, error, "Set access code", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        _audit.LogOperatorAuth("access-code-set");
+        MessageBox.Show(this, "Access code set. All sessions have been signed out — everyone must log in with the new code.",
+            "Set access code", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     private Panel CreateHeaderPanel(out Label workingDirLabel, out Label serverLabel)
@@ -229,6 +281,25 @@ public class MainForm : Form
             dialog.ShowDialog(this);
         };
         actions.Controls.Add(activityButton);
+
+        // Set the access code (openspec add-desktop-access-code): the operator's elevated
+        // authority — sets it without the current one and revokes all sessions.
+        var accessCodeButton = new Button
+        {
+            Text = "Set access code",
+            AutoSize = true,
+            Height = 32,
+            Padding = new Padding(12, 5, 12, 5),
+            BackColor = Color.FromArgb(120, 100, 150),
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            Cursor = Cursors.Hand,
+            Margin = new Padding(0, 0, 4, 0)
+        };
+        accessCodeButton.FlatAppearance.BorderSize = 0;
+        accessCodeButton.Click += (_, _) => SetAccessCode();
+        actions.Controls.Add(accessCodeButton);
 
         // The ONLY place the autopilot endpoints + engine can be turned on/off
         // (plans/loop-autopilot-safety.md). Deliberately host-only, mirroring the

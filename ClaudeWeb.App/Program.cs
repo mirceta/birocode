@@ -64,12 +64,16 @@ static class Program
         // pattern as IpAllowlistService. Resolves actor identity via the auth services.
         var audit = new Services.Audit.AuditService(config, logger, ipAllowlist, deviceTokens);
 
+        // Session auth. Built here so the WinForms desktop can SET the access code (the operator's
+        // elevated authority) and the web API share one instance (openspec add-desktop-access-code).
+        var auth = new Services.Auth.AuthService(config, logger);
+
         // Start the embedded Kestrel server on a background thread.
-        var api = new EmbeddedApi(config, logger, callLog, repositories, ipAllowlist, autopilotGate, deviceTokens, audit);
+        var api = new EmbeddedApi(config, logger, callLog, repositories, ipAllowlist, autopilotGate, deviceTokens, audit, auth);
         api.Start();
 
         // Launch the monitoring GUI (blocks on the WinForms message loop).
-        var form = new MainForm(config, logger, api, callLog, repositories, ipAllowlist, autopilotGate, deviceTokens, audit);
+        var form = new MainForm(config, logger, api, callLog, repositories, ipAllowlist, autopilotGate, deviceTokens, audit, auth);
         Application.Run(form);
 
         // Shut the server down cleanly when the GUI closes.

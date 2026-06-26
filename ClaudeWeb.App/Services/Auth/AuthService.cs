@@ -116,6 +116,29 @@ public class AuthService
         return null;
     }
 
+    /// <summary>
+    /// DESKTOP-ONLY (openspec add-desktop-access-code): sets the access code WITHOUT requiring the
+    /// current one — the Operator at the host PC is the trusted access authority, the same elevated
+    /// authority that approves IPs. Revokes every active session so all clients re-authenticate.
+    /// Returns an error message or null on success. NOT exposed over the web.
+    /// </summary>
+    public string? SetPassword(string? next)
+    {
+        if (string.IsNullOrWhiteSpace(next) || next.Trim().Length < 8)
+            return "Access code must be at least 8 characters.";
+
+        lock (_gate)
+        {
+            _passwordHash = HashPassword(next.Trim());
+            _passwordVersion++;
+            SaveAuth();
+            _sessions.Clear();
+            SaveSessions();
+        }
+        _logger.Info("[AUTH] Access code set from the desktop; all sessions revoked");
+        return null;
+    }
+
     // --- sessions ---------------------------------------------------------------
 
     /// <summary>Creates a session and returns the raw token (only ever held by the client).</summary>

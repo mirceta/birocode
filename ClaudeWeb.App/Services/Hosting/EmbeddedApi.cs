@@ -64,12 +64,13 @@ public class EmbeddedApi
     private readonly Autopilot.AutopilotGate _autopilotGate;
     private readonly Auth.DeviceTokenService _deviceTokens;
     private readonly Audit.AuditService _audit;
+    private readonly Auth.AuthService _auth;
     private WebApplication? _app;
 
     public bool IsRunning { get; private set; }
     public int Port => _config.Port;
 
-    public EmbeddedApi(AppConfig config, Logger logger, CallLog callLog, RepositoryRegistry repositories, IpAllowlistService ipAllowlist, Autopilot.AutopilotGate autopilotGate, Auth.DeviceTokenService deviceTokens, Audit.AuditService audit)
+    public EmbeddedApi(AppConfig config, Logger logger, CallLog callLog, RepositoryRegistry repositories, IpAllowlistService ipAllowlist, Autopilot.AutopilotGate autopilotGate, Auth.DeviceTokenService deviceTokens, Audit.AuditService audit, Auth.AuthService auth)
     {
         _config = config;
         _logger = logger;
@@ -79,6 +80,7 @@ public class EmbeddedApi
         _autopilotGate = autopilotGate;
         _deviceTokens = deviceTokens;
         _audit = audit;
+        _auth = auth;
     }
 
     public void Start()
@@ -146,7 +148,7 @@ public class EmbeddedApi
 
             // === MODULE SERVICE REGISTRATION (orchestrator wires these between phases) ===
             builder.Services.AddIpFilterModule(); // IP allowlist (plans/auth-ip-filter.md)
-            builder.Services.AddAuthModule();   // session login (plans/auth-login.md)
+            builder.Services.AddAuthModule(_auth);   // session login (plans/auth-login.md); pre-built so the desktop can set the access code
             builder.Services.AddRepositoryModule(); // multi-repo (resolver + HttpContext)
             builder.Services.AddChatModule();   // M1
             builder.Services.AddFileModule();   // M2
