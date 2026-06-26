@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using ClaudeWeb.Services.Events;
 
 namespace ClaudeWeb.Services.StructuredAsk;
 
@@ -22,9 +23,14 @@ namespace ClaudeWeb.Services.StructuredAsk;
 public class LocalAppDiscoveryJobs
 {
     private readonly LocalAppDiscoveryAsk _discovery;
+    private readonly RepoEventLog _events;
     private readonly ConcurrentDictionary<string, DiscoveryJob> _jobs = new();
 
-    public LocalAppDiscoveryJobs(LocalAppDiscoveryAsk discovery) => _discovery = discovery;
+    public LocalAppDiscoveryJobs(LocalAppDiscoveryAsk discovery, RepoEventLog events)
+    {
+        _discovery = discovery;
+        _events = events;
+    }
 
     /// <summary>
     /// Join the repo's discovery if one is already running, otherwise start a new
@@ -39,17 +45,22 @@ public class LocalAppDiscoveryJobs
         // fresh scan (latest-only — the old result is discarded).
         return _jobs.AddOrUpdate(
             repoId,
-            _ => StartNew(workingDirectory),
-            (_, existing) => existing.Status == DiscoveryStatus.Running ? existing : StartNew(workingDirectory));
+            _ => StartNew(repoId, workingDirectory),
+            (_, existing) => existing.Status == DiscoveryStatus.Running ? existing : StartNew(repoId, workingDirectory));
     }
 
     /// <summary>The most recent job for the repo, or null if none has ever run.</summary>
     public DiscoveryJob? Get(string repoId) =>
         _jobs.TryGetValue(repoId, out var job) ? job : null;
 
-    private DiscoveryJob StartNew(string workingDirectory)
+    private DiscoveryJob StartNew(string repoId, string workingDirectory)
     {
         var job = new DiscoveryJob();
+        // Event Console (openspec agent-dock-event-console): emit at the boundary we
+        // own. "started" fires only here — on a genuine NEW scan — so joining an
+        // already-running job does not emit a duplicate start.
+        _events.Emit(repoId, "discovery", "started", "Discovery",
+            "invoked — awaiting the agent gateway…");
         // Fire-and-forget on a background task with the job's OWN token. We never
         // pass the request's abort token in, so a client disconnect can't cancel it.
         job.Run = Task.Run(async () =>
@@ -58,17 +69,29 @@ public class LocalAppDiscoveryJobs
             {
                 var result = await _discovery.DiscoverAsync(workingDirectory, job.Cts.Token);
                 if (result.Success)
+                {
                     job.MarkDone(result.Report!);
+                    var n = result.Report!.Apps.Count;
+                    _events.Emit(repoId, "discovery", "done", "Discovery",
+                        $"returned {n} app{(n == 1 ? "" : "s")} — produced for the dock to render");
+                }
                 else
-                    job.MarkError(result.Error ?? "discovery failed");
+                {
+                    var err = result.Error ?? "discovery failed";
+                    job.MarkError(err);
+                    _events.Emit(repoId, "discovery", "error", "Discovery", err);
+                }
             }
             catch (OperationCanceledException)
             {
                 job.MarkError("discovery cancelled");
+                _events.Emit(repoId, "discovery", "error", "Discovery", "discovery cancelled");
             }
             catch (Exception ex)
             {
-                job.MarkError($"{ex.GetType().Name}: {ex.Message}");
+                var err = $"{ex.GetType().Name}: {ex.Message}";
+                job.MarkError(err);
+                _events.Emit(repoId, "discovery", "error", "Discovery", err);
             }
         });
         return job;
