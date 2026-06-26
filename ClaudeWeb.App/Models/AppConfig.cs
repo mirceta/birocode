@@ -51,8 +51,9 @@ public class AppConfig
 
     /// <summary>
     /// LEGACY seed only (plans/auth-login.md): hashed into
-    /// %APPDATA%\ClaudeWeb\auth.json on first run, then ignored. Rotate the
-    /// real password via POST /api/auth/password, not here.
+    /// %APPDATA%\ClaudeWeb\auth.json on first run, then ignored. Change the real
+    /// access code from the desktop app's "Set access code" button, not here —
+    /// it is deliberately not changeable over the web (openspec add-desktop-access-code).
     /// </summary>
     public string AuthPassword { get; set; } = "changeme";
 

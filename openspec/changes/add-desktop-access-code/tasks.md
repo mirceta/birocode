@@ -10,6 +10,11 @@
 - [x] 2.1 Pre-built `AuthService` in `Program.cs`; passed to `EmbeddedApi` + `MainForm`.
 - [x] 2.2 `AddAuthModule(AuthService)` registers the pre-built instance (dropped `AddSingleton<AuthService>()`).
 
+## 2b. Remove the web change path
+
+- [x] 2.3 Delete `POST /api/auth/password` (`AuthController.ChangePassword` + `ChangePasswordRequest`)
+      and the now-unused `AuthService.ChangePassword`. The access code is not changeable over the web.
+
 ## 3. Desktop surface
 
 - [x] 3.1 "Set access code" button on `MainForm` → dialog (new + confirm, masked) → `SetPassword`;

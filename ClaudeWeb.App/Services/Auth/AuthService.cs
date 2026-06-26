@@ -92,29 +92,8 @@ public class AuthService
         return VerifyAgainstHash(password, hash);
     }
 
-    /// <summary>
-    /// Changes the password (verifying the current one) and revokes every
-    /// session except <paramref name="keepToken"/>. Returns an error message
-    /// or null on success.
-    /// </summary>
-    public string? ChangePassword(string? current, string? next, string? keepToken)
-    {
-        if (!VerifyPassword(current)) return "Current password is incorrect";
-        if (string.IsNullOrWhiteSpace(next) || next.Length < 8)
-            return "New password must be at least 8 characters";
-
-        lock (_gate)
-        {
-            _passwordHash = HashPassword(next);
-            _passwordVersion++;
-            SaveAuth();
-            var keepHash = keepToken is null ? null : Sha256(keepToken);
-            _sessions.RemoveAll(s => s.TokenHash != keepHash);
-            SaveSessions();
-        }
-        _logger.Info("[AUTH] Password changed; other sessions revoked");
-        return null;
-    }
+    // The web change-password path (ChangePassword, verifying the current code) was removed:
+    // the access code is settable ONLY from the desktop (openspec add-desktop-access-code).
 
     /// <summary>
     /// DESKTOP-ONLY (openspec add-desktop-access-code): sets the access code WITHOUT requiring the

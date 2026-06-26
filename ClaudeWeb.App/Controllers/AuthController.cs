@@ -14,7 +14,9 @@ namespace ClaudeWeb.Controllers;
 ///   POST /api/auth/login    -- { password } -> session cookie       (exempt)
 ///   GET  /api/auth/check    -- { authenticated }                    (exempt)
 ///   POST /api/auth/logout   -- revokes the cookie session           (authed)
-///   POST /api/auth/password -- { current, next } rotates password   (authed)
+///
+/// The access code is NOT changeable over the web — only the operator at the host
+/// PC can set it (openspec add-desktop-access-code). There is no change-password endpoint.
 ///
 /// The session token travels in an HttpOnly SameSite=Strict cookie; JS never
 /// sees it. `Secure` is set when the original request came over HTTPS
@@ -100,16 +102,9 @@ public class AuthController : ControllerBase
         return Ok(new { ok = true });
     }
 
-    public record ChangePasswordRequest(string? Current, string? Next);
-
-    [HttpPost("password")]
-    public IActionResult ChangePassword([FromBody] ChangePasswordRequest request)
-    {
-        _logger.CountRequest();
-        var error = _auth.ChangePassword(request?.Current, request?.Next, Request.Cookies[CookieName]);
-        if (error != null) return BadRequest(new { error });
-        return Ok(new { ok = true });
-    }
+    // The access code is NOT changeable over the web (openspec add-desktop-access-code): only the
+    // operator at the host PC can set it, via the WinForms "Set access code" button. There is
+    // deliberately no POST /api/auth/password endpoint.
 
     private static CookieOptions CookieOptions(HttpContext context, TimeSpan maxAge) => new()
     {
