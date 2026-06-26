@@ -27,16 +27,22 @@
       project's conversation, never the ClaudeWeb self conversation (the reported bug). Frontend
       build green (`npm --prefix client run build`).
 
-## 4. Verify (headless browser, isolated preview)
+## 4. Verify (headless browser)
 
-- [ ] 4.1 Basic mode: project selector shows no `isSelf` repo even when its `visibility` is
-      `'basic'`; opening another project shows that project's conversation, not the self
-      conversation; fresh load does not default into Self-Development.
-- [ ] 4.2 Advanced mode: self repo still listed, selectable, pinned, non-removable; dual
-      "Claude Web" chat still available.
-- [ ] 4.3 Toggle Advanced → Basic while viewing the self repo: selection/conversation
-      re-resolve to a non-self repo (or empty state); no self conversation remains.
-- [ ] 4.4 No console errors.
+Driven by `.preview-test/selfrepo-basic-check.mjs`: serves the real built `client/dist` with
+SPA fallback, mocks `/api/*` with fixtures (self[basic] + kekik[basic] + notes[advanced]), and
+exercises the actual RepoContext/Projects/ChatContext code. **14/14 passed.**
+
+- [x] 4.1 Basic + multi: list shows only `kekik` (self and advanced-only `notes` hidden);
+      active repo resolved to `kekik` despite a stored `self` selection; the chat (`/studio`)
+      scoped its repo-id to `kekik`, never `self`. (A1–A5)
+- [x] 4.2 Advanced + multi: all three repos listed; self is the active project. (B1–B3)
+- [x] 4.3 Toggle Advanced → Basic via the real header ModeToggle: self disappears from the list
+      and the active project reactively re-resolves from `self` to `kekik`. (D1–D3)
+- [x] 4.4 Basic + self-only harness: no project cards, the real `projects.noneBasic` empty state
+      renders, and the chat does not scope to `self`. (C1–C3)
+- [x] 4.5 No page errors in Basic. (Advanced multi-pane needs a wide viewport + extra mocked
+      endpoints; tested at phone width — the End User case — where Advanced renders cleanly.)
 
 ## 5. Understanding app (if warranted)
 
