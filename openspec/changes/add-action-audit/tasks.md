@@ -32,8 +32,8 @@
 
 - [x] 3.1 `ChatController` — resolves the actor on the request thread (before the detached `Task.Run`),
       logs a `prompt` entry (actor, repo, lane, text), and threads an `AuditContext` into the run.
-- [x] 3.2 `CliRunnerService.HandleAssistant` — logs a `tool` entry per `tool_use` block; the service
-      skips read-only tools unless `AuditLogReads`.
+- [x] 3.2 `CliRunnerService.HandleAssistant` — logs a `tool` entry per `tool_use` block, every tool
+      (reads included); no per-tool filtering.
 - [x] 3.3 `AuthController` (login, device-mint) + desktop `IpFilterForm` (guest-approve, guest-remove,
       device-revoke as operator events). Logged at callers to avoid a circular dep on `AuditService`.
 
@@ -45,8 +45,8 @@
 
 ## 5. Config
 
-- [x] 5.1 `AuditRetentionDays` (90), `AuditLogReads` (false), `AuditRedactPromptText` (false) in
-      `Models/AppConfig.cs` + `appsettings.json`.
+- [x] 5.1 `AuditRetentionDays` (90), `AuditRedactPromptText` (false) in `Models/AppConfig.cs` +
+      `appsettings.json`. (No read-logging toggle — everything is logged.)
 
 ## 6. Verify
 

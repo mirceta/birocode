@@ -442,9 +442,10 @@
   <section class="view" id="audit">
     <h2>Action audit — trust but verify</h2>
     <div class="lead"><b>The counterweight to removing permissions (tab ⑧).</b> We no longer
-      <i>restrict</i> a gate-passed user — so instead we <i>record</i> what they do. Every prompt and
-      every mutating action is logged, attributed to <i>who</i>, append-only — for accountability now
-      and forensics if a device or password is ever compromised.</div>
+      <i>restrict</i> a gate-passed user — so instead we <i>record</i> what they do. <b>Everything</b>
+      is logged — every message sent to an agent and every tool it runs (reads included) — attributed
+      to <i>who</i>, append-only, for accountability now and forensics if a device or password is ever
+      compromised.</div>
 
     <h2 style="margin-top:22px">What a log entry looks like</h2>
     <p class="note">Three kinds — pick one.</p>
@@ -456,9 +457,9 @@
     <pre id="auditJson" style="background:#0b0f14;border:1px solid var(--line);border-radius:8px;padding:12px;font-size:12px;overflow:auto;color:#cdd9e5;white-space:pre-wrap"></pre>
     <div class="note" id="auditNote"></div>
 
-    <h2 style="margin-top:22px">What's recorded vs skipped</h2>
-    <p class="note">Mutating tools — and anything new/unknown — are logged; pure reads are skipped by
-      default to keep the signal high. Click a tool.</p>
+    <h2 style="margin-top:22px">What's recorded — everything</h2>
+    <p class="note">Every tool the agent runs is logged — <b>reads included</b> — plus every message
+      sent to an agent. No sampling, no per-tool filtering. Click a tool.</p>
     <div id="auditTools"></div>
     <div class="verdict" id="auditToolNote" style="margin-top:10px"></div>
 
@@ -889,7 +890,7 @@ function renderAuditEntry(){
 const AUDIT_TOOLS = [
   {n:'Write',m:1},{n:'Edit',m:1},{n:'MultiEdit',m:1},{n:'Bash',m:1},{n:'WebFetch',m:1},
   {n:'WebSearch',m:1},{n:'NotebookEdit',m:1},
-  {n:'Read',m:0},{n:'Glob',m:0},{n:'Grep',m:0},{n:'LS',m:0},{n:'NotebookRead',m:0},
+  {n:'Read',m:1},{n:'Glob',m:1},{n:'Grep',m:1},{n:'LS',m:1},{n:'NotebookRead',m:1},
 ];
 function renderAuditTools(){
   document.getElementById('auditTools').innerHTML = AUDIT_TOOLS.map((t,i)=>
@@ -905,9 +906,8 @@ document.getElementById('auditSel').addEventListener('click',e=>{
 document.getElementById('auditTools').addEventListener('click',e=>{
   const c=e.target.closest('[data-i]'); if(!c)return;
   const t=AUDIT_TOOLS[+c.dataset.i];
-  document.getElementById('auditToolNote').innerHTML = t.m
-    ? `<b>${t.n} → logged ✅</b> — it mutates (writes files, runs commands, or hits the network). New/unknown tools are logged too, a safe default.`
-    : `<b>${t.n} → skipped by default ○</b> — read-only, high volume, low forensic value. Flip <code>AuditLogReads</code> on to record these too.`;
+  document.getElementById('auditToolNote').innerHTML =
+    `<b>${t.n} → logged ✅</b> — every tool is recorded, reads included. The audit is a complete record of what each user's agent did, not a high-signal summary.`;
 });
 
 //// tabs ////

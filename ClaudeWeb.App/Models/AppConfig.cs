@@ -74,12 +74,6 @@ public class AppConfig
     public int AuditRetentionDays { get; set; } = 90;
 
     /// <summary>
-    /// When true, the audit also records read-only tool actions (Read/Glob/Grep/LS).
-    /// Default false — only mutating/unknown tools are logged, to keep the signal high.
-    /// </summary>
-    public bool AuditLogReads { get; set; } = false;
-
-    /// <summary>
     /// When true, prompt text is replaced with a redaction marker in the audit log
     /// (only the fact a prompt happened, its actor/project, is kept). Default false.
     /// </summary>

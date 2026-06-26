@@ -20,8 +20,8 @@ action to was an IP; with it, an audit line can name the *person* ("Girlfriend's
 - **An append-only audit trail** of every action by every identity that cleared both gates.
 - **Tool-level + prompts** granularity:
   - each **chat prompt** submitted (actor, project, lane, text);
-  - each **mutating tool action** the agent runs inside that turn — file edits, shell commands,
-    network calls — captured from the `claude -p` tool-use stream;
+  - **every tool action** the agent runs inside that turn — reads included (Read/Glob/Grep/LS as
+    well as Edit/Write/Bash/WebFetch/…) — captured from the `claude -p` tool-use stream;
   - **auth events** — login, device approval, device/guest revocation.
 - **Attribution** to the trusted-device name + approved IP + session id (from `add-resilient-auth`).
 - **Storage**: append-only JSONL under `%APPDATA%\ClaudeWeb\audit\`, daily-rotated, never writable
@@ -38,7 +38,7 @@ action to was an IP; with it, an audit line can name the *person* ("Girlfriend's
 - **Affected code (new):** an `AuditService` + append-only JSONL store + rotation; a desktop
   "Activity" UI tab; `Models/AppConfig.cs` (retention days).
 - **Affected code (edited):** `ClaudeWeb.App/Controllers/ChatController.cs` (log the prompt);
-  `ClaudeWeb.App/Services/Chat/CliRunnerService.cs` (log mutating tool-use events from the stream);
+  `ClaudeWeb.App/Services/Chat/CliRunnerService.cs` (log every tool-use event from the stream);
   `ClaudeWeb.App/Controllers/AuthController.cs` + `Services/IpFilter/IpAllowlistService.cs` (log auth
   events).
 - **Key implementation risk (see `design.md`):** tool-level capture requires the `claude -p` run to

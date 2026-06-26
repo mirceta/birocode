@@ -402,8 +402,8 @@ public class CliRunnerService
                 }
                 await emit(new { type = "tool", id, name, status = "input", summary, detail });
 
-                // Action audit (openspec add-action-audit): record this tool action, attributed to
-                // the turn's actor. The service skips read-only tools unless AuditLogReads is on.
+                // Action audit (openspec add-action-audit): record EVERY tool action (reads
+                // included), attributed to the turn's actor.
                 if (audit != null)
                     _audit.LogTool(audit, name, string.IsNullOrEmpty(summary) ? detail : summary);
             }

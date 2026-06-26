@@ -18,8 +18,7 @@ namespace ClaudeWeb.Services.Audit;
 ///
 /// Three event kinds:
 ///   - "prompt": a chat turn (actor, repo, lane, the prompt text)
-///   - "tool":   a mutating tool action the agent ran (Edit/Write/Bash/WebFetch…); reads are
-///               skipped unless AuditLogReads
+///   - "tool":   EVERY tool call the agent ran — reads included (Read/Glob/Grep/LS/Edit/Write/Bash/…)
 ///   - "auth":   login, device mint, IP approval, device/guest revocation
 ///
 /// Stored one JSON object per line in %APPDATA%\ClaudeWeb\audit\YYYY-MM-DD.jsonl (daily rotation),
@@ -29,11 +28,6 @@ namespace ClaudeWeb.Services.Audit;
 /// </summary>
 public class AuditService
 {
-    // Tools that only read — skipped by default so the log stays high-signal. Anything NOT in this
-    // set (mutations + unknown/new tools) is logged, a safe default.
-    private static readonly HashSet<string> ReadOnlyTools = new(StringComparer.OrdinalIgnoreCase)
-    { "Read", "Glob", "Grep", "LS", "NotebookRead", "TodoWrite", "Task" };
-
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -44,7 +38,6 @@ public class AuditService
     private readonly IpAllowlistService _ipAllowlist;
     private readonly DeviceTokenService _devices;
     private readonly string _dir;
-    private readonly bool _logReads;
     private readonly bool _redactPrompts;
     private readonly int _retentionDays;
     private readonly object _gate = new();
@@ -54,7 +47,6 @@ public class AuditService
         _logger = logger;
         _ipAllowlist = ipAllowlist;
         _devices = devices;
-        _logReads = config.AuditLogReads;
         _redactPrompts = config.AuditRedactPromptText;
         _retentionDays = config.AuditRetentionDays;
         _dir = Path.Combine(AppPaths.DataDir, "audit");
@@ -86,10 +78,9 @@ public class AuditService
         Append(entry);
     }
 
-    /// <summary>Records a tool action. Read-only tools are skipped unless AuditLogReads is on.</summary>
+    /// <summary>Records a tool action — every tool the agent runs, reads included.</summary>
     public void LogTool(AuditContext audit, string tool, string? args)
     {
-        if (!_logReads && ReadOnlyTools.Contains(tool)) return;
         var entry = NewEntry("tool", audit.Actor, audit.Repo);
         entry.Lane = audit.Lane;
         entry.Tool = tool;
@@ -204,7 +195,4 @@ public class AuditService
 
     private static string? Trim(string? s, int max) =>
         s is { Length: > 0 } && s.Length > max ? s[..max] + "…" : s;
-
-    /// <summary>True for tools that should be logged (mutations + unknown), given the config.</summary>
-    public bool ShouldLogTool(string tool) => _logReads || !ReadOnlyTools.Contains(tool);
 }
