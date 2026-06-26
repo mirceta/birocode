@@ -124,7 +124,10 @@ export default function Projects() {
     }
   };
 
-  const visibleRepos = isAdvanced ? repos : repos.filter((r) => r.visibility === 'basic');
+  // Basic (End User) never sees the harness's own Self-Development repo, even if
+  // its visibility is 'basic' — it's an Advanced-only concern (openspec:
+  // hide-self-repo-from-basic). Advanced sees every repo, self included.
+  const visibleRepos = isAdvanced ? repos : repos.filter((r) => r.visibility === 'basic' && !r.isSelf);
 
   if (loading && repos.length === 0) return <Loading />;
   if (error) return <ErrorBanner message={t('projects.loadError')} onRetry={reloadRepos} />;
