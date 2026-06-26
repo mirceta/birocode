@@ -115,6 +115,15 @@ export default function PinnedAgent({
   const [registerErr, setRegisterErr] = useState(null); // { port, text } | null
   const registeredPorts = new Set((localApps || []).map((a) => a.port));
 
+  // Run / Check (openspec discover-local-apps-run-controls): start a discovered app
+  // and confirm it came up. "running" is computed LIVE by the backend per fetch (port
+  // liveness), so Check is simply "re-fetch status". Run posts the app's port — the
+  // server launches the command the SCAN extracted (never a client-supplied string) —
+  // then we re-check after a short grace so the row's running dot reflects reality.
+  const [running, setRunning] = useState(null); // port currently being launched
+  const [runErr, setRunErr] = useState(null); // { port, text } | null
+  const [checking, setChecking] = useState(false);
+
   const registerApp = async (app) => {
     setRegistering(app.port);
     setRegisterErr(null);
@@ -221,6 +230,38 @@ export default function PinnedAgent({
         text = JSON.parse(err.message).error || text;
       } catch { /* raw text */ }
       setDiscovery({ status: 'error', error: text });
+    }
+  };
+
+  // Re-fetch the discovery status, which recomputes each app's live `running` flag
+  // (the backend reads port liveness per fetch). Reuses the reattach path — does NOT
+  // start a new scan. Defined after fetchDiscoverStatus so the dep is in scope.
+  const checkRunning = useCallback(async () => {
+    setChecking(true);
+    try {
+      await fetchDiscoverStatus();
+    } finally {
+      setChecking(false);
+    }
+  }, [fetchDiscoverStatus]);
+
+  // Start a discovered app, then re-check its running state after a short grace so
+  // the row's dot flips on once the server is listening. The server resolves the
+  // command from its own scan result by port — we only send the port.
+  const runApp = async (app) => {
+    setRunning(app.port);
+    setRunErr(null);
+    try {
+      await apiPost('/local-apps/run', { port: app.port }, { repoId: tab.repoId });
+      setTimeout(() => { checkRunning(); }, 1500);
+    } catch (err) {
+      let text = err.message;
+      try {
+        text = JSON.parse(err.message).error || text;
+      } catch { /* raw text */ }
+      setRunErr({ port: app.port, text });
+    } finally {
+      setRunning(null);
     }
   };
 
@@ -361,32 +402,69 @@ export default function PinnedAgent({
           {discovery?.apps && (discovery.apps.length === 0 ? (
             <div className="phone__discover-msg" role="status">{t('dashboard.discoverNone')}</div>
           ) : (
-            <ul className="phone__discover-list">
-              {discovery.apps.map((a, i) => {
-                const isRegistered = registeredPorts.has(a.port);
-                const busy = registering === a.port;
-                return (
-                  <li key={i} title={a.evidence || a.folder || ''}>
-                    <span className="phone__discover-name">{a.name}</span>
-                    <span className="phone__discover-port">:{a.port}</span>
-                    {isRegistered ? (
-                      <span className="phone__discover-reg" title={t('dashboard.discoverRegistered')}>
-                        ✓ {t('dashboard.discoverRegistered')}
+            <>
+              <ul className="phone__discover-list">
+                {discovery.apps.map((a, i) => {
+                  const isRegistered = registeredPorts.has(a.port);
+                  const busy = registering === a.port;
+                  const isRunning = !!a.running;
+                  const launching = running === a.port;
+                  return (
+                    <li key={i} title={a.evidence || a.folder || ''}>
+                      <span
+                        className={`phone__discover-dot${isRunning ? ' phone__discover-dot--on' : ''}`}
+                        title={isRunning ? t('dashboard.discoverRunning') : t('dashboard.discoverNotRunning')}
+                        aria-label={isRunning ? t('dashboard.discoverRunning') : t('dashboard.discoverNotRunning')}
+                      />
+                      <span className="phone__discover-name">{a.name}</span>
+                      <span className="phone__discover-port">:{a.port}</span>
+                      <span className="phone__discover-actions">
+                        {!isRunning && (
+                          <button
+                            type="button"
+                            className="phone__discover-run"
+                            onClick={() => runApp(a)}
+                            disabled={launching || !a.startCommand}
+                            title={a.startCommand
+                              ? t('dashboard.discoverRunHint', { command: a.startCommand })
+                              : t('dashboard.discoverNoCommand')}
+                          >
+                            {launching ? t('dashboard.discoverRunning') : `▶ ${t('dashboard.discoverRun')}`}
+                          </button>
+                        )}
+                        {isRegistered ? (
+                          <span className="phone__discover-reg" title={t('dashboard.discoverRegistered')}>
+                            ✓ {t('dashboard.discoverRegistered')}
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="phone__discover-add"
+                            onClick={() => registerApp(a)}
+                            disabled={busy}
+                          >
+                            {busy ? t('dashboard.discoverRegistering') : t('dashboard.discoverRegister')}
+                          </button>
+                        )}
                       </span>
-                    ) : (
-                      <button
-                        type="button"
-                        className="phone__discover-add"
-                        onClick={() => registerApp(a)}
-                        disabled={busy}
-                      >
-                        {busy ? t('dashboard.discoverRegistering') : t('dashboard.discoverRegister')}
-                      </button>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+                    </li>
+                  );
+                })}
+              </ul>
+              <button
+                type="button"
+                className="phone__discover-check"
+                onClick={checkRunning}
+                disabled={checking}
+              >
+                {checking ? t('dashboard.discoverChecking') : `🔄 ${t('dashboard.discoverCheck')}`}
+              </button>
+              {runErr && (
+                <div className="phone__discover-msg phone__discover-msg--err" role="status">
+                  {t('dashboard.discoverRunError', { error: runErr.text })}
+                </div>
+              )}
+            </>
           ))}
           {registerErr && (
             <div className="phone__discover-msg phone__discover-msg--err" role="status">

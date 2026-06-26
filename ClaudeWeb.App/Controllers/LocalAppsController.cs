@@ -20,14 +20,19 @@ namespace ClaudeWeb.Controllers;
 /// retained server-side for reattach. The request's abort token is deliberately
 /// NOT threaded into the run.
 ///
-///   GET /api/local-apps/discover         -- start-or-join the caller's repo scan;
+///   GET  /api/local-apps/discover        -- start-or-join the caller's repo scan;
 ///                                           returns the current job state
-///   GET /api/local-apps/discover/status  -- the caller's repo's most recent job
+///   GET  /api/local-apps/discover/status -- the caller's repo's most recent job
 ///                                           state, for reattach on (re)load
+///   POST /api/local-apps/run             -- start one discovered app (by port) using
+///                                           the command the scan extracted, launched
+///                                           detached in the app's folder
 ///
-/// Both return { repoId, repoName, status: running|done|error|idle, apps?, error?,
-/// startedAt?, finishedAt? }. On a completed scan the body still carries
-/// { repoId, repoName, apps } so existing callers stay backward-compatible.
+/// The two GETs return { repoId, repoName, status: running|done|error|idle, apps?,
+/// error?, startedAt?, finishedAt? }. On a completed scan the body still carries
+/// { repoId, repoName, apps } so existing callers stay backward-compatible; each app
+/// additionally carries its scanned `startCommand` and a harness-computed live
+/// `running` flag (openspec change discover-local-apps-run-controls).
 /// </summary>
 [ApiController]
 [Route("api/local-apps")]
@@ -35,12 +40,14 @@ public class LocalAppsController : ControllerBase
 {
     private readonly RepositoryResolver _repos;
     private readonly LocalAppDiscoveryJobs _jobs;
+    private readonly LocalAppRunner _runner;
     private readonly Logger _logger;
 
-    public LocalAppsController(RepositoryResolver repos, LocalAppDiscoveryJobs jobs, Logger logger)
+    public LocalAppsController(RepositoryResolver repos, LocalAppDiscoveryJobs jobs, LocalAppRunner runner, Logger logger)
     {
         _repos = repos;
         _jobs = jobs;
+        _runner = runner;
         _logger = logger;
     }
 
@@ -78,10 +85,62 @@ public class LocalAppsController : ControllerBase
         return Ok(JobBody(repo.Id, repo.Name, job));
     }
 
+    // Start a single discovered app for the caller's repo, by port. The command run
+    // is the one DISCOVERY extracted (resolved server-side from this repo's latest
+    // scan by port), never a string off the wire — see openspec change
+    // discover-local-apps-run-controls. Launched detached in the app's folder so it
+    // outlives the request; the dock confirms it came up via the live `running` flag.
+    [HttpPost("run")]
+    public IActionResult Run([FromBody] RunRequest body)
+    {
+        _logger.CountRequest();
+
+        var repo = _repos.Current();
+        if (repo is null)
+            return NotFound(new { error = "No repository selected." });
+        if (string.IsNullOrWhiteSpace(repo.Path) || !Directory.Exists(repo.Path))
+            return BadRequest(new { error = $"Repository working directory not found: '{repo.Path}'." });
+
+        var job = _jobs.Get(repo.Id);
+        if (job is null || job.Status != DiscoveryStatus.Done || job.Result is null)
+            return BadRequest(new { error = "No completed discovery for this repository; run Discover first." });
+
+        var app = job.Result.Apps.FirstOrDefault(a => a.Port == body.Port);
+        if (app is null)
+            return BadRequest(new { error = $"No discovered app on port {body.Port} for this repository." });
+        if (string.IsNullOrWhiteSpace(app.StartCommand))
+            return BadRequest(new { error = $"Discovered app '{app.Name}' has no known start command." });
+
+        // The folder is repo-relative (per the discovery contract); resolve it under
+        // the repo root and confirm it is inside the repo before launching there.
+        var folder = Path.GetFullPath(Path.Combine(repo.Path, app.Folder));
+        var repoRoot = Path.GetFullPath(repo.Path);
+        if (!folder.StartsWith(repoRoot, StringComparison.OrdinalIgnoreCase) || !Directory.Exists(folder))
+            return BadRequest(new { error = $"App folder not found in repository: '{app.Folder}'." });
+
+        try
+        {
+            var proc = _runner.Launch(app.StartCommand, folder);
+            return Ok(new { ok = true, port = app.Port, name = app.Name, command = app.StartCommand, pid = proc.Id });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = $"Failed to start '{app.Name}': {ex.Message}" });
+        }
+    }
+
+    public sealed class RunRequest
+    {
+        public int Port { get; set; }
+    }
+
     // Shared projection. A null job means "no recent discovery" (idle); otherwise we
     // surface running/done/error with the apps list on done. The completed shape
-    // keeps { repoId, repoName, apps } so the route stays backward-compatible.
-    private static object JobBody(string repoId, string repoName, DiscoveryJob? job)
+    // keeps { repoId, repoName, apps } so the route stays backward-compatible; each
+    // app additionally carries its scanned `startCommand` and a `running` flag the
+    // harness computes LIVE here (port liveness), so it is fresh as of this fetch
+    // rather than frozen at scan time — openspec change discover-local-apps-run-controls.
+    private object JobBody(string repoId, string repoName, DiscoveryJob? job)
     {
         if (job is null)
             return new { repoId, repoName, status = "idle" };
@@ -105,6 +164,8 @@ public class LocalAppsController : ControllerBase
                     port = a.Port,
                     folder = a.Folder,
                     evidence = a.Evidence,
+                    startCommand = a.StartCommand,
+                    running = _runner.IsListening(a.Port),
                 })
                 : null,
             error = job.Status == DiscoveryStatus.Error ? job.Error : null,

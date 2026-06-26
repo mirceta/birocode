@@ -1193,11 +1193,38 @@
   color: var(--color-accent);
 }
 
-/* Register a discovered app as a real local app (mirrors the Local tab's
-   add-app form). Pushed to the right edge of the row; "✓ Registered" replaces
-   it once the port is in the dock's localApps. */
-.phone__discover-add {
+/* Live running indicator (openspec discover-local-apps-run-controls): a dot the
+   backend computes per fetch from the app's port liveness. Dim = down, green = up. */
+.phone__discover-dot {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-border);
+}
+
+.phone__discover-dot--on {
+  background: #16a34a;
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.2);
+}
+
+/* Right-edge action group: Run + Register/✓ Registered. The wrapper carries the
+   margin-left:auto so the two buttons sit together at the row's right edge. */
+.phone__discover-actions {
   margin-left: auto;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Run a discovered app: launches the scanned start command. Hidden once the app
+   is running (the dot turns green). Register a discovered app as a real local app
+   (mirrors the Local tab's add-app form); "✓ Registered" replaces it once the
+   port is in the dock's localApps. */
+.phone__discover-add,
+.phone__discover-run {
   flex: 0 0 auto;
   padding: 1px 8px;
   border: 1px solid var(--color-border);
@@ -1210,22 +1237,54 @@
   cursor: pointer;
 }
 
-.phone__discover-add:hover:not(:disabled) {
+.phone__discover-run {
+  color: #16a34a;
+  border-color: rgba(22, 163, 74, 0.4);
+}
+
+.phone__discover-add:hover:not(:disabled),
+.phone__discover-run:hover:not(:disabled) {
   color: var(--color-text);
   border-color: var(--color-accent);
 }
 
-.phone__discover-add:disabled {
+.phone__discover-add:disabled,
+.phone__discover-run:disabled {
   cursor: default;
   opacity: 0.45;
 }
 
 .phone__discover-reg {
-  margin-left: auto;
   flex: 0 0 auto;
   font-size: 10.5px;
   font-weight: 600;
   color: #16a34a;
+}
+
+/* Re-check running state of all discovered apps (re-fetch status → recompute the
+   live dots). Sits under the list, left-aligned. */
+.phone__discover-check {
+  align-self: flex-start;
+  margin-top: 6px;
+  padding: 1px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-soft);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.phone__discover-check:hover:not(:disabled) {
+  color: var(--color-text);
+  border-color: var(--color-accent);
+}
+
+.phone__discover-check:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 
 /* Per-dock git refresh — re-fetches this agent's git status (hits origin). */

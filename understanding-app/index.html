@@ -155,21 +155,34 @@
   .status code{color:var(--ok)}
   .pill{font-size:10px; padding:1px 8px; border-radius:999px; border:1px solid var(--bad-line); background:var(--bad-bg); color:var(--bad); font-weight:700}
   .pill.ok{border-color:var(--ok-line); background:var(--ok-bg); color:var(--ok)}
+
+  /* Demo C — run & check rows */
+  .capp{display:flex; align-items:center; gap:8px; padding:7px 2px; font-size:13px}
+  .capp + .capp{border-top:1px solid var(--line)}
+  .capp-dot{width:8px; height:8px; border-radius:50%; background:var(--line); flex:0 0 auto}
+  .capp-dot.on{background:var(--ok); box-shadow:0 0 0 3px rgba(63,185,80,.22)}
+  .capp-n{font-weight:650}
+  .capp-p{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; color:var(--run)}
+  .capp-run{margin-left:auto; padding:2px 10px; font-size:11px}
+  .capp-run:disabled{opacity:.45; cursor:default}
+  .capp-reg{margin-left:auto; font-size:11px; font-weight:650; color:var(--ok)}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Discovery that survives a refresh</h1>
+  <h1>Discovery that survives a refresh — and now runs what it finds</h1>
   <p class="sub">
-    "Discover local apps" is a per-repo, read-only <b>agent scan</b> fired from a dock's button. Today the whole scan is
-    <b>bound to the HTTP request</b> and its result lives only in the browser. So a mid-scan page refresh does two bad things:
-    it <b>cancels the still-running agent call</b> (wasting it) and <b>throws away</b> any result that already landed. Separately,
-    when several docks scan at once, the reported <b>metadata gets cross-wired</b>. This change makes discovery <b>backend-owned</b>:
-    the scan runs to completion regardless of the browser, the dock <b>reattaches</b> on load, and each call gets its <b>own metadata</b>.
+    "Discover local apps" is a per-repo, read-only <b>agent scan</b> fired from a dock's button. The first change
+    (<code>discover-local-apps-resilient</code>) made it <b>backend-owned</b>: the scan runs to completion regardless of the browser,
+    the dock <b>reattaches</b> on load, and each call gets its <b>own metadata</b>. <b>Demo A &amp; B</b> below show that.
+    The follow-up (<code>discover-local-apps-run-controls</code>, <b>Demo C</b>) closes the loop: the scan also extracts each app's
+    <b>start command</b>, the harness reports a <b>live running</b> flag (computed from the port, never frozen into the scan), and the
+    dock gains <b>Run</b> and <b>Check</b> buttons so you can start a discovered app and confirm it came up without leaving the dock.
   </p>
 
   <div class="tags">
     <span class="tag"><b>Change:</b> discover-local-apps-resilient</span>
+    <span class="tag"><b>Change:</b> discover-local-apps-run-controls</span>
     <span class="tag"><b>Capability:</b> discover-local-apps (modified)</span>
     <span class="tag"><b>Branch:</b> feature/discover-local-apps-concurrency</span>
     <span class="tag"><b>Gate:</b> Advanced mode (unchanged)</span>
@@ -283,6 +296,46 @@
     </div>
   </div>
 
+  <!-- ======================= DEMO C ======================= -->
+  <h2 class="sec">Demo C — check if it's running, then run it</h2>
+  <div class="grid">
+    <div class="stage">
+      <div class="phone" id="phoneC">
+        <div class="pbar"><span class="dot"></span><span class="repo">birocode</span><span style="margin-left:auto">dock · phone tile</span></div>
+        <div class="disc-h"><span class="ic">🔎</span> Discover local apps · <b>done · 2 apps</b></div>
+        <div class="panelbox">
+          <div id="cList"></div>
+        </div>
+        <div class="ctl" style="margin-top:10px">
+          <button class="act" id="cCheck">🔄 Check running</button>
+          <button class="act" id="cStart">⚡ (simulate homepage server starting)</button>
+          <button class="act" id="cReset">↺ Reset</button>
+        </div>
+        <div class="logline" id="cLog" style="margin-top:10px"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h3>Why <code>running</code> is computed live, not scanned</h3>
+        <p>A scan takes ~30–60s; whether an app is up changes second to second. A running flag <b>baked into the scan result</b>
+          would be stale the instant the scan finished. So the harness computes <code>running</code> at <b>fetch time</b> from the
+          port itself (<code>IPGlobalProperties.GetActiveTcpListeners()</code> — in-process, no shell, no network). <b>Check</b> is
+          simply "re-fetch status," which recomputes every row's dot — so it's always accurate, and it even reflects apps started
+          outside the harness.</p>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <h3>Run uses the <i>scanned</i> command, resolved by port</h3>
+        <p><code>POST /api/local-apps/run { port }</code> looks up that port's finding in the repo's latest scan and launches its
+          stored <code>startCommand</code> <b>detached</b> in the app's folder. The client only sends a port — the command executed
+          is the one discovery extracted, never a string off the wire. After a Run the dock waits a beat, then auto-<b>Checks</b> so
+          the dot flips green once the server is listening.</p>
+        <div class="dec" style="margin-top:8px"><div class="k">Stop?</div><div class="v"><span class="pill">v1 gap</span> none.
+          <span class="why">No PID tracking yet; liveness is read off the port, so there's nothing retained to kill. A Stop endpoint is a separate, larger change.</span></div></div>
+      </div>
+    </div>
+  </div>
+
   <!-- ======================= DESIGN ======================= -->
   <h2 class="sec">Key design decisions</h2>
   <div class="grid">
@@ -290,8 +343,9 @@
       <div class="card" style="width:100%">
         <h3>Scope held fixed</h3>
         <ul>
-          <li>Discovered-apps payload <code>{ name, port, folder, evidence }</code> — <b>unchanged</b>.</li>
-          <li>Read-only scan policy — <b>unchanged</b>.</li>
+          <li>Payload is <b>additive</b>: <code>{ name, port, folder, evidence }</code> plus the new optional
+            <code>startCommand</code> and a harness-computed <code>running</code> — old callers unaffected.</li>
+          <li>Read-only <b>scan</b> policy — <b>unchanged</b> (Run is a separate, operator-initiated endpoint).</li>
           <li>Single-repo-per-call scoping — <b>unchanged</b>.</li>
           <li><code>GET /api/local-apps/discover</code> stays <b>backward-compatible</b> (completed shape unchanged).</li>
         </ul>
@@ -322,9 +376,10 @@
   </div>
 
   <p class="status">
-    Live in this repo: <code>discover-local-apps-resilient</code> is at <b>Phase&nbsp;1 (Propose)</b> — <code>proposal.md</code>,
-    <code>design.md</code>, delta <code>specs/discover-local-apps/spec.md</code> (3 ADDED requirements) and <code>tasks.md</code> (0/13)
-    live under <code>openspec/changes/</code> and pass <code>validate --strict</code>. No code written yet.
+    Live in this repo: <code>discover-local-apps-resilient</code> shipped (backend-owned discovery + reattach + per-call identity).
+    <code>discover-local-apps-run-controls</code> is <b>implemented</b> — <code>startCommand</code> on the typed report, a live
+    <code>running</code> flag + <code>POST /api/local-apps/run</code>, and the dock's Run/Check buttons; its OpenSpec change
+    (proposal, design, delta spec, tasks) passes <code>validate --strict</code>.
   </p>
 </div>
 
@@ -498,10 +553,60 @@ function resetConc(){
 document.getElementById('concBtn').addEventListener('click', fireConc);
 document.getElementById('concReset').addEventListener('click', resetConc);
 
+// ---------- DEMO C: run & check ----------
+// Two discovered apps. `running` is NOT stored on the finding — it's recomputed
+// from a (simulated) live port table every time Check runs, mirroring the backend.
+const C_APPS=[
+  {name:'homepage', port:5305, folder:'homepage', cmd:'node serve.mjs'},
+  {name:'minesweeper', port:5200, folder:'games/minesweeper', cmd:''}, // no start command found
+];
+let livePorts=new Set();        // the "OS" listener table (what the harness checks)
+let shownRunning={};            // last Check result the dock is displaying
+const cList=document.getElementById('cList'), cLog=document.getElementById('cLog');
+
+function renderC(){
+  cList.innerHTML=C_APPS.map(a=>{
+    const on=!!shownRunning[a.port];
+    const dot=`<span class="capp-dot${on?' on':''}"></span>`;
+    const right = on
+      ? '<span class="capp-reg">running</span>'
+      : `<button class="act capp-run" data-port="${a.port}" ${a.cmd?'':'disabled'} title="${a.cmd?('Start: '+a.cmd):'No start command found'}">▶ Run</button>`;
+    return `<div class="capp">${dot}<span class="capp-n">${a.name}</span><span class="capp-p">:${a.port}</span>${right}</div>`;
+  }).join('');
+  cList.querySelectorAll('.capp-run').forEach(b=>b.addEventListener('click',()=>runC(+b.dataset.port)));
+}
+function checkC(){
+  // Re-fetch status === recompute running from the live port table, right now.
+  C_APPS.forEach(a=> shownRunning[a.port]=livePorts.has(a.port));
+  renderC();
+  const ups=C_APPS.filter(a=>shownRunning[a.port]).map(a=>a.name);
+  cLog.innerHTML = `<span class="good">✓ Check</span> recomputed <code>running</code> from the live port table — `
+    + (ups.length? `up: <b>${ups.join(', ')}</b>.` : 'nothing listening yet.');
+}
+function runC(port){
+  const a=C_APPS.find(x=>x.port===port); if(!a||!a.cmd) return;
+  cLog.innerHTML=`<b>POST /run { port: ${port} }</b> → server resolves <code>${a.cmd}</code> from the scan and launches it detached in <code>${a.folder}/</code>…`;
+  setTimeout(()=>{ livePorts.add(port);   // the server is now listening
+    cLog.innerHTML+=' then the dock auto-<b>Checks</b>…';
+    setTimeout(checkC, 600);
+  }, 700);
+}
+function startHomepageExternally(){
+  livePorts.add(5305);
+  cLog.innerHTML='An external process started <b>homepage</b> on :5305 (nothing to do with the harness). '
+    + 'Press <b>Check</b> — the dot flips green because liveness is read off the port, not the scan.';
+}
+function resetC(){ livePorts=new Set(); shownRunning={}; renderC();
+  cLog.innerHTML='Both dots are dim — the scan never claimed they were running. Press <b>Check</b> (still down), then <b>Run</b> homepage.'; }
+document.getElementById('cCheck').addEventListener('click', checkC);
+document.getElementById('cStart').addEventListener('click', startHomepageExternally);
+document.getElementById('cReset').addEventListener('click', resetC);
+
 // init
 setMode('after');
 renderFlow();
 resetConc();
+resetC();
 </script>
 </body>
 </html>

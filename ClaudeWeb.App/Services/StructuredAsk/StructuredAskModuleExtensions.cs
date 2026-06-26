@@ -20,6 +20,9 @@ public static class StructuredAskModuleExtensions
         // discover-local-apps-resilient): singleton so one scan survives client
         // disconnects and the dock can reattach to it on load.
         services.AddSingleton<LocalAppDiscoveryJobs>();
+        // Live half of discovery (openspec change discover-local-apps-run-controls):
+        // port-liveness check + detached launch of a discovered app's scanned command.
+        services.AddSingleton<LocalAppRunner>();
         return services;
     }
 }
