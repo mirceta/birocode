@@ -358,6 +358,67 @@
   color: var(--color-text);
 }
 
+/* ---- IDE line-number gutter (openspec: add-cs-syntax-highlighting) ----- */
+/* Gutter + code share the SAME font metrics so numbers align 1:1 with rows.
+   The non-wrapping code column scrolls horizontally (via the body's overflow);
+   the gutter stays pinned left via sticky so numbers don't scroll out. */
+.file-viewer__code-wrap {
+  display: flex;
+  align-items: flex-start;
+}
+
+.file-viewer__gutter {
+  margin: 0;
+  flex: none;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  padding-right: 12px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: right;
+  color: var(--color-text-muted, #9aa0a6);
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.file-viewer__code--nowrap {
+  flex: 1 1 auto;
+  padding-left: 12px;
+  white-space: pre;
+  word-break: normal;
+}
+
+.file-viewer__code--nowrap code {
+  font: inherit;
+  background: none;
+  padding: 0;
+}
+
+/* C# token palette tuned to the light theme (no external hljs stylesheet). */
+.file-viewer__code .hljs-comment,
+.file-viewer__code .hljs-quote { color: #6a737d; font-style: italic; }
+.file-viewer__code .hljs-keyword,
+.file-viewer__code .hljs-built_in,
+.file-viewer__code .hljs-meta-keyword { color: #d73a49; }
+.file-viewer__code .hljs-meta { color: #6f42c1; }
+.file-viewer__code .hljs-string,
+.file-viewer__code .hljs-char.escape_ { color: #032f62; }
+.file-viewer__code .hljs-number,
+.file-viewer__code .hljs-literal { color: #005cc5; }
+.file-viewer__code .hljs-title,
+.file-viewer__code .hljs-title.function_ { color: #6f42c1; }
+.file-viewer__code .hljs-title.class_,
+.file-viewer__code .hljs-type { color: #22863a; }
+.file-viewer__code .hljs-attr,
+.file-viewer__code .hljs-property,
+.file-viewer__code .hljs-variable { color: #e36209; }
+.file-viewer__code .hljs-symbol,
+.file-viewer__code .hljs-doctag { color: #b31d28; }
+
 /* ---- IDE mode (plans/files-ide-mode.md) -------------------------------- */
 /* One split layout used on BOTH the Files tab and the agent dock: a slim rail
    with the show/hide toggle, the collapsible folder browser (search + pins +
@@ -532,54 +593,78 @@
   cursor: default;
 }
 
-/* Tree zoom: scale the folder rows, search results and pins by --tree-zoom
-   (default 1), scoped to the browser pane so the file view is never affected.
+/* Tree zoom + density: the folder browser is a dense, flat tree -- Visual
+   Studio's Solution Explorer, not a list of cards. Rows drop the per-row
+   border/background/radius and the inter-row gap and shrink to a single text
+   line, so roughly twice as many entries fit in the same height (the point is
+   to see the repo, not to look pretty). Everything still scales by --tree-zoom
+   (default 1) and is scoped to the browser pane so the file view is untouched.
    The search box and zoom controls stay fixed-size for usability. */
 .files-ide__browser { --tree-zoom: 1; }
 
-.files-ide__browser .file-list { gap: calc(4px * var(--tree-zoom)); }
+.files-ide__browser .file-list { gap: 0; }
 
 .files-ide__browser .file-row {
-  min-height: calc(var(--touch) * var(--tree-zoom));
-  padding: calc(8px * var(--tree-zoom)) calc(12px * var(--tree-zoom));
-  gap: calc(10px * var(--tree-zoom));
+  min-height: calc(22px * var(--tree-zoom));
+  /* left padding is the depth indent set inline by FileList.jsx; only trim the
+     other three sides here. */
+  padding-top: calc(1px * var(--tree-zoom));
+  padding-bottom: calc(1px * var(--tree-zoom));
+  padding-right: calc(8px * var(--tree-zoom));
+  gap: calc(6px * var(--tree-zoom));
+  background: transparent;
+  border: none;
+  border-radius: 0;
 }
 
-.files-ide__browser .file-row__name { font-size: calc(15px * var(--tree-zoom)); }
-.files-ide__browser .file-row__icon { font-size: calc(20px * var(--tree-zoom)); }
-.files-ide__browser .file-row__chevron { font-size: calc(12px * var(--tree-zoom)); }
+.files-ide__browser .file-row:hover { background: var(--color-accent-soft); }
+
+.files-ide__browser .file-row__name { font-size: calc(13px * var(--tree-zoom)); }
+.files-ide__browser .file-row__icon { font-size: calc(14px * var(--tree-zoom)); }
+.files-ide__browser .file-row__chevron { font-size: calc(10px * var(--tree-zoom)); }
 .files-ide__browser .file-row__lines,
-.files-ide__browser .file-row__size { font-size: calc(12px * var(--tree-zoom)); }
+.files-ide__browser .file-row__size { font-size: calc(11px * var(--tree-zoom)); }
+
+/* Inline folder status rows (loading / error / empty) match the dense tree. */
+.files-ide__browser .file-tree__status {
+  min-height: calc(22px * var(--tree-zoom));
+  padding-top: 0;
+  padding-bottom: 0;
+  font-size: calc(12px * var(--tree-zoom));
+}
 
 .files-ide__browser .files-ide__result-name { font-size: calc(14px * var(--tree-zoom)); }
 .files-ide__browser .files-ide__result-dir { font-size: calc(11px * var(--tree-zoom)); }
 .files-ide__browser .files-pin { font-size: calc(13px * var(--tree-zoom)); }
 
-/* Fuzzy search results (flat list replaces the tree while searching). */
+/* Fuzzy search results (flat list replaces the tree while searching). Dense and
+   flat to match the tree -- no per-row cards, no gap -- so a query shows as many
+   hits as possible. Scales with --tree-zoom like the rest of the pane. */
 .files-ide__results {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0;
 }
 
 .files-ide__rescount,
 .files-ide__more,
 .files-ide__noresults {
   color: var(--color-text-soft);
-  font-size: 12px;
+  font-size: calc(11px * var(--tree-zoom));
   margin: 4px 2px;
 }
 
 .files-ide__result {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: calc(6px * var(--tree-zoom));
   width: 100%;
   text-align: left;
-  padding: 8px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
+  min-height: calc(22px * var(--tree-zoom));
+  padding: calc(1px * var(--tree-zoom)) calc(8px * var(--tree-zoom));
+  border: none;
+  border-radius: 0;
+  background: transparent;
   color: var(--color-text);
 }
 
@@ -588,8 +673,8 @@
 }
 
 .files-ide__result--active {
-  border-color: var(--color-accent);
   background: var(--color-accent-soft);
+  box-shadow: inset 2px 0 0 var(--color-accent);
 }
 
 .files-ide__result-name {
@@ -598,7 +683,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 14px;
+  font-size: calc(13px * var(--tree-zoom));
 }
 
 .files-ide__result-dir {
@@ -607,6 +692,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11px;
+  font-size: calc(11px * var(--tree-zoom));
   color: var(--color-text-soft);
 }

@@ -18,9 +18,10 @@ panel was reworked:
   panel; `GET /api/analytics?window=…` scopes every scalar (prompts, peak,
   longest, total work, cost) to it. (v1 mixed "today" with all-time.)
 - **Real time-series.** A **concurrency-over-time** step-area chart (the hero —
-  *agents running at the same time*, with its shape, not just a scalar) and an
-  **activity, last-7-days** prompts-per-day strip. These are the "graphs" the
-  original ask wanted.
+  *agents running at the same time*, with its shape, not just a scalar) and a
+  prompts-per-day **activity strip** (originally fixed to the last 7 days —
+  **superseded**, now window-scoped; see the v3 note below). These are the
+  "graphs" the original ask wanted.
 - **Per-agent leaderboard** (runs · total work · longest · last used), ranked by
   work — replaces v1's per-agent work/idle bars.
 - **Cost.** The CLI result's `CostUsd` now rides the `finish` event; the panel
@@ -32,6 +33,33 @@ panel was reworked:
 Endpoint shape (v2): `{ window, windowStart, windowEnd, longestRun, peakConcurrency,
 prompts, totalWorkMs, totalCostUsd, totalRuns, concurrency[{ts,level}],
 daily[{date,prompts,workMs}], agents[{agent,workMs,longestMs,lastUsed,runs}] }`.
+
+## v3 (2026-06-26) — activity strip follows the window
+
+Planned in OpenSpec (`openspec/changes/scoreboard-render-all`). The v2 activity
+strip was hardcoded to the trailing 7 calendar days (`AnalyticsService.Daily()`
+looped `i = 6 → 0`) **regardless of the window toggle**, so "All" widened every
+scalar but the trend still showed only a week — the panel claimed to show all but
+didn't.
+
+- **The strip's day span now tracks the selected window** (same as the scalars and
+  the concurrency series): `today` → 1 day, `7d` → the trailing 7 days (unchanged),
+  `all` → every calendar day from the earliest recorded run through today. An empty
+  ledger on `all` falls back to a single current-day entry; days stay bounded by
+  host-local midnight.
+- `daily[]` is now **variable-length** (the `Analytics` record shape is otherwise
+  unchanged — `GET /api/analytics?window=` needs no new params). The frontend
+  `ActivityStrip` renders one bar per entry (no fixed 7) and **labels the strip
+  with the actual span** (e.g. "Activity — all · N days"). `scoreboard.css` lets
+  the strip scroll horizontally with a per-bar min-width as the count grows.
+- **Decision:** the strip tracks the window rather than *always* spanning full
+  history, so the whole panel tells one consistent story (no year of bars under
+  "Today").
+
+**Deferred follow-up — long-history density.** Once the ledger spans many weeks or
+months, one-bar-per-day will outgrow even a horizontal scroll. Bucketing into
+weeks/months (or a zoom) is the future fix — out of scope here (history is ~10
+days old today).
 
 ## Problem / goal
 

@@ -1,9 +1,54 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import hljs from 'highlight.js/lib/core';
+import csharp from 'highlight.js/lib/languages/csharp';
 import Markdown from '../shared/Markdown';
 import { useT } from '../../i18n/LanguageContext';
+import { useFeature } from '../../context/UiModeContext';
+
+// Only the C# grammar is registered — keeps the bundle to hljs core + one
+// language instead of the full ~190-language pack (openspec:
+// add-cs-syntax-highlighting).
+hljs.registerLanguage('csharp', csharp);
 
 const MARKDOWN_RE = /\.(md|markdown|mdown|mkd|mkdn)$/i;
 const HTML_RE = /\.(html?|xhtml)$/i;
+const CS_RE = /\.cs$/i;
+
+// Code view with an IDE-style line-number gutter. C# files are tokenized by
+// hljs (its output is HTML-escaped, so injecting it is safe); everything else
+// renders as plain text. The gutter is aria-hidden and unselectable so copy
+// excludes the numbers, and the code column is non-wrapping (white-space: pre)
+// so each logical line stays one row and the numbers line up 1:1.
+function CodeView({ name, content }) {
+  const isCs = CS_RE.test(name || '');
+  const html = useMemo(() => {
+    if (!isCs) return null;
+    try {
+      return hljs.highlight(content, { language: 'csharp' }).value;
+    } catch {
+      return null; // unsupported / failed — fall back to plain text
+    }
+  }, [isCs, content]);
+
+  const lineCount = content.split('\n').length;
+  const gutter = Array.from({ length: lineCount }, (_, i) => i + 1).join('\n');
+
+  return (
+    <div className="file-viewer__code-wrap">
+      <pre className="file-viewer__gutter" aria-hidden="true">{gutter}</pre>
+      {html != null ? (
+        <pre className="file-viewer__code file-viewer__code--nowrap">
+          <code
+            className="hljs language-csharp"
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
+        </pre>
+      ) : (
+        <pre className="file-viewer__code file-viewer__code--nowrap">{content}</pre>
+      )}
+    </div>
+  );
+}
 
 // Renders one open file: markdown and HTML render (with a raw toggle), anything
 // else as plain text. HTML renders in a fully-sandboxed iframe — file content
@@ -24,6 +69,7 @@ export default function FileViewer({
   onTogglePin,
 }) {
   const { t } = useT();
+  const codeHighlight = useFeature('codeHighlight');
   const isImage = !!imageUrl;
   const isMarkdown = MARKDOWN_RE.test(name || '');
   const isHtml = HTML_RE.test(name || '');
@@ -110,7 +156,10 @@ export default function FileViewer({
             sandbox=""
           />
         )}
-        {!isImage && !showRendered && (
+        {!isImage && !showRendered && codeHighlight && (
+          <CodeView name={name} content={content} />
+        )}
+        {!isImage && !showRendered && !codeHighlight && (
           <pre className="file-viewer__code">{content}</pre>
         )}
       </div>
