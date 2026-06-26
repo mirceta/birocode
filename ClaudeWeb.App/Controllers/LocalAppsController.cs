@@ -1,3 +1,4 @@
+using ClaudeWeb.Services.Events;
 using ClaudeWeb.Services.Logging;
 using ClaudeWeb.Services.Repositories;
 using ClaudeWeb.Services.StructuredAsk;
@@ -41,13 +42,15 @@ public class LocalAppsController : ControllerBase
     private readonly RepositoryResolver _repos;
     private readonly LocalAppDiscoveryJobs _jobs;
     private readonly LocalAppRunner _runner;
+    private readonly RepoEventLog _events;
     private readonly Logger _logger;
 
-    public LocalAppsController(RepositoryResolver repos, LocalAppDiscoveryJobs jobs, LocalAppRunner runner, Logger logger)
+    public LocalAppsController(RepositoryResolver repos, LocalAppDiscoveryJobs jobs, LocalAppRunner runner, RepoEventLog events, Logger logger)
     {
         _repos = repos;
         _jobs = jobs;
         _runner = runner;
+        _events = events;
         _logger = logger;
     }
 
@@ -72,8 +75,12 @@ public class LocalAppsController : ControllerBase
     // Reattach: the dock calls this on mount / repo-change (and while polling) to
     // observe a running scan, pick up a result/error that landed while it was away,
     // or learn there is nothing recent (idle) — without starting a new scan.
+    // `probe=1` marks an explicit user "Check running" press (vs the background ~5s
+    // status poll, which never sets it). Only an explicit probe emits a check event
+    // to the Event Console — so the log records the user action without the poll
+    // flooding it (openspec agent-dock-event-console).
     [HttpGet("discover/status")]
-    public IActionResult Status()
+    public IActionResult Status([FromQuery] bool probe = false)
     {
         _logger.CountRequest();
 
@@ -82,7 +89,27 @@ public class LocalAppsController : ControllerBase
             return NotFound(new { error = "No repository selected." });
 
         var job = _jobs.Get(repo.Id);
+        if (probe) EmitCheck(repo.Id, job);
         return Ok(JobBody(repo.Id, repo.Name, job));
+    }
+
+    // Emit a check boundary event: we probe each discovered app's port (in-process
+    // listener snapshot) and report which are live. Best-effort; a check with no
+    // completed scan still records that the user probed.
+    private void EmitCheck(string repoId, DiscoveryJob? job)
+    {
+        _events.Emit(repoId, "check", "started", "Check", "probing discovered ports…");
+        if (job is null || job.Status != DiscoveryStatus.Done || job.Result is null)
+        {
+            _events.Emit(repoId, "check", "done", "Check", "no completed discovery to check");
+            return;
+        }
+        var apps = job.Result.Apps;
+        var live = apps.Where(a => _runner.IsListening(a.Port)).Select(a => a.Name).ToList();
+        var detail = live.Count == 0
+            ? $"nothing listening ({apps.Count} app{(apps.Count == 1 ? "" : "s")} checked)"
+            : $"{live.Count} of {apps.Count} listening: {string.Join(", ", live)}";
+        _events.Emit(repoId, "check", "done", "Check", detail);
     }
 
     // Start a single discovered app for the caller's repo, by port. The command run
@@ -118,13 +145,21 @@ public class LocalAppsController : ControllerBase
         if (!folder.StartsWith(repoRoot, StringComparison.OrdinalIgnoreCase) || !Directory.Exists(folder))
             return BadRequest(new { error = $"App folder not found in repository: '{app.Folder}'." });
 
+        // Event Console (openspec agent-dock-event-console): emit at the boundary —
+        // we launch detached and do NOT retain the PID, so the truthful terminal is
+        // "launch issued", not "running" (liveness is read off the port by Check).
+        _events.Emit(repo.Id, "run", "started", $"Run · {app.Name}",
+            $"launching on :{app.Port} (detached)…");
         try
         {
             var proc = _runner.Launch(app.StartCommand, folder);
+            _events.Emit(repo.Id, "run", "done", $"Run · {app.Name}",
+                "launch issued — port liveness is read separately");
             return Ok(new { ok = true, port = app.Port, name = app.Name, command = app.StartCommand, pid = proc.Id });
         }
         catch (Exception ex)
         {
+            _events.Emit(repo.Id, "run", "error", $"Run · {app.Name}", ex.Message);
             return BadRequest(new { error = $"Failed to start '{app.Name}': {ex.Message}" });
         }
     }

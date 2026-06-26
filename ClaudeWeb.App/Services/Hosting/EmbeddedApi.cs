@@ -6,6 +6,7 @@ using ClaudeWeb.Services.Auth;
 using ClaudeWeb.Services.Chat;
 using ClaudeWeb.Services.Deploy;
 using ClaudeWeb.Services.Dock;
+using ClaudeWeb.Services.Events;
 using ClaudeWeb.Services.Expose;
 using ClaudeWeb.Services.Files;
 using ClaudeWeb.Services.Git;
@@ -169,6 +170,7 @@ public class EmbeddedApi
             builder.Services.AddAutopilotModule(); // loop-autopilot discovery (plans/loop-autopilot.md)
             builder.Services.AddTaskGraphModule(); // task dependency graph (plans/task-dependency-graph.md)
             builder.Services.AddStructuredAskModule(); // discover local apps (openspec discover-local-apps)
+            builder.Services.AddEventsModule(); // per-repo agent-dock Event Console log (openspec agent-dock-event-console)
             builder.Services.AddOpenspecCockpitModule(); // harness OpenSpec Cockpit (openspec openspec-cockpit-in-harness)
             // === END MODULE SERVICE REGISTRATION ===
 

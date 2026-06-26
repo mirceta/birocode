@@ -44,6 +44,7 @@ export const FEATURES = {
   autopilotTab: 'advanced', // loop-autopilot: discover recurring routine prompts (plans/loop-autopilot.md)
   taskGraph: 'advanced', // task dependency graph dashboard section (plans/task-dependency-graph.md)
   filesDock: 'advanced', // Files browse/view tab INSIDE each agent dock, scoped to that agent's repo (plans/agent-dock-files-tab.md)
+  eventConsole: 'advanced', // Console lane in each agent dock: per-repo log of harness-owned background ops (openspec: agent-dock-event-console)
   filesIdeMode: 'advanced', // IDE split: tree left + viewer right + fuzzy search + collapsible browser (plans/files-ide-mode.md)
   understandingPanel: 'advanced', // restatement-of-request panel atop chat (plans/understanding-panel.md)
   featureKickoff: 'advanced', // composer button that prefills the "start a new feature" ritual (plans/feature-kickoff.md)

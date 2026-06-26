@@ -9,6 +9,7 @@ import GitStatusSummary from '../git/GitStatusSummary';
 import { deriveGitActions, pullMainPath } from '../git/gitActions';
 import ProductFrame from '../app/ProductFrame';
 import FilesBrowser from '../files/FilesBrowser';
+import EventConsole from './EventConsole';
 import CopyPath from './CopyPath';
 import ImportantStar from './ImportantStar';
 import WideToggle from './WideToggle';
@@ -77,6 +78,13 @@ export default function PinnedAgent({
   const filesOn = useFeature('filesDock');
   const [showFiles, setShowFiles] = useState(false);
 
+  // Event Console lane (openspec agent-dock-event-console): a sibling screen that
+  // shows the per-repo log of harness-owned background operations (discovery / run
+  // / check). Like Files, picking it swaps phone__screen to <EventConsole>; picking
+  // a lane / app swaps back. Gated on the eventConsole feature (Advanced default).
+  const consoleOn = useFeature('eventConsole');
+  const [showConsole, setShowConsole] = useState(false);
+
   // Maximize chat to fill the dock (openspec add-maximize-chat-dock): an ephemeral,
   // per-dock toggle that collapses the non-chat chrome (bar, lanes, apps, git,
   // discover) so the embedded chat gets the dock's full height. State lives here
@@ -86,7 +94,7 @@ export default function PinnedAgent({
   // showing (not Files / a local app), so we gate the modifier on that.
   const [chatMaximized, setChatMaximized] = useState(false);
   const toggleChatMaximized = () => setChatMaximized((v) => !v);
-  const chatShowing = !showFiles && !openApp;
+  const chatShowing = !showFiles && !openApp && !showConsole;
   const maximized = chatMaximized && chatShowing;
 
   // "Discover local apps" (openspec discover-local-apps + discover-local-apps-resilient):
@@ -178,9 +186,15 @@ export default function PinnedAgent({
 
   // Read the server's current job state for this dock's repo. Stops polling once
   // the job is no longer running (done/error/idle), so a finished scan settles.
-  const fetchDiscoverStatus = useCallback(async () => {
+  // `probe` marks an explicit user "Check running" (or the post-Run auto-check) so
+  // the backend emits a check event to the Event Console; the background poll omits
+  // it so the log isn't flooded (openspec agent-dock-event-console).
+  const fetchDiscoverStatus = useCallback(async (probe = false) => {
     try {
-      const r = await apiGet('/local-apps/discover/status', { repoId: tab.repoId });
+      const path = probe
+        ? '/local-apps/discover/status?probe=true'
+        : '/local-apps/discover/status';
+      const r = await apiGet(path, { repoId: tab.repoId });
       setDiscovery(r);
       if (r.status !== 'running') stopPoll();
       return r;
@@ -237,7 +251,7 @@ export default function PinnedAgent({
   const checkRunning = useCallback(async () => {
     setChecking(true);
     try {
-      await fetchDiscoverStatus();
+      await fetchDiscoverStatus(true); // probe → emits a check event to the console
     } finally {
       setChecking(false);
     }
@@ -315,10 +329,11 @@ export default function PinnedAgent({
         <button
           type="button"
           role="tab"
-          aria-selected={!isAsk && !showFiles}
-          className={`phone__lane${!isAsk && !showFiles ? ' phone__lane--on' : ''}`}
+          aria-selected={!isAsk && !showFiles && !showConsole}
+          className={`phone__lane${!isAsk && !showFiles && !showConsole ? ' phone__lane--on' : ''}`}
           onClick={() => {
             setShowFiles(false);
+            setShowConsole(false);
             setLaneView('builder');
           }}
         >
@@ -327,11 +342,12 @@ export default function PinnedAgent({
         <button
           type="button"
           role="tab"
-          aria-selected={isAsk && !showFiles}
-          className={`phone__lane${isAsk && !showFiles ? ' phone__lane--on' : ''}`}
+          aria-selected={isAsk && !showFiles && !showConsole}
+          className={`phone__lane${isAsk && !showFiles && !showConsole ? ' phone__lane--on' : ''}`}
           title={t('chat.askHint')}
           onClick={() => {
             setShowFiles(false);
+            setShowConsole(false);
             setLaneView('ask');
           }}
         >
@@ -346,10 +362,27 @@ export default function PinnedAgent({
             title={t('files.tabHint')}
             onClick={() => {
               setOpenAppId(null);
+              setShowConsole(false);
               setShowFiles(true);
             }}
           >
             {t('files.tab')}
+          </button>
+        )}
+        {consoleOn && (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={showConsole}
+            className={`phone__lane${showConsole ? ' phone__lane--on' : ''}`}
+            title={t('console.hint')}
+            onClick={() => {
+              setOpenAppId(null);
+              setShowFiles(false);
+              setShowConsole(true);
+            }}
+          >
+            {t('console.tab')}
           </button>
         )}
       </div>
@@ -368,6 +401,7 @@ export default function PinnedAgent({
               className={`phone__app${a.id === openAppId ? ' phone__app--on' : ''}`}
               onClick={() => {
                 setShowFiles(false);
+                setShowConsole(false);
                 setOpenAppId((cur) => (cur === a.id ? null : a.id));
               }}
               title={`:${a.port}${a.kind === 'harness' ? ' · harness' : ''}`}
@@ -380,7 +414,7 @@ export default function PinnedAgent({
       {/* Discover local apps (openspec discover-local-apps): one read-only agent
           scan of THIS dock's repo → typed { name, port } list. Chat-context
           furniture like the git block; hidden while Files / a local app is open. */}
-      {canDiscover && !showFiles && !openApp && (
+      {canDiscover && !showFiles && !openApp && !showConsole && (
         <div className="phone__discover">
           <button
             type="button"
@@ -474,7 +508,7 @@ export default function PinnedAgent({
           a local app is open so that surface gets the full dock height (not just
           the strip below git) — plans/agent-dock-files-tab.md (Files) and
           plans/dock-local-app-full-height.md (local app). */}
-      {git && !showFiles && !openApp && (
+      {git && !showFiles && !openApp && !showConsole && (
         <div className="phone__git">
           <div className="phone__git-top">
             <GitStatusSummary status={git} compact />
@@ -543,7 +577,9 @@ export default function PinnedAgent({
         </div>
       )}
       <div className="phone__screen" style={contentZoom !== 1 ? { zoom: contentZoom } : undefined}>
-        {showFiles ? (
+        {showConsole ? (
+          <EventConsole repoId={tab.repoId} />
+        ) : showFiles ? (
           <FilesBrowser repoId={tab.repoId} />
         ) : openApp ? (
           <ProductFrame url={`/api/localview/${tab.repoId}/app/${openApp.id}/`} port={openApp.port} />
