@@ -1,3 +1,4 @@
+using ClaudeWeb.Services.Audit;
 using ClaudeWeb.Services.Auth;
 using ClaudeWeb.Services.IpFilter;
 
@@ -18,14 +19,16 @@ public class IpFilterForm : Form
 {
     private readonly IpAllowlistService _allowlist;
     private readonly DeviceTokenService _devices;
+    private readonly AuditService _audit;
     private readonly ListView _guests;
     private readonly ListView _attempts;
     private readonly ListView _trustedDevices;
 
-    public IpFilterForm(IpAllowlistService allowlist, DeviceTokenService devices)
+    public IpFilterForm(IpAllowlistService allowlist, DeviceTokenService devices, AuditService audit)
     {
         _allowlist = allowlist;
         _devices = devices;
+        _audit = audit;
 
         Text = "Guests (IP allowlist)";
         Size = new Size(900, 560);
@@ -226,6 +229,8 @@ public class IpFilterForm : Form
         if (_allowlist.Approve(ip, name) is { } error)
             MessageBox.Show(this, error, "Could not approve",
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        else
+            _audit.LogOperatorAuth("guest-approve", $"{name} ({ip})");
     }
 
     private void OnRemoveGuest(object? sender, EventArgs e)
@@ -241,6 +246,7 @@ public class IpFilterForm : Form
         if (confirm != DialogResult.Yes) return;
 
         _allowlist.Remove(ip);
+        _audit.LogOperatorAuth("guest-remove", $"{name} ({ip})");
 
         // A trusted-device cookie outlives an IP removal (it bypasses the gate from
         // any IP), so offer to revoke this person's device tokens too — otherwise
@@ -251,7 +257,10 @@ public class IpFilterForm : Form
                 $"\"{name}\" has trusted device(s) whose cookie can still bypass the IP gate from any address.\n\nRevoke those too, so they are fully evicted?",
                 "Revoke trusted devices", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
             if (alsoRevoke == DialogResult.Yes)
-                _devices.RevokeByName(name);
+            {
+                var n = _devices.RevokeByName(name);
+                _audit.LogOperatorAuth("device-revoke", $"{n} device(s) for {name}");
+            }
         }
     }
 
@@ -271,7 +280,10 @@ public class IpFilterForm : Form
             $"Revoke the trusted device for \"{name}\"?\n\nIts cookie will no longer bypass the IP gate — from a new IP it will be rejected until re-approved.",
             "Revoke device", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
         if (confirm == DialogResult.Yes)
+        {
             _devices.Revoke(id);
+            _audit.LogOperatorAuth("device-revoke", name);
+        }
     }
 
     private void OnClearAttempts(object? sender, EventArgs e)

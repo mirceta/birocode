@@ -45,6 +45,7 @@ public class MainForm : Form
     private readonly IpAllowlistService _ipAllowlist;
     private readonly AutopilotGate _autopilotGate;
     private readonly Services.Auth.DeviceTokenService _deviceTokens;
+    private readonly Services.Audit.AuditService _audit;
 
     private readonly Label _workingDirLabel;
     private readonly Label _serverLabel;
@@ -57,7 +58,7 @@ public class MainForm : Form
     // Maps a CallRecord.Number to its ListView row for in-place updates.
     private readonly Dictionary<int, ListViewItem> _rowsByNumber = new();
 
-    public MainForm(AppConfig config, Logger logger, EmbeddedApi api, CallLog callLog, RepositoryRegistry repositories, IpAllowlistService ipAllowlist, AutopilotGate autopilotGate, Services.Auth.DeviceTokenService deviceTokens)
+    public MainForm(AppConfig config, Logger logger, EmbeddedApi api, CallLog callLog, RepositoryRegistry repositories, IpAllowlistService ipAllowlist, AutopilotGate autopilotGate, Services.Auth.DeviceTokenService deviceTokens, Services.Audit.AuditService audit)
     {
         _config = config;
         _logger = logger;
@@ -67,6 +68,7 @@ public class MainForm : Form
         _ipAllowlist = ipAllowlist;
         _autopilotGate = autopilotGate;
         _deviceTokens = deviceTokens;
+        _audit = audit;
 
         Text = "Claude Web";
         Size = new Size(1200, 720);
@@ -201,10 +203,32 @@ public class MainForm : Form
         guestsButton.FlatAppearance.BorderSize = 0;
         guestsButton.Click += (_, _) =>
         {
-            using var dialog = new IpFilterForm(_ipAllowlist, _deviceTokens);
+            using var dialog = new IpFilterForm(_ipAllowlist, _deviceTokens, _audit);
             dialog.ShowDialog(this);
         };
         actions.Controls.Add(guestsButton);
+
+        // Read-only action audit: what every gate-passed user did (openspec add-action-audit).
+        var activityButton = new Button
+        {
+            Text = "Activity",
+            AutoSize = true,
+            Height = 32,
+            Padding = new Padding(12, 5, 12, 5),
+            BackColor = Color.FromArgb(90, 110, 140),
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            Cursor = Cursors.Hand,
+            Margin = new Padding(0, 0, 4, 0)
+        };
+        activityButton.FlatAppearance.BorderSize = 0;
+        activityButton.Click += (_, _) =>
+        {
+            using var dialog = new ActivityForm(_audit);
+            dialog.ShowDialog(this);
+        };
+        actions.Controls.Add(activityButton);
 
         // The ONLY place the autopilot endpoints + engine can be turned on/off
         // (plans/loop-autopilot-safety.md). Deliberately host-only, mirroring the

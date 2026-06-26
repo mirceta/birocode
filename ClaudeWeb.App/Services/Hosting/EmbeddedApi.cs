@@ -63,12 +63,13 @@ public class EmbeddedApi
     private readonly IpAllowlistService _ipAllowlist;
     private readonly Autopilot.AutopilotGate _autopilotGate;
     private readonly Auth.DeviceTokenService _deviceTokens;
+    private readonly Audit.AuditService _audit;
     private WebApplication? _app;
 
     public bool IsRunning { get; private set; }
     public int Port => _config.Port;
 
-    public EmbeddedApi(AppConfig config, Logger logger, CallLog callLog, RepositoryRegistry repositories, IpAllowlistService ipAllowlist, Autopilot.AutopilotGate autopilotGate, Auth.DeviceTokenService deviceTokens)
+    public EmbeddedApi(AppConfig config, Logger logger, CallLog callLog, RepositoryRegistry repositories, IpAllowlistService ipAllowlist, Autopilot.AutopilotGate autopilotGate, Auth.DeviceTokenService deviceTokens, Audit.AuditService audit)
     {
         _config = config;
         _logger = logger;
@@ -77,6 +78,7 @@ public class EmbeddedApi
         _ipAllowlist = ipAllowlist;
         _autopilotGate = autopilotGate;
         _deviceTokens = deviceTokens;
+        _audit = audit;
     }
 
     public void Start()
@@ -116,6 +118,9 @@ public class EmbeddedApi
             // Pre-built so the WinForms "Trusted devices" GUI and the API share one
             // instance (openspec add-resilient-auth).
             builder.Services.AddSingleton(_deviceTokens);
+            // Pre-built so the WinForms "Activity" tab (reader) and the API (writer) share
+            // one instance (openspec add-action-audit).
+            builder.Services.AddSingleton(_audit);
             // Pre-built so the WinForms host (the ONLY surface that can flip it) and
             // the API share one instance (plans/loop-autopilot-safety.md).
             builder.Services.AddSingleton(_autopilotGate);

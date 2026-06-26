@@ -1,3 +1,4 @@
+using ClaudeWeb.Services.Audit;
 using ClaudeWeb.Services.Auth;
 using ClaudeWeb.Services.Hosting;
 using ClaudeWeb.Services.IpFilter;
@@ -28,13 +29,15 @@ public class AuthController : ControllerBase
     private readonly AuthService _auth;
     private readonly DeviceTokenService _devices;
     private readonly IpAllowlistService _ipAllowlist;
+    private readonly AuditService _audit;
     private readonly Logger _logger;
 
-    public AuthController(AuthService auth, DeviceTokenService devices, IpAllowlistService ipAllowlist, Logger logger)
+    public AuthController(AuthService auth, DeviceTokenService devices, IpAllowlistService ipAllowlist, AuditService audit, Logger logger)
     {
         _auth = auth;
         _devices = devices;
         _ipAllowlist = ipAllowlist;
+        _audit = audit;
         _logger = logger;
     }
 
@@ -64,12 +67,15 @@ public class AuthController : ControllerBase
         // Guard (task 2.2): only when this request is on an approved IP — never for a request
         // the IP gate admitted purely via an existing cookie or rejected — and only once per
         // device. Tag it with the approved-IP guest's name so the Operator can identify it.
+        var actor = _audit.ResolveActor(HttpContext);
+        _audit.LogAuth(actor, "login");
         if (_ipAllowlist.IsApproved(client) &&
             !_devices.IsValid(Request.Cookies[DeviceTokenService.CookieName]))
         {
             var name = _ipAllowlist.GuestName(client) ?? client;
             var deviceToken = _devices.Issue(name);
             Response.Cookies.Append(DeviceTokenService.CookieName, deviceToken, CookieOptions(HttpContext, _devices.Lifetime));
+            _audit.LogAuth(actor, "device-mint", name);
         }
 
         _logger.Info($"[AUTH] Login from {client}");

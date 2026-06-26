@@ -67,6 +67,25 @@ public class AppConfig
     public int DeviceCookieDays { get; set; } = 180;
 
     /// <summary>
+    /// Action audit (openspec add-action-audit). Days to keep daily audit files
+    /// (`%APPDATA%\ClaudeWeb\audit\YYYY-MM-DD.jsonl`) before whole-file pruning by age.
+    /// Default 90. &lt;= 0 disables pruning (keep forever).
+    /// </summary>
+    public int AuditRetentionDays { get; set; } = 90;
+
+    /// <summary>
+    /// When true, the audit also records read-only tool actions (Read/Glob/Grep/LS).
+    /// Default false — only mutating/unknown tools are logged, to keep the signal high.
+    /// </summary>
+    public bool AuditLogReads { get; set; } = false;
+
+    /// <summary>
+    /// When true, prompt text is replaced with a redaction marker in the audit log
+    /// (only the fact a prompt happened, its actor/project, is kept). Default false.
+    /// </summary>
+    public bool AuditRedactPromptText { get; set; } = false;
+
+    /// <summary>
     /// Reverse-proxy addresses whose X-Forwarded-For header is trusted, in
     /// addition to loopback (plans/auth-ip-filter.md §1). Needed when IIS/ARR
     /// runs on a DIFFERENT machine than the harness: without it, every visitor

@@ -59,12 +59,17 @@ static class Program
         // the web API share one instance — same pattern as IpAllowlistService.
         var deviceTokens = new Services.Auth.DeviceTokenService(config, logger);
 
+        // Action audit (openspec add-action-audit). Built here so the WinForms "Activity"
+        // tab (the ONLY reader) and the web API (the writer) share one instance — same
+        // pattern as IpAllowlistService. Resolves actor identity via the auth services.
+        var audit = new Services.Audit.AuditService(config, logger, ipAllowlist, deviceTokens);
+
         // Start the embedded Kestrel server on a background thread.
-        var api = new EmbeddedApi(config, logger, callLog, repositories, ipAllowlist, autopilotGate, deviceTokens);
+        var api = new EmbeddedApi(config, logger, callLog, repositories, ipAllowlist, autopilotGate, deviceTokens, audit);
         api.Start();
 
         // Launch the monitoring GUI (blocks on the WinForms message loop).
-        var form = new MainForm(config, logger, api, callLog, repositories, ipAllowlist, autopilotGate, deviceTokens);
+        var form = new MainForm(config, logger, api, callLog, repositories, ipAllowlist, autopilotGate, deviceTokens, audit);
         Application.Run(form);
 
         // Shut the server down cleanly when the GUI closes.
