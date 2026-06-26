@@ -358,6 +358,67 @@
   color: var(--color-text);
 }
 
+/* ---- IDE line-number gutter (openspec: add-cs-syntax-highlighting) ----- */
+/* Gutter + code share the SAME font metrics so numbers align 1:1 with rows.
+   The non-wrapping code column scrolls horizontally (via the body's overflow);
+   the gutter stays pinned left via sticky so numbers don't scroll out. */
+.file-viewer__code-wrap {
+  display: flex;
+  align-items: flex-start;
+}
+
+.file-viewer__gutter {
+  margin: 0;
+  flex: none;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  padding-right: 12px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: right;
+  color: var(--color-text-muted, #9aa0a6);
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.file-viewer__code--nowrap {
+  flex: 1 1 auto;
+  padding-left: 12px;
+  white-space: pre;
+  word-break: normal;
+}
+
+.file-viewer__code--nowrap code {
+  font: inherit;
+  background: none;
+  padding: 0;
+}
+
+/* C# token palette tuned to the light theme (no external hljs stylesheet). */
+.file-viewer__code .hljs-comment,
+.file-viewer__code .hljs-quote { color: #6a737d; font-style: italic; }
+.file-viewer__code .hljs-keyword,
+.file-viewer__code .hljs-built_in,
+.file-viewer__code .hljs-meta-keyword { color: #d73a49; }
+.file-viewer__code .hljs-meta { color: #6f42c1; }
+.file-viewer__code .hljs-string,
+.file-viewer__code .hljs-char.escape_ { color: #032f62; }
+.file-viewer__code .hljs-number,
+.file-viewer__code .hljs-literal { color: #005cc5; }
+.file-viewer__code .hljs-title,
+.file-viewer__code .hljs-title.function_ { color: #6f42c1; }
+.file-viewer__code .hljs-title.class_,
+.file-viewer__code .hljs-type { color: #22863a; }
+.file-viewer__code .hljs-attr,
+.file-viewer__code .hljs-property,
+.file-viewer__code .hljs-variable { color: #e36209; }
+.file-viewer__code .hljs-symbol,
+.file-viewer__code .hljs-doctag { color: #b31d28; }
+
 /* ---- IDE mode (plans/files-ide-mode.md) -------------------------------- */
 /* One split layout used on BOTH the Files tab and the agent dock: a slim rail
    with the show/hide toggle, the collapsible folder browser (search + pins +
