@@ -140,6 +140,7 @@
     <button class="tab" data-v="model">⑧ The whole model — proposal &amp; design</button>
     <button class="tab" data-v="audit">⑨ Action audit — trust but verify</button>
     <button class="tab" data-v="impl">⑩ Action audit — how it's built</button>
+    <button class="tab" data-v="try">⑪ Try it out</button>
   </div>
 
   <!-- VIEW 1 -->
@@ -539,6 +540,21 @@
       appended `login` + `device-mint`, correctly attributed). Prompt + tool capture use the very same
       machinery and are wired at the points above — they'll appear in the Activity tab the first time a
       real chat turn runs on a deploy.</div>
+  </section>
+
+  <!-- VIEW 11 -->
+  <section class="view" id="try">
+    <h2>Try it out — exercise the new features</h2>
+    <p class="note">All three are live on this build right now. Pick one and follow the steps.</p>
+    <div class="scen" id="trySel">
+      <button data-k="cookie" class="active">📱 The 4G rescue</button>
+      <button data-k="perms">🔓 Full access</button>
+      <button data-k="audit">📋 Action audit</button>
+    </div>
+    <div class="solcard" id="tryCard"></div>
+    <div class="reframe"><b>Where to click on the host PC:</b> the main Claude Web window now has a
+      <span class="schip">Guests (IPs)</span> button (→ the new "Trusted devices" list) and an
+      <span class="schip">Activity</span> button (→ the action audit). Both are desktop-only.</div>
   </section>
 </main>
 
@@ -998,6 +1014,53 @@ document.getElementById('implSel').addEventListener('click',e=>{
   renderImpl(+e.target.dataset.i);
 });
 
+//// VIEW 11: try it out ////
+const TRY = {
+  cookie: { title:'📱 The 4G rescue — trusted-device cookie',
+    steps:[
+      ['On your phone, on home Wi-Fi (an approved IP), open the app and log in with the access code.'],
+      ['On the host PC, click <b>Guests (IPs)</b> → the new <b>Trusted devices</b> list now shows your phone.'],
+      ['On the phone, turn Wi-Fi off → switch to 4G/5G (a new, unapproved IP). Reload.'],
+      ['You\'re still in — <b>no trip to the PC.</b> The cookie carried you past the IP gate.', 1],
+      ['Optional: clear the phone\'s cookies while on 4G → you get the 403 "not on the guest list" page. One re-approval and you\'re back.'],
+      ['Optional: on the PC, pick your device in Trusted devices → <b>Revoke</b> → the next new-IP visit is 403\'d.'],
+    ],
+    expect:'A returning approved device survives an IP change with zero operator action — the original pain, gone. Revoke fully evicts it.' },
+  perms: { title:'🔓 Full access — no per-project permissions',
+    steps:[
+      ['Open any project\'s chat and ask the agent to edit a file or run a shell command.'],
+      ['It just does it — <b>every project runs at full access now;</b> no read-only/standard restriction.', 1],
+      ['Note: the desktop <b>Manage Projects</b> dialog no longer has a "Chat permissions" column or "Permissions…" button — that tier is gone.'],
+    ],
+    expect:'One trust boundary (the two gates), not two. A passed user is bounded only by the OS account the harness runs as — consider a dedicated least-privilege account (see README).' },
+  audit: { title:'📋 Action audit — see what everyone did',
+    steps:[
+      ['Send any chat message and let the agent do a few things — read a file, edit one, run a command.'],
+      ['On the host PC, click the new <b>Activity</b> button on the main window.'],
+      ['See <b>every prompt + every tool</b> the agent ran (reads included) + auth events, attributed to your device name.', 1],
+      ['Filter by user, date, or kind (prompt / tool / auth).'],
+      ['Try an auth event: log out + back in on the phone → see <code>login</code> + <code>device-mint</code>. Approve/revoke a guest → see those too.'],
+    ],
+    expect:'A complete, append-only record of what each user\'s agent did — inspectable only in the Windows program (the file lives at %APPDATA%\\ClaudeWeb\\audit\\YYYY-MM-DD.jsonl), never on the web.' },
+};
+let tryK = 'cookie';
+function renderTry(){
+  const t = TRY[tryK];
+  const steps = t.steps.map((s,i)=>{
+    const hi = s[1];
+    const badge = hi ? '<span class="t">✓</span>' : `<span style="color:var(--mut);font-weight:700;flex:none">${i+1}</span>`;
+    return `<p class="chk">${badge}<span>${s[0]}</span></p>`;
+  }).join('');
+  document.getElementById('tryCard').innerHTML =
+    `<h4>${t.title}</h4>${steps}<div class="verdict" style="margin-top:10px"><b>What to expect:</b> ${t.expect}</div>`;
+}
+document.getElementById('trySel').addEventListener('click',e=>{
+  if(!e.target.dataset.k)return;
+  tryK=e.target.dataset.k;
+  [...document.querySelectorAll('#trySel button')].forEach(b=>b.classList.toggle('active',b===e.target));
+  renderTry();
+});
+
 //// tabs ////
 document.querySelector('.tabs').addEventListener('click',e=>{
   if(!e.target.dataset.v)return;
@@ -1005,7 +1068,7 @@ document.querySelector('.tabs').addEventListener('click',e=>{
   [...document.querySelectorAll('.view')].forEach(v=>v.classList.toggle('active',v.id===e.target.dataset.v));
 });
 
-renderPipe(); buildMatrix(); renderKba('trivia'); renderHH(0); renderTJ(0); renderTA(); renderSol(); renderBR(); renderAudit(); renderImpl(0);
+renderPipe(); buildMatrix(); renderKba('trivia'); renderHH(0); renderTJ(0); renderTA(); renderSol(); renderBR(); renderAudit(); renderImpl(0); renderTry();
 </script>
 </body>
 </html>
