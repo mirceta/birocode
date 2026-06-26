@@ -6,6 +6,7 @@ import ActivitySteps from '../components/chat/ActivitySteps';
 import SessionPicker from '../components/chat/SessionPicker';
 import UnderstandingPanel from '../components/chat/UnderstandingPanel';
 import ToolCallsPanel from '../components/chat/ToolCallsPanel';
+import OperatorMessagesPanel from '../components/chat/OperatorMessagesPanel';
 import ErrorBanner from '../components/shared/ErrorBanner';
 import ClaudeViewToggle from '../components/shared/ClaudeViewToggle';
 import ModelSelector from '../components/chat/ModelSelector';
@@ -30,7 +31,16 @@ const REVEAL_CHUNK = 50;
 // `chat` facade from useChatFor + `embedded` (drops the app-level chrome —
 // Claude/Term toggle, project/harness scopes, understanding panel — that only
 // makes sense for the one active conversation). See plans/agent-dashboard.md.
-export default function Chat({ chat: injected, embedded = false, stashTabId }) {
+export default function Chat({
+  chat: injected,
+  embedded = false,
+  stashTabId,
+  // Per-dock "maximize chat" toggle (openspec add-maximize-chat-dock): owned by
+  // PinnedAgent (which collapses the .phone__* chrome). Only passed in the
+  // embedded dock chat context, so the button below renders only there.
+  chatMaximized = false,
+  toggleChatMaximized,
+}) {
   const { t } = useT();
   const active = useChat();
   const {
@@ -67,7 +77,20 @@ export default function Chat({ chat: injected, embedded = false, stashTabId }) {
   const showDualChat = useFeature('dualChat');
   const showUnderstanding = useFeature('understandingPanel');
   const showToolCalls = useFeature('toolCallHistory');
+  const showOperators = useFeature('operatorMessages');
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [operatorsOpen, setOperatorsOpen] = useState(false);
+
+  // The tool-calls and operator-messages panels both overlay the chat area, so
+  // only one can be open at a time — opening either closes the other.
+  function toggleTools() {
+    setToolsOpen((v) => !v);
+    setOperatorsOpen(false);
+  }
+  function toggleOperators() {
+    setOperatorsOpen((v) => !v);
+    setToolsOpen(false);
+  }
 
   const scrollRef = useRef(null);
   const stickToBottom = useRef(true);
@@ -208,16 +231,40 @@ export default function Chat({ chat: injected, embedded = false, stashTabId }) {
           </span>
         )}
         <ModelSelector value={model} onChange={changeModel} />
+        {toggleChatMaximized && (
+          <button
+            type="button"
+            className={`chat__maximize${chatMaximized ? ' chat__maximize--on' : ''}`}
+            onClick={toggleChatMaximized}
+            title={chatMaximized ? t('chat.restoreChat') : t('chat.maximizeChat')}
+            aria-label={chatMaximized ? t('chat.restoreChat') : t('chat.maximizeChat')}
+            aria-pressed={chatMaximized}
+          >
+            {chatMaximized ? '⤡' : '⤢'}
+          </button>
+        )}
         {showToolCalls && (
           <button
             type="button"
             className={`chat__tools${toolsOpen ? ' chat__tools--on' : ''}`}
-            onClick={() => setToolsOpen((v) => !v)}
+            onClick={toggleTools}
             title={t('chat.toolCalls')}
             aria-label={t('chat.toolCalls')}
             aria-pressed={toolsOpen}
           >
             {t('chat.toolCalls')}
+          </button>
+        )}
+        {showOperators && (
+          <button
+            type="button"
+            className={`chat__operators${operatorsOpen ? ' chat__operators--on' : ''}`}
+            onClick={toggleOperators}
+            title={t('chat.operatorMessages')}
+            aria-label={t('chat.operatorMessages')}
+            aria-pressed={operatorsOpen}
+          >
+            {t('chat.operatorMessages')}
           </button>
         )}
         {refresh && (
@@ -284,6 +331,16 @@ export default function Chat({ chat: injected, embedded = false, stashTabId }) {
             streaming={streaming}
             liveToolCalls={liveToolCalls}
             repoId={activeRepoId}
+          />
+        )}
+
+        {/* Operator messages overlay the same chat area as the tool-call drawer
+            (mutually exclusive). Purely client-side over the loaded messages. */}
+        {showOperators && (
+          <OperatorMessagesPanel
+            open={operatorsOpen}
+            onClose={() => setOperatorsOpen(false)}
+            messages={messages}
           />
         )}
       </div>

@@ -14,10 +14,20 @@
 #   cmd /c start "" /b pwsh -NoProfile -File .\swap.ps1
 #
 # Flags:
-#   -DryRun        build + stage + run the guard, but DO NOT stop/swap/restart live.
-#   -Port <n>      port the live harness serves on (default 5099).
+#   -DryRun           build + stage + run the guard, but DO NOT stop/swap/restart live.
+#   -Port <n>         port the live harness serves on (default 5099).
 #   -Configuration Debug|Release  (default Debug - matches how live is built today).
-#   -SkipGuard     bypass the origin/main ancestor guard (discouraged; see below).
+#   -SkipGuard        bypass the origin/main ancestor guard (discouraged; see below).
+#   -RollbackMinutes  dead-man switch window (default 15); see DEAD-MAN SWITCH below.
+#   -NoArm            deploy but do NOT arm the rollback timer (test/side deploys).
+#
+# DEAD-MAN SWITCH: stage-before-stop only protects against a BUILD failure. To also
+# survive a build that swaps in cleanly and then breaks down with no operator present,
+# this snapshots the live build to run-bin.lastgood BEFORE swapping, then after the
+# restart: if health FAILS it rolls back to last-good immediately; if health is OK it
+# ARMS a scheduled task (rollback.ps1) to auto-restore in -RollbackMinutes unless you
+# run keep.ps1 ("keep it") to disarm. arm-rollback.ps1 / rollback.ps1 / keep.ps1 are
+# the committed pieces; all resolve paths from $PSScriptRoot.
 #
 # SAFETY: it refuses to deploy a tree that does not contain origin/main (the guard
 # that stopped parallel sessions from clobbering each other's live features - see
@@ -31,13 +41,16 @@ param(
   [ValidateSet('Debug','Release')] [string]$Configuration = 'Debug',
   [switch]$DryRun,
   [switch]$SkipGuard,
-  [int]$StartDelaySeconds = 8
+  [int]$StartDelaySeconds = 8,
+  [int]$RollbackMinutes = 15,
+  [switch]$NoArm
 )
 
 $ErrorActionPreference = 'Stop'
 $repo   = $PSScriptRoot
 $stage  = Join-Path $repo '.claudeweb-deploy\bin'      # gitignored staging build
 $runDir = Join-Path $repo '.selfdev-build\run-bin'     # gitignored standard run location
+$lastgood = Join-Path $repo '.selfdev-build\run-bin.lastgood'  # snapshot rollback.ps1 restores
 $exe    = Join-Path $runDir 'ClaudeWeb.exe'
 $logDir = Join-Path $repo '.claudeweb-deploy'
 $log    = Join-Path $logDir 'deploy.log'
@@ -120,6 +133,20 @@ for ($i = 0; $i -lt 30; $i++) {
 }
 Start-Sleep -Seconds 2
 
+# ---- 4b. Snapshot the current (last-good) build BEFORE overwriting it ---------
+# This is what rollback.ps1 restores if the new build breaks down. We snapshot the
+# build that was just serving (presumed good - it was live). Skip on a cold deploy:
+# with no current build there is nothing good to capture, so we will NOT arm later.
+$haveSnapshot = $false
+if (Test-Path (Join-Path $runDir 'ClaudeWeb.exe')) {
+  Say 'snapshot: mirror current run-bin -> run-bin.lastgood (for auto-rollback)'
+  robocopy $runDir $lastgood /MIR /XD (Join-Path $runDir 'logs') /R:3 /W:1 /NFL /NDL /NJH /NP | Out-Null
+  if ($LASTEXITCODE -ge 8) { Say "WARNING: snapshot robocopy failed (exit $LASTEXITCODE) - auto-rollback will be unavailable this deploy" }
+  else { $haveSnapshot = $true; Say 'snapshot OK: last-good captured' }
+} else {
+  Say 'snapshot: no current run-bin exe (cold deploy) - no last-good to capture'
+}
+
 # ---- 5. Swap binaries into run-bin, PROTECTING runtime state -----------------
 # /XD logs  -> keep the live log directory
 # /XF appsettings.json -> keep the operator's config (port, etc.)
@@ -139,13 +166,41 @@ if (-not (Test-Path $exe)) { Die "exe not found at $exe after swap" }
 Start-Process -FilePath $exe -WorkingDirectory $runDir
 Say "restart: launched $exe"
 Start-Sleep -Seconds $StartDelaySeconds
+$healthy = $false
 for ($i = 0; $i -lt 20; $i++) {
   try {
     $r = Invoke-WebRequest -Uri ("http://localhost:$Port/api/auth/check") -UseBasicParsing -TimeoutSec 5
     Say "health: $($r.StatusCode) on :$Port"
+    $healthy = $true
     break
   } catch {
     if ($i -eq 19) { Say "health: FAILED after restart - $($_.Exception.Message)" } else { Start-Sleep -Seconds 2 }
   }
+}
+
+# ---- 7. Dead-man's switch ----------------------------------------------------
+# The stage-before-stop guard above only catches a BUILD failure. This catches a
+# build that swaps in and then breaks down. Two triggers:
+#   - health FAILED now            -> roll back to last-good IMMEDIATELY (inline).
+#   - health OK but breaks later   -> arm a $RollbackMinutes-min timer; "keep it"
+#                                     (keep.ps1) disarms it, else it auto-restores.
+# We never arm without a snapshot (an armed rollback with nothing to restore was the
+# 2026-06-12 failure mode: harness down, rollback fired into the void).
+$rollbackPs1 = Join-Path $repo 'rollback.ps1'
+$armPs1      = Join-Path $repo 'arm-rollback.ps1'
+if (-not $healthy) {
+  if ($haveSnapshot) {
+    Say 'health FAILED: rolling back to last-good NOW'
+    & $rollbackPs1 -Port $Port
+  } else {
+    Say 'health FAILED and no last-good snapshot (cold deploy): cannot auto-rollback. Investigate run-bin manually.'
+  }
+} elseif ($NoArm) {
+  Say 'NoArm: deploy healthy; NOT arming the dead-man switch (test/side deploy).'
+} elseif (-not $haveSnapshot) {
+  Say 'deploy healthy but no last-good snapshot (cold deploy): NOT arming. The next deploy will arm normally.'
+} else {
+  & $armPs1 -Minutes $RollbackMinutes -Port $Port
+  Say "DEAD-MAN SWITCH ARMED ($RollbackMinutes min). Say 'keep it' (keep.ps1) to disarm, else last-good auto-restores."
 }
 Say 'deploy finished'
