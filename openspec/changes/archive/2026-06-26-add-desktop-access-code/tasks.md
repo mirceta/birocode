@@ -23,6 +23,7 @@
 
 ## 4. Verify
 
-- [~] 4.1 Build green; isolated smoke test confirms the rewired shared `AuthService` still authenticates
-      (login 200, wrong 401) and the web `POST /api/auth/password` is unchanged (still gated/current
-      required). The desktop "Set access code" button itself is GUI-triggered — verify on the host.
+- [x] 4.1 Build green; isolated smoke test confirmed the rewired shared `AuthService` still
+      authenticates (login 200, wrong 401). Shipped live (deployed in the merged build) and the web
+      change-password path was subsequently removed entirely (now 404 to authed callers) — the desktop
+      "Set access code" button is the only way to change the code.
