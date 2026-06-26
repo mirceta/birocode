@@ -138,6 +138,7 @@
     <button class="tab" data-v="ta">⑥ Who actually attacks you</button>
     <button class="tab" data-v="sol">✅ The solution</button>
     <button class="tab" data-v="model">⑧ The whole model — proposal &amp; design</button>
+    <button class="tab" data-v="audit">⑨ Action audit — trust but verify</button>
   </div>
 
   <!-- VIEW 1 -->
@@ -435,6 +436,53 @@
       gates) beats two. The price is full-access-by-default, so the design's paired recommendation is
       to run the harness under a <b>dedicated least-privilege OS account</b>: that's what turns
       "bounded by the OS account" into a sandbox you chose, and keeps a worst-case breach contained.</div>
+  </section>
+
+  <!-- VIEW 9 -->
+  <section class="view" id="audit">
+    <h2>Action audit — trust but verify</h2>
+    <div class="lead"><b>The counterweight to removing permissions (tab ⑧).</b> We no longer
+      <i>restrict</i> a gate-passed user — so instead we <i>record</i> what they do. Every prompt and
+      every mutating action is logged, attributed to <i>who</i>, append-only — for accountability now
+      and forensics if a device or password is ever compromised.</div>
+
+    <h2 style="margin-top:22px">What a log entry looks like</h2>
+    <p class="note">Three kinds — pick one.</p>
+    <div class="scen" id="auditSel">
+      <button data-k="prompt" class="active">prompt</button>
+      <button data-k="tool">tool</button>
+      <button data-k="auth">auth</button>
+    </div>
+    <pre id="auditJson" style="background:#0b0f14;border:1px solid var(--line);border-radius:8px;padding:12px;font-size:12px;overflow:auto;color:#cdd9e5;white-space:pre-wrap"></pre>
+    <div class="note" id="auditNote"></div>
+
+    <h2 style="margin-top:22px">What's recorded vs skipped</h2>
+    <p class="note">Mutating tools — and anything new/unknown — are logged; pure reads are skipped by
+      default to keep the signal high. Click a tool.</p>
+    <div id="auditTools"></div>
+    <div class="verdict" id="auditToolNote" style="margin-top:10px"></div>
+
+    <div class="solgrid" style="margin-top:22px">
+      <div class="solcard"><h4>🧍 Who did it — the identity ladder</h4>
+        <p class="chk"><span class="t">1</span><span><b>Trusted-device name</b> (the cookie's record — e.g. "Girlfriend's phone")</span></p>
+        <p class="chk"><span class="t">2</span><span>else the <b>approved-IP guest name</b></span></p>
+        <p class="chk"><span class="t">3</span><span>else <code>unknown@&lt;ip&gt;</code> — never dropped</span></p>
+        <p class="note" style="margin-top:6px">Source IP + a short session id are always stamped too.
+          This is exactly the identity the trusted-device cookie (tabs ①–⑦) gave us — before it, all
+          you could attribute an action to was a bare IP.</p></div>
+      <div class="solcard"><h4>🗄️ The store</h4>
+        <span class="schip">append-only</span><span class="schip">daily JSONL</span>
+        <span class="schip">%APPDATA%\ClaudeWeb\audit\</span><span class="schip">retention prune</span>
+        <span class="schip">desktop "Activity" tab</span><span class="schip">no web surface</span>
+        <p class="note" style="margin-top:8px">One JSON object per line, one file per day, whole-file
+          pruned by age (<code>AuditRetentionDays</code>). The web/phone UI can neither read nor clear
+          it — the audit watches the web users, it isn't theirs.</p></div>
+    </div>
+
+    <div class="reframe"><b>The arc:</b> tabs ①–⑦ built the trusted-device identity, tab ⑧ removed the
+      permission layer, and this closes the loop — the identity that lets a friend back in on 4G is the
+      same identity that records <i>who</i> ran each action. Don't restrict trusted users; remember
+      what they did.</div>
   </section>
 </main>
 
@@ -819,6 +867,49 @@ document.getElementById('brSel').addEventListener('click',e=>{
   renderBR();
 });
 
+//// VIEW 9: action audit ////
+const AUDIT_ENTRIES = {
+  prompt: { json: `{"ts":"2026-06-26T08:41Z","kind":"prompt","actor":"Girlfriend's phone",
+ "ip":"81.0.43.9","session":"a1b2c3d4","repo":"my-app","lane":"builder",
+ "text":"add a dark-mode toggle"}`,
+    note: "A chat turn: who asked, from where, which project + lane, and the prompt text (redactable via <code>AuditRedactPromptText</code>)." },
+  tool: { json: `{"ts":"2026-06-26T08:41Z","kind":"tool","actor":"Girlfriend's phone",
+ "ip":"81.0.43.9","repo":"my-app","lane":"builder","tool":"Bash","args":"npm run build"}`,
+    note: "A mutating action the agent ran during that turn — captured from the <code>claude -p</code> tool-use stream (edits, shell, network). Reads skipped by default." },
+  auth: { json: `{"ts":"2026-06-26T08:36Z","kind":"auth","actor":"localhost","ip":"127.0.0.1",
+ "event":"device-mint","args":"localhost"}`,
+    note: "Auth lifecycle: login, device-mint, and operator approve/remove/revoke. (These two are the real entries from the live smoke test.)" },
+};
+let auditK = 'prompt';
+function renderAuditEntry(){
+  const e = AUDIT_ENTRIES[auditK];
+  document.getElementById('auditJson').textContent = e.json;
+  document.getElementById('auditNote').innerHTML = e.note;
+}
+const AUDIT_TOOLS = [
+  {n:'Write',m:1},{n:'Edit',m:1},{n:'MultiEdit',m:1},{n:'Bash',m:1},{n:'WebFetch',m:1},
+  {n:'WebSearch',m:1},{n:'NotebookEdit',m:1},
+  {n:'Read',m:0},{n:'Glob',m:0},{n:'Grep',m:0},{n:'LS',m:0},{n:'NotebookRead',m:0},
+];
+function renderAuditTools(){
+  document.getElementById('auditTools').innerHTML = AUDIT_TOOLS.map((t,i)=>
+    `<span class="schip" data-i="${i}" style="cursor:pointer;border-color:${t.m?'#5a2d2d':'#2d5a35'};color:${t.m?'#f0b0b0':'#9ce0a8'}">${t.m?'● ':'○ '}${t.n}</span>`).join('');
+}
+function renderAudit(){ renderAuditEntry(); renderAuditTools(); }
+document.getElementById('auditSel').addEventListener('click',e=>{
+  if(!e.target.dataset.k)return;
+  auditK=e.target.dataset.k;
+  [...document.querySelectorAll('#auditSel button')].forEach(b=>b.classList.toggle('active',b===e.target));
+  renderAuditEntry();
+});
+document.getElementById('auditTools').addEventListener('click',e=>{
+  const c=e.target.closest('[data-i]'); if(!c)return;
+  const t=AUDIT_TOOLS[+c.dataset.i];
+  document.getElementById('auditToolNote').innerHTML = t.m
+    ? `<b>${t.n} → logged ✅</b> — it mutates (writes files, runs commands, or hits the network). New/unknown tools are logged too, a safe default.`
+    : `<b>${t.n} → skipped by default ○</b> — read-only, high volume, low forensic value. Flip <code>AuditLogReads</code> on to record these too.`;
+});
+
 //// tabs ////
 document.querySelector('.tabs').addEventListener('click',e=>{
   if(!e.target.dataset.v)return;
@@ -826,7 +917,7 @@ document.querySelector('.tabs').addEventListener('click',e=>{
   [...document.querySelectorAll('.view')].forEach(v=>v.classList.toggle('active',v.id===e.target.dataset.v));
 });
 
-renderPipe(); buildMatrix(); renderKba('trivia'); renderHH(0); renderTJ(0); renderTA(); renderSol(); renderBR();
+renderPipe(); buildMatrix(); renderKba('trivia'); renderHH(0); renderTJ(0); renderTA(); renderSol(); renderBR(); renderAudit();
 </script>
 </body>
 </html>
