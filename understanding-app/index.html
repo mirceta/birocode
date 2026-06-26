@@ -3,1072 +3,356 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Resilient Auth — where the friction is, and the ways out</title>
+<title>Hide Self-Development repo from Basic mode</title>
 <style>
   :root{
-    --bg:#0d1117; --panel:#161b22; --line:#30363d; --ink:#e6edf3; --mut:#8b949e;
-    --ok:#3fb950; --warn:#d29922; --bad:#f85149; --acc:#58a6ff; --acc2:#bc8cff;
-    --chip:#21262d;
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --line:#2b3442;
+    --text:#e6edf3; --soft:#9aa7b4; --faint:#6b7785;
+    --accent:#4493f8; --accent-soft:#172033;
+    --good:#3fb950; --good-soft:#12251a;
+    --bad:#f85149; --bad-soft:#2a1416;
+    --warn:#d29922; --warn-soft:#241c0e;
+    --self:#bc8cff; --self-soft:#1e1730;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   }
   *{box-sizing:border-box}
-  body{margin:0;font:15px/1.55 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
-    background:var(--bg);color:var(--ink)}
-  header{padding:22px 20px 6px;max-width:1060px;margin:0 auto}
-  h1{font-size:22px;margin:0 0 4px} h2{font-size:16px;margin:26px 0 10px;color:var(--acc)}
-  .sub{color:var(--mut);margin:0 0 6px}
-  main{max-width:1060px;margin:0 auto;padding:0 20px 60px}
-  .tabs{display:flex;gap:6px;margin:18px 0 8px;flex-wrap:wrap}
-  .tab{background:var(--chip);border:1px solid var(--line);color:var(--ink);
-    padding:7px 13px;border-radius:8px;cursor:pointer;font-size:13px}
-  .tab.active{border-color:var(--acc);color:var(--acc)}
-  .view{display:none} .view.active{display:block}
-  /* pipeline */
-  .pipe{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;margin-top:8px}
-  .stage{flex:1;min-width:150px;background:var(--panel);border:1px solid var(--line);
-    border-radius:10px;padding:12px;position:relative}
-  .arrow{display:flex;align-items:center;color:var(--mut);padding:0 6px;font-size:20px}
-  .stage h3{margin:0 0 4px;font-size:13px} .stage p{margin:0;font-size:12px;color:var(--mut)}
-  .stage.gate{border-color:var(--bad)} .stage.gate.soft{border-color:var(--ok)}
-  .badge{position:absolute;top:-9px;right:8px;font-size:10px;padding:1px 7px;border-radius:20px;
-    background:var(--bad);color:#000;font-weight:600}
-  .badge.ok{background:var(--ok)} .badge.mut{background:var(--mut)}
-  .toggle{display:inline-flex;gap:8px;align-items:center;margin:14px 0 4px;cursor:pointer;
-    user-select:none;font-size:13px;color:var(--mut)}
-  .sw{width:42px;height:23px;border-radius:20px;background:var(--bad);position:relative;transition:.2s}
-  .sw.on{background:var(--ok)} .knob{position:absolute;top:2px;left:2px;width:19px;height:19px;
-    border-radius:50%;background:#000;transition:.2s} .sw.on .knob{left:21px}
-  .verdict{margin-top:14px;padding:12px 14px;border-radius:10px;border:1px solid var(--line);
-    background:var(--panel);font-size:13px}
-  .verdict b{color:var(--acc)}
-  .scen{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
-  .scen button{background:var(--chip);border:1px solid var(--line);color:var(--ink);
-    padding:6px 11px;border-radius:8px;cursor:pointer;font-size:12px}
-  .scen button.active{border-color:var(--acc2);color:var(--acc2)}
-  /* matrix */
-  table{border-collapse:collapse;width:100%;margin-top:8px;font-size:12.5px}
-  th,td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}
-  th{background:var(--panel);position:sticky;top:0;cursor:pointer;white-space:nowrap}
-  td.app{font-weight:600;background:var(--panel)}
-  tr.rec td.app{color:var(--ok)}
-  tr.sel{outline:2px solid var(--acc)}
-  .pill{font-size:10px;padding:1px 6px;border-radius:10px}
-  .lo{background:#1d2b1d;color:var(--ok)} .mi{background:#2b2818;color:var(--warn)}
-  .hi{background:#2b1d1d;color:var(--bad)}
-  .yes{color:var(--ok)} .no{color:var(--bad)} .part{color:var(--warn)}
-  .legend{font-size:11px;color:var(--mut);margin-top:6px}
-  .note{font-size:12px;color:var(--mut);margin-top:6px}
-  code{background:#0b0f14;border:1px solid var(--line);border-radius:4px;padding:0 4px;font-size:12px}
-  .rec-tag{font-size:10px;background:var(--ok);color:#000;border-radius:10px;padding:1px 7px;margin-left:6px}
-  /* kba view */
-  .kbawrap{display:flex;gap:18px;flex-wrap:wrap;margin-top:10px}
-  .kbaside{flex:1;min-width:250px}
-  .rings{max-width:300px;width:100%;height:auto}
-  .lgrow{font-size:12px;margin:4px 0;display:flex;align-items:center;gap:8px}
-  .dot{width:11px;height:11px;border-radius:50%;display:inline-block;flex:none}
-  .strow{font-size:12px;color:var(--mut);margin-top:10px;display:flex;align-items:center;gap:8px}
-  .meter{flex:1;height:10px;border-radius:6px;background:#0b0f14;border:1px solid var(--line);overflow:hidden}
-  .meter i{display:block;height:100%;transition:.35s}
-  .reframe{margin-top:14px;padding:11px 13px;border:1px solid var(--line);border-radius:10px;
-    background:var(--panel);font-size:13px}
-  .prop{font-size:10px;border-radius:10px;padding:1px 7px;margin:0 3px;
-    background:#2b1d1d;color:var(--bad);white-space:nowrap}
-  /* high-vs-highest view */
-  .hhboard{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px}
-  .hhcard{flex:1;min-width:230px;background:var(--panel);border:1px solid var(--line);
-    border-radius:10px;padding:12px}
-  .hhname{font-weight:600;font-size:13px;margin-bottom:6px;color:var(--acc)}
-  .hhprop{font-size:12px;margin:3px 0}
-  .cfall{background:#2b1d1d;color:var(--bad);font-weight:600}
-  .chold{background:#1d2b1d;color:var(--ok);font-weight:600}
-  .cpart{background:#2b2818;color:var(--warn);font-weight:600}
-  /* two-jobs view */
-  .layer{border-radius:12px;padding:13px 13px 15px;border:1px solid;font-size:12px}
-  .layer b{font-size:13px}
-  .l-net{background:#1a1414;border-color:#5a2d2d;color:#f0b0b0}
-  .l-ip{background:#121a24;border-color:#2d4a6a;color:#9cc4f0;margin-top:10px}
-  .l-lock{background:#121f16;border-color:#2d5a35;color:#9ce0a8;margin-top:10px}
-  .l-core{background:var(--panel);border-color:var(--line);color:var(--ink);margin-top:10px;text-align:center}
-  /* targeted-vs-automated view */
-  .lanes{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px}
-  .lane{flex:1;min-width:270px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
-  .lane h4{margin:0 0 6px;font-size:13px;color:var(--acc)}
-  .barrier{font-size:12px;padding:7px 9px;border-radius:8px;margin:7px 0;border:1px solid var(--line)}
-  .barrier .bn{display:block;color:var(--mut);margin-top:3px;font-size:11px;font-weight:400}
-  .bpass{border-left:3px solid var(--bad)}
-  .bblock{border-left:3px solid var(--ok);background:#16221a}
-  .brisk{border-left:3px solid var(--warn);background:#221f14}
-  /* solution view */
-  .lead{background:#13211a;border:1px solid #2d5a35;border-radius:10px;padding:12px 14px;font-size:13px;margin-top:8px}
-  .solgrid{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px}
-  .solcard{flex:1;min-width:240px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px}
-  .solcard h4{margin:0 0 8px;font-size:13px;color:var(--acc)}
-  .sdots{display:flex;gap:6px;margin:12px 0 8px;flex-wrap:wrap}
-  .sdot{width:27px;height:27px;border-radius:50%;border:1px solid var(--line);display:flex;
-    align-items:center;justify-content:center;font-size:12px;cursor:pointer;background:var(--chip)}
-  .sdot.active{border-color:var(--acc);color:var(--acc);font-weight:700}
-  .schip{display:inline-block;font-size:11px;border:1px solid var(--line);border-radius:10px;
-    padding:2px 8px;margin:3px 4px 0 0;background:var(--chip)}
-  .chk{font-size:13px;margin:5px 0;display:flex;gap:8px;align-items:start}
-  .chk .t{color:var(--ok);flex:none;font-weight:700}
-  .chk .w{color:var(--warn);flex:none;font-weight:700}
-  .chk .x{color:var(--bad);flex:none;font-weight:700}
-  /* whole-model view */
-  .stack{display:flex;flex-direction:column;gap:6px}
-  .slayer{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12px}
-  .slayer.gone{opacity:.5;border-style:dashed}
-  .slayer.gone s{color:var(--mut)}
-  .slayer.changed{border-color:var(--ok);background:#13211a}
-  .reach{font-size:12px;padding:7px 9px;border-radius:8px;margin:5px 0;border:1px solid var(--line);display:flex;gap:8px;align-items:center}
-  .reach.hit{background:#2b1d1d;border-left:3px solid var(--bad)}
-  .reach.safe{opacity:.55;border-left:3px solid #3a4250}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.55;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1080px;margin:0 auto;padding:32px 22px 90px}
+  header h1{font-size:26px;margin:0 0 6px;letter-spacing:-.01em}
+  header p.sub{margin:0;color:var(--soft);font-size:15px}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 28px}
+  .chip{font-family:var(--mono);font-size:12px;padding:4px 9px;border:1px solid var(--line);
+    border-radius:999px;color:var(--soft);background:var(--panel)}
+  .chip b{color:var(--text);font-weight:600}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:22px 22px;margin:0 0 20px}
+  section h2{margin:0 0 4px;font-size:18px;display:flex;align-items:center;gap:9px}
+  section h2 .n{font-family:var(--mono);font-size:13px;color:var(--accent);
+    background:var(--accent-soft);border:1px solid var(--line);border-radius:7px;
+    padding:1px 8px}
+  section .lead{color:var(--soft);font-size:14px;margin:0 0 16px}
+  code{font-family:var(--mono);font-size:.88em;background:#0b0f15;border:1px solid var(--line);
+    padding:1px 5px;border-radius:5px;color:#c9d4e0}
+  .small{font-size:13px;color:var(--soft)}
+
+  /* mode toggle */
+  .toggle{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;
+    background:var(--panel2)}
+  .toggle button{appearance:none;border:0;background:transparent;color:var(--soft);
+    font-family:var(--sans);font-size:14px;font-weight:600;padding:9px 18px;cursor:pointer;
+    transition:.15s}
+  .toggle button.on{background:var(--accent);color:#04101f}
+  .toggle button:not(.on):hover{color:var(--text)}
+  .modebar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+  .modebar .tag{font-size:12.5px;color:var(--faint)}
+
+  /* device mock */
+  .stage{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:720px){.stage{grid-template-columns:1fr}}
+  .device{border:1px solid var(--line);border-radius:16px;background:var(--panel2);
+    overflow:hidden;display:flex;flex-direction:column;min-height:280px}
+  .device .bar{display:flex;align-items:center;gap:8px;padding:9px 13px;border-bottom:1px solid var(--line);
+    background:#10151d}
+  .device .bar .dot{width:9px;height:9px;border-radius:50%;background:#30363d}
+  .device .bar .title{font-size:12px;color:var(--soft);margin-left:6px;font-family:var(--mono)}
+  .device .badge{margin-left:auto;font-size:11px;font-family:var(--mono);padding:2px 8px;border-radius:999px;
+    border:1px solid var(--line)}
+  .badge.basic{color:var(--accent);background:var(--accent-soft)}
+  .badge.adv{color:var(--self);background:var(--self-soft)}
+  .device .body{padding:13px;flex:1;display:flex;flex-direction:column;gap:9px}
+  .device .label{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);
+    margin-bottom:1px}
+  .repo{display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid var(--line);
+    border-radius:9px;background:var(--panel);font-size:14px;transition:.25s}
+  .repo .ic{font-size:15px}
+  .repo .nm{font-weight:600}
+  .repo .vis{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--faint);
+    border:1px solid var(--line);border-radius:999px;padding:1px 7px}
+  .repo.self{border-color:var(--self);background:var(--self-soft)}
+  .repo.self .nm{color:var(--self)}
+  .repo.active{outline:2px solid var(--accent);outline-offset:-2px}
+  .conv{margin-top:6px;border:1px dashed var(--line);border-radius:9px;padding:11px;font-size:13px;
+    background:#0b0f15;min-height:64px}
+  .conv .who{font-family:var(--mono);font-size:11px;color:var(--faint);margin-bottom:4px}
+  .conv.self{border-color:var(--self);background:var(--self-soft)}
+  .conv.self .who{color:var(--self)}
+  .conv.leak{border-color:var(--bad);background:var(--bad-soft)}
+  .conv.leak .who{color:var(--bad)}
+  .verdict{margin-top:10px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px}
+  .verdict.bad{color:var(--bad)} .verdict.good{color:var(--good)}
+  .empty{border:1px dashed var(--line);border-radius:9px;padding:16px 13px;text-align:center;
+    color:var(--soft);font-size:13px;background:#0b0f15}
+  .empty .ic{font-size:22px;display:block;margin-bottom:7px;opacity:.7}
+  .newbtn{margin-top:9px;border:1px dashed var(--line);border-radius:9px;padding:9px 11px;
+    text-align:center;color:var(--faint);font-size:13px;font-family:var(--sans)}
+  .col-h{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);
+    margin:0 0 9px}
+  .before .col-h{color:var(--bad)} .after .col-h{color:var(--good)}
+
+  /* flow */
+  .flow{display:flex;flex-direction:column;gap:0}
+  .step{display:grid;grid-template-columns:34px 1fr;gap:14px;align-items:start;position:relative;
+    padding-bottom:18px}
+  .step:last-child{padding-bottom:0}
+  .step .rail{display:flex;flex-direction:column;align-items:center}
+  .step .num{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+    font-family:var(--mono);font-size:14px;font-weight:700;border:1px solid var(--line);
+    background:var(--panel2);color:var(--soft);z-index:1}
+  .step .line{flex:1;width:2px;background:var(--line);margin-top:2px;min-height:24px}
+  .step:last-child .line{display:none}
+  .step.fix .num{border-color:var(--good);color:var(--good);background:var(--good-soft)}
+  .step .body h3{margin:5px 0 4px;font-size:15px}
+  .step .body p{margin:0 0 6px;color:var(--soft);font-size:13.5px}
+  .step .tagrow{display:flex;gap:7px;flex-wrap:wrap;margin-top:6px}
+  .ttag{font-family:var(--mono);font-size:11px;padding:2px 8px;border-radius:6px;border:1px solid var(--line);
+    color:var(--soft);background:#0b0f15}
+  .ttag.fix{color:var(--good);border-color:#1d3a26;background:var(--good-soft)}
+
+  /* requirements */
+  .reqs{display:grid;gap:12px}
+  .req{border:1px solid var(--line);border-radius:11px;padding:14px 15px;background:var(--panel2)}
+  .req h3{margin:0 0 5px;font-size:14.5px;display:flex;gap:9px;align-items:baseline}
+  .req h3 .r{font-family:var(--mono);font-size:11px;color:var(--good);background:var(--good-soft);
+    border:1px solid #1d3a26;border-radius:6px;padding:1px 7px;flex:none}
+  .req p{margin:0;color:var(--soft);font-size:13.5px}
+
+  /* decisions / scope */
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:720px){.cards{grid-template-columns:1fr}}
+  .card{border:1px solid var(--line);border-radius:11px;padding:15px;background:var(--panel2)}
+  .card.warn{border-color:#3a3015}
+  .card h3{margin:0 0 6px;font-size:14px}
+  .card p{margin:0;color:var(--soft);font-size:13px}
+  .kbar{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:8px}
+  .file{font-family:var(--mono);font-size:11.5px;color:var(--accent)}
+  footer{color:var(--faint);font-size:12px;text-align:center;margin-top:26px}
+  .pulse{animation:pulse 1.2s ease}
+  @keyframes pulse{0%{background:var(--warn-soft)}100%{}}
 </style>
 </head>
 <body>
-<header>
-  <h1>Resilient Auth</h1>
-  <p class="sub">Why a changing phone IP locks you out today — and the seven ways out, side by side.</p>
-</header>
-<main>
-  <div class="tabs">
-    <button class="tab active" data-v="flow">① The pipeline &amp; the friction</button>
-    <button class="tab" data-v="matrix">② Compare the 7 approaches</button>
-    <button class="tab" data-v="kba">③ "Only one person" — the questionnaire trap</button>
-    <button class="tab" data-v="hh">④ Why "High", not "Highest"</button>
-    <button class="tab" data-v="tj">⑤ Two jobs: invisibility vs. the lock</button>
-    <button class="tab" data-v="ta">⑥ Who actually attacks you</button>
-    <button class="tab" data-v="sol">✅ The solution</button>
-    <button class="tab" data-v="model">⑧ The whole model — proposal &amp; design</button>
-    <button class="tab" data-v="audit">⑨ Action audit — trust but verify</button>
-    <button class="tab" data-v="impl">⑩ Action audit — how it's built</button>
-    <button class="tab" data-v="try">⑪ Try it out</button>
-  </div>
-
-  <!-- VIEW 1 -->
-  <section class="view active" id="flow">
-    <h2>What happens to a request — and where the 4G re-bar is born</h2>
-    <p class="note">The strict <b>403</b> stays for everyone you haven't approved. Approach B adds
-      <b>one</b> new admit path: a device you already let in carries a trusted-device cookie. Pick a
-      scenario, then toggle the cookie feature <b>OFF (today)</b> vs <b>ON (this change)</b> — watch
-      that only the "<i>new IP · has cookie</i>" case changes.</p>
-
-    <div class="scen" id="scen">
-      <button data-s="approved" class="active">Approved IP</button>
-      <button data-s="cookie">New 4G IP · has device cookie</button>
-      <button data-s="nocookie">New 4G IP · no cookie (new phone)</button>
-      <button data-s="stranger">Unknown visitor · no cookie</button>
+<div class="wrap">
+  <header>
+    <h1>Hiding the Self-Development repo from Basic mode</h1>
+    <p class="sub">OpenSpec change <code>hide-self-repo-from-basic</code> — why the ClaudeWeb self conversation leaks to End Users, and the rule that stops it.</p>
+    <div class="meta">
+      <span class="chip">branch <b>feature/hide-self-repo-basic-mode</b></span>
+      <span class="chip">capability <b>project-visibility</b> (seeded)</span>
+      <span class="chip">status <b>proposal &middot; validated</b></span>
+      <span class="chip">enforcement <b>client-side</b></span>
     </div>
+  </header>
 
-    <label class="toggle" id="lockToggle">
-      <span class="sw on" id="sw"><span class="knob"></span></span>
-      <span id="lockLabel">Trusted-device cookie: <b style="color:var(--ok)">ON</b> (this change) — click to see today</span>
-    </label>
-
-    <div class="pipe" id="pipe"></div>
-    <div class="verdict" id="verdict"></div>
-  </section>
-
-  <!-- VIEW 2 -->
-  <section class="view" id="matrix">
-    <h2>Seven approaches × eight dimensions</h2>
-    <p class="note">Click a column header to sort. Click a row to highlight. <span class="rec-tag">REC</span>
-      marks the recommendation.</p>
-    <div style="overflow:auto;max-height:70vh">
-      <table id="mtx"></table>
-    </div>
-    <p class="legend">Effort/Risk/Burden: <span class="pill lo">low</span>
-      <span class="pill mi">med</span> <span class="pill hi">high</span> — green is the easy/safe end.
-      Fixes friction: <span class="yes">✓ yes</span> / <span class="part">partial</span> /
-      <span class="no">✗ no</span>. Ratings are relative to this codebase (one Operator, a few
-      trusted phones, internet-reachable via IIS/ARR).</p>
-  </section>
-
-  <!-- VIEW 3 -->
-  <section class="view" id="kba">
-    <h2>"Only one person" — why a personal questionnaire is the wrong lock</h2>
-    <p class="note">A "questions only they'd know" gate is <b>knowledge-based auth (KBA)</b>. Pick a
-      method and watch <b>how far into your life it leaks</b> — i.e. who <i>else</i> could pass.
-      Red rings can get in; the green centre is the one person you actually want.</p>
-
-    <div class="scen" id="kbaSel">
-      <button data-m="trivia" class="active">Shared-life questionnaire</button>
-      <button data-m="pass">Strong passphrase (B)</button>
-      <button data-m="passkey">Passkey on their phone (D)</button>
-    </div>
-
-    <div class="kbawrap">
-      <div id="kbaRings"></div>
-      <div class="kbaside">
-        <h3 id="kbaName" style="margin:0 0 6px;font-size:14px"></h3>
-        <div id="kbaLegend"></div>
-        <div class="strow">Guess-resistance <div class="meter"><i id="kbaMeter"></i></div></div>
-        <p class="note" id="kbaLeak"></p>
-        <div class="verdict" id="kbaVerdict"></div>
+  <!-- LIVE DEMO -->
+  <section>
+    <h2><span class="n">demo</span> Flip the mode &mdash; watch the self repo &amp; its conversation</h2>
+    <p class="lead">The same repo list rendered for the two modes. Toggle to see what an End User (Basic) gets today vs. after the fix.</p>
+    <div class="modebar">
+      <div class="toggle" id="toggle">
+        <button data-m="basic" class="on">Basic (End User)</button>
+        <button data-m="advanced">Advanced</button>
       </div>
+      <div class="toggle" id="scenario">
+        <button data-s="multi" class="on">Has other projects</button>
+        <button data-s="selfonly">Only the self repo</button>
+      </div>
+      <span class="tag">device-local &middot; <code>localStorage: claudeweb_ui_mode</code></span>
     </div>
-
-    <div class="reframe">
-      <b>The reframe:</b> a questionnaire is just a <b>low-entropy, non-rotatable, semi-public
-      password</b> — <span class="prop">entropy: low</span><span class="prop">rotatable: no</span><span class="prop">secret: partly public</span> — and a real passphrase or passkey beats it on every one of those.
-    </div>
-    <div class="reframe">
-      <b>What gives you "only this one person", properly:</b> ① give that person the strong password
-      (B) — it already <i>is</i> info only they know, but high-entropy &amp; rotatable · ② enrol a
-      passkey on <i>their</i> device (D) — possession + Face ID, can't be shared by knowing facts ·
-      ③ a unique secret invite link. Keep the trivia as fun flavour <i>behind</i> the lock, never
-      <i>as</i> the lock.
-    </div>
-  </section>
-
-  <!-- VIEW 4 -->
-  <section class="view" id="hh">
-    <h2>Why "High", not "Highest" — bearer secrets vs. unstealable keys</h2>
-    <p class="note">B's door is strong and layered, but it rests on secrets that can be
-      <b>phished</b> or <b>copied</b>. The top tier (D, F) removes the secret itself. Two properties
-      define that tier — here's who has them:</p>
-    <div class="hhboard" id="hhBoard"></div>
-
-    <h2 style="margin-top:24px">Run an attack against each approach</h2>
-    <p class="note">Click a row. Watch where <b>B goes red while D/F hold</b> — the
-      <i>phishing</i> and <i>stolen-credential</i> rows are exactly the High→Highest gap.</p>
-    <table id="hhMtx"></table>
-    <p class="legend"><span class="cfall" style="padding:1px 6px;border-radius:4px">falls ✗</span>
-      attack succeeds · <span class="cpart" style="padding:1px 6px;border-radius:4px">partial</span>
-      mitigated, not eliminated · <span class="chold" style="padding:1px 6px;border-radius:4px">holds ✓</span>
-      defended.</p>
-    <div class="verdict" id="hhDetail" style="margin-top:12px"></div>
-
-    <div class="reframe"><b>The gap, and how to close it:</b> B = password + cookie = two bearer
-      secrets, so it is breached if <i>either</i> one leaks — that caps it at <b>High</b>. Swap B's
-      password factor for a <b>passkey (D)</b> and you keep the cookie's convenience but gain both
-      properties (origin-bound, non-exportable): the "phishing" and "stolen credential" rows flip
-      red→green and B effectively rises to Highest. That's why D is framed as B's natural follow-up,
-      not a rival.</div>
-  </section>
-
-  <!-- VIEW 5 -->
-  <section class="view" id="tj">
-    <h2>Two jobs: invisibility vs. the lock</h2>
-    <p class="note">Calling both of them "gates" hides the point — they do <b>different jobs</b>. The
-      IP gate makes the app <b>invisible</b>; the password is the <b>lock</b>. One isn't better than
-      the other; they cover each other's blind spots.</p>
-
-    <div class="layer l-net">🌐 <b>The whole internet</b> — hostile by default
-      <div class="layer l-ip">🕶️ <b>IP gate — invisibility.</b> Unapproved addresses get a 403 at the
-        door; your app code never runs. Stops scanners, bots, and bugs in routes you forgot.
-        <div class="layer l-lock">🔒 <b>Password / passkey — the lock.</b> Proves <i>who</i> you are.
-          Stops anyone who reaches the door but doesn't hold the secret.
-          <div class="layer l-core">🧠 <b>Your app</b></div>
+    <div class="stage">
+      <div class="before">
+        <p class="col-h">Today (bug)</p>
+        <div class="device">
+          <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            <span class="title">Projects</span><span class="badge basic" id="b1">basic</span></div>
+          <div class="body" id="bodyBefore"></div>
+        </div>
+      </div>
+      <div class="after">
+        <p class="col-h">With this change</p>
+        <div class="device">
+          <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            <span class="title">Projects</span><span class="badge basic" id="b2">basic</span></div>
+          <div class="body" id="bodyAfter"></div>
         </div>
       </div>
     </div>
-    <p class="legend">The lock is only reachable by someone the invisibility layer already let near the
-      building — and the invisibility layer can't tell <i>who</i> anyone is. Different jobs.</p>
-
-    <h2 style="margin-top:22px">Who's at the door?</h2>
-    <p class="note">Click a row. Look down each column: <b>neither is all green.</b> Each gate gets
-      right exactly what the other gets wrong — which is why you keep both.</p>
-    <table id="tjMtx"></table>
-    <p class="legend"><span class="chold" style="padding:1px 6px;border-radius:4px">✓</span> right call ·
-      <span class="cpart" style="padding:1px 6px;border-radius:4px">~</span> only rations it ·
-      <span class="cfall" style="padding:1px 6px;border-radius:4px">✗</span> wrong call.</p>
-    <div class="verdict" id="tjDetail" style="margin-top:12px"></div>
-
-    <div class="reframe"><b>The trap you hit:</b> rows 4 and 6 are the IP gate being asked to
-      <i>authenticate</i> — to judge <i>who</i> — which it's bad at, because addresses are shared
-      (CGNAT) and reassigned (4G). The fix isn't to trust it more or to delete it; it's to move the
-      <b>identity</b> job onto the device cookie, and leave the IP gate doing the one thing it's
-      genuinely great at: keeping the app <b>invisible</b> to everyone you haven't approved.</div>
+    <p class="small" style="margin-top:14px">&#8627; The self repo is <code>isSelf=true</code>, pinned at <b>index 0 &mdash; the default project</b>. Today the Basic list is filtered by <code>visibility</code> only (<span class="file">Projects.jsx:127</span>), so the self repo slips through and, being the default, its conversation renders even after you open another project.</p>
+    <p class="small" style="margin-top:8px"><b>Empty-state case</b> &mdash; switch the scenario to <i>&ldquo;Only the self repo&rdquo;</i>: on a fresh harness where self is the <i>only</i> registered repo, hiding it means a Basic user has <b>zero</b> projects. They see the real empty state (<span class="file">Projects.jsx:181</span> &rarr; <code>projects.noneBasic</code>): &ldquo;No projects are available in Basic mode yet&hellip;&rdquo; plus the <code>+ New project</code> button &mdash; and crucially <b>no self conversation</b>. That&rsquo;s the correct outcome: better an honest empty state than the harness&rsquo;s own conversation leaking to an End User.</p>
   </section>
 
-  <!-- VIEW 6 -->
-  <section class="view" id="ta">
-    <h2>Who actually attacks you — automated vs. targeted</h2>
-    <p class="note">Two very different attackers. Pick one and walk it through each model — watch
-      which barriers it must climb and where it gets stopped. The key fact: <b>they don't happen
-      equally often.</b></p>
-
-    <div class="scen" id="taSel">
-      <button data-p="bot" class="active">🤖 Automated bot</button>
-      <button data-p="human">🎯 Targeted human</button>
-    </div>
-    <div class="verdict" id="taDesc" style="margin-top:6px"></div>
-
-    <div class="lanes" id="taLanes"></div>
-
-    <div class="reframe"><b>The asymmetry that settles it:</b> the attacker that's <b>common</b> (the
-      bot) is <i>untargeted</i> — and it's exactly what invisibility stops, so B makes you invisible
-      to it. The attacker that's <b>scary</b> (cookie + password) is <i>rare and targeted</i> — and
-      it's the bar <b>B</b> imposes, not soft. Going soft trades away your defence against the common
-      one <i>and</i> lowers the bar for the rare one.</div>
-  </section>
-
-  <!-- VIEW 7 -->
-  <section class="view" id="sol">
-    <h2>The solution — strict gate + trusted-device cookie (Approach B)</h2>
-    <div class="lead"><b>In one line:</b> keep the strict IP gate exactly as it is, and mint a
-      long-lived <b>trusted-device cookie</b> the first time you approve someone. The gate then
-      admits <b>an approved IP OR a valid cookie</b> — so a friend's rotating 4G IP never re-bars
-      them — while everyone you haven't approved still hits the same hard 403. The password stays as
-      the second factor.</div>
-
-    <h2 style="margin-top:22px">The rule the gate follows</h2>
-    <div class="solgrid">
-      <div class="solcard"><h4>✓ Approved IP</h4><p class="note">Pass — unchanged from today.</p></div>
-      <div class="solcard" style="border-color:#2d5a35"><h4>✓ Unapproved IP + valid cookie</h4>
-        <p class="note">Pass — the 4G-rescue case. The device is remembered, the address isn't.
-          (Optionally records the new IP, tagged <code>via device cookie</code>.)</p></div>
-      <div class="solcard" style="border-color:#5a2d2d"><h4>✗ Anything else</h4>
-        <p class="note">Hard 403 + rejection page, byte-for-byte as today. You approve manually. No
-          fall-through, ever.</p></div>
-    </div>
-
-    <h2 style="margin-top:22px">Lifecycle of a friend's access</h2>
-    <p class="note">Click through — from first approval, through an IP change, to eviction.</p>
-    <div class="sdots" id="solDots"></div>
-    <div class="solcard" id="solCard"></div>
-    <div class="scen" style="margin-top:10px">
-      <button id="solPrev">‹ Prev</button><button id="solNext">Next ›</button>
-    </div>
-
-    <div class="solgrid" style="margin-top:22px">
-      <div class="solcard"><h4>🍪 The trusted-device cookie</h4>
-        <span class="schip">HttpOnly</span><span class="schip">Secure (HTTPS)</span>
-        <span class="schip">SameSite</span><span class="schip">256-bit random</span>
-        <span class="schip">~180-day sliding</span><span class="schip">only its hash stored</span>
-        <span class="schip">server-side revocable</span>
-        <p class="note" style="margin-top:8px">Minted only on a successful login from an
-          already-approved IP — so a 403'd stranger can never obtain one.</p></div>
-      <div class="solcard"><h4>🔧 What gets built</h4>
-        <p class="note">① <code>DeviceTokenService</code> — issue / validate-and-slide / revoke, hash
-          stored beside sessions · ② mint the cookie on login success · ③ IP gate checks the cookie
-          before its 403 · ④ a "Trusted devices" list with Revoke in the desktop GUI · ⑤
-          <code>DeviceCookieDays</code> config. <i>(See the change's tasks.md.)</i></p></div>
-    </div>
-
-    <h2 style="margin-top:22px">Four things we must get right</h2>
-    <div class="solcard">
-      <p class="chk"><span class="w">1</span><span><b>Revocation is mandatory.</b> Removing an IP no
-        longer evicts a cookie-holder — so the "Trusted devices" list must let you revoke, and
-        removing a guest offers to revoke their tokens. Without this you can't fully evict anyone.</span></p>
-      <p class="chk"><span class="w">2</span><span><b>The cookie proves the device, not the person.</b>
-        New phone / cleared cookies → one more approval. Intended — it's what stops a lost phone being
-        a permanent backdoor.</span></p>
-      <p class="chk"><span class="w">3</span><span><b>Long, sliding lifetime</b> (~180 days) so the
-        call-you event is rare; a quiet friend re-approves once.</span></p>
-      <p class="chk"><span class="w">4</span><span><b>HttpOnly + Secure + SameSite</b> — the cookie now
-        skips the IP gate, so it must be unreadable to JS and HTTPS-only.</span></p>
-    </div>
-
-    <h2 style="margin-top:22px">What you get</h2>
-    <div class="solcard">
-      <p class="chk"><span class="t">✓</span><span>You personally approve every first entry — the
-        human allowlist stays.</span></p>
-      <p class="chk"><span class="t">✓</span><span>Everyone you haven't approved still hits a hard 403
-        — the app stays <b>invisible</b> to the automated internet.</span></p>
-      <p class="chk"><span class="t">✓</span><span>An approved friend is never re-barred when their 4G
-        IP changes — <b>no more phone calls</b>.</span></p>
-      <p class="chk"><span class="t">✓</span><span>The password remains a second factor behind the
-        gate — a leaked cookie alone doesn't grant access.</span></p>
-      <p class="chk"><span class="t">✓</span><span>You can fully evict anyone by revoking their device
-        + IP.</span></p>
-      <p class="chk"><span class="w">~</span><span><b>Residual risk (honest):</b> a stolen,
-        un-revoked, HttpOnly cookie + the password — a targeted attack only, the reassuringly hard
-        chain from tab ⑥. Closeable later by swapping the password factor for a passkey (tab ④).</span></p>
+  <!-- ROOT CAUSE FLOW -->
+  <section>
+    <h2><span class="n">why</span> How the self conversation leaks &mdash; the resolution chain</h2>
+    <p class="lead">Four steps from &ldquo;pick a mode&rdquo; to &ldquo;render a conversation.&rdquo; The leak happens because nothing in the chain subtracts <code>isSelf</code> for a Basic user. Green steps are where this change intervenes.</p>
+    <div class="flow">
+      <div class="step">
+        <div class="rail"><div class="num">1</div><div class="line"></div></div>
+        <div class="body"><h3>Mode is chosen on the device</h3>
+          <p>Purely client-side, defaults to <code>basic</code>. The backend never learns the mode &mdash; it serves every repo (incl. self) to any authed client.</p>
+          <div class="tagrow"><span class="ttag">UiModeContext.jsx</span><span class="ttag">useFeature()</span></div></div>
+      </div>
+      <div class="step fix">
+        <div class="rail"><div class="num">2</div><div class="line"></div></div>
+        <div class="body"><h3>Repo list is filtered</h3>
+          <p>Today: <code>repos.filter(r =&gt; r.visibility === 'basic')</code> &mdash; ignores <code>isSelf</code>. <b>Fix:</b> also exclude <code>isSelf</code> in Basic.</p>
+          <div class="tagrow"><span class="ttag">Projects.jsx:127</span><span class="ttag fix">+ &amp;&amp; !r.isSelf</span></div></div>
+      </div>
+      <div class="step fix">
+        <div class="rail"><div class="num">3</div><div class="line"></div></div>
+        <div class="body"><h3>Active / default repo is resolved</h3>
+          <p>Self is index-0 default, so a fresh or self-pointing Basic user lands on it. <b>Fix:</b> never resolve a Basic user's active repo to self &mdash; fall back to first Basic-visible repo (or empty state).</p>
+          <div class="tagrow"><span class="ttag">RepoContext.jsx</span><span class="ttag">ChatContext.jsx ~74-119</span><span class="ttag fix">fallback</span></div></div>
+      </div>
+      <div class="step fix">
+        <div class="rail"><div class="num">4</div><div class="line"></div></div>
+        <div class="body"><h3>Conversation renders</h3>
+          <p>With the active repo guaranteed non-self and the dual &ldquo;Claude Web&rdquo; view already <code>dualChat:'advanced'</code>, the self conversation can no longer mount for a Basic user &mdash; including right after switching projects.</p>
+          <div class="tagrow"><span class="ttag">ChatContext.jsx</span><span class="ttag fix">no self render in Basic</span></div></div>
+      </div>
     </div>
   </section>
 
-  <!-- VIEW 8 -->
-  <section class="view" id="model">
-    <h2>The whole model — what the proposal &amp; design actually change</h2>
-    <p class="note">The change has two halves: <b>(1)</b> remember the device (trusted-device cookie,
-      tabs ①–⑦) and <b>(2)</b> <b>delete the in-app permission layer</b> so the two gates are the
-      <i>entire</i> authorization model. Here's the shape of both.</p>
-
-    <h2 style="margin-top:18px">Before → after: the authorization stack</h2>
-    <div class="solgrid">
-      <div class="solcard"><h4>Before</h4>
-        <div class="stack">
-          <div class="slayer">🕶️ Gate 1 — strict IP allowlist</div>
-          <div class="slayer">🔒 Gate 2 — password / session</div>
-          <div class="slayer">🎚️ Per-project permission preset — Read-only <i>default</i>, Standard denylist (no <code>rm -rf</code>, <code>curl</code>…)</div>
-          <div class="slayer">💻 Runs as the OS account</div>
-        </div></div>
-      <div class="solcard"><h4>After</h4>
-        <div class="stack">
-          <div class="slayer changed">🕶️ Gate 1 — strict IP allowlist <b>OR trusted-device cookie</b></div>
-          <div class="slayer">🔒 Gate 2 — password / session</div>
-          <div class="slayer gone">🎚️ <s>Per-project permission preset</s> — <b>REMOVED</b></div>
-          <div class="slayer changed">💻 <b>Full access</b> — bounded only by the OS account</div>
-        </div></div>
+  <!-- REQUIREMENTS -->
+  <section>
+    <h2><span class="n">spec</span> The three requirements (delta on <code>project-visibility</code>)</h2>
+    <p class="lead">What the system SHALL guarantee once shipped. Each carries WHEN/THEN scenarios in the delta spec.</p>
+    <div class="reqs">
+      <div class="req"><h3><span class="r">R1</span> The Self-Development repo is hidden from Basic-mode users</h3>
+        <p>The Basic project selector excludes every <code>isSelf</code> repo regardless of its <code>visibility</code>. Advanced still sees it, pinned &amp; non-removable.</p></div>
+      <div class="req"><h3><span class="r">R2</span> A Basic user's active repo is never the self repo</h3>
+        <p>Even though self is the index-0 default / may be the persisted pick, resolution falls back to the first Basic-visible repo, else the empty state.</p></div>
+      <div class="req"><h3><span class="r">R3</span> The self conversation never renders for a Basic user</h3>
+        <p>No dual harness chat, no self sessions &mdash; including immediately after switching projects, and after toggling Advanced&rarr;Basic while on the self repo.</p></div>
     </div>
-    <p class="legend">Two edits: Gate 1 gains the cookie (so a rotated IP isn't a re-bar), and the
-      whole permission tier is deleted (so there's no second gate on <i>what</i> a passed user does).</p>
-
-    <h2 style="margin-top:22px">Removing the permission system — what goes, what stays</h2>
-    <div class="solgrid">
-      <div class="solcard" style="border-color:#5a2d2d"><h4>🗑️ Removed</h4>
-        <p class="chk"><span class="x">✗</span><span>The presets (Read-only / Edit-only / Standard / Full)</span></p>
-        <p class="chk"><span class="x">✗</span><span><code>ApplyPermissionFlags</code> + the Standard denylist — chat runs unrestricted</span></p>
-        <p class="chk"><span class="x">✗</span><span>The Read-only <i>safe default</i> for unconfigured projects</span></p>
-        <p class="chk"><span class="x">✗</span><span>Desktop preset picker + the read-only web badge</span></p>
-        <p class="chk"><span class="x">✗</span><span>The <code>project-permissions</code> spec capability</span></p></div>
-      <div class="solcard" style="border-color:#2d5a35"><h4>✅ Kept (not per-user authorization)</h4>
-        <p class="chk"><span class="t">✓</span><span>The IP + password gates — the auth model itself</span></p>
-        <p class="chk"><span class="t">✓</span><span><code>X-Repo-Id</code> — repo <i>routing</i>, not access control</span></p>
-        <p class="chk"><span class="t">✓</span><span>Repo visibility (basic/advanced) — a UI filter only</span></p>
-        <p class="chk"><span class="t">✓</span><span>AutopilotGate — a host-only feature on/off switch</span></p>
-        <p class="chk"><span class="t">✓</span><span>The user-<i>selectable</i> read-only "ask" mode — a chosen tool</span></p></div>
-    </div>
-
-    <h2 style="margin-top:22px">The boundary becomes the OS account — so size it</h2>
-    <p class="note">With the permission tier gone, the only thing limiting a passed user (or a breached
-      cookie + password) is <b>the Windows account the harness process runs as</b> — <i>not</i> a
-      per-user login; the End User never authenticates to Windows. Pick a scenario and see how far a
-      breach reaches:</p>
-    <div class="scen" id="brSel">
-      <button data-s="today" class="active">Today (permissions on)</button>
-      <button data-s="admin">After · harness as your admin account</button>
-      <button data-s="dedi">After · dedicated least-privilege account</button>
-    </div>
-    <div id="brList"></div>
-    <div class="verdict" id="brVerdict" style="margin-top:10px"></div>
-
-    <div class="reframe"><b>The thesis of the design:</b> for a single-Operator harness with a few
-      hand-approved devices, two overlapping trust tiers are redundant — one clear boundary (the
-      gates) beats two. The price is full-access-by-default, so the design's paired recommendation is
-      to run the harness under a <b>dedicated least-privilege OS account</b>: that's what turns
-      "bounded by the OS account" into a sandbox you chose, and keeps a worst-case breach contained.</div>
   </section>
 
-  <!-- VIEW 9 -->
-  <section class="view" id="audit">
-    <h2>Action audit — trust but verify</h2>
-    <div class="lead"><b>The counterweight to removing permissions (tab ⑧).</b> We no longer
-      <i>restrict</i> a gate-passed user — so instead we <i>record</i> what they do. <b>Everything</b>
-      is logged — every message sent to an agent and every tool it runs (reads included) — attributed
-      to <i>who</i>, append-only, for accountability now and forensics if a device or password is ever
-      compromised.</div>
-
-    <h2 style="margin-top:22px">What a log entry looks like</h2>
-    <p class="note">Three kinds — pick one.</p>
-    <div class="scen" id="auditSel">
-      <button data-k="prompt" class="active">prompt</button>
-      <button data-k="tool">tool</button>
-      <button data-k="auth">auth</button>
+  <!-- DECISIONS -->
+  <section>
+    <h2><span class="n">scope</span> Two decisions worth confirming</h2>
+    <div class="cards">
+      <div class="card">
+        <div class="kbar"><span class="ttag">new capability</span></div>
+        <h3>Seeded <code>project-visibility</code></h3>
+        <p>No existing spec owned repo visibility; <span class="file">plans/project-visibility.md</span> was never folded into <code>openspec/specs</code>. Seed-and-grow per CLAUDE.md as we touch it, rather than bolting onto <code>chat</code>/<code>access-control</code>.</p>
+      </div>
+      <div class="card warn">
+        <div class="kbar"><span class="ttag">out of scope</span></div>
+        <h3>Client-side enforcement only</h3>
+        <p>UI mode is device-local; the backend can't know it. <code>/api/repos</code> &amp; <code>/api/sessions</code> still return self to any client asking by id. A hard server-side gate needs the backend to learn the caller's mode &mdash; a separate, larger change.</p>
+      </div>
     </div>
-    <pre id="auditJson" style="background:#0b0f14;border:1px solid var(--line);border-radius:8px;padding:12px;font-size:12px;overflow:auto;color:#cdd9e5;white-space:pre-wrap"></pre>
-    <div class="note" id="auditNote"></div>
-
-    <h2 style="margin-top:22px">What's recorded — everything</h2>
-    <p class="note">Every tool the agent runs is logged — <b>reads included</b> — plus every message
-      sent to an agent. No sampling, no per-tool filtering. Click a tool.</p>
-    <div id="auditTools"></div>
-    <div class="verdict" id="auditToolNote" style="margin-top:10px"></div>
-
-    <div class="solgrid" style="margin-top:22px">
-      <div class="solcard"><h4>🧍 Who did it — the identity ladder</h4>
-        <p class="chk"><span class="t">1</span><span><b>Trusted-device name</b> (the cookie's record — e.g. "Girlfriend's phone")</span></p>
-        <p class="chk"><span class="t">2</span><span>else the <b>approved-IP guest name</b></span></p>
-        <p class="chk"><span class="t">3</span><span>else <code>unknown@&lt;ip&gt;</code> — never dropped</span></p>
-        <p class="note" style="margin-top:6px">Source IP + a short session id are always stamped too.
-          This is exactly the identity the trusted-device cookie (tabs ①–⑦) gave us — before it, all
-          you could attribute an action to was a bare IP.</p></div>
-      <div class="solcard"><h4>🗄️ The store</h4>
-        <span class="schip">append-only</span><span class="schip">daily JSONL</span>
-        <span class="schip">%APPDATA%\ClaudeWeb\audit\</span><span class="schip">retention prune</span>
-        <span class="schip">desktop "Activity" tab</span><span class="schip">no web surface</span>
-        <p class="note" style="margin-top:8px">One JSON object per line, one file per day, whole-file
-          pruned by age (<code>AuditRetentionDays</code>). The web/phone UI can neither read nor clear
-          it — the audit watches the web users, it isn't theirs.</p></div>
-    </div>
-
-    <div class="reframe"><b>The arc:</b> tabs ①–⑦ built the trusted-device identity, tab ⑧ removed the
-      permission layer, and this closes the loop — the identity that lets a friend back in on 4G is the
-      same identity that records <i>who</i> ran each action. Don't restrict trusted users; remember
-      what they did.</div>
+    <p class="small" style="margin-top:14px">Preserved invariant: self stays pinned at index 0 and non-removable for Advanced (<span class="file">RepoController.Remove</span> still refuses <code>IsSelf</code>). This change only <i>hides</i> it from Basic.</p>
   </section>
 
-  <!-- VIEW 10 -->
-  <section class="view" id="impl">
-    <h2>Action audit — how it's built</h2>
-    <p class="note">The real capture path through the C# components, as actually implemented. Click a
-      stage to see what it does and which file it lives in.</p>
-    <div class="scen" id="implSel">
-      <button data-i="0" class="active">① ChatController</button>
-      <button data-i="1">② CliRunnerService</button>
-      <button data-i="2">③ AuditService</button>
-      <button data-i="3">④ JSONL store</button>
-      <button data-i="4">⑤ ActivityForm</button>
-      <button data-i="5">＋ auth events</button>
-    </div>
-    <div class="solcard" id="implCard"></div>
-
-    <h2 style="margin-top:22px">Files touched</h2>
-    <div class="solgrid">
-      <div class="solcard" style="border-color:#2d5a35"><h4>🆕 New</h4>
-        <span class="schip">Services/Audit/AuditService.cs</span>
-        <span class="schip">Services/Audit/AuditTypes.cs</span>
-        <span class="schip">UI/ActivityForm.cs</span></div>
-      <div class="solcard"><h4>✏️ Modified</h4>
-        <span class="schip">ChatController</span><span class="schip">CliRunnerService</span>
-        <span class="schip">AuthController</span><span class="schip">IpFilterForm</span>
-        <span class="schip">MainForm</span><span class="schip">Program</span>
-        <span class="schip">EmbeddedApi</span><span class="schip">AppConfig</span>
-        <span class="schip">appsettings.json</span></div>
-    </div>
-
-    <h2 style="margin-top:22px">The non-obvious decisions</h2>
-    <div class="solcard">
-      <p class="chk"><span class="t">▹</span><span><b>Actor resolved on the request thread.</b> The run
-        is detached (`Task.Run`), where `HttpContext` is gone — so `ChatController` resolves the actor
-        and builds the `AuditContext` <i>before</i> spawning the run, and threads it in.</span></p>
-      <p class="chk"><span class="t">▹</span><span><b>One capture point for all tools.</b>
-        `HandleAssistant` already sees every `tool_use` block with its full input — so one `LogTool`
-        call there covers every tool, reads included, no per-tool filtering.</span></p>
-      <p class="chk"><span class="t">▹</span><span><b>Auth events logged at the callers,</b> not inside
-        the auth services — because `AuditService` already depends on them, so logging there would be a
-        circular dependency.</span></p>
-      <p class="chk"><span class="t">▹</span><span><b>One pre-built singleton, shared GUI↔API.</b> Built
-        in `Program.cs` (like `IpAllowlistService`) so the web writer and the desktop reader are the
-        same instance.</span></p>
-      <p class="chk"><span class="t">▹</span><span><b>Desktop-only reader, append-only store.</b> No
-        controller touches the audit — the audit watches the web users, so it isn't theirs to read or
-        clear.</span></p>
-    </div>
-
-    <div class="reframe"><b>Verified so far:</b> the auth path is runtime-confirmed (an isolated login
-      appended `login` + `device-mint`, correctly attributed). Prompt + tool capture use the very same
-      machinery and are wired at the points above — they'll appear in the Activity tab the first time a
-      real chat turn runs on a deploy.</div>
-  </section>
-
-  <!-- VIEW 11 -->
-  <section class="view" id="try">
-    <h2>Try it out — exercise the new features</h2>
-    <p class="note">All three are live on this build right now. Pick one and follow the steps.</p>
-    <div class="scen" id="trySel">
-      <button data-k="cookie" class="active">📱 The 4G rescue</button>
-      <button data-k="perms">🔓 Full access</button>
-      <button data-k="audit">📋 Action audit</button>
-    </div>
-    <div class="solcard" id="tryCard"></div>
-    <div class="reframe"><b>Where to click on the host PC:</b> the main Claude Web window now has a
-      <span class="schip">Guests (IPs)</span> button (→ the new "Trusted devices" list) and an
-      <span class="schip">Activity</span> button (→ the action audit). Both are desktop-only.</div>
-  </section>
-</main>
+  <footer>Understanding app &middot; rolling-latest &middot; overwritten each time the explanation changes &middot; build-less &amp; self-contained</footer>
+</div>
 
 <script>
-//// VIEW 1: pipeline ////
-let feature=true, scen='approved'; // feature = trusted-device cookie enabled (this change)
-const sw=document.getElementById('sw'), lockLabel=document.getElementById('lockLabel');
-function gateFor(){
-  // returns {pass, btxt, bcls, state}
-  if(scen==='approved') return {pass:true,btxt:'PASS · approved IP',bcls:'ok',state:'approved'};
-  if(scen==='cookie'){
-    if(feature) return {pass:true,btxt:'PASS · via device cookie',bcls:'ok',state:'cookie'};
-    return {pass:false,btxt:'HARD 403',bcls:'',state:'today'};
+(function(){
+  var SELF = {id:'self', name:'Claude Web (this app)', icon:'🛠️', isSelf:true, visibility:'basic'};
+  var SETS = {
+    multi: [
+      SELF,
+      {id:'kekik', name:'kekik-topluyoruz', icon:'📦', isSelf:false, visibility:'basic'},
+      {id:'notes', name:'notes-app', icon:'📝', isSelf:false, visibility:'advanced'}
+    ],
+    selfonly: [ SELF ]   // a fresh harness: the self repo is the only one registered
+  };
+  var mode = 'basic';
+  var scenario = 'multi';
+  function repos(){ return SETS[scenario]; }
+
+  // the real empty-state copy, Projects.jsx:181 / en.json "projects.noneBasic"
+  var EMPTY_MSG = 'No projects are available in Basic mode yet. Switch to Advanced mode to manage visibility.';
+
+  function visibleBefore(){ // today's logic: Projects.jsx:127
+    if(mode==='advanced') return repos().slice();
+    return repos().filter(function(r){ return r.visibility==='basic'; }); // ignores isSelf -> self leaks
   }
-  if(scen==='nocookie') return {pass:false,btxt:'HARD 403',bcls:'',state:'nocookie'};
-  return {pass:false,btxt:'HARD 403',bcls:'',state:'stranger'}; // stranger
-}
-function renderPipe(){
-  const g=gateFor();
-  const gateNote = feature
-    ? 'IpFilterMiddleware — admits approved IP <b>OR</b> valid device cookie'
-    : 'IpFilterMiddleware — admits approved IP only (today)';
-  const stages=[
-    {n:'Client',d:scenDesc(),badge:null},
-    {n:'IP guest gate',d:gateNote,cls:(g.pass?'gate soft':'gate'),
-      badge:{cls:g.bcls,txt:g.btxt}},
-    {n:'SPA / static',d:'React shell',badge:null},
-    {n:'Password gate',d:'/api/* needs session or password (2nd factor)',badge:null},
-    {n:'Controllers',d:'full app access — mints device cookie on 1st entry',badge:null},
-  ];
-  let stopIdx = g.pass ? 99 : 1;
-  const html=[];
-  stages.forEach((s,i)=>{
-    if(i) html.push('<div class="arrow">'+(i<=stopIdx?'→':'⇢')+'</div>');
-    const dim = i>stopIdx ? 'opacity:.32':'';
-    html.push(`<div class="stage ${s.cls||''}" style="${dim}">
-      ${s.badge?`<span class="badge ${s.badge.cls}">${s.badge.txt}</span>`:''}
-      <h3>${i+1}. ${s.n}</h3><p>${s.d}</p></div>`);
+  function visibleAfter(){
+    if(mode==='advanced') return repos().slice();
+    return repos().filter(function(r){ return r.visibility==='basic' && !r.isSelf; });
+  }
+  function activeOf(list){ return list.length ? list[0] : null; } // index-0 default landing
+
+  function repoRow(r, active){
+    var cls='repo'+(r.isSelf?' self':'')+(active&&active.id===r.id?' active':'');
+    return '<div class="'+cls+'"><span class="ic">'+r.icon+'</span>'+
+      '<span class="nm">'+r.name+'</span>'+
+      '<span class="vis">'+(r.isSelf?'isSelf':r.visibility)+'</span></div>';
+  }
+
+  function convBlock(active, leaked){
+    if(!active) return '<div class="conv"><div class="who">conversation</div><span class="small">&mdash; no project &mdash;</span></div>';
+    if(active.isSelf){
+      var c = leaked? 'conv self leak':'conv self';
+      var who = leaked? 'ClaudeWeb self conversation &middot; LEAKED to End User':'ClaudeWeb self conversation';
+      return '<div class="'+c+'"><div class="who">'+who+'</div>&ldquo;&hellip;run swap.ps1, arm the dead-man switch, isolated self-dev build&hellip;&rdquo;</div>';
+    }
+    return '<div class="conv"><div class="who">'+active.name+' conversation</div>&ldquo;&hellip;working on the '+active.name+' product&hellip;&rdquo;</div>';
+  }
+
+  function render(){
+    document.getElementById('b1').className = 'badge '+(mode==='basic'?'basic':'adv');
+    document.getElementById('b2').className = 'badge '+(mode==='basic'?'basic':'adv');
+    document.getElementById('b1').textContent = mode;
+    document.getElementById('b2').textContent = mode;
+
+    var lb = visibleBefore(), la = visibleAfter();
+    var ab = activeOf(lb), aa = activeOf(la);
+    var leaked = (mode==='basic' && ab && ab.isSelf);
+
+    var emptyHtml = '<div class="empty"><span class="ic">📭</span>'+EMPTY_MSG+'</div>'+
+                    '<div class="newbtn">+ New project</div>';
+
+    function listHtml(list, active){
+      if(list.length===0) return emptyHtml;
+      return list.map(function(r){return repoRow(r,active);}).join('');
+    }
+
+    var before = '<div class="label">Project selector</div>'+
+      listHtml(lb, ab)+
+      '<div class="label" style="margin-top:6px">Rendered conversation</div>'+
+      convBlock(ab, leaked)+
+      (leaked
+        ? '<div class="verdict bad">&#10007; self repo shown &amp; its conversation leaks</div>'
+        : (mode==='advanced'
+            ? '<div class="verdict good">&#10003; Advanced &mdash; self is expected here</div>'
+            : (ab? '<div class="verdict good">&#10003; ok</div>'
+                 : '<div class="verdict good">&#10003; empty state</div>')));
+
+    var after = '<div class="label">Project selector</div>'+
+      listHtml(la, aa)+
+      '<div class="label" style="margin-top:6px">Rendered conversation</div>'+
+      convBlock(aa, false)+
+      (mode==='advanced'
+        ? '<div class="verdict good">&#10003; Advanced &mdash; self available, pinned</div>'
+        : (aa
+            ? '<div class="verdict good">&#10003; self hidden &middot; lands on '+aa.name+'</div>'
+            : '<div class="verdict good">&#10003; self hidden &middot; clean empty state, no self leak</div>'));
+
+    var bb=document.getElementById('bodyBefore'), ba=document.getElementById('bodyAfter');
+    bb.innerHTML=before; ba.innerHTML=after;
+    bb.classList.remove('pulse'); ba.classList.remove('pulse');
+    void bb.offsetWidth; bb.classList.add('pulse'); ba.classList.add('pulse');
+  }
+
+  document.getElementById('toggle').addEventListener('click', function(e){
+    var btn = e.target.closest('button'); if(!btn) return;
+    mode = btn.getAttribute('data-m');
+    Array.prototype.forEach.call(this.children, function(c){ c.classList.toggle('on', c===btn); });
+    render();
   });
-  document.getElementById('pipe').innerHTML=html.join('');
-  document.getElementById('verdict').innerHTML=verdict(g);
-}
-function scenDesc(){
-  return {approved:'a friend on an IP you already approved',
-    cookie:'a friend you approved before, now on a rotated 4G IP, whose phone still holds the trusted-device cookie',
-    nocookie:'a friend you approved before, but on a new phone / cleared cookies — no token',
-    stranger:'an unknown internet visitor, never approved, no cookie'}[scen];
-}
-function verdict(g){
-  if(g.state==='approved') return `<b>Passes — approved IP.</b> Unchanged from today.`;
-  if(g.state==='cookie')
-    return `<b>Passes via the trusted-device cookie.</b> The cookie was minted the first time you
-      approved this device; it remembers the <i>device</i>, not the address, so the rotated 4G IP
-      doesn't matter. <b>No call to you.</b> This single case is the entire behavioural change —
-      they still meet the password gate as a second factor.`;
-  if(g.state==='today')
-    return `<b>Blocked — today's behaviour.</b> With no cookie concept, a friend you already
-      approved is hard-403'd the instant their 4G IP rotates and must <b>call you to re-approve.</b>
-      Toggle the cookie ON to see this exact case become a pass.`;
-  if(g.state==='nocookie')
-    return `<b>Blocked — and that's intended.</b> A new phone or cleared cookies means no token, so
-      they hit the wall and call you to approve <i>once</i>. The cookie proves the device, not the
-      person — which is what stops a wiped/lost phone being a permanent backdoor.`;
-  return `<b>Blocked — strict 403, unchanged.</b> An unapproved visitor never reaches the password,
-      exactly as today. Approach B does <i>not</i> soften this for strangers.`;
-}
-document.getElementById('scen').addEventListener('click',e=>{
-  if(e.target.dataset.s){scen=e.target.dataset.s;
-    [...document.querySelectorAll('#scen button')].forEach(b=>b.classList.toggle('active',b===e.target));
-    renderPipe();}
-});
-document.getElementById('lockToggle').addEventListener('click',()=>{
-  feature=!feature; sw.classList.toggle('on',feature);
-  lockLabel.innerHTML = feature
-    ? 'Trusted-device cookie: <b style="color:var(--ok)">ON</b> (this change) — click to see today'
-    : 'Trusted-device cookie: <b style="color:var(--bad)">OFF</b> (today\'s behaviour) — click to enable';
-  renderPipe();
-});
-
-//// VIEW 2: matrix ////
-const COLS=['Approach','Overall','Dev effort','Dev risk','Fixes IP friction','Security','Phone UX','Operator burden','External deps','Reversibility'];
-const ST=(n)=>{const f=Math.floor(n),h=n-f>=0.5;return ({t:`<span style="color:var(--warn)">${'★'.repeat(f)+(h?'½':'')+'☆'.repeat(5-f-(h?1:0))}</span>`,r:n});};
-const P=(t,k)=>({t:`<span class="pill ${k}">${t}</span>`, r:{lo:3,mi:2,hi:1}[k]});
-const Y=t=>({t:`<span class="yes">${t}</span>`,r:3});
-const N=t=>({t:`<span class="no">${t}</span>`,r:1});
-const PT=t=>({t:`<span class="part">${t}</span>`,r:2});
-const X=(t,r)=>({t,r});
-const ROWS=[
- {rec:0,c:['A — Drop IP gate',ST(3.5),P('very low','lo'),P('low–med','mi'),Y('✓ fully'),X('med',2),X('good',3),Y('none'),X('none',3),X('easy',3)]},
- {rec:1,c:['B — Strict gate + trusted-device cookie',ST(4.5),P('low–med','lo'),P('low','lo'),Y('✓ fully'),X('high',4),X('good',3),P('1st only','lo'),X('none',3),X('easy',3)]},
- {rec:0,c:['C — TOTP 2FA',ST(2.5),P('med','mi'),P('med','mi'),N('✗ not alone'),X('high',3),X('fair',2),P('low','lo'),PT('auth app'),X('med',2)]},
- {rec:0,c:['D — Passkeys / WebAuthn',ST(4),P('high','hi'),P('med–high','hi'),Y('✓*'),X('highest',4),X('best',4),P('low','lo'),PT('FIDO2 lib'),X('med',2)]},
- {rec:0,c:['E — Email magic-link',ST(3),P('med','mi'),P('med','mi'),Y('✓ fully'),X('med–high',3),X('fair',2),P('low–med','mi'),N('SMTP'),X('med',2)]},
- {rec:0,c:['F — Cloudflare / Tailscale',ST(3.5),P('med','mi'),P('med','mi'),Y('✓ fully'),X('highest',4),X('fair',2),P('med','mi'),N('CF/Tailscale'),N('hard')]},
- {rec:0,c:['G — Client cert (mTLS)',ST(2),P('med–high','hi'),P('high','hi'),Y('✓ fully'),X('high',3),N('poor'),P('med','mi'),PT('a CA'),N('hard')]},
-];
-let sortCol=1, sortDir=-1, selRow=-1;
-function buildMatrix(){
-  const t=document.getElementById('mtx');
-  let rows=ROWS.map((r,i)=>({r,i}));
-  if(sortCol>0) rows.sort((a,b)=>sortDir*(((a.r.c[sortCol].r)||0)-((b.r.c[sortCol].r)||0)));
-  let h='<thead><tr>'+COLS.map((c,i)=>`<th data-c="${i}">${c}${i===sortCol?(sortDir<0?' ▼':' ▲'):''}</th>`).join('')+'</tr></thead><tbody>';
-  rows.forEach(({r,i})=>{
-    h+=`<tr data-i="${i}" class="${r.rec?'rec':''} ${i===selRow?'sel':''}">`+
-      r.c.map((cell,ci)=>{
-        const v=typeof cell==='string'?cell:cell.t;
-        const app=ci===0?'app':'';
-        const tag=(ci===0&&r.rec)?' <span class="rec-tag">REC</span>':'';
-        return `<td class="${app}">${v}${tag}</td>`;
-      }).join('')+'</tr>';
+  document.getElementById('scenario').addEventListener('click', function(e){
+    var btn = e.target.closest('button'); if(!btn) return;
+    scenario = btn.getAttribute('data-s');
+    Array.prototype.forEach.call(this.children, function(c){ c.classList.toggle('on', c===btn); });
+    render();
   });
-  t.innerHTML=h+'</tbody>';
-}
-document.getElementById('mtx').addEventListener('click',e=>{
-  const th=e.target.closest('th'); const tr=e.target.closest('tr[data-i]');
-  if(th){const c=+th.dataset.c; if(c===0)return; if(c===sortCol)sortDir*=-1; else{sortCol=c;sortDir=-1;} buildMatrix();}
-  else if(tr){const i=+tr.dataset.i; selRow=(selRow===i?-1:i); buildMatrix();}
-});
-
-//// VIEW 3: KBA / "only one person" ////
-const RINGS=['You + the one person','Partner / family','Close friends','An ex / acquaintance','Internet strangers'];
-const kbaCol=s=>({self:'#3fb950',breach:'#f85149',maybe:'#d29922',safe:'#3a4250'}[s]);
-const kbaWord=s=>({self:'the one person you want ✓',breach:'also knows it — can pass ✗',
-  maybe:'often can reconstruct it ✗',safe:'cannot pass ✓'}[s]);
-const KBA={
-  trivia:{name:'Shared-life questionnaire (KBA)', strength:22, scol:'#f85149',
-    states:['breach','breach','maybe','safe'],
-    leak:'Your inner circle already knows these facts, and an ex or a social-media scraper can often reconstruct them. Low entropy — and you can\'t change where you grew up after it leaks.',
-    verdict:'<b>Weakest for this goal.</b> The people who share your life <i>are</i> your most realistic attackers, and they\'re exactly who this lets in.'},
-  pass:{name:'Strong passphrase, shared once (Approach B)', strength:80, scol:'#3fb950',
-    states:['safe','safe','safe','safe'],
-    leak:'High entropy and rotatable. Only as strong as the channel you shared it on, and the one person could still choose to tell someone — but revoking is just changing the password.',
-    verdict:'<b>Correct &amp; simple.</b> This already <i>is</i> "info only they know" — just high-entropy and changeable. B\'s trusted-device cookie then ignores their IP forever.'},
-  passkey:{name:'Passkey on their phone (Approach D)', strength:98, scol:'#3fb950',
-    states:['safe','safe','safe','safe'],
-    leak:'Not a guessable secret at all — it lives in their phone\'s secure enclave (possession + Face ID). Can\'t be phished, guessed, brute-forced, or told to anyone.',
-    verdict:'<b>Strongest "this specific person/device".</b> Identity is the device + their biometric, so knowing every fact about your relationship gets an attacker nowhere.'},
-};
-function ringSvg(states){
-  const layers=[
-    {r:164,st:states[3]},{r:130,st:states[2]},{r:96,st:states[1]},{r:62,st:states[0]},{r:30,st:'self'},
-  ];
-  let s='<svg viewBox="0 0 360 360" class="rings">';
-  layers.forEach(l=>{s+=`<circle cx="180" cy="180" r="${l.r}" fill="${kbaCol(l.st)}" fill-opacity="0.85" stroke="#0d1117" stroke-width="2"/>`;});
-  s+='<text x="180" y="184" text-anchor="middle" font-size="11" fill="#0d1117" font-weight="700">the one</text>';
-  return s+'</svg>';
-}
-function renderKba(m){
-  const M=KBA[m];
-  document.getElementById('kbaRings').innerHTML=ringSvg(M.states);
-  document.getElementById('kbaName').textContent=M.name;
-  document.getElementById('kbaLegend').innerHTML=RINGS.map((name,i)=>{
-    const st=i===0?'self':M.states[i-1];
-    return `<div class="lgrow"><span class="dot" style="background:${kbaCol(st)}"></span>
-      <span><b>${name}</b> — ${kbaWord(st)}</span></div>`;
-  }).join('');
-  const mtr=document.getElementById('kbaMeter');
-  mtr.style.width=M.strength+'%'; mtr.style.background=M.scol;
-  document.getElementById('kbaLeak').textContent=M.leak;
-  document.getElementById('kbaVerdict').innerHTML=M.verdict;
-}
-document.getElementById('kbaSel').addEventListener('click',e=>{
-  if(!e.target.dataset.m)return;
-  [...document.querySelectorAll('#kbaSel button')].forEach(b=>b.classList.toggle('active',b===e.target));
-  renderKba(e.target.dataset.m);
-});
-
-//// VIEW 4: High vs Highest ////
-const HH_APPROACHES=[
- {name:'B — strict gate + password + cookie', phish:false, exp:false,
-   cap:'Two bearer secrets: a phishable password and a copyable cookie. Defended in depth, but either can be captured, replayed, or handed over.'},
- {name:'D — passkey / WebAuthn', phish:true, exp:true,
-   cap:'A private key that never leaves the phone\'s secure enclave; auth is bound to the real origin. Nothing to phish, copy, or breach.'},
- {name:'F — edge identity (Cloudflare / Tailscale)', phish:true, exp:'part',
-   cap:'Identity enforced before the app is reachable; short-lived tokens; the app itself stores no secret.'},
-];
-const HH_ATTACKS=[
- {a:'Phishing page', def:'A fake login page harvests whatever the user types or approves.',
-   B:'fall', D:'hold', F:'hold',
-   why:'B falls — the password is typed into the fake site. D/F hold — a passkey is bound to the real origin and can\'t be triggered elsewhere, and strong edge SSO is likewise origin-bound. <b>This is defining property #1 of the Highest tier.</b>'},
- {a:'Server data breach', def:'An attacker dumps everything the server stores about auth.',
-   B:'part', D:'hold', F:'hold',
-   why:'B is partial — only PBKDF2 password hashes and SHA-256 token hashes are stored, not directly usable, but a weak password is crackable offline. D/F hold — the server keeps only a public key (D) or nothing at all (F).'},
- {a:'Stolen / copied credential', def:'Malware, a malicious extension, or a log leak copies the secret off the device.',
-   B:'fall', D:'hold', F:'part',
-   why:'B falls — the cookie is a bearer token (a copy works from anywhere until you revoke it), and a keylogged password is just as portable. D holds — the private key is non-exportable, there is literally nothing to copy. F limits the blast radius with short-lived tokens. <b>This is defining property #2 of the Highest tier.</b>'},
- {a:'A friend hands it over', def:'A trusted person deliberately gives their access to someone else.',
-   B:'fall', D:'part', F:'part',
-   why:'B falls — a password or an exported cookie is trivially shareable. D/F are partial — a passkey can only spread inside the user\'s own synced account and an edge identity is tied to their SSO: harder, but not impossible.'},
- {a:'Network interception (MITM)', def:'An attacker sits on the wire between phone and server.',
-   B:'hold', D:'hold', F:'hold',
-   why:'Everyone holds — TLS/HTTPS (Secure cookie + HSTS) already closes this for every approach. Not every axis separates them; this one is solved across the board.'},
- {a:'Lost, unlocked phone', def:'An attacker physically holds the friend\'s unlocked device.',
-   B:'fall', D:'part', F:'part',
-   why:'B falls — the cookie and any saved password are right there. D/F are partial — a passkey re-prompts for biometric/PIN and an edge session can be revoked remotely. Honest caveat: a fully unlocked device beats almost everything; nothing here is magic.'},
-];
-const cclass={fall:'cfall',hold:'chold',part:'cpart'};
-const cword={fall:'falls ✗',hold:'holds ✓',part:'partial'};
-function renderHH(sel){
-  const yn=v=> v===true?'<span class="yes">✓ yes</span>'
-    : v==='part'?'<span class="part">~ partial</span>' : '<span class="no">✗ no</span>';
-  document.getElementById('hhBoard').innerHTML=HH_APPROACHES.map(a=>`
-    <div class="hhcard">
-      <div class="hhname">${a.name}</div>
-      <div class="hhprop">Phishing-resistant? ${yn(a.phish)}</div>
-      <div class="hhprop">Non-exportable / breach-resilient? ${yn(a.exp)}</div>
-      <div class="note" style="margin-top:6px">${a.cap}</div>
-    </div>`).join('');
-  let h='<thead><tr><th>Attack</th><th>B (password + cookie)</th><th>D (passkey)</th><th>F (edge)</th></tr></thead><tbody>';
-  HH_ATTACKS.forEach((r,i)=>{
-    h+=`<tr data-i="${i}" class="${i===sel?'sel':''}" style="cursor:pointer">
-      <td class="app">${r.a}</td>
-      <td class="${cclass[r.B]}">${cword[r.B]}</td>
-      <td class="${cclass[r.D]}">${cword[r.D]}</td>
-      <td class="${cclass[r.F]}">${cword[r.F]}</td></tr>`;
-  });
-  document.getElementById('hhMtx').innerHTML=h+'</tbody>';
-  const r=HH_ATTACKS[sel];
-  document.getElementById('hhDetail').innerHTML=`<b>${r.a}.</b> ${r.def} ${r.why}`;
-}
-document.getElementById('hhMtx').addEventListener('click',e=>{
-  const tr=e.target.closest('tr[data-i]'); if(tr) renderHH(+tr.dataset.i);
-});
-
-//// VIEW 5: two jobs ////
-const TJ=[
- {t:'A random internet scanner / botnet hits the box',
-   ip:{s:'good',l:'blocks ✓'}, pw:{s:'bad',l:"can't see it ✗"},
-   why:'The IP gate 403s it at the door — your app code never runs. The password can\'t help: there\'s no login to judge, just probes against whatever is exposed. <b>Only invisibility stops this.</b>'},
- {t:'A 0-day in the framework, or a route you forgot to protect',
-   ip:{s:'good',l:'blocks ✓'}, pw:{s:'bad',l:"doesn't guard it ✗"},
-   why:'If the internet can\'t reach the app at all, an unauthenticated hole is unreachable too. The password guards only the routes you remembered to put behind it; the IP gate guards everything — including your mistakes. <b>Only invisibility stops this.</b>'},
- {t:'Mass credential-stuffing against the login form',
-   ip:{s:'good',l:'blocks ✓'}, pw:{s:'meh',l:'throttles ~'},
-   why:'With the IP gate up, the login isn\'t even reachable to the bots. Without it, the password\'s throttle only slows them while the form sits exposed to the whole world. <b>Invisibility removes the attack surface; the lock just rations it.</b>'},
- {t:'A stranger sharing your friend\'s CGNAT / coffee-shop IP',
-   ip:{s:'bad',l:'lets in ✗'}, pw:{s:'good',l:'blocks ✓'},
-   why:'The IP gate sees an <i>approved</i> address and waves them through — one IP is shared by everyone behind that NAT. The password catches them: they don\'t know the secret. <b>Only the lock stops this</b> — proof the IP gate is a weak <i>authenticator</i>.'},
- {t:'Someone who learned the password but was never approved',
-   ip:{s:'good',l:'blocks ✓'}, pw:{s:'bad',l:'opens ✗'},
-   why:'They know the secret, so the lock opens — but the IP gate blocks them at the door because their address was never approved and they hold no device cookie. <b>Only invisibility stops this.</b>'},
- {t:'Your actual friend, on a fresh 4G IP',
-   ip:{s:'bad',l:'wrongly blocks ✗'}, pw:{s:'good',l:'admits ✓'},
-   why:'This is the bug you started with: the IP gate <i>wrongly rejects</i> a legitimate person because their address changed. The lock (and the trusted-device cookie) recognise them fine. <b>The IP gate fails as an identity check</b> — which is exactly why identity belongs on the cookie, not the address.'},
-];
-const sClass={good:'chold',bad:'cfall',meh:'cpart'};
-function renderTJ(sel){
-  let h='<thead><tr><th>Who\'s at the door?</th><th>IP gate — invisibility</th><th>Password / cookie — the lock</th></tr></thead><tbody>';
-  TJ.forEach((r,i)=>{
-    h+=`<tr data-i="${i}" class="${i===sel?'sel':''}" style="cursor:pointer">
-      <td class="app">${i+1}. ${r.t}</td>
-      <td class="${sClass[r.ip.s]}">${r.ip.l}</td>
-      <td class="${sClass[r.pw.s]}">${r.pw.l}</td></tr>`;
-  });
-  document.getElementById('tjMtx').innerHTML=h+'</tbody>';
-  document.getElementById('tjDetail').innerHTML=`<b>${TJ[sel].t}.</b> ${TJ[sel].why}`;
-}
-document.getElementById('tjMtx').addEventListener('click',e=>{
-  const tr=e.target.closest('tr[data-i]'); if(tr) renderTJ(+tr.dataset.i);
-});
-
-//// VIEW 6: who actually attacks you ////
-const TA_PERSONAS={
-  bot:{name:'Automated bot / mass scanner', freq:'CONSTANT', fcls:'hi',
-    desc:'Sweeps the entire internet non-stop, fires known-CVE exploits at anything that answers, and sprays leaked-password lists at any login it finds. <b>It doesn\'t know you exist</b> — it hunts the software you run, not you.'},
-  human:{name:'Targeted human (after you specifically)', freq:'RARE', fcls:'lo',
-    desc:'Knows the app exists and who uses it. Can phish, or try to steal the device. Must come after <b>you specifically</b> — this does not happen by accident.'},
-};
-const TA_MODELS=[
- {key:'soft', name:'Soft gate + password (no cookie)', barriers:{
-   bot:[
-     {b:'Find the app', s:'pass', n:'mass scanners answer-probe every address on the internet — they find any open server without knowing what it is'},
-     {b:'Reach the login & app surface', s:'pass', n:'no IP gate — the door is open to everyone'},
-     {b:'Defeat the password — or exploit an exposed bug', s:'risk', n:'credential-stuffing is throttled (fine if your password is strong + unique), but a known-CVE in your exposed framework or login code gets mass-exploited automatically'},
-   ],
-   human:[
-     {b:'Find the app', s:'pass', n:'they already know it exists'},
-     {b:'Reach the login & app surface', s:'pass', n:'door is open'},
-     {b:'Defeat the password (phish / guess)', s:'risk', n:'just ONE secret stands in the way — a successful phish of the password = in'},
-   ]}},
- {key:'b', name:'Strict gate + cookie (B)', barriers:{
-   bot:[
-     {b:'Find the app', s:'pass', n:'it can still send packets at your address'},
-     {b:'Pass the IP gate (approved IP OR device cookie)', s:'block', n:'no cookie, not on an approved IP → hard 403. App code never runs; it never reaches the password or any bug. INVISIBLE.'},
-   ],
-   human:[
-     {b:'Find the app', s:'pass', n:'they know it exists'},
-     {b:'Pass the IP gate — steal the device cookie', s:'risk', n:'must compromise your girlfriend\'s actual phone to lift the cookie (or get onto an already-approved network)'},
-     {b:'Defeat the password', s:'risk', n:'AND still needs the password on top — two secrets, one of them requiring device theft'},
-   ]}},
-];
-const TA_VERD={
- soft:{bot:'⚠️ <b>Reaches your app.</b> Held only by the password\'s strength + your patch level — no backstop if either slips.',
-       human:'⚠️ <b>One secret away.</b> A successful phish of the single password = in.'},
- b:{bot:'🛡️ <b>Stopped dead at the IP gate.</b> Never sees your app, the password, or any bug. The common, untargeted attacker — neutralised.',
-    human:'🛡️ <b>Needs the phone-bound cookie AND the password.</b> Targeted and hard — exactly the chain you called reassuring.'}};
-let taP='bot';
-function renderTA(){
-  const P=TA_PERSONAS[taP];
-  document.getElementById('taDesc').innerHTML=`<span class="pill ${P.fcls}">${P.freq}</span> <b>${P.name}.</b> ${P.desc}`;
-  document.getElementById('taLanes').innerHTML=TA_MODELS.map(m=>{
-    const bars=m.barriers[taP];
-    const stop=bars.findIndex(b=>b.s==='block');
-    const rows=bars.map((b,i)=>{
-      const cls=b.s==='pass'?'bpass':b.s==='block'?'bblock':'brisk';
-      const tag=b.s==='pass'?'<span style="color:var(--bad)">↓ passes</span>'
-        :b.s==='block'?'<span style="color:var(--ok)">⛔ STOPPED HERE</span>'
-        :'<span style="color:var(--warn)">⚠ only barrier left</span>';
-      const dim=(stop>=0 && i>stop)?'opacity:.28':'';
-      return `<div class="barrier ${cls}" style="${dim}"><b>${i+1}. ${b.b}</b> — ${tag}<span class="bn">${b.n}</span></div>`;
-    }).join('');
-    return `<div class="lane"><h4>${m.name}</h4>${rows}
-      <div class="verdict" style="margin-top:8px;font-size:12px">${TA_VERD[m.key][taP]}</div></div>`;
-  }).join('');
-}
-document.getElementById('taSel').addEventListener('click',e=>{
-  if(!e.target.dataset.p)return;
-  taP=e.target.dataset.p;
-  [...document.querySelectorAll('#taSel button')].forEach(b=>b.classList.toggle('active',b===e.target));
-  renderTA();
-});
-
-//// VIEW 7: the solution — lifecycle stepper ////
-const SOL_GATE={'403':{t:'HARD 403',c:''},manual:{t:'manual approve',c:'mut'},
-  pass:{t:'PASS · mint cookie',c:'ok'},cookie:{t:'PASS · via cookie',c:'ok'},revoke:{t:'revoke + remove',c:'mut'}};
-const SOL_STEPS=[
- {t:'1. First contact — new friend, unknown IP', gate:'403',
-   n:'Your girlfriend opens the app for the first time. Her IP isn\'t approved and she has no cookie → hard 403 + rejection page. She calls you.'},
- {t:'2. You approve — once, deliberately', gate:'manual',
-   n:'You open the desktop "Guests (IPs)" GUI and approve her IP (or her pending attempt). This is the human-in-the-loop allowlist you wanted — you personally vet first entry.'},
- {t:'3. She logs in → the cookie is minted', gate:'pass',
-   n:'She enters and logs in with the password. On that success the server sets claudeweb_device — HttpOnly, Secure, long sliding life — and stores only its hash. Her device is now remembered.'},
- {t:'4. Days later: 4G rotates her IP', gate:'cookie',
-   n:'Her carrier hands her a new address. The gate sees the valid device cookie and admits her with no 403; she still meets the password as a second factor. NO call to you — this is the entire point of the change.'},
- {t:'5. New phone / cleared cookies', gate:'403',
-   n:'She switches phones or clears cookies → no token → back to a 403 and one more approval. Intended: the cookie proves the device, not the person, so a lost or wiped phone is never a standing backdoor.'},
- {t:'6. Evicting someone for good', gate:'revoke',
-   n:'To remove her access you revoke her device in the "Trusted devices" list AND remove her IP — the cookie outlives an IP removal, so both are needed. Now she 403s from everywhere.'},
-];
-let solI=0;
-function renderSol(){
-  document.getElementById('solDots').innerHTML=SOL_STEPS.map((s,i)=>
-    `<div class="sdot ${i===solI?'active':''}" data-i="${i}">${i+1}</div>`).join('');
-  const s=SOL_STEPS[solI], g=SOL_GATE[s.gate];
-  document.getElementById('solCard').innerHTML=
-    `<div style="display:flex;justify-content:space-between;gap:10px;align-items:start">
-      <b style="font-size:13px">${s.t}</b>
-      <span class="badge ${g.c}" style="position:static;white-space:nowrap">${g.t}</span></div>
-     <p class="note" style="margin-top:8px">${s.n}</p>`;
-}
-document.getElementById('solDots').addEventListener('click',e=>{
-  const d=e.target.closest('.sdot'); if(d){solI=+d.dataset.i; renderSol();}
-});
-document.getElementById('solPrev').addEventListener('click',()=>{solI=(solI-1+SOL_STEPS.length)%SOL_STEPS.length; renderSol();});
-document.getElementById('solNext').addEventListener('click',()=>{solI=(solI+1)%SOL_STEPS.length; renderSol();});
-
-//// VIEW 8: whole model — blast radius ////
-const BR_ITEMS=['Read repo files','Edit repo files','Run shell in the repo (rm -rf …)',
-  'Network / exfiltrate data','Reach other registered repos','The rest of the machine (other users, system, apps)'];
-const BR_SCEN={
- today:{name:'Today — permissions on (Read-only safe default)', reach:[1,0,0,0,0,0],
-   v:'A breach is contained to read-only on the selected repo: the preset blocks edits, shell, and exfiltration. Smallest blast radius — but it\'s the safety net this change removes.'},
- admin:{name:'After removal — harness runs as your everyday admin account', reach:[1,1,1,1,1,1],
-   v:'A breach (stolen cookie + password) becomes full machine control — edit, shell, network, every repo, and everything your admin account can touch. Largest blast radius; this is the setup to avoid.'},
- dedi:{name:'After removal — harness runs as a dedicated least-privilege account', reach:[1,1,1,1,1,0],
-   v:'Full power inside the harness sandbox (edit / shell / network / all its repos), but the rest of the machine — other users, system config, installed apps — stays out of reach. The recommended setup: "bounded by the OS account" becomes a boundary you actually sized.'},
-};
-let brS='today';
-function renderBR(){
-  const S=BR_SCEN[brS];
-  document.getElementById('brList').innerHTML=BR_ITEMS.map((it,i)=>{
-    const hit=S.reach[i];
-    return `<div class="reach ${hit?'hit':'safe'}"><span>${hit?'⚠️':'🔒'}</span><span>${it}</span>
-      <span style="margin-left:auto;color:${hit?'var(--bad)':'var(--mut)'};font-weight:600">${hit?'reachable':'blocked'}</span></div>`;
-  }).join('');
-  document.getElementById('brVerdict').innerHTML=`<b>${S.name}.</b> ${S.v}`;
-}
-document.getElementById('brSel').addEventListener('click',e=>{
-  if(!e.target.dataset.s)return;
-  brS=e.target.dataset.s;
-  [...document.querySelectorAll('#brSel button')].forEach(b=>b.classList.toggle('active',b===e.target));
-  renderBR();
-});
-
-//// VIEW 9: action audit ////
-const AUDIT_ENTRIES = {
-  prompt: { json: `{"ts":"2026-06-26T08:41Z","kind":"prompt","actor":"Girlfriend's phone",
- "ip":"81.0.43.9","session":"a1b2c3d4","repo":"my-app","lane":"builder",
- "text":"add a dark-mode toggle"}`,
-    note: "A chat turn: who asked, from where, which project + lane, and the prompt text (redactable via <code>AuditRedactPromptText</code>)." },
-  tool: { json: `{"ts":"2026-06-26T08:41Z","kind":"tool","actor":"Girlfriend's phone",
- "ip":"81.0.43.9","repo":"my-app","lane":"builder","tool":"Bash","args":"npm run build"}`,
-    note: "A mutating action the agent ran during that turn — captured from the <code>claude -p</code> tool-use stream (edits, shell, network). Reads skipped by default." },
-  auth: { json: `{"ts":"2026-06-26T08:36Z","kind":"auth","actor":"localhost","ip":"127.0.0.1",
- "event":"device-mint","args":"localhost"}`,
-    note: "Auth lifecycle: login, device-mint, and operator approve/remove/revoke. (These two are the real entries from the live smoke test.)" },
-};
-let auditK = 'prompt';
-function renderAuditEntry(){
-  const e = AUDIT_ENTRIES[auditK];
-  document.getElementById('auditJson').textContent = e.json;
-  document.getElementById('auditNote').innerHTML = e.note;
-}
-const AUDIT_TOOLS = [
-  {n:'Write',m:1},{n:'Edit',m:1},{n:'MultiEdit',m:1},{n:'Bash',m:1},{n:'WebFetch',m:1},
-  {n:'WebSearch',m:1},{n:'NotebookEdit',m:1},
-  {n:'Read',m:1},{n:'Glob',m:1},{n:'Grep',m:1},{n:'LS',m:1},{n:'NotebookRead',m:1},
-];
-function renderAuditTools(){
-  document.getElementById('auditTools').innerHTML = AUDIT_TOOLS.map((t,i)=>
-    `<span class="schip" data-i="${i}" style="cursor:pointer;border-color:${t.m?'#5a2d2d':'#2d5a35'};color:${t.m?'#f0b0b0':'#9ce0a8'}">${t.m?'● ':'○ '}${t.n}</span>`).join('');
-}
-function renderAudit(){ renderAuditEntry(); renderAuditTools(); }
-document.getElementById('auditSel').addEventListener('click',e=>{
-  if(!e.target.dataset.k)return;
-  auditK=e.target.dataset.k;
-  [...document.querySelectorAll('#auditSel button')].forEach(b=>b.classList.toggle('active',b===e.target));
-  renderAuditEntry();
-});
-document.getElementById('auditTools').addEventListener('click',e=>{
-  const c=e.target.closest('[data-i]'); if(!c)return;
-  const t=AUDIT_TOOLS[+c.dataset.i];
-  document.getElementById('auditToolNote').innerHTML =
-    `<b>${t.n} → logged ✅</b> — every tool is recorded, reads included. The audit is a complete record of what each user's agent did, not a high-signal summary.`;
-});
-
-//// VIEW 10: how it's built ////
-const IMPL_STAGES = [
-  { title:'① ChatController.Chat — capture the prompt, start the trail',
-    file:'ClaudeWeb.App/Controllers/ChatController.cs',
-    body:'Resolves the actor with <code>_audit.ResolveActor(HttpContext)</code> <b>on the request thread</b> — it must, because the run is detached into a background <code>Task.Run</code> where <code>HttpContext</code> no longer exists. Logs the prompt (<code>LogPrompt</code>), builds an <code>AuditContext { Actor, Repo, Lane }</code>, and threads it into the run: <code>RunAsync(…, audit: auditCtx)</code>.' },
-  { title:'② CliRunnerService — log every tool from the stream',
-    file:'ClaudeWeb.App/Services/Chat/CliRunnerService.cs',
-    body:'<code>RunAsync</code> reads the <code>claude -p --output-format stream-json</code> output line by line → <code>TranslateLine</code> → <code>HandleAssistant</code>. For <i>every</i> <code>tool_use</code> block (which carries the tool <code>name</code> + full <code>input</code>) it calls <code>_audit.LogTool(audit, name, summary)</code> — every tool, reads included. This single method is the one capture point for all tool calls.' },
-  { title:'③ AuditService — resolve identity, append the entry',
-    file:'ClaudeWeb.App/Services/Audit/AuditService.cs (+ AuditTypes.cs)',
-    body:'<code>ResolveActor</code> walks the identity ladder — trusted-device name (via <code>DeviceTokenService</code>) → approved-IP guest name (via <code>IpAllowlistService</code>) → <code>unknown@ip</code> — always stamping the source IP + a short session id. <code>LogPrompt</code>/<code>LogTool</code>/<code>LogAuth</code> build an <code>AuditEntry</code> and append it. Pre-built as a singleton in <code>Program.cs</code>, shared by the API and the GUI.' },
-  { title:'④ The JSONL store — append-only, daily, pruned',
-    file:'%APPDATA%\\ClaudeWeb\\audit\\YYYY-MM-DD.jsonl',
-    body:'<code>File.AppendAllText</code> under a lock: one JSON object per line, one file per day, durable per event (no buffering — nothing lost on a crash). On startup, files older than <code>AuditRetentionDays</code> are pruned whole-file by age. No code path rewrites or deletes individual lines, and <b>no controller reads or writes it</b>.' },
-  { title:'⑤ ActivityForm — the only reader (desktop)',
-    file:'ClaudeWeb.App/UI/ActivityForm.cs (+ MainForm "Activity" button)',
-    body:'A read-only WinForms dialog opened from the main window: pick a date, filter by kind and by <b>user</b>, newest-first. No edit or delete control. The web/phone UI has nothing — by construction, the audit is inspectable only in the Windows program.' },
-  { title:'＋ Auth events — logged at the callers',
-    file:'ClaudeWeb.App/Controllers/AuthController.cs + UI/IpFilterForm.cs',
-    body:'The auth lifecycle is logged at the callers, not inside the auth services (which <code>AuditService</code> already depends on — logging there would be circular). <code>AuthController.Login</code> logs <code>login</code> + <code>device-mint</code>; the desktop <code>IpFilterForm</code> logs operator <code>guest-approve</code> / <code>guest-remove</code> / <code>device-revoke</code>.' },
-];
-function renderImpl(i){
-  const s = IMPL_STAGES[i];
-  document.getElementById('implCard').innerHTML =
-    `<h4>${s.title}</h4><div class="note" style="margin:0 0 8px"><code>${s.file}</code></div>
-     <div style="font-size:13px;line-height:1.55">${s.body}</div>`;
-}
-document.getElementById('implSel').addEventListener('click',e=>{
-  if(e.target.dataset.i===undefined)return;
-  [...document.querySelectorAll('#implSel button')].forEach(b=>b.classList.toggle('active',b===e.target));
-  renderImpl(+e.target.dataset.i);
-});
-
-//// VIEW 11: try it out ////
-const TRY = {
-  cookie: { title:'📱 The 4G rescue — trusted-device cookie',
-    steps:[
-      ['On your phone, on home Wi-Fi (an approved IP), open the app and log in with the access code.'],
-      ['On the host PC, click <b>Guests (IPs)</b> → the new <b>Trusted devices</b> list now shows your phone.'],
-      ['On the phone, turn Wi-Fi off → switch to 4G/5G (a new, unapproved IP). Reload.'],
-      ['You\'re still in — <b>no trip to the PC.</b> The cookie carried you past the IP gate.', 1],
-      ['Optional: clear the phone\'s cookies while on 4G → you get the 403 "not on the guest list" page. One re-approval and you\'re back.'],
-      ['Optional: on the PC, pick your device in Trusted devices → <b>Revoke</b> → the next new-IP visit is 403\'d.'],
-    ],
-    expect:'A returning approved device survives an IP change with zero operator action — the original pain, gone. Revoke fully evicts it.' },
-  perms: { title:'🔓 Full access — no per-project permissions',
-    steps:[
-      ['Open any project\'s chat and ask the agent to edit a file or run a shell command.'],
-      ['It just does it — <b>every project runs at full access now;</b> no read-only/standard restriction.', 1],
-      ['Note: the desktop <b>Manage Projects</b> dialog no longer has a "Chat permissions" column or "Permissions…" button — that tier is gone.'],
-    ],
-    expect:'One trust boundary (the two gates), not two. A passed user is bounded only by the OS account the harness runs as — consider a dedicated least-privilege account (see README).' },
-  audit: { title:'📋 Action audit — see what everyone did',
-    steps:[
-      ['Send any chat message and let the agent do a few things — read a file, edit one, run a command.'],
-      ['On the host PC, click the new <b>Activity</b> button on the main window.'],
-      ['See <b>every prompt + every tool</b> the agent ran (reads included) + auth events, attributed to your device name.', 1],
-      ['Filter by user, date, or kind (prompt / tool / auth).'],
-      ['Try an auth event: log out + back in on the phone → see <code>login</code> + <code>device-mint</code>. Approve/revoke a guest → see those too.'],
-    ],
-    expect:'A complete, append-only record of what each user\'s agent did — inspectable only in the Windows program (the file lives at %APPDATA%\\ClaudeWeb\\audit\\YYYY-MM-DD.jsonl), never on the web.' },
-};
-let tryK = 'cookie';
-function renderTry(){
-  const t = TRY[tryK];
-  const steps = t.steps.map((s,i)=>{
-    const hi = s[1];
-    const badge = hi ? '<span class="t">✓</span>' : `<span style="color:var(--mut);font-weight:700;flex:none">${i+1}</span>`;
-    return `<p class="chk">${badge}<span>${s[0]}</span></p>`;
-  }).join('');
-  document.getElementById('tryCard').innerHTML =
-    `<h4>${t.title}</h4>${steps}<div class="verdict" style="margin-top:10px"><b>What to expect:</b> ${t.expect}</div>`;
-}
-document.getElementById('trySel').addEventListener('click',e=>{
-  if(!e.target.dataset.k)return;
-  tryK=e.target.dataset.k;
-  [...document.querySelectorAll('#trySel button')].forEach(b=>b.classList.toggle('active',b===e.target));
-  renderTry();
-});
-
-//// tabs ////
-document.querySelector('.tabs').addEventListener('click',e=>{
-  if(!e.target.dataset.v)return;
-  [...document.querySelectorAll('.tab')].forEach(t=>t.classList.toggle('active',t===e.target));
-  [...document.querySelectorAll('.view')].forEach(v=>v.classList.toggle('active',v.id===e.target.dataset.v));
-});
-
-renderPipe(); buildMatrix(); renderKba('trivia'); renderHH(0); renderTJ(0); renderTA(); renderSol(); renderBR(); renderAudit(); renderImpl(0); renderTry();
+  render();
+})();
 </script>
 </body>
 </html>
