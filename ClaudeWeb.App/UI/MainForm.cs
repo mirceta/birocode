@@ -44,6 +44,7 @@ public class MainForm : Form
     private readonly RepositoryRegistry _repositories;
     private readonly IpAllowlistService _ipAllowlist;
     private readonly AutopilotGate _autopilotGate;
+    private readonly Services.Auth.DeviceTokenService _deviceTokens;
 
     private readonly Label _workingDirLabel;
     private readonly Label _serverLabel;
@@ -56,7 +57,7 @@ public class MainForm : Form
     // Maps a CallRecord.Number to its ListView row for in-place updates.
     private readonly Dictionary<int, ListViewItem> _rowsByNumber = new();
 
-    public MainForm(AppConfig config, Logger logger, EmbeddedApi api, CallLog callLog, RepositoryRegistry repositories, IpAllowlistService ipAllowlist, AutopilotGate autopilotGate)
+    public MainForm(AppConfig config, Logger logger, EmbeddedApi api, CallLog callLog, RepositoryRegistry repositories, IpAllowlistService ipAllowlist, AutopilotGate autopilotGate, Services.Auth.DeviceTokenService deviceTokens)
     {
         _config = config;
         _logger = logger;
@@ -65,6 +66,7 @@ public class MainForm : Form
         _repositories = repositories;
         _ipAllowlist = ipAllowlist;
         _autopilotGate = autopilotGate;
+        _deviceTokens = deviceTokens;
 
         Text = "Claude Web";
         Size = new Size(1200, 720);
@@ -199,7 +201,7 @@ public class MainForm : Form
         guestsButton.FlatAppearance.BorderSize = 0;
         guestsButton.Click += (_, _) =>
         {
-            using var dialog = new IpFilterForm(_ipAllowlist);
+            using var dialog = new IpFilterForm(_ipAllowlist, _deviceTokens);
             dialog.ShowDialog(this);
         };
         actions.Controls.Add(guestsButton);

@@ -39,7 +39,7 @@ public class RepositoryRegistry
     /// <see cref="LocalPort"/> is the default (first) app's port, kept for
     /// back-compat; <see cref="LocalApps"/> is the full list
     /// (plans/multiple-local-apps.md).</summary>
-    public sealed record RepositoryInfo(string Id, string Name, string Path, bool Exists, bool IsGitRepo, bool IsSelf, string Visibility, int? LocalPort, IReadOnlyList<LocalAppInfo> LocalApps, string PermissionPolicy);
+    public sealed record RepositoryInfo(string Id, string Name, string Path, bool Exists, bool IsGitRepo, bool IsSelf, string Visibility, int? LocalPort, IReadOnlyList<LocalAppInfo> LocalApps);
 
     /// <summary>One local app exposed by a repo (plans/multiple-local-apps.md).</summary>
     public sealed record LocalAppInfo(string Id, string Name, int Port, string Kind);
@@ -60,14 +60,6 @@ public class RepositoryRegistry
     /// <summary>Normalizes a visibility value: anything but "basic" is "advanced".</summary>
     public static string NormalizeVisibility(string? visibility) =>
         string.Equals(visibility?.Trim(), "basic", StringComparison.OrdinalIgnoreCase) ? "basic" : "advanced";
-
-    /// <summary>Normalizes a chat permission preset: anything but "standard"/"full" is
-    /// "readonly" — the safe default (openspec add-per-project-claude-permissions).</summary>
-    public static string NormalizePolicy(string? policy)
-    {
-        var p = policy?.Trim().ToLowerInvariant();
-        return p is "editonly" or "standard" or "full" ? p : "readonly";
-    }
 
     /// <summary>All repositories, in operator order. Returns copies.</summary>
     public IReadOnlyList<RepositoryInfo> GetAll()
@@ -200,22 +192,6 @@ public class RepositoryRegistry
             repo.Visibility = NormalizeVisibility(visibility);
             Save();
             _logger.Info($"[REPO] Visibility of \"{repo.Name}\" -> {repo.Visibility}");
-            return true;
-        }
-    }
-
-    /// <summary>Sets a repository's chat permission preset ("readonly"/"standard"/"full").
-    /// DESKTOP-ONLY (openspec add-per-project-claude-permissions) — no web path mutates this,
-    /// so the End User can never widen their own scope. No-op if the id is unknown.</summary>
-    public bool SetPermissionPolicy(string id, string? policy)
-    {
-        lock (_gate)
-        {
-            var repo = _repos.FirstOrDefault(r => string.Equals(r.Id, id, StringComparison.Ordinal));
-            if (repo is null) return false;
-            repo.PermissionPolicy = NormalizePolicy(policy);
-            Save();
-            _logger.Info($"[REPO] Chat permission preset of \"{repo.Name}\" -> {repo.PermissionPolicy}");
             return true;
         }
     }
@@ -413,7 +389,7 @@ public class RepositoryRegistry
         // kind:harness mechanism). plans/agentic-lab.md.
         if (r.IsSelf)
             infos.Add(new LocalAppInfo(LabAppId, "Agentic Engineering Lab", 0, "harness"));
-        return new RepositoryInfo(r.Id, r.Name, r.Path, exists, isGit, r.IsSelf, NormalizeVisibility(r.Visibility), defaultPort, infos, NormalizePolicy(r.PermissionPolicy));
+        return new RepositoryInfo(r.Id, r.Name, r.Path, exists, isGit, r.IsSelf, NormalizeVisibility(r.Visibility), defaultPort, infos);
     }
 
     // Clones normalize too: LocalPort is set to the default app's port so
@@ -425,7 +401,6 @@ public class RepositoryRegistry
         return new()
         {
             Id = r.Id, Name = r.Name, Path = r.Path, IsSelf = r.IsSelf, Visibility = r.Visibility,
-            PermissionPolicy = r.PermissionPolicy,
             LocalPort = apps.Count > 0 ? apps[0].Port : null,
             LocalApps = apps.Select(a => new LocalAppConfig { Id = a.Id, Name = a.Name, Port = a.Port, Kind = a.Kind }).ToList(),
         };

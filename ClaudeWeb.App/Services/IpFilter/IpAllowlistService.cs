@@ -78,6 +78,14 @@ public class IpAllowlistService
         lock (_gate) return _store.Guests.Any(g => g.Ip == ip);
     }
 
+    /// <summary>Name of the approved guest at this IP, or null if not approved.
+    /// Used to tag a trusted-device token with the friend's name at mint time
+    /// (openspec add-resilient-auth).</summary>
+    public string? GuestName(string ip)
+    {
+        lock (_gate) return _store.Guests.FirstOrDefault(g => g.Ip == ip)?.Name;
+    }
+
     /// <summary>Approved IP touched the harness — update last access (throttled flush).</summary>
     public void RecordAccess(string ip)
     {

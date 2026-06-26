@@ -11,7 +11,6 @@ import ProductFrame from '../app/ProductFrame';
 import FilesBrowser from '../files/FilesBrowser';
 import CopyPath from './CopyPath';
 import ImportantStar from './ImportantStar';
-import PermissionBadge from './PermissionBadge';
 import WideToggle from './WideToggle';
 import WaitingBadge from './WaitingBadge';
 import WaitingOnField from './WaitingOnField';
@@ -30,7 +29,6 @@ export default function PinnedAgent({
   recency,
   contentZoom = 1,
   repoPath,
-  permission = null,
   localApps,
   git,
   gitRefreshing = false,
@@ -297,7 +295,6 @@ export default function PinnedAgent({
           onToggle={() => onToggleWaiting?.(tab.id)}
           className="phone__waiting"
         />
-        {permission && <PermissionBadge policy={permission} className="phone__perm" />}
       </button>
       {tab.waiting && (
         <WaitingOnField

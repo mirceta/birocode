@@ -1,5 +1,6 @@
 using ClaudeWeb.Services.Auth;
 using ClaudeWeb.Services.Hosting;
+using ClaudeWeb.Services.IpFilter;
 using ClaudeWeb.Services.Logging;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -25,11 +26,15 @@ public class AuthController : ControllerBase
     public const string CookieName = "claudeweb_session";
 
     private readonly AuthService _auth;
+    private readonly DeviceTokenService _devices;
+    private readonly IpAllowlistService _ipAllowlist;
     private readonly Logger _logger;
 
-    public AuthController(AuthService auth, Logger logger)
+    public AuthController(AuthService auth, DeviceTokenService devices, IpAllowlistService ipAllowlist, Logger logger)
     {
         _auth = auth;
+        _devices = devices;
+        _ipAllowlist = ipAllowlist;
         _logger = logger;
     }
 
@@ -53,7 +58,20 @@ public class AuthController : ControllerBase
 
         _auth.RecordSuccess(client);
         var token = _auth.CreateSession();
-        Response.Cookies.Append(CookieName, token, CookieOptions(HttpContext));
+        Response.Cookies.Append(CookieName, token, CookieOptions(HttpContext, AuthService.SessionLifetime));
+
+        // Mint a trusted-device cookie on first approved entry (openspec add-resilient-auth).
+        // Guard (task 2.2): only when this request is on an approved IP — never for a request
+        // the IP gate admitted purely via an existing cookie or rejected — and only once per
+        // device. Tag it with the approved-IP guest's name so the Operator can identify it.
+        if (_ipAllowlist.IsApproved(client) &&
+            !_devices.IsValid(Request.Cookies[DeviceTokenService.CookieName]))
+        {
+            var name = _ipAllowlist.GuestName(client) ?? client;
+            var deviceToken = _devices.Issue(name);
+            Response.Cookies.Append(DeviceTokenService.CookieName, deviceToken, CookieOptions(HttpContext, _devices.Lifetime));
+        }
+
         _logger.Info($"[AUTH] Login from {client}");
         return Ok(new { ok = true });
     }
@@ -70,7 +88,9 @@ public class AuthController : ControllerBase
     {
         _logger.CountRequest();
         _auth.RevokeSession(Request.Cookies[CookieName]);
-        Response.Cookies.Delete(CookieName, CookieOptions(HttpContext));
+        Response.Cookies.Delete(CookieName, CookieOptions(HttpContext, AuthService.SessionLifetime));
+        // Logout ends the session only; the trusted-device cookie (IP-gate bypass) is
+        // deliberately left in place — revoke it from the desktop "Trusted devices" list.
         return Ok(new { ok = true });
     }
 
@@ -85,13 +105,13 @@ public class AuthController : ControllerBase
         return Ok(new { ok = true });
     }
 
-    private static CookieOptions CookieOptions(HttpContext context) => new()
+    private static CookieOptions CookieOptions(HttpContext context, TimeSpan maxAge) => new()
     {
         HttpOnly = true,
         SameSite = SameSiteMode.Strict,
         Secure = IsHttps(context),
         Path = "/",
-        MaxAge = AuthService.SessionLifetime,
+        MaxAge = maxAge,
     };
 
     private static bool IsHttps(HttpContext context) =>

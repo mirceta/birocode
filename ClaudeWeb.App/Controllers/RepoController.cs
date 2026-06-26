@@ -14,7 +14,7 @@ namespace ClaudeWeb.Controllers;
 /// self repo (e.g. ...\playground). Folders are only created on explicit
 /// request (plans/projects-folder-picker.md):
 ///
-///   GET  /api/repos                 -- [{ id, name, path, exists, isGitRepo, isSelf, visibility, localPort, localApps, permissionPolicy }]
+///   GET  /api/repos                 -- [{ id, name, path, exists, isGitRepo, isSelf, visibility, localPort, localApps }]
 ///   GET  /api/repos/folders?path=   -- { root, path, folders: [{ name, registered, isGitRepo }] }
 ///   POST /api/repos                 -- { folder, name?, visibility?, createFolder? } -> the new repo + created flag
 ///   DELETE /api/repos/{id}          -- unregisters a project (keeps the folder on disk); self repo refused
@@ -44,7 +44,7 @@ public class RepoController : ControllerBase
     {
         _logger.CountRequest();
         var repos = _registry.GetAll()
-            .Select(r => new { id = r.Id, name = r.Name, path = r.Path, exists = r.Exists, isGitRepo = r.IsGitRepo, isSelf = r.IsSelf, visibility = r.Visibility, localPort = r.LocalPort, localApps = AppsJson(r.LocalApps), permissionPolicy = r.PermissionPolicy });
+            .Select(r => new { id = r.Id, name = r.Name, path = r.Path, exists = r.Exists, isGitRepo = r.IsGitRepo, isSelf = r.IsSelf, visibility = r.Visibility, localPort = r.LocalPort, localApps = AppsJson(r.LocalApps) });
         return Ok(repos);
     }
 

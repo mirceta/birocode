@@ -108,6 +108,25 @@ The monitoring GUI opens and Kestrel listens on the configured port
 - `Port` -- the web server port (default 5099).
 - `AuthPassword` -- the shared access code the user enters (default `changeme`;
   change it before exposing the app beyond your own machine).
+- `DeviceCookieDays` -- lifetime (days, default 180) of the trusted-device cookie.
+  Minted on a guest's first approved login; afterwards the IP gate admits an
+  approved IP **or** a valid device cookie, so a phone's rotating 4G IP no longer
+  needs re-approval. Revoke a device from the desktop "Guests (IPs)" dialog.
+
+## Security: the trust boundary is the harness's OS account
+
+Authorization is the two gates only -- the IP/device-cookie gate and the password
+gate. There is **no per-project permission layer**: anyone who clears both gates
+can drive Claude Code at full access (read, edit, shell, network). The only
+remaining boundary is **the Windows account the harness process runs as** -- the
+End User never logs into Windows, so "full access" means whatever *that* account
+can do, machine-wide.
+
+**Run the harness under a dedicated least-privilege Windows account** (its own
+user, with access only to the workspace and what the product needs). That turns
+"bounded by the OS account" into a sandbox you sized deliberately, and keeps the
+worst case of a stolen device-cookie + password contained. Pair it with revoking
+unused trusted devices from the desktop dialog.
 
 ## Deploy
 

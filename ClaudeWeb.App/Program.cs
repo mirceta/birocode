@@ -54,12 +54,17 @@ static class Program
         // IpAllowlistService. Default OFF.
         var autopilotGate = new AutopilotGate(logger);
 
+        // Trusted-device tokens (openspec add-resilient-auth). Built here so the
+        // WinForms "Trusted devices" GUI (the ONLY surface that can revoke) and
+        // the web API share one instance — same pattern as IpAllowlistService.
+        var deviceTokens = new Services.Auth.DeviceTokenService(config, logger);
+
         // Start the embedded Kestrel server on a background thread.
-        var api = new EmbeddedApi(config, logger, callLog, repositories, ipAllowlist, autopilotGate);
+        var api = new EmbeddedApi(config, logger, callLog, repositories, ipAllowlist, autopilotGate, deviceTokens);
         api.Start();
 
         // Launch the monitoring GUI (blocks on the WinForms message loop).
-        var form = new MainForm(config, logger, api, callLog, repositories, ipAllowlist, autopilotGate);
+        var form = new MainForm(config, logger, api, callLog, repositories, ipAllowlist, autopilotGate, deviceTokens);
         Application.Run(form);
 
         // Shut the server down cleanly when the GUI closes.
