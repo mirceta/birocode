@@ -139,6 +139,7 @@
     <button class="tab" data-v="sol">✅ The solution</button>
     <button class="tab" data-v="model">⑧ The whole model — proposal &amp; design</button>
     <button class="tab" data-v="audit">⑨ Action audit — trust but verify</button>
+    <button class="tab" data-v="impl">⑩ Action audit — how it's built</button>
   </div>
 
   <!-- VIEW 1 -->
@@ -484,6 +485,60 @@
       permission layer, and this closes the loop — the identity that lets a friend back in on 4G is the
       same identity that records <i>who</i> ran each action. Don't restrict trusted users; remember
       what they did.</div>
+  </section>
+
+  <!-- VIEW 10 -->
+  <section class="view" id="impl">
+    <h2>Action audit — how it's built</h2>
+    <p class="note">The real capture path through the C# components, as actually implemented. Click a
+      stage to see what it does and which file it lives in.</p>
+    <div class="scen" id="implSel">
+      <button data-i="0" class="active">① ChatController</button>
+      <button data-i="1">② CliRunnerService</button>
+      <button data-i="2">③ AuditService</button>
+      <button data-i="3">④ JSONL store</button>
+      <button data-i="4">⑤ ActivityForm</button>
+      <button data-i="5">＋ auth events</button>
+    </div>
+    <div class="solcard" id="implCard"></div>
+
+    <h2 style="margin-top:22px">Files touched</h2>
+    <div class="solgrid">
+      <div class="solcard" style="border-color:#2d5a35"><h4>🆕 New</h4>
+        <span class="schip">Services/Audit/AuditService.cs</span>
+        <span class="schip">Services/Audit/AuditTypes.cs</span>
+        <span class="schip">UI/ActivityForm.cs</span></div>
+      <div class="solcard"><h4>✏️ Modified</h4>
+        <span class="schip">ChatController</span><span class="schip">CliRunnerService</span>
+        <span class="schip">AuthController</span><span class="schip">IpFilterForm</span>
+        <span class="schip">MainForm</span><span class="schip">Program</span>
+        <span class="schip">EmbeddedApi</span><span class="schip">AppConfig</span>
+        <span class="schip">appsettings.json</span></div>
+    </div>
+
+    <h2 style="margin-top:22px">The non-obvious decisions</h2>
+    <div class="solcard">
+      <p class="chk"><span class="t">▹</span><span><b>Actor resolved on the request thread.</b> The run
+        is detached (`Task.Run`), where `HttpContext` is gone — so `ChatController` resolves the actor
+        and builds the `AuditContext` <i>before</i> spawning the run, and threads it in.</span></p>
+      <p class="chk"><span class="t">▹</span><span><b>One capture point for all tools.</b>
+        `HandleAssistant` already sees every `tool_use` block with its full input — so one `LogTool`
+        call there covers every tool, reads included, no per-tool filtering.</span></p>
+      <p class="chk"><span class="t">▹</span><span><b>Auth events logged at the callers,</b> not inside
+        the auth services — because `AuditService` already depends on them, so logging there would be a
+        circular dependency.</span></p>
+      <p class="chk"><span class="t">▹</span><span><b>One pre-built singleton, shared GUI↔API.</b> Built
+        in `Program.cs` (like `IpAllowlistService`) so the web writer and the desktop reader are the
+        same instance.</span></p>
+      <p class="chk"><span class="t">▹</span><span><b>Desktop-only reader, append-only store.</b> No
+        controller touches the audit — the audit watches the web users, so it isn't theirs to read or
+        clear.</span></p>
+    </div>
+
+    <div class="reframe"><b>Verified so far:</b> the auth path is runtime-confirmed (an isolated login
+      appended `login` + `device-mint`, correctly attributed). Prompt + tool capture use the very same
+      machinery and are wired at the points above — they'll appear in the Activity tab the first time a
+      real chat turn runs on a deploy.</div>
   </section>
 </main>
 
@@ -910,6 +965,39 @@ document.getElementById('auditTools').addEventListener('click',e=>{
     `<b>${t.n} → logged ✅</b> — every tool is recorded, reads included. The audit is a complete record of what each user's agent did, not a high-signal summary.`;
 });
 
+//// VIEW 10: how it's built ////
+const IMPL_STAGES = [
+  { title:'① ChatController.Chat — capture the prompt, start the trail',
+    file:'ClaudeWeb.App/Controllers/ChatController.cs',
+    body:'Resolves the actor with <code>_audit.ResolveActor(HttpContext)</code> <b>on the request thread</b> — it must, because the run is detached into a background <code>Task.Run</code> where <code>HttpContext</code> no longer exists. Logs the prompt (<code>LogPrompt</code>), builds an <code>AuditContext { Actor, Repo, Lane }</code>, and threads it into the run: <code>RunAsync(…, audit: auditCtx)</code>.' },
+  { title:'② CliRunnerService — log every tool from the stream',
+    file:'ClaudeWeb.App/Services/Chat/CliRunnerService.cs',
+    body:'<code>RunAsync</code> reads the <code>claude -p --output-format stream-json</code> output line by line → <code>TranslateLine</code> → <code>HandleAssistant</code>. For <i>every</i> <code>tool_use</code> block (which carries the tool <code>name</code> + full <code>input</code>) it calls <code>_audit.LogTool(audit, name, summary)</code> — every tool, reads included. This single method is the one capture point for all tool calls.' },
+  { title:'③ AuditService — resolve identity, append the entry',
+    file:'ClaudeWeb.App/Services/Audit/AuditService.cs (+ AuditTypes.cs)',
+    body:'<code>ResolveActor</code> walks the identity ladder — trusted-device name (via <code>DeviceTokenService</code>) → approved-IP guest name (via <code>IpAllowlistService</code>) → <code>unknown@ip</code> — always stamping the source IP + a short session id. <code>LogPrompt</code>/<code>LogTool</code>/<code>LogAuth</code> build an <code>AuditEntry</code> and append it. Pre-built as a singleton in <code>Program.cs</code>, shared by the API and the GUI.' },
+  { title:'④ The JSONL store — append-only, daily, pruned',
+    file:'%APPDATA%\\ClaudeWeb\\audit\\YYYY-MM-DD.jsonl',
+    body:'<code>File.AppendAllText</code> under a lock: one JSON object per line, one file per day, durable per event (no buffering — nothing lost on a crash). On startup, files older than <code>AuditRetentionDays</code> are pruned whole-file by age. No code path rewrites or deletes individual lines, and <b>no controller reads or writes it</b>.' },
+  { title:'⑤ ActivityForm — the only reader (desktop)',
+    file:'ClaudeWeb.App/UI/ActivityForm.cs (+ MainForm "Activity" button)',
+    body:'A read-only WinForms dialog opened from the main window: pick a date, filter by kind and by <b>user</b>, newest-first. No edit or delete control. The web/phone UI has nothing — by construction, the audit is inspectable only in the Windows program.' },
+  { title:'＋ Auth events — logged at the callers',
+    file:'ClaudeWeb.App/Controllers/AuthController.cs + UI/IpFilterForm.cs',
+    body:'The auth lifecycle is logged at the callers, not inside the auth services (which <code>AuditService</code> already depends on — logging there would be circular). <code>AuthController.Login</code> logs <code>login</code> + <code>device-mint</code>; the desktop <code>IpFilterForm</code> logs operator <code>guest-approve</code> / <code>guest-remove</code> / <code>device-revoke</code>.' },
+];
+function renderImpl(i){
+  const s = IMPL_STAGES[i];
+  document.getElementById('implCard').innerHTML =
+    `<h4>${s.title}</h4><div class="note" style="margin:0 0 8px"><code>${s.file}</code></div>
+     <div style="font-size:13px;line-height:1.55">${s.body}</div>`;
+}
+document.getElementById('implSel').addEventListener('click',e=>{
+  if(e.target.dataset.i===undefined)return;
+  [...document.querySelectorAll('#implSel button')].forEach(b=>b.classList.toggle('active',b===e.target));
+  renderImpl(+e.target.dataset.i);
+});
+
 //// tabs ////
 document.querySelector('.tabs').addEventListener('click',e=>{
   if(!e.target.dataset.v)return;
@@ -917,7 +1005,7 @@ document.querySelector('.tabs').addEventListener('click',e=>{
   [...document.querySelectorAll('.view')].forEach(v=>v.classList.toggle('active',v.id===e.target.dataset.v));
 });
 
-renderPipe(); buildMatrix(); renderKba('trivia'); renderHH(0); renderTJ(0); renderTA(); renderSol(); renderBR(); renderAudit();
+renderPipe(); buildMatrix(); renderKba('trivia'); renderHH(0); renderTJ(0); renderTA(); renderSol(); renderBR(); renderAudit(); renderImpl(0);
 </script>
 </body>
 </html>
