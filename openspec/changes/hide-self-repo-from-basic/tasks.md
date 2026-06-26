@@ -46,6 +46,6 @@ exercises the actual RepoContext/Projects/ChatContext code. **14/14 passed.**
 
 ## 5. Understanding app (if warranted)
 
-- [ ] 5.1 If the mode → repo-filter → default-resolution → conversation-render flow is worth
-      visualizing, author/refresh `understanding-app/index.html` (build-less, relative URLs)
-      per `docs/understanding-app-convention.md`; otherwise note why prose + verification suffice.
+- [x] 5.1 Authored `understanding-app/index.html` (build-less, relative URLs) visualizing the
+      mode → repo-filter → default-resolution → conversation-render flow per
+      `docs/understanding-app-convention.md`. (commit e2fc8e1)
