@@ -672,18 +672,28 @@ public class CliRunnerService
             psi.ArgumentList.Add(model);
         }
 
-        // Read-only "ask" lane (plans/repo-ask-chat.md): plan mode lets the agent
-        // read/search/answer but structurally blocks every mutation (in headless -p
-        // mode it can't approve ExitPlanMode, so Write/Edit/Bash never execute), which
-        // makes a side conversation safe in a building agent's working directory.
-        // This is the ONLY permission scoping left: the per-project preset system was
-        // removed (openspec add-resilient-auth) — a user past both gates is fully
-        // trusted, bounded only by the OS account the harness runs as. The ask lane is
-        // a tool the user opts into, not a restriction imposed on them.
+        // Permission scope. Two lanes only (the per-project preset system was removed —
+        // openspec add-resilient-auth — so a user past both gates is fully trusted,
+        // bounded only by the OS account the harness runs as):
+        //
+        //   - read-only "ask" lane (plans/repo-ask-chat.md): plan mode lets the agent
+        //     read/search/answer but structurally blocks every mutation (headless -p
+        //     can't approve ExitPlanMode, so Write/Edit/Bash never execute). A tool the
+        //     user opts into, not a restriction imposed on them.
+        //   - builder lane: FULL access. We must pass --dangerously-skip-permissions,
+        //     not just omit a flag: with no flag, `claude -p` uses its DEFAULT mode,
+        //     which needs interactive approval for Write/Bash — and headless -p can't
+        //     approve, so writes silently FAIL while reads work. Skipping the permission
+        //     checks is exactly "bounded only by the OS account" (run the harness under a
+        //     dedicated least-privilege account to size that boundary; see README).
         if (readOnly)
         {
             psi.ArgumentList.Add("--permission-mode");
             psi.ArgumentList.Add("plan");
+        }
+        else
+        {
+            psi.ArgumentList.Add("--dangerously-skip-permissions");
         }
 
         // Force Max-plan / CLI auth -- never pick up an API key from the env.
