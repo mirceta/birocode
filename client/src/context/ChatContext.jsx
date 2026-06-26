@@ -4,7 +4,7 @@ import { createSseParser } from '../components/chat/sseParser';
 import { getModel, setModel as persistModel } from '../components/chat/ModelSelector';
 import { useDock } from './DockContext';
 import { useRepo } from './RepoContext';
-import { useFeature } from './UiModeContext';
+import { useFeature, useUiMode } from './UiModeContext';
 import { useT } from '../i18n/LanguageContext';
 
 // Holds per-tab chat conversations. Each Dock tab gets its own independent
@@ -71,6 +71,7 @@ export function ChatProvider({ children }) {
   const { currentRepoId, repos } = useRepo();
   const { tabs, activeTab, activeTabId, updateTab, loaded: dockLoaded, chatView, setChatView } = useDock();
   const dualChat = useFeature('dualChat');
+  const { isAdvanced } = useUiMode();
   // The harness's own repo — the backend pins it and flags it isSelf.
   const selfRepoId = repos.find((r) => r.isSelf)?.id || null;
   const greeting = () => ({ role: 'assistant', text: t('chat.greeting') });
@@ -103,6 +104,12 @@ export function ChatProvider({ children }) {
   // to 'project' while repos are loading or when no self repo is registered.
   let view = dualChat ? chatView : 'agent';
   if (view === 'harness' && !selfRepoId) view = 'project';
+  // Basic (End User) chat is always the project-following conversation, scoped
+  // to currentRepoId (which RepoContext keeps off the self repo). The agent
+  // dock and the dual "Claude Web" harness chat are Advanced-only, so a Basic
+  // user must never have the chat driven by a (possibly self-repo) dock tab or
+  // land on the harness conversation (openspec: hide-self-repo-from-basic).
+  if (!isAdvanced) view = 'project';
 
   // Determine which conversation key is active, and the dock tab actually
   // backing it (null when a fixed Project/Claude Web chat is showing, so tab
