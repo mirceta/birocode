@@ -20,14 +20,15 @@ A small `AuditIdentity` resolver reads these off the request (the same lookups t
 already does) and stamps every audit entry. If resilient-auth isn't landed yet, the resolver returns
 `unknown@<ip>` so the audit is still useful and upgrades cleanly once identity exists.
 
-## Granularity — prompts + mutating tool actions
+## Granularity — every prompt + every tool action
 
-Three event kinds, append-only:
+Three event kinds, append-only. **Everything is recorded — no sampling, no per-tool filtering.**
 
-- **`prompt`** — actor, project (repo id), lane (chat/ask), timestamp, and the prompt text.
-- **`tool`** — actor, project, the tool name and its salient args for **mutating** actions only:
-  file writes/edits, shell/`Bash` commands, and network (`WebFetch`/`WebSearch`/curl-like). Pure
-  reads/searches are not logged by default (high volume, low forensic value) — configurable.
+- **`prompt`** — actor, project (repo id), lane (chat/ask), timestamp, and the prompt text (every
+  message sent to an agent).
+- **`tool`** — actor, project, the tool name and its salient args for **every** tool the agent runs,
+  **reads included**: `Read`/`Glob`/`Grep`/`LS` as well as `Edit`/`Write`/`Bash`/`WebFetch`/… The
+  whole point is a complete record of what each user's agent did.
 - **`auth`** — login success/failure, device mint, device/guest revocation, IP approval.
 
 ### The key risk: capturing tool actions
@@ -64,16 +65,17 @@ This mirrors the repo's existing off-repo JSON stores (`ipallow.json`, `sessions
 - **No hash-chain tamper-proofing in v1.** Append-only + operator-only is enough for the threat model
   (your own machine, vetted friends); cryptographic tamper-evidence is a follow-up, noted not silently
   skipped.
-- **Mutating-only tool capture by default.** Logging every read would bury the signal; reads are
-  opt-in via config. Stated so "audited" never over-promises.
+- **Everything is logged, reads included.** The Operator wants a complete record of what each user's
+  agent did — not a high-signal summary — so there is no per-tool filtering. Volume is bounded only by
+  daily rotation + retention.
 - **Prompt text is recorded** by default (it's the most useful forensic field) with a config switch to
   redact, since it can contain whatever the user typed.
 
 ## Verification posture
 
 - **Task 0 (gating):** confirm the live chat path streams tool-use events; record the finding.
-- Prompt logged on every chat turn with correct actor/project; mutating tool actions logged with tool
-  + args; reads not logged (default); auth events logged.
+- Prompt logged on every chat turn with correct actor/project; every tool action logged with tool
+  + args (reads included); auth events logged.
 - Store is append-only and rotates daily; retention prune removes only old whole files; no web path can
   read or write it.
 - Actor attribution shows the device name once `add-resilient-auth` is present, `unknown@<ip>` before.

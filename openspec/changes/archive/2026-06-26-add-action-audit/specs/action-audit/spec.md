@@ -20,23 +20,24 @@ IP always recorded. When no named identity is available the entry SHALL still be
 - **WHEN** a logged action occurs with no resolvable named identity
 - **THEN** the entry is still written with an `unknown@<ip>` actor, not omitted
 
-### Requirement: Prompts, mutating tool actions, and auth events are captured
+### Requirement: Every prompt, tool action, and auth event is captured
 
-The system SHALL capture three kinds of event: each chat prompt submitted (actor, project, lane,
-text); each mutating tool action the agent runs within a turn (file edit, shell command, or network
-call, with the tool name and its salient arguments); and auth events (login, device mint, device or
-guest revocation, IP approval). Pure read/search tool actions SHALL NOT be logged by default, and the
-system SHALL make read-logging and prompt-text capture configurable.
+The system SHALL capture three kinds of event with no sampling or filtering: each chat prompt
+submitted to an agent (actor, project, lane, text); **every** tool action the agent runs within a
+turn — reads included (Read/Glob/Grep/LS as well as Edit/Write/Bash/WebFetch/…), with the tool name
+and its salient arguments; and auth events (login, device mint, device or guest revocation, IP
+approval). Prompt-text capture SHALL be configurable (redactable); tool capture SHALL NOT be
+filterable — everything an agent does is recorded.
 
-#### Scenario: A mutating action is logged
+#### Scenario: Every tool action is logged, reads included
 
-- **WHEN** an agent turn edits a repo file and runs a shell command
-- **THEN** the audit records a tool entry for the edit and one for the shell command, each attributed to the actor and project
+- **WHEN** an agent turn reads a file, edits another, and runs a shell command
+- **THEN** the audit records a tool entry for all three — the read as well as the edit and the command — each attributed to the actor and project
 
-#### Scenario: Reads are not logged by default
+#### Scenario: A prompt to an agent is logged
 
-- **WHEN** an agent turn only reads and searches files
-- **THEN** no tool entries are recorded for those reads unless read-logging is enabled in config
+- **WHEN** a user submits a chat message to an agent
+- **THEN** the audit records a prompt entry with the actor, project, lane, and the message text (or a redaction marker when prompt redaction is configured)
 
 ### Requirement: The audit store is append-only and durable
 

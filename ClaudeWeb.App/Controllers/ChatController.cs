@@ -1,4 +1,5 @@
 using System.Text;
+using ClaudeWeb.Services.Audit;
 using ClaudeWeb.Services.Chat;
 using ClaudeWeb.Services.Logging;
 using ClaudeWeb.Services.Repositories;
@@ -29,14 +30,16 @@ public class ChatController : ControllerBase
     private readonly RunSessionService _runs;
     private readonly SessionService _sessions;
     private readonly RepositoryResolver _repos;
+    private readonly AuditService _audit;
     private readonly Logger _logger;
 
-    public ChatController(CliRunnerService cli, RunSessionService runs, SessionService sessions, RepositoryResolver repos, Logger logger)
+    public ChatController(CliRunnerService cli, RunSessionService runs, SessionService sessions, RepositoryResolver repos, AuditService audit, Logger logger)
     {
         _cli = cli;
         _runs = runs;
         _sessions = sessions;
         _repos = repos;
+        _audit = audit;
         _logger = logger;
     }
 
@@ -101,6 +104,13 @@ public class ChatController : ControllerBase
         // Per-project permission presets were removed (openspec add-resilient-auth):
         // a user past both gates is fully trusted, bounded only by the OS account. The
         // read-only "ask" lane above remains as a user-selected mode.
+
+        // Action audit (openspec add-action-audit): resolve the actor NOW, on the request
+        // thread (HttpContext is gone inside the detached Task.Run), log the prompt, and
+        // thread an AuditContext into the run so mutating tool calls are attributed too.
+        var auditCtx = new AuditContext { Actor = _audit.ResolveActor(HttpContext), Repo = repo.Name, Lane = lane };
+        _audit.LogPrompt(auditCtx.Actor, repo.Name, lane, message);
+
         _ = Task.Run(async () =>
         {
             try
@@ -112,7 +122,8 @@ public class ChatController : ControllerBase
                     model: model,
                     emit: session.EmitAsync,
                     ct: session.Cts.Token,
-                    readOnly: readOnly);
+                    readOnly: readOnly,
+                    audit: auditCtx);
             }
             catch (Exception ex)
             {

@@ -42,12 +42,14 @@ public class CliRunnerService
     private readonly Logger _logger;
     private readonly CallLog _callLog;
     private readonly ActivityLog _activity;
+    private readonly Audit.AuditService _audit;
 
-    public CliRunnerService(Logger logger, CallLog callLog, ActivityLog activity)
+    public CliRunnerService(Logger logger, CallLog callLog, ActivityLog activity, Audit.AuditService audit)
     {
         _logger = logger;
         _callLog = callLog;
         _activity = activity;
+        _audit = audit;
     }
 
     /// <summary>
@@ -67,7 +69,8 @@ public class CliRunnerService
         string? model = null,
         Func<object, Task>? emit = null,
         CancellationToken ct = default,
-        bool readOnly = false)
+        bool readOnly = false,
+        Audit.AuditContext? audit = null)
     {
         var resuming = !string.IsNullOrWhiteSpace(sessionId);
 
@@ -109,7 +112,8 @@ public class CliRunnerService
 
                 await TranslateLine(line, emit, record,
                     onSessionId: id => capturedSessionId = id,
-                    onError: () => sawError = true);
+                    onError: () => sawError = true,
+                    audit: audit);
             }
 
             await process.WaitForExitAsync(ct);
@@ -217,7 +221,7 @@ public class CliRunnerService
     /// </summary>
     private async Task TranslateLine(
         string line, Func<object, Task> emit, CallRecord record,
-        Action<string> onSessionId, Action onError)
+        Action<string> onSessionId, Action onError, Audit.AuditContext? audit = null)
     {
         JsonDocument doc;
         try { doc = JsonDocument.Parse(line); }
@@ -241,7 +245,7 @@ public class CliRunnerService
                     await HandleStreamEvent(root, emit, record);
                     break;
                 case "assistant":
-                    await HandleAssistant(root, emit, record);
+                    await HandleAssistant(root, emit, record, audit);
                     break;
                 case "user":
                     await HandleUser(root, emit);
@@ -356,7 +360,7 @@ public class CliRunnerService
     /// blocks (some tool calls only appear in this consolidated event, not as a
     /// stream_event). Text is already streamed via deltas, so it's not re-sent.
     /// </summary>
-    private async Task HandleAssistant(JsonElement root, Func<object, Task> emit, CallRecord record)
+    private async Task HandleAssistant(JsonElement root, Func<object, Task> emit, CallRecord record, Audit.AuditContext? audit = null)
     {
         if (!root.TryGetProperty("message", out var msg)) return;
 
@@ -397,6 +401,11 @@ public class CliRunnerService
                     detail = Truncate(input.GetRawText(), 1200);
                 }
                 await emit(new { type = "tool", id, name, status = "input", summary, detail });
+
+                // Action audit (openspec add-action-audit): record EVERY tool action (reads
+                // included), attributed to the turn's actor.
+                if (audit != null)
+                    _audit.LogTool(audit, name, string.IsNullOrEmpty(summary) ? detail : summary);
             }
         }
     }

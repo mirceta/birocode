@@ -51,8 +51,9 @@ public class AppConfig
 
     /// <summary>
     /// LEGACY seed only (plans/auth-login.md): hashed into
-    /// %APPDATA%\ClaudeWeb\auth.json on first run, then ignored. Rotate the
-    /// real password via POST /api/auth/password, not here.
+    /// %APPDATA%\ClaudeWeb\auth.json on first run, then ignored. Change the real
+    /// access code from the desktop app's "Set access code" button, not here —
+    /// it is deliberately not changeable over the web (openspec add-desktop-access-code).
     /// </summary>
     public string AuthPassword { get; set; } = "changeme";
 
@@ -65,6 +66,19 @@ public class AppConfig
     /// once. &lt;= 0 falls back to 180.
     /// </summary>
     public int DeviceCookieDays { get; set; } = 180;
+
+    /// <summary>
+    /// Action audit (openspec add-action-audit). Days to keep daily audit files
+    /// (`%APPDATA%\ClaudeWeb\audit\YYYY-MM-DD.jsonl`) before whole-file pruning by age.
+    /// Default 90. &lt;= 0 disables pruning (keep forever).
+    /// </summary>
+    public int AuditRetentionDays { get; set; } = 90;
+
+    /// <summary>
+    /// When true, prompt text is replaced with a redaction marker in the audit log
+    /// (only the fact a prompt happened, its actor/project, is kept). Default false.
+    /// </summary>
+    public bool AuditRedactPromptText { get; set; } = false;
 
     /// <summary>
     /// Reverse-proxy addresses whose X-Forwarded-For header is trusted, in
