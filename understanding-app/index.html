@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Discovery that survives a refresh — Understanding</title>
+<title>Agent-dock Event Console — Understanding</title>
 <style>
   :root{
     --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --line:#30363d;
@@ -12,7 +12,8 @@
     --ok:#3fb950; --ok-bg:#11301c; --ok-line:#1c5130;
     --run:#58a6ff; --run-bg:#102945; --run-line:#1d456f;
     --bad:#f85149; --bad-bg:#2a1414; --bad-line:#5a2222;
-    --gate:#d2a8ff; --gate-bg:#241a37;
+    --gate:#d2a8ff; --gate-bg:#241a37; --gate-line:#3d2d59;
+    --check:#56d4c4; --check-bg:#08332e; --check-line:#155349;
   }
   *{box-sizing:border-box}
   html,body{margin:0}
@@ -22,346 +23,327 @@
     padding:24px clamp(14px,4vw,48px) 64px;
   }
   h1{font-size:clamp(20px,3vw,30px); margin:0 0 6px; letter-spacing:-.01em}
-  .sub{color:var(--dim); max-width:80ch; margin:0 0 20px}
+  .sub{color:var(--dim); max-width:82ch; margin:0 0 20px}
   code{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; font-size:.86em; color:var(--run)}
   .mono{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace}
-  .wrap{max-width:1200px; margin:0 auto}
+  .wrap{max-width:1220px; margin:0 auto}
   b{color:var(--ink)}
 
-  .tags{display:flex; gap:8px; flex-wrap:wrap; margin:0 0 24px}
+  .tags{display:flex; gap:8px; flex-wrap:wrap; margin:0 0 22px}
   .tag{font-size:11px; padding:4px 11px; border-radius:999px; border:1px solid var(--line); color:var(--dim)}
   .tag b{color:var(--ink); font-weight:650}
 
-  /* before/after master toggle */
-  .modebar{display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin:0 0 22px;
-    background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 16px}
-  .modebar .q{color:var(--dim); font-size:13px}
-  .seg{display:inline-flex; border:1px solid var(--line); border-radius:9px; overflow:hidden}
-  .seg button{background:transparent; color:var(--dim); border:0; padding:8px 16px; cursor:pointer;
-    font:inherit; font-size:13px; transition:.15s; font-weight:650}
-  .seg button.on{background:var(--accent); color:#1a1400}
-  .seg button:not(.on):hover{color:var(--ink); background:#222a35}
-  .modetag{margin-left:auto; font-size:12px; color:var(--faint)}
-  .modetag b{color:var(--accent)}
-
   h2.sec{font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--dim);
-    margin:30px 0 14px; border-top:1px solid var(--line); padding-top:18px}
+    margin:34px 0 14px; border-top:1px solid var(--line); padding-top:18px}
+  .lead{color:var(--dim); max-width:84ch; margin:0 0 18px}
 
-  .grid{display:grid; grid-template-columns:minmax(290px,330px) 1fr; gap:26px; align-items:start}
-  @media(max-width:900px){ .grid{grid-template-columns:1fr} }
+  .grid{display:grid; grid-template-columns:minmax(300px,360px) 1fr; gap:26px; align-items:start}
+  @media(max-width:980px){ .grid{grid-template-columns:1fr} }
 
-  /* ---- the mock dock ---- */
-  .stage{display:flex; flex-direction:column; align-items:center; gap:13px}
-  .phone{
-    width:300px; background:#0a0e14; border:1px solid var(--line);
-    border-radius:20px; padding:12px; display:flex; flex-direction:column; gap:8px;
-    box-shadow:0 18px 50px #0009; position:relative; min-height:340px;
-  }
-  .phone.flip{animation:flip .5s ease}
-  @keyframes flip{0%{transform:rotateY(0)}50%{transform:rotateY(-12deg);opacity:.4}100%{transform:rotateY(0)}}
-  .pbar{font-size:10.5px; color:var(--faint); display:flex; align-items:center; gap:7px;
-    border-bottom:1px solid #1a212b; padding-bottom:8px}
-  .pbar .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 6px var(--ok)}
-  .pbar .repo{color:#cdd7e2; font-weight:650}
-  .disc-h{display:flex; align-items:center; gap:8px; font-size:11px; color:var(--dim)}
-  .disc-h .ic{font-size:13px}
-  .dbtn{font-size:12px; padding:7px 12px; border-radius:9px; border:1px solid var(--run-line);
-    background:var(--run-bg); color:#bcd6f5; cursor:pointer; font:inherit; transition:.15s;
-    display:flex; align-items:center; justify-content:center; gap:7px; font-weight:650}
-  .dbtn:hover:not(:disabled){border-color:var(--run); color:#fff}
-  .dbtn:disabled{opacity:.55; cursor:default}
-  .panelbox{flex:1 1 auto; border:1px solid #1a212b; border-radius:11px; background:#0c1118;
-    padding:11px; min-height:150px; display:flex; flex-direction:column; gap:8px}
-  .ph-state{font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--faint)}
-  .spin{display:inline-block; width:13px;height:13px; border-radius:50%;
-    border:2px solid #24364d; border-top-color:var(--run); animation:sp .8s linear infinite; vertical-align:-2px}
-  @keyframes sp{to{transform:rotate(360deg)}}
-  .runrow{display:flex; align-items:center; gap:8px; font-size:12px; color:var(--run)}
-  .app{display:flex; align-items:center; gap:8px; font-size:11.5px; padding:6px 8px; border-radius:8px;
-    background:var(--ok-bg); border:1px solid var(--ok-line); color:#c8ecd2; animation:in .3s ease}
-  @keyframes in{from{opacity:0;transform:translateY(4px)}to{opacity:1}}
-  .app .port{margin-left:auto; color:var(--ok); font-family:ui-monospace,monospace; font-size:10.5px}
-  .idle{color:var(--faint); font-size:11.5px; font-style:italic; margin:auto}
-  .errbox{font-size:11.5px; color:#f7a8a3; background:var(--bad-bg); border:1px solid var(--bad-line);
-    border-radius:8px; padding:8px 10px}
-
-  .ctl{display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:center}
-  button.act{
-    background:var(--panel2); color:var(--ink); border:1px solid var(--line); border-radius:8px;
-    padding:9px 16px; cursor:pointer; font:inherit; font-size:13px; transition:.15s;
-  }
-  button.act:hover:not(:disabled){border-color:var(--accent); color:var(--accent)}
-  button.act:disabled{opacity:.45; cursor:default}
-  button.act.warn:hover:not(:disabled){border-color:var(--bad); color:var(--bad)}
-
-  /* server side strip */
-  .server{width:100%; max-width:300px; border:1px dashed var(--gate); background:var(--gate-bg);
-    border-radius:11px; padding:10px 12px; font-size:11px; color:#d8c6f5}
-  .server .sh{font-weight:700; color:var(--gate); letter-spacing:.05em; font-size:10px; text-transform:uppercase; margin-bottom:6px}
-  .server .job{display:flex; align-items:center; gap:7px; font-family:ui-monospace,monospace; font-size:10.5px}
-  .server .job .badge{padding:1px 7px; border-radius:999px; font-size:9.5px; font-weight:700}
-  .badge.running{background:var(--run-bg); color:var(--run); border:1px solid var(--run-line)}
-  .badge.done{background:var(--ok-bg); color:var(--ok); border:1px solid var(--ok-line)}
-  .badge.error{background:var(--bad-bg); color:var(--bad); border:1px solid var(--bad-line)}
-  .badge.empty{background:#1a212b; color:var(--faint); border:1px solid #2a333f}
-
-  .logline{font-size:11px; color:var(--faint); min-height:34px; text-align:center; max-width:300px}
-  .logline b{color:var(--accent)}
-  .logline .good{color:var(--ok)} .logline .bad{color:var(--bad)}
-
-  /* ---- right column cards ---- */
   .card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin-bottom:16px}
   .card h3{font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); margin:0 0 12px}
   .card p{margin:0 0 10px; color:var(--dim)}
-  .card ul{margin:0; padding-left:18px; color:var(--dim)}
-  .card li{margin:6px 0}
+  .card ul{margin:0; padding-left:18px; color:var(--dim)} .card li{margin:6px 0}
 
-  .flow{display:flex; flex-direction:column; gap:0}
-  .step{display:grid; grid-template-columns:26px 1fr; gap:10px; padding:7px 0}
+  /* ---------- the boundary principle ---------- */
+  .boundary{display:grid; grid-template-columns:1fr 14px 1fr; gap:0; align-items:stretch; margin-bottom:8px}
+  @media(max-width:760px){ .boundary{grid-template-columns:1fr; gap:14px} }
+  .bcol{border:1px solid var(--line); border-radius:13px; padding:14px 16px}
+  .bcol.ours{background:linear-gradient(180deg,#10203022,#0d1117); border-color:var(--ok-line)}
+  .bcol.theirs{background:var(--gate-bg); border-color:var(--gate-line); border-style:dashed}
+  .bcol .bh{font-size:11px; text-transform:uppercase; letter-spacing:.06em; font-weight:700; margin-bottom:10px}
+  .bcol.ours .bh{color:var(--ok)} .bcol.theirs .bh{color:var(--gate)}
+  .bcol .bh small{display:block; font-weight:500; text-transform:none; letter-spacing:0; color:var(--faint); font-size:11px; margin-top:3px}
+  .bitem{font-size:12.5px; padding:6px 0; display:flex; gap:8px; align-items:flex-start; border-top:1px solid #ffffff10}
+  .bitem:first-of-type{border-top:0}
+  .bcol.ours .bitem .m{color:var(--ok)} .bcol.theirs .bitem .m{color:var(--gate)}
+  .bcol.theirs .bitem{color:var(--faint); text-decoration:line-through; text-decoration-color:#ffffff30}
+  .vline{display:flex; align-items:center; justify-content:center; position:relative}
+  .vline::before{content:""; position:absolute; top:6px; bottom:6px; width:0; border-left:2px dashed var(--gate)}
+  @media(max-width:760px){ .vline{display:none} }
+
+  /* ---------- interactive console demo ---------- */
+  .stage{display:flex; flex-direction:column; gap:14px}
+  .ctl{display:flex; gap:9px; align-items:center; flex-wrap:wrap}
+  button.act{background:var(--panel2); color:var(--ink); border:1px solid var(--line); border-radius:8px;
+    padding:9px 14px; cursor:pointer; font:inherit; font-size:13px; transition:.15s; font-weight:600}
+  button.act:hover:not(:disabled){border-color:var(--accent); color:var(--accent)}
+  button.act:disabled{opacity:.4; cursor:default}
+  button.act .k{font-size:11px; color:var(--faint); margin-left:4px}
+  button.act.warn:hover:not(:disabled){border-color:var(--bad); color:var(--bad)}
+
+  .phone{width:340px; max-width:100%; background:#0a0e14; border:1px solid var(--line);
+    border-radius:20px; padding:12px; display:flex; flex-direction:column; gap:9px; box-shadow:0 18px 50px #0009}
+  .pbar{font-size:10.5px; color:var(--faint); display:flex; align-items:center; gap:7px; border-bottom:1px solid #1a212b; padding-bottom:8px}
+  .pbar .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 6px var(--ok)}
+  .pbar .repo{color:#cdd7e2; font-weight:650}
+  /* lane tabs */
+  .lanes{display:flex; gap:5px}
+  .lane{flex:0 0 auto; font-size:11.5px; padding:6px 11px; border-radius:9px 9px 0 0; border:1px solid #1a212b; border-bottom:0;
+    background:#0c1118; color:var(--dim); cursor:pointer; transition:.15s; display:flex; align-items:center; gap:6px; font-weight:600}
+  .lane:hover{color:var(--ink)}
+  .lane.on{background:var(--panel2); color:var(--ink); border-color:var(--line)}
+  .lane .nb{font-size:9.5px; font-weight:800; background:var(--accent); color:#1a1400; border-radius:999px; padding:0 6px; min-width:16px; text-align:center}
+  .lane .nb.zero{display:none}
+  .screen{border:1px solid var(--line); border-radius:0 11px 11px 11px; background:#0c1118; min-height:268px; padding:10px; display:flex; flex-direction:column}
+  .stub{margin:auto; color:var(--faint); font-size:12px; font-style:italic; text-align:center}
+
+  /* console log */
+  .clog{display:flex; flex-direction:column; gap:5px; overflow:auto; max-height:248px}
+  .clog .empty{margin:auto; color:var(--faint); font-style:italic; font-size:12px}
+  .ev{display:grid; grid-template-columns:50px 16px 1fr; gap:8px; align-items:start; font-size:12px;
+    padding:6px 7px; border-radius:8px; background:#0f1622; border:1px solid #18202c; animation:in .25s ease}
+  @keyframes in{from{opacity:0;transform:translateY(5px)}to{opacity:1}}
+  .ev .ts{font-family:ui-monospace,monospace; font-size:10px; color:var(--faint); padding-top:1px}
+  .ev .ph{font-size:12px; text-align:center}
+  .ev .ph .spin{display:inline-block; width:11px;height:11px;border-radius:50%; border:2px solid #24364d; border-top-color:var(--run); animation:sp .8s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .ev .body .ttl{font-weight:650}
+  .ev .body .ttl .op{font-size:9.5px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; padding:1px 6px; border-radius:999px; margin-right:7px; vertical-align:1px}
+  .op.discovery{background:var(--run-bg); color:var(--run); border:1px solid var(--run-line)}
+  .op.run{background:#2a2310; color:var(--accent); border:1px solid #5a4a18}
+  .op.check{background:var(--check-bg); color:var(--check); border:1px solid var(--check-line)}
+  .ev .body .dt{color:var(--dim); font-size:11.5px; margin-top:2px}
+  .ev.done{border-color:var(--ok-line)} .ev.done .ph{color:var(--ok)}
+  .ev.error{border-color:var(--bad-line)} .ev.error .ph{color:var(--bad)}
+  .ev.error .dt{color:#f7a8a3}
+  .pollflash{font-size:10.5px; color:var(--faint); font-family:ui-monospace,monospace; text-align:center; min-height:14px; transition:.2s}
+  .pollflash.on{color:var(--run)}
+
+  /* backend ring panel */
+  .server{border:1px dashed var(--gate); background:var(--gate-bg); border-radius:12px; padding:11px 13px; font-size:11px; color:#d8c6f5}
+  .server .sh{font-weight:700; color:var(--gate); letter-spacing:.05em; font-size:10px; text-transform:uppercase; margin-bottom:8px; display:flex; align-items:center; gap:8px}
+  .server .sh .cap{margin-left:auto; color:var(--faint); font-weight:600; text-transform:none; letter-spacing:0}
+  .ring{display:flex; flex-direction:column; gap:3px; font-family:ui-monospace,monospace; font-size:10.5px; max-height:150px; overflow:auto}
+  .ring .r{display:flex; gap:8px; padding:3px 6px; border-radius:6px; background:#ffffff08}
+  .ring .r .sq{color:var(--accent); font-weight:700; min-width:34px}
+  .ring .r .op{min-width:64px}
+  .ring .r.discovery .op{color:var(--run)} .ring .r.run .op{color:var(--accent)} .ring .r.check .op{color:var(--check)}
+  .ring .r .pz{color:var(--dim)}
+  .ring .r.trim{opacity:.35}
+  .ring .none{color:var(--faint); font-style:italic}
+  .hw{margin-top:8px; font-family:ui-monospace,monospace; font-size:10.5px; color:var(--dim); display:flex; gap:14px; flex-wrap:wrap}
+  .hw b{color:var(--ink)}
+
+  /* second-dock mirror */
+  .mirror{border:1px solid var(--line); border-radius:12px; background:var(--panel); padding:11px 13px}
+  .mirror .mh{font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--dim); font-weight:700; margin-bottom:7px}
+  .mirror .mlog{display:flex; flex-direction:column; gap:3px; font-size:11px; max-height:120px; overflow:auto}
+  .mirror .ml{color:var(--dim)} .mirror .ml b{color:var(--ink)}
+  .mirror .mnone{color:var(--faint); font-style:italic; font-size:11px}
+
+  /* flow steps */
+  .flow{display:flex; flex-direction:column}
+  .step{display:grid; grid-template-columns:26px 1fr; gap:11px; padding:8px 0}
   .step .n{width:22px;height:22px;border-radius:50%; background:var(--panel2); border:1px solid var(--line);
     color:var(--accent); font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center}
-  .step .t{color:var(--dim); font-size:13px}
-  .step .t b{color:var(--ink)}
+  .step .t{color:var(--dim); font-size:13px} .step .t b{color:var(--ink)}
 
-  .dec{display:grid; grid-template-columns:140px 1fr; gap:12px; padding:10px 0; border-top:1px solid #20262e}
+  .dec{display:grid; grid-template-columns:150px 1fr; gap:12px; padding:11px 0; border-top:1px solid #20262e}
   .dec:first-of-type{border-top:0}
   .dec .k{font-weight:650; color:var(--ink); font-size:13px}
   .dec .v{color:var(--dim); font-size:13px}
   .dec .v .why{color:var(--faint); font-size:12px; display:block; margin-top:3px}
-
-  /* concurrency demo */
-  .conc{display:grid; grid-template-columns:1fr 220px 1fr; gap:14px; align-items:center}
-  @media(max-width:760px){ .conc{grid-template-columns:1fr} }
-  .repo2{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:13px}
-  .repo2 .rn{font-weight:700; font-size:13px; margin-bottom:8px; display:flex; align-items:center; gap:8px}
-  .repo2 .rn .cid{font-family:ui-monospace,monospace; font-size:10px; color:var(--gate); margin-left:auto}
-  .meta{font-family:ui-monospace,monospace; font-size:11px; color:var(--dim); display:grid; gap:3px}
-  .meta .row{display:flex; justify-content:space-between}
-  .meta .row span:last-child{color:var(--ink)}
-  .meta.wrong{border-left:3px solid var(--bad); padding-left:9px}
-  .meta.right{border-left:3px solid var(--ok); padding-left:9px}
-  .gw{background:#0c1118; border:1px solid var(--line); border-radius:12px; padding:12px; text-align:center; font-size:11px; color:var(--dim)}
-  .gw .gwt{color:var(--gate); font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px}
-  .gw code{display:block; margin:7px 0; font-size:10.5px; white-space:pre-wrap}
-  .verdict{font-size:12px; margin-top:6px; font-weight:650}
-  .verdict.bad{color:var(--bad)} .verdict.good{color:var(--ok)}
+  .pill{font-size:10px; padding:1px 8px; border-radius:999px; border:1px solid var(--run-line); background:var(--run-bg); color:var(--run); font-weight:700}
+  .pill.later{border-color:var(--gate-line); background:var(--gate-bg); color:var(--gate)}
 
   .takeaway{margin-top:10px; background:linear-gradient(180deg,#16203022,#0d1117); border:1px solid var(--line);
     border-left:3px solid var(--accent); border-radius:12px; padding:14px 18px}
   .takeaway b{color:var(--accent)}
-  .takeaway ul{margin:8px 0 0; padding-left:18px; color:var(--dim)}
-  .takeaway li{margin:5px 0}
+  .takeaway ul{margin:8px 0 0; padding-left:18px; color:var(--dim)} .takeaway li{margin:5px 0}
   .status{font-size:12px; color:var(--faint); margin-top:22px; border-top:1px solid var(--line); padding-top:14px}
   .status code{color:var(--ok)}
-  .pill{font-size:10px; padding:1px 8px; border-radius:999px; border:1px solid var(--bad-line); background:var(--bad-bg); color:var(--bad); font-weight:700}
-  .pill.ok{border-color:var(--ok-line); background:var(--ok-bg); color:var(--ok)}
 
-  /* Demo C — run & check rows */
-  .capp{display:flex; align-items:center; gap:8px; padding:7px 2px; font-size:13px}
-  .capp + .capp{border-top:1px solid var(--line)}
-  .capp-dot{width:8px; height:8px; border-radius:50%; background:var(--line); flex:0 0 auto}
-  .capp-dot.on{background:var(--ok); box-shadow:0 0 0 3px rgba(63,185,80,.22)}
-  .capp-n{font-weight:650}
-  .capp-p{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; color:var(--run)}
-  .capp-run{margin-left:auto; padding:2px 10px; font-size:11px}
-  .capp-run:disabled{opacity:.45; cursor:default}
-  .capp-reg{margin-left:auto; font-size:11px; font-weight:650; color:var(--ok)}
+  .two{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+  @media(max-width:760px){ .two{grid-template-columns:1fr} }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Discovery that survives a refresh — and now runs what it finds</h1>
+  <h1>The agent-dock Event Console</h1>
   <p class="sub">
-    "Discover local apps" is a per-repo, read-only <b>agent scan</b> fired from a dock's button. The first change
-    (<code>discover-local-apps-resilient</code>) made it <b>backend-owned</b>: the scan runs to completion regardless of the browser,
-    the dock <b>reattaches</b> on load, and each call gets its <b>own metadata</b>. <b>Demo A &amp; B</b> below show that.
-    The follow-up (<code>discover-local-apps-run-controls</code>, <b>Demo C</b>) closes the loop: the scan also extracts each app's
-    <b>start command</b>, the harness reports a <b>live running</b> flag (computed from the port, never frozen into the scan), and the
-    dock gains <b>Run</b> and <b>Check</b> buttons so you can start a discovered app and confirm it came up without leaving the dock.
+    The harness keeps moving work to be <b>backend-owned</b> — discovery scans that survive a refresh, apps it launches,
+    ports it probes, autopilot and loops that drive a repo on their own. Each is <b>something the harness does to a repository</b>,
+    yet the dock gives <b>no window into it</b>. This change adds that window: a per-repo <b>Event Console</b> lane that narrates,
+    at the boundary <i>our</i> code controls, that an operation was <b>invoked</b> and we're <b>awaiting</b> it — then that it
+    <b>returned</b> and <b>what the harness did</b> with the result. Deliberately <b>shallow</b>: the agent gateway stays a black box.
   </p>
 
   <div class="tags">
-    <span class="tag"><b>Change:</b> discover-local-apps-resilient</span>
-    <span class="tag"><b>Change:</b> discover-local-apps-run-controls</span>
-    <span class="tag"><b>Capability:</b> discover-local-apps (modified)</span>
-    <span class="tag"><b>Branch:</b> feature/discover-local-apps-concurrency</span>
-    <span class="tag"><b>Gate:</b> Advanced mode (unchanged)</span>
-    <span class="tag"><b>State:</b> in-memory · per-repo · 1 job</span>
+    <span class="tag"><b>Change:</b> agent-dock-event-console</span>
+    <span class="tag"><b>Capability:</b> agent-dock-event-console (new)</span>
+    <span class="tag"><b>Branch:</b> feature/agent-dock-event-console</span>
+    <span class="tag"><b>Gate:</b> Advanced mode</span>
+    <span class="tag"><b>State:</b> in-memory · per-repo · seq ring</span>
+    <span class="tag"><b>Status:</b> proposal · validated</span>
   </div>
 
-  <!-- master Before / After toggle -->
-  <div class="modebar">
-    <span class="q">Watch the same actions under:</span>
-    <div class="seg" id="seg">
-      <button data-mode="before">Before (today)</button>
-      <button data-mode="after" class="on">After (this change)</button>
+  <!-- ================= THE BOUNDARY ================= -->
+  <h2 class="sec">The one rule — log only the boundary we own</h2>
+  <p class="lead">
+    Every event is something <b>our application</b> did or saw at the edge of an operation. We never reach inside the
+    ClaudeMonitor gateway to report which tools a sub-agent called or its token usage — that's the gateway's own domain and
+    a much larger change. <b>Shallow first; deepen only if a real need appears.</b>
+  </p>
+  <div class="boundary">
+    <div class="bcol ours">
+      <div class="bh">Harness domain — logged<small>invoke → await → result → what we did with it</small></div>
+      <div class="bitem"><span class="m">▸</span><span><b>invoked</b> a discovery for this repo</span></div>
+      <div class="bitem"><span class="m">▸</span><span><b>awaiting</b> the agent gateway…</span></div>
+      <div class="bitem"><span class="m">▸</span><span><b>returned</b> 3 apps — produced for the dock to render</span></div>
+      <div class="bitem"><span class="m">▸</span><span><b>launch issued</b> for an app on :5200 (detached)</span></div>
+      <div class="bitem"><span class="m">▸</span><span><b>probed</b> :5200 → port live / not listening</span></div>
     </div>
-    <span class="modetag" id="modetag"></span>
+    <div class="vline"></div>
+    <div class="bcol theirs">
+      <div class="bh">Gateway internals — NOT logged<small>the black box; its own domain</small></div>
+      <div class="bitem"><span class="m">✕</span><span>which tools the sub-agent called (Read / Grep / Glob…)</span></div>
+      <div class="bitem"><span class="m">✕</span><span>per-tool inputs &amp; outputs</span></div>
+      <div class="bitem"><span class="m">✕</span><span>token counts, model steps, intermediate reasoning</span></div>
+      <div class="bitem"><span class="m">✕</span><span>retries / correction prompts inside the call</span></div>
+      <div class="bitem"><span class="m">✕</span><span>anything that would need tool-use events threaded out of the gateway</span></div>
+    </div>
   </div>
 
-  <!-- ======================= DEMO A ======================= -->
-  <h2 class="sec">Demo A — refresh the page mid-scan</h2>
+  <!-- ================= LIVE DEMO ================= -->
+  <h2 class="sec">Try it — invoke operations, watch the Console fill</h2>
+  <p class="lead">
+    Click the operations. Each emits a <b>started</b> event into the backend's per-repo ring, then a <b>terminal</b> event when it
+    returns. The dock's <b>Console</b> lane polls <code>?after=N</code> on a timer and renders new events chronologically — so events
+    appear a poll-tick after they're emitted, exactly like the real ~5s dock cadence (sped up here).
+  </p>
   <div class="grid">
-    <!-- LEFT: interactive dock -->
+    <!-- LEFT: the dock -->
     <div class="stage">
-      <div class="phone" id="phone">
+      <div class="ctl">
+        <button class="act" id="opDiscover">🔎 Discover</button>
+        <button class="act" id="opRun">⚡ Run app</button>
+        <button class="act" id="opCheck">🔄 Check port</button>
+      </div>
+      <div class="ctl">
+        <button class="act warn" id="opError">💥 Discover (fails)</button>
+        <button class="act" id="opReset">↺ Reset</button>
+      </div>
+
+      <div class="phone">
         <div class="pbar"><span class="dot"></span><span class="repo">birocode</span><span style="margin-left:auto">dock · phone tile</span></div>
-        <div class="disc-h"><span class="ic">🔎</span> Discover local apps</div>
-        <button class="dbtn" id="discBtn">Discover</button>
-        <div class="panelbox" id="panel">
-          <div class="ph-state" id="phState">idle</div>
-          <div id="phBody"><div class="idle">No discovery yet — press Discover.</div></div>
+        <div class="lanes">
+          <div class="lane" data-lane="builder">Builder</div>
+          <div class="lane" data-lane="ask">Ask</div>
+          <div class="lane" data-lane="files">Files</div>
+          <div class="lane on" data-lane="console">Console <span class="nb zero" id="laneBadge">0</span></div>
+        </div>
+        <div class="screen" id="screen">
+          <div class="clog" id="clog"><div class="empty">No events yet — invoke an operation above.</div></div>
+        </div>
+        <div class="pollflash" id="pollflash">polling /api/repos/birocode/events?after=-1</div>
+      </div>
+    </div>
+
+    <!-- RIGHT: backend + why -->
+    <div>
+      <div class="server">
+        <div class="sh">backend · RepoEventLog<span class="cap">ring[birocode] · cap 8 (demo)</span></div>
+        <div class="ring" id="ring"><div class="none">empty — no events emitted</div></div>
+        <div class="hw">
+          <span>highest seq: <b id="hwSeq">0</b></span>
+          <span>Console watermark (after): <b id="hwWm">-1</b></span>
+          <span>events held: <b id="hwLen">0</b></span>
         </div>
       </div>
 
-      <!-- the server's job registry, always visible -->
-      <div class="server">
-        <div class="sh">backend · LocalAppDiscoveryJobs</div>
-        <div class="job">job[birocode] = <span class="badge empty" id="jobBadge">none</span></div>
+      <div class="mirror" style="margin-top:14px">
+        <div class="mh">a second dock open on the same repo (per-repo scope)</div>
+        <div class="mlog" id="mlog"><div class="mnone">It polls the same per-repo log — so it shows the same events. Try it.</div></div>
       </div>
 
-      <div class="ctl">
-        <button class="act" id="discBtn2">▶ Discover</button>
-        <button class="act warn" id="refreshBtn">🔄 Refresh page</button>
-        <button class="act" id="resetBtn">↺ Reset</button>
-      </div>
-      <div class="logline" id="log">Press <b>Discover</b>, then hit <b>Refresh page</b> while it's still scanning.</div>
-    </div>
-
-    <!-- RIGHT: the why -->
-    <div>
-      <div class="card">
-        <h3 id="flowTitle">What happens on refresh — After</h3>
-        <div class="flow" id="flow"></div>
-      </div>
-      <div class="card">
-        <h3>The core fix</h3>
+      <div class="card" style="margin-top:14px">
+        <h3>What you're watching</h3>
         <ul>
-          <li><b>Backend owns the run.</b> A singleton <code>LocalAppDiscoveryJobs</code> holds one <code>DiscoveryJob</code> per repo —
-            <code>status (running|done|error)</code>, <code>result</code>, timestamps — and the scan runs on a background task with the
-            job's <b>own</b> cancellation token, never <code>HttpContext.RequestAborted</code>.</li>
-          <li><b>Start-or-join.</b> <code>GET /api/local-apps/discover</code> registers or joins the repo's job and returns the current
-            state immediately; it no longer blocks the run on the request.</li>
-          <li><b>Reattach.</b> <code>GET /api/local-apps/discover/status</code> lets the dock, on mount, rejoin a running scan (spinner) or
-            pick up a result/error that landed while the page was away — driven by the existing ~5s dock poll.</li>
+          <li><b>Emit at the boundary.</b> Each op pushes a small record <code>{ seq, at, op, phase, title, detail }</code> into the
+            repo's ring. <code>started</code> first; a <code>done</code>/<code>error</code> when our code sees the result.</li>
+          <li><b>Monotonic seq, capped ring.</b> Seq only ever increases; past the cap the oldest events drop (greyed) — same discipline
+            as the chat run buffer. In-memory only.</li>
+          <li><b>Poll by watermark.</b> The lane holds an <code>after</code> seq, asks for <code>seq &gt; after</code>, then advances it
+            by the returned <code>lastSeq</code> — never re-receiving what it has seen.</li>
+          <li><b>Per-repo, not per-tab.</b> Two docks on one repo read the <i>same</i> log — that's the truth of where jobs are keyed.</li>
         </ul>
       </div>
     </div>
   </div>
 
-  <!-- ======================= DEMO B ======================= -->
-  <h2 class="sec">Demo B — two docks scan at once (metadata cross-wiring)</h2>
+  <!-- ================= ARCHITECTURE ================= -->
+  <h2 class="sec">How an event travels</h2>
   <div class="grid">
-    <div class="stage">
-      <div class="ctl" style="margin-top:4px">
-        <button class="act" id="concBtn">▶ Fire both discoveries</button>
-        <button class="act" id="concReset">↺ Reset</button>
-      </div>
-      <div class="logline" id="concLog">Both calls hit the shared ClaudeMonitor gateway. Watch which metadata each call gets back.</div>
-      <div class="server" style="border-style:solid;border-color:var(--line);background:var(--panel)">
-        <div class="sh" style="color:var(--dim)">why it happens</div>
-        <div style="font-size:11px;color:var(--dim);line-height:1.5">
-          Every call reaches the gateway under the <b>same</b> app name <code>claudeweb-structured-ask</code>. The gateway builds each
-          call's response metadata with <code>FindLatestRecord(app)</code> = highest <code>CallNumber</code> for that name — so a sibling
-          call's record can be handed back.
-        </div>
-      </div>
-    </div>
-
-    <div>
-      <div class="conc">
-        <div class="repo2">
-          <div class="rn">repo A · birocode <span class="cid" id="cidA">—</span></div>
-          <div class="meta" id="metaA"><div class="idle" style="font-style:italic;color:var(--faint)">idle</div></div>
-        </div>
-        <div class="gw">
-          <div class="gwt">ClaudeMonitor gateway</div>
-          <code id="gwCode">resolve: FindLatestRecord("claudeweb-structured-ask")</code>
-          <div class="verdict" id="gwVerdict"></div>
-        </div>
-        <div class="repo2">
-          <div class="rn">repo B · minesweeper <span class="cid" id="cidB">—</span></div>
-          <div class="meta" id="metaB"><div class="idle" style="font-style:italic;color:var(--faint)">idle</div></div>
-        </div>
-      </div>
-      <div class="card" style="margin-top:16px">
-        <h3>The fix — per-call identity (no gateway change)</h3>
-        <p>Give every call a <b>unique app name</b> — <code>StructuredAskRunner</code> sends
-          <code>claudeweb-structured-ask#&lt;callId&gt;</code> (a fresh GUID per call) instead of the shared base name. The gateway already
-          resolves a call's record with <code>FindLatestRecord(app)</code>; because the name is now unique to this call, "latest record for
-          <i>this</i> app" is unambiguously <b>this call's own</b> record. The cross-wiring is fixed <b>entirely in birocode</b> — zero edits
-          to the shared <code>ClaudeMonitor</code> gateway or client. Trade-off: the gateway's stats/dashboard gains one
-          <code>#&lt;id&gt;</code> entry per discovery call.</p>
-      </div>
-    </div>
-  </div>
-
-  <!-- ======================= DEMO C ======================= -->
-  <h2 class="sec">Demo C — check if it's running, then run it</h2>
-  <div class="grid">
-    <div class="stage">
-      <div class="phone" id="phoneC">
-        <div class="pbar"><span class="dot"></span><span class="repo">birocode</span><span style="margin-left:auto">dock · phone tile</span></div>
-        <div class="disc-h"><span class="ic">🔎</span> Discover local apps · <b>done · 2 apps</b></div>
-        <div class="panelbox">
-          <div id="cList"></div>
-        </div>
-        <div class="ctl" style="margin-top:10px">
-          <button class="act" id="cCheck">🔄 Check running</button>
-          <button class="act" id="cStart">⚡ (simulate homepage server starting)</button>
-          <button class="act" id="cReset">↺ Reset</button>
-        </div>
-        <div class="logline" id="cLog" style="margin-top:10px"></div>
-      </div>
-    </div>
-
     <div>
       <div class="card">
-        <h3>Why <code>running</code> is computed live, not scanned</h3>
-        <p>A scan takes ~30–60s; whether an app is up changes second to second. A running flag <b>baked into the scan result</b>
-          would be stale the instant the scan finished. So the harness computes <code>running</code> at <b>fetch time</b> from the
-          port itself (<code>IPGlobalProperties.GetActiveTcpListeners()</code> — in-process, no shell, no network). <b>Check</b> is
-          simply "re-fetch status," which recomputes every row's dot — so it's always accurate, and it even reflects apps started
-          outside the harness.</p>
+        <h3>End to end</h3>
+        <div class="flow" id="flow"></div>
       </div>
-      <div class="card" style="margin-top:16px">
-        <h3>Run uses the <i>scanned</i> command, resolved by port</h3>
-        <p><code>POST /api/local-apps/run { port }</code> looks up that port's finding in the repo's latest scan and launches its
-          stored <code>startCommand</code> <b>detached</b> in the app's folder. The client only sends a port — the command executed
-          is the one discovery extracted, never a string off the wire. After a Run the dock waits a beat, then auto-<b>Checks</b> so
-          the dot flips green once the server is listening.</p>
-        <div class="dec" style="margin-top:8px"><div class="k">Stop?</div><div class="v"><span class="pill">v1 gap</span> none.
-          <span class="why">No PID tracking yet; liveness is read off the port, so there's nothing retained to kill. A Stop endpoint is a separate, larger change.</span></div></div>
+    </div>
+    <div>
+      <div class="card">
+        <h3>Where each piece lives</h3>
+        <div class="two">
+          <div>
+            <p style="color:var(--ink);font-weight:650;margin:0 0 6px">Backend (ClaudeWeb.App)</p>
+            <ul>
+              <li><code>RepoEventLog</code> — singleton; <code>ConcurrentDictionary&lt;repoId, RepoLog&gt;</code>, each a locked
+                list + monotonic <code>_seq</code> + soft cap.</li>
+              <li><code>EventRecord { Seq, At, Op, Phase, Title, Detail }</code> — <code>Op</code>/<code>Phase</code> are open
+                strings, so autopilot/loops can emit later with no model change.</li>
+              <li>Emit calls in <code>LocalAppDiscoveryJobs</code> (start/done/error) and the run/check endpoints.</li>
+              <li><code>GET /api/repos/{repoId}/events?after=N</code> → <code>{ events, lastSeq }</code>; normal session auth.</li>
+            </ul>
+          </div>
+          <div>
+            <p style="color:var(--ink);font-weight:650;margin:0 0 6px">Frontend (client/)</p>
+            <ul>
+              <li>New <b>Console</b> lane button in <code>PinnedAgent.jsx</code>, beside Builder / Ask / Files.</li>
+              <li><code>EventConsole</code> — scoped by <code>repoId</code>; polls at the dock cadence, advances its watermark,
+                renders chronologically.</li>
+              <li>Capability key <code>'advanced'</code> in <code>UiModeContext.jsx</code>; i18n + <code>dashboard.css</code>.</li>
+            </ul>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- ======================= DESIGN ======================= -->
+  <!-- ================= DECISIONS ================= -->
   <h2 class="sec">Key design decisions</h2>
   <div class="grid">
     <div class="stage" style="align-items:stretch">
       <div class="card" style="width:100%">
-        <h3>Scope held fixed</h3>
+        <h3>Slice 1 (this change)</h3>
         <ul>
-          <li>Payload is <b>additive</b>: <code>{ name, port, folder, evidence }</code> plus the new optional
-            <code>startCommand</code> and a harness-computed <code>running</code> — old callers unaffected.</li>
-          <li>Read-only <b>scan</b> policy — <b>unchanged</b> (Run is a separate, operator-initiated endpoint).</li>
-          <li>Single-repo-per-call scoping — <b>unchanged</b>.</li>
-          <li><code>GET /api/local-apps/discover</code> stays <b>backward-compatible</b> (completed shape unchanged).</li>
+          <li>One source: the three <b>discovery-feature</b> ops we just built — <b>Discover</b>, <b>Run</b>, <b>Check</b>.</li>
+          <li><b>Lifecycle depth only</b> — invoked / awaiting / returned + what we did. No gateway internals.</li>
+          <li><b>Polling</b> at the existing dock cadence; <b>in-memory</b> ring; <b>per-repo</b> scope; defaults <b>Advanced</b>.</li>
+        </ul>
+        <h3 style="margin-top:16px">Out of scope (a later slice, only if needed)</h3>
+        <ul>
+          <li>Tool-by-tool gateway detail (needs tool-use events threaded out of ClaudeMonitor — bigger).</li>
+          <li>Autopilot-intercept &amp; loop-engine sources feeding the same console.</li>
+          <li>SSE transport · cross-restart persistence.</li>
         </ul>
       </div>
     </div>
     <div>
       <div class="card">
         <h3>Decisions &amp; trade-offs</h3>
-        <div class="dec"><div class="k">Reuse RunSession?</div><div class="v">No — borrow the <b>idea</b>, not the machinery.
-          <span class="why">RunSessionService is built for seq-numbered streaming chat turns; discovery is one-shot with a typed JSON result. A smaller purpose-built store fits.</span></div></div>
-        <div class="dec"><div class="k">Persist state?</div><div class="v">No — <b>in-memory</b>, one job per repo.
-          <span class="why">A harness restart just means "no recent discovery." Latest-only overwrite avoids unbounded job leak.</span></div></div>
-        <div class="dec"><div class="k">Streaming?</div><div class="v">No — only <b>running/done/error</b>.
-          <span class="why">Simple interval polling for parity with the existing dock poll; no held connections.</span></div></div>
-        <div class="dec"><div class="k">User cancel?</div><div class="v"><span class="pill">v1 gap</span> none.
-          <span class="why">We removed the only cancellation source. A stuck run relies on the CLI runner's existing timeout; a cancel endpoint is out of scope, addable later.</span></div></div>
+        <div class="dec"><div class="k">Per-repo or per-tab?</div><div class="v"><b>Per-repo.</b>
+          <span class="why">Jobs are already keyed per repo (discovery is per-repo single-flight); two docks on one repo see the same activity. Per-tab would need attribution plumbing the backend doesn't have.</span></div></div>
+        <div class="dec"><div class="k">Reuse RunSession?</div><div class="v">Borrow the <b>shape</b>, not the machinery.
+          <span class="why">Seq + watermark + cap, yes; the live <code>Channel&lt;&gt;</code> push, no — append-only + poll is enough for slice 1.</span></div></div>
+        <div class="dec"><div class="k">Transport</div><div class="v"><b>Poll</b> <code>?after=N</code>, not SSE.
+          <span class="why">Matches the discovery-status poll already in the dock; SSE is an additive upgrade if 5s feels laggy.</span></div></div>
+        <div class="dec"><div class="k">Persistence</div><div class="v"><b>In-memory</b> ring, capped.
+          <span class="why">A restart means "nothing happening now" — acceptable for a live console. Disk persistence is out of scope.</span></div></div>
+        <div class="dec"><div class="k">Event depth</div><div class="v">Boundary only. <span class="pill later">later</span> tool-level.
+          <span class="why">Honest wording: "returned N apps", not a UI action the backend can't observe; "launch issued", not "running" (no PID retained).</span></div></div>
+        <div class="dec"><div class="k">Model shape</div><div class="v">Open strings for <code>Op</code>/<code>Phase</code>.
+          <span class="why">Source-agnostic so autopilot/loops emit later without touching the model or the renderer.</span></div></div>
       </div>
     </div>
   </div>
@@ -369,244 +351,184 @@
   <div class="takeaway">
     <b>The one rule that explains the whole thing:</b>
     <ul>
-      <li><b>The browser no longer owns the scan — the backend does.</b> The request can come and go (refresh, disconnect); the job and its result live server-side, so the agent call is never wasted and the dock just re-derives its view on load.</li>
-      <li><b>Each call gets its own identity at the gateway</b>, so concurrent discoveries can't swap metadata.</li>
-      <li>Everything else (payload, read-only policy, per-repo scoping, the route's completed shape) is <b>held fixed</b> — it's an additive change; rollback is a straight revert with no persisted state to undo.</li>
+      <li><b>Log the boundary, not the black box.</b> We record that the harness <i>invoked</i> something, is <i>awaiting</i> it, and what it
+        <i>did with the result</i> — never what the agent gateway does inside.</li>
+      <li><b>The log is per-repo and append-only</b>, with monotonic seq and a cap; the dock reads it by <i>watermark</i>, the same
+        reattach contract chat and discovery-status already use.</li>
+      <li><b>Built source-agnostic and shallow</b> — discovery/run/check today, autopilot/loops a one-liner away; deepen to tool-level
+        only if a real need appears.</li>
     </ul>
   </div>
 
   <p class="status">
-    Live in this repo: <code>discover-local-apps-resilient</code> shipped (backend-owned discovery + reattach + per-call identity).
-    <code>discover-local-apps-run-controls</code> is <b>implemented</b> — <code>startCommand</code> on the typed report, a live
-    <code>running</code> flag + <code>POST /api/local-apps/run</code>, and the dock's Run/Check buttons; its OpenSpec change
-    (proposal, design, delta spec, tasks) passes <code>validate --strict</code>.
+    Status in this repo: <code>agent-dock-event-console</code> is at the <b>proposal</b> stage — proposal, design, delta spec, and
+    tasks drafted; <code>openspec validate agent-dock-event-console --strict</code> passes. Nothing is implemented yet; this app is the
+    plan, made tangible.
   </p>
 </div>
 
 <script>
-// ---------- shared mode ----------
-let mode = 'after';            // 'before' | 'after'
-const modetag = document.getElementById('modetag');
-function setMode(m){
-  mode = m;
-  document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on', b.dataset.mode===m));
-  modetag.innerHTML = m==='after'
-    ? 'Showing: <b>After</b> — backend-owned, reattach-on-load.'
-    : 'Showing: <b>Before</b> — request-bound, result lives in the browser.';
-  resetA(); renderFlow();
+// ---------------- model ----------------
+const CAP = 8;                 // demo ring cap (real default ~500)
+let seq = 0;                   // monotonic per-repo seq
+let ring = [];                 // [{seq, at, op, phase, title, detail}]
+let t0 = 0;                    // demo clock origin (ms of first event)
+let consoleWm = -1;            // the Console lane's watermark
+let consoleShown = [];         // events the Console lane has polled & rendered
+let mirrorShown = [];          // events the second dock has polled
+let runArmed = false;          // has an app been "launched" so Check finds it live
+let busy = false;              // an op currently mid-flight (started, no terminal yet)
+let activeLane = 'console';
+
+const $ = id => document.getElementById(id);
+const clog = $('clog'), ringEl = $('ring'), mlog = $('mlog'), screen = $('screen');
+
+function clock(at){ const s = Math.max(0,(at - t0)); const sec=(s/1000); return sec.toFixed(1).padStart(4,'0')+'s'; }
+
+// emit at the boundary -> append to ring with next seq
+function emit(op, phase, title, detail){
+  if(seq===0) t0 = nowish();
+  const ev = { seq:++seq, at:nowish(), op, phase, title, detail };
+  ring.push(ev);
+  while(ring.length > CAP) ring.shift();      // cap: drop oldest
+  renderRing();
 }
-document.querySelectorAll('#seg button').forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.mode)));
+// a monotonic-ish demo clock without Date.now (forbidden in workflows, fine here but kept simple)
+let _tick = 0;
+function nowish(){ _tick += 1; return _tick * 100; }   // 100ms per logical step
 
-// ---------- DEMO A: refresh mid-scan ----------
-const phState = document.getElementById('phState');
-const phBody  = document.getElementById('phBody');
-const jobBadge= document.getElementById('jobBadge');
-const logEl   = document.getElementById('log');
-const phone   = document.getElementById('phone');
-const flowEl  = document.getElementById('flow');
-const flowTitle = document.getElementById('flowTitle');
-
-// clientState: what the browser is showing.   jobState: server registry.
-let clientState='idle';        // idle | running | done
-let jobState='none';           // none | running | done   (server-side)
-let scanTimer=null;            // the running agent call (server completes it)
-
-const APPS = [
-  {n:'web client (Vite)', p:5173},
-  {n:'preview product',   p:5200},
-];
-
-function setBadge(s){
-  jobState=s;
-  const map={none:['none','empty'],running:['running','running'],done:['done','done'],error:['error','error']};
-  const [txt,cls]=map[s];
-  jobBadge.className='badge '+cls;
-  jobBadge.textContent=txt;
-}
-function renderPanel(){
-  if(clientState==='idle'){ phState.textContent='idle';
-    phBody.innerHTML='<div class="idle">No discovery yet — press Discover.</div>'; return; }
-  if(clientState==='running'){ phState.textContent='scanning';
-    phBody.innerHTML='<div class="runrow"><span class="spin"></span> agent scanning the repo…</div>'; return; }
-  if(clientState==='done'){ phState.textContent='done · '+APPS.length+' apps';
-    phBody.innerHTML=APPS.map(a=>`<div class="app">🟢 ${a.n}<span class="port">:${a.p}</span></div>`).join(''); }
-}
-function log(html){ logEl.innerHTML=html; }
-
-function startDiscover(){
-  if(clientState==='running') return;
-  clientState='running'; renderPanel();
-  setBadge('running');
-  log('Scan started. The <b>backend job</b> is now <span class="good">running</span>. Try <b>Refresh page</b> now →');
-  clearTimeout(scanTimer);
-  scanTimer=setTimeout(()=>{          // the agent call completes server-side
-    setBadge('done');
-    if(clientState==='running'){ clientState='done'; renderPanel(); }
-    log('Agent call finished — backend job is <span class="good">done</span>. Result is cached server-side.');
-  }, 2600);
-}
-
-function refresh(){
-  phone.classList.remove('flip'); void phone.offsetWidth; phone.classList.add('flip');
-  if(mode==='before'){
-    // request-bound: the abort kills the run AND the browser loses the result
-    const wasRunning = jobState==='running';
-    clearTimeout(scanTimer);
-    setBadge('none');                 // RequestAborted -> run cancelled, nothing stored
-    clientState='idle'; renderPanel();
-    log(wasRunning
-      ? '<span class="bad">✗ Refresh aborted the fetch → <b>RequestAborted</b> cancelled the running agent call.</span> The scan is killed and the result is lost. Back to idle — <b>agent call wasted</b>.'
-      : '<span class="bad">✗ Result lived only in browser state — refresh discarded it.</span> Back to idle; you must re-run.');
-    return;
-  }
-  // AFTER: browser unmounts, but the job lives on. On mount we call /status and reattach.
-  clientState='idle'; renderPanel();           // momentary blank (page reloaded)
-  log('Page reloaded → dock calls <code>/discover/status</code> on mount…');
+// ---------------- operations (emit started, then terminal) ----------------
+function discover(fail){
+  if(busy) return; busy=true; setOps();
+  emit('discovery','started','Discovery','invoked — awaiting the agent gateway…');
   setTimeout(()=>{
-    if(jobState==='running'){ clientState='running'; renderPanel();
-      log('<span class="good">✓ Reattached to the running job</span> — spinner is back, the agent call kept going.'); }
-    else if(jobState==='done'){ clientState='done'; renderPanel();
-      log('<span class="good">✓ Picked up the cached result</span> that completed while the page was away — no re-scan.'); }
-    else { clientState='idle'; renderPanel();
-      log('No recent job for this repo — idle. (A harness restart looks like this.)'); }
-  }, 650);
+    if(fail) emit('discovery','error','Discovery','gateway returned an unparseable report — surfaced as error');
+    else     emit('discovery','done','Discovery','returned 3 apps — produced for the dock to render');
+    busy=false; setOps();
+  }, 1500);
+}
+function runApp(){
+  if(busy) return; busy=true; setOps();
+  emit('run','started','Run · homepage','launching on :5305 (detached)…');
+  setTimeout(()=>{
+    emit('run','done','Run · homepage','launch issued — port liveness is read separately');
+    runArmed = true; busy=false; setOps();
+  }, 1100);
+}
+function checkPort(){
+  if(busy) return; busy=true; setOps();
+  emit('check','started','Check · :5305','probing the OS listener table…');
+  setTimeout(()=>{
+    if(runArmed) emit('check','done','Check · :5305','port live');
+    else         emit('check','done','Check · :5305','not listening');
+    busy=false; setOps();
+  }, 800);
+}
+function setOps(){
+  ['opDiscover','opRun','opCheck','opError'].forEach(id=>$(id).disabled = busy);
 }
 
-function resetA(){
-  clearTimeout(scanTimer); clientState='idle'; setBadge('none'); renderPanel();
-  log('Press <b>Discover</b>, then hit <b>Refresh page</b> while it\'s still scanning.');
-}
-
-document.getElementById('discBtn').addEventListener('click', startDiscover);
-document.getElementById('discBtn2').addEventListener('click', startDiscover);
-document.getElementById('refreshBtn').addEventListener('click', refresh);
-document.getElementById('resetBtn').addEventListener('click', resetA);
-
-const FLOWS={
-  after:[
-    ['1','Dock mounts → <b>GET /discover/status</b> for this repo.'],
-    ['2','Button → <b>GET /discover</b> = <b>start-or-join</b>; returns current state at once.'],
-    ['3','Scan runs on a background task with the <b>job\'s own token</b> — request abort can\'t touch it.'],
-    ['4','Refresh unmounts the browser; the <b>job keeps running</b>.'],
-    ['5','New page mounts → status says <b>running</b> (spinner) or <b>done</b> (cached apps). <b>Reattach.</b>'],
-  ],
-  before:[
-    ['1','Button → <b>GET /discover</b> blocks; <code>ct = HttpContext.RequestAborted</code>.'],
-    ['2','That <code>ct</code> is threaded straight into the <b>claude CLI run</b>.'],
-    ['3','Result is held only in <code>PinnedAgent.jsx</code> local <code>useState</code>.'],
-    ['4','Refresh aborts the fetch → <code>ct</code> fires → <b>the agent scan is cancelled</b>.'],
-    ['5','Unmount drops the local state → <b>any finished result is lost</b>. Back to idle.'],
-  ],
-};
-function renderFlow(){
-  flowTitle.textContent = mode==='after' ? 'What happens on refresh — After' : 'What happens on refresh — Before';
-  flowEl.innerHTML = FLOWS[mode].map(([n,t])=>`<div class="step"><div class="n">${n}</div><div class="t">${t}</div></div>`).join('');
-}
-
-// ---------- DEMO B: concurrency metadata ----------
-const metaA=document.getElementById('metaA'), metaB=document.getElementById('metaB');
-const cidA=document.getElementById('cidA'), cidB=document.getElementById('cidB');
-const gwCode=document.getElementById('gwCode'), gwVerdict=document.getElementById('gwVerdict'), concLog=document.getElementById('concLog');
-
-// truth: each call's OWN metadata
-const TRUTH={
-  A:{call:'#41', tokens:'8.2k', cost:'$0.06', dur:'7.1s'},
-  B:{call:'#42', tokens:'5.4k', cost:'$0.04', dur:'4.3s'},
-};
-function metaHtml(m,cls){
-  return `<div class="meta ${cls}">
-    <div class="row"><span>call</span><span>${m.call}</span></div>
-    <div class="row"><span>tokens</span><span>${m.tokens}</span></div>
-    <div class="row"><span>cost</span><span>${m.cost}</span></div>
-    <div class="row"><span>duration</span><span>${m.dur}</span></div></div>`;
-}
-function fireConc(){
-  if(mode==='before'){
-    cidA.textContent='(shared name)'; cidB.textContent='(shared name)';
-    gwCode.textContent='resolve: FindLatestRecord("claudeweb-structured-ask")\n→ both get highest CallNumber = #42';
-    // cross-wired: A (slower, finishes 2nd) ends up reading B's latest record
-    metaA.innerHTML=metaHtml(TRUTH.B,'wrong');   // A wrongly shows B's metadata
-    metaB.innerHTML=metaHtml(TRUTH.B,'right');
-    gwVerdict.className='verdict bad';
-    gwVerdict.textContent='✗ repo A reported repo B\'s call #42 — cross-wired';
-    concLog.innerHTML='<span class="bad">✗ Both calls share the app name; "latest record" hands #42 to repo A too.</span>';
-    return;
+// ---------------- polling (Console lane + mirror dock) ----------------
+function pollConsole(){
+  const fresh = ring.filter(e => e.seq > consoleWm);
+  const flash = $('pollflash');
+  flash.textContent = `GET /api/repos/birocode/events?after=${consoleWm}  →  +${fresh.length}`;
+  flash.classList.add('on'); setTimeout(()=>flash.classList.remove('on'), 220);
+  if(fresh.length){
+    consoleShown = consoleShown.concat(fresh);
+    consoleWm = ring[ring.length-1].seq;        // advance by lastSeq
+    if(activeLane==='console') renderConsole();
+    updateBadge();
   }
-  cidA.textContent='#a1f3'; cidB.textContent='#b7e0';
-  gwCode.textContent='FindLatestRecord("…#a1f3")  ·  FindLatestRecord("…#b7e0")\n→ each unique name resolves its own record (no gateway change)';
-  metaA.innerHTML=metaHtml(TRUTH.A,'right');
-  metaB.innerHTML=metaHtml(TRUTH.B,'right');
-  gwVerdict.className='verdict good';
-  gwVerdict.textContent='✓ each call resolves its own record';
-  concLog.innerHTML='<span class="good">✓ Distinct correlation id per call → repo A reports #41, repo B reports #42.</span>';
+  $('hwSeq').textContent = seq;
+  $('hwWm').textContent = consoleWm;
+  $('hwLen').textContent = ring.length;
 }
-function resetConc(){
-  cidA.textContent='—'; cidB.textContent='—';
-  metaA.innerHTML='<div class="idle" style="font-style:italic;color:var(--faint)">idle</div>';
-  metaB.innerHTML='<div class="idle" style="font-style:italic;color:var(--faint)">idle</div>';
-  gwCode.textContent= mode==='before'
-    ? 'resolve: FindLatestRecord("claudeweb-structured-ask")'
-    : 'resolve: FindLatestRecord("claudeweb-structured-ask#<callId>")';
-  gwVerdict.textContent='';
-  concLog.innerHTML='Both calls hit the shared ClaudeMonitor gateway. Watch which metadata each call gets back.';
+function pollMirror(){
+  const wm = mirrorShown.length ? mirrorShown[mirrorShown.length-1].seq : -1;
+  const fresh = ring.filter(e => e.seq > wm);
+  if(fresh.length){ mirrorShown = mirrorShown.concat(fresh); renderMirror(); }
 }
-document.getElementById('concBtn').addEventListener('click', fireConc);
-document.getElementById('concReset').addEventListener('click', resetConc);
 
-// ---------- DEMO C: run & check ----------
-// Two discovered apps. `running` is NOT stored on the finding — it's recomputed
-// from a (simulated) live port table every time Check runs, mirroring the backend.
-const C_APPS=[
-  {name:'homepage', port:5305, folder:'homepage', cmd:'node serve.mjs'},
-  {name:'minesweeper', port:5200, folder:'games/minesweeper', cmd:''}, // no start command found
-];
-let livePorts=new Set();        // the "OS" listener table (what the harness checks)
-let shownRunning={};            // last Check result the dock is displaying
-const cList=document.getElementById('cList'), cLog=document.getElementById('cLog');
+// ---------------- rendering ----------------
+function phCell(phase){
+  if(phase==='started') return '<span class="spin"></span>';
+  if(phase==='done') return '✓';
+  return '✗';
+}
+function renderConsole(){
+  if(!consoleShown.length){ clog.innerHTML='<div class="empty">No events yet — invoke an operation above.</div>'; return; }
+  clog.innerHTML = consoleShown.map(e=>`
+    <div class="ev ${e.phase}">
+      <div class="ts">${clock(e.at)}</div>
+      <div class="ph">${phCell(e.phase)}</div>
+      <div class="body">
+        <div class="ttl"><span class="op ${e.op}">${e.op}</span>${e.title}</div>
+        <div class="dt">${e.detail}</div>
+      </div>
+    </div>`).join('');
+  clog.scrollTop = clog.scrollHeight;
+}
+function renderRing(){
+  if(!ring.length){ ringEl.innerHTML='<div class="none">empty — no events emitted</div>'; return; }
+  ringEl.innerHTML = ring.map((e,i)=>`
+    <div class="r ${e.op} ${i===0 && seq>CAP ? 'trim':''}">
+      <span class="sq">#${e.seq}</span><span class="op">${e.op}</span><span class="pz">${e.phase}</span>
+    </div>`).join('');
+  ringEl.scrollTop = ringEl.scrollHeight;
+}
+function renderMirror(){
+  if(!mirrorShown.length){ mlog.innerHTML='<div class="mnone">It polls the same per-repo log — so it shows the same events. Try it.</div>'; return; }
+  mlog.innerHTML = mirrorShown.map(e=>`<div class="ml">#${e.seq} <b>${e.title}</b> · ${e.phase}</div>`).join('');
+  mlog.scrollTop = mlog.scrollHeight;
+}
+function updateBadge(){
+  // badge = events not yet "seen" because another lane is focused
+  const b = $('laneBadge');
+  const unseen = (activeLane==='console') ? 0 : consoleShown.length - seenAtSwitch;
+  b.textContent = unseen>0 ? unseen : 0;
+  b.classList.toggle('zero', unseen<=0);
+}
+let seenAtSwitch = 0;
 
-function renderC(){
-  cList.innerHTML=C_APPS.map(a=>{
-    const on=!!shownRunning[a.port];
-    const dot=`<span class="capp-dot${on?' on':''}"></span>`;
-    const right = on
-      ? '<span class="capp-reg">running</span>'
-      : `<button class="act capp-run" data-port="${a.port}" ${a.cmd?'':'disabled'} title="${a.cmd?('Start: '+a.cmd):'No start command found'}">▶ Run</button>`;
-    return `<div class="capp">${dot}<span class="capp-n">${a.name}</span><span class="capp-p">:${a.port}</span>${right}</div>`;
-  }).join('');
-  cList.querySelectorAll('.capp-run').forEach(b=>b.addEventListener('click',()=>runC(+b.dataset.port)));
-}
-function checkC(){
-  // Re-fetch status === recompute running from the live port table, right now.
-  C_APPS.forEach(a=> shownRunning[a.port]=livePorts.has(a.port));
-  renderC();
-  const ups=C_APPS.filter(a=>shownRunning[a.port]).map(a=>a.name);
-  cLog.innerHTML = `<span class="good">✓ Check</span> recomputed <code>running</code> from the live port table — `
-    + (ups.length? `up: <b>${ups.join(', ')}</b>.` : 'nothing listening yet.');
-}
-function runC(port){
-  const a=C_APPS.find(x=>x.port===port); if(!a||!a.cmd) return;
-  cLog.innerHTML=`<b>POST /run { port: ${port} }</b> → server resolves <code>${a.cmd}</code> from the scan and launches it detached in <code>${a.folder}/</code>…`;
-  setTimeout(()=>{ livePorts.add(port);   // the server is now listening
-    cLog.innerHTML+=' then the dock auto-<b>Checks</b>…';
-    setTimeout(checkC, 600);
-  }, 700);
-}
-function startHomepageExternally(){
-  livePorts.add(5305);
-  cLog.innerHTML='An external process started <b>homepage</b> on :5305 (nothing to do with the harness). '
-    + 'Press <b>Check</b> — the dot flips green because liveness is read off the port, not the scan.';
-}
-function resetC(){ livePorts=new Set(); shownRunning={}; renderC();
-  cLog.innerHTML='Both dots are dim — the scan never claimed they were running. Press <b>Check</b> (still down), then <b>Run</b> homepage.'; }
-document.getElementById('cCheck').addEventListener('click', checkC);
-document.getElementById('cStart').addEventListener('click', startHomepageExternally);
-document.getElementById('cReset').addEventListener('click', resetC);
+// lane switching
+document.querySelectorAll('.lane').forEach(l=>l.addEventListener('click',()=>{
+  document.querySelectorAll('.lane').forEach(x=>x.classList.remove('on'));
+  l.classList.add('on'); activeLane = l.dataset.lane;
+  if(activeLane==='console'){ seenAtSwitch = consoleShown.length; updateBadge(); renderConsole(); screen.firstElementChild===clog || screen.replaceChildren(clog); screen.replaceChildren(clog); }
+  else { seenAtSwitch = consoleShown.length; const stub=document.createElement('div'); stub.className='stub';
+    stub.textContent = activeLane==='builder' ? 'Builder chat — the main conversation (mock).'
+      : activeLane==='ask' ? 'Ask — read-only side conversation (mock).' : 'Files — browse this repo (mock).';
+    screen.replaceChildren(stub); updateBadge(); }
+}));
+
+// ---------------- flow steps ----------------
+$('flow').innerHTML = [
+  ['1','A harness op (discovery / run / check) reaches the boundary our code owns and calls <code>RepoEventLog.Emit</code>.'],
+  ['2','Emit assigns the <b>next seq</b> for that repo and appends <code>{seq,at,op,phase,title,detail}</code>; past the cap the oldest drops.'],
+  ['3','The op continues; when our code <b>sees the result</b> it emits a <code>done</code> (or <code>error</code>) event.'],
+  ['4','The dock\'s Console lane polls <code>GET …/events?after=N</code> and gets <b>only events newer</b> than its watermark, plus <code>lastSeq</code>.'],
+  ['5','It appends them, advances <code>after = lastSeq</code>, and renders chronologically. A second dock on the repo does the same — <b>same log</b>.'],
+].map(([n,t])=>`<div class="step"><div class="n">${n}</div><div class="t">${t}</div></div>`).join('');
+
+// ---------------- wiring ----------------
+$('opDiscover').addEventListener('click', ()=>discover(false));
+$('opError').addEventListener('click', ()=>discover(true));
+$('opRun').addEventListener('click', runApp);
+$('opCheck').addEventListener('click', checkPort);
+$('opReset').addEventListener('click', ()=>{
+  seq=0; ring=[]; _tick=0; consoleWm=-1; consoleShown=[]; mirrorShown=[]; runArmed=false; busy=false; seenAtSwitch=0;
+  renderRing(); renderConsole(); renderMirror(); setOps(); updateBadge();
+  $('hwSeq').textContent=0; $('hwWm').textContent=-1; $('hwLen').textContent=0;
+  $('pollflash').textContent='polling /api/repos/birocode/events?after=-1';
+});
+
+// poll loops (sped-up stand-ins for the ~5s dock cadence)
+setInterval(pollConsole, 700);
+setInterval(pollMirror, 1100);
 
 // init
-setMode('after');
-renderFlow();
-resetConc();
-resetC();
+renderRing(); renderConsole(); renderMirror(); updateBadge();
 </script>
 </body>
 </html>
