@@ -1,5 +1,19 @@
 # Design — tab-fill-available-width
 
+## Correction (after first live test)
+
+The original diagnosis below — page CSS caps centering content in a wide pane —
+is real but secondary. The **primary** bug is in `PaneStrip.jsx#useMultiPane`:
+when a tab's span consumes the whole pane budget, no neighbours fit, `lo === hi`,
+and the hook returned `multi: false`. `Layout.jsx` then renders the classic
+single view inside `.app-frame`, which is capped at `--max-width: 720px` and
+centered — so a full-span tab never enters multi-pane at all, and the page CSS
+fix can't apply. Fix: when `lo === hi` and the tab was intentionally widened
+(`weight > 1`), return `multi: true` with a lone pane so it renders in the
+uncapped strip and fills. The `@container` CSS below remains needed for panes
+wider than a page's own reading cap (e.g. Settings at 560px, or Cockpit/Terminal
+on a very wide screen).
+
 ## Context
 
 The multi-pane strip (`client/src/layout/PaneStrip.jsx`) renders each visible

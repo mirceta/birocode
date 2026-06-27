@@ -38,7 +38,11 @@ centered in the middle.
 
 ## Impact
 
-- **Frontend CSS only.** Affected stylesheets under `client/src/`:
+- **Layout fix (primary):** `client/src/layout/PaneStrip.jsx` — a tab whose span
+  consumes the whole budget now renders as a lone pane in the uncapped strip
+  instead of falling back to the `--max-width: 720px`-capped single view (the
+  actual centering bug); span steppers stay gated to ≥2 visible panes.
+- **Frontend CSS (complementary).** Affected stylesheets under `client/src/`:
   - `pages/cockpit.css` (`.ck` `max-width: 1200px; margin: 0 auto`)
   - `pages/settings.css` (`.settings-page` `max-width: 560px; margin: 0 auto`)
   - `pages/terminal.css` (`.terminal-page` `max-width: 1100px; margin: 0 auto`)

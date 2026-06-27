@@ -1,6 +1,17 @@
 # Tasks
 
-## 1. Implement the fill-on-wide CSS
+## 0. Layout fix — full-span tab must enter multi-pane (the primary bug)
+
+- [x] 0.1 `client/src/layout/PaneStrip.jsx` — when the active tab's span consumes
+      the whole budget (`lo === hi`) and it was intentionally widened
+      (`weight > 1`), return `multi: true` with a lone pane instead of
+      `multi: false`. Otherwise it falls back to the `.app-frame` single view
+      capped at `--max-width: 720px` and centered — the actual gutter bug.
+- [x] 0.2 `PaneStrip.jsx` — gate the span ± steppers on `panes.length > 1` so the
+      lone full-span pane shows none (preserves the multi-pane spec; shrink via
+      the Settings tab).
+
+## 1. Implement the fill-on-wide CSS (complementary: very wide panes > a page cap)
 
 - [x] 1.1 `client/src/pages/cockpit.css` — add `@container (min-width: 1200px) { .ck { max-width: none; } }`
       beside the `.ck` cap, so a pane wider than the cockpit reading cap fills.
