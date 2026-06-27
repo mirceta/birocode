@@ -26,14 +26,14 @@
 ## 2. Verify
 
 - [x] 2.1 `npm --prefix client run build` compiles clean (no CSS/JS errors).
-- [ ] 2.2 Live check (Advanced UI, multi-pane, per `docs/claude-web/browser-testing.md`):
+- [x] 2.2 Live check (Advanced UI, multi-pane, per `docs/claude-web/browser-testing.md`):
       give a tab enough span to fill the strip → content fills, no side gutters;
       drop it back to span 1 → reading width unchanged. Repeat on Cockpit,
-      Settings, Terminal. (Needs a host eyeball / headless browser.)
+      Settings, Terminal. (Operator-confirmed on live :5099 after the 89c27c0 deploy.)
 
 ## 3. Ship
 
 - [x] 3.1 `openspec validate tab-fill-available-width --strict` passes.
-- [ ] 3.2 Merge `feature/tab-fill-available-width` → `main`.
-- [ ] 3.3 `openspec archive tab-fill-available-width` — fold the delta into the
+- [x] 3.2 Merge `feature/tab-fill-available-width` → `main`.
+- [x] 3.3 `openspec archive tab-fill-available-width` — fold the delta into the
       `multi-pane` baseline.

@@ -1,277 +1,240 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Wide tabs should fill, not float</title>
+<title>Full-span tab fills the width — what changed</title>
 <style>
-  :root {
-    --bg: #0f1115; --panel: #171a21; --panel2: #1e222b; --border: #2b313d;
-    --text: #e7ebf2; --muted: #99a2b2; --accent: #f0883e; --accent2: #58a6ff;
-    --ok: #3fb950; --bad: #f85149; --gutter: #2a1d1d; --radius: 10px;
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c2230; --line:#2a3142;
+    --ink:#e7edf5; --dim:#9aa7b8; --accent:#4aa3ff; --good:#3fb950; --bad:#f85149;
+    --warn:#d29922; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--bg); color: var(--text);
-    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    -webkit-font-smoothing: antialiased;
-  }
-  .wrap { max-width: 980px; margin: 0 auto; padding: 28px 18px 80px; }
-  h1 { font-size: 24px; margin: 0 0 6px; letter-spacing: -0.02em; }
-  .sub { color: var(--muted); margin: 0 0 22px; }
-  .card {
-    background: var(--panel); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 18px; margin-bottom: 18px;
-  }
-  .card h2 { font-size: 15px; margin: 0 0 14px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em; }
-
-  /* ---- controls ---- */
-  .controls { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-end; }
-  .ctl-group { display: flex; flex-direction: column; gap: 6px; }
-  .ctl-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
-  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-  .seg button {
-    background: var(--panel2); color: var(--text); border: 0; padding: 8px 14px;
-    cursor: pointer; font: inherit; font-size: 14px; border-right: 1px solid var(--border);
-  }
-  .seg button:last-child { border-right: 0; }
-  .seg button.on { background: var(--accent); color: #1a1206; font-weight: 600; }
-  .seg.fix button.on { background: var(--ok); color: #062012; }
-  .hint { font-size: 13px; color: var(--muted); }
-
-  /* ---- the simulated device / viewport ---- */
-  .device {
-    margin: 4px auto 0; max-width: 760px;
-    border: 1px solid var(--border); border-radius: 12px; background: #0b0d12;
-    padding: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.35);
-  }
-  .viewport-label { text-align: center; font-size: 12px; color: var(--muted); margin: 2px 0 8px; }
-  .strip { display: flex; gap: 8px; min-height: 250px; }
-  .pane {
-    flex: 1 1 0; min-width: 0; display: flex; flex-direction: column;
-    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
-    overflow: hidden; transition: flex-grow .5s cubic-bezier(.22,.61,.36,1);
-  }
-  .pane.active { border-color: var(--accent2); box-shadow: 0 0 0 1px var(--accent2) inset; }
-  .pane-bar {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 7px 10px; background: var(--panel2); border-bottom: 1px solid var(--border);
-    font-size: 13px; font-weight: 600;
-  }
-  .pane.active .pane-bar { color: var(--accent2); }
-  .span-badge {
-    font-size: 11px; font-weight: 600; color: var(--muted);
-    background: #11151c; border: 1px solid var(--border); border-radius: 20px; padding: 1px 8px;
-  }
-  /* the .app-content area inside a pane — already has container-type:inline-size in the real app */
-  .app-content {
-    flex: 1; padding: 12px; min-height: 0; position: relative;
-    display: flex; transition: background .4s;
-  }
-  /* the actual page content (.ck / .settings-page / .terminal-page) */
-  .page {
-    width: 100%; transition: max-width .55s cubic-bezier(.22,.61,.36,1);
-    background: #10151d; border: 1px dashed #34506e; border-radius: 6px; padding: 10px;
-    display: flex; flex-direction: column; gap: 8px;
-  }
-  .page .row { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; }
-  .page .tile { height: 30px; border-radius: 5px; background: linear-gradient(180deg,#1d2937,#16202b); border: 1px solid #2a3a4d; }
-  .page .bar { height: 10px; border-radius: 4px; background: #213044; }
-  .page .bar.short { width: 55%; }
-
-  .tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
-  .tag.bad { background: rgba(248,81,73,.15); color: var(--bad); border: 1px solid rgba(248,81,73,.4); }
-  .tag.ok  { background: rgba(63,185,80,.15); color: var(--ok);  border: 1px solid rgba(63,185,80,.4); }
-  .verdict { text-align: center; margin-top: 12px; font-size: 14px; min-height: 20px; }
-
-  /* ---- how it works ---- */
-  .flow { display: grid; grid-template-columns: 1fr; gap: 10px; }
-  .step { display: flex; gap: 12px; align-items: flex-start; }
-  .step .n { flex: 0 0 26px; height: 26px; border-radius: 50%; background: var(--panel2); border: 1px solid var(--border); display: grid; place-items: center; font-size: 13px; font-weight: 700; color: var(--accent2); }
-  .step .t { flex: 1; }
-  .step .t b { color: var(--text); }
-  code { background: #11151c; border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; font-size: 12.5px; color: #d6deea; }
-  .ok-c { color: var(--ok); } .bad-c { color: var(--bad); }
-  .files { font-size: 13px; color: var(--muted); margin-top: 10px; padding-left: 18px; }
-  .files li { margin: 3px 0; }
-  .foot { color: var(--muted); font-size: 12.5px; text-align: center; margin-top: 24px; }
-  .scope { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
-  .scope div { flex: 1 1 200px; background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 13px; }
-  .scope .k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 3px; }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#16203033,transparent),var(--bg);
+    color:var(--ink);font:15px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+  .wrap{max-width:1040px;margin:0 auto;padding:32px 22px 80px}
+  h1{font-size:30px;margin:0 0 6px;letter-spacing:-.02em}
+  .sub{color:var(--dim);margin:0 0 28px;font-size:16px}
+  h2{font-size:20px;margin:38px 0 12px;letter-spacing:-.01em}
+  p{margin:10px 0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin:16px 0}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:760px){.grid2{grid-template-columns:1fr}}
+  code,.mono{font-family:var(--mono);font-size:13px}
+  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;
+    border:1px solid var(--line)}
+  .pill.bad{color:var(--bad);border-color:#5a2a2a;background:#2a1717}
+  .pill.good{color:var(--good);border-color:#234d2b;background:#13261a}
+  .pill.dim{color:var(--dim)}
+  pre{background:#0b0f15;border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto;margin:10px 0}
+  pre code{font-size:12.5px;line-height:1.5;color:#cdd6e2}
+  .del{color:var(--bad)} .add{color:var(--good)} .cmt{color:#6b7787}
+  /* ---- interactive viewport sim ---- */
+  .sim-controls{display:flex;gap:26px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+  .ctrl label{display:block;font-size:12px;color:var(--dim);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em}
+  .ctrl input[type=range]{width:180px;accent-color:var(--accent)}
+  .ctrl .val{font-family:var(--mono);color:var(--accent);font-weight:700;margin-left:8px}
+  .toggle{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .toggle button{background:var(--panel2);color:var(--dim);border:0;padding:8px 14px;cursor:pointer;font:inherit;font-size:13px}
+  .toggle button.on{background:var(--accent);color:#04101f;font-weight:700}
+  .browser{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#0b0f15;margin-top:6px}
+  .chrome{display:flex;align-items:center;gap:6px;padding:8px 12px;background:#11161f;border-bottom:1px solid var(--line)}
+  .dot{width:10px;height:10px;border-radius:50%}
+  .chrome .addr{margin-left:10px;font-family:var(--mono);font-size:11px;color:var(--dim)}
+  .viewport{position:relative;height:230px;padding:14px;background:repeating-linear-gradient(45deg,#0c1118,#0c1118 10px,#0e141c 10px,#0e141c 20px)}
+  .frame{height:100%;display:flex;flex-direction:column;background:var(--panel);border:1px dashed var(--line);border-radius:8px;
+    transition:max-width .35s ease, margin .35s ease;}
+  .frame .fhead{padding:8px 12px;border-bottom:1px solid var(--line);font-size:12px;color:var(--dim);display:flex;justify-content:space-between}
+  .strip{flex:1;display:flex;min-height:0}
+  .pane{flex:1 1 0;border-right:1px solid var(--line);display:flex;flex-direction:column;min-width:0;transition:flex-grow .35s ease}
+  .pane:last-child{border-right:0}
+  .pane .pbar{font-size:11px;color:var(--dim);padding:5px 8px;border-bottom:1px solid var(--line);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;overflow:hidden}
+  .pane .pbody{flex:1;display:flex;align-items:center;justify-content:center;color:#54627a;font-size:12px}
+  .content-cap{transition:max-width .35s ease, margin .35s ease;background:var(--panel2);border:1px solid var(--line);
+    border-radius:6px;flex:1;display:flex;align-items:center;justify-content:center;color:#7d8aa0;font-size:12px;text-align:center;padding:6px}
+  .verdict{margin-top:12px;font-size:13px;display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+  .verdict .k{color:var(--dim)}
+  .verdict .v{font-family:var(--mono);font-weight:700}
+  ul{margin:8px 0;padding-left:20px} li{margin:5px 0}
+  .foot{margin-top:40px;color:#5e6b7d;font-size:12px;border-top:1px solid var(--line);padding-top:14px}
+  .filetag{font-family:var(--mono);font-size:11px;color:var(--accent)}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Wide tabs should <span style="color:var(--ok)">fill</span>, not <span style="color:var(--bad)">float</span></h1>
-  <p class="sub">Change <code>tab-fill-available-width</code> — a full&#8209;span tab's content should stretch to fill its pane, instead of floating centered with empty side gutters.</p>
+  <h1>Why the full-span tab finally fills the width</h1>
+  <p class="sub">One tab, widened to span <em>every</em> visible slot, used to sit centered with gutters. Here's the actual reason &mdash; and the one decision that fixed it.</p>
 
   <div class="card">
-    <h2>Try it</h2>
-    <div class="controls">
-      <div class="ctl-group">
-        <span class="ctl-label">Active tab span (tab&#8209;spaces)</span>
-        <div class="seg" id="spanSeg">
-          <button data-span="1">1</button>
-          <button data-span="2">2</button>
-          <button data-span="3" class="on">3 (full)</button>
-        </div>
-      </div>
-      <div class="ctl-group">
-        <span class="ctl-label">Behavior</span>
-        <div class="seg fix" id="modeSeg">
-          <button data-mode="before" class="on">Today (bug)</button>
-          <button data-mode="after">Proposed (fix)</button>
-        </div>
-      </div>
-      <div class="ctl-group">
-        <button id="autoBtn" style="background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 12px;cursor:pointer;font:inherit;font-size:14px;">&#9654; Auto&#8209;demo</button>
-      </div>
-    </div>
+    <p style="margin-top:0"><strong>TL;DR.</strong> A tab widened to consume the whole pane budget left <em>no room for neighbours</em>, so the multi-pane layout decided &ldquo;only one pane &rarr; not multi&rdquo; and fell back to the <strong>classic single view, capped at 720px and centered</strong>. The fix: a deliberately-widened lone tab now renders as a <strong>single full-width pane in the uncapped strip</strong> instead of falling back.</p>
+  </div>
 
-    <div class="device">
-      <div class="viewport-label">Viewport — max <b>3</b> tab&#8209;spaces visible</div>
-      <div class="strip" id="strip"></div>
-      <div class="verdict" id="verdict"></div>
+  <h2>1 &middot; The decision that was wrong</h2>
+  <p>Every render, <code class="filetag">PaneStrip.jsx &rarr; useMultiPane()</code> packs as many tabs as the screen budget allows around the active one. It computes a window <code>[lo, hi]</code> of panes to show.</p>
+  <div class="grid2">
+    <div class="card">
+      <p style="margin-top:0"><span class="pill bad">before</span></p>
+      <pre><code><span class="cmt">// only one pane fits -&gt; bail to single view</span>
+<span class="del">if (lo === hi) return { multi: false }</span>
+
+<span class="cmt">// Layout then renders &lt;Outlet/&gt; inside</span>
+<span class="cmt">// .app-frame, which is capped:</span>
+.app-frame { max-width: 720px;
+             margin: 0 auto; }  <span class="cmt">// gutters</span></code></pre>
+      <p style="font-size:13px;color:var(--dim)">A full-span tab fills the budget alone &rarr; <code>lo === hi</code> &rarr; single, capped, centered. The page-level CSS never even got a chance.</p>
+    </div>
+    <div class="card">
+      <p style="margin-top:0"><span class="pill good">after</span></p>
+      <pre><code>if (lo === hi) {
+  <span class="cmt">// widened on purpose? keep it in the strip</span>
+  <span class="add">if (weight(active) &gt; 1) return {</span>
+<span class="add">    multi: true,</span>
+<span class="add">    panes: [{ ...tabs[active],</span>
+<span class="add">             width: weight(active) }],</span>
+<span class="add">  }</span>
+  return { multi: false }  <span class="cmt">// truly alone</span>
+}</code></pre>
+      <p style="font-size:13px;color:var(--dim)">Now it renders as one pane in <code>.app-frame--multi</code> (no cap) &rarr; flex-grows to <strong>100%</strong>.</p>
     </div>
   </div>
 
+  <h2>2 &middot; Try it &mdash; watch the decision flip</h2>
   <div class="card">
-    <h2>Why it happens (and the fix)</h2>
-    <div class="flow">
-      <div class="step"><div class="n">1</div><div class="t"><b>The pane already stretches.</b> In <code>PaneStrip.jsx</code> a spanned tab gets inline <code>flexGrow: span</code>, so the <i>pane</i> correctly grows to fill its tab&#8209;spaces. <span class="ok-c">That part works.</span></div></div>
-      <div class="step"><div class="n">2</div><div class="t"><b>The page content caps &amp; centers itself.</b> Each page sets <code>max-width</code> + <code>margin: 0 auto</code> — e.g. <code>.ck { max-width:1200px; margin:0 auto }</code>. In a wide pane the content stops growing and floats in the middle. <span class="bad-c">That's the gutter.</span></div></div>
-      <div class="step"><div class="n">3</div><div class="t"><b>Fix: let content follow the pane's width.</b> <code>.app-content</code> already declares <code>container-type: inline-size</code>, so each pane is its own size context. Drive the page width with <code>@container</code> queries: narrow pane keeps the comfortable reading cap; wide / full&#8209;span pane fills 100%.</div></div>
+    <div class="sim-controls">
+      <div class="ctrl">
+        <label>Visible tab-spaces (budget) <span class="val" id="vBudget">3</span></label>
+        <input type="range" id="budget" min="1" max="4" value="3" step="1">
+      </div>
+      <div class="ctrl">
+        <label>This tab's span <span class="val" id="vSpan">3</span></label>
+        <input type="range" id="span" min="1" max="4" value="3" step="1">
+      </div>
+      <div class="ctrl">
+        <label>Build</label>
+        <div class="toggle" id="buildTog">
+          <button data-b="before">before fix</button>
+          <button data-b="after" class="on">after fix</button>
+        </div>
+      </div>
     </div>
-    <ul class="files">
-      <li>Touches CSS only: <code>pages/cockpit.css</code>, <code>pages/settings.css</code>, <code>pages/terminal.css</code> (+ maybe <code>styles/global.css</code>).</li>
-      <li>Untouched: span model &amp; 1–4 range, <code>tabWidths</code> store, span controls, backend / API.</li>
-    </ul>
-    <div class="scope">
-      <div><div class="k">Capability</div>modifies <b>multi&#8209;pane</b> (adds one requirement)</div>
-      <div><div class="k">Conservative scope</div>narrow panes look identical; only wide panes change</div>
-      <div><div class="k">Supersedes</div>frozen note <code>plans/plan-tab-stretch.md</code></div>
+
+    <div class="browser">
+      <div class="chrome">
+        <span class="dot" style="background:#f85149"></span>
+        <span class="dot" style="background:#d29922"></span>
+        <span class="dot" style="background:#3fb950"></span>
+        <span class="addr">:5099 &mdash; Advanced mode, wide window</span>
+      </div>
+      <div class="viewport">
+        <div class="frame" id="frame">
+          <div class="fhead"><span id="frameMode">.app-frame--multi</span><span id="frameCap"></span></div>
+          <div class="strip" id="strip"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="verdict">
+      <span><span class="k">lo === hi?</span> <span class="v" id="oLoHi"></span></span>
+      <span><span class="k">useMultiPane &rarr;</span> <span class="v" id="oMulti"></span></span>
+      <span><span class="k">result:</span> <span class="v" id="oResult"></span></span>
     </div>
   </div>
 
-  <div class="foot">Understanding app · OpenSpec change <b>tab-fill-available-width</b> · branch <code>feature/tab-fill-available-width</code></div>
+  <h2>3 &middot; The complementary layer (page caps)</h2>
+  <p>Once a tab <em>is</em> in the strip, a very wide pane could still center its own content if the page sets a reading-width cap (Settings caps at 560px; Cockpit/Terminal around 1100&ndash;1200px). So each pane's content area is its own size container, and the caps lift when the pane is wider than them:</p>
+  <pre><code><span class="cmt">/* the pane's .app-content is a container; the page reacts to ITS width */</span>
+@container (min-width: 560px) { .settings-page { max-width: none } }</code></pre>
+  <p style="font-size:13px;color:var(--dim)">This is why both pieces shipped: the <strong>layout fix</strong> gets the tab into the uncapped strip (the bug you saw), and the <strong>@container CSS</strong> stops page-level caps from re-centering inside an extra-wide pane.</p>
+
+  <h2>4 &middot; What shipped</h2>
+  <ul>
+    <li><span class="filetag">client/src/layout/PaneStrip.jsx</span> &mdash; the <code>weight &gt; 1</code> branch; span &plusmn; steppers gated to &ge;2 panes so a lone full-span pane shows none.</li>
+    <li><span class="filetag">client/src/**.css</span> &mdash; <code>@container</code> cap-lifts for the page bodies.</li>
+    <li>Commit <code>89c27c0</code>, deployed to live <code>:5099</code> via <code>swap.ps1</code> (auto-rollback disarmed on &ldquo;keep it&rdquo;).</li>
+  </ul>
+
+  <div class="foot">Understanding app &middot; overwritten each time the explanation changes &middot; served under <code>/api/localview/&lt;repo&gt;/app/understanding/</code></div>
 </div>
 
 <script>
-  var state = { span: 3, mode: "before" };
-  var MAX = 3; // max tab-spaces visible at once
+(function(){
+  var budget=3, span=3, build='after';
+  var $=function(id){return document.getElementById(id)};
+  var bEl=$('budget'), sEl=$('span');
 
-  // first tab is the "active" (spanned) one; the rest fill leftover slots
-  var TABS = [
-    { key: "cockpit",  label: "Cockpit" },
-    { key: "files",    label: "Files" },
-    { key: "terminal", label: "Terminal" }
-  ];
+  function render(){
+    if(span>budget){span=budget; sEl.value=span;}
+    $('vBudget').textContent=budget;
+    $('vSpan').textContent=span;
 
-  var strip = document.getElementById("strip");
-  var verdict = document.getElementById("verdict");
+    // emulate useMultiPane: budget slots; active tab takes `span`, neighbours
+    // (weight 1 each) fill the rest. span filling the budget => no neighbours.
+    var neighbours=Math.max(0, budget-span);
+    var loEqHi=(neighbours===0);
+    var weightGt1=(span>1);
 
-  function fakePage() {
-    var d = document.createElement("div");
-    d.className = "page";
-    var b1 = document.createElement("div"); b1.className = "bar";
-    var b2 = document.createElement("div"); b2.className = "bar short";
-    var row = document.createElement("div"); row.className = "row";
-    for (var i = 0; i < 8; i++) { var t = document.createElement("div"); t.className = "tile"; row.appendChild(t); }
-    d.appendChild(b1); d.appendChild(b2); d.appendChild(row);
-    return d;
-  }
-
-  function render() {
-    strip.innerHTML = "";
-    var span = state.span;
-    var after = state.mode === "after";
-
-    // active tab takes `span` slots; remaining slots filled by following tabs
-    var remaining = MAX - span;
-    var shown = [TABS[0]];
-    for (var i = 1; i < TABS.length && (shown.length - 1) < remaining; i++) shown.push(TABS[i]);
-
-    shown.forEach(function (tab, idx) {
-      var active = idx === 0;
-      var pane = document.createElement("div");
-      pane.className = "pane" + (active ? " active" : "");
-      pane.style.flexGrow = active ? span : 1;
-
-      var bar = document.createElement("div");
-      bar.className = "pane-bar";
-      var name = document.createElement("span"); name.textContent = tab.label;
-      var badge = document.createElement("span"); badge.className = "span-badge";
-      badge.textContent = active ? ("span " + span) : "span 1";
-      bar.appendChild(name); bar.appendChild(badge);
-
-      var content = document.createElement("div");
-      content.className = "app-content";
-      var page = fakePage();
-
-      var capped = active && span > 1 && !after;
-      if (capped) {
-        // fixed cap floating in a wide pane -> centered with gutters
-        page.style.maxWidth = "300px";
-        page.style.marginLeft = "auto"; page.style.marginRight = "auto";
-        content.style.background =
-          "repeating-linear-gradient(45deg, transparent, transparent 7px, var(--gutter) 7px, var(--gutter) 14px)";
-      } else {
-        page.style.maxWidth = "100%";
+    var multi, mode, capLabel, panes=[];
+    if(loEqHi){
+      if(build==='after' && weightGt1){
+        multi=true; panes=[{label:'this tab',grow:span,full:true}];
+      }else{
+        multi=false; // single capped view
       }
-
-      content.appendChild(page);
-      pane.appendChild(bar); pane.appendChild(content);
-      strip.appendChild(pane);
-    });
-
-    if (state.span === 1) {
-      verdict.innerHTML = '<span class="tag ok">No change</span> &nbsp; A 1&#8209;space tab already fills its (narrow) pane — identical today and after.';
-    } else if (after) {
-      verdict.innerHTML = '<span class="tag ok">Fixed</span> &nbsp; The ' + state.span + '&#8209;space tab fills the whole horizontal space available to it.';
-    } else {
-      verdict.innerHTML = '<span class="tag bad">Today</span> &nbsp; The ' + state.span + '&#8209;space tab is centered — wasted gutters on both sides.';
+    }else{
+      multi=true;
+      panes.push({label:'this tab',grow:span,full:false});
+      for(var i=0;i<neighbours;i++) panes.push({label:'tab',grow:1,full:false});
     }
+
+    var frame=$('frame'), strip=$('strip');
+    if(multi){
+      mode='.app-frame--multi';
+      frame.style.maxWidth='none'; frame.style.margin='0';
+      capLabel='no cap, fills';
+    }else{
+      mode='.app-frame (single)';
+      frame.style.maxWidth='340px'; frame.style.margin='0 auto'; // stand-in for 720px cap+center
+      capLabel='max-width:720px, centered';
+    }
+    $('frameMode').textContent=mode;
+    $('frameCap').textContent=capLabel;
+
+    strip.innerHTML='';
+    if(multi){
+      panes.forEach(function(p){
+        var d=document.createElement('div');
+        d.className='pane'; d.style.flexGrow=p.grow;
+        var bar=document.createElement('div'); bar.className='pbar'; bar.textContent=p.label;
+        var body=document.createElement('div'); body.className='pbody';
+        body.textContent=p.full?'fills the strip':'pane';
+        d.appendChild(bar); d.appendChild(body); strip.appendChild(d);
+      });
+    }else{
+      var c=document.createElement('div'); c.className='content-cap';
+      c.textContent='page content: capped at 720px, centered (the gutters bug)';
+      strip.appendChild(c);
+    }
+
+    $('oLoHi').textContent=loEqHi?'yes':'no';
+    $('oLoHi').style.color=loEqHi?'var(--warn)':'var(--dim)';
+    $('oMulti').textContent=multi?'multi:true':'multi:false';
+    $('oMulti').style.color=multi?'var(--good)':'var(--bad)';
+    $('oResult').textContent=multi?'fills available width':'centered with gutters';
+    $('oResult').style.color=multi?'var(--good)':'var(--bad)';
   }
 
-  function wireSeg(id, attr, key, cast) {
-    var seg = document.getElementById(id);
-    seg.addEventListener("click", function (e) {
-      var btn = e.target.closest("button"); if (!btn) return;
-      state[key] = cast ? cast(btn.getAttribute(attr)) : btn.getAttribute(attr);
-      [].forEach.call(seg.querySelectorAll("button"), function (b) { b.classList.remove("on"); });
-      btn.classList.add("on");
+  bEl.addEventListener('input',function(){budget=+bEl.value; render();});
+  sEl.addEventListener('input',function(){span=+sEl.value; render();});
+  Array.prototype.forEach.call(document.querySelectorAll('#buildTog button'),function(btn){
+    btn.addEventListener('click',function(){
+      build=btn.getAttribute('data-b');
+      Array.prototype.forEach.call(document.querySelectorAll('#buildTog button'),function(b){b.classList.toggle('on',b===btn);});
       render();
     });
-  }
-  wireSeg("spanSeg", "data-span", "span", function (v) { return parseInt(v, 10); });
-  wireSeg("modeSeg", "data-mode", "mode");
-
-  var timer = null;
-  function setSeg(id, attr, val) {
-    var seg = document.getElementById(id);
-    [].forEach.call(seg.querySelectorAll("button"), function (b) {
-      b.classList.toggle("on", b.getAttribute(attr) == val);
-    });
-  }
-  var steps = [
-    { span: 3, mode: "before" }, { span: 3, mode: "after" },
-    { span: 2, mode: "before" }, { span: 2, mode: "after" },
-    { span: 1, mode: "before" }
-  ];
-  var si = 0;
-  function tick() {
-    var s = steps[si % steps.length]; si++;
-    state.span = s.span; state.mode = s.mode;
-    setSeg("spanSeg", "data-span", s.span);
-    setSeg("modeSeg", "data-mode", s.mode);
-    render();
-  }
-  document.getElementById("autoBtn").addEventListener("click", function () {
-    if (timer) { clearInterval(timer); timer = null; this.innerHTML = "&#9654; Auto&#8209;demo"; }
-    else { this.innerHTML = "&#9208; Stop"; tick(); timer = setInterval(tick, 1600); }
   });
-
   render();
+})();
 </script>
 </body>
 </html>
