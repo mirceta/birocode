@@ -1,358 +1,261 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Hide Self-Development repo from Basic mode</title>
+<title>The Local tab in Basic mode</title>
 <style>
-  :root{
-    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --line:#2b3442;
-    --text:#e6edf3; --soft:#9aa7b4; --faint:#6b7785;
-    --accent:#4493f8; --accent-soft:#172033;
-    --good:#3fb950; --good-soft:#12251a;
-    --bad:#f85149; --bad-soft:#2a1416;
-    --warn:#d29922; --warn-soft:#241c0e;
-    --self:#bc8cff; --self-soft:#1e1730;
-    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel2: #1e222b; --border: #2b313d;
+    --text: #e7ebf2; --muted: #99a2b2; --accent: #f0883e; --accent2: #58a6ff;
+    --ok: #3fb950; --bad: #f85149; --radius: 10px;
   }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.55;
-    -webkit-font-smoothing:antialiased}
-  .wrap{max-width:1080px;margin:0 auto;padding:32px 22px 90px}
-  header h1{font-size:26px;margin:0 0 6px;letter-spacing:-.01em}
-  header p.sub{margin:0;color:var(--soft);font-size:15px}
-  .meta{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 28px}
-  .chip{font-family:var(--mono);font-size:12px;padding:4px 9px;border:1px solid var(--line);
-    border-radius:999px;color:var(--soft);background:var(--panel)}
-  .chip b{color:var(--text);font-weight:600}
-  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
-    padding:22px 22px;margin:0 0 20px}
-  section h2{margin:0 0 4px;font-size:18px;display:flex;align-items:center;gap:9px}
-  section h2 .n{font-family:var(--mono);font-size:13px;color:var(--accent);
-    background:var(--accent-soft);border:1px solid var(--line);border-radius:7px;
-    padding:1px 8px}
-  section .lead{color:var(--soft);font-size:14px;margin:0 0 16px}
-  code{font-family:var(--mono);font-size:.88em;background:#0b0f15;border:1px solid var(--line);
-    padding:1px 5px;border-radius:5px;color:#c9d4e0}
-  .small{font-size:13px;color:var(--soft)}
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.55 -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  }
+  header { padding: 26px 22px 8px; max-width: 1040px; margin: 0 auto; }
+  h1 { margin: 0 0 6px; font-size: 24px; }
+  .sub { color: var(--muted); margin: 0; }
+  main { max-width: 1040px; margin: 0 auto; padding: 14px 22px 60px; }
+  .lead { color: var(--muted); margin: 14px 0 22px; }
+  .lead b { color: var(--text); }
 
-  /* mode toggle */
-  .toggle{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;
-    background:var(--panel2)}
-  .toggle button{appearance:none;border:0;background:transparent;color:var(--soft);
-    font-family:var(--sans);font-size:14px;font-weight:600;padding:9px 18px;cursor:pointer;
-    transition:.15s}
-  .toggle button.on{background:var(--accent);color:#04101f}
-  .toggle button:not(.on):hover{color:var(--text)}
-  .modebar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px}
-  .modebar .tag{font-size:12.5px;color:var(--faint)}
+  .controls { display: flex; gap: 26px; flex-wrap: wrap; align-items: center;
+    padding: 14px 16px; background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); margin-bottom: 22px; }
+  .ctl { display: flex; flex-direction: column; gap: 6px; }
+  .ctl-label { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+  .seg button { border: 0; background: transparent; color: var(--text); font: inherit;
+    font-weight: 600; padding: 7px 16px; cursor: pointer; }
+  .seg button.on { background: var(--accent); color: #1a1205; }
+  .seg.alt button.on { background: var(--accent2); color: #04122b; }
 
-  /* device mock */
-  .stage{display:grid;grid-template-columns:1fr 1fr;gap:18px}
-  @media(max-width:720px){.stage{grid-template-columns:1fr}}
-  .device{border:1px solid var(--line);border-radius:16px;background:var(--panel2);
-    overflow:hidden;display:flex;flex-direction:column;min-height:280px}
-  .device .bar{display:flex;align-items:center;gap:8px;padding:9px 13px;border-bottom:1px solid var(--line);
-    background:#10151d}
-  .device .bar .dot{width:9px;height:9px;border-radius:50%;background:#30363d}
-  .device .bar .title{font-size:12px;color:var(--soft);margin-left:6px;font-family:var(--mono)}
-  .device .badge{margin-left:auto;font-size:11px;font-family:var(--mono);padding:2px 8px;border-radius:999px;
-    border:1px solid var(--line)}
-  .badge.basic{color:var(--accent);background:var(--accent-soft)}
-  .badge.adv{color:var(--self);background:var(--self-soft)}
-  .device .body{padding:13px;flex:1;display:flex;flex-direction:column;gap:9px}
-  .device .label{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);
-    margin-bottom:1px}
-  .repo{display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid var(--line);
-    border-radius:9px;background:var(--panel);font-size:14px;transition:.25s}
-  .repo .ic{font-size:15px}
-  .repo .nm{font-weight:600}
-  .repo .vis{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--faint);
-    border:1px solid var(--line);border-radius:999px;padding:1px 7px}
-  .repo.self{border-color:var(--self);background:var(--self-soft)}
-  .repo.self .nm{color:var(--self)}
-  .repo.active{outline:2px solid var(--accent);outline-offset:-2px}
-  .conv{margin-top:6px;border:1px dashed var(--line);border-radius:9px;padding:11px;font-size:13px;
-    background:#0b0f15;min-height:64px}
-  .conv .who{font-family:var(--mono);font-size:11px;color:var(--faint);margin-bottom:4px}
-  .conv.self{border-color:var(--self);background:var(--self-soft)}
-  .conv.self .who{color:var(--self)}
-  .conv.leak{border-color:var(--bad);background:var(--bad-soft)}
-  .conv.leak .who{color:var(--bad)}
-  .verdict{margin-top:10px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px}
-  .verdict.bad{color:var(--bad)} .verdict.good{color:var(--good)}
-  .empty{border:1px dashed var(--line);border-radius:9px;padding:16px 13px;text-align:center;
-    color:var(--soft);font-size:13px;background:#0b0f15}
-  .empty .ic{font-size:22px;display:block;margin-bottom:7px;opacity:.7}
-  .newbtn{margin-top:9px;border:1px dashed var(--line);border-radius:9px;padding:9px 11px;
-    text-align:center;color:var(--faint);font-size:13px;font-family:var(--sans)}
-  .col-h{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);
-    margin:0 0 9px}
-  .before .col-h{color:var(--bad)} .after .col-h{color:var(--good)}
+  .stage { display: grid; grid-template-columns: 1.15fr .85fr; gap: 18px; align-items: start; }
+  @media (max-width: 820px) { .stage { grid-template-columns: 1fr; } }
 
-  /* flow */
-  .flow{display:flex;flex-direction:column;gap:0}
-  .step{display:grid;grid-template-columns:34px 1fr;gap:14px;align-items:start;position:relative;
-    padding-bottom:18px}
-  .step:last-child{padding-bottom:0}
-  .step .rail{display:flex;flex-direction:column;align-items:center}
-  .step .num{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
-    font-family:var(--mono);font-size:14px;font-weight:700;border:1px solid var(--line);
-    background:var(--panel2);color:var(--soft);z-index:1}
-  .step .line{flex:1;width:2px;background:var(--line);margin-top:2px;min-height:24px}
-  .step:last-child .line{display:none}
-  .step.fix .num{border-color:var(--good);color:var(--good);background:var(--good-soft)}
-  .step .body h3{margin:5px 0 4px;font-size:15px}
-  .step .body p{margin:0 0 6px;color:var(--soft);font-size:13.5px}
-  .step .tagrow{display:flex;gap:7px;flex-wrap:wrap;margin-top:6px}
-  .ttag{font-family:var(--mono);font-size:11px;padding:2px 8px;border-radius:6px;border:1px solid var(--line);
-    color:var(--soft);background:#0b0f15}
-  .ttag.fix{color:var(--good);border-color:#1d3a26;background:var(--good-soft)}
+  /* simulated harness */
+  .phone { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,.35); }
+  .bar { display: flex; align-items: center; gap: 8px; padding: 9px 11px;
+    border-bottom: 1px solid var(--border); background: var(--panel2); flex-wrap: wrap; }
+  .proj { font-weight: 700; font-size: 13px; }
+  .chip { display: inline-flex; align-items: center; border: 1px solid var(--border);
+    border-radius: 7px; overflow: hidden; }
+  .chip .pick { padding: 3px 8px; font-size: 12px; font-weight: 600; }
+  .chip.on { border-color: var(--accent2); box-shadow: inset 0 0 0 1px var(--accent2); }
+  .chip .x { border-left: 1px solid var(--border); padding: 3px 7px; color: var(--bad); }
+  .pill { border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px;
+    font-size: 12px; font-weight: 600; }
+  .pill.add { border-style: dashed; }
+  .hint { margin-left: auto; font-size: 11px; color: var(--muted); }
+  .empty { font-size: 12px; color: var(--muted); padding: 8px 11px; border-bottom: 1px solid var(--border); }
+  .frame { height: 150px; display: flex; align-items: center; justify-content: center;
+    background: repeating-linear-gradient(45deg,#11141a,#11141a 10px,#0d1015 10px,#0d1015 20px);
+    color: var(--muted); font-size: 13px; text-align: center; padding: 0 18px; }
+  .form { padding: 14px; }
+  .form .row { display: flex; gap: 8px; margin: 8px 0; }
+  .form input { background: var(--panel2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 6px 8px; font: inherit; font-size: 12px; }
+  .form input.port { width: 90px; }
+  .form .how { margin-top: 10px; padding: 10px; border: 1px solid var(--border);
+    border-radius: 6px; background: var(--panel2); font-size: 12px; color: var(--muted); }
+  .nav { display: flex; justify-content: space-around; padding: 8px 0;
+    border-top: 1px solid var(--border); background: var(--panel2); font-size: 11px; }
+  .nav span { color: var(--muted); }
+  .nav span.local { color: var(--accent); font-weight: 700; }
+  .tag { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; vertical-align: middle; }
+  .tag.show { background: rgba(63,185,80,.16); color: var(--ok); }
+  .tag.hide { background: rgba(248,81,73,.16); color: var(--bad); }
 
-  /* requirements */
-  .reqs{display:grid;gap:12px}
-  .req{border:1px solid var(--line);border-radius:11px;padding:14px 15px;background:var(--panel2)}
-  .req h3{margin:0 0 5px;font-size:14.5px;display:flex;gap:9px;align-items:baseline}
-  .req h3 .r{font-family:var(--mono);font-size:11px;color:var(--good);background:var(--good-soft);
-    border:1px solid #1d3a26;border-radius:6px;padding:1px 7px;flex:none}
-  .req p{margin:0;color:var(--soft);font-size:13.5px}
-
-  /* decisions / scope */
-  .cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  @media(max-width:720px){.cards{grid-template-columns:1fr}}
-  .card{border:1px solid var(--line);border-radius:11px;padding:15px;background:var(--panel2)}
-  .card.warn{border-color:#3a3015}
-  .card h3{margin:0 0 6px;font-size:14px}
-  .card p{margin:0;color:var(--soft);font-size:13px}
-  .kbar{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:8px}
-  .file{font-family:var(--mono);font-size:11.5px;color:var(--accent)}
-  footer{color:var(--faint);font-size:12px;text-align:center;margin-top:26px}
-  .pulse{animation:pulse 1.2s ease}
-  @keyframes pulse{0%{background:var(--warn-soft)}100%{}}
+  /* code-path panel */
+  .path { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+  .path h3 { margin: 0 0 10px; font-size: 14px; }
+  .step { border-left: 2px solid var(--border); padding: 8px 0 8px 12px; margin: 0 0 2px; position: relative; }
+  .step::before { content: ""; position: absolute; left: -5px; top: 13px; width: 8px; height: 8px;
+    border-radius: 50%; background: var(--border); }
+  .step.active { border-left-color: var(--accent); }
+  .step.active::before { background: var(--accent); }
+  .step .file { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; color: var(--accent2); }
+  .step .what { font-size: 13px; }
+  .step .val { font-size: 12px; color: var(--muted); }
+  .step .val b { color: var(--text); }
+  code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; color: var(--text); font-size: 12px; }
+  .legend { margin-top: 18px; color: var(--muted); font-size: 12.5px; }
+  footer { color: var(--muted); font-size: 12px; margin-top: 26px; border-top: 1px solid var(--border); padding-top: 14px; }
+  footer i { color: var(--text); }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <h1>Hiding the Self-Development repo from Basic mode</h1>
-    <p class="sub">OpenSpec change <code>hide-self-repo-from-basic</code> — why the ClaudeWeb self conversation leaks to End Users, and the rule that stops it.</p>
-    <div class="meta">
-      <span class="chip">branch <b>feature/hide-self-repo-basic-mode</b></span>
-      <span class="chip">capability <b>project-visibility</b> (seeded)</span>
-      <span class="chip">status <b>proposal &middot; validated</b></span>
-      <span class="chip">enforcement <b>client-side</b></span>
-    </div>
-  </header>
+<header>
+  <h1>The Local tab in Basic mode</h1>
+  <p class="sub">Show the running product to the End User &mdash; without its authoring plumbing.</p>
+</header>
+<main>
+  <p class="lead">
+    The <b>Local tab</b> embeds a project's running product through the harness's
+    same-origin proxy. It used to be <b>Advanced-only</b>. This change makes it visible in
+    <b>Basic</b> too &mdash; but <b>view-only</b>: an End User sees the product, never the
+    add/remove/verify controls or the "how to embed" walkthrough. Flip the toggles to see
+    exactly what renders, and which gate decides it.
+  </p>
 
-  <!-- LIVE DEMO -->
-  <section>
-    <h2><span class="n">demo</span> Flip the mode &mdash; watch the self repo &amp; its conversation</h2>
-    <p class="lead">The same repo list rendered for the two modes. Toggle to see what an End User (Basic) gets today vs. after the fix.</p>
-    <div class="modebar">
-      <div class="toggle" id="toggle">
-        <button data-m="basic" class="on">Basic (End User)</button>
-        <button data-m="advanced">Advanced</button>
-      </div>
-      <div class="toggle" id="scenario">
-        <button data-s="multi" class="on">Has other projects</button>
-        <button data-s="selfonly">Only the self repo</button>
-      </div>
-      <span class="tag">device-local &middot; <code>localStorage: claudeweb_ui_mode</code></span>
-    </div>
-    <div class="stage">
-      <div class="before">
-        <p class="col-h">Today (bug)</p>
-        <div class="device">
-          <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
-            <span class="title">Projects</span><span class="badge basic" id="b1">basic</span></div>
-          <div class="body" id="bodyBefore"></div>
-        </div>
-      </div>
-      <div class="after">
-        <p class="col-h">With this change</p>
-        <div class="device">
-          <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
-            <span class="title">Projects</span><span class="badge basic" id="b2">basic</span></div>
-          <div class="body" id="bodyAfter"></div>
-        </div>
+  <div class="controls">
+    <div class="ctl">
+      <span class="ctl-label">UI mode</span>
+      <div class="seg" id="seg-mode">
+        <button data-mode="basic" class="on">Basic (End User)</button>
+        <button data-mode="advanced">Advanced (Operator)</button>
       </div>
     </div>
-    <p class="small" style="margin-top:14px">&#8627; The self repo is <code>isSelf=true</code>, pinned at <b>index 0 &mdash; the default project</b>. Today the Basic list is filtered by <code>visibility</code> only (<span class="file">Projects.jsx:127</span>), so the self repo slips through and, being the default, its conversation renders even after you open another project.</p>
-    <p class="small" style="margin-top:8px"><b>Empty-state case</b> &mdash; switch the scenario to <i>&ldquo;Only the self repo&rdquo;</i>: on a fresh harness where self is the <i>only</i> registered repo, hiding it means a Basic user has <b>zero</b> projects. They see the real empty state (<span class="file">Projects.jsx:181</span> &rarr; <code>projects.noneBasic</code>): &ldquo;No projects are available in Basic mode yet&hellip;&rdquo; plus the <code>+ New project</code> button &mdash; and crucially <b>no self conversation</b>. That&rsquo;s the correct outcome: better an honest empty state than the harness&rsquo;s own conversation leaking to an End User.</p>
-  </section>
+    <div class="ctl">
+      <span class="ctl-label">Selected project</span>
+      <div class="seg alt" id="seg-app">
+        <button data-app="yes" class="on">has a running app</button>
+        <button data-app="no">no real app yet</button>
+      </div>
+    </div>
+  </div>
 
-  <!-- ROOT CAUSE FLOW -->
-  <section>
-    <h2><span class="n">why</span> How the self conversation leaks &mdash; the resolution chain</h2>
-    <p class="lead">Four steps from &ldquo;pick a mode&rdquo; to &ldquo;render a conversation.&rdquo; The leak happens because nothing in the chain subtracts <code>isSelf</code> for a Basic user. Green steps are where this change intervenes.</p>
-    <div class="flow">
-      <div class="step">
-        <div class="rail"><div class="num">1</div><div class="line"></div></div>
-        <div class="body"><h3>Mode is chosen on the device</h3>
-          <p>Purely client-side, defaults to <code>basic</code>. The backend never learns the mode &mdash; it serves every repo (incl. self) to any authed client.</p>
-          <div class="tagrow"><span class="ttag">UiModeContext.jsx</span><span class="ttag">useFeature()</span></div></div>
-      </div>
-      <div class="step fix">
-        <div class="rail"><div class="num">2</div><div class="line"></div></div>
-        <div class="body"><h3>Repo list is filtered</h3>
-          <p>Today: <code>repos.filter(r =&gt; r.visibility === 'basic')</code> &mdash; ignores <code>isSelf</code>. <b>Fix:</b> also exclude <code>isSelf</code> in Basic.</p>
-          <div class="tagrow"><span class="ttag">Projects.jsx:127</span><span class="ttag fix">+ &amp;&amp; !r.isSelf</span></div></div>
-      </div>
-      <div class="step fix">
-        <div class="rail"><div class="num">3</div><div class="line"></div></div>
-        <div class="body"><h3>Active / default repo is resolved</h3>
-          <p>Self is index-0 default, so a fresh or self-pointing Basic user lands on it. <b>Fix:</b> never resolve a Basic user's active repo to self &mdash; fall back to first Basic-visible repo (or empty state).</p>
-          <div class="tagrow"><span class="ttag">RepoContext.jsx</span><span class="ttag">ChatContext.jsx ~74-119</span><span class="ttag fix">fallback</span></div></div>
-      </div>
-      <div class="step fix">
-        <div class="rail"><div class="num">4</div><div class="line"></div></div>
-        <div class="body"><h3>Conversation renders</h3>
-          <p>With the active repo guaranteed non-self and the dual &ldquo;Claude Web&rdquo; view already <code>dualChat:'advanced'</code>, the self conversation can no longer mount for a Basic user &mdash; including right after switching projects.</p>
-          <div class="tagrow"><span class="ttag">ChatContext.jsx</span><span class="ttag fix">no self render in Basic</span></div></div>
-      </div>
-    </div>
-  </section>
+  <div class="stage">
+    <div class="phone" id="phone"><!-- rendered --></div>
+    <div class="path" id="path"><!-- rendered --></div>
+  </div>
 
-  <!-- REQUIREMENTS -->
-  <section>
-    <h2><span class="n">spec</span> The three requirements (delta on <code>project-visibility</code>)</h2>
-    <p class="lead">What the system SHALL guarantee once shipped. Each carries WHEN/THEN scenarios in the delta spec.</p>
-    <div class="reqs">
-      <div class="req"><h3><span class="r">R1</span> The Self-Development repo is hidden from Basic-mode users</h3>
-        <p>The Basic project selector excludes every <code>isSelf</code> repo regardless of its <code>visibility</code>. Advanced still sees it, pinned &amp; non-removable.</p></div>
-      <div class="req"><h3><span class="r">R2</span> A Basic user's active repo is never the self repo</h3>
-        <p>Even though self is the index-0 default / may be the persisted pick, resolution falls back to the first Basic-visible repo, else the empty state.</p></div>
-      <div class="req"><h3><span class="r">R3</span> The self conversation never renders for a Basic user</h3>
-        <p>No dual harness chat, no self sessions &mdash; including immediately after switching projects, and after toggling Advanced&rarr;Basic while on the self repo.</p></div>
-    </div>
-  </section>
+  <p class="legend">
+    <b>One source of truth.</b> Components never compare the mode directly &mdash; the
+    capability map in <code>UiModeContext.jsx</code> holds <code>localAppTab: 'basic'</code>,
+    and the page reads <code>const { isAdvanced: canAuthor } = useUiMode()</code> to gate the
+    authoring surface. Promoting the tab is a one-line map change; hiding the controls is one
+    boolean. <b>Self-repo safety is free:</b> Basic users already can't select the
+    Self-Development repo, so its local apps never reach Basic without extra code.
+  </p>
 
-  <!-- DECISIONS -->
-  <section>
-    <h2><span class="n">scope</span> Two decisions worth confirming</h2>
-    <div class="cards">
-      <div class="card">
-        <div class="kbar"><span class="ttag">new capability</span></div>
-        <h3>Seeded <code>project-visibility</code></h3>
-        <p>No existing spec owned repo visibility; <span class="file">plans/project-visibility.md</span> was never folded into <code>openspec/specs</code>. Seed-and-grow per CLAUDE.md as we touch it, rather than bolting onto <code>chat</code>/<code>access-control</code>.</p>
-      </div>
-      <div class="card warn">
-        <div class="kbar"><span class="ttag">out of scope</span></div>
-        <h3>Client-side enforcement only</h3>
-        <p>UI mode is device-local; the backend can't know it. <code>/api/repos</code> &amp; <code>/api/sessions</code> still return self to any client asking by id. A hard server-side gate needs the backend to learn the caller's mode &mdash; a separate, larger change.</p>
-      </div>
-    </div>
-    <p class="small" style="margin-top:14px">Preserved invariant: self stays pinned at index 0 and non-removable for Advanced (<span class="file">RepoController.Remove</span> still refuses <code>IsSelf</code>). This change only <i>hides</i> it from Basic.</p>
-  </section>
-
-  <footer>Understanding app &middot; rolling-latest &middot; overwritten each time the explanation changes &middot; build-less &amp; self-contained</footer>
-</div>
+  <footer>
+    Companion to the OpenSpec change <code>enable-local-tab-in-basic</code>. Successor to the
+    <i>hide-self-repo-from-basic</i> explanation &mdash; same Basic-mode story, next step.
+  </footer>
+</main>
 
 <script>
-(function(){
-  var SELF = {id:'self', name:'Claude Web (this app)', icon:'🛠️', isSelf:true, visibility:'basic'};
-  var SETS = {
-    multi: [
-      SELF,
-      {id:'kekik', name:'kekik-topluyoruz', icon:'📦', isSelf:false, visibility:'basic'},
-      {id:'notes', name:'notes-app', icon:'📝', isSelf:false, visibility:'advanced'}
-    ],
-    selfonly: [ SELF ]   // a fresh harness: the self repo is the only one registered
-  };
-  var mode = 'basic';
-  var scenario = 'multi';
-  function repos(){ return SETS[scenario]; }
+  const state = { mode: 'basic', app: 'yes' };
 
-  // the real empty-state copy, Projects.jsx:181 / en.json "projects.noneBasic"
-  var EMPTY_MSG = 'No projects are available in Basic mode yet. Switch to Advanced mode to manage visibility.';
-
-  function visibleBefore(){ // today's logic: Projects.jsx:127
-    if(mode==='advanced') return repos().slice();
-    return repos().filter(function(r){ return r.visibility==='basic'; }); // ignores isSelf -> self leaks
-  }
-  function visibleAfter(){
-    if(mode==='advanced') return repos().slice();
-    return repos().filter(function(r){ return r.visibility==='basic' && !r.isSelf; });
-  }
-  function activeOf(list){ return list.length ? list[0] : null; } // index-0 default landing
-
-  function repoRow(r, active){
-    var cls='repo'+(r.isSelf?' self':'')+(active&&active.id===r.id?' active':'');
-    return '<div class="'+cls+'"><span class="ic">'+r.icon+'</span>'+
-      '<span class="nm">'+r.name+'</span>'+
-      '<span class="vis">'+(r.isSelf?'isSelf':r.visibility)+'</span></div>';
+  function bind(segId, key) {
+    const seg = document.getElementById(segId);
+    seg.addEventListener('click', (e) => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      seg.querySelectorAll('button').forEach((b) => b.classList.remove('on'));
+      btn.classList.add('on');
+      state[key] = btn.dataset.mode || btn.dataset.app;
+      render();
+    });
   }
 
-  function convBlock(active, leaked){
-    if(!active) return '<div class="conv"><div class="who">conversation</div><span class="small">&mdash; no project &mdash;</span></div>';
-    if(active.isSelf){
-      var c = leaked? 'conv self leak':'conv self';
-      var who = leaked? 'ClaudeWeb self conversation &middot; LEAKED to End User':'ClaudeWeb self conversation';
-      return '<div class="'+c+'"><div class="who">'+who+'</div>&ldquo;&hellip;run swap.ps1, arm the dead-man switch, isolated self-dev build&hellip;&rdquo;</div>';
-    }
-    return '<div class="conv"><div class="who">'+active.name+' conversation</div>&ldquo;&hellip;working on the '+active.name+' product&hellip;&rdquo;</div>';
-  }
+  function render() {
+    const advanced = state.mode === 'advanced';
+    const hasApp = state.app === 'yes';
+    // Advanced auto-opens the add form when there is no real app.
+    const showForm = advanced && !hasApp;
+    const showEmpty = !advanced && !hasApp;
 
-  function render(){
-    document.getElementById('b1').className = 'badge '+(mode==='basic'?'basic':'adv');
-    document.getElementById('b2').className = 'badge '+(mode==='basic'?'basic':'adv');
-    document.getElementById('b1').textContent = mode;
-    document.getElementById('b2').textContent = mode;
+    // ---- simulated harness ----
+    const projName = hasApp ? 'kekik-topluyoruz' : 'Project Alpha';
+    const appChip = hasApp
+      ? '<span class="chip on"><span class="pick">App :5300</span>' + (advanced ? '<span class="x">&times;</span>' : '') + '</span>'
+      : '';
+    const understandingChip = '<span class="chip' + (hasApp ? '' : ' on') + '"><span class="pick">Understanding</span></span>';
+    const addBtn = advanced && !showForm ? '<span class="pill add">+ Add app</span>' : '';
+    const verifyBtn = advanced && hasApp ? '<span class="pill">Verify exposure</span>' : '';
 
-    var lb = visibleBefore(), la = visibleAfter();
-    var ab = activeOf(lb), aa = activeOf(la);
-    var leaked = (mode==='basic' && ab && ab.isSelf);
-
-    var emptyHtml = '<div class="empty"><span class="ic">📭</span>'+EMPTY_MSG+'</div>'+
-                    '<div class="newbtn">+ New project</div>';
-
-    function listHtml(list, active){
-      if(list.length===0) return emptyHtml;
-      return list.map(function(r){return repoRow(r,active);}).join('');
+    let body;
+    if (showForm) {
+      body = '<div class="form">' +
+        '<div class="row">' +
+          '<input placeholder="name (optional)" />' +
+          '<input class="port" placeholder="port" />' +
+          '<span class="pill" style="background:var(--accent);color:#1a1205;border-color:var(--accent)">Show it</span>' +
+        '</div>' +
+        '<div class="how">How to make a web app embeddable here &mdash; serve on one loopback port, relative URLs&hellip; (Operator-only)</div>' +
+      '</div>';
+    } else {
+      body = (showEmpty ? '<div class="empty">This project doesn\'t have a running app to show yet.</div>' : '') +
+        '<div class="frame">' + (hasApp
+          ? '&#9654; embedded product (live iframe via /api/localview/&hellip;)'
+          : 'Understanding app renders here as the fallback') + '</div>';
     }
 
-    var before = '<div class="label">Project selector</div>'+
-      listHtml(lb, ab)+
-      '<div class="label" style="margin-top:6px">Rendered conversation</div>'+
-      convBlock(ab, leaked)+
-      (leaked
-        ? '<div class="verdict bad">&#10007; self repo shown &amp; its conversation leaks</div>'
-        : (mode==='advanced'
-            ? '<div class="verdict good">&#10003; Advanced &mdash; self is expected here</div>'
-            : (ab? '<div class="verdict good">&#10003; ok</div>'
-                 : '<div class="verdict good">&#10003; empty state</div>')));
+    document.getElementById('phone').innerHTML =
+      '<div class="bar">' +
+        '<span class="proj">' + projName + '</span>' +
+        appChip + understandingChip + addBtn +
+        '<span class="pill">&#8599;</span>' +
+        '<span class="pill">Refresh</span>' +
+        verifyBtn +
+        '<span class="hint">served through your login</span>' +
+      '</div>' +
+      body +
+      '<div class="nav">' +
+        '<span>Chat</span><span>Files</span><span>History</span><span>Projects</span>' +
+        '<span class="local">Local</span>' +
+      '</div>';
 
-    var after = '<div class="label">Project selector</div>'+
-      listHtml(la, aa)+
-      '<div class="label" style="margin-top:6px">Rendered conversation</div>'+
-      convBlock(aa, false)+
-      (mode==='advanced'
-        ? '<div class="verdict good">&#10003; Advanced &mdash; self available, pinned</div>'
-        : (aa
-            ? '<div class="verdict good">&#10003; self hidden &middot; lands on '+aa.name+'</div>'
-            : '<div class="verdict good">&#10003; self hidden &middot; clean empty state, no self leak</div>'));
+    // ---- code path ----
+    const tagShow = '<span class="tag show">shows</span>';
+    const tagHide = '<span class="tag hide">hides</span>';
+    const steps = [
+      {
+        active: true,
+        file: 'UiModeContext.jsx',
+        what: 'Capability map: <code>localAppTab</code>',
+        val: "= <b>'basic'</b> &rarr; the Local tab is selectable in Basic. <span class=\"tag show\">tab shown</span>",
+      },
+      {
+        active: true,
+        file: 'tabRegistry.jsx',
+        what: "Nav gate <code>visible('localAppTab')</code>",
+        val: 'now true in Basic &mdash; no change needed; the tab appears in the bottom-nav.',
+      },
+      {
+        active: true,
+        file: 'LocalApp.jsx',
+        what: '<code>canAuthor = useUiMode().isAdvanced</code>',
+        val: '= <b>' + advanced + '</b> &rarr; authoring controls (add / remove &times; / verify / how) ' + (advanced ? tagShow : tagHide),
+      },
+      {
+        active: !hasApp,
+        file: 'LocalApp.jsx',
+        what: 'auto-open form effect',
+        val: showForm
+          ? 'no real app + Advanced &rarr; add-form auto-opens ' + tagShow
+          : (showEmpty
+              ? 'no real app + Basic &rarr; suppressed; empty note + Understanding fallback ' + tagShow
+              : 'project has an app &rarr; effect idle'),
+      },
+      {
+        active: true,
+        file: 'RepoContext.jsx',
+        what: 'selectable = basic-visible, <code>!isSelf</code>',
+        val: "Basic can't land on the Self-Development repo &rarr; its local apps never leak. <span class=\"tag show\">self-safe</span>",
+      },
+    ];
 
-    var bb=document.getElementById('bodyBefore'), ba=document.getElementById('bodyAfter');
-    bb.innerHTML=before; ba.innerHTML=after;
-    bb.classList.remove('pulse'); ba.classList.remove('pulse');
-    void bb.offsetWidth; bb.classList.add('pulse'); ba.classList.add('pulse');
+    document.getElementById('path').innerHTML =
+      '<h3>What decides this view</h3>' +
+      steps.map(function (s) {
+        return '<div class="step' + (s.active ? ' active' : '') + '">' +
+          '<div class="file">' + s.file + '</div>' +
+          '<div class="what">' + s.what + '</div>' +
+          '<div class="val">' + s.val + '</div>' +
+        '</div>';
+      }).join('');
   }
 
-  document.getElementById('toggle').addEventListener('click', function(e){
-    var btn = e.target.closest('button'); if(!btn) return;
-    mode = btn.getAttribute('data-m');
-    Array.prototype.forEach.call(this.children, function(c){ c.classList.toggle('on', c===btn); });
-    render();
-  });
-  document.getElementById('scenario').addEventListener('click', function(e){
-    var btn = e.target.closest('button'); if(!btn) return;
-    scenario = btn.getAttribute('data-s');
-    Array.prototype.forEach.call(this.children, function(c){ c.classList.toggle('on', c===btn); });
-    render();
-  });
+  bind('seg-mode', 'mode');
+  bind('seg-app', 'app');
   render();
-})();
 </script>
 </body>
 </html>
