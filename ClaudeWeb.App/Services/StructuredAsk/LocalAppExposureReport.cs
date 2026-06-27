@@ -65,4 +65,8 @@ public class LocalAppFinding
     [JsonPropertyName("evidence")]
     [Description("file:line where the port is bound, e.g. homepage/serve.mjs:22")]
     public string Evidence { get; set; } = "";
+
+    [JsonPropertyName("startCommand")]
+    [Description("Command that launches this app, run from its folder, e.g. node serve.mjs or powershell -File serve.ps1. Empty string if it cannot be determined.")]
+    public string StartCommand { get; set; } = "";
 }

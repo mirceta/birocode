@@ -49,15 +49,10 @@ public class RepositoryConfig
     /// </summary>
     public List<LocalAppConfig> LocalApps { get; set; } = new();
 
-    /// <summary>
-    /// Per-project permission preset for this repo's chat <c>claude -p</c> calls
-    /// (openspec add-per-project-claude-permissions): "readonly" | "standard" |
-    /// "full". Null/absent ⇒ Read-only — the SAFE DEFAULT — so both existing
-    /// entries and freshly-added projects are read-only until the Operator opts
-    /// them up in the desktop app. Set only from the WinForms GUI; the web reads
-    /// but never mutates it.
-    /// </summary>
-    public string? PermissionPolicy { get; set; }
+    // The per-project permission preset (PermissionPolicy) was removed
+    // (openspec add-resilient-auth): the two auth gates are the whole
+    // authorization model, so chat runs unrestricted. Any stale field in an
+    // existing repositories.json is ignored on load.
 }
 
 /// <summary>

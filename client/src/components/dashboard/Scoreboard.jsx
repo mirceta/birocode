@@ -134,7 +134,7 @@ export default function Scoreboard() {
           ) : (
             <div className="scoreboard__charts">
               <ConcurrencyChart series={data.concurrency || []} peak={data.peakConcurrency ?? 0} t={t} />
-              <ActivityStrip daily={data.daily || []} t={t} />
+              <ActivityStrip daily={data.daily || []} window={window} t={t} />
               {agents.length > 0 && <Leaderboard agents={agents} t={t} />}
             </div>
           )}
@@ -217,12 +217,15 @@ function ConcurrencyChart({ series, peak, t }) {
   );
 }
 
-// 7-day activity — prompts sent per calendar day (work time in the tooltip).
-function ActivityStrip({ daily, t }) {
+// Per-day activity — prompts sent per calendar day (work time in the tooltip).
+// The strip spans the selected window (today / 7d / all), so the bar count and
+// label vary; we size maxP and the label off the actual entries, not a fixed 7.
+function ActivityStrip({ daily, window, t }) {
   const maxP = Math.max(1, ...daily.map((d) => d.prompts));
+  const span = t(`scoreboard.activitySpan.${window}`, { n: daily.length });
   return (
     <div className="scoreboard__chart">
-      <h4 className="scoreboard__chart-title">{t('scoreboard.activity')}</h4>
+      <h4 className="scoreboard__chart-title">{t('scoreboard.activity')} — {span}</h4>
       <div className="scoreboard__days">
         {daily.map((d) => {
           const day = new Date(d.date);

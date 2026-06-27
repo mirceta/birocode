@@ -1,3 +1,5 @@
+using ClaudeWeb.Services.Audit;
+using ClaudeWeb.Services.Auth;
 using ClaudeWeb.Services.IpFilter;
 
 namespace ClaudeWeb.UI;
@@ -16,16 +18,21 @@ namespace ClaudeWeb.UI;
 public class IpFilterForm : Form
 {
     private readonly IpAllowlistService _allowlist;
+    private readonly DeviceTokenService _devices;
+    private readonly AuditService _audit;
     private readonly ListView _guests;
     private readonly ListView _attempts;
+    private readonly ListView _trustedDevices;
 
-    public IpFilterForm(IpAllowlistService allowlist)
+    public IpFilterForm(IpAllowlistService allowlist, DeviceTokenService devices, AuditService audit)
     {
         _allowlist = allowlist;
+        _devices = devices;
+        _audit = audit;
 
         Text = "Guests (IP allowlist)";
-        Size = new Size(900, 460);
-        MinimumSize = new Size(700, 340);
+        Size = new Size(900, 560);
+        MinimumSize = new Size(700, 420);
         StartPosition = FormStartPosition.CenterParent;
         BackColor = Color.White;
 
@@ -40,14 +47,34 @@ public class IpFilterForm : Form
         _attempts.Columns.Add("Attempts", 70, HorizontalAlignment.Right);
         _attempts.Columns.Add("Last attempt", 130);
 
+        // Trusted devices (openspec add-resilient-auth): cookies that bypass the
+        // IP gate. The Operator revokes here — removing an IP no longer evicts a
+        // cookie-holder, so this is the only place a device can be fully cut off.
+        _trustedDevices = MakeList();
+        _trustedDevices.Columns.Add("Name", 150);
+        _trustedDevices.Columns.Add("Last seen", 130);
+        _trustedDevices.Columns.Add("Last IP", 130);
+        _trustedDevices.Columns.Add("Issued", 130);
+
+        // Left column: guests on top, trusted devices below. Right column: attempts.
+        var leftSplit = new SplitContainer
+        {
+            Dock = DockStyle.Fill,
+            Orientation = Orientation.Horizontal,
+            SplitterWidth = 5,
+        };
+        leftSplit.Panel1.Controls.Add(_guests);
+        leftSplit.Panel1.Controls.Add(MakeCaption("  Approved guests"));
+        leftSplit.Panel2.Controls.Add(_trustedDevices);
+        leftSplit.Panel2.Controls.Add(MakeCaption("  Trusted devices (cookie bypasses the IP gate)"));
+
         var split = new SplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Vertical,
             SplitterWidth = 5,
         };
-        split.Panel1.Controls.Add(_guests);
-        split.Panel1.Controls.Add(MakeCaption("  Approved guests"));
+        split.Panel1.Controls.Add(leftSplit);
         split.Panel2.Controls.Add(_attempts);
         split.Panel2.Controls.Add(MakeCaption("  Connection attempts (not approved)"));
 
@@ -66,21 +93,33 @@ public class IpFilterForm : Form
         approveManual.Click += OnApproveManual;
         var removeGuest = MakeButton("Remove guest", 110);
         removeGuest.Click += OnRemoveGuest;
+        var revokeDevice = MakeButton("Revoke device", 110);
+        revokeDevice.Click += OnRevokeDevice;
         var clearAttempts = MakeButton("Clear attempts", 110);
         clearAttempts.Click += OnClearAttempts;
 
         buttonBar.Controls.Add(approveAttempt);
         buttonBar.Controls.Add(approveManual);
         buttonBar.Controls.Add(removeGuest);
+        buttonBar.Controls.Add(revokeDevice);
         buttonBar.Controls.Add(clearAttempts);
 
         Controls.Add(split);
         Controls.Add(buttonBar);
 
-        Load += (_, _) => split.SplitterDistance = Math.Max(300, Width / 2);
+        Load += (_, _) =>
+        {
+            split.SplitterDistance = Math.Max(300, Width / 2);
+            leftSplit.SplitterDistance = Math.Max(160, leftSplit.Height / 2);
+        };
 
         _allowlist.Changed += OnAllowlistChanged;
-        FormClosed += (_, _) => _allowlist.Changed -= OnAllowlistChanged;
+        _devices.Changed += OnAllowlistChanged;
+        FormClosed += (_, _) =>
+        {
+            _allowlist.Changed -= OnAllowlistChanged;
+            _devices.Changed -= OnAllowlistChanged;
+        };
 
         RefreshLists();
     }
@@ -149,6 +188,16 @@ public class IpFilterForm : Form
             })
             { Tag = a.Ip });
         _attempts.EndUpdate();
+
+        _trustedDevices.BeginUpdate();
+        _trustedDevices.Items.Clear();
+        foreach (var d in _devices.Snapshot())
+            _trustedDevices.Items.Add(new ListViewItem(new[]
+            {
+                d.Name, Local(d.LastSeenUtc), d.LastIp ?? "—", Local(d.IssuedUtc),
+            })
+            { Tag = d.RevokeId });
+        _trustedDevices.EndUpdate();
     }
 
     private static string Local(DateTime? utc) =>
@@ -180,6 +229,8 @@ public class IpFilterForm : Form
         if (_allowlist.Approve(ip, name) is { } error)
             MessageBox.Show(this, error, "Could not approve",
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        else
+            _audit.LogOperatorAuth("guest-approve", $"{name} ({ip})");
     }
 
     private void OnRemoveGuest(object? sender, EventArgs e)
@@ -195,6 +246,44 @@ public class IpFilterForm : Form
         if (confirm != DialogResult.Yes) return;
 
         _allowlist.Remove(ip);
+        _audit.LogOperatorAuth("guest-remove", $"{name} ({ip})");
+
+        // A trusted-device cookie outlives an IP removal (it bypasses the gate from
+        // any IP), so offer to revoke this person's device tokens too — otherwise
+        // they cannot be fully evicted (openspec add-resilient-auth).
+        if (_devices.Snapshot().Any(d => string.Equals(d.Name, name, StringComparison.OrdinalIgnoreCase)))
+        {
+            var alsoRevoke = MessageBox.Show(this,
+                $"\"{name}\" has trusted device(s) whose cookie can still bypass the IP gate from any address.\n\nRevoke those too, so they are fully evicted?",
+                "Revoke trusted devices", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            if (alsoRevoke == DialogResult.Yes)
+            {
+                var n = _devices.RevokeByName(name);
+                _audit.LogOperatorAuth("device-revoke", $"{n} device(s) for {name}");
+            }
+        }
+    }
+
+    private void OnRevokeDevice(object? sender, EventArgs e)
+    {
+        if (_trustedDevices.SelectedItems.Count == 0)
+        {
+            MessageBox.Show(this, "Select a trusted device first.", "Revoke device",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        var item = _trustedDevices.SelectedItems[0];
+        var name = item.SubItems[0].Text;
+        var id = (string)item.Tag!;
+
+        var confirm = MessageBox.Show(this,
+            $"Revoke the trusted device for \"{name}\"?\n\nIts cookie will no longer bypass the IP gate — from a new IP it will be rejected until re-approved.",
+            "Revoke device", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+        if (confirm == DialogResult.Yes)
+        {
+            _devices.Revoke(id);
+            _audit.LogOperatorAuth("device-revoke", name);
+        }
     }
 
     private void OnClearAttempts(object? sender, EventArgs e)

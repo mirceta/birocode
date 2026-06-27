@@ -211,10 +211,17 @@
   align-items: flex-end;
   gap: 8px;
   height: 120px;
+  /* The strip span tracks the window, so the bar count is variable. Few days
+     stretch to fill the width; many (the "all" window) scroll horizontally
+     rather than squashing each bar to an illegible sliver. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 4px;
 }
 
 .scoreboard__day {
-  flex: 1;
+  flex: 1 0 28px;
+  min-width: 28px;
   display: flex;
   flex-direction: column;
   align-items: center;

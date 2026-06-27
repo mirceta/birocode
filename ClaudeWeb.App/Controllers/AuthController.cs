@@ -1,5 +1,7 @@
+using ClaudeWeb.Services.Audit;
 using ClaudeWeb.Services.Auth;
 using ClaudeWeb.Services.Hosting;
+using ClaudeWeb.Services.IpFilter;
 using ClaudeWeb.Services.Logging;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -12,7 +14,9 @@ namespace ClaudeWeb.Controllers;
 ///   POST /api/auth/login    -- { password } -> session cookie       (exempt)
 ///   GET  /api/auth/check    -- { authenticated }                    (exempt)
 ///   POST /api/auth/logout   -- revokes the cookie session           (authed)
-///   POST /api/auth/password -- { current, next } rotates password   (authed)
+///
+/// The access code is NOT changeable over the web — only the operator at the host
+/// PC can set it (openspec add-desktop-access-code). There is no change-password endpoint.
 ///
 /// The session token travels in an HttpOnly SameSite=Strict cookie; JS never
 /// sees it. `Secure` is set when the original request came over HTTPS
@@ -25,11 +29,17 @@ public class AuthController : ControllerBase
     public const string CookieName = "claudeweb_session";
 
     private readonly AuthService _auth;
+    private readonly DeviceTokenService _devices;
+    private readonly IpAllowlistService _ipAllowlist;
+    private readonly AuditService _audit;
     private readonly Logger _logger;
 
-    public AuthController(AuthService auth, Logger logger)
+    public AuthController(AuthService auth, DeviceTokenService devices, IpAllowlistService ipAllowlist, AuditService audit, Logger logger)
     {
         _auth = auth;
+        _devices = devices;
+        _ipAllowlist = ipAllowlist;
+        _audit = audit;
         _logger = logger;
     }
 
@@ -53,7 +63,23 @@ public class AuthController : ControllerBase
 
         _auth.RecordSuccess(client);
         var token = _auth.CreateSession();
-        Response.Cookies.Append(CookieName, token, CookieOptions(HttpContext));
+        Response.Cookies.Append(CookieName, token, CookieOptions(HttpContext, AuthService.SessionLifetime));
+
+        // Mint a trusted-device cookie on first approved entry (openspec add-resilient-auth).
+        // Guard (task 2.2): only when this request is on an approved IP — never for a request
+        // the IP gate admitted purely via an existing cookie or rejected — and only once per
+        // device. Tag it with the approved-IP guest's name so the Operator can identify it.
+        var actor = _audit.ResolveActor(HttpContext);
+        _audit.LogAuth(actor, "login");
+        if (_ipAllowlist.IsApproved(client) &&
+            !_devices.IsValid(Request.Cookies[DeviceTokenService.CookieName]))
+        {
+            var name = _ipAllowlist.GuestName(client) ?? client;
+            var deviceToken = _devices.Issue(name);
+            Response.Cookies.Append(DeviceTokenService.CookieName, deviceToken, CookieOptions(HttpContext, _devices.Lifetime));
+            _audit.LogAuth(actor, "device-mint", name);
+        }
+
         _logger.Info($"[AUTH] Login from {client}");
         return Ok(new { ok = true });
     }
@@ -70,28 +96,23 @@ public class AuthController : ControllerBase
     {
         _logger.CountRequest();
         _auth.RevokeSession(Request.Cookies[CookieName]);
-        Response.Cookies.Delete(CookieName, CookieOptions(HttpContext));
+        Response.Cookies.Delete(CookieName, CookieOptions(HttpContext, AuthService.SessionLifetime));
+        // Logout ends the session only; the trusted-device cookie (IP-gate bypass) is
+        // deliberately left in place — revoke it from the desktop "Trusted devices" list.
         return Ok(new { ok = true });
     }
 
-    public record ChangePasswordRequest(string? Current, string? Next);
+    // The access code is NOT changeable over the web (openspec add-desktop-access-code): only the
+    // operator at the host PC can set it, via the WinForms "Set access code" button. There is
+    // deliberately no POST /api/auth/password endpoint.
 
-    [HttpPost("password")]
-    public IActionResult ChangePassword([FromBody] ChangePasswordRequest request)
-    {
-        _logger.CountRequest();
-        var error = _auth.ChangePassword(request?.Current, request?.Next, Request.Cookies[CookieName]);
-        if (error != null) return BadRequest(new { error });
-        return Ok(new { ok = true });
-    }
-
-    private static CookieOptions CookieOptions(HttpContext context) => new()
+    private static CookieOptions CookieOptions(HttpContext context, TimeSpan maxAge) => new()
     {
         HttpOnly = true,
         SameSite = SameSiteMode.Strict,
         Secure = IsHttps(context),
         Path = "/",
-        MaxAge = AuthService.SessionLifetime,
+        MaxAge = maxAge,
     };
 
     private static bool IsHttps(HttpContext context) =>

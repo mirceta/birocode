@@ -1,3 +1,4 @@
+using ClaudeWeb.Services.Auth;
 using ClaudeWeb.Services.Hosting;
 using ClaudeWeb.Services.Logging;
 using Microsoft.AspNetCore.Http;
@@ -21,14 +22,16 @@ public class IpFilterMiddleware
     private readonly RequestDelegate _next;
     private readonly IpAllowlistService _allowlist;
     private readonly IpConnectionRegistry _connections;
+    private readonly DeviceTokenService _devices;
     private readonly Logger _logger;
 
     public IpFilterMiddleware(RequestDelegate next, IpAllowlistService allowlist,
-        IpConnectionRegistry connections, Logger logger)
+        IpConnectionRegistry connections, DeviceTokenService devices, Logger logger)
     {
         _next = next;
         _allowlist = allowlist;
         _connections = connections;
+        _devices = devices;
         _logger = logger;
     }
 
@@ -36,15 +39,34 @@ public class IpFilterMiddleware
     {
         var ip = ClientIp.Get(context);
 
-        if (!_allowlist.IsApproved(ip))
+        if (_allowlist.IsApproved(ip))
         {
-            _allowlist.RecordAttempt(ip);
-            _logger.Error($"[IPFILTER] Rejected {ip} — not on the allowlist ({context.Request.Method} {context.Request.Path})");
-            await RejectAsync(context, ip);
+            _allowlist.RecordAccess(ip);
+            await PassAsync(context, ip);
             return;
         }
 
-        _allowlist.RecordAccess(ip);
+        // Not on the allowlist — admit anyway if the request carries a valid
+        // trusted-device cookie (openspec add-resilient-auth). This is the
+        // 4G-rescue case: an already-approved device whose IP rotated. Sliding
+        // the token also records the new source IP on the device, so the
+        // Operator can see a friend's addresses in the "Trusted devices" list.
+        var deviceName = _devices.ValidateAndSlide(context.Request.Cookies[DeviceTokenService.CookieName], ip);
+        if (deviceName != null)
+        {
+            _logger.Info($"[IPFILTER] Admitted {ip} via trusted-device cookie (\"{deviceName}\")");
+            await PassAsync(context, ip);
+            return;
+        }
+
+        // Otherwise: the same hard 403 + standalone rejection page as before.
+        _allowlist.RecordAttempt(ip);
+        _logger.Error($"[IPFILTER] Rejected {ip} — not on the allowlist, no device cookie ({context.Request.Method} {context.Request.Path})");
+        await RejectAsync(context, ip);
+    }
+
+    private async Task PassAsync(HttpContext context, string ip)
+    {
         using (_connections.Track(ip, context))
         {
             await _next(context);

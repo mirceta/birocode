@@ -15,7 +15,8 @@ namespace ClaudeWeb.Services.Analytics;
 ///
 /// Beyond the headline scalars it produces two real time series — concurrency
 /// over the window (a step line of how many agents ran at once) and a per-day
-/// rollup (prompts + work, last 7 calendar days) — plus a per-agent leaderboard.
+/// rollup (prompts + work) whose span tracks the selected window — plus a
+/// per-agent leaderboard.
 /// </summary>
 public class AnalyticsService
 {
@@ -103,7 +104,7 @@ public class AnalyticsService
         var totalCost = runs.Sum(r => r.Cost);
 
         var (peak, concurrency) = ConcurrencySeries(runs, axisLo, now);
-        var daily = Daily(allRuns, events);
+        var daily = Daily(win, allRuns, events);
 
         var agents = runs
             .GroupBy(r => r.Agent)
@@ -151,12 +152,23 @@ public class AnalyticsService
         return (peak, series);
     }
 
-    // Last 7 calendar days (oldest→newest): prompt starts that day + work clipped
-    // to the day. Independent of the selected window so the trend strip is stable.
-    private List<DayStat> Daily(List<Run> allRuns, IReadOnlyList<ActivityLog.Event> events)
+    // Per-day rollup (oldest→newest): prompt starts that day + work clipped to the
+    // day. The span tracks the selected window so the strip stays consistent with
+    // the rest of the panel: today ⇒ 1 day, 7d ⇒ the trailing 7 calendar days, all
+    // ⇒ the earliest recorded run's day through today (single current day when the
+    // ledger is empty).
+    private List<DayStat> Daily(string win, List<Run> allRuns, IReadOnlyList<ActivityLog.Event> events)
     {
-        var days = new List<DayStat>(7);
-        for (var i = 6; i >= 0; i--)
+        // First day of the span (days back from today), per the window.
+        var span = win switch
+        {
+            "today" => 0,
+            "7d" => 6,
+            _ => EarliestDaysAgo(events),   // "all"
+        };
+
+        var days = new List<DayStat>(span + 1);
+        for (var i = span; i >= 0; i--)
         {
             var lo = LocalMidnight(i);
             var hi = LocalMidnight(i - 1); // next midnight
@@ -167,6 +179,18 @@ public class AnalyticsService
             days.Add(new DayStat(lo, prompts, work));
         }
         return days;
+    }
+
+    // Whole calendar days between the earliest recorded event and today (0 = today).
+    // Falls back to 0 (today only) on an empty ledger, and clamps future-dated
+    // events so the span is never negative.
+    private static int EarliestDaysAgo(IReadOnlyList<ActivityLog.Event> events)
+    {
+        if (events.Count == 0) return 0;
+        var earliestTs = events.Min(e => e.Ts);
+        var earliestDay = DateTimeOffset.FromUnixTimeMilliseconds(earliestTs).LocalDateTime.Date;
+        var daysAgo = (DateTime.Today - earliestDay).Days;
+        return daysAgo > 0 ? daysAgo : 0;
     }
 
     // Unix-ms of local midnight `daysAgo` days back (daysAgo = -1 ⇒ tomorrow).

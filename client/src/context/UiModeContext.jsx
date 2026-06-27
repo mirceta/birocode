@@ -44,6 +44,7 @@ export const FEATURES = {
   autopilotTab: 'advanced', // loop-autopilot: discover recurring routine prompts (plans/loop-autopilot.md)
   taskGraph: 'advanced', // task dependency graph dashboard section (plans/task-dependency-graph.md)
   filesDock: 'advanced', // Files browse/view tab INSIDE each agent dock, scoped to that agent's repo (plans/agent-dock-files-tab.md)
+  eventConsole: 'advanced', // Console lane in each agent dock: per-repo log of harness-owned background ops (openspec: agent-dock-event-console)
   filesIdeMode: 'advanced', // IDE split: tree left + viewer right + fuzzy search + collapsible browser (plans/files-ide-mode.md)
   understandingPanel: 'advanced', // restatement-of-request panel atop chat (plans/understanding-panel.md)
   featureKickoff: 'advanced', // composer button that prefills the "start a new feature" ritual (plans/feature-kickoff.md)
@@ -52,10 +53,10 @@ export const FEATURES = {
   toolCallHistory: 'advanced', // Tool calls drawer: consolidated tool-call list for the active conversation (openspec: add-tool-call-history)
   promptExpand: 'advanced', // composer button that opens the current draft in a large editor popup (openspec: add-prompt-expand-popup)
   localAppDiscovery: 'advanced', // "Discover local apps" button in each agent dock: read-only agent scan → {name,port} (openspec: discover-local-apps)
-  permissionBadge: 'advanced', // read-only preset badge on each dashboard agent dock; config stays desktop-only (openspec: add-per-project-claude-permissions)
   cockpitTab: 'advanced', // read-only OpenSpec Cockpit tab, scoped to the selected repo (openspec: openspec-cockpit-in-harness)
   paneSpanButtons: 'advanced', // -/+ span steppers in each multi-pane top bar; reuses the Settings tabWidths span (openspec: add-pane-span-buttons)
   operatorMessages: 'advanced', // Operator messages drawer: consolidated list of the active conversation's user-role messages (openspec: add-operator-message-history)
+  codeHighlight: 'advanced', // IDE line-number gutter for code/text files + C# token coloring in the Files viewer (openspec: add-cs-syntax-highlighting)
 };
 
 const MODE_KEY = 'claudeweb_ui_mode';

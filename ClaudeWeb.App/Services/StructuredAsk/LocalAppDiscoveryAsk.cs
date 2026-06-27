@@ -50,6 +50,12 @@ For each app you find, report:
   - port: the fixed port it listens on (an integer)
   - folder: the repo-relative folder it lives in
   - evidence: the file and line where the port is bound (e.g. homepage/serve.mjs:22)
+  - startCommand: the command that LAUNCHES the app, meant to be run from its
+    folder (the value of `folder`). Read it from the server file you found -- e.g.
+    `node serve.mjs` for a Node server file, `powershell -File serve.ps1` for a
+    PowerShell server, or the documented start command if one is given. Report just
+    the command (no `cd` prefix). Use an empty string ONLY if you genuinely cannot
+    determine how to start it.
 
 If the repository has no such directory, return an empty ""apps"" array. Do not invent
 entries.

@@ -92,27 +92,29 @@ public class AuthService
         return VerifyAgainstHash(password, hash);
     }
 
+    // The web change-password path (ChangePassword, verifying the current code) was removed:
+    // the access code is settable ONLY from the desktop (openspec add-desktop-access-code).
+
     /// <summary>
-    /// Changes the password (verifying the current one) and revokes every
-    /// session except <paramref name="keepToken"/>. Returns an error message
-    /// or null on success.
+    /// DESKTOP-ONLY (openspec add-desktop-access-code): sets the access code WITHOUT requiring the
+    /// current one — the Operator at the host PC is the trusted access authority, the same elevated
+    /// authority that approves IPs. Revokes every active session so all clients re-authenticate.
+    /// Returns an error message or null on success. NOT exposed over the web.
     /// </summary>
-    public string? ChangePassword(string? current, string? next, string? keepToken)
+    public string? SetPassword(string? next)
     {
-        if (!VerifyPassword(current)) return "Current password is incorrect";
-        if (string.IsNullOrWhiteSpace(next) || next.Length < 8)
-            return "New password must be at least 8 characters";
+        if (string.IsNullOrWhiteSpace(next) || next.Trim().Length < 8)
+            return "Access code must be at least 8 characters.";
 
         lock (_gate)
         {
-            _passwordHash = HashPassword(next);
+            _passwordHash = HashPassword(next.Trim());
             _passwordVersion++;
             SaveAuth();
-            var keepHash = keepToken is null ? null : Sha256(keepToken);
-            _sessions.RemoveAll(s => s.TokenHash != keepHash);
+            _sessions.Clear();
             SaveSessions();
         }
-        _logger.Info("[AUTH] Password changed; other sessions revoked");
+        _logger.Info("[AUTH] Access code set from the desktop; all sessions revoked");
         return null;
     }
 

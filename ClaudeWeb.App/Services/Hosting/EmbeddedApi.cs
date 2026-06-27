@@ -6,6 +6,7 @@ using ClaudeWeb.Services.Auth;
 using ClaudeWeb.Services.Chat;
 using ClaudeWeb.Services.Deploy;
 using ClaudeWeb.Services.Dock;
+using ClaudeWeb.Services.Events;
 using ClaudeWeb.Services.Expose;
 using ClaudeWeb.Services.Files;
 using ClaudeWeb.Services.Git;
@@ -62,12 +63,15 @@ public class EmbeddedApi
     private readonly RepositoryRegistry _repositories;
     private readonly IpAllowlistService _ipAllowlist;
     private readonly Autopilot.AutopilotGate _autopilotGate;
+    private readonly Auth.DeviceTokenService _deviceTokens;
+    private readonly Audit.AuditService _audit;
+    private readonly Auth.AuthService _auth;
     private WebApplication? _app;
 
     public bool IsRunning { get; private set; }
     public int Port => _config.Port;
 
-    public EmbeddedApi(AppConfig config, Logger logger, CallLog callLog, RepositoryRegistry repositories, IpAllowlistService ipAllowlist, Autopilot.AutopilotGate autopilotGate)
+    public EmbeddedApi(AppConfig config, Logger logger, CallLog callLog, RepositoryRegistry repositories, IpAllowlistService ipAllowlist, Autopilot.AutopilotGate autopilotGate, Auth.DeviceTokenService deviceTokens, Audit.AuditService audit, Auth.AuthService auth)
     {
         _config = config;
         _logger = logger;
@@ -75,6 +79,9 @@ public class EmbeddedApi
         _repositories = repositories;
         _ipAllowlist = ipAllowlist;
         _autopilotGate = autopilotGate;
+        _deviceTokens = deviceTokens;
+        _audit = audit;
+        _auth = auth;
     }
 
     public void Start()
@@ -111,6 +118,12 @@ public class EmbeddedApi
             // Pre-built so the WinForms UI and the API share one instance.
             builder.Services.AddSingleton(_repositories);
             builder.Services.AddSingleton(_ipAllowlist);
+            // Pre-built so the WinForms "Trusted devices" GUI and the API share one
+            // instance (openspec add-resilient-auth).
+            builder.Services.AddSingleton(_deviceTokens);
+            // Pre-built so the WinForms "Activity" tab (reader) and the API (writer) share
+            // one instance (openspec add-action-audit).
+            builder.Services.AddSingleton(_audit);
             // Pre-built so the WinForms host (the ONLY surface that can flip it) and
             // the API share one instance (plans/loop-autopilot-safety.md).
             builder.Services.AddSingleton(_autopilotGate);
@@ -136,7 +149,7 @@ public class EmbeddedApi
 
             // === MODULE SERVICE REGISTRATION (orchestrator wires these between phases) ===
             builder.Services.AddIpFilterModule(); // IP allowlist (plans/auth-ip-filter.md)
-            builder.Services.AddAuthModule();   // session login (plans/auth-login.md)
+            builder.Services.AddAuthModule(_auth);   // session login (plans/auth-login.md); pre-built so the desktop can set the access code
             builder.Services.AddRepositoryModule(); // multi-repo (resolver + HttpContext)
             builder.Services.AddChatModule();   // M1
             builder.Services.AddFileModule();   // M2
@@ -157,6 +170,7 @@ public class EmbeddedApi
             builder.Services.AddAutopilotModule(); // loop-autopilot discovery (plans/loop-autopilot.md)
             builder.Services.AddTaskGraphModule(); // task dependency graph (plans/task-dependency-graph.md)
             builder.Services.AddStructuredAskModule(); // discover local apps (openspec discover-local-apps)
+            builder.Services.AddEventsModule(); // per-repo agent-dock Event Console log (openspec agent-dock-event-console)
             builder.Services.AddOpenspecCockpitModule(); // harness OpenSpec Cockpit (openspec openspec-cockpit-in-harness)
             // === END MODULE SERVICE REGISTRATION ===
 

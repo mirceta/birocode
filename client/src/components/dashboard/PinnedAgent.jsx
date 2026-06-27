@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Chat from '../../pages/Chat';
 import { apiGet, apiPost } from '../../api/client';
 import { useChatFor } from '../../context/ChatContext';
@@ -9,9 +9,9 @@ import GitStatusSummary from '../git/GitStatusSummary';
 import { deriveGitActions, pullMainPath } from '../git/gitActions';
 import ProductFrame from '../app/ProductFrame';
 import FilesBrowser from '../files/FilesBrowser';
+import EventConsole from './EventConsole';
 import CopyPath from './CopyPath';
 import ImportantStar from './ImportantStar';
-import PermissionBadge from './PermissionBadge';
 import WideToggle from './WideToggle';
 import WaitingBadge from './WaitingBadge';
 import WaitingOnField from './WaitingOnField';
@@ -30,7 +30,6 @@ export default function PinnedAgent({
   recency,
   contentZoom = 1,
   repoPath,
-  permission = null,
   localApps,
   git,
   gitRefreshing = false,
@@ -79,6 +78,13 @@ export default function PinnedAgent({
   const filesOn = useFeature('filesDock');
   const [showFiles, setShowFiles] = useState(false);
 
+  // Event Console lane (openspec agent-dock-event-console): a sibling screen that
+  // shows the per-repo log of harness-owned background operations (discovery / run
+  // / check). Like Files, picking it swaps phone__screen to <EventConsole>; picking
+  // a lane / app swaps back. Gated on the eventConsole feature (Advanced default).
+  const consoleOn = useFeature('eventConsole');
+  const [showConsole, setShowConsole] = useState(false);
+
   // Maximize chat to fill the dock (openspec add-maximize-chat-dock): an ephemeral,
   // per-dock toggle that collapses the non-chat chrome (bar, lanes, apps, git,
   // discover) so the embedded chat gets the dock's full height. State lives here
@@ -88,16 +94,22 @@ export default function PinnedAgent({
   // showing (not Files / a local app), so we gate the modifier on that.
   const [chatMaximized, setChatMaximized] = useState(false);
   const toggleChatMaximized = () => setChatMaximized((v) => !v);
-  const chatShowing = !showFiles && !openApp;
+  const chatShowing = !showFiles && !openApp && !showConsole;
   const maximized = chatMaximized && chatShowing;
 
-  // "Discover local apps" (openspec discover-local-apps): a read-only agent scan of
-  // THIS dock's repo for self-serving local-app exposures, returning a typed
-  // { name, port } list. Single repo per click (the dock's), via
-  // GET /api/local-apps/discover scoped by X-Repo-Id. Advanced-mode only.
+  // "Discover local apps" (openspec discover-local-apps + discover-local-apps-resilient):
+  // a read-only agent scan of THIS dock's repo for self-serving local-app exposures,
+  // returning a typed { name, port } list. Discovery is now BACKEND-OWNED: the scan
+  // is a per-repo server job, so a refresh mid-scan no longer cancels it or loses the
+  // result. We drive the UI from server state instead of fire-and-forget local state —
+  // on mount/repo-change we GET .../discover/status to reattach (spinner if running,
+  // result/error if it finished while we were away), and the Discover button hits the
+  // start-or-join endpoint then polls status at the dock cadence until terminal.
+  // Single repo per click (the dock's), scoped by X-Repo-Id. Advanced-mode only.
   const canDiscover = useFeature('localAppDiscovery');
-  const [discovering, setDiscovering] = useState(false);
-  const [discovery, setDiscovery] = useState(null); // { apps } | { error } | null
+  const [discovery, setDiscovery] = useState(null); // { status, apps?, error? } | null
+  const discovering = discovery?.status === 'running';
+  const pollRef = useRef(null);
 
   // Register a discovered app as a real local app, closing the loop with the Local
   // tab's name+port form (POST /repos/{id}/localapps). A discovered row whose port
@@ -108,6 +120,15 @@ export default function PinnedAgent({
   const [registering, setRegistering] = useState(null); // port currently being registered
   const [registerErr, setRegisterErr] = useState(null); // { port, text } | null
   const registeredPorts = new Set((localApps || []).map((a) => a.port));
+
+  // Run / Check (openspec discover-local-apps-run-controls): start a discovered app
+  // and confirm it came up. "running" is computed LIVE by the backend per fetch (port
+  // liveness), so Check is simply "re-fetch status". Run posts the app's port — the
+  // server launches the command the SCAN extracted (never a client-supplied string) —
+  // then we re-check after a short grace so the row's running dot reflects reality.
+  const [running, setRunning] = useState(null); // port currently being launched
+  const [runErr, setRunErr] = useState(null); // { port, text } | null
+  const [checking, setChecking] = useState(false);
 
   const registerApp = async (app) => {
     setRegistering(app.port);
@@ -156,21 +177,103 @@ export default function PinnedAgent({
     }
   };
 
-  const discover = async () => {
-    setDiscovering(true);
-    setDiscovery(null);
+  const stopPoll = () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  };
+
+  // Read the server's current job state for this dock's repo. Stops polling once
+  // the job is no longer running (done/error/idle), so a finished scan settles.
+  // `probe` marks an explicit user "Check running" (or the post-Run auto-check) so
+  // the backend emits a check event to the Event Console; the background poll omits
+  // it so the log isn't flooded (openspec agent-dock-event-console).
+  const fetchDiscoverStatus = useCallback(async (probe = false) => {
     try {
-      // X-Repo-Id = this dock's repo, so the server scans only that repo.
+      const path = probe
+        ? '/local-apps/discover/status?probe=true'
+        : '/local-apps/discover/status';
+      const r = await apiGet(path, { repoId: tab.repoId });
+      setDiscovery(r);
+      if (r.status !== 'running') stopPoll();
+      return r;
+    } catch {
+      stopPoll();
+      return null;
+    }
+  }, [tab.repoId]);
+
+  const startPoll = () => {
+    if (pollRef.current) return;
+    pollRef.current = setInterval(fetchDiscoverStatus, 5000); // dock cadence
+  };
+
+  // Reattach on mount / repo-change: observe a running scan (show spinner + poll)
+  // or pick up a result/error that landed while this dock was away — without
+  // starting a new scan. Idle (no recent job) just renders the bare button.
+  useEffect(() => {
+    if (!canDiscover) return undefined;
+    let alive = true;
+    setDiscovery(null);
+    (async () => {
+      const r = await fetchDiscoverStatus();
+      if (alive && r?.status === 'running') startPoll();
+    })();
+    return () => {
+      alive = false;
+      stopPoll();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canDiscover, tab.repoId, fetchDiscoverStatus]);
+
+  const discover = async () => {
+    setRegisterErr(null);
+    try {
+      // Start-or-join: X-Repo-Id = this dock's repo, so the server scans only that
+      // repo. Returns the current job state immediately; we drive off server state
+      // and poll until terminal, so a refresh mid-scan re-derives it.
       const r = await apiGet('/local-apps/discover', { repoId: tab.repoId });
-      setDiscovery({ apps: r.apps || [] });
+      setDiscovery(r);
+      if (r.status === 'running') startPoll();
     } catch (err) {
       let text = err.message;
       try {
         text = JSON.parse(err.message).error || text;
       } catch { /* raw text */ }
-      setDiscovery({ error: text });
+      setDiscovery({ status: 'error', error: text });
+    }
+  };
+
+  // Re-fetch the discovery status, which recomputes each app's live `running` flag
+  // (the backend reads port liveness per fetch). Reuses the reattach path — does NOT
+  // start a new scan. Defined after fetchDiscoverStatus so the dep is in scope.
+  const checkRunning = useCallback(async () => {
+    setChecking(true);
+    try {
+      await fetchDiscoverStatus(true); // probe → emits a check event to the console
     } finally {
-      setDiscovering(false);
+      setChecking(false);
+    }
+  }, [fetchDiscoverStatus]);
+
+  // Start a discovered app, then re-check its running state after a short grace so
+  // the row's dot flips on once the server is listening. The server resolves the
+  // command from its own scan result by port — we only send the port.
+  const runApp = async (app) => {
+    setRunning(app.port);
+    setRunErr(null);
+    try {
+      await apiPost('/local-apps/run', { port: app.port }, { repoId: tab.repoId });
+      setTimeout(() => { checkRunning(); }, 1500);
+    } catch (err) {
+      let text = err.message;
+      try {
+        text = JSON.parse(err.message).error || text;
+      } catch { /* raw text */ }
+      setRunErr({ port: app.port, text });
+    } finally {
+      setRunning(null);
     }
   };
 
@@ -206,7 +309,6 @@ export default function PinnedAgent({
           onToggle={() => onToggleWaiting?.(tab.id)}
           className="phone__waiting"
         />
-        {permission && <PermissionBadge policy={permission} className="phone__perm" />}
       </button>
       {tab.waiting && (
         <WaitingOnField
@@ -227,10 +329,11 @@ export default function PinnedAgent({
         <button
           type="button"
           role="tab"
-          aria-selected={!isAsk && !showFiles}
-          className={`phone__lane${!isAsk && !showFiles ? ' phone__lane--on' : ''}`}
+          aria-selected={!isAsk && !showFiles && !showConsole}
+          className={`phone__lane${!isAsk && !showFiles && !showConsole ? ' phone__lane--on' : ''}`}
           onClick={() => {
             setShowFiles(false);
+            setShowConsole(false);
             setLaneView('builder');
           }}
         >
@@ -239,11 +342,12 @@ export default function PinnedAgent({
         <button
           type="button"
           role="tab"
-          aria-selected={isAsk && !showFiles}
-          className={`phone__lane${isAsk && !showFiles ? ' phone__lane--on' : ''}`}
+          aria-selected={isAsk && !showFiles && !showConsole}
+          className={`phone__lane${isAsk && !showFiles && !showConsole ? ' phone__lane--on' : ''}`}
           title={t('chat.askHint')}
           onClick={() => {
             setShowFiles(false);
+            setShowConsole(false);
             setLaneView('ask');
           }}
         >
@@ -258,10 +362,27 @@ export default function PinnedAgent({
             title={t('files.tabHint')}
             onClick={() => {
               setOpenAppId(null);
+              setShowConsole(false);
               setShowFiles(true);
             }}
           >
             {t('files.tab')}
+          </button>
+        )}
+        {consoleOn && (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={showConsole}
+            className={`phone__lane${showConsole ? ' phone__lane--on' : ''}`}
+            title={t('console.hint')}
+            onClick={() => {
+              setOpenAppId(null);
+              setShowFiles(false);
+              setShowConsole(true);
+            }}
+          >
+            {t('console.tab')}
           </button>
         )}
       </div>
@@ -280,6 +401,7 @@ export default function PinnedAgent({
               className={`phone__app${a.id === openAppId ? ' phone__app--on' : ''}`}
               onClick={() => {
                 setShowFiles(false);
+                setShowConsole(false);
                 setOpenAppId((cur) => (cur === a.id ? null : a.id));
               }}
               title={`:${a.port}${a.kind === 'harness' ? ' · harness' : ''}`}
@@ -292,7 +414,7 @@ export default function PinnedAgent({
       {/* Discover local apps (openspec discover-local-apps): one read-only agent
           scan of THIS dock's repo → typed { name, port } list. Chat-context
           furniture like the git block; hidden while Files / a local app is open. */}
-      {canDiscover && !showFiles && !openApp && (
+      {canDiscover && !showFiles && !openApp && !showConsole && (
         <div className="phone__discover">
           <button
             type="button"
@@ -311,32 +433,69 @@ export default function PinnedAgent({
           {discovery?.apps && (discovery.apps.length === 0 ? (
             <div className="phone__discover-msg" role="status">{t('dashboard.discoverNone')}</div>
           ) : (
-            <ul className="phone__discover-list">
-              {discovery.apps.map((a, i) => {
-                const isRegistered = registeredPorts.has(a.port);
-                const busy = registering === a.port;
-                return (
-                  <li key={i} title={a.evidence || a.folder || ''}>
-                    <span className="phone__discover-name">{a.name}</span>
-                    <span className="phone__discover-port">:{a.port}</span>
-                    {isRegistered ? (
-                      <span className="phone__discover-reg" title={t('dashboard.discoverRegistered')}>
-                        ✓ {t('dashboard.discoverRegistered')}
+            <>
+              <ul className="phone__discover-list">
+                {discovery.apps.map((a, i) => {
+                  const isRegistered = registeredPorts.has(a.port);
+                  const busy = registering === a.port;
+                  const isRunning = !!a.running;
+                  const launching = running === a.port;
+                  return (
+                    <li key={i} title={a.evidence || a.folder || ''}>
+                      <span
+                        className={`phone__discover-dot${isRunning ? ' phone__discover-dot--on' : ''}`}
+                        title={isRunning ? t('dashboard.discoverRunning') : t('dashboard.discoverNotRunning')}
+                        aria-label={isRunning ? t('dashboard.discoverRunning') : t('dashboard.discoverNotRunning')}
+                      />
+                      <span className="phone__discover-name">{a.name}</span>
+                      <span className="phone__discover-port">:{a.port}</span>
+                      <span className="phone__discover-actions">
+                        {!isRunning && (
+                          <button
+                            type="button"
+                            className="phone__discover-run"
+                            onClick={() => runApp(a)}
+                            disabled={launching || !a.startCommand}
+                            title={a.startCommand
+                              ? t('dashboard.discoverRunHint', { command: a.startCommand })
+                              : t('dashboard.discoverNoCommand')}
+                          >
+                            {launching ? t('dashboard.discoverRunning') : `▶ ${t('dashboard.discoverRun')}`}
+                          </button>
+                        )}
+                        {isRegistered ? (
+                          <span className="phone__discover-reg" title={t('dashboard.discoverRegistered')}>
+                            ✓ {t('dashboard.discoverRegistered')}
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="phone__discover-add"
+                            onClick={() => registerApp(a)}
+                            disabled={busy}
+                          >
+                            {busy ? t('dashboard.discoverRegistering') : t('dashboard.discoverRegister')}
+                          </button>
+                        )}
                       </span>
-                    ) : (
-                      <button
-                        type="button"
-                        className="phone__discover-add"
-                        onClick={() => registerApp(a)}
-                        disabled={busy}
-                      >
-                        {busy ? t('dashboard.discoverRegistering') : t('dashboard.discoverRegister')}
-                      </button>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+                    </li>
+                  );
+                })}
+              </ul>
+              <button
+                type="button"
+                className="phone__discover-check"
+                onClick={checkRunning}
+                disabled={checking}
+              >
+                {checking ? t('dashboard.discoverChecking') : `🔄 ${t('dashboard.discoverCheck')}`}
+              </button>
+              {runErr && (
+                <div className="phone__discover-msg phone__discover-msg--err" role="status">
+                  {t('dashboard.discoverRunError', { error: runErr.text })}
+                </div>
+              )}
+            </>
           ))}
           {registerErr && (
             <div className="phone__discover-msg phone__discover-msg--err" role="status">
@@ -349,7 +508,7 @@ export default function PinnedAgent({
           a local app is open so that surface gets the full dock height (not just
           the strip below git) — plans/agent-dock-files-tab.md (Files) and
           plans/dock-local-app-full-height.md (local app). */}
-      {git && !showFiles && !openApp && (
+      {git && !showFiles && !openApp && !showConsole && (
         <div className="phone__git">
           <div className="phone__git-top">
             <GitStatusSummary status={git} compact />
@@ -418,7 +577,9 @@ export default function PinnedAgent({
         </div>
       )}
       <div className="phone__screen" style={contentZoom !== 1 ? { zoom: contentZoom } : undefined}>
-        {showFiles ? (
+        {showConsole ? (
+          <EventConsole repoId={tab.repoId} />
+        ) : showFiles ? (
           <FilesBrowser repoId={tab.repoId} />
         ) : openApp ? (
           <ProductFrame url={`/api/localview/${tab.repoId}/app/${openApp.id}/`} port={openApp.port} />

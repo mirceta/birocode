@@ -12,7 +12,6 @@ import WideToggle from '../components/dashboard/WideToggle';
 import DependsOnPicker from '../components/dashboard/DependsOnPicker';
 import WaitingBadge from '../components/dashboard/WaitingBadge';
 import WaitingOnField from '../components/dashboard/WaitingOnField';
-import PermissionBadge from '../components/dashboard/PermissionBadge';
 import IdeasPanel from '../components/ideas/IdeasPanel';
 import Scoreboard from '../components/dashboard/Scoreboard';
 import AutopilotPanel from '../components/dashboard/AutopilotPanel';
@@ -386,9 +385,6 @@ export default function Dashboard({ onClose }) {
   // (plans/autopilot-to-harness.md) only when its feature is on; otherwise it's
   // absent and the layout is just Ideas + agents, exactly as before.
   const autopilotOn = useFeature('autopilotTab');
-  // Read-only per-project permission badge on each agent dock; the preset itself
-  // is set only on the desktop GUI (openspec add-per-project-claude-permissions).
-  const showPerms = useFeature('permissionBadge');
   // The panels the free 2D drag layout manages, in DOM order. Autopilot leads so
   // it sits on top in grid-mode flow. (The task graph used to be a citizen here;
   // it now lives as a tab inside Ideas — plans/ideas-taskgraph-merge.md. Files is
@@ -654,7 +650,6 @@ export default function Dashboard({ onClose }) {
             recency={recency}
             contentZoom={contentZoom}
             repoPath={repoPath(tab.repoId)}
-            permission={showPerms ? repos.find((r) => r.id === tab.repoId)?.permissionPolicy : null}
             localApps={repos.find((r) => r.id === tab.repoId)?.localApps || []}
             git={gitInfo[tab.repoId]}
             gitRefreshing={!!gitBusy[tab.repoId]}
@@ -701,12 +696,6 @@ export default function Dashboard({ onClose }) {
               onToggle={() => toggleWaiting(tab.id)}
               className="dash-cell__waiting"
             />
-            {showPerms && (
-              <PermissionBadge
-                policy={repos.find((r) => r.id === tab.repoId)?.permissionPolicy}
-                className="dash-cell__perm"
-              />
-            )}
           </span>
           {repoPath(tab.repoId) && (
             <CopyPath path={repoPath(tab.repoId)} className="dash-cell__path" />
