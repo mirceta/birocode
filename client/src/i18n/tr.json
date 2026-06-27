@@ -633,5 +633,6 @@
   "files.zoom": "Klasor agaci yakinlastirma",
   "files.zoomIn": "Yakinlastir",
   "files.zoomOut": "Uzaklastir",
-  "files.zoomReset": "Yakinlastirmayi %100'e sifirla"
+  "files.zoomReset": "Yakinlastirmayi %100'e sifirla",
+  "files.hideGeneratedTitle": "bin/obj klasorlerini gizle (C# derleme ciktisi)"
 }

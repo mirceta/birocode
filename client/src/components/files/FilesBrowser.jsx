@@ -73,6 +73,19 @@ const writeTreeZoom = (z) => {
   try { localStorage.setItem(TREE_ZOOM_KEY, String(z)); } catch { /* private mode */ }
 };
 
+// Hide C# build-output folders (bin/obj) from the tree + search, device-local.
+// Default ON — they're generated noise. Toggle lives next to the zoom controls.
+const HIDE_GEN_KEY = 'claudeweb_files_hide_generated';
+const GENERATED_DIRS = new Set(['bin', 'obj']);
+const readHideGen = () => {
+  try { return localStorage.getItem(HIDE_GEN_KEY) !== '0'; } catch { return true; }
+};
+const writeHideGen = (on) => {
+  try { localStorage.setItem(HIDE_GEN_KEY, on ? '1' : '0'); } catch { /* private mode */ }
+};
+// A path is generated when any segment is a build-output folder (e.g. .../bin/Debug/x.dll).
+const isGeneratedPath = (path) => path.split('/').some((seg) => GENERATED_DIRS.has(seg));
+
 const SEARCH_LIMIT = 200; // cap rendered fuzzy results so a short query can't render thousands
 
 // Subsequence fuzzy match: every char of the (lowercased) query must appear in
@@ -154,6 +167,7 @@ export default function FilesBrowser({ repoId }) {
   // factor, both device-local prefs scoped to the left pane.
   const [browserWidth, setBrowserWidth] = useState(readBrowserWidth);
   const [treeZoom, setTreeZoom] = useState(readTreeZoom);
+  const [hideGenerated, setHideGenerated] = useState(readHideGen);
   const browserRef = useRef(null);
   const dragWidthRef = useRef(null); // latest width during a drag, persisted on release
 
@@ -166,6 +180,11 @@ export default function FilesBrowser({ repoId }) {
     setTreeZoom((z) => { const next = clampZoom(z + delta); writeTreeZoom(next); return next; });
   }, []);
   const zoomReset = useCallback(() => { setTreeZoom(1); writeTreeZoom(1); }, []);
+
+  // Toggle hiding bin/obj (C# build output) from the tree + search. Persisted.
+  const toggleHideGenerated = useCallback(() => {
+    setHideGenerated((on) => { const next = !on; writeHideGen(next); return next; });
+  }, []);
 
   // Drag the divider between the browser and the file view. Pointer events cover
   // mouse and touch; width is clamped so the view always keeps MIN_VIEW_WIDTH.
@@ -417,12 +436,13 @@ export default function FilesBrowser({ repoId }) {
     if (!q) return null;
     const scored = [];
     for (const path of allFiles) {
+      if (hideGenerated && isGeneratedPath(path)) continue;
       const score = fuzzyScore(q, path);
       if (score != null) scored.push({ path, score });
     }
     scored.sort((a, b) => a.score - b.score);
     return scored;
-  }, [query, allFiles]);
+  }, [query, allFiles, hideGenerated]);
 
   const root = nodes['/'];
 
@@ -509,6 +529,7 @@ export default function FilesBrowser({ repoId }) {
         onOpenFile={openFileAt}
         onReferenceFile={referenceFile}
         onRetryDir={loadDir}
+        hideGenerated={hideGenerated}
       />
     );
   }
@@ -589,6 +610,17 @@ export default function FilesBrowser({ repoId }) {
               </div>
             )}
             <div className="files-ide__scroll">{renderBrowserBody()}</div>
+            <div className="files-ide__bottombar">
+            <button
+              type="button"
+              className={`files-ide__filter${hideGenerated ? ' files-ide__filter--on' : ''}`}
+              onClick={toggleHideGenerated}
+              title={t('files.hideGeneratedTitle')}
+              aria-label={t('files.hideGeneratedTitle')}
+              aria-pressed={hideGenerated}
+            >
+              <span aria-hidden="true">{hideGenerated ? '\u{1F6AB}' : '\u{1F441}️'}</span> bin/obj
+            </button>
             <div className="files-ide__zoom" role="group" aria-label={t('files.zoom')}>
               <button
                 type="button"
@@ -619,6 +651,7 @@ export default function FilesBrowser({ repoId }) {
               >
                 A+
               </button>
+            </div>
             </div>
           </div>
         )}
@@ -723,6 +756,7 @@ export default function FilesBrowser({ repoId }) {
           onOpenFile={openFileAt}
           onReferenceFile={referenceFile}
           onRetryDir={loadDir}
+          hideGenerated={hideGenerated}
         />
       )}
 
