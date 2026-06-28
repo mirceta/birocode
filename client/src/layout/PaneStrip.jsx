@@ -58,7 +58,23 @@ export function useMultiPane() {
       budget -= weight(lo);
     }
   }
-  if (lo === hi) return { multi: false, panes: [], activeKey: null };
+  if (lo === hi) {
+    // A tab widened to span the whole visible budget consumes every slot, so no
+    // neighbours fit. Don't fall back to the classic single-column view -- that
+    // view is capped at --max-width and centered, which is exactly the
+    // "wide tab is centered with gutters" bug. Render it as a lone pane in the
+    // uncapped strip (.app-frame--multi) so it fills the full width. A tab that
+    // is alone only because it has no neighbours (weight 1) keeps the classic
+    // single view.
+    if (weight(active) > 1) {
+      return {
+        multi: true,
+        panes: [{ ...tabs[active], width: weight(active) }],
+        activeKey: tabs[active].key,
+      };
+    }
+    return { multi: false, panes: [], activeKey: null };
+  }
 
   const panes = tabs.slice(lo, hi + 1).map((tab, i) => ({ ...tab, width: weight(lo + i) }));
   return { multi: true, panes, activeKey: tabs[active].key };
@@ -68,7 +84,9 @@ export default function PaneStrip({ panes, activeKey }) {
   const { t } = useT();
   const { tabWidths, saveTabWidths } = useUiSettings();
   const orderKeys = useOrderedTabs({ includeHidden: true }).map((tab) => tab.key);
-  const showSpan = useFeature('paneSpanButtons');
+  // Span steppers stay a multi-pane affordance: only with two or more visible
+  // panes (a lone full-span pane shows none; shrink it from the Settings tab).
+  const showSpan = useFeature('paneSpanButtons') && panes.length > 1;
 
   // The pane bar's -/+ buttons are a second front-end onto the one per-tab
   // span the Settings tab configures — same map, same store. Mirror Settings'

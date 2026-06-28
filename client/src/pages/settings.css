@@ -6,6 +6,13 @@
   gap: 24px;
 }
 
+/* When the pane is wider than the reading cap (a multi-space/wide tab), fill the
+   width instead of centering with side gutters. .app-content is the size
+   container (container-type: inline-size, global.css). */
+@container (min-width: 560px) {
+  .settings-page { max-width: none; }
+}
+
 .settings-section__title {
   margin: 0 0 4px;
   font-size: 16px;

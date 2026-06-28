@@ -123,7 +123,9 @@ public class ChatController : ControllerBase
                     emit: session.EmitAsync,
                     ct: session.Cts.Token,
                     readOnly: readOnly,
-                    audit: auditCtx);
+                    audit: auditCtx,
+                    repoId: repo.Id,
+                    repoName: repo.Name);
             }
             catch (Exception ex)
             {

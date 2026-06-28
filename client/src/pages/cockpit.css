@@ -7,6 +7,12 @@
   padding: 14px 14px 60px; color: var(--ck-ink); max-width: 1200px; margin: 0 auto;
   font-size: 14px;
 }
+/* When the pane is wider than the reading cap (a multi-space/wide tab), fill the
+   width instead of centering with side gutters. .app-content is the size
+   container (container-type: inline-size, global.css). */
+@container (min-width: 1200px) {
+  .ck { max-width: none; }
+}
 .ck__head { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; }
 .ck__head h2 { font-size: 18px; margin: 0; }
 .ck__repo { color: var(--ck-dim); font-size: 13px; background: var(--ck-panel2);
