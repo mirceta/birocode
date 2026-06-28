@@ -3,238 +3,328 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Full-span tab fills the width — what changed</title>
+<title>Harness Event Feed — what we're building (pilot)</title>
 <style>
   :root{
-    --bg:#0e1116; --panel:#161b22; --panel2:#1c2230; --line:#2a3142;
-    --ink:#e7edf5; --dim:#9aa7b8; --accent:#4aa3ff; --good:#3fb950; --bad:#f85149;
-    --warn:#d29922; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --edge:#30363d;
+    --ink:#e6edf3; --dim:#9aa7b4; --accent:#58a6ff; --good:#3fb950;
+    --warn:#d29922; --bad:#f85149; --turn:#bc8cff; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#16203033,transparent),var(--bg);
-    color:var(--ink);font:15px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
-  .wrap{max-width:1040px;margin:0 auto;padding:32px 22px 80px}
-  h1{font-size:30px;margin:0 0 6px;letter-spacing:-.02em}
-  .sub{color:var(--dim);margin:0 0 28px;font-size:16px}
-  h2{font-size:20px;margin:38px 0 12px;letter-spacing:-.01em}
-  p{margin:10px 0}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin:16px 0}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,Segoe UI,Roboto,sans-serif}
+  header{padding:22px 24px 10px;border-bottom:1px solid var(--edge)}
+  h1{margin:0 0 4px;font-size:21px}
+  .sub{color:var(--dim);font-size:13.5px}
+  .tabs{display:flex;flex-wrap:wrap;gap:6px;padding:12px 24px 0}
+  .tab{padding:8px 14px;border:1px solid var(--edge);border-bottom:none;border-radius:8px 8px 0 0;
+       background:var(--panel);color:var(--dim);cursor:pointer;font-size:13.5px}
+  .tab.active{background:var(--panel2);color:var(--ink);border-color:var(--accent)}
+  main{padding:20px 24px 60px;max-width:1040px}
+  .view{display:none;animation:fade .25s ease}
+  .view.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  h2{font-size:17px;margin:6px 0 10px}
+  p{color:#cdd6e0}
+  .card{background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:16px 18px;margin:12px 0}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   @media(max-width:760px){.grid2{grid-template-columns:1fr}}
-  code,.mono{font-family:var(--mono);font-size:13px}
-  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;
-    border:1px solid var(--line)}
-  .pill.bad{color:var(--bad);border-color:#5a2a2a;background:#2a1717}
-  .pill.good{color:var(--good);border-color:#234d2b;background:#13261a}
-  .pill.dim{color:var(--dim)}
-  pre{background:#0b0f15;border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto;margin:10px 0}
-  pre code{font-size:12.5px;line-height:1.5;color:#cdd6e2}
-  .del{color:var(--bad)} .add{color:var(--good)} .cmt{color:#6b7787}
-  /* ---- interactive viewport sim ---- */
-  .sim-controls{display:flex;gap:26px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
-  .ctrl label{display:block;font-size:12px;color:var(--dim);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em}
-  .ctrl input[type=range]{width:180px;accent-color:var(--accent)}
-  .ctrl .val{font-family:var(--mono);color:var(--accent);font-weight:700;margin-left:8px}
-  .toggle{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
-  .toggle button{background:var(--panel2);color:var(--dim);border:0;padding:8px 14px;cursor:pointer;font:inherit;font-size:13px}
-  .toggle button.on{background:var(--accent);color:#04101f;font-weight:700}
-  .browser{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#0b0f15;margin-top:6px}
-  .chrome{display:flex;align-items:center;gap:6px;padding:8px 12px;background:#11161f;border-bottom:1px solid var(--line)}
-  .dot{width:10px;height:10px;border-radius:50%}
-  .chrome .addr{margin-left:10px;font-family:var(--mono);font-size:11px;color:var(--dim)}
-  .viewport{position:relative;height:230px;padding:14px;background:repeating-linear-gradient(45deg,#0c1118,#0c1118 10px,#0e141c 10px,#0e141c 20px)}
-  .frame{height:100%;display:flex;flex-direction:column;background:var(--panel);border:1px dashed var(--line);border-radius:8px;
-    transition:max-width .35s ease, margin .35s ease;}
-  .frame .fhead{padding:8px 12px;border-bottom:1px solid var(--line);font-size:12px;color:var(--dim);display:flex;justify-content:space-between}
-  .strip{flex:1;display:flex;min-height:0}
-  .pane{flex:1 1 0;border-right:1px solid var(--line);display:flex;flex-direction:column;min-width:0;transition:flex-grow .35s ease}
-  .pane:last-child{border-right:0}
-  .pane .pbar{font-size:11px;color:var(--dim);padding:5px 8px;border-bottom:1px solid var(--line);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;overflow:hidden}
-  .pane .pbody{flex:1;display:flex;align-items:center;justify-content:center;color:#54627a;font-size:12px}
-  .content-cap{transition:max-width .35s ease, margin .35s ease;background:var(--panel2);border:1px solid var(--line);
-    border-radius:6px;flex:1;display:flex;align-items:center;justify-content:center;color:#7d8aa0;font-size:12px;text-align:center;padding:6px}
-  .verdict{margin-top:12px;font-size:13px;display:flex;gap:14px;flex-wrap:wrap;align-items:center}
-  .verdict .k{color:var(--dim)}
-  .verdict .v{font-family:var(--mono);font-weight:700}
-  ul{margin:8px 0;padding-left:20px} li{margin:5px 0}
-  .foot{margin-top:40px;color:#5e6b7d;font-size:12px;border-top:1px solid var(--line);padding-top:14px}
-  .filetag{font-family:var(--mono);font-size:11px;color:var(--accent)}
+  code,.mono{font-family:var(--mono);font-size:12.8px}
+  .pill{display:inline-block;padding:1px 8px;border-radius:20px;font-size:11.5px;border:1px solid var(--edge);color:var(--dim)}
+  .pill.now{color:var(--good);border-color:var(--good)}
+  .pill.future{color:var(--turn);border-color:var(--turn)}
+  .pill.ro{color:var(--accent);border-color:var(--accent)}
+  ul{margin:8px 0;padding-left:20px}
+  li{margin:5px 0;color:#cdd6e0}
+  .muted{color:var(--dim)}
+  .kvs{font-family:var(--mono);font-size:12.6px;background:#0b0f14;border:1px solid var(--edge);border-radius:8px;padding:12px;white-space:pre;overflow:auto;color:#cdd6e0}
+  .tag{color:var(--turn)} .str{color:#7ee787} .key{color:var(--accent)} .num{color:#ffa657}
+
+  /* flow simulator */
+  .flow{display:flex;align-items:stretch;gap:0;flex-wrap:wrap}
+  .node{flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--edge);border-radius:10px;
+        padding:12px;margin:6px;transition:.3s;position:relative}
+  .node.lit{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 0 18px -6px var(--accent)}
+  .node .t{font-weight:600;font-size:13.5px}
+  .node .d{font-size:12px;color:var(--dim);margin-top:4px}
+  .node .badge{position:absolute;top:-9px;right:8px;font-size:10.5px;padding:1px 7px;border-radius:20px;background:var(--bg);border:1px solid var(--edge);color:var(--dim)}
+  .arrow{align-self:center;color:var(--dim);font-size:20px;padding:0 2px}
+  .controls{display:flex;gap:8px;align-items:center;margin:14px 0}
+  button.run{background:var(--accent);color:#08111f;border:none;border-radius:8px;padding:9px 16px;font-weight:600;cursor:pointer;font-size:13.5px}
+  button.run:disabled{opacity:.5;cursor:default}
+  button.ghost{background:transparent;color:var(--dim);border:1px solid var(--edge);border-radius:8px;padding:9px 14px;cursor:pointer;font-size:13px}
+  .log{margin-top:14px;background:#0b0f14;border:1px solid var(--edge);border-radius:8px;min-height:120px;padding:10px 12px;font-family:var(--mono);font-size:12.4px}
+  .log .ln{padding:2px 0;border-bottom:1px dashed #1d2430;opacity:0;animation:fade .3s forwards}
+  .log .ln:last-child{border-bottom:none}
+  .ok{color:var(--good)} .er{color:var(--bad)} .tn{color:var(--turn)} .ac{color:var(--accent)}
+  .feedrow{font-family:var(--mono);font-size:12.2px;padding:6px 8px;border:1px solid var(--edge);border-radius:6px;margin:5px 0;background:var(--panel2)}
+  .stepnote{min-height:22px;color:var(--accent);font-size:13px;margin-top:8px}
+  .legend{font-size:12px;color:var(--dim);margin-top:8px}
+  .scope{display:flex;gap:14px;flex-wrap:wrap}
+  .harness{flex:1;min-width:200px;border:1px dashed var(--edge);border-radius:10px;padding:12px;background:var(--panel)}
+  .harness h4{margin:0 0 6px;font-size:13.5px}
+  .col{border:1px solid var(--turn);border-radius:10px;padding:12px;background:rgba(188,140,255,.06)}
+  .warnbox{border-left:3px solid var(--warn);padding:8px 12px;background:rgba(210,153,34,.07);border-radius:6px;margin:10px 0}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>Why the full-span tab finally fills the width</h1>
-  <p class="sub">One tab, widened to span <em>every</em> visible slot, used to sit centered with gutters. Here's the actual reason &mdash; and the one decision that fixed it.</p>
+<header>
+  <h1>Harness Event Feed — the pilot, as I understand it</h1>
+  <div class="sub">Read-only REST exposure of harness events · seeded with <b>turn.ended</b> · plus an in-repo app that consumes it · OpenSpec change <code>add-harness-event-feed</code></div>
+</header>
 
-  <div class="card">
-    <p style="margin-top:0"><strong>TL;DR.</strong> A tab widened to consume the whole pane budget left <em>no room for neighbours</em>, so the multi-pane layout decided &ldquo;only one pane &rarr; not multi&rdquo; and fell back to the <strong>classic single view, capped at 720px and centered</strong>. The fix: a deliberately-widened lone tab now renders as a <strong>single full-width pane in the uncapped strip</strong> instead of falling back.</p>
-  </div>
-
-  <h2>1 &middot; The decision that was wrong</h2>
-  <p>Every render, <code class="filetag">PaneStrip.jsx &rarr; useMultiPane()</code> packs as many tabs as the screen budget allows around the active one. It computes a window <code>[lo, hi]</code> of panes to show.</p>
-  <div class="grid2">
-    <div class="card">
-      <p style="margin-top:0"><span class="pill bad">before</span></p>
-      <pre><code><span class="cmt">// only one pane fits -&gt; bail to single view</span>
-<span class="del">if (lo === hi) return { multi: false }</span>
-
-<span class="cmt">// Layout then renders &lt;Outlet/&gt; inside</span>
-<span class="cmt">// .app-frame, which is capped:</span>
-.app-frame { max-width: 720px;
-             margin: 0 auto; }  <span class="cmt">// gutters</span></code></pre>
-      <p style="font-size:13px;color:var(--dim)">A full-span tab fills the budget alone &rarr; <code>lo === hi</code> &rarr; single, capped, centered. The page-level CSS never even got a chance.</p>
-    </div>
-    <div class="card">
-      <p style="margin-top:0"><span class="pill good">after</span></p>
-      <pre><code>if (lo === hi) {
-  <span class="cmt">// widened on purpose? keep it in the strip</span>
-  <span class="add">if (weight(active) &gt; 1) return {</span>
-<span class="add">    multi: true,</span>
-<span class="add">    panes: [{ ...tabs[active],</span>
-<span class="add">             width: weight(active) }],</span>
-<span class="add">  }</span>
-  return { multi: false }  <span class="cmt">// truly alone</span>
-}</code></pre>
-      <p style="font-size:13px;color:var(--dim)">Now it renders as one pane in <code>.app-frame--multi</code> (no cap) &rarr; flex-grows to <strong>100%</strong>.</p>
-    </div>
-  </div>
-
-  <h2>2 &middot; Try it &mdash; watch the decision flip</h2>
-  <div class="card">
-    <div class="sim-controls">
-      <div class="ctrl">
-        <label>Visible tab-spaces (budget) <span class="val" id="vBudget">3</span></label>
-        <input type="range" id="budget" min="1" max="4" value="3" step="1">
-      </div>
-      <div class="ctrl">
-        <label>This tab's span <span class="val" id="vSpan">3</span></label>
-        <input type="range" id="span" min="1" max="4" value="3" step="1">
-      </div>
-      <div class="ctrl">
-        <label>Build</label>
-        <div class="toggle" id="buildTog">
-          <button data-b="before">before fix</button>
-          <button data-b="after" class="on">after fix</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="browser">
-      <div class="chrome">
-        <span class="dot" style="background:#f85149"></span>
-        <span class="dot" style="background:#d29922"></span>
-        <span class="dot" style="background:#3fb950"></span>
-        <span class="addr">:5099 &mdash; Advanced mode, wide window</span>
-      </div>
-      <div class="viewport">
-        <div class="frame" id="frame">
-          <div class="fhead"><span id="frameMode">.app-frame--multi</span><span id="frameCap"></span></div>
-          <div class="strip" id="strip"></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="verdict">
-      <span><span class="k">lo === hi?</span> <span class="v" id="oLoHi"></span></span>
-      <span><span class="k">useMultiPane &rarr;</span> <span class="v" id="oMulti"></span></span>
-      <span><span class="k">result:</span> <span class="v" id="oResult"></span></span>
-    </div>
-  </div>
-
-  <h2>3 &middot; The complementary layer (page caps)</h2>
-  <p>Once a tab <em>is</em> in the strip, a very wide pane could still center its own content if the page sets a reading-width cap (Settings caps at 560px; Cockpit/Terminal around 1100&ndash;1200px). So each pane's content area is its own size container, and the caps lift when the pane is wider than them:</p>
-  <pre><code><span class="cmt">/* the pane's .app-content is a container; the page reacts to ITS width */</span>
-@container (min-width: 560px) { .settings-page { max-width: none } }</code></pre>
-  <p style="font-size:13px;color:var(--dim)">This is why both pieces shipped: the <strong>layout fix</strong> gets the tab into the uncapped strip (the bug you saw), and the <strong>@container CSS</strong> stops page-level caps from re-centering inside an extra-wide pane.</p>
-
-  <h2>4 &middot; What shipped</h2>
-  <ul>
-    <li><span class="filetag">client/src/layout/PaneStrip.jsx</span> &mdash; the <code>weight &gt; 1</code> branch; span &plusmn; steppers gated to &ge;2 panes so a lone full-span pane shows none.</li>
-    <li><span class="filetag">client/src/**.css</span> &mdash; <code>@container</code> cap-lifts for the page bodies.</li>
-    <li>Commit <code>89c27c0</code>, deployed to live <code>:5099</code> via <code>swap.ps1</code> (auto-rollback disarmed on &ldquo;keep it&rdquo;).</li>
-  </ul>
-
-  <div class="foot">Understanding app &middot; overwritten each time the explanation changes &middot; served under <code>/api/localview/&lt;repo&gt;/app/understanding/</code></div>
-</div>
+<div class="tabs" id="tabs"></div>
+<main id="main"></main>
 
 <script>
-(function(){
-  var budget=3, span=3, build='after';
-  var $=function(id){return document.getElementById(id)};
-  var bEl=$('budget'), sEl=$('span');
+const VIEWS = [
+  {id:"ask",   label:"What you asked for"},
+  {id:"scope", label:"Pilot now · collector later"},
+  {id:"flow",  label:"The turn-ended flow ▶"},
+  {id:"env",   label:"The general mechanism"},
+  {id:"rules", label:"The hard constraints"},
+];
 
-  function render(){
-    if(span>budget){span=budget; sEl.value=span;}
-    $('vBudget').textContent=budget;
-    $('vSpan').textContent=span;
+const MAIN = document.getElementById("main");
+const TABS = document.getElementById("tabs");
 
-    // emulate useMultiPane: budget slots; active tab takes `span`, neighbours
-    // (weight 1 each) fill the rest. span filling the budget => no neighbours.
-    var neighbours=Math.max(0, budget-span);
-    var loEqHi=(neighbours===0);
-    var weightGt1=(span>1);
+VIEWS.forEach((v,i)=>{
+  const b=document.createElement("div");
+  b.className="tab"+(i===0?" active":"");
+  b.textContent=v.label; b.dataset.id=v.id;
+  b.onclick=()=>select(v.id);
+  TABS.appendChild(b);
+  const sec=document.createElement("section");
+  sec.className="view"+(i===0?" active":"");
+  sec.id="view-"+v.id;
+  MAIN.appendChild(sec);
+});
+function select(id){
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.id===id));
+  document.querySelectorAll(".view").forEach(s=>s.classList.toggle("active",s.id==="view-"+id));
+}
 
-    var multi, mode, capLabel, panes=[];
-    if(loEqHi){
-      if(build==='after' && weightGt1){
-        multi=true; panes=[{label:'this tab',grow:span,full:true}];
-      }else{
-        multi=false; // single capped view
-      }
-    }else{
-      multi=true;
-      panes.push({label:'this tab',grow:span,full:false});
-      for(var i=0;i<neighbours;i++) panes.push({label:'tab',grow:1,full:false});
-    }
+/* ---------- View: the ask ---------- */
+document.getElementById("view-ask").innerHTML = `
+  <h2>What I think you want me to prove I understand</h2>
+  <p>We want our harness to <b>publish what is happening inside it</b> so something outside
+  can watch — without ever letting that outside thing <i>do</i> anything to the harness.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4 style="margin:0 0 6px">The five pieces</h4>
+      <ul>
+        <li><b>Make harness events visible over the web</b> — a read-only REST surface.</li>
+        <li><b>The first event: an agent's turn ending</b> — the moment a chat run finishes.</li>
+        <li><b>A local app in this repo</b> that consumes the feed and proves the events arrive.</li>
+        <li><b>A general, extensible mechanism</b> — built so we add more event types later, and so the test app doubles as a test bed for them.</li>
+        <li><b>A pilot only</b> — the real prize (a service + app on another computer collecting from many harnesses) is a <span class="pill future">future task</span>.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4 style="margin:0 0 6px">The one rule I must not break</h4>
+      <div class="warnbox">No new <b>actions</b> over REST. Nothing exposed that isn't already
+      reachable from the frontend. The feed <b>reports</b> events — it never <b>causes</b> harness actions.</div>
+      <p class="muted" style="font-size:13px">So everything I add is a <code>GET</code> with no side effects,
+      behind the harness's existing login.</p>
+    </div>
+  </div>
+  <div class="card">
+    <h4 style="margin:0 0 6px">Good news: the foundation is already here</h4>
+    <p style="margin:0">The harness already has a proven per-repo event log
+    (<code>RepoEventLog</code> + <code>GET /api/repos/{id}/events?after=N</code> + the dock's Event Console).
+    I'll reuse that <i>pattern</i> — ring buffer, monotonic <code>seq</code>, watermark polling — but at
+    <b>harness scope</b>, because a collector wants <b>one stream per harness</b>, not one per repo. And the
+    per-repo log deliberately excludes turn lifecycle, so this is genuinely new surface, not a duplicate.</p>
+  </div>
+`;
 
-    var frame=$('frame'), strip=$('strip');
-    if(multi){
-      mode='.app-frame--multi';
-      frame.style.maxWidth='none'; frame.style.margin='0';
-      capLabel='no cap, fills';
-    }else{
-      mode='.app-frame (single)';
-      frame.style.maxWidth='340px'; frame.style.margin='0 auto'; // stand-in for 720px cap+center
-      capLabel='max-width:720px, centered';
-    }
-    $('frameMode').textContent=mode;
-    $('frameCap').textContent=capLabel;
+/* ---------- View: scope (pilot vs future) ---------- */
+document.getElementById("view-scope").innerHTML = `
+  <h2>Where the line is: pilot now, collector later</h2>
+  <div class="scope">
+    <div class="harness">
+      <h4>NOW — the pilot <span class="pill now">this change</span></h4>
+      <div class="node lit" style="margin:6px 0"><div class="t">One harness (this one)</div>
+        <div class="d">publishes <span class="tn">turn.ended</span> to an in-memory feed</div></div>
+      <div style="text-align:center;color:var(--dim)">↓ <code>GET /api/events?after=N</code> (read-only)</div>
+      <div class="node lit" style="margin:6px 0"><div class="t">In-repo test app</div>
+        <div class="d">polls the feed, renders the stream, proves it works</div></div>
+    </div>
+    <div class="col">
+      <h4 style="margin:0 0 6px">LATER — the real goal <span class="pill future">future task</span></h4>
+      <p style="font-size:13px;margin:6px 0">A <b>separate service + app on another computer</b> that:</p>
+      <ul style="font-size:13px">
+        <li>polls the same <code>/api/events</code> on <b>many harnesses</b>,</li>
+        <li>fans them into one place,</li>
+        <li>and <b>reacts</b> to what it sees.</li>
+      </ul>
+      <p class="muted" style="font-size:12.5px;margin-top:8px">Out of scope now — including how a remote
+      reader authenticates to many harnesses. The pilot just has to make the first link real.</p>
+    </div>
+  </div>
+  <div class="card">
+    <p style="margin:0">The in-repo test app is the <b>stand-in for that future collector</b>. If it can read
+    <span class="tn">turn.ended</span> off the feed today, the future service reads the same shape — just from
+    several boxes at once.</p>
+  </div>
+`;
 
-    strip.innerHTML='';
-    if(multi){
-      panes.forEach(function(p){
-        var d=document.createElement('div');
-        d.className='pane'; d.style.flexGrow=p.grow;
-        var bar=document.createElement('div'); bar.className='pbar'; bar.textContent=p.label;
-        var body=document.createElement('div'); body.className='pbody';
-        body.textContent=p.full?'fills the strip':'pane';
-        d.appendChild(bar); d.appendChild(body); strip.appendChild(d);
-      });
-    }else{
-      var c=document.createElement('div'); c.className='content-cap';
-      c.textContent='page content: capped at 720px, centered (the gutters bug)';
-      strip.appendChild(c);
-    }
+/* ---------- View: flow simulator ---------- */
+document.getElementById("view-flow").innerHTML = `
+  <h2>How a "turn ended" event travels (step it through)</h2>
+  <div class="flow" id="flowNodes"></div>
+  <div class="controls">
+    <button class="run" id="runBtn">▶ Run a turn (success)</button>
+    <button class="ghost" id="errBtn">Run a turn (error)</button>
+    <button class="ghost" id="resetBtn">Reset</button>
+  </div>
+  <div class="stepnote" id="stepNote">Press “Run a turn” to watch one event flow from chat → feed → the test app.</div>
+  <div class="grid2">
+    <div>
+      <h4 style="margin:14px 0 4px;font-size:13.5px">Harness log</h4>
+      <div class="log" id="flowLog"></div>
+    </div>
+    <div>
+      <h4 style="margin:14px 0 4px;font-size:13.5px">Test app — feed view <span class="pill ro">read-only</span></h4>
+      <div class="log" id="appFeed"><div class="muted" style="opacity:1">— waiting for events —</div></div>
+    </div>
+  </div>
+  <div class="legend">The test app only ever <b>reads</b> <code>GET /api/events</code> and advances a watermark. It cannot push anything back.</div>
+`;
 
-    $('oLoHi').textContent=loEqHi?'yes':'no';
-    $('oLoHi').style.color=loEqHi?'var(--warn)':'var(--dim)';
-    $('oMulti').textContent=multi?'multi:true':'multi:false';
-    $('oMulti').style.color=multi?'var(--good)':'var(--bad)';
-    $('oResult').textContent=multi?'fills available width':'centered with gutters';
-    $('oResult').style.color=multi?'var(--good)':'var(--bad)';
-  }
+const NODES = [
+  {t:"Chat run",        d:"agent turn launched (POST /api/chat)", badge:"existing"},
+  {t:"CliRunnerService",d:"detects the turn's terminal result", badge:"existing hook"},
+  {t:"HarnessEventFeed",d:"append turn.ended (seq++, best-effort)", badge:"NEW"},
+  {t:"GET /api/events", d:"read-only, watermark-paged", badge:"NEW"},
+  {t:"Test app",        d:"polls, renders the stream", badge:"NEW (in-repo)"},
+];
+const fn=document.getElementById("flowNodes");
+NODES.forEach((n,i)=>{
+  if(i) {const a=document.createElement("div");a.className="arrow";a.textContent="→";fn.appendChild(a);}
+  const d=document.createElement("div");d.className="node";d.id="fnode"+i;
+  d.innerHTML=`<span class="badge">${n.badge}</span><div class="t">${n.t}</div><div class="d">${n.d}</div>`;
+  fn.appendChild(d);
+});
 
-  bEl.addEventListener('input',function(){budget=+bEl.value; render();});
-  sEl.addEventListener('input',function(){span=+sEl.value; render();});
-  Array.prototype.forEach.call(document.querySelectorAll('#buildTog button'),function(btn){
-    btn.addEventListener('click',function(){
-      build=btn.getAttribute('data-b');
-      Array.prototype.forEach.call(document.querySelectorAll('#buildTog button'),function(b){b.classList.toggle('on',b===btn);});
-      render();
-    });
-  });
-  render();
-})();
+let seq = 41, running=false;
+const flowLog=document.getElementById("flowLog");
+const appFeed=document.getElementById("appFeed");
+const stepNote=document.getElementById("stepNote");
+
+function addLn(box,html,cls){const l=document.createElement("div");l.className="ln "+(cls||"");l.innerHTML=html;box.appendChild(l);box.scrollTop=box.scrollHeight;}
+function lit(i,on){const el=document.getElementById("fnode"+i);if(el)el.classList.toggle("lit",on);}
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+
+async function runTurn(ok){
+  if(running) return; running=true;
+  document.getElementById("runBtn").disabled=true;
+  for(let i=0;i<5;i++) lit(i,false);
+  seq++;
+  const ev = ok
+    ? {seq, type:"turn.ended", source:{repoId:"kekik"}, data:{sessionId:"a91c…", status:"done", costUsd:0.0142, numTurns:3}}
+    : {seq, type:"turn.ended", source:{repoId:"kekik"}, data:{sessionId:"b07f…", status:"error"}};
+
+  stepNote.textContent="1 · A chat run is launched on a repo.";
+  lit(0,true); addLn(flowLog,'<span class="ac">POST /api/chat</span> → run started (repo kekik)'); await wait(800);
+
+  stepNote.textContent="2 · The harness sees the run's terminal result (the moment it already detects).";
+  lit(0,false);lit(1,true);
+  addLn(flowLog, ok?'CliRunnerService.HandleResult → <span class="ok">done</span>':'CliRunnerService.HandleResult → <span class="er">error</span>'); await wait(900);
+
+  stepNote.textContent="3 · It publishes a turn.ended event to the feed — best-effort, can never break the run.";
+  lit(1,false);lit(2,true);
+  addLn(flowLog,'HarnessEventFeed.Publish(<span class="tn">turn.ended</span>) seq='+seq+' <span class="muted">(best-effort)</span>'); await wait(900);
+
+  stepNote.textContent="4 · The test app's next poll asks for events after its watermark.";
+  lit(2,false);lit(3,true);
+  addLn(appFeed,'<span class="ac">GET /api/events?after='+(seq-1)+'</span>',''); await wait(800);
+
+  stepNote.textContent="5 · It receives the event and renders it. Nothing flows back to the harness.";
+  lit(3,false);lit(4,true);
+  if(appFeed.querySelector('.muted')) appFeed.innerHTML='';
+  const st = ok?'<span class="ok">done</span>':'<span class="er">error</span>';
+  addLn(appFeed,`<b class="tn">turn.ended</b> #${seq} · repo <b>kekik</b> · session ${ev.data.sessionId} · ${st}`+(ok?` · $${ev.data.costUsd}`:''),'');
+  await wait(600); lit(4,false);
+  stepNote.textContent="Done. One turn → one read-only event the future collector could fan in.";
+  running=false; document.getElementById("runBtn").disabled=false;
+}
+document.getElementById("runBtn").onclick=()=>runTurn(true);
+document.getElementById("errBtn").onclick=()=>runTurn(false);
+document.getElementById("resetBtn").onclick=()=>{flowLog.innerHTML="";appFeed.innerHTML='<div class="muted" style="opacity:1">— waiting for events —</div>';seq=41;stepNote.textContent="Reset.";for(let i=0;i<5;i++)lit(i,false);};
+
+/* ---------- View: envelope ---------- */
+document.getElementById("view-env").innerHTML = `
+  <h2>The general mechanism: one envelope, many types</h2>
+  <p>The point isn't just <span class="tn">turn.ended</span> — it's a <b>shape we can grow</b>. Every event has the
+  same outer envelope; the <code>type</code> field is the extension point and <code>data</code> carries the
+  type-specific payload.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4 style="margin:0 0 8px">The envelope (stable)</h4>
+      <div class="kvs">{
+  <span class="key">"seq"</span>:    <span class="num">42</span>,        <span class="muted">// harness-wide, monotonic</span>
+  <span class="key">"at"</span>:     <span class="num">1751...</span>,   <span class="muted">// epoch ms</span>
+  <span class="key">"type"</span>:   <span class="str">"turn.ended"</span>,<span class="muted"> // the extension point</span>
+  <span class="key">"source"</span>: { <span class="key">"repoId"</span>: <span class="str">"kekik"</span> },
+  <span class="key">"data"</span>:   { ... }      <span class="muted">// shape depends on type</span>
+}</div>
+    </div>
+    <div class="card">
+      <h4 style="margin:0 0 8px">turn.ended payload (seeded)</h4>
+      <div class="kvs"><span class="key">"data"</span>: {
+  <span class="key">"sessionId"</span>: <span class="str">"a91c…"</span>,
+  <span class="key">"status"</span>:    <span class="str">"done"</span>,   <span class="muted">// or "error"</span>
+  <span class="key">"costUsd"</span>:   <span class="num">0.0142</span>,
+  <span class="key">"numTurns"</span>:  <span class="num">3</span>
+}</div>
+      <p class="muted" style="font-size:12.5px;margin-bottom:0">Only data the harness <b>already has</b> at turn-end — no new agent instrumentation.</p>
+    </div>
+  </div>
+  <div class="card">
+    <h4 style="margin:0 0 8px">Why this makes "add more later" cheap</h4>
+    <p style="margin:0 0 8px">Future events just pick a new <code>type</code> and reuse everything else —
+    the same buffer, the same <code>GET /api/events</code>, the same watermark, the same parser:</p>
+    <div class="feedrow"><span class="tag">run.started</span> · repo · sessionId</div>
+    <div class="feedrow"><span class="tag">deploy.done</span> · repo · status, durationMs</div>
+    <div class="feedrow"><span class="tag">tool.flagged</span> · repo · toolName, reason</div>
+    <p class="muted" style="font-size:12.5px;margin:8px 0 0">The test app renders any <code>type</code> generically
+    from the envelope — so it's the test bed for these without changes.</p>
+  </div>
+`;
+
+/* ---------- View: rules ---------- */
+document.getElementById("view-rules").innerHTML = `
+  <h2>The constraints I'm holding myself to</h2>
+  <div class="card">
+    <h4 style="margin:0 0 6px"><span class="pill ro">read-only</span> No actions over REST</h4>
+    <p style="margin:0">The only endpoint added is a <code>GET</code> with no side effects. No mutation endpoint,
+    nothing exposed that isn't already reachable from the frontend. Reading the feed can never trigger a harness action.</p>
+  </div>
+  <div class="card">
+    <h4 style="margin:0 0 6px">Auth is inherited, not invented</h4>
+    <p style="margin:0">The feed lives under <code>/api/*</code>, so the existing login (session cookie or
+    <code>X-Auth-Password</code>) already guards it. No new auth surface in the pilot. <span class="muted">How a remote
+    collector authenticates to many harnesses is the future task's problem.</span></p>
+  </div>
+  <div class="card">
+    <h4 style="margin:0 0 6px">Additive &amp; safe by construction</h4>
+    <ul style="margin:0">
+      <li>New service + one read-only controller + one best-effort publish call + one static app.</li>
+      <li>Publishing <span class="tn">turn.ended</span> is wrapped so it can <b>never</b> disrupt a chat run.</li>
+      <li>The existing per-repo <code>/api/repos/{id}/events</code> + Event Console are untouched.</li>
+      <li>In-memory only — no persistence across restart (a pilot, like the per-repo log).</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4 style="margin:0 0 6px">Explicitly NOT in the pilot</h4>
+    <ul style="margin:0">
+      <li>The remote collector service/app and cross-harness auth/discovery.</li>
+      <li>A live push transport (WebSocket/SSE) — polling by watermark for now.</li>
+      <li>Any event type beyond <span class="tn">turn.ended</span> (the mechanism is built to grow).</li>
+      <li>Surfacing the feed inside the React UI (the in-repo test app is the consumer).</li>
+    </ul>
+  </div>
+`;
 </script>
 </body>
 </html>

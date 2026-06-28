@@ -43,13 +43,16 @@ public class CliRunnerService
     private readonly CallLog _callLog;
     private readonly ActivityLog _activity;
     private readonly Audit.AuditService _audit;
+    private readonly Events.HarnessEventFeed _feed;
 
-    public CliRunnerService(Logger logger, CallLog callLog, ActivityLog activity, Audit.AuditService audit)
+    public CliRunnerService(Logger logger, CallLog callLog, ActivityLog activity, Audit.AuditService audit,
+        Events.HarnessEventFeed feed)
     {
         _logger = logger;
         _callLog = callLog;
         _activity = activity;
         _audit = audit;
+        _feed = feed;
     }
 
     /// <summary>
@@ -70,7 +73,9 @@ public class CliRunnerService
         Func<object, Task>? emit = null,
         CancellationToken ct = default,
         bool readOnly = false,
-        Audit.AuditContext? audit = null)
+        Audit.AuditContext? audit = null,
+        string? repoId = null,
+        string? repoName = null)
     {
         var resuming = !string.IsNullOrWhiteSpace(sessionId);
 
@@ -166,6 +171,24 @@ public class CliRunnerService
             // Close the scoreboard run interval (matches the "start" above),
             // carrying this run's cost so the scoreboard can total spend.
             if (!readOnly) _activity.Append("finish", workingDirectory, record.SessionId, record.CostUsd);
+
+            // Publish the turn.ended harness event (openspec add-harness-event-feed).
+            // This is the single chokepoint hit by EVERY terminal path — normal
+            // completion, CLI error, non-zero exit, cancellation, exception — so it
+            // fires exactly once per turn (record is finalized before this finally).
+            // Best-effort by contract: HarnessEventFeed.Publish never throws.
+            _feed.Publish(
+                "turn.ended",
+                source: new { repoId = repoId ?? "", repoName = repoName ?? "" },
+                data: new
+                {
+                    sessionId = record.SessionId,
+                    status = record.Status == "Success" ? "done" : "error",
+                    rawStatus = record.Status,
+                    costUsd = record.CostUsd,
+                    numTurns = record.NumTurns,
+                    readOnly,
+                });
         }
     }
 
