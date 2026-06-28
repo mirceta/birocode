@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Harness Event Feed — pilot consumer</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --edge:#30363d;
+    --ink:#e6edf3; --dim:#9aa7b4; --accent:#58a6ff; --good:#3fb950;
+    --bad:#f85149; --turn:#bc8cff; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 system-ui,Segoe UI,Roboto,sans-serif}
+  header{padding:16px 20px;border-bottom:1px solid var(--edge);display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  h1{margin:0;font-size:17px}
+  .sub{color:var(--dim);font-size:12.5px}
+  .spacer{flex:1}
+  .stat{font-family:var(--mono);font-size:12px;color:var(--dim);display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--dim);margin-right:5px;vertical-align:middle}
+  .dot.live{background:var(--good);box-shadow:0 0 8px -1px var(--good)}
+  .dot.err{background:var(--bad)}
+  main{padding:16px 20px 60px;max-width:960px}
+  .bar{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+  button{background:var(--panel2);color:var(--ink);border:1px solid var(--edge);border-radius:7px;padding:7px 13px;cursor:pointer;font-size:13px}
+  button.primary{background:var(--accent);color:#08111f;border:none;font-weight:600}
+  button:disabled{opacity:.5;cursor:default}
+  .hint{color:var(--dim);font-size:12px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;color:var(--dim);font-weight:500;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;padding:6px 10px;border-bottom:1px solid var(--edge)}
+  td{padding:8px 10px;border-bottom:1px solid #1b212b;vertical-align:top}
+  tr:hover td{background:#11161d}
+  .seq{font-family:var(--mono);color:var(--dim)}
+  .type{font-family:var(--mono);color:var(--turn);font-weight:600;white-space:nowrap}
+  .src{font-family:var(--mono);font-size:12px;color:var(--accent)}
+  .data{font-family:var(--mono);font-size:12px;color:#cdd6e0;white-space:pre-wrap;word-break:break-word}
+  .badge{display:inline-block;padding:0 7px;border-radius:20px;font-size:11px;border:1px solid var(--edge)}
+  .badge.done{color:var(--good);border-color:var(--good)}
+  .badge.error{color:var(--bad);border-color:var(--bad)}
+  .empty{color:var(--dim);padding:40px 10px;text-align:center}
+  .new{animation:flash 1.2s ease}
+  @keyframes flash{from{background:rgba(88,166,255,.18)}to{background:transparent}}
+  code{background:#11161d;padding:1px 5px;border-radius:4px;font-family:var(--mono);font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Harness Event Feed <span class="sub">· pilot consumer</span></h1>
+    <div class="sub">Polls <code id="ep">/api/events</code> by watermark — read-only. Stand-in for the future cross-harness collector.</div>
+  </div>
+  <div class="spacer"></div>
+  <div class="stat">
+    <span><span class="dot" id="dot"></span><span id="status">idle</span></span>
+    <span>watermark <b id="wm">-1</b></span>
+    <span>events <b id="count">0</b></span>
+  </div>
+</header>
+<main>
+  <div class="bar">
+    <button class="primary" id="toggle">▶ Start polling</button>
+    <button id="once">Poll once</button>
+    <button id="clear">Clear view</button>
+    <span class="hint">New event types render generically — this is also the test bed for them.</span>
+  </div>
+  <table>
+    <thead><tr><th style="width:60px">seq</th><th style="width:90px">time</th><th style="width:130px">type</th><th style="width:170px">source</th><th>data</th></tr></thead>
+    <tbody id="rows"><tr><td colspan="5" class="empty">No events yet. Start polling, then end an agent turn in the harness.</td></tr></tbody>
+  </table>
+</main>
+
+<script>
+// Derive the harness API root from our own URL so it works behind any proxy
+// prefix. We are served at  <prefix>/api/localview/<repoId>/app/events-feed/  —
+// the harness API lives at  <prefix>/api . Strip from "/api/localview/" on.
+const m = location.pathname.match(/^(.*?)\/api\/localview\//);
+const API = (m ? m[1] : "") + "/api";
+document.getElementById("ep").textContent = API + "/events";
+
+const rows = document.getElementById("rows");
+const elStatus = document.getElementById("status");
+const elDot = document.getElementById("dot");
+const elWm = document.getElementById("wm");
+const elCount = document.getElementById("count");
+const btnToggle = document.getElementById("toggle");
+
+let watermark = -1;   // ask for the full retained feed on first poll
+let total = 0;
+let timer = null;
+let empty = true;
+
+function setStatus(text, cls){ elStatus.textContent = text; elDot.className = "dot" + (cls ? " " + cls : ""); }
+function esc(s){ return String(s).replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+function fmtTime(ms){ try { const d = new Date(ms); return d.toLocaleTimeString(); } catch { return String(ms); } }
+
+function sourceText(src){
+  if (src == null) return "—";
+  if (typeof src === "object"){
+    const id = src.repoName || src.repoId;
+    return id ? esc(id) : esc(JSON.stringify(src));
+  }
+  return esc(String(src));
+}
+
+// Render any event purely from the envelope, so an unknown `type` still shows.
+function renderData(ev){
+  const d = ev.data;
+  if (d == null) return "—";
+  // Highlight the known turn.ended status; everything else prints generically.
+  if (ev.type === "turn.ended" && d.status){
+    const cls = d.status === "done" ? "done" : "error";
+    const bits = [`<span class="badge ${cls}">${esc(d.status)}</span>`];
+    if (d.sessionId) bits.push(`session ${esc(d.sessionId)}`);
+    if (d.numTurns != null) bits.push(`${esc(d.numTurns)} turn(s)`);
+    if (d.costUsd != null) bits.push(`$${esc(d.costUsd)}`);
+    if (d.readOnly) bits.push(`<span class="badge">read-only</span>`);
+    return bits.join(" · ");
+  }
+  return `<span class="data">${esc(JSON.stringify(d))}</span>`;
+}
+
+function addRow(ev){
+  if (empty){ rows.innerHTML = ""; empty = false; }
+  const tr = document.createElement("tr");
+  tr.className = "new";
+  tr.innerHTML =
+    `<td class="seq">#${esc(ev.seq)}</td>`+
+    `<td class="sub">${esc(fmtTime(ev.at))}</td>`+
+    `<td class="type">${esc(ev.type)}</td>`+
+    `<td class="src">${sourceText(ev.source)}</td>`+
+    `<td>${renderData(ev)}</td>`;
+  rows.insertBefore(tr, rows.firstChild); // newest on top
+}
+
+async function poll(){
+  try{
+    const res = await fetch(API + "/events?after=" + watermark, { headers: { "Accept": "application/json" } });
+    if (res.status === 401 || res.status === 403){ setStatus("auth required", "err"); stop(); return; }
+    if (!res.ok){ setStatus("HTTP " + res.status, "err"); return; }
+    const body = await res.json();
+    const evs = body.events || [];
+    for (const ev of evs){ addRow(ev); total++; }
+    if (typeof body.lastSeq === "number") watermark = body.lastSeq;
+    elWm.textContent = watermark;
+    elCount.textContent = total;
+    setStatus(timer ? "live" : "polled", timer ? "live" : "");
+  }catch(e){
+    setStatus("offline", "err");
+  }
+}
+
+function start(){
+  if (timer) return;
+  poll();
+  timer = setInterval(poll, 3000);
+  btnToggle.textContent = "⏸ Stop polling";
+  setStatus("live", "live");
+}
+function stop(){
+  if (timer){ clearInterval(timer); timer = null; }
+  btnToggle.textContent = "▶ Start polling";
+  setStatus("paused");
+}
+
+btnToggle.onclick = () => (timer ? stop() : start());
+document.getElementById("once").onclick = poll;
+document.getElementById("clear").onclick = () => {
+  rows.innerHTML = `<tr><td colspan="5" class="empty">View cleared. Watermark kept at ${watermark} — only newer events will appear. Reload to replay from -1.</td></tr>`;
+  empty = true;
+};
+</script>
+</body>
+</html>

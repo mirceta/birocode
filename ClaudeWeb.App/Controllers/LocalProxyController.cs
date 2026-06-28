@@ -35,15 +35,18 @@ public class LocalProxyController : ControllerBase
     private readonly Logger _logger;
     private readonly Services.Understanding.UnderstandingApp _understanding;
     private readonly Services.Understanding.LabApp _lab;
+    private readonly Services.Events.EventsApp _eventsApp;
 
     public LocalProxyController(IHttpClientFactory http, RepositoryRegistry registry, Logger logger,
-        Services.Understanding.UnderstandingApp understanding, Services.Understanding.LabApp lab)
+        Services.Understanding.UnderstandingApp understanding, Services.Understanding.LabApp lab,
+        Services.Events.EventsApp eventsApp)
     {
         _http = http;
         _registry = registry;
         _logger = logger;
         _understanding = understanding;
         _lab = lab;
+        _eventsApp = eventsApp;
     }
 
     // Named app: /api/localview/{repoId}/app/{appId}/... — the multi-app form
@@ -68,6 +71,8 @@ public class LocalProxyController : ControllerBase
         {
             if (string.Equals(appId, RepositoryRegistry.LabAppId, StringComparison.OrdinalIgnoreCase))
                 await _lab.Serve(HttpContext, repo!, rest);
+            else if (string.Equals(appId, RepositoryRegistry.EventsAppId, StringComparison.OrdinalIgnoreCase))
+                await _eventsApp.Serve(HttpContext, repo!, rest);
             else
                 await _understanding.Serve(HttpContext, repo!, rest);
             return;

@@ -373,6 +373,11 @@ public class RepositoryRegistry
     /// self repo only — the operator's single personal hub (plans/agentic-lab.md).</summary>
     public const string LabAppId = "lab";
 
+    /// <summary>Id of the harness-provided pilot consumer of the harness event feed,
+    /// attached to the self repo only — a harness dev tool that reads /api/events
+    /// (openspec change add-harness-event-feed).</summary>
+    public const string EventsAppId = "events-feed";
+
     private RepositoryInfo ToInfo(RepositoryConfig r)
     {
         var exists = Directory.Exists(r.Path);
@@ -388,7 +393,14 @@ public class RepositoryRegistry
         // attached to the self repo only (served internally by LabApp; same synthetic
         // kind:harness mechanism). plans/agentic-lab.md.
         if (r.IsSelf)
+        {
             infos.Add(new LocalAppInfo(LabAppId, "Agentic Engineering Lab", 0, "harness"));
+            // The harness event-feed pilot consumer is a harness dev tool (reads the
+            // harness-wide /api/events), so like the Lab it is attached to the self
+            // repo only; served internally by EventsApp via the same kind:harness
+            // mechanism. openspec add-harness-event-feed.
+            infos.Add(new LocalAppInfo(EventsAppId, "Harness Event Feed", 0, "harness"));
+        }
         return new RepositoryInfo(r.Id, r.Name, r.Path, exists, isGit, r.IsSelf, NormalizeVisibility(r.Visibility), defaultPort, infos);
     }
 
