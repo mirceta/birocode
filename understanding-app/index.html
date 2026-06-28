@@ -3,353 +3,235 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Hide Self-Development repo from Basic mode</title>
+<title>Full-span tab fills the width — what changed</title>
 <style>
   :root{
-    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --line:#2b3442;
-    --text:#e6edf3; --soft:#9aa7b4; --faint:#6b7785;
-    --accent:#4493f8; --accent-soft:#172033;
-    --good:#3fb950; --good-soft:#12251a;
-    --bad:#f85149; --bad-soft:#2a1416;
-    --warn:#d29922; --warn-soft:#241c0e;
-    --self:#bc8cff; --self-soft:#1e1730;
-    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c2230; --line:#2a3142;
+    --ink:#e7edf5; --dim:#9aa7b8; --accent:#4aa3ff; --good:#3fb950; --bad:#f85149;
+    --warn:#d29922; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.55;
-    -webkit-font-smoothing:antialiased}
-  .wrap{max-width:1080px;margin:0 auto;padding:32px 22px 90px}
-  header h1{font-size:26px;margin:0 0 6px;letter-spacing:-.01em}
-  header p.sub{margin:0;color:var(--soft);font-size:15px}
-  .meta{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 28px}
-  .chip{font-family:var(--mono);font-size:12px;padding:4px 9px;border:1px solid var(--line);
-    border-radius:999px;color:var(--soft);background:var(--panel)}
-  .chip b{color:var(--text);font-weight:600}
-  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
-    padding:22px 22px;margin:0 0 20px}
-  section h2{margin:0 0 4px;font-size:18px;display:flex;align-items:center;gap:9px}
-  section h2 .n{font-family:var(--mono);font-size:13px;color:var(--accent);
-    background:var(--accent-soft);border:1px solid var(--line);border-radius:7px;
-    padding:1px 8px}
-  section .lead{color:var(--soft);font-size:14px;margin:0 0 16px}
-  code{font-family:var(--mono);font-size:.88em;background:#0b0f15;border:1px solid var(--line);
-    padding:1px 5px;border-radius:5px;color:#c9d4e0}
-  .small{font-size:13px;color:var(--soft)}
-
-  /* mode toggle */
-  .toggle{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;
-    background:var(--panel2)}
-  .toggle button{appearance:none;border:0;background:transparent;color:var(--soft);
-    font-family:var(--sans);font-size:14px;font-weight:600;padding:9px 18px;cursor:pointer;
-    transition:.15s}
-  .toggle button.on{background:var(--accent);color:#04101f}
-  .toggle button:not(.on):hover{color:var(--text)}
-  .modebar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px}
-  .modebar .tag{font-size:12.5px;color:var(--faint)}
-
-  /* device mock */
-  .stage{display:grid;grid-template-columns:1fr 1fr;gap:18px}
-  @media(max-width:720px){.stage{grid-template-columns:1fr}}
-  .device{border:1px solid var(--line);border-radius:16px;background:var(--panel2);
-    overflow:hidden;display:flex;flex-direction:column;min-height:280px}
-  .device .bar{display:flex;align-items:center;gap:8px;padding:9px 13px;border-bottom:1px solid var(--line);
-    background:#10151d}
-  .device .bar .dot{width:9px;height:9px;border-radius:50%;background:#30363d}
-  .device .bar .title{font-size:12px;color:var(--soft);margin-left:6px;font-family:var(--mono)}
-  .device .badge{margin-left:auto;font-size:11px;font-family:var(--mono);padding:2px 8px;border-radius:999px;
+  body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#16203033,transparent),var(--bg);
+    color:var(--ink);font:15px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+  .wrap{max-width:1040px;margin:0 auto;padding:32px 22px 80px}
+  h1{font-size:30px;margin:0 0 6px;letter-spacing:-.02em}
+  .sub{color:var(--dim);margin:0 0 28px;font-size:16px}
+  h2{font-size:20px;margin:38px 0 12px;letter-spacing:-.01em}
+  p{margin:10px 0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin:16px 0}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:760px){.grid2{grid-template-columns:1fr}}
+  code,.mono{font-family:var(--mono);font-size:13px}
+  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;
     border:1px solid var(--line)}
-  .badge.basic{color:var(--accent);background:var(--accent-soft)}
-  .badge.adv{color:var(--self);background:var(--self-soft)}
-  .device .body{padding:13px;flex:1;display:flex;flex-direction:column;gap:9px}
-  .device .label{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);
-    margin-bottom:1px}
-  .repo{display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid var(--line);
-    border-radius:9px;background:var(--panel);font-size:14px;transition:.25s}
-  .repo .ic{font-size:15px}
-  .repo .nm{font-weight:600}
-  .repo .vis{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--faint);
-    border:1px solid var(--line);border-radius:999px;padding:1px 7px}
-  .repo.self{border-color:var(--self);background:var(--self-soft)}
-  .repo.self .nm{color:var(--self)}
-  .repo.active{outline:2px solid var(--accent);outline-offset:-2px}
-  .conv{margin-top:6px;border:1px dashed var(--line);border-radius:9px;padding:11px;font-size:13px;
-    background:#0b0f15;min-height:64px}
-  .conv .who{font-family:var(--mono);font-size:11px;color:var(--faint);margin-bottom:4px}
-  .conv.self{border-color:var(--self);background:var(--self-soft)}
-  .conv.self .who{color:var(--self)}
-  .conv.leak{border-color:var(--bad);background:var(--bad-soft)}
-  .conv.leak .who{color:var(--bad)}
-  .verdict{margin-top:10px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px}
-  .verdict.bad{color:var(--bad)} .verdict.good{color:var(--good)}
-  .empty{border:1px dashed var(--line);border-radius:9px;padding:16px 13px;text-align:center;
-    color:var(--soft);font-size:13px;background:#0b0f15}
-  .empty .ic{font-size:22px;display:block;margin-bottom:7px;opacity:.7}
-  .newbtn{margin-top:9px;border:1px dashed var(--line);border-radius:9px;padding:9px 11px;
-    text-align:center;color:var(--faint);font-size:13px;font-family:var(--sans)}
-  .col-h{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);
-    margin:0 0 9px}
-  .before .col-h{color:var(--bad)} .after .col-h{color:var(--good)}
-
-  /* flow */
-  .flow{display:flex;flex-direction:column;gap:0}
-  .step{display:grid;grid-template-columns:34px 1fr;gap:14px;align-items:start;position:relative;
-    padding-bottom:18px}
-  .step:last-child{padding-bottom:0}
-  .step .rail{display:flex;flex-direction:column;align-items:center}
-  .step .num{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
-    font-family:var(--mono);font-size:14px;font-weight:700;border:1px solid var(--line);
-    background:var(--panel2);color:var(--soft);z-index:1}
-  .step .line{flex:1;width:2px;background:var(--line);margin-top:2px;min-height:24px}
-  .step:last-child .line{display:none}
-  .step.fix .num{border-color:var(--good);color:var(--good);background:var(--good-soft)}
-  .step .body h3{margin:5px 0 4px;font-size:15px}
-  .step .body p{margin:0 0 6px;color:var(--soft);font-size:13.5px}
-  .step .tagrow{display:flex;gap:7px;flex-wrap:wrap;margin-top:6px}
-  .ttag{font-family:var(--mono);font-size:11px;padding:2px 8px;border-radius:6px;border:1px solid var(--line);
-    color:var(--soft);background:#0b0f15}
-  .ttag.fix{color:var(--good);border-color:#1d3a26;background:var(--good-soft)}
-
-  /* requirements */
-  .reqs{display:grid;gap:12px}
-  .req{border:1px solid var(--line);border-radius:11px;padding:14px 15px;background:var(--panel2)}
-  .req h3{margin:0 0 5px;font-size:14.5px;display:flex;gap:9px;align-items:baseline}
-  .req h3 .r{font-family:var(--mono);font-size:11px;color:var(--good);background:var(--good-soft);
-    border:1px solid #1d3a26;border-radius:6px;padding:1px 7px;flex:none}
-  .req p{margin:0;color:var(--soft);font-size:13.5px}
-
-  /* decisions / scope */
-  .cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  @media(max-width:720px){.cards{grid-template-columns:1fr}}
-  .card{border:1px solid var(--line);border-radius:11px;padding:15px;background:var(--panel2)}
-  .card.warn{border-color:#3a3015}
-  .card h3{margin:0 0 6px;font-size:14px}
-  .card p{margin:0;color:var(--soft);font-size:13px}
-  .kbar{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:8px}
-  .file{font-family:var(--mono);font-size:11.5px;color:var(--accent)}
-  footer{color:var(--faint);font-size:12px;text-align:center;margin-top:26px}
-  .pulse{animation:pulse 1.2s ease}
-  @keyframes pulse{0%{background:var(--warn-soft)}100%{}}
+  .pill.bad{color:var(--bad);border-color:#5a2a2a;background:#2a1717}
+  .pill.good{color:var(--good);border-color:#234d2b;background:#13261a}
+  .pill.dim{color:var(--dim)}
+  pre{background:#0b0f15;border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto;margin:10px 0}
+  pre code{font-size:12.5px;line-height:1.5;color:#cdd6e2}
+  .del{color:var(--bad)} .add{color:var(--good)} .cmt{color:#6b7787}
+  /* ---- interactive viewport sim ---- */
+  .sim-controls{display:flex;gap:26px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+  .ctrl label{display:block;font-size:12px;color:var(--dim);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em}
+  .ctrl input[type=range]{width:180px;accent-color:var(--accent)}
+  .ctrl .val{font-family:var(--mono);color:var(--accent);font-weight:700;margin-left:8px}
+  .toggle{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .toggle button{background:var(--panel2);color:var(--dim);border:0;padding:8px 14px;cursor:pointer;font:inherit;font-size:13px}
+  .toggle button.on{background:var(--accent);color:#04101f;font-weight:700}
+  .browser{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#0b0f15;margin-top:6px}
+  .chrome{display:flex;align-items:center;gap:6px;padding:8px 12px;background:#11161f;border-bottom:1px solid var(--line)}
+  .dot{width:10px;height:10px;border-radius:50%}
+  .chrome .addr{margin-left:10px;font-family:var(--mono);font-size:11px;color:var(--dim)}
+  .viewport{position:relative;height:230px;padding:14px;background:repeating-linear-gradient(45deg,#0c1118,#0c1118 10px,#0e141c 10px,#0e141c 20px)}
+  .frame{height:100%;display:flex;flex-direction:column;background:var(--panel);border:1px dashed var(--line);border-radius:8px;
+    transition:max-width .35s ease, margin .35s ease;}
+  .frame .fhead{padding:8px 12px;border-bottom:1px solid var(--line);font-size:12px;color:var(--dim);display:flex;justify-content:space-between}
+  .strip{flex:1;display:flex;min-height:0}
+  .pane{flex:1 1 0;border-right:1px solid var(--line);display:flex;flex-direction:column;min-width:0;transition:flex-grow .35s ease}
+  .pane:last-child{border-right:0}
+  .pane .pbar{font-size:11px;color:var(--dim);padding:5px 8px;border-bottom:1px solid var(--line);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;overflow:hidden}
+  .pane .pbody{flex:1;display:flex;align-items:center;justify-content:center;color:#54627a;font-size:12px}
+  .content-cap{transition:max-width .35s ease, margin .35s ease;background:var(--panel2);border:1px solid var(--line);
+    border-radius:6px;flex:1;display:flex;align-items:center;justify-content:center;color:#7d8aa0;font-size:12px;text-align:center;padding:6px}
+  .verdict{margin-top:12px;font-size:13px;display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+  .verdict .k{color:var(--dim)}
+  .verdict .v{font-family:var(--mono);font-weight:700}
+  ul{margin:8px 0;padding-left:20px} li{margin:5px 0}
+  .foot{margin-top:40px;color:#5e6b7d;font-size:12px;border-top:1px solid var(--line);padding-top:14px}
+  .filetag{font-family:var(--mono);font-size:11px;color:var(--accent)}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <h1>Hiding the Self-Development repo from Basic mode</h1>
-    <p class="sub">OpenSpec change <code>hide-self-repo-from-basic</code> — why the ClaudeWeb self conversation leaks to End Users, and the rule that stops it.</p>
-    <div class="meta">
-      <span class="chip">branch <b>feature/hide-self-repo-basic-mode</b></span>
-      <span class="chip">capability <b>project-visibility</b> (seeded)</span>
-      <span class="chip">status <b>proposal &middot; validated</b></span>
-      <span class="chip">enforcement <b>client-side</b></span>
-    </div>
-  </header>
+  <h1>Why the full-span tab finally fills the width</h1>
+  <p class="sub">One tab, widened to span <em>every</em> visible slot, used to sit centered with gutters. Here's the actual reason &mdash; and the one decision that fixed it.</p>
 
-  <!-- LIVE DEMO -->
-  <section>
-    <h2><span class="n">demo</span> Flip the mode &mdash; watch the self repo &amp; its conversation</h2>
-    <p class="lead">The same repo list rendered for the two modes. Toggle to see what an End User (Basic) gets today vs. after the fix.</p>
-    <div class="modebar">
-      <div class="toggle" id="toggle">
-        <button data-m="basic" class="on">Basic (End User)</button>
-        <button data-m="advanced">Advanced</button>
-      </div>
-      <div class="toggle" id="scenario">
-        <button data-s="multi" class="on">Has other projects</button>
-        <button data-s="selfonly">Only the self repo</button>
-      </div>
-      <span class="tag">device-local &middot; <code>localStorage: claudeweb_ui_mode</code></span>
+  <div class="card">
+    <p style="margin-top:0"><strong>TL;DR.</strong> A tab widened to consume the whole pane budget left <em>no room for neighbours</em>, so the multi-pane layout decided &ldquo;only one pane &rarr; not multi&rdquo; and fell back to the <strong>classic single view, capped at 720px and centered</strong>. The fix: a deliberately-widened lone tab now renders as a <strong>single full-width pane in the uncapped strip</strong> instead of falling back.</p>
+  </div>
+
+  <h2>1 &middot; The decision that was wrong</h2>
+  <p>Every render, <code class="filetag">PaneStrip.jsx &rarr; useMultiPane()</code> packs as many tabs as the screen budget allows around the active one. It computes a window <code>[lo, hi]</code> of panes to show.</p>
+  <div class="grid2">
+    <div class="card">
+      <p style="margin-top:0"><span class="pill bad">before</span></p>
+      <pre><code><span class="cmt">// only one pane fits -&gt; bail to single view</span>
+<span class="del">if (lo === hi) return { multi: false }</span>
+
+<span class="cmt">// Layout then renders &lt;Outlet/&gt; inside</span>
+<span class="cmt">// .app-frame, which is capped:</span>
+.app-frame { max-width: 720px;
+             margin: 0 auto; }  <span class="cmt">// gutters</span></code></pre>
+      <p style="font-size:13px;color:var(--dim)">A full-span tab fills the budget alone &rarr; <code>lo === hi</code> &rarr; single, capped, centered. The page-level CSS never even got a chance.</p>
     </div>
-    <div class="stage">
-      <div class="before">
-        <p class="col-h">Today (bug)</p>
-        <div class="device">
-          <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
-            <span class="title">Projects</span><span class="badge basic" id="b1">basic</span></div>
-          <div class="body" id="bodyBefore"></div>
+    <div class="card">
+      <p style="margin-top:0"><span class="pill good">after</span></p>
+      <pre><code>if (lo === hi) {
+  <span class="cmt">// widened on purpose? keep it in the strip</span>
+  <span class="add">if (weight(active) &gt; 1) return {</span>
+<span class="add">    multi: true,</span>
+<span class="add">    panes: [{ ...tabs[active],</span>
+<span class="add">             width: weight(active) }],</span>
+<span class="add">  }</span>
+  return { multi: false }  <span class="cmt">// truly alone</span>
+}</code></pre>
+      <p style="font-size:13px;color:var(--dim)">Now it renders as one pane in <code>.app-frame--multi</code> (no cap) &rarr; flex-grows to <strong>100%</strong>.</p>
+    </div>
+  </div>
+
+  <h2>2 &middot; Try it &mdash; watch the decision flip</h2>
+  <div class="card">
+    <div class="sim-controls">
+      <div class="ctrl">
+        <label>Visible tab-spaces (budget) <span class="val" id="vBudget">3</span></label>
+        <input type="range" id="budget" min="1" max="4" value="3" step="1">
+      </div>
+      <div class="ctrl">
+        <label>This tab's span <span class="val" id="vSpan">3</span></label>
+        <input type="range" id="span" min="1" max="4" value="3" step="1">
+      </div>
+      <div class="ctrl">
+        <label>Build</label>
+        <div class="toggle" id="buildTog">
+          <button data-b="before">before fix</button>
+          <button data-b="after" class="on">after fix</button>
         </div>
       </div>
-      <div class="after">
-        <p class="col-h">With this change</p>
-        <div class="device">
-          <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
-            <span class="title">Projects</span><span class="badge basic" id="b2">basic</span></div>
-          <div class="body" id="bodyAfter"></div>
+    </div>
+
+    <div class="browser">
+      <div class="chrome">
+        <span class="dot" style="background:#f85149"></span>
+        <span class="dot" style="background:#d29922"></span>
+        <span class="dot" style="background:#3fb950"></span>
+        <span class="addr">:5099 &mdash; Advanced mode, wide window</span>
+      </div>
+      <div class="viewport">
+        <div class="frame" id="frame">
+          <div class="fhead"><span id="frameMode">.app-frame--multi</span><span id="frameCap"></span></div>
+          <div class="strip" id="strip"></div>
         </div>
       </div>
     </div>
-    <p class="small" style="margin-top:14px">&#8627; The self repo is <code>isSelf=true</code>, pinned at <b>index 0 &mdash; the default project</b>. Today the Basic list is filtered by <code>visibility</code> only (<span class="file">Projects.jsx:127</span>), so the self repo slips through and, being the default, its conversation renders even after you open another project.</p>
-    <p class="small" style="margin-top:8px"><b>Empty-state case</b> &mdash; switch the scenario to <i>&ldquo;Only the self repo&rdquo;</i>: on a fresh harness where self is the <i>only</i> registered repo, hiding it means a Basic user has <b>zero</b> projects. They see the real empty state (<span class="file">Projects.jsx:181</span> &rarr; <code>projects.noneBasic</code>): &ldquo;No projects are available in Basic mode yet&hellip;&rdquo; plus the <code>+ New project</code> button &mdash; and crucially <b>no self conversation</b>. That&rsquo;s the correct outcome: better an honest empty state than the harness&rsquo;s own conversation leaking to an End User.</p>
-  </section>
 
-  <!-- ROOT CAUSE FLOW -->
-  <section>
-    <h2><span class="n">why</span> How the self conversation leaks &mdash; the resolution chain</h2>
-    <p class="lead">Four steps from &ldquo;pick a mode&rdquo; to &ldquo;render a conversation.&rdquo; The leak happens because nothing in the chain subtracts <code>isSelf</code> for a Basic user. Green steps are where this change intervenes.</p>
-    <div class="flow">
-      <div class="step">
-        <div class="rail"><div class="num">1</div><div class="line"></div></div>
-        <div class="body"><h3>Mode is chosen on the device</h3>
-          <p>Purely client-side, defaults to <code>basic</code>. The backend never learns the mode &mdash; it serves every repo (incl. self) to any authed client.</p>
-          <div class="tagrow"><span class="ttag">UiModeContext.jsx</span><span class="ttag">useFeature()</span></div></div>
-      </div>
-      <div class="step fix">
-        <div class="rail"><div class="num">2</div><div class="line"></div></div>
-        <div class="body"><h3>Repo list is filtered</h3>
-          <p>Today: <code>repos.filter(r =&gt; r.visibility === 'basic')</code> &mdash; ignores <code>isSelf</code>. <b>Fix:</b> also exclude <code>isSelf</code> in Basic.</p>
-          <div class="tagrow"><span class="ttag">Projects.jsx:127</span><span class="ttag fix">+ &amp;&amp; !r.isSelf</span></div></div>
-      </div>
-      <div class="step fix">
-        <div class="rail"><div class="num">3</div><div class="line"></div></div>
-        <div class="body"><h3>Active / default repo is resolved</h3>
-          <p>Self is index-0 default, so a fresh or self-pointing Basic user lands on it. <b>Fix:</b> never resolve a Basic user's active repo to self &mdash; fall back to first Basic-visible repo (or empty state).</p>
-          <div class="tagrow"><span class="ttag">RepoContext.jsx</span><span class="ttag">ChatContext.jsx ~74-119</span><span class="ttag fix">fallback</span></div></div>
-      </div>
-      <div class="step fix">
-        <div class="rail"><div class="num">4</div><div class="line"></div></div>
-        <div class="body"><h3>Conversation renders</h3>
-          <p>With the active repo guaranteed non-self and the dual &ldquo;Claude Web&rdquo; view already <code>dualChat:'advanced'</code>, the self conversation can no longer mount for a Basic user &mdash; including right after switching projects.</p>
-          <div class="tagrow"><span class="ttag">ChatContext.jsx</span><span class="ttag fix">no self render in Basic</span></div></div>
-      </div>
+    <div class="verdict">
+      <span><span class="k">lo === hi?</span> <span class="v" id="oLoHi"></span></span>
+      <span><span class="k">useMultiPane &rarr;</span> <span class="v" id="oMulti"></span></span>
+      <span><span class="k">result:</span> <span class="v" id="oResult"></span></span>
     </div>
-  </section>
+  </div>
 
-  <!-- REQUIREMENTS -->
-  <section>
-    <h2><span class="n">spec</span> The three requirements (delta on <code>project-visibility</code>)</h2>
-    <p class="lead">What the system SHALL guarantee once shipped. Each carries WHEN/THEN scenarios in the delta spec.</p>
-    <div class="reqs">
-      <div class="req"><h3><span class="r">R1</span> The Self-Development repo is hidden from Basic-mode users</h3>
-        <p>The Basic project selector excludes every <code>isSelf</code> repo regardless of its <code>visibility</code>. Advanced still sees it, pinned &amp; non-removable.</p></div>
-      <div class="req"><h3><span class="r">R2</span> A Basic user's active repo is never the self repo</h3>
-        <p>Even though self is the index-0 default / may be the persisted pick, resolution falls back to the first Basic-visible repo, else the empty state.</p></div>
-      <div class="req"><h3><span class="r">R3</span> The self conversation never renders for a Basic user</h3>
-        <p>No dual harness chat, no self sessions &mdash; including immediately after switching projects, and after toggling Advanced&rarr;Basic while on the self repo.</p></div>
-    </div>
-  </section>
+  <h2>3 &middot; The complementary layer (page caps)</h2>
+  <p>Once a tab <em>is</em> in the strip, a very wide pane could still center its own content if the page sets a reading-width cap (Settings caps at 560px; Cockpit/Terminal around 1100&ndash;1200px). So each pane's content area is its own size container, and the caps lift when the pane is wider than them:</p>
+  <pre><code><span class="cmt">/* the pane's .app-content is a container; the page reacts to ITS width */</span>
+@container (min-width: 560px) { .settings-page { max-width: none } }</code></pre>
+  <p style="font-size:13px;color:var(--dim)">This is why both pieces shipped: the <strong>layout fix</strong> gets the tab into the uncapped strip (the bug you saw), and the <strong>@container CSS</strong> stops page-level caps from re-centering inside an extra-wide pane.</p>
 
-  <!-- DECISIONS -->
-  <section>
-    <h2><span class="n">scope</span> Two decisions worth confirming</h2>
-    <div class="cards">
-      <div class="card">
-        <div class="kbar"><span class="ttag">new capability</span></div>
-        <h3>Seeded <code>project-visibility</code></h3>
-        <p>No existing spec owned repo visibility; <span class="file">plans/project-visibility.md</span> was never folded into <code>openspec/specs</code>. Seed-and-grow per CLAUDE.md as we touch it, rather than bolting onto <code>chat</code>/<code>access-control</code>.</p>
-      </div>
-      <div class="card warn">
-        <div class="kbar"><span class="ttag">out of scope</span></div>
-        <h3>Client-side enforcement only</h3>
-        <p>UI mode is device-local; the backend can't know it. <code>/api/repos</code> &amp; <code>/api/sessions</code> still return self to any client asking by id. A hard server-side gate needs the backend to learn the caller's mode &mdash; a separate, larger change.</p>
-      </div>
-    </div>
-    <p class="small" style="margin-top:14px">Preserved invariant: self stays pinned at index 0 and non-removable for Advanced (<span class="file">RepoController.Remove</span> still refuses <code>IsSelf</code>). This change only <i>hides</i> it from Basic.</p>
-  </section>
+  <h2>4 &middot; What shipped</h2>
+  <ul>
+    <li><span class="filetag">client/src/layout/PaneStrip.jsx</span> &mdash; the <code>weight &gt; 1</code> branch; span &plusmn; steppers gated to &ge;2 panes so a lone full-span pane shows none.</li>
+    <li><span class="filetag">client/src/**.css</span> &mdash; <code>@container</code> cap-lifts for the page bodies.</li>
+    <li>Commit <code>89c27c0</code>, deployed to live <code>:5099</code> via <code>swap.ps1</code> (auto-rollback disarmed on &ldquo;keep it&rdquo;).</li>
+  </ul>
 
-  <footer>Understanding app &middot; rolling-latest &middot; overwritten each time the explanation changes &middot; build-less &amp; self-contained</footer>
+  <div class="foot">Understanding app &middot; overwritten each time the explanation changes &middot; served under <code>/api/localview/&lt;repo&gt;/app/understanding/</code></div>
 </div>
 
 <script>
 (function(){
-  var SELF = {id:'self', name:'Claude Web (this app)', icon:'🛠️', isSelf:true, visibility:'basic'};
-  var SETS = {
-    multi: [
-      SELF,
-      {id:'kekik', name:'kekik-topluyoruz', icon:'📦', isSelf:false, visibility:'basic'},
-      {id:'notes', name:'notes-app', icon:'📝', isSelf:false, visibility:'advanced'}
-    ],
-    selfonly: [ SELF ]   // a fresh harness: the self repo is the only one registered
-  };
-  var mode = 'basic';
-  var scenario = 'multi';
-  function repos(){ return SETS[scenario]; }
-
-  // the real empty-state copy, Projects.jsx:181 / en.json "projects.noneBasic"
-  var EMPTY_MSG = 'No projects are available in Basic mode yet. Switch to Advanced mode to manage visibility.';
-
-  function visibleBefore(){ // today's logic: Projects.jsx:127
-    if(mode==='advanced') return repos().slice();
-    return repos().filter(function(r){ return r.visibility==='basic'; }); // ignores isSelf -> self leaks
-  }
-  function visibleAfter(){
-    if(mode==='advanced') return repos().slice();
-    return repos().filter(function(r){ return r.visibility==='basic' && !r.isSelf; });
-  }
-  function activeOf(list){ return list.length ? list[0] : null; } // index-0 default landing
-
-  function repoRow(r, active){
-    var cls='repo'+(r.isSelf?' self':'')+(active&&active.id===r.id?' active':'');
-    return '<div class="'+cls+'"><span class="ic">'+r.icon+'</span>'+
-      '<span class="nm">'+r.name+'</span>'+
-      '<span class="vis">'+(r.isSelf?'isSelf':r.visibility)+'</span></div>';
-  }
-
-  function convBlock(active, leaked){
-    if(!active) return '<div class="conv"><div class="who">conversation</div><span class="small">&mdash; no project &mdash;</span></div>';
-    if(active.isSelf){
-      var c = leaked? 'conv self leak':'conv self';
-      var who = leaked? 'ClaudeWeb self conversation &middot; LEAKED to End User':'ClaudeWeb self conversation';
-      return '<div class="'+c+'"><div class="who">'+who+'</div>&ldquo;&hellip;run swap.ps1, arm the dead-man switch, isolated self-dev build&hellip;&rdquo;</div>';
-    }
-    return '<div class="conv"><div class="who">'+active.name+' conversation</div>&ldquo;&hellip;working on the '+active.name+' product&hellip;&rdquo;</div>';
-  }
+  var budget=3, span=3, build='after';
+  var $=function(id){return document.getElementById(id)};
+  var bEl=$('budget'), sEl=$('span');
 
   function render(){
-    document.getElementById('b1').className = 'badge '+(mode==='basic'?'basic':'adv');
-    document.getElementById('b2').className = 'badge '+(mode==='basic'?'basic':'adv');
-    document.getElementById('b1').textContent = mode;
-    document.getElementById('b2').textContent = mode;
+    if(span>budget){span=budget; sEl.value=span;}
+    $('vBudget').textContent=budget;
+    $('vSpan').textContent=span;
 
-    var lb = visibleBefore(), la = visibleAfter();
-    var ab = activeOf(lb), aa = activeOf(la);
-    var leaked = (mode==='basic' && ab && ab.isSelf);
+    // emulate useMultiPane: budget slots; active tab takes `span`, neighbours
+    // (weight 1 each) fill the rest. span filling the budget => no neighbours.
+    var neighbours=Math.max(0, budget-span);
+    var loEqHi=(neighbours===0);
+    var weightGt1=(span>1);
 
-    var emptyHtml = '<div class="empty"><span class="ic">📭</span>'+EMPTY_MSG+'</div>'+
-                    '<div class="newbtn">+ New project</div>';
-
-    function listHtml(list, active){
-      if(list.length===0) return emptyHtml;
-      return list.map(function(r){return repoRow(r,active);}).join('');
+    var multi, mode, capLabel, panes=[];
+    if(loEqHi){
+      if(build==='after' && weightGt1){
+        multi=true; panes=[{label:'this tab',grow:span,full:true}];
+      }else{
+        multi=false; // single capped view
+      }
+    }else{
+      multi=true;
+      panes.push({label:'this tab',grow:span,full:false});
+      for(var i=0;i<neighbours;i++) panes.push({label:'tab',grow:1,full:false});
     }
 
-    var before = '<div class="label">Project selector</div>'+
-      listHtml(lb, ab)+
-      '<div class="label" style="margin-top:6px">Rendered conversation</div>'+
-      convBlock(ab, leaked)+
-      (leaked
-        ? '<div class="verdict bad">&#10007; self repo shown &amp; its conversation leaks</div>'
-        : (mode==='advanced'
-            ? '<div class="verdict good">&#10003; Advanced &mdash; self is expected here</div>'
-            : (ab? '<div class="verdict good">&#10003; ok</div>'
-                 : '<div class="verdict good">&#10003; empty state</div>')));
+    var frame=$('frame'), strip=$('strip');
+    if(multi){
+      mode='.app-frame--multi';
+      frame.style.maxWidth='none'; frame.style.margin='0';
+      capLabel='no cap, fills';
+    }else{
+      mode='.app-frame (single)';
+      frame.style.maxWidth='340px'; frame.style.margin='0 auto'; // stand-in for 720px cap+center
+      capLabel='max-width:720px, centered';
+    }
+    $('frameMode').textContent=mode;
+    $('frameCap').textContent=capLabel;
 
-    var after = '<div class="label">Project selector</div>'+
-      listHtml(la, aa)+
-      '<div class="label" style="margin-top:6px">Rendered conversation</div>'+
-      convBlock(aa, false)+
-      (mode==='advanced'
-        ? '<div class="verdict good">&#10003; Advanced &mdash; self available, pinned</div>'
-        : (aa
-            ? '<div class="verdict good">&#10003; self hidden &middot; lands on '+aa.name+'</div>'
-            : '<div class="verdict good">&#10003; self hidden &middot; clean empty state, no self leak</div>'));
+    strip.innerHTML='';
+    if(multi){
+      panes.forEach(function(p){
+        var d=document.createElement('div');
+        d.className='pane'; d.style.flexGrow=p.grow;
+        var bar=document.createElement('div'); bar.className='pbar'; bar.textContent=p.label;
+        var body=document.createElement('div'); body.className='pbody';
+        body.textContent=p.full?'fills the strip':'pane';
+        d.appendChild(bar); d.appendChild(body); strip.appendChild(d);
+      });
+    }else{
+      var c=document.createElement('div'); c.className='content-cap';
+      c.textContent='page content: capped at 720px, centered (the gutters bug)';
+      strip.appendChild(c);
+    }
 
-    var bb=document.getElementById('bodyBefore'), ba=document.getElementById('bodyAfter');
-    bb.innerHTML=before; ba.innerHTML=after;
-    bb.classList.remove('pulse'); ba.classList.remove('pulse');
-    void bb.offsetWidth; bb.classList.add('pulse'); ba.classList.add('pulse');
+    $('oLoHi').textContent=loEqHi?'yes':'no';
+    $('oLoHi').style.color=loEqHi?'var(--warn)':'var(--dim)';
+    $('oMulti').textContent=multi?'multi:true':'multi:false';
+    $('oMulti').style.color=multi?'var(--good)':'var(--bad)';
+    $('oResult').textContent=multi?'fills available width':'centered with gutters';
+    $('oResult').style.color=multi?'var(--good)':'var(--bad)';
   }
 
-  document.getElementById('toggle').addEventListener('click', function(e){
-    var btn = e.target.closest('button'); if(!btn) return;
-    mode = btn.getAttribute('data-m');
-    Array.prototype.forEach.call(this.children, function(c){ c.classList.toggle('on', c===btn); });
-    render();
-  });
-  document.getElementById('scenario').addEventListener('click', function(e){
-    var btn = e.target.closest('button'); if(!btn) return;
-    scenario = btn.getAttribute('data-s');
-    Array.prototype.forEach.call(this.children, function(c){ c.classList.toggle('on', c===btn); });
-    render();
+  bEl.addEventListener('input',function(){budget=+bEl.value; render();});
+  sEl.addEventListener('input',function(){span=+sEl.value; render();});
+  Array.prototype.forEach.call(document.querySelectorAll('#buildTog button'),function(btn){
+    btn.addEventListener('click',function(){
+      build=btn.getAttribute('data-b');
+      Array.prototype.forEach.call(document.querySelectorAll('#buildTog button'),function(b){b.classList.toggle('on',b===btn);});
+      render();
+    });
   });
   render();
 })();

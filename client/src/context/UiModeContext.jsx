@@ -39,7 +39,7 @@ export const FEATURES = {
   settingsTab: 'advanced', // app preferences incl. tab order (plans/settings-tab.md)
   docLinks: 'advanced', // doc links + history in the Files viewer (plans/doc-viewer.md slice 2)
   dualChat: 'advanced', // Project | Claude Web chat switcher (plans/dual-chat.md)
-  localAppTab: 'advanced', // direct-iframe Local tab, per-project port (plans/local-app-tab.md)
+  localAppTab: 'basic', // direct-iframe Local tab, per-project port (plans/local-app-tab.md) — promoted to basic 2026-06-27 (view-only in Basic; authoring stays Advanced)
   ideasTab: 'advanced', // per-project notes (plans/ideas-tab.md)
   autopilotTab: 'advanced', // loop-autopilot: discover recurring routine prompts (plans/loop-autopilot.md)
   taskGraph: 'advanced', // task dependency graph dashboard section (plans/task-dependency-graph.md)

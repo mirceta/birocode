@@ -3,6 +3,7 @@ import { apiPost, apiDelete } from '../api/client';
 import ProductFrame from '../components/app/ProductFrame';
 import ExposeCheck from '../components/expose/ExposeCheck';
 import { useRepo } from '../context/RepoContext';
+import { useUiMode } from '../context/UiModeContext';
 import { useT } from '../i18n/LanguageContext';
 import './localapp.css';
 
@@ -13,6 +14,11 @@ import './localapp.css';
 export default function LocalApp() {
   const { t } = useT();
   const { current, reloadRepos } = useRepo();
+  // The Local tab is view-only for Basic (End User) clients — they see the
+  // running product, never its authoring/operator plumbing. The capability map
+  // promotes `localAppTab` itself to Basic, so the authoring gate keys off the
+  // mode directly. (enable-local-tab-in-basic)
+  const { isAdvanced: canAuthor } = useUiMode();
   const [selectedId, setSelectedId] = useState(null);
   const [adding, setAdding] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
@@ -31,14 +37,15 @@ export default function LocalApp() {
 
   // Keep a valid selection as the project / its app list changes; auto-open the
   // add form when the repo has no real app yet (the Understanding app stays
-  // viewable behind it via Cancel).
+  // viewable behind it via Cancel). The auto-open is an authoring affordance, so
+  // it is suppressed in Basic — an End User never sees the add form.
   useEffect(() => {
     setSelectedId(apps[0]?.id || null);
-    setAdding(repoApps.length === 0);
+    setAdding(canAuthor && repoApps.length === 0);
     setError('');
     setChecking(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current?.id, apps.length]);
+  }, [current?.id, apps.length, canAuthor]);
 
   // Embed the harness's OWN reverse proxy, not the port directly
   // (plans/local-app-proxy.md): same-origin so it works over the internet behind
@@ -90,8 +97,12 @@ export default function LocalApp() {
   }
 
   // The setup surface shows only while adding (auto-opened when no real app yet);
-  // the Understanding app means there's always something to fall back to.
-  const showForm = adding;
+  // the Understanding app means there's always something to fall back to. Gated
+  // to Advanced as a belt-and-suspenders: in Basic nothing can flip `adding`.
+  const showForm = adding && canAuthor;
+  // Basic, no real app: the always-on Understanding app renders as the fallback;
+  // a slim note tells the End User why no product is showing.
+  const showBasicEmpty = !canAuthor && repoApps.length === 0;
 
   return (
     <div className="localapp">
@@ -111,7 +122,7 @@ export default function LocalApp() {
                 >
                   {a.name}{a.kind === 'repo' && <span className="localapp__app-port"> :{a.port}</span>}
                 </button>
-                {a.kind === 'repo' && (
+                {canAuthor && a.kind === 'repo' && (
                   <button
                     type="button"
                     className="localapp__app-x"
@@ -122,7 +133,7 @@ export default function LocalApp() {
                 )}
               </span>
             ))}
-            {!adding && (
+            {canAuthor && !adding && (
               <button type="button" className="localapp__btn localapp__btn--add" onClick={() => { setAdding(true); setError(''); }}>
                 {t('localapp.addApp')}
               </button>
@@ -137,8 +148,8 @@ export default function LocalApp() {
               {t('apptab.refresh')}
             </button>
             {/* The Exposure check is about exposing a real product, not the
-                harness-provided Understanding app. */}
-            {selected.kind === 'repo' && (
+                harness-provided Understanding app. Authoring-only → Advanced. */}
+            {canAuthor && selected.kind === 'repo' && (
               <button
                 type="button"
                 className={`localapp__btn${checking ? ' localapp__btn--on' : ''}`}
@@ -152,7 +163,7 @@ export default function LocalApp() {
         <span className="localapp__hint">{t('localapp.servedHint')}</span>
       </div>
 
-      {checking && selected?.kind === 'repo' && !showForm && <ExposeCheck onReloadEmbed={reloadEmbed} app={selected} />}
+      {canAuthor && checking && selected?.kind === 'repo' && !showForm && <ExposeCheck onReloadEmbed={reloadEmbed} app={selected} />}
 
       {showForm ? (
         <div className="localapp__setup">
@@ -199,9 +210,12 @@ export default function LocalApp() {
           </section>
         </div>
       ) : (
-        <div className="localapp__body">
-          <ProductFrame url={url} port={selected?.port} reloadKey={reloadKey} />
-        </div>
+        <>
+          {showBasicEmpty && <p className="localapp__empty">{t('localapp.basicEmpty')}</p>}
+          <div className="localapp__body">
+            <ProductFrame url={url} port={selected?.port} reloadKey={reloadKey} />
+          </div>
+        </>
       )}
     </div>
   );

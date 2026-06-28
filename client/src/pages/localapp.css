@@ -159,6 +159,18 @@
   color: var(--color-text-muted, #666);
 }
 
+/* Basic-mode "no running app yet" note; the Understanding app renders below it
+   as the fallback view (enable-local-tab-in-basic). */
+.localapp__empty {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--color-text-muted, #888);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
 /* Multi-app switcher (plans/multiple-local-apps.md): one chip per local app,
    the active one highlighted, each removable; "+ Add app" opens the setup form. */
 .localapp__apps {

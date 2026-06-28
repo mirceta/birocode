@@ -497,6 +497,7 @@
   "expose.freshBlankDetail": "The embed rendered blank while the server is serving the current build ({server}). This is a browser-cache issue, not a product problem.",
   "expose.reloadEmbed": "Reload embed",
   "localapp.noProject": "Select a project first — the Local tab shows the current project's app.",
+  "localapp.basicEmpty": "This project doesn't have a running app to show yet.",
   "archplan.title": "Architectural plan",
   "archplan.edit": "Edit",
   "archplan.save": "Save",

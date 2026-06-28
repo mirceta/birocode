@@ -494,6 +494,7 @@
   "expose.freshBlankDetail": "Sunucu guncel surumu ({server}) sunarken gomulu icerik bos goruntulendi. Bu bir tarayici onbellek sorunu, urun sorunu degil.",
   "expose.reloadEmbed": "Gomuluyu yeniden yukle",
   "localapp.noProject": "Once bir proje sec — Yerel sekme secili projenin uygulamasini gosterir.",
+  "localapp.basicEmpty": "Bu projenin henuz gosterilecek calisan bir uygulamasi yok.",
   "archplan.title": "Mimari plan",
   "archplan.edit": "Duzenle",
   "archplan.save": "Kaydet",
