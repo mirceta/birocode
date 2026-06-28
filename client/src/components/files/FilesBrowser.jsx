@@ -86,6 +86,18 @@ const writeHideGen = (on) => {
 // A path is generated when any segment is a build-output folder (e.g. .../bin/Debug/x.dll).
 const isGeneratedPath = (path) => path.split('/').some((seg) => GENERATED_DIRS.has(seg));
 
+// Hide C# project files (*.csproj) from the tree + search, device-local. Default
+// OFF — unlike bin/obj, .csproj are meaningful source you usually want to see.
+// Toggle lives next to the bin/obj toggle.
+const HIDE_CSPROJ_KEY = 'claudeweb_files_hide_csproj';
+const readHideCsproj = () => {
+  try { return localStorage.getItem(HIDE_CSPROJ_KEY) === '1'; } catch { return false; }
+};
+const writeHideCsproj = (on) => {
+  try { localStorage.setItem(HIDE_CSPROJ_KEY, on ? '1' : '0'); } catch { /* private mode */ }
+};
+const isCsprojPath = (path) => path.toLowerCase().endsWith('.csproj');
+
 const SEARCH_LIMIT = 200; // cap rendered fuzzy results so a short query can't render thousands
 
 // Subsequence fuzzy match: every char of the (lowercased) query must appear in
@@ -168,6 +180,7 @@ export default function FilesBrowser({ repoId }) {
   const [browserWidth, setBrowserWidth] = useState(readBrowserWidth);
   const [treeZoom, setTreeZoom] = useState(readTreeZoom);
   const [hideGenerated, setHideGenerated] = useState(readHideGen);
+  const [hideCsproj, setHideCsproj] = useState(readHideCsproj);
   const browserRef = useRef(null);
   const dragWidthRef = useRef(null); // latest width during a drag, persisted on release
 
@@ -184,6 +197,11 @@ export default function FilesBrowser({ repoId }) {
   // Toggle hiding bin/obj (C# build output) from the tree + search. Persisted.
   const toggleHideGenerated = useCallback(() => {
     setHideGenerated((on) => { const next = !on; writeHideGen(next); return next; });
+  }, []);
+
+  // Toggle hiding *.csproj files from the tree + search. Persisted device-local.
+  const toggleHideCsproj = useCallback(() => {
+    setHideCsproj((on) => { const next = !on; writeHideCsproj(next); return next; });
   }, []);
 
   // Drag the divider between the browser and the file view. Pointer events cover
@@ -437,12 +455,13 @@ export default function FilesBrowser({ repoId }) {
     const scored = [];
     for (const path of allFiles) {
       if (hideGenerated && isGeneratedPath(path)) continue;
+      if (hideCsproj && isCsprojPath(path)) continue;
       const score = fuzzyScore(q, path);
       if (score != null) scored.push({ path, score });
     }
     scored.sort((a, b) => a.score - b.score);
     return scored;
-  }, [query, allFiles, hideGenerated]);
+  }, [query, allFiles, hideGenerated, hideCsproj]);
 
   const root = nodes['/'];
 
@@ -530,6 +549,7 @@ export default function FilesBrowser({ repoId }) {
         onReferenceFile={referenceFile}
         onRetryDir={loadDir}
         hideGenerated={hideGenerated}
+        hideCsproj={hideCsproj}
       />
     );
   }
@@ -620,6 +640,16 @@ export default function FilesBrowser({ repoId }) {
               aria-pressed={hideGenerated}
             >
               <span aria-hidden="true">{hideGenerated ? '\u{1F6AB}' : '\u{1F441}️'}</span> bin/obj
+            </button>
+            <button
+              type="button"
+              className={`files-ide__filter${hideCsproj ? ' files-ide__filter--on' : ''}`}
+              onClick={toggleHideCsproj}
+              title={t('files.hideCsprojTitle')}
+              aria-label={t('files.hideCsprojTitle')}
+              aria-pressed={hideCsproj}
+            >
+              <span aria-hidden="true">{hideCsproj ? '\u{1F6AB}' : '\u{1F441}️'}</span> .csproj
             </button>
             <div className="files-ide__zoom" role="group" aria-label={t('files.zoom')}>
               <button
@@ -757,6 +787,7 @@ export default function FilesBrowser({ repoId }) {
           onReferenceFile={referenceFile}
           onRetryDir={loadDir}
           hideGenerated={hideGenerated}
+          hideCsproj={hideCsproj}
         />
       )}
 
