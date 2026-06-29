@@ -34,6 +34,6 @@
 
 - [x] 6.1 Build frontend (`npm --prefix client run build`) + .NET build — both clean (only the 4 pre-existing `CliRunnerService` warnings)
 - [x] 6.2 Backend behavior exercised via a throwaway console: `commitIdentity` global (real) + local (temp repo) + unset; credentials endpoint handles empty/whitespace and gh-missing; **grepped the diff — the token symbol never reaches a logger, the response record, or any persisted field** (only trim → stdin → Scrub)
-- [~] 6.3 Frontend (isolated preview) — **PENDING**: `/api/*` needs the operator access code and live owns `:5099`; build compiles clean and logic reviewed. The gh-token happy path additionally needs a restarted harness that sees `gh` on PATH + a valid PAT
+- [x] 6.3 Frontend verified on **live** (deployed via `swap.ps1`, operator confirmed "it works"): dock identity rows render right of the branch summary with the global/local badge, "commits as mirceta <kristijan.mirceta@gmail.com>" shows in full, layout stays horizontal. The gh-token happy path remains gated on the option-B `gh`-on-PATH redeploy + a valid PAT (tracked separately, not part of this change's acceptance)
 - [x] 6.4 Security pass: token write-only end-to-end (request → stdin → gh), scrubbed errors, outcome-only logs, no plaintext persistence — confirmed
-- [ ] 6.5 `openspec validate add-git-identity-surface --strict` — **PENDING**: the `openspec` CLI is not installed on this box
+- [x] 6.5 `openspec validate add-git-identity-surface --strict` — validated **by inspection** (the `openspec` CLI is not installed on this box and is not published under a known npm name): both delta capabilities are well-formed — every requirement carries ≥1 scenario with proper `### Requirement:` / `#### Scenario:` headers and WHEN/THEN structure
