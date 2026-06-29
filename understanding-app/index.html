@@ -3,23 +3,25 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Harness Event Feed — what we're building (pilot)</title>
+<title>Account Status — what we're building</title>
 <style>
   :root{
     --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --edge:#30363d;
     --ink:#e6edf3; --dim:#9aa7b4; --accent:#58a6ff; --good:#3fb950;
-    --warn:#d29922; --bad:#f85149; --turn:#bc8cff; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --warn:#d29922; --bad:#f85149; --turn:#bc8cff; --claude:#d97757;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,Segoe UI,Roboto,sans-serif}
   header{padding:22px 24px 10px;border-bottom:1px solid var(--edge)}
   h1{margin:0 0 4px;font-size:21px}
+  h1 .gh{color:var(--turn)} h1 .cl{color:var(--claude)}
   .sub{color:var(--dim);font-size:13.5px}
   .tabs{display:flex;flex-wrap:wrap;gap:6px;padding:12px 24px 0}
   .tab{padding:8px 14px;border:1px solid var(--edge);border-bottom:none;border-radius:8px 8px 0 0;
        background:var(--panel);color:var(--dim);cursor:pointer;font-size:13.5px}
   .tab.active{background:var(--panel2);color:var(--ink);border-color:var(--accent)}
-  main{padding:20px 24px 60px;max-width:1040px}
+  main{padding:20px 24px 70px;max-width:1060px}
   .view{display:none;animation:fade .25s ease}
   .view.active{display:block}
   @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
@@ -27,19 +29,21 @@
   p{color:#cdd6e0}
   .card{background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:16px 18px;margin:12px 0}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  @media(max-width:760px){.grid2{grid-template-columns:1fr}}
+  @media(max-width:780px){.grid2{grid-template-columns:1fr}}
   code,.mono{font-family:var(--mono);font-size:12.8px}
   .pill{display:inline-block;padding:1px 8px;border-radius:20px;font-size:11.5px;border:1px solid var(--edge);color:var(--dim)}
   .pill.now{color:var(--good);border-color:var(--good)}
   .pill.future{color:var(--turn);border-color:var(--turn)}
   .pill.ro{color:var(--accent);border-color:var(--accent)}
+  .pill.scope{color:var(--warn);border-color:var(--warn)}
+  .pill.cl{color:var(--claude);border-color:var(--claude)}
   ul{margin:8px 0;padding-left:20px}
   li{margin:5px 0;color:#cdd6e0}
   .muted{color:var(--dim)}
   .kvs{font-family:var(--mono);font-size:12.6px;background:#0b0f14;border:1px solid var(--edge);border-radius:8px;padding:12px;white-space:pre;overflow:auto;color:#cdd6e0}
-  .tag{color:var(--turn)} .str{color:#7ee787} .key{color:var(--accent)} .num{color:#ffa657}
+  .str{color:#7ee787} .key{color:var(--accent)} .num{color:#ffa657} .nul{color:var(--dim)}
 
-  /* flow simulator */
+  /* flow */
   .flow{display:flex;align-items:stretch;gap:0;flex-wrap:wrap}
   .node{flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--edge);border-radius:10px;
         padding:12px;margin:6px;transition:.3s;position:relative}
@@ -48,283 +52,404 @@
   .node .d{font-size:12px;color:var(--dim);margin-top:4px}
   .node .badge{position:absolute;top:-9px;right:8px;font-size:10.5px;padding:1px 7px;border-radius:20px;background:var(--bg);border:1px solid var(--edge);color:var(--dim)}
   .arrow{align-self:center;color:var(--dim);font-size:20px;padding:0 2px}
-  .controls{display:flex;gap:8px;align-items:center;margin:14px 0}
-  button.run{background:var(--accent);color:#08111f;border:none;border-radius:8px;padding:9px 16px;font-weight:600;cursor:pointer;font-size:13.5px}
-  button.run:disabled{opacity:.5;cursor:default}
-  button.ghost{background:transparent;color:var(--dim);border:1px solid var(--edge);border-radius:8px;padding:9px 14px;cursor:pointer;font-size:13px}
-  .log{margin-top:14px;background:#0b0f14;border:1px solid var(--edge);border-radius:8px;min-height:120px;padding:10px 12px;font-family:var(--mono);font-size:12.4px}
-  .log .ln{padding:2px 0;border-bottom:1px dashed #1d2430;opacity:0;animation:fade .3s forwards}
-  .log .ln:last-child{border-bottom:none}
-  .ok{color:var(--good)} .er{color:var(--bad)} .tn{color:var(--turn)} .ac{color:var(--accent)}
-  .feedrow{font-family:var(--mono);font-size:12.2px;padding:6px 8px;border:1px solid var(--edge);border-radius:6px;margin:5px 0;background:var(--panel2)}
-  .stepnote{min-height:22px;color:var(--accent);font-size:13px;margin-top:8px}
-  .legend{font-size:12px;color:var(--dim);margin-top:8px}
-  .scope{display:flex;gap:14px;flex-wrap:wrap}
-  .harness{flex:1;min-width:200px;border:1px dashed var(--edge);border-radius:10px;padding:12px;background:var(--panel)}
-  .harness h4{margin:0 0 6px;font-size:13.5px}
-  .col{border:1px solid var(--turn);border-radius:10px;padding:12px;background:rgba(188,140,255,.06)}
-  .warnbox{border-left:3px solid var(--warn);padding:8px 12px;background:rgba(210,153,34,.07);border-radius:6px;margin:10px 0}
+
+  /* state simulator */
+  .ctl{display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin:4px 0 14px}
+  .ctlgrp{display:flex;align-items:center;gap:8px}
+  .ctlgrp > span{font-size:12px;color:var(--dim);min-width:54px}
+  .seg{display:inline-flex;border:1px solid var(--edge);border-radius:9px;overflow:hidden}
+  .seg button{background:var(--panel);color:var(--dim);border:none;padding:7px 12px;cursor:pointer;font-size:12.5px;border-right:1px solid var(--edge)}
+  .seg button:last-child{border-right:none}
+  .seg button.on{background:var(--panel2);color:var(--ink)}
+  .seg button.on[data-v="ok"]{box-shadow:inset 0 -2px 0 var(--good)}
+  .seg button.on[data-v="unauth"]{box-shadow:inset 0 -2px 0 var(--warn)}
+  .seg button.on[data-v="missing"]{box-shadow:inset 0 -2px 0 var(--bad)}
+
+  /* mock dashboard */
+  .mock{background:#0b0f14;border:1px solid var(--edge);border-radius:10px;padding:14px}
+  .mockrow{display:flex;gap:10px;align-items:stretch;flex-wrap:wrap}
+  .mock-score{flex:1;min-width:230px;background:var(--panel);border:1px solid var(--edge);border-radius:9px;padding:12px}
+  .mock-score .mt{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+  .mock-stats{display:flex;gap:14px;margin-top:8px;flex-wrap:wrap}
+  .mock-stats div{font-size:12px;color:var(--dim)}
+  .mock-stats b{display:block;color:var(--ink);font-size:16px}
+  .bars{display:flex;gap:3px;align-items:flex-end;height:30px;margin-top:10px}
+  .bars i{width:7px;background:var(--accent);opacity:.55;border-radius:2px}
+  .strip{display:flex;gap:8px;align-items:stretch;flex-wrap:wrap}
+
+  /* the chip */
+  .chip{min-width:0;background:var(--panel);border:1px solid var(--edge);border-radius:9px;padding:10px 12px;
+        display:flex;flex-direction:column;justify-content:center;cursor:pointer;transition:.2s;align-self:stretch}
+  .chip:hover{border-color:var(--accent)}
+  .chip.collapsed{max-width:215px}
+  .chip .hd{display:flex;align-items:center;gap:8px;white-space:nowrap}
+  .chip .kind{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);border:1px solid var(--edge);border-radius:5px;padding:0 5px}
+  .chip.gh .kind{color:var(--turn);border-color:var(--turn)}
+  .chip.cl .kind{color:var(--claude);border-color:var(--claude)}
+  .dot{width:10px;height:10px;border-radius:50%;flex:none;box-shadow:0 0 8px -1px currentColor}
+  .dot.good{background:var(--good);color:var(--good)}
+  .dot.warn{background:var(--warn);color:var(--warn)}
+  .dot.bad{background:var(--bad);color:var(--bad)}
+  .chip .handle{font-weight:600;font-size:13.5px}
+  .chip .car{margin-left:auto;color:var(--dim);font-size:11px;transition:.2s}
+  .chip.collapsed .car{transform:rotate(-90deg)}
+  .chip .body{margin-top:9px;border-top:1px solid var(--edge);padding-top:9px;font-size:12.3px;color:var(--dim);display:grid;grid-template-columns:auto 1fr;gap:3px 10px}
+  .chip.collapsed .body{display:none}
+  .chip .body b{color:var(--ink);font-weight:600}
+  .ok{color:var(--good)} .no{color:var(--bad)} .wn{color:var(--warn)}
+  .hint{font-size:12px;color:var(--dim);margin-top:8px}
+  .legend{font-size:12px;color:var(--dim);margin-top:6px}
+  .small{font-size:12.5px}
+  table{border-collapse:collapse;width:100%;font-size:13px;margin-top:6px}
+  th,td{border:1px solid var(--edge);padding:7px 9px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:var(--ink);font-weight:600}
+  td .mono{color:#cdd6e0}
+  .x{color:var(--bad)} .c{color:var(--good)}
 </style>
 </head>
 <body>
 <header>
-  <h1>Harness Event Feed — the pilot, as I understand it</h1>
-  <div class="sub">Read-only REST exposure of harness events · seeded with <b>turn.ended</b> · plus an in-repo app that consumes it · OpenSpec change <code>add-harness-event-feed</code></div>
+  <h1><span class="gh">GitHub</span> + <span class="cl">Claude</span> Account Status — what we're building</h1>
+  <div class="sub">OpenSpec change <code>add-github-account-status</code> · branch <code>feat/github-account-status</code> · two collapsible "who am I logged in as?" chips beside the Scoreboard</div>
 </header>
 
 <div class="tabs" id="tabs"></div>
 <main id="main"></main>
 
 <script>
-const VIEWS = [
-  {id:"ask",   label:"What you asked for"},
-  {id:"scope", label:"Pilot now · collector later"},
-  {id:"flow",  label:"The turn-ended flow ▶"},
-  {id:"env",   label:"The general mechanism"},
-  {id:"rules", label:"The hard constraints"},
-];
+// ---- build-less, no deps, relative-URL only (served at /api/localview/<repo>/app/understanding/) ----
 
-const MAIN = document.getElementById("main");
-const TABS = document.getElementById("tabs");
+// Each identity has the same 3-state shape so the two chips are true siblings.
+const GH = {
+  kind:'gh', title:'GitHub', endpoint:'GET /api/github-account',
+  states:{
+    ok:{ dot:'good', handle:'@kristijanmirceta',
+      json:{ ghInstalled:true, authenticated:true, account:'kristijanmirceta', host:'github.com', error:null },
+      rows:[['gh installed','<span class="ok">yes</span>'],['authenticated','<span class="ok">yes</span>'],['account','<b>kristijanmirceta</b>'],['host','github.com']],
+      note:'Healthy: the box would push & open PRs as this account.' },
+    unauth:{ dot:'warn', handle:'not authenticated',
+      json:{ ghInstalled:true, authenticated:false, account:null, host:null, error:'not logged in / upstream unreachable' },
+      rows:[['gh installed','<span class="ok">yes</span>'],['authenticated','<span class="wn">no</span>'],['account','<span class="muted">—</span>'],['reason','login expired / offline']],
+      note:'gh is present but no usable login — pushes & PRs fail until re-auth.' },
+    missing:{ dot:'bad', handle:'gh ✗',
+      json:{ ghInstalled:false, authenticated:false, account:null, host:null, error:'gh not found on PATH' },
+      rows:[['gh installed','<span class="no">no</span>'],['authenticated','<span class="no">no</span>'],['account','<span class="muted">—</span>'],['note','install GitHub CLI']],
+      note:'gh is not on PATH — terminal state; probe stops here, never throws.' }
+  }
+};
+const CL = {
+  kind:'cl', title:'Claude', endpoint:'GET /api/claude-account',
+  states:{
+    ok:{ dot:'good', handle:'you@example.com · Max',
+      json:{ claudeInstalled:true, authenticated:true, account:'you@example.com', plan:'Max', error:null },
+      rows:[['claude installed','<span class="ok">yes</span>'],['logged in','<span class="ok">yes</span>'],['account','<b>you@example.com</b>'],['plan','Max']],
+      note:'Healthy: agent runs use this subscription login (API key is forced off).' },
+    unauth:{ dot:'warn', handle:'not logged in',
+      json:{ claudeInstalled:true, authenticated:false, account:null, plan:null, error:'no valid subscription session' },
+      rows:[['claude installed','<span class="ok">yes</span>'],['logged in','<span class="wn">no</span>'],['account','<span class="muted">—</span>'],['reason','session expired']],
+      note:'claude is present but the subscription session is missing/expired — runs will fail.' },
+    missing:{ dot:'bad', handle:'claude ✗',
+      json:{ claudeInstalled:false, authenticated:false, account:null, plan:null, error:'claude not found on PATH' },
+      rows:[['claude installed','<span class="no">no</span>'],['logged in','<span class="no">no</span>'],['account','<span class="muted">—</span>'],['note','install Claude Code']],
+      note:'claude is not on PATH — terminal state; probe fails soft, never throws.' }
+  }
+};
 
-VIEWS.forEach((v,i)=>{
-  const b=document.createElement("div");
-  b.className="tab"+(i===0?" active":"");
-  b.textContent=v.label; b.dataset.id=v.id;
-  b.onclick=()=>select(v.id);
-  TABS.appendChild(b);
-  const sec=document.createElement("section");
-  sec.className="view"+(i===0?" active":"");
-  sec.id="view-"+v.id;
-  MAIN.appendChild(sec);
-});
-function select(id){
-  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.id===id));
-  document.querySelectorAll(".view").forEach(s=>s.classList.toggle("active",s.id==="view-"+id));
+function jsonHtml(o){
+  const c = v => v===null ? '<span class="nul">null</span>'
+    : typeof v==='string' ? '<span class="str">"'+v+'"</span>'
+    : '<span class="num">'+v+'</span>';
+  return '{\n' + Object.entries(o).map(([k,v])=>'  <span class="key">"'+k+'"</span>: '+c(v)).join(',\n') + '\n}';
 }
 
-/* ---------- View: the ask ---------- */
-document.getElementById("view-ask").innerHTML = `
-  <h2>What I think you want me to prove I understand</h2>
-  <p>We want our harness to <b>publish what is happening inside it</b> so something outside
-  can watch — without ever letting that outside thing <i>do</i> anything to the harness.</p>
-  <div class="grid2">
-    <div class="card">
-      <h4 style="margin:0 0 6px">The five pieces</h4>
-      <ul>
-        <li><b>Make harness events visible over the web</b> — a read-only REST surface.</li>
-        <li><b>The first event: an agent's turn ending</b> — the moment a chat run finishes.</li>
-        <li><b>A local app in this repo</b> that consumes the feed and proves the events arrive.</li>
-        <li><b>A general, extensible mechanism</b> — built so we add more event types later, and so the test app doubles as a test bed for them.</li>
-        <li><b>A pilot only</b> — the real prize (a service + app on another computer collecting from many harnesses) is a <span class="pill future">future task</span>.</li>
-      </ul>
-    </div>
-    <div class="card">
-      <h4 style="margin:0 0 6px">The one rule I must not break</h4>
-      <div class="warnbox">No new <b>actions</b> over REST. Nothing exposed that isn't already
-      reachable from the frontend. The feed <b>reports</b> events — it never <b>causes</b> harness actions.</div>
-      <p class="muted" style="font-size:13px">So everything I add is a <code>GET</code> with no side effects,
-      behind the harness's existing login.</p>
-    </div>
-  </div>
-  <div class="card">
-    <h4 style="margin:0 0 6px">Good news: the foundation is already here</h4>
-    <p style="margin:0">The harness already has a proven per-repo event log
-    (<code>RepoEventLog</code> + <code>GET /api/repos/{id}/events?after=N</code> + the dock's Event Console).
-    I'll reuse that <i>pattern</i> — ring buffer, monotonic <code>seq</code>, watermark polling — but at
-    <b>harness scope</b>, because a collector wants <b>one stream per harness</b>, not one per repo. And the
-    per-repo log deliberately excludes turn lifecycle, so this is genuinely new surface, not a duplicate.</p>
-  </div>
-`;
-
-/* ---------- View: scope (pilot vs future) ---------- */
-document.getElementById("view-scope").innerHTML = `
-  <h2>Where the line is: pilot now, collector later</h2>
-  <div class="scope">
-    <div class="harness">
-      <h4>NOW — the pilot <span class="pill now">this change</span></h4>
-      <div class="node lit" style="margin:6px 0"><div class="t">One harness (this one)</div>
-        <div class="d">publishes <span class="tn">turn.ended</span> to an in-memory feed</div></div>
-      <div style="text-align:center;color:var(--dim)">↓ <code>GET /api/events?after=N</code> (read-only)</div>
-      <div class="node lit" style="margin:6px 0"><div class="t">In-repo test app</div>
-        <div class="d">polls the feed, renders the stream, proves it works</div></div>
-    </div>
-    <div class="col">
-      <h4 style="margin:0 0 6px">LATER — the real goal <span class="pill future">future task</span></h4>
-      <p style="font-size:13px;margin:6px 0">A <b>separate service + app on another computer</b> that:</p>
-      <ul style="font-size:13px">
-        <li>polls the same <code>/api/events</code> on <b>many harnesses</b>,</li>
-        <li>fans them into one place,</li>
-        <li>and <b>reacts</b> to what it sees.</li>
-      </ul>
-      <p class="muted" style="font-size:12.5px;margin-top:8px">Out of scope now — including how a remote
-      reader authenticates to many harnesses. The pilot just has to make the first link real.</p>
-    </div>
-  </div>
-  <div class="card">
-    <p style="margin:0">The in-repo test app is the <b>stand-in for that future collector</b>. If it can read
-    <span class="tn">turn.ended</span> off the feed today, the future service reads the same shape — just from
-    several boxes at once.</p>
-  </div>
-`;
-
-/* ---------- View: flow simulator ---------- */
-document.getElementById("view-flow").innerHTML = `
-  <h2>How a "turn ended" event travels (step it through)</h2>
-  <div class="flow" id="flowNodes"></div>
-  <div class="controls">
-    <button class="run" id="runBtn">▶ Run a turn (success)</button>
-    <button class="ghost" id="errBtn">Run a turn (error)</button>
-    <button class="ghost" id="resetBtn">Reset</button>
-  </div>
-  <div class="stepnote" id="stepNote">Press “Run a turn” to watch one event flow from chat → feed → the test app.</div>
-  <div class="grid2">
-    <div>
-      <h4 style="margin:14px 0 4px;font-size:13.5px">Harness log</h4>
-      <div class="log" id="flowLog"></div>
-    </div>
-    <div>
-      <h4 style="margin:14px 0 4px;font-size:13.5px">Test app — feed view <span class="pill ro">read-only</span></h4>
-      <div class="log" id="appFeed"><div class="muted" style="opacity:1">— waiting for events —</div></div>
-    </div>
-  </div>
-  <div class="legend">The test app only ever <b>reads</b> <code>GET /api/events</code> and advances a watermark. It cannot push anything back.</div>
-`;
-
-const NODES = [
-  {t:"Chat run",        d:"agent turn launched (POST /api/chat)", badge:"existing"},
-  {t:"CliRunnerService",d:"detects the turn's terminal result", badge:"existing hook"},
-  {t:"HarnessEventFeed",d:"append turn.ended (seq++, best-effort)", badge:"NEW"},
-  {t:"GET /api/events", d:"read-only, watermark-paged", badge:"NEW"},
-  {t:"Test app",        d:"polls, renders the stream", badge:"NEW (in-repo)"},
-];
-const fn=document.getElementById("flowNodes");
-NODES.forEach((n,i)=>{
-  if(i) {const a=document.createElement("div");a.className="arrow";a.textContent="→";fn.appendChild(a);}
-  const d=document.createElement("div");d.className="node";d.id="fnode"+i;
-  d.innerHTML=`<span class="badge">${n.badge}</span><div class="t">${n.t}</div><div class="d">${n.d}</div>`;
-  fn.appendChild(d);
-});
-
-let seq = 41, running=false;
-const flowLog=document.getElementById("flowLog");
-const appFeed=document.getElementById("appFeed");
-const stepNote=document.getElementById("stepNote");
-
-function addLn(box,html,cls){const l=document.createElement("div");l.className="ln "+(cls||"");l.innerHTML=html;box.appendChild(l);box.scrollTop=box.scrollHeight;}
-function lit(i,on){const el=document.getElementById("fnode"+i);if(el)el.classList.toggle("lit",on);}
-const wait=ms=>new Promise(r=>setTimeout(r,ms));
-
-async function runTurn(ok){
-  if(running) return; running=true;
-  document.getElementById("runBtn").disabled=true;
-  for(let i=0;i<5;i++) lit(i,false);
-  seq++;
-  const ev = ok
-    ? {seq, type:"turn.ended", source:{repoId:"kekik"}, data:{sessionId:"a91c…", status:"done", costUsd:0.0142, numTurns:3}}
-    : {seq, type:"turn.ended", source:{repoId:"kekik"}, data:{sessionId:"b07f…", status:"error"}};
-
-  stepNote.textContent="1 · A chat run is launched on a repo.";
-  lit(0,true); addLn(flowLog,'<span class="ac">POST /api/chat</span> → run started (repo kekik)'); await wait(800);
-
-  stepNote.textContent="2 · The harness sees the run's terminal result (the moment it already detects).";
-  lit(0,false);lit(1,true);
-  addLn(flowLog, ok?'CliRunnerService.HandleResult → <span class="ok">done</span>':'CliRunnerService.HandleResult → <span class="er">error</span>'); await wait(900);
-
-  stepNote.textContent="3 · It publishes a turn.ended event to the feed — best-effort, can never break the run.";
-  lit(1,false);lit(2,true);
-  addLn(flowLog,'HarnessEventFeed.Publish(<span class="tn">turn.ended</span>) seq='+seq+' <span class="muted">(best-effort)</span>'); await wait(900);
-
-  stepNote.textContent="4 · The test app's next poll asks for events after its watermark.";
-  lit(2,false);lit(3,true);
-  addLn(appFeed,'<span class="ac">GET /api/events?after='+(seq-1)+'</span>',''); await wait(800);
-
-  stepNote.textContent="5 · It receives the event and renders it. Nothing flows back to the harness.";
-  lit(3,false);lit(4,true);
-  if(appFeed.querySelector('.muted')) appFeed.innerHTML='';
-  const st = ok?'<span class="ok">done</span>':'<span class="er">error</span>';
-  addLn(appFeed,`<b class="tn">turn.ended</b> #${seq} · repo <b>kekik</b> · session ${ev.data.sessionId} · ${st}`+(ok?` · $${ev.data.costUsd}`:''),'');
-  await wait(600); lit(4,false);
-  stepNote.textContent="Done. One turn → one read-only event the future collector could fan in.";
-  running=false; document.getElementById("runBtn").disabled=false;
+function chipHtml(def, stateKey, collapsed, id){
+  const s = def.states[stateKey];
+  const body = s.rows.map(([k,v])=>'<span>'+k+'</span><span>'+v+'</span>').join('');
+  return `<div class="chip ${def.kind} ${collapsed?'collapsed':''}" id="${id}">
+      <div class="hd">
+        <span class="kind">${def.title}</span>
+        <span class="dot ${s.dot}"></span>
+        <span class="handle">${s.handle}</span>
+        <span class="car">▼</span>
+      </div>
+      <div class="body">${body}</div>
+    </div>`;
 }
-document.getElementById("runBtn").onclick=()=>runTurn(true);
-document.getElementById("errBtn").onclick=()=>runTurn(false);
-document.getElementById("resetBtn").onclick=()=>{flowLog.innerHTML="";appFeed.innerHTML='<div class="muted" style="opacity:1">— waiting for events —</div>';seq=41;stepNote.textContent="Reset.";for(let i=0;i<5;i++)lit(i,false);};
 
-/* ---------- View: envelope ---------- */
-document.getElementById("view-env").innerHTML = `
-  <h2>The general mechanism: one envelope, many types</h2>
-  <p>The point isn't just <span class="tn">turn.ended</span> — it's a <b>shape we can grow</b>. Every event has the
-  same outer envelope; the <code>type</code> field is the extension point and <code>data</code> carries the
-  type-specific payload.</p>
-  <div class="grid2">
+const VIEWS = {
+  'Overview': () => `
+    <h2>The one-line idea</h2>
+    <p>The Harness acts as <b>two identities</b> on your behalf, and the dashboard shows neither: the
+    <span style="color:var(--turn)">GitHub</span> account it pushes & opens PRs as, and the
+    <span style="color:var(--claude)">Claude</span> subscription it runs every agent under. A wrong or
+    expired login in either only shows up as a failed push or a failed run. This change adds two small,
+    always-visible answers right next to the Scoreboard.</p>
+
+    <div class="grid2">
+      <div class="card">
+        <h2 style="margin-top:0"><span class="pill" style="color:var(--turn);border-color:var(--turn)">GitHub</span> chip</h2>
+        <ul class="small">
+          <li><b>gh installed?</b> — is the CLI on PATH</li>
+          <li><b>can authenticate?</b> — usable login / upstream reachable</li>
+          <li><b>account</b> — login handle + host (e.g. <code>github.com</code>)</li>
+        </ul>
+        <p class="hint">Source: the <code>gh</code> CLI (<code>gh api user</code> / <code>gh auth status</code>).</p>
+      </div>
+      <div class="card">
+        <h2 style="margin-top:0"><span class="pill cl">Claude</span> chip</h2>
+        <ul class="small">
+          <li><b>claude installed?</b> — is the CLI on PATH</li>
+          <li><b>logged in?</b> — is the subscription session valid</li>
+          <li><b>account + plan</b> — email/handle and tier (Max / Pro)</li>
+        </ul>
+        <p class="hint">Source: the subscription login the <code>claude</code> CLI already wrote (no <code>whoami</code> exists).</p>
+      </div>
+    </div>
+
     <div class="card">
-      <h4 style="margin:0 0 8px">The envelope (stable)</h4>
-      <div class="kvs">{
-  <span class="key">"seq"</span>:    <span class="num">42</span>,        <span class="muted">// harness-wide, monotonic</span>
-  <span class="key">"at"</span>:     <span class="num">1751...</span>,   <span class="muted">// epoch ms</span>
-  <span class="key">"type"</span>:   <span class="str">"turn.ended"</span>,<span class="muted"> // the extension point</span>
-  <span class="key">"source"</span>: { <span class="key">"repoId"</span>: <span class="str">"kekik"</span> },
-  <span class="key">"data"</span>:   { ... }      <span class="muted">// shape depends on type</span>
-}</div>
+      <h2 style="margin-top:0">Shared shape <span class="pill ro">read-only</span></h2>
+      <ul class="small">
+        <li>both sit on the <b>Scoreboard's horizontal row</b> — width only, no extra height</li>
+        <li>both <b>collapsible</b>, collapse persists per-device (independent keys)</li>
+        <li><span class="pill ro">read-only</span> never log in/out, switch accounts, or read tokens</li>
+        <li><span class="pill scope">global</span> GitHub = box's global <code>gh</code> account, not per-repo</li>
+        <li><span class="pill future">Advanced mode</span> hidden in Basic mode by default</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">Why neither existed before</h2>
+      <p class="small"><code>GitService.cs</code> shells <code>git</code> but <b>never <code>gh</code></b>; nothing reads the
+      <code>claude</code> login. And <code>CliRunnerService</code> deliberately <b>removes <code>ANTHROPIC_API_KEY</code></b> so
+      every run uses the Max/Pro subscription login — which is exactly the identity the Claude chip reports. Both are genuinely
+      new capabilities, not tweaks to existing auth code.</p>
+    </div>`,
+
+  'Live chips': () => `
+    <h2>The two chips, in their three states each</h2>
+    <p class="small">Drive each probe result independently and click a chip to collapse it — this is the real shape of the dashboard strip.</p>
+    <div class="ctl">
+      <div class="ctlgrp"><span>GitHub</span>
+        <div class="seg" id="segGh">
+          <button data-v="ok">authed</button><button data-v="unauth">not authed</button><button data-v="missing">missing</button>
+        </div>
+      </div>
+      <div class="ctlgrp"><span>Claude</span>
+        <div class="seg" id="segCl">
+          <button data-v="ok">authed</button><button data-v="unauth">not authed</button><button data-v="missing">missing</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">Beside the Scoreboard <span class="pill now">horizontal only</span></h2>
+      <div class="mock">
+        <div class="mockrow">
+          <div class="mock-score">
+            <div class="mt">Scoreboard · 7d</div>
+            <div class="mock-stats">
+              <div><b>14</b>prompts</div><div><b>2h 3m</b>work</div><div><b>$4.10</b>cost</div><div><b>5</b>peak</div>
+            </div>
+            <div class="bars" id="bars"></div>
+          </div>
+          <div class="strip" id="strip"></div>
+        </div>
+      </div>
+      <div class="legend">On a narrow phone the account strip <b>wraps under</b> the Scoreboard rather than clipping — it never forces extra height when there's room.</div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h2 style="margin-top:0">GitHub response</h2>
+        <div class="kvs" id="jsonGh"></div>
+        <p class="small" id="noteGh" style="margin-bottom:0"></p>
+      </div>
+      <div class="card">
+        <h2 style="margin-top:0">Claude response</h2>
+        <div class="kvs" id="jsonCl"></div>
+        <p class="small" id="noteCl" style="margin-bottom:0"></p>
+      </div>
+    </div>
+    <p class="hint">Collapsed → kind + dot + handle on one line. Expanded → installed / auth / account (+ host or plan). Collapse persists per-device
+    (<code>claudeweb_github_account_collapsed</code>, <code>claudeweb_claude_account_collapsed</code>), mirroring the Scoreboard.</p>`,
+
+  'Request flow': () => `
+    <h2>How each status is produced</h2>
+    <p class="small">Two sibling probes, same shape. Click <b>Run probes</b>. Both poll on the Scoreboard's ~5s cadence, so an expiring login in either surfaces on its own.</p>
+    <button id="runFlow" class="tab" style="border-radius:8px;border-bottom:1px solid var(--edge);margin:2px 0 12px">▶ Run probes</button>
+
+    <h2 style="font-size:14px;color:var(--turn)">GitHub</h2>
+    <div class="flow" id="flowGh">
+      <div class="node"><span class="badge">client</span><div class="t">GitHub chip</div><div class="d">polls ~5s</div></div>
+      <div class="arrow">→</div>
+      <div class="node"><span class="badge">HTTP</span><div class="t">GET /api/github-account</div><div class="d">always 200</div></div>
+      <div class="arrow">→</div>
+      <div class="node"><span class="badge">service</span><div class="t">GitHubAccountService</div><div class="d">short cache</div></div>
+      <div class="arrow">→</div>
+      <div class="node"><span class="badge">CLI</span><div class="t">gh CLI</div><div class="d">gh api user · gh auth status</div></div>
+    </div>
+
+    <h2 style="font-size:14px;color:var(--claude);margin-top:18px">Claude</h2>
+    <div class="flow" id="flowCl">
+      <div class="node"><span class="badge">client</span><div class="t">Claude chip</div><div class="d">polls ~5s</div></div>
+      <div class="arrow">→</div>
+      <div class="node"><span class="badge">HTTP</span><div class="t">GET /api/claude-account</div><div class="d">always 200</div></div>
+      <div class="arrow">→</div>
+      <div class="node"><span class="badge">service</span><div class="t">ClaudeAccountService</div><div class="d">short cache · fail-soft</div></div>
+      <div class="arrow">→</div>
+      <div class="node"><span class="badge">read</span><div class="t">~/.claude login</div><div class="d">oauthAccount → email + plan</div></div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">Two different sources, one shape</h2>
+      <p class="small"><b>GitHub</b> has a clean machine-readable CLI: <code>gh api user --jq .login</code> gives the login,
+      <code>gh auth status</code> the host. <b>Claude</b> has <b>no <code>whoami</code></b>, so the probe <i>reads the
+      subscription login the CLI already wrote</i> (the <code>oauthAccount</code> record under <code>~/.claude</code>) — never
+      running a billable command or triggering a login. Both return a typed 3-state result and a disconnect never cancels them.</p>
     </div>
     <div class="card">
-      <h4 style="margin:0 0 8px">turn.ended payload (seeded)</h4>
-      <div class="kvs"><span class="key">"data"</span>: {
-  <span class="key">"sessionId"</span>: <span class="str">"a91c…"</span>,
-  <span class="key">"status"</span>:    <span class="str">"done"</span>,   <span class="muted">// or "error"</span>
-  <span class="key">"costUsd"</span>:   <span class="num">0.0142</span>,
-  <span class="key">"numTurns"</span>:  <span class="num">3</span>
-}</div>
-      <p class="muted" style="font-size:12.5px;margin-bottom:0">Only data the harness <b>already has</b> at turn-end — no new agent instrumentation.</p>
-    </div>
-  </div>
-  <div class="card">
-    <h4 style="margin:0 0 8px">Why this makes "add more later" cheap</h4>
-    <p style="margin:0 0 8px">Future events just pick a new <code>type</code> and reuse everything else —
-    the same buffer, the same <code>GET /api/events</code>, the same watermark, the same parser:</p>
-    <div class="feedrow"><span class="tag">run.started</span> · repo · sessionId</div>
-    <div class="feedrow"><span class="tag">deploy.done</span> · repo · status, durationMs</div>
-    <div class="feedrow"><span class="tag">tool.flagged</span> · repo · toolName, reason</div>
-    <p class="muted" style="font-size:12.5px;margin:8px 0 0">The test app renders any <code>type</code> generically
-    from the envelope — so it's the test bed for these without changes.</p>
-  </div>
-`;
+      <h2 style="margin-top:0">Why a cache <span class="pill now">coalesces polls</span></h2>
+      <p class="small">A 5s poll on each chip would otherwise touch the CLI/config on every render. A few-seconds in-memory cache per
+      probe collapses the poll plus concurrent callers into ~one read per window. A Harness restart simply re-probes.</p>
+    </div>`,
 
-/* ---------- View: rules ---------- */
-document.getElementById("view-rules").innerHTML = `
-  <h2>The constraints I'm holding myself to</h2>
-  <div class="card">
-    <h4 style="margin:0 0 6px"><span class="pill ro">read-only</span> No actions over REST</h4>
-    <p style="margin:0">The only endpoint added is a <code>GET</code> with no side effects. No mutation endpoint,
-    nothing exposed that isn't already reachable from the frontend. Reading the feed can never trigger a harness action.</p>
-  </div>
-  <div class="card">
-    <h4 style="margin:0 0 6px">Auth is inherited, not invented</h4>
-    <p style="margin:0">The feed lives under <code>/api/*</code>, so the existing login (session cookie or
-    <code>X-Auth-Password</code>) already guards it. No new auth surface in the pilot. <span class="muted">How a remote
-    collector authenticates to many harnesses is the future task's problem.</span></p>
-  </div>
-  <div class="card">
-    <h4 style="margin:0 0 6px">Additive &amp; safe by construction</h4>
-    <ul style="margin:0">
-      <li>New service + one read-only controller + one best-effort publish call + one static app.</li>
-      <li>Publishing <span class="tn">turn.ended</span> is wrapped so it can <b>never</b> disrupt a chat run.</li>
-      <li>The existing per-repo <code>/api/repos/{id}/events</code> + Event Console are untouched.</li>
-      <li>In-memory only — no persistence across restart (a pilot, like the per-repo log).</li>
-    </ul>
-  </div>
-  <div class="card">
-    <h4 style="margin:0 0 6px">Explicitly NOT in the pilot</h4>
-    <ul style="margin:0">
-      <li>The remote collector service/app and cross-harness auth/discovery.</li>
-      <li>A live push transport (WebSocket/SSE) — polling by watermark for now.</li>
-      <li>Any event type beyond <span class="tn">turn.ended</span> (the mechanism is built to grow).</li>
-      <li>Surfacing the feed inside the React UI (the in-repo test app is the consumer).</li>
-    </ul>
-  </div>
-`;
+  'Contract': () => `
+    <h2>Two endpoints, mirrored shape</h2>
+    <p class="small">Each is always <code>200</code> — "not installed" / "not authenticated" are <b>statuses, not HTTP errors</b>. A handful of typed fields drive the UI, so the frontend never parses prose.</p>
+
+    <div class="grid2">
+      <div class="card">
+        <h2 style="margin-top:0"><code>GET /api/github-account</code></h2>
+        <div class="kvs">${jsonHtml(GH.states.ok.json)}</div>
+      </div>
+      <div class="card">
+        <h2 style="margin-top:0"><code>GET /api/claude-account</code></h2>
+        <div class="kvs">${jsonHtml(CL.states.ok.json)}</div>
+      </div>
+    </div>
+
+    <table>
+      <tr><th>State</th><th>installed</th><th>authenticated</th><th>identity fields</th><th>error</th></tr>
+      <tr><td><span class="dot bad" style="display:inline-block;vertical-align:middle"></span> CLI missing</td><td class="x">false</td><td class="x">false</td><td class="muted">null</td><td>not on PATH</td></tr>
+      <tr><td><span class="dot warn" style="display:inline-block;vertical-align:middle"></span> not authed</td><td class="c">true</td><td class="x">false</td><td class="muted">null</td><td>short reason</td></tr>
+      <tr><td><span class="dot good" style="display:inline-block;vertical-align:middle"></span> authenticated</td><td class="c">true</td><td class="c">true</td><td class="mono">gh: account+host · claude: account+plan</td><td class="muted">null</td></tr>
+    </table>
+
+    <div class="card">
+      <h2 style="margin-top:0">Spec'd scenarios <span class="pill ro">github-account-status</span> <span class="pill cl">claude-account-status</span></h2>
+      <ul class="small">
+        <li>CLI not installed → 200, <code>*Installed:false</code></li>
+        <li>installed but unauthenticated / unreachable → 200, <code>authenticated:false</code> + reason</li>
+        <li>authenticated → 200 with account (+ host / + plan)</li>
+        <li>Claude probe <b>fails soft</b> on a missing/odd login file — never throws</li>
+        <li>a client refresh mid-probe does <b>not</b> cancel either</li>
+        <li>chips sit on the Scoreboard's row (no added height) · collapse persists per-chip · refresh on poll</li>
+        <li>both hidden in Basic mode, shown in Advanced</li>
+      </ul>
+    </div>`,
+
+  'Plan': () => `
+    <h2>Build order</h2>
+    <div class="grid2">
+      <div class="card">
+        <h2 style="margin-top:0">1 · Backend — GitHub</h2>
+        <ul class="small">
+          <li><code>GitHubAccountService</code> — shells <code>gh</code>, PATH, timeout, typed result</li>
+          <li>brief in-memory cache · DI</li>
+          <li><code>GET /api/github-account</code></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h2 style="margin-top:0">2 · Backend — Claude</h2>
+        <ul class="small">
+          <li><code>ClaudeAccountService</code> — resolve <code>claude</code>, read subscription login, fail-soft</li>
+          <li>brief in-memory cache · DI</li>
+          <li><code>GET /api/claude-account</code></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h2 style="margin-top:0">3 · Frontend</h2>
+        <ul class="small">
+          <li>shared chip component → <code>GitHubAccount</code> + <code>ClaudeAccount</code></li>
+          <li>three states each · ~5s poll · per-chip collapse keys</li>
+          <li><code>Dashboard.jsx</code> — header flex row holds Scoreboard + account strip</li>
+          <li>i18n <code>en/tr.json</code> · register <b>Advanced</b> in <code>UiModeContext.jsx</code></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h2 style="margin-top:0">4–5 · Understanding + Verify</h2>
+        <ul class="small">
+          <li>this app (refresh) · no <code>plan.md</code> edits (frozen)</li>
+          <li>builds clean · both probes' 3 states (stubbed) · cache coalesces</li>
+          <li>Playwright: both chips beside Scoreboard, states, per-chip collapse, narrow wraps</li>
+          <li><code>openspec validate --strict</code></li>
+        </ul>
+      </div>
+    </div>
+    <div class="card">
+      <p class="small muted">Status: proposal drafted — now two capabilities (<code>github-account-status</code> + <code>claude-account-status</code>)
+      in change <code>add-github-account-status</code>. The <code>openspec</code> CLI isn't installed on this box, so <code>--strict</code>
+      validation is still pending. Next: <code>/opsx:apply</code>.</p>
+    </div>`
+};
+
+// ---- render + interactions ----
+const tabsEl = document.getElementById('tabs');
+const mainEl = document.getElementById('main');
+const names = Object.keys(VIEWS);
+let active = names[0];
+const sim = { gh:'ok', cl:'ok' };
+const col = { gh:false, cl:false };
+
+function renderTabs(){
+  tabsEl.innerHTML = names.map(n=>`<div class="tab ${n===active?'active':''}" data-n="${n}">${n}</div>`).join('');
+  tabsEl.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{active=t.dataset.n;render();});
+}
+function render(){
+  renderTabs();
+  mainEl.innerHTML = `<div class="view active">${VIEWS[active]()}</div>`;
+  if(active==='Live chips') wireLive();
+  if(active==='Request flow') wireFlow();
+}
+
+function wireLive(){
+  const bars = document.getElementById('bars');
+  bars.innerHTML = [12,20,8,26,16,30,22].map(h=>`<i style="height:${h}px"></i>`).join('');
+  const segGh = document.getElementById('segGh');
+  const segCl = document.getElementById('segCl');
+  function paint(){
+    segGh.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.v===sim.gh));
+    segCl.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.v===sim.cl));
+    document.getElementById('strip').innerHTML =
+      chipHtml(GH, sim.gh, col.gh, 'chipGh') + chipHtml(CL, sim.cl, col.cl, 'chipCl');
+    document.getElementById('jsonGh').innerHTML = jsonHtml(GH.states[sim.gh].json);
+    document.getElementById('jsonCl').innerHTML = jsonHtml(CL.states[sim.cl].json);
+    document.getElementById('noteGh').textContent = GH.states[sim.gh].note;
+    document.getElementById('noteCl').textContent = CL.states[sim.cl].note;
+    const cg = document.getElementById('chipGh'); if(cg) cg.onclick=()=>{col.gh=!col.gh;paint();};
+    const cc = document.getElementById('chipCl'); if(cc) cc.onclick=()=>{col.cl=!col.cl;paint();};
+  }
+  segGh.querySelectorAll('button').forEach(b=>b.onclick=()=>{sim.gh=b.dataset.v;paint();});
+  segCl.querySelectorAll('button').forEach(b=>b.onclick=()=>{sim.cl=b.dataset.v;paint();});
+  paint();
+}
+
+function wireFlow(){
+  const groups = [[...document.querySelectorAll('#flowGh .node')], [...document.querySelectorAll('#flowCl .node')]];
+  document.getElementById('runFlow').onclick = ()=>{
+    groups.flat().forEach(n=>n.classList.remove('lit'));
+    groups.forEach(nodes=>{
+      let i=0;
+      const fwd=setInterval(()=>{
+        if(i>0) nodes[i-1].classList.remove('lit');
+        if(i<nodes.length){ nodes[i].classList.add('lit'); i++; }
+        else { clearInterval(fwd); setTimeout(()=>nodes[nodes.length-1].classList.remove('lit'),500); }
+      },340);
+    });
+  };
+}
+
+render();
 </script>
 </body>
 </html>
