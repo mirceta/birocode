@@ -17,5 +17,5 @@
 ## 3. Verify
 
 - [x] 3.1 Frontend build green; i18n JSON valid.
-- [ ] 3.2 On a deploy: confirm `.csproj` shown by default, toggle hides them in tree + search, choice
-      persists. (Needs the deployed build.)
+- [x] 3.2 On a deploy: confirm `.csproj` shown by default, toggle hides them in tree + search, choice
+      persists. (Verified on the live deploy.)
