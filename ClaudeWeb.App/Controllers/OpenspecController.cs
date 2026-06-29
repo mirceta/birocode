@@ -16,6 +16,14 @@ namespace ClaudeWeb.Controllers;
 ///   GET /api/openspec/cockpit        -- { repoId, repoName, ready, activeChanges, specs, archived, errors }
 ///   GET /api/openspec/show?id=…      -- openspec show &lt;id&gt; --json + tasks/proposal/design
 ///   GET /api/openspec/archived?id=…  -- an archived change parsed from disk
+///
+/// The one exception to read-only is the explicit, gated setup action
+/// (openspec change add-cockpit-openspec-setup):
+///   POST /api/openspec/setup         -- { action:"init"|"update" } → runs ONE fixed
+///                                       verb in the resolved repo dir, returns the
+///                                       command result + refreshed readiness.
+/// It takes an action discriminator only — never a command string, args, or path —
+/// and init is guarded against clobbering an existing openspec/ tree.
 /// </summary>
 [ApiController]
 [Route("api/openspec")]
@@ -102,5 +110,37 @@ public class OpenspecController : ControllerBase
         var repo = ResolveRepoDir(out var error);
         if (repo is null) return error!;
         return Ok(_cockpit.ReadArchivedChange(repo.Value.Path, id!));
+    }
+
+    public sealed record SetupRequest(string? Action);
+
+    // The cockpit's only state-changing endpoint. The body carries an action
+    // discriminator, never a command/args/path: the service maps it to one fixed
+    // verb and runs it in the resolved repo working dir. init is no-clobber guarded
+    // server-side. Returns the command result + refreshed readiness so the tab can
+    // update in place. See the openspec-cockpit spec delta in change
+    // add-cockpit-openspec-setup.
+    [HttpPost("setup")]
+    public IActionResult Setup([FromBody] SetupRequest? body)
+    {
+        _logger.CountRequest();
+        var action = body?.Action?.Trim().ToLowerInvariant();
+        if (action != "init" && action != "update")
+            return BadRequest(new { error = $"invalid action \"{body?.Action}\" — must be \"init\" or \"update\"" });
+
+        var repo = ResolveRepoDir(out var error);
+        if (repo is null) return error!;
+
+        var r = _cockpit.RunSetup(repo.Value.Path, action);
+        return Ok(new
+        {
+            ok = r.Ok,
+            action = r.Action,
+            exitCode = r.ExitCode,
+            stdout = r.StdOut,
+            stderr = r.StdErr,
+            alreadyInitialized = r.AlreadyInitialized,
+            ready = new { openspecOnPath = r.Ready.OpenspecOnPath, openspecDirPresent = r.Ready.OpenspecDirPresent },
+        });
     }
 }

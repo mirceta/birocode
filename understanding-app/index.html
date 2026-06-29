@@ -286,8 +286,11 @@
           <p class="muted">Leaning: just readiness for this change; richer output can follow.</p>
         </div>
       </div>
-      <p class="muted" style="margin-top:14px">Status: proposal + design + spec delta + tasks all written;
-      <span class="mono">openspec validate --strict</span> passes. Next step is <span class="mono">/opsx apply</span> (implement) — pending your call.</p>
+      <p class="muted" style="margin-top:14px">Status: <b>implemented</b> — backend endpoint + service method, actionable readiness UI, and styles are in;
+      both builds are green and <span class="mono">openspec validate --strict</span> passes. Backend verbs
+      (<span class="mono">init</span>/<span class="mono">update</span>) and the no-clobber guard are verified directly.
+      Remaining: in-harness click-through (tasks 3.2&ndash;3.5) in a running instance, then
+      <span class="mono">openspec archive</span> on ship. Both open questions above were resolved at their leaning defaults.</p>
     </div>
   </section>
 

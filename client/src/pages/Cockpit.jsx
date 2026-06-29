@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { apiGet } from '../api/client';
+import { apiGet, apiPost } from '../api/client';
 import { useRepo } from '../context/RepoContext';
 import './cockpit.css';
 
@@ -158,14 +158,44 @@ function Detail({ detail }) {
   );
 }
 
+// Outcome banner for the last setup action. Surfaces a clean success, the
+// no-clobber "already initialised" case, and — critically — a non-zero exit as
+// an explicit failure (exitCode + captured stderr), never a false success.
+function SetupResult({ setup }) {
+  if (setup.error)
+    return <div className="ck__prep-result is-bad">Setup request failed: {setup.error}</div>;
+  const r = setup.result || {};
+  if (r.alreadyInitialized)
+    return <div className="ck__prep-result is-warn">Already initialised — the existing <code>openspec/</code> tree was left untouched.</div>;
+  if (r.ok)
+    return (
+      <div className="ck__prep-result is-ok">
+        {setup.action === 'init' ? 'OpenSpec scaffolded — this repository is now ready.' : 'Instruction files updated.'}
+      </div>
+    );
+  return (
+    <div className="ck__prep-result is-bad">
+      <div>{setup.action === 'init' ? 'openspec init' : 'openspec update'} failed (exit {r.exitCode}).</div>
+      {r.stderr ? <pre>{r.stderr.trim()}</pre> : null}
+    </div>
+  );
+}
+
 // Top "is this repo prepared for OpenSpec?" section. Both checks come straight
 // from the cockpit payload's `ready` node (openspec on PATH + openspec/ present) —
 // the same readiness the backend gates aggregation on — surfaced affirmatively
-// here, not only when something is missing.
-function Readiness({ ready, repoName }) {
+// here, not only when something is missing. The remediation is actionable: when
+// the CLI is present, the not-ready / ready states each offer one fixed setup
+// action (init / update) that ports or refreshes THIS repo without leaving the
+// harness (openspec change add-cockpit-openspec-setup).
+function Readiness({ ready, repoName, setup, onSetup }) {
   const cli = !!ready.openspecOnPath;
   const dir = !!ready.openspecDirPresent;
   const prepared = cli && dir;
+  const running = !!setup?.running;
+  // The single applicable action: init can run only with the CLI present and no
+  // openspec/ yet; update only once initialised; without the CLI, nothing runs.
+  const action = !cli ? null : (dir ? 'update' : 'init');
   const checks = [
     {
       ok: cli,
@@ -175,7 +205,7 @@ function Readiness({ ready, repoName }) {
     {
       ok: dir,
       label: <><code>openspec/</code> {dir ? <>initialised in <b>{repoName}</b></> : <>missing in <b>{repoName}</b></>}</>,
-      fix: dir || !cli ? null : <>Run <code>openspec init</code> in this repo, then reload.</>, // only actionable once the CLI exists
+      fix: null, // remediation is now the action button below
     },
   ];
   return (
@@ -194,6 +224,21 @@ function Readiness({ ready, repoName }) {
           </li>
         ))}
       </ul>
+      {action ? (
+        <div className="ck__prep-actions">
+          <button className="ck__prep-btn" disabled={running} onClick={() => onSetup(action)}>
+            {running
+              ? (action === 'init' ? 'Setting up…' : 'Updating…')
+              : (action === 'init' ? '⚙ Set up OpenSpec' : '↻ Update instruction files')}
+          </button>
+          <span className="ck__prep-hint">
+            {action === 'init'
+              ? <>Runs <code>openspec init --tools claude</code> in <b>{repoName}</b>.</>
+              : <>Runs <code>openspec update</code> to refresh instruction files.</>}
+          </span>
+        </div>
+      ) : null}
+      {setup && !setup.running ? <SetupResult setup={setup} /> : null}
     </section>
   );
 }
@@ -203,6 +248,7 @@ export default function Cockpit() {
   const [state, setState] = useState({ loading: true });
   const [sel, setSel] = useState(null);     // { kind:'change'|'archived'|'spec', id }
   const [detail, setDetail] = useState(null);
+  const [setup, setSetup] = useState(null); // { running, action, result?, error? }
 
   const load = useCallback(async () => {
     setState({ loading: true });
@@ -217,6 +263,23 @@ export default function Cockpit() {
   }, [currentRepoId]);
 
   useEffect(() => { load(); }, [load]);
+  // Drop a stale setup outcome when the operator switches repos (load() keeps it
+  // so the banner survives the post-action refresh on the SAME repo).
+  useEffect(() => { setSetup(null); }, [currentRepoId]);
+
+  // The cockpit's one mutating call: POST the action discriminator, surface the
+  // result inline, then re-run load() so readiness and the rest of the tab
+  // refresh in place (no manual reload).
+  const runSetup = useCallback(async (action) => {
+    setSetup({ running: true, action });
+    try {
+      const result = await apiPost('/openspec/setup', { action });
+      setSetup({ running: false, action, result });
+    } catch (e) {
+      setSetup({ running: false, action, error: e?.message || String(e) });
+    }
+    await load();
+  }, [load]);
 
   useEffect(() => {
     if (!sel) { setDetail(null); return; }
@@ -249,7 +312,7 @@ export default function Cockpit() {
     return (
       <div className="ck">
         <div className="ck__head"><h2>OpenSpec Cockpit</h2><span className="ck__repo">{repoName}</span></div>
-        <Readiness ready={ready} repoName={repoName} />
+        <Readiness ready={ready} repoName={repoName} setup={setup} onSetup={runSetup} />
       </div>
     );
   }
@@ -266,7 +329,7 @@ export default function Cockpit() {
         <button className="ck__refresh" onClick={load} title="Re-read OpenSpec state">↻</button>
       </div>
 
-      <Readiness ready={ready} repoName={repoName} />
+      <Readiness ready={ready} repoName={repoName} setup={setup} onSetup={runSetup} />
 
       <div className="ck__legend">
         {LEGEND.map((l, i) => (
