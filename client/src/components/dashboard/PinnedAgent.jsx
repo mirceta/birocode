@@ -130,6 +130,20 @@ export default function PinnedAgent({
   const [runErr, setRunErr] = useState(null); // { port, text } | null
   const [checking, setChecking] = useState(false);
 
+  // "Ask for understanding" (openspec add-ask-for-understanding): the second, more
+  // advanced agentic dock button. It FORKS this dock's builder conversation into
+  // Claude Monitor (snapshot-resume) and has the forked agent build the repo's
+  // Understanding app explaining the latest reply — so it never touches the live
+  // chat. Like Discover, the run is backend-owned (survives a refresh): we POST
+  // /understanding/ask, then poll /understanding/status until terminal, and reattach
+  // to a running job on mount/repo-change. Disabled until the builder lane has a
+  // conversation (a sessionId). Advanced-mode only; progress also shows in the
+  // Console lane (op="understanding").
+  const canUnderstand = useFeature('understandingAgent');
+  const [understanding, setUnderstanding] = useState(null); // { status, error? } | null
+  const understandingBusy = understanding?.status === 'running';
+  const uPollRef = useRef(null);
+
   const registerApp = async (app) => {
     setRegistering(app.port);
     setRegisterErr(null);
@@ -274,6 +288,65 @@ export default function PinnedAgent({
       setRunErr({ port: app.port, text });
     } finally {
       setRunning(null);
+    }
+  };
+
+  // --- Ask for understanding: backend-owned run, same start/poll/reattach shape as
+  // Discover but for the snapshot-resume build (openspec add-ask-for-understanding).
+  const stopUPoll = () => {
+    if (uPollRef.current) {
+      clearInterval(uPollRef.current);
+      uPollRef.current = null;
+    }
+  };
+
+  const fetchUnderstandingStatus = useCallback(async () => {
+    try {
+      const r = await apiGet('/understanding/status', { repoId: tab.repoId });
+      setUnderstanding(r);
+      if (r.status !== 'running') stopUPoll();
+      return r;
+    } catch {
+      stopUPoll();
+      return null;
+    }
+  }, [tab.repoId]);
+
+  const startUPoll = () => {
+    if (uPollRef.current) return;
+    uPollRef.current = setInterval(fetchUnderstandingStatus, 5000); // dock cadence
+  };
+
+  // Reattach on mount / repo-change: pick up a running build (spinner + poll) or a
+  // result/error that landed while this dock was away — without starting a new run.
+  useEffect(() => {
+    if (!canUnderstand) return undefined;
+    let alive = true;
+    setUnderstanding(null);
+    (async () => {
+      const r = await fetchUnderstandingStatus();
+      if (alive && r?.status === 'running') startUPoll();
+    })();
+    return () => {
+      alive = false;
+      stopUPoll();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canUnderstand, tab.repoId, fetchUnderstandingStatus]);
+
+  const askUnderstanding = async () => {
+    try {
+      // Start-or-join, scoped to this dock's repo (X-Repo-Id); body carries the
+      // builder lane's sessionId. Drive off server state and poll until terminal.
+      const r = await apiPost('/understanding/ask', { sessionId: tab.sessionId }, { repoId: tab.repoId });
+      setUnderstanding(r);
+      if (r.status === 'running') startUPoll();
+    } catch (err) {
+      let text = err.message;
+      try {
+        text = JSON.parse(err.message).error || text;
+      } catch { /* raw text */ }
+      setUnderstanding({ status: 'error', error: text });
     }
   };
 
@@ -500,6 +573,34 @@ export default function PinnedAgent({
           {registerErr && (
             <div className="phone__discover-msg phone__discover-msg--err" role="status">
               {t('dashboard.discoverRegisterError', { error: registerErr.text })}
+            </div>
+          )}
+        </div>
+      )}
+      {/* Ask for understanding (openspec add-ask-for-understanding): the second
+          agentic button — fork the conversation → build the Understanding app.
+          Sibling of Discover; reuses the .phone__discover furniture styling. Hidden
+          while Files / a local app / the Console is open; disabled until the builder
+          lane has a conversation. */}
+      {canUnderstand && !showFiles && !openApp && !showConsole && (
+        <div className="phone__discover phone__understanding">
+          <button
+            type="button"
+            className="phone__discover-btn"
+            onClick={askUnderstanding}
+            disabled={understandingBusy || !tab.sessionId}
+            title={tab.sessionId ? t('dashboard.understandingHint') : t('dashboard.understandingDisabled')}
+          >
+            {understandingBusy ? t('dashboard.understandingAsking') : `🧠 ${t('dashboard.understanding')}`}
+          </button>
+          {understanding?.status === 'done' && (
+            <div className="phone__discover-msg" role="status">
+              {t('dashboard.understandingDone')}
+            </div>
+          )}
+          {understanding?.status === 'error' && (
+            <div className="phone__discover-msg phone__discover-msg--err" role="status">
+              {t('dashboard.understandingError', { error: understanding.error })}
             </div>
           )}
         </div>
