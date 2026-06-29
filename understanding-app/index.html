@@ -1,455 +1,282 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Account Status — what we're building</title>
+<title>Git Identity in Claude Web — two identities, one global config</title>
 <style>
-  :root{
-    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --edge:#30363d;
-    --ink:#e6edf3; --dim:#9aa7b4; --accent:#58a6ff; --good:#3fb950;
-    --warn:#d29922; --bad:#f85149; --turn:#bc8cff; --claude:#d97757;
-    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel2: #1e222b; --border: #2a2f3a;
+    --text: #e6e9ef; --soft: #9aa3b2; --accent: #c96442; --accent2: #4f8cff;
+    --good: #3fb950; --warn: #d29922; --bad: #f85149; --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
   }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,Segoe UI,Roboto,sans-serif}
-  header{padding:22px 24px 10px;border-bottom:1px solid var(--edge)}
-  h1{margin:0 0 4px;font-size:21px}
-  h1 .gh{color:var(--turn)} h1 .cl{color:var(--claude)}
-  .sub{color:var(--dim);font-size:13.5px}
-  .tabs{display:flex;flex-wrap:wrap;gap:6px;padding:12px 24px 0}
-  .tab{padding:8px 14px;border:1px solid var(--edge);border-bottom:none;border-radius:8px 8px 0 0;
-       background:var(--panel);color:var(--dim);cursor:pointer;font-size:13.5px}
-  .tab.active{background:var(--panel2);color:var(--ink);border-color:var(--accent)}
-  main{padding:20px 24px 70px;max-width:1060px}
-  .view{display:none;animation:fade .25s ease}
-  .view.active{display:block}
-  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
-  h2{font-size:17px;margin:6px 0 10px}
-  p{color:#cdd6e0}
-  .card{background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:16px 18px;margin:12px 0}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  @media(max-width:780px){.grid2{grid-template-columns:1fr}}
-  code,.mono{font-family:var(--mono);font-size:12.8px}
-  .pill{display:inline-block;padding:1px 8px;border-radius:20px;font-size:11.5px;border:1px solid var(--edge);color:var(--dim)}
-  .pill.now{color:var(--good);border-color:var(--good)}
-  .pill.future{color:var(--turn);border-color:var(--turn)}
-  .pill.ro{color:var(--accent);border-color:var(--accent)}
-  .pill.scope{color:var(--warn);border-color:var(--warn)}
-  .pill.cl{color:var(--claude);border-color:var(--claude)}
-  ul{margin:8px 0;padding-left:20px}
-  li{margin:5px 0;color:#cdd6e0}
-  .muted{color:var(--dim)}
-  .kvs{font-family:var(--mono);font-size:12.6px;background:#0b0f14;border:1px solid var(--edge);border-radius:8px;padding:12px;white-space:pre;overflow:auto;color:#cdd6e0}
-  .str{color:#7ee787} .key{color:var(--accent)} .num{color:#ffa657} .nul{color:var(--dim)}
-
-  /* flow */
-  .flow{display:flex;align-items:stretch;gap:0;flex-wrap:wrap}
-  .node{flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--edge);border-radius:10px;
-        padding:12px;margin:6px;transition:.3s;position:relative}
-  .node.lit{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 0 18px -6px var(--accent)}
-  .node .t{font-weight:600;font-size:13.5px}
-  .node .d{font-size:12px;color:var(--dim);margin-top:4px}
-  .node .badge{position:absolute;top:-9px;right:8px;font-size:10.5px;padding:1px 7px;border-radius:20px;background:var(--bg);border:1px solid var(--edge);color:var(--dim)}
-  .arrow{align-self:center;color:var(--dim);font-size:20px;padding:0 2px}
-
-  /* state simulator */
-  .ctl{display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin:4px 0 14px}
-  .ctlgrp{display:flex;align-items:center;gap:8px}
-  .ctlgrp > span{font-size:12px;color:var(--dim);min-width:54px}
-  .seg{display:inline-flex;border:1px solid var(--edge);border-radius:9px;overflow:hidden}
-  .seg button{background:var(--panel);color:var(--dim);border:none;padding:7px 12px;cursor:pointer;font-size:12.5px;border-right:1px solid var(--edge)}
-  .seg button:last-child{border-right:none}
-  .seg button.on{background:var(--panel2);color:var(--ink)}
-  .seg button.on[data-v="ok"]{box-shadow:inset 0 -2px 0 var(--good)}
-  .seg button.on[data-v="unauth"]{box-shadow:inset 0 -2px 0 var(--warn)}
-  .seg button.on[data-v="missing"]{box-shadow:inset 0 -2px 0 var(--bad)}
-
-  /* mock dashboard */
-  .mock{background:#0b0f14;border:1px solid var(--edge);border-radius:10px;padding:14px}
-  .mockrow{display:flex;gap:10px;align-items:stretch;flex-wrap:wrap}
-  .mock-score{flex:1;min-width:230px;background:var(--panel);border:1px solid var(--edge);border-radius:9px;padding:12px}
-  .mock-score .mt{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
-  .mock-stats{display:flex;gap:14px;margin-top:8px;flex-wrap:wrap}
-  .mock-stats div{font-size:12px;color:var(--dim)}
-  .mock-stats b{display:block;color:var(--ink);font-size:16px}
-  .bars{display:flex;gap:3px;align-items:flex-end;height:30px;margin-top:10px}
-  .bars i{width:7px;background:var(--accent);opacity:.55;border-radius:2px}
-  .strip{display:flex;gap:8px;align-items:stretch;flex-wrap:wrap}
-
-  /* the chip */
-  .chip{min-width:0;background:var(--panel);border:1px solid var(--edge);border-radius:9px;padding:10px 12px;
-        display:flex;flex-direction:column;justify-content:center;cursor:pointer;transition:.2s;align-self:stretch}
-  .chip:hover{border-color:var(--accent)}
-  .chip.collapsed{max-width:215px}
-  .chip .hd{display:flex;align-items:center;gap:8px;white-space:nowrap}
-  .chip .kind{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);border:1px solid var(--edge);border-radius:5px;padding:0 5px}
-  .chip.gh .kind{color:var(--turn);border-color:var(--turn)}
-  .chip.cl .kind{color:var(--claude);border-color:var(--claude)}
-  .dot{width:10px;height:10px;border-radius:50%;flex:none;box-shadow:0 0 8px -1px currentColor}
-  .dot.good{background:var(--good);color:var(--good)}
-  .dot.warn{background:var(--warn);color:var(--warn)}
-  .dot.bad{background:var(--bad);color:var(--bad)}
-  .chip .handle{font-weight:600;font-size:13.5px}
-  .chip .car{margin-left:auto;color:var(--dim);font-size:11px;transition:.2s}
-  .chip.collapsed .car{transform:rotate(-90deg)}
-  .chip .body{margin-top:9px;border-top:1px solid var(--edge);padding-top:9px;font-size:12.3px;color:var(--dim);display:grid;grid-template-columns:auto 1fr;gap:3px 10px}
-  .chip.collapsed .body{display:none}
-  .chip .body b{color:var(--ink);font-weight:600}
-  .ok{color:var(--good)} .no{color:var(--bad)} .wn{color:var(--warn)}
-  .hint{font-size:12px;color:var(--dim);margin-top:8px}
-  .legend{font-size:12px;color:var(--dim);margin-top:6px}
-  .small{font-size:12.5px}
-  table{border-collapse:collapse;width:100%;font-size:13px;margin-top:6px}
-  th,td{border:1px solid var(--edge);padding:7px 9px;text-align:left;vertical-align:top}
-  th{background:var(--panel2);color:var(--ink);font-weight:600}
-  td .mono{color:#cdd6e0}
-  .x{color:var(--bad)} .c{color:var(--good)}
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  header { padding: 22px 24px 12px; border-bottom: 1px solid var(--border); }
+  h1 { margin: 0 0 4px; font-size: 20px; }
+  header p { margin: 0; color: var(--soft); font-size: 13.5px; }
+  nav { display: flex; gap: 4px; flex-wrap: wrap; padding: 10px 20px 0; border-bottom: 1px solid var(--border); }
+  nav button { appearance: none; border: 1px solid transparent; border-bottom: none;
+    background: none; color: var(--soft); font: inherit; font-size: 13.5px; font-weight: 600;
+    padding: 9px 14px; border-radius: 8px 8px 0 0; cursor: pointer; }
+  nav button:hover { color: var(--text); }
+  nav button.on { color: var(--text); background: var(--panel); border-color: var(--border); }
+  main { padding: 22px 24px 60px; max-width: 1000px; }
+  .tab { display: none; } .tab.on { display: block; animation: fade .25s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; } }
+  h2 { font-size: 16px; margin: 0 0 12px; }
+  p.lead { color: var(--soft); margin-top: 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .card h3 { margin: 0 0 4px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  .tag { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    padding: 2px 7px; border-radius: 6px; border: 1px solid var(--border); color: var(--soft); }
+  .tag.commit { color: var(--accent2); border-color: var(--accent2); }
+  .tag.auth { color: var(--accent); border-color: var(--accent); }
+  .tag.global { color: var(--good); border-color: var(--good); }
+  .kv { font-family: var(--mono); font-size: 13px; background: var(--panel2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px; margin-top: 10px; }
+  .kv b { color: var(--text); } .kv .muted { color: var(--soft); }
+  .note { font-size: 13px; color: var(--soft); margin-top: 10px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .dot.good { background: var(--good); } .dot.bad { background: var(--bad); } .dot.warn { background: var(--warn); }
+  .callout { border-left: 3px solid var(--accent); background: var(--panel); padding: 12px 14px;
+    border-radius: 0 10px 10px 0; margin: 16px 0; font-size: 14px; }
+  .callout.warn { border-color: var(--warn); }
+  .tree { font-family: var(--mono); font-size: 13px; }
+  .node { background: var(--panel2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 11px; margin: 6px 0; cursor: pointer; transition: border-color .15s, background .15s; }
+  .node:hover { border-color: var(--accent2); }
+  .node.sel { border-color: var(--accent2); background: #1b2433; }
+  .node small { color: var(--soft); }
+  .indent { margin-left: 22px; border-left: 1px dashed var(--border); padding-left: 12px; }
+  .detail { margin-top: 0; min-height: 64px; }
+  .steps { display: flex; flex-direction: column; gap: 8px; }
+  .step { display: grid; grid-template-columns: 28px 1fr; gap: 12px; align-items: start;
+    padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel);
+    opacity: .45; transition: opacity .2s, border-color .2s; }
+  .step.active { opacity: 1; border-color: var(--accent2); }
+  .step .num { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+    font-weight: 700; font-size: 13px; background: var(--panel2); border: 1px solid var(--border); }
+  .step.active .num { background: var(--accent2); color: #fff; border-color: var(--accent2); }
+  .which { font-size: 12px; font-weight: 700; margin-top: 4px; }
+  .which.commit { color: var(--accent2); } .which.auth { color: var(--accent); } .which.neither { color: var(--soft); }
+  .ctrls { display: flex; gap: 8px; margin: 14px 0; }
+  .btn { appearance: none; border: 1px solid var(--border); background: var(--panel2); color: var(--text);
+    font: inherit; font-weight: 600; font-size: 13px; padding: 7px 14px; border-radius: 8px; cursor: pointer; }
+  .btn:hover { border-color: var(--accent2); }
+  .btn.primary { background: var(--accent2); border-color: var(--accent2); color: #fff; }
+  .mock { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+  .mock .dockhead { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 13px; margin-bottom: 8px; }
+  .mock .gitrow { font-family: var(--mono); font-size: 12.5px; color: var(--soft); display: flex;
+    flex-wrap: wrap; gap: 6px 14px; padding: 8px 10px; background: var(--panel2);
+    border: 1px solid var(--border); border-radius: 8px; }
+  .mock .idrow { margin-top: 6px; border-style: dashed; }
+  .mock .idrow.new { border-color: var(--accent); }
+  .added { color: var(--good); font-size: 11px; font-weight: 700; }
+  .toggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; font-size: 13px; }
+  .toggle input { accent-color: var(--accent2); width: 16px; height: 16px; }
+  code { font-family: var(--mono); background: var(--panel2); padding: 1px 6px; border-radius: 5px; font-size: 12.5px; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12.5px; color: var(--soft); margin-top: 8px; }
 </style>
 </head>
 <body>
 <header>
-  <h1><span class="gh">GitHub</span> + <span class="cl">Claude</span> Account Status — what we're building</h1>
-  <div class="sub">OpenSpec change <code>add-github-account-status</code> · branch <code>feat/github-account-status</code> · two collapsible "who am I logged in as?" chips beside the Scoreboard</div>
+  <h1>Git Identity in Claude Web</h1>
+  <p>Two independent identities, one global config — measured on this box (birocode), 2026-06-29.</p>
 </header>
+<nav id="nav"></nav>
+<main>
 
-<div class="tabs" id="tabs"></div>
-<main id="main"></main>
-
-<script>
-// ---- build-less, no deps, relative-URL only (served at /api/localview/<repo>/app/understanding/) ----
-
-// Each identity has the same 3-state shape so the two chips are true siblings.
-const GH = {
-  kind:'gh', title:'GitHub', endpoint:'GET /api/github-account',
-  states:{
-    ok:{ dot:'good', handle:'@kristijanmirceta',
-      json:{ ghInstalled:true, authenticated:true, account:'kristijanmirceta', host:'github.com', error:null },
-      rows:[['gh installed','<span class="ok">yes</span>'],['authenticated','<span class="ok">yes</span>'],['account','<b>kristijanmirceta</b>'],['host','github.com']],
-      note:'Healthy: the box would push & open PRs as this account.' },
-    unauth:{ dot:'warn', handle:'not authenticated',
-      json:{ ghInstalled:true, authenticated:false, account:null, host:null, error:'not logged in / upstream unreachable' },
-      rows:[['gh installed','<span class="ok">yes</span>'],['authenticated','<span class="wn">no</span>'],['account','<span class="muted">—</span>'],['reason','login expired / offline']],
-      note:'gh is present but no usable login — pushes & PRs fail until re-auth.' },
-    missing:{ dot:'bad', handle:'gh ✗',
-      json:{ ghInstalled:false, authenticated:false, account:null, host:null, error:'gh not found on PATH' },
-      rows:[['gh installed','<span class="no">no</span>'],['authenticated','<span class="no">no</span>'],['account','<span class="muted">—</span>'],['note','install GitHub CLI']],
-      note:'gh is not on PATH — terminal state; probe stops here, never throws.' }
-  }
-};
-const CL = {
-  kind:'cl', title:'Claude', endpoint:'GET /api/claude-account',
-  states:{
-    ok:{ dot:'good', handle:'you@example.com · Max',
-      json:{ claudeInstalled:true, authenticated:true, account:'you@example.com', plan:'Max', error:null },
-      rows:[['claude installed','<span class="ok">yes</span>'],['logged in','<span class="ok">yes</span>'],['account','<b>you@example.com</b>'],['plan','Max']],
-      note:'Healthy: agent runs use this subscription login (API key is forced off).' },
-    unauth:{ dot:'warn', handle:'not logged in',
-      json:{ claudeInstalled:true, authenticated:false, account:null, plan:null, error:'no valid subscription session' },
-      rows:[['claude installed','<span class="ok">yes</span>'],['logged in','<span class="wn">no</span>'],['account','<span class="muted">—</span>'],['reason','session expired']],
-      note:'claude is present but the subscription session is missing/expired — runs will fail.' },
-    missing:{ dot:'bad', handle:'claude ✗',
-      json:{ claudeInstalled:false, authenticated:false, account:null, plan:null, error:'claude not found on PATH' },
-      rows:[['claude installed','<span class="no">no</span>'],['logged in','<span class="no">no</span>'],['account','<span class="muted">—</span>'],['note','install Claude Code']],
-      note:'claude is not on PATH — terminal state; probe fails soft, never throws.' }
-  }
-};
-
-function jsonHtml(o){
-  const c = v => v===null ? '<span class="nul">null</span>'
-    : typeof v==='string' ? '<span class="str">"'+v+'"</span>'
-    : '<span class="num">'+v+'</span>';
-  return '{\n' + Object.entries(o).map(([k,v])=>'  <span class="key">"'+k+'"</span>: '+c(v)).join(',\n') + '\n}';
-}
-
-function chipHtml(def, stateKey, collapsed, id){
-  const s = def.states[stateKey];
-  const body = s.rows.map(([k,v])=>'<span>'+k+'</span><span>'+v+'</span>').join('');
-  return `<div class="chip ${def.kind} ${collapsed?'collapsed':''}" id="${id}">
-      <div class="hd">
-        <span class="kind">${def.title}</span>
-        <span class="dot ${s.dot}"></span>
-        <span class="handle">${s.handle}</span>
-        <span class="car">▼</span>
-      </div>
-      <div class="body">${body}</div>
-    </div>`;
-}
-
-const VIEWS = {
-  'Overview': () => `
-    <h2>The one-line idea</h2>
-    <p>The Harness acts as <b>two identities</b> on your behalf, and the dashboard shows neither: the
-    <span style="color:var(--turn)">GitHub</span> account it pushes & opens PRs as, and the
-    <span style="color:var(--claude)">Claude</span> subscription it runs every agent under. A wrong or
-    expired login in either only shows up as a failed push or a failed run. This change adds two small,
-    always-visible answers right next to the Scoreboard.</p>
-
+  <section class="tab on" data-tab="two">
+    <h2>There are two identities, and they are independent</h2>
+    <p class="lead">Every git action touches one of two completely separate identities. Conflating them is the usual source of confusion.</p>
     <div class="grid2">
       <div class="card">
-        <h2 style="margin-top:0"><span class="pill" style="color:var(--turn);border-color:var(--turn)">GitHub</span> chip</h2>
-        <ul class="small">
-          <li><b>gh installed?</b> — is the CLI on PATH</li>
-          <li><b>can authenticate?</b> — usable login / upstream reachable</li>
-          <li><b>account</b> — login handle + host (e.g. <code>github.com</code>)</li>
-        </ul>
-        <p class="hint">Source: the <code>gh</code> CLI (<code>gh api user</code> / <code>gh auth status</code>).</p>
+        <h3><span class="tag commit">Commit identity</span></h3>
+        <div>Who a commit is <b>authored as</b>. Baked permanently into the commit object. Set by <code>user.name</code> / <code>user.email</code>.</div>
+        <div class="kv">
+          user.name&nbsp;&nbsp;= <b>mirceta</b><br>
+          user.email = <b>kristijan.mirceta@gmail.com</b><br>
+          <span class="muted">source: ~/.gitconfig (global)</span>
+        </div>
+        <div class="note">Used by: <code>git commit</code>. The harness runs <code>git commit -m …</code> with <b>no identity argument</b>, so it inherits this.</div>
       </div>
       <div class="card">
-        <h2 style="margin-top:0"><span class="pill cl">Claude</span> chip</h2>
-        <ul class="small">
-          <li><b>claude installed?</b> — is the CLI on PATH</li>
-          <li><b>logged in?</b> — is the subscription session valid</li>
-          <li><b>account + plan</b> — email/handle and tier (Max / Pro)</li>
-        </ul>
-        <p class="hint">Source: the subscription login the <code>claude</code> CLI already wrote (no <code>whoami</code> exists).</p>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2 style="margin-top:0">Shared shape <span class="pill ro">read-only</span></h2>
-      <ul class="small">
-        <li>both sit on the <b>Scoreboard's horizontal row</b> — width only, no extra height</li>
-        <li>both <b>collapsible</b>, collapse persists per-device (independent keys)</li>
-        <li><span class="pill ro">read-only</span> never log in/out, switch accounts, or read tokens</li>
-        <li><span class="pill scope">global</span> GitHub = box's global <code>gh</code> account, not per-repo</li>
-        <li><span class="pill future">Advanced mode</span> hidden in Basic mode by default</li>
-      </ul>
-    </div>
-
-    <div class="card">
-      <h2 style="margin-top:0">Why neither existed before</h2>
-      <p class="small"><code>GitService.cs</code> shells <code>git</code> but <b>never <code>gh</code></b>; nothing reads the
-      <code>claude</code> login. And <code>CliRunnerService</code> deliberately <b>removes <code>ANTHROPIC_API_KEY</code></b> so
-      every run uses the Max/Pro subscription login — which is exactly the identity the Claude chip reports. Both are genuinely
-      new capabilities, not tweaks to existing auth code.</p>
-    </div>`,
-
-  'Live chips': () => `
-    <h2>The two chips, in their three states each</h2>
-    <p class="small">Drive each probe result independently and click a chip to collapse it — this is the real shape of the dashboard strip.</p>
-    <div class="ctl">
-      <div class="ctlgrp"><span>GitHub</span>
-        <div class="seg" id="segGh">
-          <button data-v="ok">authed</button><button data-v="unauth">not authed</button><button data-v="missing">missing</button>
+        <h3><span class="tag auth">GitHub auth identity</span></h3>
+        <div>Who you <b>authenticate as</b> when pushing or calling the GitHub API. A token, not baked into commits.</div>
+        <div class="kv">
+          credential.helper = <b>manager</b> (GCM)<br>
+          stored github.com token = <b class="muted">none yet</b><br>
+          gh CLI = <b>installed, not logged in</b>
         </div>
-      </div>
-      <div class="ctlgrp"><span>Claude</span>
-        <div class="seg" id="segCl">
-          <button data-v="ok">authed</button><button data-v="unauth">not authed</button><button data-v="missing">missing</button>
-        </div>
+        <div class="note">Used by: <code>git push</code>, PRs, the GitHub API. The harness pushes with <code>GIT_TERMINAL_PROMPT=0</code>, so it relies entirely on this store.</div>
       </div>
     </div>
+    <div class="callout warn">
+      <b>They can disagree.</b> A token for account <i>X</i> still produces commits authored as whatever <code>user.email</code> says.
+      So a PAT textbox changes the <span class="tag auth">auth</span> identity — <b>not</b> the <span class="tag commit">commit</span> author.
+      <br><span class="note">Also: your commit email has a dot (<code>kristijan.mirceta</code>) while your Claude account has none (<code>kristijanmirceta</code>) — different addresses.</span>
+    </div>
+  </section>
 
-    <div class="card">
-      <h2 style="margin-top:0">Beside the Scoreboard <span class="pill now">horizontal only</span></h2>
-      <div class="mock">
-        <div class="mockrow">
-          <div class="mock-score">
-            <div class="mt">Scoreboard · 7d</div>
-            <div class="mock-stats">
-              <div><b>14</b>prompts</div><div><b>2h 3m</b>work</div><div><b>$4.10</b>cost</div><div><b>5</b>peak</div>
-            </div>
-            <div class="bars" id="bars"></div>
+  <section class="tab" data-tab="scope">
+    <h2>Global or per-repo? — Today it's <span class="tag global">global</span> on both axes</h2>
+    <p class="lead">Click a node to inspect it. Git <i>supports</i> per-repo overrides, but none are configured here.</p>
+    <label class="toggle" style="margin-bottom:12px">
+      <input type="checkbox" id="ovr"> Simulate adding a per-repo override to <code>birocode/.git/config</code>
+    </label>
+    <div class="grid2">
+      <div>
+        <div class="tree" id="tree">
+          <div class="node" data-k="gitconfig">~/.gitconfig <small>· global identity</small></div>
+          <div class="indent">
+            <div class="node" data-k="repoA">repo: birocode <small>· inherits</small></div>
+            <div class="node" data-k="repoB">repo: other-project <small>· inherits</small></div>
           </div>
-          <div class="strip" id="strip"></div>
+          <div class="node" data-k="gcm" style="margin-top:14px">Git Credential Manager <small>· auth store</small></div>
+          <div class="indent">
+            <div class="node" data-k="host">host: github.com <small>· one shared token</small></div>
+          </div>
         </div>
       </div>
-      <div class="legend">On a narrow phone the account strip <b>wraps under</b> the Scoreboard rather than clipping — it never forces extra height when there's room.</div>
+      <div>
+        <div class="card detail" id="detail"><span class="note">Select a node to see its config.</span></div>
+      </div>
     </div>
+    <div class="callout">
+      Because there is <b>no <code>includeIf</code></b> in <code>~/.gitconfig</code> and <b>no local <code>user.*</code></b> in any repo,
+      every repo commits as the same person. And because GCM keys credentials <b>by host</b>, every <code>github.com</code> repo shares one token.
+      <b>→ One global place controls everything.</b>
+    </div>
+  </section>
 
+  <section class="tab" data-tab="life">
+    <h2>Lifecycle: which identity is consulted, when</h2>
+    <p class="lead">Step through a save-and-publish to see <span class="tag commit">commit</span> vs <span class="tag auth">auth</span> hand off.</p>
+    <div class="ctrls">
+      <button class="btn" id="prev">‹ Prev</button>
+      <button class="btn primary" id="next">Next ›</button>
+      <button class="btn" id="reset">Reset</button>
+    </div>
+    <div class="steps" id="steps"></div>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--accent2)"></span> commit identity</span>
+      <span><span class="dot" style="background:var(--accent)"></span> auth identity</span>
+      <span><span class="dot" style="background:var(--soft)"></span> neither</span>
+    </div>
+  </section>
+
+  <section class="tab" data-tab="ui">
+    <h2>Where it surfaces — today vs proposed</h2>
+    <p class="lead">The new account chips already answer "which GitHub account" — but globally, once, at the top. The dock git section shows no identity at all.</p>
     <div class="grid2">
-      <div class="card">
-        <h2 style="margin-top:0">GitHub response</h2>
-        <div class="kvs" id="jsonGh"></div>
-        <p class="small" id="noteGh" style="margin-bottom:0"></p>
+      <div>
+        <h3 style="font-size:13px;color:var(--soft)">Dock git section — TODAY</h3>
+        <div class="mock">
+          <div class="dockhead"><span class="dot good"></span> agent · birocode</div>
+          <div class="gitrow"><span>branch: feat/github-account-status</span><span>+3 / -0 vs origin/main</span><span>clean</span></div>
+          <div class="note">Branch + ahead/behind + actions. No "who".</div>
+        </div>
       </div>
-      <div class="card">
-        <h2 style="margin-top:0">Claude response</h2>
-        <div class="kvs" id="jsonCl"></div>
-        <p class="small" id="noteCl" style="margin-bottom:0"></p>
-      </div>
-    </div>
-    <p class="hint">Collapsed → kind + dot + handle on one line. Expanded → installed / auth / account (+ host or plan). Collapse persists per-device
-    (<code>claudeweb_github_account_collapsed</code>, <code>claudeweb_claude_account_collapsed</code>), mirroring the Scoreboard.</p>`,
-
-  'Request flow': () => `
-    <h2>How each status is produced</h2>
-    <p class="small">Two sibling probes, same shape. Click <b>Run probes</b>. Both poll on the Scoreboard's ~5s cadence, so an expiring login in either surfaces on its own.</p>
-    <button id="runFlow" class="tab" style="border-radius:8px;border-bottom:1px solid var(--edge);margin:2px 0 12px">▶ Run probes</button>
-
-    <h2 style="font-size:14px;color:var(--turn)">GitHub</h2>
-    <div class="flow" id="flowGh">
-      <div class="node"><span class="badge">client</span><div class="t">GitHub chip</div><div class="d">polls ~5s</div></div>
-      <div class="arrow">→</div>
-      <div class="node"><span class="badge">HTTP</span><div class="t">GET /api/github-account</div><div class="d">always 200</div></div>
-      <div class="arrow">→</div>
-      <div class="node"><span class="badge">service</span><div class="t">GitHubAccountService</div><div class="d">short cache</div></div>
-      <div class="arrow">→</div>
-      <div class="node"><span class="badge">CLI</span><div class="t">gh CLI</div><div class="d">gh api user · gh auth status</div></div>
-    </div>
-
-    <h2 style="font-size:14px;color:var(--claude);margin-top:18px">Claude</h2>
-    <div class="flow" id="flowCl">
-      <div class="node"><span class="badge">client</span><div class="t">Claude chip</div><div class="d">polls ~5s</div></div>
-      <div class="arrow">→</div>
-      <div class="node"><span class="badge">HTTP</span><div class="t">GET /api/claude-account</div><div class="d">always 200</div></div>
-      <div class="arrow">→</div>
-      <div class="node"><span class="badge">service</span><div class="t">ClaudeAccountService</div><div class="d">short cache · fail-soft</div></div>
-      <div class="arrow">→</div>
-      <div class="node"><span class="badge">read</span><div class="t">~/.claude login</div><div class="d">oauthAccount → email + plan</div></div>
-    </div>
-
-    <div class="card">
-      <h2 style="margin-top:0">Two different sources, one shape</h2>
-      <p class="small"><b>GitHub</b> has a clean machine-readable CLI: <code>gh api user --jq .login</code> gives the login,
-      <code>gh auth status</code> the host. <b>Claude</b> has <b>no <code>whoami</code></b>, so the probe <i>reads the
-      subscription login the CLI already wrote</i> (the <code>oauthAccount</code> record under <code>~/.claude</code>) — never
-      running a billable command or triggering a login. Both return a typed 3-state result and a disconnect never cancels them.</p>
-    </div>
-    <div class="card">
-      <h2 style="margin-top:0">Why a cache <span class="pill now">coalesces polls</span></h2>
-      <p class="small">A 5s poll on each chip would otherwise touch the CLI/config on every render. A few-seconds in-memory cache per
-      probe collapses the poll plus concurrent callers into ~one read per window. A Harness restart simply re-probes.</p>
-    </div>`,
-
-  'Contract': () => `
-    <h2>Two endpoints, mirrored shape</h2>
-    <p class="small">Each is always <code>200</code> — "not installed" / "not authenticated" are <b>statuses, not HTTP errors</b>. A handful of typed fields drive the UI, so the frontend never parses prose.</p>
-
-    <div class="grid2">
-      <div class="card">
-        <h2 style="margin-top:0"><code>GET /api/github-account</code></h2>
-        <div class="kvs">${jsonHtml(GH.states.ok.json)}</div>
-      </div>
-      <div class="card">
-        <h2 style="margin-top:0"><code>GET /api/claude-account</code></h2>
-        <div class="kvs">${jsonHtml(CL.states.ok.json)}</div>
+      <div>
+        <h3 style="font-size:13px;color:var(--soft)">Dock git section — PROPOSED</h3>
+        <div class="mock">
+          <div class="dockhead"><span class="dot good"></span> agent · birocode</div>
+          <div class="gitrow"><span>branch: feat/github-account-status</span><span>+3 / -0</span><span>clean</span></div>
+          <div class="gitrow idrow new"><span class="added">NEW</span><span class="tag commit">commits as</span><span><b>mirceta</b> &lt;kristijan.mirceta@gmail.com&gt;</span></div>
+          <div class="gitrow idrow new"><span class="added">NEW</span><span class="tag auth">pushes as</span><span><span class="dot bad"></span> <b>not authenticated</b></span></div>
+        </div>
       </div>
     </div>
-
-    <table>
-      <tr><th>State</th><th>installed</th><th>authenticated</th><th>identity fields</th><th>error</th></tr>
-      <tr><td><span class="dot bad" style="display:inline-block;vertical-align:middle"></span> CLI missing</td><td class="x">false</td><td class="x">false</td><td class="muted">null</td><td>not on PATH</td></tr>
-      <tr><td><span class="dot warn" style="display:inline-block;vertical-align:middle"></span> not authed</td><td class="c">true</td><td class="x">false</td><td class="muted">null</td><td>short reason</td></tr>
-      <tr><td><span class="dot good" style="display:inline-block;vertical-align:middle"></span> authenticated</td><td class="c">true</td><td class="c">true</td><td class="mono">gh: account+host · claude: account+plan</td><td class="muted">null</td></tr>
-    </table>
-
-    <div class="card">
-      <h2 style="margin-top:0">Spec'd scenarios <span class="pill ro">github-account-status</span> <span class="pill cl">claude-account-status</span></h2>
-      <ul class="small">
-        <li>CLI not installed → 200, <code>*Installed:false</code></li>
-        <li>installed but unauthenticated / unreachable → 200, <code>authenticated:false</code> + reason</li>
-        <li>authenticated → 200 with account (+ host / + plan)</li>
-        <li>Claude probe <b>fails soft</b> on a missing/odd login file — never throws</li>
-        <li>a client refresh mid-probe does <b>not</b> cancel either</li>
-        <li>chips sit on the Scoreboard's row (no added height) · collapse persists per-chip · refresh on poll</li>
-        <li>both hidden in Basic mode, shown in Advanced</li>
-      </ul>
-    </div>`,
-
-  'Plan': () => `
-    <h2>Build order</h2>
-    <div class="grid2">
-      <div class="card">
-        <h2 style="margin-top:0">1 · Backend — GitHub</h2>
-        <ul class="small">
-          <li><code>GitHubAccountService</code> — shells <code>gh</code>, PATH, timeout, typed result</li>
-          <li>brief in-memory cache · DI</li>
-          <li><code>GET /api/github-account</code></li>
-        </ul>
-      </div>
-      <div class="card">
-        <h2 style="margin-top:0">2 · Backend — Claude</h2>
-        <ul class="small">
-          <li><code>ClaudeAccountService</code> — resolve <code>claude</code>, read subscription login, fail-soft</li>
-          <li>brief in-memory cache · DI</li>
-          <li><code>GET /api/claude-account</code></li>
-        </ul>
-      </div>
-      <div class="card">
-        <h2 style="margin-top:0">3 · Frontend</h2>
-        <ul class="small">
-          <li>shared chip component → <code>GitHubAccount</code> + <code>ClaudeAccount</code></li>
-          <li>three states each · ~5s poll · per-chip collapse keys</li>
-          <li><code>Dashboard.jsx</code> — header flex row holds Scoreboard + account strip</li>
-          <li>i18n <code>en/tr.json</code> · register <b>Advanced</b> in <code>UiModeContext.jsx</code></li>
-        </ul>
-      </div>
-      <div class="card">
-        <h2 style="margin-top:0">4–5 · Understanding + Verify</h2>
-        <ul class="small">
-          <li>this app (refresh) · no <code>plan.md</code> edits (frozen)</li>
-          <li>builds clean · both probes' 3 states (stubbed) · cache coalesces</li>
-          <li>Playwright: both chips beside Scoreboard, states, per-chip collapse, narrow wraps</li>
-          <li><code>openspec validate --strict</code></li>
-        </ul>
-      </div>
+    <div class="callout">
+      <b>Honest caveat:</b> since identity is global today, these two rows would read the <b>same in every dock</b>.
+      They're still worth showing — they're the <i>effective</i> identity for that repo, so the moment any repo gets a local override they'd correctly diverge.
     </div>
-    <div class="card">
-      <p class="small muted">Status: proposal drafted — now two capabilities (<code>github-account-status</code> + <code>claude-account-status</code>)
-      in change <code>add-github-account-status</code>. The <code>openspec</code> CLI isn't installed on this box, so <code>--strict</code>
-      validation is still pending. Next: <code>/opsx:apply</code>.</p>
-    </div>`
-};
+    <h3 style="font-size:13px;color:var(--soft);margin-top:22px">Proposed global PAT textbox</h3>
+    <div class="mock" style="max-width:520px">
+      <div class="dockhead">GitHub credentials <span class="tag global">global</span></div>
+      <div class="gitrow" style="flex-direction:column;align-items:stretch;gap:8px">
+        <span>Personal access token</span>
+        <span style="font-family:var(--mono);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--soft)">ghp_••••••••••••••••••••••••••••</span>
+        <span><button class="btn primary" type="button" onclick="this.textContent='stored (host: github.com)'">Save token</button></span>
+      </div>
+      <div class="note">Writes one host-keyed token (via GCM <code>credential approve</code> or <code>gh auth login --with-token</code>) that every github.com repo reuses. Sets <b>auth</b>, never the commit author. Stored secret → handled server-side, never echoed back.</div>
+    </div>
+  </section>
 
-// ---- render + interactions ----
-const tabsEl = document.getElementById('tabs');
-const mainEl = document.getElementById('main');
-const names = Object.keys(VIEWS);
-let active = names[0];
-const sim = { gh:'ok', cl:'ok' };
-const col = { gh:false, cl:false };
+</main>
+<script>
+  const TABS = [["two","Two identities"],["scope","Global vs per-repo"],["life","Commit → push lifecycle"],["ui","In the UI"]];
+  const nav = document.getElementById("nav");
+  TABS.forEach(([id,label],i) => {
+    const b = document.createElement("button");
+    b.textContent = label; b.className = i===0?"on":"";
+    b.onclick = () => {
+      document.querySelectorAll("nav button").forEach(x=>x.classList.remove("on"));
+      document.querySelectorAll(".tab").forEach(x=>x.classList.remove("on"));
+      b.classList.add("on");
+      document.querySelector('.tab[data-tab="'+id+'"]').classList.add("on");
+    };
+    nav.appendChild(b);
+  });
 
-function renderTabs(){
-  tabsEl.innerHTML = names.map(n=>`<div class="tab ${n===active?'active':''}" data-n="${n}">${n}</div>`).join('');
-  tabsEl.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{active=t.dataset.n;render();});
-}
-function render(){
-  renderTabs();
-  mainEl.innerHTML = `<div class="view active">${VIEWS[active]()}</div>`;
-  if(active==='Live chips') wireLive();
-  if(active==='Request flow') wireFlow();
-}
-
-function wireLive(){
-  const bars = document.getElementById('bars');
-  bars.innerHTML = [12,20,8,26,16,30,22].map(h=>`<i style="height:${h}px"></i>`).join('');
-  const segGh = document.getElementById('segGh');
-  const segCl = document.getElementById('segCl');
-  function paint(){
-    segGh.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.v===sim.gh));
-    segCl.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.v===sim.cl));
-    document.getElementById('strip').innerHTML =
-      chipHtml(GH, sim.gh, col.gh, 'chipGh') + chipHtml(CL, sim.cl, col.cl, 'chipCl');
-    document.getElementById('jsonGh').innerHTML = jsonHtml(GH.states[sim.gh].json);
-    document.getElementById('jsonCl').innerHTML = jsonHtml(CL.states[sim.cl].json);
-    document.getElementById('noteGh').textContent = GH.states[sim.gh].note;
-    document.getElementById('noteCl').textContent = CL.states[sim.cl].note;
-    const cg = document.getElementById('chipGh'); if(cg) cg.onclick=()=>{col.gh=!col.gh;paint();};
-    const cc = document.getElementById('chipCl'); if(cc) cc.onclick=()=>{col.cl=!col.cl;paint();};
-  }
-  segGh.querySelectorAll('button').forEach(b=>b.onclick=()=>{sim.gh=b.dataset.v;paint();});
-  segCl.querySelectorAll('button').forEach(b=>b.onclick=()=>{sim.cl=b.dataset.v;paint();});
-  paint();
-}
-
-function wireFlow(){
-  const groups = [[...document.querySelectorAll('#flowGh .node')], [...document.querySelectorAll('#flowCl .node')]];
-  document.getElementById('runFlow').onclick = ()=>{
-    groups.flat().forEach(n=>n.classList.remove('lit'));
-    groups.forEach(nodes=>{
-      let i=0;
-      const fwd=setInterval(()=>{
-        if(i>0) nodes[i-1].classList.remove('lit');
-        if(i<nodes.length){ nodes[i].classList.add('lit'); i++; }
-        else { clearInterval(fwd); setTimeout(()=>nodes[nodes.length-1].classList.remove('lit'),500); }
-      },340);
-    });
+  const baseDetails = {
+    gitconfig: '<b>~/.gitconfig</b> (global)<div class="kv">[user]<br>&nbsp;&nbsp;name = mirceta<br>&nbsp;&nbsp;email = kristijan.mirceta@gmail.com</div><div class="note">No <code>[includeIf]</code> section, so identity does not change by directory.</div>',
+    repoA: '<b>birocode/.git/config</b><div class="kv">[remote "origin"]<br>&nbsp;&nbsp;url = https://github.com/mirceta/birocode.git<br><span class="muted"># no [user] section, inherits global</span></div>',
+    repoB: '<b>other-project/.git/config</b><div class="kv"><span class="muted"># no [user] section, inherits global</span></div><div class="note">Same global identity as every other repo.</div>',
+    gcm: '<b>Git Credential Manager</b><div class="kv">credential.helper = manager<br><span class="muted"># system-level, one helper for all repos</span></div><div class="note">Stores tokens in Windows Credential Manager, keyed by host.</div>',
+    host: '<b>github.com entry</b><div class="kv">protocol = https<br>host = github.com<br>password = <span class="muted">&lt;none stored yet&gt;</span></div><div class="note">One token shared by every github.com repo. A push with no token triggers an interactive GCM prompt.</div>'
   };
-}
+  const detail = document.getElementById("detail");
+  let selKey = null;
+  function render(k){
+    selKey = k;
+    document.querySelectorAll("#tree .node").forEach(n=>n.classList.toggle("sel", n.dataset.k===k));
+    let html = baseDetails[k] || "";
+    if (k==="repoA" && document.getElementById("ovr").checked){
+      html = '<b>birocode/.git/config</b><div class="kv" style="border-color:var(--accent)">[remote "origin"] …<br>[user]<br>&nbsp;&nbsp;email = <b>work@company.com</b> <span class="added">&lt;- override</span></div><div class="note">Now <b>this repo only</b> commits as a different identity; the others still inherit global. This is how it becomes per-repo.</div>';
+    }
+    detail.innerHTML = html;
+  }
+  function bindNodes(){ document.querySelectorAll("#tree .node").forEach(n => n.onclick = () => render(n.dataset.k)); }
+  bindNodes();
+  document.getElementById("ovr").onchange = () => {
+    const repoNode = document.querySelector('.node[data-k="repoA"]');
+    repoNode.innerHTML = document.getElementById("ovr").checked
+      ? 'repo: birocode <small>· <span style="color:var(--accent)">local override</span></small>'
+      : 'repo: birocode <small>· inherits</small>';
+    bindNodes();
+    if (selKey==="repoA") render("repoA");
+  };
 
-render();
+  const STEPS = [
+    ["Edit files in the repo", "neither", "Working tree changes. No identity involved yet."],
+    ["git add -A", "neither", "Stage changes. Still no identity."],
+    ["git commit -m …", "commit", "Git stamps the commit with user.name / user.email, the COMMIT identity. The harness passes no identity, so the global config wins."],
+    ["git push", "auth", "Git asks the credential helper (GCM) for a github.com token, the AUTH identity. Pushed with GIT_TERMINAL_PROMPT=0, so a missing token fails fast instead of prompting."],
+    ["Open a PR / GitHub API", "auth", "The same AUTH token (or gh's token) authorizes API calls. The commit author shown on GitHub is still the COMMIT identity from step 3."]
+  ];
+  const stepsEl = document.getElementById("steps");
+  let cur = 0;
+  function paint(){
+    stepsEl.innerHTML = "";
+    STEPS.forEach(([t,w,d],i) => {
+      const el = document.createElement("div");
+      el.className = "step" + (i===cur?" active":"");
+      const wlabel = w==="commit"?"uses COMMIT identity":w==="auth"?"uses AUTH identity":"no identity";
+      el.innerHTML = '<div class="num">'+(i+1)+'</div><div><div><b>'+t+'</b></div>'+
+        '<div class="which '+w+'">'+wlabel+'</div>'+
+        (i===cur?'<div class="note" style="margin-top:6px">'+d+'</div>':'')+'</div>';
+      stepsEl.appendChild(el);
+    });
+  }
+  document.getElementById("next").onclick = () => { cur=Math.min(cur+1,STEPS.length-1); paint(); };
+  document.getElementById("prev").onclick = () => { cur=Math.max(cur-1,0); paint(); };
+  document.getElementById("reset").onclick = () => { cur=0; paint(); };
+  paint();
 </script>
 </body>
 </html>
