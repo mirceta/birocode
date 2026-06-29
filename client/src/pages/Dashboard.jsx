@@ -14,6 +14,7 @@ import WaitingBadge from '../components/dashboard/WaitingBadge';
 import WaitingOnField from '../components/dashboard/WaitingOnField';
 import IdeasPanel from '../components/ideas/IdeasPanel';
 import Scoreboard from '../components/dashboard/Scoreboard';
+import AccountChips from '../components/dashboard/AccountChips';
 import AutopilotPanel from '../components/dashboard/AutopilotPanel';
 import './dashboard.css';
 
@@ -385,6 +386,9 @@ export default function Dashboard({ onClose }) {
   // (plans/autopilot-to-harness.md) only when its feature is on; otherwise it's
   // absent and the layout is just Ideas + agents, exactly as before.
   const autopilotOn = useFeature('autopilotTab');
+  // Account-status chips sit beside the Scoreboard on its row (openspec
+  // add-account-status); Advanced-only, so Basic mode is unchanged.
+  const accountChipsOn = useFeature('accountChips');
   // The panels the free 2D drag layout manages, in DOM order. Autopilot leads so
   // it sits on top in grid-mode flow. (The task graph used to be a citizen here;
   // it now lives as a tab inside Ideas — plans/ideas-taskgraph-merge.md. Files is
@@ -1092,7 +1096,10 @@ export default function Dashboard({ onClose }) {
               </button>
             </div>
           )}
-      <Scoreboard />
+      <div className="dash__scoreboard-row">
+        <Scoreboard />
+        {accountChipsOn && <AccountChips />}
+      </div>
       {tabs.length === 0 ? (
         <p className="dash__empty">{t('dashboard.empty')}</p>
       ) : onlyImportant && importantCount === 0 ? (

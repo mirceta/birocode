@@ -1,4 +1,5 @@
 using ClaudeWeb.Models;
+using ClaudeWeb.Services.Accounts;
 using ClaudeWeb.Services.Analytics;
 using ClaudeWeb.Services.ArchPlan;
 using ClaudeWeb.Services.Autopilot;
@@ -168,6 +169,7 @@ public class EmbeddedApi
             builder.Services.AddDeployModule(); // deployments tab (plans/deployments-tab.md)
             builder.Services.AddExposeModule(); // exposure check (plans/product-onboarding.md)
             builder.Services.AddAnalyticsModule(); // scoreboard (plans/scoreboard-analytics.md)
+            builder.Services.AddAccountsModule(); // dashboard account chips: gh + claude identity (openspec add-account-status)
             builder.Services.AddAutopilotModule(); // loop-autopilot discovery (plans/loop-autopilot.md)
             builder.Services.AddTaskGraphModule(); // task dependency graph (plans/task-dependency-graph.md)
             builder.Services.AddStructuredAskModule(); // discover local apps (openspec discover-local-apps)

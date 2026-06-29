@@ -103,6 +103,15 @@ public class GitController : ControllerBase
                 baseDriftAhead = s.BaseDriftAhead,
                 baseDriftBehind = s.BaseDriftBehind,
                 fetchedAt = s.FetchedAt,
+                // Effective commit identity for this repo (openspec
+                // add-git-identity-surface): who commits here are authored as,
+                // with scope = local | global | unset.
+                commitIdentity = new
+                {
+                    name = s.CommitIdentity.Name,
+                    email = s.CommitIdentity.Email,
+                    scope = s.CommitIdentity.Scope,
+                },
                 // A chat run mutating this repo right now: git actions are
                 // rejected (and greyed out) while true (plans/git-actions.md).
                 busy = _runs.IsBusy(repo.Id),
