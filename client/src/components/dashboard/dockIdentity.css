@@ -5,7 +5,11 @@
    --color-danger, so the green/amber status tones are local literals (same choice
    as accountChips.css). */
 .dock-id {
-  flex: 0 1 190px;
+  /* Grow to claim the spare row width (and bias it over the branch summary, which
+     needs little) so "commits as <name email>" and "pushes as …" show in full
+     instead of ellipsizing. Still min-width:0 so it truncates gracefully when a
+     narrow dock genuinely can't fit it. */
+  flex: 3 1 240px;
   min-width: 0;
   display: flex;
   flex-direction: column;
