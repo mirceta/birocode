@@ -62,6 +62,21 @@ public partial class GitHubAccountService
         return status;
     }
 
+    /// <summary>Force a fresh probe and replace the cache. Called right after a
+    /// credential is established (openspec add-git-identity-surface) so the cached
+    /// status — and the dashboard chip on its next poll — reflects the new login
+    /// immediately instead of waiting out the previous (unauthenticated) cache.</summary>
+    public GitHubAccountStatus Refresh()
+    {
+        var status = Probe();
+        lock (_gate)
+        {
+            _cached = status;
+            _cachedAtUtc = DateTime.UtcNow;
+        }
+        return status;
+    }
+
     private GitHubAccountStatus Probe()
     {
         var gh = ProcessProbe.ResolveOnPath("gh");

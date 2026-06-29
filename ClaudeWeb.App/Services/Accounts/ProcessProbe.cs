@@ -56,14 +56,19 @@ public static class ProcessProbe
     /// <paramref name="timeoutMs"/>. Never throws for a normal non-zero exit; a spawn
     /// failure surfaces as a TimedOut=false result with a non-zero exit and the
     /// exception text in StdErr so callers can degrade to a typed status.
+    ///
+    /// When <paramref name="stdin"/> is supplied it is written to the child's standard
+    /// input and the stream is closed — the secret-safe way to hand a token to
+    /// <c>gh auth login --with-token</c> (never on argv, never in an env var).
     /// </summary>
-    public static Result Run(string filePath, IReadOnlyList<string> args, int timeoutMs)
+    public static Result Run(string filePath, IReadOnlyList<string> args, int timeoutMs, string? stdin = null)
     {
         var psi = new ProcessStartInfo
         {
             FileName = filePath,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            RedirectStandardInput = stdin is not null,
             UseShellExecute = false,
             CreateNoWindow = true,
             StandardOutputEncoding = Encoding.UTF8,
@@ -78,6 +83,13 @@ public static class ProcessProbe
         {
             using var process = new Process { StartInfo = psi };
             process.Start();
+
+            // Hand the secret over stdin, then close it so the child can proceed.
+            if (stdin is not null)
+            {
+                using var input = process.StandardInput;
+                input.Write(stdin);
+            }
 
             // Read both streams asynchronously so a chatty child cannot deadlock
             // against a full pipe while we wait on the timeout.

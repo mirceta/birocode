@@ -157,12 +157,49 @@ public partial class GitService
     }
 
     public sealed record StatusFile(string Path, string Index, string Worktree, bool Untracked, bool Conflicted);
+
+    /// <summary>The identity this repo's commits would be authored as (openspec
+    /// add-git-identity-surface). <see cref="Scope"/> is "local" when it comes from
+    /// the repo's own .git/config, "global" when it comes from an outer (user/system)
+    /// config, and "unset" when no identity resolves (Name/Email then null).</summary>
+    public sealed record CommitIdentity(string? Name, string? Email, string Scope);
+
     public sealed record StatusResult(
         string Branch, string? Upstream, int Ahead, int Behind, IReadOnlyList<StatusFile> Files,
         bool Fetched, string? FetchError,
         string? BaseBranch, int BaseAhead, int BaseBehind,
         string? LocalBaseBranch, string? OriginBaseBranch, int OriginBaseAhead, int OriginBaseBehind,
-        int BaseDriftAhead, int BaseDriftBehind, DateTime? FetchedAt);
+        int BaseDriftAhead, int BaseDriftBehind, DateTime? FetchedAt,
+        CommitIdentity CommitIdentity);
+
+    /// <summary>Effective commit identity for a repo, read-only. Scope is decided by
+    /// asking the repo-local config first (a local user.* means a per-repo override);
+    /// otherwise an effective value comes from an outer/global config. Any failure
+    /// degrades to "unset" so it can never break the status call.</summary>
+    private CommitIdentity ReadCommitIdentity(string workingDir)
+    {
+        try
+        {
+            var name = RunGit(workingDir, "config --get user.name").StdOut.Trim();
+            var email = RunGit(workingDir, "config --get user.email").StdOut.Trim();
+            if (name.Length == 0 && email.Length == 0)
+                return new CommitIdentity(null, null, "unset");
+
+            var localName = RunGit(workingDir, "config --local --get user.name").StdOut.Trim();
+            var localEmail = RunGit(workingDir, "config --local --get user.email").StdOut.Trim();
+            var scope = localName.Length > 0 || localEmail.Length > 0 ? "local" : "global";
+
+            return new CommitIdentity(
+                name.Length == 0 ? null : name,
+                email.Length == 0 ? null : email,
+                scope);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[GIT] Commit-identity read failed: {ex.Message}");
+            return new CommitIdentity(null, null, "unset");
+        }
+    }
 
     /// <summary>
     /// Read-only working-tree status (plans/git-tab.md): current branch,
@@ -255,7 +292,8 @@ public partial class GitService
         return new StatusResult(branch, upstream, ahead, behind, files, fetched, fetchError,
             baseBranch, baseAhead, baseBehind,
             origin.LocalBase, origin.OriginBase, origin.Ahead, origin.Behind,
-            origin.DriftAhead, origin.DriftBehind, FetchHeadTime(workingDir));
+            origin.DriftAhead, origin.DriftBehind, FetchHeadTime(workingDir),
+            ReadCommitIdentity(workingDir));
     }
 
     /// <summary>

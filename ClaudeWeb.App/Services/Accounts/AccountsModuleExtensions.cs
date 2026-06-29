@@ -12,6 +12,9 @@ public static class AccountsModuleExtensions
     {
         services.AddSingleton<GitHubAccountService>();
         services.AddSingleton<ClaudeAccountService>();
+        // Write-only credential control (openspec add-git-identity-surface): reuses
+        // the GitHub probe to re-derive the account after establishing a token.
+        services.AddSingleton<GitHubCredentialsService>();
         return services;
     }
 }
