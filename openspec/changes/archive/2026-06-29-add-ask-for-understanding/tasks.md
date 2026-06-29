@@ -45,9 +45,9 @@
       (per `docs/understanding-app-convention.md`) — it is non-trivial, so visualize the
       click → fork → snapshot-resume → Understanding-app → Console flow.
 - [x] 4.2 `npm --prefix client run build` clean; backend builds clean.
-- [ ] 4.3 Browser-verify (Playwright, `docs/claude-web/browser-testing.md`): with the gateway
+- [x] 4.3 Browser-verify (Playwright, `docs/claude-web/browser-testing.md`): with the gateway
       running, press the button in a dock that has a conversation, confirm a `understanding`
       job appears in the Console, completes, and `understanding-app/index.html` is
       (re)written; confirm the live conversation is untouched. Verify disabled state with no
       conversation and the gateway-down error path.
-- [ ] 4.4 Deploy to live `:5099` via `swap.ps1`, re-verify, then `keep.ps1`.
+- [x] 4.4 Deploy to live `:5099` via `swap.ps1`, re-verify, then `keep.ps1`.
