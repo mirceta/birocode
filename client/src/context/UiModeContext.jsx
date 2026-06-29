@@ -57,6 +57,7 @@ export const FEATURES = {
   paneSpanButtons: 'advanced', // -/+ span steppers in each multi-pane top bar; reuses the Settings tabWidths span (openspec: add-pane-span-buttons)
   operatorMessages: 'advanced', // Operator messages drawer: consolidated list of the active conversation's user-role messages (openspec: add-operator-message-history)
   codeHighlight: 'advanced', // IDE line-number gutter for code/text files + C# token coloring in the Files viewer (openspec: add-cs-syntax-highlighting)
+  accountChips: 'advanced', // dashboard GitHub + Claude account-status chips beside the Scoreboard (openspec: add-account-status)
 };
 
 const MODE_KEY = 'claudeweb_ui_mode';
