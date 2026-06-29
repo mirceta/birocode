@@ -671,5 +671,7 @@
   "files.zoom": "Folder tree zoom",
   "files.zoomIn": "Zoom in",
   "files.zoomOut": "Zoom out",
-  "files.zoomReset": "Reset zoom to 100%"
+  "files.zoomReset": "Reset zoom to 100%",
+  "files.hideGeneratedTitle": "Hide bin/obj folders (C# build output)",
+  "files.hideCsprojTitle": "Hide .csproj files (C# project files)"
 }
