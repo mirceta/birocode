@@ -58,6 +58,8 @@ export const FEATURES = {
   operatorMessages: 'advanced', // Operator messages drawer: consolidated list of the active conversation's user-role messages (openspec: add-operator-message-history)
   codeHighlight: 'advanced', // IDE line-number gutter for code/text files + C# token coloring in the Files viewer (openspec: add-cs-syntax-highlighting)
   accountChips: 'advanced', // dashboard GitHub + Claude account-status chips beside the Scoreboard (openspec: add-account-status)
+  gitIdentityRows: 'advanced', // per-dock "commits as / pushes as" identity rows in the git section (openspec: add-git-identity-surface)
+  githubTokenControl: 'advanced', // write-only PAT control in the GitHub chip to set the global credential (openspec: add-git-identity-surface)
 };
 
 const MODE_KEY = 'claudeweb_ui_mode';

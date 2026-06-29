@@ -1,0 +1,79 @@
+/* Agent-dock git identity rows (openspec add-git-identity-surface): two compact
+   "who" lines under the dock's branch/ahead-behind summary. Mirrors the muted,
+   monospace-ish density of the surrounding git furniture. The theme ships only
+   --color-danger, so the green/amber status tones are local literals (same choice
+   as accountChips.css). */
+.dock-id {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--color-border);
+  font-size: 11.5px;
+}
+
+.dock-id__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.dock-id__key {
+  flex: none;
+  color: var(--color-text-soft, #777);
+  font-weight: 600;
+}
+
+.dock-id__val {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--color-text);
+}
+
+.dock-id__val--muted {
+  color: var(--color-text-soft, #777);
+}
+
+.dock-id__badge {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 5px;
+  border: 1px solid var(--color-border);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-soft, #777);
+}
+
+/* A per-repo override is the noteworthy case — tint it with the brand accent so it
+   stands out against the unremarkable "global". */
+.dock-id__badge--local {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.dock-id__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-text-soft, #777);
+}
+
+.dock-id__dot--ok {
+  background: #2e7d32;
+}
+.dock-id__dot--unauth {
+  background: #b7791f;
+}
+.dock-id__dot--missing {
+  background: var(--color-danger);
+}
+.dock-id__dot--loading {
+  background: var(--color-text-soft, #777);
+}

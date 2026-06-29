@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { apiGet } from '../../api/client';
 import { useT } from '../../i18n/LanguageContext';
+import { useFeature } from '../../context/UiModeContext';
+import GitHubTokenControl from './GitHubTokenControl';
 import './accountChips.css';
 
 // Dashboard account-status chips (openspec add-account-status): two compact,
@@ -163,18 +165,22 @@ export default function AccountChips() {
   const { t } = useT();
   const github = useAccountProbe('/github-account');
   const claude = useAccountProbe('/claude-account');
+  const tokenControlOn = useFeature('githubTokenControl');
 
   const gh = githubView(github, t);
   const cl = claudeView(claude, t);
 
   return (
     <div className="acct-strip" aria-label={t('account.title')}>
-      <AccountChip
-        kind="github"
-        title={t('account.github.title')}
-        collapseKey="claudeweb_github_account_collapsed"
-        {...gh}
-      />
+      <div className="acct-col">
+        <AccountChip
+          kind="github"
+          title={t('account.github.title')}
+          collapseKey="claudeweb_github_account_collapsed"
+          {...gh}
+        />
+        {tokenControlOn && <GitHubTokenControl />}
+      </div>
       <AccountChip
         kind="claude"
         title={t('account.claude.title')}
