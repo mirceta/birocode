@@ -70,7 +70,8 @@ public class UnderstandingAsk
                 "Claude Monitor gateway is not running on localhost:5123. " +
                 "Start birokrat-ai-platform\\ClaudeMonitor\\ClaudeMonitor.App.");
 
-        var resp = await claude.ResumeFromSnapshot(snapshotPath, Prompt, workingDirectory, ct);
+        var resp = await claude.ResumeFromSnapshot(
+            snapshotPath, BuildPrompt(workingDirectory), workingDirectory, ct);
         if (resp is null)
             return UnderstandingResult.Fail("null response from gateway");
         if (!resp.Success)
@@ -83,14 +84,25 @@ public class UnderstandingAsk
     // so the prompt does not re-paste it — it just directs the build (design.md
     // decision 3). Kept in lockstep with docs/understanding-app-convention.md, which
     // the agent is told to read and follow as the source of truth.
-    private const string Prompt = @"
+    //
+    // The convention doc lives ONLY in birocode (the canonical Harness repo). When this
+    // run fires from a DIFFERENT repo, "docs/understanding-app-convention.md in this
+    // repository" points at a file that doesn't exist there. So we resolve birocode's
+    // copy by absolute path (see <see cref="ResolveConventionDoc"/>) and inject it.
+    private static string BuildPrompt(string workingDirectory)
+    {
+        var conventionRef = ResolveConventionDoc(workingDirectory) is { } abs
+            ? $"the Understanding-app convention at **{abs}**"
+            : "**docs/understanding-app-convention.md** in this repository";
+
+        return $@"
 You are continuing THIS conversation. Your job now is to build the repository's
 **Understanding app** so it visually explains your most recent reply in this
 conversation — the turn the user just read.
 
-1. Read **docs/understanding-app-convention.md** in this repository and follow it
+1. Read {conventionRef} and follow it
    EXACTLY. It is the source of truth for what the Understanding app is and where it
-   lives.
+   lives. Build the app in THIS repo (your working directory), not where the doc lives.
 2. Focus on the **most recent assistant turn** in this conversation: what was just
    explained. Build an app that makes that explanation clear with diagrams, demos,
    and a thorough, interactive visual explanation — not a static wall of text.
@@ -103,4 +115,34 @@ conversation — the turn the user just read.
 Do not modify anything outside understanding-app/. When done, briefly confirm what
 you built.
 ";
+    }
+
+    // Resolve the canonical Understanding-app convention doc, which lives only in the
+    // birocode repo. We cannot hard-code an absolute path — birocode sits at a different
+    // place on every machine. The one invariant the user guarantees: every repo this
+    // runs from is a DESCENDANT of a folder named "playground", and birocode is a DIRECT
+    // CHILD of that same playground folder. So walk up the ancestors from the firing
+    // repo to the nearest "playground", then descend into birocode/docs.
+    //
+    // Returns null when no "playground" ancestor exists or the doc isn't there, so the
+    // caller can fall back to the relative reference (correct when firing from birocode
+    // itself, whose own ancestor walk lands back on its own copy anyway).
+    private static string? ResolveConventionDoc(string workingDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(workingDirectory))
+            return null;
+
+        for (var dir = new DirectoryInfo(Path.GetFullPath(workingDirectory));
+             dir is not null; dir = dir.Parent)
+        {
+            if (!string.Equals(dir.Name, "playground", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var candidate = Path.Combine(
+                dir.FullName, "birocode", "docs", "understanding-app-convention.md");
+            return File.Exists(candidate) ? candidate : null;
+        }
+
+        return null;
+    }
 }

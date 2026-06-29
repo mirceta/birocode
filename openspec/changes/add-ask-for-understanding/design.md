@@ -83,6 +83,24 @@ The prompt therefore does not re-paste the conversation; it instructs the agent 
   that turn with demos / diagrams / a thorough interactive explanation;
 - keep it build-less, self-contained, and **relative-URL only** (the proxy sub-path contract).
 
+#### 3a. Cross-repo convention pointer — resolve birocode by the `playground` ancestor
+
+The convention doc (`docs/understanding-app-convention.md`) lives **only in birocode**, the
+canonical Harness repo. But this button can fire from **any** registered repo, whose working
+directory is the run's CWD. Telling the fork to read "`docs/understanding-app-convention.md`
+in this repository" then points at a file that doesn't exist in a non-birocode repo, and the
+agent either guesses the convention or skips it.
+
+We cannot hard-code birocode's absolute path — it sits at a different place on every machine.
+The one invariant we rely on: **every repo lives under a folder named `playground`, and
+birocode is a direct child of that same `playground`.** So `UnderstandingAsk.ResolveConventionDoc`
+walks the firing repo's **ancestors** up to the nearest directory named `playground`, then
+descends into `birocode/docs/understanding-app-convention.md`, and injects that **absolute path**
+into the prompt. Firing from birocode itself resolves to its own copy, so the path is uniform.
+When no `playground` ancestor exists (or the doc isn't there), we fall back to the relative
+phrasing. The prompt also now states explicitly: build the app in **this** repo (the working
+directory), not where the doc lives — since the doc and the target repo can now differ.
+
 ### 4. Backend-owned, latest-only, observable (reuse the Discover model)
 
 - A new per-repo job registry (modeled on `LocalAppDiscoveryJobs`): `StartOrJoin(repoId,

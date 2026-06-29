@@ -52,17 +52,32 @@ run's working directory SHALL be the repo root.
 
 ### Requirement: The forked agent builds the repo's Understanding app for the latest turn
 
-The continuation prompt SHALL instruct the forked agent to follow the repo's Understanding-app
+The continuation prompt SHALL instruct the forked agent to follow the Understanding-app
 convention (`docs/understanding-app-convention.md`) and to author the repo's Understanding app
 (`understanding-app/index.html` at the repo root, build-less, self-contained, relative-URL only)
 so that it visually clarifies the most recent assistant turn of the conversation with demos,
 diagrams, and a thorough visual explanation. Because the working directory is the repo root, the
 output SHALL land where the Local tab's always-on Understanding app serves it.
 
+Because the convention document lives only in the canonical Harness repo (birocode) yet the run
+can fire from any repo, the system SHALL resolve the convention document's location and pass it
+into the prompt rather than assuming it exists in the firing repo. The system SHALL resolve it by
+walking the firing repo's ancestor directories up to the nearest one named `playground` and
+descending into `birocode/docs/understanding-app-convention.md` (birocode being a direct child of
+`playground`), passing that absolute path into the prompt. When no such document can be resolved,
+the system SHALL fall back to referencing the convention relative to the firing repo. The prompt
+SHALL direct the agent to build the Understanding app in the firing repo (the working directory),
+not where the convention document lives.
+
 #### Scenario: Understanding app is produced for the latest turn
 
 - **WHEN** an understanding run completes successfully
 - **THEN** `understanding-app/index.html` at the repo root is written/overwritten to visually explain the conversation's most recent assistant turn
+
+#### Scenario: Convention pointer resolves across repos
+
+- **WHEN** the run fires from a repo other than birocode that shares a `playground` ancestor with birocode
+- **THEN** the prompt references the convention document at birocode's absolute path under that `playground` ancestor, and instructs the agent to build the app in the firing repo
 
 #### Scenario: Output is servable by the Local tab
 
