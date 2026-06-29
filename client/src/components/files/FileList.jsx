@@ -5,6 +5,8 @@ import { useLongPress } from '../../hooks/useLongPress';
 const INDENT_BASE = 14; // .file-row horizontal padding (px)
 const INDENT_STEP = 14; // extra indent per tree depth (px)
 const OVERSIZE_LINES = 500; // files past this get a refactor warning (plans/file-size-warnings.md)
+const GENERATED_DIRS = new Set(['bin', 'obj']); // C# build output, hidden when the toggle is on
+const isCsproj = (name) => name.toLowerCase().endsWith('.csproj'); // C# project files, hidden when their toggle is on
 
 function formatSize(bytes) {
   if (bytes == null || Number.isNaN(bytes)) return '';
@@ -73,7 +75,7 @@ function TreeRow({ entry, path, depth, isExpanded, onToggleDir, onOpenFile, onRe
 // while there is nothing to show, otherwise the entries (recursing into any
 // expanded subfolders). The root's loading/error is handled by the page with
 // the full-size Loading/ErrorBanner instead.
-function TreeChildren({ parentPath, depth, nodes, expanded, onToggleDir, onOpenFile, onReferenceFile, onRetryDir, t }) {
+function TreeChildren({ parentPath, depth, nodes, expanded, onToggleDir, onOpenFile, onReferenceFile, onRetryDir, hideGenerated, hideCsproj, t }) {
   const node = nodes[parentPath];
 
   if (!node || node.state === 'loading') {
@@ -101,7 +103,11 @@ function TreeChildren({ parentPath, depth, nodes, expanded, onToggleDir, onOpenF
     );
   }
 
-  return node.entries.map((entry) => {
+  let entries = node.entries;
+  if (hideGenerated) entries = entries.filter((e) => !(e.type === 'dir' && GENERATED_DIRS.has(e.name)));
+  if (hideCsproj) entries = entries.filter((e) => !(e.type !== 'dir' && isCsproj(e.name)));
+
+  return entries.map((entry) => {
     const path = joinPath(parentPath, entry.name);
     const isExpanded = entry.type === 'dir' && expanded.has(path);
     return (
@@ -125,6 +131,8 @@ function TreeChildren({ parentPath, depth, nodes, expanded, onToggleDir, onOpenF
             onOpenFile={onOpenFile}
             onReferenceFile={onReferenceFile}
             onRetryDir={onRetryDir}
+            hideGenerated={hideGenerated}
+            hideCsproj={hideCsproj}
             t={t}
           />
         )}
@@ -135,7 +143,7 @@ function TreeChildren({ parentPath, depth, nodes, expanded, onToggleDir, onOpenF
 
 // VS Code-style explorer tree rooted at "/". The page guarantees the root
 // node is loaded before rendering this (see Files.jsx).
-export default function FileTree({ nodes, expanded, onToggleDir, onOpenFile, onReferenceFile, onRetryDir }) {
+export default function FileTree({ nodes, expanded, onToggleDir, onOpenFile, onReferenceFile, onRetryDir, hideGenerated = false, hideCsproj = false }) {
   const { t } = useT();
   const root = nodes['/'];
 
@@ -164,6 +172,8 @@ export default function FileTree({ nodes, expanded, onToggleDir, onOpenFile, onR
           onOpenFile={onOpenFile}
           onReferenceFile={onReferenceFile}
           onRetryDir={onRetryDir}
+          hideGenerated={hideGenerated}
+          hideCsproj={hideCsproj}
           t={t}
         />
       </div>
