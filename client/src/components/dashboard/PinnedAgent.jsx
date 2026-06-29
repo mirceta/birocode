@@ -519,6 +519,44 @@ export default function PinnedAgent({
             {showIdentityRows && (
               <DockIdentityRows commitIdentity={git.commitIdentity} repoId={tab.repoId} />
             )}
+            {showGitActions && ga && (
+              <div className="phone__git-actions" role="group" aria-label={t('dashboard.gitActions')}>
+                {!ga.onBase && (
+                  <button
+                    type="button"
+                    className="phone__git-action"
+                    disabled={!ga.canMerge || !!gitActing || gitRefreshing}
+                    onClick={() => runGitAction('merge', '/git/merge-base')}
+                  >
+                    {gitActing === 'merge'
+                      ? t('dashboard.gitActing')
+                      : t('dashboard.gitMerge', { base: ga.base || 'main' })}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="phone__git-action"
+                  disabled={!ga.canPullMain || !!gitActing || gitRefreshing}
+                  onClick={() => runGitAction('pullMain', pullMainPath(ga.onBase))}
+                >
+                  {gitActing === 'pullMain'
+                    ? t('dashboard.gitActing')
+                    : t('dashboard.gitPullMain', { base: ga.base || 'main' })}
+                </button>
+                {!ga.onBase && (
+                  <button
+                    type="button"
+                    className="phone__git-action"
+                    disabled={!ga.canPullBranch || !!gitActing || gitRefreshing}
+                    onClick={() => runGitAction('pullBranch', '/git/pull-current')}
+                  >
+                    {gitActing === 'pullBranch'
+                      ? t('dashboard.gitActing')
+                      : t('dashboard.gitPullBranch')}
+                  </button>
+                )}
+              </div>
+            )}
             {onRefreshGit && (
               <button
                 type="button"
@@ -532,44 +570,6 @@ export default function PinnedAgent({
               </button>
             )}
           </div>
-          {showGitActions && ga && (
-            <div className="phone__git-actions" role="group" aria-label={t('dashboard.gitActions')}>
-              {!ga.onBase && (
-                <button
-                  type="button"
-                  className="phone__git-action"
-                  disabled={!ga.canMerge || !!gitActing || gitRefreshing}
-                  onClick={() => runGitAction('merge', '/git/merge-base')}
-                >
-                  {gitActing === 'merge'
-                    ? t('dashboard.gitActing')
-                    : t('dashboard.gitMerge', { base: ga.base || 'main' })}
-                </button>
-              )}
-              <button
-                type="button"
-                className="phone__git-action"
-                disabled={!ga.canPullMain || !!gitActing || gitRefreshing}
-                onClick={() => runGitAction('pullMain', pullMainPath(ga.onBase))}
-              >
-                {gitActing === 'pullMain'
-                  ? t('dashboard.gitActing')
-                  : t('dashboard.gitPullMain', { base: ga.base || 'main' })}
-              </button>
-              {!ga.onBase && (
-                <button
-                  type="button"
-                  className="phone__git-action"
-                  disabled={!ga.canPullBranch || !!gitActing || gitRefreshing}
-                  onClick={() => runGitAction('pullBranch', '/git/pull-current')}
-                >
-                  {gitActing === 'pullBranch'
-                    ? t('dashboard.gitActing')
-                    : t('dashboard.gitPullBranch')}
-                </button>
-              )}
-            </div>
-          )}
           {showGitActions && ga?.busy && (
             <div className="phone__git-hint">{t('git.actBusy')}</div>
           )}

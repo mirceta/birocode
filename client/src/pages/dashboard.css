@@ -1076,10 +1076,15 @@
   flex: 1 1 auto;
 }
 
-/* Inward-sync buttons in the dock git row — same actions as the Git tab. */
+/* Inward-sync buttons in the dock git row — same actions as the Git tab. They live
+   inside .phone__git-top as a right-side column (openspec add-git-identity-surface):
+   stacked on the right so they parallel the branch summary's height instead of adding
+   a row below it, conserving vertical space for chat. */
 .phone__git-actions {
+  flex: 0 0 auto;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: stretch;
   gap: 6px;
 }
 
@@ -1093,6 +1098,8 @@
   font-size: 11.5px;
   font-weight: 600;
   line-height: 1.5;
+  text-align: center;
+  white-space: nowrap;
   cursor: pointer;
 }
 
