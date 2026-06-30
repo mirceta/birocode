@@ -38,7 +38,7 @@
   .src .acts{display:flex;gap:6px}
   button{background:var(--panel2);color:var(--ink);border:1px solid var(--edge);border-radius:7px;padding:6px 11px;cursor:pointer;font-size:12.5px}
   button:hover{border-color:var(--accent)} button.primary{background:var(--accent);color:#08111f;border:none;font-weight:600}
-  #snd{padding:4px 9px;font-size:12px} #snd.on{border-color:var(--good);color:var(--good)}
+  #snd,#hsnd{padding:4px 9px;font-size:12px} #snd.on,#hsnd.on{border-color:var(--good);color:var(--good)}
   button:disabled{opacity:.5;cursor:default}
   .addform{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--panel);border:1px dashed var(--edge);border-radius:9px;padding:10px 12px;margin-bottom:16px}
   input{background:#0a0f16;border:1px solid var(--edge);border-radius:7px;color:var(--ink);padding:7px 10px;font:inherit;font-size:13px}
@@ -74,7 +74,8 @@
     <span><span class="dot" id="dot"></span><span id="status">connecting</span></span>
     <span>watermark <b id="wm">-1</b></span>
     <span>events <b id="count">0</b></span>
-    <button id="snd" title="Play a sound on each new event">🔇 Sound off</button>
+    <button id="snd" title="Play a sound in THIS browser on each new event">🔇 Device</button>
+    <button id="hsnd" title="Beep on the HOST computer (running the harness) on each new event">🖥️ Host off</button>
   </div>
 </header>
 <main>
@@ -132,7 +133,7 @@ function blip(i){
 }
 function playForNew(n){ const k = Math.min(n, 4); for (let i = 0; i < k; i++) blip(i); }
 const btnSnd = document.getElementById("snd");
-function renderSnd(){ btnSnd.textContent = soundOn ? "🔊 Sound on" : "🔇 Sound off"; btnSnd.classList.toggle("on", soundOn); }
+function renderSnd(){ btnSnd.textContent = soundOn ? "🔈 Device" : "🔇 Device"; btnSnd.classList.toggle("on", soundOn); }
 btnSnd.onclick = () => {
   soundOn = !soundOn;
   if (soundOn){ unlockAudio(); blip(0); }                // a confirmation blip
@@ -142,6 +143,23 @@ btnSnd.onclick = () => {
 // If sound was left on from a previous visit, unlock on the first gesture anywhere.
 window.addEventListener("pointerdown", unlockAudio, { once: true });
 renderSnd();
+
+// --- host-side beep (server plays it on the computer running the harness) ----
+// This is a backend toggle (GET/POST /api/collector/sound), shared by everyone, not
+// a per-browser setting — it beeps on the host regardless of any open browser.
+let hostOn = false;
+const btnHost = document.getElementById("hsnd");
+function renderHost(){ btnHost.textContent = hostOn ? "🖥️ Host on" : "🖥️ Host off"; btnHost.classList.toggle("on", hostOn); }
+async function loadHost(){
+  try { const r = await fetch(`${API}/collector/sound`, { headers: { Accept: "application/json" } });
+    if (r.ok){ hostOn = !!(await r.json()).on; renderHost(); } } catch {}
+}
+btnHost.onclick = async () => {
+  const next = !hostOn;
+  try { const r = await fetch(`${API}/collector/sound`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ on: next }) });
+    if (r.ok){ hostOn = !!(await r.json()).on; renderHost(); } } catch {}
+};
+renderHost(); loadHost();
 
 function setStatus(t, cls){ elStatus.textContent = t; elDot.className = "dot" + (cls ? " " + cls : ""); }
 function esc(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
