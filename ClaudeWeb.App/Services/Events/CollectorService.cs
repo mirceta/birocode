@@ -71,16 +71,24 @@ public class CollectorService
         public string? ProtectedCredential;     // encrypted at rest; null = none
 
         // runtime (not persisted)
-        public string Status = "idle";          // idle | connecting | active | stopped | error
+        // Status:  idle | connecting | active | needs-credential | unreachable | error | stopped
+        //   active           = pulling events
+        //   needs-credential = the host answered but rejected auth (alive, just needs a credential)
+        //   unreachable      = no HTTP answer (DNS / refused / timed out)
+        //   error            = answered with an unexpected HTTP status / body
+        public string Status = "idle";
         public string? LastError;
         public long LastPolledAtMs;
+        public bool Alive;                      // did the host answer an HTTP request at all
         public int Watermark = -1;              // into THIS source's own seq space
     }
 
-    /// <summary>What the API exposes for a source — never the credential.</summary>
+    /// <summary>What the API exposes for a source — never the credential. <see cref="Alive"/>
+    /// is true whenever the host answered (even with a 401), so the UI can say "alive but
+    /// needs a credential" rather than treating it as dead.</summary>
     public sealed record SourceView(
         string Id, string Label, string Address, string Kind, bool Active,
-        string Status, int LastSeq, string? LastError, long LastPolledAt);
+        string Status, int LastSeq, string? LastError, long LastPolledAt, bool Alive);
 
     /// <summary>An aggregated event: the producer envelope (<see cref="Type"/>,
     /// <see cref="Source"/>, <see cref="At"/>, <see cref="Data"/>) plus which registered
@@ -125,9 +133,11 @@ public class CollectorService
 
     // ---- mutations (the collector's OWN subscription list only) -------------
 
-    /// <summary>Register a remote source and start it. Returns the new source view
-    /// (never the credential). Throws ArgumentException on a blank address.</summary>
-    public SourceView AddSource(string? address, string? label, string? credential)
+    /// <summary>Register a remote source, start it, and immediately probe it so the
+    /// returned view already reflects reality (active / needs-credential / unreachable)
+    /// instead of a bare "connecting". Returns the new source view (never the credential).
+    /// Throws ArgumentException on a blank address.</summary>
+    public async Task<SourceView> AddSourceAsync(string? address, string? label, string? credential, CancellationToken ct = default)
     {
         var addr = NormalizeAddress(address);
         if (addr.Length == 0) throw new ArgumentException("Address is required.");
@@ -149,6 +159,10 @@ public class CollectorService
             Save();
         }
         _logger.Info($"[COLLECTOR] added source {src.Label} ({src.Address})");
+
+        // Status-only probe (no event append, watermark untouched) so the operator gets
+        // an instant verdict. Bounded by the HttpClient timeout; never throws into the add.
+        try { await ProbeRemoteAsync(src, ct); } catch { /* the background loop will refine */ }
         return ToView(src);
     }
 
@@ -195,9 +209,10 @@ public class CollectorService
                 if (s.Kind == "self") PollSelf(s);
                 else await PollRemoteAsync(s, ct);
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
             catch (Exception ex)
             {
-                SetError(s, ex.Message);
+                SetState(s, alive: s.Alive, status: "error", detail: ex.Message);
             }
         }
     }
@@ -207,44 +222,89 @@ public class CollectorService
         var (events, last) = _selfFeed.Read(s.Watermark);
         foreach (var e in events)
             Append(s, e.At, e.Type, e.Source, e.Data);
-        lock (_lock)
-        {
-            s.Watermark = last;
-            s.Status = "active";
-            s.LastError = null;
-            s.LastPolledAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        }
+        SetState(s, alive: true, status: "active", detail: null, watermark: last);
     }
 
+    // Real pull: GET the source feed from its watermark, append new events, classify status.
     private async Task PollRemoteAsync(Source s, CancellationToken ct)
     {
-        var url = $"{s.Address}/api/events?after={s.Watermark}";
-        using var req = new HttpRequestMessage(HttpMethod.Get, url);
-        req.Headers.TryAddWithoutValidation("Accept", "application/json");
-        var cred = Unprotect(s.ProtectedCredential);
-        if (cred is not null) req.Headers.TryAddWithoutValidation("X-Auth-Password", cred);
-
-        using var resp = await _http.SendAsync(req, ct);
-        if (!resp.IsSuccessStatusCode)
+        HttpResponseMessage resp;
+        try
         {
-            SetError(s, $"HTTP {(int)resp.StatusCode}");
+            using var req = BuildEventsRequest(s, s.Watermark);
+            resp = await _http.SendAsync(req, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception ex)
+        {
+            SetState(s, alive: false, status: "unreachable", detail: ReachReason(ex));
             return;
         }
 
-        var feed = await resp.Content.ReadFromJsonAsync<RemoteFeed>(JsonOpts, ct);
-        if (feed is null) { SetError(s, "empty response"); return; }
-
-        foreach (var e in feed.Events ?? new())
-            Append(s, e.At, e.Type ?? "unknown", e.Source, e.Data);
-
-        lock (_lock)
+        using (resp)
         {
-            s.Watermark = feed.LastSeq;
-            s.Status = "active";
-            s.LastError = null;
-            s.LastPolledAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            if (IsUnauthorized(resp))
+            {
+                SetState(s, alive: true, status: "needs-credential", detail: "alive — requires a credential");
+                return;
+            }
+            if (!resp.IsSuccessStatusCode)
+            {
+                SetState(s, alive: true, status: "error", detail: $"HTTP {(int)resp.StatusCode}");
+                return;
+            }
+
+            RemoteFeed? feed;
+            try { feed = await resp.Content.ReadFromJsonAsync<RemoteFeed>(JsonOpts, ct); }
+            catch { SetState(s, alive: true, status: "error", detail: "unexpected response (not an event feed)"); return; }
+            if (feed is null) { SetState(s, alive: true, status: "error", detail: "empty response"); return; }
+
+            foreach (var e in feed.Events ?? new())
+                Append(s, e.At, e.Type ?? "unknown", e.Source, e.Data);
+
+            SetState(s, alive: true, status: "active", detail: null, watermark: feed.LastSeq);
         }
     }
+
+    // Status-only probe (no append, watermark untouched): asks for events past the end of the
+    // remote feed so the host answers with its auth/status but no backlog. Used on add.
+    private async Task ProbeRemoteAsync(Source s, CancellationToken ct)
+    {
+        HttpResponseMessage resp;
+        try
+        {
+            using var req = BuildEventsRequest(s, int.MaxValue);
+            resp = await _http.SendAsync(req, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception ex)
+        {
+            SetState(s, alive: false, status: "unreachable", detail: ReachReason(ex));
+            return;
+        }
+
+        using (resp)
+        {
+            if (IsUnauthorized(resp))
+                SetState(s, alive: true, status: "needs-credential", detail: "alive — requires a credential");
+            else if (!resp.IsSuccessStatusCode)
+                SetState(s, alive: true, status: "error", detail: $"HTTP {(int)resp.StatusCode}");
+            else
+                SetState(s, alive: true, status: "active", detail: null);
+        }
+    }
+
+    private HttpRequestMessage BuildEventsRequest(Source s, int after)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Get, $"{s.Address}/api/events?after={after}");
+        req.Headers.TryAddWithoutValidation("Accept", "application/json");
+        var cred = Unprotect(s.ProtectedCredential);
+        if (cred is not null) req.Headers.TryAddWithoutValidation("X-Auth-Password", cred);
+        return req;
+    }
+
+    private static bool IsUnauthorized(HttpResponseMessage r) =>
+        r.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden;
 
     // Append one event to the aggregate under a fresh collector seq, tagged with its source.
     private void Append(Source s, long at, string type, object? source, object? data)
@@ -256,22 +316,39 @@ public class CollectorService
         }
     }
 
-    private void SetError(Source s, string reason)
+    // Unified state update: status + scrubbed detail + alive + lastPolled, optional watermark.
+    // "needs-credential" is a normal, expected state (alive but unauthorized) — not logged as an error.
+    private void SetState(Source s, bool alive, string status, string? detail, int? watermark = null)
     {
-        var scrubbed = Scrub(reason, s);
+        var scrubbed = detail is null ? null : Scrub(detail, s);
         lock (_lock)
         {
-            s.Status = "error";
+            s.Alive = alive;
+            s.Status = status;
             s.LastError = scrubbed;
             s.LastPolledAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            if (watermark.HasValue) s.Watermark = watermark.Value;
         }
-        _logger.Info($"[COLLECTOR] source {s.Label} error: {scrubbed}");
+        if (status is "error" or "unreachable")
+            _logger.Info($"[COLLECTOR] source {s.Label}: {status}{(scrubbed is null ? "" : " — " + scrubbed)}");
+    }
+
+    private static string ReachReason(Exception ex)
+    {
+        if (ex is TaskCanceledException or OperationCanceledException) return "timed out";
+        var msg = (ex.InnerException ?? ex).Message;
+        var oic = StringComparison.OrdinalIgnoreCase;
+        if (msg.Contains("host", oic) && (msg.Contains("known", oic) || msg.Contains("no such", oic) || msg.Contains("resolve", oic)))
+            return "host not found";
+        if (msg.Contains("refused", oic)) return "connection refused";
+        if (msg.Contains("timed out", oic) || msg.Contains("timeout", oic)) return "timed out";
+        return msg.Length > 120 ? msg[..120] : msg;
     }
 
     // ---- helpers -----------------------------------------------------------
 
     private SourceView ToView(Source s) =>
-        new(s.Id, s.Label, s.Address, s.Kind, s.Active, s.Status, s.Watermark, s.LastError, s.LastPolledAtMs);
+        new(s.Id, s.Label, s.Address, s.Kind, s.Active, s.Status, s.Watermark, s.LastError, s.LastPolledAtMs, s.Alive);
 
     private string? Protect(string? plaintext)
     {

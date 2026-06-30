@@ -43,12 +43,14 @@ public class CollectorController : ControllerBase
     }
 
     [HttpPost("sources")]
-    public IActionResult AddSource([FromBody] AddSourceRequest? req)
+    public async Task<IActionResult> AddSource([FromBody] AddSourceRequest? req)
     {
         _logger.CountRequest();
         try
         {
-            var view = _collector.AddSource(req?.Address, req?.Label, req?.Credential);
+            // No request-abort token: a quick client disconnect must not cancel the
+            // add-time probe (it is bounded by the HttpClient timeout instead).
+            var view = await _collector.AddSourceAsync(req?.Address, req?.Label, req?.Credential);
             return Ok(view);
         }
         catch (ArgumentException ex)
