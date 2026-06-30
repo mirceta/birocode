@@ -301,7 +301,11 @@ public class CollectorService
     {
         var a = (address ?? "").Trim();
         if (a.Length == 0) return "";
-        if (!a.Contains("://")) a = "http://" + a;
+        // Default a bare hostname to https: named harnesses are https-only (plain
+        // http 301-redirects), so this sends the credentialed pull straight to the
+        // secure endpoint with no redirect in between. A LAN/plain harness can still
+        // be added by typing an explicit http:// scheme.
+        if (!a.Contains("://")) a = "https://" + a;
         return a.TrimEnd('/');
     }
 
