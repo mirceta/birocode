@@ -25,15 +25,18 @@ namespace ClaudeWeb.Controllers;
 public class CollectorController : ControllerBase
 {
     private readonly CollectorService _collector;
+    private readonly HostEventSound _hostSound;
     private readonly Logger _logger;
 
-    public CollectorController(CollectorService collector, Logger logger)
+    public CollectorController(CollectorService collector, HostEventSound hostSound, Logger logger)
     {
         _collector = collector;
+        _hostSound = hostSound;
         _logger = logger;
     }
 
     public sealed record AddSourceRequest(string? Address, string? Label, string? Credential);
+    public sealed record SoundRequest(bool On);
 
     [HttpGet("sources")]
     public IActionResult Sources()
@@ -94,5 +97,22 @@ public class CollectorController : ControllerBase
         _logger.CountRequest();
         var (events, lastSeq) = _collector.ReadEvents(after);
         return Ok(new { events, lastSeq });
+    }
+
+    // Host-side beep on each new event (openspec add-event-feed-collector): plays on the
+    // computer running the harness, independent of any browser. Operator-toggled, persisted.
+    [HttpGet("sound")]
+    public IActionResult GetSound()
+    {
+        _logger.CountRequest();
+        return Ok(new { on = _hostSound.Enabled });
+    }
+
+    [HttpPost("sound")]
+    public IActionResult SetSound([FromBody] SoundRequest? req)
+    {
+        _logger.CountRequest();
+        _hostSound.SetEnabled(req?.On ?? false);
+        return Ok(new { on = _hostSound.Enabled });
     }
 }

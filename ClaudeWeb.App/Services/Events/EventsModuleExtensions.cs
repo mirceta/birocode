@@ -28,6 +28,7 @@ public static class EventsModuleExtensions
         // each remote source's credential at rest; the hosted poller pulls active
         // sources on a background loop so listening survives a frontend reload/restart.
         services.AddDataProtection();
+        services.AddSingleton<HostEventSound>();
         services.AddSingleton<CollectorService>();
         services.AddHostedService<CollectorPoller>();
         return services;

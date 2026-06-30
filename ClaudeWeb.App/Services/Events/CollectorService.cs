@@ -38,6 +38,7 @@ public class CollectorService
     private readonly HarnessEventFeed _selfFeed;
     private readonly IDataProtector _protector;
     private readonly Logger _logger;
+    private readonly HostEventSound _hostSound;
     private readonly HttpClient _http;
     private readonly string _storePath;
 
@@ -46,11 +47,12 @@ public class CollectorService
     private readonly List<CollectorEvent> _events = new();
     private int _seq;
 
-    public CollectorService(HarnessEventFeed selfFeed, IDataProtectionProvider dp, Logger logger)
+    public CollectorService(HarnessEventFeed selfFeed, IDataProtectionProvider dp, Logger logger, HostEventSound hostSound)
     {
         _selfFeed = selfFeed;
         _protector = dp.CreateProtector("collector.source.credential");
         _logger = logger;
+        _hostSound = hostSound;
         _http = new HttpClient { Timeout = HttpTimeout };
         _storePath = System.IO.Path.Combine(AppPaths.DataDir, "collector-sources.json");
         Load();
@@ -314,6 +316,9 @@ public class CollectorService
             _events.Add(new CollectorEvent(++_seq, at, type, source, data, s.Id, s.Label));
             if (_events.Count > Cap) _events.RemoveRange(0, TrimChunk);
         }
+        // Best-effort host beep (debounced, non-blocking; no-op unless the operator
+        // enabled it). Outside the lock so audio scheduling never holds up polling.
+        _hostSound.Notify();
     }
 
     // Unified state update: status + scrubbed detail + alive + lastPolled, optional watermark.
