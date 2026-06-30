@@ -33,6 +33,7 @@
   .src .kind.self{color:var(--self);border:1px solid rgba(63,185,80,.45)}
   .src .kind.remote{color:var(--remote);border:1px solid rgba(188,140,255,.5)}
   .src .st{margin-left:auto;font-size:11.5px;color:var(--dim);font-family:var(--mono)}
+  .src .st.warn{color:var(--warn)} .src .st.err{color:var(--bad)}
   .src .err{color:var(--bad);font-family:var(--mono);font-size:11px}
   .src .acts{display:flex;gap:6px}
   button{background:var(--panel2);color:var(--ink);border:1px solid var(--edge);border-radius:7px;padding:6px 11px;cursor:pointer;font-size:12.5px}
@@ -142,13 +143,35 @@ function addRow(ev){
   while (rows.children.length > 300) rows.removeChild(rows.lastChild);
 }
 
+// Map the backend status taxonomy to a dot colour and a human label. The key case:
+// "needs-credential" = the host answered but rejected auth, i.e. alive but unauthorized —
+// shown amber with "alive · needs credential", never a dead red error.
+function dotClass(st){
+  if (st === "active") return "live";
+  if (st === "needs-credential" || st === "connecting") return "connecting"; // amber
+  if (st === "unreachable" || st === "error") return "err";                  // red
+  return "stopped";
+}
+function statusText(s){
+  switch (s.status){
+    case "active": return "active";
+    case "needs-credential": return "alive · needs credential";
+    case "unreachable": return "unreachable" + (s.lastError ? " · " + s.lastError : "");
+    case "error": return "error" + (s.lastError ? " · " + s.lastError : "");
+    case "connecting": return "connecting…";
+    case "stopped": return "stopped";
+    default: return s.status;
+  }
+}
+
 function renderSources(list){
   srcWrap.innerHTML = "";
   if (!list.length){ srcWrap.innerHTML = `<div class="empty">No sources.</div>`; return; }
   for (const s of list){
     const div = document.createElement("div");
     div.className = "src " + (s.kind === "self" ? "self" : "remote");
-    const dotcls = s.status === "active" ? "live" : (s.status === "connecting" ? "connecting" : (s.status === "error" ? "err" : "stopped"));
+    const dotcls = dotClass(s.status);
+    const stCls = s.status === "needs-credential" ? "warn" : ((s.status === "unreachable" || s.status === "error") ? "err" : "");
     let acts = "";
     if (s.kind !== "self"){
       acts = `<div class="acts">`+
@@ -162,7 +185,7 @@ function renderSources(list){
       `<span class="lbl">${esc(s.label)}</span>`+
       `<span class="kind ${s.kind}">${esc(s.kind)}</span>`+
       (s.address ? `<span class="addr">${esc(s.address)}</span>` : "")+
-      `<span class="st">${s.lastError ? `<span class="err">${esc(s.lastError)}</span>` : esc(s.status)}</span>`+
+      `<span class="st ${stCls}">${esc(statusText(s))}</span>`+
       acts;
     srcWrap.appendChild(div);
   }
