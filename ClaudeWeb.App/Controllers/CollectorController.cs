@@ -115,4 +115,13 @@ public class CollectorController : ControllerBase
         _hostSound.SetEnabled(req?.On ?? false);
         return Ok(new { on = _hostSound.Enabled });
     }
+
+    // Play the host sound right now (ignores the on/off toggle) — to verify audio works.
+    [HttpPost("sound/test")]
+    public IActionResult TestSound()
+    {
+        _logger.CountRequest();
+        _hostSound.PlayNow();
+        return Ok(new { ok = true });
+    }
 }

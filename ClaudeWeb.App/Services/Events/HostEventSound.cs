@@ -60,9 +60,19 @@ public class HostEventSound
         if (now - last < MinGapMs) return;                                   // within the debounce window
         if (Interlocked.CompareExchange(ref _lastBeepTicks, now, last) != last) return; // lost the race — someone else beeped
 
-        _ = Task.Run(static () =>
-        {
-            try { Console.Beep(880, 120); } catch { /* no audio device / unsupported host */ }
-        });
+        _ = Task.Run(DoBeep);
+    }
+
+    /// <summary>Play the host sound immediately, ignoring the enable flag and debounce —
+    /// used by the "test" button to verify audio works on the host machine.</summary>
+    public void PlayNow() => _ = Task.Run(DoBeep);
+
+    // Prefer the Windows notification sound (plays through the default audio device, so it's
+    // actually audible), and fall back to Console.Beep (legacy PC-speaker tone) if that path
+    // is unavailable. Both are best-effort — a host with no audio just stays silent.
+    private static void DoBeep()
+    {
+        try { System.Media.SystemSounds.Asterisk.Play(); return; } catch { /* fall through */ }
+        try { Console.Beep(880, 150); } catch { /* no audio device / unsupported host */ }
     }
 }
