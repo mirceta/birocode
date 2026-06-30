@@ -38,6 +38,7 @@
   .src .acts{display:flex;gap:6px}
   button{background:var(--panel2);color:var(--ink);border:1px solid var(--edge);border-radius:7px;padding:6px 11px;cursor:pointer;font-size:12.5px}
   button:hover{border-color:var(--accent)} button.primary{background:var(--accent);color:#08111f;border:none;font-weight:600}
+  #snd{padding:4px 9px;font-size:12px} #snd.on{border-color:var(--good);color:var(--good)}
   button:disabled{opacity:.5;cursor:default}
   .addform{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--panel);border:1px dashed var(--edge);border-radius:9px;padding:10px 12px;margin-bottom:16px}
   input{background:#0a0f16;border:1px solid var(--edge);border-radius:7px;color:var(--ink);padding:7px 10px;font:inherit;font-size:13px}
@@ -73,6 +74,7 @@
     <span><span class="dot" id="dot"></span><span id="status">connecting</span></span>
     <span>watermark <b id="wm">-1</b></span>
     <span>events <b id="count">0</b></span>
+    <button id="snd" title="Play a sound on each new event">🔇 Sound off</button>
   </div>
 </header>
 <main>
@@ -103,7 +105,43 @@ const srcWrap = document.getElementById("sources");
 const elStatus = document.getElementById("status"), elDot = document.getElementById("dot");
 const elWm = document.getElementById("wm"), elCount = document.getElementById("count");
 
-let watermark = -1, total = 0, empty = true;
+let watermark = -1, total = 0, empty = true, firstPoll = true;
+
+// --- sound on each new event (Web Audio, no asset) ---------------------------
+// Browsers block audio until a user gesture, so sound is behind a toggle (which is
+// itself the unlocking gesture). Synthesised blip — no file to vendor.
+let soundOn = false, audioCtx = null;
+try { soundOn = localStorage.getItem("events_sound") === "1"; } catch {}
+function unlockAudio(){
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+  } catch {}
+}
+function blip(i){
+  if (!soundOn || !audioCtx) return;
+  const t = audioCtx.currentTime + i * 0.07;            // stagger a burst slightly
+  const osc = audioCtx.createOscillator(), g = audioCtx.createGain();
+  osc.type = "triangle";
+  osc.frequency.value = 740 + (i % 3) * 90;             // small pitch variation
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.16, t + 0.012); // quick attack
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);// soft decay
+  osc.connect(g); g.connect(audioCtx.destination);
+  osc.start(t); osc.stop(t + 0.18);
+}
+function playForNew(n){ const k = Math.min(n, 4); for (let i = 0; i < k; i++) blip(i); }
+const btnSnd = document.getElementById("snd");
+function renderSnd(){ btnSnd.textContent = soundOn ? "🔊 Sound on" : "🔇 Sound off"; btnSnd.classList.toggle("on", soundOn); }
+btnSnd.onclick = () => {
+  soundOn = !soundOn;
+  if (soundOn){ unlockAudio(); blip(0); }                // a confirmation blip
+  try { localStorage.setItem("events_sound", soundOn ? "1" : "0"); } catch {}
+  renderSnd();
+};
+// If sound was left on from a previous visit, unlock on the first gesture anywhere.
+window.addEventListener("pointerdown", unlockAudio, { once: true });
+renderSnd();
 
 function setStatus(t, cls){ elStatus.textContent = t; elDot.className = "dot" + (cls ? " " + cls : ""); }
 function esc(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
@@ -224,7 +262,12 @@ async function pollEvents(){
     if (res.status === 401 || res.status === 403){ setStatus("auth required", "err"); return; }
     if (!res.ok){ setStatus("HTTP " + res.status, "err"); return; }
     const body = await res.json();
-    for (const ev of (body.events || [])){ addRow(ev); total++; }
+    const evs = body.events || [];
+    for (const ev of evs){ addRow(ev); total++; }
+    // Sound only for genuinely new events — not the backlog the first poll (or a
+    // reload) pulls from watermark -1.
+    if (evs.length && !firstPoll) playForNew(evs.length);
+    firstPoll = false;
     if (typeof body.lastSeq === "number") watermark = body.lastSeq;
     elWm.textContent = watermark; elCount.textContent = total;
     setStatus("observing", "live");
