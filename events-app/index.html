@@ -38,7 +38,7 @@
   .src .acts{display:flex;gap:6px}
   button{background:var(--panel2);color:var(--ink);border:1px solid var(--edge);border-radius:7px;padding:6px 11px;cursor:pointer;font-size:12.5px}
   button:hover{border-color:var(--accent)} button.primary{background:var(--accent);color:#08111f;border:none;font-weight:600}
-  #snd,#hsnd{padding:4px 9px;font-size:12px} #snd.on,#hsnd.on{border-color:var(--good);color:var(--good)}
+  #snd,#hsnd,#htest{padding:4px 9px;font-size:12px} #snd.on,#hsnd.on{border-color:var(--good);color:var(--good)}
   button:disabled{opacity:.5;cursor:default}
   .addform{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--panel);border:1px dashed var(--edge);border-radius:9px;padding:10px 12px;margin-bottom:16px}
   input{background:#0a0f16;border:1px solid var(--edge);border-radius:7px;color:var(--ink);padding:7px 10px;font:inherit;font-size:13px}
@@ -76,6 +76,7 @@
     <span>events <b id="count">0</b></span>
     <button id="snd" title="Play a sound in THIS browser on each new event">🔇 Device</button>
     <button id="hsnd" title="Beep on the HOST computer (running the harness) on each new event">🖥️ Host off</button>
+    <button id="htest" title="Play the host sound right now, to test it">🔔 Test host</button>
   </div>
 </header>
 <main>
@@ -160,6 +161,19 @@ btnHost.onclick = async () => {
     if (r.ok){ hostOn = !!(await r.json()).on; renderHost(); } } catch {}
 };
 renderHost(); loadHost();
+
+// One-shot host-sound test (POST /api/collector/sound/test) — plays on the host now,
+// regardless of the Host toggle, to confirm the machine can actually make the sound.
+const btnHTest = document.getElementById("htest");
+btnHTest.onclick = async () => {
+  const old = btnHTest.textContent;
+  btnHTest.textContent = "🔔 …";
+  try {
+    const r = await fetch(`${API}/collector/sound/test`, { method: "POST" });
+    btnHTest.textContent = r.ok ? "🔔 Sent" : "🔔 Failed";
+  } catch { btnHTest.textContent = "🔔 Failed"; }
+  setTimeout(() => { btnHTest.textContent = old; }, 1200);
+};
 
 function setStatus(t, cls){ elStatus.textContent = t; elDot.className = "dot" + (cls ? " " + cls : ""); }
 function esc(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
