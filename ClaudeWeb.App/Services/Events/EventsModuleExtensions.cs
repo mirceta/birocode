@@ -22,6 +22,14 @@ public static class EventsModuleExtensions
         // Harness-provided pilot consumer app (synthetic kind:harness local app),
         // served internally like the Understanding/Lab apps.
         services.AddSingleton<EventsApp>();
+
+        // The event-feed COLLECTOR (openspec change add-event-feed-collector): a
+        // backend-owned aggregator over many harness sources. Data Protection encrypts
+        // each remote source's credential at rest; the hosted poller pulls active
+        // sources on a background loop so listening survives a frontend reload/restart.
+        services.AddDataProtection();
+        services.AddSingleton<CollectorService>();
+        services.AddHostedService<CollectorPoller>();
         return services;
     }
 }
