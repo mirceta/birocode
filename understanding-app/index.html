@@ -230,11 +230,45 @@
         ring, like the feed. <span class="badge" style="color:var(--ok);border:1px solid rgba(126,240,200,.4)">your call #4</span></p></div></div>
     </div>
   </section>
+
+  <!-- HOST CUE -->
+  <section class="view" data-v="cue">
+    <div class="card">
+      <h2>The host cue: a sound on the <i>machine</i>, not the browser</h2>
+      <p class="lede">Independent of any open tab, the computer running the harness can make a noise each time the
+      collector ingests a new event — so an operator across the room knows something landed. It's an
+      operator toggle (<code class="inline">POST /api/collector/sound</code>), debounced, played on a background
+      thread, and best-effort: a host with no audio just stays silent.</p>
+
+      <h3>Two modes — <code class="inline">beep</code> (default) vs <code class="inline">voice</code></h3>
+      <div class="grid2">
+        <div>
+          <p class="lede"><b>Beep</b> plays the Windows notification tone (falling back to <code class="inline">Console.Beep</code>).
+          <b>Voice</b> instead <i>speaks</i> a short robotic phrase — <b>"an agent has finished"</b> — through the
+          default audio device via Windows SAPI (<code class="inline">SpVoice</code> over COM, no new dependency),
+          slowed and pitched down to sound robotic.</p>
+        </div>
+        <div>
+          <p class="lede">The selected mode is <b>persisted</b> (survives a restart) and the <b>Test</b> button plays
+          whichever mode is live. If the voice path is ever unavailable, it <b>falls back to the beep</b>, so the
+          cue is always best-effort.</p>
+        </div>
+      </div>
+
+      <div class="ctrlrow">
+        <button class="btn ghost sm" id="cue-mode">🔊 Mode: Beep</button>
+        <button class="btn" id="cue-fire">▶ A new event arrives</button>
+        <span class="dot idle" id="cue-dot"></span><span id="cue-say" style="color:var(--muted);font-size:12.5px">host is quiet</span>
+      </div>
+      <div class="note">This demo uses your <i>browser's</i> speech/beep to stand in for the host. In production the
+      sound comes out of the <b>host machine's</b> speakers on the server side — no browser needed.</div>
+    </div>
+  </section>
 </div>
 
 <script>
   // ---- tabs ----
-  var TABS=[["why","The problem"],["model","The model"],["reload","Reload resilience"],["add","Add a harness"],["safe","Guarantees"]];
+  var TABS=[["why","The problem"],["model","The model"],["reload","Reload resilience"],["add","Add a harness"],["cue","Host cue"],["safe","Guarantees"]];
   var nav=document.getElementById("tabs");
   TABS.forEach(function(t,i){var b=document.createElement("button");b.textContent=t[1];if(i===0)b.className="active";
     b.onclick=function(){document.querySelectorAll("nav.tabs button").forEach(function(x){x.classList.remove("active")});
@@ -242,6 +276,41 @@
       b.classList.add("active");document.querySelector('section[data-v="'+t[0]+'"]').classList.add("active");};
     nav.appendChild(b);});
   document.querySelector('section[data-v="why"]').classList.add("active");
+
+  // ---- HOST CUE: browser stand-in for the server-side beep/voice ----
+  (function(){
+    var mode="beep", ac=null;
+    var mBtn=document.getElementById("cue-mode"), fire=document.getElementById("cue-fire");
+    var dot=document.getElementById("cue-dot"), say=document.getElementById("cue-say");
+    if(!mBtn) return;
+    function renderMode(){ mBtn.textContent = mode==="voice" ? "🗣️ Mode: Voice" : "🔊 Mode: Beep"; }
+    mBtn.onclick=function(){ mode = mode==="voice" ? "beep" : "voice"; renderMode(); };
+    function beep(){
+      try{
+        ac = ac || new (window.AudioContext||window.webkitAudioContext)();
+        if(ac.state==="suspended") ac.resume();
+        var t=ac.currentTime, o=ac.createOscillator(), g=ac.createGain();
+        o.type="triangle"; o.frequency.value=880;
+        g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.2,t+0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001,t+0.16);
+        o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t+0.18);
+      }catch(e){}
+    }
+    function speak(){
+      try{
+        var u=new SpeechSynthesisUtterance("an agent has finished");
+        u.rate=0.85; u.pitch=0.4;                 // slowed + low = robotic, mirrors SAPI rate/pitch
+        speechSynthesis.cancel(); speechSynthesis.speak(u);
+      }catch(e){ beep(); }                          // fall back to the beep, like the server does
+    }
+    fire.onclick=function(){
+      dot.className="dot ok";
+      if(mode==="voice"){ say.textContent='host speaks: "an agent has finished"'; speak(); }
+      else { say.textContent="host beeps"; beep(); }
+      setTimeout(function(){ dot.className="dot idle"; say.textContent="host is quiet"; }, 1600);
+    };
+    renderMode();
+  })();
 
   var TYPES=["turn.ended","turn.ended","turn.ended"];
   function evRow(seq,ty,fromLabel,kind){

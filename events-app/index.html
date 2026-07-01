@@ -76,6 +76,7 @@
     <span>events <b id="count">0</b></span>
     <button id="snd" title="Play a sound in THIS browser on each new event">🔇 Device</button>
     <button id="hsnd" title="Beep on the HOST computer (running the harness) on each new event">🖥️ Host off</button>
+    <button id="hmode" title="Host cue: a beep tone, or a spoken 'an agent has finished'">🔊 Beep</button>
     <button id="htest" title="Play the host sound right now, to test it">🔔 Test host</button>
   </div>
 </header>
@@ -148,19 +149,29 @@ renderSnd();
 // --- host-side beep (server plays it on the computer running the harness) ----
 // This is a backend toggle (GET/POST /api/collector/sound), shared by everyone, not
 // a per-browser setting — it beeps on the host regardless of any open browser.
-let hostOn = false;
+let hostOn = false, hostMode = "beep";
 const btnHost = document.getElementById("hsnd");
+const btnHMode = document.getElementById("hmode");
 function renderHost(){ btnHost.textContent = hostOn ? "🖥️ Host on" : "🖥️ Host off"; btnHost.classList.toggle("on", hostOn); }
+// Mode is beep vs voice ("an agent has finished"); it applies to both the on-each-event cue
+// and the Test button. Shared backend state, same endpoint as the on/off toggle.
+function renderHMode(){ const v = hostMode === "voice"; btnHMode.textContent = v ? "🗣️ Voice" : "🔊 Beep"; btnHMode.classList.toggle("on", v); }
+function applyHost(j){ hostOn = !!j.on; if (j.mode) hostMode = j.mode; renderHost(); renderHMode(); }
 async function loadHost(){
   try { const r = await fetch(`${API}/collector/sound`, { headers: { Accept: "application/json" } });
-    if (r.ok){ hostOn = !!(await r.json()).on; renderHost(); } } catch {}
+    if (r.ok){ applyHost(await r.json()); } } catch {}
 }
 btnHost.onclick = async () => {
   const next = !hostOn;
   try { const r = await fetch(`${API}/collector/sound`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ on: next }) });
-    if (r.ok){ hostOn = !!(await r.json()).on; renderHost(); } } catch {}
+    if (r.ok){ applyHost(await r.json()); } } catch {}
 };
-renderHost(); loadHost();
+btnHMode.onclick = async () => {
+  const next = hostMode === "voice" ? "beep" : "voice";
+  try { const r = await fetch(`${API}/collector/sound`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: next }) });
+    if (r.ok){ applyHost(await r.json()); } } catch {}
+};
+renderHost(); renderHMode(); loadHost();
 
 // One-shot host-sound test (POST /api/collector/sound/test) — plays on the host now,
 // regardless of the Host toggle, to confirm the machine can actually make the sound.

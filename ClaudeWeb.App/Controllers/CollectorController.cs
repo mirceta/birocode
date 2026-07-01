@@ -36,7 +36,7 @@ public class CollectorController : ControllerBase
     }
 
     public sealed record AddSourceRequest(string? Address, string? Label, string? Credential);
-    public sealed record SoundRequest(bool On);
+    public sealed record SoundRequest(bool? On, string? Mode);
 
     [HttpGet("sources")]
     public IActionResult Sources()
@@ -99,24 +99,26 @@ public class CollectorController : ControllerBase
         return Ok(new { events, lastSeq });
     }
 
-    // Host-side beep on each new event (openspec add-event-feed-collector): plays on the
-    // computer running the harness, independent of any browser. Operator-toggled, persisted.
+    // Host-side cue on each new event (openspec add-event-feed-collector, add-host-voice-mode):
+    // plays on the computer running the harness, independent of any browser. Operator-toggled and
+    // persisted, with a selectable mode ("beep" or "voice" — the latter speaks a spoken phrase).
     [HttpGet("sound")]
     public IActionResult GetSound()
     {
         _logger.CountRequest();
-        return Ok(new { on = _hostSound.Enabled });
+        return Ok(new { on = _hostSound.Enabled, mode = _hostSound.Mode });
     }
 
     [HttpPost("sound")]
     public IActionResult SetSound([FromBody] SoundRequest? req)
     {
         _logger.CountRequest();
-        _hostSound.SetEnabled(req?.On ?? false);
-        return Ok(new { on = _hostSound.Enabled });
+        if (req?.On is bool on) _hostSound.SetEnabled(on);
+        if (req?.Mode is string mode) _hostSound.SetMode(mode);
+        return Ok(new { on = _hostSound.Enabled, mode = _hostSound.Mode });
     }
 
-    // Play the host sound right now (ignores the on/off toggle) — to verify audio works.
+    // Play the host cue right now in the current mode (ignores the on/off toggle) — to verify audio works.
     [HttpPost("sound/test")]
     public IActionResult TestSound()
     {
