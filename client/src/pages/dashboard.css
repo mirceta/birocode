@@ -10,7 +10,85 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  /* Wrap so the dock toolbar (last child, full-width) drops to its own row
+     below the stepper/view controls instead of crowding them (openspec
+     add-dashboard-dock-toolbar). */
+  flex-wrap: wrap;
   margin-bottom: 12px;
+}
+
+/* Dock toolbar (openspec add-dashboard-dock-toolbar): a full-width second row of
+   the header listing every dock as a toggleable tab. A single horizontally-
+   scrolling row so a large ("many, many") roster never wraps or blows out the
+   header height. */
+.dash__docktoolbar {
+  flex: 1 1 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding-bottom: 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+}
+
+.dash__docktoolbar-label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-soft);
+  margin-right: 4px;
+}
+
+/* One compact tab per dock: colour dot + short label. Inactive (dock hidden from
+   the grid) is muted; active (rendered) fills accent. */
+.dash__docktab {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 180px;
+  padding: 3px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-soft);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.15s, border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.dash__docktab:hover {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+  opacity: 1;
+}
+
+/* Active = the dock renders in the grid (dashboard !== false). */
+.dash__docktab--on {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+  opacity: 1;
+}
+
+.dash__docktab-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #aaa;
+}
+
+.dash__docktab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dash__title {

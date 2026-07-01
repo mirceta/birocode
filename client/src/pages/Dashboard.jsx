@@ -16,6 +16,7 @@ import IdeasPanel from '../components/ideas/IdeasPanel';
 import Scoreboard from '../components/dashboard/Scoreboard';
 import AccountChips from '../components/dashboard/AccountChips';
 import AutopilotPanel from '../components/dashboard/AutopilotPanel';
+import DockToolbar from '../components/dashboard/DockToolbar';
 import './dashboard.css';
 
 // The dashboard has three layouts (plans/agent-dashboard.md): summary "cards"
@@ -555,6 +556,28 @@ export default function Dashboard({ onClose }) {
     return [...important, ...rest];
   }, [tabs, live]);
 
+  // The dock toolbar (openspec add-dashboard-dock-toolbar) lists the FULL,
+  // UNFILTERED roster — including docks hidden from the grid — so a hidden dock
+  // stays one click away from being re-shown. Ordered the same important-first-
+  // then-recency way as the grid's orderedTabs so the row reads as "the same
+  // docks", just including the hidden ones (which carry no live recency).
+  const rosterTabs = useMemo(() => {
+    const important = dockTabs.filter((t) => t.important);
+    const rest = dockTabs
+      .filter((t) => !t.important)
+      .sort((a, b) => (live[b.id]?.at || 0) - (live[a.id]?.at || 0));
+    return [...important, ...rest];
+  }, [dockTabs, live]);
+
+  // Toggle whether a dock renders in the grid, from the toolbar: flip its
+  // existing `dashboard` field (optimistic + PATCH via updateTab). The grid
+  // re-renders from the changed `tabs` memo — no duplicate local state — and the
+  // Agents-page ▦ toggle reflects the same change (both read this one field).
+  const toggleDashboard = useCallback(
+    (id, active) => updateTab(id, { dashboard: !active }),
+    [updateTab],
+  );
+
   // Toggle the important mark; optimistic + backend-synced like color/dashboard.
   const toggleImportant = useCallback(
     (id) => {
@@ -963,6 +986,11 @@ export default function Dashboard({ onClose }) {
         >
           &times;
         </button>
+        {/* Dock toolbar (openspec add-dashboard-dock-toolbar): its own wrapped
+            row of the header, listing the full roster so hidden docks stay
+            reachable. Gated on the roster, not the visible `tabs`, so it still
+            shows (all-inactive) when every dock is hidden. */}
+        <DockToolbar tabs={rosterTabs} onToggle={toggleDashboard} />
       </div>
 
       <div
@@ -1101,7 +1129,11 @@ export default function Dashboard({ onClose }) {
         {accountChipsOn && <AccountChips />}
       </div>
       {tabs.length === 0 ? (
-        <p className="dash__empty">{t('dashboard.empty')}</p>
+        // No visible tiles: distinguish "no docks at all" from "every dock hidden
+        // from the toolbar" — the latter points back at the toolbar to re-show one.
+        <p className="dash__empty">
+          {dockTabs.length > 0 ? t('dashboard.allHidden') : t('dashboard.empty')}
+        </p>
       ) : onlyImportant && importantCount === 0 ? (
         <p className="dash__empty">{t('dashboard.onlyImportantEmpty')}</p>
       ) : (

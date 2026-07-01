@@ -1,419 +1,167 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Event Feed Collector — proposal walkthrough</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dashboard dock toolbar — how it works</title>
 <style>
-  :root{
-    --bg:#0b1020; --panel:#141b33; --panel2:#1b2444; --ink:#e8ecf8; --muted:#9aa6c8;
-    --line:#2a3358; --accent:#6ea8fe; --accent2:#7ef0c8; --warn:#ffd166; --danger:#ff6b8a;
-    --ok:#7ef0c8; --self:#7ef0c8; --remote:#9b8cff; --shadow:0 8px 30px rgba(0,0,0,.45); --radius:14px;
+  :root {
+    --bg: #faf7f2; --surface: #fff; --ink: #23201c; --soft: #6b655c;
+    --border: #e2dcd2; --accent: #b85c00; --on: #b85c00; --hidden: #b9b2a6;
+    --ok: #16a34a; --code: #f2ede4;
   }
-  *{box-sizing:border-box}
-  html,body{margin:0;padding:0}
-  body{background:radial-gradient(1200px 600px at 80% -10%, #1a2452 0,#0b1020 60%), var(--bg);
-    color:var(--ink); font:15px/1.55 ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial;-webkit-font-smoothing:antialiased}
-  .wrap{max-width:1100px;margin:0 auto;padding:26px 20px 90px}
-  .kicker{color:var(--accent);font-weight:700;letter-spacing:.12em;text-transform:uppercase;font-size:11px}
-  h1{margin:4px 0 6px;font-size:28px;line-height:1.15;letter-spacing:-.01em}
-  .sub{color:var(--muted);max-width:820px}
-  nav.tabs{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 18px}
-  nav.tabs button{background:var(--panel);border:1px solid var(--line);color:var(--muted);
-    border-radius:999px;padding:8px 14px;font-size:13px;cursor:pointer;transition:.15s}
-  nav.tabs button:hover{color:var(--ink);border-color:var(--accent)}
-  nav.tabs button.active{background:linear-gradient(180deg,#22305f,#1a2450);color:var(--ink);
-    border-color:var(--accent);box-shadow:0 0 0 1px rgba(110,168,254,.3)}
-  section.view{display:none;animation:fade .25s ease}
-  section.view.active{display:block}
-  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-  .card{background:linear-gradient(180deg,var(--panel),#10172e);border:1px solid var(--line);
-    border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow);margin-bottom:16px}
-  .card h2{margin:0 0 8px;font-size:18px}
-  .card h3{margin:16px 0 8px;font-size:13px;color:var(--accent2);letter-spacing:.03em;text-transform:uppercase}
-  p.lede{color:var(--muted);margin:0 0 12px}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  @media(max-width:820px){.grid2{grid-template-columns:1fr}}
-  code.inline{font-family:ui-monospace,Consolas,monospace;background:#0d1430;border:1px solid var(--line);
-    border-radius:6px;padding:1px 6px;color:#cfe0ff;font-size:12.5px}
-  .btn{background:linear-gradient(180deg,#2b3c72,#1d2a55);border:1px solid var(--accent);color:var(--ink);
-    border-radius:10px;padding:9px 16px;font-size:13px;cursor:pointer;font-weight:600}
-  .btn:hover{filter:brightness(1.12)} .btn:disabled{opacity:.5;cursor:default;filter:none}
-  .btn.ghost{background:#121a36;border-color:var(--line);color:var(--muted)}
-  .btn.sm{padding:5px 10px;font-size:12px;border-radius:8px}
-  .ctrlrow{display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap}
-  .note{font-size:12.5px;color:var(--muted);border-left:3px solid var(--accent);padding:4px 0 4px 12px;margin:12px 0}
-  .note.warn{border-left-color:var(--warn)} .note.ok{border-left-color:var(--ok)}
-  .dot{width:9px;height:9px;border-radius:50%;display:inline-block;vertical-align:middle}
-  .dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.bad{background:var(--danger)} .dot.idle{background:var(--muted)}
-  .badge{font-size:10.5px;font-weight:700;border-radius:6px;padding:2px 7px;text-transform:uppercase;letter-spacing:.04em}
-  .badge.self{color:var(--self);border:1px solid rgba(126,240,200,.45)}
-  .badge.remote{color:var(--remote);border:1px solid rgba(155,140,255,.5)}
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 28px 20px 80px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  h2 { font-size: 17px; margin: 34px 0 10px; color: var(--accent); }
+  .sub { color: var(--soft); margin: 0 0 8px; }
+  p { margin: 10px 0; }
+  code { background: var(--code); padding: 1px 6px; border-radius: 5px; font-size: 13px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin: 14px 0; }
 
-  /* topology diagram */
-  .topo{display:grid;grid-template-columns:1fr 90px 150px 90px 1fr;align-items:center;gap:6px;margin-top:8px}
-  @media(max-width:820px){.topo{grid-template-columns:1fr;gap:10px}}
-  .srccol{display:flex;flex-direction:column;gap:10px}
-  .src{border:1px solid var(--line);border-radius:12px;background:#0d1430;padding:10px 12px;position:relative;transition:.2s}
-  .src.self{border-left:3px solid var(--self)} .src.remote{border-left:3px solid var(--remote)}
-  .src.pull{box-shadow:0 0 0 1px var(--accent);background:#13204a}
-  .src b{font-size:13px} .src .a{display:block;color:var(--muted);font-size:11px;font-family:ui-monospace,Consolas,monospace}
-  .hub{border:1px solid var(--accent);border-radius:14px;background:linear-gradient(180deg,#1a2450,#10183a);
-    padding:14px 10px;text-align:center;box-shadow:0 0 0 1px rgba(110,168,254,.25)}
-  .hub b{display:block;font-size:14px} .hub span{font-size:11px;color:var(--muted)}
-  .hub.beat{box-shadow:0 0 0 3px rgba(110,168,254,.35)}
-  .wire{height:2px;background:linear-gradient(90deg,var(--line),var(--line));border-radius:2px;position:relative;overflow:hidden}
-  .wire.left::after,.wire.right::after{content:"";position:absolute;top:-1px;width:24px;height:4px;border-radius:3px;
-    background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:0}
-  .wire.go.left::after{animation:flowL .55s linear} .wire.go.right::after{animation:flowR .55s linear}
-  @keyframes flowR{from{left:-24px;opacity:1}to{left:100%;opacity:1}}
-  @keyframes flowL{from{left:100%;opacity:1}to{left:-24px;opacity:1}}
-  @media(max-width:820px){.wire{display:none}}
+  /* Live simulator */
+  .label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--soft); }
+  .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0 4px; }
+  .tab {
+    display: inline-flex; align-items: center; gap: 7px; padding: 4px 12px;
+    border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
+    color: var(--soft); font-size: 13px; font-weight: 500; cursor: pointer;
+    opacity: .6; transition: opacity .15s, border-color .15s, color .15s;
+  }
+  .tab:hover { opacity: 1; border-color: var(--accent); }
+  .tab.on { opacity: 1; border-color: var(--accent); color: var(--ink); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #aaa; flex: 0 0 auto; }
 
-  /* feed */
-  .feed{margin-top:10px;border:1px solid var(--line);border-radius:12px;background:#0a1128;max-height:230px;overflow:auto}
-  .ev{display:flex;gap:10px;align-items:center;padding:7px 12px;border-bottom:1px solid #16203f;font-size:12.5px;animation:pop .25s ease}
-  .ev:last-child{border-bottom:none}
-  @keyframes pop{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:none}}
-  .ev .seq{font-family:ui-monospace,Consolas,monospace;color:var(--muted);min-width:34px}
-  .ev .ty{font-family:ui-monospace,Consolas,monospace;color:#cfe0ff}
-  .ev .from{margin-left:auto;font-size:11px;font-family:ui-monospace,Consolas,monospace}
-  .ev .from.self{color:var(--self)} .ev .from.remote{color:var(--remote)}
-  .empty{padding:16px;color:var(--muted);font-size:12.5px;text-align:center}
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; margin-top: 14px; min-height: 96px; }
+  .cell {
+    border: 1px solid var(--border); border-left: 4px solid var(--cellcolor, var(--border));
+    border-radius: 10px; padding: 14px 12px; background: var(--surface);
+    font-weight: 600; animation: pop .18s ease;
+  }
+  @keyframes pop { from { transform: scale(.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .empty { grid-column: 1 / -1; color: var(--soft); font-style: italic; text-align: center; padding: 26px 0; border: 1px dashed var(--border); border-radius: 10px; }
 
-  /* reload sim */
-  .panes{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  @media(max-width:820px){.panes{grid-template-columns:1fr}}
-  .pane{border:1px solid var(--line);border-radius:12px;background:#0d1430;padding:14px}
-  .pane h4{margin:0 0 4px;font-size:14px}
-  .screen{margin-top:10px;border:1px dashed var(--line);border-radius:10px;background:#0a1128;min-height:96px;padding:10px;font-size:12px}
-  .reloading{animation:flash .5s ease}
-  @keyframes flash{0%{opacity:1}40%{opacity:.15}100%{opacity:1}}
-
-  /* sources mgr */
-  .srcrow{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:10px;background:#0d1430;padding:9px 12px;margin-bottom:8px}
-  .srcrow .lbl{font-weight:600;font-size:13px} .srcrow .addr{color:var(--muted);font-size:11px;font-family:ui-monospace,Consolas,monospace}
-  .srcrow .st{margin-left:auto;font-size:11px;color:var(--muted)}
-  input.txt{background:#0a1128;border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:8px 10px;font:inherit;font-size:13px}
-  .pwwrap{position:relative}
-  .guarantee{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#0d1430;margin-bottom:10px}
-  .guarantee .ic{font-size:20px} .guarantee b{display:block;margin-bottom:2px}
-  .guarantee p{margin:0;color:var(--muted);font-size:12.5px}
-  .pill{display:inline-flex;gap:6px;align-items:center;font-size:11px;color:var(--muted);background:#0d1430;border:1px solid var(--line);border-radius:999px;padding:3px 9px}
+  .flow { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .pill { background: var(--code); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 13px; }
+  .arrow { color: var(--soft); }
+  .agents { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+  .acard { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 8px; padding: 5px 10px; font-size: 13px; }
+  .glyph { font-size: 15px; }
+  .glyph.off { color: var(--hidden); }
+  .glyph.on { color: var(--accent); }
+  .note { font-size: 13px; color: var(--soft); }
+  .k { color: var(--accent); font-weight: 600; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="kicker">OpenSpec · add-event-feed-collector</div>
-  <h1>From one browser-polled feed → a backend fleet collector</h1>
-  <p class="sub">An interactive walkthrough of the proposal. The harness already publishes its own events
-  read-only (<code class="inline">GET /api/events</code>, seeded with <code class="inline">turn.ended</code>).
-  This change moves the <b>listening</b> onto the backend and lets it aggregate <b>many harnesses</b>.
-  Everything below is a simulation — no real network calls.</p>
+  <h1>The Dashboard dock toolbar</h1>
+  <p class="sub">openspec <code>add-dashboard-dock-toolbar</code> — curate which agent docks show in the grid, in place.</p>
 
-  <nav class="tabs" id="tabs"></nav>
+  <div class="card">
+    <p><strong>The problem.</strong> The Dashboard renders one tile per <em>agent dock</em>, and the fleet has grown to many docks. The only way to hide one from the grid was to leave for the <strong>Agents</strong> page and click its <code>&#9638;</code> button. There was no in-place way to see the full roster and curate it.</p>
+    <p><strong>The fix.</strong> A toolbar at the top of the Dashboard listing <em>every</em> dock as a tab — <span class="k">active</span> means it renders in the grid, click to hide, click again to re-show. It drives the dock's existing <code>dashboard</code> field. <strong>No backend or schema change.</strong></p>
+  </div>
 
-  <!-- PROBLEM -->
-  <section class="view" data-v="why">
-    <div class="card">
-      <h2>Two gaps in today's pilot</h2>
-      <div class="grid2">
-        <div>
-          <h3>Gap 1 · listening lives in the browser</h3>
-          <p class="lede">The <code class="inline">events-app</code> holds the "started" flag and the
-          watermark in client JS. Reload the page and the feed stops — you must press start again. Nothing
-          listens when no tab is open.</p>
-          <span class="pill"><span class="dot bad"></span> reload = stop &amp; restart</span>
-        </div>
-        <div>
-          <h3>Gap 2 · one harness only</h3>
-          <p class="lede">It can watch only the harness serving it. The original proposal pointed at a
-          <i>collector that aggregates many harnesses</i> — that's the goal here.</p>
-          <span class="pill"><span class="dot idle"></span> can't watch a fleet</span>
-        </div>
+  <h2>Try it</h2>
+  <p class="note">Click a tab to toggle whether that dock renders below. The toolbar always shows the <em>full</em> roster — hidden docks stay one click from returning.</p>
+  <div class="card">
+    <div class="label">Docks</div>
+    <div class="toolbar" id="toolbar"></div>
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <h2>The data flow</h2>
+  <div class="card">
+    <div class="flow">
+      <div class="row"><span class="pill"><code>GET /api/dock</code> &rarr; <code>DockContext</code></span><span class="arrow">&rarr; one roster, read two ways:</span></div>
+      <div class="row" style="padding-left:16px">
+        <span class="pill"><code>rosterTabs</code> &mdash; <strong>unfiltered</strong> &rarr; the <span class="k">toolbar</span> (all docks)</span>
       </div>
-      <div class="note">The fix for both is the same idea: make the backend the <b>source of truth</b> for
-      "what am I listening to, and how far have I read," and let the frontend be a thin <b>observer</b>.</div>
+      <div class="row" style="padding-left:16px">
+        <span class="pill"><code>tabs = dockTabs.filter(d =&gt; d.dashboard !== false)</code> &rarr; the <span class="k">grid</span></span>
+      </div>
+      <div class="row"><span class="arrow">click a tab &rarr;</span><span class="pill"><code>updateTab(id, { dashboard: !active })</code></span><span class="arrow">&rarr;</span><span class="pill"><code>PATCH /api/dock/{id}</code></span></div>
     </div>
-  </section>
+    <p class="note" style="margin-top:12px">The grid re-renders from the changed <code>tabs</code> memo &mdash; no duplicate local state. Because the toolbar and grid read the one field, they stay consistent <em>by construction</em>.</p>
+  </div>
 
-  <!-- MODEL -->
-  <section class="view" data-v="model">
-    <div class="card">
-      <h2>The model: sources → backend poller → one merged feed</h2>
-      <p class="lede">A backend <code class="inline">CollectorService</code> owns a list of <b>sources</b>.
-      A background loop pulls each <b>active</b> source and merges everything into one stream, tagged by source.
-      Press the button to run one poll pass.</p>
-      <div class="topo">
-        <div class="srccol">
-          <div class="src self" id="s-self"><b>self</b><span class="a">in-process feed</span><span class="badge self">self</span></div>
-          <div class="src remote" id="s-r1"><b>laptop-2</b><span class="a">http://192.168.1.20:5099</span> <span class="badge remote">remote</span></div>
-          <div class="src remote" id="s-r2"><b>build-box</b><span class="a">http://10.0.0.7:5099</span> <span class="badge remote">remote</span></div>
-        </div>
-        <div class="wire left" id="w-l"></div>
-        <div class="hub" id="hub"><b>Collector</b><span>poll · merge · seq</span></div>
-        <div class="wire right" id="w-r"></div>
-        <div>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em">Aggregated feed</div>
-          <div class="feed" id="feed-model"><div class="empty">No events yet — run a poll.</div></div>
-        </div>
-      </div>
-      <div class="ctrlrow">
-        <button class="btn" id="poll-btn">▶ Run one poll pass</button>
-        <button class="btn ghost sm" id="poll-clear">Clear</button>
-        <span class="note" style="border:none;margin:0;padding:0">self is read in-process; remotes are pulled with a short-timeout <code class="inline">GET</code>.</span>
-      </div>
-    </div>
-  </section>
+  <h2>Same field the Agents page uses</h2>
+  <p class="note">The Agents-page <code>&#9638;</code> toggle calls the identical <code>updateTab(id, { dashboard })</code>. So a toolbar toggle is reflected there and vice-versa &mdash; one source of truth. Watch these cards track the simulator above:</p>
+  <div class="card">
+    <div class="label">Agents page &middot; dashboard visibility</div>
+    <div class="agents" id="agents"></div>
+  </div>
 
-  <!-- RELOAD -->
-  <section class="view" data-v="reload">
-    <div class="card">
-      <h2>Why a reload now just resumes</h2>
-      <p class="lede">The watermark and "active" state live on the backend, so the page is disposable.
-      Hit reload on each side and watch the difference.</p>
-      <div class="panes">
-        <div class="pane">
-          <h4>Today — state in the browser</h4>
-          <div class="screen" id="old-screen"></div>
-          <div class="ctrlrow"><button class="btn ghost sm" id="old-reload">⟳ Reload page</button></div>
-        </div>
-        <div class="pane">
-          <h4>Proposed — state on the backend</h4>
-          <div class="screen" id="new-screen"></div>
-          <div class="ctrlrow"><button class="btn ghost sm" id="new-reload">⟳ Reload page</button></div>
-        </div>
-      </div>
-      <div class="note ok">Backend keeps pulling while no one is watching; the observer just reattaches at its
-      last watermark and the stream continues.</div>
-    </div>
-  </section>
-
-  <!-- ADD HARNESS -->
-  <section class="view" data-v="add">
-    <div class="card">
-      <h2>Register a harness — live simulation</h2>
-      <p class="lede">Type an address and add it. It registers as a <span class="badge remote">remote</span>
-      source, goes <b>connecting → active</b>, and starts dropping events (tagged by source) into the merged
-      feed. Stop one and its events stop. (Fake data, local only.)</p>
-      <div class="ctrlrow">
-        <input class="txt" id="add-addr" placeholder="http://192.168.1.42:5099" style="min-width:230px" />
-        <input class="txt" id="add-label" placeholder="label (optional)" style="width:150px" />
-        <div class="pwwrap"><input class="txt" id="add-cred" type="password" placeholder="credential (write-only)" style="width:180px" /></div>
-        <button class="btn" id="add-btn">+ Add harness</button>
-      </div>
-      <div style="margin-top:14px" id="src-list"></div>
-      <div style="font-size:11px;color:var(--muted);margin:14px 0 4px;text-transform:uppercase;letter-spacing:.04em">Merged feed</div>
-      <div class="feed" id="feed-add"><div class="empty">Add a harness to see its events flow in.</div></div>
-    </div>
-  </section>
-
-  <!-- GUARANTEES -->
-  <section class="view" data-v="safe">
-    <div class="card">
-      <h2>The guarantees (and your four decisions)</h2>
-      <div class="guarantee"><div class="ic">👁️</div><div><b>Read-only toward every watched harness</b>
-        <p>The collector only ever issues <code class="inline">GET /api/events</code> to a source. It never
-        causes or exposes an action on a watched harness. The only writes are to its <i>own</i> source list —
-        the same category as registering a repo.</p></div></div>
-      <div class="guarantee"><div class="ic">🔒</div><div><b>Credentials are write-only &amp; encrypted at rest</b>
-        <p>A remote's credential is entered once, stored encrypted (Data Protection / DPAPI-backed keys), never
-        returned in any response, and scrubbed from logs. <span class="badge" style="color:var(--ok);border:1px solid rgba(126,240,200,.4)">your call #1</span></p></div></div>
-      <div class="guarantee"><div class="ic">🌐</div><div><b>Any address is allowed</b>
-        <p>No allowlist — operator-entered, behind auth. Blast radius is bounded by short timeouts and
-        per-source isolation. <span class="badge" style="color:var(--ok);border:1px solid rgba(126,240,200,.4)">your call #2</span></p></div></div>
-      <div class="guarantee"><div class="ic">🪞</div><div><b>Self is a built-in source</b>
-        <p>This harness is always a source, read in-process and active by default — "surely accessible" — so the
-        local feed is always present without pressing start. <span class="badge" style="color:var(--ok);border:1px solid rgba(126,240,200,.4)">your call #3</span></p></div></div>
-      <div class="guarantee"><div class="ic">💾</div><div><b>Source list persists; events stay in memory</b>
-        <p>The sources survive a harness restart (listening auto-resumes); the aggregated events are an in-memory
-        ring, like the feed. <span class="badge" style="color:var(--ok);border:1px solid rgba(126,240,200,.4)">your call #4</span></p></div></div>
-    </div>
-  </section>
-
-  <!-- HOST CUE -->
-  <section class="view" data-v="cue">
-    <div class="card">
-      <h2>The host cue: a sound on the <i>machine</i>, not the browser</h2>
-      <p class="lede">Independent of any open tab, the computer running the harness can make a noise each time the
-      collector ingests a new event — so an operator across the room knows something landed. It's an
-      operator toggle (<code class="inline">POST /api/collector/sound</code>), debounced, played on a background
-      thread, and best-effort: a host with no audio just stays silent.</p>
-
-      <h3>Two modes — <code class="inline">beep</code> (default) vs <code class="inline">voice</code></h3>
-      <div class="grid2">
-        <div>
-          <p class="lede"><b>Beep</b> plays the Windows notification tone (falling back to <code class="inline">Console.Beep</code>).
-          <b>Voice</b> instead <i>speaks</i> a short robotic phrase — <b>"an agent has finished"</b> — through the
-          default audio device via Windows SAPI (<code class="inline">SpVoice</code> over COM, no new dependency),
-          slowed and pitched down to sound robotic.</p>
-        </div>
-        <div>
-          <p class="lede">The selected mode is <b>persisted</b> (survives a restart) and the <b>Test</b> button plays
-          whichever mode is live. If the voice path is ever unavailable, it <b>falls back to the beep</b>, so the
-          cue is always best-effort.</p>
-        </div>
-      </div>
-
-      <div class="ctrlrow">
-        <button class="btn ghost sm" id="cue-mode">🔊 Mode: Beep</button>
-        <button class="btn" id="cue-fire">▶ A new event arrives</button>
-        <span class="dot idle" id="cue-dot"></span><span id="cue-say" style="color:var(--muted);font-size:12.5px">host is quiet</span>
-      </div>
-      <div class="note">This demo uses your <i>browser's</i> speech/beep to stand in for the host. In production the
-      sound comes out of the <b>host machine's</b> speakers on the server side — no browser needed.</div>
-    </div>
-  </section>
+  <h2>Shared, not personal (the one real decision)</h2>
+  <div class="card">
+    <p>Reusing the synced <code>dashboard</code> field means hiding a dock hides it for <strong>every</strong> client and stays in lock-step with the Agents page &mdash; but it is <strong>not</strong> a private per-device view. The alternative was a device-local hidden-set (like <code>claudeweb_dash_only_important</code>). It was rejected as the default because it introduces a second, competing notion of "is this dock on the dashboard" that can silently disagree with the field and the Agents page. Shared reuse wins: zero backend work, one source of truth.</p>
+    <p class="note">Gate: the toolbar lives inside the Dashboard overlay, which only renders under the <code>agentDashboard</code> (Advanced) gate &mdash; so Basic mode shows neither. No new capability entry.</p>
+  </div>
 </div>
 
 <script>
-  // ---- tabs ----
-  var TABS=[["why","The problem"],["model","The model"],["reload","Reload resilience"],["add","Add a harness"],["cue","Host cue"],["safe","Guarantees"]];
-  var nav=document.getElementById("tabs");
-  TABS.forEach(function(t,i){var b=document.createElement("button");b.textContent=t[1];if(i===0)b.className="active";
-    b.onclick=function(){document.querySelectorAll("nav.tabs button").forEach(function(x){x.classList.remove("active")});
-      document.querySelectorAll("section.view").forEach(function(x){x.classList.remove("active")});
-      b.classList.add("active");document.querySelector('section[data-v="'+t[0]+'"]').classList.add("active");};
-    nav.appendChild(b);});
-  document.querySelector('section[data-v="why"]').classList.add("active");
+  // Mirror of Dashboard.jsx: the toolbar reads the FULL roster; the grid renders
+  // only docks whose `dashboard !== false`. Clicking a tab flips that one field.
+  const DOCKS = [
+    { id: 'a', name: 'alpha', color: '#e11d48', dashboard: true },
+    { id: 'b', name: 'beta', color: '#2563eb', dashboard: true },
+    { id: 'c', name: 'gamma', color: '#16a34a', dashboard: false },
+    { id: 'd', name: 'delta', color: '#9333ea', dashboard: true },
+  ];
 
-  // ---- HOST CUE: browser stand-in for the server-side beep/voice ----
-  (function(){
-    var mode="beep", ac=null;
-    var mBtn=document.getElementById("cue-mode"), fire=document.getElementById("cue-fire");
-    var dot=document.getElementById("cue-dot"), say=document.getElementById("cue-say");
-    if(!mBtn) return;
-    function renderMode(){ mBtn.textContent = mode==="voice" ? "🗣️ Mode: Voice" : "🔊 Mode: Beep"; }
-    mBtn.onclick=function(){ mode = mode==="voice" ? "beep" : "voice"; renderMode(); };
-    function beep(){
-      try{
-        ac = ac || new (window.AudioContext||window.webkitAudioContext)();
-        if(ac.state==="suspended") ac.resume();
-        var t=ac.currentTime, o=ac.createOscillator(), g=ac.createGain();
-        o.type="triangle"; o.frequency.value=880;
-        g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.2,t+0.01);
-        g.gain.exponentialRampToValueAtTime(0.0001,t+0.16);
-        o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t+0.18);
-      }catch(e){}
-    }
-    function speak(){
-      try{
-        var u=new SpeechSynthesisUtterance("an agent has finished");
-        u.rate=0.85; u.pitch=0.4;                 // slowed + low = robotic, mirrors SAPI rate/pitch
-        speechSynthesis.cancel(); speechSynthesis.speak(u);
-      }catch(e){ beep(); }                          // fall back to the beep, like the server does
-    }
-    fire.onclick=function(){
-      dot.className="dot ok";
-      if(mode==="voice"){ say.textContent='host speaks: "an agent has finished"'; speak(); }
-      else { say.textContent="host beeps"; beep(); }
-      setTimeout(function(){ dot.className="dot idle"; say.textContent="host is quiet"; }, 1600);
-    };
-    renderMode();
-  })();
+  const toolbar = document.getElementById('toolbar');
+  const grid = document.getElementById('grid');
+  const agents = document.getElementById('agents');
 
-  var TYPES=["turn.ended","turn.ended","turn.ended"];
-  function evRow(seq,ty,fromLabel,kind){
-    var d=document.createElement("div");d.className="ev";
-    d.innerHTML='<span class="seq">#'+seq+'</span><span class="ty">'+ty+'</span>'+
-      '<span class="from '+kind+'">'+(kind==="self"?"⌂ ":"⇲ ")+fromLabel+'</span>';
-    return d;
-  }
-  function prepend(feed,row){var e=feed.querySelector(".empty");if(e)e.remove();feed.insertBefore(row,feed.firstChild);
-    while(feed.children.length>40)feed.removeChild(feed.lastChild);}
-
-  // ---- MODEL: one poll pass ----
-  var mSeq=0;
-  var modelSources=[["self","self","self"],["laptop-2","s-r1","remote"],["build-box","s-r2","remote"]];
-  var feedModel=document.getElementById("feed-model");
-  document.getElementById("poll-btn").onclick=function(){
-    var btn=this;btn.disabled=true;
-    document.getElementById("hub").classList.add("beat");
-    document.getElementById("w-l").classList.add("go");document.getElementById("w-r").classList.add("go");
-    modelSources.forEach(function(s,i){
-      var el=document.getElementById(s[1]);
-      setTimeout(function(){ if(el)el.classList.add("pull"); },120*i);
-      setTimeout(function(){
-        if(el)el.classList.remove("pull");
-        // each source yields 1-2 events this pass
-        var n=1+Math.floor(Math.random()*2);
-        for(var k=0;k<n;k++){mSeq++;prepend(feedModel,evRow(mSeq,TYPES[i%TYPES.length],s[0],s[2]));}
-      },300+170*i);
+  function render() {
+    // Toolbar = the unfiltered roster.
+    toolbar.innerHTML = '';
+    DOCKS.forEach((d) => {
+      const active = d.dashboard !== false;
+      const b = document.createElement('button');
+      b.className = 'tab' + (active ? ' on' : '');
+      b.setAttribute('aria-pressed', active);
+      b.title = (active ? 'Hide ' : 'Show ') + d.name;
+      b.innerHTML = '<span class="dot" style="background:' + d.color + '"></span>' + d.name;
+      b.onclick = () => { d.dashboard = !active; render(); };
+      toolbar.appendChild(b);
     });
-    setTimeout(function(){document.getElementById("hub").classList.remove("beat");
-      document.getElementById("w-l").classList.remove("go");document.getElementById("w-r").classList.remove("go");
-      btn.disabled=false;},1100);
-  };
-  document.getElementById("poll-clear").onclick=function(){mSeq=0;feedModel.innerHTML='<div class="empty">No events yet — run a poll.</div>';};
 
-  // ---- RELOAD sim ----
-  function renderOld(stopped){
-    var s=document.getElementById("old-screen");
-    if(stopped){s.innerHTML='<span class="dot idle"></span> <b>Not listening.</b><br><button class="btn sm" id="old-start" style="margin-top:8px">▶ Start</button>';
-      document.getElementById("old-start").onclick=function(){renderOld(false);};
+    // Grid = dashboard !== false.
+    const shown = DOCKS.filter((d) => d.dashboard !== false);
+    grid.innerHTML = '';
+    if (shown.length === 0) {
+      const e = document.createElement('div');
+      e.className = 'empty';
+      e.textContent = 'Every dock is hidden. Use the Docks toolbar above to show one.';
+      grid.appendChild(e);
     } else {
-      s.innerHTML='<span class="dot ok"></span> listening · watermark in this tab<br>'+
-        '<div style="margin-top:6px;font-family:ui-monospace,Consolas,monospace;font-size:11px;color:var(--muted)">#41 turn.ended<br>#42 turn.ended<br>#43 turn.ended</div>';
+      shown.forEach((d) => {
+        const c = document.createElement('div');
+        c.className = 'cell';
+        c.style.setProperty('--cellcolor', d.color);
+        c.textContent = d.name;
+        grid.appendChild(c);
+      });
     }
-  }
-  function renderNew(){
-    var s=document.getElementById("new-screen");
-    s.innerHTML='<span class="dot ok"></span> observing backend · watermark on server<br>'+
-      '<div style="margin-top:6px;font-family:ui-monospace,Consolas,monospace;font-size:11px;color:var(--muted)">#41 turn.ended<br>#42 turn.ended<br>#43 turn.ended</div>';
-  }
-  renderOld(false);renderNew();
-  document.getElementById("old-reload").onclick=function(){var s=document.getElementById("old-screen");
-    s.classList.add("reloading");setTimeout(function(){s.classList.remove("reloading");renderOld(true);},500);};
-  document.getElementById("new-reload").onclick=function(){var s=document.getElementById("new-screen");
-    s.classList.add("reloading");setTimeout(function(){s.classList.remove("reloading");renderNew();},500);};
 
-  // ---- ADD HARNESS sim ----
-  var aSeq=43; var sources=[]; var timers={};
-  var feedAdd=document.getElementById("feed-add"); var list=document.getElementById("src-list");
-  // seed self
-  function addSource(label,addr,kind){
-    var id="src"+Math.floor(Math.random()*1e6);
-    var s={id:id,label:label,addr:addr,kind:kind,active:false,status:kind==="self"?"active":"connecting"};
-    sources.push(s); renderSources();
-    if(kind==="self"){s.active=true;startEmit(s);}
-    else{ setTimeout(function(){s.status="active";s.active=true;renderSources();startEmit(s);}, 900); }
-    return s;
-  }
-  function startEmit(s){
-    if(timers[s.id])clearInterval(timers[s.id]);
-    timers[s.id]=setInterval(function(){
-      if(!s.active)return;
-      aSeq++; prepend(feedAdd,evRow(aSeq,"turn.ended",s.label,s.kind==="self"?"self":"remote"));
-    }, s.kind==="self"?2600:1600+Math.random()*1200);
-  }
-  function renderSources(){
-    list.innerHTML="";
-    sources.forEach(function(s){
-      var row=document.createElement("div");row.className="srcrow";
-      var dotc=s.status==="active"?"ok":(s.status==="connecting"?"warn":"bad");
-      row.innerHTML='<span class="dot '+dotc+'"></span><span class="lbl">'+s.label+'</span>'+
-        '<span class="badge '+(s.kind==="self"?"self":"remote")+'">'+s.kind+'</span>'+
-        '<span class="addr">'+s.addr+'</span><span class="st">'+s.status+'</span>';
-      var ctrl=document.createElement("div");ctrl.style.marginLeft="6px";
-      if(s.kind!=="self"){
-        var toggle=document.createElement("button");toggle.className="btn ghost sm";
-        toggle.textContent=s.active?"Stop":"Start";
-        toggle.onclick=function(){s.active=!s.active;s.status=s.active?"active":"stopped";if(s.active)startEmit(s);renderSources();};
-        var rm=document.createElement("button");rm.className="btn ghost sm";rm.textContent="✕";rm.style.marginLeft="6px";
-        rm.onclick=function(){s.active=false;clearInterval(timers[s.id]);sources=sources.filter(function(x){return x!==s});renderSources();};
-        ctrl.appendChild(toggle);ctrl.appendChild(rm);
-      } else { ctrl.innerHTML='<span class="st" style="color:var(--muted)">built-in</span>'; }
-      row.appendChild(ctrl); list.appendChild(row);
+    // Agents page mirror = the same field.
+    agents.innerHTML = '';
+    DOCKS.forEach((d) => {
+      const active = d.dashboard !== false;
+      const a = document.createElement('span');
+      a.className = 'acard';
+      a.innerHTML = '<span class="glyph ' + (active ? 'on' : 'off') + '">&#9638;</span>' + d.name;
+      agents.appendChild(a);
     });
   }
-  addSource("this harness","in-process","self");
-  document.getElementById("add-btn").onclick=function(){
-    var addr=document.getElementById("add-addr").value.trim()||"http://192.168.1.42:5099";
-    var label=document.getElementById("add-label").value.trim()||addr.replace(/^https?:\/\//,"").split(":")[0];
-    document.getElementById("add-addr").value="";document.getElementById("add-label").value="";
-    document.getElementById("add-cred").value=""; // write-only: cleared on submit
-    addSource(label,addr,"remote");
-  };
+  render();
 </script>
 </body>
 </html>
