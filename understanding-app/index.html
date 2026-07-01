@@ -244,9 +244,10 @@
       <div class="grid2">
         <div>
           <p class="lede"><b>Beep</b> plays the Windows notification tone (falling back to <code class="inline">Console.Beep</code>).
-          <b>Voice</b> instead <i>speaks</i> a short phrase — <b>"an agent has finished"</b> — through the
-          default audio device via Windows SAPI (<code class="inline">SpVoice</code> over COM, no new dependency),
-          in a soft, soothing female voice (a female SAPI voice, slightly slowed).</p>
+          <b>Voice</b> instead <i>speaks</i>, naming the source that finished — <b>"agent {label} has finished"</b> —
+          through the default audio device via Windows SAPI (<code class="inline">SpVoice</code> over COM, no new
+          dependency), in a soft, soothing female voice. Because the phrase says the label, every source now
+          <b>requires</b> a label when you add it.</p>
         </div>
         <div>
           <p class="lede">The selected mode is <b>persisted</b> (survives a restart) and the <b>Test</b> button plays
@@ -280,6 +281,7 @@
   // ---- HOST CUE: browser stand-in for the server-side beep/voice ----
   (function(){
     var mode="beep", ac=null;
+    var LABELS=["self","build-box","laptop-2"], li=0;                 // cycle sample sources per fire
     var mBtn=document.getElementById("cue-mode"), fire=document.getElementById("cue-fire");
     var dot=document.getElementById("cue-dot"), say=document.getElementById("cue-say");
     if(!mBtn) return;
@@ -301,18 +303,19 @@
         return vs.find(function(v){return /female|zira|samantha|susan|hazel|fiona/i.test(v.name);}) || null;
       }catch(e){ return null; }
     }
-    function speak(){
+    function speak(phrase){
       try{
-        var u=new SpeechSynthesisUtterance("an agent has finished");
+        var u=new SpeechSynthesisUtterance(phrase);
         u.rate=0.9; u.pitch=1.05;                  // gentle + soft = soothing, mirrors the female SAPI voice
         var f=pickFemale(); if(f) u.voice=f;
         speechSynthesis.cancel(); speechSynthesis.speak(u);
       }catch(e){ beep(); }                          // fall back to the beep, like the server does
     }
     fire.onclick=function(){
+      var label=LABELS[li++ % LABELS.length];
       dot.className="dot ok";
-      if(mode==="voice"){ say.textContent='host speaks: "an agent has finished"'; speak(); }
-      else { say.textContent="host beeps"; beep(); }
+      if(mode==="voice"){ var phrase='agent '+label+' has finished'; say.textContent='host speaks: "'+phrase+'"'; speak(phrase); }
+      else { say.textContent="host beeps (source: "+label+")"; beep(); }
       setTimeout(function(){ dot.className="dot idle"; say.textContent="host is quiet"; }, 1600);
     };
     renderMode();

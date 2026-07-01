@@ -84,10 +84,11 @@
   <h2>Sources</h2>
   <div class="addform">
     <input id="addr" placeholder="http://192.168.1.42:5099" />
-    <input id="label" placeholder="label (optional)" />
+    <input id="label" placeholder="label (required)" />
     <input id="cred" type="password" autocomplete="off" placeholder="credential (write-only)" />
     <button class="primary" id="add">+ Add harness</button>
-    <div class="formhint">Enter a harness address to listen to it. The credential is sent once and never shown again. The collector only ever <b>reads</b> a source's <code>/api/events</code>.</div>
+    <div class="formhint">Enter a harness address <b>and a label</b> to listen to it — the label names the source (and is what the host voice cue speaks). The credential is sent once and never shown again. The collector only ever <b>reads</b> a source's <code>/api/events</code>.</div>
+    <div class="formhint" id="adderr" style="display:none;color:var(--bad)"></div>
   </div>
   <div class="sources" id="sources"></div>
 
@@ -281,14 +282,19 @@ async function sourceAction(act, id){
   }catch(e){ /* next tick reflects reality */ }
 }
 
+const elAddErr = document.getElementById("adderr");
+function showAddErr(msg){ if (msg){ elAddErr.textContent = msg; elAddErr.style.display = ""; } else { elAddErr.style.display = "none"; } }
 document.getElementById("add").onclick = async () => {
   const addr = document.getElementById("addr"), label = document.getElementById("label"), cred = document.getElementById("cred");
+  showAddErr(null);
   const body = { address: addr.value.trim(), label: label.value.trim() || undefined, credential: cred.value || undefined };
   if (!body.address) { addr.focus(); return; }
+  if (!body.label) { showAddErr("A label is required — it names the source."); label.focus(); return; }
   try{
     const res = await fetch(`${API}/collector/sources`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     if (res.ok){ addr.value = ""; label.value = ""; cred.value = ""; refreshSources(); }
-  }catch(e){ /* ignore; user can retry */ }
+    else { let msg = "Could not add source."; try { msg = (await res.json()).error || msg; } catch {} showAddErr(msg); }
+  }catch(e){ showAddErr("Network error — please retry."); }
 };
 
 async function refreshSources(){

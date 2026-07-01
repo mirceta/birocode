@@ -9,7 +9,7 @@ namespace ClaudeWeb.Controllers;
 /// Auto-discovered by AddControllers(); behind the usual session auth like every /api route.
 ///
 ///   GET    /api/collector/sources            -> [{ id, label, address, kind, active, status, lastSeq, lastError, lastPolledAt }]
-///   POST   /api/collector/sources            { address, label?, credential? } -> the new source
+///   POST   /api/collector/sources            { address, label, credential? } -> the new source (label required)
 ///   POST   /api/collector/sources/{id}/start -> { ok }
 ///   POST   /api/collector/sources/{id}/stop  -> { ok }
 ///   DELETE /api/collector/sources/{id}       -> { ok }   (the built-in self source is non-removable)
