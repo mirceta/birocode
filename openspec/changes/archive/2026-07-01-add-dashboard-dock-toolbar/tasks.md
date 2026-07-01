@@ -16,7 +16,7 @@
 
 ## 4. Verify & document
 
-- [ ] 4.1 `openspec validate add-dashboard-dock-toolbar --strict` passes
+- [x] 4.1 `openspec validate add-dashboard-dock-toolbar --strict` passes
 - [x] 4.2 Build (client) clean; browser-verify on an isolated preview port with Playwright: toggle a dock off from the toolbar → its tile leaves the grid and the tab goes inactive; toggle it back on → tile returns; hide all → empty-state hint shows; screenshot — `verify-dock-toolbar.mjs` on :5210, 16/16 PASS, screenshots in `out-dock-toolbar/`
 - [x] 4.3 Confirm consistency with the Agents-page `▦` toggle (toggling in the toolbar is reflected there and vice-versa) — verified: after toolbar toggles, the Agents page shows all 3 cards `agent-card__dash--off` (both surfaces drive the same `dashboard` field via `updateTab` → `PATCH /api/dock/{id}`)
 - [x] 4.4 Update the repo-root `understanding-app/index.html` to explain the dock toolbar → `dashboard` field → grid filter flow — rolling-latest overwritten with an interactive simulator (toolbar → filter → grid, plus the Agents-page mirror and the shared-vs-personal decision)
