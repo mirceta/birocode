@@ -12,7 +12,7 @@ This change adds a second dimension — *how* it sounds — without disturbing t
 
 **Goals:**
 - Add a persisted `mode` ∈ {`beep`, `voice`}; default `beep` (preserves today's behavior).
-- `voice` speaks "an agent has finished" via Windows SAPI, robotic-sounding, no new NuGet dep.
+- `voice` speaks "an agent has finished" via Windows SAPI in a soft female voice, no new NuGet dep.
 - Enable toggle, debounce, background play, best-effort swallow, and test all honor the mode.
 - Expose mode on the existing sound endpoints; add a Beep/Voice control in the events-app.
 
@@ -30,8 +30,9 @@ This change adds a second dimension — *how* it sounds — without disturbing t
   `Type.GetTypeFromProgID("SAPI.SpVoice")` + `dynamic` and call `Speak(phrase, 0)`
   synchronously on the background thread. This adds **no package** and matches the file's
   "pure-BCL, best-effort" ethos. Wrap in try/catch; on any failure fall through to the beep.
-- **Robotic timbre:** set `voice.Rate` (e.g. `-2`) and speak with SSML/`<pitch>` to lower and
-  flatten it. Kept minimal — the synthetic default voice already reads as robotic.
+- **Soothing timbre:** prefer a female voice via `GetVoices("Gender=Female")` (e.g. Zira) and
+  slow the rate slightly (`voice.Rate = -1`) with natural intonation (no pitch shift), so the
+  cue is soft rather than harsh.
 - **Play dispatch:** rename the private `DoBeep()` to a `Play()` that switches on the current
   mode. `Notify()` (debounced) and `PlayNow()` (test) both call `Play()`, so the test always
   reflects the live mode — no separate test path per mode.

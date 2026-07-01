@@ -10,8 +10,8 @@ namespace ClaudeWeb.Services.Events;
 ///
 /// Off by default and operator-toggleable; the choice persists across restarts. The cue has a
 /// selectable, persisted <see cref="SoundMode"/>: <c>beep</c> (default) plays a short tone,
-/// <c>voice</c> instead speaks "an agent has finished" through the default audio device via
-/// Windows SAPI. Debounced so a burst of events collapses to one cue, and played on a
+/// <c>voice</c> instead speaks "an agent has finished" in a soft female voice through the
+/// default audio device via Windows SAPI. Debounced so a burst of events collapses to one cue, and played on a
 /// background thread so it can never block the poll loop. Every path is best-effort — a host
 /// with no audio (or no speech voice) just stays silent, and voice falls back to the beep.
 /// </summary>
@@ -84,8 +84,9 @@ public class HostEventSound
     }
 
     /// <summary>Cheap and non-blocking: debounce, then fire one cue on a background thread.
-    /// Safe to call from inside the poll path for every event.</summary>
-    public void Notify()
+    /// Safe to call from inside the poll path for every event. In voice mode the cue names the
+    /// source it came from — "agent {sourceLabel} has finished".</summary>
+    public void Notify(string? sourceLabel = null)
     {
         if (!_enabled) return;
 
@@ -94,27 +95,32 @@ public class HostEventSound
         if (now - last < MinGapMs) return;                                   // within the debounce window
         if (Interlocked.CompareExchange(ref _lastBeepTicks, now, last) != last) return; // lost the race — someone else cued
 
-        _ = Task.Run(Play);
+        _ = Task.Run(() => Play(sourceLabel));
     }
 
     /// <summary>Play the host cue immediately, ignoring the enable flag and debounce, in the
-    /// currently selected mode — used by the "test" button to verify audio works on the host.</summary>
-    public void PlayNow() => _ = Task.Run(Play);
+    /// currently selected mode — used by the "test" button to verify audio works on the host.
+    /// No source, so the voice speaks the generic phrase.</summary>
+    public void PlayNow() => _ = Task.Run(() => Play(null));
 
     // Play the cue for the current mode. Voice speaks a phrase via SAPI; beep plays the
     // Windows notification sound (falling back to Console.Beep). All best-effort: any failure
     // in the voice path falls through to the beep, and a host with no audio stays silent.
-    private void Play()
+    private void Play(string? sourceLabel)
     {
-        if (_mode == ModeVoice && TrySpeak()) return;
+        if (_mode == ModeVoice && TrySpeak(PhraseFor(sourceLabel))) return;
         DoBeep();
     }
 
+    // "agent {label} has finished" when we know the source, else the generic phrase.
+    private static string PhraseFor(string? label) =>
+        string.IsNullOrWhiteSpace(label) ? VoicePhrase : $"agent {label!.Trim()} has finished";
+
     // Speak the phrase through the default audio device using the OS SAPI voice (SpVoice via
-    // COM — no NuGet dependency). Tuned to sound robotic: slower rate and a lowered pitch via
-    // the inline SSML <pitch> tag (SVSFIsXML = 8). Returns false on any failure so the caller
-    // can fall back to the beep.
-    private bool TrySpeak()
+    // COM — no NuGet dependency). Tuned to sound soft and soothing: prefer a female voice
+    // (e.g. Zira) and slow the rate slightly, with natural intonation (no pitch shift).
+    // Returns false on any failure so the caller can fall back to the beep.
+    private bool TrySpeak(string phrase)
     {
         try
         {
@@ -124,8 +130,14 @@ public class HostEventSound
             if (voice == null) return false;
             try
             {
-                voice.Rate = -2;                                              // slower = more deliberate/robotic
-                voice.Speak($"<pitch absmiddle='-4'/>{VoicePhrase}", 8);      // 8 = SVSFIsXML, synchronous
+                try
+                {
+                    dynamic females = voice.GetVoices("Gender=Female", "");   // pick a female voice if present
+                    if (females.Count > 0) voice.Voice = females.Item(0);
+                }
+                catch { /* no female voice available — keep the default */ }
+                voice.Rate = -1;                                              // slightly slower = calmer
+                voice.Speak(phrase, 0);                                       // 0 = default flags, natural delivery
             }
             finally
             {
