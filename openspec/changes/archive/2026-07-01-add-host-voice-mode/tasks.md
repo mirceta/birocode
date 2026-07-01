@@ -21,5 +21,5 @@
 ## 4. Verify & document
 
 - [x] 4.1 `openspec validate add-host-voice-mode --strict` passes
-- [ ] 4.2 Build (client + dotnet) clean; manual check: toggle Voice, press Test host, hear "an agent has finished"; toggle Beep, press Test, hear the beep; restart harness and confirm mode persists — dotnet builds clean and SAPI verified on host; live end-to-end check pending deploy
+- [x] 4.2 Build (client + dotnet) clean; manual check: toggle Voice, press Test host, hear "an agent has finished"; toggle Beep, press Test, hear the beep; restart harness and confirm mode persists — dotnet builds clean, SAPI verified on host, and operator confirmed the live voice cue sounds good
 - [x] 4.3 Update the events-app Understanding app to show the beep-vs-voice cue path (added a "Host cue" tab with a live beep/voice demo)

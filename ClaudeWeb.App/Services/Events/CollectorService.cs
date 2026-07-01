@@ -143,11 +143,13 @@ public class CollectorService
     {
         var addr = NormalizeAddress(address);
         if (addr.Length == 0) throw new ArgumentException("Address is required.");
+        var lbl = label?.Trim();
+        if (string.IsNullOrWhiteSpace(lbl)) throw new ArgumentException("Label is required.");
 
         var src = new Source
         {
             Id = Guid.NewGuid().ToString("n"),
-            Label = string.IsNullOrWhiteSpace(label) ? DeriveLabel(addr) : label!.Trim(),
+            Label = lbl!,
             Address = addr,
             Kind = "remote",
             Active = true,
@@ -316,9 +318,10 @@ public class CollectorService
             _events.Add(new CollectorEvent(++_seq, at, type, source, data, s.Id, s.Label));
             if (_events.Count > Cap) _events.RemoveRange(0, TrimChunk);
         }
-        // Best-effort host beep (debounced, non-blocking; no-op unless the operator
-        // enabled it). Outside the lock so audio scheduling never holds up polling.
-        _hostSound.Notify();
+        // Best-effort host cue (debounced, non-blocking; no-op unless the operator enabled it).
+        // Pass the source label so voice mode can say "agent {label} has finished". Outside the
+        // lock so audio scheduling never holds up polling.
+        _hostSound.Notify(s.Label);
     }
 
     // Unified state update: status + scrubbed detail + alive + lastPolled, optional watermark.
@@ -389,11 +392,6 @@ public class CollectorService
         // be added by typing an explicit http:// scheme.
         if (!a.Contains("://")) a = "https://" + a;
         return a.TrimEnd('/');
-    }
-
-    private static string DeriveLabel(string addr)
-    {
-        try { return new Uri(addr).Host; } catch { return addr; }
     }
 
     private void EnsureSelf()
