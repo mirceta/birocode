@@ -1,363 +1,368 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>The button that vanished — a version-skew diagnosis</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Understanding · add-cockpit-openspec-setup</title>
 <style>
   :root{
-    --bg:#0b1020; --panel:#141b33; --panel2:#1b2444; --ink:#e8ecf8; --muted:#9aa6c8;
-    --line:#2a3358; --accent:#6ea8fe; --accent2:#7ef0c8; --warn:#ffd166; --danger:#ff6b8a;
-    --ok:#7ef0c8; --shadow:0 8px 30px rgba(0,0,0,.45); --radius:14px;
-    --be:#7ef0c8; --fe:#ffb3c8;
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c232c; --border:#30363d;
+    --ink:#e6edf3; --muted:#8b949e; --accent:#58a6ff; --good:#3fb950;
+    --warn:#d29922; --bad:#f85149; --mod:#bc8cff; --add:#3fb950;
   }
   *{box-sizing:border-box}
-  html,body{margin:0;padding:0}
-  body{
-    background:radial-gradient(1200px 600px at 80% -10%, #1a2452 0,#0b1020 60%), var(--bg);
-    color:var(--ink); font:15px/1.55 ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial;
-    -webkit-font-smoothing:antialiased;
-  }
-  .wrap{max-width:1120px;margin:0 auto;padding:28px 20px 90px}
-  header.top{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
-  .kicker{color:var(--accent);font-weight:700;letter-spacing:.12em;text-transform:uppercase;font-size:11px}
-  h1{margin:0;font-size:30px;line-height:1.15;letter-spacing:-.01em}
-  .sub{color:var(--muted);max-width:860px}
-  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
-  .chip{display:inline-flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line);
-    border-radius:999px;padding:3px 10px;font-size:12px;color:var(--muted)}
-  .chip b{color:var(--ink)}
-  .chip.ok{border-color:rgba(126,240,200,.4)} .chip.ok b{color:var(--ok)}
-  .chip.bad{border-color:rgba(255,107,138,.4)} .chip.bad b{color:var(--danger)}
-  nav.tabs{display:flex;flex-wrap:wrap;gap:8px;margin:22px 0 18px}
-  nav.tabs button{background:var(--panel);border:1px solid var(--line);color:var(--muted);
-    border-radius:999px;padding:8px 14px;font-size:13px;cursor:pointer;transition:.15s}
-  nav.tabs button:hover{color:var(--ink);border-color:var(--accent)}
-  nav.tabs button.active{background:linear-gradient(180deg,#22305f,#1a2450);color:var(--ink);
-    border-color:var(--accent);box-shadow:0 0 0 1px rgba(110,168,254,.3)}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  code,kbd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  a{color:var(--accent)}
+  .wrap{max-width:1040px;margin:0 auto;padding:32px 20px 80px}
+  header.hero{border-left:3px solid var(--accent);padding:6px 0 6px 18px;margin-bottom:8px}
+  .eyebrow{color:var(--muted);font-size:12px;letter-spacing:.12em;text-transform:uppercase}
+  h1{font-size:26px;margin:6px 0 4px}
+  h1 .mono{font-family:ui-monospace,monospace;color:var(--accent);font-size:22px}
+  .sub{color:var(--muted);max-width:760px}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin:26px 0 18px;border-bottom:1px solid var(--border);padding-bottom:0}
+  .tab{background:none;border:0;border-bottom:2px solid transparent;color:var(--muted);
+    padding:9px 14px;cursor:pointer;font-size:14px;border-radius:6px 6px 0 0}
+  .tab:hover{color:var(--ink);background:var(--panel)}
+  .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
   section.view{display:none;animation:fade .25s ease}
   section.view.active{display:block}
-  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-  .card{background:linear-gradient(180deg,var(--panel),#10172e);border:1px solid var(--line);
-    border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow);margin-bottom:16px}
-  .card h2{margin:0 0 10px;font-size:18px}
-  .card h3{margin:18px 0 8px;font-size:14px;color:var(--accent2);letter-spacing:.02em}
-  p.lede{color:var(--muted);margin:0 0 12px}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin:14px 0}
+  .card h3{margin:0 0 8px;font-size:16px}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   @media(max-width:760px){.grid2{grid-template-columns:1fr}}
-  code,kbd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px}
-  code.inline{background:#0d1430;border:1px solid var(--line);border-radius:6px;padding:1px 6px;color:#cfe0ff}
-  .mono{background:#0a1128;border:1px solid var(--line);border-radius:10px;padding:12px 14px;
-    color:#d4e2ff;font-family:ui-monospace,Consolas,monospace;font-size:12.5px;overflow-x:auto;white-space:pre}
-  .note{font-size:12.5px;color:var(--muted);border-left:3px solid var(--accent);padding:4px 0 4px 12px;margin:10px 0}
-  .danger-note{border-left-color:var(--danger)}
-  .ok-note{border-left-color:var(--ok)}
-  .warn-note{border-left-color:var(--warn)}
-  button.act{background:linear-gradient(180deg,#2b3c72,#1d2a55);border:1px solid var(--accent);
-    color:var(--ink);border-radius:10px;padding:9px 16px;font-size:13px;cursor:pointer;font-weight:600}
-  button.act:hover{filter:brightness(1.12)}
-  button.ghost{background:#121a36;border:1px solid var(--line);color:var(--muted);border-radius:10px;
-    padding:9px 16px;font-size:13px;cursor:pointer}
-  .ctrlrow{display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap}
-  .tag{display:inline-block;font-size:11px;color:var(--muted);background:#0d1430;border:1px solid var(--line);
-    border-radius:6px;padding:1px 7px}
-  .badge{font-weight:700;font-size:13px;border-radius:8px;padding:4px 10px;white-space:nowrap}
-  .badge.g{background:rgba(126,240,200,.14);color:var(--ok);border:1px solid rgba(126,240,200,.4)}
-  .badge.y{background:rgba(255,209,102,.14);color:var(--warn);border:1px solid rgba(255,209,102,.4)}
-  .badge.r{background:rgba(255,107,138,.14);color:var(--danger);border:1px solid rgba(255,107,138,.4)}
+  .pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;border:1px solid var(--border);color:var(--muted)}
+  .pill.mod{color:var(--mod);border-color:var(--mod)}
+  .pill.add{color:var(--add);border-color:var(--add)}
+  .pill.warn{color:var(--warn);border-color:var(--warn)}
+  .mono{font-family:ui-monospace,monospace}
+  .cmd{background:#010409;border:1px solid var(--border);border-radius:8px;padding:10px 12px;
+    color:#c9d1d9;font-family:ui-monospace,monospace;font-size:13px;overflow-x:auto;white-space:pre-wrap}
+  .cmd .tok{color:var(--accent)}
+  .muted{color:var(--muted)}
+  .good{color:var(--good)} .bad{color:var(--bad)} .warn{color:var(--warn)}
+  ul.tight{margin:6px 0;padding-left:20px} ul.tight li{margin:3px 0}
 
-  /* hypothesis fork */
-  .fork{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px}
-  @media(max-width:760px){.fork{grid-template-columns:1fr}}
-  .hyp{border:1px solid var(--line);border-radius:12px;padding:14px;background:#0d1430;cursor:pointer;transition:.2s;position:relative}
-  .hyp:hover{border-color:var(--accent)}
-  .hyp h4{margin:0 0 6px;font-size:15px}
-  .hyp p{margin:0;color:var(--muted);font-size:12.5px}
-  .hyp .verdict{margin-top:10px;font-weight:700;font-size:13px;opacity:0;transition:.3s;min-height:18px}
-  .hyp.ruled-out{border-color:rgba(255,107,138,.5);opacity:.72}
-  .hyp.ruled-out .verdict{opacity:1;color:var(--danger)}
-  .hyp.confirmed{border-color:rgba(126,240,200,.6);box-shadow:0 0 0 1px rgba(126,240,200,.35)}
-  .hyp.confirmed .verdict{opacity:1;color:var(--ok)}
-  .strike{text-decoration:line-through;text-decoration-color:var(--danger);text-decoration-thickness:2px}
+  /* flow simulator */
+  .sim{display:grid;grid-template-columns:230px 1fr;gap:18px}
+  @media(max-width:760px){.sim{grid-template-columns:1fr}}
+  .steps{list-style:none;margin:0;padding:0}
+  .steps li{padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;
+    cursor:pointer;background:var(--panel);color:var(--muted);font-size:13px;display:flex;gap:10px;align-items:center}
+  .steps li .n{width:22px;height:22px;border-radius:50%;border:1px solid var(--border);
+    display:grid;place-items:center;font-size:12px;flex:none}
+  .steps li.active{border-color:var(--accent);color:var(--ink);background:var(--panel2)}
+  .steps li.active .n{border-color:var(--accent);color:var(--accent)}
+  .steps li.done .n{background:var(--good);border-color:var(--good);color:#04130a}
+  .stage{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:18px;min-height:330px}
+  .repo-bar{display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:14px;flex-wrap:wrap}
+  .select{background:#010409;border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--ink)}
+  .ready{border-radius:8px;padding:12px 14px;border:1px solid var(--border);background:var(--panel);margin-bottom:12px}
+  .ready.notready{border-left:3px solid var(--warn)}
+  .ready.ok{border-left:3px solid var(--good)}
+  .check{display:flex;align-items:center;gap:8px;font-size:13px;margin:4px 0}
+  .dot{width:14px;height:14px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:10px}
+  .dot.ok{background:var(--good);color:#04130a} .dot.no{background:var(--bad);color:#1a0303}
+  .btn{background:var(--accent);color:#03101f;border:0;border-radius:7px;padding:9px 14px;
+    font-size:13px;font-weight:600;cursor:pointer}
+  .btn:disabled{opacity:.5;cursor:default}
+  .btn.ghost{background:transparent;border:1px solid var(--border);color:var(--ink)}
+  .stagelog{margin-top:12px;font-family:ui-monospace,monospace;font-size:12px;color:#9fb0c0;
+    background:#010409;border:1px solid var(--border);border-radius:8px;padding:10px;min-height:64px;white-space:pre-wrap}
+  .nav{display:flex;justify-content:space-between;margin-top:14px}
+  .narr{font-size:13.5px;color:var(--muted);margin-bottom:12px;min-height:38px}
 
-  /* artifact scanner */
-  .arts{display:flex;flex-direction:column;gap:12px;margin-top:6px}
-  .art{display:grid;grid-template-columns:42px 1fr auto;gap:12px;align-items:center;padding:12px 14px;
-    border:1px solid var(--line);border-radius:12px;background:#0d1430;transition:.25s}
-  .art .ico{font-size:22px;text-align:center}
-  .art .meta b{display:block;font-size:13.5px}
-  .art .meta span{color:var(--muted);font-size:12px;font-family:ui-monospace,Consolas,monospace}
-  .art .when{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--muted)}
-  .art.be{border-left:3px solid var(--be)}
-  .art.fe{border-left:3px solid var(--fe)}
-  .art .flag{font-weight:700;font-size:12px;border-radius:8px;padding:4px 9px;white-space:nowrap;opacity:0;transition:.3s}
-  .art.scanned .flag{opacity:1}
-  .art .flag.yes{background:rgba(126,240,200,.14);color:var(--ok);border:1px solid rgba(126,240,200,.4)}
-  .art .flag.no{background:rgba(255,107,138,.14);color:var(--danger);border:1px solid rgba(255,107,138,.4)}
-  .art.culprit{box-shadow:0 0 0 1px rgba(255,107,138,.5);background:#1a1024}
-  .scanline{height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);
-    border-radius:2px;margin:2px 0 0;opacity:0}
-  .legendrow{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--muted)}
-  .swatch{display:inline-block;width:18px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
-
-  /* request pipeline */
-  .req{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;margin-top:10px}
-  .rnode{flex:1;min-width:130px;background:#0d1430;border:1px solid var(--line);border-radius:12px;
-    padding:12px;font-size:12.5px;text-align:center;position:relative;transition:.25s}
-  .rnode b{display:block;font-size:12.5px} .rnode span{color:var(--muted);font-size:11px}
-  .rnode.lit{border-color:var(--accent);box-shadow:0 0 0 1px rgba(110,168,254,.4);background:#13204a}
-  .rnode.fail{border-color:var(--danger);box-shadow:0 0 0 1px rgba(255,107,138,.45);background:#1a1024}
-  .rarrow{align-self:center;color:var(--accent);font-size:18px;flex:0 0 auto}
-  @media(max-width:760px){.req{flex-direction:column}.rarrow{transform:rotate(90deg)}}
-
-  /* fix / robocopy */
-  .mir{display:grid;grid-template-columns:1fr 70px 1fr;gap:10px;align-items:center;margin-top:10px}
-  @media(max-width:680px){.mir{grid-template-columns:1fr}}
-  .box{border:1px solid var(--line);border-radius:12px;background:#0d1430;padding:14px}
-  .box h4{margin:0 0 8px;font-size:13px;color:var(--accent2)}
-  .file{display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;
-    margin:6px 0;font-family:ui-monospace,Consolas,monospace;font-size:12px;background:#0a1128;transition:.3s}
-  .file .h{color:var(--muted)} .file .h.new{color:var(--ok)} .file .h.old{color:var(--danger)}
-  .file.flip{animation:flipbg 1s ease}
-  @keyframes flipbg{0%{background:#241018}50%{background:#10241a}100%{background:#0a1128}}
-  .mirarrow{text-align:center;color:var(--accent);font-size:26px}
-  .mirarrow .lbl{font-size:10px;color:var(--muted);display:block;font-family:ui-monospace,Consolas,monospace}
-
-  footer{color:var(--muted);font-size:12px;text-align:center;margin-top:26px}
+  /* before/after */
+  .ba{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:center}
+  @media(max-width:760px){.ba{grid-template-columns:1fr}.arrow{transform:rotate(90deg)}}
+  .arrow{font-size:22px;color:var(--accent);text-align:center}
+  .delta-line{padding:6px 10px;border-radius:6px;font-family:ui-monospace,monospace;font-size:12.5px;margin:4px 0}
+  .delta-line.rm{background:rgba(248,81,73,.08);border-left:2px solid var(--bad)}
+  .delta-line.ad{background:rgba(63,185,80,.08);border-left:2px solid var(--good)}
+  .scn{border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin:8px 0;background:var(--panel)}
+  .scn b{color:var(--accent)} .scn .w{color:var(--mod)} .scn .t{color:var(--good)}
+  footer{margin-top:40px;color:var(--muted);font-size:12px;border-top:1px solid var(--border);padding-top:14px}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header class="top">
-    <div class="kicker">Claude Web · self-development incident</div>
-    <h1>The 🧠 button that vanished — a version-skew diagnosis</h1>
-    <p class="sub">The <em>Ask for understanding</em> button disappeared from live. It looked like an auto-rollback —
-      it wasn't. The <b>backend</b> had the feature; the <b>frontend bundle being served was a day older</b> and predated it.
-      This walks the diagnosis, the root cause, and the no-restart fix.</p>
-    <div class="chips">
-      <span class="chip ok">backend DLL <b>6/29 11:51 PM</b> · has route</span>
-      <span class="chip bad">served JS <b>6/28 1:23 PM</b> · no button</span>
-      <span class="chip ok">source build <b>6/29 11:51 PM</b> · has button</span>
-      <span class="chip">fix = <b>robocopy /MIR</b>, no restart</span>
-    </div>
+  <header class="hero">
+    <div class="eyebrow">OpenSpec change · proposal</div>
+    <h1><span class="mono">add-cockpit-openspec-setup</span></h1>
+    <p class="sub">Make the OpenSpec Cockpit able to <b>port a repo into OpenSpec</b> with one click —
+    turning its read-only readiness banner into an action — while deliberately and explicitly
+    relaxing the cockpit's read-only guarantee through a spec delta, not by sneaking past it.</p>
   </header>
 
   <nav class="tabs" id="tabs">
-    <button class="active" data-v="mystery">① The mystery</button>
-    <button data-v="scan">② Three artifacts</button>
-    <button data-v="why">③ Why no button rendered</button>
-    <button data-v="notroll">④ Not a rollback</button>
-    <button data-v="fix">⑤ The fix</button>
-    <button data-v="verify">⑥ Verified</button>
+    <button class="tab active" data-v="why">Why</button>
+    <button class="tab" data-v="flow">The flow</button>
+    <button class="tab" data-v="conflict">The conflict</button>
+    <button class="tab" data-v="delta">Spec delta</button>
+    <button class="tab" data-v="api">Endpoint</button>
+    <button class="tab" data-v="open">Open questions</button>
   </nav>
 
-  <!-- MYSTERY -->
-  <section class="view active" data-v="mystery">
-    <div class="card">
-      <h2>Symptom: a feature that shipped is suddenly gone</h2>
-      <p class="lede">The 🧠 dock button was committed, deployed, and verified — then it wasn't on the live UI.
-        Two explanations fit the symptom. Click each to run it against the evidence.</p>
-      <div class="fork" id="fork">
-        <div class="hyp" data-h="rollback">
-          <h4>Hypothesis A — the auto-rollback fired</h4>
-          <p>swap.ps1 arms a 15-min dead-man's switch. If nobody ran <code class="inline">keep.ps1</code>,
-             live could have reverted to the last-good build, taking the button with it.</p>
-          <div class="verdict"></div>
-        </div>
-        <div class="hyp" data-h="skew">
-          <h4>Hypothesis B — backend/frontend version skew</h4>
-          <p>The deploy refreshed the <b>backend</b> but left a <b>stale frontend bundle</b> in the run dir.
-             The route exists; the served JS just doesn't know about the button.</p>
-          <div class="verdict"></div>
-        </div>
-      </div>
-      <div class="ctrlrow">
-        <button class="act" id="testBtn">▶ Test both against the evidence</button>
-        <button class="ghost" id="testReset">Reset</button>
-      </div>
-      <div class="note" id="forkMsg">A rollback would revert <em>everything</em> to 6/28 — backend included.
-        So the deciding question is: <b>does the live backend still know the new route?</b> Run the test.</div>
-    </div>
-  </section>
-
-  <!-- SCAN -->
-  <section class="view" data-v="scan">
-    <div class="card">
-      <h2>Three artifacts, three timestamps, one liar</h2>
-      <p class="lede">The button is a <b>frontend</b> capability — the token <code class="inline">understandingAgent</code>
-        must be present in the served JS. I scanned the three relevant artifacts for it. Press <b>Scan</b>.</p>
-      <div class="arts" id="arts">
-        <div class="art be" data-has="yes">
-          <div class="ico">⚙️</div>
-          <div class="meta"><b>Live backend — ClaudeWeb.dll</b><span>run-bin\ · exposes /api/understanding</span></div>
-          <div class="when">6/29 11:51 PM</div>
-          <div class="flag yes">has route ✓</div>
-        </div>
-        <div class="art fe culprit" data-has="no">
-          <div class="ico">📦</div>
-          <div class="meta"><b>Live frontend — index-BKUDIuJp.js  (SERVED)</b><span>run-bin\client\dist\assets\ · what the browser gets</span></div>
-          <div class="when">6/28 1:23 PM</div>
-          <div class="flag no">no understandingAgent ✗</div>
-        </div>
-        <div class="art fe" data-has="yes">
-          <div class="ico">🧩</div>
-          <div class="meta"><b>Source build — index-D2iCtp2-.js</b><span>client\dist\assets\ · fresh, never copied over</span></div>
-          <div class="when">6/29 11:51 PM</div>
-          <div class="flag yes">has understandingAgent ✓</div>
-        </div>
-      </div>
-      <div class="scanline" id="scanline"></div>
-      <div class="ctrlrow">
-        <button class="act" id="scanBtn">▶ Scan for "understandingAgent"</button>
-        <button class="ghost" id="scanReset">Reset</button>
-      </div>
-      <div class="legendrow">
-        <span><span class="swatch" style="background:var(--be)"></span>backend artifact</span>
-        <span><span class="swatch" style="background:var(--fe)"></span>frontend bundle</span>
-      </div>
-      <div class="note danger-note" id="scanMsg">The served bundle (6/28) is the only one missing the token — and it's
-        also the <b>oldest</b>. A fresh build with the button exists in <code class="inline">client\dist</code>, but it was
-        never copied into the run dir. That gap is the whole bug.</div>
-    </div>
-  </section>
-
   <!-- WHY -->
-  <section class="view" data-v="why">
+  <section class="view active" data-v="why">
     <div class="card">
-      <h2>Why a fresh backend still renders an old button-less UI</h2>
-      <p class="lede">Kestrel serves the static files in <code class="inline">run-bin\client\dist</code>
-        <b>per request</b> — independently of the running C# process. So a stale <code class="inline">dist</code>
-        silently downgrades the UI while the backend is brand new. Send a request and watch.</p>
-      <div class="req" id="req">
-        <div class="rnode" data-r="0"><b>📱 Browser</b><span>GET /</span></div>
-        <div class="rarrow">→</div>
-        <div class="rnode" data-r="1"><b>Kestrel :5099</b><span>static-file middleware</span></div>
-        <div class="rarrow">→</div>
-        <div class="rnode" data-r="2"><b>run-bin\client\dist</b><span>index.html (6/28)</span></div>
-        <div class="rarrow">→</div>
-        <div class="rnode" data-r="3"><b>references</b><span>index-BKUDIuJp.js</span></div>
-        <div class="rarrow">→</div>
-        <div class="rnode fail" data-r="4"><b>no 🧠 button</b><span>token absent</span></div>
-      </div>
-      <div class="ctrlrow">
-        <button class="act" id="reqBtn">▶ Trace a request</button>
-        <button class="ghost" id="reqReset">Reset</button>
-      </div>
-      <div class="grid2" style="margin-top:6px">
-        <div class="card" style="margin:0;background:#0d1430">
-          <h3 style="margin-top:0">The backend never enters this path</h3>
-          <p class="lede">The C# controller answers <code class="inline">/api/understanding/*</code>. But the
-            <em>shell</em> that decides whether to draw the button is plain static JS. New backend + old shell = no button.</p>
+      <h3>The problem, in one picture</h3>
+      <div class="ba">
+        <div class="card" style="margin:0;background:var(--panel2)">
+          <span class="pill warn">today</span>
+          <p>The cockpit detects a repo isn't OpenSpec-ready and prints static text:</p>
+          <div class="cmd">Run <span class="tok">openspec init</span> in this repo, then reload.</div>
+          <p class="muted">You leave the harness, open a shell in that repo, run the CLI by hand, come back, reload.</p>
         </div>
-        <div class="card" style="margin:0;background:#0d1430">
-          <h3 style="margin-top:0">Why "didn't show up" is a known trap</h3>
-          <p class="lede">In self-dev, the frontend lives as static files, not as part of the process. So a backend-only
-            deploy leaves <code class="inline">dist</code> stale — the recurring "frontend change didn't show up" gotcha.</p>
+        <div class="arrow">&#8594;</div>
+        <div class="card" style="margin:0;background:var(--panel2)">
+          <span class="pill add">this change</span>
+          <p>The same banner offers a button:</p>
+          <p><button class="btn" disabled>&#9881; Set up OpenSpec</button></p>
+          <p class="muted">Runs <span class="mono">openspec init --tools claude</span> in the <b>selected</b> repo,
+          re-checks readiness, refreshes in place. No shell, no reload.</p>
+        </div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h3>Why now</h3>
+        <p>You want OpenSpec in other repos too (e.g. <span class="mono">prg-copy1</span>).
+        The standalone Control Room already documents this as
+        <b>Operate &#8594; Workflows &#8594; "Set up the tool"</b>
+        (<span class="mono">openspec init --tools claude</span>, then <span class="mono">openspec update</span>).
+        This brings that one capability into the cockpit you already use.</p>
+      </div>
+      <div class="card">
+        <h3>The key insight: repo scoping</h3>
+        <p>The cockpit is already scoped to the selected repo via the
+        <span class="mono">X-Repo-Id</span> header &#8594; <span class="mono">RepositoryResolver</span> &#8594; working dir.
+        So you port <span class="mono">prg-copy1</span> by <b>selecting it</b> in the repo picker —
+        not by hardcoding a path. "Set up <i>this</i> repo" needs no path parameter at all.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- FLOW -->
+  <section class="view" data-v="flow">
+    <div class="card">
+      <h3>Walk the setup flow</h3>
+      <p class="muted">Click a step, or use Next. This simulates the cockpit's readiness section for an un-ported repo.</p>
+      <div class="narr" id="narr"></div>
+      <div class="sim">
+        <ul class="steps" id="steps">
+          <li data-s="0"><span class="n">1</span> Select repo</li>
+          <li data-s="1"><span class="n">2</span> Readiness check</li>
+          <li data-s="2"><span class="n">3</span> Press &ldquo;Set up&rdquo;</li>
+          <li data-s="3"><span class="n">4</span> POST /api/openspec/setup</li>
+          <li data-s="4"><span class="n">5</span> init runs in repo dir</li>
+          <li data-s="5"><span class="n">6</span> Re-check + refresh</li>
+        </ul>
+        <div class="stage">
+          <div class="repo-bar">
+            <span class="muted">Repo:</span>
+            <span class="select" id="repoName">prg-copy1</span>
+            <span class="muted">— selected in the harness repo picker</span>
+          </div>
+          <div class="ready" id="readyBox">
+            <div style="font-weight:600;margin-bottom:6px">Prepared for OpenSpec?</div>
+            <div class="check"><span class="dot" id="d-cli">?</span> <span><code>openspec</code> CLI on PATH</span></div>
+            <div class="check"><span class="dot" id="d-dir">?</span> <span><code>openspec/</code> present in repo</span></div>
+            <div id="actionRow" style="margin-top:10px"></div>
+          </div>
+          <div class="stagelog" id="log">&hellip;</div>
+          <div class="nav">
+            <button class="btn ghost" id="prev">&lsaquo; Prev</button>
+            <button class="btn" id="next">Next &rsaquo;</button>
+          </div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- NOT A ROLLBACK -->
-  <section class="view" data-v="notroll">
-    <div class="card">
-      <h2>Proof it was not the dead-man's switch</h2>
-      <p class="lede">A rollback would have three fingerprints. None of them are present.</p>
-      <div class="arts">
-        <div class="art be scanned" data-has="yes">
-          <div class="ico">🔌</div>
-          <div class="meta"><b>Live backend route still answers</b><span>/api/understanding/status → not 404</span></div>
-          <div class="when">live now</div>
-          <div class="flag yes">present ✓</div>
-        </div>
-        <div class="art fe scanned" data-has="yes">
-          <div class="ico">💾</div>
-          <div class="meta"><b>run-bin.lastgood untouched</b><span>still the older 6/28 backend — never restored from</span></div>
-          <div class="when">6/28</div>
-          <div class="flag yes">intact ✓</div>
-        </div>
-        <div class="art be scanned" data-has="yes">
-          <div class="ico">⏱️</div>
-          <div class="meta"><b>Rollback task never fired</b><span>no restore event in logs; switch wasn't the cause</span></div>
-          <div class="when">—</div>
-          <div class="flag yes">never ran ✓</div>
-        </div>
-      </div>
-      <div class="note ok-note">If the rollback had fired, the live <b>backend</b> would have reverted to 6/28 and the
-        route would 404. It answers. So the backend is the <em>new</em> build — only the served JS is old. That's skew, not rollback.</div>
+  <!-- CONFLICT -->
+  <section class="view" data-v="conflict">
+    <div class="card" style="border-left:3px solid var(--warn)">
+      <h3>&#9888; A convention conflict — surfaced, not buried</h3>
+      <p>Per the repo's <b>most important convention</b> (<span class="mono">CLAUDE.md</span>), a request that breaks
+      a written convention must be flagged before acting. This one does:</p>
+      <div class="delta-line rm">openspec/specs/openspec-cockpit/spec.md — "read-only &hellip; <b>no mutating verb</b>"</div>
+      <p>A <b>Set up OpenSpec</b> button runs <span class="mono">openspec init</span> — a <b>write</b>. That directly
+      contradicts the cockpit's read-only baseline.</p>
+      <p>The resolution is not to ignore it, but to <b>MODIFY the requirement</b> through the change's delta spec —
+      the legitimate OpenSpec mechanism — carving out exactly <b>one</b> explicit, gated exception:</p>
+      <ul class="tight">
+        <li><b>Fixed verbs only</b> — <span class="mono">init --tools claude</span> or <span class="mono">update</span>; the API never accepts a command string or arbitrary args.</li>
+        <li><b>No-clobber guard</b> — init refuses to run if <span class="mono">openspec/</span> already exists (enforced server-side, unreachable from the UI).</li>
+        <li><b>Repo-scoped</b> — runs only in the resolver-resolved working dir; can't target another directory.</li>
+        <li><b>Everything else stays read-only</b> — in-flight, shipped, baseline, drill-in are untouched.</li>
+      </ul>
+      <p class="muted">If you'd rather keep the cockpit strictly read-only and build this in the standalone Control Room,
+      that's the alternative — say so and it redirects before any code.</p>
     </div>
   </section>
 
-  <!-- FIX -->
-  <section class="view" data-v="fix">
+  <!-- DELTA -->
+  <section class="view" data-v="delta">
     <div class="card">
-      <h2>The fix: mirror the fresh dist into the run dir — no restart</h2>
-      <p class="lede">No rebuild needed: the correct bundle already existed in <code class="inline">client\dist</code>.
-        Just mirror it into the run dir with <code class="inline">robocopy /MIR</code>. Because Kestrel reads static files
-        per-request, the next reload serves the new bundle — <b>no process restart</b>. Press <b>Run fix</b>.</p>
-      <div class="mir">
-        <div class="box">
-          <h4>SOURCE · client\dist\assets</h4>
-          <div class="file"><span class="ico">🧩</span><span class="h new" id="srcHash">index-D2iCtp2-.js</span></div>
-          <div class="tag">fresh build · has the button</div>
-        </div>
-        <div class="mirarrow">⟶<span class="lbl">/MIR</span></div>
-        <div class="box">
-          <h4>RUN DIR · run-bin\client\dist\assets</h4>
-          <div class="file" id="dstFile"><span class="ico">📦</span><span class="h old" id="dstHash">index-BKUDIuJp.js</span></div>
-          <div class="tag" id="dstTag">stale · 6/28 · no button</div>
-        </div>
-      </div>
-      <div class="mono" id="fixCmd">robocopy client\dist  run-bin\client\dist  /MIR
-   →  exit code 3   (files copied + extras removed = success)</div>
-      <div class="ctrlrow">
-        <button class="act" id="fixBtn">▶ Run fix</button>
-        <button class="ghost" id="fixReset">Reset</button>
-      </div>
-      <div class="note">robocopy exit codes 0–7 are all success. <code class="inline">/MIR</code> makes the run dir an exact
-        mirror, so the old <code class="inline">index.html</code> is replaced too and now points at the new hashed bundle.</div>
+      <h3><span class="pill mod">MODIFIED</span> A harness-native read-only Cockpit tab&hellip;</h3>
+      <p>The read-only clause is rewritten to name the single exception:</p>
+      <div class="delta-line rm">&minus; &ldquo;The tab SHALL NOT expose any action that &hellip; mutates OpenSpec artifacts — it is read-only.&rdquo;</div>
+      <div class="delta-line ad">&plus; &ldquo;The <b>only</b> state-changing action the tab MAY expose is the explicit, gated <b>setup action</b>;
+      no other mutating verb SHALL be exposed.&rdquo;</div>
+      <p class="muted">And the "No mutating verb" scenario becomes "No mutating verb <b>beyond the gated setup action</b>".</p>
+    </div>
+    <div class="card">
+      <h3><span class="pill add">ADDED</span> Set up a repository for OpenSpec from the Cockpit</h3>
+      <p>One endpoint, fixed verb, no-clobber guard, repo-scoped, readiness re-run after. Six scenarios:</p>
+      <div class="scn"><b>Set up a not-ready repo</b> — <span class="w">WHEN</span> CLI present &amp; no <span class="mono">openspec/</span>
+        <span class="t">THEN</span> run init, re-check, reflect ready without reload</div>
+      <div class="scn"><b>Refuse to clobber</b> — <span class="w">WHEN</span> <span class="mono">openspec/</span> already exists
+        <span class="t">THEN</span> don't run init; report "already initialized"; tree untouched</div>
+      <div class="scn"><b>Unavailable without CLI</b> — <span class="w">WHEN</span> no CLI on PATH
+        <span class="t">THEN</span> don't offer init; direct to install</div>
+      <div class="scn"><b>Refresh instruction files</b> — <span class="w">WHEN</span> already initialized
+        <span class="t">THEN</span> run <span class="mono">openspec update</span>, surface result</div>
+      <div class="scn"><b>Fixed verb &amp; scope enforced</b> — <span class="w">WHEN</span> endpoint called
+        <span class="t">THEN</span> only the fixed verb in the resolved dir; reject arbitrary args</div>
+      <div class="scn"><b>Surface failure cleanly</b> — <span class="w">WHEN</span> verb exits non-zero
+        <span class="t">THEN</span> show captured result as failure; readiness reflects true state</div>
     </div>
   </section>
 
-  <!-- VERIFY -->
-  <section class="view" data-v="verify">
+  <!-- API -->
+  <section class="view" data-v="api">
     <div class="card">
-      <h2>Confirmed live over HTTP</h2>
-      <p class="lede">Not "it copied" — but "the running server now hands out the new bytes." Three checks against
-        <code class="inline">:5099</code>.</p>
-      <div class="art be scanned" style="margin-bottom:10px"><div class="ico">🌐</div>
-        <div class="meta"><b>GET /</b><span>references assets/index-D2iCtp2-.js</span></div>
-        <div class="when"> </div><div class="flag yes">new bundle ✓</div></div>
-      <div class="art be scanned" style="margin-bottom:10px"><div class="ico">📦</div>
-        <div class="meta"><b>GET /assets/index-D2iCtp2-.js</b><span>HTTP status</span></div>
-        <div class="when"> </div><div class="flag yes">200 ✓</div></div>
-      <div class="art be scanned" style="margin-bottom:4px"><div class="ico">🔎</div>
-        <div class="meta"><b>body contains "understandingAgent"</b><span>the button capability is in the served JS</span></div>
-        <div class="when"> </div><div class="flag yes">true ✓</div></div>
-      <div class="note ok-note">All three line up → the live server serves the fresh bundle, and the 🧠 button is back.</div>
-
-      <h3>Two caveats handed back to you</h3>
+      <h3>One new state-changing endpoint</h3>
+      <div class="cmd">POST <span class="tok">/api/openspec/setup</span>
+{ "action": "init" | "update" }   <span class="muted">// a discriminator — never a command string</span></div>
+      <p class="muted">Maps to a fixed verb server-side, runs it in the resolved repo working dir via the existing
+      <span class="mono">RunOpenspec(workingDir, &hellip;)</span>, then returns command result + refreshed readiness.</p>
       <div class="grid2">
-        <div class="card" style="margin:0;background:#0d1430">
-          <h3 style="margin-top:0">① Hard-reload your browser</h3>
-          <p class="lede">The old <code class="inline">index-BKUDIuJp.js</code> may be cached client-side. Reload to
-            pull the new hashed bundle.</p>
+        <div class="card" style="margin:0;background:var(--panel2)">
+          <h3>Controller — <span class="mono">OpenspecController.cs</span></h3>
+          <ul class="tight">
+            <li>Resolve dir via <span class="mono">RepositoryResolver</span> (same X-Repo-Id path as reads)</li>
+            <li>Validate <span class="mono">action</span> &#8712; {init, update}</li>
+            <li>Return <span class="mono">{ ok, action, exitCode, stdout, stderr, alreadyInitialized?, ready }</span></li>
+          </ul>
         </div>
-        <div class="card" style="margin:0;background:#0d1430">
-          <h3 style="margin-top:0">② Switch to Advanced mode</h3>
-          <p class="lede">The button is gated to Advanced UI mode (<code class="inline">understandingAgent: 'advanced'</code>).
-            In Simple mode it stays hidden even with the right bundle.</p>
+        <div class="card" style="margin:0;background:var(--panel2)">
+          <h3>Service — <span class="mono">OpenspecCockpitService.cs</span></h3>
+          <ul class="tight">
+            <li><span class="mono">RunSetup(workingDir, action)</span>: init&#8594;<span class="mono">init --tools claude</span>, update&#8594;<span class="mono">update</span></li>
+            <li>init: if <span class="mono">openspecDirPresent</span> &#8594; "already initialized", run nothing</li>
+            <li>After run: <span class="mono">CheckReadiness()</span> again, return both</li>
+          </ul>
         </div>
       </div>
-      <div class="note warn-note">Still open (separate issue): fired from another repo, the prompt points at
-        <code class="inline">docs/understanding-app-convention.md</code> "in this repository", which may not exist there —
-        the cross-repo absolute-path fix is the next task.</div>
+    </div>
+    <div class="card">
+      <h3>Frontend — <span class="mono">Cockpit.jsx</span> readiness section</h3>
+      <p>No new tab/section; the existing "Prepared for OpenSpec?" block becomes conditional on data it already has:</p>
+      <ul class="tight">
+        <li><b>Set up OpenSpec</b> when <span class="mono">openspecOnPath &amp;&amp; !openspecDirPresent</span></li>
+        <li><b>Update instruction files</b> when <span class="mono">openspecDirPresent</span></li>
+        <li>install-CLI hint when <span class="mono">!openspecOnPath</span> (init can't run without it)</li>
+        <li>after POST &#8594; re-run the existing <span class="mono">load()</span> so the whole tab refreshes in place</li>
+      </ul>
     </div>
   </section>
 
-  <footer>Companion app · rolling-latest · overwritten when the explanation changes · served no-store at
-    <code>/api/localview/&lt;repo&gt;/app/understanding/</code></footer>
+  <!-- OPEN -->
+  <section class="view" data-v="open">
+    <div class="card">
+      <h3>Two decisions left for you</h3>
+      <div class="grid2">
+        <div class="card" style="margin:0;background:var(--panel2)">
+          <p><b>a.</b> Should a successful <span class="mono">init</span> auto-chain <span class="mono">openspec update</span>,
+          or stay two separate buttons?</p>
+          <p class="muted">Leaning: separate, matching the Control Room's two-step workflow.</p>
+        </div>
+        <div class="card" style="margin:0;background:var(--panel2)">
+          <p><b>b.</b> Should the result show the scaffolded file tree, or just success + refreshed readiness?</p>
+          <p class="muted">Leaning: just readiness for this change; richer output can follow.</p>
+        </div>
+      </div>
+      <p class="muted" style="margin-top:14px">Status: <b>implemented</b> — backend endpoint + service method, actionable readiness UI, and styles are in;
+      both builds are green and <span class="mono">openspec validate --strict</span> passes. Backend verbs
+      (<span class="mono">init</span>/<span class="mono">update</span>) and the no-clobber guard are verified directly.
+      Remaining: in-harness click-through (tasks 3.2&ndash;3.5) in a running instance, then
+      <span class="mono">openspec archive</span> on ship. Both open questions above were resolved at their leaning defaults.</p>
+    </div>
+  </section>
+
+  <footer>
+    Companion to the <span class="mono">add-cockpit-openspec-setup</span> proposal · rolling-latest understanding app ·
+    overwrite-on-change · served under <span class="mono">/api/localview/&lt;repo&gt;/app/understanding/</span>
+  </footer>
 </div>
-<script src="./app.js"></script>
+
+<script>
+(function(){
+  // ---- tabs ----
+  var tabs = document.getElementById('tabs');
+  tabs.addEventListener('click', function(e){
+    var b = e.target.closest('.tab'); if(!b) return;
+    var v = b.dataset.v;
+    document.querySelectorAll('.tab').forEach(function(t){t.classList.toggle('active', t===b);});
+    document.querySelectorAll('.view').forEach(function(s){s.classList.toggle('active', s.dataset.v===v);});
+  });
+
+  // ---- flow simulator ----
+  var steps = [
+    { narr:"Pick prg-copy1 in the harness repo picker. The cockpit re-scopes to it via X-Repo-Id — nothing is hardcoded.",
+      cli:null, dir:null, action:'', log:"X-Repo-Id: prg-copy1  ->  RepositoryResolver  ->  C:\\...\\playground\\prg-copy1" },
+    { narr:"Readiness runs two checks. The CLI is installed, but this repo has no openspec/ — so it is not ready.",
+      cli:true, dir:false, action:'setup', log:"openspec --version  ->  ok\ntest -d openspec/      ->  missing" },
+    { narr:"Because CLI=yes and openspec/=no, the banner offers exactly one action: Set up OpenSpec.",
+      cli:true, dir:false, action:'setup', log:"render: [Set up OpenSpec]   (init is applicable)" },
+    { narr:"The button POSTs an action discriminator — not a command string. The server picks the fixed verb.",
+      cli:true, dir:false, action:'running', log:'POST /api/openspec/setup  { "action": "init" }' },
+    { narr:"Server checks the no-clobber guard (openspec/ absent -> safe), then runs the fixed verb in the repo dir.",
+      cli:true, dir:false, action:'running', log:"guard: openspec/ absent -> proceed\ncmd /c openspec init --tools claude   (cwd = prg-copy1)\nscaffolded openspec/  +  .claude/commands/opsx/*  +  .claude/skills/openspec-*" },
+    { narr:"Readiness is re-run and the whole tab refreshes in place. prg-copy1 is now OpenSpec-ready.",
+      cli:true, dir:true, action:'done', log:"re-check  ->  { openspecOnPath:true, openspecDirPresent:true }\nload()  ->  cockpit refreshed, no manual reload" }
+  ];
+  var i = 0;
+  var dCli=document.getElementById('d-cli'), dDir=document.getElementById('d-dir');
+  var readyBox=document.getElementById('readyBox'), actionRow=document.getElementById('actionRow');
+  var log=document.getElementById('log'), narr=document.getElementById('narr');
+  var stepEls=[].slice.call(document.querySelectorAll('#steps li'));
+
+  function setDot(el, v){
+    if(v===null){el.className='dot';el.textContent='?';}
+    else if(v){el.className='dot ok';el.textContent='✓';}
+    else {el.className='dot no';el.textContent='✕';}
+  }
+  function render(){
+    var s = steps[i];
+    setDot(dCli, s.cli); setDot(dDir, s.dir);
+    narr.textContent = s.narr;
+    log.textContent = s.log || '...';
+    readyBox.className = 'ready' + (s.dir ? ' ok' : (s.dir===false ? ' notready' : ''));
+    var a = s.action;
+    if(a==='setup') actionRow.innerHTML='<button class="btn">&#9881; Set up OpenSpec</button>';
+    else if(a==='running') actionRow.innerHTML='<button class="btn" disabled>&#9203; Running init&hellip;</button>';
+    else if(a==='done') actionRow.innerHTML='<span class="good">&#10003; Ready — OpenSpec scaffolded.</span> '+
+        '<button class="btn ghost">&#8635; Update instruction files</button>';
+    else actionRow.innerHTML='';
+    stepEls.forEach(function(el,idx){
+      el.classList.toggle('active', idx===i);
+      el.classList.toggle('done', idx<i);
+    });
+    document.getElementById('prev').disabled = i===0;
+    document.getElementById('next').disabled = i===steps.length-1;
+  }
+  document.getElementById('next').onclick=function(){ if(i<steps.length-1){i++;render();} };
+  document.getElementById('prev').onclick=function(){ if(i>0){i--;render();} };
+  document.getElementById('steps').addEventListener('click', function(e){
+    var li=e.target.closest('li'); if(!li) return; i=+li.dataset.s; render();
+  });
+  render();
+})();
+</script>
 </body>
 </html>

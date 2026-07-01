@@ -35,6 +35,9 @@ public partial class OpenspecCockpitService
 
     public sealed record ExecResult(bool Ok, int Code, string Cmd, string StdOut, string StdErr);
     public sealed record Readiness(bool OpenspecOnPath, bool OpenspecDirPresent);
+    public sealed record SetupResult(
+        bool Ok, string Action, int ExitCode, string StdOut, string StdErr,
+        bool AlreadyInitialized, Readiness Ready);
 
     // ── exec ─────────────────────────────────────────────────────────
     private ExecResult RunOpenspec(string workingDir, params string[] args)
@@ -95,6 +98,40 @@ public partial class OpenspecCockpitService
         var dirPresent = !string.IsNullOrEmpty(workingDir)
             && Directory.Exists(Path.Combine(workingDir, "openspec"));
         return new Readiness(onPath, dirPresent);
+    }
+
+    // ── setup: the ONE state-changing action this service exposes ─────
+    // The cockpit is otherwise read-only (see the class summary and the
+    // openspec-cockpit spec). This method runs exactly one fixed OpenSpec verb,
+    // chosen here from a closed action set — never a caller-supplied command or
+    // args — in the resolved repo working dir. `init` is guarded against
+    // clobbering an existing openspec/ tree.
+    public SetupResult RunSetup(string workingDir, string action)
+    {
+        switch (action)
+        {
+            case "init":
+            {
+                // No-clobber guard: refuse to run init over an existing tree.
+                // Enforced here so the destructive case is unreachable from the
+                // API regardless of what the UI sends.
+                var dirPresent = !string.IsNullOrEmpty(workingDir)
+                    && Directory.Exists(Path.Combine(workingDir, "openspec"));
+                if (dirPresent)
+                    return new SetupResult(true, action, 0, "", "", true, CheckReadiness(workingDir));
+
+                var r = RunOpenspec(workingDir, "init", "--tools", "claude");
+                return new SetupResult(r.Ok, action, r.Code, r.StdOut, r.StdErr, false, CheckReadiness(workingDir));
+            }
+            case "update":
+            {
+                var r = RunOpenspec(workingDir, "update");
+                return new SetupResult(r.Ok, action, r.Code, r.StdOut, r.StdErr, false, CheckReadiness(workingDir));
+            }
+            default:
+                // Defense-in-depth: the controller already whitelists the action.
+                throw new ArgumentException($"unknown setup action \"{action}\"", nameof(action));
+        }
     }
 
     // ── shipped (archived) changes — no CLI lists them, so read disk ──
