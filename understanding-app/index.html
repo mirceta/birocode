@@ -244,9 +244,9 @@
       <div class="grid2">
         <div>
           <p class="lede"><b>Beep</b> plays the Windows notification tone (falling back to <code class="inline">Console.Beep</code>).
-          <b>Voice</b> instead <i>speaks</i> a short robotic phrase — <b>"an agent has finished"</b> — through the
+          <b>Voice</b> instead <i>speaks</i> a short phrase — <b>"an agent has finished"</b> — through the
           default audio device via Windows SAPI (<code class="inline">SpVoice</code> over COM, no new dependency),
-          slowed and pitched down to sound robotic.</p>
+          in a soft, soothing female voice (a female SAPI voice, slightly slowed).</p>
         </div>
         <div>
           <p class="lede">The selected mode is <b>persisted</b> (survives a restart) and the <b>Test</b> button plays
@@ -296,10 +296,16 @@
         o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t+0.18);
       }catch(e){}
     }
+    function pickFemale(){
+      try{ var vs=speechSynthesis.getVoices()||[];
+        return vs.find(function(v){return /female|zira|samantha|susan|hazel|fiona/i.test(v.name);}) || null;
+      }catch(e){ return null; }
+    }
     function speak(){
       try{
         var u=new SpeechSynthesisUtterance("an agent has finished");
-        u.rate=0.85; u.pitch=0.4;                 // slowed + low = robotic, mirrors SAPI rate/pitch
+        u.rate=0.9; u.pitch=1.05;                  // gentle + soft = soothing, mirrors the female SAPI voice
+        var f=pickFemale(); if(f) u.voice=f;
         speechSynthesis.cancel(); speechSynthesis.speak(u);
       }catch(e){ beep(); }                          // fall back to the beep, like the server does
     }
