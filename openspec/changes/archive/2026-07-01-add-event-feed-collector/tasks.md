@@ -36,5 +36,13 @@
 
 - [x] 7.1 .NET build clean (only the 4 pre-existing `CliRunnerService` warnings); client/ unaffected (events-app is static)
 - [x] 7.2 Security: `SourceView` has no credential; credential only `Protect`(add) / `Unprotect`(header + scrub); never logged/serialized — confirmed by grep. Self-seed, persistence, and per-source isolation verified by code review
-- [~] 7.3 Live: deployed; `[COLLECTOR] poller started` in the harness log; `/api/collector/*` present (auth-gated). **Operator to confirm in the events-app**: self `turn.ended` events appear after a turn, a reload resumes, adding a second harness streams its events tagged by source
+- [x] 7.3 Live: deployed; `[COLLECTOR] poller started` in the harness log; `/api/collector/*` present (auth-gated). **Operator confirmed in the events-app**: self `turn.ended` events appear after a turn, a reload resumes, adding a second harness streams its events tagged by source
 - [x] 7.4 `openspec validate add-event-feed-collector --strict` — by inspection (CLI absent per the openspec-cli-absent memory): deltas well-formed, every requirement has ≥1 scenario
+
+## 8. Audible host-side sound (follow-on)
+
+- [x] 8.1 `Services/Events/HostEventSound.cs`: operator-toggled, persisted (`%APPDATA%\ClaudeWeb\collector-host-sound`) host sound; plays the Windows notification sound (`SystemSounds.Asterisk`) with `Console.Beep` only as a fallback; `PlayNow()` for the on-demand test
+- [x] 8.2 Poller plays the host sound on each newly-ingested event when enabled, independent of any browser
+- [x] 8.3 REST: `GET/POST /api/collector/sound` (toggle, persisted) and `POST /api/collector/sound/test` (one-shot, ignores the toggle) — auth-gated and behind the IP gate like every `/api` route
+- [x] 8.4 events-app: **🖥️ Host** on/off toggle + **🔔 Test host** button; both call the endpoints above
+- [x] 8.5 Verify: build clean; test button plays audibly on the host (operator confirmed); endpoints covered by the IP gate (`IpFilterMiddleware` is the first middleware, no path exemptions)
