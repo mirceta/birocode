@@ -13,5 +13,5 @@
 ## 3. Verify & document
 
 - [x] 3.1 `openspec validate distinguish-source-auth-failures --strict` passes
-- [ ] 3.2 dotnet build clean; manual check against a real harness: unapproved IP shows ip-blocked (with the rejected IP), wrong credential shows credential rejected, no credential shows needs credential
+- [x] 3.2 dotnet build clean; manual check against a real harness: unapproved IP shows ip-blocked (with the rejected IP), wrong credential shows credential rejected, no credential shows needs credential — verified live after the 2026-07-03 deploy (user confirmed)
 - [x] 3.3 Update the events-app Understanding app to show the split failure taxonomy
