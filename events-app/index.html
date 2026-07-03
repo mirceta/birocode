@@ -225,19 +225,24 @@ function addRow(ev){
   while (rows.children.length > 300) rows.removeChild(rows.lastChild);
 }
 
-// Map the backend status taxonomy to a dot colour and a human label. The key case:
-// "needs-credential" = the host answered but rejected auth, i.e. alive but unauthorized —
-// shown amber with "alive · needs credential", never a dead red error.
+// Map the backend status taxonomy to a dot colour and a human label. The key cases are the
+// refusal states — ip-blocked / needs-credential / bad-credential / throttled — where the host
+// answered but refused us: all amber "alive" states with DISTINCT labels (an IP-gate block must
+// never read as a credential problem), never a dead red error.
+const REFUSED = ["ip-blocked", "needs-credential", "bad-credential", "throttled"];
 function dotClass(st){
   if (st === "active") return "live";
-  if (st === "needs-credential" || st === "connecting") return "connecting"; // amber
+  if (REFUSED.includes(st) || st === "connecting") return "connecting";      // amber
   if (st === "unreachable" || st === "error") return "err";                  // red
   return "stopped";
 }
 function statusText(s){
   switch (s.status){
     case "active": return "active";
+    case "ip-blocked": return "alive · blocked by IP gate" + (s.lastError ? " · " + s.lastError : "");
     case "needs-credential": return "alive · needs credential";
+    case "bad-credential": return "alive · credential rejected";
+    case "throttled": return "alive · throttled" + (s.lastError ? " · " + s.lastError : "");
     case "unreachable": return "unreachable" + (s.lastError ? " · " + s.lastError : "");
     case "error": return "error" + (s.lastError ? " · " + s.lastError : "");
     case "connecting": return "connecting…";
@@ -253,7 +258,7 @@ function renderSources(list){
     const div = document.createElement("div");
     div.className = "src " + (s.kind === "self" ? "self" : "remote");
     const dotcls = dotClass(s.status);
-    const stCls = s.status === "needs-credential" ? "warn" : ((s.status === "unreachable" || s.status === "error") ? "err" : "");
+    const stCls = REFUSED.includes(s.status) ? "warn" : ((s.status === "unreachable" || s.status === "error") ? "err" : "");
     let acts = "";
     if (s.kind !== "self"){
       acts = `<div class="acts">`+
