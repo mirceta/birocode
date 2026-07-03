@@ -1,0 +1,132 @@
+/* Dashboard host clock chip (openspec add-dashboard-host-clock): the host box's
+   wall time beside the Scoreboard + account chips. Same chip idiom as
+   accountChips.css — width-only, collapsible, wraps via the parent row's
+   flex-wrap. Digits are tabular so the 1 s tick doesn't make the chip jitter. */
+.hclk {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius, 12px);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hclk:hover {
+  border-color: var(--color-accent);
+}
+
+.hclk--collapsed {
+  max-width: 240px;
+}
+
+/* Stale = resyncs keep failing; still ticking from the last good sync, but say so. */
+.hclk--stale {
+  opacity: 0.75;
+}
+
+.hclk__hd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.hclk__kind {
+  flex: none;
+  padding: 0 5px;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-soft);
+}
+
+.hclk__dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--color-text-soft);
+}
+
+.hclk__dot--ok {
+  background: #2e7d32;
+}
+.hclk__dot--stale {
+  background: #b7791f;
+}
+.hclk__dot--loading {
+  background: var(--color-text-soft);
+}
+
+.hclk__time {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.hclk__time--pending {
+  color: var(--color-text-soft);
+}
+
+.hclk__offset {
+  margin-left: 6px;
+  color: var(--color-text-soft);
+  font-weight: 500;
+}
+
+.hclk__stale {
+  flex: none;
+  color: #b7791f;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.hclk__chevron {
+  flex: none;
+  margin-left: auto;
+  padding-left: 6px;
+  color: var(--color-text-soft);
+  font-size: 11px;
+  transition: transform 0.15s ease;
+}
+
+.hclk--collapsed .hclk__chevron {
+  transform: rotate(-90deg);
+}
+
+.hclk__body {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+  font-size: 12px;
+}
+
+.hclk__row {
+  display: contents;
+}
+
+.hclk__rk {
+  color: var(--color-text-soft);
+}
+
+.hclk__rv {
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

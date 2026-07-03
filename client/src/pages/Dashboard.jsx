@@ -15,6 +15,7 @@ import WaitingOnField from '../components/dashboard/WaitingOnField';
 import IdeasPanel from '../components/ideas/IdeasPanel';
 import Scoreboard from '../components/dashboard/Scoreboard';
 import AccountChips from '../components/dashboard/AccountChips';
+import HostClock from '../components/dashboard/HostClock';
 import AutopilotPanel from '../components/dashboard/AutopilotPanel';
 import DockToolbar from '../components/dashboard/DockToolbar';
 import './dashboard.css';
@@ -390,6 +391,8 @@ export default function Dashboard({ onClose }) {
   // Account-status chips sit beside the Scoreboard on its row (openspec
   // add-account-status); Advanced-only, so Basic mode is unchanged.
   const accountChipsOn = useFeature('accountChips');
+  // Host clock chip on the same row (openspec add-dashboard-host-clock).
+  const hostClockOn = useFeature('hostClock');
   // The panels the free 2D drag layout manages, in DOM order. Autopilot leads so
   // it sits on top in grid-mode flow. (The task graph used to be a citizen here;
   // it now lives as a tab inside Ideas — plans/ideas-taskgraph-merge.md. Files is
@@ -1127,6 +1130,7 @@ export default function Dashboard({ onClose }) {
       <div className="dash__scoreboard-row">
         <Scoreboard />
         {accountChipsOn && <AccountChips />}
+        {hostClockOn && <HostClock />}
       </div>
       {tabs.length === 0 ? (
         // No visible tiles: distinguish "no docks at all" from "every dock hidden
