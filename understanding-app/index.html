@@ -115,7 +115,7 @@
 <div class="wrap">
   <h1>The Status Monitor Dashboard — what's being proposed</h1>
   <p class="sub">A glanceable wallboard for the third monitor: who's working, who's blocked on <em>you</em>, what's red on GitHub — across all five machines.</p>
-  <div class="stage-chip">OpenSpec change <b>status-monitor-dashboard</b> · stage: <b>proposal drafted</b> — nothing below is built yet; this is a mock of the proposal</div>
+  <div class="stage-chip">OpenSpec change <b>status-monitor-dashboard</b> · stage: <b>implemented</b> on <code>feat/status-monitor-dashboard</code> — the real board lives at <code>events-app/board.html</code>, browser-verified in an isolated preview; live deploy + real-fleet check (task 4.3) pending</div>
 
   <div class="tabs" id="tabs">
     <button data-v="board" class="on">1 · The board (live mock)</button>
@@ -226,7 +226,7 @@
       <dt>✓ Staleness source? → the collector's existing per-source state</dt><dd>code audit confirmed <code>Alive</code> / <code>Status</code> / <code>lastPolledAt</code> on <code>api/collector/sources</code>. One nuance: <code>lastPolledAt</code> marks the last <em>attempt</em>, not the last success — so "dark for N min" comes from the board service tracking state <em>transitions</em> in memory (after a harness restart: "duration unknown", never a fabricated timestamp). Collector untouched.</dd>
       <dt>◌ Sound on new attention items? → deferred</dt><dd>doesn't matter for now, decide later; v1 ships silent.</dd>
     </dl></div>
-    <p class="note">Artifacts: <code>openspec/changes/status-monitor-dashboard/</code> — proposal.md · design.md · specs/status-monitor/spec.md (6 requirements, 14 scenarios) · tasks.md. Run <code>/opsx:apply</code> to start implementing.</p>
+    <p class="note">Artifacts: <code>openspec/changes/status-monitor-dashboard/</code> — proposal.md · design.md · specs/status-monitor/spec.md (6 requirements, 14 scenarios) · tasks.md (<b>12/13 done</b> — remaining: 4.3, the real-fleet check on the third monitor after live deploy). Implementation: <code>Services/StatusMonitor/</code> (board + GitHub services), <code>StatusMonitorController</code>, <code>events-app/board.html</code>.</p>
   </section>
 </div>
 <script src="./app.js"></script>

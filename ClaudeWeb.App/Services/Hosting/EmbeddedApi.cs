@@ -23,6 +23,7 @@ using ClaudeWeb.Services.Repositories;
 using ClaudeWeb.Services.Screen;
 using ClaudeWeb.Services.OpenspecCockpit;
 using ClaudeWeb.Services.Settings;
+using ClaudeWeb.Services.StatusMonitor;
 using ClaudeWeb.Services.StructuredAsk;
 using ClaudeWeb.Services.TaskGraph;
 using ClaudeWeb.Services.Terminal;
@@ -176,6 +177,7 @@ public class EmbeddedApi
             builder.Services.AddUnderstandingModule(); // ask for understanding — fork → build Understanding app (openspec add-ask-for-understanding)
             builder.Services.AddEventsModule(); // per-repo agent-dock Event Console log (openspec agent-dock-event-console)
             builder.Services.AddOpenspecCockpitModule(); // harness OpenSpec Cockpit (openspec openspec-cockpit-in-harness)
+            builder.Services.AddStatusMonitorModule(); // third-monitor wallboard board endpoint (openspec status-monitor-dashboard)
             // === END MODULE SERVICE REGISTRATION ===
 
             _app = builder.Build();

@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Status Monitor</title>
+<style>
+  /* Self-contained by spec — shares NOTHING with index.html except the folder.
+     Status colors: validated dark-surface palette (all ≥3:1 on #1a1a19);
+     icon + label always paired so color never carries meaning alone. */
+  :root{
+    --page:#0d0d0d; --surface:#1a1a19; --line:#2c2c2a; --ring:rgba(255,255,255,.10);
+    --ink:#ffffff; --ink2:#c3c2b7; --muted:#898781;
+    --good:#0ca30c; --warning:#fab219; --serious:#ec835a; --critical:#d03b3b;
+    --mono:ui-monospace,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--page);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;padding:14px 18px;display:flex;flex-direction:column;gap:4px}
+  #wrap{transition:opacity .3s}
+  #wrap.dimmed{opacity:.35}
+
+  .top{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid var(--line);padding-bottom:8px}
+  .top .t{font-size:14px;letter-spacing:.24em;color:var(--ink2)}
+  .top .clock{font-family:var(--mono);font-size:13px;color:var(--muted)}
+  .sect{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin:14px 0 8px}
+
+  /* attention — largest, top, alert-first */
+  .attn-row{display:flex;align-items:center;gap:14px;border:1px solid;border-radius:10px;padding:14px 16px;margin:8px 0;font-size:19px}
+  .attn-row .ic{font-size:24px;line-height:1}
+  .attn-row .fix{margin-left:auto;font-size:13.5px;color:var(--ink2);font-family:var(--mono);text-align:right}
+  .attn-row.critical{border-color:var(--critical);background:rgba(208,59,59,.10)}
+  .attn-row.serious{border-color:var(--serious);background:rgba(236,131,90,.08)}
+  .attn-row.warning{border-color:var(--warning);background:rgba(250,178,25,.07)}
+  .attn-clear{display:flex;align-items:center;gap:12px;border:1px dashed var(--line);border-radius:10px;padding:14px 16px;color:var(--ink2);font-size:17px}
+  .attn-clear .ic{color:var(--good);font-size:20px}
+
+  /* fleet */
+  .fleet{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+  .mach{border:1px solid var(--ring);border-radius:10px;padding:10px 12px;background:var(--surface)}
+  .mach .name{font-family:var(--mono);font-size:14px;margin-bottom:6px}
+  .mach .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;border-radius:999px;padding:2px 9px;border:1px solid}
+  .chip.ok{color:var(--good);border-color:var(--good)}
+  .chip.warning{color:var(--warning);border-color:var(--warning)}
+  .chip.serious{color:var(--serious);border-color:var(--serious)}
+  .chip.critical{color:var(--critical);border-color:var(--critical)}
+  .chip.off{color:var(--muted);border-color:var(--muted)}
+  .mach .seen{color:var(--muted);font-size:11.5px;margin-top:6px}
+  .mach .act{color:var(--ink2);font-size:12px;margin-top:6px;border-top:1px solid var(--line);padding-top:6px;min-height:24px}
+
+  /* github */
+  .gh{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+  .repo{border:1px solid var(--ring);border-radius:10px;padding:10px 12px;background:var(--surface)}
+  .repo.red{border-color:var(--critical);background:rgba(208,59,59,.10)}
+  .repo .name{font-family:var(--mono);font-size:13px;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .repo .ci{display:flex;align-items:center;gap:6px;font-size:12.5px}
+  .repo .ci.pass{color:var(--good)} .repo .ci.fail{color:var(--critical)}
+  .repo .ci.pending{color:var(--warning)} .repo .ci.none{color:var(--muted)}
+  .repo .prs{color:var(--ink2);font-size:12px;margin-top:5px}
+  .gh-note{color:var(--muted);font-size:12.5px;border:1px dashed var(--line);border-radius:10px;padding:10px 12px}
+
+  /* board-level staleness — never silently frozen */
+  #stale{position:fixed;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;background:rgba(13,13,13,.55);z-index:5;text-align:center}
+  #stale.on{display:flex}
+  #stale .big{font-size:24px;color:var(--warning);border:2px solid var(--warning);border-radius:12px;padding:16px 30px;background:var(--surface)}
+  #stale .small{color:var(--ink2);font-size:14px}
+  .empty{color:var(--muted);font-size:13px;border:1px dashed var(--line);border-radius:10px;padding:10px 12px}
+</style>
+</head>
+<body>
+<div class="top"><span class="t">STATUS</span><span class="clock" id="clock">connecting…</span></div>
+<div id="wrap">
+  <div class="sect">Needs me</div>
+  <div id="attn"><div class="empty">connecting…</div></div>
+  <div class="sect" id="fleetHead">Fleet</div>
+  <div class="fleet" id="fleet"></div>
+  <div class="sect">GitHub</div>
+  <div class="gh" id="gh"></div>
+</div>
+<div id="stale">
+  <div class="big">⚠ BOARD STALE — harness unreachable</div>
+  <div class="small">last good poll <span id="staleTime">—</span> · showing last-known state (dimmed)</div>
+</div>
+
+<script>
+"use strict";
+// Harness API root from our own URL — served at <prefix>/api/localview/<repo>/app/events-feed/board.html.
+const m = location.pathname.match(/^(.*?)\/api\/localview\//);
+const API = (m ? m[1] : "") + "/api";
+
+const POLL_MS = 5000;      // board poll cadence
+const STALE_AFTER = 3;     // consecutive failures before the board declares ITSELF stale
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+
+let lastGoodAt = null, failures = 0;
+const lastHtml = { attn:"", fleet:"", gh:"" };
+
+// --- formatting ---------------------------------------------------------------
+function ago(ms){
+  if (ms == null || ms < 0) return "—";
+  const s = Math.floor(ms/1000);
+  if (s < 60) return s + "s";
+  const mn = Math.floor(s/60);
+  if (mn < 60) return mn + "m";
+  const h = Math.floor(mn/60);
+  return h < 48 ? h + "h " + (mn%60) + "m" : Math.floor(h/24) + "d";
+}
+function clockStr(t){ const d = new Date(t); return String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0") + ":" + String(d.getSeconds()).padStart(2,"0"); }
+
+// Status → chip class + icon + label. Labels mirror the events-app taxonomy.
+function chip(s){
+  if (!s.active)                        return { c:"off",      ic:"◦", label:"stopped" };
+  switch (s.status){
+    case "active":                      return { c:"ok",       ic:"✓", label:"active" };
+    case "idle": case "connecting":     return { c:"off",      ic:"◦", label:s.status };
+    case "ip-blocked":                  return { c:"critical", ic:"✖", label:"blocked by IP gate" };
+    case "needs-credential":            return { c:"critical", ic:"✖", label:"needs credential" };
+    case "bad-credential":              return { c:"critical", ic:"✖", label:"credential rejected" };
+    case "throttled":                   return { c:"serious",  ic:"⚠", label:"throttled" };
+    case "unreachable":                 return { c:"warning",  ic:"◌", label:"unreachable" };
+    case "error":                       return { c:"serious",  ic:"⚠", label:"error" };
+    case "stopped":                     return { c:"off",      ic:"◦", label:"stopped" };
+    default:                            return { c:"off",      ic:"◦", label:s.status };
+  }
+}
+
+// --- render (diff-render: only swap a section whose HTML actually changed) -----
+function setSection(key, el, html){
+  if (lastHtml[key] === html) return;
+  lastHtml[key] = html;
+  el.innerHTML = html;
+}
+
+function render(b){
+  const now = b.now;
+
+  const attnHtml = !b.attention.length
+    ? `<div class="attn-clear"><span class="ic">✓</span>Nothing needs you — all machines healthy</div>`
+    : b.attention.map(a => {
+        const ic = a.severity === "warning" ? "◌" : (a.severity === "serious" ? "⚠" : "✖");
+        return `<div class="attn-row ${esc(a.severity)}"><span class="ic">${ic}</span><span>${esc(a.title)}</span><span class="fix">${esc(a.fix)}</span></div>`;
+      }).join("");
+  setSection("attn", $("#attn"), attnHtml);
+
+  $("#fleetHead").textContent = "Fleet — " + b.fleet.length + (b.fleet.length === 1 ? " machine" : " machines");
+  const fleetHtml = !b.fleet.length
+    ? `<div class="empty">No sources — add machines in the events-app.</div>`
+    : b.fleet.map(s => {
+        const c = chip(s);
+        const dark = s.status === "unreachable";
+        const dur = s.stateDurationMs == null
+          ? (dark ? "duration unknown" : "")
+          : (dark ? "dark for " + ago(s.stateDurationMs) : "");
+        const checked = s.lastPolledAt > 0 ? "checked " + ago(now - s.lastPolledAt) + " ago" : "not checked yet";
+        return `<div class="mach"><div class="name">${esc(s.label)}</div>` +
+          `<span class="chip ${c.c}">${c.ic} ${esc(c.label)}</span>` +
+          `<div class="seen">${esc([checked, dur].filter(Boolean).join(" · "))}</div>` +
+          `<div class="act">${s.activity ? esc(s.activity.type) + " · " + ago(now - s.activity.at) + " ago" : "— no activity yet"}</div></div>`;
+      }).join("");
+  setSection("fleet", $("#fleet"), fleetHtml);
+
+  let ghHtml;
+  const g = b.github;
+  if (g.status !== "ok")
+    ghHtml = `<div class="gh-note">⚠ GitHub unavailable · ${esc(g.error || "unknown")}</div>`;
+  else if (!g.repos.length)
+    ghHtml = `<div class="gh-note">no registered repos with a GitHub remote</div>`;
+  else
+    ghHtml = g.repos.map(r => {
+      if (r.error) return `<div class="repo"><div class="name">${esc(r.name)}</div><div class="ci none">◦ ${esc(r.error)}</div></div>`;
+      const ci = r.ci === "fail" ? `✖ CI failing${r.failingCheck ? " · " + esc(r.failingCheck) : ""}`
+        : r.ci === "pass" ? "✓ CI green"
+        : r.ci === "pending" ? "◌ CI running"
+        : "◦ no checks";
+      const prs = r.openPrs
+        ? r.openPrs + " open PR" + (r.openPrs > 1 ? "s" : "")
+          + (r.oldestPrAgeMs != null ? " · oldest " + ago(r.oldestPrAgeMs) : "")
+          + (r.changesRequested ? " · " + r.changesRequested + " changes-requested" : "")
+          + (r.drafts ? " · " + r.drafts + " draft" : "")
+        : "no open PRs";
+      return `<div class="repo${r.ci === "fail" ? " red" : ""}"><div class="name">${esc(r.name)}</div><div class="ci ${esc(r.ci)}">${ci}</div><div class="prs">${prs}</div></div>`;
+    }).join("");
+  setSection("gh", $("#gh"), ghHtml);
+}
+
+// --- poll loop + self-honesty --------------------------------------------------
+async function poll(){
+  try {
+    const r = await fetch(API + "/status-monitor/board", { headers: { Accept: "application/json" } });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const board = await r.json();
+    lastGoodAt = Date.now();
+    failures = 0;
+    $("#stale").classList.remove("on");
+    $("#wrap").classList.remove("dimmed");
+    render(board);
+  } catch {
+    failures++;
+    if (failures >= STALE_AFTER){
+      // A wallboard that silently freezes while looking healthy is worse than none.
+      $("#stale").classList.add("on");
+      $("#wrap").classList.add("dimmed");
+      $("#staleTime").textContent = lastGoodAt ? clockStr(lastGoodAt) : "never";
+    }
+  }
+}
+
+setInterval(() => {
+  $("#clock").textContent = lastGoodAt
+    ? "updated " + clockStr(lastGoodAt) + " · " + ago(Date.now() - lastGoodAt) + " ago"
+    : "connecting…";
+}, 1000);
+
+poll();
+setInterval(poll, POLL_MS);
+</script>
+</body>
+</html>
