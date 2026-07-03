@@ -3,145 +3,232 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Understanding — why was my source refused?</title>
+<title>Understanding — the Status Monitor Dashboard proposal</title>
 <style>
+  /* ink & status tokens: dataviz reference palette, dark mode (all status steps ≥3:1 on #1a1a19) */
   :root{
-    --bg:#0d1117; --panel:#161b22; --line:#30363d; --fg:#e6edf3; --dim:#8b949e;
-    --good:#3fb950; --warn:#d29922; --bad:#f85149; --accent:#58a6ff; --mono:ui-monospace,Consolas,monospace;
+    --page:#0d0d0d; --surface:#1a1a19; --line:#2c2c2a; --ring:rgba(255,255,255,.10);
+    --ink:#ffffff; --ink2:#c3c2b7; --muted:#898781;
+    --good:#0ca30c; --warning:#fab219; --serious:#ec835a; --critical:#d03b3b;
+    --new:#3987e5; /* "new in this change" accent (series-1 dark) */
+    --mono:ui-monospace,Consolas,monospace;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.55 system-ui,Segoe UI,sans-serif;padding:28px 20px 60px}
-  .wrap{max-width:920px;margin:0 auto}
-  h1{font-size:22px;margin:0 0 4px} .sub{color:var(--dim);margin:0 0 24px}
-  h2{font-size:16px;margin:34px 0 10px;border-bottom:1px solid var(--line);padding-bottom:6px}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:14px 0}
-  code{font-family:var(--mono);font-size:12.5px;background:#21262d;border-radius:4px;padding:1px 5px}
-  .pipeline{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;margin:10px 0}
-  .stage{flex:1;min-width:150px;border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:#0d1117;position:relative;transition:box-shadow .3s,border-color .3s}
-  .stage h3{margin:0 0 4px;font-size:13px} .stage p{margin:0;color:var(--dim);font-size:12px}
-  .stage.hot{border-color:var(--bad);box-shadow:0 0 14px -4px var(--bad)}
-  .stage.pass{border-color:var(--good)}
-  .arrow{align-self:center;padding:0 8px;color:var(--dim);font-size:18px}
-  .btns{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
-  button{background:#21262d;border:1px solid var(--line);color:var(--fg);border-radius:7px;padding:8px 13px;cursor:pointer;font-size:13px}
-  button:hover{border-color:var(--accent)} button.on{border-color:var(--accent);background:#1c2a3a}
-  .result{display:flex;flex-direction:column;gap:10px;margin-top:14px}
-  .http{font-family:var(--mono);font-size:13px;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:#0d1117}
-  .chiprow{display:flex;gap:18px;flex-wrap:wrap}
-  .chipbox{flex:1;min-width:260px;border:1px solid var(--line);border-radius:8px;padding:10px 12px}
-  .chipbox .tag{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);margin-bottom:6px}
-  .chip{display:inline-flex;align-items:center;gap:8px;font-size:13px}
-  .dot{width:10px;height:10px;border-radius:50%}
-  .dot.amber{background:var(--warn);box-shadow:0 0 8px -1px var(--warn)}
-  .dot.red{background:var(--bad);box-shadow:0 0 8px -1px var(--bad)}
-  .dot.green{background:var(--good);box-shadow:0 0 8px -1px var(--good)}
-  .fix{margin-top:6px;font-size:12.5px;color:var(--dim)}
-  .fix b{color:var(--fg)}
-  .strike{text-decoration:line-through;opacity:.65}
-  table{border-collapse:collapse;width:100%;font-size:13px}
-  th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
-  th{background:#161b22} td code{white-space:nowrap}
-  .old{color:var(--warn)}
+  body{margin:0;background:var(--page);color:var(--ink);font:14px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;padding:26px 18px 70px}
+  .wrap{max-width:1060px;margin:0 auto}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:var(--ink2);margin:0 0 6px}
+  .stage-chip{display:inline-block;font-size:12px;color:var(--ink2);border:1px solid var(--ring);border-radius:999px;padding:2px 10px;margin:0 0 20px;background:var(--surface)}
+  .stage-chip b{color:var(--new)}
+
+  /* tabs */
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 18px;border-bottom:1px solid var(--line);padding-bottom:10px}
+  .tabs button{background:var(--surface);border:1px solid var(--ring);color:var(--ink2);border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13px}
+  .tabs button:hover{color:var(--ink)}
+  .tabs button.on{color:var(--ink);border-color:var(--new);background:#14202e}
+  .view{display:none} .view.on{display:block}
+
+  h2{font-size:16px;margin:26px 0 10px}
+  p.note{color:var(--ink2);margin:6px 0 14px;max-width:74ch}
+  .card{background:var(--surface);border:1px solid var(--ring);border-radius:10px;padding:14px 16px;margin:12px 0}
+  code{font-family:var(--mono);font-size:12.5px;background:#242423;border-radius:4px;padding:1px 5px}
+
+  /* scenario buttons */
+  .btns{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
+  .btns button{background:var(--surface);border:1px solid var(--ring);color:var(--ink);border-radius:7px;padding:8px 13px;cursor:pointer;font-size:13px}
+  .btns button:hover{border-color:var(--new)}
+  .btns button.on{border-color:var(--new);background:#14202e}
+
+  /* ─── the monitor mock ─── */
+  .monitor{border:10px solid #262624;border-bottom-width:22px;border-radius:14px;background:var(--surface);position:relative;box-shadow:0 12px 40px -18px #000}
+  .monitor:after{content:"your third monitor";position:absolute;left:50%;transform:translateX(-50%);bottom:-19px;font-size:9px;color:#a3a29a;letter-spacing:.14em;text-transform:uppercase;z-index:6}
+  .stale-banner{border-radius:8px}
+  .board{padding:14px 16px 18px;min-height:430px;position:relative;transition:opacity .3s}
+  .board.dimmed{opacity:.35}
+  .board-top{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:12px}
+  .board-top .t{font-size:13px;letter-spacing:.22em;color:var(--ink2)}
+  .board-top .clock{font-family:var(--mono);font-size:12px;color:var(--muted)}
+  .sect{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin:14px 0 8px}
+
+  /* attention queue — largest, top */
+  .attn-row{display:flex;align-items:center;gap:12px;border:1px solid;border-radius:10px;padding:12px 14px;margin:8px 0;font-size:16px}
+  .attn-row .ic{font-size:20px;line-height:1}
+  .attn-row .fix{margin-left:auto;font-size:12.5px;color:var(--ink2);font-family:var(--mono)}
+  .attn-row.critical{border-color:var(--critical);background:rgba(208,59,59,.10)}
+  .attn-row.serious{border-color:var(--serious);background:rgba(236,131,90,.08)}
+  .attn-row.warning{border-color:var(--warning);background:rgba(250,178,25,.07)}
+  .attn-clear{display:flex;align-items:center;gap:10px;border:1px dashed var(--line);border-radius:10px;padding:12px 14px;color:var(--ink2);font-size:15px}
+  .attn-clear .ic{color:var(--good);font-size:18px}
+
+  /* fleet cards */
+  .fleet{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+  .mach{border:1px solid var(--ring);border-radius:10px;padding:10px 12px;background:#20201f}
+  .mach .name{font-family:var(--mono);font-size:13px;margin-bottom:6px}
+  .mach .chip{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;border-radius:999px;padding:2px 9px;border:1px solid}
+  .chip.ok{color:var(--good);border-color:var(--good)}
+  .chip.warning{color:var(--warning);border-color:var(--warning)}
+  .chip.serious{color:var(--serious);border-color:var(--serious)}
+  .chip.critical{color:var(--critical);border-color:var(--critical)}
+  .mach .seen{color:var(--muted);font-size:11px;margin-top:6px}
+  .mach .act{color:var(--ink2);font-size:11.5px;margin-top:6px;border-top:1px solid var(--line);padding-top:6px;min-height:30px}
+
+  /* github tiles */
+  .gh{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .repo{border:1px solid var(--ring);border-radius:10px;padding:10px 12px;background:#20201f}
+  .repo.red{border-color:var(--critical);background:rgba(208,59,59,.10)}
+  .repo .name{font-family:var(--mono);font-size:12.5px;margin-bottom:6px}
+  .repo .ci{display:flex;align-items:center;gap:6px;font-size:12px}
+  .repo .ci.pass{color:var(--good)} .repo .ci.fail{color:var(--critical)}
+  .repo .prs{color:var(--ink2);font-size:11.5px;margin-top:5px}
+
+  /* staleness banner */
+  .stale-banner{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:8px;background:rgba(13,13,13,.55);z-index:5;text-align:center}
+  .stale-banner.on{display:flex}
+  .stale-banner .big{font-size:20px;color:var(--warning);border:2px solid var(--warning);border-radius:12px;padding:14px 26px;background:#1a1a19}
+  .stale-banner .small{color:var(--ink2);font-size:13px}
+  .caption{color:var(--muted);font-size:12.5px;margin-top:26px;max-width:74ch}
+
+  /* ─── data flow diagram ─── */
+  .flow{display:flex;gap:14px;align-items:stretch;flex-wrap:wrap;margin:14px 0}
+  .col{flex:1;min-width:180px;display:flex;flex-direction:column;gap:10px;justify-content:center}
+  .node{border:1px solid var(--ring);border-radius:10px;padding:10px 12px;background:var(--surface)}
+  .node h3{margin:0 0 3px;font-size:13px} .node p{margin:0;color:var(--ink2);font-size:11.5px}
+  .node.exists{border-left:3px solid var(--good)}
+  .node.new{border-left:3px solid var(--new);border-color:var(--new)}
+  .node .tag{float:right;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase}
+  .node.exists .tag{color:var(--good)} .node.new .tag{color:var(--new)}
+  .flow-arrow{align-self:center;color:var(--muted);font-size:20px;padding:0 2px}
+  .legend{display:flex;gap:18px;color:var(--ink2);font-size:12px;margin:6px 0 0}
+  .legend .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+
+  /* research + scope */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:760px){.grid2{grid-template-columns:1fr}}
+  ul{margin:8px 0;padding-left:20px} li{margin:4px 0;color:var(--ink2)}
+  li b, .card b{color:var(--ink)}
+  .callout{border-left:3px solid var(--new);padding:8px 14px;background:var(--surface);border-radius:0 8px 8px 0;margin:12px 0;color:var(--ink2)}
+  .defer li{color:var(--muted)}
+  .qa dt{color:var(--ink);margin-top:10px} .qa dd{color:var(--ink2);margin:2px 0 0 0}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Why was my source refused?</h1>
-  <p class="sub">The harness event feed's collector now tells you <b>which gate</b> refused a watched harness — instead of always saying "needs a credential".</p>
+  <h1>The Status Monitor Dashboard — what's being proposed</h1>
+  <p class="sub">A glanceable wallboard for the third monitor: who's working, who's blocked on <em>you</em>, what's red on GitHub — across all five machines.</p>
+  <div class="stage-chip">OpenSpec change <b>status-monitor-dashboard</b> · stage: <b>proposal drafted</b> — nothing below is built yet; this is a mock of the proposal</div>
 
-  <div class="card">
-    <b>The problem this fixes.</b> A watched harness refuses a pull for two very different reasons:
-    its <b>IP gate</b> didn't let us through (no credential will ever fix that — the remote operator must
-    approve our IP), or the <b>credential</b> was missing/wrong. Both used to surface as one status,
-    <span class="old">"needs-credential"</span> — sending you down the wrong fix.
+  <div class="tabs" id="tabs">
+    <button data-v="board" class="on">1 · The board (live mock)</button>
+    <button data-v="flow">2 · How the data flows</button>
+    <button data-v="research">3 · The research behind it</button>
+    <button data-v="scope">4 · Scope &amp; open questions</button>
   </div>
 
-  <h2>The two gates on the watched harness</h2>
-  <p>Every pull (<code>GET /api/events</code>) passes through the watched harness's pipeline in this order.
-     Click a scenario below and watch where it dies:</p>
-
-  <div class="pipeline">
-    <div class="stage" id="st-ip"><h3>1 · IP gate</h3><p>First middleware. Unapproved IP → <code>403</code> + JSON naming the rejected IP.</p></div>
-    <div class="arrow">→</div>
-    <div class="stage" id="st-auth"><h3>2 · Password auth</h3><p>Session cookie or <code>X-Auth-Password</code>. Missing/wrong → <code>401</code>; brute-force throttle → <code>429</code>.</p></div>
-    <div class="arrow">→</div>
-    <div class="stage" id="st-feed"><h3>3 · Event feed</h3><p><code>200</code> — events flow, tagged with the source.</p></div>
-  </div>
-
-  <div class="btns" id="btns">
-    <button data-k="ip">Unapproved IP</button>
-    <button data-k="nocred">No credential stored</button>
-    <button data-k="badcred">Wrong credential</button>
-    <button data-k="throttle">Throttled</button>
-    <button data-k="ok">Authorized</button>
-  </div>
-
-  <div class="result" id="result" hidden>
-    <div class="http" id="http"></div>
-    <div class="chiprow">
-      <div class="chipbox"><div class="tag">Before (one bucket)</div><div class="chip" id="chip-old"></div></div>
-      <div class="chipbox"><div class="tag">Now (distinguished)</div><div class="chip" id="chip-new"></div><div class="fix" id="fix"></div></div>
+  <!-- ── VIEW 1: the board ── -->
+  <section class="view on" id="v-board">
+    <p class="note">Click a scenario and watch the board do the one thing it's for: <b>reorder itself so what needs you is on top, loudest</b>. The attention queue is <em>derived server-side</em> from collector state — this mock derives it the same way.</p>
+    <div class="btns" id="scenarios">
+      <button data-s="calm" class="on">Calm morning</button>
+      <button data-s="badcred">nuc-1 credential expires</button>
+      <button data-s="dark">laptop goes dark</button>
+      <button data-s="ci">CI fails on birocode</button>
+      <button data-s="stale">board loses the harness</button>
     </div>
-  </div>
+    <div class="monitor">
+      <div class="board" id="board">
+        <div class="board-top"><span class="t">STATUS</span><span class="clock" id="clock">updated —</span></div>
+        <div class="sect">Needs me</div>
+        <div id="attn"></div>
+        <div class="sect">Fleet — 5 machines</div>
+        <div class="fleet" id="fleet"></div>
+        <div class="sect">GitHub</div>
+        <div class="gh" id="gh"></div>
+      </div>
+      <div class="stale-banner" id="staleBanner">
+        <div class="big">⚠ BOARD STALE — harness unreachable</div>
+        <div class="small">last good poll <span id="staleTime">—</span> · showing last-known state (dimmed)</div>
+      </div>
+    </div>
+    <p class="caption" id="caption"></p>
+  </section>
 
-  <h2>The full status taxonomy</h2>
-  <div class="card" style="padding:0;overflow:auto">
-  <table>
-    <tr><th>Answer</th><th>Status</th><th>Events-app label</th><th>Right fix</th></tr>
-    <tr><td><code>403</code></td><td><code>ip-blocked</code></td><td>🟡 alive · blocked by IP gate <i>(+ your rejected IP when the gate names it)</i></td><td>Ask the remote operator to approve your IP. A credential will not help.</td></tr>
-    <tr><td><code>401</code>, no credential stored</td><td><code>needs-credential</code></td><td>🟡 alive · needs credential</td><td>Supply one.</td></tr>
-    <tr><td><code>401</code>, credential stored</td><td><code>bad-credential</code></td><td>🟡 alive · credential rejected</td><td>Re-enter it — it's wrong (or was invalidated).</td></tr>
-    <tr><td><code>429</code></td><td><code>throttled</code></td><td>🟡 alive · throttled</td><td>Wait — the harness's brute-force throttle engaged.</td></tr>
-    <tr><td>no HTTP answer</td><td><code>unreachable</code></td><td>🔴 unreachable</td><td>Wrong address / host down / network.</td></tr>
-    <tr><td><code>200</code></td><td><code>active</code></td><td>🟢 active</td><td>—</td></tr>
-  </table>
-  </div>
-  <p class="fix" style="margin-top:10px">All four refusals are <b>amber "alive" states</b> — the host answered; it just said no. Only a host that never answers goes red.
-  The distinction applies from the very first probe after "Add harness", so the add form already names the actual problem.
-  The 403's JSON body (<code>{ error, ip }</code>) is parsed <b>best-effort, for the detail line only</b> — a bare 403 from an older or foreign gate still classifies as <code>ip-blocked</code> from the status code alone.</p>
+  <!-- ── VIEW 2: data flow ── -->
+  <section class="view" id="v-flow">
+    <p class="note">One aggregation endpoint paints the whole board in a single round-trip. All derivation (attention membership, ordering, staleness math) lives <b>server-side</b>; the SPA is a dumb renderer. The fleet panel's data spine — the collector — <b>already exists</b>.</p>
+    <div class="flow">
+      <div class="col">
+        <div class="node exists"><span class="tag">exists</span><h3>5 × harness event feeds</h3><p>each machine's birocode harness publishes its feed (<code>harness-event-feed</code>)</p></div>
+        <div class="node exists"><span class="tag">exists</span><h3>GitHub API</h3><p>PRs + default-branch workflow runs, via <code>github-credentials</code> PAT</p></div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="col">
+        <div class="node exists"><span class="tag">exists</span><h3>event-feed-collector</h3><p>already polls all sources; alive / ip-blocked / needs-credential / bad-credential / throttled</p></div>
+        <div class="node new"><span class="tag">new</span><h3>GitHubStatusService</h3><p>server-side polling, ≥60s cache, ETags; <b>PAT never reaches the browser</b></p></div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="col">
+        <div class="node new"><span class="tag">new</span><h3><code>GET api/status-monitor/board</code></h3><p>one JSON doc: fleet + attention + github. Attention is a <b>projection</b>, not stored state — feed enrichment later just adds rows</p></div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="col">
+        <div class="node new"><span class="tag">new</span><h3><code>status-app/</code> SPA</h3><p>build-less, mirrors events-app serving; polls + diff-renders, staleness banner when polls fail</p></div>
+        <div class="node exists"><span class="tag">exists</span><h3>Browser on monitor 3</h3><p>full-screen window, zero interaction required</p></div>
+      </div>
+    </div>
+    <div class="legend">
+      <span><span class="sw" style="background:var(--good)"></span>exists today (reused as-is)</span>
+      <span><span class="sw" style="background:var(--new)"></span>new in this change</span>
+    </div>
+    <div class="callout">Why not a React-client tab or a standalone repo? The events-app pattern is proven for exactly this shape — always-on, no build step, iterate by overwriting a folder — and the harness already knows how to serve it. A standalone product would drag in a second server for what is fundamentally a harness view.</div>
+  </section>
+
+  <!-- ── VIEW 3: research ── -->
+  <section class="view" id="v-research">
+    <p class="note">This isn't invented — "mission control" boards are an established practice in agentic engineering. Mission Control, claude-view, Conductor, AgentsRoom, and Marc Nuri's cross-device dashboard (his problem is literally ours: 5–10 sessions across machines) all converge on the same shape.</p>
+    <div class="grid2">
+      <div class="card"><b>The consensus board</b><ul>
+        <li>per-machine / per-agent <b>cards</b></li>
+        <li>status: working / idle / <b>awaiting&nbsp;input</b></li>
+        <li>current task, project + branch, PR link</li>
+        <li>context-window %</li></ul></div>
+      <div class="card"><b>The two consensus insights</b><ul>
+        <li><b>awaiting-input outranks everything</b> — the human is the bottleneck, so the board's real job is the attention queue of "things blocked on me"</li>
+        <li><b>context %</b> is the most actionable per-agent metric (ours once the feed carries it)</li></ul></div>
+      <div class="card"><b>Companion panels people run</b><ul>
+        <li>cross-repo GitHub wallboard: PRs awaiting review, red/green CI (GitactionBoard, GitHub repo dashboard) — <b>in v1</b></li>
+        <li>usage/burn-rate ticker (ccusage, Claude-Code-Usage-Monitor) — <b>deferred</b>, needs per-machine JSONL</li></ul></div>
+      <div class="card"><b>Wallboard rules (Hanselman's "third monitor")</b><ul>
+        <li>it's the <b>"everything changing"</b> screen</li>
+        <li>glanceable from across the desk, zero interaction</li>
+        <li>alert-first ordering</li>
+        <li>must <b>visibly go stale</b> — a frozen board that looks healthy is worse than no board</li></ul></div>
+    </div>
+    <div class="callout"><b>The birocode punchline:</b> everyone else's dashboard has to invent its data plane. Ours already exists — the event-feed collector polls the other machines' harnesses today. This change is mostly a <em>view</em> over it.</div>
+  </section>
+
+  <!-- ── VIEW 4: scope ── -->
+  <section class="view" id="v-scope">
+    <div class="grid2">
+      <div class="card"><b>In v1</b><ul>
+        <li>new capability <code>status-monitor</code> (spec'd, strict-valid)</li>
+        <li><code>status-app/</code> build-less SPA + <code>StatusApp</code> service (mirrors events-app)</li>
+        <li><code>GET api/status-monitor/board</code> — fleet / attention / github in one doc</li>
+        <li>attention queue v1 = refusal-state sources + stale sources (source-level)</li>
+        <li>GitHub panel: explicit repo list, PRs + review state + default-branch CI, ≥60s cache</li>
+        <li>read-only; wallboard presentation is a <em>requirement</em>, not styling taste</li></ul></div>
+      <div class="card defer"><b>Deliberately deferred (each its own follow-up change)</b><ul>
+        <li>feed enrichment: per-agent <b>awaiting-input</b>, current task, context % (modifies <code>harness-event-feed</code> + <code>event-feed-collector</code> — kept out so this change stays additive)</li>
+        <li>usage / burn-rate panel</li>
+        <li>acting from the board (approve / dismiss / retry)</li></ul></div>
+    </div>
+    <div class="card"><b>Open questions (design.md)</b><dl class="qa">
+      <dt>Which repos on the GitHub panel?</dt><dd>settings list vs derived from registered Repos' remotes — lean: start with a settings list.</dd>
+      <dt>Staleness source?</dt><dd>does the collector already persist last-successful-poll per source, or does the board compute it from events? Audit is task 1.1.</dd>
+      <dt>Sound on new attention items?</dt><dd>events-app has a sound endpoint — lean: silent v1, the monitor is peripheral vision.</dd>
+    </dl></div>
+    <p class="note">Artifacts: <code>openspec/changes/status-monitor-dashboard/</code> — proposal.md · design.md · specs/status-monitor/spec.md (6 requirements, 10 scenarios) · tasks.md. Run <code>/opsx:apply</code> to start implementing.</p>
+  </section>
 </div>
-
-<script>
-(function(){
-  const CASES = {
-    ip:      { die:"st-ip",   http:"HTTP/1.1 403 Forbidden\n{ \"error\": \"Your IP (203.0.113.7) is not on the approved list…\", \"ip\": \"203.0.113.7\" }",
-               nw:["amber","alive · blocked by IP gate · your IP 203.0.113.7 is not approved"],
-               fix:"<b>Fix:</b> ask the remote operator to approve 203.0.113.7. Retyping passwords would have been wasted effort — the old label pointed you exactly there." },
-    nocred:  { die:"st-auth", http:"HTTP/1.1 401 Unauthorized\n{ \"error\": \"Unauthorized: log in or supply a valid X-Auth-Password header\" }",
-               nw:["amber","alive · needs credential"],
-               fix:"<b>Fix:</b> supply the harness's access code. (The old label was right — for this one case.)" },
-    badcred: { die:"st-auth", http:"HTTP/1.1 401 Unauthorized   ← but a credential WAS sent\n{ \"error\": \"Unauthorized: log in or supply a valid X-Auth-Password header\" }",
-               nw:["amber","alive · credential rejected"],
-               fix:"<b>Fix:</b> re-enter the credential — it's wrong or was changed. No more wondering whether one is needed at all." },
-    throttle:{ die:"st-auth", http:"HTTP/1.1 429 Too Many Requests\nRetry-After: 60",
-               nw:["amber","alive · throttled (retry after 60)"],
-               fix:"<b>Fix:</b> wait. Repeated wrong credentials engaged the harness's brute-force throttle — retrying harder makes it longer." },
-    ok:      { die:null,      http:"HTTP/1.1 200 OK\n{ \"events\": [ … ], \"lastSeq\": 41 }",
-               nw:["green","active"],
-               fix:"Events flow into the aggregate, tagged with this source." }
-  };
-  const stages=["st-ip","st-auth","st-feed"];
-  const btns=document.getElementById("btns");
-  btns.addEventListener("click",function(e){
-    const b=e.target.closest("button"); if(!b) return;
-    for(const x of btns.children) x.classList.toggle("on",x===b);
-    const c=CASES[b.dataset.k];
-    let passed=true;
-    for(const id of stages){
-      const el=document.getElementById(id);
-      el.classList.remove("hot","pass");
-      if(c.die===id){ el.classList.add("hot"); passed=false; }
-      else if(passed) el.classList.add("pass");
-    }
-    document.getElementById("result").hidden=false;
-    document.getElementById("http").textContent=c.http;
-    const oldChip=document.getElementById("chip-old");
-    if(c.die===null){ oldChip.innerHTML='<span class="dot green"></span> active'; }
-    else { oldChip.innerHTML='<span class="dot amber"></span> <span class="'+(b.dataset.k==="nocred"?"":"strike")+'">alive · needs credential</span>'; }
-    document.getElementById("chip-new").innerHTML='<span class="dot '+c.nw[0]+'"></span> '+c.nw[1];
-    document.getElementById("fix").innerHTML=c.fix;
-  });
-})();
-</script>
+<script src="./app.js"></script>
 </body>
 </html>
