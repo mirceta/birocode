@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- net8.0-windows because we reference ClaudeWeb.App (WinForms) to reuse the
+         REAL discovery services — the whole point of the eval (design D1). -->
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>ClaudeWeb.DiscoveryEval</RootNamespace>
+    <AssemblyName>DiscoveryEval</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\ClaudeWeb.App\ClaudeWeb.App.csproj" />
+  </ItemGroup>
+
+</Project>

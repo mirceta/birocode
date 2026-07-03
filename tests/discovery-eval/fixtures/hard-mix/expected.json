@@ -1,0 +1,22 @@
+[
+  {
+    "folder": "homepage-widgets",
+    "port": 5411,
+    "note": "Node serve.mjs; dual-stack listen(PORT); evidence homepage-widgets/serve.mjs (server.listen(PORT ...))"
+  },
+  {
+    "folder": "tools/status-board",
+    "port": 5412,
+    "note": "Node server.js (CommonJS), nested two levels; evidence tools/status-board/server.js (server.listen(STATUS_PORT ...))"
+  },
+  {
+    "folder": "ops/panel",
+    "port": 5413,
+    "note": "PowerShell serve.ps1 HttpListener with 127.0.0.1 + [::1] prefixes; evidence ops/panel/serve.ps1 ($port = 5413)"
+  },
+  {
+    "folder": "svc/miniview",
+    "port": 5414,
+    "note": "Embedded C# HttpListener console app; evidence svc/miniview/Program.cs (port = 5414); start: dotnet run"
+  }
+]
