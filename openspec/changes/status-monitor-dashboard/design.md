@@ -22,8 +22,9 @@ CI wallboard for repos.
 - One full-screen browser window that answers, from across the desk: who's
   working, who's blocked on me, what's red on GitHub.
 - Zero interaction required; the board reorders itself (attention items first).
-- Reuse: collector state as-is, github-credentials as-is, events-app serving
-  pattern as-is.
+- Reuse: collector state as-is, github-credentials as-is, and the events-app's
+  folder + serving service as-is (the board is a new file in it, not a new
+  app).
 
 **Non-Goals:**
 - Not a control surface — read-only in v1 (no approve/dismiss/retry buttons).
@@ -37,12 +38,17 @@ CI wallboard for repos.
 
 ## Decisions
 
-1. **Serve as a second harness-owned build-less app (`status-app/` at the repo
-   root), mirroring events-app** — over adding a tab to the React client or a
-   standalone product repo. Rationale: the events-app pattern is proven for
-   exactly this shape (always-on, no-build, iterate-by-overwrite), needs no
-   client rebuild/deploy to tweak layout, and the harness already knows how to
-   mount such apps in `LocalProxyController`. A standalone repo (à la
+1. **Serve as a sibling page inside the existing events-app
+   (`events-app/board.html`)** — over a second build-less app folder with its
+   own serving service, a React-client tab, or a standalone product repo.
+   Rationale: `EventsApp.cs` already serves *every* file in `events-app/`
+   (build-less, no-store), and the events-app is already the multi-machine
+   surface — it renders the collector's source cards with the refusal
+   taxonomy. A sibling page gets the wallboard served with **zero new serving
+   code** and keeps one app-folder convention instead of two. The board stays
+   a *separate page* from the feed log, never merged into it: the log is
+   interactive and chronological, the wallboard is zero-interaction and
+   alert-first — one page cannot honor both. A standalone repo (à la
    youtube-transcript) would drag in a second server + registration for what
    is fundamentally a harness view.
 2. **One aggregation endpoint, `GET api/status-monitor/board`** returning the
@@ -79,8 +85,13 @@ CI wallboard for repos.
 - [Feed doesn't yet carry per-agent awaiting-input] → v1 attention queue is
   source-level only; set expectations in the UI ("machine blocked", not
   "agent asks: …") until the follow-up change lands.
-- [Second build-less app dilutes the events-app convention] → same folder
-  contract, same serving service shape, documented alongside events-app.
+- [Events-app identity widens from "feed viewer" to "fleet app" — the board
+  page brings GitHub data into an app named after events] → accepted; the two
+  pages keep distinct jobs (log vs. wallboard), and renaming the app id is a
+  cosmetic follow-up if it ever grates.
+- [Feed-log UI changes could accidentally break the always-on board] → they
+  can't share page-level code: `board.html` is self-contained, sharing only
+  the folder and the serving contract with `index.html`.
 
 ## Open Questions
 

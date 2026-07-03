@@ -35,10 +35,13 @@ spine exists.
 - **GitHub panel** — across the operator's repos: open PRs (age, draft/ready,
   review state) and latest CI status per default branch, red/green wallboard
   style, reusing the existing `github-credentials` capability.
-- Rendering/exposure follows the existing local-app conventions (served by the
-  harness, reachable full-screen in a plain browser window on the third
-  monitor). Exact placement (events-app sibling vs. new tab) is a design
-  decision, not a requirement.
+- The board ships as a **sibling page inside the existing events-app**
+  (`events-app/board.html`) — the events-app is already the multi-machine
+  surface (it renders the collector's sources) and its serving service already
+  serves every file in that folder, so the wallboard needs **zero new serving
+  code**. It stays a *separate page* from the feed log: the log is
+  interactive/chronological, the wallboard is zero-interaction/alert-first —
+  one page doing both would do both badly.
 - **Deliberately deferred** (each a candidate follow-up change, kept out to
   stay additive): richer per-agent signals in the harness feed
   (awaiting-input, current task, context-window %), usage/burn-rate panel,
@@ -58,8 +61,11 @@ is a separate follow-up change so this one stays additive and archives cleanly.
 
 ## Impact
 
-- **New:** status-monitor web surface (served like the existing events-app) +
-  a harness endpoint aggregating collector state and GitHub status for it.
+- **New:** `events-app/board.html` wallboard page (no new serving service —
+  the existing events-app service serves it) + a harness endpoint aggregating
+  collector state and GitHub status for it. Accepted trade-off: the
+  events-app's identity widens from "feed viewer" to "fleet app", since the
+  board page brings GitHub data with it.
 - **Read (unchanged):** event-feed-collector's source/status model;
   github-credentials for API auth.
 - **External:** GitHub REST API polling (rate limits respected; PAT already on

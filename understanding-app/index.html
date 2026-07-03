@@ -171,7 +171,7 @@
       </div>
       <div class="flow-arrow">→</div>
       <div class="col">
-        <div class="node new"><span class="tag">new</span><h3><code>status-app/</code> SPA</h3><p>build-less, mirrors events-app serving; polls + diff-renders, staleness banner when polls fail</p></div>
+        <div class="node new"><span class="tag">new page</span><h3><code>events-app/board.html</code></h3><p>a self-contained sibling page in the <b>existing</b> events-app folder — its serving service already delivers every file there, so the wallboard needs <b>zero new serving code</b>. Polls + diff-renders, staleness banner when polls fail</p></div>
         <div class="node exists"><span class="tag">exists</span><h3>Browser on monitor 3</h3><p>full-screen window, zero interaction required</p></div>
       </div>
     </div>
@@ -179,7 +179,7 @@
       <span><span class="sw" style="background:var(--good)"></span>exists today (reused as-is)</span>
       <span><span class="sw" style="background:var(--new)"></span>new in this change</span>
     </div>
-    <div class="callout">Why not a React-client tab or a standalone repo? The events-app pattern is proven for exactly this shape — always-on, no build step, iterate by overwriting a folder — and the harness already knows how to serve it. A standalone product would drag in a second server for what is fundamentally a harness view.</div>
+    <div class="callout"><b>Why inside the events-app?</b> It is already the multi-machine surface — it renders the collector's source cards with the refusal taxonomy — and its service serves the whole folder. But the board stays a <b>separate page</b>, never merged into the feed log: the log is interactive and chronological, the wallboard is zero-interaction and alert-first — one page can't honor both. <code>board.html</code> is self-contained, so breaking the log page can't take the always-on board down with it. Accepted trade-off: the events-app's identity widens from "feed viewer" to "fleet app".</div>
   </section>
 
   <!-- ── VIEW 3: research ── -->
@@ -211,7 +211,7 @@
     <div class="grid2">
       <div class="card"><b>In v1</b><ul>
         <li>new capability <code>status-monitor</code> (spec'd, strict-valid)</li>
-        <li><code>status-app/</code> build-less SPA + <code>StatusApp</code> service (mirrors events-app)</li>
+        <li><code>events-app/board.html</code> — self-contained sibling page in the existing events-app; <b>zero new serving code</b> (no <code>StatusApp</code> service)</li>
         <li><code>GET api/status-monitor/board</code> — fleet / attention / github in one doc</li>
         <li>attention queue v1 = refusal-state sources + stale sources (source-level)</li>
         <li>GitHub panel: explicit repo list, PRs + review state + default-branch CI, ≥60s cache</li>
@@ -226,7 +226,7 @@
       <dt>Staleness source?</dt><dd>does the collector already persist last-successful-poll per source, or does the board compute it from events? Audit is task 1.1.</dd>
       <dt>Sound on new attention items?</dt><dd>events-app has a sound endpoint — lean: silent v1, the monitor is peripheral vision.</dd>
     </dl></div>
-    <p class="note">Artifacts: <code>openspec/changes/status-monitor-dashboard/</code> — proposal.md · design.md · specs/status-monitor/spec.md (6 requirements, 10 scenarios) · tasks.md. Run <code>/opsx:apply</code> to start implementing.</p>
+    <p class="note">Artifacts: <code>openspec/changes/status-monitor-dashboard/</code> — proposal.md · design.md · specs/status-monitor/spec.md (6 requirements, 11 scenarios) · tasks.md. Run <code>/opsx:apply</code> to start implementing.</p>
   </section>
 </div>
 <script src="./app.js"></script>

@@ -1,15 +1,19 @@
 ## ADDED Requirements
 
 ### Requirement: Status monitor surface
-The Harness SHALL serve a build-less status-monitor wallboard SPA from `status-app/` at the Harness repo root, through the same proxy mechanism as the events-app, under a fixed app id, full-screen capable in a plain browser window.
+The Harness SHALL serve the wallboard as a self-contained sibling page `board.html` inside the existing `events-app/` folder, delivered by the existing events-app serving mechanism (build-less, no-store, relative URLs), full-screen capable in a plain browser window. The wallboard MUST remain a separate page from the feed log page — the two are never merged into one UI.
 
 #### Scenario: Board loads on the third monitor
-- **WHEN** the Operator opens the status monitor's proxy URL in a browser window on the status monitor
-- **THEN** the wallboard renders full-screen from `status-app/index.html` with no build step required, and an overwrite of that file shows on next reload (no-store)
+- **WHEN** the Operator opens the events-app proxy URL with the `board.html` path in a browser window on the status monitor
+- **THEN** the wallboard renders full-screen from `events-app/board.html` with no build step or new serving code required, and an overwrite of that file shows on next reload (no-store)
 
-#### Scenario: Missing app is visibly missing
-- **WHEN** `status-app/index.html` does not exist at the Harness repo root
-- **THEN** the Harness serves an explicit empty state (not a fallback renderer) so a broken board is visibly broken
+#### Scenario: Missing page is visibly missing
+- **WHEN** `events-app/board.html` does not exist at the Harness repo root
+- **THEN** the request yields a plain 404 (a missing asset is never masked by a fallback renderer), while the feed log page is unaffected
+
+#### Scenario: Feed log stays independent
+- **WHEN** the feed log page (`events-app/index.html`) is edited or broken
+- **THEN** the board page still renders, because `board.html` is self-contained and shares only the folder and serving contract
 
 ### Requirement: Single board endpoint
 The Harness SHALL expose `GET api/status-monitor/board` returning one JSON document with three sections — fleet, attention, and github — so the SPA is a renderer and all derivation (ordering, staleness, attention membership) is computed server-side.

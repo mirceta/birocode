@@ -1,7 +1,7 @@
 ## 1. Audit & wiring
 
 - [ ] 1.1 Audit collector source records: confirm per-source status, last-successful-poll timestamp, and latest-activity data available for the board (design open question); note gaps
-- [ ] 1.2 Add `StatusApp` service mirroring `EventsApp` (serve `status-app/` build-less, no-store, explicit empty state) and mount it in `LocalProxyController` under a fixed app id
+- [ ] 1.2 Confirm the events-app serving contract for sibling pages: `events-app/board.html` reachable through the proxy path, no-store honored, plain 404 when absent (no new serving code expected)
 
 ## 2. Board endpoint
 
@@ -10,9 +10,9 @@
 - [ ] 2.3 `GitHubStatusService`: configured repo list (settings), PRs + review state + latest default-branch workflow run via github-credentials PAT, ≥60s cache, PAT never leaves the server
 - [ ] 2.4 Wire github section into the board response; degrade gracefully (github section carries its own error/staleness rather than failing the board)
 
-## 3. Wallboard SPA (`status-app/`)
+## 3. Wallboard page (`events-app/board.html`)
 
-- [ ] 3.1 Layout: attention queue on top (largest), fleet cards mid, GitHub tiles bottom; dark high-contrast, readable from across a desk on a small monitor
+- [ ] 3.1 Self-contained `board.html` (no shared page-level code with `index.html`): attention queue on top (largest), fleet cards mid, GitHub tiles bottom; dark high-contrast, readable from across a desk on a small monitor
 - [ ] 3.2 Poll + diff-render loop (no flicker), last-updated clock, full-bleed staleness banner on consecutive poll failures over dimmed last-known content
 - [ ] 3.3 Refusal labels match the events-app taxonomy (ip-blocked with rejected IP, needs-credential, bad-credential, throttled)
 
