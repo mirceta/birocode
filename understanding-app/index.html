@@ -1,167 +1,241 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Dashboard dock toolbar — how it works</title>
+<title>Discovery Eval — measuring "did we find every app?"</title>
 <style>
   :root {
-    --bg: #faf7f2; --surface: #fff; --ink: #23201c; --soft: #6b655c;
-    --border: #e2dcd2; --accent: #b85c00; --on: #b85c00; --hidden: #b9b2a6;
-    --ok: #16a34a; --code: #f2ede4;
+    --bg:#0e1116; --panel:#171c24; --panel2:#1e2530; --edge:#2a3341;
+    --ink:#e6edf3; --dim:#8b98a9; --good:#3fb950; --bad:#f0603a;
+    --warn:#d9a441; --link:#58a6ff; --accent:#a371f7;
   }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--bg); color: var(--ink);
-    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  }
-  .wrap { max-width: 860px; margin: 0 auto; padding: 28px 20px 80px; }
-  h1 { font-size: 24px; margin: 0 0 4px; }
-  h2 { font-size: 17px; margin: 34px 0 10px; color: var(--accent); }
-  .sub { color: var(--soft); margin: 0 0 8px; }
-  p { margin: 10px 0; }
-  code { background: var(--code); padding: 1px 6px; border-radius: 5px; font-size: 13px; }
-  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin: 14px 0; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.55 -apple-system,Segoe UI,Roboto,sans-serif; }
+  .wrap { max-width:980px; margin:0 auto; padding:28px 20px 80px; }
+  h1 { font-size:24px; margin:0 0 6px; }
+  h2 { font-size:17px; margin:34px 0 12px; }
+  .sub { color:var(--dim); margin:0 0 8px; }
+  .card { background:var(--panel); border:1px solid var(--edge); border-radius:12px;
+    padding:18px; margin:14px 0; }
+  code { background:#0b0e13; border:1px solid var(--edge); border-radius:5px;
+    padding:1px 6px; font-family:ui-monospace,Consolas,monospace; font-size:13px; }
 
-  /* Live simulator */
-  .label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--soft); }
-  .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0 4px; }
-  .tab {
-    display: inline-flex; align-items: center; gap: 7px; padding: 4px 12px;
-    border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
-    color: var(--soft); font-size: 13px; font-weight: 500; cursor: pointer;
-    opacity: .6; transition: opacity .15s, border-color .15s, color .15s;
-  }
-  .tab:hover { opacity: 1; border-color: var(--accent); }
-  .tab.on { opacity: 1; border-color: var(--accent); color: var(--ink); }
-  .dot { width: 9px; height: 9px; border-radius: 50%; background: #aaa; flex: 0 0 auto; }
+  /* pipeline */
+  .pipe { display:flex; align-items:stretch; gap:10px; flex-wrap:wrap; justify-content:center; }
+  .stage { background:var(--panel2); border:1px solid var(--edge); border-radius:10px;
+    padding:12px 14px; min-width:150px; max-width:200px; text-align:center; }
+  .stage b { display:block; margin-bottom:4px; }
+  .stage small { color:var(--dim); font-size:12px; line-height:1.4; display:block; }
+  .stage.hot { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
+  .arr { align-self:center; color:var(--dim); font-size:20px; }
 
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; margin-top: 14px; min-height: 96px; }
-  .cell {
-    border: 1px solid var(--border); border-left: 4px solid var(--cellcolor, var(--border));
-    border-radius: 10px; padding: 14px 12px; background: var(--surface);
-    font-weight: 600; animation: pop .18s ease;
-  }
-  @keyframes pop { from { transform: scale(.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-  .empty { grid-column: 1 / -1; color: var(--soft); font-style: italic; text-align: center; padding: 26px 0; border: 1px dashed var(--border); border-radius: 10px; }
+  /* fixture demo */
+  .cols { display:flex; gap:16px; flex-wrap:wrap; }
+  .col { flex:1; min-width:280px; }
+  .tree { font-family:ui-monospace,Consolas,monospace; font-size:13px; line-height:1.8; }
+  .tree .row { display:flex; align-items:center; gap:8px; padding:1px 8px; border-radius:6px;
+    cursor:pointer; user-select:none; }
+  .tree .row:hover { background:#232b38; }
+  .tree .tag { font-size:11px; padding:0 7px; border-radius:20px; border:1px solid; flex:none; }
+  .tag.app { color:var(--good); border-color:var(--good); }
+  .tag.decoy { color:var(--warn); border-color:var(--warn); }
+  .tree .chk { width:16px; text-align:center; flex:none; }
+  .found .chk { color:var(--good); }
+  .missed .chk { color:var(--bad); }
 
-  .flow { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
-  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .pill { background: var(--code); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 13px; }
-  .arrow { color: var(--soft); }
-  .agents { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
-  .acard { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 8px; padding: 5px 10px; font-size: 13px; }
-  .glyph { font-size: 15px; }
-  .glyph.off { color: var(--hidden); }
-  .glyph.on { color: var(--accent); }
-  .note { font-size: 13px; color: var(--soft); }
-  .k { color: var(--accent); font-weight: 600; }
+  .score { display:flex; gap:14px; flex-wrap:wrap; margin:12px 0; }
+  .metric { background:var(--panel2); border:1px solid var(--edge); border-radius:10px;
+    padding:10px 18px; text-align:center; min-width:110px; }
+  .metric .v { font-size:24px; font-weight:700; }
+  .metric .k { color:var(--dim); font-size:12px; }
+  .v.ok { color:var(--good); } .v.notok { color:var(--bad); }
+  .lists { font-size:13px; }
+  .lists .miss { color:var(--bad); } .lists .extra { color:var(--warn); }
+  button { background:var(--panel2); color:var(--ink); border:1px solid var(--edge);
+    border-radius:8px; padding:7px 14px; cursor:pointer; font-size:13px; }
+  button:hover { border-color:var(--link); }
+  .hint { color:var(--dim); font-size:12px; margin-top:8px; }
+
+  /* runs strip */
+  .runs { display:flex; gap:6px; margin:10px 0; flex-wrap:wrap; }
+  .run { width:34px; height:34px; border-radius:8px; display:flex; align-items:center;
+    justify-content:center; font-size:12px; font-weight:700; border:1px solid var(--edge); }
+  .run.p { background:rgba(63,185,80,.15); color:var(--good); border-color:var(--good); }
+  .run.f { background:rgba(240,96,58,.15); color:var(--bad); border-color:var(--bad); }
+
+  table { border-collapse:collapse; width:100%; font-size:14px; margin-top:6px; }
+  th,td { border:1px solid var(--edge); padding:8px 10px; text-align:left; }
+  th { background:var(--panel2); color:var(--dim); font-weight:600; }
+  .delta.up { color:var(--good); font-weight:700; }
+  .delta.dn { color:var(--bad); font-weight:700; }
+  .foot { color:var(--dim); font-size:12px; margin-top:26px; text-align:center; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>The Dashboard dock toolbar</h1>
-  <p class="sub">openspec <code>add-dashboard-dock-toolbar</code> — curate which agent docks show in the grid, in place.</p>
+  <h1>Discovery Eval — measuring "did we find every app?"</h1>
+  <p class="sub">OpenSpec change <code>add-discovery-eval</code>: an offline harness that turns
+    the quality of the dock's <b>Discover Local Apps</b> agent into a number, so the discovery
+    prompt can be optimized with evidence instead of eyeballing.</p>
 
+  <h2>The loop</h2>
   <div class="card">
-    <p><strong>The problem.</strong> The Dashboard renders one tile per <em>agent dock</em>, and the fleet has grown to many docks. The only way to hide one from the grid was to leave for the <strong>Agents</strong> page and click its <code>&#9638;</code> button. There was no in-place way to see the full roster and curate it.</p>
-    <p><strong>The fix.</strong> A toolbar at the top of the Dashboard listing <em>every</em> dock as a tab — <span class="k">active</span> means it renders in the grid, click to hide, click again to re-show. It drives the dock's existing <code>dashboard</code> field. <strong>No backend or schema change.</strong></p>
-  </div>
-
-  <h2>Try it</h2>
-  <p class="note">Click a tab to toggle whether that dock renders below. The toolbar always shows the <em>full</em> roster — hidden docks stay one click from returning.</p>
-  <div class="card">
-    <div class="label">Docks</div>
-    <div class="toolbar" id="toolbar"></div>
-    <div class="grid" id="grid"></div>
-  </div>
-
-  <h2>The data flow</h2>
-  <div class="card">
-    <div class="flow">
-      <div class="row"><span class="pill"><code>GET /api/dock</code> &rarr; <code>DockContext</code></span><span class="arrow">&rarr; one roster, read two ways:</span></div>
-      <div class="row" style="padding-left:16px">
-        <span class="pill"><code>rosterTabs</code> &mdash; <strong>unfiltered</strong> &rarr; the <span class="k">toolbar</span> (all docks)</span>
-      </div>
-      <div class="row" style="padding-left:16px">
-        <span class="pill"><code>tabs = dockTabs.filter(d =&gt; d.dashboard !== false)</code> &rarr; the <span class="k">grid</span></span>
-      </div>
-      <div class="row"><span class="arrow">click a tab &rarr;</span><span class="pill"><code>updateTab(id, { dashboard: !active })</code></span><span class="arrow">&rarr;</span><span class="pill"><code>PATCH /api/dock/{id}</code></span></div>
+    <div class="pipe">
+      <div class="stage"><b>1 · Golden fixture</b><small>hard repo committed under
+        <code>tests/discovery-eval/fixtures/</code> + <code>expected.json</code>
+        (the true apps, keyed folder+port)</small></div>
+      <span class="arr">&rarr;</span>
+      <div class="stage hot"><b>2 · Real discovery</b><small>the SHIPPED path —
+        <code>LocalAppDiscoveryAsk</code> &rarr; <code>StructuredAskRunner</code> &rarr;
+        ClaudeMonitor, read-only tools — scan root = the fixture</small></div>
+      <span class="arr">&rarr;</span>
+      <div class="stage"><b>3 · Score</b><small>recall &amp; precision on folder+port,
+        explicit <span style="color:var(--bad)">missing</span> /
+        <span style="color:var(--warn)">extra</span> lists</small></div>
+      <span class="arr">&rarr;</span>
+      <div class="stage"><b>4 · Repeat ×N</b><small>agent is non-deterministic —
+        report per-run scores, worst-case recall, runs-perfect count</small></div>
+      <span class="arr">&rarr;</span>
+      <div class="stage"><b>5 · Prompt delta</b><small>baseline vs candidate prompts on the
+        same fixture; pick the winner from the delta — adopting it is a separate change</small></div>
     </div>
-    <p class="note" style="margin-top:12px">The grid re-renders from the changed <code>tabs</code> memo &mdash; no duplicate local state. Because the toolbar and grid read the one field, they stay consistent <em>by construction</em>.</p>
   </div>
 
-  <h2>Same field the Agents page uses</h2>
-  <p class="note">The Agents-page <code>&#9638;</code> toggle calls the identical <code>updateTab(id, { dashboard })</code>. So a toolbar toggle is reflected there and vice-versa &mdash; one source of truth. Watch these cards track the simulator above:</p>
+  <h2>Try it — simulate a discovery run over the fixture</h2>
+  <p class="sub">Click rows to toggle what the agent "reported", or use the buttons.
+    True apps it misses hurt <b>recall</b>; decoys it reports hurt <b>precision</b>.</p>
   <div class="card">
-    <div class="label">Agents page &middot; dashboard visibility</div>
-    <div class="agents" id="agents"></div>
+    <div class="cols">
+      <div class="col">
+        <div class="tree" id="tree"></div>
+        <p class="hint">✅ = agent reported it. <span class="tag app" style="padding:0 6px">app</span> = in
+          <code>expected.json</code> · <span class="tag decoy" style="padding:0 6px">decoy</span> = looks
+          app-like, must NOT be reported.</p>
+        <p><button id="btnPerfect">Perfect run</button>
+           <button id="btnSloppy">Sloppy run</button>
+           <button id="btnGreedy">Greedy run (reports decoys)</button></p>
+      </div>
+      <div class="col">
+        <div class="score">
+          <div class="metric"><div class="v" id="mRecall">—</div><div class="k">recall</div></div>
+          <div class="metric"><div class="v" id="mPrec">—</div><div class="k">precision</div></div>
+        </div>
+        <div class="lists" id="lists"></div>
+      </div>
+    </div>
   </div>
 
-  <h2>Shared, not personal (the one real decision)</h2>
+  <h2>Why N runs, not one</h2>
   <div class="card">
-    <p>Reusing the synced <code>dashboard</code> field means hiding a dock hides it for <strong>every</strong> client and stays in lock-step with the Agents page &mdash; but it is <strong>not</strong> a private per-device view. The alternative was a device-local hidden-set (like <code>claudeweb_dash_only_important</code>). It was rejected as the default because it introduces a second, competing notion of "is this dock on the dashboard" that can silently disagree with the field and the Agents page. Shared reuse wins: zero backend work, one source of truth.</p>
-    <p class="note">Gate: the toolbar lives inside the Dashboard overlay, which only renders under the <code>agentDashboard</code> (Advanced) gate &mdash; so Basic mode shows neither. No new capability entry.</p>
+    <p class="sub" style="margin-top:0">One green run can be luck. Ten runs show whether
+      discovery is <i>reliably</i> complete:</p>
+    <div class="runs" id="runsA"></div>
+    <p class="sub" id="runsAcap"></p>
   </div>
+
+  <h2>Prompt optimization = compare deltas</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>Prompt</th><th>runs perfect</th><th>worst-case recall</th><th>precision</th><th>&Delta; vs baseline</th></tr></thead>
+      <tbody>
+        <tr><td>baseline (shipped)</td><td>6/10</td><td>0.75</td><td>1.00</td><td>—</td></tr>
+        <tr><td>candidate A</td><td>10/10</td><td>1.00</td><td>1.00</td><td class="delta up">+4 perfect runs</td></tr>
+        <tr><td>candidate B</td><td>9/10</td><td>0.75</td><td>0.86</td><td class="delta dn">reports decoys</td></tr>
+      </tbody>
+    </table>
+    <p class="hint">Illustrative numbers. The shipped prompt stays untouched while candidates are scored;
+      adopting a winner is its own explicit change. The prompt override seam defaults byte-identical to
+      the shipped constant.</p>
+  </div>
+
+  <h2>Guardrails</h2>
+  <div class="card">
+    <ul style="margin:0; padding-left:20px; color:var(--dim)">
+      <li>Evaluates <code>discover-local-apps</code>; changes none of its behavior, endpoints, or dock UI.</li>
+      <li>Offline &amp; dev-facing — needs the ClaudeMonitor gateway, so on-demand, not default CI.</li>
+      <li>Identity for matching is <b>folder + port</b> — names are agent-chosen and advisory.</li>
+      <li>Ground truth is committed and human-audited (<code>expected.json</code> + fixture README).</li>
+    </ul>
+  </div>
+
+  <p class="foot">Companion to openspec/changes/add-discovery-eval &middot; rolling latest, overwritten as the work evolves.</p>
 </div>
 
 <script>
-  // Mirror of Dashboard.jsx: the toolbar reads the FULL roster; the grid renders
-  // only docks whose `dashboard !== false`. Clicking a tab flips that one field.
-  const DOCKS = [
-    { id: 'a', name: 'alpha', color: '#e11d48', dashboard: true },
-    { id: 'b', name: 'beta', color: '#2563eb', dashboard: true },
-    { id: 'c', name: 'gamma', color: '#16a34a', dashboard: false },
-    { id: 'd', name: 'delta', color: '#9333ea', dashboard: true },
-  ];
+// fixture: [folder, port|null, kind app|decoy, why]
+const FIXTURE = [
+  ["homepage",              5170, "app",   "node serve.mjs, fixed port"],
+  ["tools/status-board",    5171, "app",   "node server.js, nested folder"],
+  ["ops/ps-panel",          5172, "app",   "powershell serve.ps1"],
+  ["embedded/miniview",     5173, "app",   "C# HttpListener, unusual style"],
+  ["scripts/build-helper",  null, "decoy", "script, no HTTP listener"],
+  ["docs-site-src",         null, "decoy", "static source, nothing serves it"],
+  ["dev-proxy",             null, "decoy", "random port, not fixed"],
+];
+const reported = new Set();
 
-  const toolbar = document.getElementById('toolbar');
-  const grid = document.getElementById('grid');
-  const agents = document.getElementById('agents');
+const tree = document.getElementById("tree");
+FIXTURE.forEach(([folder, port, kind], i) => {
+  const row = document.createElement("div");
+  row.className = "row"; row.dataset.i = i;
+  row.innerHTML = `<span class="chk">·</span><span style="flex:1">${folder}${port ? " <span style='color:var(--dim)'>:" + port + "</span>" : ""}</span>
+    <span class="tag ${kind}">${kind}</span>`;
+  row.title = FIXTURE[i][3];
+  row.addEventListener("click", () => { reported.has(i) ? reported.delete(i) : reported.add(i); render(); });
+  tree.appendChild(row);
+});
 
-  function render() {
-    // Toolbar = the unfiltered roster.
-    toolbar.innerHTML = '';
-    DOCKS.forEach((d) => {
-      const active = d.dashboard !== false;
-      const b = document.createElement('button');
-      b.className = 'tab' + (active ? ' on' : '');
-      b.setAttribute('aria-pressed', active);
-      b.title = (active ? 'Hide ' : 'Show ') + d.name;
-      b.innerHTML = '<span class="dot" style="background:' + d.color + '"></span>' + d.name;
-      b.onclick = () => { d.dashboard = !active; render(); };
-      toolbar.appendChild(b);
-    });
+function setRun(idxs) { reported.clear(); idxs.forEach(i => reported.add(i)); render(); }
+document.getElementById("btnPerfect").onclick = () => setRun([0,1,2,3]);
+document.getElementById("btnSloppy").onclick  = () => setRun([0,1]);          // misses ps + embedded
+document.getElementById("btnGreedy").onclick  = () => setRun([0,1,2,3,4,6]);  // + decoys
 
-    // Grid = dashboard !== false.
-    const shown = DOCKS.filter((d) => d.dashboard !== false);
-    grid.innerHTML = '';
-    if (shown.length === 0) {
-      const e = document.createElement('div');
-      e.className = 'empty';
-      e.textContent = 'Every dock is hidden. Use the Docks toolbar above to show one.';
-      grid.appendChild(e);
-    } else {
-      shown.forEach((d) => {
-        const c = document.createElement('div');
-        c.className = 'cell';
-        c.style.setProperty('--cellcolor', d.color);
-        c.textContent = d.name;
-        grid.appendChild(c);
-      });
-    }
+function render() {
+  const apps = FIXTURE.map((f,i)=>i).filter(i => FIXTURE[i][2]==="app");
+  const hit   = apps.filter(i => reported.has(i));
+  const extra = [...reported].filter(i => FIXTURE[i][2]!=="app");
+  const miss  = apps.filter(i => !reported.has(i));
+  const recall = apps.length ? hit.length/apps.length : 1;
+  const prec   = reported.size ? hit.length/reported.size : 1;
 
-    // Agents page mirror = the same field.
-    agents.innerHTML = '';
-    DOCKS.forEach((d) => {
-      const active = d.dashboard !== false;
-      const a = document.createElement('span');
-      a.className = 'acard';
-      a.innerHTML = '<span class="glyph ' + (active ? 'on' : 'off') + '">&#9638;</span>' + d.name;
-      agents.appendChild(a);
-    });
-  }
-  render();
+  document.querySelectorAll(".tree .row").forEach(row => {
+    const i = +row.dataset.i;
+    row.classList.remove("found","missed");
+    const chk = row.querySelector(".chk");
+    if (reported.has(i)) { row.classList.add("found"); chk.textContent = "✅"; }
+    else if (FIXTURE[i][2]==="app") { row.classList.add("missed"); chk.textContent = "✗"; }
+    else chk.textContent = "·";
+  });
+
+  const mR = document.getElementById("mRecall"), mP = document.getElementById("mPrec");
+  mR.textContent = recall.toFixed(2); mP.textContent = prec.toFixed(2);
+  mR.className = "v " + (recall === 1 ? "ok" : "notok");
+  mP.className = "v " + (prec === 1 ? "ok" : "notok");
+
+  document.getElementById("lists").innerHTML =
+    `<p><b>missing</b> (expected, not found): <span class="miss">${miss.length ? miss.map(i=>FIXTURE[i][0]).join(", ") : "none"}</span></p>
+     <p><b>extra</b> (reported, not expected): <span class="extra">${extra.length ? extra.map(i=>FIXTURE[i][0]).join(", ") : "none"}</span></p>
+     <p class="hint">${recall===1 && prec===1 ? "Perfect: recall 1.0, precision 1.0 — this run counts toward the reliability aggregate."
+       : recall<1 ? "Recall < 1: a prompt that reliably avoids this miss scores a positive delta."
+       : "Precision < 1: the prompt is over-reporting — decoys exist in the fixture exactly to catch this."}</p>`;
+}
+render();
+
+// N-run strip: illustrative flaky baseline
+const RUNS = [1,1,0,1,1,1,0,1,0,1]; // 1 = perfect recall
+const strip = document.getElementById("runsA");
+RUNS.forEach((ok,i) => {
+  const d = document.createElement("div");
+  d.className = "run " + (ok ? "p" : "f");
+  d.textContent = i+1;
+  d.title = ok ? "perfect recall" : "missed ≥1 app";
+  strip.appendChild(d);
+});
+document.getElementById("runsAcap").textContent =
+  `Aggregate: ${RUNS.filter(Boolean).length}/${RUNS.length} runs perfect, worst-case recall 0.75 — ` +
+  `a single-run eval would have called this prompt "working" ${RUNS.filter(Boolean).length} times out of 10.`;
 </script>
 </body>
 </html>
