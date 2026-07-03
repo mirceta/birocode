@@ -47,9 +47,14 @@ public sealed class StatusBoardService
 
     public sealed record FleetCard(
         string Id, string Label, string Kind, bool Active, string Status, bool Alive,
-        long LastPolledAt, long? StateDurationMs, LastActivity? Activity);
+        long LastPolledAt, long? StateDurationMs, LastActivity? Activity,
+        IReadOnlyList<RunningAgent> Agents);
 
     public sealed record LastActivity(string Type, long At);
+
+    /// <summary>An agent currently executing on a source: a turn.start in the
+    /// retained aggregate with no matching turn.ended (paired by turnId).</summary>
+    public sealed record RunningAgent(string Repo, long StartedAt);
 
     public sealed record AttentionItem(
         string Severity, string SourceId, string Label, string Title, string Fix, long? DurationMs);
@@ -68,7 +73,7 @@ public sealed class StatusBoardService
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
         var sources = _collector.ListSources();
-        var lastActivity = LatestActivityBySource();
+        var (lastActivity, runningAgents) = ScanEvents(now);
 
         var fleet = new List<FleetCard>(sources.Count);
         var attention = new List<AttentionItem>();
@@ -94,7 +99,8 @@ public sealed class StatusBoardService
                 fleet.Add(new FleetCard(
                     s.Id, s.Label, s.Kind, s.Active, s.Status, s.Alive,
                     s.LastPolledAt, duration,
-                    lastActivity.TryGetValue(s.Id, out var act) ? act : null));
+                    lastActivity.TryGetValue(s.Id, out var act) ? act : null,
+                    runningAgents.TryGetValue(s.Id, out var agents) ? agents : Array.Empty<RunningAgent>()));
 
                 if (!s.Active) continue; // operator stopped it deliberately — not attention
 
@@ -130,15 +136,68 @@ public sealed class StatusBoardService
         return new Board(now, (long)DarkThreshold.TotalMilliseconds, fleet, attention, github);
     }
 
-    /// <summary>Most recent event per source in the collector's retained aggregate —
-    /// "the most recent agent activity the feed carries" (fleet-panel requirement).</summary>
-    private Dictionary<string, LastActivity> LatestActivityBySource()
+    /// <summary>An unmatched turn.start older than this is dropped: a trimmed or
+    /// lost turn.ended must not pin a ghost "running" agent forever.</summary>
+    private static readonly TimeSpan RunningMaxAge = TimeSpan.FromHours(4);
+
+    /// <summary>One pass over the collector's retained aggregate: the most recent
+    /// event per source ("latest activity", fleet requirement) and the running
+    /// agents per source — turn.start events with no matching turn.ended, paired by
+    /// turnId (spec: per-source status with running agents). Event payloads are
+    /// anonymous objects for the self source but JsonElements for remote ones, so
+    /// both are normalized through SerializeToElement before field access.</summary>
+    private (Dictionary<string, LastActivity> Activity, Dictionary<string, List<RunningAgent>> Running)
+        ScanEvents(long now)
     {
         var (events, _) = _collector.ReadEvents(0);
-        var map = new Dictionary<string, LastActivity>();
+        var activity = new Dictionary<string, LastActivity>();
+        // sourceId -> turnId -> agent (insertion order preserved = start order)
+        var open = new Dictionary<string, Dictionary<string, RunningAgent>>();
+
         foreach (var e in events) // ascending seq — later entries overwrite earlier
-            map[e.SourceId] = new LastActivity(e.Type, e.At);
-        return map;
+        {
+            activity[e.SourceId] = new LastActivity(e.Type, e.At);
+            if (e.Type is not ("turn.start" or "turn.ended")) continue;
+
+            var turnId = ReadString(e.Data, "turnId");
+            if (turnId is null) continue; // old-build source: no pairing possible
+
+            if (e.Type == "turn.start")
+            {
+                var repo = ReadString(e.Source, "repoName") ?? ReadString(e.Source, "repoId") ?? "?";
+                if (!open.TryGetValue(e.SourceId, out var perSource))
+                    open[e.SourceId] = perSource = new Dictionary<string, RunningAgent>();
+                perSource[turnId] = new RunningAgent(repo, e.At);
+            }
+            else if (open.TryGetValue(e.SourceId, out var perSource))
+            {
+                perSource.Remove(turnId);
+            }
+        }
+
+        var running = new Dictionary<string, List<RunningAgent>>();
+        foreach (var (sourceId, perSource) in open)
+        {
+            var alive = perSource.Values.Where(a => now - a.StartedAt < RunningMaxAge.TotalMilliseconds).ToList();
+            if (alive.Count > 0) running[sourceId] = alive;
+        }
+        return (activity, running);
+    }
+
+    private static string? ReadString(object? payload, string field)
+    {
+        if (payload is null) return null;
+        try
+        {
+            var el = payload is System.Text.Json.JsonElement je
+                ? je
+                : System.Text.Json.JsonSerializer.SerializeToElement(payload);
+            return el.ValueKind == System.Text.Json.JsonValueKind.Object &&
+                   el.TryGetProperty(field, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String
+                ? v.GetString()
+                : null;
+        }
+        catch { return null; }
     }
 
     private static int Rank(string severity) => severity switch

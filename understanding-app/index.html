@@ -115,10 +115,10 @@
 <div class="wrap">
   <h1>The Status Monitor Dashboard — what's being proposed</h1>
   <p class="sub">A glanceable wallboard for the third monitor: who's working, who's blocked on <em>you</em>, what's red on GitHub — across all five machines.</p>
-  <div class="stage-chip">OpenSpec change <b>status-monitor-dashboard</b> · stage: <b>implemented</b> on <code>feat/status-monitor-dashboard</code> — the real board lives at <code>events-app/board.html</code>, browser-verified in an isolated preview; live deploy + real-fleet check (task 4.3) pending</div>
+  <div class="stage-chip">OpenSpec change <b>status-monitor-dashboard</b> · stage: <b>implemented, rev 3 (merged-page shape)</b> — operator decision 2026-07-03: no separate board page; the events-app primary page IS mission control (attention + fleet with <b>live running agents</b> via new <code>turn.start</code> events + GitHub), with a zero-interaction <b>display mode</b> (<code>?display=1</code>) for the third monitor</div>
 
   <div class="tabs" id="tabs">
-    <button data-v="board" class="on">1 · The board (live mock)</button>
+    <button data-v="board" class="on">1 · Display mode (mock)</button>
     <button data-v="flow">2 · How the data flows</button>
     <button data-v="research">3 · The research behind it</button>
     <button data-v="scope">4 · Scope &amp; open questions</button>
@@ -157,7 +157,7 @@
     <p class="note">One aggregation endpoint paints the whole board in a single round-trip. All derivation (attention membership, ordering, staleness math) lives <b>server-side</b>; the SPA is a dumb renderer. The fleet panel's data spine — the collector — <b>already exists</b>.</p>
     <div class="flow">
       <div class="col">
-        <div class="node exists"><span class="tag">exists</span><h3>5 × harness event feeds</h3><p>each machine's birocode harness publishes its feed (<code>harness-event-feed</code>)</p></div>
+        <div class="node exists"><span class="tag">modified</span><h3>5 × harness event feeds</h3><p>each machine's harness publishes its feed — now with <b><code>turn.start</code></b> paired to <code>turn.ended</code> by <code>turnId</code>, so "agents running right now" is derivable</p></div>
         <div class="node exists"><span class="tag">exists</span><h3>GitHub API</h3><p>PRs + default-branch workflow runs, via <code>github-credentials</code> PAT</p></div>
       </div>
       <div class="flow-arrow">→</div>
@@ -171,15 +171,15 @@
       </div>
       <div class="flow-arrow">→</div>
       <div class="col">
-        <div class="node new"><span class="tag">new page</span><h3><code>events-app/board.html</code></h3><p>a self-contained sibling page in the <b>existing</b> events-app folder — its serving service already delivers every file there, so the wallboard needs <b>zero new serving code</b>. Polls + diff-renders, staleness banner when polls fail</p></div>
-        <div class="node exists"><span class="tag">exists</span><h3>Browser on monitor 3</h3><p>full-screen window, zero interaction required</p></div>
+        <div class="node new"><span class="tag">merged</span><h3><code>events-app/index.html</code></h3><p>the primary page itself renders attention + running agents + GitHub alongside source admin and the log; <b>display mode</b> (<code>?display=1</code>) hides every interactive element and enlarges the status sections. <code>board.html</code> deleted</p></div>
+        <div class="node exists"><span class="tag">exists</span><h3>Browser on monitor 3</h3><p>same page with <code>?display=1</code>, full-screen, zero interaction required</p></div>
       </div>
     </div>
     <div class="legend">
       <span><span class="sw" style="background:var(--good)"></span>exists today (reused as-is)</span>
       <span><span class="sw" style="background:var(--new)"></span>new in this change</span>
     </div>
-    <div class="callout"><b>Why inside the events-app?</b> It is already the multi-machine surface — it renders the collector's source cards with the refusal taxonomy — and its service serves the whole folder. But the board stays a <b>separate page</b>, never merged into the feed log: the log is interactive and chronological, the wallboard is zero-interaction and alert-first — one page can't honor both. <code>board.html</code> is self-contained, so breaking the log page can't take the always-on board down with it. Accepted trade-off: the events-app's identity widens from "feed viewer" to "fleet app".</div>
+    <div class="callout"><b>Why ONE page? (decision reversed 2026-07-03)</b> The first cut shipped a separate <code>board.html</code> on the "log vs wallboard" argument. Seeing it live, the operator ruled the split artificial: the Sources panel <em>is</em> fleet administration, so the board duplicated the fleet one click away. Now one page administers the fleet and shows its status — and the wallboard rules survive <em>inside</em> it as the spec'd <b>display mode</b>: <code>?display=1</code> must hide every interactive element, enlarge attention/fleet/GitHub, and never silently freeze (staleness banner). One page, one data path.</div>
   </section>
 
   <!-- ── VIEW 3: research ── -->
@@ -209,24 +209,24 @@
   <!-- ── VIEW 4: scope ── -->
   <section class="view" id="v-scope">
     <div class="grid2">
-      <div class="card"><b>In v1</b><ul>
-        <li>new capability <code>status-monitor</code> (spec'd, strict-valid)</li>
-        <li><code>events-app/board.html</code> — self-contained sibling page in the existing events-app; <b>zero new serving code</b> (no <code>StatusApp</code> service)</li>
+      <div class="card"><b>Shipped (rev 3, merged shape)</b><ul>
+        <li>new capability <code>status-monitor</code> + <b>modified</b> <code>harness-event-feed</code> (<code>turn.start</code>, <code>turnId</code> on <code>turn.ended</code>)</li>
+        <li>status renders on the <b>events-app primary page</b>; <code>board.html</code> deleted; <b>display mode</b> <code>?display=1</code> for the third monitor</li>
+        <li><b>running agents per machine</b>: <code>turn.start</code>/<code>turn.ended</code> paired by <code>turnId</code>, max-age guard against ghosts; old-build machines just show none</li>
         <li><code>GET api/status-monitor/board</code> — fleet / attention / github in one doc</li>
-        <li>attention queue v1 = refusal-state sources + stale sources (source-level)</li>
-        <li>GitHub panel: repo list <b>derived from registered Repos' remotes</b>, PRs + review state + default-branch CI, ≥60s cache</li>
-        <li>read-only; wallboard presentation is a <em>requirement</em>, not styling taste</li></ul></div>
-      <div class="card defer"><b>Deliberately deferred (each its own follow-up change)</b><ul>
-        <li>feed enrichment: per-agent <b>awaiting-input</b>, current task, context % (modifies <code>harness-event-feed</code> + <code>event-feed-collector</code> — kept out so this change stays additive)</li>
+        <li>attention queue = refusal-state sources + dark sources, alert-first</li>
+        <li>GitHub panel: repo list <b>derived from registered Repos' remotes</b>, PRs + review state + default-branch CI, ≥60s cache</li></ul></div>
+      <div class="card defer"><b>Still deferred (follow-up changes)</b><ul>
+        <li>per-agent <b>awaiting-input</b>, current task, context-window %</li>
         <li>usage / burn-rate panel</li>
-        <li>acting from the board (approve / dismiss / retry)</li></ul></div>
+        <li>acting from the status sections (approve / dismiss / retry)</li></ul></div>
     </div>
     <div class="card"><b>Open questions — resolved by the operator (2026-07-03)</b><dl class="qa">
       <dt>✓ Which repos on the GitHub panel? → derived from registered Repos' remotes</dt><dd>each registered repo's <code>origin</code> parsed to <code>owner/name</code>, deduped, non-GitHub remotes skipped — the board automatically tracks what you actually work on. No separate configuration.</dd>
       <dt>✓ Staleness source? → the collector's existing per-source state</dt><dd>code audit confirmed <code>Alive</code> / <code>Status</code> / <code>lastPolledAt</code> on <code>api/collector/sources</code>. One nuance: <code>lastPolledAt</code> marks the last <em>attempt</em>, not the last success — so "dark for N min" comes from the board service tracking state <em>transitions</em> in memory (after a harness restart: "duration unknown", never a fabricated timestamp). Collector untouched.</dd>
       <dt>◌ Sound on new attention items? → deferred</dt><dd>doesn't matter for now, decide later; v1 ships silent.</dd>
     </dl></div>
-    <p class="note">Artifacts: <code>openspec/changes/status-monitor-dashboard/</code> — proposal.md · design.md · specs/status-monitor/spec.md (6 requirements, 14 scenarios) · tasks.md (<b>12/13 done</b> — remaining: 4.3, the real-fleet check on the third monitor after live deploy). Implementation: <code>Services/StatusMonitor/</code> (board + GitHub services), <code>StatusMonitorController</code>, <code>events-app/board.html</code>.</p>
+    <p class="note">Artifacts: <code>openspec/changes/status-monitor-dashboard/</code> — proposal.md · design.md (decision 1 reversed; decisions 5–7 added) · delta specs for <code>status-monitor</code> and <code>harness-event-feed</code> · tasks.md (section 5 = the pivot; remaining: 4.3 real-fleet check). Implementation: <code>Services/StatusMonitor/</code>, <code>StatusMonitorController</code>, <code>turn.start</code> in <code>CliRunnerService</code>, merged <code>events-app/index.html</code>.</p>
   </section>
 </div>
 <script src="./app.js"></script>

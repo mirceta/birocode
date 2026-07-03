@@ -22,3 +22,12 @@
 - [x] 4.2 Browser-verify (per docs/claude-web/browser-testing.md) through the proxy path: board renders, attention ordering correct, staleness banner appears when the harness is stopped
 - [ ] 4.3 Live check against the real fleet: at least one refusal-state source and one dark machine render correctly on the third monitor
 - [x] 4.4 Update the Understanding app; note the deferred follow-ups (feed enrichment with awaiting-input/current-task/context %, burn-rate panel, acting from the board)
+
+## 5. Pivot: merge into the primary page (operator decision 2026-07-03)
+
+- [x] 5.1 `turn.start` event: publish at turn launch in `CliRunnerService` with a fresh `turnId`; add the same `turnId` to the `turn.ended` payload
+- [x] 5.2 Running-agent derivation in `StatusBoardService`: pair `turn.start`/`turn.ended` by `turnId` per source, max-age cutoff against ghost agents, expose per fleet card (repo + elapsed)
+- [x] 5.3 Primary page: render attention strip (top), per-source running agents in the Sources panel, and GitHub tiles on `events-app/index.html`, fed by the board endpoint
+- [x] 5.4 Display mode: `?display=1` + visible enter/exit controls; hides add-form, source actions, sound buttons, merged log; enlarges status sections; staleness banner + clock
+- [x] 5.5 Delete `events-app/board.html`; the old "Status board" button becomes the display-mode control
+- [ ] 5.6 Browser-verify the merged page (normal + display mode, running-agent appears on turn.start and clears on turn.ended, staleness banner); validate strict; update the Understanding app; deploy

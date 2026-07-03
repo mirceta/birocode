@@ -94,6 +94,15 @@ public class CliRunnerService
         // inflate work-time stats.
         if (!readOnly) _activity.Append("start", workingDirectory, resuming ? sessionId : null);
 
+        // Publish the turn.start harness event (openspec status-monitor-dashboard).
+        // Same best-effort contract as the turn.ended publish in the finally below;
+        // turnId pairs the two so consumers can derive "agents running now".
+        var turnId = Guid.NewGuid().ToString("n");
+        _feed.Publish(
+            "turn.start",
+            source: new { repoId = repoId ?? "", repoName = repoName ?? "" },
+            data: new { turnId, sessionId = resuming ? sessionId : null, resuming, readOnly });
+
         Process? process = null;
         try
         {
@@ -182,6 +191,7 @@ public class CliRunnerService
                 source: new { repoId = repoId ?? "", repoName = repoName ?? "" },
                 data: new
                 {
+                    turnId,
                     sessionId = record.SessionId,
                     status = record.Status == "Success" ? "done" : "error",
                     rawStatus = record.Status,

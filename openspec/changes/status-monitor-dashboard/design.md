@@ -38,19 +38,17 @@ CI wallboard for repos.
 
 ## Decisions
 
-1. **Serve as a sibling page inside the existing events-app
-   (`events-app/board.html`)** — over a second build-less app folder with its
-   own serving service, a React-client tab, or a standalone product repo.
-   Rationale: `EventsApp.cs` already serves *every* file in `events-app/`
-   (build-less, no-store), and the events-app is already the multi-machine
-   surface — it renders the collector's source cards with the refusal
-   taxonomy. A sibling page gets the wallboard served with **zero new serving
-   code** and keeps one app-folder convention instead of two. The board stays
-   a *separate page* from the feed log, never merged into it: the log is
-   interactive and chronological, the wallboard is zero-interaction and
-   alert-first — one page cannot honor both. A standalone repo (à la
-   youtube-transcript) would drag in a second server + registration for what
-   is fundamentally a harness view.
+1. **Render on the events-app primary page, with a display mode — no separate
+   board page.** (REVERSED 2026-07-03: the first cut shipped `board.html` as a
+   separate sibling page on the "log vs wallboard" argument; the operator,
+   seeing it live, ruled the split artificial — the Sources panel already IS
+   fleet administration, so the board duplicated the fleet one click away.)
+   The primary page gains the attention strip, per-source agent status, and
+   GitHub tiles; a URL-flagged **display mode** (`?display=1`) hides the admin
+   form, action buttons, and merged log and enlarges the status sections —
+   preserving the wallboard rules (zero interaction, alert-first, readable
+   across the desk) *within* the single page instead of via a second one. One
+   page, one data path; `board.html` is deleted.
 2. **One aggregation endpoint, `GET api/status-monitor/board`** returning the
    whole board model (fleet, attention, github) in a single JSON document —
    over the SPA fanning out to collector + GitHub itself. Rationale: the board
@@ -72,7 +70,19 @@ CI wallboard for repos.
    *projection* of collector state, so the follow-up feed enrichment
    (awaiting-input agents) slots in as more rows, not a schema change to this
    surface.
-5. **Staleness comes from the collector's existing per-source state** —
+5. **Running agents come from `turn.start`/`turn.ended` pairing.** The feed
+   gains `turn.start` published at the same single chokepoint style as
+   `turn.ended` (best-effort, never disrupts the run), carrying a fresh
+   `turnId` that `turn.ended` echoes. The status-monitor projection derives
+   "agents running now" per source = `turn.start` events in the collector's
+   retained aggregate with no matching `turn.ended` (paired by `turnId`),
+   guarded by a max-age cutoff so a trimmed or lost `turn.ended` cannot pin a
+   ghost agent forever. Derivation lives in `StatusBoardService` (a
+   projection), NOT in the collector — the collector stays a dumb aggregator
+   and needs no spec change. Known bounds, accepted for v1: the merged
+   aggregate is capped (very old `turn.start`s trim away → long runs undercount)
+   and old-build remotes emit no `turn.start` (their cards show no agents).
+6. **Staleness comes from the collector's existing per-source state** —
    `Alive` / `Status` / `lastPolledAt` on `GET /api/collector/sources` (code
    audit confirmed these exist; the poller maintains them). One nuance:
    `lastPolledAt` marks the last *attempt*, not the last success, so "dark
@@ -80,11 +90,12 @@ CI wallboard for repos.
    times in memory. In-memory is acceptable for a wallboard: after a harness
    restart a dark source shows "unreachable, duration unknown" until the next
    transition. No collector change. (Operator decision, 2026-07-03.)
-5. **Wallboard presentation is a spec'd requirement, not styling taste**:
-   dark, high-contrast, largest text for attention items, alert-first
-   ordering, auto-refresh without flicker (poll + diff-render), and an
-   explicit staleness banner when the board itself can't reach the harness —
-   a wallboard that silently freezes is worse than none.
+7. **Display-mode presentation is a spec'd requirement, not styling taste**:
+   in `?display=1` every interactive element is hidden, attention items get
+   the largest text, ordering is alert-first, refresh is flicker-free
+   (poll + diff-render), and a staleness banner appears when the page can't
+   reach the harness — a status display that silently freezes is worse than
+   none.
 
 ## Risks / Trade-offs
 
@@ -93,20 +104,23 @@ CI wallboard for repos.
 - [Board trusted blindly while frozen] → visible "last updated" clock +
   full-bleed staleness banner when polls fail (mirrors dashboard-host-clock
   lesson).
-- [Feed doesn't yet carry per-agent awaiting-input] → v1 attention queue is
-  source-level only; set expectations in the UI ("machine blocked", not
-  "agent asks: …") until the follow-up change lands.
-- [Events-app identity widens from "feed viewer" to "fleet app" — the board
-  page brings GitHub data into an app named after events] → accepted; the two
-  pages keep distinct jobs (log vs. wallboard), and renaming the app id is a
-  cosmetic follow-up if it ever grates.
-- [Feed-log UI changes could accidentally break the always-on board] → they
-  can't share page-level code: `board.html` is self-contained, sharing only
-  the folder and the serving contract with `index.html`.
+- [Feed doesn't yet carry awaiting-input] → the attention queue is
+  source-level plus running-agent presence; "agent asks: …" rows await the
+  follow-up change.
+- [Events-app identity widens from "feed viewer" to "fleet mission control"]
+  → accepted and now deliberate (operator decision): one page administers the
+  fleet and shows its status; renaming the app id is a cosmetic follow-up.
+- [Everything on one page risks the wallboard rules eroding] → the display
+  mode is spec'd, not styling: `?display=1` MUST hide every interactive
+  element and enlarge attention/fleet/GitHub; the display-mode variant is the
+  thing on the third monitor.
+- [Ghost "running" agents if turn.ended is trimmed/lost] → turnId pairing +
+  max-age cutoff; an unmatched start older than the cutoff is dropped from
+  the count.
 
 ## Open Questions
 
 - Sound/notification on new attention items: events-app has a sound endpoint —
-  reuse or keep the wallboard silent. Operator: doesn't matter for now, decide
-  later; v1 ships silent. (The other two original questions — repo list and
-  staleness source — were resolved into Decisions 3 and 5.)
+  reuse or keep the status rendering silent. Operator: doesn't matter for now,
+  decide later; v1 ships silent. (The other two original questions — repo list
+  and staleness source — were resolved into Decisions 3 and 6.)

@@ -37,40 +37,47 @@ spine exists.
   draft/ready, review state) and latest CI status per default branch,
   red/green wallboard style, reusing the existing `github-credentials`
   capability.
-- The board ships as a **sibling page inside the existing events-app**
-  (`events-app/board.html`) — the events-app is already the multi-machine
-  surface (it renders the collector's sources) and its serving service already
-  serves every file in that folder, so the wallboard needs **zero new serving
-  code**. It stays a *separate page* from the feed log: the log is
-  interactive/chronological, the wallboard is zero-interaction/alert-first —
-  one page doing both would do both badly.
-- **Deliberately deferred** (each a candidate follow-up change, kept out to
-  stay additive): richer per-agent signals in the harness feed
-  (awaiting-input, current task, context-window %), usage/burn-rate panel,
-  acting on items from the wallboard (it stays read-only).
+- **One surface, not two** (operator decision 2026-07-03, after seeing the
+  first cut live): the attention queue, fleet status, and GitHub panel render
+  on the **events-app primary page itself** — its Sources panel already *is*
+  fleet administration, so a separate `board.html` duplicated the fleet one
+  click away. The page gains a **display mode** (URL-flagged, e.g.
+  `?display=1`): the same page with admin form and merged log hidden and
+  attention/fleet/GitHub enlarged for across-the-desk reading on the third
+  monitor. This supersedes the earlier separate-page rule; `board.html`
+  (which shipped briefly) is removed.
+- **Live agent tracking**: the harness feed today emits only `turn.ended`, so
+  nobody can know an agent is *currently running*. The feed gains a
+  **`turn.start`** event (with a `turnId` echoed by `turn.ended`), and the
+  status-monitor projection derives **running agents per machine** — agents
+  executing within repositories right now — rendered per source on the
+  primary page.
+- **Deliberately deferred** (candidate follow-up changes): awaiting-input /
+  current-task / context-window % signals, usage/burn-rate panel, acting on
+  items from the board data (the status rendering stays read-only).
 
 ## Capabilities
 
 ### New Capabilities
-- `status-monitor`: the glanceable third-monitor wallboard — fleet panel,
-  attention queue, GitHub repo/PR/CI panel, wallboard presentation rules.
+- `status-monitor`: the fleet mission-control rendering on the events-app
+  primary page — attention queue, per-machine status with running agents,
+  GitHub repo/PR/CI panel, and the zero-interaction display mode.
 
 ### Modified Capabilities
-
-None. v1 renders only data the collector and GitHub already provide; enriching
-`harness-event-feed` / `event-feed-collector` with per-agent attention signals
-is a separate follow-up change so this one stays additive and archives cleanly.
+- `harness-event-feed`: emits `turn.start` at the turn-launch boundary, and
+  `turn.ended` additionally carries the pairing `turnId`.
 
 ## Impact
 
-- **New:** `events-app/board.html` wallboard page (no new serving service —
-  the existing events-app service serves it) + a harness endpoint aggregating
-  collector state and GitHub status for it. Accepted trade-off: the
-  events-app's identity widens from "feed viewer" to "fleet app", since the
-  board page brings GitHub data with it.
+- **New:** `GET api/status-monitor/board` aggregation endpoint +
+  `GitHubStatusService`; attention/fleet/GitHub sections and display mode in
+  `events-app/index.html`. The events-app's identity intentionally widens
+  from "feed viewer" to "fleet mission control".
+- **Modified:** `CliRunnerService` publishes `turn.start` (same best-effort
+  chokepoint contract as `turn.ended`); `turn.ended` payload gains `turnId`.
 - **Read (unchanged):** event-feed-collector's source/status model;
   github-credentials for API auth.
-- **External:** GitHub REST API polling (rate limits respected; PAT already on
-  the box for `gh`).
-- **Ops:** one more always-open browser window on the operator's host; no new
-  service, no schema changes to the feed.
+- **External:** GitHub REST API polling via `gh` (rate limits respected; PAT
+  stays inside `gh`).
+- **Compat:** fleet machines running older harness builds emit no
+  `turn.start`; their cards simply show no running agents (never an error).

@@ -1,59 +1,74 @@
 ## ADDED Requirements
 
-### Requirement: Status monitor surface
-The Harness SHALL serve the wallboard as a self-contained sibling page `board.html` inside the existing `events-app/` folder, delivered by the existing events-app serving mechanism (build-less, no-store, relative URLs), full-screen capable in a plain browser window. The wallboard MUST remain a separate page from the feed log page — the two are never merged into one UI.
+### Requirement: Fleet status on the events-app primary page
+The events-app primary page (`events-app/index.html`) SHALL render the fleet's status alongside its existing source administration and merged log: the attention queue above all other content, per-source status (including running agents) integrated with the Sources panel, and the GitHub panel. There SHALL be no separate board page — the Sources panel is the fleet, and status renders where the fleet is administered. (Supersedes the withdrawn separate-page rule; operator decision 2026-07-03.)
 
-#### Scenario: Board loads on the third monitor
-- **WHEN** the Operator opens the events-app proxy URL with the `board.html` path in a browser window on the status monitor
-- **THEN** the wallboard renders full-screen from `events-app/board.html` with no build step or new serving code required, and an overwrite of that file shows on next reload (no-store)
+#### Scenario: One surface
+- **WHEN** the Operator opens the events-app
+- **THEN** source administration, the attention queue, per-machine agent status, and GitHub state are all present on that one page, with no second page to visit
 
-#### Scenario: Missing page is visibly missing
-- **WHEN** `events-app/board.html` does not exist at the Harness repo root
-- **THEN** the request yields a plain 404 (a missing asset is never masked by a fallback renderer), while the feed log page is unaffected
+#### Scenario: The old board page is gone
+- **WHEN** `board.html` is requested under the events-app path
+- **THEN** it yields a plain 404 (the wallboard experience is the display mode of the primary page, not a separate page)
 
-#### Scenario: Feed log stays independent
-- **WHEN** the feed log page (`events-app/index.html`) is edited or broken
-- **THEN** the board page still renders, because `board.html` is self-contained and shares only the folder and serving contract
+### Requirement: Display mode
+The primary page SHALL offer a display mode, entered via a visible control and addressable by URL (`?display=1`), that hides every interactive element (add-source form, source action buttons, sound controls, the merged event log) and enlarges the attention queue, fleet status, and GitHub panel for across-the-desk reading. Display mode SHALL require no interaction to stay current (poll + diff-render, no flicker), SHALL show a last-updated clock, and SHALL show a prominent staleness banner over dimmed last-known content when consecutive polls fail — it MUST never silently freeze while looking healthy. A visible control SHALL exit display mode.
 
-#### Scenario: Board reachable without editing URLs
-- **WHEN** the Operator is on the feed log page
-- **THEN** a visible "Status board" control opens `board.html` in its own window (and the board's top bar links back to the feed) — hand-editing the address bar is never required
+#### Scenario: Entering display mode
+- **WHEN** the Operator clicks the display-mode control (or opens the page with `?display=1`)
+- **THEN** the same page re-renders with all interactive elements hidden and the status sections enlarged, suitable for fullscreen on the third monitor
+
+#### Scenario: Display mode never silently freezes
+- **WHEN** consecutive polls fail while in display mode
+- **THEN** a prominent staleness banner with the time of the last good poll appears over the (dimmed) last-known content
 
 ### Requirement: Single board endpoint
-The Harness SHALL expose `GET api/status-monitor/board` returning one JSON document with three sections — fleet, attention, and github — so the SPA is a renderer and all derivation (ordering, staleness, attention membership) is computed server-side.
+The Harness SHALL expose `GET api/status-monitor/board` returning one JSON document with three sections — fleet, attention, and github — so the page is a renderer and all derivation (ordering, staleness, attention membership, running-agent pairing) is computed server-side.
 
-#### Scenario: One poll paints the whole board
-- **WHEN** the SPA requests the board endpoint
-- **THEN** the response contains per-machine fleet cards, the ordered attention queue, and the GitHub panel data in a single round-trip
+#### Scenario: One poll paints the status sections
+- **WHEN** the page requests the board endpoint
+- **THEN** the response contains per-machine fleet status, the ordered attention queue, and the GitHub panel data in a single round-trip
 
-### Requirement: Fleet panel
-The board SHALL show one card per collector source (machine): its display name, reachability/status from the collector's existing per-source state (alive, ip-blocked, needs-credential, bad-credential, throttled, unreachable), how long the source has been in that state, and the most recent agent activity the feed carries for that machine. State duration SHALL be derived by the board service from observed state transitions (the collector's `lastPolledAt` marks poll attempts, not successes), with no change to the collector.
+### Requirement: Per-source status with running agents
+For each collector source (machine) the board SHALL report: its display name, reachability/status from the collector's existing per-source state (alive, ip-blocked, needs-credential, bad-credential, throttled, unreachable), how long the source has been in that state, and the **agents currently running** on that machine — derived by pairing `turn.start` events with `turn.ended` events by `turnId` in the collector's retained aggregate, each running agent identified by its repository and elapsed time. An unmatched `turn.start` older than a max-age cutoff SHALL be dropped from the count (a trimmed or lost `turn.ended` must not pin a ghost agent). State duration SHALL be derived from observed state transitions (the collector's `lastPolledAt` marks poll attempts, not successes), with no change to the collector.
+
+#### Scenario: An agent is running
+- **WHEN** a source's feed carries a `turn.start` with no matching `turn.ended`
+- **THEN** that source shows a running agent with its repository and elapsed time
+
+#### Scenario: The agent finishes
+- **WHEN** the matching `turn.ended` (same `turnId`) arrives
+- **THEN** the running-agent entry disappears on the next poll
+
+#### Scenario: A machine on an old harness build
+- **WHEN** a source's harness predates `turn.start` and emits only `turn.ended`
+- **THEN** its card shows no running agents and no error
 
 #### Scenario: Machine goes dark
 - **WHEN** a source has been unreachable for longer than the staleness threshold
-- **THEN** its card visibly changes state and shows how long the machine has been dark
+- **THEN** its status visibly changes state and shows how long the machine has been dark
 
 #### Scenario: Harness restarts while a machine is dark
 - **WHEN** the Harness restarts and a source is unreachable with no observed transition yet
-- **THEN** the card still shows the unreachable state, with duration marked unknown rather than a fabricated timestamp
-
-#### Scenario: Machine is refused, not dead
-- **WHEN** a source is in a refusal state (e.g. ip-blocked or bad-credential)
-- **THEN** the card shows the specific refusal label (with the rejected IP when known), not a generic error
+- **THEN** the status still shows unreachable, with duration marked unknown rather than a fabricated timestamp
 
 ### Requirement: Attention queue
-The board SHALL derive an ordered "needs me" queue across all machines — in v1: sources in refusal states and stale sources — and SHALL render it above all other content, largest and most visually salient, ordered most-actionable-first. An empty queue SHALL render as an explicit calm state.
+The board SHALL derive an ordered "needs me" queue across all machines — sources in refusal states and stale sources — and the page SHALL render it above all other content, most visually salient, ordered most-actionable-first. An empty queue SHALL render as an explicit calm state.
 
 #### Scenario: Blocked source enters the queue
 - **WHEN** any source transitions into a refusal state
-- **THEN** on the next board poll an attention row appears at the top of the board naming the machine, the refusal, and the fix
+- **THEN** on the next poll an attention row appears at the top of the page naming the machine, the refusal, and the fix
 
 #### Scenario: Nothing needs the operator
 - **WHEN** no source is blocked or stale
 - **THEN** the attention area shows an explicit all-clear state (not an empty gap)
 
 ### Requirement: GitHub panel
-The Harness SHALL poll the GitHub API server-side, authenticated via the existing github-credentials capability, for a repo list derived from the registered Repos' git remotes (each registered repo's `origin` parsed to `owner/name`, deduplicated), and the board SHALL show per repo: open PR count with review state (draft/ready/changes-requested), oldest-PR age, and latest default-branch CI status rendered red/green wallboard-style. Results SHALL be cached at least 60 seconds; the PAT SHALL never be sent to the browser.
+The Harness SHALL poll the GitHub API server-side, authenticated via the existing github-credentials capability, for a repo list derived from the registered Repos' git remotes (each registered repo's `origin` parsed to `owner/name`, deduplicated), and the page SHALL show per repo: open PR count with review state (draft/ready/changes-requested), oldest-PR age, and latest default-branch CI status rendered red/green. Results SHALL be cached at least 60 seconds; the PAT SHALL never be sent to the browser; GitHub being unavailable SHALL degrade only this panel, never the page.
+
+#### Scenario: CI goes red
+- **WHEN** the latest default-branch workflow run of a derived repo fails
+- **THEN** that repo's tile renders in the failure color with the workflow name, within one cache window
 
 #### Scenario: Repo list follows the registry
 - **WHEN** a repo is registered in (or removed from) the Harness's repo selector and has a GitHub `origin` remote
@@ -61,19 +76,8 @@ The Harness SHALL poll the GitHub API server-side, authenticated via the existin
 
 #### Scenario: Registered repo without a GitHub remote
 - **WHEN** a registered repo has no remote, or a remote that is not GitHub
-- **THEN** it is skipped — no tile and no error on the board
-
-#### Scenario: CI goes red
-- **WHEN** the latest default-branch workflow run of a configured repo fails
-- **THEN** that repo's tile renders in the failure color with the workflow name, within one cache window
+- **THEN** it is skipped — no tile and no error
 
 #### Scenario: Rate-limit friendliness
-- **WHEN** the SPA polls the board more often than the GitHub cache TTL
+- **WHEN** the page polls the board more often than the GitHub cache TTL
 - **THEN** the Harness serves the cached GitHub section without new GitHub API calls
-
-### Requirement: Wallboard presentation and self-honesty
-The SPA SHALL be readable from across a desk (dark, high-contrast, large type for attention items), SHALL require no interaction to stay current (auto-refresh with diff-render, no flicker, no scroll for the primary panels), and SHALL display a last-updated clock plus a full-bleed staleness banner whenever board polls fail — the board MUST never silently freeze while looking healthy.
-
-#### Scenario: Board loses its own data source
-- **WHEN** consecutive board polls fail (harness unreachable from the browser)
-- **THEN** the board shows a prominent staleness banner with the time of the last good poll, over the (dimmed) last-known content
