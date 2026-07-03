@@ -73,9 +73,13 @@ public class CollectorService
         public string? ProtectedCredential;     // encrypted at rest; null = none
 
         // runtime (not persisted)
-        // Status:  idle | connecting | active | needs-credential | unreachable | error | stopped
+        // Status:  idle | connecting | active | ip-blocked | needs-credential | bad-credential
+        //          | throttled | unreachable | error | stopped
         //   active           = pulling events
-        //   needs-credential = the host answered but rejected auth (alive, just needs a credential)
+        //   ip-blocked       = 403: the host's IP gate refused us — a credential will NOT fix it
+        //   needs-credential = 401 with no credential stored (alive, genuinely needs one)
+        //   bad-credential   = 401 with a credential stored (alive, credential rejected — re-enter it)
+        //   throttled        = 429: the host's brute-force throttle engaged
         //   unreachable      = no HTTP answer (DNS / refused / timed out)
         //   error            = answered with an unexpected HTTP status / body
         public string Status = "idle";
@@ -247,9 +251,9 @@ public class CollectorService
 
         using (resp)
         {
-            if (IsUnauthorized(resp))
+            if (await ClassifyRejectionAsync(resp, s, ct) is { } rej)
             {
-                SetState(s, alive: true, status: "needs-credential", detail: "alive — requires a credential");
+                SetState(s, alive: true, status: rej.Status, detail: rej.Detail);
                 return;
             }
             if (!resp.IsSuccessStatusCode)
@@ -289,8 +293,8 @@ public class CollectorService
 
         using (resp)
         {
-            if (IsUnauthorized(resp))
-                SetState(s, alive: true, status: "needs-credential", detail: "alive — requires a credential");
+            if (await ClassifyRejectionAsync(resp, s, ct) is { } rej)
+                SetState(s, alive: true, status: rej.Status, detail: rej.Detail);
             else if (!resp.IsSuccessStatusCode)
                 SetState(s, alive: true, status: "error", detail: $"HTTP {(int)resp.StatusCode}");
             else
@@ -307,8 +311,51 @@ public class CollectorService
         return req;
     }
 
-    private static bool IsUnauthorized(HttpResponseMessage r) =>
-        r.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden;
+    // Classifies a refusal (401/403/429) into a distinct status + detail, or null when the
+    // response is not a refusal (openspec distinguish-source-auth-failures). 403 = the
+    // harness's IP gate — no credential will fix it, so it must not read as one; the body is
+    // best-effort parsed for the rejected IP. 401 splits on whether a credential is STORED
+    // (an undecryptable one also lands in bad-credential: "re-enter it" is the right cue).
+    // 429 = the harness's brute-force throttle. All are alive states: the host answered.
+    private static async Task<(string Status, string Detail)?> ClassifyRejectionAsync(HttpResponseMessage resp, Source s, CancellationToken ct)
+    {
+        switch ((int)resp.StatusCode)
+        {
+            case 403:
+                var ip = await TryReadRejectedIpAsync(resp, ct);
+                return ("ip-blocked", ip is null
+                    ? "alive — refused by an access gate (HTTP 403)"
+                    : $"alive — blocked by the harness's IP gate (your IP {ip} is not approved)");
+            case 401:
+                return s.ProtectedCredential is null
+                    ? ("needs-credential", "alive — requires a credential")
+                    : ("bad-credential", "alive — credential rejected");
+            case 429:
+                var retry = resp.Headers.RetryAfter?.ToString();
+                return ("throttled", "alive — throttled by the harness" + (string.IsNullOrEmpty(retry) ? "" : $" (retry after {retry})"));
+            default:
+                return null;
+        }
+    }
+
+    // The ClaudeWeb IP gate's 403 JSON body carries { ip } naming the rejected IP. Bounded
+    // and best-effort: a bare/foreign 403 (empty, huge, or non-JSON body) just returns null —
+    // the ip-blocked status never depends on the body.
+    private static async Task<string?> TryReadRejectedIpAsync(HttpResponseMessage resp, CancellationToken ct)
+    {
+        try
+        {
+            var text = await resp.Content.ReadAsStringAsync(ct);
+            if (text.Length is 0 or > 4096) return null;
+            using var doc = JsonDocument.Parse(text);
+            if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+                doc.RootElement.TryGetProperty("ip", out var ip) &&
+                ip.ValueKind == JsonValueKind.String)
+                return ip.GetString();
+        }
+        catch { /* enrichment only */ }
+        return null;
+    }
 
     // Append one event to the aggregate under a fresh collector seq, tagged with its source.
     private void Append(Source s, long at, string type, object? source, object? data)
@@ -325,7 +372,8 @@ public class CollectorService
     }
 
     // Unified state update: status + scrubbed detail + alive + lastPolled, optional watermark.
-    // "needs-credential" is a normal, expected state (alive but unauthorized) — not logged as an error.
+    // The refusal states (ip-blocked / needs-credential / bad-credential / throttled) are normal,
+    // expected states (alive but not authorized) — not logged as errors.
     private void SetState(Source s, bool alive, string status, string? detail, int? watermark = null)
     {
         var scrubbed = detail is null ? null : Scrub(detail, s);
