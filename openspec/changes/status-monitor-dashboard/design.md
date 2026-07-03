@@ -1,0 +1,94 @@
+## Context
+
+The operator runs agents on five machines; each runs a birocode harness whose
+outbound event feed (`harness-event-feed`) this harness's collector
+(`event-feed-collector`, `api/collector/sources` + `api/collector/events`)
+already polls, including the split refusal taxonomy (ip-blocked /
+needs-credential / bad-credential / throttled). The events-app precedent shows
+the serving pattern: a build-less SPA in a folder at the repo root, served by
+a dedicated service (`EventsApp.cs`) through `LocalProxyController` under a
+fixed app id. GitHub auth exists via the `github-credentials` capability and
+the `gh`-authenticated PAT on the box. The third monitor is small and viewed
+from a distance: the design target is a *wallboard*, not an app.
+
+Research consensus this design encodes (mission-control pattern): per-device
+cards; awaiting-input is the attention queue and outranks everything; the
+board must be readable without interaction; alert-first ordering; red/green
+CI wallboard for repos.
+
+## Goals / Non-Goals
+
+**Goals:**
+- One full-screen browser window that answers, from across the desk: who's
+  working, who's blocked on me, what's red on GitHub.
+- Zero interaction required; the board reorders itself (attention items first).
+- Reuse: collector state as-is, github-credentials as-is, events-app serving
+  pattern as-is.
+
+**Non-Goals:**
+- Not a control surface — read-only in v1 (no approve/dismiss/retry buttons).
+- No changes to the harness feed schema (per-agent awaiting-input, current
+  task, context % are a follow-up change to `harness-event-feed` +
+  `event-feed-collector`).
+- No usage/burn-rate panel in v1 (needs per-machine JSONL access — separate
+  change).
+- Not a phone surface; it targets a landscape monitor. (It still ships through
+  the normal proxy path, so it *works* anywhere.)
+
+## Decisions
+
+1. **Serve as a second harness-owned build-less app (`status-app/` at the repo
+   root), mirroring events-app** — over adding a tab to the React client or a
+   standalone product repo. Rationale: the events-app pattern is proven for
+   exactly this shape (always-on, no-build, iterate-by-overwrite), needs no
+   client rebuild/deploy to tweak layout, and the harness already knows how to
+   mount such apps in `LocalProxyController`. A standalone repo (à la
+   youtube-transcript) would drag in a second server + registration for what
+   is fundamentally a harness view.
+2. **One aggregation endpoint, `GET api/status-monitor/board`** returning the
+   whole board model (fleet, attention, github) in a single JSON document —
+   over the SPA fanning out to collector + GitHub itself. Rationale: the board
+   polls every few seconds; one endpoint keeps ordering/derivation logic
+   (what counts as "needs attention", staleness math) server-side and testable,
+   and the SPA stays a dumb renderer (same philosophy as the youtube-transcript
+   "backend is the state machine" rule).
+3. **GitHub polling server-side with a dedicated `GitHubStatusService`**,
+   cached (~60s TTL) — over client-side calls. Rationale: rate limits are
+   respected in one place, the PAT never reaches the browser, and the board
+   endpoint stays one round-trip. Repo list = explicit configuration
+   (settings), not org discovery, to keep API cost bounded and the board
+   curated.
+4. **Attention queue is derived, not stored**: refusal-state sources (blocked
+   on the operator by definition) + stale sources (no successful poll for
+   N minutes) in v1. The queue is a *projection* of collector state, so the
+   follow-up feed enrichment (awaiting-input agents) slots in as more rows,
+   not a schema change to this surface.
+5. **Wallboard presentation is a spec'd requirement, not styling taste**:
+   dark, high-contrast, largest text for attention items, alert-first
+   ordering, auto-refresh without flicker (poll + diff-render), and an
+   explicit staleness banner when the board itself can't reach the harness —
+   a wallboard that silently freezes is worse than none.
+
+## Risks / Trade-offs
+
+- [GitHub rate limits with many repos] → explicit repo list, 60s cache,
+  conditional requests (ETag) if needed.
+- [Board trusted blindly while frozen] → visible "last updated" clock +
+  full-bleed staleness banner when polls fail (mirrors dashboard-host-clock
+  lesson).
+- [Feed doesn't yet carry per-agent awaiting-input] → v1 attention queue is
+  source-level only; set expectations in the UI ("machine blocked", not
+  "agent asks: …") until the follow-up change lands.
+- [Second build-less app dilutes the events-app convention] → same folder
+  contract, same serving service shape, documented alongside events-app.
+
+## Open Questions
+
+- Which repos on the GitHub panel: flat list in harness settings vs. derived
+  from the registered Repos' remotes (lean: start with settings list).
+- Does the collector already persist "last successful poll per source"
+  suitable for staleness, or does the board endpoint compute it from events?
+  (Audit during implementation; expected: available on the source record.)
+- Sound/notification on new attention items: events-app has a sound endpoint —
+  reuse or keep the wallboard silent (lean: silent v1; the monitor is
+  peripheral vision).
