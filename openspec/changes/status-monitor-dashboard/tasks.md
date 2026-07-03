@@ -1,13 +1,13 @@
 ## 1. Audit & wiring
 
-- [ ] 1.1 Audit collector source records: confirm per-source status, last-successful-poll timestamp, and latest-activity data available for the board (design open question); note gaps
+- [ ] 1.1 Repo-list derivation: parse each registered Repo's `origin` remote to `owner/name`, dedupe, skip non-GitHub remotes (design decision 3)
 - [ ] 1.2 Confirm the events-app serving contract for sibling pages: `events-app/board.html` reachable through the proxy path, no-store honored, plain 404 when absent (no new serving code expected)
 
 ## 2. Board endpoint
 
-- [ ] 2.1 `GET api/status-monitor/board`: fleet section projected from collector sources (name, status taxonomy, last-seen, latest activity)
-- [ ] 2.2 Attention derivation server-side: refusal-state sources + stale sources (threshold), ordered most-actionable-first; explicit all-clear representation
-- [ ] 2.3 `GitHubStatusService`: configured repo list (settings), PRs + review state + latest default-branch workflow run via github-credentials PAT, ≥60s cache, PAT never leaves the server
+- [ ] 2.1 `GET api/status-monitor/board`: fleet section projected from collector sources (name, status taxonomy, state duration, latest activity); track state-transition times in the board service (collector `lastPolledAt` = last attempt, not last success — design decision 5)
+- [ ] 2.2 Attention derivation server-side: refusal-state sources + dark sources (threshold), ordered most-actionable-first; explicit all-clear representation; duration-unknown after harness restart
+- [ ] 2.3 `GitHubStatusService`: repo list from 1.1, PRs + review state + latest default-branch workflow run via github-credentials PAT, ≥60s cache, PAT never leaves the server
 - [ ] 2.4 Wire github section into the board response; degrade gracefully (github section carries its own error/staleness rather than failing the board)
 
 ## 3. Wallboard page (`events-app/board.html`)

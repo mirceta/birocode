@@ -61,14 +61,25 @@ CI wallboard for repos.
 3. **GitHub polling server-side with a dedicated `GitHubStatusService`**,
    cached (~60s TTL) — over client-side calls. Rationale: rate limits are
    respected in one place, the PAT never reaches the browser, and the board
-   endpoint stays one round-trip. Repo list = explicit configuration
-   (settings), not org discovery, to keep API cost bounded and the board
-   curated.
+   endpoint stays one round-trip. **Repo list = derived from the registered
+   Repos' git remotes** (parse each registered repo's `origin` →
+   `owner/name`, dedupe; skip repos with no GitHub remote) — over a settings
+   list or org discovery. The board then automatically tracks what the
+   operator actually works on, with API cost still bounded by the registry's
+   size. (Operator decision, 2026-07-03.)
 4. **Attention queue is derived, not stored**: refusal-state sources (blocked
-   on the operator by definition) + stale sources (no successful poll for
-   N minutes) in v1. The queue is a *projection* of collector state, so the
-   follow-up feed enrichment (awaiting-input agents) slots in as more rows,
-   not a schema change to this surface.
+   on the operator by definition) + dark sources in v1. The queue is a
+   *projection* of collector state, so the follow-up feed enrichment
+   (awaiting-input agents) slots in as more rows, not a schema change to this
+   surface.
+5. **Staleness comes from the collector's existing per-source state** —
+   `Alive` / `Status` / `lastPolledAt` on `GET /api/collector/sources` (code
+   audit confirmed these exist; the poller maintains them). One nuance:
+   `lastPolledAt` marks the last *attempt*, not the last success, so "dark
+   for N minutes" is computed by the board service tracking state-transition
+   times in memory. In-memory is acceptable for a wallboard: after a harness
+   restart a dark source shows "unreachable, duration unknown" until the next
+   transition. No collector change. (Operator decision, 2026-07-03.)
 5. **Wallboard presentation is a spec'd requirement, not styling taste**:
    dark, high-contrast, largest text for attention items, alert-first
    ordering, auto-refresh without flicker (poll + diff-render), and an
@@ -95,11 +106,7 @@ CI wallboard for repos.
 
 ## Open Questions
 
-- Which repos on the GitHub panel: flat list in harness settings vs. derived
-  from the registered Repos' remotes (lean: start with settings list).
-- Does the collector already persist "last successful poll per source"
-  suitable for staleness, or does the board endpoint compute it from events?
-  (Audit during implementation; expected: available on the source record.)
 - Sound/notification on new attention items: events-app has a sound endpoint —
-  reuse or keep the wallboard silent (lean: silent v1; the monitor is
-  peripheral vision).
+  reuse or keep the wallboard silent. Operator: doesn't matter for now, decide
+  later; v1 ships silent. (The other two original questions — repo list and
+  staleness source — were resolved into Decisions 3 and 5.)

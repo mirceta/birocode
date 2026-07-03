@@ -163,7 +163,7 @@
       <div class="flow-arrow">→</div>
       <div class="col">
         <div class="node exists"><span class="tag">exists</span><h3>event-feed-collector</h3><p>already polls all sources; alive / ip-blocked / needs-credential / bad-credential / throttled</p></div>
-        <div class="node new"><span class="tag">new</span><h3>GitHubStatusService</h3><p>server-side polling, ≥60s cache, ETags; <b>PAT never reaches the browser</b></p></div>
+        <div class="node new"><span class="tag">new</span><h3>GitHubStatusService</h3><p>repo list derived from registered Repos' remotes; server-side polling, ≥60s cache, ETags; <b>PAT never reaches the browser</b></p></div>
       </div>
       <div class="flow-arrow">→</div>
       <div class="col">
@@ -214,19 +214,19 @@
         <li><code>events-app/board.html</code> — self-contained sibling page in the existing events-app; <b>zero new serving code</b> (no <code>StatusApp</code> service)</li>
         <li><code>GET api/status-monitor/board</code> — fleet / attention / github in one doc</li>
         <li>attention queue v1 = refusal-state sources + stale sources (source-level)</li>
-        <li>GitHub panel: explicit repo list, PRs + review state + default-branch CI, ≥60s cache</li>
+        <li>GitHub panel: repo list <b>derived from registered Repos' remotes</b>, PRs + review state + default-branch CI, ≥60s cache</li>
         <li>read-only; wallboard presentation is a <em>requirement</em>, not styling taste</li></ul></div>
       <div class="card defer"><b>Deliberately deferred (each its own follow-up change)</b><ul>
         <li>feed enrichment: per-agent <b>awaiting-input</b>, current task, context % (modifies <code>harness-event-feed</code> + <code>event-feed-collector</code> — kept out so this change stays additive)</li>
         <li>usage / burn-rate panel</li>
         <li>acting from the board (approve / dismiss / retry)</li></ul></div>
     </div>
-    <div class="card"><b>Open questions (design.md)</b><dl class="qa">
-      <dt>Which repos on the GitHub panel?</dt><dd>settings list vs derived from registered Repos' remotes — lean: start with a settings list.</dd>
-      <dt>Staleness source?</dt><dd>does the collector already persist last-successful-poll per source, or does the board compute it from events? Audit is task 1.1.</dd>
-      <dt>Sound on new attention items?</dt><dd>events-app has a sound endpoint — lean: silent v1, the monitor is peripheral vision.</dd>
+    <div class="card"><b>Open questions — resolved by the operator (2026-07-03)</b><dl class="qa">
+      <dt>✓ Which repos on the GitHub panel? → derived from registered Repos' remotes</dt><dd>each registered repo's <code>origin</code> parsed to <code>owner/name</code>, deduped, non-GitHub remotes skipped — the board automatically tracks what you actually work on. No separate configuration.</dd>
+      <dt>✓ Staleness source? → the collector's existing per-source state</dt><dd>code audit confirmed <code>Alive</code> / <code>Status</code> / <code>lastPolledAt</code> on <code>api/collector/sources</code>. One nuance: <code>lastPolledAt</code> marks the last <em>attempt</em>, not the last success — so "dark for N min" comes from the board service tracking state <em>transitions</em> in memory (after a harness restart: "duration unknown", never a fabricated timestamp). Collector untouched.</dd>
+      <dt>◌ Sound on new attention items? → deferred</dt><dd>doesn't matter for now, decide later; v1 ships silent.</dd>
     </dl></div>
-    <p class="note">Artifacts: <code>openspec/changes/status-monitor-dashboard/</code> — proposal.md · design.md · specs/status-monitor/spec.md (6 requirements, 11 scenarios) · tasks.md. Run <code>/opsx:apply</code> to start implementing.</p>
+    <p class="note">Artifacts: <code>openspec/changes/status-monitor-dashboard/</code> — proposal.md · design.md · specs/status-monitor/spec.md (6 requirements, 14 scenarios) · tasks.md. Run <code>/opsx:apply</code> to start implementing.</p>
   </section>
 </div>
 <script src="./app.js"></script>

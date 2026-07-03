@@ -32,9 +32,11 @@ spine exists.
 - **Attention panel** — a single ordered "needs me" queue across all machines:
   sources in refusal states now; agents awaiting input once the feed carries
   that signal (follow-up change, see below).
-- **GitHub panel** — across the operator's repos: open PRs (age, draft/ready,
-  review state) and latest CI status per default branch, red/green wallboard
-  style, reusing the existing `github-credentials` capability.
+- **GitHub panel** — across the operator's repos, the list derived
+  automatically from the registered Repos' git remotes: open PRs (age,
+  draft/ready, review state) and latest CI status per default branch,
+  red/green wallboard style, reusing the existing `github-credentials`
+  capability.
 - The board ships as a **sibling page inside the existing events-app**
   (`events-app/board.html`) — the events-app is already the multi-machine
   surface (it renders the collector's sources) and its serving service already

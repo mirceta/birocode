@@ -23,11 +23,15 @@ The Harness SHALL expose `GET api/status-monitor/board` returning one JSON docum
 - **THEN** the response contains per-machine fleet cards, the ordered attention queue, and the GitHub panel data in a single round-trip
 
 ### Requirement: Fleet panel
-The board SHALL show one card per collector source (machine): its display name, reachability/status from the collector's existing taxonomy (alive, ip-blocked, needs-credential, bad-credential, throttled, unreachable), time since last successful poll, and the most recent agent activity the feed carries for that machine.
+The board SHALL show one card per collector source (machine): its display name, reachability/status from the collector's existing per-source state (alive, ip-blocked, needs-credential, bad-credential, throttled, unreachable), how long the source has been in that state, and the most recent agent activity the feed carries for that machine. State duration SHALL be derived by the board service from observed state transitions (the collector's `lastPolledAt` marks poll attempts, not successes), with no change to the collector.
 
 #### Scenario: Machine goes dark
-- **WHEN** a source has had no successful poll for longer than the staleness threshold
-- **THEN** its card visibly changes state and shows how long ago it was last seen
+- **WHEN** a source has been unreachable for longer than the staleness threshold
+- **THEN** its card visibly changes state and shows how long the machine has been dark
+
+#### Scenario: Harness restarts while a machine is dark
+- **WHEN** the Harness restarts and a source is unreachable with no observed transition yet
+- **THEN** the card still shows the unreachable state, with duration marked unknown rather than a fabricated timestamp
 
 #### Scenario: Machine is refused, not dead
 - **WHEN** a source is in a refusal state (e.g. ip-blocked or bad-credential)
@@ -45,7 +49,15 @@ The board SHALL derive an ordered "needs me" queue across all machines — in v1
 - **THEN** the attention area shows an explicit all-clear state (not an empty gap)
 
 ### Requirement: GitHub panel
-The Harness SHALL poll the GitHub API server-side, authenticated via the existing github-credentials capability, for an explicitly configured repo list, and the board SHALL show per repo: open PR count with review state (draft/ready/changes-requested), oldest-PR age, and latest default-branch CI status rendered red/green wallboard-style. Results SHALL be cached at least 60 seconds; the PAT SHALL never be sent to the browser.
+The Harness SHALL poll the GitHub API server-side, authenticated via the existing github-credentials capability, for a repo list derived from the registered Repos' git remotes (each registered repo's `origin` parsed to `owner/name`, deduplicated), and the board SHALL show per repo: open PR count with review state (draft/ready/changes-requested), oldest-PR age, and latest default-branch CI status rendered red/green wallboard-style. Results SHALL be cached at least 60 seconds; the PAT SHALL never be sent to the browser.
+
+#### Scenario: Repo list follows the registry
+- **WHEN** a repo is registered in (or removed from) the Harness's repo selector and has a GitHub `origin` remote
+- **THEN** its tile appears on (or disappears from) the GitHub panel without any separate configuration
+
+#### Scenario: Registered repo without a GitHub remote
+- **WHEN** a registered repo has no remote, or a remote that is not GitHub
+- **THEN** it is skipped — no tile and no error on the board
 
 #### Scenario: CI goes red
 - **WHEN** the latest default-branch workflow run of a configured repo fails
