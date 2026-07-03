@@ -15,6 +15,10 @@ The Harness SHALL serve the wallboard as a self-contained sibling page `board.ht
 - **WHEN** the feed log page (`events-app/index.html`) is edited or broken
 - **THEN** the board page still renders, because `board.html` is self-contained and shares only the folder and serving contract
 
+#### Scenario: Board reachable without editing URLs
+- **WHEN** the Operator is on the feed log page
+- **THEN** a visible "Status board" control opens `board.html` in its own window (and the board's top bar links back to the feed) — hand-editing the address bar is never required
+
 ### Requirement: Single board endpoint
 The Harness SHALL expose `GET api/status-monitor/board` returning one JSON document with three sections — fleet, attention, and github — so the SPA is a renderer and all derivation (ordering, staleness, attention membership) is computed server-side.
 

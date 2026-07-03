@@ -23,6 +23,9 @@
   .top{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid var(--line);padding-bottom:8px}
   .top .t{font-size:14px;letter-spacing:.24em;color:var(--ink2)}
   .top .clock{font-family:var(--mono);font-size:13px;color:var(--muted)}
+  .top .right{display:flex;gap:14px;align-items:baseline}
+  .top a{color:var(--muted);font-size:12px;text-decoration:none;border:1px solid var(--line);border-radius:7px;padding:2px 8px}
+  .top a:hover{color:var(--ink2);border-color:var(--muted)}
   .sect{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin:14px 0 8px}
 
   /* attention — largest, top, alert-first */
@@ -68,7 +71,7 @@
 </style>
 </head>
 <body>
-<div class="top"><span class="t">STATUS</span><span class="clock" id="clock">connecting…</span></div>
+<div class="top"><span class="t">STATUS</span><span class="right"><a href="./" title="Back to the Harness Event Feed (sources & merged log)">⚙ feed</a><span class="clock" id="clock">connecting…</span></span></div>
 <div id="wrap">
   <div class="sect">Needs me</div>
   <div id="attn"><div class="empty">connecting…</div></div>
