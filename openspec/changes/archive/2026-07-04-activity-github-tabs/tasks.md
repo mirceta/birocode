@@ -16,4 +16,4 @@
 ## 3. Ship
 
 - [x] 3.1 `openspec validate activity-github-tabs --strict` passes; update understanding-app to show the tab split
-- [ ] 3.2 No `swap.ps1` needed — `events-app/` is served from the working tree (like understanding-app), so the change is live on reload once committed; operator confirms the two tabs on live
+- [x] 3.2 No `swap.ps1` needed — events-app/ is served from the working tree, live on reload; operator confirmed the tabs, full width, and light theme on live
