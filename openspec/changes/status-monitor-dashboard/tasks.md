@@ -30,4 +30,9 @@
 - [x] 5.3 Primary page: render attention strip (top), per-source running agents in the Sources panel, and GitHub tiles on `events-app/index.html`, fed by the board endpoint
 - [x] 5.4 Display mode: `?display=1` + visible enter/exit controls; hides add-form, source actions, sound buttons, merged log; enlarges status sections; staleness banner + clock
 - [x] 5.5 Delete `events-app/board.html`; the old "Status board" button becomes the display-mode control
-- [ ] 5.6 Browser-verify the merged page (normal + display mode, running-agent appears on turn.start and clears on turn.ended, staleness banner); validate strict; update the Understanding app; deploy
+- [x] 5.6 Browser-verify the merged page (normal + display mode, running-agent appears on turn.start and clears on turn.ended, staleness banner); validate strict; update the Understanding app; deploy
+
+## 6. Fleet-wide producers (operator direction 2026-07-03)
+
+- [x] 6.1 `docs/event-feed-contract.md`: agent-agnostic feed contract (envelope, read contract, turn.start/turn.ended pairing, X-Auth-Password) for producers in other repos — ClaudeMonitor first
+- [ ] 6.2 ClaudeMonitor (birokrat-ai-platform repo, per ITS conventions): implement `GET /api/events` emitting turn.start/turn.ended from OnCallStarted/OnCallFinished; verify by adding it as a source
