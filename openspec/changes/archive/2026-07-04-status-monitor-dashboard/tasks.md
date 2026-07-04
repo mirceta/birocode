@@ -20,7 +20,7 @@
 
 - [x] 4.1 `openspec validate status-monitor-dashboard --strict` passes
 - [x] 4.2 Browser-verify (per docs/claude-web/browser-testing.md) through the proxy path: board renders, attention ordering correct, staleness banner appears when the harness is stopped
-- [ ] 4.3 Live check against the real fleet: at least one refusal-state source and one dark machine render correctly on the third monitor
+- [x] 4.3 Live check against the real fleet: at least one refusal-state source and one dark machine render correctly on the third monitor
 - [x] 4.4 Update the Understanding app; note the deferred follow-ups (feed enrichment with awaiting-input/current-task/context %, burn-rate panel, acting from the board)
 
 ## 5. Pivot: merge into the primary page (operator decision 2026-07-03)
