@@ -35,4 +35,4 @@
 ## 6. Fleet-wide producers (operator direction 2026-07-03)
 
 - [x] 6.1 `docs/event-feed-contract.md`: agent-agnostic feed contract (envelope, read contract, turn.start/turn.ended pairing, X-Auth-Password) for producers in other repos — ClaudeMonitor first
-- [ ] 6.2 ClaudeMonitor (birokrat-ai-platform repo, per ITS conventions): implement `GET /api/events` emitting turn.start/turn.ended from OnCallStarted/OnCallFinished; verify by adding it as a source
+- [x] 6.2 ClaudeMonitor (birokrat-ai-platform repo, per ITS conventions): implement `GET /api/events` emitting turn.start/turn.ended from OnCallStarted/OnCallFinished; verify by adding it as a source
