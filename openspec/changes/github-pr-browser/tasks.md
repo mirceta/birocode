@@ -17,4 +17,4 @@
 ## 3. Verify & ship
 
 - [x] 3.1 Browser-verify per `docs/claude-web/browser-testing.md`: tile click opens list, PR click opens detail, back works, hostile-body escape holds (inject a `<script>`/`<img onerror>` body in a fixture or a real PR), display mode non-interactive, panel error state on forced failure
-- [ ] 3.2 `openspec validate github-pr-browser --strict`; update the Understanding app for the new drill-down flow; deploy via `swap.ps1` (auto-keep watcher per memory) and confirm on live
+- [x] 3.2 `openspec validate github-pr-browser --strict`; update the Understanding app for the new drill-down flow; deploy via `swap.ps1` (auto-keep watcher per memory) and confirm on live
