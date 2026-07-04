@@ -144,6 +144,12 @@ public sealed class GitHubStatusService
 
     // ---- repo list derivation (design decision 3) ---------------------------
 
+    /// <summary>Whether <paramref name="ownerName"/> is one of the derived registered
+    /// repos — the PR-browser endpoints' allow-list (openspec change github-pr-browser),
+    /// so they can never be used as an open proxy to arbitrary repositories.</summary>
+    public bool IsKnownRepo(string ownerName)
+        => DeriveRepoList().Contains(ownerName, StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Registered Repos → their <c>origin</c> remotes → distinct
     /// <c>owner/name</c>. A repo without a remote, or with a non-GitHub remote,
     /// is skipped silently.</summary>

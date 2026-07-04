@@ -16,6 +16,7 @@ public static class StatusMonitorModuleExtensions
         // must both survive across requests (a per-request instance would report
         // every source as "duration unknown" forever).
         services.AddSingleton<GitHubStatusService>();
+        services.AddSingleton<GitHubPrService>();
         services.AddSingleton<StatusBoardService>();
         return services;
     }
