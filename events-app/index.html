@@ -74,6 +74,20 @@
   .attn-clear{display:flex;align-items:center;gap:10px;border:1px dashed var(--edge);border-radius:9px;padding:10px 14px;color:var(--dim);font-size:13.5px}
   .attn-clear .ic{color:var(--good)}
   #attnWrap{margin-bottom:16px}
+
+  /* ── two-tab shell (openspec activity-github-tabs): attention stays pinned
+        above; Activity and GitHub are sibling tabs in interactive mode ── */
+  .tabbar{display:flex;gap:6px;border-bottom:1px solid var(--edge);margin:0 0 18px}
+  .tabbar .tab{background:none;border:none;border-bottom:2px solid transparent;border-radius:0;
+    color:var(--dim);padding:9px 15px;font-size:14px;cursor:pointer;margin-bottom:-1px}
+  .tabbar .tab:hover{color:var(--ink);border-color:var(--edge)}
+  .tabbar .tab[aria-selected="true"]{color:var(--ink);border-color:var(--accent);font-weight:600}
+  body[data-tab="activity"] .tabpanel[data-tab="github"]{display:none}
+  body[data-tab="github"] .tabpanel[data-tab="activity"]{display:none}
+  /* display mode is tabless: hide the bar, render both panels in one glance */
+  body.display .tabbar{display:none}
+  body.display .tabpanel{display:block !important}
+
   .src{flex-wrap:wrap}
   .src .agents{flex-basis:100%;display:flex;gap:14px;flex-wrap:wrap;border-top:1px solid #1b212b;margin-top:7px;padding-top:7px;font-size:12px;color:var(--dim)}
   .src .agents .ag{font-family:var(--mono)} .src .agents .ag b{color:var(--accent);font-weight:600}
@@ -165,27 +179,37 @@
     <h2>Needs me</h2>
     <div id="attn"><div class="attn-clear"><span class="ic">…</span>connecting…</div></div>
   </div>
-  <h2>Sources</h2>
-  <div class="addform">
-    <input id="addr" placeholder="http://192.168.1.42:5099" />
-    <input id="label" placeholder="label (required)" />
-    <input id="cred" type="password" autocomplete="off" placeholder="credential (write-only)" />
-    <button class="primary" id="add">+ Add harness</button>
-    <div class="formhint">Enter a harness address <b>and a label</b> to listen to it — the label names the source (and is what the host voice cue speaks). The credential is sent once and never shown again. The collector only ever <b>reads</b> a source's <code>/api/events</code>.</div>
-    <div class="formhint" id="adderr" style="display:none;color:var(--bad)"></div>
+
+  <div class="tabbar" role="tablist" aria-label="Views">
+    <button class="tab" id="tab-activity" role="tab" aria-controls="panel-activity" data-tab="activity">Activity</button>
+    <button class="tab" id="tab-github" role="tab" aria-controls="panel-github" data-tab="github">GitHub</button>
   </div>
-  <div class="sources" id="sources"></div>
 
-  <h2>GitHub</h2>
-  <div class="gh" id="gh"><div class="gh-note">connecting…</div></div>
-  <div id="ghPanel" style="display:none"></div>
+  <div class="tabpanel" id="panel-activity" role="tabpanel" aria-labelledby="tab-activity" data-tab="activity">
+    <h2>Sources</h2>
+    <div class="addform">
+      <input id="addr" placeholder="http://192.168.1.42:5099" />
+      <input id="label" placeholder="label (required)" />
+      <input id="cred" type="password" autocomplete="off" placeholder="credential (write-only)" />
+      <button class="primary" id="add">+ Add harness</button>
+      <div class="formhint">Enter a harness address <b>and a label</b> to listen to it — the label names the source (and is what the host voice cue speaks). The credential is sent once and never shown again. The collector only ever <b>reads</b> a source's <code>/api/events</code>.</div>
+      <div class="formhint" id="adderr" style="display:none;color:var(--bad)"></div>
+    </div>
+    <div class="sources" id="sources"></div>
 
-  <div id="feedSection">
-    <h2>Merged feed</h2>
-    <table>
-      <thead><tr><th style="width:56px">seq</th><th style="width:84px">time</th><th style="width:150px">source</th><th style="width:120px">type</th><th>data</th></tr></thead>
-      <tbody id="rows"><tr><td colspan="5" class="empty">Waiting for events… self events appear automatically; add a harness to see more.</td></tr></tbody>
-    </table>
+    <div id="feedSection">
+      <h2>Merged feed</h2>
+      <table>
+        <thead><tr><th style="width:56px">seq</th><th style="width:84px">time</th><th style="width:150px">source</th><th style="width:120px">type</th><th>data</th></tr></thead>
+        <tbody id="rows"><tr><td colspan="5" class="empty">Waiting for events… self events appear automatically; add a harness to see more.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="tabpanel" id="panel-github" role="tabpanel" aria-labelledby="tab-github" data-tab="github">
+    <h2>GitHub</h2>
+    <div class="gh" id="gh"><div class="gh-note">connecting…</div></div>
+    <div id="ghPanel" style="display:none"></div>
   </div>
 </main>
 <div id="staleBanner">
@@ -203,6 +227,42 @@ const DISPLAY = new URLSearchParams(location.search).get("display") === "1";
 if (DISPLAY) document.body.classList.add("display");
 const toggle = document.getElementById("displayToggle");
 if (DISPLAY){ toggle.textContent = "✕ Exit display"; toggle.href = location.pathname; toggle.title = "Back to the full page (admin + log)"; }
+
+// Two-tab shell (openspec activity-github-tabs). Tab state is device-local and
+// URL-addressable, same idea as the display toggle: ?tab= wins, else localStorage,
+// else Activity. Display mode is tabless (CSS shows both panels), so we skip it.
+const TABS = ["activity", "github"];
+const tabBtns = Array.from(document.querySelectorAll(".tabbar .tab"));
+function setTab(name, push){
+  if (!TABS.includes(name)) name = "activity";
+  document.body.dataset.tab = name;
+  tabBtns.forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
+  try { localStorage.setItem("eventsapp.tab", name); } catch {}
+  if (push){
+    const u = new URL(location.href);
+    u.searchParams.set("tab", name);
+    history.replaceState(null, "", u);
+  }
+}
+if (!DISPLAY){
+  let initial = "activity";
+  try {
+    const q = new URLSearchParams(location.search).get("tab");
+    initial = TABS.includes(q) ? q : (localStorage.getItem("eventsapp.tab") || "activity");
+  } catch {}
+  setTab(initial, false);
+  tabBtns.forEach((b, i) => {
+    b.addEventListener("click", () => setTab(b.dataset.tab, true));
+    b.addEventListener("keydown", e => {
+      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+      e.preventDefault();
+      const next = tabBtns[(i + (e.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length];
+      next.focus(); setTab(next.dataset.tab, true);
+    });
+  });
+} else {
+  document.body.dataset.tab = "activity"; // harmless; CSS forces both panels visible
+}
 
 const rows = document.getElementById("rows");
 const srcWrap = document.getElementById("sources");
