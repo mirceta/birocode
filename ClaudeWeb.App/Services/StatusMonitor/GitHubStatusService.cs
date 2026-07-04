@@ -9,9 +9,14 @@ namespace ClaudeWeb.Services.StatusMonitor;
 
 /// <summary>
 /// The status-monitor wallboard's GitHub side (openspec change
-/// status-monitor-dashboard, design decision 3): the repo list is DERIVED from the
-/// registered Repos' <c>origin</c> remotes (parsed to owner/name, deduped, repos
-/// without a GitHub remote skipped) — no separate configuration. Polling happens
+/// status-monitor-dashboard, design decision 3; repo-list source widened by change
+/// github-repos-from-pat): the repo list is the repositories VISIBLE to the
+/// authenticated gh account (non-archived, most recently pushed first, capped at
+/// 100) unioned with the registered Repos' <c>origin</c> remotes (parsed to
+/// owner/name, deduped, repos without a GitHub remote skipped) — no separate
+/// configuration. The combined list is cached ~5 min with stale-while-refresh and
+/// falls back to the registry derivation alone when the visibility query fails.
+/// Polling happens
 /// server-side through <c>gh api graphql</c>, so the credential established by
 /// <see cref="Accounts.GitHubCredentialsService"/> stays inside <c>gh</c> and the
 /// PAT never reaches this process or the browser. Results are cached for
@@ -23,9 +28,12 @@ namespace ClaudeWeb.Services.StatusMonitor;
 public sealed class GitHubStatusService
 {
     private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan RepoListTtl = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan RepoListRetryTtl = TimeSpan.FromSeconds(60);
     private const int GhTimeoutMs = 20000;
     private const int GitTimeoutMs = 5000;
     private const int MaxPrsPerRepo = 50;
+    private const int MaxVisibleRepos = 100;
 
     // https://github.com/owner/name(.git) | git@github.com:owner/name(.git) | ssh://git@github.com/owner/name
     private static readonly Regex RemoteRx = new(
@@ -38,6 +46,11 @@ public sealed class GitHubStatusService
     private readonly object _lock = new();
     private GitHubSection? _cached;
     private Task? _refreshing;
+
+    private List<string>? _repoList;
+    private long _repoListFetchedAtMs;
+    private bool _repoListFromFallback;
+    private Task? _repoListRefreshing;
 
     public GitHubStatusService(RepositoryRegistry repos, Logger logger)
     {
@@ -92,7 +105,7 @@ public sealed class GitHubStatusService
 
     private GitHubSection Fetch(long fetchedAtMs)
     {
-        var list = DeriveRepoList();
+        var list = CombinedRepoList();
         if (list.Count == 0)
             return new GitHubSection("ok", null, fetchedAtMs, Array.Empty<RepoStatus>());
 
@@ -142,13 +155,109 @@ public sealed class GitHubStatusService
         }
     }
 
-    // ---- repo list derivation (design decision 3) ---------------------------
+    // ---- repo list derivation (github-repos-from-pat) ------------------------
 
-    /// <summary>Whether <paramref name="ownerName"/> is one of the derived registered
-    /// repos — the PR-browser endpoints' allow-list (openspec change github-pr-browser),
-    /// so they can never be used as an open proxy to arbitrary repositories.</summary>
+    /// <summary>Whether <paramref name="ownerName"/> is on the combined repo list —
+    /// the PR-browser endpoints' allow-list (openspec change github-pr-browser). The
+    /// list is bounded by what the authenticated account can see plus the registered
+    /// repos, so the endpoints can never proxy to arbitrary repositories.</summary>
     public bool IsKnownRepo(string ownerName)
-        => DeriveRepoList().Contains(ownerName, StringComparer.OrdinalIgnoreCase);
+        => CombinedRepoList().Contains(ownerName, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>PAT-visible repos ∪ registry-derived repos, cached
+    /// <see cref="RepoListTtl"/> with stale-while-background-refresh (mirrors the
+    /// section cache): callers get an answer immediately; only the first-ever call
+    /// blocks. A failed visibility query keeps the previous list and retries after
+    /// <see cref="RepoListRetryTtl"/>.</summary>
+    private List<string> CombinedRepoList()
+    {
+        Task? await_;
+        lock (_lock)
+        {
+            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var ttl = (_repoListFromFallback ? RepoListRetryTtl : RepoListTtl).TotalMilliseconds;
+            if (_repoList is not null && now - _repoListFetchedAtMs < ttl)
+                return _repoList;
+            _repoListRefreshing ??= Task.Run(RefreshRepoListOnce, CancellationToken.None)
+                                        .ContinueWith(_ => { lock (_lock) _repoListRefreshing = null; });
+            await_ = _repoList is null ? _repoListRefreshing : null;
+        }
+        await_?.Wait();
+        lock (_lock) return _repoList ?? new List<string>();
+    }
+
+    private void RefreshRepoListOnce()
+    {
+        var (visible, ok) = FetchVisibleRepos();
+        var local = DeriveRepoList();
+        lock (_lock)
+        {
+            if (ok || _repoList is null)
+            {
+                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var combined = new List<string>();
+                foreach (var r in visible.Concat(local))
+                    if (seen.Add(r)) combined.Add(r);
+                _repoList = combined;
+            }
+            // On failure with an existing list: keep serving the stale list so
+            // fleet-only tiles do not vanish; only the retry clock changes.
+            _repoListFromFallback = !ok;
+            _repoListFetchedAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        }
+    }
+
+    /// <summary>Repositories visible to the authenticated gh account: non-archived,
+    /// most recently pushed first, capped at <see cref="MaxVisibleRepos"/> (the cap
+    /// is logged when hit, never silent). Failure returns (empty, false).</summary>
+    private (List<string> Repos, bool Ok) FetchVisibleRepos()
+    {
+        var result = new List<string>();
+        var gh = ProcessProbe.ResolveOnPath("gh");
+        if (gh is null)
+        {
+            _logger.Error("[STATUS-GH] repo-list: gh not found on PATH; using registered repos only");
+            return (result, false);
+        }
+
+        var query = $@"query {{
+  viewer {{
+    repositories(first: {MaxVisibleRepos},
+                 affiliations: [OWNER, COLLABORATOR, ORGANIZATION_MEMBER],
+                 ownerAffiliations: [OWNER, COLLABORATOR, ORGANIZATION_MEMBER],
+                 isArchived: false,
+                 orderBy: {{ field: PUSHED_AT, direction: DESC }}) {{
+      nodes {{ nameWithOwner }}
+    }}
+  }}
+}}";
+        var run = ProcessProbe.Run(gh, new[] { "api", "graphql", "-F", "query=@-" }, GhTimeoutMs, stdin: query);
+        if (run.TimedOut)
+        {
+            _logger.Error("[STATUS-GH] repo-list: visibility query timed out; using registered repos only");
+            return (result, false);
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(run.StdOut);
+            var nodes = doc.RootElement.GetProperty("data").GetProperty("viewer")
+                           .GetProperty("repositories").GetProperty("nodes");
+            foreach (var n in nodes.EnumerateArray())
+                if (n.TryGetProperty("nameWithOwner", out var nw) && nw.GetString() is { Length: > 0 } full)
+                    result.Add(full);
+        }
+        catch
+        {
+            var reason = FirstLine(run.StdErr) ?? "no JSON (not authenticated?)";
+            _logger.Error($"[STATUS-GH] repo-list: visibility query failed ({reason}); using registered repos only");
+            return (new List<string>(), false);
+        }
+
+        if (result.Count == MaxVisibleRepos)
+            _logger.Error($"[STATUS-GH] repo-list: visibility cap of {MaxVisibleRepos} hit — least-recently-pushed repos are omitted");
+        return (result, true);
+    }
 
     /// <summary>Registered Repos → their <c>origin</c> remotes → distinct
     /// <c>owner/name</c>. A repo without a remote, or with a non-GitHub remote,
