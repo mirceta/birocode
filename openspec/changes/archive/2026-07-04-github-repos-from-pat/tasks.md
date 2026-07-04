@@ -15,4 +15,4 @@
 ## 3. Ship
 
 - [x] 3.1 `openspec validate github-repos-from-pat --strict` passes; update understanding-app if the explanation changes
-- [ ] 3.2 Deploy via `swap.ps1` (auto-keep armed), operator confirms fleet-only repos visible on live
+- [x] 3.2 Deploy via `swap.ps1` (auto-keep armed), operator confirms fleet-only repos visible on live

@@ -3,9 +3,6 @@
 ## Purpose
 In-app GitHub PR drill-down on the events-app status board: repo tiles expand to an open-PR list and a native PR detail view, served through harness endpoints (PAT stays server-side).
 ## Requirements
-
-
-
 ### Requirement: In-app PR list per repo
 Outside display mode, each GitHub repo tile on the events-app primary page SHALL be clickable, expanding an in-app panel that lists that repository's open pull requests — for each PR: number, title, author, head branch, draft state, review decision, CI state, and age. Clicking the tile again (or a close affordance) SHALL collapse the panel. In display mode (`?display=1`) tiles SHALL remain non-interactive summary-only.
 
@@ -29,14 +26,18 @@ Clicking a PR row in the PR list panel SHALL render an in-app detail view of tha
 - **THEN** the markup renders as visible text, never as live DOM
 
 ### Requirement: Server-side PR endpoints
-The Harness SHALL expose read-only `GET api/status-monitor/github/prs?repo=owner/name` (open-PR list) and `GET api/status-monitor/github/pr?repo=owner/name&number=N` (single PR detail), fetching from GitHub server-side via the same `gh`-on-PATH mechanism as the board's GitHub section so no GitHub credential ever reaches the browser. Responses SHALL be cached per key (order of 30s) with single-flight refresh. A `repo` value not in the board's derived registered-repo list SHALL be rejected, so the endpoints cannot be used as an open proxy to arbitrary repositories.
+The Harness SHALL expose read-only `GET api/status-monitor/github/prs?repo=owner/name` (open-PR list) and `GET api/status-monitor/github/pr?repo=owner/name&number=N` (single PR detail), fetching from GitHub server-side via the same `gh`-on-PATH mechanism as the board's GitHub section so no GitHub credential ever reaches the browser. Responses SHALL be cached per key (order of 30s) with single-flight refresh. A `repo` value not in the board's derived repo list (repositories visible to the authenticated GitHub account unioned with the registered Repos' GitHub remotes) SHALL be rejected, so the endpoints cannot be used as an open proxy to arbitrary repositories.
 
 #### Scenario: Credential stays server-side
 - **WHEN** the page fetches a PR list or PR detail
 - **THEN** the request carries no GitHub credential and the response contains none — authentication happens inside `gh` on the host
 
+#### Scenario: Fleet repo is browsable
+- **WHEN** the endpoint is called with a repo that is visible to the authenticated GitHub account but not registered locally
+- **THEN** it serves the PR data exactly as for a registered repo
+
 #### Scenario: Unknown repo rejected
-- **WHEN** the endpoint is called with a repo that is not one of the registered Repos' GitHub remotes
+- **WHEN** the endpoint is called with a repo that is neither visible to the authenticated account nor a registered Repo's GitHub remote
 - **THEN** it responds 404 without contacting GitHub
 
 ### Requirement: Panel-level degradation
@@ -45,3 +46,4 @@ A failure fetching PR data (gh missing, unauthenticated, timeout, GraphQL error)
 #### Scenario: GitHub down mid-drill-down
 - **WHEN** the PR list fetch fails
 - **THEN** the expanded panel shows the error inline and the board (including the GitHub tiles) continues updating as before
+
