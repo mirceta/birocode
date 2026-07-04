@@ -38,6 +38,8 @@
   .src .acts{display:flex;gap:6px}
   button{background:var(--panel2);color:var(--ink);border:1px solid var(--edge);border-radius:7px;padding:6px 11px;cursor:pointer;font-size:12.5px}
   button:hover{border-color:var(--accent)} button.primary{background:var(--accent);color:#08111f;border:none;font-weight:600}
+  a.btnlink{background:var(--panel2);color:var(--ink);border:1px solid var(--edge);border-radius:7px;padding:4px 9px;font-size:12px;text-decoration:none;display:inline-block}
+  a.btnlink:hover{border-color:var(--accent);color:var(--accent)}
   #snd,#hsnd,#htest{padding:4px 9px;font-size:12px} #snd.on,#hsnd.on{border-color:var(--good);color:var(--good)}
   button:disabled{opacity:.5;cursor:default}
   .addform{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--panel);border:1px dashed var(--edge);border-radius:9px;padding:10px 12px;margin-bottom:16px}
@@ -61,6 +63,81 @@
   .new{animation:flash 1.2s ease}
   @keyframes flash{from{background:rgba(88,166,255,.18)}to{background:transparent}}
   code{background:#11161d;padding:1px 5px;border-radius:4px;font-family:var(--mono);font-size:12px}
+
+  /* ── status sections (openspec status-monitor-dashboard, merged-page shape) ── */
+  .attn-row{display:flex;align-items:center;gap:12px;border:1px solid;border-radius:9px;padding:11px 14px;margin:0 0 8px;font-size:15px;background:var(--panel)}
+  .attn-row .ic{font-size:18px;line-height:1}
+  .attn-row .fix{margin-left:auto;font-size:12px;color:var(--dim);font-family:var(--mono);text-align:right}
+  .attn-row.critical{border-color:var(--bad);background:rgba(248,81,73,.09)}
+  .attn-row.serious{border-color:#ec835a;background:rgba(236,131,90,.08)}
+  .attn-row.warning{border-color:var(--warn);background:rgba(210,153,34,.08)}
+  .attn-clear{display:flex;align-items:center;gap:10px;border:1px dashed var(--edge);border-radius:9px;padding:10px 14px;color:var(--dim);font-size:13.5px}
+  .attn-clear .ic{color:var(--good)}
+  #attnWrap{margin-bottom:16px}
+  .src{flex-wrap:wrap}
+  .src .agents{flex-basis:100%;display:flex;gap:14px;flex-wrap:wrap;border-top:1px solid #1b212b;margin-top:7px;padding-top:7px;font-size:12px;color:var(--dim)}
+  .src .agents .ag{font-family:var(--mono)} .src .agents .ag b{color:var(--accent);font-weight:600}
+  .gh{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:16px}
+  .repo{border:1px solid var(--edge);border-radius:9px;padding:9px 12px;background:var(--panel)}
+  .repo.red{border-color:var(--bad);background:rgba(248,81,73,.09)}
+  .repo .name{font-family:var(--mono);font-size:12.5px;margin-bottom:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .repo .ci{font-size:12px} .repo .ci.pass{color:var(--good)} .repo .ci.fail{color:var(--bad)}
+  .repo .ci.pending{color:var(--warn)} .repo .ci.none{color:var(--dim)}
+  .repo .prs{color:var(--dim);font-size:11.5px;margin-top:4px}
+  .gh-note{color:var(--dim);font-size:12px;border:1px dashed var(--edge);border-radius:9px;padding:9px 12px}
+  #bclock{font-family:var(--mono)}
+
+  /* ── GitHub PR drill-down (openspec github-pr-browser): tile → PR list → PR ── */
+  .repo.clk{cursor:pointer} .repo.clk:hover{border-color:var(--accent)}
+  .repo.sel{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+  #ghPanel{margin:-6px 0 16px}
+  .ghp{border:1px solid var(--edge);border-radius:9px;background:var(--panel2);padding:10px 14px}
+  .ghp-head{display:flex;align-items:center;gap:10px;font-size:13px;padding-bottom:8px;border-bottom:1px solid var(--edge);margin-bottom:6px}
+  .ghp-head .sp{flex:1}
+  .ghp-head .ext{color:var(--accent);font-size:12px;text-decoration:none}
+  .ghp-head .ext:hover{text-decoration:underline}
+  .ghp-note{color:var(--dim);font-size:12.5px;padding:8px 2px}
+  .ghp-err{color:var(--warn);font-size:12.5px;padding:8px 2px}
+  .ghpr{display:flex;align-items:center;gap:9px;padding:7px 6px;border-radius:6px;cursor:pointer;flex-wrap:wrap}
+  .ghpr:hover{background:#11161d}
+  .ghpr .num{font-family:var(--mono);color:var(--dim);font-size:12px}
+  .ghpr .ttl{font-weight:600;font-size:13px}
+  .ghpr .meta{margin-left:auto;color:var(--dim);font-family:var(--mono);font-size:11.5px;white-space:nowrap}
+  .ci-dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--dim);flex:none}
+  .ci-dot.pass{background:var(--good)} .ci-dot.fail{background:var(--bad)} .ci-dot.pending{background:var(--warn)}
+  .tag{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-radius:5px;padding:0 6px;border:1px solid var(--edge);color:var(--dim)}
+  .tag.approved{color:var(--good);border-color:rgba(63,185,80,.45)}
+  .tag.changes{color:var(--bad);border-color:rgba(248,81,73,.45)}
+  .tag.review{color:var(--warn);border-color:rgba(210,153,34,.45)}
+  .ghd .row{display:flex;gap:14px;flex-wrap:wrap;color:var(--dim);font-size:12px;font-family:var(--mono);margin:6px 0}
+  .ghd .desc{background:#0a0f16;border:1px solid var(--edge);border-radius:8px;padding:10px 12px;font-size:13px;max-height:300px;overflow:auto;margin:8px 0}
+  .ghd .desc p{margin:0 0 8px} .ghd .desc p:last-child{margin:0} .ghd .desc a{color:var(--accent)}
+  .ghd h3{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);margin:12px 0 4px}
+  .chk{font-family:var(--mono);font-size:12px;padding:2px 0}
+  .chk.ok{color:var(--good)} .chk.bad{color:var(--bad)} .chk.run{color:var(--warn)}
+  .fil{display:flex;gap:10px;font-family:var(--mono);font-size:12px;padding:2px 0}
+  .fil .pth{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fil .pm{margin-left:auto;white-space:nowrap} .add{color:var(--good)} .del{color:var(--bad)}
+  /* display mode stays glanceable: no drill-down, no click affordance (spec) */
+  body.display #ghPanel{display:none !important}
+  body.display .repo{cursor:default}
+
+  /* display mode (?display=1): the SAME page, zero-interaction, enlarged — the
+     thing on the third monitor. Spec: every interactive element hidden. */
+  body.display .addform, body.display .acts, body.display #feedSection,
+  body.display #snd, body.display #hsnd, body.display #hmode, body.display #htest,
+  body.display .sub{display:none !important}
+  body.display main{max-width:none}
+  body.display .attn-row{font-size:19px;padding:14px 16px} body.display .attn-row .ic{font-size:24px}
+  body.display .attn-clear{font-size:16px;padding:13px 16px}
+  body.display .src{padding:12px 14px;font-size:15px} body.display .src .agents{font-size:13.5px}
+  body.display .repo .name{font-size:13.5px} body.display .repo .ci{font-size:13px}
+  body.display h2{font-size:13px}
+  #staleBanner{position:fixed;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;background:rgba(6,9,13,.55);z-index:9;text-align:center}
+  #staleBanner.on{display:flex}
+  #staleBanner .big{font-size:22px;color:var(--warn);border:2px solid var(--warn);border-radius:12px;padding:14px 28px;background:var(--panel)}
+  #staleBanner .small{color:var(--dim);font-size:13px}
+  main.dimmed{opacity:.35}
 </style>
 </head>
 <body>
@@ -74,6 +151,9 @@
     <span><span class="dot" id="dot"></span><span id="status">connecting</span></span>
     <span>watermark <b id="wm">-1</b></span>
     <span>events <b id="count">0</b></span>
+    <span id="bclock"></span>
+    <a class="btnlink" id="displayToggle" href="?display=1"
+       title="Display mode: same page, admin and log hidden, status enlarged — made for the third monitor, F11 to fullscreen">🖥 Display mode</a>
     <button id="snd" title="Play a sound in THIS browser on each new event">🔇 Device</button>
     <button id="hsnd" title="Beep on the HOST computer (running the harness) on each new event">🖥️ Host off</button>
     <button id="hmode" title="Host cue: a beep tone, or a spoken 'an agent has finished'">🔊 Beep</button>
@@ -81,6 +161,10 @@
   </div>
 </header>
 <main>
+  <div id="attnWrap">
+    <h2>Needs me</h2>
+    <div id="attn"><div class="attn-clear"><span class="ic">…</span>connecting…</div></div>
+  </div>
   <h2>Sources</h2>
   <div class="addform">
     <input id="addr" placeholder="http://192.168.1.42:5099" />
@@ -92,17 +176,33 @@
   </div>
   <div class="sources" id="sources"></div>
 
-  <h2>Merged feed</h2>
-  <table>
-    <thead><tr><th style="width:56px">seq</th><th style="width:84px">time</th><th style="width:150px">source</th><th style="width:120px">type</th><th>data</th></tr></thead>
-    <tbody id="rows"><tr><td colspan="5" class="empty">Waiting for events… self events appear automatically; add a harness to see more.</td></tr></tbody>
-  </table>
+  <h2>GitHub</h2>
+  <div class="gh" id="gh"><div class="gh-note">connecting…</div></div>
+  <div id="ghPanel" style="display:none"></div>
+
+  <div id="feedSection">
+    <h2>Merged feed</h2>
+    <table>
+      <thead><tr><th style="width:56px">seq</th><th style="width:84px">time</th><th style="width:150px">source</th><th style="width:120px">type</th><th>data</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="5" class="empty">Waiting for events… self events appear automatically; add a harness to see more.</td></tr></tbody>
+    </table>
+  </div>
 </main>
+<div id="staleBanner">
+  <div class="big">⚠ STATUS STALE — harness unreachable</div>
+  <div class="small">last good poll <span id="staleTime">—</span> · showing last-known state (dimmed)</div>
+</div>
 
 <script>
 // Harness API root from our own URL — served at <prefix>/api/localview/<repo>/app/events-feed/.
 const m = location.pathname.match(/^(.*?)\/api\/localview\//);
 const API = (m ? m[1] : "") + "/api";
+
+// Display mode (?display=1): same page, admin/log hidden, status enlarged.
+const DISPLAY = new URLSearchParams(location.search).get("display") === "1";
+if (DISPLAY) document.body.classList.add("display");
+const toggle = document.getElementById("displayToggle");
+if (DISPLAY){ toggle.textContent = "✕ Exit display"; toggle.href = location.pathname; toggle.title = "Back to the full page (admin + log)"; }
 
 const rows = document.getElementById("rows");
 const srcWrap = document.getElementById("sources");
@@ -251,7 +351,19 @@ function statusText(s){
   }
 }
 
+function ago(ms){
+  if (ms == null || ms < 0) return "—";
+  const s = Math.floor(ms/1000);
+  if (s < 60) return s + "s";
+  const mn = Math.floor(s/60);
+  if (mn < 60) return mn + "m";
+  const h = Math.floor(mn/60);
+  return h < 48 ? h + "h " + (mn%60) + "m" : Math.floor(h/24) + "d";
+}
+
+let lastSources = [];
 function renderSources(list){
+  lastSources = list;
   srcWrap.innerHTML = "";
   if (!list.length){ srcWrap.innerHTML = `<div class="empty">No sources.</div>`; return; }
   for (const s of list){
@@ -267,13 +379,26 @@ function renderSources(list){
     } else {
       acts = `<div class="acts"><span class="st">built-in</span></div>`;
     }
+    // Fleet enrichment from the board endpoint: running agents (turn.start
+    // without its turn.ended) + how long a dark source has been dark.
+    const f = fleetById.get(s.id);
+    let st = statusText(s);
+    if (f && s.status === "unreachable")
+      st += " · dark " + (f.stateDurationMs == null ? "(duration unknown)" : "for " + ago(f.stateDurationMs));
+    let agents = "";
+    if (f && f.agents && f.agents.length){
+      agents = `<div class="agents">` + f.agents.map(a =>
+        `<span class="ag">▶ <b>${esc(a.repo)}</b> · running ${ago(boardNow - a.startedAt)}</span>`).join("") + `</div>`;
+    } else if (DISPLAY && s.status === "active"){
+      agents = `<div class="agents"><span class="ag">no agent running</span></div>`;
+    }
     div.innerHTML =
       `<span class="dot ${dotcls}"></span>`+
       `<span class="lbl">${esc(s.label)}</span>`+
       `<span class="kind ${s.kind}">${esc(s.kind)}</span>`+
       (s.address ? `<span class="addr">${esc(s.address)}</span>` : "")+
-      `<span class="st ${stCls}">${esc(statusText(s))}</span>`+
-      acts;
+      `<span class="st ${stCls}">${esc(st)}</span>`+
+      acts + agents;
     srcWrap.appendChild(div);
   }
   srcWrap.querySelectorAll("button[data-act]").forEach(b => b.onclick = () => sourceAction(b.dataset.act, b.dataset.id));
@@ -328,11 +453,232 @@ async function pollEvents(){
   }catch(e){ setStatus("offline", "err"); }
 }
 
+// --- status sections: one board endpoint paints attention + fleet + github ----
+let fleetById = new Map(), boardNow = Date.now();
+let boardFailures = 0, lastBoardOkAt = null, lastBoard = null;
+const lastHtml = { attn: "", gh: "" };
+
+function setSection(key, el, html){
+  if (lastHtml[key] === html) return; // diff-render: no flicker
+  lastHtml[key] = html;
+  el.innerHTML = html;
+}
+
+function renderBoard(b){
+  lastBoard = b;
+  boardNow = b.now;
+  fleetById = new Map(b.fleet.map(f => [f.id, f]));
+
+  const attn = document.getElementById("attn");
+  const attnHtml = !b.attention.length
+    ? `<div class="attn-clear"><span class="ic">✓</span>Nothing needs you — all machines healthy</div>`
+    : b.attention.map(a => {
+        const ic = a.severity === "warning" ? "◌" : (a.severity === "serious" ? "⚠" : "✖");
+        return `<div class="attn-row ${esc(a.severity)}"><span class="ic">${ic}</span><span>${esc(a.title)}</span><span class="fix">${esc(a.fix)}</span></div>`;
+      }).join("");
+  setSection("attn", attn, attnHtml);
+
+  const gh = document.getElementById("gh");
+  const g = b.github;
+  let ghHtml;
+  if (g.status !== "ok")
+    ghHtml = `<div class="gh-note">⚠ GitHub unavailable · ${esc(g.error || "unknown")}</div>`;
+  else if (!g.repos.length)
+    ghHtml = `<div class="gh-note">no registered repos with a GitHub remote</div>`;
+  else
+    ghHtml = g.repos.map(r => {
+      if (r.error) return `<div class="repo"><div class="name">${esc(r.name)}</div><div class="ci none">◦ ${esc(r.error)}</div></div>`;
+      const ci = r.ci === "fail" ? `✖ CI failing${r.failingCheck ? " · " + esc(r.failingCheck) : ""}`
+        : r.ci === "pass" ? "✓ CI green"
+        : r.ci === "pending" ? "◌ CI running"
+        : "◦ no checks";
+      const prs = r.openPrs
+        ? r.openPrs + " open PR" + (r.openPrs > 1 ? "s" : "")
+          + (r.oldestPrAgeMs != null ? " · oldest " + ago(r.oldestPrAgeMs) : "")
+          + (r.changesRequested ? " · " + r.changesRequested + " changes-requested" : "")
+          + (r.drafts ? " · " + r.drafts + " draft" : "")
+        : "no open PRs";
+      // Outside display mode a tile is the door to the in-app PR browser (openspec
+      // github-pr-browser); the wallboard keeps tiles inert.
+      const cls = "repo" + (r.ci === "fail" ? " red" : "") + (DISPLAY ? "" : " clk") + (r.name === ghOpen ? " sel" : "");
+      const attrs = DISPLAY ? "" : ` data-repo="${esc(r.name)}" role="button" tabindex="0" title="Show open PRs in-app"`;
+      return `<div class="${cls}"${attrs}><div class="name">${esc(r.name)}</div><div class="ci ${esc(r.ci)}">${ci}</div><div class="prs">${prs}</div></div>`;
+    }).join("");
+  setSection("gh", gh, ghHtml);
+  // A repo that vanished from the board (deregistered) closes its panel.
+  if (ghOpen && g.status === "ok" && !g.repos.some(r => r.name === ghOpen)) ghClose();
+
+  renderSources(lastSources); // re-render so agents/durations refresh
+}
+
+// --- GitHub PR drill-down (openspec github-pr-browser) -------------------------
+// Tile → open-PR list → PR detail, all in-app: the endpoints fetch via gh
+// server-side, so no credential and no github.com iframe (which its
+// X-Frame-Options forbids anyway). Errors paint the panel, never the page.
+const ghPanel = document.getElementById("ghPanel");
+let ghOpen = null;  // owner/name of the expanded repo, or null
+let ghSeq = 0;      // ignores out-of-order responses after quick click-arounds
+
+function ghClose(){
+  ghOpen = null; ghSeq++;
+  ghPanel.style.display = "none"; ghPanel.innerHTML = "";
+  if (lastBoard) renderBoard(lastBoard); // drop the tile's selected state
+}
+
+function ghHead(inner, opts){
+  return `<div class="ghp-head">`
+    + (opts && opts.back ? `<button data-ghact="back">← back</button>` : "")
+    + inner + `<span class="sp"></span>`
+    + (opts && opts.url ? `<a class="ext" href="${esc(opts.url)}" target="_blank" rel="noopener">open on GitHub ↗</a>` : "")
+    + `<button data-ghact="close" title="Close">✕</button></div>`;
+}
+
+function revBadge(d){
+  if (d === "APPROVED") return `<span class="tag approved">approved</span>`;
+  if (d === "CHANGES_REQUESTED") return `<span class="tag changes">changes requested</span>`;
+  if (d === "REVIEW_REQUIRED") return `<span class="tag review">review required</span>`;
+  return "";
+}
+
+// PR bodies are third-party content: escape-first, then only autolink http(s)
+// and paragraphize. Markup in a body must render as text (spec), so no
+// markdown engine and no innerHTML of anything unescaped.
+function fmtBody(s){
+  if (!s || !s.trim()) return `<div class="ghp-note">no description</div>`;
+  const linked = esc(s.replace(/\r/g, "")).replace(/https?:\/\/\S+/g, m => {
+    const t = m.match(/^(.*?)((?:&(?:quot|gt|lt|amp|#39);|[.,;:!?)\]])*)$/); // trailing punctuation stays text
+    return `<a href="${t[1]}" target="_blank" rel="noopener">${t[1]}</a>${t[2]}`;
+  });
+  return `<div class="desc">` + linked.split(/\n{2,}/).map(p => `<p>${p.replace(/\n/g, "<br>")}</p>`).join("") + `</div>`;
+}
+
+async function ghShowList(repo){
+  ghOpen = repo;
+  const seq = ++ghSeq;
+  ghPanel.style.display = "";
+  ghPanel.innerHTML = `<div class="ghp">${ghHead(`<b>${esc(repo)}</b> · open PRs`)}<div class="ghp-note">loading…</div></div>`;
+  if (lastBoard) renderBoard(lastBoard); // mark the tile selected
+  let html;
+  try{
+    const res = await fetch(`${API}/status-monitor/github/prs?repo=${encodeURIComponent(repo)}`, { headers: { Accept: "application/json" } });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const j = await res.json();
+    if (j.status !== "ok") throw new Error(j.error || "unknown error");
+    const rows = !j.prs.length
+      ? `<div class="ghp-note">no open PRs</div>`
+      : j.prs.map(p =>
+          `<div class="ghpr" data-pr="${p.number}" role="button" tabindex="0">`
+          + `<span class="ci-dot ${esc(p.ci)}" title="CI ${esc(p.ci)}"></span>`
+          + `<span class="num">#${p.number}</span><span class="ttl">${esc(p.title)}</span>`
+          + (p.isDraft ? `<span class="tag">draft</span>` : "") + revBadge(p.reviewDecision)
+          + `<span class="meta">${esc(p.author || "?")} · ${esc(p.headRef)} · ${ago(p.ageMs)}</span></div>`).join("");
+    html = `<div class="ghp">${ghHead(`<b>${esc(repo)}</b> · ${j.totalCount} open PR${j.totalCount === 1 ? "" : "s"}`)}${rows}</div>`;
+  }catch(e){
+    html = `<div class="ghp">${ghHead(`<b>${esc(repo)}</b> · open PRs`)}<div class="ghp-err">⚠ ${esc(e.message)}</div></div>`;
+  }
+  if (seq === ghSeq) ghPanel.innerHTML = html;
+}
+
+async function ghShowDetail(repo, number){
+  const seq = ++ghSeq;
+  ghPanel.innerHTML = `<div class="ghp">${ghHead(`<b>${esc(repo)}</b> #${number}`, { back: true })}<div class="ghp-note">loading…</div></div>`;
+  let html;
+  try{
+    const res = await fetch(`${API}/status-monitor/github/pr?repo=${encodeURIComponent(repo)}&number=${number}`, { headers: { Accept: "application/json" } });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const j = await res.json();
+    if (j.status !== "ok" || !j.pr) throw new Error(j.error || "unknown error");
+    const p = j.pr;
+    const checks = !p.checks.length ? `<div class="ghp-note">no checks</div>`
+      : p.checks.map(c => {
+          const st = String(c.state).toUpperCase();
+          const cls = st === "SUCCESS" ? "ok" : (st === "FAILURE" || st === "ERROR" || st === "TIMED_OUT" ? "bad" : "run");
+          const ic = cls === "ok" ? "✓" : (cls === "bad" ? "✖" : "◌");
+          return `<div class="chk ${cls}">${ic} ${esc(c.name)} · ${esc(st.toLowerCase())}</div>`;
+        }).join("");
+    const files = !p.files.length ? `<div class="ghp-note">no files reported</div>`
+      : p.files.map(f =>
+          `<div class="fil"><span class="pth">${esc(f.path)}</span>`
+          + `<span class="pm"><span class="add">+${f.additions}</span> <span class="del">−${f.deletions}</span></span></div>`).join("");
+    html = `<div class="ghp ghd">`
+      + ghHead(`<b>#${p.number}</b> ${esc(p.title)}`, { back: true, url: p.url })
+      + `<div class="row">`
+      + `<span>${esc(p.author || "?")} · ${ago(p.createdAtMs ? Date.now() - p.createdAtMs : null)} old</span>`
+      + `<span>${esc(p.baseRef)} ← ${esc(p.headRef)}</span>`
+      + (p.isDraft ? `<span class="tag">draft</span>` : "") + revBadge(p.reviewDecision)
+      + `<span>merge: ${esc((p.mergeable || "unknown").toLowerCase())}</span>`
+      + `<span><span class="add">+${p.additions}</span> <span class="del">−${p.deletions}</span> in ${p.changedFiles} file${p.changedFiles === 1 ? "" : "s"}</span>`
+      + `<span>${p.reviewCount} review${p.reviewCount === 1 ? "" : "s"} · ${p.commentCount} comment${p.commentCount === 1 ? "" : "s"}</span>`
+      + `</div>`
+      + fmtBody(p.body)
+      + `<h3>Checks</h3>` + checks
+      + `<h3>Files</h3>` + files
+      + `</div>`;
+  }catch(e){
+    html = `<div class="ghp">${ghHead(`<b>${esc(repo)}</b> #${number}`, { back: true })}<div class="ghp-err">⚠ ${esc(e.message)}</div></div>`;
+  }
+  if (seq === ghSeq) ghPanel.innerHTML = html;
+}
+
+document.getElementById("gh").addEventListener("click", e => {
+  if (DISPLAY) return; // the wallboard is glanceable, not a control surface (spec)
+  const tile = e.target.closest(".repo[data-repo]");
+  if (!tile) return;
+  const repo = tile.dataset.repo;
+  if (ghOpen === repo) ghClose(); else ghShowList(repo);
+});
+ghPanel.addEventListener("click", e => {
+  const act = e.target.closest("[data-ghact]");
+  if (act){
+    if (act.dataset.ghact === "close") ghClose();
+    else if (act.dataset.ghact === "back" && ghOpen) ghShowList(ghOpen);
+    return;
+  }
+  const row = e.target.closest(".ghpr[data-pr]");
+  if (row && ghOpen) ghShowDetail(ghOpen, +row.dataset.pr);
+});
+// role="button" elements act on Enter/Space like real buttons.
+function ghKey(e){
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const t = e.target.closest('[role="button"]');
+  if (t){ e.preventDefault(); t.click(); }
+}
+document.getElementById("gh").addEventListener("keydown", ghKey);
+ghPanel.addEventListener("keydown", ghKey);
+
+async function pollBoard(){
+  try{
+    const res = await fetch(`${API}/status-monitor/board`, { headers: { Accept: "application/json" } });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    renderBoard(await res.json());
+    lastBoardOkAt = Date.now();
+    boardFailures = 0;
+    document.getElementById("staleBanner").classList.remove("on");
+    document.querySelector("main").classList.remove("dimmed");
+  }catch(e){
+    boardFailures++;
+    // Display mode must never silently freeze while looking healthy (spec).
+    if (DISPLAY && boardFailures >= 3){
+      document.getElementById("staleBanner").classList.add("on");
+      document.querySelector("main").classList.add("dimmed");
+      document.getElementById("staleTime").textContent =
+        lastBoardOkAt ? new Date(lastBoardOkAt).toLocaleTimeString() : "never";
+    }
+  }
+}
+
+setInterval(() => {
+  document.getElementById("bclock").textContent =
+    lastBoardOkAt ? "updated " + new Date(lastBoardOkAt).toLocaleTimeString() : "";
+}, 1000);
+
 // The collector runs on the backend regardless of this page, so we simply observe:
 // on load (or reload) we read from the current watermark and resume.
 refreshSources();
 pollEvents();
+pollBoard();
 setInterval(() => { pollEvents(); refreshSources(); }, 2500);
+setInterval(pollBoard, 5000);
 </script>
 </body>
 </html>
