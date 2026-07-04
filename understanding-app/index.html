@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Understanding — Activity / GitHub tabs</title>
+<title>Understanding — the events-app tabs & agent dock</title>
 <style>
   :root{
     --bg:#0d1117; --panel:#161b22; --panel2:#1c222b; --line:#30363d; --fg:#e6edf3; --dim:#8b949e;
@@ -48,8 +48,8 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>Activity / GitHub tabs</h1>
-  <p class="sub">The events-app primary page split into two top-level tabs — with the "needs me" attention queue pinned above both, and display mode left flat.</p>
+  <h1>The events-app tabs & agent dock</h1>
+  <p class="sub">Three top-level tabs — Activity, Agents, GitHub — with the "needs me" attention queue pinned above all of them, and display mode left flat.</p>
 
   <div class="card">
     <b>Why.</b> The page does two jobs: <b>agent activity across the fleet</b> (attention queue, per-machine sources, merged log) and <b>GitHub administration</b> (repo tiles, PR browser). They used to share one long scroll. Now each has its own tab — but the attention queue, the "needs me now" signal, stays <b>above</b> the tabs so an alert is never a tab-switch away.
@@ -96,6 +96,11 @@
   </table>
   </div>
   <p class="note">Selecting a tab updates both <code>localStorage</code> and the URL (via <code>history.replaceState</code>) — no reload, and no extra board poll: one poll already paints both tabs, so switching is instant DOM show/hide.</p>
+
+  <h2>The Agents tab — a dock of what runs where</h2>
+  <div class="card">
+    Every <code>turn.start</code> / <code>turn.ended</code> event in the collected feed carries its machine and the repo it ran in. The <b>Agents</b> tab assembles that: one card per machine, one <b>square per repository</b> agents have run on there — a green running light while a start has no matching finish (dropped after 4h so a crashed agent doesn't stay lit) — and clicking a square opens that machine × repo's <b>trail</b>: each run's start/finish, status, duration, turns and cost. It's reconstructed client-side from the feed the page already polls — zero extra requests — so it reaches only as far back as the collector retains: an empty dock means "no <i>recent</i> activity observed", not "nothing ever ran". Old harnesses that only send <code>turn.ended</code> still get squares and trails; their running light just never turns on.
+  </div>
 
   <h2>Display mode is tabless</h2>
   <div class="card">

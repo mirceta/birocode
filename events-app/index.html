@@ -91,11 +91,42 @@
     color:var(--dim);padding:10px 18px;font-size:14.5px;cursor:pointer;margin-bottom:-1px}
   .tabbar .tab:hover{color:var(--ink);border-color:#c3c2b7}
   .tabbar .tab[aria-selected="true"]{color:var(--accent-deep);border-color:var(--accent);font-weight:600}
-  body[data-tab="activity"] .tabpanel[data-tab="github"]{display:none}
-  body[data-tab="github"] .tabpanel[data-tab="activity"]{display:none}
-  /* display mode is tabless: hide the bar, render both panels in one glance */
+  /* generic: hide every panel, show the one matching body[data-tab] */
+  .tabpanel{display:none}
+  body[data-tab="activity"] .tabpanel[data-tab="activity"],
+  body[data-tab="agents"]   .tabpanel[data-tab="agents"],
+  body[data-tab="github"]   .tabpanel[data-tab="github"]{display:block}
+  /* display mode is tabless: hide the bar, render every panel in one glance */
   body.display .tabbar{display:none}
   body.display .tabpanel{display:block !important}
+  h2 .hint{text-transform:none;letter-spacing:0;font-weight:400;color:var(--muted)}
+
+  /* ── agent dock (openspec agent-dock): machine cards → repo squares → trail ── */
+  .dock{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px;align-items:start}
+  .mach{background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:12px 14px;box-shadow:var(--card-shadow)}
+  .mach.self{border-left:3px solid var(--self)} .mach.remote{border-left:3px solid var(--remote)}
+  .mach .mh{display:flex;align-items:baseline;gap:8px;margin-bottom:9px}
+  .mach .mh .lbl{font-weight:600}
+  .mach .mh .meta{margin-left:auto;color:var(--muted);font-family:var(--mono);font-size:11px}
+  .dock-note,.mach .none{color:var(--muted);font-size:12.5px;border:1px dashed #c3c2b7;border-radius:8px;padding:8px 11px;background:var(--panel)}
+  .sqs{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+  .sq{border:1px solid var(--edge);border-radius:8px;padding:8px 10px;background:var(--panel2);min-width:0}
+  .sq .rn{font-family:var(--mono);font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:3px}
+  .sq .rs{font-size:11px;color:var(--dim)}
+  .sq .run{display:inline-flex;align-items:center;gap:4px;color:var(--good-text);font-weight:600}
+  .sq .run .ci-dot{background:var(--good)}
+  .sq.live{border-color:var(--good);background:rgba(12,163,12,.06)}
+  body:not(.display) .sq{cursor:pointer}
+  body:not(.display) .sq:hover{border-color:var(--accent)}
+  .sq.sel{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+  .trail{grid-column:1/-1;border:1px solid var(--edge);border-radius:8px;background:var(--panel);padding:8px 12px;margin-top:2px}
+  .trail .th{display:flex;align-items:center;gap:8px;font-size:12px;padding-bottom:6px;border-bottom:1px solid var(--edge);margin-bottom:4px}
+  .trail .th .sp{flex:1}
+  .trow{display:flex;gap:12px;align-items:baseline;font-family:var(--mono);font-size:12px;padding:3px 0;flex-wrap:wrap}
+  .trow .t{color:var(--muted)}
+  .trow .st.done{color:var(--good-text)} .trow .st.error{color:var(--bad)} .trow .st.open{color:var(--good-text);font-weight:600}
+  .trow .xtra{color:var(--dim)}
+  body.display .trail{display:none !important}
 
   /* wide screens (the 1080p operator monitor): Activity becomes two columns —
      sources & admin on the left, the merged feed alongside on the right */
@@ -203,6 +234,7 @@
 
   <div class="tabbar" role="tablist" aria-label="Views">
     <button class="tab" id="tab-activity" role="tab" aria-controls="panel-activity" data-tab="activity">Activity</button>
+    <button class="tab" id="tab-agents" role="tab" aria-controls="panel-agents" data-tab="agents">Agents</button>
     <button class="tab" id="tab-github" role="tab" aria-controls="panel-github" data-tab="github">GitHub</button>
   </div>
 
@@ -225,6 +257,11 @@
         <tbody id="rows"><tr><td colspan="5" class="empty">Waiting for events… self events appear automatically; add a harness to see more.</td></tr></tbody>
       </table>
     </div>
+  </div>
+
+  <div class="tabpanel" id="panel-agents" role="tabpanel" aria-labelledby="tab-agents" data-tab="agents">
+    <h2>Agent dock <span class="hint">— which repos agents run on, per machine · reconstructed from the recent event trail</span></h2>
+    <div class="dock" id="dock"><div class="dock-note">connecting…</div></div>
   </div>
 
   <div class="tabpanel" id="panel-github" role="tabpanel" aria-labelledby="tab-github" data-tab="github">
@@ -252,7 +289,7 @@ if (DISPLAY){ toggle.textContent = "✕ Exit display"; toggle.href = location.pa
 // Two-tab shell (openspec activity-github-tabs). Tab state is device-local and
 // URL-addressable, same idea as the display toggle: ?tab= wins, else localStorage,
 // else Activity. Display mode is tabless (CSS shows both panels), so we skip it.
-const TABS = ["activity", "github"];
+const TABS = ["activity", "agents", "github"];
 const tabBtns = Array.from(document.querySelectorAll(".tabbar .tab"));
 function setTab(name, push){
   if (!TABS.includes(name)) name = "activity";
@@ -443,6 +480,141 @@ function ago(ms){
 }
 
 let lastSources = [];
+// ── agent dock (openspec agent-dock): reconstruct machine × repo runs from the
+//    turn.* events the feed poll already delivers. turn.start opens a run (by
+//    turnId), turn.ended closes/pairs it; finish-only runs (old harnesses that
+//    never send turn.start) still count. Client-side only — zero extra requests.
+const RUNNING_MAX_AGE = 4 * 3600 * 1000; // mirror the board's RunningMaxAge guard
+const TRAIL_CAP = 50;
+const dockWrap = document.getElementById("dock");
+const dockData = new Map();   // sourceId -> { label, repos: Map<repo, rec> }
+let dockOpen = null;          // "sourceId repo" of the open trail, or null
+let dockDirty = false;
+
+function dockIngest(ev){
+  if (ev.type !== "turn.start" && ev.type !== "turn.ended") return;
+  const repo = producerSource(ev.source) || "?";
+  let src = dockData.get(ev.sourceId);
+  if (!src) dockData.set(ev.sourceId, src = { label: ev.sourceLabel || ev.sourceId, repos: new Map() });
+  if (ev.sourceLabel) src.label = ev.sourceLabel;
+  let rec = src.repos.get(repo);
+  if (!rec) src.repos.set(repo, rec = { runs: 0, open: new Map(), trail: [], lastAt: 0 });
+  rec.lastAt = Math.max(rec.lastAt, ev.at);
+  const turnId = ev.data && ev.data.turnId;
+
+  if (ev.type === "turn.start"){
+    if (turnId) rec.open.set(turnId, ev.at);
+    rec.trail.push({ kind: "start", at: ev.at, turnId });
+  } else {
+    const startedAt = turnId != null && rec.open.has(turnId) ? rec.open.get(turnId) : null;
+    if (turnId != null) rec.open.delete(turnId);
+    rec.runs++;
+    const d = ev.data || {};
+    rec.trail.push({ kind: "end", at: ev.at, turnId,
+      status: d.status || "done", durMs: startedAt != null ? ev.at - startedAt : null,
+      numTurns: d.numTurns, costUsd: d.costUsd });
+    // the paired start row is subsumed by the finished row
+    if (startedAt != null){
+      const i = rec.trail.findIndex(r => r.kind === "start" && r.turnId === turnId);
+      if (i >= 0) rec.trail.splice(i, 1);
+    }
+  }
+  if (rec.trail.length > TRAIL_CAP) rec.trail.splice(0, rec.trail.length - TRAIL_CAP);
+  dockDirty = true;
+}
+
+function dockRunning(rec, now){
+  let n = 0;
+  for (const at of rec.open.values()) if (now - at < RUNNING_MAX_AGE) n++;
+  return n;
+}
+
+function renderDock(){
+  if (!dockWrap) return;
+  const now = Date.now();
+  // machine cards follow the Sources panel order; feed-only sources appended
+  const order = [];
+  const seen = new Set();
+  for (const s of (lastSources || [])){ order.push({ id: s.id, label: s.label, kind: s.kind }); seen.add(s.id); }
+  for (const [id, src] of dockData) if (!seen.has(id)) order.push({ id, label: src.label, kind: id === "self" ? "self" : "remote" });
+  if (!order.length){ dockWrap.innerHTML = `<div class="dock-note">No sources yet.</div>`; return; }
+
+  dockWrap.innerHTML = "";
+  for (const m of order){
+    const card = document.createElement("div");
+    card.className = "mach " + (m.kind === "self" ? "self" : "remote");
+    const src = dockData.get(m.id);
+    const repos = src ? [...src.repos.entries()].sort((a, b) => b[1].lastAt - a[1].lastAt) : [];
+    const runningTotal = repos.reduce((n, [, r]) => n + dockRunning(r, now), 0);
+    let html = `<div class="mh"><span class="lbl">${esc(m.label || m.id)}</span>` +
+      (runningTotal ? `<span class="run"><span class="ci-dot pass"></span>${runningTotal} running</span>` : "") +
+      `<span class="meta">${repos.length ? repos.length + " repo" + (repos.length === 1 ? "" : "s") : ""}</span></div>`;
+    if (!repos.length){
+      html += `<div class="none">no agent activity observed</div>`;
+      card.innerHTML = html; dockWrap.appendChild(card); continue;
+    }
+    html += `<div class="sqs">`;
+    for (const [repo, rec] of repos){
+      const running = dockRunning(rec, now);
+      const key = m.id + " " + repo;
+      const stats = [];
+      if (running) stats.push(`<span class="run"><span class="ci-dot pass"></span>${running} running</span>`);
+      if (rec.runs) stats.push(`${rec.runs} run${rec.runs === 1 ? "" : "s"}`);
+      stats.push(`last ${ago(now - rec.lastAt)}`);
+      html += `<div class="sq${running ? " live" : ""}${dockOpen === key ? " sel" : ""}" data-src="${esc(m.id)}" data-repo="${esc(repo)}"` +
+        (DISPLAY ? "" : ` role="button" tabindex="0" title="Show this repo's trail"`) +
+        `><div class="rn">${esc(repo)}</div><div class="rs">${stats.join(" · ")}</div></div>`;
+      if (dockOpen === key) html += dockTrailHtml(repo, rec, now);
+    }
+    html += `</div>`;
+    card.innerHTML = html;
+    dockWrap.appendChild(card);
+  }
+}
+
+function dockTrailHtml(repo, rec, now){
+  const rows = [...rec.trail].reverse().map(r => {
+    if (r.kind === "start"){
+      const stale = now - r.at >= RUNNING_MAX_AGE;
+      return `<div class="trow"><span class="t">${esc(fmtTime(r.at))}</span>` +
+        `<span class="st ${stale ? "" : "open"}">${stale ? "▶ started (stale, no finish seen)" : "▶ running"}</span>` +
+        `<span class="xtra">started ${ago(now - r.at)} ago</span></div>`;
+    }
+    const bits = [];
+    if (r.durMs != null) bits.push(fmtDur(r.durMs));
+    if (r.numTurns != null) bits.push(`${r.numTurns} turn${r.numTurns === 1 ? "" : "s"}`);
+    if (r.costUsd != null) bits.push(`$${r.costUsd}`);
+    return `<div class="trow"><span class="t">${esc(fmtTime(r.at))}</span>` +
+      `<span class="st ${r.status === "done" ? "done" : "error"}">${r.status === "done" ? "✔ done" : "✖ " + esc(r.status)}</span>` +
+      (bits.length ? `<span class="xtra">${bits.join(" · ")}</span>` : "") + `</div>`;
+  }).join("");
+  return `<div class="trail"><div class="th"><b>${esc(repo)}</b> · recent trail (newest first)<span class="sp"></span>` +
+    `<button data-dockact="close" title="Close">✕</button></div>${rows || `<div class="trow"><span class="xtra">nothing retained yet</span></div>`}</div>`;
+}
+
+function fmtDur(ms){
+  const s = Math.round(ms / 1000);
+  if (s < 60) return s + "s";
+  const m = Math.floor(s / 60);
+  return m < 60 ? `${m}m${String(s % 60).padStart(2, "0")}s` : `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}m`;
+}
+
+if (dockWrap && !DISPLAY){
+  dockWrap.addEventListener("click", e => {
+    if (e.target.closest("[data-dockact='close']")){ dockOpen = null; renderDock(); return; }
+    const sq = e.target.closest(".sq");
+    if (!sq) return;
+    const key = sq.dataset.src + " " + sq.dataset.repo;
+    dockOpen = dockOpen === key ? null : key;
+    renderDock();
+  });
+  dockWrap.addEventListener("keydown", e => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const sq = e.target.closest(".sq");
+    if (sq){ e.preventDefault(); sq.click(); }
+  });
+}
+
 function renderSources(list){
   lastSources = list;
   srcWrap.innerHTML = "";
@@ -523,7 +695,8 @@ async function pollEvents(){
     if (!res.ok){ setStatus("HTTP " + res.status, "err"); return; }
     const body = await res.json();
     const evs = body.events || [];
-    for (const ev of evs){ addRow(ev); total++; }
+    for (const ev of evs){ addRow(ev); dockIngest(ev); total++; }
+    if (dockDirty){ dockDirty = false; renderDock(); }
     // Sound only for genuinely new events — not the backlog the first poll (or a
     // reload) pulls from watermark -1.
     if (evs.length && !firstPoll) playForNew(evs.length);
@@ -590,6 +763,7 @@ function renderBoard(b){
   if (ghOpen && g.status === "ok" && !g.repos.some(r => r.name === ghOpen)) ghClose();
 
   renderSources(lastSources); // re-render so agents/durations refresh
+  renderDock();               // and the dock's running lights / "last X ago"
 }
 
 // --- GitHub PR drill-down (openspec github-pr-browser) -------------------------
