@@ -5,119 +5,186 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Harness Event Collector</title>
 <style>
+  /* Light theme from the dataviz reference palette: page plane / card surface /
+     ink tokens; blue = the one interactive accent; status colors (good #0ca30c,
+     warning #fab219, serious #ec835a, critical #d03b3b) go on dots, icons,
+     borders and washes — the words stay in ink (validated, icon+label rule). */
   :root{
-    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --edge:#30363d;
-    --ink:#e6edf3; --dim:#9aa7b4; --accent:#58a6ff; --good:#3fb950;
-    --bad:#f85149; --warn:#d29922; --turn:#bc8cff; --self:#3fb950; --remote:#bc8cff;
+    --bg:#f0efec; --panel:#fcfcfb; --panel2:#f4f3f0; --edge:#e1e0d9;
+    --ink:#0b0b0b; --dim:#52514e; --muted:#898781; --accent:#2a78d6; --accent-deep:#256abf;
+    --good:#0ca30c; --good-text:#006300; --bad:#d03b3b; --warn:#fab219; --serious:#ec835a;
+    --turn:#4a3aa7; --self:#008300; --remote:#4a3aa7;
+    --card-shadow:0 1px 2px rgba(11,11,11,.05), 0 1px 8px rgba(11,11,11,.04);
     --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 system-ui,Segoe UI,Roboto,sans-serif}
-  header{padding:16px 20px;border-bottom:1px solid var(--edge);display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-  h1{margin:0;font-size:17px}
+  header{padding:14px 24px;background:var(--panel);border-bottom:1px solid var(--edge);display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  h1{margin:0;font-size:17px;letter-spacing:-.01em}
   .sub{color:var(--dim);font-size:12.5px}
   .spacer{flex:1}
   .stat{font-family:var(--mono);font-size:12px;color:var(--dim);display:flex;gap:14px;flex-wrap:wrap;align-items:center}
-  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--dim);margin-right:5px;vertical-align:middle}
-  .dot.live{background:var(--good);box-shadow:0 0 8px -1px var(--good)} .dot.err{background:var(--bad)}
-  .dot.connecting{background:var(--warn)} .dot.stopped{background:var(--dim)}
-  main{padding:16px 20px 60px;max-width:1000px}
-  h2{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);margin:4px 0 10px}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);margin-right:5px;vertical-align:middle}
+  .dot.live{background:var(--good)} .dot.err{background:var(--bad)}
+  .dot.connecting{background:var(--warn)} .dot.stopped{background:var(--muted)}
+  main{padding:20px 24px 60px}
+  h2{font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;margin:4px 0 10px}
 
   /* sources */
   .sources{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
-  .src{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--edge);border-radius:9px;padding:9px 12px}
+  .src{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:10px 14px;box-shadow:var(--card-shadow)}
   .src.self{border-left:3px solid var(--self)} .src.remote{border-left:3px solid var(--remote)}
-  .src .lbl{font-weight:600} .src .addr{color:var(--dim);font-family:var(--mono);font-size:11.5px}
+  .src .lbl{font-weight:600} .src .addr{color:var(--muted);font-family:var(--mono);font-size:11.5px}
   .src .kind{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-radius:5px;padding:1px 6px}
-  .src .kind.self{color:var(--self);border:1px solid rgba(63,185,80,.45)}
-  .src .kind.remote{color:var(--remote);border:1px solid rgba(188,140,255,.5)}
+  .src .kind.self{color:var(--self);border:1px solid rgba(0,131,0,.4);background:rgba(0,131,0,.06)}
+  .src .kind.remote{color:var(--remote);border:1px solid rgba(74,58,167,.35);background:rgba(74,58,167,.06)}
   .src .st{margin-left:auto;font-size:11.5px;color:var(--dim);font-family:var(--mono)}
-  .src .st.warn{color:var(--warn)} .src .st.err{color:var(--bad)}
+  .src .st.warn{color:var(--dim)} .src .st.err{color:var(--bad)}
   .src .err{color:var(--bad);font-family:var(--mono);font-size:11px}
   .src .acts{display:flex;gap:6px}
-  button{background:var(--panel2);color:var(--ink);border:1px solid var(--edge);border-radius:7px;padding:6px 11px;cursor:pointer;font-size:12.5px}
-  button:hover{border-color:var(--accent)} button.primary{background:var(--accent);color:#08111f;border:none;font-weight:600}
-  a.btnlink{background:var(--panel2);color:var(--ink);border:1px solid var(--edge);border-radius:7px;padding:4px 9px;font-size:12px;text-decoration:none;display:inline-block}
+  button{background:var(--panel);color:var(--ink);border:1px solid var(--edge);border-radius:7px;padding:6px 11px;cursor:pointer;font-size:12.5px;box-shadow:0 1px 1px rgba(11,11,11,.04)}
+  button:hover{border-color:var(--accent)} button.primary{background:var(--accent-deep);color:#fff;border:none;font-weight:600}
+  a.btnlink{background:var(--panel);color:var(--ink);border:1px solid var(--edge);border-radius:7px;padding:4px 9px;font-size:12px;text-decoration:none;display:inline-block}
   a.btnlink:hover{border-color:var(--accent);color:var(--accent)}
-  #snd,#hsnd,#htest{padding:4px 9px;font-size:12px} #snd.on,#hsnd.on{border-color:var(--good);color:var(--good)}
+  #snd,#hsnd,#htest{padding:4px 9px;font-size:12px} #snd.on,#hsnd.on{border-color:var(--good);color:var(--good-text)}
   button:disabled{opacity:.5;cursor:default}
-  .addform{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--panel);border:1px dashed var(--edge);border-radius:9px;padding:10px 12px;margin-bottom:16px}
-  input{background:#0a0f16;border:1px solid var(--edge);border-radius:7px;color:var(--ink);padding:7px 10px;font:inherit;font-size:13px}
+  .addform{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--panel2);border:1px dashed #c3c2b7;border-radius:10px;padding:10px 12px;margin-bottom:16px}
+  input{background:#fff;border:1px solid #c3c2b7;border-radius:7px;color:var(--ink);padding:7px 10px;font:inherit;font-size:13px}
+  input::placeholder{color:var(--muted)}
   input#addr{min-width:230px;flex:1} input#label{width:150px}
   .formhint{color:var(--dim);font-size:11.5px;flex-basis:100%}
 
   /* feed */
-  table{width:100%;border-collapse:collapse;font-size:13px}
-  th{text-align:left;color:var(--dim);font-weight:500;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;padding:6px 10px;border-bottom:1px solid var(--edge)}
-  td{padding:8px 10px;border-bottom:1px solid #1b212b;vertical-align:top}
-  tr:hover td{background:#11161d}
-  .seq{font-family:var(--mono);color:var(--dim)}
+  #feedSection table{background:var(--panel);border:1px solid var(--edge);border-radius:10px;box-shadow:var(--card-shadow);overflow:hidden}
+  table{width:100%;border-collapse:separate;border-spacing:0;font-size:13px;font-variant-numeric:tabular-nums}
+  th{text-align:left;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.06em;padding:8px 12px;border-bottom:1px solid var(--edge);background:var(--panel2)}
+  td{padding:8px 12px;border-bottom:1px solid #edece7;vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  tr:hover td{background:#f4f7fb}
+  .seq{font-family:var(--mono);color:var(--muted)}
   .type{font-family:var(--mono);color:var(--turn);font-weight:600;white-space:nowrap}
   .from{font-family:var(--mono);font-size:12px;white-space:nowrap}
   .from.self{color:var(--self)} .from.remote{color:var(--remote)}
-  .data{font-family:var(--mono);font-size:12px;color:#cdd6e0;white-space:pre-wrap;word-break:break-word}
+  .data{font-family:var(--mono);font-size:12px;color:var(--dim);white-space:pre-wrap;word-break:break-word}
   .badge{display:inline-block;padding:0 7px;border-radius:20px;font-size:11px;border:1px solid var(--edge)}
-  .badge.done{color:var(--good);border-color:var(--good)} .badge.error{color:var(--bad);border-color:var(--bad)}
-  .empty{color:var(--dim);padding:34px 10px;text-align:center}
+  .badge.done{color:var(--good-text);border-color:var(--good)} .badge.error{color:var(--bad);border-color:var(--bad)}
+  .empty{color:var(--muted);padding:34px 10px;text-align:center}
   .new{animation:flash 1.2s ease}
-  @keyframes flash{from{background:rgba(88,166,255,.18)}to{background:transparent}}
-  code{background:#11161d;padding:1px 5px;border-radius:4px;font-family:var(--mono);font-size:12px}
+  @keyframes flash{from{background:rgba(42,120,214,.14)}to{background:transparent}}
+  code{background:var(--panel2);border:1px solid var(--edge);padding:1px 5px;border-radius:4px;font-family:var(--mono);font-size:12px}
 
   /* ── status sections (openspec status-monitor-dashboard, merged-page shape) ── */
-  .attn-row{display:flex;align-items:center;gap:12px;border:1px solid;border-radius:9px;padding:11px 14px;margin:0 0 8px;font-size:15px;background:var(--panel)}
+  .attn-row{display:flex;align-items:center;gap:12px;border:1px solid;border-left-width:4px;border-radius:10px;padding:11px 14px;margin:0 0 8px;font-size:15px;background:var(--panel);box-shadow:var(--card-shadow)}
   .attn-row .ic{font-size:18px;line-height:1}
   .attn-row .fix{margin-left:auto;font-size:12px;color:var(--dim);font-family:var(--mono);text-align:right}
-  .attn-row.critical{border-color:var(--bad);background:rgba(248,81,73,.09)}
-  .attn-row.serious{border-color:#ec835a;background:rgba(236,131,90,.08)}
-  .attn-row.warning{border-color:var(--warn);background:rgba(210,153,34,.08)}
-  .attn-clear{display:flex;align-items:center;gap:10px;border:1px dashed var(--edge);border-radius:9px;padding:10px 14px;color:var(--dim);font-size:13.5px}
-  .attn-clear .ic{color:var(--good)}
-  #attnWrap{margin-bottom:16px}
+  .attn-row.critical{border-color:var(--bad);background:rgba(208,59,59,.06)}
+  .attn-row.serious{border-color:var(--serious);background:rgba(236,131,90,.07)}
+  .attn-row.warning{border-color:var(--warn);background:rgba(250,178,25,.08)}
+  .attn-clear{display:flex;align-items:center;gap:10px;border:1px dashed #c3c2b7;border-radius:10px;padding:10px 14px;color:var(--dim);font-size:13.5px;background:var(--panel)}
+  .attn-clear .ic{color:var(--good-text)}
+  #attnWrap{margin-bottom:18px}
+
+  /* ── two-tab shell (openspec activity-github-tabs): attention stays pinned
+        above; Activity and GitHub are sibling tabs in interactive mode ── */
+  .tabbar{display:flex;gap:6px;border-bottom:1px solid #c3c2b7;margin:0 0 20px}
+  .tabbar .tab{background:none;border:none;border-bottom:2px solid transparent;border-radius:0;box-shadow:none;
+    color:var(--dim);padding:10px 18px;font-size:14.5px;cursor:pointer;margin-bottom:-1px}
+  .tabbar .tab:hover{color:var(--ink);border-color:#c3c2b7}
+  .tabbar .tab[aria-selected="true"]{color:var(--accent-deep);border-color:var(--accent);font-weight:600}
+  /* generic: hide every panel, show the one matching body[data-tab] */
+  .tabpanel{display:none}
+  body[data-tab="activity"] .tabpanel[data-tab="activity"],
+  body[data-tab="agents"]   .tabpanel[data-tab="agents"],
+  body[data-tab="github"]   .tabpanel[data-tab="github"]{display:block}
+  /* display mode is tabless: hide the bar, render every panel in one glance */
+  body.display .tabbar{display:none}
+  body.display .tabpanel{display:block !important}
+  h2 .hint{text-transform:none;letter-spacing:0;font-weight:400;color:var(--muted)}
+
+  /* ── agent dock (openspec agent-dock): machine cards → repo squares → trail ── */
+  .dock{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px;align-items:start}
+  .mach{background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:12px 14px;box-shadow:var(--card-shadow)}
+  .mach.self{border-left:3px solid var(--self)} .mach.remote{border-left:3px solid var(--remote)}
+  .mach .mh{display:flex;align-items:baseline;gap:8px;margin-bottom:9px}
+  .mach .mh .lbl{font-weight:600}
+  .mach .mh .meta{margin-left:auto;color:var(--muted);font-family:var(--mono);font-size:11px}
+  .dock-note,.mach .none{color:var(--muted);font-size:12.5px;border:1px dashed #c3c2b7;border-radius:8px;padding:8px 11px;background:var(--panel)}
+  .sqs{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+  .sq{border:1px solid var(--edge);border-radius:8px;padding:8px 10px;background:var(--panel2);min-width:0}
+  .sq .rn{font-family:var(--mono);font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:3px}
+  .sq .rs{font-size:11px;color:var(--dim)}
+  .sq .run{display:inline-flex;align-items:center;gap:4px;color:var(--good-text);font-weight:600}
+  .sq .run .ci-dot{background:var(--good)}
+  .sq.live{border-color:var(--good);background:rgba(12,163,12,.06)}
+  body:not(.display) .sq{cursor:pointer}
+  body:not(.display) .sq:hover{border-color:var(--accent)}
+  .sq.sel{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+  .trail{grid-column:1/-1;border:1px solid var(--edge);border-radius:8px;background:var(--panel);padding:8px 12px;margin-top:2px}
+  .trail .th{display:flex;align-items:center;gap:8px;font-size:12px;padding-bottom:6px;border-bottom:1px solid var(--edge);margin-bottom:4px}
+  .trail .th .sp{flex:1}
+  .trow{display:flex;gap:12px;align-items:baseline;font-family:var(--mono);font-size:12px;padding:3px 0;flex-wrap:wrap}
+  .trow .t{color:var(--muted)}
+  .trow .st.done{color:var(--good-text)} .trow .st.error{color:var(--bad)} .trow .st.open{color:var(--good-text);font-weight:600}
+  .trow .xtra{color:var(--dim)}
+  body.display .trail{display:none !important}
+
+  /* wide screens (the 1080p operator monitor): Activity becomes two columns —
+     sources & admin on the left, the merged feed alongside on the right */
+  @media (min-width:1400px){
+    body[data-tab="activity"] #panel-activity{display:grid;grid-template-columns:minmax(420px,560px) 1fr;gap:0 28px;
+      grid-template-areas:"sh fd" "af fd" "sr fd" ". fd";grid-template-rows:auto auto auto 1fr}
+    #panel-activity > h2{grid-area:sh}
+    #panel-activity > .addform{grid-area:af}
+    #panel-activity > .sources{grid-area:sr}
+    #panel-activity > #feedSection{grid-area:fd;min-width:0}
+    #feedSection h2{margin-top:4px}
+  }
+  body.display #panel-activity{display:block !important}
+
   .src{flex-wrap:wrap}
-  .src .agents{flex-basis:100%;display:flex;gap:14px;flex-wrap:wrap;border-top:1px solid #1b212b;margin-top:7px;padding-top:7px;font-size:12px;color:var(--dim)}
-  .src .agents .ag{font-family:var(--mono)} .src .agents .ag b{color:var(--accent);font-weight:600}
-  .gh{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:16px}
-  .repo{border:1px solid var(--edge);border-radius:9px;padding:9px 12px;background:var(--panel)}
-  .repo.red{border-color:var(--bad);background:rgba(248,81,73,.09)}
-  .repo .name{font-family:var(--mono);font-size:12.5px;margin-bottom:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .repo .ci{font-size:12px} .repo .ci.pass{color:var(--good)} .repo .ci.fail{color:var(--bad)}
-  .repo .ci.pending{color:var(--warn)} .repo .ci.none{color:var(--dim)}
+  .src .agents{flex-basis:100%;display:flex;gap:14px;flex-wrap:wrap;border-top:1px solid #edece7;margin-top:7px;padding-top:7px;font-size:12px;color:var(--dim)}
+  .src .agents .ag{font-family:var(--mono)} .src .agents .ag b{color:var(--accent-deep);font-weight:600}
+  .gh{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;margin-bottom:16px}
+  .repo{border:1px solid var(--edge);border-radius:10px;padding:11px 13px;background:var(--panel);box-shadow:var(--card-shadow)}
+  .repo.red{border-color:var(--bad);background:rgba(208,59,59,.05)}
+  .repo .name{font-family:var(--mono);font-size:12.5px;font-weight:600;margin-bottom:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .repo .ci{font-size:12px} .repo .ci.pass{color:var(--good-text)} .repo .ci.fail{color:var(--bad)}
+  .repo .ci.pending{color:var(--dim)} .repo .ci.none{color:var(--muted)}
   .repo .prs{color:var(--dim);font-size:11.5px;margin-top:4px}
-  .gh-note{color:var(--dim);font-size:12px;border:1px dashed var(--edge);border-radius:9px;padding:9px 12px}
+  .gh-note{color:var(--dim);font-size:12px;border:1px dashed #c3c2b7;border-radius:10px;padding:9px 12px;background:var(--panel)}
   #bclock{font-family:var(--mono)}
 
   /* ── GitHub PR drill-down (openspec github-pr-browser): tile → PR list → PR ── */
-  .repo.clk{cursor:pointer} .repo.clk:hover{border-color:var(--accent)}
-  .repo.sel{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
-  #ghPanel{margin:-6px 0 16px}
-  .ghp{border:1px solid var(--edge);border-radius:9px;background:var(--panel2);padding:10px 14px}
+  .repo.clk{cursor:pointer} .repo.clk:hover{border-color:var(--accent);box-shadow:0 2px 10px rgba(42,120,214,.14)}
+  .repo.sel{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent),var(--card-shadow)}
+  #ghPanel{margin:-4px 0 16px}
+  .ghp{border:1px solid var(--edge);border-radius:10px;background:var(--panel);padding:12px 16px;box-shadow:var(--card-shadow)}
   .ghp-head{display:flex;align-items:center;gap:10px;font-size:13px;padding-bottom:8px;border-bottom:1px solid var(--edge);margin-bottom:6px}
   .ghp-head .sp{flex:1}
-  .ghp-head .ext{color:var(--accent);font-size:12px;text-decoration:none}
+  .ghp-head .ext{color:var(--accent-deep);font-size:12px;text-decoration:none}
   .ghp-head .ext:hover{text-decoration:underline}
   .ghp-note{color:var(--dim);font-size:12.5px;padding:8px 2px}
-  .ghp-err{color:var(--warn);font-size:12.5px;padding:8px 2px}
-  .ghpr{display:flex;align-items:center;gap:9px;padding:7px 6px;border-radius:6px;cursor:pointer;flex-wrap:wrap}
-  .ghpr:hover{background:#11161d}
-  .ghpr .num{font-family:var(--mono);color:var(--dim);font-size:12px}
+  .ghp-err{color:var(--ink);font-size:12.5px;padding:6px 10px;background:rgba(250,178,25,.12);border:1px solid var(--warn);border-radius:7px;margin:6px 0}
+  .ghpr{display:flex;align-items:center;gap:9px;padding:8px 8px;border-radius:7px;cursor:pointer;flex-wrap:wrap}
+  .ghpr:hover{background:#f4f7fb}
+  .ghpr .num{font-family:var(--mono);color:var(--muted);font-size:12px}
   .ghpr .ttl{font-weight:600;font-size:13px}
   .ghpr .meta{margin-left:auto;color:var(--dim);font-family:var(--mono);font-size:11.5px;white-space:nowrap}
-  .ci-dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--dim);flex:none}
+  .ci-dot{width:9px;height:9px;border-radius:50%;display:inline-block;background:var(--muted);flex:none;box-shadow:inset 0 0 0 1px rgba(11,11,11,.08)}
   .ci-dot.pass{background:var(--good)} .ci-dot.fail{background:var(--bad)} .ci-dot.pending{background:var(--warn)}
   .tag{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-radius:5px;padding:0 6px;border:1px solid var(--edge);color:var(--dim)}
-  .tag.approved{color:var(--good);border-color:rgba(63,185,80,.45)}
-  .tag.changes{color:var(--bad);border-color:rgba(248,81,73,.45)}
-  .tag.review{color:var(--warn);border-color:rgba(210,153,34,.45)}
+  .tag.approved{color:var(--good-text);border-color:rgba(0,131,0,.4);background:rgba(12,163,12,.07)}
+  .tag.changes{color:var(--bad);border-color:rgba(208,59,59,.4);background:rgba(208,59,59,.06)}
+  .tag.review{color:var(--ink);border-color:var(--warn);background:rgba(250,178,25,.14)}
   .ghd .row{display:flex;gap:14px;flex-wrap:wrap;color:var(--dim);font-size:12px;font-family:var(--mono);margin:6px 0}
-  .ghd .desc{background:#0a0f16;border:1px solid var(--edge);border-radius:8px;padding:10px 12px;font-size:13px;max-height:300px;overflow:auto;margin:8px 0}
-  .ghd .desc p{margin:0 0 8px} .ghd .desc p:last-child{margin:0} .ghd .desc a{color:var(--accent)}
-  .ghd h3{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);margin:12px 0 4px}
+  .ghd .desc{background:var(--panel2);border:1px solid var(--edge);border-radius:8px;padding:10px 12px;font-size:13px;max-height:300px;overflow:auto;margin:8px 0}
+  .ghd .desc p{margin:0 0 8px} .ghd .desc p:last-child{margin:0} .ghd .desc a{color:var(--accent-deep)}
+  .ghd h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:12px 0 4px}
   .chk{font-family:var(--mono);font-size:12px;padding:2px 0}
-  .chk.ok{color:var(--good)} .chk.bad{color:var(--bad)} .chk.run{color:var(--warn)}
+  .chk.ok{color:var(--good-text)} .chk.bad{color:var(--bad)} .chk.run{color:var(--dim)}
   .fil{display:flex;gap:10px;font-family:var(--mono);font-size:12px;padding:2px 0}
   .fil .pth{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .fil .pm{margin-left:auto;white-space:nowrap} .add{color:var(--good)} .del{color:var(--bad)}
+  .fil .pm{margin-left:auto;white-space:nowrap} .add{color:var(--good-text)} .del{color:var(--bad)}
   /* display mode stays glanceable: no drill-down, no click affordance (spec) */
   body.display #ghPanel{display:none !important}
   body.display .repo{cursor:default}
@@ -127,15 +194,14 @@
   body.display .addform, body.display .acts, body.display #feedSection,
   body.display #snd, body.display #hsnd, body.display #hmode, body.display #htest,
   body.display .sub{display:none !important}
-  body.display main{max-width:none}
   body.display .attn-row{font-size:19px;padding:14px 16px} body.display .attn-row .ic{font-size:24px}
   body.display .attn-clear{font-size:16px;padding:13px 16px}
   body.display .src{padding:12px 14px;font-size:15px} body.display .src .agents{font-size:13.5px}
   body.display .repo .name{font-size:13.5px} body.display .repo .ci{font-size:13px}
   body.display h2{font-size:13px}
-  #staleBanner{position:fixed;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;background:rgba(6,9,13,.55);z-index:9;text-align:center}
+  #staleBanner{position:fixed;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;background:rgba(240,239,236,.65);backdrop-filter:blur(1.5px);z-index:9;text-align:center}
   #staleBanner.on{display:flex}
-  #staleBanner .big{font-size:22px;color:var(--warn);border:2px solid var(--warn);border-radius:12px;padding:14px 28px;background:var(--panel)}
+  #staleBanner .big{font-size:22px;color:var(--ink);border:2px solid var(--warn);border-radius:12px;padding:14px 28px;background:var(--panel);box-shadow:0 4px 24px rgba(11,11,11,.12)}
   #staleBanner .small{color:var(--dim);font-size:13px}
   main.dimmed{opacity:.35}
 </style>
@@ -165,27 +231,43 @@
     <h2>Needs me</h2>
     <div id="attn"><div class="attn-clear"><span class="ic">…</span>connecting…</div></div>
   </div>
-  <h2>Sources</h2>
-  <div class="addform">
-    <input id="addr" placeholder="http://192.168.1.42:5099" />
-    <input id="label" placeholder="label (required)" />
-    <input id="cred" type="password" autocomplete="off" placeholder="credential (write-only)" />
-    <button class="primary" id="add">+ Add harness</button>
-    <div class="formhint">Enter a harness address <b>and a label</b> to listen to it — the label names the source (and is what the host voice cue speaks). The credential is sent once and never shown again. The collector only ever <b>reads</b> a source's <code>/api/events</code>.</div>
-    <div class="formhint" id="adderr" style="display:none;color:var(--bad)"></div>
+
+  <div class="tabbar" role="tablist" aria-label="Views">
+    <button class="tab" id="tab-activity" role="tab" aria-controls="panel-activity" data-tab="activity">Activity</button>
+    <button class="tab" id="tab-agents" role="tab" aria-controls="panel-agents" data-tab="agents">Agents</button>
+    <button class="tab" id="tab-github" role="tab" aria-controls="panel-github" data-tab="github">GitHub</button>
   </div>
-  <div class="sources" id="sources"></div>
 
-  <h2>GitHub</h2>
-  <div class="gh" id="gh"><div class="gh-note">connecting…</div></div>
-  <div id="ghPanel" style="display:none"></div>
+  <div class="tabpanel" id="panel-activity" role="tabpanel" aria-labelledby="tab-activity" data-tab="activity">
+    <h2>Sources</h2>
+    <div class="addform">
+      <input id="addr" placeholder="http://192.168.1.42:5099" />
+      <input id="label" placeholder="label (required)" />
+      <input id="cred" type="password" autocomplete="off" placeholder="credential (write-only)" />
+      <button class="primary" id="add">+ Add harness</button>
+      <div class="formhint">Enter a harness address <b>and a label</b> to listen to it — the label names the source (and is what the host voice cue speaks). The credential is sent once and never shown again. The collector only ever <b>reads</b> a source's <code>/api/events</code>.</div>
+      <div class="formhint" id="adderr" style="display:none;color:var(--bad)"></div>
+    </div>
+    <div class="sources" id="sources"></div>
 
-  <div id="feedSection">
-    <h2>Merged feed</h2>
-    <table>
-      <thead><tr><th style="width:56px">seq</th><th style="width:84px">time</th><th style="width:150px">source</th><th style="width:120px">type</th><th>data</th></tr></thead>
-      <tbody id="rows"><tr><td colspan="5" class="empty">Waiting for events… self events appear automatically; add a harness to see more.</td></tr></tbody>
-    </table>
+    <div id="feedSection">
+      <h2>Merged feed</h2>
+      <table>
+        <thead><tr><th style="width:56px">seq</th><th style="width:84px">time</th><th style="width:150px">source</th><th style="width:120px">type</th><th>data</th></tr></thead>
+        <tbody id="rows"><tr><td colspan="5" class="empty">Waiting for events… self events appear automatically; add a harness to see more.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="tabpanel" id="panel-agents" role="tabpanel" aria-labelledby="tab-agents" data-tab="agents">
+    <h2>Agent dock <span class="hint">— which repos agents run on, per machine · reconstructed from the recent event trail</span></h2>
+    <div class="dock" id="dock"><div class="dock-note">connecting…</div></div>
+  </div>
+
+  <div class="tabpanel" id="panel-github" role="tabpanel" aria-labelledby="tab-github" data-tab="github">
+    <h2>GitHub</h2>
+    <div class="gh" id="gh"><div class="gh-note">connecting…</div></div>
+    <div id="ghPanel" style="display:none"></div>
   </div>
 </main>
 <div id="staleBanner">
@@ -203,6 +285,42 @@ const DISPLAY = new URLSearchParams(location.search).get("display") === "1";
 if (DISPLAY) document.body.classList.add("display");
 const toggle = document.getElementById("displayToggle");
 if (DISPLAY){ toggle.textContent = "✕ Exit display"; toggle.href = location.pathname; toggle.title = "Back to the full page (admin + log)"; }
+
+// Two-tab shell (openspec activity-github-tabs). Tab state is device-local and
+// URL-addressable, same idea as the display toggle: ?tab= wins, else localStorage,
+// else Activity. Display mode is tabless (CSS shows both panels), so we skip it.
+const TABS = ["activity", "agents", "github"];
+const tabBtns = Array.from(document.querySelectorAll(".tabbar .tab"));
+function setTab(name, push){
+  if (!TABS.includes(name)) name = "activity";
+  document.body.dataset.tab = name;
+  tabBtns.forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
+  try { localStorage.setItem("eventsapp.tab", name); } catch {}
+  if (push){
+    const u = new URL(location.href);
+    u.searchParams.set("tab", name);
+    history.replaceState(null, "", u);
+  }
+}
+if (!DISPLAY){
+  let initial = "activity";
+  try {
+    const q = new URLSearchParams(location.search).get("tab");
+    initial = TABS.includes(q) ? q : (localStorage.getItem("eventsapp.tab") || "activity");
+  } catch {}
+  setTab(initial, false);
+  tabBtns.forEach((b, i) => {
+    b.addEventListener("click", () => setTab(b.dataset.tab, true));
+    b.addEventListener("keydown", e => {
+      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+      e.preventDefault();
+      const next = tabBtns[(i + (e.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length];
+      next.focus(); setTab(next.dataset.tab, true);
+    });
+  });
+} else {
+  document.body.dataset.tab = "activity"; // harmless; CSS forces both panels visible
+}
 
 const rows = document.getElementById("rows");
 const srcWrap = document.getElementById("sources");
@@ -362,6 +480,141 @@ function ago(ms){
 }
 
 let lastSources = [];
+// ── agent dock (openspec agent-dock): reconstruct machine × repo runs from the
+//    turn.* events the feed poll already delivers. turn.start opens a run (by
+//    turnId), turn.ended closes/pairs it; finish-only runs (old harnesses that
+//    never send turn.start) still count. Client-side only — zero extra requests.
+const RUNNING_MAX_AGE = 4 * 3600 * 1000; // mirror the board's RunningMaxAge guard
+const TRAIL_CAP = 50;
+const dockWrap = document.getElementById("dock");
+const dockData = new Map();   // sourceId -> { label, repos: Map<repo, rec> }
+let dockOpen = null;          // "sourceId repo" of the open trail, or null
+let dockDirty = false;
+
+function dockIngest(ev){
+  if (ev.type !== "turn.start" && ev.type !== "turn.ended") return;
+  const repo = producerSource(ev.source) || "?";
+  let src = dockData.get(ev.sourceId);
+  if (!src) dockData.set(ev.sourceId, src = { label: ev.sourceLabel || ev.sourceId, repos: new Map() });
+  if (ev.sourceLabel) src.label = ev.sourceLabel;
+  let rec = src.repos.get(repo);
+  if (!rec) src.repos.set(repo, rec = { runs: 0, open: new Map(), trail: [], lastAt: 0 });
+  rec.lastAt = Math.max(rec.lastAt, ev.at);
+  const turnId = ev.data && ev.data.turnId;
+
+  if (ev.type === "turn.start"){
+    if (turnId) rec.open.set(turnId, ev.at);
+    rec.trail.push({ kind: "start", at: ev.at, turnId });
+  } else {
+    const startedAt = turnId != null && rec.open.has(turnId) ? rec.open.get(turnId) : null;
+    if (turnId != null) rec.open.delete(turnId);
+    rec.runs++;
+    const d = ev.data || {};
+    rec.trail.push({ kind: "end", at: ev.at, turnId,
+      status: d.status || "done", durMs: startedAt != null ? ev.at - startedAt : null,
+      numTurns: d.numTurns, costUsd: d.costUsd });
+    // the paired start row is subsumed by the finished row
+    if (startedAt != null){
+      const i = rec.trail.findIndex(r => r.kind === "start" && r.turnId === turnId);
+      if (i >= 0) rec.trail.splice(i, 1);
+    }
+  }
+  if (rec.trail.length > TRAIL_CAP) rec.trail.splice(0, rec.trail.length - TRAIL_CAP);
+  dockDirty = true;
+}
+
+function dockRunning(rec, now){
+  let n = 0;
+  for (const at of rec.open.values()) if (now - at < RUNNING_MAX_AGE) n++;
+  return n;
+}
+
+function renderDock(){
+  if (!dockWrap) return;
+  const now = Date.now();
+  // machine cards follow the Sources panel order; feed-only sources appended
+  const order = [];
+  const seen = new Set();
+  for (const s of (lastSources || [])){ order.push({ id: s.id, label: s.label, kind: s.kind }); seen.add(s.id); }
+  for (const [id, src] of dockData) if (!seen.has(id)) order.push({ id, label: src.label, kind: id === "self" ? "self" : "remote" });
+  if (!order.length){ dockWrap.innerHTML = `<div class="dock-note">No sources yet.</div>`; return; }
+
+  dockWrap.innerHTML = "";
+  for (const m of order){
+    const card = document.createElement("div");
+    card.className = "mach " + (m.kind === "self" ? "self" : "remote");
+    const src = dockData.get(m.id);
+    const repos = src ? [...src.repos.entries()].sort((a, b) => b[1].lastAt - a[1].lastAt) : [];
+    const runningTotal = repos.reduce((n, [, r]) => n + dockRunning(r, now), 0);
+    let html = `<div class="mh"><span class="lbl">${esc(m.label || m.id)}</span>` +
+      (runningTotal ? `<span class="run"><span class="ci-dot pass"></span>${runningTotal} running</span>` : "") +
+      `<span class="meta">${repos.length ? repos.length + " repo" + (repos.length === 1 ? "" : "s") : ""}</span></div>`;
+    if (!repos.length){
+      html += `<div class="none">no agent activity observed</div>`;
+      card.innerHTML = html; dockWrap.appendChild(card); continue;
+    }
+    html += `<div class="sqs">`;
+    for (const [repo, rec] of repos){
+      const running = dockRunning(rec, now);
+      const key = m.id + " " + repo;
+      const stats = [];
+      if (running) stats.push(`<span class="run"><span class="ci-dot pass"></span>${running} running</span>`);
+      if (rec.runs) stats.push(`${rec.runs} run${rec.runs === 1 ? "" : "s"}`);
+      stats.push(`last ${ago(now - rec.lastAt)}`);
+      html += `<div class="sq${running ? " live" : ""}${dockOpen === key ? " sel" : ""}" data-src="${esc(m.id)}" data-repo="${esc(repo)}"` +
+        (DISPLAY ? "" : ` role="button" tabindex="0" title="Show this repo's trail"`) +
+        `><div class="rn">${esc(repo)}</div><div class="rs">${stats.join(" · ")}</div></div>`;
+      if (dockOpen === key) html += dockTrailHtml(repo, rec, now);
+    }
+    html += `</div>`;
+    card.innerHTML = html;
+    dockWrap.appendChild(card);
+  }
+}
+
+function dockTrailHtml(repo, rec, now){
+  const rows = [...rec.trail].reverse().map(r => {
+    if (r.kind === "start"){
+      const stale = now - r.at >= RUNNING_MAX_AGE;
+      return `<div class="trow"><span class="t">${esc(fmtTime(r.at))}</span>` +
+        `<span class="st ${stale ? "" : "open"}">${stale ? "▶ started (stale, no finish seen)" : "▶ running"}</span>` +
+        `<span class="xtra">started ${ago(now - r.at)} ago</span></div>`;
+    }
+    const bits = [];
+    if (r.durMs != null) bits.push(fmtDur(r.durMs));
+    if (r.numTurns != null) bits.push(`${r.numTurns} turn${r.numTurns === 1 ? "" : "s"}`);
+    if (r.costUsd != null) bits.push(`$${r.costUsd}`);
+    return `<div class="trow"><span class="t">${esc(fmtTime(r.at))}</span>` +
+      `<span class="st ${r.status === "done" ? "done" : "error"}">${r.status === "done" ? "✔ done" : "✖ " + esc(r.status)}</span>` +
+      (bits.length ? `<span class="xtra">${bits.join(" · ")}</span>` : "") + `</div>`;
+  }).join("");
+  return `<div class="trail"><div class="th"><b>${esc(repo)}</b> · recent trail (newest first)<span class="sp"></span>` +
+    `<button data-dockact="close" title="Close">✕</button></div>${rows || `<div class="trow"><span class="xtra">nothing retained yet</span></div>`}</div>`;
+}
+
+function fmtDur(ms){
+  const s = Math.round(ms / 1000);
+  if (s < 60) return s + "s";
+  const m = Math.floor(s / 60);
+  return m < 60 ? `${m}m${String(s % 60).padStart(2, "0")}s` : `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}m`;
+}
+
+if (dockWrap && !DISPLAY){
+  dockWrap.addEventListener("click", e => {
+    if (e.target.closest("[data-dockact='close']")){ dockOpen = null; renderDock(); return; }
+    const sq = e.target.closest(".sq");
+    if (!sq) return;
+    const key = sq.dataset.src + " " + sq.dataset.repo;
+    dockOpen = dockOpen === key ? null : key;
+    renderDock();
+  });
+  dockWrap.addEventListener("keydown", e => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const sq = e.target.closest(".sq");
+    if (sq){ e.preventDefault(); sq.click(); }
+  });
+}
+
 function renderSources(list){
   lastSources = list;
   srcWrap.innerHTML = "";
@@ -442,7 +695,8 @@ async function pollEvents(){
     if (!res.ok){ setStatus("HTTP " + res.status, "err"); return; }
     const body = await res.json();
     const evs = body.events || [];
-    for (const ev of evs){ addRow(ev); total++; }
+    for (const ev of evs){ addRow(ev); dockIngest(ev); total++; }
+    if (dockDirty){ dockDirty = false; renderDock(); }
     // Sound only for genuinely new events — not the backlog the first poll (or a
     // reload) pulls from watermark -1.
     if (evs.length && !firstPoll) playForNew(evs.length);
@@ -509,6 +763,7 @@ function renderBoard(b){
   if (ghOpen && g.status === "ok" && !g.repos.some(r => r.name === ghOpen)) ghClose();
 
   renderSources(lastSources); // re-render so agents/durations refresh
+  renderDock();               // and the dock's running lights / "last X ago"
 }
 
 // --- GitHub PR drill-down (openspec github-pr-browser) -------------------------

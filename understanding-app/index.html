@@ -1,208 +1,141 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding: the in-app GitHub PR browser</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Understanding — the events-app tabs & agent dock</title>
 <style>
   :root{
-    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --edge:#30363d;
-    --ink:#e6edf3; --dim:#9aa7b4; --accent:#58a6ff; --good:#3fb950;
-    --bad:#f85149; --warn:#d29922; --purple:#bc8cff;
-    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c222b; --line:#30363d; --fg:#e6edf3; --dim:#8b949e;
+    --good:#3fb950; --warn:#d29922; --bad:#f85149; --accent:#58a6ff; --mono:ui-monospace,Consolas,monospace;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 system-ui,Segoe UI,Roboto,sans-serif;padding:28px 24px 80px}
-  main{max-width:980px;margin:0 auto}
-  h1{font-size:22px;margin:0 0 4px}
-  .sub{color:var(--dim);margin-bottom:26px}
-  h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);margin:34px 0 12px;border-bottom:1px solid var(--edge);padding-bottom:6px}
-  p{margin:10px 0}
-  code{background:#11161d;padding:1px 6px;border-radius:4px;font-family:var(--mono);font-size:13px}
-  .card{background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:16px 18px;margin:12px 0}
-  .warn-card{border-color:var(--warn);background:rgba(210,153,34,.07)}
-  .cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  @media (max-width:800px){.cols{grid-template-columns:1fr}}
+  body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.55 system-ui,Segoe UI,sans-serif;padding:28px 20px 60px}
+  .wrap{max-width:900px;margin:0 auto}
+  h1{font-size:22px;margin:0 0 4px} .sub{color:var(--dim);margin:0 0 22px}
+  h2{font-size:16px;margin:30px 0 10px;border-bottom:1px solid var(--line);padding-bottom:6px}
+  code{font-family:var(--mono);font-size:12.5px;background:#21262d;border-radius:4px;padding:1px 5px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:14px 0}
 
-  /* pipeline diagram */
-  .pipe{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;margin:14px 0}
-  .stage{flex:1;min-width:150px;background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:12px 14px;position:relative;cursor:pointer;transition:border-color .15s}
-  .stage:hover,.stage.on{border-color:var(--accent)}
-  .stage .t{font-weight:700;font-size:13.5px;margin-bottom:4px}
-  .stage .d{color:var(--dim);font-size:12px}
-  .arrow{align-self:center;padding:0 8px;color:var(--dim);font-size:20px}
-  #stageInfo{min-height:74px}
-  #stageInfo .t{color:var(--accent);font-weight:700;margin-bottom:4px}
+  /* live mock of the events-app */
+  .mock{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#0b0f14}
+  .mock .bar{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--line);font-size:12px;color:var(--dim)}
+  .mock .body{padding:14px}
+  .attn{border:1px solid var(--bad);background:rgba(248,81,73,.09);border-radius:8px;padding:9px 12px;font-size:13px;margin-bottom:12px}
+  .attn .lbl{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);display:block;margin-bottom:4px}
+  .tabbar{display:flex;gap:6px;border-bottom:1px solid var(--line);margin-bottom:14px}
+  .tabbar button{background:none;border:none;border-bottom:2px solid transparent;color:var(--dim);padding:8px 14px;font-size:13px;cursor:pointer;margin-bottom:-1px}
+  .tabbar button[aria-selected="true"]{color:var(--fg);border-color:var(--accent);font-weight:600}
+  .panel{display:none} .panel.on{display:block}
+  .panel .blk{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:12.5px;color:var(--dim)}
+  .panel .blk b{color:var(--fg)}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+  .tile{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12px}
+  .tile.red{border-color:var(--bad)}
+  /* display-mode variant: no tabs, both panels shown */
+  .mock.disp .tabbar{display:none}
+  .mock.disp .panel{display:block}
+  .mock.disp .addform{display:none}
 
-  /* live demo */
-  .demo{background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:16px}
-  .demo .hint{color:var(--dim);font-size:12.5px;margin-bottom:10px}
-  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
-  .tile{border:1px solid var(--edge);border-radius:9px;padding:9px 12px;background:var(--panel2);cursor:pointer}
-  .tile:hover{border-color:var(--accent)}
-  .tile.sel{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
-  .tile .name{font-family:var(--mono);font-size:12.5px;margin-bottom:5px}
-  .tile .ci{font-size:12px}.ci.pass{color:var(--good)}.ci.fail{color:var(--bad)}.ci.none{color:var(--dim)}
-  .tile .prs{color:var(--dim);font-size:11.5px;margin-top:4px}
-  .panel{border:1px solid var(--edge);border-radius:9px;background:var(--panel2);padding:10px 14px;margin-top:10px}
-  .phead{display:flex;align-items:center;gap:10px;font-size:13px;border-bottom:1px solid var(--edge);padding-bottom:8px;margin-bottom:6px}
-  .phead .sp{flex:1}
-  .phead button{background:var(--panel);color:var(--ink);border:1px solid var(--edge);border-radius:7px;padding:3px 10px;cursor:pointer;font-size:12px}
-  .phead button:hover{border-color:var(--accent)}
-  .prrow{display:flex;align-items:center;gap:9px;padding:7px 6px;border-radius:6px;cursor:pointer;flex-wrap:wrap}
-  .prrow:hover{background:#11161d}
-  .prrow .num{font-family:var(--mono);color:var(--dim);font-size:12px}
-  .prrow .ttl{font-weight:600;font-size:13px}
-  .prrow .meta{margin-left:auto;color:var(--dim);font-family:var(--mono);font-size:11.5px}
-  .cidot{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--dim);flex:none}
-  .cidot.pass{background:var(--good)}.cidot.fail{background:var(--bad)}
-  .tag{font-size:10.5px;font-weight:700;text-transform:uppercase;border-radius:5px;padding:0 6px;border:1px solid var(--edge);color:var(--dim)}
-  .tag.approved{color:var(--good);border-color:rgba(63,185,80,.45)}
-  .desc{background:#0a0f16;border:1px solid var(--edge);border-radius:8px;padding:10px 12px;font-size:13px;margin:8px 0}
-  .fil{display:flex;gap:10px;font-family:var(--mono);font-size:12px;padding:2px 0}
-  .fil .pm{margin-left:auto}.add{color:var(--good)}.del{color:var(--bad)}
-  .netlog{font-family:var(--mono);font-size:11.5px;color:var(--warn);margin-top:10px;min-height:18px}
-
-  .rule{display:flex;gap:12px;align-items:baseline;padding:7px 0;border-bottom:1px dashed #1b212b}
-  .rule:last-child{border-bottom:none}
-  .rule .ic{flex:none;width:22px;text-align:center}
-  .ok{color:var(--good)} .no{color:var(--bad)}
+  .ctrls{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+  button.ctl{background:var(--panel2);border:1px solid var(--line);color:var(--fg);border-radius:7px;padding:8px 13px;cursor:pointer;font-size:13px}
+  button.ctl:hover{border-color:var(--accent)} button.ctl.on{border-color:var(--accent);background:#1c2a3a}
+  table{border-collapse:collapse;width:100%;font-size:13px;margin-top:4px}
+  th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+  th{background:var(--panel)}
+  .note{color:var(--dim);font-size:12.5px}
 </style>
 </head>
 <body>
-<main>
-  <h1>The in-app GitHub PR browser</h1>
-  <div class="sub">How the events-app GitHub tiles became a drill-down — repo → open PRs → one PR — with zero Chrome tabs and zero credentials in the browser. (openspec change <code>github-pr-browser</code>)</div>
+<div class="wrap">
+  <h1>The events-app tabs & agent dock</h1>
+  <p class="sub">Three top-level tabs — Activity, Agents, GitHub — with the "needs me" attention queue pinned above all of them, and display mode left flat.</p>
 
-  <h2>Why not an iframe? (the original ask)</h2>
-  <div class="card warn-card">
-    <b>github.com refuses to be embedded.</b> Every github.com response carries
-    <code>X-Frame-Options: deny</code>, so an <code>&lt;iframe&gt;</code> of a PR page renders a blank
-    refused frame in every browser — no header, flag, or proxy trick makes it render
-    without rewriting GitHub's HTML (fragile, against ToS). So the same outcome — <i>no tabs</i> — is
-    delivered by rendering the PR <i>data</i> natively in the page, with an
-    <b>“open on GitHub ↗”</b> escape hatch for deep review.
-  </div>
-
-  <h2>The data path — click a stage</h2>
-  <div class="pipe" id="pipe">
-    <div class="stage" data-k="page"><div class="t">events-app page</div><div class="d">tile click → fetch</div></div>
-    <div class="arrow">→</div>
-    <div class="stage" data-k="ctrl"><div class="t">Harness endpoints</div><div class="d">/api/status-monitor/github/*</div></div>
-    <div class="arrow">→</div>
-    <div class="stage" data-k="svc"><div class="t">GitHubPrService</div><div class="d">cache 30s · single-flight</div></div>
-    <div class="arrow">→</div>
-    <div class="stage" data-k="gh"><div class="t">gh api graphql</div><div class="d">PAT stays in gh</div></div>
-    <div class="arrow">→</div>
-    <div class="stage" data-k="github"><div class="t">GitHub GraphQL</div><div class="d">one query per panel</div></div>
-  </div>
-  <div class="card" id="stageInfo"><div class="t">←&nbsp;pick a stage</div><div class="d">Each box explains its role in the round-trip.</div></div>
-
-  <h2>Try it — a faithful simulation of the flow</h2>
-  <div class="demo">
-    <div class="hint">This is the exact interaction shipped on the events-app page (with canned data): click a repo tile, then a PR row, then <b>← back</b> / <b>✕</b>. The amber line shows which endpoint the real page would call.</div>
-    <div class="tiles" id="tiles"></div>
-    <div class="panel" id="dpanel" style="display:none"></div>
-    <div class="netlog" id="netlog">&nbsp;</div>
-  </div>
-
-  <h2>The contract, in five rules</h2>
   <div class="card">
-    <div class="rule"><span class="ic ok">✓</span><span><b>Credential stays server-side.</b> The browser calls the Harness; the Harness shells out to <code>gh</code>, which holds the PAT. No GitHub token ever reaches a phone.</span></div>
-    <div class="rule"><span class="ic ok">✓</span><span><b>Allow-listed repos only.</b> <code>?repo=</code> must be on the board's repo list — the repositories <i>visible to the authenticated gh account</i> (non-archived, most recently pushed first, capped at 100) unioned with the registered Repos' <code>origin</code> remotes (change <code>github-repos-from-pat</code>: every fleet machine pushes as the same account, so fleet repos appear without local registration). Anything else: 404 <i>without contacting GitHub</i>. The Harness can't be used as an open GraphQL proxy.</span></div>
-    <div class="rule"><span class="ic ok">✓</span><span><b>Escape-first rendering.</b> A PR body is third-party content: it is HTML-escaped, then only http(s) URLs are autolinked. <code>&lt;script&gt;</code> in a description renders as visible text (Playwright-verified).</span></div>
-    <div class="rule"><span class="ic ok">✓</span><span><b>Panel-level degradation.</b> gh missing / unauthenticated / timeout paints an inline ⚠ in the panel; the board, tiles, and page keep polling as if nothing happened.</span></div>
-    <div class="rule"><span class="ic no">✕</span><span><b>Display mode stays inert.</b> On the wallboard (<code>?display=1</code>) tiles have no click affordance and the panel never renders — glanceable, not a control surface.</span></div>
+    <b>Why.</b> The page does two jobs: <b>agent activity across the fleet</b> (attention queue, per-machine sources, merged log) and <b>GitHub administration</b> (repo tiles, PR browser). They used to share one long scroll. Now each has its own tab — but the attention queue, the "needs me now" signal, stays <b>above</b> the tabs so an alert is never a tab-switch away.
   </div>
 
-  <h2>Where things live</h2>
-  <div class="cols">
-    <div class="card"><b>Backend</b><p style="font-size:13px"><code>Services/StatusMonitor/GitHubPrService.cs</code> — queries, per-key cache, single-flight<br><code>Controllers/StatusMonitorController.cs</code> — <code>github/prs</code>, <code>github/pr</code> routes + allow-list<br><code>GitHubStatusService.IsKnownRepo()</code> — the shared repo derivation</p></div>
-    <div class="card"><b>Frontend</b><p style="font-size:13px"><code>events-app/index.html</code> — tile affordance in <code>renderBoard</code>, the <code>#ghPanel</code> region, <code>ghShowList</code> / <code>ghShowDetail</code> / <code>fmtBody</code></p></div>
+  <h2>Try it</h2>
+  <div class="ctrls">
+    <button class="ctl on" id="c-activity">Activity tab</button>
+    <button class="ctl" id="c-github">GitHub tab</button>
+    <button class="ctl" id="c-disp">Toggle display mode</button>
   </div>
-</main>
+  <div class="mock" id="mock">
+    <div class="bar"><span>🖥 events-app</span><span id="modelabel">interactive · Activity</span></div>
+    <div class="body">
+      <div class="attn"><span class="lbl">Needs me — always pinned, outside the tabs</span>next7.birokrat.si — blocked by IP gate · monster — credential rejected</div>
+      <div class="tabbar" role="tablist">
+        <button id="t-activity" role="tab" aria-selected="true">Activity</button>
+        <button id="t-github" role="tab" aria-selected="false">GitHub</button>
+      </div>
+      <div class="panel on" id="p-activity">
+        <div class="blk addform"><b>Add harness</b> — address · label · credential (hidden in display mode)</div>
+        <div class="blk"><b>Sources</b> — DESKTOP-F9OH7AP · next7 · monster · spacex (per-machine agent status)</div>
+        <div class="blk"><b>Merged feed</b> — the event log table (hidden in display mode)</div>
+      </div>
+      <div class="panel" id="p-github">
+        <div class="tiles">
+          <div class="tile"><b>mirceta/birocode</b><br>2 open PRs</div>
+          <div class="tile red"><b>birokrat-ai-platform</b><br>✖ CI failing</div>
+          <div class="tile"><b>bojanmirceta/Prg</b><br>13 open PRs</div>
+        </div>
+        <div class="blk" style="margin-top:8px"><b>PR browser</b> — click a tile → open-PR list → PR detail</div>
+      </div>
+    </div>
+  </div>
+  <p class="note" id="explain">Interactive mode: exactly one tab shows. The attention queue sits above the tab bar either way.</p>
+
+  <h2>How the active tab is chosen (on load)</h2>
+  <div class="card" style="padding:0;overflow:auto">
+  <table>
+    <tr><th>Priority</th><th>Source</th><th>Why</th></tr>
+    <tr><td>1</td><td><code>?tab=</code> in the URL</td><td>A tab is linkable/bookmarkable — a shared link lands directly on it.</td></tr>
+    <tr><td>2</td><td><code>localStorage</code></td><td>Device-local: reopening the page resumes the tab you last used, per device.</td></tr>
+    <tr><td>3</td><td>default <b>Activity</b></td><td>First visit with no signal lands on fleet activity.</td></tr>
+  </table>
+  </div>
+  <p class="note">Selecting a tab updates both <code>localStorage</code> and the URL (via <code>history.replaceState</code>) — no reload, and no extra board poll: one poll already paints both tabs, so switching is instant DOM show/hide.</p>
+
+  <h2>The Agents tab — a dock of what runs where</h2>
+  <div class="card">
+    Every <code>turn.start</code> / <code>turn.ended</code> event in the collected feed carries its machine and the repo it ran in. The <b>Agents</b> tab assembles that: one card per machine, one <b>square per repository</b> agents have run on there — a green running light while a start has no matching finish (dropped after 4h so a crashed agent doesn't stay lit) — and clicking a square opens that machine × repo's <b>trail</b>: each run's start/finish, status, duration, turns and cost. It's reconstructed client-side from the feed the page already polls — zero extra requests — so it reaches only as far back as the collector retains: an empty dock means "no <i>recent</i> activity observed", not "nothing ever ran". Old harnesses that only send <code>turn.ended</code> still get squares and trails; their running light just never turns on.
+  </div>
+
+  <h2>Display mode is tabless</h2>
+  <div class="card">
+    Display mode (<code>?display=1</code>) is the zero-interaction wallboard for the third monitor. A tab you can't click is pointless there, so the <b>tab bar is hidden and both panels render together</b> in one enlarged glance — attention + fleet + GitHub tiles — exactly as before this change. Any <code>?tab=</code> value is ignored. Toggle it above to see the two panels flatten into one.
+  </div>
+</div>
 
 <script>
-// ---- pipeline explainer -------------------------------------------------------
-const INFO = {
-  page:  ["events-app page", "The tile carries data-repo (outside display mode). Click → fetch(API + '/status-monitor/github/prs?repo=…') with the session cookie; the response is rendered into #ghPanel. A stale-response guard (ghSeq) drops out-of-order answers after quick click-arounds."],
-  ctrl:  ["Harness endpoints", "GET github/prs?repo=owner/name and GET github/pr?repo=…&number=N on StatusMonitorController. Unknown repo → 404 before GitHub is ever contacted. GitHub trouble → { status:'error', error } with HTTP 200, so the panel shows the reason instead of a generic failure."],
-  svc:   ["GitHubPrService", "One cache entry per key ('owner/name' or 'owner/name#N'), TTL ~30s. Single-flight: concurrent clicks on the same key await one gh call. Unlike the board's 60s stale-while-refresh cache, a click past the TTL waits for fresh data — drill-down is click-driven, freshness wins."],
-  gh:    ["gh api graphql", "The query is piped via stdin (-F query=@-). The PAT lives in gh's own credential store, established once by the operator — this process and the browser never see it. 20s timeout; a timeout degrades the panel."],
-  github:["GitHub GraphQL", "List: open PRs (number, title, author, branch, draft, reviewDecision, head-commit check rollup, createdAt; first:50). Detail: body, refs, mergeable, checks (first:50), files + diff stats (first:100), review/comment counts — one query each."],
-};
-const stageInfo = document.getElementById("stageInfo");
-document.querySelectorAll(".stage").forEach(s => s.onclick = () => {
-  document.querySelectorAll(".stage").forEach(x => x.classList.toggle("on", x === s));
-  const [t, d] = INFO[s.dataset.k];
-  stageInfo.innerHTML = `<div class="t">${t}</div><div style="font-size:13.5px">${d}</div>`;
-});
+(function(){
+  const mock = document.getElementById("mock");
+  const modelabel = document.getElementById("modelabel");
+  const explain = document.getElementById("explain");
+  let tab = "activity", disp = false;
 
-// ---- interactive demo (canned data, real interaction shape) --------------------
-const REPOS = [
-  { name:"mirceta/birocode", ci:"none", prs:[
-    { n:12, t:"events-app: GitHub PR drill-down", a:"mirceta", br:"feat/status-monitor-dashboard", ci:"pass", age:"2h", rev:null,
-      body:"Click a repo tile → in-app PR list → PR detail. No Chrome tabs.", files:[["events-app/index.html",210,6],["Services/StatusMonitor/GitHubPrService.cs",290,0],["Controllers/StatusMonitorController.cs",40,9]] } ]},
-  { name:"mirceta/birokrat-ai-platform", ci:"fail", prs:[
-    { n:8, t:"ClaudeMonitor: fleet event feed (GET /api/events)", a:"mirceta-agents", br:"feat/claude-monitor-event-feed", ci:"none", age:"10h", rev:"APPROVED",
-      body:"Implements the Claude Web fleet contract so ClaudeMonitor joins the operator fleet board.", files:[["Services/EventFeed.cs",53,0],["Services/ClaudeEventBridge.cs",60,0],["Program.cs",11,2]] },
-    { n:1, t:"[WIP] Add prompt draft for constructing wiki prompt", a:"pavlin-policar", br:"kb", ci:"none", age:"88d", rev:null,
-      body:"Draft.", files:[["prompts/wiki.md",66,0]] } ]},
-  { name:"mirceta/living-room", ci:"none", prs:[] },
-];
-const tiles = document.getElementById("tiles"), dpanel = document.getElementById("dpanel"), netlog = document.getElementById("netlog");
-let open = null;
-const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-function net(u){ netlog.textContent = u ? "→ GET " + u : " "; }
-function renderTiles(){
-  tiles.innerHTML = REPOS.map(r => `<div class="tile${r.name===open?" sel":""}" data-r="${esc(r.name)}">
-    <div class="name">${esc(r.name)}</div>
-    <div class="ci ${r.ci}">${r.ci==="fail"?"✖ CI failing":r.ci==="pass"?"✓ CI green":"◦ no checks"}</div>
-    <div class="prs">${r.prs.length? r.prs.length+" open PR"+(r.prs.length>1?"s":"") : "no open PRs"}</div></div>`).join("");
-}
-function head(t, back, gh){
-  return `<div class="phead">${back?`<button data-a="back">← back</button>`:""}${t}<span class="sp"></span>${gh?`<a style="color:var(--accent);font-size:12px" href="${gh}" target="_blank" rel="noopener">open on GitHub ↗</a>`:""}<button data-a="close" title="Close">✕</button></div>`;
-}
-function showList(name){
-  open = name; renderTiles();
-  const r = REPOS.find(x => x.name === name);
-  net(`api/status-monitor/github/prs?repo=${encodeURIComponent(name)}`);
-  dpanel.style.display = "";
-  dpanel.innerHTML = `<div>${head(`<b>${esc(name)}</b> · ${r.prs.length} open PR${r.prs.length===1?"":"s"}`)}${
-    r.prs.length ? r.prs.map(p => `<div class="prrow" data-pr="${p.n}">
-      <span class="cidot ${p.ci}"></span><span class="num">#${p.n}</span><span class="ttl">${esc(p.t)}</span>
-      ${p.rev==="APPROVED"?`<span class="tag approved">approved</span>`:""}
-      <span class="meta">${esc(p.a)} · ${esc(p.br)} · ${p.age}</span></div>`).join("")
-    : `<div style="color:var(--dim);font-size:12.5px;padding:8px 2px">no open PRs</div>`}</div>`;
-}
-function showDetail(name, n){
-  const p = REPOS.find(x => x.name === name).prs.find(x => x.n === n);
-  net(`api/status-monitor/github/pr?repo=${encodeURIComponent(name)}&number=${n}`);
-  dpanel.innerHTML = `<div>${head(`<b>#${p.n}</b> ${esc(p.t)}`, true, "https://github.com/"+name+"/pull/"+n)}
-    <div style="display:flex;gap:14px;flex-wrap:wrap;color:var(--dim);font-size:12px;font-family:var(--mono);margin:6px 0">
-      <span>${esc(p.a)} · ${p.age} old</span><span>main ← ${esc(p.br)}</span><span>merge: mergeable</span>
-      <span><span class="add">+${p.files.reduce((s,f)=>s+f[1],0)}</span> <span class="del">−${p.files.reduce((s,f)=>s+f[2],0)}</span> in ${p.files.length} files</span></div>
-    <div class="desc">${esc(p.body)}</div>
-    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);margin:10px 0 4px">Files</div>
-    ${p.files.map(f => `<div class="fil"><span>${esc(f[0])}</span><span class="pm"><span class="add">+${f[1]}</span> <span class="del">−${f[2]}</span></span></div>`).join("")}</div>`;
-}
-tiles.addEventListener("click", e => {
-  const t = e.target.closest(".tile[data-r]");
-  if (!t) return;
-  if (open === t.dataset.r){ open = null; dpanel.style.display = "none"; dpanel.innerHTML = ""; net(null); renderTiles(); }
-  else showList(t.dataset.r);
-});
-dpanel.addEventListener("click", e => {
-  const a = e.target.closest("[data-a]");
-  if (a){
-    if (a.dataset.a === "close"){ open = null; dpanel.style.display = "none"; dpanel.innerHTML = ""; net(null); renderTiles(); }
-    else if (a.dataset.a === "back" && open) showList(open);
-    return;
+  function render(){
+    for (const name of ["activity", "github"]){
+      document.getElementById("p-" + name).classList.toggle("on", name === tab);
+      document.getElementById("t-" + name).setAttribute("aria-selected", String(name === tab));
+      document.getElementById("c-" + name).classList.toggle("on", name === tab && !disp);
+    }
+    mock.classList.toggle("disp", disp);
+    document.getElementById("c-disp").classList.toggle("on", disp);
+    modelabel.textContent = disp ? "display · tabless wallboard" : ("interactive · " + (tab === "activity" ? "Activity" : "GitHub"));
+    explain.textContent = disp
+      ? "Display mode: no tab bar; both panels render together for across-the-desk reading. The add-form and merged feed stay hidden."
+      : "Interactive mode: exactly one tab shows. The attention queue sits above the tab bar either way.";
   }
-  const row = e.target.closest(".prrow[data-pr]");
-  if (row && open) showDetail(open, +row.dataset.pr);
-});
-renderTiles();
+  const set = t => { tab = t; disp = false; render(); };
+  document.getElementById("c-activity").onclick = () => set("activity");
+  document.getElementById("c-github").onclick = () => set("github");
+  document.getElementById("t-activity").onclick = () => set("activity");
+  document.getElementById("t-github").onclick = () => set("github");
+  document.getElementById("c-disp").onclick = () => { disp = !disp; render(); };
+  render();
+})();
 </script>
 </body>
 </html>
