@@ -16,4 +16,4 @@
 ## 3. Ship
 
 - [x] 3.1 `openspec validate agent-dock --strict` passes; understanding-app updated with the dock
-- [ ] 3.2 events-app/ served from the working tree — live on reload once committed; operator confirms the dock on live with real fleet events
+- [x] 3.2 events-app/ served from the working tree — live on reload; operator confirmed the dock on live with real fleet events
