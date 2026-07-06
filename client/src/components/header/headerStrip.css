@@ -1,0 +1,69 @@
+/* Header status strip (openspec add-header-status-strip): full-width bar
+   directly under the sticky .app-header. It is a flex child of the locked
+   .app-frame (not inside the .app-content scroller), so it stays visible on
+   every screen; flex-shrink: 0 keeps the content area from squeezing it. */
+.header-strip {
+  flex-shrink: 0;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* Collapsed = just this slim bar; also the expand/collapse control. */
+.header-strip__toggle {
+  width: 100%;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--color-text-soft);
+  text-align: left;
+}
+
+.header-strip__toggle:hover {
+  color: var(--color-accent);
+}
+
+.header-strip__title {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.header-strip__summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header-strip__chevron {
+  margin-left: auto;
+  transition: transform 0.15s ease;
+}
+
+.header-strip:not(.header-strip--collapsed) .header-strip__chevron {
+  transform: rotate(180deg);
+}
+
+/* Same row contract the dashboard's .dash__scoreboard-row had: sections share
+   one horizontal row and wrap on narrow viewports; the Scoreboard's own
+   bottom margin is absorbed by the row padding. */
+.header-strip__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 12px;
+  padding: 0 16px 10px;
+}
+
+.header-strip__row .scoreboard {
+  flex: 1 1 320px;
+  margin-bottom: 0;
+}
