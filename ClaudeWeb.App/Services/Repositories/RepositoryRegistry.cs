@@ -182,6 +182,21 @@ public class RepositoryRegistry
         }
     }
 
+    /// <summary>Sets a repository's auto-understanding mode (openspec
+    /// auto-understanding-after-turn). No-op if the id is unknown.</summary>
+    public bool SetAutoUnderstanding(string id, bool enabled)
+    {
+        lock (_gate)
+        {
+            var repo = _repos.FirstOrDefault(r => string.Equals(r.Id, id, StringComparison.Ordinal));
+            if (repo is null) return false;
+            repo.AutoUnderstanding = enabled;
+            Save();
+            _logger.Info($"[REPO] Auto-understanding of \"{repo.Name}\" -> {(enabled ? "on" : "off")}");
+            return true;
+        }
+    }
+
     /// <summary>Sets a repository's UI-mode visibility ("basic" or "advanced"). No-op if the id is unknown.</summary>
     public bool SetVisibility(string id, string? visibility)
     {
@@ -413,6 +428,7 @@ public class RepositoryRegistry
         return new()
         {
             Id = r.Id, Name = r.Name, Path = r.Path, IsSelf = r.IsSelf, Visibility = r.Visibility,
+            AutoUnderstanding = r.AutoUnderstanding,
             LocalPort = apps.Count > 0 ? apps[0].Port : null,
             LocalApps = apps.Select(a => new LocalAppConfig { Id = a.Id, Name = a.Name, Port = a.Port, Kind = a.Kind }).ToList(),
         };

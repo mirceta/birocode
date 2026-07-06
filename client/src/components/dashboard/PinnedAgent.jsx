@@ -145,6 +145,13 @@ export default function PinnedAgent({
   const understandingBusy = understanding?.status === 'running';
   const uPollRef = useRef(null);
 
+  // Auto-understanding (openspec auto-understanding-after-turn): a per-repo,
+  // SERVER-persisted flag — when on, the backend starts the same understanding
+  // run by itself at the end of every completed builder turn (it fires with no
+  // browser attached, which is the point). The dock only views/flips the flag;
+  // same capability gate as the Ask button. Optimistic flip, reverted on error.
+  const [autoUnderstanding, setAutoUnderstanding] = useState(false);
+
   const registerApp = async (app) => {
     setRegistering(app.port);
     setRegisterErr(null);
@@ -337,6 +344,49 @@ export default function PinnedAgent({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canUnderstand, tab.repoId, fetchUnderstandingStatus]);
+
+  // Load the persisted auto flag on mount / repo-change.
+  useEffect(() => {
+    if (!canUnderstand) return undefined;
+    let alive = true;
+    setAutoUnderstanding(false);
+    (async () => {
+      try {
+        const r = await apiGet('/understanding/auto', { repoId: tab.repoId });
+        if (alive) setAutoUnderstanding(!!r.enabled);
+      } catch { /* leave off; the toggle just shows the default */ }
+    })();
+    return () => { alive = false; };
+  }, [canUnderstand, tab.repoId]);
+
+  const toggleAutoUnderstanding = async () => {
+    const next = !autoUnderstanding;
+    setAutoUnderstanding(next);
+    try {
+      await apiPost('/understanding/auto', { enabled: next }, { repoId: tab.repoId });
+    } catch {
+      setAutoUnderstanding(!next); // revert the optimistic flip
+    }
+  };
+
+  // Poll nudge: when THIS dock watches its builder turn finish while auto is on,
+  // the backend is starting (or has started) an auto-run — look for it shortly
+  // after so the spinner/result appears without a manual refresh. Short grace
+  // because the client can see the chat's "done" a beat before the server-side
+  // trigger enqueues the job.
+  const prevStatusRef = useRef(status);
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = status;
+    if (!canUnderstand || !autoUnderstanding || isAsk) return undefined;
+    if (prev !== 'running' || status !== 'done') return undefined;
+    const timer = setTimeout(async () => {
+      const r = await fetchUnderstandingStatus();
+      if (r?.status === 'running') startUPoll();
+    }, 1500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, canUnderstand, autoUnderstanding, isAsk, fetchUnderstandingStatus]);
 
   const askUnderstanding = async () => {
     try {
@@ -588,15 +638,31 @@ export default function PinnedAgent({
           lane has a conversation. */}
       {canUnderstand && !showFiles && !openApp && !showConsole && (
         <div className="phone__discover phone__understanding">
-          <button
-            type="button"
-            className="phone__discover-btn"
-            onClick={askUnderstanding}
-            disabled={understandingBusy || !tab.sessionId}
-            title={tab.sessionId ? t('dashboard.understandingHint') : t('dashboard.understandingDisabled')}
-          >
-            {understandingBusy ? t('dashboard.understandingAsking') : `🧠 ${t('dashboard.understanding')}`}
-          </button>
+          <div className="phone__understanding-row">
+            <button
+              type="button"
+              className="phone__discover-btn"
+              onClick={askUnderstanding}
+              disabled={understandingBusy || !tab.sessionId}
+              title={tab.sessionId ? t('dashboard.understandingHint') : t('dashboard.understandingDisabled')}
+            >
+              {understandingBusy ? t('dashboard.understandingAsking') : `🧠 ${t('dashboard.understanding')}`}
+            </button>
+            {/* Auto-mode toggle (openspec auto-understanding-after-turn): views/flips
+                the repo's SERVER-persisted flag — the backend re-runs understanding
+                by itself after every completed builder turn, browser or not. */}
+            <label
+              className={`phone__understanding-auto${autoUnderstanding ? ' phone__understanding-auto--on' : ''}`}
+              title={t('dashboard.understandingAutoHint')}
+            >
+              <input
+                type="checkbox"
+                checked={autoUnderstanding}
+                onChange={toggleAutoUnderstanding}
+              />
+              {t('dashboard.understandingAuto')}
+            </label>
+          </div>
           {understanding?.status === 'done' && (
             <div className="phone__discover-msg" role="status">
               {t('dashboard.understandingDone')}

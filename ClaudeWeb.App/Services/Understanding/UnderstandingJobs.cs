@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using ClaudeWeb.Services.AgenticAudit;
 using ClaudeWeb.Services.Events;
 
@@ -15,19 +14,39 @@ namespace ClaudeWeb.Services.Understanding;
 /// In-memory and latest-only per repo: a harness restart simply means "no recent
 /// run", and only the most recent job per repo is retained (the next start
 /// overwrites a terminal one) so jobs never accumulate.
+///
+/// The auto path (openspec auto-understanding-after-turn) adds one pending slot
+/// per repo: <see cref="EnqueueLatest"/> during a run remembers only the NEWEST
+/// session, and the run's completion chains it — coalescing, never queuing, so
+/// turns that finish faster than builds complete cost at most one follow-up run.
 /// </summary>
 public class UnderstandingJobs
 {
     private readonly UnderstandingAsk _ask;
     private readonly RepoEventLog _events;
     private readonly AgenticAuditLog _audit;
-    private readonly ConcurrentDictionary<string, UnderstandingJob> _jobs = new();
+    private readonly Logging.Logger _logger;
+    // One lock guards both maps: a job's terminal transition and the pending
+    // slot's consume/keep decision must be atomic together, or a pending run
+    // could be double-started or silently dropped.
+    private readonly object _gate = new();
+    private readonly Dictionary<string, UnderstandingJob> _jobs = new();
+    private readonly Dictionary<string, PendingRun> _pending = new();
 
-    public UnderstandingJobs(UnderstandingAsk ask, RepoEventLog events, AgenticAuditLog audit)
+    // Auto-triggered runs have no request-scoped identity (they fire from the
+    // RunCompleted event with no client attached), so the audit trail records
+    // them under this fixed actor.
+    private const string AutoActor = "auto";
+    private const string AutoIp = "-";
+
+    private sealed record PendingRun(string RepoName, string Path, string SessionId);
+
+    public UnderstandingJobs(UnderstandingAsk ask, RepoEventLog events, AgenticAuditLog audit, Logging.Logger logger)
     {
         _ask = ask;
         _events = events;
         _audit = audit;
+        _logger = logger;
     }
 
     /// <summary>
@@ -40,21 +59,69 @@ public class UnderstandingJobs
     /// </summary>
     public UnderstandingJob StartOrJoin(string repoId, string repoName, string workingDirectory, string sessionId, string actor, string ip)
     {
-        return _jobs.AddOrUpdate(
-            repoId,
-            _ => StartNew(repoId, repoName, workingDirectory, sessionId, actor, ip),
-            (_, existing) => existing.Status == UnderstandingStatus.Running
-                ? existing
-                : StartNew(repoId, repoName, workingDirectory, sessionId, actor, ip));
+        lock (_gate)
+        {
+            if (_jobs.TryGetValue(repoId, out var existing) && existing.Status == UnderstandingStatus.Running)
+                return existing;
+            var job = StartNew(repoId, repoName, workingDirectory, sessionId, actor, ip);
+            _jobs[repoId] = job;
+            return job;
+        }
+    }
+
+    /// <summary>
+    /// The auto-trigger's entry point (openspec auto-understanding-after-turn):
+    /// start a run now if the repo is idle/terminal (same as
+    /// <see cref="StartOrJoin"/>), else overwrite the repo's single pending slot
+    /// with this newest session; the in-flight run starts it when it finishes.
+    /// Intermediate sessions are dropped by design — a fork always explains the
+    /// transcript's latest turn, so only the newest matters. Audited as actor
+    /// "auto" (there is no request identity on this path).
+    /// </summary>
+    public UnderstandingJob EnqueueLatest(string repoId, string repoName, string workingDirectory, string sessionId)
+    {
+        lock (_gate)
+        {
+            if (_jobs.TryGetValue(repoId, out var existing) && existing.Status == UnderstandingStatus.Running)
+            {
+                _pending[repoId] = new PendingRun(repoName, workingDirectory, sessionId);
+                return existing;
+            }
+            var job = StartNew(repoId, repoName, workingDirectory, sessionId, AutoActor, AutoIp);
+            _jobs[repoId] = job;
+            return job;
+        }
     }
 
     /// <summary>The most recent job for the repo, or null if none has ever run.</summary>
-    public UnderstandingJob? Get(string repoId) =>
-        _jobs.TryGetValue(repoId, out var job) ? job : null;
+    public UnderstandingJob? Get(string repoId)
+    {
+        lock (_gate) return _jobs.GetValueOrDefault(repoId);
+    }
+
+    // Chains the pending run, if any, when a job reaches its terminal state —
+    // called at the end of every job's background task. If another run raced in
+    // and is already Running (a manual press), the pending slot is left alone:
+    // THAT run's completion will land here too and chain it then. Only the auto
+    // path writes the slot, so chained runs are audited as "auto".
+    private void StartPendingIfAny(string repoId)
+    {
+        lock (_gate)
+        {
+            if (!_pending.TryGetValue(repoId, out var next)) return;
+            if (_jobs.TryGetValue(repoId, out var existing) && existing.Status == UnderstandingStatus.Running)
+                return;
+            _pending.Remove(repoId);
+            _jobs[repoId] = StartNew(repoId, next.RepoName, next.Path, next.SessionId, AutoActor, AutoIp);
+        }
+    }
 
     private UnderstandingJob StartNew(string repoId, string repoName, string workingDirectory, string sessionId, string actor, string ip)
     {
         var job = new UnderstandingJob();
+        // Which session each run explains lands in the host log — the audit
+        // trail that a coalesced follow-up ran for the NEWEST pending session.
+        _logger.Info($"[UNDERSTANDING] run started for {repoId} (session {sessionId[..Math.Min(8, sessionId.Length)]}…)");
         // Event Console: "started" fires only here — on a genuine NEW run — so
         // joining an already-running job does not emit a duplicate start.
         _events.Emit(repoId, "understanding", "started", "Understanding",
@@ -100,6 +167,12 @@ public class UnderstandingJobs
                 job.MarkError(err);
                 _events.Emit(repoId, "understanding", "error", "Understanding", err);
                 AuditEnd("error", err);
+            }
+            finally
+            {
+                // Coalescing continuation: the terminal run itself starts the
+                // pending "latest" (if a qualifying turn landed while we ran).
+                StartPendingIfAny(repoId);
             }
         });
         return job;

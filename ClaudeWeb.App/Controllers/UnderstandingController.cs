@@ -23,6 +23,10 @@ namespace ClaudeWeb.Controllers;
 ///                                     given builder sessionId; returns job state
 ///   GET  /api/understanding/status -- the caller's repo's most recent job state,
 ///                                     for reattach on (re)load — never starts a run
+///   GET  /api/understanding/auto   -- the repo's persisted auto-understanding flag
+///   POST /api/understanding/auto   -- flip it ({ enabled }); persisted server-side
+///                                     so the trigger fires with no client attached
+///                                     (openspec auto-understanding-after-turn)
 ///
 /// Both return { repoId, repoName, status: running|done|error|idle, error?,
 /// startedAt?, finishedAt? }. Progress also lands in the per-repo Event Console as
@@ -34,13 +38,15 @@ namespace ClaudeWeb.Controllers;
 public class UnderstandingController : ControllerBase
 {
     private readonly RepositoryResolver _repos;
+    private readonly RepositoryRegistry _registry;
     private readonly UnderstandingJobs _jobs;
     private readonly AuditService _audit;
     private readonly Logger _logger;
 
-    public UnderstandingController(RepositoryResolver repos, UnderstandingJobs jobs, AuditService audit, Logger logger)
+    public UnderstandingController(RepositoryResolver repos, RepositoryRegistry registry, UnderstandingJobs jobs, AuditService audit, Logger logger)
     {
         _repos = repos;
+        _registry = registry;
         _jobs = jobs;
         _audit = audit;
         _logger = logger;
@@ -86,9 +92,46 @@ public class UnderstandingController : ControllerBase
         return Ok(JobBody(repo.Id, repo.Name, job));
     }
 
+    // The repo's persisted auto-understanding flag (openspec
+    // auto-understanding-after-turn). The dock reads this on mount/repo-change.
+    [HttpGet("auto")]
+    public IActionResult GetAuto()
+    {
+        _logger.CountRequest();
+
+        var repo = _repos.Current();
+        if (repo is null)
+            return NotFound(new { error = "No repository selected." });
+
+        return Ok(new { repoId = repo.Id, enabled = repo.AutoUnderstanding });
+    }
+
+    // Flip the flag. Persisted server-side (repositories.json) because the
+    // trigger fires with no browser attached (detached runs, autopilot loops).
+    [HttpPost("auto")]
+    public IActionResult SetAuto([FromBody] AutoRequest body)
+    {
+        _logger.CountRequest();
+
+        var repo = _repos.Current();
+        if (repo is null)
+            return NotFound(new { error = "No repository selected." });
+        if (body is null)
+            return BadRequest(new { error = "Body { enabled } is required." });
+
+        if (!_registry.SetAutoUnderstanding(repo.Id, body.Enabled))
+            return NotFound(new { error = "Repository not found." });
+        return Ok(new { repoId = repo.Id, enabled = body.Enabled });
+    }
+
     public sealed class AskRequest
     {
         public string? SessionId { get; set; }
+    }
+
+    public sealed class AutoRequest
+    {
+        public bool Enabled { get; set; }
     }
 
     // Shared projection. A null job means "no recent run" (idle); otherwise we

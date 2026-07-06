@@ -1366,6 +1366,35 @@
   color: #dc2626;
 }
 
+/* Ask-for-understanding row: the Ask button + the per-repo Auto toggle side by
+   side (openspec auto-understanding-after-turn). */
+.phone__understanding-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.phone__understanding-auto {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-text-soft);
+  cursor: pointer;
+  user-select: none;
+}
+
+.phone__understanding-auto input {
+  margin: 0;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
+.phone__understanding-auto--on {
+  color: var(--color-accent);
+}
+
 .phone__discover-list {
   list-style: none;
   margin: 0;

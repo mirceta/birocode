@@ -18,6 +18,10 @@ public static class UnderstandingModuleExtensions
         // Backend-owned per-repo job registry: singleton so one run survives client
         // disconnects and the dock can reattach to it on load (latest-only per repo).
         services.AddSingleton<UnderstandingJobs>();
+        // Auto-trigger at turn end (openspec auto-understanding-after-turn):
+        // subscribes to RunSessionService.RunCompleted at startup, so the
+        // dependency direction stays understanding -> chat.
+        services.AddHostedService<AutoUnderstandingTrigger>();
         return services;
     }
 }

@@ -3,148 +3,332 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Self-dev deploy — how the harness redeploys itself</title>
-<link rel="stylesheet" href="./styles.css">
+<title>Deploy status — rollback armed</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel2: #1c2330;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --green: #3fb950;
+    --green-dim: #238636;
+    --red: #f85149;
+    --red-dim: #da3633;
+    --amber: #d29922;
+    --blue: #58a6ff;
+    --purple: #bc8cff;
+    --mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.55;
+    padding: 24px 16px 80px;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin-bottom: 4px; }
+  h2 { font-size: 1.1rem; margin: 36px 0 12px; color: var(--blue); }
+  .sub { color: var(--muted); margin-bottom: 24px; }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+    margin-bottom: 16px;
+  }
+  code, .mono { font-family: var(--mono); font-size: 0.88em; }
+  code {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    white-space: nowrap;
+  }
+
+  /* ---- countdown banner ---- */
+  .banner {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    align-items: center;
+    border: 1px solid var(--amber);
+    background: linear-gradient(180deg, rgba(210,153,34,.10), rgba(210,153,34,.03));
+  }
+  .banner.expired { border-color: var(--red); background: linear-gradient(180deg, rgba(248,81,73,.10), rgba(248,81,73,.03)); }
+  .banner .big {
+    font-family: var(--mono);
+    font-size: 2.4rem;
+    font-weight: 700;
+    color: var(--amber);
+    min-width: 180px;
+  }
+  .banner.expired .big { color: var(--red); font-size: 1.3rem; min-width: 0; }
+  .banner .lbl { color: var(--muted); font-size: .85rem; text-transform: uppercase; letter-spacing: .08em; }
+  .pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: .78rem;
+    font-weight: 600;
+    border: 1px solid;
+    margin-right: 6px;
+  }
+  .pill.live  { color: var(--green); border-color: var(--green-dim); background: rgba(63,185,80,.1); }
+  .pill.armed { color: var(--amber); border-color: var(--amber);     background: rgba(210,153,34,.1); }
+  .pill.fired { color: var(--red);   border-color: var(--red-dim);   background: rgba(248,81,73,.1); }
+
+  /* ---- timeline ---- */
+  .timeline { position: relative; padding-left: 26px; }
+  .timeline::before {
+    content: "";
+    position: absolute; left: 8px; top: 6px; bottom: 6px;
+    width: 2px; background: var(--border);
+  }
+  .tl-item { position: relative; padding: 0 0 20px 8px; }
+  .tl-item:last-child { padding-bottom: 0; }
+  .tl-item::before {
+    content: "";
+    position: absolute; left: -24px; top: 5px;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--bg);
+    border: 3px solid var(--muted);
+  }
+  .tl-item.done::before   { border-color: var(--green); background: var(--green-dim); }
+  .tl-item.now::before    { border-color: var(--amber); background: var(--amber); box-shadow: 0 0 0 4px rgba(210,153,34,.25); }
+  .tl-item.future::before { border-color: var(--border); }
+  .tl-time { font-family: var(--mono); color: var(--muted); font-size: .82rem; }
+  .tl-title { font-weight: 600; }
+  .tl-desc { color: var(--muted); font-size: .92rem; }
+
+  /* ---- fork simulator ---- */
+  .fork-buttons { display: flex; gap: 12px; flex-wrap: wrap; margin: 14px 0 18px; }
+  button.choice {
+    flex: 1 1 220px;
+    padding: 14px 18px;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    border: 1px solid;
+    background: var(--panel2);
+    color: var(--text);
+    transition: transform .1s, box-shadow .2s;
+  }
+  button.choice:hover { transform: translateY(-2px); }
+  button.choice.keep   { border-color: var(--green-dim); }
+  button.choice.keep:hover   { box-shadow: 0 4px 18px rgba(63,185,80,.25); }
+  button.choice.ignore { border-color: var(--red-dim); }
+  button.choice.ignore:hover { box-shadow: 0 4px 18px rgba(248,81,73,.25); }
+  button.choice small { display: block; font-weight: 400; color: var(--muted); margin-top: 4px; }
+  button.choice.active.keep   { background: rgba(63,185,80,.12); }
+  button.choice.active.ignore { background: rgba(248,81,73,.12); }
+
+  .flow { display: none; }
+  .flow.visible { display: block; }
+  .step {
+    display: flex; gap: 12px; align-items: flex-start;
+    padding: 10px 12px; margin-bottom: 8px;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    opacity: 0;
+    transform: translateX(-12px);
+    transition: opacity .4s, transform .4s;
+  }
+  .step.shown { opacity: 1; transform: translateX(0); }
+  .step .num {
+    flex: 0 0 26px; height: 26px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    font-family: var(--mono); font-size: .8rem; font-weight: 700;
+  }
+  .flow.keep   .num { background: rgba(63,185,80,.15); color: var(--green); border: 1px solid var(--green-dim); }
+  .flow.ignore .num { background: rgba(248,81,73,.15); color: var(--red); border: 1px solid var(--red-dim); }
+  .step .body strong { display: block; }
+  .step .body span { color: var(--muted); font-size: .9rem; }
+  .outcome {
+    margin-top: 10px; padding: 14px;
+    border-radius: 8px; font-weight: 600;
+    opacity: 0; transition: opacity .5s;
+  }
+  .outcome.shown { opacity: 1; }
+  .flow.keep .outcome   { background: rgba(63,185,80,.1);  border: 1px solid var(--green-dim); color: var(--green); }
+  .flow.ignore .outcome { background: rgba(248,81,73,.1);  border: 1px solid var(--red-dim);  color: var(--red); }
+
+  /* ---- machinery diagram ---- */
+  .machine { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .part {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--purple);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .part.green  { border-left-color: var(--green); }
+  .part.amber  { border-left-color: var(--amber); }
+  .part.red    { border-left-color: var(--red); }
+  .part .name { font-family: var(--mono); font-weight: 700; font-size: .92rem; }
+  .part .role { color: var(--muted); font-size: .88rem; margin-top: 4px; }
+
+  .facts { width: 100%; border-collapse: collapse; }
+  .facts td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .facts tr:last-child td { border-bottom: none; }
+  .facts td:first-child { color: var(--muted); white-space: nowrap; width: 40%; }
+
+  .note { color: var(--muted); font-size: .88rem; margin-top: 10px; }
+</style>
 </head>
 <body>
-<header>
-  <h1>Deploying the harness <em>from inside the harness</em></h1>
-  <p class="sub">How the 2026-07-06 23:54 deploy shipped <code>main</code> (d3384f2) to live :5099 —
-  and why it needs a scheduled-task escape hatch and a dead-man switch.</p>
-  <nav id="tabs">
-    <button data-view="trap" class="active">1 · The trap</button>
-    <button data-view="pipeline">2 · The pipeline</button>
-    <button data-view="deadman">3 · Dead-man switch</button>
-    <button data-view="replay">4 · This deploy, replayed</button>
-  </nav>
-</header>
+<div class="wrap">
 
-<main>
+  <h1>New build is live — the dead-man's switch is armed</h1>
+  <p class="sub">What the last status update means: the auto-understanding deploy succeeded,
+  but it only <em>stays</em> live if you say <strong>"keep it"</strong> before the rollback deadline.</p>
 
-<!-- ============ VIEW 1: THE TRAP ============ -->
-<section id="view-trap" class="view active">
-  <h2>Why you can't just run <code>swap.ps1</code></h2>
-  <p>This is <strong>Self-Development</strong>: the Repo being deployed <em>is</em> the Harness.
-  The Claude session doing the deploy is a child process of the very server the deploy restarts.</p>
-
-  <div class="tree-demo">
-    <div class="tree" id="proc-tree">
-      <div class="node harness" id="n-harness">🖥️ ClaudeWeb harness <span class="port">:5099 (live)</span></div>
-      <div class="branch">
-        <div class="node session" id="n-session">🤖 Claude session <span class="tag">this conversation</span></div>
-        <div class="branch">
-          <div class="node swap" id="n-swap">📜 swap.ps1 <span class="tag">foreground child</span></div>
-        </div>
+  <!-- Countdown -->
+  <div class="card banner" id="banner">
+    <div>
+      <div class="lbl" id="cdLabel">Auto-rollback fires in</div>
+      <div class="big" id="countdown">--:--</div>
+    </div>
+    <div>
+      <div style="margin-bottom:6px">
+        <span class="pill live">NEW BUILD LIVE</span>
+        <span class="pill armed" id="armPill">ROLLBACK ARMED</span>
       </div>
-      <div class="node outside hidden" id="n-task">🗓️ Task Scheduler → deploy-keep-wrapper.ps1 <span class="tag">outside the tree, RunLevel Highest</span></div>
-    </div>
-    <div class="tree-controls">
-      <button id="btn-naive" class="danger">▶ Run swap.ps1 foreground (naive)</button>
-      <button id="btn-task" class="ok">▶ Run via scheduled task (correct)</button>
-      <button id="btn-reset-tree" class="ghost">↺ reset</button>
-      <p id="tree-caption" class="caption">swap.ps1's job includes <strong>stopping the harness</strong> before swapping binaries…</p>
+      <div class="tl-desc">Deadline: <span class="mono">22:59</span> on 2026-07-06.
+      Harness process <span class="mono">PID 26728</span>, started <span class="mono">22:44:04</span>.</div>
     </div>
   </div>
 
-  <div class="cards">
-    <div class="card">
-      <h3>The suicide problem</h3>
-      <p>Foreground <code>swap.ps1</code> stops the harness → the harness's process tree dies →
-      <strong>the Claude session and the half-finished swap die with it</strong>. Live is left stopped.</p>
-    </div>
-    <div class="card">
-      <h3>The escape hatch</h3>
-      <p>A <strong>scheduled task</strong> (<code>ClaudeWebManualDeploy</code>) runs the wrapper in a process tree
-      <em>outside</em> the harness. The swap survives the restart; only the Claude session blips and resumes.</p>
-    </div>
-    <div class="card">
-      <h3>Why RunLevel&nbsp;Highest</h3>
-      <p>The harness runs <em>elevated</em>. A non-elevated task can't kill its PID (this is exactly why the
-      auto-rollback dead-man task was once inert — robocopy exit 11). The deploy task is registered
-      <strong>RunLevel&nbsp;Highest</strong> so it can.</p>
-    </div>
-    <div class="card">
-      <h3>Today's wrinkle</h3>
-      <p><code>Register-ScheduledTask</code> was <strong>denied</strong> (0x80070005) — this shell isn't elevated.
-      But the task <em>persisted from the last deploy</em>, so a plain <code>schtasks /Run</code> was enough.
-      Starting a task you own doesn't need elevation; registering an elevated one does.</p>
-    </div>
-  </div>
-</section>
-
-<!-- ============ VIEW 2: THE PIPELINE ============ -->
-<section id="view-pipeline" class="view">
-  <h2>The full deploy pipeline</h2>
-  <p>Click a stage — or <button id="btn-walk" class="ok inline">▶ walk through</button> — to follow the order.
-  Note the two safety ideas: <strong>stage-before-stop</strong> (live keeps running until the new build is proven
-  to compile) and <strong>health-gated keep</strong> (the rollback is only disarmed after live answers 200).</p>
-
-  <div class="pipe" id="pipe"></div>
-  <div class="stage-detail" id="stage-detail">
-    <h3 id="sd-title">Select a stage</h3>
-    <p id="sd-body">Each box above is one step of the real deploy that ran tonight.</p>
-    <pre id="sd-code" class="hidden"></pre>
-  </div>
-</section>
-
-<!-- ============ VIEW 3: DEAD-MAN SWITCH ============ -->
-<section id="view-deadman" class="view">
-  <h2>The dead-man switch</h2>
-  <p><code>swap.ps1</code> snapshots live to <code>run-bin.lastgood</code>, then arms a <strong>15-minute
-  auto-rollback</strong> scheduled task. If nobody confirms the new build (<code>keep.ps1</code>), live silently
-  restores itself to last-good. The wrapper only runs <code>keep.ps1</code> after live answers
-  <code>200</code> — a broken deploy is <em>never</em> disarmed.</p>
-
-  <div class="dm-sim">
-    <div class="dm-controls">
-      <span>Simulate: after the swap, the new build…</span>
-      <button id="dm-healthy" class="ok">✅ answers 200</button>
-      <button id="dm-broken" class="danger">💥 is broken (no 200)</button>
-      <button id="dm-reset" class="ghost">↺ reset</button>
-    </div>
-    <div class="dm-stage">
-      <div class="dm-timer"><div class="dm-clock" id="dm-clock">15:00</div><div class="dm-label">until auto-rollback</div></div>
-      <div class="dm-fuse-wrap"><div class="dm-fuse" id="dm-fuse"></div></div>
-      <div class="dm-log" id="dm-log"><div class="dm-line dim">swap complete — rollback armed, probing http://localhost:5099/api/auth/check …</div></div>
+  <!-- Timeline -->
+  <h2>What just happened (the deploy timeline)</h2>
+  <div class="card">
+    <div class="timeline">
+      <div class="tl-item done">
+        <div class="tl-time">before 22:44</div>
+        <div class="tl-title">Snapshot: live build saved to <code>run-bin.lastgood</code></div>
+        <div class="tl-desc">swap.ps1 copies the currently-live binaries aside <em>before</em> touching anything — this is the safety net everything below relies on.</div>
+      </div>
+      <div class="tl-item done">
+        <div class="tl-time">~22:44</div>
+        <div class="tl-title">Stage → stop → swap → restart</div>
+        <div class="tl-desc">New build (with the auto-understanding-after-turn feature) staged, swapped into the run dir preserving <code>logs/</code> + <code>appsettings.json</code>, harness restarted on :5099.</div>
+      </div>
+      <div class="tl-item done">
+        <div class="tl-time">22:44:04</div>
+        <div class="tl-title">Health check passed — new process is live (PID 26728)</div>
+        <div class="tl-desc">Only after a healthy restart does the switch get armed.</div>
+      </div>
+      <div class="tl-item now">
+        <div class="tl-time">now</div>
+        <div class="tl-title">Rollback armed: scheduled task <code>ClaudeWebAutoRollback</code></div>
+        <div class="tl-desc">A Windows scheduled task will run <code>rollback.ps1</code> at 22:59 unless it is deleted first.</div>
+      </div>
+      <div class="tl-item future">
+        <div class="tl-time">22:59</div>
+        <div class="tl-title">The fork — see below</div>
+        <div class="tl-desc">Either you said "keep it" by now, or live auto-reverts. No operator needed for the revert; that's the point.</div>
+      </div>
     </div>
   </div>
 
-  <div class="cards">
-    <div class="card">
-      <h3>Probe loop</h3>
-      <p>Up to <strong>20 attempts × 2 s</strong> against <code>/api/auth/check</code>. One 200 → run
-      <code>keep.ps1</code> (disarm). Zero 200s → log <em>“HEALTH FAILED → NOT disarming”</em> and let the fuse burn.</p>
+  <!-- Fork simulator -->
+  <h2>The fork — click a path to see what happens</h2>
+  <div class="card">
+    <div class="fork-buttons">
+      <button class="choice keep" id="btnKeep">
+        You say "keep it"
+        <small>Claude runs keep.ps1</small>
+      </button>
+      <button class="choice ignore" id="btnIgnore">
+        You do nothing
+        <small>22:59 arrives</small>
+      </button>
     </div>
-    <div class="card">
-      <h3>Rollback = restore, not undo</h3>
-      <p><code>rollback.ps1</code> restores with <code>robocopy /MIR</code> (never copy) from the
-      <code>run-bin.lastgood</code> snapshot. And the timer uses a real <code>DateTime</code> trigger, never
-      <code>schtasks /SD</code> — a locale bug bakes those two rules in.</p>
+
+    <div class="flow keep" id="flowKeep">
+      <div class="step"><div class="num">1</div><div class="body">
+        <strong>keep.ps1 runs</strong>
+        <span>Deletes the <code>ClaudeWebAutoRollback</code> scheduled task — the timer simply ceases to exist.</span>
+      </div></div>
+      <div class="step"><div class="num">2</div><div class="body">
+        <strong>Nothing happens at 22:59</strong>
+        <span>There is no task left to fire. <code>run-bin.lastgood</code> stays on disk as a manual fallback, unused.</span>
+      </div></div>
+      <div class="step"><div class="num">3</div><div class="body">
+        <strong>New build is permanent</strong>
+        <span>The auto-understanding feature stays live; the next deploy will snapshot <em>this</em> build as the new last-good.</span>
+      </div></div>
+      <div class="outcome">✔ Outcome: new build stays live. Confirmed by a human, kept by design.</div>
     </div>
-    <div class="card">
-      <h3>Tonight</h3>
-      <p>Health came back 200 on the first probe; <code>keep.ps1</code> ran at <strong>23:54:42</strong> and the
-      <code>ClaudeWebDeadman</code> task is confirmed gone. The deploy is kept.</p>
+
+    <div class="flow ignore" id="flowIgnore">
+      <div class="step"><div class="num">1</div><div class="body">
+        <strong>22:59 — scheduled task fires</strong>
+        <span>Windows runs <code>rollback.ps1</code> with no human involved. This is the "dead man" part: silence means revert.</span>
+      </div></div>
+      <div class="step"><div class="num">2</div><div class="body">
+        <strong>Live restored from <code>run-bin.lastgood</code></strong>
+        <span>The pre-deploy snapshot is mirrored back with <code>robocopy /MIR</code> (never plain copy — stale files must die too) and the harness restarts.</span>
+      </div></div>
+      <div class="step"><div class="num">3</div><div class="body">
+        <strong>Previous build is live again</strong>
+        <span>The auto-understanding feature is gone from live (the code is still safe on the branch). Live <code>client/dist</code> reverts too — a redeploy must rebuild the frontend first.</span>
+      </div></div>
+      <div class="outcome">✘ Outcome: live auto-reverts to the last-good build. Nothing is lost, but the deploy is undone.</div>
+    </div>
+
+    <p class="note">Why it works this way: if the new build crashed the harness, you couldn't
+    use the harness to fix it — the phone UI would be dead. So the default action is
+    <em>revert</em>, and keeping the build requires a positive signal.</p>
+  </div>
+
+  <!-- Machinery -->
+  <h2>The moving parts</h2>
+  <div class="card">
+    <div class="machine">
+      <div class="part green">
+        <div class="name">swap.ps1</div>
+        <div class="role">The one canonical deploy: origin/main guard, stage-before-stop, swap, health-check, then arms the switch.</div>
+      </div>
+      <div class="part">
+        <div class="name">run-bin.lastgood</div>
+        <div class="role">Snapshot of the live build taken <em>before</em> the swap — the restore source.</div>
+      </div>
+      <div class="part amber">
+        <div class="name">ClaudeWebAutoRollback <span style="color:var(--muted);font-weight:400">(scheduled task)</span></div>
+        <div class="role">The timer. A real <code>DateTime</code> trigger (never <code>schtasks /SD</code> — locale bug). Currently set for 22:59.</div>
+      </div>
+      <div class="part red">
+        <div class="name">rollback.ps1</div>
+        <div class="role">Fires on the deadline: <code>robocopy /MIR</code> from last-good, restart live. Runs unattended.</div>
+      </div>
+      <div class="part green">
+        <div class="name">keep.ps1</div>
+        <div class="role">The disarm. Deletes the scheduled task. This is what "keep it" triggers.</div>
+      </div>
     </div>
   </div>
-</section>
 
-<!-- ============ VIEW 4: REPLAY ============ -->
-<section id="view-replay" class="view">
-  <h2>Tonight's deploy, from the real logs</h2>
-  <p>Timestamps from <code>.claudeweb-deploy/deploy-keep-wrapper.log</code> and the session itself.
-  <button id="btn-replay" class="ok inline">▶ replay</button></p>
-  <div class="timeline" id="timeline"></div>
-  <div class="verdict" id="replay-verdict">
-    <span class="big">✔</span>
-    <div><strong>Live :5099 is running the new build</strong> — merge d3384f2, health 200, rollback disarmed,
-    dead-man task deleted. Total wall clock from task start to “kept”: <strong>~29 seconds</strong>
-    (the build was pre-warmed by the dry run).</div>
+  <!-- Facts -->
+  <h2>The status at a glance</h2>
+  <div class="card">
+    <table class="facts">
+      <tr><td>What was deployed</td><td>The <code>feat/auto-understanding-after-turn</code> build — auto-refresh of the Understanding app after each chat turn</td></tr>
+      <tr><td>Live process</td><td><span class="mono">PID 26728</span>, started <span class="mono">22:44:04</span>, serving on <span class="mono">:5099</span></td></tr>
+      <tr><td>Rollback deadline</td><td><span class="mono">22:59</span>, 2026-07-06 (~15 min after the healthy restart)</td></tr>
+      <tr><td>To keep the build</td><td>Say <strong>"keep it"</strong> → <code>keep.ps1</code> disarms the task</td></tr>
+      <tr><td>If you do nothing</td><td>Live auto-reverts to <code>run-bin.lastgood</code>; the feature branch is unaffected</td></tr>
+    </table>
   </div>
-</section>
 
-</main>
-<footer>Understanding app · rolling latest · overwritten per explanation · self-dev deploy flow (2026-07-06)</footer>
+</div>
+
 <script src="./app.js"></script>
 </body>
 </html>
