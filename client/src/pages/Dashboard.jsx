@@ -38,23 +38,36 @@ function isHotTier(tier) {
   return tier === 'fresh' || tier === 'recent' || tier === 'mid';
 }
 
-// Is this repo's Local-tab app actually serving (plans/dock-local-app.md)? We
-// Dock size is a per-device "bigger/smaller" stepper: an index into SIZE_STEPS
-// that scales the square cells' width cap (height follows via aspect-ratio).
-// Default is the middle step (1.0 = the original 340/460px caps).
-const SIZE_KEY = 'claudeweb_dash_size';
-const SIZE_STEPS = [0.7, 0.85, 1, 1.2, 1.45];
-const SIZE_DEFAULT = 2;
-function clampSize(i) {
-  return Math.min(SIZE_STEPS.length - 1, Math.max(0, i));
+// Dock grid layout (openspec dock-layout-controls): per-device, per-view-family
+// render settings — docks per row (cols, 0 = auto ⌈√n⌉ with the default width
+// caps; 1–6 = exactly that many columns, docks fill the full row width) and
+// dock height (h, 0 = auto via aspect-ratio; else an explicit px height on
+// every cell). 'cards' and 'phones' are tuned independently; the hot view
+// renders phones, so it shares the phones bucket.
+const GRID_KEY = 'claudeweb_dash_grid';
+const COLS_MAX = 6;
+const CELL_H_MIN = 240;
+const CELL_H_MAX = 1500;
+const CELL_H_STEP = 20;
+const CELL_H_DEFAULT = 480; // slider position while height is still auto
+const GRID_DEFAULT = { cards: { cols: 0, h: 0 }, phones: { cols: 0, h: 0 } };
+function clampGridBucket(b) {
+  const cols = Math.min(COLS_MAX, Math.max(0, parseInt(b?.cols, 10) || 0));
+  const rawH = parseInt(b?.h, 10) || 0;
+  const h = rawH === 0 ? 0 : Math.min(CELL_H_MAX, Math.max(CELL_H_MIN, rawH));
+  return { cols, h };
 }
-function readSize() {
+function readGridLayout() {
   try {
-    const i = parseInt(localStorage.getItem(SIZE_KEY), 10);
-    return Number.isNaN(i) ? SIZE_DEFAULT : clampSize(i);
+    const raw = localStorage.getItem(GRID_KEY);
+    const v = raw ? JSON.parse(raw) : null;
+    if (v && typeof v === 'object') {
+      return { cards: clampGridBucket(v.cards), phones: clampGridBucket(v.phones) };
+    }
   } catch {
-    return SIZE_DEFAULT;
+    /* private mode / malformed */
   }
+  return GRID_DEFAULT;
 }
 
 // Content zoom (plans/dashboard-zoom.md): scales the text + controls rendered
@@ -121,6 +134,23 @@ function readIdeasSize() {
     const raw = localStorage.getItem(IDEAS_SIZE_KEY);
     const v = raw ? JSON.parse(raw) : null;
     if (v && typeof v === 'object' && (v.w || v.h)) return v;
+  } catch {
+    /* private mode / malformed */
+  }
+  return null;
+}
+
+// Free-mode horizontal resize of the agents panel from a right-edge grip
+// (openspec dock-resizable-agents-panel): width only — height keeps following
+// content. Remembered per device; double-click the grip (or reset layout)
+// clears back to full-canvas width. Grid mode never renders the grip nor
+// applies a saved width.
+const AGENTS_W_KEY = 'claudeweb_dash_agents_w';
+const AGENTS_MIN_W = 360;
+function readAgentsWidth() {
+  try {
+    const v = parseInt(localStorage.getItem(AGENTS_W_KEY), 10);
+    if (Number.isFinite(v) && v > 0) return v;
   } catch {
     /* private mode / malformed */
   }
@@ -262,32 +292,61 @@ export default function Dashboard({ onClose }) {
       /* private mode — fall back to in-memory only */
     }
   }
-  // "Bigger/smaller" dock size, stepped and remembered per device.
-  const [sizeIdx, setSizeIdx] = useState(readSize);
-  function stepSize(delta) {
-    setSizeIdx((prev) => {
-      const next = clampSize(prev + delta);
+  // Dock grid layout (cols/height per view family), remembered per device.
+  // `gridBucketKey` picks which bucket the current view reads and edits.
+  const [gridLayout, setGridLayout] = useState(readGridLayout);
+  const gridBucketKey = view === 'cards' ? 'cards' : 'phones';
+  const gridBucket = gridLayout[gridBucketKey];
+  function patchGridBucket(patch) {
+    setGridLayout((prev) => {
+      const next = {
+        ...prev,
+        [gridBucketKey]: clampGridBucket({ ...prev[gridBucketKey], ...patch }),
+      };
       try {
-        localStorage.setItem(SIZE_KEY, String(next));
+        localStorage.setItem(GRID_KEY, JSON.stringify(next));
       } catch {
         /* private mode — fall back to in-memory only */
       }
       return next;
     });
   }
-  // Content zoom for what's rendered INSIDE the docks (the embedded chat),
-  // remembered per device. Distinct from the window-size stepper above.
-  const [contentZoom, setContentZoom] = useState(readZoom);
-  function stepZoom(delta) {
-    setContentZoom((prev) => {
-      const next = clampZoom(prev + delta);
-      try {
-        localStorage.setItem(ZOOM_KEY, String(next));
-      } catch {
-        /* private mode — fall back to in-memory only */
+  // The Layout popover (openspec dock-layout-controls): one compact trigger on
+  // the shared bar; closes on Escape or any pointer-down outside it.
+  const [layoutOpen, setLayoutOpen] = useState(false);
+  const layoutRef = useRef(null);
+  useEffect(() => {
+    if (!layoutOpen) return undefined;
+    function onDown(e) {
+      if (layoutRef.current && !layoutRef.current.contains(e.target)) setLayoutOpen(false);
+    }
+    function onKey(e) {
+      // Capture + stopPropagation: Escape closes JUST the popover — the
+      // overlay's own window-level Escape handler (Layout.jsx) must not also
+      // fire and close the whole dashboard underneath us.
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        setLayoutOpen(false);
       }
-      return next;
-    });
+    }
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKey, true);
+    };
+  }, [layoutOpen]);
+  // Content zoom for what's rendered INSIDE the docks (the embedded chat),
+  // remembered per device. Set directly from the Layout popover's slider.
+  const [contentZoom, setContentZoom] = useState(readZoom);
+  function setZoomTo(value) {
+    const next = clampZoom(value);
+    setContentZoom(next);
+    try {
+      localStorage.setItem(ZOOM_KEY, String(next));
+    } catch {
+      /* private mode — fall back to in-memory only */
+    }
   }
 
   // "Show only important agents" filter — device-local, default off.
@@ -381,6 +440,47 @@ export default function Dashboard({ onClose }) {
     }
   }
 
+  // Free-mode horizontal drag-resize of the agents panel from its right-edge
+  // grip — same pointer pattern as the Ideas grip, width only.
+  const agentsPanelRef = useRef(null);
+  const [agentsW, setAgentsW] = useState(readAgentsWidth);
+  const agentsResizeRef = useRef(null);
+  function startAgentsResize(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = agentsPanelRef.current?.getBoundingClientRect();
+    agentsResizeRef.current = { startX: e.clientX, baseW: rect?.width ?? AGENTS_MIN_W };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  }
+  function moveAgentsResize(e) {
+    const r = agentsResizeRef.current;
+    if (!r) return;
+    const maxW = Math.round(window.innerWidth * 0.95);
+    setAgentsW(Math.max(AGENTS_MIN_W, Math.min(maxW, Math.round(r.baseW + (e.clientX - r.startX)))));
+  }
+  function endAgentsResize() {
+    if (!agentsResizeRef.current) return;
+    agentsResizeRef.current = null;
+    setAgentsW((w) => {
+      if (w) {
+        try {
+          localStorage.setItem(AGENTS_W_KEY, String(w));
+        } catch {
+          /* private mode — in-memory only */
+        }
+      }
+      return w;
+    });
+  }
+  function clearAgentsWidth() {
+    setAgentsW(null);
+    try {
+      localStorage.removeItem(AGENTS_W_KEY);
+    } catch {
+      /* private mode */
+    }
+  }
+
   // Autopilot mission-control joins the dashboard as a third drag-layout citizen
   // (plans/autopilot-to-harness.md) only when its feature is on; otherwise it's
   // absent and the layout is just Ideas + agents, exactly as before.
@@ -466,6 +566,9 @@ export default function Dashboard({ onClose }) {
   function resetLayout() {
     setPositions({});
     writePositions({});
+    // The agents-panel width is part of the free layout too — ↺ means "back
+    // to flow", and a leftover width would make reset look broken.
+    clearAgentsWidth();
   }
 
   // Layout mode: 'free' drag vs 'grid' snap (plans/dashboard-drag-layout.md).
@@ -530,8 +633,10 @@ export default function Dashboard({ onClose }) {
   // Lay agents out in a grid that approximates a square (columns = ⌈√n⌉) rather
   // than one long row: 4 → 2×2, 6 → 3×2, 10 → 4×3. When the filter is on, pack
   // by the visible (important) count so the grid doesn't keep empty columns.
+  // An explicit per-row choice from the Layout popover overrides the auto count.
   const visibleCount = onlyImportant ? importantCount : tabs.length;
-  const columns = Math.max(1, Math.ceil(Math.sqrt(visibleCount)));
+  const autoColumns = Math.max(1, Math.ceil(Math.sqrt(visibleCount)));
+  const columns = gridBucket.cols > 0 ? gridBucket.cols : autoColumns;
 
   // Recency tiers are derived against "now"; recomputed each render. The 5s poll
   // re-renders via setLive, so the borders age without a separate timer.
@@ -843,51 +948,85 @@ export default function Dashboard({ onClose }) {
   return (
     <div className="dash">
       <div className="dash__header">
-        <h2 className="dash__title">{t('dashboard.title')}</h2>
+        {/* Dock toolbar (openspec add-dashboard-dock-toolbar / dashboard-slim-chrome):
+            leads the shared header bar, listing the full roster so hidden docks
+            stay reachable. Gated on the roster, not the visible `tabs`, so it
+            still shows (all-inactive) when every dock is hidden. */}
+        <DockToolbar tabs={rosterTabs} onToggle={toggleDashboard} />
         {tabs.length > 0 && (
-          <div className="dash__size" role="group" aria-label={t('dashboard.size')}>
+          // Layout popover (openspec dock-layout-controls): the one trigger that
+          // replaced the −/+ size stepper and A−/A+ zoom buttons. Per-row and
+          // height edit the current view family's bucket; zoom is global.
+          <div className="dash__layout-pop" ref={layoutRef}>
             <button
               type="button"
-              className="dash__size-btn"
-              onClick={() => stepSize(-1)}
-              disabled={sizeIdx <= 0}
-              aria-label={t('dashboard.sizeSmaller')}
+              className={`dash__layout-btn${layoutOpen ? ' dash__layout-btn--on' : ''}`}
+              onClick={() => setLayoutOpen((o) => !o)}
+              aria-expanded={layoutOpen}
+              aria-haspopup="true"
+              title={t('dashboard.layout')}
+              aria-label={t('dashboard.layout')}
             >
-              &minus;
+              ▤
             </button>
-            <button
-              type="button"
-              className="dash__size-btn"
-              onClick={() => stepSize(1)}
-              disabled={sizeIdx >= SIZE_STEPS.length - 1}
-              aria-label={t('dashboard.sizeBigger')}
-            >
-              +
-            </button>
-          </div>
-        )}
-        {tabs.length > 0 && (
-          <div className="dash__zoom" role="group" aria-label={t('dashboard.zoom')}>
-            <button
-              type="button"
-              className="dash__zoom-btn"
-              onClick={() => stepZoom(-ZOOM_STEP)}
-              disabled={contentZoom <= ZOOM_MIN}
-              aria-label={t('dashboard.zoomOut')}
-              title={t('dashboard.zoomOut')}
-            >
-              A&minus;
-            </button>
-            <button
-              type="button"
-              className="dash__zoom-btn"
-              onClick={() => stepZoom(ZOOM_STEP)}
-              disabled={contentZoom >= ZOOM_MAX}
-              aria-label={t('dashboard.zoomIn')}
-              title={t('dashboard.zoomIn')}
-            >
-              A+
-            </button>
+            {layoutOpen && (
+              <div className="dash__layout-menu" role="group" aria-label={t('dashboard.layout')}>
+                <div className="dash__layout-row" role="group" aria-label={t('dashboard.perRow')}>
+                  <span className="dash__layout-label">{t('dashboard.perRow')}</span>
+                  <div className="dash__layout-seg">
+                    {[0, 1, 2, 3, 4, 5, 6].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        className={`dash__layout-seg-btn${gridBucket.cols === n ? ' dash__layout-seg-btn--on' : ''}`}
+                        onClick={() => patchGridBucket({ cols: n })}
+                        aria-pressed={gridBucket.cols === n}
+                      >
+                        {n === 0 ? t('dashboard.auto') : n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="dash__layout-row" role="group" aria-label={t('dashboard.height')}>
+                  <span className="dash__layout-label">{t('dashboard.height')}</span>
+                  <button
+                    type="button"
+                    className={`dash__layout-seg-btn${gridBucket.h === 0 ? ' dash__layout-seg-btn--on' : ''}`}
+                    onClick={() => patchGridBucket({ h: 0 })}
+                    aria-pressed={gridBucket.h === 0}
+                  >
+                    {t('dashboard.auto')}
+                  </button>
+                  <input
+                    type="range"
+                    className="dash__layout-slider"
+                    min={CELL_H_MIN}
+                    max={CELL_H_MAX}
+                    step={CELL_H_STEP}
+                    value={gridBucket.h || CELL_H_DEFAULT}
+                    onChange={(e) => patchGridBucket({ h: parseInt(e.target.value, 10) })}
+                    aria-label={t('dashboard.height')}
+                  />
+                  <span className="dash__layout-value">
+                    {gridBucket.h > 0 ? `${gridBucket.h}px` : t('dashboard.auto')}
+                  </span>
+                </div>
+                <div className="dash__layout-row" role="group" aria-label={t('dashboard.zoom')}>
+                  <span className="dash__layout-label">{t('dashboard.zoom')}</span>
+                  <input
+                    type="range"
+                    className="dash__layout-slider"
+                    min={ZOOM_MIN}
+                    max={ZOOM_MAX}
+                    step={ZOOM_STEP}
+                    value={contentZoom}
+                    onChange={(e) => setZoomTo(parseFloat(e.target.value))}
+                    aria-label={t('dashboard.zoom')}
+                  />
+                  <span className="dash__layout-value">{Math.round(contentZoom * 100)}%</span>
+                </div>
+              </div>
+            )}
           </div>
         )}
         {tabs.length > 0 && (
@@ -902,7 +1041,7 @@ export default function Dashboard({ onClose }) {
             >
               {free ? '⤢' : '▦'}
             </button>
-            {free && freePlaced && (
+            {free && (freePlaced || !!agentsW) && (
               <button
                 type="button"
                 className="dash__swap"
@@ -981,11 +1120,6 @@ export default function Dashboard({ onClose }) {
         >
           &times;
         </button>
-        {/* Dock toolbar (openspec add-dashboard-dock-toolbar): its own wrapped
-            row of the header, listing the full roster so hidden docks stay
-            reachable. Gated on the roster, not the visible `tabs`, so it still
-            shows (all-inactive) when every dock is hidden. */}
-        <DockToolbar tabs={rosterTabs} onToggle={toggleDashboard} />
       </div>
 
       <div
@@ -1099,10 +1233,30 @@ export default function Dashboard({ onClose }) {
           )}
         </aside>
         <div
+          ref={agentsPanelRef}
           data-panel="agents"
           className={`dash__main${dragKey === 'agents' ? ' dash__panel--lifted' : ''}`}
-          style={free ? posStyle('agents') : undefined}
+          style={{
+            ...(free ? posStyle('agents') : null),
+            // A saved drag-width applies in free mode only. flex 0 0 auto lets
+            // the width win even in the not-yet-placed flex flow (the canvas
+            // only goes display:block once a panel has been dragged).
+            ...(free && agentsW ? { width: agentsW, maxWidth: '100%', flex: '0 0 auto' } : null),
+          }}
         >
+          {free && (
+            <span
+              className="dash__main-resize"
+              role="separator"
+              aria-label="Resize agents panel"
+              title="Drag to resize · double-click to reset"
+              onPointerDown={startAgentsResize}
+              onPointerMove={moveAgentsResize}
+              onPointerUp={endAgentsResize}
+              onPointerCancel={endAgentsResize}
+              onDoubleClick={clearAgentsWidth}
+            />
+          )}
           {free && (
             <div className="dash__main-head">
               <button
@@ -1129,16 +1283,19 @@ export default function Dashboard({ onClose }) {
         <p className="dash__empty">{t('dashboard.onlyImportantEmpty')}</p>
       ) : (
         <ul
-          className={`dash__grid${view !== 'cards' ? ' dash__grid--phones' : ''}`}
+          className={`dash__grid${view !== 'cards' ? ' dash__grid--phones' : ''}${gridBucket.h > 0 ? ' dash__grid--fixed-h' : ''}`}
           style={{
-            // All layouts cap their columns so cells stay square (height tracks
-            // width via aspect-ratio) and centred, instead of stretching into wide
-            // rectangles. Phones (and the mixed "hot" view, which can hold phones)
-            // get a larger cap since they render live chats.
+            // Auto keeps the width-capped, centred near-square layout (cards
+            // 340px, phones/hot 460px — they render live chats). An explicit
+            // per-row count switches to equal 1fr tracks so the docks fill the
+            // whole row width: fewer per row = wider docks, no side gutters.
             gridTemplateColumns:
-              view === 'cards'
-                ? `repeat(${columns}, minmax(0, ${Math.round(340 * SIZE_STEPS[sizeIdx])}px))`
-                : `repeat(${columns}, minmax(0, ${Math.round(460 * SIZE_STEPS[sizeIdx])}px))`,
+              gridBucket.cols > 0
+                ? `repeat(${columns}, minmax(0, 1fr))`
+                : `repeat(${columns}, minmax(0, ${view === 'cards' ? 340 : 460}px))`,
+            // Explicit dock height rides a CSS var; dash__grid--fixed-h points
+            // every cell at it (over aspect-ratio) in dashboard.css.
+            ...(gridBucket.h > 0 ? { '--dash-cell-h': `${gridBucket.h}px` } : null),
           }}
         >
           {orderedTabs.map((tab) => {
