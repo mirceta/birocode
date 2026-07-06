@@ -140,6 +140,23 @@ function readIdeasSize() {
   return null;
 }
 
+// Free-mode horizontal resize of the agents panel from a right-edge grip
+// (openspec dock-resizable-agents-panel): width only — height keeps following
+// content. Remembered per device; double-click the grip (or reset layout)
+// clears back to full-canvas width. Grid mode never renders the grip nor
+// applies a saved width.
+const AGENTS_W_KEY = 'claudeweb_dash_agents_w';
+const AGENTS_MIN_W = 360;
+function readAgentsWidth() {
+  try {
+    const v = parseInt(localStorage.getItem(AGENTS_W_KEY), 10);
+    if (Number.isFinite(v) && v > 0) return v;
+  } catch {
+    /* private mode / malformed */
+  }
+  return null;
+}
+
 // Free 2D drag layout (plans/dashboard-drag-layout.md): each panel is positioned
 // absolutely at a saved {x,y} inside the dashboard canvas. Remembered per device.
 // DEFAULT_POS = null means "use the natural flow position" (Ideas left, agents
@@ -423,6 +440,47 @@ export default function Dashboard({ onClose }) {
     }
   }
 
+  // Free-mode horizontal drag-resize of the agents panel from its right-edge
+  // grip — same pointer pattern as the Ideas grip, width only.
+  const agentsPanelRef = useRef(null);
+  const [agentsW, setAgentsW] = useState(readAgentsWidth);
+  const agentsResizeRef = useRef(null);
+  function startAgentsResize(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = agentsPanelRef.current?.getBoundingClientRect();
+    agentsResizeRef.current = { startX: e.clientX, baseW: rect?.width ?? AGENTS_MIN_W };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  }
+  function moveAgentsResize(e) {
+    const r = agentsResizeRef.current;
+    if (!r) return;
+    const maxW = Math.round(window.innerWidth * 0.95);
+    setAgentsW(Math.max(AGENTS_MIN_W, Math.min(maxW, Math.round(r.baseW + (e.clientX - r.startX)))));
+  }
+  function endAgentsResize() {
+    if (!agentsResizeRef.current) return;
+    agentsResizeRef.current = null;
+    setAgentsW((w) => {
+      if (w) {
+        try {
+          localStorage.setItem(AGENTS_W_KEY, String(w));
+        } catch {
+          /* private mode — in-memory only */
+        }
+      }
+      return w;
+    });
+  }
+  function clearAgentsWidth() {
+    setAgentsW(null);
+    try {
+      localStorage.removeItem(AGENTS_W_KEY);
+    } catch {
+      /* private mode */
+    }
+  }
+
   // Autopilot mission-control joins the dashboard as a third drag-layout citizen
   // (plans/autopilot-to-harness.md) only when its feature is on; otherwise it's
   // absent and the layout is just Ideas + agents, exactly as before.
@@ -508,6 +566,9 @@ export default function Dashboard({ onClose }) {
   function resetLayout() {
     setPositions({});
     writePositions({});
+    // The agents-panel width is part of the free layout too — ↺ means "back
+    // to flow", and a leftover width would make reset look broken.
+    clearAgentsWidth();
   }
 
   // Layout mode: 'free' drag vs 'grid' snap (plans/dashboard-drag-layout.md).
@@ -980,7 +1041,7 @@ export default function Dashboard({ onClose }) {
             >
               {free ? '⤢' : '▦'}
             </button>
-            {free && freePlaced && (
+            {free && (freePlaced || !!agentsW) && (
               <button
                 type="button"
                 className="dash__swap"
@@ -1172,10 +1233,30 @@ export default function Dashboard({ onClose }) {
           )}
         </aside>
         <div
+          ref={agentsPanelRef}
           data-panel="agents"
           className={`dash__main${dragKey === 'agents' ? ' dash__panel--lifted' : ''}`}
-          style={free ? posStyle('agents') : undefined}
+          style={{
+            ...(free ? posStyle('agents') : null),
+            // A saved drag-width applies in free mode only. flex 0 0 auto lets
+            // the width win even in the not-yet-placed flex flow (the canvas
+            // only goes display:block once a panel has been dragged).
+            ...(free && agentsW ? { width: agentsW, maxWidth: '100%', flex: '0 0 auto' } : null),
+          }}
         >
+          {free && (
+            <span
+              className="dash__main-resize"
+              role="separator"
+              aria-label="Resize agents panel"
+              title="Drag to resize · double-click to reset"
+              onPointerDown={startAgentsResize}
+              onPointerMove={moveAgentsResize}
+              onPointerUp={endAgentsResize}
+              onPointerCancel={endAgentsResize}
+              onDoubleClick={clearAgentsWidth}
+            />
+          )}
           {free && (
             <div className="dash__main-head">
               <button

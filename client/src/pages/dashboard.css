@@ -368,6 +368,37 @@
 .dash__main {
   flex: 1 1 480px;
   min-width: 0;
+  position: relative; /* anchors the free-mode right-edge resize grip */
+}
+
+/* Free-mode width grip on the agents panel (openspec
+   dock-resizable-agents-panel): horizontal-only resize, so a right-EDGE strip
+   (ew-resize), not an Ideas-style 2D corner grip. The width itself rides
+   inline on .dash__main; height keeps following content. */
+.dash__main-resize {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 10px;
+  cursor: ew-resize;
+  color: var(--color-text-soft, #8a8a85);
+  touch-action: none; /* pointer-drag on touch without page scroll */
+  z-index: 10;
+}
+.dash__main-resize::after {
+  content: '';
+  position: absolute;
+  right: 3px;
+  top: 50%;
+  height: 28px;
+  transform: translateY(-50%);
+  border-right: 2px solid currentColor;
+  border-radius: 2px;
+  opacity: 0.5;
+}
+.dash__main-resize:hover {
+  color: var(--color-accent, #b85c00);
 }
 
 /* Square-ish grid — the column count (⌈√n⌉) is set inline by Dashboard.jsx so
