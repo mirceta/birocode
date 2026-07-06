@@ -13,6 +13,12 @@ import './accountChips.css';
 //   Claude → GET /api/claude-account  { claudeInstalled, authenticated, account, plan }
 // Open/closed state is per device (localStorage), independent per chip — mirroring
 // the Scoreboard's own collapse idiom.
+//
+// The Claude chip additionally polls GET /api/claude-usage (openspec
+// add-claude-usage) and renders plan-usage meters (5h window / weekly quota /
+// per-model weekly) in its EXPANDED body, below the identity rows. Usage is
+// strictly additive: any usage failure renders a muted "unavailable" line and
+// must never disturb the identity rows or the collapsed chip.
 const POLL_MS = 5000;
 
 function readCollapsed(key) {
@@ -47,8 +53,23 @@ function useAccountProbe(endpoint) {
   return data;
 }
 
+// A usage meter row's value cell: small percent bar + "54% · resets 15:50".
+// `tone` (warn) tints the bar when the backend reports severity ≠ normal.
+function UsageMeter({ percent, text, tone }) {
+  const pct = Math.max(0, Math.min(100, Math.round(percent)));
+  return (
+    <span className={`acct-chip__meter${tone ? ` acct-chip__meter--${tone}` : ''}`}>
+      <span className="acct-chip__bar" aria-hidden="true">
+        <span className="acct-chip__bar-fill" style={{ width: `${pct}%` }} />
+      </span>
+      <span className="acct-chip__meter-txt">{text}</span>
+    </span>
+  );
+}
+
 // Presentational chip. `state` ∈ loading | ok | unauth | missing drives the dot
 // color; `handle` is the one-line collapsed label; `rows` are the expanded detail.
+// A row with `meter` renders a UsageMeter as its value; `muted` greys the row.
 function AccountChip({ kind, title, state, handle, rows, collapseKey }) {
   const [collapsed, setCollapsed] = useState(() => readCollapsed(collapseKey));
 
@@ -80,10 +101,18 @@ function AccountChip({ kind, title, state, handle, rows, collapseKey }) {
       </span>
       {!collapsed && rows.length > 0 && (
         <span className="acct-chip__body">
-          {rows.map((r) => (
-            <span className="acct-chip__row" key={r.label}>
-              <span className="acct-chip__rk">{r.label}</span>
-              <span className={`acct-chip__rv${r.tone ? ` acct-chip__rv--${r.tone}` : ''}`}>{r.value}</span>
+          {rows.map((r, i) => (
+            <span className="acct-chip__row" key={`${i}:${r.label}`}>
+              <span className={`acct-chip__rk${r.muted ? ' acct-chip__rk--muted' : ''}`}>{r.label}</span>
+              {r.meter ? (
+                <UsageMeter {...r.meter} />
+              ) : (
+                <span
+                  className={`acct-chip__rv${r.tone ? ` acct-chip__rv--${r.tone}` : ''}${r.muted ? ' acct-chip__rv--muted' : ''}`}
+                >
+                  {r.value}
+                </span>
+              )}
             </span>
           ))}
         </span>
@@ -126,8 +155,50 @@ function githubView(data, t) {
   };
 }
 
-// Map the Claude probe payload → chip view.
-function claudeView(data, t) {
+// "resets 15:50" for a same-day reset, "resets Tue 15:50" further out; null when
+// the upstream timestamp is missing/unparseable (the row then shows percent only).
+function formatReset(resetsAt, t) {
+  if (!resetsAt) return null;
+  const d = new Date(resetsAt);
+  if (Number.isNaN(d.getTime())) return null;
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const sameDay = Date.now() + 24 * 60 * 60 * 1000 > d.getTime();
+  const when = sameDay ? time : `${d.toLocaleDateString([], { weekday: 'short' })} ${time}`;
+  return t('account.usage.resets', { time: when });
+}
+
+// One usage entry → a meter row. Severity ≠ normal tints the row (amber).
+function usageRow(label, entry, t) {
+  if (!entry || typeof entry.percent !== 'number') return null;
+  const reset = formatReset(entry.resetsAt, t);
+  const text = `${Math.round(entry.percent)}%${reset ? ` · ${reset}` : ''}`;
+  const tone = entry.severity && entry.severity !== 'normal' ? 'warn' : null;
+  return { label, meter: { percent: entry.percent, text, tone } };
+}
+
+// Map GET /api/claude-usage → extra rows for the expanded chip. Strictly
+// additive and fail-soft: unavailable (or still loading after an error) becomes
+// one muted line; identity rows are built elsewhere and never touched here.
+function usageRows(usage, t) {
+  if (!usage) return []; // first poll still in flight — show nothing yet
+  if (!usage.available) {
+    return [{ label: t('account.usage.label'), value: t('account.usage.unavailable'), muted: true }];
+  }
+  const rows = [
+    usageRow(t('account.usage.session'), usage.session, t),
+    usageRow(t('account.usage.weekly'), usage.weekly, t),
+    ...(usage.scopedWeekly || []).map((s) => usageRow(s.label || t('account.usage.model'), s, t)),
+  ].filter(Boolean);
+  if (usage.stale) {
+    rows.push({ label: t('account.usage.label'), value: t('account.usage.stale'), muted: true });
+  }
+  return rows;
+}
+
+// Map the Claude probe payload (+ usage probe) → chip view. Usage rows are
+// appended only in the authenticated view: without a session there is no quota
+// to meter, and the unauth/missing states keep their exact previous shape.
+function claudeView(data, usage, t) {
   if (!data) return { state: 'loading', handle: t('account.checking'), rows: [] };
   const yes = { value: t('account.yes'), tone: 'yes' };
   const no = { value: t('account.no'), tone: 'no' };
@@ -157,6 +228,7 @@ function claudeView(data, t) {
       { label: t('account.loggedIn'), ...yes },
       { label: t('account.account'), value: data.account || '—' },
       { label: t('account.plan'), value: data.plan || '—' },
+      ...usageRows(usage, t),
     ],
   };
 }
@@ -165,10 +237,11 @@ export default function AccountChips() {
   const { t } = useT();
   const github = useAccountProbe('/github-account');
   const claude = useAccountProbe('/claude-account');
+  const usage = useAccountProbe('/claude-usage'); // backend caches for minutes; polling stays cheap
   const tokenControlOn = useFeature('githubTokenControl');
 
   const gh = githubView(github, t);
-  const cl = claudeView(claude, t);
+  const cl = claudeView(claude, usage, t);
 
   return (
     <div className="acct-strip" aria-label={t('account.title')}>

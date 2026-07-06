@@ -138,6 +138,56 @@
   color: var(--color-danger);
 }
 
+/* Plan-usage meter rows (openspec add-claude-usage): live in the same expanded
+   grid as the identity rows — bar + "54% · resets 15:50" in the value column, so
+   usage costs rows, not a second visual block. Amber = severity ≠ normal,
+   reusing the chip's unauth tone; muted = the fail-soft "usage unavailable" /
+   stale hint lines. */
+.acct-chip__meter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.acct-chip__bar {
+  flex: 0 0 52px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--color-border);
+  overflow: hidden;
+}
+
+.acct-chip__bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: #2e7d32;
+}
+
+.acct-chip__meter--warn .acct-chip__bar-fill {
+  background: #b7791f;
+}
+
+.acct-chip__meter-txt {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--color-text);
+}
+
+.acct-chip__meter--warn .acct-chip__meter-txt {
+  color: #b7791f;
+  font-weight: 600;
+}
+
+.acct-chip__rk--muted,
+.acct-chip__rv--muted {
+  color: var(--color-text-soft);
+  font-style: italic;
+}
+
 /* GitHub chip + its token control stack as one column so the control sits directly
    under the chip it configures (openspec add-git-identity-surface). */
 .acct-col {
