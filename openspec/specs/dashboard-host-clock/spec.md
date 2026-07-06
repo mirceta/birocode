@@ -18,30 +18,36 @@ fields and MUST NOT derive the time from anything the client sent.
   that moment (DST included)
 
 ### Requirement: Dashboard host clock display
-The dashboard SHALL display the host computer's wall-clock time on the
-Scoreboard row, alongside the Scoreboard and the account chips. The displayed
-time MUST be the host's local time — computed from the probe's instant and UTC
-offset — and MUST NOT be formatted in the viewing device's timezone. The
-display SHALL include the host's UTC offset so the reading is unambiguous.
+
+The header status strip SHALL display the host computer's wall-clock time,
+alongside the Scoreboard and the account chips (the clock moves out of the
+dashboard's Scoreboard row, which no longer exists). The displayed time MUST
+be the host's local time — computed from the probe's instant and UTC offset —
+and MUST NOT be formatted in the viewing device's timezone. The display SHALL
+include the host's UTC offset so the reading is unambiguous.
 
 #### Scenario: Viewer in a different timezone
-- **WHEN** the dashboard is viewed from a device whose timezone differs from
-  the host's
+
+- **WHEN** the strip is expanded on a device whose timezone differs from the
+  host's
 - **THEN** the clock shows the host's wall time (with its UTC offset), not the
   device's local time
 
 ### Requirement: Live ticking with periodic resync
-While the dashboard is open, the clock SHALL tick at one-second resolution
-using a locally computed skew from the last successful probe, and SHALL resync
-against `GET /api/host-time` on the Scoreboard row's polling cadence rather
-than polling every second.
+
+While the header status strip is expanded, the clock SHALL tick at one-second
+resolution using a locally computed skew from the last successful probe, and
+SHALL resync against `GET /api/host-time` on the strip's polling cadence
+rather than polling every second.
 
 #### Scenario: Clock advances between polls
-- **WHEN** the dashboard stays open between two probe polls
+
+- **WHEN** the strip stays expanded between two probe polls
 - **THEN** the displayed time keeps advancing every second without additional
   API requests
 
 #### Scenario: Offset change is picked up
+
 - **WHEN** the host's UTC offset changes (e.g. a DST transition) after the
   clock was first synced
 - **THEN** a subsequent resync updates the displayed wall time and offset to
@@ -63,14 +69,18 @@ successful resync.
 - **THEN** the stale marker is removed and the clock reflects the fresh probe
 
 ### Requirement: Advanced-mode gating
+
 The host clock SHALL be registered in the UI-mode capability map as an
-Advanced-mode feature, so Basic mode's dashboard is unchanged.
+Advanced-mode feature, so Basic mode is unchanged (in Basic mode the whole
+header status strip is absent anyway).
 
 #### Scenario: Basic mode unchanged
+
 - **WHEN** a device is in Basic (Simple) UI mode
-- **THEN** the Scoreboard row renders without the host clock
+- **THEN** no host clock renders anywhere
 
 #### Scenario: Advanced mode shows the clock
-- **WHEN** a device is in Advanced UI mode
-- **THEN** the Scoreboard row includes the host clock
+
+- **WHEN** a device is in Advanced UI mode and the strip is expanded
+- **THEN** the strip includes the host clock
 
