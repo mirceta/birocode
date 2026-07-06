@@ -152,7 +152,7 @@ function StudioShell() {
           // bottom nav / pane strip (plans/agent-dashboard.md). Top bar stays
           // visible so the same button (or Escape, or the in-overlay ×) closes.
           // Requires dashEnabled too, so Basic mode never renders it.
-          <main className="app-content">
+          <main className="app-content app-content--dash">
             <Dashboard onClose={() => setDashOpen(false)} />
           </main>
         ) : multi ? (

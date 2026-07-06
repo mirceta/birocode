@@ -325,6 +325,13 @@ button.app-header__title.app-header__title--active:hover {
   container-type: inline-size;
 }
 
+/* Dashboard overlay (openspec dock-layout-controls): screen space belongs to
+   the docks — no top inset above the docks bar, thin sides, and no bottom-nav
+   allowance (the nav is hidden while the dashboard is open). */
+.app-content--dash {
+  padding: 0 6px 8px;
+}
+
 /* ---- Multi-pane desktop layout (plans/multi-pane.md) ------------------- */
 
 /* The frame drops its phone-column cap while the strip is active. */

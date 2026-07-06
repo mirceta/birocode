@@ -1,9 +1,10 @@
 /* Agent dashboard — grid overview of all dock agents (plans/agent-dashboard.md) */
 
-/* Full-screen overlay: fills the content region the studio normally uses
-   (.app-content is the scroller, so this just lays out and pads). */
+/* Full-screen overlay: fills the content region the studio normally uses.
+   Zero own padding (openspec dock-layout-controls): the thin inset lives on
+   .app-content--dash, and the docks bar must start flush at the very top. */
 .dash {
-  padding: 8px 12px;
+  padding: 0;
 }
 
 .dash__header {
@@ -14,8 +15,8 @@
      the control groups trail on the same line; wrap only exists so the controls
      can drop below the docks bar on viewports too narrow to fit both. */
   flex-wrap: wrap;
-  row-gap: 6px;
-  margin-bottom: 6px;
+  row-gap: 4px;
+  margin-bottom: 4px;
 }
 
 /* Dock toolbar (openspec add-dashboard-dock-toolbar / dashboard-slim-chrome):
@@ -125,7 +126,7 @@
 .dash__body {
   display: flex;
   align-items: flex-start;
-  gap: 20px;
+  gap: 10px;
   flex-wrap: wrap;
   position: relative; /* anchors the drag-layout drop-zone overlay */
 }
@@ -376,10 +377,25 @@
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 20px;
-  /* Both views are width-capped (see Dashboard.jsx), so centre the grid rather
-     than leaving the cells clinging to the left. */
+  /* Minimal cell gap (openspec dock-layout-controls): dock content, not
+     chrome, consumes the screen. */
+  gap: 8px;
+  /* Auto layout is width-capped (see Dashboard.jsx), so centre the grid rather
+     than leaving the cells clinging to the left. Explicit per-row uses 1fr
+     tracks, which fill the row regardless. */
   justify-content: center;
+}
+
+/* Explicit dock height (openspec dock-layout-controls): the grid carries
+   --dash-cell-h and every dock box takes it over its aspect-ratio. The height
+   lands on the dock boxes, not the row track, because a "together" group <li>
+   stacks several docks inside one track. overflow guards clipped card text. */
+.dash__grid--fixed-h .dash-cell,
+.dash__grid--fixed-h .dash__phone-cell {
+  height: var(--dash-cell-h);
+  aspect-ratio: auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* The whole cell is the click target (opens that agent — no separate button). */
@@ -387,14 +403,14 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
   /* Square-ish: height tracks the (capped) width instead of a fixed strip, so
      a couple of agents don't become wide rectangles. min-height keeps a floor
      when the column shrinks on narrow screens. */
   aspect-ratio: 1 / 1;
   min-height: 240px;
-  padding: 28px;
+  padding: 12px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   background: var(--color-surface);
@@ -687,8 +703,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 10px;
+  gap: 8px;
+  padding: 6px;
   border: 1px dashed var(--color-border);
   border-radius: var(--radius);
   background: rgba(0, 0, 0, 0.02);
@@ -831,66 +847,115 @@
   background: var(--color-surface);
 }
 
-/* "Bigger/smaller" stepper — mirrors the views pill, sits just left of it and
-   carries the margin-left:auto that pushes both controls to the right. */
-.dash__size {
-  display: flex;
-  gap: 2px;
+/* Layout popover (openspec dock-layout-controls): one compact trigger holding
+   all dock-render controls — per row, height, content zoom. The wrapper carries
+   the margin-left:auto that pushes the whole control cluster to the right. */
+.dash__layout-pop {
+  position: relative;
   margin-left: auto;
   margin-right: 12px;
+}
+
+.dash__layout-btn {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: 999px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--color-text-soft);
+  cursor: pointer;
+}
+
+.dash__layout-btn:hover,
+.dash__layout-btn--on {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* Anchored under the trigger, above the grid. Right-aligned so it never
+   overflows the viewport from its right-of-bar home. */
+.dash__layout-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 320px;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+}
+
+.dash__layout-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dash__layout-label {
+  flex: 0 0 58px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-soft);
+}
+
+.dash__layout-seg {
+  display: flex;
+  gap: 2px;
   padding: 2px;
   border: 1px solid var(--color-border);
   border-radius: 999px;
-  background: var(--color-surface);
 }
 
-.dash__size-btn {
+.dash__layout-seg-btn {
   border: none;
   background: none;
   border-radius: 999px;
-  width: 28px;
-  height: 26px;
-  font-size: 16px;
-  line-height: 1;
+  min-width: 26px;
+  height: 24px;
+  padding: 0 7px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--color-text-soft);
   cursor: pointer;
 }
 
-.dash__size-btn:disabled {
-  opacity: 0.35;
-  cursor: default;
+.dash__layout-seg-btn--on {
+  background: var(--color-accent);
+  color: #fff;
 }
 
-/* Content zoom (plans/dashboard-zoom.md): A−/A+ scales what's INSIDE the docks
-   (the embedded chat), separate from the window-size stepper. */
-.dash__zoom {
-  display: flex;
-  gap: 2px;
-  margin-right: 12px;
-  padding: 2px;
+/* The height "Auto" pill sits alone (outside a .dash__layout-seg), so it needs
+   its own border to read as a button. */
+.dash__layout-row > .dash__layout-seg-btn {
   border: 1px solid var(--color-border);
-  border-radius: 999px;
-  background: var(--color-surface);
 }
 
-.dash__zoom-btn {
-  border: none;
-  background: none;
-  border-radius: 999px;
-  min-width: 30px;
-  height: 26px;
-  padding: 0 6px;
-  font-size: 13px;
-  line-height: 1;
-  font-weight: 700;
+.dash__layout-row > .dash__layout-seg-btn--on {
+  border-color: var(--color-accent);
+}
+
+.dash__layout-slider {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--color-accent);
+}
+
+.dash__layout-value {
+  flex: 0 0 44px;
+  text-align: right;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
   color: var(--color-text-soft);
-  cursor: pointer;
-}
-
-.dash__zoom-btn:disabled {
-  opacity: 0.35;
-  cursor: default;
 }
 
 /* Reset-layout button (plans/dashboard-drag-layout.md) — sits in the header
@@ -1046,7 +1111,7 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 10px 12px;
+  padding: 6px 8px;
   border: none;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface);
@@ -1065,7 +1130,7 @@
   display: flex;
   gap: 2px;
   flex: 0 0 auto;
-  padding: 6px 12px;
+  padding: 4px 8px;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface);
 }
@@ -1098,7 +1163,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  padding: 7px 12px;
+  padding: 4px 8px;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface);
 }
@@ -1136,7 +1201,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 8px 12px;
+  padding: 6px 8px;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface);
 }
@@ -1530,7 +1595,7 @@
      off, composer unreachable). Standalone Chat avoids this via a fixed
      composer; embedded keeps the composer in-flow, so it needs the floor. */
   min-height: 0;
-  padding: 12px 12px 16px;
+  padding: 8px 8px 10px;
 }
 
 .chat--embedded .chat-input {
