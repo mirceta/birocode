@@ -12,6 +12,9 @@ public static class AccountsModuleExtensions
     {
         services.AddSingleton<GitHubAccountService>();
         services.AddSingleton<ClaudeAccountService>();
+        // Plan-usage probe (openspec add-claude-usage): 5-hour window + weekly quota
+        // via Anthropic's OAuth usage endpoint, cached for minutes.
+        services.AddSingleton<ClaudeUsageService>();
         // Write-only credential control (openspec add-git-identity-surface): reuses
         // the GitHub probe to re-derive the account after establishing a token.
         services.AddSingleton<GitHubCredentialsService>();
