@@ -32,5 +32,5 @@
 ## 6. Convention & validation
 
 - [x] 6.1 Build/overwrite `understanding-app/index.html` to visualize the eval loop (fixture → real discovery → score → prompt delta), self-contained with relative URLs.
-- [ ] 6.2 Run `openspec validate add-discovery-eval --strict` and fix any issues.
-- [ ] 6.3 Run the eval against the baseline prompt to capture a first ground-truthed score as the optimization starting point.
+- [x] 6.2 Run `openspec validate add-discovery-eval --strict` and fix any issues.
+- [x] 6.3 Run the eval against the baseline prompt to capture a first ground-truthed score as the optimization starting point.

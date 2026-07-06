@@ -1,241 +1,150 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Discovery Eval — measuring "did we find every app?"</title>
-<style>
-  :root {
-    --bg:#0e1116; --panel:#171c24; --panel2:#1e2530; --edge:#2a3341;
-    --ink:#e6edf3; --dim:#8b98a9; --good:#3fb950; --bad:#f0603a;
-    --warn:#d9a441; --link:#58a6ff; --accent:#a371f7;
-  }
-  * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--ink);
-    font:15px/1.55 -apple-system,Segoe UI,Roboto,sans-serif; }
-  .wrap { max-width:980px; margin:0 auto; padding:28px 20px 80px; }
-  h1 { font-size:24px; margin:0 0 6px; }
-  h2 { font-size:17px; margin:34px 0 12px; }
-  .sub { color:var(--dim); margin:0 0 8px; }
-  .card { background:var(--panel); border:1px solid var(--edge); border-radius:12px;
-    padding:18px; margin:14px 0; }
-  code { background:#0b0e13; border:1px solid var(--edge); border-radius:5px;
-    padding:1px 6px; font-family:ui-monospace,Consolas,monospace; font-size:13px; }
-
-  /* pipeline */
-  .pipe { display:flex; align-items:stretch; gap:10px; flex-wrap:wrap; justify-content:center; }
-  .stage { background:var(--panel2); border:1px solid var(--edge); border-radius:10px;
-    padding:12px 14px; min-width:150px; max-width:200px; text-align:center; }
-  .stage b { display:block; margin-bottom:4px; }
-  .stage small { color:var(--dim); font-size:12px; line-height:1.4; display:block; }
-  .stage.hot { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
-  .arr { align-self:center; color:var(--dim); font-size:20px; }
-
-  /* fixture demo */
-  .cols { display:flex; gap:16px; flex-wrap:wrap; }
-  .col { flex:1; min-width:280px; }
-  .tree { font-family:ui-monospace,Consolas,monospace; font-size:13px; line-height:1.8; }
-  .tree .row { display:flex; align-items:center; gap:8px; padding:1px 8px; border-radius:6px;
-    cursor:pointer; user-select:none; }
-  .tree .row:hover { background:#232b38; }
-  .tree .tag { font-size:11px; padding:0 7px; border-radius:20px; border:1px solid; flex:none; }
-  .tag.app { color:var(--good); border-color:var(--good); }
-  .tag.decoy { color:var(--warn); border-color:var(--warn); }
-  .tree .chk { width:16px; text-align:center; flex:none; }
-  .found .chk { color:var(--good); }
-  .missed .chk { color:var(--bad); }
-
-  .score { display:flex; gap:14px; flex-wrap:wrap; margin:12px 0; }
-  .metric { background:var(--panel2); border:1px solid var(--edge); border-radius:10px;
-    padding:10px 18px; text-align:center; min-width:110px; }
-  .metric .v { font-size:24px; font-weight:700; }
-  .metric .k { color:var(--dim); font-size:12px; }
-  .v.ok { color:var(--good); } .v.notok { color:var(--bad); }
-  .lists { font-size:13px; }
-  .lists .miss { color:var(--bad); } .lists .extra { color:var(--warn); }
-  button { background:var(--panel2); color:var(--ink); border:1px solid var(--edge);
-    border-radius:8px; padding:7px 14px; cursor:pointer; font-size:13px; }
-  button:hover { border-color:var(--link); }
-  .hint { color:var(--dim); font-size:12px; margin-top:8px; }
-
-  /* runs strip */
-  .runs { display:flex; gap:6px; margin:10px 0; flex-wrap:wrap; }
-  .run { width:34px; height:34px; border-radius:8px; display:flex; align-items:center;
-    justify-content:center; font-size:12px; font-weight:700; border:1px solid var(--edge); }
-  .run.p { background:rgba(63,185,80,.15); color:var(--good); border-color:var(--good); }
-  .run.f { background:rgba(240,96,58,.15); color:var(--bad); border-color:var(--bad); }
-
-  table { border-collapse:collapse; width:100%; font-size:14px; margin-top:6px; }
-  th,td { border:1px solid var(--edge); padding:8px 10px; text-align:left; }
-  th { background:var(--panel2); color:var(--dim); font-weight:600; }
-  .delta.up { color:var(--good); font-weight:700; }
-  .delta.dn { color:var(--bad); font-weight:700; }
-  .foot { color:var(--dim); font-size:12px; margin-top:26px; text-align:center; }
-</style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Self-dev deploy — how the harness redeploys itself</title>
+<link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-<div class="wrap">
-  <h1>Discovery Eval — measuring "did we find every app?"</h1>
-  <p class="sub">OpenSpec change <code>add-discovery-eval</code>: an offline harness that turns
-    the quality of the dock's <b>Discover Local Apps</b> agent into a number, so the discovery
-    prompt can be optimized with evidence instead of eyeballing.</p>
+<header>
+  <h1>Deploying the harness <em>from inside the harness</em></h1>
+  <p class="sub">How the 2026-07-06 23:54 deploy shipped <code>main</code> (d3384f2) to live :5099 —
+  and why it needs a scheduled-task escape hatch and a dead-man switch.</p>
+  <nav id="tabs">
+    <button data-view="trap" class="active">1 · The trap</button>
+    <button data-view="pipeline">2 · The pipeline</button>
+    <button data-view="deadman">3 · Dead-man switch</button>
+    <button data-view="replay">4 · This deploy, replayed</button>
+  </nav>
+</header>
 
-  <h2>The loop</h2>
-  <div class="card">
-    <div class="pipe">
-      <div class="stage"><b>1 · Golden fixture</b><small>hard repo committed under
-        <code>tests/discovery-eval/fixtures/</code> + <code>expected.json</code>
-        (the true apps, keyed folder+port)</small></div>
-      <span class="arr">&rarr;</span>
-      <div class="stage hot"><b>2 · Real discovery</b><small>the SHIPPED path —
-        <code>LocalAppDiscoveryAsk</code> &rarr; <code>StructuredAskRunner</code> &rarr;
-        ClaudeMonitor, read-only tools — scan root = the fixture</small></div>
-      <span class="arr">&rarr;</span>
-      <div class="stage"><b>3 · Score</b><small>recall &amp; precision on folder+port,
-        explicit <span style="color:var(--bad)">missing</span> /
-        <span style="color:var(--warn)">extra</span> lists</small></div>
-      <span class="arr">&rarr;</span>
-      <div class="stage"><b>4 · Repeat ×N</b><small>agent is non-deterministic —
-        report per-run scores, worst-case recall, runs-perfect count</small></div>
-      <span class="arr">&rarr;</span>
-      <div class="stage"><b>5 · Prompt delta</b><small>baseline vs candidate prompts on the
-        same fixture; pick the winner from the delta — adopting it is a separate change</small></div>
-    </div>
-  </div>
+<main>
 
-  <h2>Try it — simulate a discovery run over the fixture</h2>
-  <p class="sub">Click rows to toggle what the agent "reported", or use the buttons.
-    True apps it misses hurt <b>recall</b>; decoys it reports hurt <b>precision</b>.</p>
-  <div class="card">
-    <div class="cols">
-      <div class="col">
-        <div class="tree" id="tree"></div>
-        <p class="hint">✅ = agent reported it. <span class="tag app" style="padding:0 6px">app</span> = in
-          <code>expected.json</code> · <span class="tag decoy" style="padding:0 6px">decoy</span> = looks
-          app-like, must NOT be reported.</p>
-        <p><button id="btnPerfect">Perfect run</button>
-           <button id="btnSloppy">Sloppy run</button>
-           <button id="btnGreedy">Greedy run (reports decoys)</button></p>
-      </div>
-      <div class="col">
-        <div class="score">
-          <div class="metric"><div class="v" id="mRecall">—</div><div class="k">recall</div></div>
-          <div class="metric"><div class="v" id="mPrec">—</div><div class="k">precision</div></div>
+<!-- ============ VIEW 1: THE TRAP ============ -->
+<section id="view-trap" class="view active">
+  <h2>Why you can't just run <code>swap.ps1</code></h2>
+  <p>This is <strong>Self-Development</strong>: the Repo being deployed <em>is</em> the Harness.
+  The Claude session doing the deploy is a child process of the very server the deploy restarts.</p>
+
+  <div class="tree-demo">
+    <div class="tree" id="proc-tree">
+      <div class="node harness" id="n-harness">🖥️ ClaudeWeb harness <span class="port">:5099 (live)</span></div>
+      <div class="branch">
+        <div class="node session" id="n-session">🤖 Claude session <span class="tag">this conversation</span></div>
+        <div class="branch">
+          <div class="node swap" id="n-swap">📜 swap.ps1 <span class="tag">foreground child</span></div>
         </div>
-        <div class="lists" id="lists"></div>
       </div>
+      <div class="node outside hidden" id="n-task">🗓️ Task Scheduler → deploy-keep-wrapper.ps1 <span class="tag">outside the tree, RunLevel Highest</span></div>
+    </div>
+    <div class="tree-controls">
+      <button id="btn-naive" class="danger">▶ Run swap.ps1 foreground (naive)</button>
+      <button id="btn-task" class="ok">▶ Run via scheduled task (correct)</button>
+      <button id="btn-reset-tree" class="ghost">↺ reset</button>
+      <p id="tree-caption" class="caption">swap.ps1's job includes <strong>stopping the harness</strong> before swapping binaries…</p>
     </div>
   </div>
 
-  <h2>Why N runs, not one</h2>
-  <div class="card">
-    <p class="sub" style="margin-top:0">One green run can be luck. Ten runs show whether
-      discovery is <i>reliably</i> complete:</p>
-    <div class="runs" id="runsA"></div>
-    <p class="sub" id="runsAcap"></p>
+  <div class="cards">
+    <div class="card">
+      <h3>The suicide problem</h3>
+      <p>Foreground <code>swap.ps1</code> stops the harness → the harness's process tree dies →
+      <strong>the Claude session and the half-finished swap die with it</strong>. Live is left stopped.</p>
+    </div>
+    <div class="card">
+      <h3>The escape hatch</h3>
+      <p>A <strong>scheduled task</strong> (<code>ClaudeWebManualDeploy</code>) runs the wrapper in a process tree
+      <em>outside</em> the harness. The swap survives the restart; only the Claude session blips and resumes.</p>
+    </div>
+    <div class="card">
+      <h3>Why RunLevel&nbsp;Highest</h3>
+      <p>The harness runs <em>elevated</em>. A non-elevated task can't kill its PID (this is exactly why the
+      auto-rollback dead-man task was once inert — robocopy exit 11). The deploy task is registered
+      <strong>RunLevel&nbsp;Highest</strong> so it can.</p>
+    </div>
+    <div class="card">
+      <h3>Today's wrinkle</h3>
+      <p><code>Register-ScheduledTask</code> was <strong>denied</strong> (0x80070005) — this shell isn't elevated.
+      But the task <em>persisted from the last deploy</em>, so a plain <code>schtasks /Run</code> was enough.
+      Starting a task you own doesn't need elevation; registering an elevated one does.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ VIEW 2: THE PIPELINE ============ -->
+<section id="view-pipeline" class="view">
+  <h2>The full deploy pipeline</h2>
+  <p>Click a stage — or <button id="btn-walk" class="ok inline">▶ walk through</button> — to follow the order.
+  Note the two safety ideas: <strong>stage-before-stop</strong> (live keeps running until the new build is proven
+  to compile) and <strong>health-gated keep</strong> (the rollback is only disarmed after live answers 200).</p>
+
+  <div class="pipe" id="pipe"></div>
+  <div class="stage-detail" id="stage-detail">
+    <h3 id="sd-title">Select a stage</h3>
+    <p id="sd-body">Each box above is one step of the real deploy that ran tonight.</p>
+    <pre id="sd-code" class="hidden"></pre>
+  </div>
+</section>
+
+<!-- ============ VIEW 3: DEAD-MAN SWITCH ============ -->
+<section id="view-deadman" class="view">
+  <h2>The dead-man switch</h2>
+  <p><code>swap.ps1</code> snapshots live to <code>run-bin.lastgood</code>, then arms a <strong>15-minute
+  auto-rollback</strong> scheduled task. If nobody confirms the new build (<code>keep.ps1</code>), live silently
+  restores itself to last-good. The wrapper only runs <code>keep.ps1</code> after live answers
+  <code>200</code> — a broken deploy is <em>never</em> disarmed.</p>
+
+  <div class="dm-sim">
+    <div class="dm-controls">
+      <span>Simulate: after the swap, the new build…</span>
+      <button id="dm-healthy" class="ok">✅ answers 200</button>
+      <button id="dm-broken" class="danger">💥 is broken (no 200)</button>
+      <button id="dm-reset" class="ghost">↺ reset</button>
+    </div>
+    <div class="dm-stage">
+      <div class="dm-timer"><div class="dm-clock" id="dm-clock">15:00</div><div class="dm-label">until auto-rollback</div></div>
+      <div class="dm-fuse-wrap"><div class="dm-fuse" id="dm-fuse"></div></div>
+      <div class="dm-log" id="dm-log"><div class="dm-line dim">swap complete — rollback armed, probing http://localhost:5099/api/auth/check …</div></div>
+    </div>
   </div>
 
-  <h2>Prompt optimization = compare deltas</h2>
-  <div class="card">
-    <table>
-      <thead><tr><th>Prompt</th><th>runs perfect</th><th>worst-case recall</th><th>precision</th><th>&Delta; vs baseline</th></tr></thead>
-      <tbody>
-        <tr><td>baseline (shipped)</td><td>6/10</td><td>0.75</td><td>1.00</td><td>—</td></tr>
-        <tr><td>candidate A</td><td>10/10</td><td>1.00</td><td>1.00</td><td class="delta up">+4 perfect runs</td></tr>
-        <tr><td>candidate B</td><td>9/10</td><td>0.75</td><td>0.86</td><td class="delta dn">reports decoys</td></tr>
-      </tbody>
-    </table>
-    <p class="hint">Illustrative numbers. The shipped prompt stays untouched while candidates are scored;
-      adopting a winner is its own explicit change. The prompt override seam defaults byte-identical to
-      the shipped constant.</p>
+  <div class="cards">
+    <div class="card">
+      <h3>Probe loop</h3>
+      <p>Up to <strong>20 attempts × 2 s</strong> against <code>/api/auth/check</code>. One 200 → run
+      <code>keep.ps1</code> (disarm). Zero 200s → log <em>“HEALTH FAILED → NOT disarming”</em> and let the fuse burn.</p>
+    </div>
+    <div class="card">
+      <h3>Rollback = restore, not undo</h3>
+      <p><code>rollback.ps1</code> restores with <code>robocopy /MIR</code> (never copy) from the
+      <code>run-bin.lastgood</code> snapshot. And the timer uses a real <code>DateTime</code> trigger, never
+      <code>schtasks /SD</code> — a locale bug bakes those two rules in.</p>
+    </div>
+    <div class="card">
+      <h3>Tonight</h3>
+      <p>Health came back 200 on the first probe; <code>keep.ps1</code> ran at <strong>23:54:42</strong> and the
+      <code>ClaudeWebDeadman</code> task is confirmed gone. The deploy is kept.</p>
+    </div>
   </div>
+</section>
 
-  <h2>Guardrails</h2>
-  <div class="card">
-    <ul style="margin:0; padding-left:20px; color:var(--dim)">
-      <li>Evaluates <code>discover-local-apps</code>; changes none of its behavior, endpoints, or dock UI.</li>
-      <li>Offline &amp; dev-facing — needs the ClaudeMonitor gateway, so on-demand, not default CI.</li>
-      <li>Identity for matching is <b>folder + port</b> — names are agent-chosen and advisory.</li>
-      <li>Ground truth is committed and human-audited (<code>expected.json</code> + fixture README).</li>
-    </ul>
+<!-- ============ VIEW 4: REPLAY ============ -->
+<section id="view-replay" class="view">
+  <h2>Tonight's deploy, from the real logs</h2>
+  <p>Timestamps from <code>.claudeweb-deploy/deploy-keep-wrapper.log</code> and the session itself.
+  <button id="btn-replay" class="ok inline">▶ replay</button></p>
+  <div class="timeline" id="timeline"></div>
+  <div class="verdict" id="replay-verdict">
+    <span class="big">✔</span>
+    <div><strong>Live :5099 is running the new build</strong> — merge d3384f2, health 200, rollback disarmed,
+    dead-man task deleted. Total wall clock from task start to “kept”: <strong>~29 seconds</strong>
+    (the build was pre-warmed by the dry run).</div>
   </div>
+</section>
 
-  <p class="foot">Companion to openspec/changes/add-discovery-eval &middot; rolling latest, overwritten as the work evolves.</p>
-</div>
-
-<script>
-// fixture: [folder, port|null, kind app|decoy, why]
-const FIXTURE = [
-  ["homepage",              5170, "app",   "node serve.mjs, fixed port"],
-  ["tools/status-board",    5171, "app",   "node server.js, nested folder"],
-  ["ops/ps-panel",          5172, "app",   "powershell serve.ps1"],
-  ["embedded/miniview",     5173, "app",   "C# HttpListener, unusual style"],
-  ["scripts/build-helper",  null, "decoy", "script, no HTTP listener"],
-  ["docs-site-src",         null, "decoy", "static source, nothing serves it"],
-  ["dev-proxy",             null, "decoy", "random port, not fixed"],
-];
-const reported = new Set();
-
-const tree = document.getElementById("tree");
-FIXTURE.forEach(([folder, port, kind], i) => {
-  const row = document.createElement("div");
-  row.className = "row"; row.dataset.i = i;
-  row.innerHTML = `<span class="chk">·</span><span style="flex:1">${folder}${port ? " <span style='color:var(--dim)'>:" + port + "</span>" : ""}</span>
-    <span class="tag ${kind}">${kind}</span>`;
-  row.title = FIXTURE[i][3];
-  row.addEventListener("click", () => { reported.has(i) ? reported.delete(i) : reported.add(i); render(); });
-  tree.appendChild(row);
-});
-
-function setRun(idxs) { reported.clear(); idxs.forEach(i => reported.add(i)); render(); }
-document.getElementById("btnPerfect").onclick = () => setRun([0,1,2,3]);
-document.getElementById("btnSloppy").onclick  = () => setRun([0,1]);          // misses ps + embedded
-document.getElementById("btnGreedy").onclick  = () => setRun([0,1,2,3,4,6]);  // + decoys
-
-function render() {
-  const apps = FIXTURE.map((f,i)=>i).filter(i => FIXTURE[i][2]==="app");
-  const hit   = apps.filter(i => reported.has(i));
-  const extra = [...reported].filter(i => FIXTURE[i][2]!=="app");
-  const miss  = apps.filter(i => !reported.has(i));
-  const recall = apps.length ? hit.length/apps.length : 1;
-  const prec   = reported.size ? hit.length/reported.size : 1;
-
-  document.querySelectorAll(".tree .row").forEach(row => {
-    const i = +row.dataset.i;
-    row.classList.remove("found","missed");
-    const chk = row.querySelector(".chk");
-    if (reported.has(i)) { row.classList.add("found"); chk.textContent = "✅"; }
-    else if (FIXTURE[i][2]==="app") { row.classList.add("missed"); chk.textContent = "✗"; }
-    else chk.textContent = "·";
-  });
-
-  const mR = document.getElementById("mRecall"), mP = document.getElementById("mPrec");
-  mR.textContent = recall.toFixed(2); mP.textContent = prec.toFixed(2);
-  mR.className = "v " + (recall === 1 ? "ok" : "notok");
-  mP.className = "v " + (prec === 1 ? "ok" : "notok");
-
-  document.getElementById("lists").innerHTML =
-    `<p><b>missing</b> (expected, not found): <span class="miss">${miss.length ? miss.map(i=>FIXTURE[i][0]).join(", ") : "none"}</span></p>
-     <p><b>extra</b> (reported, not expected): <span class="extra">${extra.length ? extra.map(i=>FIXTURE[i][0]).join(", ") : "none"}</span></p>
-     <p class="hint">${recall===1 && prec===1 ? "Perfect: recall 1.0, precision 1.0 — this run counts toward the reliability aggregate."
-       : recall<1 ? "Recall < 1: a prompt that reliably avoids this miss scores a positive delta."
-       : "Precision < 1: the prompt is over-reporting — decoys exist in the fixture exactly to catch this."}</p>`;
-}
-render();
-
-// N-run strip: illustrative flaky baseline
-const RUNS = [1,1,0,1,1,1,0,1,0,1]; // 1 = perfect recall
-const strip = document.getElementById("runsA");
-RUNS.forEach((ok,i) => {
-  const d = document.createElement("div");
-  d.className = "run " + (ok ? "p" : "f");
-  d.textContent = i+1;
-  d.title = ok ? "perfect recall" : "missed ≥1 app";
-  strip.appendChild(d);
-});
-document.getElementById("runsAcap").textContent =
-  `Aggregate: ${RUNS.filter(Boolean).length}/${RUNS.length} runs perfect, worst-case recall 0.75 — ` +
-  `a single-run eval would have called this prompt "working" ${RUNS.filter(Boolean).length} times out of 10.`;
-</script>
+</main>
+<footer>Understanding app · rolling latest · overwritten per explanation · self-dev deploy flow (2026-07-06)</footer>
+<script src="./app.js"></script>
 </body>
 </html>
