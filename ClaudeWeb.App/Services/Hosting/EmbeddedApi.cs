@@ -1,5 +1,6 @@
 using ClaudeWeb.Models;
 using ClaudeWeb.Services.Accounts;
+using ClaudeWeb.Services.AgenticAudit;
 using ClaudeWeb.Services.Analytics;
 using ClaudeWeb.Services.ArchPlan;
 using ClaudeWeb.Services.Autopilot;
@@ -176,6 +177,7 @@ public class EmbeddedApi
             builder.Services.AddStructuredAskModule(); // discover local apps (openspec discover-local-apps)
             builder.Services.AddUnderstandingModule(); // ask for understanding — fork → build Understanding app (openspec add-ask-for-understanding)
             builder.Services.AddEventsModule(); // per-repo agent-dock Event Console log (openspec agent-dock-event-console)
+            builder.Services.AddAgenticAuditModule(); // durable agentic-call audit trail (openspec add-agent-audit-trail)
             builder.Services.AddOpenspecCockpitModule(); // harness OpenSpec Cockpit (openspec openspec-cockpit-in-harness)
             builder.Services.AddStatusMonitorModule(); // third-monitor wallboard board endpoint (openspec status-monitor-dashboard)
             // === END MODULE SERVICE REGISTRATION ===

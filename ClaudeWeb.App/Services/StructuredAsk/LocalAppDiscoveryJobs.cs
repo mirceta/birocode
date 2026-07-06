@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using ClaudeWeb.Services.AgenticAudit;
 using ClaudeWeb.Services.Events;
 
 namespace ClaudeWeb.Services.StructuredAsk;
@@ -24,36 +25,42 @@ public class LocalAppDiscoveryJobs
 {
     private readonly LocalAppDiscoveryAsk _discovery;
     private readonly RepoEventLog _events;
+    private readonly AgenticAuditLog _audit;
     private readonly ConcurrentDictionary<string, DiscoveryJob> _jobs = new();
 
-    public LocalAppDiscoveryJobs(LocalAppDiscoveryAsk discovery, RepoEventLog events)
+    public LocalAppDiscoveryJobs(LocalAppDiscoveryAsk discovery, RepoEventLog events, AgenticAuditLog audit)
     {
         _discovery = discovery;
         _events = events;
+        _audit = audit;
     }
 
     /// <summary>
     /// Join the repo's discovery if one is already running, otherwise start a new
     /// one on a background task and return it. Satisfies "only one discovery per
     /// repository at a time" (the join case) and the disconnect-survival fix (the
-    /// scan runs under the job's own token).
+    /// scan runs under the job's own token). Actor + IP come from the controller
+    /// (identity is request-scoped) and are recorded in the agentic audit trail —
+    /// only on an actual start, never on a join (openspec add-agent-audit-trail).
     /// </summary>
-    public DiscoveryJob StartOrJoin(string repoId, string workingDirectory)
+    public DiscoveryJob StartOrJoin(string repoId, string repoName, string workingDirectory, string actor, string ip)
     {
         // AddOrUpdate so the start-or-join decision is atomic per repo: a Running
         // job is returned as-is; any terminal (Done/Error) job is replaced by a
         // fresh scan (latest-only — the old result is discarded).
         return _jobs.AddOrUpdate(
             repoId,
-            _ => StartNew(repoId, workingDirectory),
-            (_, existing) => existing.Status == DiscoveryStatus.Running ? existing : StartNew(repoId, workingDirectory));
+            _ => StartNew(repoId, repoName, workingDirectory, actor, ip),
+            (_, existing) => existing.Status == DiscoveryStatus.Running
+                ? existing
+                : StartNew(repoId, repoName, workingDirectory, actor, ip));
     }
 
     /// <summary>The most recent job for the repo, or null if none has ever run.</summary>
     public DiscoveryJob? Get(string repoId) =>
         _jobs.TryGetValue(repoId, out var job) ? job : null;
 
-    private DiscoveryJob StartNew(string repoId, string workingDirectory)
+    private DiscoveryJob StartNew(string repoId, string repoName, string workingDirectory, string actor, string ip)
     {
         var job = new DiscoveryJob();
         // Event Console (openspec agent-dock-event-console): emit at the boundary we
@@ -61,6 +68,13 @@ public class LocalAppDiscoveryJobs
         // already-running job does not emit a duplicate start.
         _events.Emit(repoId, "discovery", "started", "Discovery",
             "invoked — awaiting the agent gateway…");
+        // Agentic audit (openspec add-agent-audit-trail): durable "started" entry,
+        // same only-on-actual-start boundary. The callId lives on the job so the
+        // trail endpoint can tell a live "running" from a crash-orphaned start.
+        job.AuditCallId = _audit.RecordStart("discover-local-apps", repoId, repoName, actor, ip);
+        void AuditEnd(string outcome, string? error = null) =>
+            _audit.RecordEnd(job.AuditCallId!, "discover-local-apps", repoId, repoName, actor, ip,
+                outcome, (long)(DateTimeOffset.UtcNow - job.StartedAt).TotalMilliseconds, error);
         // Fire-and-forget on a background task with the job's OWN token. We never
         // pass the request's abort token in, so a client disconnect can't cancel it.
         job.Run = Task.Run(async () =>
@@ -74,24 +88,28 @@ public class LocalAppDiscoveryJobs
                     var n = result.Report!.Apps.Count;
                     _events.Emit(repoId, "discovery", "done", "Discovery",
                         $"returned {n} app{(n == 1 ? "" : "s")} — produced for the dock to render");
+                    AuditEnd("done");
                 }
                 else
                 {
                     var err = result.Error ?? "discovery failed";
                     job.MarkError(err);
                     _events.Emit(repoId, "discovery", "error", "Discovery", err);
+                    AuditEnd("error", err);
                 }
             }
             catch (OperationCanceledException)
             {
                 job.MarkError("discovery cancelled");
                 _events.Emit(repoId, "discovery", "error", "Discovery", "discovery cancelled");
+                AuditEnd("canceled");
             }
             catch (Exception ex)
             {
                 var err = $"{ex.GetType().Name}: {ex.Message}";
                 job.MarkError(err);
                 _events.Emit(repoId, "discovery", "error", "Discovery", err);
+                AuditEnd("error", err);
             }
         });
         return job;
@@ -116,6 +134,11 @@ public class DiscoveryJob
     /// <summary>The backing background task; cancellation source for it.</summary>
     public Task? Run { get; set; }
     public CancellationTokenSource Cts { get; } = new();
+
+    /// <summary>Correlation id of this run's agentic-audit call (openspec
+    /// add-agent-audit-trail) — lets the trail endpoint distinguish a live
+    /// "running" call from a start orphaned by a harness restart.</summary>
+    public string? AuditCallId { get; set; }
 
     public void MarkDone(LocalAppExposureReport report)
     {

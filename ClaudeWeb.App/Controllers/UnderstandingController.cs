@@ -1,3 +1,4 @@
+using ClaudeWeb.Services.Audit;
 using ClaudeWeb.Services.Logging;
 using ClaudeWeb.Services.Repositories;
 using ClaudeWeb.Services.Understanding;
@@ -34,12 +35,14 @@ public class UnderstandingController : ControllerBase
 {
     private readonly RepositoryResolver _repos;
     private readonly UnderstandingJobs _jobs;
+    private readonly AuditService _audit;
     private readonly Logger _logger;
 
-    public UnderstandingController(RepositoryResolver repos, UnderstandingJobs jobs, Logger logger)
+    public UnderstandingController(RepositoryResolver repos, UnderstandingJobs jobs, AuditService audit, Logger logger)
     {
         _repos = repos;
         _jobs = jobs;
+        _audit = audit;
         _logger = logger;
     }
 
@@ -59,7 +62,11 @@ public class UnderstandingController : ControllerBase
         if (string.IsNullOrWhiteSpace(body?.SessionId))
             return BadRequest(new { error = "No conversation to explain yet — start a conversation in this dock first." });
 
-        var job = _jobs.StartOrJoin(repo.Id, repo.Path, body.SessionId);
+        // Agentic audit (openspec add-agent-audit-trail): resolve WHO here — identity
+        // is request-scoped — and hand it to the registry, which owns the lifecycle
+        // and records the call only if this is an actual start (not a join).
+        var actor = _audit.ResolveActor(HttpContext);
+        var job = _jobs.StartOrJoin(repo.Id, repo.Name, repo.Path, body.SessionId, actor.Display, actor.Ip);
         return Ok(JobBody(repo.Id, repo.Name, job));
     }
 
