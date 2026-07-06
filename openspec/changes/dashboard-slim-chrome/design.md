@@ -40,7 +40,11 @@ spacing budget. Layout-only; no control behavior changes.
    direct child of `.dash__header` (already `display: flex; flex-wrap: wrap`).
    Move `DockToolbar` from last child to FIRST child in JSX, drop `.dash__title`,
    and change `.dash__docktoolbar` from `flex: 1 1 100%` to
-   `flex: 1 1 auto; min-width: 0; margin-top: 0`. Its existing
+   `flex: 1 1 0; min-width: 40%; margin-top: 0`. The basis must be `0`, not
+   `auto`: flex-wrap assigns lines by the item's HYPOTHETICAL size (content
+   width under `auto` — the whole roster), so an auto-basis toolbar takes a
+   line alone and wraps every control (caught by Playwright during verify).
+   Its existing
    `overflow-x: auto` keeps a big roster scrolling inside the leftover space
    instead of wrapping. Control groups stay `flex: 0 0 auto`.
    *Alternative considered:* wrapping the controls in a new right-side container

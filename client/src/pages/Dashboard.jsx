@@ -843,7 +843,11 @@ export default function Dashboard({ onClose }) {
   return (
     <div className="dash">
       <div className="dash__header">
-        <h2 className="dash__title">{t('dashboard.title')}</h2>
+        {/* Dock toolbar (openspec add-dashboard-dock-toolbar / dashboard-slim-chrome):
+            leads the shared header bar, listing the full roster so hidden docks
+            stay reachable. Gated on the roster, not the visible `tabs`, so it
+            still shows (all-inactive) when every dock is hidden. */}
+        <DockToolbar tabs={rosterTabs} onToggle={toggleDashboard} />
         {tabs.length > 0 && (
           <div className="dash__size" role="group" aria-label={t('dashboard.size')}>
             <button
@@ -981,11 +985,6 @@ export default function Dashboard({ onClose }) {
         >
           &times;
         </button>
-        {/* Dock toolbar (openspec add-dashboard-dock-toolbar): its own wrapped
-            row of the header, listing the full roster so hidden docks stay
-            reachable. Gated on the roster, not the visible `tabs`, so it still
-            shows (all-inactive) when every dock is hidden. */}
-        <DockToolbar tabs={rosterTabs} onToggle={toggleDashboard} />
       </div>
 
       <div

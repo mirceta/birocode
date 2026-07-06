@@ -3,30 +3,36 @@
 /* Full-screen overlay: fills the content region the studio normally uses
    (.app-content is the scroller, so this just lays out and pads). */
 .dash {
-  padding: 16px;
+  padding: 8px 12px;
 }
 
 .dash__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  /* Wrap so the dock toolbar (last child, full-width) drops to its own row
-     below the stepper/view controls instead of crowding them (openspec
-     add-dashboard-dock-toolbar). */
+  /* One shared bar (openspec dashboard-slim-chrome): the dock toolbar leads and
+     the control groups trail on the same line; wrap only exists so the controls
+     can drop below the docks bar on viewports too narrow to fit both. */
   flex-wrap: wrap;
-  margin-bottom: 12px;
+  row-gap: 6px;
+  margin-bottom: 6px;
 }
 
-/* Dock toolbar (openspec add-dashboard-dock-toolbar): a full-width second row of
-   the header listing every dock as a toggleable tab. A single horizontally-
-   scrolling row so a large ("many, many") roster never wraps or blows out the
-   header height. */
+/* Dock toolbar (openspec add-dashboard-dock-toolbar / dashboard-slim-chrome):
+   the leading, greedy item of the shared header bar, listing every dock as a
+   toggleable tab. A single horizontally-scrolling row so a large ("many,
+   many") roster never wraps or blows out the header height; the min-width
+   floor keeps it usable instead of letting the controls squeeze it out.
+   flex-basis must be 0, not auto: flex-wrap breaks lines on the HYPOTHETICAL
+   size (content width for auto — the whole roster), so an auto-basis toolbar
+   grabs a line alone and wraps every control. */
 .dash__docktoolbar {
-  flex: 1 1 100%;
+  flex: 1 1 0;
+  min-width: 40%;
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 10px;
+  margin-right: 10px;
   padding-bottom: 2px;
   overflow-x: auto;
   overflow-y: hidden;
@@ -89,13 +95,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.dash__title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--color-accent);
 }
 
 .dash__close {
