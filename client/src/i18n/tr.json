@@ -277,6 +277,8 @@
   "dashboard.understandingAsking": "Anlama oluşturuluyor…",
   "dashboard.understandingDone": "Anlama uygulaması oluşturuldu — Yerel sekmesindeki Anlama uygulamasını yeniden yükleyin",
   "dashboard.understandingError": "Anlamak için sor başarısız: {error}",
+  "dashboard.understandingAuto": "Oto",
+  "dashboard.understandingAutoHint": "Her tamamlanan turdan sonra Anlama uygulamasını otomatik yeniden oluştur (her tur ücretli bir ajan çalışması başlatır; proje başına, sunucuda saklanır)",
   "dashboard.localServing": ":{port} üzerinde yayında",
   "dashboard.localOffline": ":{port} · yayında değil",
   "dashboard.localNone": "yok",

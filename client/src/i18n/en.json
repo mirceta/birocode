@@ -277,6 +277,8 @@
   "dashboard.understandingAsking": "Building understanding…",
   "dashboard.understandingDone": "Understanding app built — reload the Local tab's Understanding app",
   "dashboard.understandingError": "Ask for understanding failed: {error}",
+  "dashboard.understandingAuto": "Auto",
+  "dashboard.understandingAutoHint": "Rebuild the Understanding app automatically after every completed turn (each turn starts a paid agentic run; per-project, saved on the server)",
   "dashboard.localServing": "serving on :{port}",
   "dashboard.localOffline": ":{port} · not serving",
   "dashboard.localNone": "none",

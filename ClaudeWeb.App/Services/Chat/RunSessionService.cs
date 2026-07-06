@@ -35,13 +35,26 @@ public class RunSession
     /// <param name="startSeq">Seq to continue counting from (the previous
     /// run's last seq). Seq is monotonic per repo across runs so a client
     /// holding an old watermark never discards a new run's events.</param>
-    public RunSession(string repoId, int startSeq = 0)
+    public RunSession(string repoId, string lane = "builder", int startSeq = 0)
     {
         RepoId = repoId;
+        Lane = lane;
         _seq = startSeq;
     }
 
     public string RepoId { get; }
+
+    /// <summary>Run lane ("builder" or "ask"); see <see cref="RunSessionService.TryBeginRun"/>.</summary>
+    public string Lane { get; }
+
+    /// <summary>
+    /// Completion callback, installed by <see cref="RunSessionService"/> at creation
+    /// (openspec auto-understanding-after-turn). Invoked exactly once, when
+    /// <see cref="Complete"/> performs the single running→terminal transition — the
+    /// backend choke point for "this turn ended", covering every run starter
+    /// (user send, autopilot, loops). Must never throw into the completion path.
+    /// </summary>
+    public Action<RunSession>? Completed { get; set; }
 
     /// <summary>"running" | "done" | "error".</summary>
     public string Status { get; private set; } = "running";
@@ -91,13 +104,21 @@ public class RunSession
     /// </summary>
     public void Complete()
     {
+        Action<RunSession>? completed;
         lock (_lock)
         {
             if (Status != "running") return;
             Status = _sawDone ? "done" : "error";
             foreach (var ch in _subscribers) ch.Writer.TryComplete();
             _subscribers.Clear();
+            completed = Completed;
         }
+        // The single-transition guard above guarantees exactly-once; the callback
+        // runs outside the lock so a handler can never deadlock against EmitAsync
+        // or StreamAsync. Swallow everything: a broken observer must never fail
+        // or delay the chat turn's completion.
+        try { completed?.Invoke(this); }
+        catch { /* observers own their errors (logged in RunSessionService) */ }
     }
 
     /// <summary>
@@ -152,11 +173,28 @@ public class RunSessionService
 {
     private readonly object _gate = new();
     private readonly Dictionary<string, RunSession> _sessions = new();
+    private readonly Logging.Logger _logger;
 
-    public RunSessionService(IHostApplicationLifetime lifetime)
+    public RunSessionService(IHostApplicationLifetime lifetime, Logging.Logger logger)
     {
+        _logger = logger;
         lifetime.ApplicationStopping.Register(StopAll);
     }
+
+    /// <summary>What a completed run looked like, for <see cref="RunCompleted"/>.</summary>
+    public sealed record RunCompletedEvent(string RepoId, string Lane, string Status, string? SessionId);
+
+    /// <summary>
+    /// Raised exactly once per run, when it reaches its terminal status
+    /// ("done" or "error") — the single choke point for "a chat turn ended",
+    /// whatever started it (user send, autopilot auto-send, loop resend). Other
+    /// modules subscribe here (dependency direction stays module → chat); the
+    /// understanding module's auto-trigger is the first consumer (openspec
+    /// auto-understanding-after-turn). Handlers run fire-and-forget on the
+    /// completing thread: exceptions are caught and logged, never blocking or
+    /// failing the turn's completion.
+    /// </summary>
+    public event Action<RunCompletedEvent>? RunCompleted;
 
     /// <summary>
     /// A run "lane" lets one repo host two independent conversations at once: the
@@ -185,7 +223,8 @@ public class RunSessionService
                 session = existing;
                 return false;
             }
-            session = new RunSession(repoId, existing?.LastSeq ?? 0);
+            session = new RunSession(repoId, lane, existing?.LastSeq ?? 0);
+            session.Completed = OnSessionCompleted;
             _sessions[key] = session;
             return true;
         }
@@ -213,6 +252,24 @@ public class RunSessionService
                     sessionId = kv.Value.SessionId,
                     lastSeq = kv.Value.LastSeq,
                 });
+        }
+    }
+
+    // Bridges a session's exactly-once completion callback to the RunCompleted
+    // event. Each subscriber is invoked independently so one broken handler
+    // can't starve the others; every exception is caught and logged here — the
+    // completion path must never observe a failure.
+    private void OnSessionCompleted(RunSession s)
+    {
+        var handlers = RunCompleted;
+        if (handlers is null) return;
+        foreach (var handler in handlers.GetInvocationList().Cast<Action<RunCompletedEvent>>())
+        {
+            try { handler(new RunCompletedEvent(s.RepoId, s.Lane, s.Status, s.SessionId)); }
+            catch (Exception ex)
+            {
+                _logger.Error($"[CHAT] RunCompleted handler failed for \"{s.RepoId}\" ({s.Lane}/{s.Status}): {ex.Message}");
+            }
         }
     }
 

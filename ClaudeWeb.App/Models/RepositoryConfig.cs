@@ -33,6 +33,16 @@ public class RepositoryConfig
     public string Visibility { get; set; } = "advanced";
 
     /// <summary>
+    /// Per-repo auto-understanding mode (openspec auto-understanding-after-turn):
+    /// when true, every builder-lane chat turn that completes as "done" also
+    /// starts the same understanding run the dock's "Ask for understanding"
+    /// button starts. Defaults to false — every turn spawns a paid agentic run,
+    /// so enabling is an explicit choice — and entries predating this field
+    /// (absent in repositories.json) load as false.
+    /// </summary>
+    public bool AutoUnderstanding { get; set; }
+
+    /// <summary>
     /// LEGACY single Local-tab port (plans/local-app-tab.md). Superseded by
     /// <see cref="LocalApps"/> (plans/multiple-local-apps.md): a repo may now
     /// expose several local apps. Kept for back-compat — when LocalApps is empty
