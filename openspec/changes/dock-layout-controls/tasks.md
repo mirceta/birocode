@@ -22,7 +22,7 @@
 
 - [x] 3.1 Dashboard.jsx: `▤` trigger replaces the −/+ and A−/A+ groups;
       popover with per-row segmented (Auto·1–6), height (Auto + slider
-      240–900 step 20), zoom slider (0.5–2 step 0.1, existing key); Esc +
+      240–1500 step 20), zoom slider (0.5–2 step 0.1, existing key); Esc +
       outside-click close
 - [x] 3.2 dashboard.css: popover + control styles (compact, anchored to the
       header bar, above the grid z-order)

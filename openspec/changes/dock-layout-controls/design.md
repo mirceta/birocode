@@ -53,7 +53,7 @@ dock width, dock height — optimized for control, ease of use, and screen space
    Auto (default) keeps today's ⌈√n⌉ count with the 340/460px caps so the
    out-of-box look is unchanged.
 
-2. **Height: `Auto` or an explicit px slider (240–900, step 20) applied as a
+2. **Height: `Auto` or an explicit px slider (240–1500, step 20) applied as a
    CSS variable.** The grid `<ul>` gets inline `--dash-cell-h` plus a
    `dash__grid--fixed-h` modifier; CSS overrides `.dash-cell` /
    `.dash__phone-cell` with `height: var(--dash-cell-h); aspect-ratio: auto;
@@ -110,5 +110,5 @@ the operator opens the popover. Rollback = revert the commit.
 
 ## Open Questions
 
-None — sliders' ranges (height 240–900, zoom 0.5–2.0) mirror existing
+None — sliders' ranges (height 240–1500, zoom 0.5–2.0) mirror existing
 min-heights and zoom clamps.

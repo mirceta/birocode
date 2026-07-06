@@ -47,7 +47,7 @@ function isHotTier(tier) {
 const GRID_KEY = 'claudeweb_dash_grid';
 const COLS_MAX = 6;
 const CELL_H_MIN = 240;
-const CELL_H_MAX = 900;
+const CELL_H_MAX = 1500;
 const CELL_H_STEP = 20;
 const CELL_H_DEFAULT = 480; // slider position while height is still auto
 const GRID_DEFAULT = { cards: { cols: 0, h: 0 }, phones: { cols: 0, h: 0 } };
