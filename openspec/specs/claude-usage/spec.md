@@ -91,16 +91,16 @@ status codes / exception types only.
 
 ### Requirement: Dashboard Claude chip renders usage
 
-The dashboard's Claude account chip SHALL render the usage data inside its
-**expanded** state, below the existing account/plan rows: one compact meter
-row for the 5-hour window, one for the weekly quota, and one per model-scoped
-weekly entry, each showing utilization percent and reset time; a severity
-other than `normal` SHALL be visually distinguished. The collapsed chip is
-unchanged. When usage is unavailable the chip SHALL show a single muted
-"usage unavailable" line and all identity content SHALL render exactly as
-before — a usage failure SHALL NOT affect the account/plan display. Usage
-SHALL refresh on the dashboard's existing poll cadence against the cached
-endpoint.
+The Claude account chip — hosted in the header status strip — SHALL render the
+usage data inside its **expanded** state, below the existing account/plan
+rows: one compact meter row for the 5-hour window, one for the weekly quota,
+and one per model-scoped weekly entry, each showing utilization percent and
+reset time; a severity other than `normal` SHALL be visually distinguished.
+The collapsed chip is unchanged. When usage is unavailable the chip SHALL show
+a single muted "usage unavailable" line and all identity content SHALL render
+exactly as before — a usage failure SHALL NOT affect the account/plan display.
+Usage SHALL refresh on the chip's existing poll cadence (now driven by the
+header status strip being expanded) against the cached endpoint.
 
 #### Scenario: Usage rows shown in the expanded chip
 

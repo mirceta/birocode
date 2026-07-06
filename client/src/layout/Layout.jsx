@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { apiGet } from '../api/client';
+import HeaderStatusStrip from '../components/header/HeaderStatusStrip';
 import SaveButton from '../components/shared/SaveButton';
 import LanguageToggle from '../components/shared/LanguageToggle';
 import ModeToggle from '../components/shared/ModeToggle';
@@ -140,6 +141,11 @@ function StudioShell() {
             <ModeToggle />
           </div>
         </header>
+
+        {/* Always-available status strip (openspec add-header-status-strip):
+            sits between the header and the content branch so it shows on every
+            screen, including while the dashboard overlay is open. */}
+        <HeaderStatusStrip />
 
         {dashEnabled && dashOpen ? (
           // Full-screen overview: replaces the content area and hides the

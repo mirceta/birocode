@@ -7,9 +7,7 @@ pasted Personal Access Token, entirely in-app, so one token serves both the GitH
 and `git push`. The token is handled as a secret: piped to `gh` over stdin, never
 echoed, logged, or persisted in plaintext by the Harness. This sets the auth/push
 identity only — never the commit-author identity.
-
 ## Requirements
-
 ### Requirement: Establish a global GitHub credential from a pasted token
 
 The system SHALL provide a write-only endpoint `POST /api/github-credentials` that
@@ -64,12 +62,14 @@ from `gh` SHALL be scrubbed of token-like substrings before it is logged or retu
 
 ### Requirement: Token entry is Advanced-mode and write-only in the UI
 
-The dashboard SHALL provide an **Advanced**-mode control to submit a token to
-`POST /api/github-credentials`. The input SHALL be write-only — it SHALL NOT fetch or
-display any stored token — and SHALL use a masked field. On success the UI SHALL allow
-the existing GitHub account indicator to reflect the newly authenticated account on its
-next poll. The control SHALL set only the **auth/push** identity and SHALL NOT change
-the commit-author identity (`user.name` / `user.email`).
+The header status strip's GitHub chip SHALL provide an **Advanced**-mode
+control to submit a token to `POST /api/github-credentials` (the control moves
+with the chip from the dashboard to the strip). The input SHALL be write-only —
+it SHALL NOT fetch or display any stored token — and SHALL use a masked field.
+On success the UI SHALL allow the existing GitHub account indicator to reflect
+the newly authenticated account on its next poll. The control SHALL set only
+the **auth/push** identity and SHALL NOT change the commit-author identity
+(`user.name` / `user.email`).
 
 #### Scenario: Hidden in Basic mode
 
@@ -79,11 +79,12 @@ the commit-author identity (`user.name` / `user.email`).
 #### Scenario: Write-only masked entry
 
 - **WHEN** the user opens the token control
-- **THEN** it presents a masked, empty input that never displays a previously stored
-  token, and submitting it clears the field
+- **THEN** it presents a masked, empty input that never displays a previously
+  stored token, and submitting it clears the field
 
 #### Scenario: Success reflected by the account indicator
 
 - **WHEN** a valid token is submitted and accepted
-- **THEN** the GitHub account indicator reflects the authenticated account on its next
-  poll, without the commit-author identity changing
+- **THEN** the GitHub account indicator reflects the authenticated account on
+  its next poll, without the commit-author identity changing
+

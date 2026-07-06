@@ -1739,19 +1739,3 @@
   font-size: 11px;
   word-break: break-word;
 }
-
-/* Scoreboard + account chips share one horizontal row (openspec add-account-status):
-   the chips cost width, not vertical height, and wrap under the Scoreboard on a
-   narrow viewport. The Scoreboard's own bottom margin moves to the row. */
-.dash__scoreboard-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.dash__scoreboard-row .scoreboard {
-  flex: 1 1 320px;
-  margin-bottom: 0;
-}

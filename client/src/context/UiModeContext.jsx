@@ -62,6 +62,7 @@ export const FEATURES = {
   gitIdentityRows: 'advanced', // per-dock "commits as / pushes as" identity rows in the git section (openspec: add-git-identity-surface)
   githubTokenControl: 'advanced', // write-only PAT control in the GitHub chip to set the global credential (openspec: add-git-identity-surface)
   hostClock: 'advanced', // dashboard host-clock chip: the host box's wall time beside the Scoreboard (openspec: add-dashboard-host-clock)
+  headerStatusStrip: 'advanced', // collapsible status strip under the app header hosting Scoreboard + account chips + host clock (openspec: add-header-status-strip)
 };
 
 const MODE_KEY = 'claudeweb_ui_mode';

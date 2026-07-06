@@ -1,21 +1,6 @@
-# dashboard-host-clock Specification
+# dashboard-host-clock Delta
 
-## Purpose
-TBD - created by archiving change add-dashboard-host-clock. Update Purpose after archive.
-## Requirements
-### Requirement: Host time probe
-The harness SHALL expose a read-only endpoint `GET /api/host-time` that reports
-the host computer's current local time read directly from the Windows clock of
-the harness process, returning the instant (`unixMs`, `iso`), the Windows
-timezone id (`timeZoneId`), and the current UTC offset in minutes
-(`utcOffsetMinutes`). The endpoint MUST always return HTTP 200 with typed
-fields and MUST NOT derive the time from anything the client sent.
-
-#### Scenario: Reading the host clock
-- **WHEN** a client requests `GET /api/host-time`
-- **THEN** the response contains the host's current local time and timezone as
-  read from Windows at request time, with the UTC offset that is in effect at
-  that moment (DST included)
+## MODIFIED Requirements
 
 ### Requirement: Dashboard host clock display
 
@@ -53,21 +38,6 @@ rather than polling every second.
 - **THEN** a subsequent resync updates the displayed wall time and offset to
   the new values
 
-### Requirement: Visible staleness
-If resyncing fails repeatedly, the clock SHALL keep ticking from the last
-successful sync and SHALL show a visible stale indicator rather than silently
-presenting a possibly-wrong time; the indicator SHALL clear on the next
-successful resync.
-
-#### Scenario: Harness stops answering
-- **WHEN** several consecutive resync attempts fail
-- **THEN** the clock remains visible, still ticking from the last good sync,
-  with a visible stale marker
-
-#### Scenario: Recovery
-- **WHEN** a resync succeeds after a stale period
-- **THEN** the stale marker is removed and the clock reflects the fresh probe
-
 ### Requirement: Advanced-mode gating
 
 The host clock SHALL be registered in the UI-mode capability map as an
@@ -83,4 +53,3 @@ header status strip is absent anyway).
 
 - **WHEN** a device is in Advanced UI mode and the strip is expanded
 - **THEN** the strip includes the host clock
-
