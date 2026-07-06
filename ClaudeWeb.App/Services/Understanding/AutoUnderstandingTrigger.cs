@@ -70,7 +70,7 @@ public class AutoUnderstandingTrigger : IHostedService
             }
 
             _logger.Info($"[UNDERSTANDING] Auto-run for \"{repo.Name}\" (turn done, session {e.SessionId[..Math.Min(8, e.SessionId.Length)]}…)");
-            _jobs.EnqueueLatest(repo.Id, repo.Path, e.SessionId);
+            _jobs.EnqueueLatest(repo.Id, repo.Name, repo.Path, e.SessionId);
         }
         catch (Exception ex)
         {

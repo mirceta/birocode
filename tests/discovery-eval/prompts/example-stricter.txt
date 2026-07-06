@@ -1,0 +1,49 @@
+Scan THIS repository for every web app in it that exposes itself as a **local app** --
+a self-serving HTTP server the Claude Web harness can reach on its Local tab.
+
+A local-app exposure is a directory in this repository that:
+  - runs its OWN HTTP server (e.g. a Node serve.mjs / server.js, a serve.ps1, a C#
+    console app using HttpListener, or any embedded server) that LISTENS on a FIXED port;
+  - binds dual-stack loopback -- 127.0.0.1 AND [::1] (or 0.0.0.0 / [::] / `::` with
+    dualstack enabled);
+  - serves its page at the root path GET /;
+  - references its assets with RELATIVE URLs (./... not /...).
+
+The canonical contract is `docs/local-exposure-convention.md` in this repository --
+read it if present, then go find the apps.
+
+Find EVERY such directory. Do NOT assume any particular app exists, and do NOT assume a
+particular layout -- discover them by locating the server's listen/bind call and the
+fixed port it uses. Search the WHOLE repository including nested folders (look for files
+like serve.mjs, server.js, serve.ps1, Program.cs, and calls such as `.listen(`,
+`createServer`, `HttpListener`, `app.listen`, `Prefixes.Add`).
+
+Before reporting a directory, VERIFY each condition against the actual code:
+  - a `listen`/bind call with a CONSTANT port (a variable holding a constant is fine;
+    `listen(0)` or an OS-assigned port is NOT a fixed port -- exclude it);
+  - the bind is dual-stack (an explicit IPv4-only host like '127.0.0.1' with no [::1]
+    prefix is NOT dual-stack -- exclude it);
+  - the match is in RUNNABLE code, not documentation -- code samples inside .md files
+    do not count;
+  - the code LISTENS; an HTTP *client* (http.get / http.request) does not count.
+
+For each app you find, report:
+  - name: the app's name (its directory name is a good default)
+  - port: the fixed port it listens on (an integer)
+  - folder: the repo-relative folder it lives in
+  - evidence: the file and line where the port is bound (e.g. homepage/serve.mjs:22)
+  - startCommand: the command that LAUNCHES the app, meant to be run from its
+    folder (the value of `folder`). Read it from the server file you found -- e.g.
+    `node serve.mjs` for a Node server file, `powershell -File serve.ps1` for a
+    PowerShell server, `dotnet run` for a C# project, or the documented start command
+    if one is given. Report just the command (no `cd` prefix). Use an empty string
+    ONLY if you genuinely cannot determine how to start it.
+
+If the repository has no such directory, return an empty "apps" array. Do not invent
+entries.
+
+### Output format
+
+Respond with ONLY valid JSON in this exact structure:
+
+{{OUTPUT_FORMAT}}

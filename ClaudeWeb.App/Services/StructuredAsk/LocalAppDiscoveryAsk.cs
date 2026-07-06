@@ -18,12 +18,27 @@ public class LocalAppDiscoveryAsk
     /// <paramref name="workingDirectory"/>.</summary>
     public Task<StructuredAskResult<LocalAppExposureReport>> DiscoverAsync(
         string workingDirectory, CancellationToken ct = default)
-    {
-        var prompt = Prompt.Replace(
+        => DiscoverAsync(workingDirectory, promptTemplate: null, ct);
+
+    /// <summary>Same discovery, with an optional prompt-template override — the seam the
+    /// offline discovery eval uses to score CANDIDATE prompts against the shipped baseline
+    /// (openspec change add-discovery-eval). A null/empty template means the shipped
+    /// <see cref="BaselinePromptTemplate"/>; production callers never pass one, so shipped
+    /// behavior is unchanged. A template must contain the {{OUTPUT_FORMAT}} placeholder.</summary>
+    public Task<StructuredAskResult<LocalAppExposureReport>> DiscoverAsync(
+        string workingDirectory, string? promptTemplate, CancellationToken ct = default)
+        => _runner.RunAsync(BuildPrompt(promptTemplate), LocalAppExposureReport.Parse, workingDirectory, ct);
+
+    /// <summary>The shipped discovery prompt template, exposed so the eval can run it as
+    /// the baseline and assert the no-override path stays byte-identical to it.</summary>
+    public static string BaselinePromptTemplate => Prompt;
+
+    /// <summary>Render a template (default: the shipped one) into the final prompt by
+    /// substituting the output-format skeleton derived from the typed report.</summary>
+    public static string BuildPrompt(string? promptTemplate = null) =>
+        (string.IsNullOrEmpty(promptTemplate) ? Prompt : promptTemplate).Replace(
             "{{OUTPUT_FORMAT}}",
             OutputFormatRenderer.Render(typeof(LocalAppExposureReport)));
-        return _runner.RunAsync(prompt, LocalAppExposureReport.Parse, workingDirectory, ct);
-    }
 
     private const string Prompt = @"
 Scan THIS repository for every web app in it that exposes itself as a **local app** --

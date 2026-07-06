@@ -14,6 +14,7 @@ import WaitingBadge from '../components/dashboard/WaitingBadge';
 import WaitingOnField from '../components/dashboard/WaitingOnField';
 import IdeasPanel from '../components/ideas/IdeasPanel';
 import AutopilotPanel from '../components/dashboard/AutopilotPanel';
+import AgentAuditPanel from '../components/dashboard/AgentAuditPanel';
 import DockToolbar from '../components/dashboard/DockToolbar';
 import './dashboard.css';
 
@@ -485,6 +486,9 @@ export default function Dashboard({ onClose }) {
   // (plans/autopilot-to-harness.md) only when its feature is on; otherwise it's
   // absent and the layout is just Ideas + agents, exactly as before.
   const autopilotOn = useFeature('autopilotTab');
+  // Agent audit trail joins the same way (openspec add-agent-audit-trail): a
+  // read-only citizen right below Autopilot, above the agents row.
+  const agentAuditOn = useFeature('agenticAudit');
   // The panels the free 2D drag layout manages, in DOM order. Autopilot leads so
   // it sits on top in grid-mode flow. (The task graph used to be a citizen here;
   // it now lives as a tab inside Ideas — plans/ideas-taskgraph-merge.md. Files is
@@ -492,6 +496,7 @@ export default function Dashboard({ onClose }) {
   // PinnedAgent and plans/agent-dock-files-tab.md.)
   const dragKeys = [
     ...(autopilotOn ? ['autopilot'] : []),
+    ...(agentAuditOn ? ['agentAudit'] : []),
     'ideas',
     'agents',
   ];
@@ -614,7 +619,7 @@ export default function Dashboard({ onClose }) {
     if (!ideasFloating) return;
     const agentsEl = bodyRef.current?.querySelector('[data-panel="agents"]');
     if (agentsEl) setFloatTop(agentsEl.offsetTop);
-  }, [ideasFloating, autopilotOn, ideasSize, ideasWide, gridSwapped, tabs.length]);
+  }, [ideasFloating, autopilotOn, agentAuditOn, ideasSize, ideasWide, gridSwapped, tabs.length]);
 
   // { [tabId]: { status, activity } } — fresher than the dock list, view-local.
   const [live, setLive] = useState({});
@@ -1144,6 +1149,35 @@ export default function Dashboard({ onClose }) {
                     type="button"
                     className="dash__drag"
                     onPointerDown={(e) => startPanelDrag('autopilot', e)}
+                    onPointerMove={movePanelDrag}
+                    onPointerUp={endPanelDrag}
+                    onPointerCancel={endPanelDrag}
+                    title={t('dashboard.dragPanel')}
+                    aria-label={t('dashboard.dragPanel')}
+                  >
+                    ⠿
+                  </button>
+                ) : null
+              }
+            />
+          </section>
+        )}
+        {/* Agent audit trail (openspec add-agent-audit-trail): read-only list of
+            agentic feature calls, a drag-layout citizen below Autopilot / above
+            the agents row (the Activity area). Self-gates on agenticAudit. */}
+        {agentAuditOn && (
+          <section
+            data-panel="agentAudit"
+            className={`dash__audit${dragKey === 'agentAudit' ? ' dash__panel--lifted' : ''}`}
+            style={free ? posStyle('agentAudit') : undefined}
+          >
+            <AgentAuditPanel
+              dragHandle={
+                free ? (
+                  <button
+                    type="button"
+                    className="dash__drag"
+                    onPointerDown={(e) => startPanelDrag('agentAudit', e)}
                     onPointerMove={movePanelDrag}
                     onPointerUp={endPanelDrag}
                     onPointerCancel={endPanelDrag}

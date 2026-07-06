@@ -1,3 +1,4 @@
+using ClaudeWeb.Services.Audit;
 using ClaudeWeb.Services.Events;
 using ClaudeWeb.Services.Logging;
 using ClaudeWeb.Services.Repositories;
@@ -43,14 +44,16 @@ public class LocalAppsController : ControllerBase
     private readonly LocalAppDiscoveryJobs _jobs;
     private readonly LocalAppRunner _runner;
     private readonly RepoEventLog _events;
+    private readonly AuditService _audit;
     private readonly Logger _logger;
 
-    public LocalAppsController(RepositoryResolver repos, LocalAppDiscoveryJobs jobs, LocalAppRunner runner, RepoEventLog events, Logger logger)
+    public LocalAppsController(RepositoryResolver repos, LocalAppDiscoveryJobs jobs, LocalAppRunner runner, RepoEventLog events, AuditService audit, Logger logger)
     {
         _repos = repos;
         _jobs = jobs;
         _runner = runner;
         _events = events;
+        _audit = audit;
         _logger = logger;
     }
 
@@ -68,7 +71,11 @@ public class LocalAppsController : ControllerBase
         if (string.IsNullOrWhiteSpace(repo.Path) || !Directory.Exists(repo.Path))
             return BadRequest(new { error = $"Repository working directory not found: '{repo.Path}'." });
 
-        var job = _jobs.StartOrJoin(repo.Id, repo.Path);
+        // Agentic audit (openspec add-agent-audit-trail): resolve WHO here — identity
+        // is request-scoped — and hand it to the registry, which owns the lifecycle
+        // and records the call only if this is an actual start (not a join).
+        var actor = _audit.ResolveActor(HttpContext);
+        var job = _jobs.StartOrJoin(repo.Id, repo.Name, repo.Path, actor.Display, actor.Ip);
         return Ok(JobBody(repo.Id, repo.Name, job));
     }
 
