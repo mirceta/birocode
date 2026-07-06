@@ -191,6 +191,25 @@
   width: min(560px, 92vw);
 }
 
+/* Agent audit trail as a drag-layout citizen (openspec add-agent-audit-trail):
+   same full-width-strip-in-flow / compact-float-in-free behaviour as Autopilot,
+   but plain stacking — it's a read-only log, not mission-control. */
+.dash__audit {
+  flex: 1 1 100%;
+  min-width: 0;
+  position: relative;
+}
+.dash__audit .aa-panel {
+  width: 100%;
+}
+.dash__body--free .dash__audit {
+  flex: none;
+  width: auto;
+}
+.dash__body--free .dash__audit .aa-panel {
+  width: min(560px, 92vw);
+}
+
 /* (Files is not a dashboard citizen — it lives as a tab INSIDE each agent dock;
    see PinnedAgent and plans/agent-dock-files-tab.md.) */
 
