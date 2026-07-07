@@ -46,7 +46,21 @@
   button:hover{border-color:var(--accent)} button.primary{background:var(--accent-deep);color:#fff;border:none;font-weight:600}
   a.btnlink{background:var(--panel);color:var(--ink);border:1px solid var(--edge);border-radius:7px;padding:4px 9px;font-size:12px;text-decoration:none;display:inline-block}
   a.btnlink:hover{border-color:var(--accent);color:var(--accent)}
-  #snd,#hsnd,#htest{padding:4px 9px;font-size:12px} #snd.on,#hsnd.on{border-color:var(--good);color:var(--good-text)}
+  #snd,#hsnd,#htest,#sndcfg{padding:4px 9px;font-size:12px} #snd.on,#hsnd.on{border-color:var(--good);color:var(--good-text)}
+
+  /* custom-sound config modal */
+  .sndmodal{position:fixed;inset:0;background:rgba(11,11,11,.42);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+  .sndmodal[hidden]{display:none}
+  .sndcard{background:var(--panel);border:1px solid var(--edge);border-radius:14px;box-shadow:0 10px 40px rgba(11,11,11,.22);width:min(560px,100%);max-height:90vh;overflow:auto;padding:18px 20px}
+  .sndhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+  .sndhead b{font-size:15px}
+  .sndnote{color:var(--dim);font-size:12.5px;margin:4px 0 12px}
+  .sndrow{display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:center;padding:10px 0;border-top:1px solid var(--edge)}
+  .sndrow:first-child{border-top:none}
+  .sndlbl b{display:block} .sndlbl span{color:var(--muted);font-size:11.5px}
+  .sndstate{grid-column:1;color:var(--dim);font-size:12px;font-family:var(--mono);word-break:break-all}
+  .sndacts{grid-column:2;grid-row:1/3;display:flex;gap:6px;align-items:center}
+  .sndacts button{padding:4px 9px;font-size:12px}
   button:disabled{opacity:.5;cursor:default}
   .addform{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--panel2);border:1px dashed #c3c2b7;border-radius:10px;padding:10px 12px;margin-bottom:16px}
   input{background:#fff;border:1px solid #c3c2b7;border-radius:7px;color:var(--ink);padding:7px 10px;font:inherit;font-size:13px}
@@ -221,6 +235,7 @@
     <a class="btnlink" id="displayToggle" href="?display=1"
        title="Display mode: same page, admin and log hidden, status enlarged — made for the third monitor, F11 to fullscreen">🖥 Display mode</a>
     <button id="snd" title="Play a sound in THIS browser on each new event">🔇 Device</button>
+    <button id="sndcfg" title="Assign your own audio file to each event type (stored only in this browser)">🎵 Sounds</button>
     <button id="hsnd" title="Beep on the HOST computer (running the harness) on each new event">🖥️ Host off</button>
     <button id="hmode" title="Host cue: a beep tone, or a spoken 'an agent has finished'">🔊 Beep</button>
     <button id="htest" title="Play the host sound right now, to test it">🔔 Test host</button>
@@ -270,6 +285,16 @@
     <div id="ghPanel" style="display:none"></div>
   </div>
 </main>
+<div id="sndModal" class="sndmodal" hidden>
+  <div class="sndcard">
+    <div class="sndhead"><b>🎵 Custom event sounds</b><button id="sndClose" title="Close">✕</button></div>
+    <p class="sndnote">Assign an audio file (mp3, wav, ogg, m4a) to each event type. Files are stored only in
+      <b>this browser</b> (IndexedDB) — nothing is uploaded or committed. An event type with no file uses the
+      built-in synth cue. Playback respects the <b>🔈 Device</b> toggle; <b>Test</b> plays regardless.</p>
+    <div id="sndRows"></div>
+    <input id="sndFile" type="file" accept="audio/*" hidden />
+  </div>
+</div>
 <div id="staleBanner">
   <div class="big">⚠ STATUS STALE — harness unreachable</div>
   <div class="small">last good poll <span id="staleTime">—</span> · showing last-known state (dimmed)</div>
@@ -329,9 +354,11 @@ const elWm = document.getElementById("wm"), elCount = document.getElementById("c
 
 let watermark = -1, total = 0, empty = true, firstPoll = true;
 
-// --- sound on each new event (Web Audio, no asset) ---------------------------
-// Browsers block audio until a user gesture, so sound is behind a toggle (which is
-// itself the unlocking gesture). Synthesised blip — no file to vendor.
+// --- sound on each new event (Web Audio; optional user-supplied audio) --------
+// Browsers block audio until a user gesture, so sound is behind the Device toggle
+// (which is itself the unlocking gesture). Built-in cues are synthesized per event
+// type (no file to vendor); on top of that the user can assign their OWN audio file
+// per type, stored device-local in IndexedDB — nothing is uploaded or committed.
 let soundOn = false, audioCtx = null;
 try { soundOn = localStorage.getItem("events_sound") === "1"; } catch {}
 function unlockAudio(){
@@ -340,19 +367,73 @@ function unlockAudio(){
     if (audioCtx.state === "suspended") audioCtx.resume();
   } catch {}
 }
-function blip(i){
-  if (!soundOn || !audioCtx) return;
-  const t = audioCtx.currentTime + i * 0.07;            // stagger a burst slightly
+
+// -- built-in synth motifs, per event type (a superset of the old single blip) --
+// each note: {freq, type, dur, gain, at(stagger s), to(glide target)}.
+const N = (freq, opt={}) => Object.assign({ freq }, opt);
+const SOUNDS = {
+  // start = bright rising query, ended = crisp affirmative resolve, else a neutral blip.
+  "turn.start": [N(587,{type:"square",dur:.07,gain:.10}), N(880,{type:"square",dur:.10,gain:.11,at:.07}), N(1175,{type:"triangle",dur:.12,gain:.09,at:.15})],
+  "turn.ended": [N(784,{type:"square",dur:.08,gain:.11}), N(1046,{type:"square",dur:.14,gain:.11,at:.09})],
+  _default:     [N(740,{type:"triangle"})],
+};
+function note(n, t0){
+  const t = t0 + (n.at || 0);
   const osc = audioCtx.createOscillator(), g = audioCtx.createGain();
-  osc.type = "triangle";
-  osc.frequency.value = 740 + (i % 3) * 90;             // small pitch variation
+  osc.type = n.type || "triangle";
+  osc.frequency.setValueAtTime(n.freq, t);
+  if (n.to) osc.frequency.exponentialRampToValueAtTime(n.to, t + (n.dur || 0.16));
+  const peak = n.gain || 0.16, dur = n.dur || 0.16;
   g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(0.16, t + 0.012); // quick attack
-  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);// soft decay
+  g.gain.exponentialRampToValueAtTime(peak, t + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   osc.connect(g); g.connect(audioCtx.destination);
-  osc.start(t); osc.stop(t + 0.18);
+  osc.start(t); osc.stop(t + dur + 0.02);
 }
-function playForNew(n){ const k = Math.min(n, 4); for (let i = 0; i < k; i++) blip(i); }
+function playMotif(notes){ if (!audioCtx) return; const t0 = audioCtx.currentTime + 0.02; notes.forEach(n => note(n, t0)); }
+function blip(i){ if (!audioCtx) return; playMotif([N(740 + (i % 3) * 90, { type:"triangle", at: i * 0.07 })]); } // toggle-on confirmation
+
+// -- user-supplied audio per event type (device-local, IndexedDB) --------------
+// Raw file bytes are kept per type; decoded to an AudioBuffer on first play and
+// routed through the same audioCtx, so the Device toggle + gesture-unlock still gate it.
+const IDB_DB = "eventsapp-sounds", IDB_STORE = "cues";
+function idb(){ return new Promise((res, rej) => { const r = indexedDB.open(IDB_DB, 1);
+  r.onupgradeneeded = () => r.result.createObjectStore(IDB_STORE, { keyPath: "type" });
+  r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+function idbReq(mode, fn){ return idb().then(db => new Promise((res, rej) => {
+  const tx = db.transaction(IDB_STORE, mode), rq = fn(tx.objectStore(IDB_STORE));
+  tx.oncomplete = () => res(rq && rq.result); tx.onerror = () => rej(tx.error); })); }
+const customBytes = {}, customBuf = {}, customName = {};
+async function loadCustomSounds(){
+  try { const all = await idbReq("readonly", st => st.getAll());
+    for (const r of (all || [])){ customBytes[r.type] = r.bytes; customName[r.type] = r.name; } } catch {}
+  renderSndCfg();
+}
+async function playBuffer(type){
+  if (!audioCtx) return false;
+  if (!customBuf[type]){
+    if (!customBytes[type]) return false;
+    try { customBuf[type] = await audioCtx.decodeAudioData(customBytes[type].slice(0)); }
+    catch { return false; }                              // undecodable → let caller fall back to synth
+  }
+  const src = audioCtx.createBufferSource(); src.buffer = customBuf[type];
+  const g = audioCtx.createGain(); g.gain.value = 0.9;
+  src.connect(g); g.connect(audioCtx.destination); src.start();
+  return true;
+}
+// dispatch: custom-for-type > built-in synth-for-type > custom default > neutral blip
+async function playCue(type){
+  if (!soundOn || !audioCtx) return;
+  if (customBytes[type] && await playBuffer(type)) return;
+  if (SOUNDS[type]) return playMotif(SOUNDS[type]);
+  if (customBytes._default && await playBuffer("_default")) return;
+  playMotif(SOUNDS._default);
+}
+function playForNew(evs){                                 // one cue per genuinely-new event, capped
+  const k = Math.min(evs.length, 4);
+  for (let i = 0; i < k; i++){ const ev = evs[i]; setTimeout(() => playCue(ev.type), i * 90); }
+}
+
 const btnSnd = document.getElementById("snd");
 function renderSnd(){ btnSnd.textContent = soundOn ? "🔈 Device" : "🔇 Device"; btnSnd.classList.toggle("on", soundOn); }
 btnSnd.onclick = () => {
@@ -364,6 +445,65 @@ btnSnd.onclick = () => {
 // If sound was left on from a previous visit, unlock on the first gesture anywhere.
 window.addEventListener("pointerdown", unlockAudio, { once: true });
 renderSnd();
+
+// -- custom-sound config modal -------------------------------------------------
+const CUE_SLOTS = [
+  { type:"turn.start", label:"Turn start", hint:"an agent began working" },
+  { type:"turn.ended", label:"Turn ended", hint:"an agent finished" },
+  { type:"_default",   label:"Other / unknown events", hint:"anything without its own sound" },
+];
+const sndModal = document.getElementById("sndModal");
+const sndRows = document.getElementById("sndRows");
+const sndFile = document.getElementById("sndFile");
+let sndPending = null;
+function renderSndCfg(){
+  if (!sndRows) return;
+  sndRows.innerHTML = "";
+  for (const slot of CUE_SLOTS){
+    const has = !!customBytes[slot.type];
+    const row = document.createElement("div"); row.className = "sndrow";
+    row.innerHTML =
+      `<div class="sndlbl"><b>${slot.label}</b><span>${slot.hint}</span></div>`+
+      `<div class="sndacts">`+
+        `<button data-snd="choose" data-type="${slot.type}">${has ? "Replace" : "Choose file…"}</button>`+
+        `<button data-snd="test" data-type="${slot.type}">▸ Test</button>`+
+        (has ? `<button data-snd="clear" data-type="${slot.type}">Clear</button>` : "")+
+      `</div>`+
+      `<div class="sndstate">${has ? "🎵 " + esc(customName[slot.type] || "custom file") : "built-in synth cue"}</div>`;
+    sndRows.appendChild(row);
+  }
+}
+async function assignSound(type, file){
+  let bytes; try { bytes = await file.arrayBuffer(); } catch { return; }
+  unlockAudio();
+  try { await audioCtx.decodeAudioData(bytes.slice(0)); }
+  catch { alert("Couldn't decode that audio file — try mp3, wav, ogg or m4a."); return; }
+  try { await idbReq("readwrite", st => st.put({ type, name: file.name, bytes })); } catch {}
+  customBytes[type] = bytes; customName[type] = file.name; delete customBuf[type];
+  renderSndCfg();
+}
+async function clearSound(type){
+  try { await idbReq("readwrite", st => st.delete(type)); } catch {}
+  delete customBytes[type]; delete customBuf[type]; delete customName[type];
+  renderSndCfg();
+}
+async function testSound(type){                           // audition regardless of the Device toggle
+  unlockAudio();
+  if (customBytes[type] && await playBuffer(type)) return;
+  playMotif(SOUNDS[type] || SOUNDS._default);
+}
+sndRows.addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-snd]"); if (!b) return;
+  const type = b.getAttribute("data-type"), act = b.getAttribute("data-snd");
+  if (act === "choose"){ sndPending = type; sndFile.value = ""; sndFile.click(); }
+  else if (act === "test"){ testSound(type); }
+  else if (act === "clear"){ clearSound(type); }
+});
+sndFile.onchange = () => { const f = sndFile.files && sndFile.files[0]; if (f && sndPending) assignSound(sndPending, f); };
+document.getElementById("sndcfg").onclick = () => { renderSndCfg(); sndModal.hidden = false; };
+document.getElementById("sndClose").onclick = () => { sndModal.hidden = true; };
+sndModal.addEventListener("click", (e) => { if (e.target === sndModal) sndModal.hidden = true; });
+loadCustomSounds();
 
 // --- host-side beep (server plays it on the computer running the harness) ----
 // This is a backend toggle (GET/POST /api/collector/sound), shared by everyone, not
@@ -699,7 +839,7 @@ async function pollEvents(){
     if (dockDirty){ dockDirty = false; renderDock(); }
     // Sound only for genuinely new events — not the backlog the first poll (or a
     // reload) pulls from watermark -1.
-    if (evs.length && !firstPoll) playForNew(evs.length);
+    if (evs.length && !firstPoll) playForNew(evs);
     firstPoll = false;
     if (typeof body.lastSeq === "number") watermark = body.lastSeq;
     elWm.textContent = watermark; elCount.textContent = total;
