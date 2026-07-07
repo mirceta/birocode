@@ -61,10 +61,11 @@ export default function PinnedAgent({
 
   // Per-app switcher (plans/dock-multi-local-app.md): one button per local app the
   // repo defines (mirrors the Local tab), instead of dock-local-app's single
-  // default-app toggle. Clicking an app swaps phone__screen from the chat to
-  // ProductFrame at /api/localview/{repoId}/app/{appId}/; clicking the active one
-  // returns to the chat. One app at a time, off by default so the wall stays light
-  // (a frame only mounts once an app is picked). Gated like the Local tab.
+  // default-app toggle. Clicking an app shows ProductFrame at
+  // /api/localview/{repoId}/app/{appId}/ over the chat's bar and messages (the
+  // composer stays below it — see altViewActive); clicking the active one
+  // returns to the full chat. One app at a time, off by default so the wall stays
+  // light (a frame only mounts once an app is picked). Gated like the Local tab.
   const canLocalApp = useFeature('localAppTab');
   const apps = canLocalApp ? (localApps || []) : [];
   const [openAppId, setOpenAppId] = useState(null);
@@ -74,15 +75,16 @@ export default function PinnedAgent({
   // phone can show — the SAME browse-and-view surface as the routed Files tab
   // (tree · viewer · pins · live poll · doc-links), scoped to THIS agent's repo.
   // It is a sibling of the Builder/Ask lanes and the local-app buttons: picking
-  // it swaps phone__screen to the FilesBrowser; picking a lane or app swaps back.
-  // Gated on the filesDock feature (Advanced by default).
+  // it shows the FilesBrowser over the chat (composer stays below); picking a
+  // lane or app swaps back. Gated on the filesDock feature (Advanced by default).
   const filesOn = useFeature('filesDock');
   const [showFiles, setShowFiles] = useState(false);
 
   // Event Console lane (openspec agent-dock-event-console): a sibling screen that
   // shows the per-repo log of harness-owned background operations (discovery / run
-  // / check). Like Files, picking it swaps phone__screen to <EventConsole>; picking
-  // a lane / app swaps back. Gated on the eventConsole feature (Advanced default).
+  // / check). Like Files, picking it shows <EventConsole> over the chat (composer
+  // stays below); picking a lane / app swaps back. Gated on the eventConsole
+  // feature (Advanced default).
   const consoleOn = useFeature('eventConsole');
   const [showConsole, setShowConsole] = useState(false);
 
@@ -97,6 +99,11 @@ export default function PinnedAgent({
   const toggleChatMaximized = () => setChatMaximized((v) => !v);
   const chatShowing = !showFiles && !openApp && !showConsole;
   const maximized = chatMaximized && chatShowing;
+  // Any alternate view open? (openspec local-app-overlay-keep-composer) The view
+  // no longer REPLACES the chat in phone__screen — it renders above one shared
+  // <Chat embedded composerOnly>, so the composer stays usable and the chat
+  // never remounts when opening/closing/switching views.
+  const altViewActive = !chatShowing;
 
   // "Discover local apps" (openspec discover-local-apps + discover-local-apps-resilient):
   // a read-only agent scan of THIS dock's repo for self-serving local-app exposures,
@@ -757,15 +764,15 @@ export default function PinnedAgent({
           <FilesBrowser repoId={tab.repoId} />
         ) : openApp ? (
           <ProductFrame url={`/api/localview/${tab.repoId}/app/${openApp.id}/`} port={openApp.port} />
-        ) : (
-          <Chat
-            chat={chat}
-            embedded
-            stashTabId={tab.id}
-            chatMaximized={maximized}
-            toggleChatMaximized={toggleChatMaximized}
-          />
-        )}
+        ) : null}
+        <Chat
+          chat={chat}
+          embedded
+          composerOnly={altViewActive}
+          stashTabId={tab.id}
+          chatMaximized={maximized}
+          toggleChatMaximized={toggleChatMaximized}
+        />
       </div>
     </div>
   );

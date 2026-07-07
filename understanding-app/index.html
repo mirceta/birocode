@@ -3,331 +3,116 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Deploy status — rollback armed</title>
-<style>
-  :root {
-    --bg: #0d1117;
-    --panel: #161b22;
-    --panel2: #1c2330;
-    --border: #30363d;
-    --text: #e6edf3;
-    --muted: #8b949e;
-    --green: #3fb950;
-    --green-dim: #238636;
-    --red: #f85149;
-    --red-dim: #da3633;
-    --amber: #d29922;
-    --blue: #58a6ff;
-    --purple: #bc8cff;
-    --mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    line-height: 1.55;
-    padding: 24px 16px 80px;
-  }
-  .wrap { max-width: 880px; margin: 0 auto; }
-  h1 { font-size: 1.5rem; margin-bottom: 4px; }
-  h2 { font-size: 1.1rem; margin: 36px 0 12px; color: var(--blue); }
-  .sub { color: var(--muted); margin-bottom: 24px; }
-  .card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 18px;
-    margin-bottom: 16px;
-  }
-  code, .mono { font-family: var(--mono); font-size: 0.88em; }
-  code {
-    background: var(--panel2);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 1px 6px;
-    white-space: nowrap;
-  }
-
-  /* ---- countdown banner ---- */
-  .banner {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 18px;
-    align-items: center;
-    border: 1px solid var(--amber);
-    background: linear-gradient(180deg, rgba(210,153,34,.10), rgba(210,153,34,.03));
-  }
-  .banner.expired { border-color: var(--red); background: linear-gradient(180deg, rgba(248,81,73,.10), rgba(248,81,73,.03)); }
-  .banner .big {
-    font-family: var(--mono);
-    font-size: 2.4rem;
-    font-weight: 700;
-    color: var(--amber);
-    min-width: 180px;
-  }
-  .banner.expired .big { color: var(--red); font-size: 1.3rem; min-width: 0; }
-  .banner .lbl { color: var(--muted); font-size: .85rem; text-transform: uppercase; letter-spacing: .08em; }
-  .pill {
-    display: inline-block;
-    padding: 2px 10px;
-    border-radius: 999px;
-    font-size: .78rem;
-    font-weight: 600;
-    border: 1px solid;
-    margin-right: 6px;
-  }
-  .pill.live  { color: var(--green); border-color: var(--green-dim); background: rgba(63,185,80,.1); }
-  .pill.armed { color: var(--amber); border-color: var(--amber);     background: rgba(210,153,34,.1); }
-  .pill.fired { color: var(--red);   border-color: var(--red-dim);   background: rgba(248,81,73,.1); }
-
-  /* ---- timeline ---- */
-  .timeline { position: relative; padding-left: 26px; }
-  .timeline::before {
-    content: "";
-    position: absolute; left: 8px; top: 6px; bottom: 6px;
-    width: 2px; background: var(--border);
-  }
-  .tl-item { position: relative; padding: 0 0 20px 8px; }
-  .tl-item:last-child { padding-bottom: 0; }
-  .tl-item::before {
-    content: "";
-    position: absolute; left: -24px; top: 5px;
-    width: 12px; height: 12px; border-radius: 50%;
-    background: var(--bg);
-    border: 3px solid var(--muted);
-  }
-  .tl-item.done::before   { border-color: var(--green); background: var(--green-dim); }
-  .tl-item.now::before    { border-color: var(--amber); background: var(--amber); box-shadow: 0 0 0 4px rgba(210,153,34,.25); }
-  .tl-item.future::before { border-color: var(--border); }
-  .tl-time { font-family: var(--mono); color: var(--muted); font-size: .82rem; }
-  .tl-title { font-weight: 600; }
-  .tl-desc { color: var(--muted); font-size: .92rem; }
-
-  /* ---- fork simulator ---- */
-  .fork-buttons { display: flex; gap: 12px; flex-wrap: wrap; margin: 14px 0 18px; }
-  button.choice {
-    flex: 1 1 220px;
-    padding: 14px 18px;
-    border-radius: 8px;
-    font-size: 1rem;
-    font-weight: 700;
-    cursor: pointer;
-    border: 1px solid;
-    background: var(--panel2);
-    color: var(--text);
-    transition: transform .1s, box-shadow .2s;
-  }
-  button.choice:hover { transform: translateY(-2px); }
-  button.choice.keep   { border-color: var(--green-dim); }
-  button.choice.keep:hover   { box-shadow: 0 4px 18px rgba(63,185,80,.25); }
-  button.choice.ignore { border-color: var(--red-dim); }
-  button.choice.ignore:hover { box-shadow: 0 4px 18px rgba(248,81,73,.25); }
-  button.choice small { display: block; font-weight: 400; color: var(--muted); margin-top: 4px; }
-  button.choice.active.keep   { background: rgba(63,185,80,.12); }
-  button.choice.active.ignore { background: rgba(248,81,73,.12); }
-
-  .flow { display: none; }
-  .flow.visible { display: block; }
-  .step {
-    display: flex; gap: 12px; align-items: flex-start;
-    padding: 10px 12px; margin-bottom: 8px;
-    background: var(--panel2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    opacity: 0;
-    transform: translateX(-12px);
-    transition: opacity .4s, transform .4s;
-  }
-  .step.shown { opacity: 1; transform: translateX(0); }
-  .step .num {
-    flex: 0 0 26px; height: 26px;
-    display: flex; align-items: center; justify-content: center;
-    border-radius: 50%;
-    font-family: var(--mono); font-size: .8rem; font-weight: 700;
-  }
-  .flow.keep   .num { background: rgba(63,185,80,.15); color: var(--green); border: 1px solid var(--green-dim); }
-  .flow.ignore .num { background: rgba(248,81,73,.15); color: var(--red); border: 1px solid var(--red-dim); }
-  .step .body strong { display: block; }
-  .step .body span { color: var(--muted); font-size: .9rem; }
-  .outcome {
-    margin-top: 10px; padding: 14px;
-    border-radius: 8px; font-weight: 600;
-    opacity: 0; transition: opacity .5s;
-  }
-  .outcome.shown { opacity: 1; }
-  .flow.keep .outcome   { background: rgba(63,185,80,.1);  border: 1px solid var(--green-dim); color: var(--green); }
-  .flow.ignore .outcome { background: rgba(248,81,73,.1);  border: 1px solid var(--red-dim);  color: var(--red); }
-
-  /* ---- machinery diagram ---- */
-  .machine { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
-  .part {
-    background: var(--panel2);
-    border: 1px solid var(--border);
-    border-left: 4px solid var(--purple);
-    border-radius: 8px;
-    padding: 12px 14px;
-  }
-  .part.green  { border-left-color: var(--green); }
-  .part.amber  { border-left-color: var(--amber); }
-  .part.red    { border-left-color: var(--red); }
-  .part .name { font-family: var(--mono); font-weight: 700; font-size: .92rem; }
-  .part .role { color: var(--muted); font-size: .88rem; margin-top: 4px; }
-
-  .facts { width: 100%; border-collapse: collapse; }
-  .facts td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
-  .facts tr:last-child td { border-bottom: none; }
-  .facts td:first-child { color: var(--muted); white-space: nowrap; width: 40%; }
-
-  .note { color: var(--muted); font-size: .88rem; margin-top: 10px; }
-</style>
+<title>Understanding — composer-only docks: shipped &amp; verified</title>
+<link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-<div class="wrap">
-
-  <h1>New build is live — the dead-man's switch is armed</h1>
-  <p class="sub">What the last status update means: the auto-understanding deploy succeeded,
-  but it only <em>stays</em> live if you say <strong>"keep it"</strong> before the rollback deadline.</p>
-
-  <!-- Countdown -->
-  <div class="card banner" id="banner">
-    <div>
-      <div class="lbl" id="cdLabel">Auto-rollback fires in</div>
-      <div class="big" id="countdown">--:--</div>
-    </div>
-    <div>
-      <div style="margin-bottom:6px">
-        <span class="pill live">NEW BUILD LIVE</span>
-        <span class="pill armed" id="armPill">ROLLBACK ARMED</span>
-      </div>
-      <div class="tl-desc">Deadline: <span class="mono">22:59</span> on 2026-07-06.
-      Harness process <span class="mono">PID 26728</span>, started <span class="mono">22:44:04</span>.</div>
-    </div>
+<header class="hdr">
+  <div class="hdr__title">
+    <span class="hdr__badge hdr__badge--done">OpenSpec change · implemented ✓ 10/10 tasks</span>
+    <h1>local-app-overlay-keep-composer</h1>
   </div>
+  <p class="hdr__sub">
+    The change is <b>implemented and browser-verified</b>: every alternate dock view
+    (Event Console · Files · local app) now renders above one always-mounted chat whose
+    composer stays usable. This page explains the latest turn — the four files that changed,
+    the one real bug the tests caught, and exactly how the verification proved it works.
+  </p>
+  <nav class="tabs" id="tabs">
+    <button class="tab tab--active" data-view="shipped">1 · What shipped — try it</button>
+    <button class="tab" data-view="bug">2 · The bug tests caught</button>
+    <button class="tab" data-view="verify">3 · How it was verified</button>
+  </nav>
+</header>
 
-  <!-- Timeline -->
-  <h2>What just happened (the deploy timeline)</h2>
-  <div class="card">
-    <div class="timeline">
-      <div class="tl-item done">
-        <div class="tl-time">before 22:44</div>
-        <div class="tl-title">Snapshot: live build saved to <code>run-bin.lastgood</code></div>
-        <div class="tl-desc">swap.ps1 copies the currently-live binaries aside <em>before</em> touching anything — this is the safety net everything below relies on.</div>
-      </div>
-      <div class="tl-item done">
-        <div class="tl-time">~22:44</div>
-        <div class="tl-title">Stage → stop → swap → restart</div>
-        <div class="tl-desc">New build (with the auto-understanding-after-turn feature) staged, swapped into the run dir preserving <code>logs/</code> + <code>appsettings.json</code>, harness restarted on :5099.</div>
-      </div>
-      <div class="tl-item done">
-        <div class="tl-time">22:44:04</div>
-        <div class="tl-title">Health check passed — new process is live (PID 26728)</div>
-        <div class="tl-desc">Only after a healthy restart does the switch get armed.</div>
-      </div>
-      <div class="tl-item now">
-        <div class="tl-time">now</div>
-        <div class="tl-title">Rollback armed: scheduled task <code>ClaudeWebAutoRollback</code></div>
-        <div class="tl-desc">A Windows scheduled task will run <code>rollback.ps1</code> at 22:59 unless it is deleted first.</div>
-      </div>
-      <div class="tl-item future">
-        <div class="tl-time">22:59</div>
-        <div class="tl-title">The fork — see below</div>
-        <div class="tl-desc">Either you said "keep it" by now, or live auto-reverts. No operator needed for the revert; that's the point.</div>
+<main id="views">
+
+  <!-- ============ VIEW 1: what shipped ============ -->
+  <section class="view view--active" id="view-shipped">
+    <p class="view__intro">
+      This dock simulates the <b>shipped</b> behavior. Open <span class="k">📊 Console</span>,
+      <span class="k">📁 Files</span> or <span class="k">🚀 my-app</span>: the view covers the
+      chat bar + messages, the composer stays below it. Type a draft and switch
+      <em>directly between views</em> — it survives, because one chat instance never remounts.
+      Send while a view is open, then close the view: the turn is in the transcript.
+    </p>
+    <div class="ship-demo">
+      <div class="phone-sim" id="phoneSim"></div>
+      <div class="files-panel">
+        <h2 class="sect-title">The four files that changed <span class="sect-hint">— click one</span></h2>
+        <div class="filecards" id="fileCards"></div>
       </div>
     </div>
-  </div>
+  </section>
 
-  <!-- Fork simulator -->
-  <h2>The fork — click a path to see what happens</h2>
-  <div class="card">
-    <div class="fork-buttons">
-      <button class="choice keep" id="btnKeep">
-        You say "keep it"
-        <small>Claude runs keep.ps1</small>
-      </button>
-      <button class="choice ignore" id="btnIgnore">
-        You do nothing
-        <small>22:59 arrives</small>
-      </button>
-    </div>
+  <!-- ============ VIEW 2: the height bug ============ -->
+  <section class="view" id="view-bug">
+    <p class="view__intro">
+      The first CSS attempt — <code>.chat--composer-only { flex: 0 0 auto }</code> — looked
+      right and passed a glance. The browser tests showed the alternate views rendered at
+      <b>0px</b>. The culprit is how flexbox resolves an <code>auto</code> flex-basis:
+      it falls back to the element's <code>height</code> property — and the chat's <b>base</b>
+      rule sets <code>height: calc(100dvh - …)</code>. Step through the chain, then flip the fix.
+    </p>
 
-    <div class="flow keep" id="flowKeep">
-      <div class="step"><div class="num">1</div><div class="body">
-        <strong>keep.ps1 runs</strong>
-        <span>Deletes the <code>ClaudeWebAutoRollback</code> scheduled task — the timer simply ceases to exist.</span>
-      </div></div>
-      <div class="step"><div class="num">2</div><div class="body">
-        <strong>Nothing happens at 22:59</strong>
-        <span>There is no task left to fire. <code>run-bin.lastgood</code> stays on disk as a manual fallback, unused.</span>
-      </div></div>
-      <div class="step"><div class="num">3</div><div class="body">
-        <strong>New build is permanent</strong>
-        <span>The auto-understanding feature stays live; the next deploy will snapshot <em>this</em> build as the new last-good.</span>
-      </div></div>
-      <div class="outcome">✔ Outcome: new build stays live. Confirmed by a human, kept by design.</div>
-    </div>
-
-    <div class="flow ignore" id="flowIgnore">
-      <div class="step"><div class="num">1</div><div class="body">
-        <strong>22:59 — scheduled task fires</strong>
-        <span>Windows runs <code>rollback.ps1</code> with no human involved. This is the "dead man" part: silence means revert.</span>
-      </div></div>
-      <div class="step"><div class="num">2</div><div class="body">
-        <strong>Live restored from <code>run-bin.lastgood</code></strong>
-        <span>The pre-deploy snapshot is mirrored back with <code>robocopy /MIR</code> (never plain copy — stale files must die too) and the harness restarts.</span>
-      </div></div>
-      <div class="step"><div class="num">3</div><div class="body">
-        <strong>Previous build is live again</strong>
-        <span>The auto-understanding feature is gone from live (the code is still safe on the branch). Live <code>client/dist</code> reverts too — a redeploy must rebuild the frontend first.</span>
-      </div></div>
-      <div class="outcome">✘ Outcome: live auto-reverts to the last-good build. Nothing is lost, but the deploy is undone.</div>
-    </div>
-
-    <p class="note">Why it works this way: if the new build crashed the harness, you couldn't
-    use the harness to fix it — the phone UI would be dead. So the default action is
-    <em>revert</em>, and keeping the build requires a positive signal.</p>
-  </div>
-
-  <!-- Machinery -->
-  <h2>The moving parts</h2>
-  <div class="card">
-    <div class="machine">
-      <div class="part green">
-        <div class="name">swap.ps1</div>
-        <div class="role">The one canonical deploy: origin/main guard, stage-before-stop, swap, health-check, then arms the switch.</div>
-      </div>
-      <div class="part">
-        <div class="name">run-bin.lastgood</div>
-        <div class="role">Snapshot of the live build taken <em>before</em> the swap — the restore source.</div>
-      </div>
-      <div class="part amber">
-        <div class="name">ClaudeWebAutoRollback <span style="color:var(--muted);font-weight:400">(scheduled task)</span></div>
-        <div class="role">The timer. A real <code>DateTime</code> trigger (never <code>schtasks /SD</code> — locale bug). Currently set for 22:59.</div>
-      </div>
-      <div class="part red">
-        <div class="name">rollback.ps1</div>
-        <div class="role">Fires on the deadline: <code>robocopy /MIR</code> from last-good, restart live. Runs unattended.</div>
-      </div>
-      <div class="part green">
-        <div class="name">keep.ps1</div>
-        <div class="role">The disarm. Deletes the scheduled task. This is what "keep it" triggers.</div>
+    <div class="chainlab">
+      <div class="chain" id="chain"></div>
+      <div class="buglab">
+        <div class="seg" id="bugSeg">
+          <button class="seg__btn seg__btn--active" data-b="broken">✗ flex: 0 0 auto</button>
+          <button class="seg__btn" data-b="fixed">✓ + height: auto</button>
+        </div>
+        <div class="screenbox">
+          <div class="screenbox__label">.phone__screen — <b>603px</b> (dock minus chrome)</div>
+          <div class="screenbox__frame" id="screenFrame">
+            <div class="sb-item sb-item--view" id="sbView"><b id="sbViewH">0px</b><span>&lt;EventConsole/&gt; · flex: 1 1 auto</span></div>
+            <div class="sb-item sb-item--chat" id="sbChat"><b id="sbChatH">944px</b><span id="sbChatWhy">chat basis = height = calc(100dvh − …)</span></div>
+          </div>
+        </div>
+        <p class="cond-note" id="bugNote"></p>
+        <pre class="codeblock" id="bugCode"></pre>
       </div>
     </div>
-  </div>
 
-  <!-- Facts -->
-  <h2>The status at a glance</h2>
-  <div class="card">
-    <table class="facts">
-      <tr><td>What was deployed</td><td>The <code>feat/auto-understanding-after-turn</code> build — auto-refresh of the Understanding app after each chat turn</td></tr>
-      <tr><td>Live process</td><td><span class="mono">PID 26728</span>, started <span class="mono">22:44:04</span>, serving on <span class="mono">:5099</span></td></tr>
-      <tr><td>Rollback deadline</td><td><span class="mono">22:59</span>, 2026-07-06 (~15 min after the healthy restart)</td></tr>
-      <tr><td>To keep the build</td><td>Say <strong>"keep it"</strong> → <code>keep.ps1</code> disarms the task</td></tr>
-      <tr><td>If you do nothing</td><td>Live auto-reverts to <code>run-bin.lastgood</code>; the feature branch is unaffected</td></tr>
-    </table>
-  </div>
+    <p class="view__intro view__intro--tail">
+      Why the normal embedded chat never hit this: <code>flex: 1</code> means
+      <code>flex-basis: 0%</code> — a <em>definite</em> basis, so the <code>height</code>
+      property is ignored entirely. Only when the basis became <code>auto</code> did the
+      forgotten viewport height come back from the dead. Measured evidence from the debug run:
+      chat <b>944px</b> · screen <b>603px</b> · view <b>0px</b> → after the fix:
+      view <b>462px</b> · composer <b>141px</b>.
+    </p>
+  </section>
 
-</div>
+  <!-- ============ VIEW 3: verification ============ -->
+  <section class="view" id="view-verify">
+    <p class="view__intro">
+      Verification ran a <b>real browser</b> (headless Playwright, per
+      <code>docs/claude-web/browser-testing.md</code>) against an <b>isolated preview harness</b>
+      on <code>:5210</code> — never the live app. Two safety choices made it side-effect-free,
+      and one DOM trick made "never remounts" <em>provable</em> rather than assumed.
+      Click each step of the run.
+    </p>
+
+    <div class="safety" id="safety"></div>
+
+    <h2 class="sect-title">The test run — every step green</h2>
+    <div class="runlab">
+      <div class="runsteps" id="runSteps"></div>
+      <div class="runevidence" id="runEvidence"></div>
+    </div>
+
+    <h2 class="sect-title">Two environment traps the test had to route around</h2>
+    <div class="traps" id="traps"></div>
+  </section>
+
+</main>
+
+<footer class="ftr">
+  <code>openspec validate --strict</code> ✓ · tasks <b>10/10</b> ·
+  preview instance on :5210 stopped ·
+  next: merge, then <code>/opsx:archive</code>
+</footer>
 
 <script src="./app.js"></script>
 </body>
