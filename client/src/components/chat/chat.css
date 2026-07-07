@@ -284,6 +284,17 @@
   font-size: 12px;
 }
 
+/* Composer-only mode (openspec local-app-overlay-keep-composer): the dock keeps
+   the chat mounted beneath an alternate view (local app / Event Console /
+   Files) so the operator can keep prompting. Everything above the composer is
+   hidden — not unmounted — so stream/scroll state survives; the .chat-input's
+   own top border separates it from the view above. */
+.chat--composer-only .chat__bar,
+.chat--composer-only .chat__pinned,
+.chat--composer-only .chat__body {
+  display: none;
+}
+
 /* "Show earlier messages" — only present when the tail window hides history
    (plans/chat-windowing.md). Sits centred at the top of the scroll area. */
 .chat__earlier {

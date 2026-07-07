@@ -1688,6 +1688,19 @@
   flex: 0 0 auto;
 }
 
+/* Alternate view keeps the composer (openspec local-app-overlay-keep-composer):
+   while a local app / Event Console / Files view is open, the embedded chat
+   drops to composer-only (bar/body hidden in chat.css) and must stop claiming
+   the screen's height — the view above is the flex:1 child, the chat shrinks
+   to its composer's natural height. height:auto matters: with flex-basis auto,
+   the base `.chat { height: calc(100dvh - …) }` would otherwise become the
+   basis and the "shrunk" chat would still be viewport-tall. */
+.chat.chat--embedded.chat--composer-only {
+  flex: 0 0 auto;
+  height: auto;
+  min-height: auto;
+}
+
 /* Narrow screens: one phone per row, each a tall slab; beat the inline
    grid-template-columns Dashboard.jsx sets for the square layout. */
 @media (max-width: 700px) {
