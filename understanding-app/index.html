@@ -3,116 +3,180 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Understanding — composer-only docks: shipped &amp; verified</title>
+<title>Zoom verification — redeploy &amp; 23/23</title>
 <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-<header class="hdr">
-  <div class="hdr__title">
-    <span class="hdr__badge hdr__badge--done">OpenSpec change · implemented ✓ 10/10 tasks</span>
-    <h1>local-app-overlay-keep-composer</h1>
-  </div>
-  <p class="hdr__sub">
-    The change is <b>implemented and browser-verified</b>: every alternate dock view
-    (Event Console · Files · local app) now renders above one always-mounted chat whose
-    composer stays usable. This page explains the latest turn — the four files that changed,
-    the one real bug the tests caught, and exactly how the verification proved it works.
-  </p>
-  <nav class="tabs" id="tabs">
-    <button class="tab tab--active" data-view="shipped">1 · What shipped — try it</button>
-    <button class="tab" data-view="bug">2 · The bug tests caught</button>
-    <button class="tab" data-view="verify">3 · How it was verified</button>
-  </nav>
+<header class="hero">
+  <h1>Per-frame zoom: redeploy &amp; verification</h1>
+  <p class="sub">Why the preview rig had vanished from :5300, how it was rebuilt in isolation on :5301,
+  and what the <strong>23/23</strong> Playwright checks actually proved.</p>
 </header>
 
-<main id="views">
+<nav class="tabs" id="tabs">
+  <button class="tab active" data-view="story">1 · What happened</button>
+  <button class="tab" data-view="rig">2 · The rig &amp; ports</button>
+  <button class="tab" data-view="checks">3 · The 23 checks</button>
+  <button class="tab" data-view="demo">4 · Live zoom demo</button>
+</nav>
 
-  <!-- ============ VIEW 1: what shipped ============ -->
-  <section class="view view--active" id="view-shipped">
-    <p class="view__intro">
-      This dock simulates the <b>shipped</b> behavior. Open <span class="k">📊 Console</span>,
-      <span class="k">📁 Files</span> or <span class="k">🚀 my-app</span>: the view covers the
-      chat bar + messages, the composer stays below it. Type a draft and switch
-      <em>directly between views</em> — it survives, because one chat instance never remounts.
-      Send while a view is open, then close the view: the turn is in the transcript.
-    </p>
-    <div class="ship-demo">
-      <div class="phone-sim" id="phoneSim"></div>
-      <div class="files-panel">
-        <h2 class="sect-title">The four files that changed <span class="sect-hint">— click one</span></h2>
-        <div class="filecards" id="fileCards"></div>
+<main>
+<!-- ============ VIEW 1: STORY ============ -->
+<section class="view active" id="view-story">
+  <p class="lede">The zoom feature test suite had started failing on its dashboard section. The cause
+  wasn't the feature — the <em>test environment itself had disappeared</em>. Step through the timeline:</p>
+  <div class="timeline" id="timeline"></div>
+  <div class="timeline-detail card" id="timeline-detail"></div>
+  <div class="timeline-nav">
+    <button id="tl-prev" class="btn">← Back</button>
+    <button id="tl-next" class="btn primary">Next →</button>
+  </div>
+</section>
+
+<!-- ============ VIEW 2: RIG ============ -->
+<section class="view" id="view-rig">
+  <p class="lede">Four ports, four very different roles. Hover / tap each box. The key rule of
+  <strong>Self-Development</strong>: never test against the live harness — build an isolated copy.</p>
+  <div class="portmap">
+    <div class="portrow">
+      <div class="portbox live" data-port="5099">
+        <div class="portnum">:5099</div>
+        <div class="portname">Live harness</div>
+        <div class="portstate ok">never touched</div>
+      </div>
+      <div class="portbox dead" data-port="5300">
+        <div class="portnum">:5300</div>
+        <div class="portname">Old preview harness</div>
+        <div class="portstate bad">hijacked by Autodev.Web</div>
       </div>
     </div>
-  </section>
+    <div class="portrow">
+      <div class="portbox fresh" data-port="5301">
+        <div class="portnum">:5301</div>
+        <div class="portname">New isolated harness</div>
+        <div class="portstate ok">health 200 · still running</div>
+      </div>
+      <div class="portbox probe" data-port="5311">
+        <div class="portnum">:5311</div>
+        <div class="portname">Zoom-probe product</div>
+        <div class="portstate ok">ruler + cells · still running</div>
+      </div>
+    </div>
+  </div>
+  <div class="card" id="port-detail"><em>Hover or tap a port box above…</em></div>
 
-  <!-- ============ VIEW 2: the height bug ============ -->
-  <section class="view" id="view-bug">
-    <p class="view__intro">
-      The first CSS attempt — <code>.chat--composer-only { flex: 0 0 auto }</code> — looked
-      right and passed a glance. The browser tests showed the alternate views rendered at
-      <b>0px</b>. The culprit is how flexbox resolves an <code>auto</code> flex-basis:
-      it falls back to the element's <code>height</code> property — and the chat's <b>base</b>
-      rule sets <code>height: calc(100dvh - …)</code>. Step through the chain, then flip the fix.
-    </p>
+  <h3>Anatomy of the isolated rig</h3>
+  <div class="rigtree">
+<pre>.preview-test/zoom-harness/
+├── bin/                    ← fresh <code>dotnet publish</code> of ClaudeWeb.App
+│   └── client/dist/        ← fresh <code>npm run build</code> of the frontend
+└── data/                   ← its OWN datadir (CLAUDEWEB_DATADIR)
+                              → never shares state with live :5099</pre>
+  </div>
+  <p class="note">Launched <strong>detached</strong> (<code>cmd start /b</code>) with
+  <code>CLAUDEWEB_PORT=5301</code> so it survives the shell that started it — the same discipline
+  <code>docs/claude-web/self-dev.md</code> demands for anything touching this repo.</p>
+</section>
 
-    <div class="chainlab">
-      <div class="chain" id="chain"></div>
-      <div class="buglab">
-        <div class="seg" id="bugSeg">
-          <button class="seg__btn seg__btn--active" data-b="broken">✗ flex: 0 0 auto</button>
-          <button class="seg__btn" data-b="fixed">✓ + height: auto</button>
+<!-- ============ VIEW 3: CHECKS ============ -->
+<section class="view" id="view-checks">
+  <p class="lede">The Playwright run drives a real headless browser against :5301 —
+  <strong>23 checks in 3 groups</strong>. Click any check to see what it proves.
+  <span class="pillcount" id="checkcount"></span></p>
+  <div class="checkgroups" id="checkgroups"></div>
+  <div class="card" id="check-detail"><em>Click a check above…</em></div>
+  <div class="noisebox">
+    <strong>The noise that wasn't a failure:</strong> a few <code>403</code> / <code>ERR_CONNECTION_REFUSED</code>
+    console lines mid-run came from the freshly-registered repo's background probes (git &amp; screen endpoints
+    warming up) — every functional assertion passed.
+  </div>
+</section>
+
+<!-- ============ VIEW 4: DEMO ============ -->
+<section class="view" id="view-demo">
+  <p class="lede">This is the exact mechanic the checks verified, rebuilt here in miniature.
+  The trick: <code>transform: scale(z)</code> on the frame content plus
+  <code>width: 100%/z</code> compensation — so the <em>frame footprint never changes</em>,
+  only what the inner page thinks its viewport is.</p>
+
+  <h3>A. One frame, one zoom</h3>
+  <div class="demo-single">
+    <div class="fakeframe" id="frame1">
+      <div class="fakeviewport" id="viewport1">
+        <div class="fakecontent" id="content1">
+          <div class="fakebanner">ZOOM PROBE on :5311</div>
+          <div class="ruler" id="ruler1"></div>
+          <div class="cells" id="cells1"></div>
         </div>
-        <div class="screenbox">
-          <div class="screenbox__label">.phone__screen — <b>603px</b> (dock minus chrome)</div>
-          <div class="screenbox__frame" id="screenFrame">
-            <div class="sb-item sb-item--view" id="sbView"><b id="sbViewH">0px</b><span>&lt;EventConsole/&gt; · flex: 1 1 auto</span></div>
-            <div class="sb-item sb-item--chat" id="sbChat"><b id="sbChatH">944px</b><span id="sbChatWhy">chat basis = height = calc(100dvh − …)</span></div>
+      </div>
+      <div class="zoomoverlay">
+        <button class="zbtn" id="z1minus">−</button>
+        <button class="zpill" id="z1pill" title="click to reset">100%</button>
+        <button class="zbtn" id="z1plus">+</button>
+      </div>
+    </div>
+    <div class="demo-readout card">
+      <div>frame footprint: <strong id="r-foot">—</strong> <span class="tag ok">constant</span></div>
+      <div>inner viewport width: <strong id="r-inner">—</strong> <span class="tag">= footprint ÷ zoom</span></div>
+      <div>zoom: <strong id="r-zoom">100%</strong> <span class="tag">clamped 50–200%</span></div>
+      <p class="note">At <strong>200%</strong> the inner viewport <em>halves</em> (the run measured 499→250 px);
+      at <strong>50%</strong> it <em>doubles</em> (499→999 px). Click the % pill to reset. The + and −
+      buttons disable at the clamps — exactly as the clamp checks asserted.</p>
+    </div>
+  </div>
+
+  <h3>B. Two docks — independence &amp; composition</h3>
+  <p>Dashboard docks each carry their own frame zoom, <em>and</em> a dock-wide content-zoom slider
+  scales the whole dock. The final scale is the <strong>product</strong> — frame zoom survives.</p>
+  <div class="demo-docks">
+    <div class="dock" id="dockA">
+      <div class="dockhead">Dock A <span class="dockzoom" id="dockAz"></span></div>
+      <div class="dockscale" id="dockAscale">
+        <div class="fakeframe small">
+          <div class="fakeviewport">
+            <div class="fakecontent" id="contentA">
+              <div class="fakebanner sm">ZOOM PROBE</div>
+              <div class="cells sm" id="cellsA"></div>
+            </div>
+          </div>
+          <div class="zoomoverlay">
+            <button class="zbtn" data-dock="A" data-d="-1">−</button>
+            <button class="zpill" data-dock="A" id="pillA">100%</button>
+            <button class="zbtn" data-dock="A" data-d="1">+</button>
           </div>
         </div>
-        <p class="cond-note" id="bugNote"></p>
-        <pre class="codeblock" id="bugCode"></pre>
       </div>
+      <label class="slider">dock-wide zoom <input type="range" id="sliderA" min="60" max="140" value="100" step="10"> <span id="sliderAval">100%</span></label>
     </div>
-
-    <p class="view__intro view__intro--tail">
-      Why the normal embedded chat never hit this: <code>flex: 1</code> means
-      <code>flex-basis: 0%</code> — a <em>definite</em> basis, so the <code>height</code>
-      property is ignored entirely. Only when the basis became <code>auto</code> did the
-      forgotten viewport height come back from the dead. Measured evidence from the debug run:
-      chat <b>944px</b> · screen <b>603px</b> · view <b>0px</b> → after the fix:
-      view <b>462px</b> · composer <b>141px</b>.
-    </p>
-  </section>
-
-  <!-- ============ VIEW 3: verification ============ -->
-  <section class="view" id="view-verify">
-    <p class="view__intro">
-      Verification ran a <b>real browser</b> (headless Playwright, per
-      <code>docs/claude-web/browser-testing.md</code>) against an <b>isolated preview harness</b>
-      on <code>:5210</code> — never the live app. Two safety choices made it side-effect-free,
-      and one DOM trick made "never remounts" <em>provable</em> rather than assumed.
-      Click each step of the run.
-    </p>
-
-    <div class="safety" id="safety"></div>
-
-    <h2 class="sect-title">The test run — every step green</h2>
-    <div class="runlab">
-      <div class="runsteps" id="runSteps"></div>
-      <div class="runevidence" id="runEvidence"></div>
+    <div class="dock" id="dockB">
+      <div class="dockhead">Dock B <span class="dockzoom" id="dockBz"></span></div>
+      <div class="dockscale" id="dockBscale">
+        <div class="fakeframe small">
+          <div class="fakeviewport">
+            <div class="fakecontent" id="contentB">
+              <div class="fakebanner sm">ZOOM PROBE</div>
+              <div class="cells sm" id="cellsB"></div>
+            </div>
+          </div>
+          <div class="zoomoverlay">
+            <button class="zbtn" data-dock="B" data-d="-1">−</button>
+            <button class="zpill" data-dock="B" id="pillB">100%</button>
+            <button class="zbtn" data-dock="B" data-d="1">+</button>
+          </div>
+        </div>
+      </div>
+      <label class="slider">dock-wide zoom <input type="range" id="sliderB" min="60" max="140" value="100" step="10"> <span id="sliderBval">100%</span></label>
     </div>
-
-    <h2 class="sect-title">Two environment traps the test had to route around</h2>
-    <div class="traps" id="traps"></div>
-  </section>
-
+  </div>
+  <div class="card" id="compose-readout"></div>
+  <p class="note">The run set dock A's frame to <strong>150%</strong> and left dock B alone (independence),
+  then applied a dock-wide zoom of <strong>0.8</strong> — the 150% frame zoom survived underneath it
+  (composition). Reproduce it: set A to 150%, drag A's slider to 80%.</p>
+</section>
 </main>
 
-<footer class="ftr">
-  <code>openspec validate --strict</code> ✓ · tasks <b>10/10</b> ·
-  preview instance on :5210 stopped ·
-  next: merge, then <code>/opsx:archive</code>
-</footer>
+<footer class="foot">Rolling-latest Understanding app · overwritten per explanation ·
+served no-store at <code>/api/localview/&lt;repo&gt;/app/understanding/</code></footer>
 
 <script src="./app.js"></script>
 </body>

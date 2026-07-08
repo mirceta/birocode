@@ -763,7 +763,7 @@ export default function PinnedAgent({
         ) : showFiles ? (
           <FilesBrowser repoId={tab.repoId} />
         ) : openApp ? (
-          <ProductFrame url={`/api/localview/${tab.repoId}/app/${openApp.id}/`} port={openApp.port} />
+          <ProductFrame url={`/api/localview/${tab.repoId}/app/${openApp.id}/`} port={openApp.port} zoomable />
         ) : null}
         <Chat
           chat={chat}

@@ -213,7 +213,7 @@ export default function LocalApp() {
         <>
           {showBasicEmpty && <p className="localapp__empty">{t('localapp.basicEmpty')}</p>}
           <div className="localapp__body">
-            <ProductFrame url={url} port={selected?.port} reloadKey={reloadKey} />
+            <ProductFrame url={url} port={selected?.port} reloadKey={reloadKey} zoomable />
           </div>
         </>
       )}
