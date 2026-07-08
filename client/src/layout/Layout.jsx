@@ -11,6 +11,8 @@ import { SaveProvider } from '../components/history/SaveHandler';
 import { ChatProvider } from '../context/ChatContext';
 import { RepoProvider, useRepo } from '../context/RepoContext';
 import { DockProvider, useDock } from '../context/DockContext';
+import { LocalAppFramesProvider } from '../context/LocalAppFramesContext';
+import LocalAppFrameHost from '../components/app/LocalAppFrameHost';
 import { PromptsProvider } from '../context/PromptsContext';
 import { PromptPlansProvider } from '../context/PromptPlansContext';
 import { PromptNotesProvider } from '../context/PromptNotesContext';
@@ -166,6 +168,10 @@ function StudioShell() {
         {!dashOpen && <BottomNav />}
         <BuildStamp />
       </div>
+      {/* Keep-alive home of every embedded local-app iframe (openspec
+          local-app-state-preserve): OUTSIDE the content branch above, so no
+          tab switch, dashboard toggle, or pane eviction can unmount a frame. */}
+      <LocalAppFrameHost />
     </div>
   );
 }
@@ -176,17 +182,19 @@ export default function Layout() {
       <UiSettingsProvider>
         <RepoProvider>
           <DockProvider>
-            <SaveProvider>
-              <ChatProvider>
-                <PromptsProvider>
-                  <PromptPlansProvider>
-                    <PromptNotesProvider>
-                      <StudioShell />
-                    </PromptNotesProvider>
-                  </PromptPlansProvider>
-                </PromptsProvider>
-              </ChatProvider>
-            </SaveProvider>
+            <LocalAppFramesProvider>
+              <SaveProvider>
+                <ChatProvider>
+                  <PromptsProvider>
+                    <PromptPlansProvider>
+                      <PromptNotesProvider>
+                        <StudioShell />
+                      </PromptNotesProvider>
+                    </PromptPlansProvider>
+                  </PromptsProvider>
+                </ChatProvider>
+              </SaveProvider>
+            </LocalAppFramesProvider>
           </DockProvider>
         </RepoProvider>
       </UiSettingsProvider>

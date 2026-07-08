@@ -381,6 +381,7 @@
   "productframe.zoomIn": "Yakinlastir",
   "productframe.zoomOut": "Uzaklastir",
   "productframe.zoomReset": "Yakinlastirmayi %100 yap",
+  "productframe.refresh": "Uygulamayi yeniden yukle",
   "pwgate.title": "Tekrar hosgeldin",
   "pwgate.subtitle": "Calisma alanini acmak icin erisim kodunu gir.",
   "pwgate.placeholder": "Erisim kodu",

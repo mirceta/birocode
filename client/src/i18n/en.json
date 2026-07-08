@@ -381,6 +381,7 @@
   "productframe.zoomIn": "Zoom in",
   "productframe.zoomOut": "Zoom out",
   "productframe.zoomReset": "Reset zoom to 100%",
+  "productframe.refresh": "Reload this app",
   "pwgate.title": "Welcome back",
   "pwgate.subtitle": "Enter your access code to open your workspace.",
   "pwgate.placeholder": "Access code",

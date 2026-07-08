@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { apiPost, apiDelete } from '../api/client';
 import ProductFrame from '../components/app/ProductFrame';
 import ExposeCheck from '../components/expose/ExposeCheck';
+import { useLocalAppFrames } from '../context/LocalAppFramesContext';
 import { useRepo } from '../context/RepoContext';
 import { useUiMode } from '../context/UiModeContext';
 import { useT } from '../i18n/LanguageContext';
@@ -25,9 +26,8 @@ export default function LocalApp() {
   const [portDraft, setPortDraft] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [reloadKey, setReloadKey] = useState(0);
-  const [bust, setBust] = useState(0);
   const [checking, setChecking] = useState(false);
+  const { refreshFrame } = useLocalAppFrames();
 
   const apps = current?.localApps || [];
   // The harness-provided Understanding app is always present; "real" apps are the
@@ -50,15 +50,23 @@ export default function LocalApp() {
   // Embed the harness's OWN reverse proxy, not the port directly
   // (plans/local-app-proxy.md): same-origin so it works over the internet behind
   // the login. The trailing slash is load-bearing — the product's relative asset
-  // URLs resolve under it. `?_=<n>` (plans/expose-freshness.md) forces a fresh
-  // document fetch on Refresh / Reload-embed.
+  // URLs resolve under it.
   const url = selected && current
-    ? `/api/localview/${current.id}/app/${selected.id}/${bust ? `?_=${bust}` : ''}`
+    ? `/api/localview/${current.id}/app/${selected.id}/`
+    : null;
+
+  // Keep-alive frame identity (openspec local-app-state-preserve): one frame
+  // per (repo, app); switching apps swaps which SLOT is registered instead of
+  // reassigning src, so every opened app keeps its state. The toolbar Refresh
+  // reloads only the visible frame — the frame host adds the `?_=<n>` bust
+  // (plans/expose-freshness.md) so the document is fetched fresh.
+  const frameKey = selected && current ? `local:${current.id}:${selected.id}` : null;
+  const frameMeta = selected && current
+    ? { kind: 'local', repoId: current.id, appId: selected.id, pinned: selected.kind === 'harness' }
     : null;
 
   function reloadEmbed() {
-    setBust(Date.now());
-    setReloadKey((k) => k + 1);
+    if (frameKey) refreshFrame(frameKey);
   }
 
   async function addApp(e) {
@@ -213,7 +221,7 @@ export default function LocalApp() {
         <>
           {showBasicEmpty && <p className="localapp__empty">{t('localapp.basicEmpty')}</p>}
           <div className="localapp__body">
-            <ProductFrame url={url} port={selected?.port} reloadKey={reloadKey} zoomable />
+            <ProductFrame url={url} port={selected?.port} zoomable frameKey={frameKey} frameMeta={frameMeta} />
           </div>
         </>
       )}

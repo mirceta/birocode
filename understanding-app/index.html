@@ -3,180 +3,225 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Zoom verification — redeploy &amp; 23/23</title>
+<title>Shipped: apps survive navigation — the verification run</title>
 <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
+
 <header class="hero">
-  <h1>Per-frame zoom: redeploy &amp; verification</h1>
-  <p class="sub">Why the preview rig had vanished from :5300, how it was rebuilt in isolation on :5301,
-  and what the <strong>23/23</strong> Playwright checks actually proved.</p>
+  <div class="hero-badge">Understanding app · rolling latest</div>
+  <h1>Leave and come back — <em>shipped &amp; proven</em></h1>
+  <p class="hero-sub">OpenSpec change <code>local-app-state-preserve</code> is <strong>implemented</strong> on
+  branch <code>feat/local-app-state-preserve</code> and <strong>verified in a real headless browser</strong>:
+  26/26 Playwright checks passed on the isolated <code>:5200</code> preview. Embedded local apps now keep their
+  state across every navigation; reload only happens when <em>you</em> press ↻. This app walks the proof —
+  what changed, how it works, what the browser saw, and what's left: <strong>your acceptance test</strong>.</p>
+  <div class="hero-chips">
+    <span class="chip ok">15/15 tasks done</span>
+    <span class="chip ok">26/26 browser checks</span>
+    <span class="chip ok">openspec validate --strict ✓</span>
+    <span class="chip warn">not committed — waiting on you</span>
+  </div>
 </header>
 
 <nav class="tabs" id="tabs">
-  <button class="tab active" data-view="story">1 · What happened</button>
-  <button class="tab" data-view="rig">2 · The rig &amp; ports</button>
-  <button class="tab" data-view="checks">3 · The 23 checks</button>
-  <button class="tab" data-view="demo">4 · Live zoom demo</button>
+  <button class="tab active" data-view="demo">1 · Feel the fix</button>
+  <button class="tab" data-view="arch">2 · How it works</button>
+  <button class="tab" data-view="proof">3 · The proof: 26 checks</button>
+  <button class="tab" data-view="found">4 · Surfaced in testing</button>
+  <button class="tab" data-view="accept">5 · Your acceptance test</button>
 </nav>
 
-<main>
-<!-- ============ VIEW 1: STORY ============ -->
-<section class="view active" id="view-story">
-  <p class="lede">The zoom feature test suite had started failing on its dashboard section. The cause
-  wasn't the feature — the <em>test environment itself had disappeared</em>. Step through the timeline:</p>
-  <div class="timeline" id="timeline"></div>
-  <div class="timeline-detail card" id="timeline-detail"></div>
-  <div class="timeline-nav">
-    <button id="tl-prev" class="btn">← Back</button>
-    <button id="tl-next" class="btn primary">Next →</button>
-  </div>
-</section>
+<main id="views">
 
-<!-- ============ VIEW 2: RIG ============ -->
-<section class="view" id="view-rig">
-  <p class="lede">Four ports, four very different roles. Hover / tap each box. The key rule of
-  <strong>Self-Development</strong>: never test against the live harness — build an isolated copy.</p>
-  <div class="portmap">
-    <div class="portrow">
-      <div class="portbox live" data-port="5099">
-        <div class="portnum">:5099</div>
-        <div class="portname">Live harness</div>
-        <div class="portstate ok">never touched</div>
+<!-- ============ VIEW 1: FEEL THE FIX ============ -->
+<section class="view active" id="view-demo">
+  <div class="panel">
+    <h2>The same three clicks, on main vs. on this branch</h2>
+    <p>This is a working simulation of the harness. The embedded box below behaves like <b>StateA</b> — the tiny
+    stateful test app the real verification typed into. <b>Type something, bump the counter, then switch to the
+    Files tab and come back.</b> Flip the mode switch and do it again.</p>
+
+    <div class="mode-row">
+      <span class="mode-label">Simulate:</span>
+      <div class="mode-toggle" id="mode-toggle">
+        <button class="mode-btn" data-mode="old">main (before)</button>
+        <button class="mode-btn active" data-mode="new">this branch (after)</button>
       </div>
-      <div class="portbox dead" data-port="5300">
-        <div class="portnum">:5300</div>
-        <div class="portname">Old preview harness</div>
-        <div class="portstate bad">hijacked by Autodev.Web</div>
-      </div>
+      <span class="mode-desc" id="mode-desc"></span>
     </div>
-    <div class="portrow">
-      <div class="portbox fresh" data-port="5301">
-        <div class="portnum">:5301</div>
-        <div class="portname">New isolated harness</div>
-        <div class="portstate ok">health 200 · still running</div>
-      </div>
-      <div class="portbox probe" data-port="5311">
-        <div class="portnum">:5311</div>
-        <div class="portname">Zoom-probe product</div>
-        <div class="portstate ok">ruler + cells · still running</div>
-      </div>
-    </div>
-  </div>
-  <div class="card" id="port-detail"><em>Hover or tap a port box above…</em></div>
 
-  <h3>Anatomy of the isolated rig</h3>
-  <div class="rigtree">
-<pre>.preview-test/zoom-harness/
-├── bin/                    ← fresh <code>dotnet publish</code> of ClaudeWeb.App
-│   └── client/dist/        ← fresh <code>npm run build</code> of the frontend
-└── data/                   ← its OWN datadir (CLAUDEWEB_DATADIR)
-                              → never shares state with live :5099</pre>
-  </div>
-  <p class="note">Launched <strong>detached</strong> (<code>cmd start /b</code>) with
-  <code>CLAUDEWEB_PORT=5301</code> so it survives the shell that started it — the same discipline
-  <code>docs/claude-web/self-dev.md</code> demands for anything touching this repo.</p>
-</section>
-
-<!-- ============ VIEW 3: CHECKS ============ -->
-<section class="view" id="view-checks">
-  <p class="lede">The Playwright run drives a real headless browser against :5301 —
-  <strong>23 checks in 3 groups</strong>. Click any check to see what it proves.
-  <span class="pillcount" id="checkcount"></span></p>
-  <div class="checkgroups" id="checkgroups"></div>
-  <div class="card" id="check-detail"><em>Click a check above…</em></div>
-  <div class="noisebox">
-    <strong>The noise that wasn't a failure:</strong> a few <code>403</code> / <code>ERR_CONNECTION_REFUSED</code>
-    console lines mid-run came from the freshly-registered repo's background probes (git &amp; screen endpoints
-    warming up) — every functional assertion passed.
-  </div>
-</section>
-
-<!-- ============ VIEW 4: DEMO ============ -->
-<section class="view" id="view-demo">
-  <p class="lede">This is the exact mechanic the checks verified, rebuilt here in miniature.
-  The trick: <code>transform: scale(z)</code> on the frame content plus
-  <code>width: 100%/z</code> compensation — so the <em>frame footprint never changes</em>,
-  only what the inner page thinks its viewport is.</p>
-
-  <h3>A. One frame, one zoom</h3>
-  <div class="demo-single">
-    <div class="fakeframe" id="frame1">
-      <div class="fakeviewport" id="viewport1">
-        <div class="fakecontent" id="content1">
-          <div class="fakebanner">ZOOM PROBE on :5311</div>
-          <div class="ruler" id="ruler1"></div>
-          <div class="cells" id="cells1"></div>
+    <div class="sim-wrap">
+      <div class="sim-phone">
+        <div class="sim-header">Claude Web · <span id="sim-tab-name">Local</span></div>
+        <div class="sim-body" id="sim-body"><!-- filled by app.js --></div>
+        <div class="sim-nav">
+          <button class="sim-navbtn active" data-tab="local">⌂ Local</button>
+          <button class="sim-navbtn" data-tab="files">F Files</button>
+          <button class="sim-navbtn" data-tab="chat">C Chat</button>
         </div>
       </div>
-      <div class="zoomoverlay">
-        <button class="zbtn" id="z1minus">−</button>
-        <button class="zpill" id="z1pill" title="click to reset">100%</button>
-        <button class="zbtn" id="z1plus">+</button>
+
+      <div class="sim-host">
+        <h3>The frame host layer <span class="tag">what the user never sees</span></h3>
+        <p class="small">One fixed layer at the app root owns every iframe. Pages only render an empty
+        <i>slot</i>; the host projects the live frame over it. Leave the tab → the frame is just
+        <code>display:none</code>, never destroyed.</p>
+        <div id="host-frames"></div>
+        <div class="host-legend">
+          <span><i class="dot dot-visible"></i> projected over a slot</span>
+          <span><i class="dot dot-hidden"></i> hidden, state alive</span>
+          <span><i class="dot dot-dead"></i> destroyed (old behavior)</span>
+        </div>
       </div>
     </div>
-    <div class="demo-readout card">
-      <div>frame footprint: <strong id="r-foot">—</strong> <span class="tag ok">constant</span></div>
-      <div>inner viewport width: <strong id="r-inner">—</strong> <span class="tag">= footprint ÷ zoom</span></div>
-      <div>zoom: <strong id="r-zoom">100%</strong> <span class="tag">clamped 50–200%</span></div>
-      <p class="note">At <strong>200%</strong> the inner viewport <em>halves</em> (the run measured 499→250 px);
-      at <strong>50%</strong> it <em>doubles</em> (499→999 px). Click the % pill to reset. The + and −
-      buttons disable at the clamps — exactly as the clamp checks asserted.</p>
+
+    <div class="callout" id="demo-callout">Switch tabs and watch both sides: the phone <em>and</em> the host layer.</div>
+  </div>
+</section>
+
+<!-- ============ VIEW 2: HOW IT WORKS ============ -->
+<section class="view" id="view-arch">
+  <div class="panel">
+    <h2>Slot projection, running live in this page</h2>
+    <p>The mechanism that shipped: the page renders an empty <b>slot div</b> where the app should appear; the
+    iframe lives in a root-level host and is <b>projected</b> over the slot's rectangle
+    (ResizeObserver + capture-phase scroll listeners, batched into one <code>requestAnimationFrame</code>).
+    The demo below <em>is</em> that algorithm in miniature — the orange "frame" is in a separate fixed layer,
+    tracking the slot inside the scrollable page. <b>Scroll the grey page.</b></p>
+
+    <div class="proj-wrap">
+      <div class="proj-page" id="proj-page">
+        <div class="proj-filler">page content above the app…</div>
+        <div class="proj-slot" id="proj-slot"><span>&lt;div class="product-frame__slot"&gt;<br>(empty slot — the page renders only this)</span></div>
+        <div class="proj-filler tall">…page content below. Keep scrolling — push the slot fully out of view and
+        the frame hides itself (that exact behavior showed up in verification; see view 4).</div>
+      </div>
+      <div class="proj-status" id="proj-status"></div>
     </div>
   </div>
 
-  <h3>B. Two docks — independence &amp; composition</h3>
-  <p>Dashboard docks each carry their own frame zoom, <em>and</em> a dock-wide content-zoom slider
-  scales the whole dock. The final scale is the <strong>product</strong> — frame zoom survives.</p>
-  <div class="demo-docks">
-    <div class="dock" id="dockA">
-      <div class="dockhead">Dock A <span class="dockzoom" id="dockAz"></span></div>
-      <div class="dockscale" id="dockAscale">
-        <div class="fakeframe small">
-          <div class="fakeviewport">
-            <div class="fakecontent" id="contentA">
-              <div class="fakebanner sm">ZOOM PROBE</div>
-              <div class="cells sm" id="cellsA"></div>
-            </div>
-          </div>
-          <div class="zoomoverlay">
-            <button class="zbtn" data-dock="A" data-d="-1">−</button>
-            <button class="zpill" data-dock="A" id="pillA">100%</button>
-            <button class="zbtn" data-dock="A" data-d="1">+</button>
-          </div>
+  <div class="panel">
+    <h2>Who owns what</h2>
+    <div class="arch-diagram">
+      <div class="arch-col">
+        <div class="arch-box router">
+          <b>Router pages — mount &amp; unmount freely</b>
+          <div class="arch-inner">LocalApp tab · dock PinnedAgent<br>
+          <span class="small">ProductFrame is now just the <b>shell</b>: liveness probe, offline/empty states,
+          and the slot div. No iframe here anymore.</span></div>
+        </div>
+        <div class="arch-arrow">acquire / release / registerSlot</div>
+        <div class="arch-box context">
+          <b>LocalAppFramesContext — the registry</b>
+          <div class="arch-inner"><span class="small">Frame identity keys:</span><br>
+          <code>local:&lt;repo&gt;:&lt;app&gt;</code> · <code>dock:&lt;dockId&gt;:&lt;repo&gt;:&lt;app&gt;</code></div>
+        </div>
+        <div class="arch-arrow">renders one HostedFrame per entry</div>
+        <div class="arch-box host">
+          <b>LocalAppFrameHost — fixed layer, z-index 4</b>
+          <div class="arch-inner"><span class="small">Owns every iframe for its whole life. Projects visible ones
+          over their slots, clips against scrolling ancestors, hides the rest. z-index 4 sits below every menu
+          (20–50), dashboard chrome (5–21) and modal (1000+).</span></div>
         </div>
       </div>
-      <label class="slider">dock-wide zoom <input type="range" id="sliderA" min="60" max="140" value="100" step="10"> <span id="sliderAval">100%</span></label>
-    </div>
-    <div class="dock" id="dockB">
-      <div class="dockhead">Dock B <span class="dockzoom" id="dockBz"></span></div>
-      <div class="dockscale" id="dockBscale">
-        <div class="fakeframe small">
-          <div class="fakeviewport">
-            <div class="fakecontent" id="contentB">
-              <div class="fakebanner sm">ZOOM PROBE</div>
-              <div class="cells sm" id="cellsB"></div>
-            </div>
-          </div>
-          <div class="zoomoverlay">
-            <button class="zbtn" data-dock="B" data-d="-1">−</button>
-            <button class="zpill" data-dock="B" id="pillB">100%</button>
-            <button class="zbtn" data-dock="B" data-d="1">+</button>
-          </div>
-        </div>
+      <div class="arch-col rules">
+        <h3>Lifetime rules that shipped</h3>
+        <div class="rule-card keep"><b>Navigation</b><span>only unregisters the slot → frame hides, state lives.</span></div>
+        <div class="rule-card release"><b>Repo switch</b><span>releases the Local tab's frames (verified: 2 → 0).</span></div>
+        <div class="rule-card release"><b>Dock removed / app deleted</b><span>releases that dock's / that app's frames.</span></div>
+        <div class="rule-card release"><b>LRU cap 6</b><span>7th frame evicts the least-recently-visible — but only <em>hidden, non-pinned</em> frames; a visible frame is never yanked.</span></div>
+        <div class="rule-card keep"><b>Pinned</b><span>the Local tab's Understanding frame (this page!) is exempt from eviction.</span></div>
+        <div class="rule-card keep"><b>↻ is the only reload</b><span>bumps one frame's <code>reloadKey</code>. Docks gain a refresh they never had.</span></div>
       </div>
-      <label class="slider">dock-wide zoom <input type="range" id="sliderB" min="60" max="140" value="100" step="10"> <span id="sliderBval">100%</span></label>
     </div>
   </div>
-  <div class="card" id="compose-readout"></div>
-  <p class="note">The run set dock A's frame to <strong>150%</strong> and left dock B alone (independence),
-  then applied a dock-wide zoom of <strong>0.8</strong> — the 150% frame zoom survived underneath it
-  (composition). Reproduce it: set A to 150%, drag A's slider to 80%.</p>
 </section>
+
+<!-- ============ VIEW 3: THE PROOF ============ -->
+<section class="view" id="view-proof">
+  <div class="panel">
+    <h2>26 checks, zero failures — a real browser, not curl</h2>
+    <p>Per <code>docs/claude-web/browser-testing.md</code>, every claim was exercised end-to-end with headless
+    Playwright against the isolated preview on <code>:5200</code>, using two throwaway stateful apps
+    (<b>StateA</b> :5301, <b>StateB</b> :5302) that expose a text input, a counter, and a
+    <code>LOADED_AT</code> timestamp — so the test can tell "state survived" from "document reloaded".
+    <b>Click a stage</b> to see its checks; stages with a camera icon carry a real screenshot from the run.</p>
+    <div id="proof-stages"></div>
+  </div>
+  <div class="lightbox" id="lightbox"><img id="lightbox-img" alt="evidence screenshot"><div class="lightbox-cap" id="lightbox-cap"></div></div>
+</section>
+
+<!-- ============ VIEW 4: SURFACED IN TESTING ============ -->
+<section class="view" id="view-found">
+  <div class="panel">
+    <h2>Two behaviors the browser run made visible</h2>
+    <p>Neither is a bug — both are the spec doing its job, and both are worth knowing before you test.</p>
+
+    <div class="found-grid">
+      <div class="found-card">
+        <h3>1 · Same app, two surfaces → two independent frames</h3>
+        <p>Midway through the dock stage, the selector <code>iframe[src*="statea"]</code> suddenly matched
+        <b>two elements</b>: the Local tab's kept-alive frame <em>and</em> the dock's new one. That's per-surface
+        frame identity working exactly as specced — each surface gets its own document, own state, own ↻.</p>
+        <div class="twin-demo">
+          <div class="twin">
+            <div class="twin-title"><code>local:birocode:statea</code></div>
+            <div class="twin-screen">StateA<br><span class="twin-val">"hello" · count 2</span></div>
+            <div class="twin-foot">Local tab · hidden but alive</div>
+          </div>
+          <div class="twin">
+            <div class="twin-title"><code>dock:pwtest-dock-a:…:statea</code></div>
+            <div class="twin-screen">StateA<br><span class="twin-val">"dockstate" · count 0</span></div>
+            <div class="twin-foot">dock phone · visible</div>
+          </div>
+        </div>
+        <p class="small">Those are the <em>actual values</em> from the run — the two documents never bled into
+        each other, and refreshing one left the other untouched.</p>
+      </div>
+
+      <div class="found-card">
+        <h3>2 · Fully scrolled-out slot → the frame hides itself</h3>
+        <p>The dock test first "failed": the phone's screen sat at <code>y = 982</code> in a 950-px-tall
+        viewport, so the host — correctly — hid the frame whose slot had zero visible area. The fix was in the
+        <em>test</em>, not the code: scroll the slot into view like a real user, and the frame appears and tracks.</p>
+        <p>You already have this demo live: go to <b>view 2</b> and scroll the slot fully out of the grey page —
+        the status readout flips to <i>hidden (slot off-screen)</i>, exactly what Playwright saw.</p>
+        <div class="mini-note">Why it matters: frames also <b>reposition live while scrolling</b> — the same
+        capture-phase listener that hides an off-screen frame keeps an on-screen one glued to its slot.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ VIEW 5: ACCEPTANCE ============ -->
+<section class="view" id="view-accept">
+  <div class="panel">
+    <h2>The sandbox is running — here's your test script</h2>
+    <div class="fact-grid">
+      <div class="fact"><b>Preview</b><span><code>http://localhost:5200</code> · password <code>changeme</code></span></div>
+      <div class="fact"><b>Fully isolated</b><span>own data dir, own repo store, own docks — live <code>:5099</code> untouched</span></div>
+      <div class="fact"><b>Test apps</b><span><b>StateA</b> :5301 · <b>StateB</b> :5302 — registered on "Claude Web (this app)"</span></div>
+      <div class="fact"><b>UI mode</b><span>set <b>Advanced</b> to see docks &amp; the dashboard</span></div>
+    </div>
+
+    <h3>Try what the machine already proved <span class="tag">checklist remembers itself on this device</span></h3>
+    <div id="accept-list"></div>
+
+    <div class="next-strip">
+      <b>Then:</b> nothing is committed and nothing merges until you say so
+      <span class="arrow">→</span> say the word
+      <span class="arrow">→</span> commit on <code>feat/local-app-state-preserve</code>
+      <span class="arrow">→</span> merge
+      <span class="arrow">→</span> <code>/opsx:archive</code> folds the spec into the baseline
+    </div>
+  </div>
+</section>
+
 </main>
 
-<footer class="foot">Rolling-latest Understanding app · overwritten per explanation ·
-served no-store at <code>/api/localview/&lt;repo&gt;/app/understanding/</code></footer>
+<footer class="foot">Understanding app · overwritten per explanation · served no-store under
+<code>/api/localview/&lt;repo&gt;/app/understanding/</code></footer>
 
 <script src="./app.js"></script>
 </body>
