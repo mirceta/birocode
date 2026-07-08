@@ -1,119 +1,264 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Understanding — composer-only docks: shipped &amp; verified</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>local-app-zoom — understanding</title>
 <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-<header class="hdr">
-  <div class="hdr__title">
-    <span class="hdr__badge hdr__badge--done">OpenSpec change · implemented ✓ 10/10 tasks</span>
-    <h1>local-app-overlay-keep-composer</h1>
+<header class="masthead">
+  <div>
+    <h1>Zoom the embedded local app — not the harness</h1>
+    <p class="sub">OpenSpec change <code>local-app-zoom</code> on branch <code>feat/local-app-zoom</code> — implemented and verified headless (23/23 checks against an isolated harness instance). Ready to archive.</p>
   </div>
-  <p class="hdr__sub">
-    The change is <b>implemented and browser-verified</b>: every alternate dock view
-    (Event Console · Files · local app) now renders above one always-mounted chat whose
-    composer stays usable. This page explains the latest turn — the four files that changed,
-    the one real bug the tests caught, and exactly how the verification proved it works.
-  </p>
-  <nav class="tabs" id="tabs">
-    <button class="tab tab--active" data-view="shipped">1 · What shipped — try it</button>
-    <button class="tab" data-view="bug">2 · The bug tests caught</button>
-    <button class="tab" data-view="verify">3 · How it was verified</button>
-  </nav>
+  <div class="flow" aria-label="OpenSpec lifecycle">
+    <span class="flow__step is-done">propose</span>
+    <span class="flow__step is-done">specify</span>
+    <span class="flow__step is-done">design</span>
+    <span class="flow__step is-done">implement</span>
+    <span class="flow__step is-next">archive</span>
+  </div>
 </header>
 
-<main id="views">
+<nav class="tabs" role="tablist">
+  <button class="tab is-active" data-view="problem" role="tab">1 · The problem</button>
+  <button class="tab" data-view="component" role="tab">2 · One component</button>
+  <button class="tab" data-view="mechanism" role="tab">3 · How zoom works</button>
+  <button class="tab" data-view="compose" role="tab">4 · Two zooms compose</button>
+  <button class="tab" data-view="spec" role="tab">5 · The spec</button>
+</nav>
 
-  <!-- ============ VIEW 1: what shipped ============ -->
-  <section class="view view--active" id="view-shipped">
-    <p class="view__intro">
-      This dock simulates the <b>shipped</b> behavior. Open <span class="k">📊 Console</span>,
-      <span class="k">📁 Files</span> or <span class="k">🚀 my-app</span>: the view covers the
-      chat bar + messages, the composer stays below it. Type a draft and switch
-      <em>directly between views</em> — it survives, because one chat instance never remounts.
-      Send while a view is open, then close the view: the turn is in the transcript.
-    </p>
-    <div class="ship-demo">
-      <div class="phone-sim" id="phoneSim"></div>
-      <div class="files-panel">
-        <h2 class="sect-title">The four files that changed <span class="sect-hint">— click one</span></h2>
-        <div class="filecards" id="fileCards"></div>
-      </div>
+<!-- ============ 1 · PROBLEM ============ -->
+<section class="view is-active" id="view-problem">
+  <div class="cols">
+    <div class="card">
+      <h2>Why this change exists</h2>
+      <p>Local apps are embedded at their natural size. In the <strong>agent dock</strong> a full product is squeezed into a small tile; on the <strong>phone's Local tab</strong> some products render too big or too small for the screen.</p>
+      <p>Browser zoom can't help: it scales the <em>whole harness</em> — chat, tabs, composer — along with the app. What's needed is a zoom that touches <strong>only the embedded app's frame</strong>.</p>
+      <div class="verdict verdict--want">Wanted: per-frame zoom, on both embedding surfaces, harness chrome untouched.</div>
     </div>
-  </section>
-
-  <!-- ============ VIEW 2: the height bug ============ -->
-  <section class="view" id="view-bug">
-    <p class="view__intro">
-      The first CSS attempt — <code>.chat--composer-only { flex: 0 0 auto }</code> — looked
-      right and passed a glance. The browser tests showed the alternate views rendered at
-      <b>0px</b>. The culprit is how flexbox resolves an <code>auto</code> flex-basis:
-      it falls back to the element's <code>height</code> property — and the chat's <b>base</b>
-      rule sets <code>height: calc(100dvh - …)</code>. Step through the chain, then flip the fix.
-    </p>
-
-    <div class="chainlab">
-      <div class="chain" id="chain"></div>
-      <div class="buglab">
-        <div class="seg" id="bugSeg">
-          <button class="seg__btn seg__btn--active" data-b="broken">✗ flex: 0 0 auto</button>
-          <button class="seg__btn" data-b="fixed">✓ + height: auto</button>
-        </div>
-        <div class="screenbox">
-          <div class="screenbox__label">.phone__screen — <b>603px</b> (dock minus chrome)</div>
-          <div class="screenbox__frame" id="screenFrame">
-            <div class="sb-item sb-item--view" id="sbView"><b id="sbViewH">0px</b><span>&lt;EventConsole/&gt; · flex: 1 1 auto</span></div>
-            <div class="sb-item sb-item--chat" id="sbChat"><b id="sbChatH">944px</b><span id="sbChatWhy">chat basis = height = calc(100dvh − …)</span></div>
+    <div class="card">
+      <h2>Browser zoom vs frame zoom</h2>
+      <p class="hint">Toggle to see what scales in each mode.</p>
+      <div class="seg" role="group" aria-label="zoom kind">
+        <button class="seg__btn is-active" data-zoomkind="browser">Browser zoom 150%</button>
+        <button class="seg__btn" data-zoomkind="frame">Frame zoom 150%</button>
+        <button class="seg__btn" data-zoomkind="none">No zoom</button>
+      </div>
+      <div class="mockwin" id="problem-mock">
+        <div class="mockwin__inner" id="problem-harness">
+          <div class="mockchrome">
+            <span class="mockchrome__tab">Chat</span>
+            <span class="mockchrome__tab is-on">Local</span>
+            <span class="mockchrome__tab">Files</span>
           </div>
+          <div class="mockframe" id="problem-frame">
+            <div class="mockapp" id="problem-app">
+              <div class="mockapp__bar">my-product · :5210</div>
+              <div class="mockapp__grid"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            </div>
+          </div>
+          <div class="mockcomposer">Ask Claude anything…</div>
         </div>
-        <p class="cond-note" id="bugNote"></p>
-        <pre class="codeblock" id="bugCode"></pre>
       </div>
+      <p class="caption" id="problem-caption">Browser zoom scales <b>everything</b> — chrome, composer and app together. The harness gets huge too.</p>
     </div>
+  </div>
 
-    <p class="view__intro view__intro--tail">
-      Why the normal embedded chat never hit this: <code>flex: 1</code> means
-      <code>flex-basis: 0%</code> — a <em>definite</em> basis, so the <code>height</code>
-      property is ignored entirely. Only when the basis became <code>auto</code> did the
-      forgotten viewport height come back from the dead. Measured evidence from the debug run:
-      chat <b>944px</b> · screen <b>603px</b> · view <b>0px</b> → after the fix:
-      view <b>462px</b> · composer <b>141px</b>.
-    </p>
-  </section>
+  <div class="card">
+    <h2>What was decided this turn</h2>
+    <ul class="facts">
+      <li><b>New branch</b> <code>feat/local-app-zoom</code> off an already-synced <code>main</code> (one feature per branch).</li>
+      <li><b>One new capability</b>, <code>local-app-zoom</code>, covering both surfaces — no existing spec modified.</li>
+      <li><b>Purely client-side</b>: no server or API work; the <code>/api/localview/…</code> proxy is untouched.</li>
+      <li><b>Basic-mode exception, on purpose</b>: new UI normally defaults to Advanced, but the phone tab (End-User surface) was the explicitly requested target — so the Local-tab control is a Basic-visible <em>viewing</em> control.</li>
+      <li><b>Implemented &amp; verified</b>: 13/13 tasks done; a Playwright run against an isolated harness instance (own port + datadir, live untouched) passed all 23 checks — clamps, chrome unaffected, two-dock independence, reset-on-reload, composition with the dock zoom.</li>
+    </ul>
+  </div>
+</section>
 
-  <!-- ============ VIEW 3: verification ============ -->
-  <section class="view" id="view-verify">
-    <p class="view__intro">
-      Verification ran a <b>real browser</b> (headless Playwright, per
-      <code>docs/claude-web/browser-testing.md</code>) against an <b>isolated preview harness</b>
-      on <code>:5210</code> — never the live app. Two safety choices made it side-effect-free,
-      and one DOM trick made "never remounts" <em>provable</em> rather than assumed.
-      Click each step of the run.
-    </p>
-
-    <div class="safety" id="safety"></div>
-
-    <h2 class="sect-title">The test run — every step green</h2>
-    <div class="runlab">
-      <div class="runsteps" id="runSteps"></div>
-      <div class="runevidence" id="runEvidence"></div>
+<!-- ============ 2 · ONE COMPONENT ============ -->
+<section class="view" id="view-component">
+  <div class="card">
+    <h2>The load-bearing discovery: both surfaces share <code>ProductFrame</code></h2>
+    <p>Four places iframe a product, all through one shared component. The whole feature lands in <code>ProductFrame.jsx</code> behind an opt-in <code>zoomable</code> prop — the two target surfaces each change by <em>one prop</em>, and the two out-of-scope surfaces are untouched <em>by construction</em> (they never pass it).</p>
+    <div class="diagram" id="component-diagram">
+      <svg viewBox="0 0 760 340" preserveAspectRatio="xMidYMid meet" aria-label="ProductFrame consumers diagram">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#8b93a7"/>
+          </marker>
+          <marker id="arr-on" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#4ade80"/>
+          </marker>
+        </defs>
+        <g class="dnode dnode--on">
+          <rect x="10" y="14" width="175" height="64" rx="10"/>
+          <text x="97" y="40" text-anchor="middle" class="dtitle">PinnedAgent.jsx</text>
+          <text x="97" y="60" text-anchor="middle" class="dsub">agent dock · local-apps view</text>
+        </g>
+        <g class="dnode dnode--on">
+          <rect x="200" y="14" width="175" height="64" rx="10"/>
+          <text x="287" y="40" text-anchor="middle" class="dtitle">LocalApp.jsx</text>
+          <text x="287" y="60" text-anchor="middle" class="dsub">phone Local tab</text>
+        </g>
+        <g class="dnode dnode--off">
+          <rect x="390" y="14" width="175" height="64" rx="10"/>
+          <text x="477" y="40" text-anchor="middle" class="dtitle">AppRun.jsx</text>
+          <text x="477" y="60" text-anchor="middle" class="dsub">App tab preview</text>
+        </g>
+        <g class="dnode dnode--off">
+          <rect x="580" y="14" width="170" height="64" rx="10"/>
+          <text x="665" y="40" text-anchor="middle" class="dtitle">Landing.jsx</text>
+          <text x="665" y="60" text-anchor="middle" class="dsub">public landing page</text>
+        </g>
+        <path class="dedge dedge--on" d="M97 78 C 97 130, 300 130, 345 158" marker-end="url(#arr-on)"/>
+        <path class="dedge dedge--on" d="M287 78 C 287 118, 330 130, 358 156" marker-end="url(#arr-on)"/>
+        <path class="dedge" d="M477 78 C 477 118, 430 130, 404 156" marker-end="url(#arr)"/>
+        <path class="dedge" d="M665 78 C 665 130, 460 130, 418 158" marker-end="url(#arr)"/>
+        <text x="150" y="120" class="dlabel dlabel--on">passes zoomable ✓</text>
+        <text x="530" y="120" class="dlabel">no prop → unchanged</text>
+        <g class="dnode dnode--core">
+          <rect x="255" y="160" width="250" height="76" rx="12"/>
+          <text x="380" y="188" text-anchor="middle" class="dtitle">ProductFrame.jsx</text>
+          <text x="380" y="208" text-anchor="middle" class="dsub">probe + empty state + iframe</text>
+          <text x="380" y="226" text-anchor="middle" class="dsub dsub--new">NEW: zoom state · overlay · viewport</text>
+        </g>
+        <path class="dedge dedge--on" d="M380 236 L380 268" marker-end="url(#arr-on)"/>
+        <g class="dnode dnode--iframe">
+          <rect x="230" y="272" width="300" height="54" rx="10"/>
+          <text x="380" y="295" text-anchor="middle" class="dtitle">&lt;iframe class="product-frame"&gt;</text>
+          <text x="380" y="314" text-anchor="middle" class="dsub">/api/localview/&lt;repo&gt;/app/&lt;appId&gt;/</text>
+        </g>
+      </svg>
     </div>
+    <div class="cols cols--tight">
+      <div class="mini mini--on"><b>Green</b> — the two in-scope surfaces: dock (already Advanced-gated) and Local tab (zoom is Basic-visible, a viewing control).</div>
+      <div class="mini"><b>Grey</b> — App tab &amp; Landing iframe the cross-origin preview port directly and stay exactly as they are.</div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Why state lives <em>inside</em> ProductFrame</h2>
+    <p>Component-local <code>useState</code> gives the spec'd scope for free: each mounted frame has its own level (<b>per-surface independence</b>) and it's gone on unmount/reload (<b>ephemeral</b>, like the dock's maximize-chat state). The rejected alternative — host-owned state passed down — would duplicate control UI and plumbing in two hosts for no requirement we have.</p>
+  </div>
+</section>
 
-    <h2 class="sect-title">Two environment traps the test had to route around</h2>
-    <div class="traps" id="traps"></div>
-  </section>
+<!-- ============ 3 · MECHANISM ============ -->
+<section class="view" id="view-mechanism">
+  <div class="cols">
+    <div class="card card--grow">
+      <h2>Live demo — the exact CSS technique from the design</h2>
+      <p class="hint">This demo <em>is</em> the mechanism: <code>transform: scale(f)</code> with the layout size compensated to <code>calc(100% / f)</code>. Harness chrome around it never moves. (One mock-only difference: a plain <code>div</code> has no inner viewport, so here you scroll the dashed box; the real iframe fills its frame exactly and magnified content scrolls with the <em>app's own</em> scrollbars.)</p>
+      <div class="zoomctl" id="mech-ctl">
+        <button id="mech-out" aria-label="zoom out">−</button>
+        <span class="zoomctl__level" id="mech-level">100%</span>
+        <button id="mech-in" aria-label="zoom in">+</button>
+        <button id="mech-reset" class="zoomctl__reset">reset</button>
+      </div>
+      <div class="mockwin">
+        <div class="mockwin__inner">
+          <div class="mockchrome"><span class="mockchrome__tab">Chat</span><span class="mockchrome__tab is-on">Local</span><span class="mockchrome__tab">Files</span><span class="mockchrome__note">← chrome: fixed</span></div>
+          <div class="viewport" id="mech-viewport">
+            <div class="mockapp mockapp--rich" id="mech-app">
+              <div class="mockapp__bar">my-product · served via /api/localview/…</div>
+              <div class="mockapp__grid mockapp__grid--rich">
+                <i>orders</i><i>users</i><i>revenue</i><i>errors</i><i>uptime</i><i>queue</i><i>builds</i><i>logs</i>
+              </div>
+              <div class="mockapp__rows"><s></s><s></s><s></s><s></s></div>
+            </div>
+          </div>
+          <div class="mockcomposer">composer: fixed too</div>
+        </div>
+      </div>
+      <p class="caption" id="mech-caption"></p>
+    </div>
+    <div class="card">
+      <h2>The CSS being applied, live</h2>
+      <pre class="code" id="mech-code"></pre>
+      <h3>Why not CSS <code>zoom</code> on the iframe?</h3>
+      <ul class="facts facts--tight">
+        <li><code>zoom</code> participates in <b>layout</b>; how it sizes an iframe's inner viewport differs across engines.</li>
+        <li><code>transform</code> is <b>paint-only</b> and fully specified — identical at any nesting depth.</li>
+        <li>That includes inside the dock's already-<code>zoom</code>-ed screen, where the two simply compose visually (→ tab 4).</li>
+      </ul>
+      <h3>The two regimes</h3>
+      <ul class="facts facts--tight">
+        <li><b>Always</b> — layout <code>100%/f</code> × paint <code>scale(f)</code> = exactly 100%: the scaled iframe fills the viewport at <em>every</em> level, so the frame's footprint never changes and there is no outer scrollbar.</li>
+        <li><b>f &lt; 1</b> — the app sees a <em>bigger</em> inner viewport painted shrunk: more app at once, no dead margins.</li>
+        <li><b>f &gt; 1</b> — the app sees a <em>smaller</em> inner viewport painted magnified; overflow scrolls with the app's <em>own</em> scrollbars, exactly like browser zoom (verified: inner width 499px → 250px at 200%).</li>
+      </ul>
+    </div>
+  </div>
+</section>
 
-</main>
+<!-- ============ 4 · COMPOSE ============ -->
+<section class="view" id="view-compose">
+  <div class="cols">
+    <div class="card card--grow">
+      <h2>Discovery: the dashboard already has a zoom — a different one</h2>
+      <p>The Layout popover has a <b>whole-dock content zoom</b> (<code>contentZoom</code> in <code>Dashboard.jsx</code>): a persisted, per-device CSS <code>zoom</code> on every dock's <code>.phone__screen</code> — chat, console and all. The new <b>frame zoom</b> is per-frame, ephemeral, and composes <em>on top</em>; the spec pins both as independent.</p>
+      <div class="composectl">
+        <label>dock content zoom <input type="range" id="dock-zoom" min="0.6" max="1.2" step="0.1" value="1"> <b id="dock-zoom-val">100%</b></label>
+        <div class="zoomctl zoomctl--inline">
+          <span class="composectl__tag">frame zoom</span>
+          <button id="comp-out" aria-label="zoom out">−</button>
+          <span class="zoomctl__level" id="comp-level">100%</span>
+          <button id="comp-in" aria-label="zoom in">+</button>
+        </div>
+      </div>
+      <div class="dockmock">
+        <div class="dockmock__head">agent dock · repo: birocode <span class="dockmock__pill">local app open</span></div>
+        <div class="dockmock__screen" id="comp-screen">
+          <div class="dockmock__chatline">▸ built the client, verifying…</div>
+          <div class="viewport viewport--small" id="comp-viewport">
+            <div class="mockapp" id="comp-app">
+              <div class="mockapp__bar">my-product</div>
+              <div class="mockapp__grid"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            </div>
+          </div>
+          <div class="dockmock__composer">message this agent…</div>
+        </div>
+      </div>
+      <p class="caption">Chat line + composer follow only the <b>dock</b> zoom; the app follows <b>both</b>.</p>
+    </div>
+    <div class="card">
+      <h2>Effective scale</h2>
+      <div class="mathbox">
+        <span id="math-dock">100%</span> <em>dock (CSS zoom, persisted)</em>
+        <b>×</b>
+        <span id="math-frame">100%</span> <em>frame (transform, ephemeral)</em>
+        <b>=</b>
+        <span class="mathbox__result" id="math-eff">100%</span> <em>what your eye sees</em>
+      </div>
+      <ul class="facts facts--tight">
+        <li>The frame's indicator shows the <b>frame zoom only</b> — by design.</li>
+        <li>Changing one never changes the other's setting.</li>
+        <li>Different control shapes on purpose: slider = dock-wide, ± buttons = per-frame.</li>
+      </ul>
+    </div>
+  </div>
+</section>
 
-<footer class="ftr">
-  <code>openspec validate --strict</code> ✓ · tasks <b>10/10</b> ·
-  preview instance on :5210 stopped ·
-  next: merge, then <code>/opsx:archive</code>
-</footer>
+<!-- ============ 5 · SPEC ============ -->
+<section class="view" id="view-spec">
+  <div class="card">
+    <h2>Five requirements in <code>specs/local-app-zoom/spec.md</code></h2>
+    <p class="hint">Click a card to unfold its WHEN/THEN scenarios. Try the clamp widget on №3.</p>
+    <div class="reqs" id="reqs"></div>
+  </div>
+  <div class="card">
+    <h2>Implementation (tasks.md — 13/13 done ✓)</h2>
+    <ol class="plan">
+      <li><b>ProductFrame zoom mechanism ✓</b> — constants (0.5–2, step 0.25), <code>zoomable</code> prop + local state, viewport wrapper, transform + compensated size, CSS.</li>
+      <li><b>Controls overlay ✓</b> — corner cluster (− / % pill that doubles as reset / +), i18n (en/tr), pointer-safe overlay.</li>
+      <li><b>Wire the two surfaces ✓</b> — one prop each in <code>PinnedAgent.jsx</code> and <code>LocalApp.jsx</code>; App tab/Landing untouched by construction (no prop → bare iframe).</li>
+      <li><b>Verify against the spec ✓</b> — 23/23 Playwright checks: clamps at 50/200, chrome pixel-identical, in-frame scrolling, two-dock independence, reset-on-reload, 150% frame × 80% dock composition.</li>
+    </ol>
+  </div>
+</section>
 
+<footer class="foot">Rolling-latest understanding app · explains the <code>local-app-zoom</code> implementation · overwritten as the explanation evolves</footer>
 <script src="./app.js"></script>
 </body>
 </html>
