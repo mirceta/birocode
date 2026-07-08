@@ -67,6 +67,43 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Keep-alive frame host (openspec local-app-state-preserve). The host is a
+   fixed full-viewport layer that owns every local-app iframe for its whole
+   life; surfaces render a .product-frame__slot placeholder and the matching
+   .laf-frame is projected over it. z-index 4 is deliberate: above plain page
+   content (which has no z-index), below EVERY overlay in the app — dropdown
+   menus (20-50), dashboard chrome (5-21), chat/prompt modals (1000+) — so
+   modals and menus always draw over embedded apps. */
+.laf-host {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+/* One kept-alive frame. Positioned/sized/clipped imperatively by
+   LocalAppFrameHost to track its slot; pointer events come back on so the
+   embedded app stays interactive. display is host-managed (none = hidden,
+   which does NOT unload an iframe). */
+.laf-frame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  flex-direction: column;
+  pointer-events: auto;
+  background: #fff;
+  overflow: hidden;
+}
+
+/* The placeholder a surface renders where the frame should show — takes the
+   flex-child role .product-frame__viewport used to play. White so the layout
+   reads as the app's canvas even in the beat before the overlay projects. */
+.product-frame__slot {
+  flex: 1 1 auto;
+  min-height: 0;
+  background: #fff;
+}
+
 .product-empty {
   display: flex;
   flex: 1 1 auto;

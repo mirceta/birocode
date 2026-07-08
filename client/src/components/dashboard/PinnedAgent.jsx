@@ -763,7 +763,16 @@ export default function PinnedAgent({
         ) : showFiles ? (
           <FilesBrowser repoId={tab.repoId} />
         ) : openApp ? (
-          <ProductFrame url={`/api/localview/${tab.repoId}/app/${openApp.id}/`} port={openApp.port} zoomable />
+          // Hosted keep-alive frame (openspec local-app-state-preserve): keyed
+          // per (dock, app), so closing the app view / switching dock views
+          // only unregisters the slot — the live frame waits for the reopen.
+          <ProductFrame
+            url={`/api/localview/${tab.repoId}/app/${openApp.id}/`}
+            port={openApp.port}
+            zoomable
+            frameKey={`dock:${tab.id}:${tab.repoId}:${openApp.id}`}
+            frameMeta={{ kind: 'dock', dockId: tab.id, repoId: tab.repoId, appId: openApp.id }}
+          />
         ) : null}
         <Chat
           chat={chat}
