@@ -1,228 +1,223 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Shipped: apps survive navigation — the verification run</title>
-<link rel="stylesheet" href="./styles.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The fixed prompt catalog — how the prompts pop-up got organized</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --panel2: #1c2330; --line: #2d3646;
+    --text: #d7dde6; --dim: #8b96a5; --accent: #4cc38a; --accent2: #7aa2f7;
+    --warn: #e5c07b; --bad: #e06c75; --purple: #bb9af7;
+    font-size: 15px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", system-ui, sans-serif; line-height: 1.55; }
+  .wrap { max-width: 1020px; margin: 0 auto; padding: 24px 20px 80px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  .sub { color: var(--dim); margin-bottom: 20px; }
+  .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+  .tab { background: var(--panel); border: 1px solid var(--line); color: var(--dim);
+    padding: 8px 14px; border-radius: 8px; cursor: pointer; font: inherit; }
+  .tab.active { color: var(--text); border-color: var(--accent); background: var(--panel2); }
+  section { display: none; }
+  section.active { display: block; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 16px 18px; margin-bottom: 14px; }
+  .card h2 { font-size: 1.05rem; margin: 0 0 8px; }
+  ul, ol { margin: 6px 0 6px 18px; padding: 0; }
+  li { margin: 4px 0; }
+  .dim { color: var(--dim); }
+  .okbox { border-left: 3px solid var(--accent); background: var(--panel2);
+    padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 10px 0; }
+  .warnbox { border-left: 3px solid var(--warn); background: var(--panel2);
+    padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 10px 0; }
+  code { background: var(--panel2); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: .85em; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: .88rem; }
+  th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: var(--dim); font-weight: 600; }
+
+  /* Catalog explorer */
+  .cat-title { font-size: .78rem; font-weight: 700; letter-spacing: .05em; color: var(--dim);
+    text-transform: uppercase; border-bottom: 1px solid var(--line); padding-bottom: 4px; margin: 16px 0 8px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .pcard { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 9px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
+  .pcard:hover { border-color: var(--accent2); }
+  .pcard.open { border-color: var(--accent); }
+  .pcard .lbl { font-size: .82rem; font-weight: 600; }
+  .pcard .txt { font-size: .74rem; color: var(--dim); display: -webkit-box;
+    -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .pcard.open .txt { -webkit-line-clamp: unset; }
+  .pcard .meta { font-size: .68rem; color: var(--purple); }
+  .pcard .origin { font-size: .68rem; color: var(--warn); }
+  .pcard.inbox { border-style: dashed; }
+
+  /* Flow diagram */
+  .flow { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; margin: 12px 0; }
+  .fbox { flex: 1 1 180px; background: var(--panel2); border: 1px solid var(--line);
+    border-radius: 8px; padding: 10px 12px; font-size: .85rem; }
+  .fbox b { display: block; margin-bottom: 4px; }
+  .fbox.green { border-color: var(--accent); }
+  .fbox.red { border-color: var(--bad); }
+  .arrow { align-self: center; color: var(--dim); font-size: 1.3rem; }
+  .count { font-size: 1.4rem; font-weight: 700; color: var(--accent); }
+</style>
 </head>
 <body>
+<div class="wrap">
+  <h1>The fixed prompt catalog</h1>
+  <div class="sub">openspec change <code>organize-custom-prompts</code> · step 1 of ordering the prompts pop-up:
+    the proven set becomes harness constants in a categorized grid; customs stay only as the "New ideas" inbox.</div>
 
-<header class="hero">
-  <div class="hero-badge">Understanding app · rolling latest</div>
-  <h1>Leave and come back — <em>shipped &amp; proven</em></h1>
-  <p class="hero-sub">OpenSpec change <code>local-app-state-preserve</code> is <strong>implemented</strong> on
-  branch <code>feat/local-app-state-preserve</code> and <strong>verified in a real headless browser</strong>:
-  26/26 Playwright checks passed on the isolated <code>:5200</code> preview. Embedded local apps now keep their
-  state across every navigation; reload only happens when <em>you</em> press ↻. This app walks the proof —
-  what changed, how it works, what the browser saw, and what's left: <strong>your acceptance test</strong>.</p>
-  <div class="hero-chips">
-    <span class="chip ok">15/15 tasks done</span>
-    <span class="chip ok">26/26 browser checks</span>
-    <span class="chip ok">openspec validate --strict ✓</span>
-    <span class="chip warn">not committed — waiting on you</span>
-  </div>
-</header>
-
-<nav class="tabs" id="tabs">
-  <button class="tab active" data-view="demo">1 · Feel the fix</button>
-  <button class="tab" data-view="arch">2 · How it works</button>
-  <button class="tab" data-view="proof">3 · The proof: 26 checks</button>
-  <button class="tab" data-view="found">4 · Surfaced in testing</button>
-  <button class="tab" data-view="accept">5 · Your acceptance test</button>
-</nav>
-
-<main id="views">
-
-<!-- ============ VIEW 1: FEEL THE FIX ============ -->
-<section class="view active" id="view-demo">
-  <div class="panel">
-    <h2>The same three clicks, on main vs. on this branch</h2>
-    <p>This is a working simulation of the harness. The embedded box below behaves like <b>StateA</b> — the tiny
-    stateful test app the real verification typed into. <b>Type something, bump the counter, then switch to the
-    Files tab and come back.</b> Flip the mode switch and do it again.</p>
-
-    <div class="mode-row">
-      <span class="mode-label">Simulate:</span>
-      <div class="mode-toggle" id="mode-toggle">
-        <button class="mode-btn" data-mode="old">main (before)</button>
-        <button class="mode-btn active" data-mode="new">this branch (after)</button>
-      </div>
-      <span class="mode-desc" id="mode-desc"></span>
-    </div>
-
-    <div class="sim-wrap">
-      <div class="sim-phone">
-        <div class="sim-header">Claude Web · <span id="sim-tab-name">Local</span></div>
-        <div class="sim-body" id="sim-body"><!-- filled by app.js --></div>
-        <div class="sim-nav">
-          <button class="sim-navbtn active" data-tab="local">⌂ Local</button>
-          <button class="sim-navbtn" data-tab="files">F Files</button>
-          <button class="sim-navbtn" data-tab="chat">C Chat</button>
-        </div>
-      </div>
-
-      <div class="sim-host">
-        <h3>The frame host layer <span class="tag">what the user never sees</span></h3>
-        <p class="small">One fixed layer at the app root owns every iframe. Pages only render an empty
-        <i>slot</i>; the host projects the live frame over it. Leave the tab → the frame is just
-        <code>display:none</code>, never destroyed.</p>
-        <div id="host-frames"></div>
-        <div class="host-legend">
-          <span><i class="dot dot-visible"></i> projected over a slot</span>
-          <span><i class="dot dot-hidden"></i> hidden, state alive</span>
-          <span><i class="dot dot-dead"></i> destroyed (old behavior)</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="callout" id="demo-callout">Switch tabs and watch both sides: the phone <em>and</em> the host layer.</div>
-  </div>
-</section>
-
-<!-- ============ VIEW 2: HOW IT WORKS ============ -->
-<section class="view" id="view-arch">
-  <div class="panel">
-    <h2>Slot projection, running live in this page</h2>
-    <p>The mechanism that shipped: the page renders an empty <b>slot div</b> where the app should appear; the
-    iframe lives in a root-level host and is <b>projected</b> over the slot's rectangle
-    (ResizeObserver + capture-phase scroll listeners, batched into one <code>requestAnimationFrame</code>).
-    The demo below <em>is</em> that algorithm in miniature — the orange "frame" is in a separate fixed layer,
-    tracking the slot inside the scrollable page. <b>Scroll the grey page.</b></p>
-
-    <div class="proj-wrap">
-      <div class="proj-page" id="proj-page">
-        <div class="proj-filler">page content above the app…</div>
-        <div class="proj-slot" id="proj-slot"><span>&lt;div class="product-frame__slot"&gt;<br>(empty slot — the page renders only this)</span></div>
-        <div class="proj-filler tall">…page content below. Keep scrolling — push the slot fully out of view and
-        the frame hides itself (that exact behavior showed up in verification; see view 4).</div>
-      </div>
-      <div class="proj-status" id="proj-status"></div>
-    </div>
+  <div class="tabs">
+    <button class="tab active" data-t="set">The set — explore it</button>
+    <button class="tab" data-t="story">22 → 17 — how we got here</button>
+    <button class="tab" data-t="arch">Architecture</button>
+    <button class="tab" data-t="next">Inbox &amp; next steps</button>
   </div>
 
-  <div class="panel">
-    <h2>Who owns what</h2>
-    <div class="arch-diagram">
-      <div class="arch-col">
-        <div class="arch-box router">
-          <b>Router pages — mount &amp; unmount freely</b>
-          <div class="arch-inner">LocalApp tab · dock PinnedAgent<br>
-          <span class="small">ProductFrame is now just the <b>shell</b>: liveness probe, offline/empty states,
-          and the slot div. No iframe here anymore.</span></div>
-        </div>
-        <div class="arch-arrow">acquire / release / registerSlot</div>
-        <div class="arch-box context">
-          <b>LocalAppFramesContext — the registry</b>
-          <div class="arch-inner"><span class="small">Frame identity keys:</span><br>
-          <code>local:&lt;repo&gt;:&lt;app&gt;</code> · <code>dock:&lt;dockId&gt;:&lt;repo&gt;:&lt;app&gt;</code></div>
-        </div>
-        <div class="arch-arrow">renders one HostedFrame per entry</div>
-        <div class="arch-box host">
-          <b>LocalAppFrameHost — fixed layer, z-index 4</b>
-          <div class="arch-inner"><span class="small">Owns every iframe for its whole life. Projects visible ones
-          over their slots, clips against scrolling ancestors, hides the rest. z-index 4 sits below every menu
-          (20–50), dashboard chrome (5–21) and modal (1000+).</span></div>
-        </div>
+  <section id="set" class="active">
+    <div class="card dim" style="font-size:.88rem">Click a card to expand its full text. <span style="color:var(--purple)">purple</span> = swaps wording with the per-repo OpenSpec/Old-system toggle · <span style="color:var(--warn)">orange</span> = carries <code>{{fill-in}}</code> fields · dashed = the New ideas inbox (custom prompts, editable).</div>
+    <div id="catalog"></div>
+  </section>
+
+  <section id="story">
+    <div class="card">
+      <h2>Where 22 came from, and why the catalog holds 17</h2>
+      <div class="flow">
+        <div class="fbox"><b>Machine union</b>This computer had 11 customs; another had 10. Unioned by exact text → 15 customs + the 7 shipped built-ins = <span class="count">22</span> pop-up rows.</div>
+        <div class="arrow">→</div>
+        <div class="fbox red"><b>Exact duplicates (−4)</b>4 customs were literal copies of built-in texts: the plan.md "close", the plan-table "evaluate" (both live on as <code>.legacy</code> wordings behind the Old-system toggle), "Document better understanding", "Wall of text warning".</div>
+        <div class="arrow">→</div>
+        <div class="fbox red"><b>Wording variant (−1)</b>"Serve me understanding in understanding local app" = the "understanding app" built-in reworded. Folded in as a dedupe <em>alias</em>.</div>
+        <div class="arrow">→</div>
+        <div class="fbox green"><b>The catalog</b><span class="count">17</span> distinct prompts: 7 original built-ins + 10 promoted customs, texts verbatim, in 5 fixed categories.</div>
       </div>
-      <div class="arch-col rules">
-        <h3>Lifetime rules that shipped</h3>
-        <div class="rule-card keep"><b>Navigation</b><span>only unregisters the slot → frame hides, state lives.</span></div>
-        <div class="rule-card release"><b>Repo switch</b><span>releases the Local tab's frames (verified: 2 → 0).</span></div>
-        <div class="rule-card release"><b>Dock removed / app deleted</b><span>releases that dock's / that app's frames.</span></div>
-        <div class="rule-card release"><b>LRU cap 6</b><span>7th frame evicts the least-recently-visible — but only <em>hidden, non-pinned</em> frames; a visible frame is never yanked.</span></div>
-        <div class="rule-card keep"><b>Pinned</b><span>the Local tab's Understanding frame (this page!) is exempt from eviction.</span></div>
-        <div class="rule-card keep"><b>↻ is the only reload</b><span>bumps one frame's <code>reloadKey</code>. Docks gain a refresh they never had.</span></div>
-      </div>
+      <div class="okbox">Nothing was lost: every distinct text is in the catalog, and the 15 store copies still exist in <code>prompts.json</code> — the pop-up just hides them (see Architecture).</div>
     </div>
-  </div>
-</section>
+    <div class="card">
+      <h2>Why fixed categories, not user groups?</h2>
+      <p class="dim" style="margin:4px 0">The first draft of this change planned user-defined groups with manual reordering. Superseded: the custom library was a <em>temporary</em> discovery vehicle — now that the practiced set is known, it belongs in version control like any other harness constant. Categories are assistant-identified and shipped with the code; reordering means editing <code>promptCatalog.js</code> in a commit, not dragging rows on a phone.</p>
+    </div>
+  </section>
 
-<!-- ============ VIEW 3: THE PROOF ============ -->
-<section class="view" id="view-proof">
-  <div class="panel">
-    <h2>26 checks, zero failures — a real browser, not curl</h2>
-    <p>Per <code>docs/claude-web/browser-testing.md</code>, every claim was exercised end-to-end with headless
-    Playwright against the isolated preview on <code>:5200</code>, using two throwaway stateful apps
-    (<b>StateA</b> :5301, <b>StateB</b> :5302) that expose a text input, a counter, and a
-    <code>LOADED_AT</code> timestamp — so the test can tell "state survived" from "document reloaded".
-    <b>Click a stage</b> to see its checks; stages with a camera icon carry a real screenshot from the run.</p>
-    <div id="proof-stages"></div>
-  </div>
-  <div class="lightbox" id="lightbox"><img id="lightbox-img" alt="evidence screenshot"><div class="lightbox-cap" id="lightbox-cap"></div></div>
-</section>
+  <section id="arch">
+    <div class="card">
+      <h2>Where things live now</h2>
+      <table>
+        <tr><th>Piece</th><th>Home</th><th>Notes</th></tr>
+        <tr><td>Catalog (17 prompts, 5 categories)</td><td><code>client/src/components/chat/promptCatalog.js</code></td><td>ids, categories, emoji, <code>sys/gen</code> kind, dedupe aliases. Version-controlled order.</td></tr>
+        <tr><td>Prompt texts + labels</td><td><code>i18n/en.json</code> + <code>tr.json</code></td><td>Same pattern as the original built-ins: labels translated, bodies stay English.</td></tr>
+        <tr><td>Grid UI + dupe hiding</td><td><code>PromptManager.jsx</code> + <code>chat.css</code></td><td>Sections per category; cards ≥2 columns on a phone; catalog templates open the fill-in form.</td></tr>
+        <tr><td>Custom prompts ("New ideas")</td><td><code>prompts.json</code> via <code>PromptsService</code> — unchanged</td><td>Add/edit/delete exactly as before; renders as the last section.</td></tr>
+      </table>
+      <h2 style="margin-top:14px">The hiding rule (why nothing shows twice)</h2>
+      <p class="dim" style="margin:4px 0">A custom whose normalized text (trim, collapse whitespace, lowercase) matches any catalog text — base wording, <code>.legacy</code> wording, or a retired alias — is a <em>promoted copy</em> and is hidden from the pop-up. The store keeps it on purpose:</p>
+      <ul>
+        <li><b>Autopilot</b> builds its routine label space from <code>_prompts.List()</code> — deleting would silently shrink the recommender's vocabulary.</li>
+        <li><b>Rollback</b> to an older build just shows the flat list again; no data event either way.</li>
+        <li>If a hidden copy's text is later <b>edited</b> (e.g. in the Routine-prompts tab), it stops matching and honestly reappears under New ideas as a new idea.</li>
+      </ul>
+      <div class="warnbox"><b>Promoted verbatim.</b> Some promoted texts still speak the old plans-era language ("table in our plan"; "merge to master" survives only behind the Old-system toggle). Modernizing wording is a separate, deliberate edit — the catalog never rewrites silently.</div>
+    </div>
+  </section>
 
-<!-- ============ VIEW 4: SURFACED IN TESTING ============ -->
-<section class="view" id="view-found">
-  <div class="panel">
-    <h2>Two behaviors the browser run made visible</h2>
-    <p>Neither is a bug — both are the spec doing its job, and both are worth knowing before you test.</p>
-
-    <div class="found-grid">
-      <div class="found-card">
-        <h3>1 · Same app, two surfaces → two independent frames</h3>
-        <p>Midway through the dock stage, the selector <code>iframe[src*="statea"]</code> suddenly matched
-        <b>two elements</b>: the Local tab's kept-alive frame <em>and</em> the dock's new one. That's per-surface
-        frame identity working exactly as specced — each surface gets its own document, own state, own ↻.</p>
-        <div class="twin-demo">
-          <div class="twin">
-            <div class="twin-title"><code>local:birocode:statea</code></div>
-            <div class="twin-screen">StateA<br><span class="twin-val">"hello" · count 2</span></div>
-            <div class="twin-foot">Local tab · hidden but alive</div>
-          </div>
-          <div class="twin">
-            <div class="twin-title"><code>dock:pwtest-dock-a:…:statea</code></div>
-            <div class="twin-screen">StateA<br><span class="twin-val">"dockstate" · count 0</span></div>
-            <div class="twin-foot">dock phone · visible</div>
-          </div>
-        </div>
-        <p class="small">Those are the <em>actual values</em> from the run — the two documents never bled into
-        each other, and refreshing one left the other untouched.</p>
-      </div>
-
-      <div class="found-card">
-        <h3>2 · Fully scrolled-out slot → the frame hides itself</h3>
-        <p>The dock test first "failed": the phone's screen sat at <code>y = 982</code> in a 950-px-tall
-        viewport, so the host — correctly — hid the frame whose slot had zero visible area. The fix was in the
-        <em>test</em>, not the code: scroll the slot into view like a real user, and the frame appears and tracks.</p>
-        <p>You already have this demo live: go to <b>view 2</b> and scroll the slot fully out of the grey page —
-        the status readout flips to <i>hidden (slot off-screen)</i>, exactly what Playwright saw.</p>
-        <div class="mini-note">Why it matters: frames also <b>reposition live while scrolling</b> — the same
-        capture-phase listener that hides an off-screen frame keeps an on-screen one glued to its slot.</div>
+  <section id="next">
+    <div class="card">
+      <h2>The idea lifecycle from here</h2>
+      <div class="flow">
+        <div class="fbox"><b>1 · Chart it</b>New prompt idea → add it in the pop-up form. It lands in "New ideas", backend-synced, usable immediately.</div>
+        <div class="arrow">→</div>
+        <div class="fbox"><b>2 · Prove it</b>Use it in practice. Edit freely — it's still a custom.</div>
+        <div class="arrow">→</div>
+        <div class="fbox green"><b>3 · Promote it</b>Ask Claude to add it to <code>promptCatalog.js</code> + i18n in a commit. Its store copy auto-hides; the idea is now a harness constant on every machine.</div>
       </div>
     </div>
-  </div>
-</section>
-
-<!-- ============ VIEW 5: ACCEPTANCE ============ -->
-<section class="view" id="view-accept">
-  <div class="panel">
-    <h2>The sandbox is running — here's your test script</h2>
-    <div class="fact-grid">
-      <div class="fact"><b>Preview</b><span><code>http://localhost:5200</code> · password <code>changeme</code></span></div>
-      <div class="fact"><b>Fully isolated</b><span>own data dir, own repo store, own docks — live <code>:5099</code> untouched</span></div>
-      <div class="fact"><b>Test apps</b><span><b>StateA</b> :5301 · <b>StateB</b> :5302 — registered on "Claude Web (this app)"</span></div>
-      <div class="fact"><b>UI mode</b><span>set <b>Advanced</b> to see docks &amp; the dashboard</span></div>
+    <div class="card">
+      <h2>Deliberately deferred</h2>
+      <ul>
+        <li><b>Quick filter</b> — natural step 2 if 17 cards + inbox is still slow to scan.</li>
+        <li><b>Collapsible sections / ordering UI</b> — only if the grid alone doesn't suffice.</li>
+        <li><b>Purging the 15 promoted store copies</b> — needs Autopilot to learn the catalog first.</li>
+        <li><b>Modernizing plans-era texts</b> — user decision, separate change.</li>
+      </ul>
     </div>
+  </section>
+</div>
 
-    <h3>Try what the machine already proved <span class="tag">checklist remembers itself on this device</span></h3>
-    <div id="accept-list"></div>
+<script>
+// The real catalog, mirrored for exploration (source of truth: promptCatalog.js + en.json).
+const CATS = [
+  { id: 'lifecycle', name: 'Feature lifecycle' },
+  { id: 'decide', name: 'Plan & decide' },
+  { id: 'understanding', name: 'Understanding & docs' },
+  { id: 'flow', name: 'Conversation flow' },
+  { id: 'apps', name: 'Local apps & repo' },
+  { id: 'ideas', name: 'New ideas (custom inbox)' },
+];
+const P = [
+  ['lifecycle','🚀','Kick off a new feature','I want you to start a new feature. Make sure you are on the main branch synced with origin/main, then create a new feature branch. Start an OpenSpec change for it — run `openspec new change <name>` (or use /opsx propose) and draft its proposal. This is the feature we will be working on: ','sys','built-in'],
+  ['lifecycle','🔀',"MERGE ANOTHER BRANCH'S WORK INTO OURS","In the origin there is another branch that has gone on with a lot of work in the repository and it isnt merged to the main branch yet because its a work in progress, but it eventually will be and its the dominant work branch in the repository now. we appear to be outdated with respect to that branch and there may be merge conflicts. could you pull that branch and reconciliate with our own. like take the work on that branch as the new baseline for how the project is supposed to be, then on top of that add our work that we have done in this branch. Before you proceed with this, confirm your understanding of what i just asked you",'gen','promoted'],
+  ['lifecycle','🏁','Close a finished feature',"it works. Tick the remaining items in the change's tasks.md, run `openspec validate <change> --strict`, then `openspec archive <change>` to fold its delta into the living baseline. Then merge to main and make sure main is synced with origin.",'sys','built-in'],
+  ['decide','💡','Evaluate the different options we have',"Do you have only one idea/approach to this problem? If there are many approaches you can think of I want you to create a comparison table in the change's design.md where you will compare these approaches across a couple of dimensions. For example, difficulty of development, risk of development and so on. could you do that?",'sys','built-in'],
+  ['decide','🌟','Evaluate the different options we have (star ratings)','If there are many approaches you can think of I want you to create a table in our plan where you will compare these approaches across a couple of dimensions. For example, difficulty of development, risk of development and so on. could you do that? and could you rate all of the options in how many stars out of 5 they are.','gen','promoted'],
+  ['decide','🧠','ARCHITECTURE PLANNING','"List the 10 most consequential software/architecture/product decisions that will shape this project, and interview me until you understand 98% of it."','gen','promoted'],
+  ['decide','🎯','Rate your level of confidence','Rate your level of confidence in the proposed path. Are you sure? Do you just think its a good idea. can you present your reasoning.','gen','promoted'],
+  ['understanding','📝','Ask Claude to write its understanding first',"Before acting on my request, first restate your understanding of it — the goal, the concrete steps you'll take, and any assumptions — in the `proposal.md` of an OpenSpec change (run `openspec new change <name>` first if one isn't started). Keep it current if the request changes, and let me confirm it before you proceed.",'sys','built-in'],
+  ['understanding','📄','Document better understanding (but not diagrams)','The document is bloated right now. I want you to use appropriate principles for making it simpler, but not losing any important information. Use the principle of progressive disclosure - if the document covers many responsibilities, then try and refactor responsibilities into their own subfiles, that are only referenced by this document. You are trying to optimize for understanding of the operator. When you write the document - the goal should always be the most clarity for the reader.','gen','built-in'],
+  ['understanding','🤖','understanding app','please serve me the understanding in the understanding app','gen','built-in +1 alias'],
+  ['flow','🧭','Ok so where were we','Please give me a concise description of where we left work. what have we done in the previous step. if we were thinking about the next step then tell me what we were thinking about.','gen','promoted'],
+  ['flow','💬','Wall of text warning','You sent me a wall of text. Can you just give it to me concisely - what do you need from me. are you asking me a question? are you asking me for permission? please just tell me what you want from me concisely','gen','built-in'],
+  ['flow','🤝','agent handoff','our current context is huge. if we cant compact, then create a handoff for another agent please. it such be such that you explain what the task at hand was and include the context needed to understand everything associated with being able to continue our work. then paste me the prompt i would need to paste into the new agent to make it read the handoff and be able to proceed with work.','gen','promoted'],
+  ['apps','🌐','Find me all of the web applications in this repository','Find me all of the web applications in this repository','gen','promoted'],
+  ['apps','📦','create a new local tab exposed application',"I want you to create a new repository $R as a sibling folder to our current repository. I want you to name it {{repository name}}. run 'git init' in it. create an example of a local app exposed application. for the technology stack use the already local tab exposed application in {{local_tab_exposed_application_with_desired_technology_stack}}.",'gen','promoted'],
+  ['apps','🧩','create a new application in existing repository','I want you to create a new local tab application in our current repository. it will be named {{new_application_name}} so put it in {{folder_path}}. for the technology stack use the already local tab exposed application in {{local_tab_exposed_application_with_desired_technology_stack}}.','gen','promoted'],
+  ['apps','🔌','Service probably run detached','The app still doesnt show for me. I think the reason may be you didnt run it detached so it died when you exited your own process.','gen','promoted'],
+];
 
-    <div class="next-strip">
-      <b>Then:</b> nothing is committed and nothing merges until you say so
-      <span class="arrow">→</span> say the word
-      <span class="arrow">→</span> commit on <code>feat/local-app-state-preserve</code>
-      <span class="arrow">→</span> merge
-      <span class="arrow">→</span> <code>/opsx:archive</code> folds the spec into the baseline
-    </div>
-  </div>
-</section>
+const host = document.getElementById('catalog');
+for (const c of CATS) {
+  const h = document.createElement('div');
+  h.className = 'cat-title';
+  h.textContent = c.name;
+  host.appendChild(h);
+  const g = document.createElement('div');
+  g.className = 'grid';
+  const items = P.filter(p => p[0] === c.id);
+  if (c.id === 'ideas') {
+    const d = document.createElement('div');
+    d.className = 'pcard inbox';
+    d.innerHTML = '<div class="lbl">＋ your next idea</div><div class="txt">Anything added in the pop-up form lands here — editable, backend-synced, and one commit away from promotion into the catalog.</div>';
+    g.appendChild(d);
+  }
+  for (const p of items) {
+    const d = document.createElement('div');
+    d.className = 'pcard';
+    const params = [...p[3].matchAll(/\{\{\s*([A-Za-z0-9_ -]+?)\s*\}\}/g)].map(m => m[1]);
+    d.innerHTML =
+      '<div class="lbl">' + p[1] + ' ' + p[2] + '</div>' +
+      '<div class="txt"></div>' +
+      (p[4] === 'sys' ? '<div class="meta">swaps with OpenSpec/Old-system toggle</div>' : '') +
+      (params.length ? '<div class="origin">fields: ' + params.join(', ') + '</div>' : '') +
+      '<div class="meta" style="color:var(--dim)">' + p[5] + '</div>';
+    d.querySelector('.txt').textContent = p[3];
+    d.addEventListener('click', () => d.classList.toggle('open'));
+    g.appendChild(d);
+  }
+  host.appendChild(g);
+}
 
-</main>
-
-<footer class="foot">Understanding app · overwritten per explanation · served no-store under
-<code>/api/localview/&lt;repo&gt;/app/understanding/</code></footer>
-
-<script src="./app.js"></script>
+for (const t of document.querySelectorAll('.tab')) {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('section').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById(t.dataset.t).classList.add('active');
+  });
+}
+</script>
 </body>
 </html>

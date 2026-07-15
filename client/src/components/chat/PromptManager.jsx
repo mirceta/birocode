@@ -3,28 +3,21 @@ import { createPortal } from 'react-dom';
 import { useT } from '../../i18n/LanguageContext';
 import { useRepo } from '../../context/RepoContext';
 import { getPromptSystem, setPromptSystem } from './promptSystem';
+import { CATEGORIES, CATALOG, hiddenCatalogTexts, normalizeText } from './promptCatalog';
 import { extractParams, fillParams } from './promptTemplate';
 import PromptPlansPanel from './PromptPlansPanel';
 import PromptNotesPanel from './PromptNotesPanel';
 
-// The one-off composer prompts pop-up. It holds a FIXED, hard-coded built-in set
-// (insert-only, text from i18n) AND the user's own editable custom prompts
-// (openspec: add-prompt-templates — un-retiring the editable list). A custom
-// prompt may be a TEMPLATE: its body can carry `{{name}}` placeholders, and "Use"
-// then opens a fill-in form before the substituted text lands in the composer.
-//   built-in kind 'sys' → planning-system-specific: base key is the OpenSpec
-//                wording, `<key>.legacy` is the old plans/* wording; the per-repo
-//                toggle picks which. kind 'gen' → identical under both systems.
+// The one-off composer prompts pop-up (openspec: organize-custom-prompts). It
+// renders the FIXED catalog (promptCatalog.js — every proven prompt, hard-coded,
+// insert-only, texts from i18n) as a card grid under fixed category headings,
+// followed by a "New ideas" section: the user's editable custom prompts, kept as
+// the fast capture inbox for prompts that haven't earned promotion yet. A store
+// custom whose text matches a catalog text is a promoted copy (left in
+// prompts.json for the Autopilot label space) and is hidden here, never shown
+// twice. Any prompt body may be a TEMPLATE: `{{name}}` placeholders open a
+// fill-in form before the substituted text lands in the composer.
 // (Prompt PLANS and NOTES are separate tabs, untouched by this.)
-const BUILTINS = [
-  { id: 'understanding', emoji: '\u{1F4DD}', label: 'understanding.prefill', text: 'understanding.prefillPrompt', kind: 'sys' },
-  { id: 'kickoff', emoji: '\u{1F680}', label: 'feature.kickoff', text: 'feature.kickoffPrompt', kind: 'sys' },
-  { id: 'close', emoji: '\u{1F3C1}', label: 'prompts.builtin.close.label', text: 'prompts.builtin.close', kind: 'sys' },
-  { id: 'evaluate', emoji: '\u{1F4A1}', label: 'prompts.builtin.evaluate.label', text: 'prompts.builtin.evaluate', kind: 'sys' },
-  { id: 'docsimplify', emoji: '\u{1F4C4}', label: 'prompts.builtin.docsimplify.label', text: 'prompts.builtin.docsimplify', kind: 'gen' },
-  { id: 'walloftext', emoji: '\u{1F4AC}', label: 'prompts.builtin.walloftext.label', text: 'prompts.builtin.walloftext', kind: 'gen' },
-  { id: 'understandingapp', emoji: '\u{1F916}', label: 'prompts.builtin.understandingapp.label', text: 'prompts.builtin.understandingapp', kind: 'gen' },
-];
 
 // Emoji palette for the custom-prompt add/edit form (revived with the editable list).
 const EMOJIS = [
@@ -54,18 +47,27 @@ export default function PromptManager({
   function changeSystem(s) { setSystem(s); setPromptSystem(currentRepoId, s); }
   const legacy = system === 'old';
 
-  // Built-ins resolve their i18n text (sys ones honour the toggle). Custom prompts
-  // come straight from the backend-synced list. Built-ins are insert-only; custom
-  // ones also offer edit/delete.
-  const builtinItems = BUILTINS.map((b) => ({
+  // Catalog entries resolve their i18n text (sys ones honour the toggle); grouped
+  // into the fixed category sections. Custom prompts come straight from the
+  // backend-synced list, minus the promoted copies the catalog already covers
+  // (matched on normalized text incl. legacy wordings + retired aliases).
+  // Catalog cards are insert-only; custom ones also offer edit/delete.
+  const catalogItems = CATALOG.map((b) => ({
     id: b.id,
+    category: b.category,
     emoji: b.emoji,
     label: t(b.label),
     text: t(b.kind === 'sys' && legacy ? `${b.text}.legacy` : b.text),
     builtin: true,
   }));
-  const customItems = (prompts || []).map((p) => ({ ...p, builtin: false }));
-  const items = [...builtinItems, ...customItems];
+  const sections = CATEGORIES.map((c) => ({
+    ...c,
+    items: catalogItems.filter((p) => p.category === c.id),
+  }));
+  const promoted = hiddenCatalogTexts(t);
+  const customItems = (prompts || [])
+    .filter((p) => !promoted.has(normalizeText(p.text)))
+    .map((p) => ({ ...p, builtin: false }));
 
   // Add/edit form state for custom prompts.
   const [editingId, setEditingId] = useState(null);
@@ -136,11 +138,50 @@ export default function PromptManager({
     }
   }
 
+  // One prompt card, shared by the catalog sections and the New ideas inbox.
+  // Params are detected for every card now — catalog templates fill in too.
+  function renderCard(p) {
+    const params = extractParams(p.text);
+    return (
+      <li key={p.builtin ? `b:${p.id}` : p.id} className="prompt-mgr__card">
+        <div className="prompt-mgr__card-head">
+          <span className="prompt-mgr__item-emoji" aria-hidden="true">{p.emoji}</span>
+          {p.label && <span className="prompt-mgr__item-label">{p.label}</span>}
+        </div>
+        <span className="prompt-mgr__item-text">{p.text}</span>
+        {params.length > 0 && (
+          <span className="prompt-mgr__item-params">
+            {t('prompts.params')}: {params.join(', ')}
+          </span>
+        )}
+        <div className="prompt-mgr__card-actions">
+          <button
+            type="button"
+            className="prompt-mgr__item-btn prompt-mgr__item-use"
+            onClick={() => use(p.text)}
+          >
+            {t('prompts.use')}
+          </button>
+          {!p.builtin && (
+            <button type="button" className="prompt-mgr__item-btn" onClick={() => startEdit(p)}>
+              {t('prompts.edit')}
+            </button>
+          )}
+          {!p.builtin && (
+            <button type="button" className="prompt-mgr__item-btn" onClick={() => remove(p.id)}>
+              {t('prompts.delete')}
+            </button>
+          )}
+        </div>
+      </li>
+    );
+  }
+
   return (
     <>
     {createPortal(
     <div className="prompt-mgr-backdrop" onClick={onClose}>
-    <div className={`prompt-mgr${tab === 'notes' ? ' prompt-mgr--notes' : ''}`} role="dialog" aria-modal="true" aria-label={t('prompts.title')} onClick={(e) => e.stopPropagation()}>
+    <div className={`prompt-mgr${tab === 'notes' ? ' prompt-mgr--notes' : ''}${tab === 'prompts' ? ' prompt-mgr--grid' : ''}`} role="dialog" aria-modal="true" aria-label={t('prompts.title')} onClick={(e) => e.stopPropagation()}>
       <div className="prompt-mgr__head">
         <div className="prompt-mgr__tabs" role="tablist">
           <button
@@ -212,44 +253,22 @@ export default function PromptManager({
         />
       ) : (
       <>
-      <ul className="prompt-mgr__list">
-        {items.map((p) => {
-          const params = p.builtin ? [] : extractParams(p.text);
-          return (
-          <li key={p.builtin ? `b:${p.id}` : p.id} className="prompt-mgr__item">
-            <span className="prompt-mgr__item-emoji" aria-hidden="true">{p.emoji}</span>
-            <div className="prompt-mgr__item-main">
-              {p.label && <span className="prompt-mgr__item-label">{p.label}</span>}
-              <span className="prompt-mgr__item-text">{p.text}</span>
-              {params.length > 0 && (
-                <span className="prompt-mgr__item-params">
-                  {t('prompts.params')}: {params.join(', ')}
-                </span>
-              )}
-            </div>
-            <div className="prompt-mgr__item-actions">
-              <button
-                type="button"
-                className="prompt-mgr__item-btn prompt-mgr__item-use"
-                onClick={() => use(p.text)}
-              >
-                {t('prompts.use')}
-              </button>
-              {!p.builtin && (
-                <button type="button" className="prompt-mgr__item-btn" onClick={() => startEdit(p)}>
-                  {t('prompts.edit')}
-                </button>
-              )}
-              {!p.builtin && (
-                <button type="button" className="prompt-mgr__item-btn" onClick={() => remove(p.id)}>
-                  {t('prompts.delete')}
-                </button>
-              )}
-            </div>
-          </li>
-          );
-        })}
-      </ul>
+      {sections.map((s) => (
+        <section key={s.id} className="prompt-mgr__cat">
+          <h3 className="prompt-mgr__cat-title">{t(s.label)}</h3>
+          <ul className="prompt-mgr__grid">{s.items.map(renderCard)}</ul>
+        </section>
+      ))}
+
+      <section className="prompt-mgr__cat">
+        <h3 className="prompt-mgr__cat-title">{t('prompts.cat.ideas')}</h3>
+        <p className="prompt-mgr__cat-hint">{t('prompts.cat.ideasHint')}</p>
+        {customItems.length > 0 ? (
+          <ul className="prompt-mgr__grid">{customItems.map(renderCard)}</ul>
+        ) : (
+          <p className="prompt-mgr__empty">{t('prompts.empty')}</p>
+        )}
+      </section>
 
       <p className="prompt-mgr__formhint">{t('prompts.addHint')}</p>
 
