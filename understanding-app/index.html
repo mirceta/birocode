@@ -1,325 +1,228 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Event Feed — Sound Design Playground</title>
-<style>
-  :root{
-    --bg:#0e1116; --panel:#161b22; --panel2:#1c232d; --line:#2a323d;
-    --ink:#e6edf3; --dim:#8b98a5; --accent:#58a6ff; --good:#3fb950;
-    --start:#d29922; --end:#3fb950; --err:#f85149; --tool:#a371f7;
-  }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);
-    font:15px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-  .wrap{max-width:860px;margin:0 auto;padding:22px 18px 80px}
-  h1{font-size:22px;margin:.2em 0 .1em}
-  h2{font-size:15px;letter-spacing:.02em;text-transform:uppercase;color:var(--dim);
-    margin:26px 0 10px;font-weight:600}
-  p{color:var(--ink)} .dim{color:var(--dim)}
-  .sub{color:var(--dim);margin-top:0}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
-  .layers{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  @media(max-width:620px){.layers{grid-template-columns:1fr}}
-  .badge{display:inline-block;font-size:12px;padding:1px 8px;border-radius:999px;
-    border:1px solid var(--line);color:var(--dim);margin-left:6px}
-  table{width:100%;border-collapse:collapse;margin-top:6px}
-  th,td{padding:9px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
-  th{color:var(--dim);font-weight:600;font-size:13px}
-  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle}
-  .d-start{background:var(--start)} .d-end{background:var(--end)}
-  .d-err{background:var(--err)} .d-tool{background:var(--tool)}
-  button{font:inherit;color:var(--ink);background:var(--panel2);border:1px solid var(--line);
-    border-radius:8px;padding:7px 12px;cursor:pointer;transition:.12s}
-  button:hover{border-color:var(--accent);color:#fff}
-  button:active{transform:translateY(1px)}
-  button.play{min-width:44px}
-  .theme-row td:first-child{font-weight:600}
-  .seqbtn{background:transparent;border-color:transparent;color:var(--accent);padding:6px 8px}
-  .seqbtn:hover{text-decoration:underline;border-color:transparent}
-  .pill{font-size:12px;color:var(--dim)}
-  .foot{margin-top:8px;font-size:13px;color:var(--dim)}
-  code{background:#0b0f14;border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:13px}
-  .toggle{display:flex;align-items:center;gap:8px;margin-top:10px}
-  .swatch{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 0}
-  .swatch span{font-size:13px;color:var(--dim)}
-  .now{outline:2px solid var(--accent);outline-offset:1px}
-  .aom{border-left:4px solid var(--start);background:#1a160e}
-</style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shipped: apps survive navigation — the verification run</title>
+<link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-<div class="wrap">
-  <h1>Event Feed — Sound Design Playground</h1>
-  <p class="sub">Audition candidate sounds for each event type. Everything here is synthesized live in
-  your browser with Web Audio — no audio files — exactly how the real <code>events-app</code> "Device"
-  cue works, so what you hear is what we'd ship.</p>
 
-  <div class="card aom" style="margin-top:12px">
-    <b>🏛️ The wish: Age-of-Mythology-style unit acks.</b>
-    <p class="dim" style="margin:.5em 0 0">Two ways to get there. The repo itself vendors no audio files (it stays
-    build-less), so the built-in <b>"AoM-spirit"</b> theme below is an <i>original, synthesized homage</i> — snappy,
-    playful RTS-selection cues with that "unit acknowledges your click" feel. But since this harness runs only for you
-    at home, the real answer is <b><a href="#" onclick="document.getElementById('byo').scrollIntoView({behavior:'smooth'});return false" style="color:var(--start)">bring your own sound</a></b>:
-    drop the actual game lines (or anything else) straight in — they live in your browser only, never in git.</p>
+<header class="hero">
+  <div class="hero-badge">Understanding app · rolling latest</div>
+  <h1>Leave and come back — <em>shipped &amp; proven</em></h1>
+  <p class="hero-sub">OpenSpec change <code>local-app-state-preserve</code> is <strong>implemented</strong> on
+  branch <code>feat/local-app-state-preserve</code> and <strong>verified in a real headless browser</strong>:
+  26/26 Playwright checks passed on the isolated <code>:5200</code> preview. Embedded local apps now keep their
+  state across every navigation; reload only happens when <em>you</em> press ↻. This app walks the proof —
+  what changed, how it works, what the browser saw, and what's left: <strong>your acceptance test</strong>.</p>
+  <div class="hero-chips">
+    <span class="chip ok">15/15 tasks done</span>
+    <span class="chip ok">26/26 browser checks</span>
+    <span class="chip ok">openspec validate --strict ✓</span>
+    <span class="chip warn">not committed — waiting on you</span>
   </div>
+</header>
 
-  <h2>The two sound layers today</h2>
-  <div class="layers">
-    <div class="card">
-      <b>🔈 Device</b> <span class="badge">per browser</span>
-      <p class="dim" style="margin:.5em 0 0">Synthesized in the page watching the feed (your phone).
-      Today: one triangle "blip" on <i>every</i> event. This is the layer this playground redesigns —
-      cheap to give each event its own motif.</p>
+<nav class="tabs" id="tabs">
+  <button class="tab active" data-view="demo">1 · Feel the fix</button>
+  <button class="tab" data-view="arch">2 · How it works</button>
+  <button class="tab" data-view="proof">3 · The proof: 26 checks</button>
+  <button class="tab" data-view="found">4 · Surfaced in testing</button>
+  <button class="tab" data-view="accept">5 · Your acceptance test</button>
+</nav>
+
+<main id="views">
+
+<!-- ============ VIEW 1: FEEL THE FIX ============ -->
+<section class="view active" id="view-demo">
+  <div class="panel">
+    <h2>The same three clicks, on main vs. on this branch</h2>
+    <p>This is a working simulation of the harness. The embedded box below behaves like <b>StateA</b> — the tiny
+    stateful test app the real verification typed into. <b>Type something, bump the counter, then switch to the
+    Files tab and come back.</b> Flip the mode switch and do it again.</p>
+
+    <div class="mode-row">
+      <span class="mode-label">Simulate:</span>
+      <div class="mode-toggle" id="mode-toggle">
+        <button class="mode-btn" data-mode="old">main (before)</button>
+        <button class="mode-btn active" data-mode="new">this branch (after)</button>
+      </div>
+      <span class="mode-desc" id="mode-desc"></span>
     </div>
-    <div class="card">
-      <b>🖥️ Host</b> <span class="badge">shared</span>
-      <p class="dim" style="margin:.5em 0 0">Plays on the machine running the harness (<code>HostEventSound.cs</code>):
-      a beep, or a spoken "an agent has finished". Could also branch by type (e.g. say
-      "started" vs "finished") — but it's shared &amp; server-side.</p>
+
+    <div class="sim-wrap">
+      <div class="sim-phone">
+        <div class="sim-header">Claude Web · <span id="sim-tab-name">Local</span></div>
+        <div class="sim-body" id="sim-body"><!-- filled by app.js --></div>
+        <div class="sim-nav">
+          <button class="sim-navbtn active" data-tab="local">⌂ Local</button>
+          <button class="sim-navbtn" data-tab="files">F Files</button>
+          <button class="sim-navbtn" data-tab="chat">C Chat</button>
+        </div>
+      </div>
+
+      <div class="sim-host">
+        <h3>The frame host layer <span class="tag">what the user never sees</span></h3>
+        <p class="small">One fixed layer at the app root owns every iframe. Pages only render an empty
+        <i>slot</i>; the host projects the live frame over it. Leave the tab → the frame is just
+        <code>display:none</code>, never destroyed.</p>
+        <div id="host-frames"></div>
+        <div class="host-legend">
+          <span><i class="dot dot-visible"></i> projected over a slot</span>
+          <span><i class="dot dot-hidden"></i> hidden, state alive</span>
+          <span><i class="dot dot-dead"></i> destroyed (old behavior)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout" id="demo-callout">Switch tabs and watch both sides: the phone <em>and</em> the host layer.</div>
+  </div>
+</section>
+
+<!-- ============ VIEW 2: HOW IT WORKS ============ -->
+<section class="view" id="view-arch">
+  <div class="panel">
+    <h2>Slot projection, running live in this page</h2>
+    <p>The mechanism that shipped: the page renders an empty <b>slot div</b> where the app should appear; the
+    iframe lives in a root-level host and is <b>projected</b> over the slot's rectangle
+    (ResizeObserver + capture-phase scroll listeners, batched into one <code>requestAnimationFrame</code>).
+    The demo below <em>is</em> that algorithm in miniature — the orange "frame" is in a separate fixed layer,
+    tracking the slot inside the scrollable page. <b>Scroll the grey page.</b></p>
+
+    <div class="proj-wrap">
+      <div class="proj-page" id="proj-page">
+        <div class="proj-filler">page content above the app…</div>
+        <div class="proj-slot" id="proj-slot"><span>&lt;div class="product-frame__slot"&gt;<br>(empty slot — the page renders only this)</span></div>
+        <div class="proj-filler tall">…page content below. Keep scrolling — push the slot fully out of view and
+        the frame hides itself (that exact behavior showed up in verification; see view 4).</div>
+      </div>
+      <div class="proj-status" id="proj-status"></div>
     </div>
   </div>
 
-  <h2>Events flowing today <span class="pill">+ two we could add later</span></h2>
-  <div class="swatch">
-    <span><i class="dot d-start"></i><b>turn.start</b> — an agent began working</span>
-    <span><i class="dot d-end"></i><b>turn.ended</b> — an agent finished</span>
-    <span><i class="dot d-err"></i>error <i>(future)</i></span>
-    <span><i class="dot d-tool"></i>tool <i>(future)</i></span>
-  </div>
-
-  <h2>Candidate sound themes — press play</h2>
-  <div class="card">
-    <table id="grid">
-      <thead>
-        <tr>
-          <th>Theme</th>
-          <th><i class="dot d-start"></i>turn.start</th>
-          <th><i class="dot d-end"></i>turn.ended</th>
-          <th><i class="dot d-err"></i>error</th>
-          <th><i class="dot d-tool"></i>tool</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="rows"></tbody>
-    </table>
-    <div class="toggle">
-      <button id="space" aria-pressed="false">✨ Space (echo) : off</button>
-      <span class="pill">a touch of feedback-delay makes cues feel richer</span>
+  <div class="panel">
+    <h2>Who owns what</h2>
+    <div class="arch-diagram">
+      <div class="arch-col">
+        <div class="arch-box router">
+          <b>Router pages — mount &amp; unmount freely</b>
+          <div class="arch-inner">LocalApp tab · dock PinnedAgent<br>
+          <span class="small">ProductFrame is now just the <b>shell</b>: liveness probe, offline/empty states,
+          and the slot div. No iframe here anymore.</span></div>
+        </div>
+        <div class="arch-arrow">acquire / release / registerSlot</div>
+        <div class="arch-box context">
+          <b>LocalAppFramesContext — the registry</b>
+          <div class="arch-inner"><span class="small">Frame identity keys:</span><br>
+          <code>local:&lt;repo&gt;:&lt;app&gt;</code> · <code>dock:&lt;dockId&gt;:&lt;repo&gt;:&lt;app&gt;</code></div>
+        </div>
+        <div class="arch-arrow">renders one HostedFrame per entry</div>
+        <div class="arch-box host">
+          <b>LocalAppFrameHost — fixed layer, z-index 4</b>
+          <div class="arch-inner"><span class="small">Owns every iframe for its whole life. Projects visible ones
+          over their slots, clips against scrolling ancestors, hides the rest. z-index 4 sits below every menu
+          (20–50), dashboard chrome (5–21) and modal (1000+).</span></div>
+        </div>
+      </div>
+      <div class="arch-col rules">
+        <h3>Lifetime rules that shipped</h3>
+        <div class="rule-card keep"><b>Navigation</b><span>only unregisters the slot → frame hides, state lives.</span></div>
+        <div class="rule-card release"><b>Repo switch</b><span>releases the Local tab's frames (verified: 2 → 0).</span></div>
+        <div class="rule-card release"><b>Dock removed / app deleted</b><span>releases that dock's / that app's frames.</span></div>
+        <div class="rule-card release"><b>LRU cap 6</b><span>7th frame evicts the least-recently-visible — but only <em>hidden, non-pinned</em> frames; a visible frame is never yanked.</span></div>
+        <div class="rule-card keep"><b>Pinned</b><span>the Local tab's Understanding frame (this page!) is exempt from eviction.</span></div>
+        <div class="rule-card keep"><b>↻ is the only reload</b><span>bumps one frame's <code>reloadKey</code>. Docks gain a refresh they never had.</span></div>
+      </div>
     </div>
-    <div class="foot">Tip: hit <b>▸ start → end</b> in the last column to hear the pair as a mini narrative
-      (agent starts, then resolves). Design intent: <b>start = rising/bright</b>, <b>end = settling/warm</b>,
-      <b>error = low/dissonant</b>, <b>tool = a soft tick</b> — so you can tell what happened without looking.
-      The <b>AoM-spirit</b> row leans playful and snappy, like a unit answering a click.</div>
   </div>
+</section>
 
-  <h2>Bring your own sound <span class="pill">device-local · nothing uploaded</span></h2>
-  <div class="card">
-    <p class="dim" style="margin-top:0">This is the real feature. Assign your <b>own</b> audio file to each event
-    type. Since this runs only for you at home, drop in whatever you like — e.g. the actual Age&nbsp;of&nbsp;Mythology
-    unit lines. Files are stored only in <b>this browser</b> (IndexedDB); nothing is uploaded or committed to the repo.
-    An event type with no file falls back to the synth theme above. The shipped <code>events-app</code> uses this exact
-    scheme (custom file wins, else built-in synth cue).</p>
-    <table>
-      <thead><tr><th>Event</th><th>Your file</th><th>Assign</th><th></th><th></th></tr></thead>
-      <tbody id="byo"></tbody>
-    </table>
-    <input id="byoFile" type="file" accept="audio/*" hidden />
-    <div class="foot">Tip: on a phone the file picker offers your music/voice memos; on desktop it's a normal open dialog.
-      Clearing a file reverts that event to the synth fallback.</div>
+<!-- ============ VIEW 3: THE PROOF ============ -->
+<section class="view" id="view-proof">
+  <div class="panel">
+    <h2>26 checks, zero failures — a real browser, not curl</h2>
+    <p>Per <code>docs/claude-web/browser-testing.md</code>, every claim was exercised end-to-end with headless
+    Playwright against the isolated preview on <code>:5200</code>, using two throwaway stateful apps
+    (<b>StateA</b> :5301, <b>StateB</b> :5302) that expose a text input, a counter, and a
+    <code>LOADED_AT</code> timestamp — so the test can tell "state survived" from "document reloaded".
+    <b>Click a stage</b> to see its checks; stages with a camera icon carry a real screenshot from the run.</p>
+    <div id="proof-stages"></div>
   </div>
+  <div class="lightbox" id="lightbox"><img id="lightbox-img" alt="evidence screenshot"><div class="lightbox-cap" id="lightbox-cap"></div></div>
+</section>
 
-  <h2>How this maps to the code</h2>
-  <p class="dim">Each cell above is one <code>playMotif(notes)</code> call — a list of
-  <code>{freq, type, dur, gain}</code> notes staggered in time, the same primitive the real
-  <code>blip()</code> already uses. Shipping = replace the single <code>blip()</code> with a
-  <code>SOUNDS[eventType]</code> lookup driving these motifs, keep the one Device toggle, and (optionally)
-  pass the event <code>type</code> into <code>HostEventSound.Notify()</code> so the host cue can branch too.
-  Pick the theme you like and it gets wired in via the OpenSpec change <code>add-event-feed-sounds</code>.</p>
-</div>
+<!-- ============ VIEW 4: SURFACED IN TESTING ============ -->
+<section class="view" id="view-found">
+  <div class="panel">
+    <h2>Two behaviors the browser run made visible</h2>
+    <p>Neither is a bug — both are the spec doing its job, and both are worth knowing before you test.</p>
 
-<script>
-// ---- tiny Web Audio engine (no assets) --------------------------------------
-let ctx = null, master = null, spaceOn = false, echoGain = null;
-function ensure(){
-  if (ctx) return;
-  ctx = new (window.AudioContext || window.webkitAudioContext)();
-  master = ctx.createGain(); master.gain.value = 0.9; master.connect(ctx.destination);
-  // optional feedback-delay "space"
-  const delay = ctx.createDelay(); delay.delayTime.value = 0.16;
-  const fb = ctx.createGain(); fb.gain.value = 0.28;
-  echoGain = ctx.createGain(); echoGain.gain.value = 0;       // dry by default
-  delay.connect(fb); fb.connect(delay); delay.connect(echoGain); echoGain.connect(ctx.destination);
-  master.connect(delay);
-}
-function note(n, t0){
-  const t = t0 + (n.at || 0);
-  const osc = ctx.createOscillator();
-  const g = ctx.createGain();
-  osc.type = n.type || 'triangle';
-  osc.frequency.setValueAtTime(n.freq, t);
-  if (n.to) osc.frequency.exponentialRampToValueAtTime(n.to, t + (n.dur||0.16)); // glide
-  if (n.detune) osc.detune.value = n.detune;
-  const peak = n.gain || 0.16, dur = n.dur || 0.16;
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(peak, t + 0.012);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  osc.connect(g); g.connect(master);
-  osc.start(t); osc.stop(t + dur + 0.02);
-}
-function playMotif(notes){
-  ensure(); if (ctx.state === 'suspended') ctx.resume();
-  const t0 = ctx.currentTime + 0.02;
-  notes.forEach(n => note(n, t0));
-}
+    <div class="found-grid">
+      <div class="found-card">
+        <h3>1 · Same app, two surfaces → two independent frames</h3>
+        <p>Midway through the dock stage, the selector <code>iframe[src*="statea"]</code> suddenly matched
+        <b>two elements</b>: the Local tab's kept-alive frame <em>and</em> the dock's new one. That's per-surface
+        frame identity working exactly as specced — each surface gets its own document, own state, own ↻.</p>
+        <div class="twin-demo">
+          <div class="twin">
+            <div class="twin-title"><code>local:birocode:statea</code></div>
+            <div class="twin-screen">StateA<br><span class="twin-val">"hello" · count 2</span></div>
+            <div class="twin-foot">Local tab · hidden but alive</div>
+          </div>
+          <div class="twin">
+            <div class="twin-title"><code>dock:pwtest-dock-a:…:statea</code></div>
+            <div class="twin-screen">StateA<br><span class="twin-val">"dockstate" · count 0</span></div>
+            <div class="twin-foot">dock phone · visible</div>
+          </div>
+        </div>
+        <p class="small">Those are the <em>actual values</em> from the run — the two documents never bled into
+        each other, and refreshing one left the other untouched.</p>
+      </div>
 
-// ---- themes: eventType -> motif ---------------------------------------------
-// each note: {freq, type, dur, gain, at(stagger s), to(glide target)}
-const N = (freq,opt={}) => Object.assign({freq}, opt);
-const THEMES = {
-  'Current blip': {
-    start: [N(740,{type:'triangle'})],
-    ended: [N(740,{type:'triangle'})],
-    error: [N(740,{type:'triangle'})],
-    tool:  [N(740,{type:'triangle'})],
-  },
-  'AoM-spirit (homage)': {
-    // snappy square/triangle "unit ack" — bright rising query for start, a crisp
-    // affirmative two-note for end, a low bonk for error, a wood-tick for tool.
-    start: [N(587,{type:'square',dur:.07,gain:.10}), N(880,{type:'square',dur:.10,gain:.11,at:.07}), N(1175,{type:'triangle',dur:.12,gain:.09,at:.15})],
-    ended: [N(784,{type:'square',dur:.08,gain:.11}), N(1046,{type:'square',dur:.14,gain:.11,at:.09})],
-    error: [N(196,{type:'square',dur:.12,gain:.13}), N(165,{type:'square',dur:.20,gain:.12,at:.10})],
-    tool:  [N(1568,{type:'square',dur:.04,gain:.07})],
-  },
-  'Two-tone motif': {
-    start: [N(660,{type:'triangle',dur:.12}), N(880,{type:'triangle',dur:.16,at:.10})],
-    ended: [N(880,{type:'sine',dur:.14,gain:.14}), N(587,{type:'sine',dur:.28,gain:.14,at:.11})],
-    error: [N(220,{type:'sawtooth',dur:.20,gain:.12}), N(207,{type:'sawtooth',dur:.30,gain:.12,at:.04})],
-    tool:  [N(1320,{type:'square',dur:.05,gain:.07})],
-  },
-  'Marimba pluck': {
-    start: [N(523,{type:'sine',dur:.14}), N(659,{type:'sine',dur:.14,at:.09}), N(784,{type:'sine',dur:.20,at:.18})],
-    ended: [N(784,{type:'sine',dur:.16,gain:.15}), N(523,{type:'sine',dur:.34,gain:.15,at:.10})],
-    error: [N(196,{type:'triangle',dur:.34,gain:.14})],
-    tool:  [N(988,{type:'sine',dur:.06,gain:.08})],
-  },
-  'Glass glide': {
-    start: [N(600,{type:'sine',dur:.26,to:1000,gain:.14})],
-    ended: [N(1000,{type:'sine',dur:.34,to:520,gain:.14})],
-    error: [N(300,{type:'sawtooth',dur:.34,to:180,gain:.12,detune:6})],
-    tool:  [N(1500,{type:'triangle',dur:.05,gain:.06})],
-  },
-  'Chime (soft bells)': {
-    start: [N(784,{type:'sine',dur:.5,gain:.10}), N(1175,{type:'sine',dur:.6,gain:.06,at:.02})],
-    ended: [N(659,{type:'sine',dur:.7,gain:.11}), N(988,{type:'sine',dur:.8,gain:.06,at:.02}), N(494,{type:'sine',dur:.9,gain:.05,at:.04})],
-    error: [N(277,{type:'sine',dur:.6,gain:.12}), N(293,{type:'sine',dur:.6,gain:.10,at:.0})],
-    tool:  [N(1319,{type:'sine',dur:.12,gain:.06})],
-  },
-};
-const EVENTS = ['start','ended','error','tool'];
+      <div class="found-card">
+        <h3>2 · Fully scrolled-out slot → the frame hides itself</h3>
+        <p>The dock test first "failed": the phone's screen sat at <code>y = 982</code> in a 950-px-tall
+        viewport, so the host — correctly — hid the frame whose slot had zero visible area. The fix was in the
+        <em>test</em>, not the code: scroll the slot into view like a real user, and the frame appears and tracks.</p>
+        <p>You already have this demo live: go to <b>view 2</b> and scroll the slot fully out of the grey page —
+        the status readout flips to <i>hidden (slot off-screen)</i>, exactly what Playwright saw.</p>
+        <div class="mini-note">Why it matters: frames also <b>reposition live while scrolling</b> — the same
+        capture-phase listener that hides an off-screen frame keeps an on-screen one glued to its slot.</div>
+      </div>
+    </div>
+  </div>
+</section>
 
-// ---- render grid ------------------------------------------------------------
-const rows = document.getElementById('rows');
-let lastBtn = null;
-function markNow(btn){ if(lastBtn) lastBtn.classList.remove('now'); btn.classList.add('now'); lastBtn = btn; }
-Object.keys(THEMES).forEach(name => {
-  const tr = document.createElement('tr'); tr.className = 'theme-row';
-  const td0 = document.createElement('td'); td0.textContent = name; tr.appendChild(td0);
-  EVENTS.forEach(ev => {
-    const td = document.createElement('td');
-    const b = document.createElement('button'); b.className = 'play'; b.textContent = '▸';
-    b.title = `Play ${name} · ${ev}`;
-    b.onclick = () => { markNow(b); playMotif(THEMES[name][ev]); };
-    td.appendChild(b); tr.appendChild(td);
-  });
-  const tdSeq = document.createElement('td');
-  const seq = document.createElement('button'); seq.className = 'seqbtn'; seq.textContent = '▸ start → end';
-  seq.onclick = () => {
-    markNow(seq);
-    playMotif(THEMES[name].start);
-    setTimeout(() => playMotif(THEMES[name].ended), 900);
-  };
-  tdSeq.appendChild(seq); tr.appendChild(tdSeq);
-  rows.appendChild(tr);
-});
+<!-- ============ VIEW 5: ACCEPTANCE ============ -->
+<section class="view" id="view-accept">
+  <div class="panel">
+    <h2>The sandbox is running — here's your test script</h2>
+    <div class="fact-grid">
+      <div class="fact"><b>Preview</b><span><code>http://localhost:5200</code> · password <code>changeme</code></span></div>
+      <div class="fact"><b>Fully isolated</b><span>own data dir, own repo store, own docks — live <code>:5099</code> untouched</span></div>
+      <div class="fact"><b>Test apps</b><span><b>StateA</b> :5301 · <b>StateB</b> :5302 — registered on "Claude Web (this app)"</span></div>
+      <div class="fact"><b>UI mode</b><span>set <b>Advanced</b> to see docks &amp; the dashboard</span></div>
+    </div>
 
-// ---- bring your own sound (device-local, IndexedDB) -------------------------
-// Store the raw file bytes keyed by event type; decode to an AudioBuffer on first
-// play and route it through the same `master` bus so the echo toggle applies too.
-const IDB_DB = 'eventfeed-sounds-playground', IDB_STORE = 'cues';
-function idb(){ return new Promise((res, rej) => { const r = indexedDB.open(IDB_DB, 1);
-  r.onupgradeneeded = () => r.result.createObjectStore(IDB_STORE, { keyPath: 'type' });
-  r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
-function idbReq(mode, fn){ return idb().then(db => new Promise((res, rej) => {
-  const tx = db.transaction(IDB_STORE, mode), rq = fn(tx.objectStore(IDB_STORE));
-  tx.oncomplete = () => res(rq && rq.result); tx.onerror = () => rej(tx.error); })); }
-const byoBytes = {}, byoBuf = {}, byoName = {};
-const BYO = [
-  { type:'start', label:'turn.start', dot:'d-start' },
-  { type:'ended', label:'turn.ended', dot:'d-end' },
-  { type:'error', label:'error',      dot:'d-err' },
-  { type:'tool',  label:'tool',       dot:'d-tool' },
-];
-async function byoLoad(){
-  try { const all = await idbReq('readonly', s => s.getAll());
-    for (const r of (all || [])){ byoBytes[r.type] = r.bytes; byoName[r.type] = r.name; } } catch {}
-  byoRender();
-}
-async function byoPlay(type){
-  ensure(); if (ctx.state === 'suspended') ctx.resume();
-  if (!byoBuf[type]){
-    if (!byoBytes[type]) return false;
-    try { byoBuf[type] = await ctx.decodeAudioData(byoBytes[type].slice(0)); } catch { return false; }
-  }
-  const src = ctx.createBufferSource(); src.buffer = byoBuf[type];
-  const g = ctx.createGain(); g.gain.value = 0.9;
-  src.connect(g); g.connect(master); src.start(); return true;
-}
-async function byoAssign(type, file){
-  let bytes; try { bytes = await file.arrayBuffer(); } catch { return; }
-  ensure();
-  try { await ctx.decodeAudioData(bytes.slice(0)); } catch { alert('Could not decode that audio file — try mp3, wav, ogg or m4a.'); return; }
-  try { await idbReq('readwrite', s => s.put({ type, name: file.name, bytes })); } catch {}
-  byoBytes[type] = bytes; byoName[type] = file.name; delete byoBuf[type]; byoRender();
-}
-async function byoClear(type){
-  try { await idbReq('readwrite', s => s.delete(type)); } catch {}
-  delete byoBytes[type]; delete byoBuf[type]; delete byoName[type]; byoRender();
-}
-const byoBody = document.getElementById('byo'), byoFile = document.getElementById('byoFile');
-let byoPending = null;
-function byoRender(){
-  byoBody.innerHTML = '';
-  for (const s of BYO){
-    const has = !!byoBytes[s.type];
-    const tr = document.createElement('tr');
-    tr.innerHTML =
-      `<td><i class="dot ${s.dot}"></i><b>${s.label}</b></td>`+
-      `<td class="dim">${has ? byoName[s.type] : '<i>— synth fallback —</i>'}</td>`+
-      `<td><button data-byo="choose" data-type="${s.type}">${has ? 'Replace' : 'Choose file…'}</button></td>`+
-      `<td><button class="play" data-byo="test" data-type="${s.type}">▸</button></td>`+
-      `<td>${has ? `<button data-byo="clear" data-type="${s.type}">Clear</button>` : ''}</td>`;
-    byoBody.appendChild(tr);
-  }
-}
-byoBody.addEventListener('click', e => {
-  const b = e.target.closest('button[data-byo]'); if (!b) return;
-  const t = b.dataset.type, a = b.dataset.byo;
-  if (a === 'choose'){ byoPending = t; byoFile.value = ''; byoFile.click(); }
-  else if (a === 'test'){ byoPlay(t).then(ok => { if (!ok) playMotif(THEMES['AoM-spirit (homage)'][t] || []); }); }
-  else if (a === 'clear'){ byoClear(t); }
-});
-byoFile.onchange = () => { const f = byoFile.files && byoFile.files[0]; if (f && byoPending) byoAssign(byoPending, f); };
-byoLoad();
+    <h3>Try what the machine already proved <span class="tag">checklist remembers itself on this device</span></h3>
+    <div id="accept-list"></div>
 
-// ---- space toggle -----------------------------------------------------------
-const spaceBtn = document.getElementById('space');
-spaceBtn.onclick = () => {
-  ensure(); spaceOn = !spaceOn;
-  echoGain.gain.setTargetAtTime(spaceOn ? 0.5 : 0, ctx.currentTime, 0.02);
-  spaceBtn.textContent = `✨ Space (echo) : ${spaceOn ? 'on' : 'off'}`;
-  spaceBtn.setAttribute('aria-pressed', spaceOn);
-};
-</script>
+    <div class="next-strip">
+      <b>Then:</b> nothing is committed and nothing merges until you say so
+      <span class="arrow">→</span> say the word
+      <span class="arrow">→</span> commit on <code>feat/local-app-state-preserve</code>
+      <span class="arrow">→</span> merge
+      <span class="arrow">→</span> <code>/opsx:archive</code> folds the spec into the baseline
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">Understanding app · overwritten per explanation · served no-store under
+<code>/api/localview/&lt;repo&gt;/app/understanding/</code></footer>
+
+<script src="./app.js"></script>
 </body>
 </html>

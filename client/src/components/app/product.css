@@ -9,6 +9,101 @@
   background: #fff;
 }
 
+/* Zoomable wrapper (openspec: local-app-zoom). Takes over the flex-child role
+   from the iframe; the scaled iframe always fills it exactly (layout 100%/f ×
+   scale f), so overflow: hidden only guards sub-pixel rounding — the frame's
+   footprint in the harness layout never changes with the zoom level. */
+.product-frame__viewport {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  background: #fff;
+}
+
+.product-frame__viewport .product-frame {
+  flex: none;
+  width: 100%;
+  height: 100%;
+}
+
+/* Corner-anchored zoom cluster: content-sized, and only the buttons take
+   pointer events, so the iframe stays fully interactive around it. */
+.product-frame__zoom {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  gap: 4px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.product-frame__zoom-btn {
+  pointer-events: auto;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(20, 20, 20, 0.65);
+  color: #fff;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.product-frame__zoom-btn:hover:not(:disabled) {
+  background: rgba(20, 20, 20, 0.85);
+}
+
+.product-frame__zoom-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.product-frame__zoom-level {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Keep-alive frame host (openspec local-app-state-preserve). The host is a
+   fixed full-viewport layer that owns every local-app iframe for its whole
+   life; surfaces render a .product-frame__slot placeholder and the matching
+   .laf-frame is projected over it. z-index 4 is deliberate: above plain page
+   content (which has no z-index), below EVERY overlay in the app — dropdown
+   menus (20-50), dashboard chrome (5-21), chat/prompt modals (1000+) — so
+   modals and menus always draw over embedded apps. */
+.laf-host {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+/* One kept-alive frame. Positioned/sized/clipped imperatively by
+   LocalAppFrameHost to track its slot; pointer events come back on so the
+   embedded app stays interactive. display is host-managed (none = hidden,
+   which does NOT unload an iframe). */
+.laf-frame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  flex-direction: column;
+  pointer-events: auto;
+  background: #fff;
+  overflow: hidden;
+}
+
+/* The placeholder a surface renders where the frame should show — takes the
+   flex-child role .product-frame__viewport used to play. White so the layout
+   reads as the app's canvas even in the beat before the overlay projects. */
+.product-frame__slot {
+  flex: 1 1 auto;
+  min-height: 0;
+  background: #fff;
+}
+
 .product-empty {
   display: flex;
   flex: 1 1 auto;

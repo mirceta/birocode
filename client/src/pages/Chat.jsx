@@ -40,6 +40,11 @@ export default function Chat({
   // embedded dock chat context, so the button below renders only there.
   chatMaximized = false,
   toggleChatMaximized,
+  // Composer-only mode (openspec local-app-overlay-keep-composer): while a dock
+  // shows an alternate view (local app / Event Console / Files) the chat stays
+  // MOUNTED below it with everything but the composer hidden via CSS — so the
+  // operator can keep prompting and stream/scroll state survives the view.
+  composerOnly = false,
 }) {
   const { t } = useT();
   const active = useChat();
@@ -175,6 +180,17 @@ export default function Chat({
     scrollToBottom();
   }, [scrollToBottom]);
 
+  // Leaving composer-only mode: while the body was display:none its scroll
+  // metrics were zero, so every autoscroll during that time was a no-op and the
+  // position is lost on re-show — snap back to the tail (where any turn that
+  // streamed behind the alternate view now ends).
+  useEffect(() => {
+    if (!composerOnly) {
+      stickToBottom.current = true;
+      scrollToBottom();
+    }
+  }, [composerOnly, scrollToBottom]);
+
   function handleSend(text) {
     stickToBottom.current = true;
     setVisibleCount(WINDOW);
@@ -182,7 +198,7 @@ export default function Chat({
   }
 
   return (
-    <div className={`chat${embedded ? ' chat--embedded' : ''}`}>
+    <div className={`chat${embedded ? ' chat--embedded' : ''}${composerOnly ? ' chat--composer-only' : ''}`}>
       {!embedded && showDualChat && (
         <div className="chat__scopes" role="tablist" aria-label={t('chat.scopesAria')}>
           <button
