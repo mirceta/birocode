@@ -3,226 +3,228 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Shipped: apps survive navigation — the verification run</title>
-<link rel="stylesheet" href="./styles.css">
+<title>Dashboard focus: docks first, panels on demand</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel2: #1e2230; --line: #2a3040;
+    --text: #e6e9f0; --soft: #9aa3b5; --accent: #e07b39; --ok: #4caf7d; --warn: #d9a441;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.55 system-ui, "Segoe UI", sans-serif; }
+  .hero { padding: 28px 22px 18px; border-bottom: 1px solid var(--line); }
+  .hero-badge { display: inline-block; font-size: 12px; color: var(--soft); border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; margin-bottom: 10px; }
+  h1 { margin: 0 0 8px; font-size: 26px; } h1 em { color: var(--accent); font-style: normal; }
+  .hero-sub { max-width: 860px; color: var(--soft); margin: 0 0 12px; }
+  .hero-sub code, td code, li code, p code { background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-size: 13px; }
+  .chip { display: inline-block; font-size: 12px; border-radius: 999px; padding: 3px 10px; margin-right: 6px; border: 1px solid var(--line); }
+  .chip.ok { color: var(--ok); border-color: var(--ok); }
+  .chip.warn { color: var(--warn); border-color: var(--warn); }
+  .tabs { display: flex; gap: 6px; padding: 12px 22px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .tab { background: var(--panel); color: var(--soft); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; cursor: pointer; font-size: 14px; }
+  .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .view { display: none; padding: 22px; } .view.active { display: block; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; margin-bottom: 18px; max-width: 980px; }
+  h2 { margin: 0 0 10px; font-size: 19px; } h3 { margin: 18px 0 6px; font-size: 15px; color: var(--accent); }
+  p, li { color: var(--soft); } li b, p b { color: var(--text); }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--soft); font-weight: 600; }
+  .ok-cell { color: var(--ok); white-space: nowrap; }
+  /* ---- simulator ---- */
+  .sim { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--panel2); }
+  .sim-bar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .sim-docks { font-size: 12px; color: var(--soft); margin-right: auto; }
+  .sim-chip { width: 34px; height: 30px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); cursor: pointer; font-size: 15px; filter: grayscale(1) opacity(0.55); }
+  .sim-chip.on { border-color: var(--accent); filter: none; }
+  .sim-body { display: flex; gap: 10px; padding: 12px; min-height: 240px; align-items: flex-start; }
+  .sim-aux { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 10px; width: 180px; flex: 0 0 auto; font-size: 13px; }
+  .sim-aux h4 { margin: 0 0 6px; font-size: 13px; }
+  .sim-aux .poll { font-size: 11px; color: var(--ok); }
+  .sim-grid { flex: 1; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .sim-dock { border: 2px solid #b33; border-radius: 8px; background: var(--panel); padding: 10px; font-size: 13px; min-height: 100px; }
+  .sim-dock small { color: var(--soft); }
+  .sim-note { font-size: 12.5px; color: var(--soft); padding: 8px 12px; border-top: 1px solid var(--line); }
+  .sim-note b { color: var(--text); }
+  .btn { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 12px; cursor: pointer; font-size: 13px; }
+  .flow { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; }
+  .flow-step { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 13px; flex: 1 1 200px; }
+  .flow-step .n { color: var(--accent); font-weight: 700; margin-right: 6px; }
+</style>
 </head>
 <body>
 
 <header class="hero">
   <div class="hero-badge">Understanding app · rolling latest</div>
-  <h1>Leave and come back — <em>shipped &amp; proven</em></h1>
-  <p class="hero-sub">OpenSpec change <code>local-app-state-preserve</code> is <strong>implemented</strong> on
-  branch <code>feat/local-app-state-preserve</code> and <strong>verified in a real headless browser</strong>:
-  26/26 Playwright checks passed on the isolated <code>:5200</code> preview. Embedded local apps now keep their
-  state across every navigation; reload only happens when <em>you</em> press ↻. This app walks the proof —
-  what changed, how it works, what the browser saw, and what's left: <strong>your acceptance test</strong>.</p>
-  <div class="hero-chips">
-    <span class="chip ok">15/15 tasks done</span>
-    <span class="chip ok">26/26 browser checks</span>
+  <h1>Dashboard focus: <em>docks first</em>, panels on demand</h1>
+  <p class="hero-sub">OpenSpec change <code>dashboard-focus-docks</code> on branch
+  <code>feat/dashboard-declutter</code>. The Ideas, Autopilot, and Agent-audit panels are no longer
+  always-on: the dashboard opens <b>docks-only</b>, and a new <b>panel rail</b> (💡 ⚙ 🛡 chips in the
+  header) summons each panel when you want it. Hidden means <b>unmounted</b> — no polling, no layout
+  interference — and your choice is remembered per device.</p>
+  <div>
+    <span class="chip ok">9/9 tasks done</span>
+    <span class="chip ok">16/16 browser checks on isolated :5216</span>
     <span class="chip ok">openspec validate --strict ✓</span>
-    <span class="chip warn">not committed — waiting on you</span>
+    <span class="chip warn">not deployed — waiting on you</span>
   </div>
 </header>
 
 <nav class="tabs" id="tabs">
-  <button class="tab active" data-view="demo">1 · Feel the fix</button>
-  <button class="tab" data-view="arch">2 · How it works</button>
-  <button class="tab" data-view="proof">3 · The proof: 26 checks</button>
-  <button class="tab" data-view="found">4 · Surfaced in testing</button>
-  <button class="tab" data-view="accept">5 · Your acceptance test</button>
+  <button class="tab active" data-view="demo">1 · Feel it</button>
+  <button class="tab" data-view="how">2 · How it works</button>
+  <button class="tab" data-view="proof">3 · The proof</button>
+  <button class="tab" data-view="accept">4 · Your acceptance test</button>
 </nav>
 
-<main id="views">
+<main>
 
-<!-- ============ VIEW 1: FEEL THE FIX ============ -->
 <section class="view active" id="view-demo">
   <div class="panel">
-    <h2>The same three clicks, on main vs. on this branch</h2>
-    <p>This is a working simulation of the harness. The embedded box below behaves like <b>StateA</b> — the tiny
-    stateful test app the real verification typed into. <b>Type something, bump the counter, then switch to the
-    Files tab and come back.</b> Flip the mode switch and do it again.</p>
-
-    <div class="mode-row">
-      <span class="mode-label">Simulate:</span>
-      <div class="mode-toggle" id="mode-toggle">
-        <button class="mode-btn" data-mode="old">main (before)</button>
-        <button class="mode-btn active" data-mode="new">this branch (after)</button>
+    <h2>A working miniature of the new dashboard</h2>
+    <p>This is the real behavior in miniature. <b>Tap the chips</b> in the header bar: each summons or
+    dismisses its panel. Notice the docks reclaim the full width when everything is dismissed — that is
+    now the <b>default state on a fresh device</b>. The "Fresh device" button simulates opening the
+    dashboard on a phone that has never chosen anything.</p>
+    <div class="sim">
+      <div class="sim-bar">
+        <span class="sim-docks">DOCKS · repo-a · repo-b · …</span>
+        <button class="sim-chip" id="chip-ideas" title="Ideas panel">💡</button>
+        <button class="sim-chip" id="chip-auto" title="Autopilot panel">⚙</button>
+        <button class="sim-chip" id="chip-audit" title="Agent audit panel">🛡</button>
+        <button class="btn" id="reset">Fresh device</button>
       </div>
-      <span class="mode-desc" id="mode-desc"></span>
-    </div>
-
-    <div class="sim-wrap">
-      <div class="sim-phone">
-        <div class="sim-header">Claude Web · <span id="sim-tab-name">Local</span></div>
-        <div class="sim-body" id="sim-body"><!-- filled by app.js --></div>
-        <div class="sim-nav">
-          <button class="sim-navbtn active" data-tab="local">⌂ Local</button>
-          <button class="sim-navbtn" data-tab="files">F Files</button>
-          <button class="sim-navbtn" data-tab="chat">C Chat</button>
-        </div>
-      </div>
-
-      <div class="sim-host">
-        <h3>The frame host layer <span class="tag">what the user never sees</span></h3>
-        <p class="small">One fixed layer at the app root owns every iframe. Pages only render an empty
-        <i>slot</i>; the host projects the live frame over it. Leave the tab → the frame is just
-        <code>display:none</code>, never destroyed.</p>
-        <div id="host-frames"></div>
-        <div class="host-legend">
-          <span><i class="dot dot-visible"></i> projected over a slot</span>
-          <span><i class="dot dot-hidden"></i> hidden, state alive</span>
-          <span><i class="dot dot-dead"></i> destroyed (old behavior)</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="callout" id="demo-callout">Switch tabs and watch both sides: the phone <em>and</em> the host layer.</div>
-  </div>
-</section>
-
-<!-- ============ VIEW 2: HOW IT WORKS ============ -->
-<section class="view" id="view-arch">
-  <div class="panel">
-    <h2>Slot projection, running live in this page</h2>
-    <p>The mechanism that shipped: the page renders an empty <b>slot div</b> where the app should appear; the
-    iframe lives in a root-level host and is <b>projected</b> over the slot's rectangle
-    (ResizeObserver + capture-phase scroll listeners, batched into one <code>requestAnimationFrame</code>).
-    The demo below <em>is</em> that algorithm in miniature — the orange "frame" is in a separate fixed layer,
-    tracking the slot inside the scrollable page. <b>Scroll the grey page.</b></p>
-
-    <div class="proj-wrap">
-      <div class="proj-page" id="proj-page">
-        <div class="proj-filler">page content above the app…</div>
-        <div class="proj-slot" id="proj-slot"><span>&lt;div class="product-frame__slot"&gt;<br>(empty slot — the page renders only this)</span></div>
-        <div class="proj-filler tall">…page content below. Keep scrolling — push the slot fully out of view and
-        the frame hides itself (that exact behavior showed up in verification; see view 4).</div>
-      </div>
-      <div class="proj-status" id="proj-status"></div>
-    </div>
-  </div>
-
-  <div class="panel">
-    <h2>Who owns what</h2>
-    <div class="arch-diagram">
-      <div class="arch-col">
-        <div class="arch-box router">
-          <b>Router pages — mount &amp; unmount freely</b>
-          <div class="arch-inner">LocalApp tab · dock PinnedAgent<br>
-          <span class="small">ProductFrame is now just the <b>shell</b>: liveness probe, offline/empty states,
-          and the slot div. No iframe here anymore.</span></div>
-        </div>
-        <div class="arch-arrow">acquire / release / registerSlot</div>
-        <div class="arch-box context">
-          <b>LocalAppFramesContext — the registry</b>
-          <div class="arch-inner"><span class="small">Frame identity keys:</span><br>
-          <code>local:&lt;repo&gt;:&lt;app&gt;</code> · <code>dock:&lt;dockId&gt;:&lt;repo&gt;:&lt;app&gt;</code></div>
-        </div>
-        <div class="arch-arrow">renders one HostedFrame per entry</div>
-        <div class="arch-box host">
-          <b>LocalAppFrameHost — fixed layer, z-index 4</b>
-          <div class="arch-inner"><span class="small">Owns every iframe for its whole life. Projects visible ones
-          over their slots, clips against scrolling ancestors, hides the rest. z-index 4 sits below every menu
-          (20–50), dashboard chrome (5–21) and modal (1000+).</span></div>
-        </div>
-      </div>
-      <div class="arch-col rules">
-        <h3>Lifetime rules that shipped</h3>
-        <div class="rule-card keep"><b>Navigation</b><span>only unregisters the slot → frame hides, state lives.</span></div>
-        <div class="rule-card release"><b>Repo switch</b><span>releases the Local tab's frames (verified: 2 → 0).</span></div>
-        <div class="rule-card release"><b>Dock removed / app deleted</b><span>releases that dock's / that app's frames.</span></div>
-        <div class="rule-card release"><b>LRU cap 6</b><span>7th frame evicts the least-recently-visible — but only <em>hidden, non-pinned</em> frames; a visible frame is never yanked.</span></div>
-        <div class="rule-card keep"><b>Pinned</b><span>the Local tab's Understanding frame (this page!) is exempt from eviction.</span></div>
-        <div class="rule-card keep"><b>↻ is the only reload</b><span>bumps one frame's <code>reloadKey</code>. Docks gain a refresh they never had.</span></div>
-      </div>
+      <div class="sim-body" id="sim-body"></div>
+      <div class="sim-note" id="sim-note"></div>
     </div>
   </div>
 </section>
 
-<!-- ============ VIEW 3: THE PROOF ============ -->
+<section class="view" id="view-how">
+  <div class="panel">
+    <h2>What actually changed</h2>
+    <div class="flow">
+      <div class="flow-step"><span class="n">1</span><b>One new device-local key.</b>
+        <code>claudeweb_dash_panels</code> holds <code>{ ideas, autopilot, audit }</code> booleans.
+        Absent or malformed → all <b>false</b> → docks-only. Same read/degrade pattern as every other
+        dashboard view setting.</div>
+      <div class="flow-step"><span class="n">2</span><b>Hidden = unmounted.</b> Visibility gates the JSX,
+        so a hidden panel issues <b>zero</b> fetches (Ideas' <code>/api/notes</code>, Autopilot's
+        <code>/api/autopilot</code> poll) and drops out of <code>dragKeys</code> — the free-drag /
+        grid-flow citizen list is computed from <b>visible</b> panels only.</div>
+      <div class="flow-step"><span class="n">3</span><b>Layout state survives.</b> Saved positions, the
+        Ideas size/wide/collapsed toggles, and the agents width are untouched by dismissing a panel; a
+        re-summoned panel reapplies them exactly.</div>
+      <div class="flow-step"><span class="n">4</span><b>Gates compose with AND.</b> The Autopilot/Audit
+        chips render only when their features (<code>autopilotTab</code> / <code>agenticAudit</code>)
+        are on; a summoned-but-feature-off panel stays hidden. The rail itself rides the
+        already-Advanced-gated dashboard.</div>
+    </div>
+    <h3>What was rejected, and why</h3>
+    <p>A <b>slide-in drawer</b> would have been a second layout system overlaying the very docks the
+    Operator wants to watch. A <b>"Docks | Ops" sub-view switch</b> discards the mixed layouts people
+    already arranged. Toggle chips keep the one existing layout system and just make membership
+    optional. Everything inside the panels — collapse, wide, drag-resize, drag-position — is untouched.</p>
+    <h3>Files</h3>
+    <p><code>client/src/pages/Dashboard.jsx</code> (state, gating, rail) ·
+    <code>client/src/pages/dashboard.css</code> (chip styles) ·
+    <code>client/src/i18n/en.json + tr.json</code> (chip labels). No backend changes.</p>
+  </div>
+</section>
+
 <section class="view" id="view-proof">
   <div class="panel">
-    <h2>26 checks, zero failures — a real browser, not curl</h2>
-    <p>Per <code>docs/claude-web/browser-testing.md</code>, every claim was exercised end-to-end with headless
-    Playwright against the isolated preview on <code>:5200</code>, using two throwaway stateful apps
-    (<b>StateA</b> :5301, <b>StateB</b> :5302) that expose a text input, a counter, and a
-    <code>LOADED_AT</code> timestamp — so the test can tell "state survived" from "document reloaded".
-    <b>Click a stage</b> to see its checks; stages with a camera icon carry a real screenshot from the run.</p>
-    <div id="proof-stages"></div>
-  </div>
-  <div class="lightbox" id="lightbox"><img id="lightbox-img" alt="evidence screenshot"><div class="lightbox-cap" id="lightbox-cap"></div></div>
-</section>
-
-<!-- ============ VIEW 4: SURFACED IN TESTING ============ -->
-<section class="view" id="view-found">
-  <div class="panel">
-    <h2>Two behaviors the browser run made visible</h2>
-    <p>Neither is a bug — both are the spec doing its job, and both are worth knowing before you test.</p>
-
-    <div class="found-grid">
-      <div class="found-card">
-        <h3>1 · Same app, two surfaces → two independent frames</h3>
-        <p>Midway through the dock stage, the selector <code>iframe[src*="statea"]</code> suddenly matched
-        <b>two elements</b>: the Local tab's kept-alive frame <em>and</em> the dock's new one. That's per-surface
-        frame identity working exactly as specced — each surface gets its own document, own state, own ↻.</p>
-        <div class="twin-demo">
-          <div class="twin">
-            <div class="twin-title"><code>local:birocode:statea</code></div>
-            <div class="twin-screen">StateA<br><span class="twin-val">"hello" · count 2</span></div>
-            <div class="twin-foot">Local tab · hidden but alive</div>
-          </div>
-          <div class="twin">
-            <div class="twin-title"><code>dock:pwtest-dock-a:…:statea</code></div>
-            <div class="twin-screen">StateA<br><span class="twin-val">"dockstate" · count 0</span></div>
-            <div class="twin-foot">dock phone · visible</div>
-          </div>
-        </div>
-        <p class="small">Those are the <em>actual values</em> from the run — the two documents never bled into
-        each other, and refreshing one left the other untouched.</p>
-      </div>
-
-      <div class="found-card">
-        <h3>2 · Fully scrolled-out slot → the frame hides itself</h3>
-        <p>The dock test first "failed": the phone's screen sat at <code>y = 982</code> in a 950-px-tall
-        viewport, so the host — correctly — hid the frame whose slot had zero visible area. The fix was in the
-        <em>test</em>, not the code: scroll the slot into view like a real user, and the frame appears and tracks.</p>
-        <p>You already have this demo live: go to <b>view 2</b> and scroll the slot fully out of the grey page —
-        the status readout flips to <i>hidden (slot off-screen)</i>, exactly what Playwright saw.</p>
-        <div class="mini-note">Why it matters: frames also <b>reposition live while scrolling</b> — the same
-        capture-phase listener that hides an off-screen frame keeps an on-screen one glued to its slot.</div>
-      </div>
-    </div>
+    <h2>16 headless-browser checks on the isolated :5216 build</h2>
+    <p>Script: <code>.claudeweb-preview/playwright/verify-panel-rail.mjs</code>. It logs in for a real
+    session cookie, opens the dashboard overlay, and watches the network.</p>
+    <table>
+      <tr><th>Check</th><th>Result</th></tr>
+      <tr><td>Fresh device: no Ideas / Autopilot / Audit panel mounted; 3 chips render</td><td class="ok-cell">✓ pass</td></tr>
+      <tr><td>Fresh device: zero <code>/api/notes</code> and <code>/api/autopilot</code> requests while open</td><td class="ok-cell">✓ pass</td></tr>
+      <tr><td>Ideas chip summons the panel, reads <code>aria-pressed="true"</code>, and <code>/api/notes</code> fires</td><td class="ok-cell">✓ pass</td></tr>
+      <tr><td>Autopilot chip summons its panel and its poll starts</td><td class="ok-cell">✓ pass</td></tr>
+      <tr><td>Second tap dismisses (panel unmounts)</td><td class="ok-cell">✓ pass</td></tr>
+      <tr><td>Reload: Autopilot still summoned, Ideas still dismissed — no re-toggling</td><td class="ok-cell">✓ pass</td></tr>
+      <tr><td>Free-mode saved position <code>{120,180}</code> reapplies when a hidden panel is re-summoned</td><td class="ok-cell">✓ pass</td></tr>
+      <tr><td>640px viewport: rail visible, chip still summons</td><td class="ok-cell">✓ pass</td></tr>
+    </table>
+    <h3>Legacy suites reseeded</h3>
+    <p><code>verify-ideas-overlap.mjs</code> and <code>verify-ideas-dock-polish.mjs</code> assumed the
+    Ideas panel was always mounted; both now seed <code>claudeweb_dash_panels</code> first. The polish
+    script's dashboard checks (z-index, collapse/expand) all pass against this build; its task-graph
+    section exercises the standalone Ideas page, which this change does not touch.</p>
   </div>
 </section>
 
-<!-- ============ VIEW 5: ACCEPTANCE ============ -->
 <section class="view" id="view-accept">
   <div class="panel">
-    <h2>The sandbox is running — here's your test script</h2>
-    <div class="fact-grid">
-      <div class="fact"><b>Preview</b><span><code>http://localhost:5200</code> · password <code>changeme</code></span></div>
-      <div class="fact"><b>Fully isolated</b><span>own data dir, own repo store, own docks — live <code>:5099</code> untouched</span></div>
-      <div class="fact"><b>Test apps</b><span><b>StateA</b> :5301 · <b>StateB</b> :5302 — registered on "Claude Web (this app)"</span></div>
-      <div class="fact"><b>UI mode</b><span>set <b>Advanced</b> to see docks &amp; the dashboard</span></div>
-    </div>
-
-    <h3>Try what the machine already proved <span class="tag">checklist remembers itself on this device</span></h3>
-    <div id="accept-list"></div>
-
-    <div class="next-strip">
-      <b>Then:</b> nothing is committed and nothing merges until you say so
-      <span class="arrow">→</span> say the word
-      <span class="arrow">→</span> commit on <code>feat/local-app-state-preserve</code>
-      <span class="arrow">→</span> merge
-      <span class="arrow">→</span> <code>/opsx:archive</code> folds the spec into the baseline
-    </div>
+    <h2>Try it yourself (2 minutes)</h2>
+    <ol>
+      <li>Open the dashboard (the grid button in the top bar). <b>Expect: docks only</b>, full width —
+        no Ideas/Autopilot/Audit panel. Three small chips (💡 ⚙ 🛡) sit in the header next to the
+        layout controls, greyed out.</li>
+      <li>Tap 💡. <b>The Ideas panel appears</b> in its usual place, with all its old controls
+        (collapse ▾, widen ⇥, drag grip). Tap 💡 again — it's gone.</li>
+      <li>Summon a panel, close the dashboard, reopen it (or reload the page).
+        <b>Your choice is remembered</b> on this device.</li>
+      <li>If you had dragged panels around before: summon them again — <b>they return to their saved
+        spots</b>. Nothing was reset.</li>
+    </ol>
+    <p>First open after this ships, Ideas will be hidden until you tap its chip <b>once</b> — that
+    single tap is the whole migration.</p>
   </div>
 </section>
 
 </main>
 
-<footer class="foot">Understanding app · overwritten per explanation · served no-store under
-<code>/api/localview/&lt;repo&gt;/app/understanding/</code></footer>
+<script>
+  // Tabs.
+  const tabs = document.getElementById('tabs');
+  tabs.addEventListener('click', (e) => {
+    const btn = e.target.closest('.tab');
+    if (!btn) return;
+    document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t === btn));
+    document.querySelectorAll('.view').forEach((v) => v.classList.toggle('active', v.id === 'view-' + btn.dataset.view));
+  });
 
-<script src="./app.js"></script>
+  // Simulator — mirrors the real rules: chip state per "device" (in-page),
+  // hidden = unmounted (we literally don't create the DOM node), docks reclaim width.
+  const state = { ideas: false, autopilot: false, audit: false };
+  const meta = {
+    ideas: { icon: '💡', name: 'Ideas', poll: 'GET /api/notes' },
+    autopilot: { icon: '⚙', name: 'Autopilot', poll: 'polling /api/autopilot' },
+    audit: { icon: '🛡', name: 'Agent audit', poll: 'GET /api/audit' },
+  };
+  const chips = { ideas: document.getElementById('chip-ideas'), autopilot: document.getElementById('chip-auto'), audit: document.getElementById('chip-audit') };
+  const body = document.getElementById('sim-body');
+  const note = document.getElementById('sim-note');
+  function render() {
+    Object.entries(chips).forEach(([k, el]) => el.classList.toggle('on', state[k]));
+    body.innerHTML = '';
+    for (const k of ['autopilot', 'audit', 'ideas']) {
+      if (!state[k]) continue; // unmounted, not hidden — exactly like the real gate
+      const aux = document.createElement('div');
+      aux.className = 'sim-aux';
+      aux.innerHTML = '<h4>' + meta[k].icon + ' ' + meta[k].name + '</h4><span class="poll">● ' + meta[k].poll + '</span>';
+      body.appendChild(aux);
+    }
+    const grid = document.createElement('div');
+    grid.className = 'sim-grid';
+    for (const name of ['repo-a', 'repo-b', 'repo-c', 'repo-d']) {
+      const d = document.createElement('div');
+      d.className = 'sim-dock';
+      d.innerHTML = '<b>' + name + '</b><br><small>Idle · main · live chat…</small>';
+      grid.appendChild(d);
+    }
+    body.appendChild(grid);
+    const on = Object.keys(state).filter((k) => state[k]);
+    note.innerHTML = on.length
+      ? 'Summoned: <b>' + on.map((k) => meta[k].name).join(', ') + '</b> — each is fetching again. Dismissed panels make <b>zero</b> requests.'
+      : '<b>Docks-only</b> — the default. No aux panel is mounted, so no aux fetch fires and the grid owns the full canvas.';
+  }
+  Object.entries(chips).forEach(([k, el]) => el.addEventListener('click', () => { state[k] = !state[k]; render(); }));
+  document.getElementById('reset').addEventListener('click', () => { state.ideas = state.autopilot = state.audit = false; render(); });
+  render();
+</script>
 </body>
 </html>
