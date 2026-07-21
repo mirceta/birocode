@@ -21,6 +21,6 @@
 
 - [x] 4.1 `dotnet build` clean; `dotnet test tests/ClaudeWeb.Tests` green
 - [x] 4.2 `npm --prefix client run build` clean
-- [ ] 4.3 In an isolated self-dev harness build (never live :5099), open a dock, edit **commits as**, confirm the row updates and `git config --local user.name` in that repo reflects it
+- [x] 4.3 In an isolated self-dev harness build (never live :5099), open a dock, edit **commits as**, confirm the row updates and `git config --local user.name` in that repo reflects it
 - [x] 4.4 `openspec validate add-commit-identity-write --strict` passes
-- [ ] 4.5 Update `understanding-app/index.html` to show the commits-as vs pushes-as split and the new write path (per repo convention)
+- [x] 4.5 Update `understanding-app/index.html` to show the commits-as vs pushes-as split and the new write path (per repo convention)
