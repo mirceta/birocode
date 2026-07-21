@@ -46,15 +46,17 @@
   button:hover{border-color:var(--accent)} button.primary{background:var(--accent-deep);color:#fff;border:none;font-weight:600}
   a.btnlink{background:var(--panel);color:var(--ink);border:1px solid var(--edge);border-radius:7px;padding:4px 9px;font-size:12px;text-decoration:none;display:inline-block}
   a.btnlink:hover{border-color:var(--accent);color:var(--accent)}
-  #snd,#hsnd,#htest,#sndcfg{padding:4px 9px;font-size:12px} #snd.on,#hsnd.on{border-color:var(--good);color:var(--good-text)}
+  #snd,#hsnd,#hmode,#htest{padding:4px 9px;font-size:12px} #snd.on,#hsnd.on{border-color:var(--good);color:var(--good-text)}
 
-  /* custom-sound config modal */
-  .sndmodal{position:fixed;inset:0;background:rgba(11,11,11,.42);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
-  .sndmodal[hidden]{display:none}
-  .sndcard{background:var(--panel);border:1px solid var(--edge);border-radius:14px;box-shadow:0 10px 40px rgba(11,11,11,.22);width:min(560px,100%);max-height:90vh;overflow:auto;padding:18px 20px}
-  .sndhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
-  .sndhead b{font-size:15px}
-  .sndnote{color:var(--dim);font-size:12.5px;margin:4px 0 12px}
+  /* ── Sounds tab (openspec promote-sound-settings-to-tab): the former loose
+        header sound buttons + the (formerly modal) custom-audio grid, grouped
+        as a settings dashboard. Sections are plain in-page cards, no overlay. ── */
+  .sndgrid{display:flex;flex-direction:column;gap:14px;max-width:720px}
+  .sndsec{background:var(--panel);border:1px solid var(--edge);border-radius:12px;box-shadow:var(--card-shadow);padding:14px 16px}
+  .sndsec h3{margin:0;font-size:14px}
+  .sndsec.future{border:1px dashed #c3c2b7;background:var(--panel2);box-shadow:none}
+  .sndctl{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+  .sndnote{color:var(--dim);font-size:12.5px;margin:6px 0 12px}
   .sndrow{display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:center;padding:10px 0;border-top:1px solid var(--edge)}
   .sndrow:first-child{border-top:none}
   .sndlbl b{display:block} .sndlbl span{color:var(--muted);font-size:11.5px}
@@ -109,11 +111,12 @@
   .tabpanel{display:none}
   body[data-tab="activity"] .tabpanel[data-tab="activity"],
   body[data-tab="agents"]   .tabpanel[data-tab="agents"],
-  body[data-tab="github"]   .tabpanel[data-tab="github"]{display:block}
+  body[data-tab="github"]   .tabpanel[data-tab="github"],
+  body[data-tab="sounds"]   .tabpanel[data-tab="sounds"]{display:block}
   /* display mode is tabless: hide the bar, render every panel in one glance */
   body.display .tabbar{display:none}
   body.display .tabpanel{display:block !important}
-  h2 .hint{text-transform:none;letter-spacing:0;font-weight:400;color:var(--muted)}
+  h2 .hint,.sndsec h3 .hint{text-transform:none;letter-spacing:0;font-weight:400;color:var(--muted);font-size:12px}
 
   /* ── agent dock (openspec agent-dock): machine cards → repo squares → trail ── */
   .dock{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px;align-items:start}
@@ -206,7 +209,6 @@
   /* display mode (?display=1): the SAME page, zero-interaction, enlarged — the
      thing on the third monitor. Spec: every interactive element hidden. */
   body.display .addform, body.display .acts, body.display #feedSection,
-  body.display #snd, body.display #hsnd, body.display #hmode, body.display #htest,
   body.display .sub{display:none !important}
   body.display .attn-row{font-size:19px;padding:14px 16px} body.display .attn-row .ic{font-size:24px}
   body.display .attn-clear{font-size:16px;padding:13px 16px}
@@ -234,11 +236,6 @@
     <span id="bclock"></span>
     <a class="btnlink" id="displayToggle" href="?display=1"
        title="Display mode: same page, admin and log hidden, status enlarged — made for the third monitor, F11 to fullscreen">🖥 Display mode</a>
-    <button id="snd" title="Play a sound in THIS browser on each new event">🔇 Device</button>
-    <button id="sndcfg" title="Assign your own audio file to each event type (stored only in this browser)">🎵 Sounds</button>
-    <button id="hsnd" title="Beep on the HOST computer (running the harness) on each new event">🖥️ Host off</button>
-    <button id="hmode" title="Host cue: a beep tone, or a spoken 'an agent has finished'">🔊 Beep</button>
-    <button id="htest" title="Play the host sound right now, to test it">🔔 Test host</button>
   </div>
 </header>
 <main>
@@ -251,6 +248,7 @@
     <button class="tab" id="tab-activity" role="tab" aria-controls="panel-activity" data-tab="activity">Activity</button>
     <button class="tab" id="tab-agents" role="tab" aria-controls="panel-agents" data-tab="agents">Agents</button>
     <button class="tab" id="tab-github" role="tab" aria-controls="panel-github" data-tab="github">GitHub</button>
+    <button class="tab" id="tab-sounds" role="tab" aria-controls="panel-sounds" data-tab="sounds">Sounds</button>
   </div>
 
   <div class="tabpanel" id="panel-activity" role="tabpanel" aria-labelledby="tab-activity" data-tab="activity">
@@ -284,17 +282,52 @@
     <div class="gh" id="gh"><div class="gh-note">connecting…</div></div>
     <div id="ghPanel" style="display:none"></div>
   </div>
-</main>
-<div id="sndModal" class="sndmodal" hidden>
-  <div class="sndcard">
-    <div class="sndhead"><b>🎵 Custom event sounds</b><button id="sndClose" title="Close">✕</button></div>
-    <p class="sndnote">Assign an audio file (mp3, wav, ogg, m4a) to each event type. Files are stored only in
-      <b>this browser</b> (IndexedDB) — nothing is uploaded or committed. An event type with no file uses the
-      built-in synth cue. Playback respects the <b>🔈 Device</b> toggle; <b>Test</b> plays regardless.</p>
-    <div id="sndRows"></div>
-    <input id="sndFile" type="file" accept="audio/*" hidden />
+
+  <div class="tabpanel" id="panel-sounds" role="tabpanel" aria-labelledby="tab-sounds" data-tab="sounds">
+    <h2>Sounds <span class="hint">— how the event feed announces itself, on this device and on the host</span></h2>
+    <div class="sndgrid">
+
+      <section class="sndsec">
+        <h3>🔊 Device sound</h3>
+        <p class="sndnote">Play a cue in <b>this browser</b> on each new event — private to this device
+          (stored in localStorage). Browsers block audio until you click, so the toggle itself is the
+          unlocking gesture.</p>
+        <div class="sndctl">
+          <button id="snd" title="Play a sound in THIS browser on each new event">🔇 Device</button>
+        </div>
+      </section>
+
+      <section class="sndsec">
+        <h3>🎵 Custom event sounds</h3>
+        <p class="sndnote">Assign an audio file (mp3, wav, ogg, m4a) to each event type. Files are stored only in
+          <b>this browser</b> (IndexedDB) — nothing is uploaded or committed. An event type with no file uses the
+          built-in synth cue. Playback respects the <b>Device</b> toggle above; <b>Test</b> plays regardless.</p>
+        <div id="sndRows"></div>
+        <input id="sndFile" type="file" accept="audio/*" hidden />
+      </section>
+
+      <section class="sndsec">
+        <h3>🖥️ Host cue</h3>
+        <p class="sndnote">Beep on the <b>host computer running the harness</b> on each new event — shared by
+          everyone and audible even with no browser open. Choose a beep tone or a spoken
+          "an agent has finished", and test it on the host right now.</p>
+        <div class="sndctl">
+          <button id="hsnd" title="Beep on the HOST computer (running the harness) on each new event">🖥️ Host off</button>
+          <button id="hmode" title="Host cue: a beep tone, or a spoken 'an agent has finished'">🔊 Beep</button>
+          <button id="htest" title="Play the host sound right now, to test it">🔔 Test host</button>
+        </div>
+      </section>
+
+      <section class="sndsec future">
+        <h3>🔗 Event → sound rules <span class="hint">— coming soon</span></h3>
+        <p class="sndnote" style="margin:6px 0 0">The reserved home for mapping <i>which</i> event triggers
+          <i>which</i> sound (per source, per type) — replies for events. Not built yet; this is headroom
+          for that next step.</p>
+      </section>
+
+    </div>
   </div>
-</div>
+</main>
 <div id="staleBanner">
   <div class="big">⚠ STATUS STALE — harness unreachable</div>
   <div class="small">last good poll <span id="staleTime">—</span> · showing last-known state (dimmed)</div>
@@ -314,7 +347,7 @@ if (DISPLAY){ toggle.textContent = "✕ Exit display"; toggle.href = location.pa
 // Two-tab shell (openspec activity-github-tabs). Tab state is device-local and
 // URL-addressable, same idea as the display toggle: ?tab= wins, else localStorage,
 // else Activity. Display mode is tabless (CSS shows both panels), so we skip it.
-const TABS = ["activity", "agents", "github"];
+const TABS = ["activity", "agents", "github", "sounds"];
 const tabBtns = Array.from(document.querySelectorAll(".tabbar .tab"));
 function setTab(name, push){
   if (!TABS.includes(name)) name = "activity";
@@ -452,7 +485,6 @@ const CUE_SLOTS = [
   { type:"turn.ended", label:"Turn ended", hint:"an agent finished" },
   { type:"_default",   label:"Other / unknown events", hint:"anything without its own sound" },
 ];
-const sndModal = document.getElementById("sndModal");
 const sndRows = document.getElementById("sndRows");
 const sndFile = document.getElementById("sndFile");
 let sndPending = null;
@@ -500,9 +532,8 @@ sndRows.addEventListener("click", (e) => {
   else if (act === "clear"){ clearSound(type); }
 });
 sndFile.onchange = () => { const f = sndFile.files && sndFile.files[0]; if (f && sndPending) assignSound(sndPending, f); };
-document.getElementById("sndcfg").onclick = () => { renderSndCfg(); sndModal.hidden = false; };
-document.getElementById("sndClose").onclick = () => { sndModal.hidden = true; };
-sndModal.addEventListener("click", (e) => { if (e.target === sndModal) sndModal.hidden = true; });
+// The custom-audio grid now lives inline in the Sounds tab (no modal); loadCustomSounds()
+// renders it on load and IndexedDB reads/writes rebind it as before.
 loadCustomSounds();
 
 // --- host-side beep (server plays it on the computer running the harness) ----

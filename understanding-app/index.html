@@ -3,230 +3,151 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Shipped: the "commits as" identity is now editable</title>
+<title>Shipped: sound settings are now a first-class Sounds tab</title>
 <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
+<div class="wrap">
 
-<header class="hero">
-  <div class="hero-badge">Understanding app · rolling latest</div>
-  <h1>Both halves of "who am I to git" are now <em>editable in the harness</em></h1>
-  <p class="hero-sub">OpenSpec change <code>add-commit-identity-write</code> is
-  <strong>implemented, tested, and running live</strong>. The agent dock's git section always showed two
-  identities — <strong>commits as</strong> (the repo's <code>user.name</code>/<code>user.email</code>) and
-  <strong>pushes as</strong> (the GitHub account). Only <em>pushes as</em> was settable from the UI; the
-  <em>commits as</em> half was read-only, so the only way to change a commit author was to drop into a
-  terminal and run <code>git config</code>. This change closes that asymmetry: a new
-  <code>POST /api/git/identity</code> writer plus an inline editor on the dock row. This app walks
-  the split, the write path, the guards, and the first-ever C# tests.</p>
-  <div class="hero-chips">
-    <span class="chip ok">backend writer + endpoint</span>
-    <span class="chip ok">inline dock editor</span>
-    <span class="chip ok">first C# test project · green</span>
-    <span class="chip ok">openspec validate --strict ✓</span>
-    <span class="chip ok">verified live · it works</span>
-  </div>
-</header>
+  <header class="hero">
+    <div class="badge">Understanding app · rolling latest</div>
+    <h1>Five loose sound buttons are now one <em>Sounds tab</em></h1>
+    <p class="sub">OpenSpec change <code>promote-sound-settings-to-tab</code> is
+    <strong>implemented and verified</strong>. The event feed's five sound controls used to sit
+    crammed in the page header — a <em>Device</em> toggle, a <em>🎵 Sounds</em> button that opened a
+    floating modal, and three host-cue buttons — with no grouping, so nobody could tell what they were
+    or how they related. This change promotes them into a fourth first-class tab (<code>Sounds</code>),
+    laid out as a settings dashboard. The trick: <strong>move the markup, keep every element ID</strong>,
+    so all the playback / IndexedDB / host-cue logic keeps working with zero rewiring.</p>
+    <div class="chips">
+      <span class="chip ok">4th tab, reuses the tab system</span>
+      <span class="chip ok">modal retired &amp; inlined</span>
+      <span class="chip ok">no behaviour change</span>
+      <span class="chip ok">17/17 headless checks</span>
+      <span class="chip soon">event→sound rules (next)</span>
+    </div>
+  </header>
 
-<nav class="tabs" id="tabs">
-  <button class="tab active" data-view="split">1 · The asymmetry</button>
-  <button class="tab" data-view="edit">2 · Edit it live</button>
-  <button class="tab" data-view="path">3 · The write path</button>
-  <button class="tab" data-view="guards">4 · Guards &amp; rules</button>
-  <button class="tab" data-view="tests">5 · First tests</button>
-</nav>
-
-<main id="views">
-
-<!-- ============ VIEW 1: THE ASYMMETRY ============ -->
-<section class="view active" id="view-split">
-  <div class="panel">
-    <h2>Two identities, one used to be a dead end</h2>
-    <p>Every commit records an <b>author</b> (git's <code>user.name</code>/<code>user.email</code>) and every
-    push <b>authenticates</b> as a GitHub account. The dock has always shown both. The difference this change
-    erases: the push side was already wired to a control (the dashboard PAT box sets the box's <code>gh</code>
-    login), while the commit side was <em>surfacing only</em> — <code>git-identity-surface</code> was explicitly
-    "read-only." Below: what each row is, where it comes from, and which was editable <b>before</b> vs
-    <b>after</b>.</p>
-
-    <div class="split">
-      <div class="idcard commit">
-        <h3>commits as <span class="pill was">read-only</span> <span class="pill rw">now writable</span></h3>
-        <div class="who">mirceta-agents &lt;caffe.klinika@gmail.com&gt;</div>
-        <div class="src">source: <code>git config user.name / user.email</code> for this repo, with a
-        <span class="pill local">local</span> / <span class="pill global">global</span> scope badge.</div>
-        <p class="small" style="margin-top:10px">Local scope = the repo's own <code>.git/config</code>, a
-        per-repo override. Global = the outer user config that every repo on the box inherits.
-        <b>This is the half the change makes editable.</b></p>
-      </div>
-      <div class="idcard push">
-        <h3>pushes as <span class="pill ro">unchanged</span></h3>
-        <div class="who">@mirceta-agents</div>
-        <div class="src">source: <code>GET /api/github-account</code> — the box's authenticated GitHub login.</div>
-        <p class="small" style="margin-top:10px">Already settable outside this change via the dashboard PAT
-        control. This change <b>does not touch it</b> — the row stays read-only, and account switch/logout stay
-        out of scope.</p>
-      </div>
+  <h2>Before → after · press the button</h2>
+  <div class="demo">
+    <div class="demo-bar">
+      <span class="cap">The event feed's header &amp; tabbar</span>
+      <span class="sp"></span>
+      <button class="tgl" id="promote" aria-pressed="false">▶ Promote to a Sounds tab</button>
     </div>
 
-    <div class="callout">Key insight: these are <b>independent</b>. You can author commits as one identity and
-    push them under a different GitHub account — a normal setup for agent commits. The change makes the
-    <em>author</em> half controllable from the same place it's shown.</div>
-  </div>
-</section>
-
-<!-- ============ VIEW 2: EDIT IT LIVE ============ -->
-<section class="view" id="view-edit">
-  <div class="panel">
-    <h2>The inline editor — a working simulation</h2>
-    <p>This is the real dock row behaviour. Press <b>Edit</b> on the <em>commits as</em> row: an inline
-    name/email form opens with a local/global scope toggle. Hit <b>Save</b> and watch the request trace on the
-    right run exactly as the harness does — endpoint → writer → <code>git config</code> → re-read → dock
-    refresh. Try the edge cases too: clear <b>both</b> fields and save (rejected), or flip the busy switch
-    first.</p>
-
-    <div class="dockdemo">
-      <div class="dock" id="dock">
-        <div class="dock-head">Agent dock · git</div>
-        <!-- rows injected by app.js -->
+    <div class="stage" id="stage">
+      <div class="fauxhead">
+        <span class="h1">Harness Event Collector</span>
+        <span class="btn disp">🖥 Display mode</span>
+        <span class="btn snd">🔇 Device</span>
+        <span class="btn snd">🎵 Sounds</span>
+        <span class="btn snd">🖥️ Host off</span>
+        <span class="btn snd">🔊 Beep</span>
+        <span class="btn snd">🔔 Test host</span>
       </div>
-      <div>
-        <div class="trace" id="trace"><div class="step hot">— idle. Press <span class="k">Edit</span> then <span class="k">Save</span> —</div></div>
-        <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:var(--ink-dim)">
-          <input type="checkbox" id="busy"> Simulate a chat run active in this repo (<code>_runs.IsBusy</code> → 409)
-        </label>
+
+      <div class="tab-strip">
+        <span class="t">Activity</span>
+        <span class="t">Agents</span>
+        <span class="t">GitHub</span>
+        <span class="t new on">Sounds</span>
       </div>
+
+      <div class="sections">
+        <div class="sec">
+          <h3>🔊 Device sound</h3>
+          <p>Play a cue in <b>this browser</b> on each event — private to this device. The toggle is
+          also the audio-unlock gesture.</p>
+          <div class="btnrow"><span class="btn snd">🔇 Device</span></div>
+        </div>
+        <div class="sec">
+          <h3>🎵 Custom event sounds</h3>
+          <p>The old modal's per-type grid, now always visible: assign your own file per event type
+          (IndexedDB, device-local). No more open/close.</p>
+        </div>
+        <div class="sec">
+          <h3>🖥️ Host cue</h3>
+          <p>Beep on the <b>host computer running the harness</b> — shared, audible with no browser open.
+          Beep/voice + a live test.</p>
+          <div class="btnrow"><span class="btn snd">🖥️ Host off</span><span class="btn snd">🔊 Beep</span><span class="btn snd">🔔 Test host</span></div>
+        </div>
+        <div class="sec future">
+          <h3>🔗 Event → sound rules <span class="hint" style="margin:0">— coming soon</span></h3>
+          <p>Reserved headroom for mapping <i>which</i> event triggers <i>which</i> sound. Deliberately
+          not built here — it's the operator's explicit next order of business.</p>
+        </div>
+      </div>
+      <p class="hint">Notice what didn't move: the <code>🖥 Display mode</code> link stays in the header.
+      Only the sound controls migrate — the two "unknown" buttons turn out to be the two <b>poles</b> of
+      where a sound plays: this device vs. the host PC.</p>
     </div>
   </div>
-</section>
 
-<!-- ============ VIEW 3: THE WRITE PATH ============ -->
-<section class="view" id="view-path">
-  <div class="panel">
-    <h2>From row click to <code>.git/config</code> — the real code path</h2>
-    <p>No new controller, no new service, no new module registration. The write rides the existing
-    <code>GitController</code>, reusing the injected <code>GitService</code>, <code>RepositoryResolver</code>,
-    and the run-busy guard (design decision D2). Every arrow below is an actual call in the shipped code.</p>
-
-    <div class="flow">
-      <div class="node">
-        <b>DockIdentityRows.jsx <span class="pill rw">edited</span></b>
-        <span class="file">client/src/…/DockIdentityRows.jsx</span>
-        <p>Edit affordance on the <b>commits as</b> row opens an inline name/email + scope form. On save:
-        <code>apiPost('/git/identity', { name, email, scope }, { repoId })</code>, then calls
-        <code>onRefreshGit</code> (the dock's existing git-status refresh, threaded down from
-        <code>PinnedAgent.jsx</code>). Disabled while saving; inline error on failure. The <b>pushes as</b> row
-        is untouched.</p>
-      </div>
-      <div class="arrowdown">↓ POST /api/git/identity { name, email, scope }</div>
-      <div class="node">
-        <b>GitController.SetIdentity <span class="pill rw">added</span></b>
-        <span class="file">ClaudeWeb.App/Controllers/GitController.cs</span>
-        <p>Resolves the current repo. <code>409</code> if <code>_runs.IsBusy(repo.Id)</code>. Maps
-        <code>scope</code> (<code>"global"</code>→global, else local) and calls the writer. On success returns
-        <code>{ ok:true, name, email, scope }</code>; on the writer's failure returns
-        <code>422 { ok:false, error }</code>. Never throws to a 500 for a normal rejection.</p>
-      </div>
-      <div class="arrowdown">↓ _git.SetCommitIdentity(repo.Path, name, email, scope)</div>
-      <div class="node">
-        <b>GitService.SetCommitIdentity <span class="pill rw">added</span></b>
-        <span class="file">ClaudeWeb.App/Services/Git/GitService.cs</span>
-        <p>Trims inputs; rejects when both empty (typed <code>SetIdentityResult</code>, no throw). Writes via
-        <code>RunGit(dir, "config --local user.name", value)</code> / <code>--global</code> — values ride the
-        <code>ArgumentList</code>, so no shell, no escaping. Partial writes allowed (only name, or only email).
-        Then <b>re-reads</b> via <code>ReadCommitIdentity</code> and returns the authoritative
-        <code>{ name, email, scope }</code>. Any git failure degrades into <code>Error</code>, not a 500.</p>
-      </div>
-      <div class="arrowdown">↓ git config --local/--global user.name/user.email</div>
-      <div class="node">
-        <b>.git/config (local) or ~/.gitconfig (global)</b>
-        <span class="file">the repo's own config, or the outer user config</span>
-        <p>Local is the default and the safe choice for a per-repo dock. Global is offered but separately
-        labelled because it changes every repo on the box (design decision D3).</p>
-      </div>
-      <div class="arrowdown">↑ re-read → response → onRefreshGit → next git/status</div>
-      <div class="node">
-        <b>Dock reflects the authoritative value</b>
-        <p>D6 — optimistic-then-authoritative: the row saves, then the dock re-fetches
-        <code>git/status.commitIdentity</code> so what you see is the re-read config, not a hopeful echo.</p>
-      </div>
+  <h2>Why "move markup, keep IDs" is the whole point</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>The controls bind by <span class="k">id</span></h3>
+      <p>Every handler already looked its element up by ID —
+      <span class="k">#snd</span>, <span class="k">#hsnd</span>, <span class="k">#hmode</span>,
+      <span class="k">#htest</span>, and the per-type grid rows. Relocating the DOM node doesn't touch
+      the handler, so <span class="k">renderSnd()</span>, <span class="k">playCue()</span>, the host
+      fetches and the IndexedDB assign/clear all keep working untouched.</p>
+    </div>
+    <div class="card">
+      <h3>The modal was pure chrome</h3>
+      <p>The <span class="k">🎵 Sounds</span> button and floating overlay existed only to
+      <em>open and close</em> the custom-audio editor. In a dedicated tab that editor is always on
+      screen, so the opener, the <span class="k">#sndClose</span> ✕, the backdrop and the three
+      open/close handlers are gone — the grid renders inline.</p>
+    </div>
+    <div class="card">
+      <h3>The tab system was already there</h3>
+      <p>A generic CSS rule shows the panel whose <span class="k">data-tab</span> matches
+      <span class="k">body[data-tab]</span>, and the resolver routes any tab name. Adding
+      <code>sounds</code> meant one tab button, one panel, one CSS selector, and one array entry —
+      no new show/hide mechanism.</p>
+    </div>
+    <div class="card">
+      <h3>Device vs. Host — the real fix</h3>
+      <p>The confusing pair wasn't redundant, it was <em>two scopes</em>: <b>Device</b> = beep on the
+      phone/browser you're holding (localStorage, private); <b>Host</b> = beep on the machine running
+      the harness (shared server state, fires with no browser open). Grouping + one-line explainers
+      make that legible.</p>
     </div>
   </div>
-</section>
 
-<!-- ============ VIEW 4: GUARDS ============ -->
-<section class="view" id="view-guards">
-  <div class="panel">
-    <h2>Four rules that keep the write safe</h2>
-    <div class="guards">
-      <div class="guard g-409">
-        <h3>Busy guard · 409</h3>
-        <p>Rejected while a chat run is active in the repo, consistent with merge/pull/push — so a commit
-        identity can't change under an in-flight commit (D4).</p>
-        <div class="code">if (_runs.IsBusy(repo.Id)) → Conflict</div>
-      </div>
-      <div class="guard g-422">
-        <h3>Empty rejected · 422</h3>
-        <p>A request with neither name nor email mutates nothing and returns the empty-rejection result. No
-        blank writes.</p>
-        <div class="code">n=="" &amp;&amp; e=="" → "Provide a name or email."</div>
-      </div>
-      <div class="guard g-ok">
-        <h3>Partial writes · allowed</h3>
-        <p>Git stores name and email independently, so setting only one is valid; the other keeps its previous
-        value (D5). Inputs are trimmed.</p>
-        <div class="code">only name → sets user.name, leaves user.email</div>
-      </div>
-      <div class="guard g-ok">
-        <h3>No injection · literal args</h3>
-        <p>Values pass through <code>RunGit</code>'s <code>ArgumentList</code> — never a shell string — so a name
-        or email needs no escaping and can't inject.</p>
-        <div class="code">RunGit(dir, "config --local user.name", value)</div>
-      </div>
-    </div>
-    <div class="callout">Scope default is <b>local</b> (this repo only). Choosing <b>global</b> is deliberate and
-    separately labelled — it rewrites the identity every repo on the box inherits.</div>
-  </div>
-</section>
-
-<!-- ============ VIEW 5: TESTS ============ -->
-<section class="view" id="view-tests">
-  <div class="panel">
-    <h2>The first automated coverage in this repo</h2>
-    <p>Before this change there was no test project at all. <code>add-commit-identity-write</code> introduces
-    <code>tests/ClaudeWeb.Tests</code> (xUnit, referencing <code>ClaudeWeb.App</code>, wired into
-    <code>ClaudeWeb.sln</code>), driving the writer against a throwaway <code>git init</code> repo — read →
-    write → read back. <b>Green.</b></p>
-    <ul class="tests" id="tests-list"></ul>
-    <p class="small" style="margin-top:12px">The global-scope test isolates <code>HOME</code> /
-    <code>GIT_CONFIG_GLOBAL</code> to a temp path, so it can prove a global write reads back with
-    <code>scope: global</code> <b>without ever touching the developer's real <code>~/.gitconfig</code></b>
-    (design decision D7).</p>
+  <h2>How a Sounds selection travels</h2>
+  <div class="card">
+    <ol class="flow">
+      <li><b>Pick the tab</b> — click <code>Sounds</code>, or deep-link <code>?tab=sounds</code>.
+      The URL query wins, else <code>localStorage</code>, else Activity.</li>
+      <li><b>It's remembered</b> — the choice is written to <code>localStorage["eventsapp.tab"]</code>,
+      so a reload with no query re-opens Sounds.</li>
+      <li><b>CSS reveals the panel</b> — <code>body[data-tab="sounds"]</code> flips
+      <code>#panel-sounds</code> visible; the other three panels hide.</li>
+      <li><b>Display mode is different</b> — <code>?display=1</code> is tabless and force-shows every
+      panel stacked, Sounds included, mirroring how Agents &amp; GitHub already appear.</li>
+    </ol>
+    <div class="note">Verified headlessly (Playwright): the tab appears with no loose buttons left in
+    the header, <code>?tab=sounds</code> selects it and survives a reload, the Device toggle flips and
+    persists, a custom file assigns → persists across reload → Clear reverts, the host Test button is
+    live, and display mode renders the section — <b>17/17</b>, zero uncaught page errors.</div>
   </div>
 
-  <div class="panel">
-    <h2>Where this leaves the change</h2>
-    <div class="fact-grid">
-      <div class="fact"><b>Backend</b><span><code>dotnet build</code> clean · <code>dotnet test</code> green</span></div>
-      <div class="fact"><b>Frontend</b><span><code>npm run build</code> clean · i18n en + tr</span></div>
-      <div class="fact"><b>Spec</b><span>MODIFIED <code>git-identity-surface</code> · validate --strict ✓</span></div>
-      <div class="fact"><b>Live</b><span>running on <code>:5099</code> · manually verified</span></div>
-    </div>
-    <div class="next-strip">
-      <b>Wrap-up:</b> tick tasks.md
-      <span class="arrow">→</span> <code>openspec validate --strict</code>
-      <span class="arrow">→</span> <code>openspec archive</code> folds the delta into the living baseline
-      <span class="arrow">→</span> merge to <code>main</code>
-      <span class="arrow">→</span> sync origin
-    </div>
+  <h2>Deliberately left for next time</h2>
+  <div class="card">
+    <h3>Event → sound <em>rules</em></h3>
+    <p>This change only carries the existing behaviour into a better home and leaves a marked-empty
+    section for it. The mapping UI — “when <i>this</i> event happens, play <i>that</i> sound,” per
+    source and per type — is tracked as out-of-scope (tasks §6.1) and is the operator's stated next
+    order of business.</p>
   </div>
-</section>
 
-</main>
+  <p class="foot">understanding-app · rolling latest · overwritten each time the explanation changes ·
+  build-less, self-contained, relative URLs only</p>
 
-<footer class="foot">Understanding app · overwritten per explanation · served no-store under
-<code>/api/localview/&lt;repo&gt;/app/understanding/</code></footer>
-
+</div>
 <script src="./app.js"></script>
 </body>
 </html>
