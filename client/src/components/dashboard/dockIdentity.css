@@ -83,3 +83,73 @@
 .dock-id__dot--loading {
   background: var(--color-text-soft, #777);
 }
+
+/* "commits as" is editable (openspec add-commit-identity-write): a faint pencil that
+   only asserts itself on hover, so the read view stays as quiet as before. */
+.dock-id__pencil {
+  flex: none;
+  padding: 0 2px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--color-text-soft, #777);
+  opacity: 0.55;
+}
+.dock-id__pencil:hover {
+  opacity: 1;
+  color: var(--color-accent);
+}
+
+/* Inline editor: wraps within the row's width, staying compact next to the summary. */
+.dock-id__edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.dock-id__input {
+  min-width: 0;
+  flex: 1 1 90px;
+  padding: 1px 4px;
+  font-size: 11px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg, #fff);
+  color: var(--color-text);
+}
+.dock-id__scope {
+  flex: none;
+  font-size: 10.5px;
+  padding: 1px 2px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg, #fff);
+  color: var(--color-text);
+}
+.dock-id__btn {
+  flex: none;
+  padding: 1px 7px;
+  font-size: 10.5px;
+  font-weight: 600;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: none;
+  color: var(--color-text);
+  cursor: pointer;
+}
+.dock-id__btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.dock-id__btn--save {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+.dock-id__error {
+  flex: 1 0 100%;
+  color: var(--color-danger);
+  font-size: 10.5px;
+}

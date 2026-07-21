@@ -3,228 +3,230 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard focus: docks first, panels on demand</title>
-<style>
-  :root {
-    --bg: #0f1115; --panel: #171a21; --panel2: #1e2230; --line: #2a3040;
-    --text: #e6e9f0; --soft: #9aa3b5; --accent: #e07b39; --ok: #4caf7d; --warn: #d9a441;
-    --radius: 10px;
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.55 system-ui, "Segoe UI", sans-serif; }
-  .hero { padding: 28px 22px 18px; border-bottom: 1px solid var(--line); }
-  .hero-badge { display: inline-block; font-size: 12px; color: var(--soft); border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; margin-bottom: 10px; }
-  h1 { margin: 0 0 8px; font-size: 26px; } h1 em { color: var(--accent); font-style: normal; }
-  .hero-sub { max-width: 860px; color: var(--soft); margin: 0 0 12px; }
-  .hero-sub code, td code, li code, p code { background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-size: 13px; }
-  .chip { display: inline-block; font-size: 12px; border-radius: 999px; padding: 3px 10px; margin-right: 6px; border: 1px solid var(--line); }
-  .chip.ok { color: var(--ok); border-color: var(--ok); }
-  .chip.warn { color: var(--warn); border-color: var(--warn); }
-  .tabs { display: flex; gap: 6px; padding: 12px 22px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-  .tab { background: var(--panel); color: var(--soft); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; cursor: pointer; font-size: 14px; }
-  .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-  .view { display: none; padding: 22px; } .view.active { display: block; }
-  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; margin-bottom: 18px; max-width: 980px; }
-  h2 { margin: 0 0 10px; font-size: 19px; } h3 { margin: 18px 0 6px; font-size: 15px; color: var(--accent); }
-  p, li { color: var(--soft); } li b, p b { color: var(--text); }
-  table { border-collapse: collapse; width: 100%; font-size: 14px; }
-  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
-  th { color: var(--soft); font-weight: 600; }
-  .ok-cell { color: var(--ok); white-space: nowrap; }
-  /* ---- simulator ---- */
-  .sim { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--panel2); }
-  .sim-bar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-  .sim-docks { font-size: 12px; color: var(--soft); margin-right: auto; }
-  .sim-chip { width: 34px; height: 30px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); cursor: pointer; font-size: 15px; filter: grayscale(1) opacity(0.55); }
-  .sim-chip.on { border-color: var(--accent); filter: none; }
-  .sim-body { display: flex; gap: 10px; padding: 12px; min-height: 240px; align-items: flex-start; }
-  .sim-aux { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 10px; width: 180px; flex: 0 0 auto; font-size: 13px; }
-  .sim-aux h4 { margin: 0 0 6px; font-size: 13px; }
-  .sim-aux .poll { font-size: 11px; color: var(--ok); }
-  .sim-grid { flex: 1; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  .sim-dock { border: 2px solid #b33; border-radius: 8px; background: var(--panel); padding: 10px; font-size: 13px; min-height: 100px; }
-  .sim-dock small { color: var(--soft); }
-  .sim-note { font-size: 12.5px; color: var(--soft); padding: 8px 12px; border-top: 1px solid var(--line); }
-  .sim-note b { color: var(--text); }
-  .btn { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 12px; cursor: pointer; font-size: 13px; }
-  .flow { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; }
-  .flow-step { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 13px; flex: 1 1 200px; }
-  .flow-step .n { color: var(--accent); font-weight: 700; margin-right: 6px; }
-</style>
+<title>Shipped: the "commits as" identity is now editable</title>
+<link rel="stylesheet" href="./styles.css">
 </head>
 <body>
 
 <header class="hero">
   <div class="hero-badge">Understanding app · rolling latest</div>
-  <h1>Dashboard focus: <em>docks first</em>, panels on demand</h1>
-  <p class="hero-sub">OpenSpec change <code>dashboard-focus-docks</code> on branch
-  <code>feat/dashboard-declutter</code>. The Ideas, Autopilot, and Agent-audit panels are no longer
-  always-on: the dashboard opens <b>docks-only</b>, and a new <b>panel rail</b> (💡 ⚙ 🛡 chips in the
-  header) summons each panel when you want it. Hidden means <b>unmounted</b> — no polling, no layout
-  interference — and your choice is remembered per device.</p>
-  <div>
-    <span class="chip ok">9/9 tasks done</span>
-    <span class="chip ok">16/16 browser checks on isolated :5216</span>
+  <h1>Both halves of "who am I to git" are now <em>editable in the harness</em></h1>
+  <p class="hero-sub">OpenSpec change <code>add-commit-identity-write</code> is
+  <strong>implemented, tested, and running live</strong>. The agent dock's git section always showed two
+  identities — <strong>commits as</strong> (the repo's <code>user.name</code>/<code>user.email</code>) and
+  <strong>pushes as</strong> (the GitHub account). Only <em>pushes as</em> was settable from the UI; the
+  <em>commits as</em> half was read-only, so the only way to change a commit author was to drop into a
+  terminal and run <code>git config</code>. This change closes that asymmetry: a new
+  <code>POST /api/git/identity</code> writer plus an inline editor on the dock row. This app walks
+  the split, the write path, the guards, and the first-ever C# tests.</p>
+  <div class="hero-chips">
+    <span class="chip ok">backend writer + endpoint</span>
+    <span class="chip ok">inline dock editor</span>
+    <span class="chip ok">first C# test project · green</span>
     <span class="chip ok">openspec validate --strict ✓</span>
-    <span class="chip warn">not deployed — waiting on you</span>
+    <span class="chip ok">verified live · it works</span>
   </div>
 </header>
 
 <nav class="tabs" id="tabs">
-  <button class="tab active" data-view="demo">1 · Feel it</button>
-  <button class="tab" data-view="how">2 · How it works</button>
-  <button class="tab" data-view="proof">3 · The proof</button>
-  <button class="tab" data-view="accept">4 · Your acceptance test</button>
+  <button class="tab active" data-view="split">1 · The asymmetry</button>
+  <button class="tab" data-view="edit">2 · Edit it live</button>
+  <button class="tab" data-view="path">3 · The write path</button>
+  <button class="tab" data-view="guards">4 · Guards &amp; rules</button>
+  <button class="tab" data-view="tests">5 · First tests</button>
 </nav>
 
-<main>
+<main id="views">
 
-<section class="view active" id="view-demo">
+<!-- ============ VIEW 1: THE ASYMMETRY ============ -->
+<section class="view active" id="view-split">
   <div class="panel">
-    <h2>A working miniature of the new dashboard</h2>
-    <p>This is the real behavior in miniature. <b>Tap the chips</b> in the header bar: each summons or
-    dismisses its panel. Notice the docks reclaim the full width when everything is dismissed — that is
-    now the <b>default state on a fresh device</b>. The "Fresh device" button simulates opening the
-    dashboard on a phone that has never chosen anything.</p>
-    <div class="sim">
-      <div class="sim-bar">
-        <span class="sim-docks">DOCKS · repo-a · repo-b · …</span>
-        <button class="sim-chip" id="chip-ideas" title="Ideas panel">💡</button>
-        <button class="sim-chip" id="chip-auto" title="Autopilot panel">⚙</button>
-        <button class="sim-chip" id="chip-audit" title="Agent audit panel">🛡</button>
-        <button class="btn" id="reset">Fresh device</button>
+    <h2>Two identities, one used to be a dead end</h2>
+    <p>Every commit records an <b>author</b> (git's <code>user.name</code>/<code>user.email</code>) and every
+    push <b>authenticates</b> as a GitHub account. The dock has always shown both. The difference this change
+    erases: the push side was already wired to a control (the dashboard PAT box sets the box's <code>gh</code>
+    login), while the commit side was <em>surfacing only</em> — <code>git-identity-surface</code> was explicitly
+    "read-only." Below: what each row is, where it comes from, and which was editable <b>before</b> vs
+    <b>after</b>.</p>
+
+    <div class="split">
+      <div class="idcard commit">
+        <h3>commits as <span class="pill was">read-only</span> <span class="pill rw">now writable</span></h3>
+        <div class="who">mirceta-agents &lt;caffe.klinika@gmail.com&gt;</div>
+        <div class="src">source: <code>git config user.name / user.email</code> for this repo, with a
+        <span class="pill local">local</span> / <span class="pill global">global</span> scope badge.</div>
+        <p class="small" style="margin-top:10px">Local scope = the repo's own <code>.git/config</code>, a
+        per-repo override. Global = the outer user config that every repo on the box inherits.
+        <b>This is the half the change makes editable.</b></p>
       </div>
-      <div class="sim-body" id="sim-body"></div>
-      <div class="sim-note" id="sim-note"></div>
+      <div class="idcard push">
+        <h3>pushes as <span class="pill ro">unchanged</span></h3>
+        <div class="who">@mirceta-agents</div>
+        <div class="src">source: <code>GET /api/github-account</code> — the box's authenticated GitHub login.</div>
+        <p class="small" style="margin-top:10px">Already settable outside this change via the dashboard PAT
+        control. This change <b>does not touch it</b> — the row stays read-only, and account switch/logout stay
+        out of scope.</p>
+      </div>
+    </div>
+
+    <div class="callout">Key insight: these are <b>independent</b>. You can author commits as one identity and
+    push them under a different GitHub account — a normal setup for agent commits. The change makes the
+    <em>author</em> half controllable from the same place it's shown.</div>
+  </div>
+</section>
+
+<!-- ============ VIEW 2: EDIT IT LIVE ============ -->
+<section class="view" id="view-edit">
+  <div class="panel">
+    <h2>The inline editor — a working simulation</h2>
+    <p>This is the real dock row behaviour. Press <b>Edit</b> on the <em>commits as</em> row: an inline
+    name/email form opens with a local/global scope toggle. Hit <b>Save</b> and watch the request trace on the
+    right run exactly as the harness does — endpoint → writer → <code>git config</code> → re-read → dock
+    refresh. Try the edge cases too: clear <b>both</b> fields and save (rejected), or flip the busy switch
+    first.</p>
+
+    <div class="dockdemo">
+      <div class="dock" id="dock">
+        <div class="dock-head">Agent dock · git</div>
+        <!-- rows injected by app.js -->
+      </div>
+      <div>
+        <div class="trace" id="trace"><div class="step hot">— idle. Press <span class="k">Edit</span> then <span class="k">Save</span> —</div></div>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:var(--ink-dim)">
+          <input type="checkbox" id="busy"> Simulate a chat run active in this repo (<code>_runs.IsBusy</code> → 409)
+        </label>
+      </div>
     </div>
   </div>
 </section>
 
-<section class="view" id="view-how">
+<!-- ============ VIEW 3: THE WRITE PATH ============ -->
+<section class="view" id="view-path">
   <div class="panel">
-    <h2>What actually changed</h2>
+    <h2>From row click to <code>.git/config</code> — the real code path</h2>
+    <p>No new controller, no new service, no new module registration. The write rides the existing
+    <code>GitController</code>, reusing the injected <code>GitService</code>, <code>RepositoryResolver</code>,
+    and the run-busy guard (design decision D2). Every arrow below is an actual call in the shipped code.</p>
+
     <div class="flow">
-      <div class="flow-step"><span class="n">1</span><b>One new device-local key.</b>
-        <code>claudeweb_dash_panels</code> holds <code>{ ideas, autopilot, audit }</code> booleans.
-        Absent or malformed → all <b>false</b> → docks-only. Same read/degrade pattern as every other
-        dashboard view setting.</div>
-      <div class="flow-step"><span class="n">2</span><b>Hidden = unmounted.</b> Visibility gates the JSX,
-        so a hidden panel issues <b>zero</b> fetches (Ideas' <code>/api/notes</code>, Autopilot's
-        <code>/api/autopilot</code> poll) and drops out of <code>dragKeys</code> — the free-drag /
-        grid-flow citizen list is computed from <b>visible</b> panels only.</div>
-      <div class="flow-step"><span class="n">3</span><b>Layout state survives.</b> Saved positions, the
-        Ideas size/wide/collapsed toggles, and the agents width are untouched by dismissing a panel; a
-        re-summoned panel reapplies them exactly.</div>
-      <div class="flow-step"><span class="n">4</span><b>Gates compose with AND.</b> The Autopilot/Audit
-        chips render only when their features (<code>autopilotTab</code> / <code>agenticAudit</code>)
-        are on; a summoned-but-feature-off panel stays hidden. The rail itself rides the
-        already-Advanced-gated dashboard.</div>
+      <div class="node">
+        <b>DockIdentityRows.jsx <span class="pill rw">edited</span></b>
+        <span class="file">client/src/…/DockIdentityRows.jsx</span>
+        <p>Edit affordance on the <b>commits as</b> row opens an inline name/email + scope form. On save:
+        <code>apiPost('/git/identity', { name, email, scope }, { repoId })</code>, then calls
+        <code>onRefreshGit</code> (the dock's existing git-status refresh, threaded down from
+        <code>PinnedAgent.jsx</code>). Disabled while saving; inline error on failure. The <b>pushes as</b> row
+        is untouched.</p>
+      </div>
+      <div class="arrowdown">↓ POST /api/git/identity { name, email, scope }</div>
+      <div class="node">
+        <b>GitController.SetIdentity <span class="pill rw">added</span></b>
+        <span class="file">ClaudeWeb.App/Controllers/GitController.cs</span>
+        <p>Resolves the current repo. <code>409</code> if <code>_runs.IsBusy(repo.Id)</code>. Maps
+        <code>scope</code> (<code>"global"</code>→global, else local) and calls the writer. On success returns
+        <code>{ ok:true, name, email, scope }</code>; on the writer's failure returns
+        <code>422 { ok:false, error }</code>. Never throws to a 500 for a normal rejection.</p>
+      </div>
+      <div class="arrowdown">↓ _git.SetCommitIdentity(repo.Path, name, email, scope)</div>
+      <div class="node">
+        <b>GitService.SetCommitIdentity <span class="pill rw">added</span></b>
+        <span class="file">ClaudeWeb.App/Services/Git/GitService.cs</span>
+        <p>Trims inputs; rejects when both empty (typed <code>SetIdentityResult</code>, no throw). Writes via
+        <code>RunGit(dir, "config --local user.name", value)</code> / <code>--global</code> — values ride the
+        <code>ArgumentList</code>, so no shell, no escaping. Partial writes allowed (only name, or only email).
+        Then <b>re-reads</b> via <code>ReadCommitIdentity</code> and returns the authoritative
+        <code>{ name, email, scope }</code>. Any git failure degrades into <code>Error</code>, not a 500.</p>
+      </div>
+      <div class="arrowdown">↓ git config --local/--global user.name/user.email</div>
+      <div class="node">
+        <b>.git/config (local) or ~/.gitconfig (global)</b>
+        <span class="file">the repo's own config, or the outer user config</span>
+        <p>Local is the default and the safe choice for a per-repo dock. Global is offered but separately
+        labelled because it changes every repo on the box (design decision D3).</p>
+      </div>
+      <div class="arrowdown">↑ re-read → response → onRefreshGit → next git/status</div>
+      <div class="node">
+        <b>Dock reflects the authoritative value</b>
+        <p>D6 — optimistic-then-authoritative: the row saves, then the dock re-fetches
+        <code>git/status.commitIdentity</code> so what you see is the re-read config, not a hopeful echo.</p>
+      </div>
     </div>
-    <h3>What was rejected, and why</h3>
-    <p>A <b>slide-in drawer</b> would have been a second layout system overlaying the very docks the
-    Operator wants to watch. A <b>"Docks | Ops" sub-view switch</b> discards the mixed layouts people
-    already arranged. Toggle chips keep the one existing layout system and just make membership
-    optional. Everything inside the panels — collapse, wide, drag-resize, drag-position — is untouched.</p>
-    <h3>Files</h3>
-    <p><code>client/src/pages/Dashboard.jsx</code> (state, gating, rail) ·
-    <code>client/src/pages/dashboard.css</code> (chip styles) ·
-    <code>client/src/i18n/en.json + tr.json</code> (chip labels). No backend changes.</p>
   </div>
 </section>
 
-<section class="view" id="view-proof">
+<!-- ============ VIEW 4: GUARDS ============ -->
+<section class="view" id="view-guards">
   <div class="panel">
-    <h2>16 headless-browser checks on the isolated :5216 build</h2>
-    <p>Script: <code>.claudeweb-preview/playwright/verify-panel-rail.mjs</code>. It logs in for a real
-    session cookie, opens the dashboard overlay, and watches the network.</p>
-    <table>
-      <tr><th>Check</th><th>Result</th></tr>
-      <tr><td>Fresh device: no Ideas / Autopilot / Audit panel mounted; 3 chips render</td><td class="ok-cell">✓ pass</td></tr>
-      <tr><td>Fresh device: zero <code>/api/notes</code> and <code>/api/autopilot</code> requests while open</td><td class="ok-cell">✓ pass</td></tr>
-      <tr><td>Ideas chip summons the panel, reads <code>aria-pressed="true"</code>, and <code>/api/notes</code> fires</td><td class="ok-cell">✓ pass</td></tr>
-      <tr><td>Autopilot chip summons its panel and its poll starts</td><td class="ok-cell">✓ pass</td></tr>
-      <tr><td>Second tap dismisses (panel unmounts)</td><td class="ok-cell">✓ pass</td></tr>
-      <tr><td>Reload: Autopilot still summoned, Ideas still dismissed — no re-toggling</td><td class="ok-cell">✓ pass</td></tr>
-      <tr><td>Free-mode saved position <code>{120,180}</code> reapplies when a hidden panel is re-summoned</td><td class="ok-cell">✓ pass</td></tr>
-      <tr><td>640px viewport: rail visible, chip still summons</td><td class="ok-cell">✓ pass</td></tr>
-    </table>
-    <h3>Legacy suites reseeded</h3>
-    <p><code>verify-ideas-overlap.mjs</code> and <code>verify-ideas-dock-polish.mjs</code> assumed the
-    Ideas panel was always mounted; both now seed <code>claudeweb_dash_panels</code> first. The polish
-    script's dashboard checks (z-index, collapse/expand) all pass against this build; its task-graph
-    section exercises the standalone Ideas page, which this change does not touch.</p>
+    <h2>Four rules that keep the write safe</h2>
+    <div class="guards">
+      <div class="guard g-409">
+        <h3>Busy guard · 409</h3>
+        <p>Rejected while a chat run is active in the repo, consistent with merge/pull/push — so a commit
+        identity can't change under an in-flight commit (D4).</p>
+        <div class="code">if (_runs.IsBusy(repo.Id)) → Conflict</div>
+      </div>
+      <div class="guard g-422">
+        <h3>Empty rejected · 422</h3>
+        <p>A request with neither name nor email mutates nothing and returns the empty-rejection result. No
+        blank writes.</p>
+        <div class="code">n=="" &amp;&amp; e=="" → "Provide a name or email."</div>
+      </div>
+      <div class="guard g-ok">
+        <h3>Partial writes · allowed</h3>
+        <p>Git stores name and email independently, so setting only one is valid; the other keeps its previous
+        value (D5). Inputs are trimmed.</p>
+        <div class="code">only name → sets user.name, leaves user.email</div>
+      </div>
+      <div class="guard g-ok">
+        <h3>No injection · literal args</h3>
+        <p>Values pass through <code>RunGit</code>'s <code>ArgumentList</code> — never a shell string — so a name
+        or email needs no escaping and can't inject.</p>
+        <div class="code">RunGit(dir, "config --local user.name", value)</div>
+      </div>
+    </div>
+    <div class="callout">Scope default is <b>local</b> (this repo only). Choosing <b>global</b> is deliberate and
+    separately labelled — it rewrites the identity every repo on the box inherits.</div>
   </div>
 </section>
 
-<section class="view" id="view-accept">
+<!-- ============ VIEW 5: TESTS ============ -->
+<section class="view" id="view-tests">
   <div class="panel">
-    <h2>Try it yourself (2 minutes)</h2>
-    <ol>
-      <li>Open the dashboard (the grid button in the top bar). <b>Expect: docks only</b>, full width —
-        no Ideas/Autopilot/Audit panel. Three small chips (💡 ⚙ 🛡) sit in the header next to the
-        layout controls, greyed out.</li>
-      <li>Tap 💡. <b>The Ideas panel appears</b> in its usual place, with all its old controls
-        (collapse ▾, widen ⇥, drag grip). Tap 💡 again — it's gone.</li>
-      <li>Summon a panel, close the dashboard, reopen it (or reload the page).
-        <b>Your choice is remembered</b> on this device.</li>
-      <li>If you had dragged panels around before: summon them again — <b>they return to their saved
-        spots</b>. Nothing was reset.</li>
-    </ol>
-    <p>First open after this ships, Ideas will be hidden until you tap its chip <b>once</b> — that
-    single tap is the whole migration.</p>
+    <h2>The first automated coverage in this repo</h2>
+    <p>Before this change there was no test project at all. <code>add-commit-identity-write</code> introduces
+    <code>tests/ClaudeWeb.Tests</code> (xUnit, referencing <code>ClaudeWeb.App</code>, wired into
+    <code>ClaudeWeb.sln</code>), driving the writer against a throwaway <code>git init</code> repo — read →
+    write → read back. <b>Green.</b></p>
+    <ul class="tests" id="tests-list"></ul>
+    <p class="small" style="margin-top:12px">The global-scope test isolates <code>HOME</code> /
+    <code>GIT_CONFIG_GLOBAL</code> to a temp path, so it can prove a global write reads back with
+    <code>scope: global</code> <b>without ever touching the developer's real <code>~/.gitconfig</code></b>
+    (design decision D7).</p>
+  </div>
+
+  <div class="panel">
+    <h2>Where this leaves the change</h2>
+    <div class="fact-grid">
+      <div class="fact"><b>Backend</b><span><code>dotnet build</code> clean · <code>dotnet test</code> green</span></div>
+      <div class="fact"><b>Frontend</b><span><code>npm run build</code> clean · i18n en + tr</span></div>
+      <div class="fact"><b>Spec</b><span>MODIFIED <code>git-identity-surface</code> · validate --strict ✓</span></div>
+      <div class="fact"><b>Live</b><span>running on <code>:5099</code> · manually verified</span></div>
+    </div>
+    <div class="next-strip">
+      <b>Wrap-up:</b> tick tasks.md
+      <span class="arrow">→</span> <code>openspec validate --strict</code>
+      <span class="arrow">→</span> <code>openspec archive</code> folds the delta into the living baseline
+      <span class="arrow">→</span> merge to <code>main</code>
+      <span class="arrow">→</span> sync origin
+    </div>
   </div>
 </section>
 
 </main>
 
-<script>
-  // Tabs.
-  const tabs = document.getElementById('tabs');
-  tabs.addEventListener('click', (e) => {
-    const btn = e.target.closest('.tab');
-    if (!btn) return;
-    document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t === btn));
-    document.querySelectorAll('.view').forEach((v) => v.classList.toggle('active', v.id === 'view-' + btn.dataset.view));
-  });
+<footer class="foot">Understanding app · overwritten per explanation · served no-store under
+<code>/api/localview/&lt;repo&gt;/app/understanding/</code></footer>
 
-  // Simulator — mirrors the real rules: chip state per "device" (in-page),
-  // hidden = unmounted (we literally don't create the DOM node), docks reclaim width.
-  const state = { ideas: false, autopilot: false, audit: false };
-  const meta = {
-    ideas: { icon: '💡', name: 'Ideas', poll: 'GET /api/notes' },
-    autopilot: { icon: '⚙', name: 'Autopilot', poll: 'polling /api/autopilot' },
-    audit: { icon: '🛡', name: 'Agent audit', poll: 'GET /api/audit' },
-  };
-  const chips = { ideas: document.getElementById('chip-ideas'), autopilot: document.getElementById('chip-auto'), audit: document.getElementById('chip-audit') };
-  const body = document.getElementById('sim-body');
-  const note = document.getElementById('sim-note');
-  function render() {
-    Object.entries(chips).forEach(([k, el]) => el.classList.toggle('on', state[k]));
-    body.innerHTML = '';
-    for (const k of ['autopilot', 'audit', 'ideas']) {
-      if (!state[k]) continue; // unmounted, not hidden — exactly like the real gate
-      const aux = document.createElement('div');
-      aux.className = 'sim-aux';
-      aux.innerHTML = '<h4>' + meta[k].icon + ' ' + meta[k].name + '</h4><span class="poll">● ' + meta[k].poll + '</span>';
-      body.appendChild(aux);
-    }
-    const grid = document.createElement('div');
-    grid.className = 'sim-grid';
-    for (const name of ['repo-a', 'repo-b', 'repo-c', 'repo-d']) {
-      const d = document.createElement('div');
-      d.className = 'sim-dock';
-      d.innerHTML = '<b>' + name + '</b><br><small>Idle · main · live chat…</small>';
-      grid.appendChild(d);
-    }
-    body.appendChild(grid);
-    const on = Object.keys(state).filter((k) => state[k]);
-    note.innerHTML = on.length
-      ? 'Summoned: <b>' + on.map((k) => meta[k].name).join(', ') + '</b> — each is fetching again. Dismissed panels make <b>zero</b> requests.'
-      : '<b>Docks-only</b> — the default. No aux panel is mounted, so no aux fetch fires and the grid owns the full canvas.';
-  }
-  Object.entries(chips).forEach(([k, el]) => el.addEventListener('click', () => { state[k] = !state[k]; render(); }));
-  document.getElementById('reset').addEventListener('click', () => { state.ideas = state.autopilot = state.audit = false; render(); });
-  render();
-</script>
+<script src="./app.js"></script>
 </body>
 </html>
