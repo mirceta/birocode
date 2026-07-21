@@ -3,217 +3,221 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Shipped: apps survive navigation — the verification run</title>
+<title>Shipped: the "commits as" identity is now editable</title>
 <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
 
 <header class="hero">
   <div class="hero-badge">Understanding app · rolling latest</div>
-  <h1>Leave and come back — <em>shipped &amp; proven</em></h1>
-  <p class="hero-sub">OpenSpec change <code>local-app-state-preserve</code> is <strong>implemented</strong> on
-  branch <code>feat/local-app-state-preserve</code> and <strong>verified in a real headless browser</strong>:
-  26/26 Playwright checks passed on the isolated <code>:5200</code> preview. Embedded local apps now keep their
-  state across every navigation; reload only happens when <em>you</em> press ↻. This app walks the proof —
-  what changed, how it works, what the browser saw, and what's left: <strong>your acceptance test</strong>.</p>
+  <h1>Both halves of "who am I to git" are now <em>editable in the harness</em></h1>
+  <p class="hero-sub">OpenSpec change <code>add-commit-identity-write</code> is
+  <strong>implemented, tested, and running live</strong>. The agent dock's git section always showed two
+  identities — <strong>commits as</strong> (the repo's <code>user.name</code>/<code>user.email</code>) and
+  <strong>pushes as</strong> (the GitHub account). Only <em>pushes as</em> was settable from the UI; the
+  <em>commits as</em> half was read-only, so the only way to change a commit author was to drop into a
+  terminal and run <code>git config</code>. This change closes that asymmetry: a new
+  <code>POST /api/git/identity</code> writer plus an inline editor on the dock row. This app walks
+  the split, the write path, the guards, and the first-ever C# tests.</p>
   <div class="hero-chips">
-    <span class="chip ok">15/15 tasks done</span>
-    <span class="chip ok">26/26 browser checks</span>
+    <span class="chip ok">backend writer + endpoint</span>
+    <span class="chip ok">inline dock editor</span>
+    <span class="chip ok">first C# test project · green</span>
     <span class="chip ok">openspec validate --strict ✓</span>
-    <span class="chip warn">not committed — waiting on you</span>
+    <span class="chip ok">verified live · it works</span>
   </div>
 </header>
 
 <nav class="tabs" id="tabs">
-  <button class="tab active" data-view="demo">1 · Feel the fix</button>
-  <button class="tab" data-view="arch">2 · How it works</button>
-  <button class="tab" data-view="proof">3 · The proof: 26 checks</button>
-  <button class="tab" data-view="found">4 · Surfaced in testing</button>
-  <button class="tab" data-view="accept">5 · Your acceptance test</button>
+  <button class="tab active" data-view="split">1 · The asymmetry</button>
+  <button class="tab" data-view="edit">2 · Edit it live</button>
+  <button class="tab" data-view="path">3 · The write path</button>
+  <button class="tab" data-view="guards">4 · Guards &amp; rules</button>
+  <button class="tab" data-view="tests">5 · First tests</button>
 </nav>
 
 <main id="views">
 
-<!-- ============ VIEW 1: FEEL THE FIX ============ -->
-<section class="view active" id="view-demo">
+<!-- ============ VIEW 1: THE ASYMMETRY ============ -->
+<section class="view active" id="view-split">
   <div class="panel">
-    <h2>The same three clicks, on main vs. on this branch</h2>
-    <p>This is a working simulation of the harness. The embedded box below behaves like <b>StateA</b> — the tiny
-    stateful test app the real verification typed into. <b>Type something, bump the counter, then switch to the
-    Files tab and come back.</b> Flip the mode switch and do it again.</p>
+    <h2>Two identities, one used to be a dead end</h2>
+    <p>Every commit records an <b>author</b> (git's <code>user.name</code>/<code>user.email</code>) and every
+    push <b>authenticates</b> as a GitHub account. The dock has always shown both. The difference this change
+    erases: the push side was already wired to a control (the dashboard PAT box sets the box's <code>gh</code>
+    login), while the commit side was <em>surfacing only</em> — <code>git-identity-surface</code> was explicitly
+    "read-only." Below: what each row is, where it comes from, and which was editable <b>before</b> vs
+    <b>after</b>.</p>
 
-    <div class="mode-row">
-      <span class="mode-label">Simulate:</span>
-      <div class="mode-toggle" id="mode-toggle">
-        <button class="mode-btn" data-mode="old">main (before)</button>
-        <button class="mode-btn active" data-mode="new">this branch (after)</button>
+    <div class="split">
+      <div class="idcard commit">
+        <h3>commits as <span class="pill was">read-only</span> <span class="pill rw">now writable</span></h3>
+        <div class="who">mirceta-agents &lt;caffe.klinika@gmail.com&gt;</div>
+        <div class="src">source: <code>git config user.name / user.email</code> for this repo, with a
+        <span class="pill local">local</span> / <span class="pill global">global</span> scope badge.</div>
+        <p class="small" style="margin-top:10px">Local scope = the repo's own <code>.git/config</code>, a
+        per-repo override. Global = the outer user config that every repo on the box inherits.
+        <b>This is the half the change makes editable.</b></p>
       </div>
-      <span class="mode-desc" id="mode-desc"></span>
-    </div>
-
-    <div class="sim-wrap">
-      <div class="sim-phone">
-        <div class="sim-header">Claude Web · <span id="sim-tab-name">Local</span></div>
-        <div class="sim-body" id="sim-body"><!-- filled by app.js --></div>
-        <div class="sim-nav">
-          <button class="sim-navbtn active" data-tab="local">⌂ Local</button>
-          <button class="sim-navbtn" data-tab="files">F Files</button>
-          <button class="sim-navbtn" data-tab="chat">C Chat</button>
-        </div>
-      </div>
-
-      <div class="sim-host">
-        <h3>The frame host layer <span class="tag">what the user never sees</span></h3>
-        <p class="small">One fixed layer at the app root owns every iframe. Pages only render an empty
-        <i>slot</i>; the host projects the live frame over it. Leave the tab → the frame is just
-        <code>display:none</code>, never destroyed.</p>
-        <div id="host-frames"></div>
-        <div class="host-legend">
-          <span><i class="dot dot-visible"></i> projected over a slot</span>
-          <span><i class="dot dot-hidden"></i> hidden, state alive</span>
-          <span><i class="dot dot-dead"></i> destroyed (old behavior)</span>
-        </div>
+      <div class="idcard push">
+        <h3>pushes as <span class="pill ro">unchanged</span></h3>
+        <div class="who">@mirceta-agents</div>
+        <div class="src">source: <code>GET /api/github-account</code> — the box's authenticated GitHub login.</div>
+        <p class="small" style="margin-top:10px">Already settable outside this change via the dashboard PAT
+        control. This change <b>does not touch it</b> — the row stays read-only, and account switch/logout stay
+        out of scope.</p>
       </div>
     </div>
 
-    <div class="callout" id="demo-callout">Switch tabs and watch both sides: the phone <em>and</em> the host layer.</div>
+    <div class="callout">Key insight: these are <b>independent</b>. You can author commits as one identity and
+    push them under a different GitHub account — a normal setup for agent commits. The change makes the
+    <em>author</em> half controllable from the same place it's shown.</div>
   </div>
 </section>
 
-<!-- ============ VIEW 2: HOW IT WORKS ============ -->
-<section class="view" id="view-arch">
+<!-- ============ VIEW 2: EDIT IT LIVE ============ -->
+<section class="view" id="view-edit">
   <div class="panel">
-    <h2>Slot projection, running live in this page</h2>
-    <p>The mechanism that shipped: the page renders an empty <b>slot div</b> where the app should appear; the
-    iframe lives in a root-level host and is <b>projected</b> over the slot's rectangle
-    (ResizeObserver + capture-phase scroll listeners, batched into one <code>requestAnimationFrame</code>).
-    The demo below <em>is</em> that algorithm in miniature — the orange "frame" is in a separate fixed layer,
-    tracking the slot inside the scrollable page. <b>Scroll the grey page.</b></p>
+    <h2>The inline editor — a working simulation</h2>
+    <p>This is the real dock row behaviour. Press <b>Edit</b> on the <em>commits as</em> row: an inline
+    name/email form opens with a local/global scope toggle. Hit <b>Save</b> and watch the request trace on the
+    right run exactly as the harness does — endpoint → writer → <code>git config</code> → re-read → dock
+    refresh. Try the edge cases too: clear <b>both</b> fields and save (rejected), or flip the busy switch
+    first.</p>
 
-    <div class="proj-wrap">
-      <div class="proj-page" id="proj-page">
-        <div class="proj-filler">page content above the app…</div>
-        <div class="proj-slot" id="proj-slot"><span>&lt;div class="product-frame__slot"&gt;<br>(empty slot — the page renders only this)</span></div>
-        <div class="proj-filler tall">…page content below. Keep scrolling — push the slot fully out of view and
-        the frame hides itself (that exact behavior showed up in verification; see view 4).</div>
+    <div class="dockdemo">
+      <div class="dock" id="dock">
+        <div class="dock-head">Agent dock · git</div>
+        <!-- rows injected by app.js -->
       </div>
-      <div class="proj-status" id="proj-status"></div>
-    </div>
-  </div>
-
-  <div class="panel">
-    <h2>Who owns what</h2>
-    <div class="arch-diagram">
-      <div class="arch-col">
-        <div class="arch-box router">
-          <b>Router pages — mount &amp; unmount freely</b>
-          <div class="arch-inner">LocalApp tab · dock PinnedAgent<br>
-          <span class="small">ProductFrame is now just the <b>shell</b>: liveness probe, offline/empty states,
-          and the slot div. No iframe here anymore.</span></div>
-        </div>
-        <div class="arch-arrow">acquire / release / registerSlot</div>
-        <div class="arch-box context">
-          <b>LocalAppFramesContext — the registry</b>
-          <div class="arch-inner"><span class="small">Frame identity keys:</span><br>
-          <code>local:&lt;repo&gt;:&lt;app&gt;</code> · <code>dock:&lt;dockId&gt;:&lt;repo&gt;:&lt;app&gt;</code></div>
-        </div>
-        <div class="arch-arrow">renders one HostedFrame per entry</div>
-        <div class="arch-box host">
-          <b>LocalAppFrameHost — fixed layer, z-index 4</b>
-          <div class="arch-inner"><span class="small">Owns every iframe for its whole life. Projects visible ones
-          over their slots, clips against scrolling ancestors, hides the rest. z-index 4 sits below every menu
-          (20–50), dashboard chrome (5–21) and modal (1000+).</span></div>
-        </div>
-      </div>
-      <div class="arch-col rules">
-        <h3>Lifetime rules that shipped</h3>
-        <div class="rule-card keep"><b>Navigation</b><span>only unregisters the slot → frame hides, state lives.</span></div>
-        <div class="rule-card release"><b>Repo switch</b><span>releases the Local tab's frames (verified: 2 → 0).</span></div>
-        <div class="rule-card release"><b>Dock removed / app deleted</b><span>releases that dock's / that app's frames.</span></div>
-        <div class="rule-card release"><b>LRU cap 6</b><span>7th frame evicts the least-recently-visible — but only <em>hidden, non-pinned</em> frames; a visible frame is never yanked.</span></div>
-        <div class="rule-card keep"><b>Pinned</b><span>the Local tab's Understanding frame (this page!) is exempt from eviction.</span></div>
-        <div class="rule-card keep"><b>↻ is the only reload</b><span>bumps one frame's <code>reloadKey</code>. Docks gain a refresh they never had.</span></div>
+      <div>
+        <div class="trace" id="trace"><div class="step hot">— idle. Press <span class="k">Edit</span> then <span class="k">Save</span> —</div></div>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:var(--ink-dim)">
+          <input type="checkbox" id="busy"> Simulate a chat run active in this repo (<code>_runs.IsBusy</code> → 409)
+        </label>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ============ VIEW 3: THE PROOF ============ -->
-<section class="view" id="view-proof">
+<!-- ============ VIEW 3: THE WRITE PATH ============ -->
+<section class="view" id="view-path">
   <div class="panel">
-    <h2>26 checks, zero failures — a real browser, not curl</h2>
-    <p>Per <code>docs/claude-web/browser-testing.md</code>, every claim was exercised end-to-end with headless
-    Playwright against the isolated preview on <code>:5200</code>, using two throwaway stateful apps
-    (<b>StateA</b> :5301, <b>StateB</b> :5302) that expose a text input, a counter, and a
-    <code>LOADED_AT</code> timestamp — so the test can tell "state survived" from "document reloaded".
-    <b>Click a stage</b> to see its checks; stages with a camera icon carry a real screenshot from the run.</p>
-    <div id="proof-stages"></div>
-  </div>
-  <div class="lightbox" id="lightbox"><img id="lightbox-img" alt="evidence screenshot"><div class="lightbox-cap" id="lightbox-cap"></div></div>
-</section>
+    <h2>From row click to <code>.git/config</code> — the real code path</h2>
+    <p>No new controller, no new service, no new module registration. The write rides the existing
+    <code>GitController</code>, reusing the injected <code>GitService</code>, <code>RepositoryResolver</code>,
+    and the run-busy guard (design decision D2). Every arrow below is an actual call in the shipped code.</p>
 
-<!-- ============ VIEW 4: SURFACED IN TESTING ============ -->
-<section class="view" id="view-found">
-  <div class="panel">
-    <h2>Two behaviors the browser run made visible</h2>
-    <p>Neither is a bug — both are the spec doing its job, and both are worth knowing before you test.</p>
-
-    <div class="found-grid">
-      <div class="found-card">
-        <h3>1 · Same app, two surfaces → two independent frames</h3>
-        <p>Midway through the dock stage, the selector <code>iframe[src*="statea"]</code> suddenly matched
-        <b>two elements</b>: the Local tab's kept-alive frame <em>and</em> the dock's new one. That's per-surface
-        frame identity working exactly as specced — each surface gets its own document, own state, own ↻.</p>
-        <div class="twin-demo">
-          <div class="twin">
-            <div class="twin-title"><code>local:birocode:statea</code></div>
-            <div class="twin-screen">StateA<br><span class="twin-val">"hello" · count 2</span></div>
-            <div class="twin-foot">Local tab · hidden but alive</div>
-          </div>
-          <div class="twin">
-            <div class="twin-title"><code>dock:pwtest-dock-a:…:statea</code></div>
-            <div class="twin-screen">StateA<br><span class="twin-val">"dockstate" · count 0</span></div>
-            <div class="twin-foot">dock phone · visible</div>
-          </div>
-        </div>
-        <p class="small">Those are the <em>actual values</em> from the run — the two documents never bled into
-        each other, and refreshing one left the other untouched.</p>
+    <div class="flow">
+      <div class="node">
+        <b>DockIdentityRows.jsx <span class="pill rw">edited</span></b>
+        <span class="file">client/src/…/DockIdentityRows.jsx</span>
+        <p>Edit affordance on the <b>commits as</b> row opens an inline name/email + scope form. On save:
+        <code>apiPost('/git/identity', { name, email, scope }, { repoId })</code>, then calls
+        <code>onRefreshGit</code> (the dock's existing git-status refresh, threaded down from
+        <code>PinnedAgent.jsx</code>). Disabled while saving; inline error on failure. The <b>pushes as</b> row
+        is untouched.</p>
       </div>
-
-      <div class="found-card">
-        <h3>2 · Fully scrolled-out slot → the frame hides itself</h3>
-        <p>The dock test first "failed": the phone's screen sat at <code>y = 982</code> in a 950-px-tall
-        viewport, so the host — correctly — hid the frame whose slot had zero visible area. The fix was in the
-        <em>test</em>, not the code: scroll the slot into view like a real user, and the frame appears and tracks.</p>
-        <p>You already have this demo live: go to <b>view 2</b> and scroll the slot fully out of the grey page —
-        the status readout flips to <i>hidden (slot off-screen)</i>, exactly what Playwright saw.</p>
-        <div class="mini-note">Why it matters: frames also <b>reposition live while scrolling</b> — the same
-        capture-phase listener that hides an off-screen frame keeps an on-screen one glued to its slot.</div>
+      <div class="arrowdown">↓ POST /api/git/identity { name, email, scope }</div>
+      <div class="node">
+        <b>GitController.SetIdentity <span class="pill rw">added</span></b>
+        <span class="file">ClaudeWeb.App/Controllers/GitController.cs</span>
+        <p>Resolves the current repo. <code>409</code> if <code>_runs.IsBusy(repo.Id)</code>. Maps
+        <code>scope</code> (<code>"global"</code>→global, else local) and calls the writer. On success returns
+        <code>{ ok:true, name, email, scope }</code>; on the writer's failure returns
+        <code>422 { ok:false, error }</code>. Never throws to a 500 for a normal rejection.</p>
+      </div>
+      <div class="arrowdown">↓ _git.SetCommitIdentity(repo.Path, name, email, scope)</div>
+      <div class="node">
+        <b>GitService.SetCommitIdentity <span class="pill rw">added</span></b>
+        <span class="file">ClaudeWeb.App/Services/Git/GitService.cs</span>
+        <p>Trims inputs; rejects when both empty (typed <code>SetIdentityResult</code>, no throw). Writes via
+        <code>RunGit(dir, "config --local user.name", value)</code> / <code>--global</code> — values ride the
+        <code>ArgumentList</code>, so no shell, no escaping. Partial writes allowed (only name, or only email).
+        Then <b>re-reads</b> via <code>ReadCommitIdentity</code> and returns the authoritative
+        <code>{ name, email, scope }</code>. Any git failure degrades into <code>Error</code>, not a 500.</p>
+      </div>
+      <div class="arrowdown">↓ git config --local/--global user.name/user.email</div>
+      <div class="node">
+        <b>.git/config (local) or ~/.gitconfig (global)</b>
+        <span class="file">the repo's own config, or the outer user config</span>
+        <p>Local is the default and the safe choice for a per-repo dock. Global is offered but separately
+        labelled because it changes every repo on the box (design decision D3).</p>
+      </div>
+      <div class="arrowdown">↑ re-read → response → onRefreshGit → next git/status</div>
+      <div class="node">
+        <b>Dock reflects the authoritative value</b>
+        <p>D6 — optimistic-then-authoritative: the row saves, then the dock re-fetches
+        <code>git/status.commitIdentity</code> so what you see is the re-read config, not a hopeful echo.</p>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ============ VIEW 5: ACCEPTANCE ============ -->
-<section class="view" id="view-accept">
+<!-- ============ VIEW 4: GUARDS ============ -->
+<section class="view" id="view-guards">
   <div class="panel">
-    <h2>The sandbox is running — here's your test script</h2>
+    <h2>Four rules that keep the write safe</h2>
+    <div class="guards">
+      <div class="guard g-409">
+        <h3>Busy guard · 409</h3>
+        <p>Rejected while a chat run is active in the repo, consistent with merge/pull/push — so a commit
+        identity can't change under an in-flight commit (D4).</p>
+        <div class="code">if (_runs.IsBusy(repo.Id)) → Conflict</div>
+      </div>
+      <div class="guard g-422">
+        <h3>Empty rejected · 422</h3>
+        <p>A request with neither name nor email mutates nothing and returns the empty-rejection result. No
+        blank writes.</p>
+        <div class="code">n=="" &amp;&amp; e=="" → "Provide a name or email."</div>
+      </div>
+      <div class="guard g-ok">
+        <h3>Partial writes · allowed</h3>
+        <p>Git stores name and email independently, so setting only one is valid; the other keeps its previous
+        value (D5). Inputs are trimmed.</p>
+        <div class="code">only name → sets user.name, leaves user.email</div>
+      </div>
+      <div class="guard g-ok">
+        <h3>No injection · literal args</h3>
+        <p>Values pass through <code>RunGit</code>'s <code>ArgumentList</code> — never a shell string — so a name
+        or email needs no escaping and can't inject.</p>
+        <div class="code">RunGit(dir, "config --local user.name", value)</div>
+      </div>
+    </div>
+    <div class="callout">Scope default is <b>local</b> (this repo only). Choosing <b>global</b> is deliberate and
+    separately labelled — it rewrites the identity every repo on the box inherits.</div>
+  </div>
+</section>
+
+<!-- ============ VIEW 5: TESTS ============ -->
+<section class="view" id="view-tests">
+  <div class="panel">
+    <h2>The first automated coverage in this repo</h2>
+    <p>Before this change there was no test project at all. <code>add-commit-identity-write</code> introduces
+    <code>tests/ClaudeWeb.Tests</code> (xUnit, referencing <code>ClaudeWeb.App</code>, wired into
+    <code>ClaudeWeb.sln</code>), driving the writer against a throwaway <code>git init</code> repo — read →
+    write → read back. <b>Green.</b></p>
+    <ul class="tests" id="tests-list"></ul>
+    <p class="small" style="margin-top:12px">The global-scope test isolates <code>HOME</code> /
+    <code>GIT_CONFIG_GLOBAL</code> to a temp path, so it can prove a global write reads back with
+    <code>scope: global</code> <b>without ever touching the developer's real <code>~/.gitconfig</code></b>
+    (design decision D7).</p>
+  </div>
+
+  <div class="panel">
+    <h2>Where this leaves the change</h2>
     <div class="fact-grid">
-      <div class="fact"><b>Preview</b><span><code>http://localhost:5200</code> · password <code>changeme</code></span></div>
-      <div class="fact"><b>Fully isolated</b><span>own data dir, own repo store, own docks — live <code>:5099</code> untouched</span></div>
-      <div class="fact"><b>Test apps</b><span><b>StateA</b> :5301 · <b>StateB</b> :5302 — registered on "Claude Web (this app)"</span></div>
-      <div class="fact"><b>UI mode</b><span>set <b>Advanced</b> to see docks &amp; the dashboard</span></div>
+      <div class="fact"><b>Backend</b><span><code>dotnet build</code> clean · <code>dotnet test</code> green</span></div>
+      <div class="fact"><b>Frontend</b><span><code>npm run build</code> clean · i18n en + tr</span></div>
+      <div class="fact"><b>Spec</b><span>MODIFIED <code>git-identity-surface</code> · validate --strict ✓</span></div>
+      <div class="fact"><b>Live</b><span>running on <code>:5099</code> · manually verified</span></div>
     </div>
-
-    <h3>Try what the machine already proved <span class="tag">checklist remembers itself on this device</span></h3>
-    <div id="accept-list"></div>
-
     <div class="next-strip">
-      <b>Then:</b> nothing is committed and nothing merges until you say so
-      <span class="arrow">→</span> say the word
-      <span class="arrow">→</span> commit on <code>feat/local-app-state-preserve</code>
-      <span class="arrow">→</span> merge
-      <span class="arrow">→</span> <code>/opsx:archive</code> folds the spec into the baseline
+      <b>Wrap-up:</b> tick tasks.md
+      <span class="arrow">→</span> <code>openspec validate --strict</code>
+      <span class="arrow">→</span> <code>openspec archive</code> folds the delta into the living baseline
+      <span class="arrow">→</span> merge to <code>main</code>
+      <span class="arrow">→</span> sync origin
     </div>
   </div>
 </section>

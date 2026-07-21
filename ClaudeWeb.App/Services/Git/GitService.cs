@@ -201,6 +201,53 @@ public partial class GitService
         }
     }
 
+    /// <summary>Outcome of a commit-identity write: on success the re-read identity,
+    /// otherwise <see cref="Error"/> carries the git failure. Shaped so the endpoint
+    /// can return a typed result instead of throwing (openspec
+    /// add-commit-identity-write).</summary>
+    public sealed record SetIdentityResult(bool Ok, string? Name, string? Email, string Scope, string? Error);
+
+    /// <summary>Writes this repo's commit identity (<c>user.name</c>/<c>user.email</c>) —
+    /// the matching writer for <see cref="ReadCommitIdentity"/>. <paramref name="scope"/>
+    /// "local" targets the repo's own .git/config (a per-repo override, the default);
+    /// "global" targets the outer user config. Values ride the ArgumentList so names
+    /// and emails need no escaping. Setting only one of name/email is allowed; an empty
+    /// request is rejected. Any git failure is returned in the result, never thrown, so
+    /// it degrades to a 4xx rather than a 500.</summary>
+    public SetIdentityResult SetCommitIdentity(string workingDir, string? name, string? email, string scope)
+    {
+        var n = name?.Trim() ?? "";
+        var e = email?.Trim() ?? "";
+        var normScope = scope == "global" ? "global" : "local";
+        if (n.Length == 0 && e.Length == 0)
+            return new SetIdentityResult(false, null, null, normScope, "Provide a name or email.");
+
+        var scopeFlag = normScope == "global" ? "--global" : "--local";
+        try
+        {
+            if (n.Length > 0)
+            {
+                var r = RunGit(workingDir, $"config {scopeFlag} user.name", n);
+                if (r.ExitCode != 0)
+                    return new SetIdentityResult(false, null, null, normScope, FirstLine(r.StdErr, r.StdOut));
+            }
+            if (e.Length > 0)
+            {
+                var r = RunGit(workingDir, $"config {scopeFlag} user.email", e);
+                if (r.ExitCode != 0)
+                    return new SetIdentityResult(false, null, null, normScope, FirstLine(r.StdErr, r.StdOut));
+            }
+            var ci = ReadCommitIdentity(workingDir);
+            _logger.Info($"[GIT] Commit identity set ({normScope}) -> {ci.Name} <{ci.Email}>");
+            return new SetIdentityResult(true, ci.Name, ci.Email, ci.Scope, null);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[GIT] Set commit identity failed: {ex.Message}");
+            return new SetIdentityResult(false, null, null, normScope, ex.Message);
+        }
+    }
+
     /// <summary>
     /// Read-only working-tree status (plans/git-tab.md): current branch,
     /// upstream + ahead/behind, and the changed/untracked/conflicted paths.
