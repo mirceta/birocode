@@ -1008,7 +1008,8 @@ export default function Dashboard({ onClose }) {
             title={t('dashboard.panelIdeas')}
             aria-label={t('dashboard.panelIdeas')}
           >
-            💡
+            <span aria-hidden="true">💡</span>
+            <span className="dash__panel-chip-label">{t('nav.ideas')}</span>
           </button>
           {autopilotOn && (
             <button
@@ -1019,7 +1020,8 @@ export default function Dashboard({ onClose }) {
               title={t('dashboard.panelAutopilot')}
               aria-label={t('dashboard.panelAutopilot')}
             >
-              ⚙
+              <span aria-hidden="true">⚙</span>
+              <span className="dash__panel-chip-label">{t('nav.autopilot')}</span>
             </button>
           )}
           {agentAuditOn && (
@@ -1031,7 +1033,8 @@ export default function Dashboard({ onClose }) {
               title={t('dashboard.panelAudit')}
               aria-label={t('dashboard.panelAudit')}
             >
-              🛡
+              <span aria-hidden="true">🛡</span>
+              <span className="dash__panel-chip-label">{t('audit.title')}</span>
             </button>
           )}
         </div>
