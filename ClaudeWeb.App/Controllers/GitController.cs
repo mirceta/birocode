@@ -32,6 +32,7 @@ public class GitController : ControllerBase
 
     public sealed record SaveRequest(string? Message);
     public sealed record RestoreRequest(string? Hash);
+    public sealed record SetIdentityRequest(string? Name, string? Email, string? Scope);
 
     /// <summary>POST /api/save -- stage everything and commit.</summary>
     [HttpPost("save")]
@@ -128,6 +129,35 @@ public class GitController : ControllerBase
         catch (Exception ex)
         {
             _logger.Error($"[GIT] Status failed: {ex.Message}");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    /// <summary>POST /api/git/identity -- set this repo's commit identity
+    /// (user.name/user.email), the write side of git/status.commitIdentity
+    /// (openspec add-commit-identity-write). Scope "local" (default) writes the
+    /// repo's own .git/config; "global" writes the outer user config. 409 while a
+    /// chat run is active so the author can't change under an in-flight commit;
+    /// 422 when neither name nor email is supplied or git rejects the write.</summary>
+    [HttpPost("git/identity")]
+    public IActionResult SetIdentity([FromBody] SetIdentityRequest? body)
+    {
+        _logger.CountRequest();
+        var repo = _repos.Current();
+        if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
+        if (_runs.IsBusy(repo.Id))
+            return Conflict(new { error = "Claude is working in this project — try again when the run finishes." });
+        try
+        {
+            var scope = body?.Scope == "global" ? "global" : "local";
+            var r = _git.SetCommitIdentity(repo.Path, body?.Name, body?.Email, scope);
+            return r.Ok
+                ? Ok(new { ok = true, name = r.Name, email = r.Email, scope = r.Scope })
+                : UnprocessableEntity(new { ok = false, error = r.Error });
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[GIT] SetIdentity failed: {ex.Message}");
             return StatusCode(500, new { error = ex.Message });
         }
     }

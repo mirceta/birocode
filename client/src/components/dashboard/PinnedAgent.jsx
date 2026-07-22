@@ -691,7 +691,11 @@ export default function PinnedAgent({
           <div className="phone__git-top">
             <GitStatusSummary status={git} compact />
             {showIdentityRows && (
-              <DockIdentityRows commitIdentity={git.commitIdentity} repoId={tab.repoId} />
+              <DockIdentityRows
+                commitIdentity={git.commitIdentity}
+                repoId={tab.repoId}
+                onSaved={onRefreshGit}
+              />
             )}
             {showGitActions && ga && (
               <div className="phone__git-actions" role="group" aria-label={t('dashboard.gitActions')}>
