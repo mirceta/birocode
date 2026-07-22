@@ -1013,6 +1013,72 @@ details.step > summary::-webkit-details-marker {
    prompt/plan lists. The canvas itself is resizable (below). */
 .prompt-mgr--notes { width: min(820px, 100%); }
 
+/* The Prompts tab renders the fixed catalog as a categorized card grid
+   (openspec: organize-custom-prompts), so it gets the wide modal too. */
+.prompt-mgr--grid { width: min(820px, 100%); }
+
+.prompt-mgr__cat { margin: 0 0 14px; }
+
+.prompt-mgr__cat-title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-soft);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 4px;
+}
+
+.prompt-mgr__cat-hint {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--color-text-soft);
+}
+
+/* Card grid: at least two columns on a phone, more as the modal widens.
+   140px min: backdrop (16px) + modal (16px) padding leave ~296px of content
+   on a 360px phone — 150px+ minimums collapse that to a single column. */
+.prompt-mgr__grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.prompt-mgr__card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius, 8px);
+  background: var(--color-surface);
+}
+
+.prompt-mgr__card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.prompt-mgr__card .prompt-mgr__item-emoji { line-height: 1.2; }
+
+/* Tighter clamp than the old flat list — the grid shows many cards at once. */
+.prompt-mgr__card .prompt-mgr__item-text { -webkit-line-clamp: 3; }
+
+.prompt-mgr__card-actions {
+  margin-top: auto;
+  padding-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .prompt-mgr__head {
   display: flex;
   align-items: center;
