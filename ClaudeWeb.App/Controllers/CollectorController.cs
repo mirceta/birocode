@@ -14,6 +14,10 @@ namespace ClaudeWeb.Controllers;
 ///   POST   /api/collector/sources/{id}/stop  -> { ok }
 ///   DELETE /api/collector/sources/{id}       -> { ok }   (the built-in self source is non-removable)
 ///   GET    /api/collector/events?after=N     -> { events: [{ seq, at, type, source, data, sourceId, sourceLabel }], lastSeq }
+///   GET    /api/collector/sound/rules            -> { rules: [{ slot, hasCustom, fileName }] }
+///   POST   /api/collector/sound/rules/{slot}?name=x.wav (body = audio bytes) -> { rules }
+///   DELETE /api/collector/sound/rules/{slot}     -> { rules }
+///   POST   /api/collector/sound/rules/{slot}/test -> { ok }  (plays the slot's effective host cue now)
 ///
 /// These endpoints mutate only the collector's OWN subscription list — they never cause or
 /// expose an action on a watched harness (the collector only ever GETs a source's feed).
@@ -126,5 +130,76 @@ public class CollectorController : ControllerBase
         _logger.CountRequest();
         _hostSound.PlayNow(req?.Mode);
         return Ok(new { ok = true });
+    }
+
+    // Event → sound rules (openspec add-host-event-sound-rules): per-slot custom audio the HOST
+    // plays on matching events, stored server-side. The upload is the raw audio bytes as the
+    // request body (no multipart) with the original filename in ?name= — the extension is
+    // validated and the size capped. The listing never returns the bytes.
+    [HttpGet("sound/rules")]
+    public IActionResult GetSoundRules()
+    {
+        _logger.CountRequest();
+        return Ok(new { rules = _hostSound.ListRules() });
+    }
+
+    [HttpPost("sound/rules/{slot}")]
+    public async Task<IActionResult> SetSoundRule(string slot, [FromQuery] string? name)
+    {
+        _logger.CountRequest();
+        // Bounded read regardless of (possibly absent) Content-Length, so an oversize body is
+        // rejected without buffering more than the cap.
+        if (Request.ContentLength is long len && len > HostEventSound.MaxRuleBytes)
+            return BadRequest(new { error = $"Audio file must be at most {HostEventSound.MaxRuleBytes / (1024 * 1024)} MB." });
+        using var ms = new MemoryStream();
+        var buf = new byte[64 * 1024];
+        int read;
+        while ((read = await Request.Body.ReadAsync(buf)) > 0)
+        {
+            if (ms.Length + read > HostEventSound.MaxRuleBytes)
+                return BadRequest(new { error = $"Audio file must be at most {HostEventSound.MaxRuleBytes / (1024 * 1024)} MB." });
+            ms.Write(buf, 0, read);
+        }
+        try
+        {
+            _hostSound.AssignRule(slot, ms.ToArray(), name);
+            return Ok(new { rules = _hostSound.ListRules() });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpDelete("sound/rules/{slot}")]
+    public IActionResult ClearSoundRule(string slot)
+    {
+        _logger.CountRequest();
+        try
+        {
+            _hostSound.ClearRule(slot);
+            return Ok(new { rules = _hostSound.ListRules() });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    // Play, on the host and right now, exactly what a live event of this slot's type would play
+    // (custom file or built-in in the current mode) — the per-slot Test button.
+    [HttpPost("sound/rules/{slot}/test")]
+    public IActionResult TestSoundRule(string slot)
+    {
+        _logger.CountRequest();
+        try
+        {
+            _hostSound.PlayEffectiveNow(slot);
+            return Ok(new { ok = true });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 }

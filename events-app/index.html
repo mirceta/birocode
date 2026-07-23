@@ -320,11 +320,14 @@
         </div>
       </section>
 
-      <section class="sndsec future">
-        <h3>🔗 Event → sound rules <span class="hint">— coming soon</span></h3>
-        <p class="sndnote" style="margin:6px 0 0">The reserved home for mapping <i>which</i> event triggers
-          <i>which</i> sound (per source, per type) — replies for events. Not built yet; this is headroom
-          for that next step.</p>
+      <section class="sndsec">
+        <h3>🔗 Event → sound rules</h3>
+        <p class="sndnote">Map each event type to the sound the <b>host computer</b> plays when it arrives.
+          Upload a wav or mp3 (max 2 MB) — it is stored <b>on the host</b>, wins over Beep/Voice for that
+          type, and plays with no browser open. Types without a file keep the built-in host cue above.
+          <i>Per-source</i> rules remain future headroom.</p>
+        <div id="hruleRows"></div>
+        <input id="hruleFile" type="file" accept=".wav,.mp3,audio/wav,audio/mpeg" hidden />
       </section>
 
     </div>
@@ -583,6 +586,70 @@ function wireHTest(id, mode){
 }
 wireHTest("htestb", "beep");
 wireHTest("htestv", "voice");
+
+// --- host event → sound rules (openspec add-host-event-sound-rules) -----------
+// Server-side custom audio per event type: the file is uploaded to and stored on the
+// HOST, which plays it on matching events instead of the built-in cue — unlike the
+// device grid above, whose files never leave this browser. Same slot taxonomy, so
+// CUE_SLOTS provides the labels; state always re-syncs from the server's response.
+const hruleRows = document.getElementById("hruleRows");
+const hruleFile = document.getElementById("hruleFile");
+let hrules = {};                                          // slot -> stored file name
+let hrulePending = null;
+function renderHRules(){
+  hruleRows.innerHTML = "";
+  for (const slot of CUE_SLOTS){
+    const name = hrules[slot.type];
+    const row = document.createElement("div"); row.className = "sndrow";
+    row.innerHTML =
+      `<div class="sndlbl"><b>${slot.label}</b><span>${slot.hint}</span></div>`+
+      `<div class="sndacts">`+
+        `<button data-hrule="choose" data-slot="${slot.type}">${name ? "Replace" : "Choose file…"}</button>`+
+        `<button data-hrule="test" data-slot="${slot.type}" title="Play this event type's host sound on the host computer, right now">▸ Test on host</button>`+
+        (name ? `<button data-hrule="clear" data-slot="${slot.type}">Clear</button>` : "")+
+      `</div>`+
+      `<div class="sndstate">${name ? "🎵 " + esc(name) : "built-in host cue"}</div>`;
+    hruleRows.appendChild(row);
+  }
+}
+function applyHRules(j){
+  hrules = {};
+  for (const r of (j && j.rules) || []) if (r.hasCustom) hrules[r.slot] = r.fileName || "custom file";
+  renderHRules();
+}
+async function loadHRules(){
+  try { const r = await fetch(`${API}/collector/sound/rules`, { headers: { Accept: "application/json" } });
+    if (r.ok) applyHRules(await r.json()); } catch {}
+}
+async function uploadHRule(slot, file){
+  try {
+    const r = await fetch(`${API}/collector/sound/rules/${encodeURIComponent(slot)}?name=${encodeURIComponent(file.name)}`,
+      { method: "POST", headers: { "Content-Type": file.type || "application/octet-stream" }, body: file });
+    const j = await r.json().catch(() => null);
+    if (!r.ok){ alert((j && j.error) || "Upload failed."); return; }
+    applyHRules(j);
+  } catch { alert("Upload failed — harness unreachable?"); }
+}
+async function clearHRule(slot){
+  try { const r = await fetch(`${API}/collector/sound/rules/${encodeURIComponent(slot)}`, { method: "DELETE" });
+    if (r.ok) applyHRules(await r.json()); } catch {}
+}
+async function testHRule(slot, btn){                      // fires on the HOST, like the mode tests above
+  const old = btn.textContent; btn.textContent = "⏳ …";
+  try { const r = await fetch(`${API}/collector/sound/rules/${encodeURIComponent(slot)}/test`, { method: "POST" });
+    btn.textContent = r.ok ? "✅ Sent" : "⚠ Failed"; }
+  catch { btn.textContent = "⚠ Failed"; }
+  setTimeout(() => { btn.textContent = old; }, 1200);
+}
+hruleRows.addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-hrule]"); if (!b) return;
+  const slot = b.getAttribute("data-slot"), act = b.getAttribute("data-hrule");
+  if (act === "choose"){ hrulePending = slot; hruleFile.value = ""; hruleFile.click(); }
+  else if (act === "test"){ testHRule(slot, b); }
+  else if (act === "clear"){ clearHRule(slot); }
+});
+hruleFile.onchange = () => { const f = hruleFile.files && hruleFile.files[0]; if (f && hrulePending) uploadHRule(hrulePending, f); };
+renderHRules(); loadHRules();
 
 function setStatus(t, cls){ elStatus.textContent = t; elDot.className = "dot" + (cls ? " " + cls : ""); }
 function esc(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }

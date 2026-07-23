@@ -3,291 +3,194 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Understanding — the Traffic Monitor</title>
+<title>Event sounds — what you expected vs what shipped</title>
 <style>
-  :root {
-    --bg: #faf9f6; --surface: #fff; --border: #e3e0d8; --text: #2b2a26;
-    --soft: #6b6b66; --accent: #2b8a8a; --amber: #d9770a; --radius: 10px;
-    font-size: 15px;
+  :root{
+    --bg:#0e1116; --panel:#161b24; --panel2:#1d2430; --line:#2a3444;
+    --txt:#dfe6f0; --dim:#8fa0b8; --acc:#5aa9ff; --ok:#4fd08a; --warn:#ffb454; --bad:#ff6b6b;
   }
-  * { box-sizing: border-box; }
-  body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); }
-  header { padding: 18px 22px 6px; }
-  h1 { font-size: 21px; margin: 0 0 4px; }
-  .sub { color: var(--soft); font-size: 13.5px; margin: 0; }
-  nav { display: flex; gap: 6px; padding: 12px 22px; flex-wrap: wrap; }
-  nav button {
-    font: inherit; font-size: 13.5px; padding: 7px 14px; border-radius: 999px;
-    border: 1px solid var(--border); background: var(--surface); cursor: pointer; color: var(--soft);
-  }
-  nav button.on { border-color: var(--accent); color: var(--accent); font-weight: 700; }
-  main { padding: 6px 22px 40px; max-width: 1050px; }
-  section { display: none; }
-  section.on { display: block; }
-  .card {
-    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 16px 18px; margin: 12px 0;
-  }
-  .card h2 { font-size: 16px; margin: 0 0 8px; }
-  .card p { line-height: 1.55; margin: 8px 0; }
-  .k { font-family: ui-monospace, monospace; font-size: 12.5px; background: #f1efe9; padding: 1px 6px; border-radius: 5px; }
-  .muted { color: var(--soft); }
-  .amber { color: var(--amber); font-weight: 700; }
-  .teal { color: var(--accent); font-weight: 700; }
-  svg text { font-family: system-ui, sans-serif; }
-  .legendrow { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; color: var(--soft); margin-top: 6px; }
-  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
-  .ctrl { display: flex; align-items: center; gap: 10px; margin: 10px 0; flex-wrap: wrap; }
-  .ctrl button { font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 7px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; }
-  .ctrl button.hot { border-color: var(--amber); color: var(--amber); font-weight: 700; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.55 system-ui,Segoe UI,Roboto,sans-serif;padding:24px 16px 80px}
+  main{max-width:900px;margin:0 auto}
+  h1{font-size:1.45rem;margin:0 0 4px}
+  h2{font-size:1.15rem;margin:36px 0 10px;border-bottom:1px solid var(--line);padding-bottom:6px}
+  .sub{color:var(--dim);margin:0 0 24px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:14px 0}
+  .dim{color:var(--dim)}
+  code{background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:.86em}
+
+  /* expected vs shipped */
+  .vs{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+  .vsbox{border-radius:12px;padding:16px 18px;border:1px solid var(--line);background:var(--panel)}
+  .vsbox.want{border-color:var(--warn)}
+  .vsbox.got{border-color:var(--acc)}
+  .vsbox h3{margin:0 0 10px;font-size:1rem}
+  .vsbox.want h3{color:var(--warn)} .vsbox.got h3{color:var(--acc)}
+  .chain{display:flex;flex-direction:column;gap:6px;font-size:.92rem}
+  .chain .hop{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+  .chain .down{color:var(--dim);text-align:center;font-size:1rem;line-height:1}
+  .missing{border-style:dashed !important;color:var(--dim)}
+  .no{color:var(--bad);font-weight:700} .yes{color:var(--ok);font-weight:700}
+
+  /* two layers table */
+  table{width:100%;border-collapse:collapse;font-size:.9rem}
+  td,th{padding:9px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  th{color:var(--dim);font-weight:600}
+  tr.hd td{font-weight:700;color:var(--acc);border-bottom:none;padding-top:14px}
+
+  /* scenario picker */
+  button{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:8px;
+    padding:9px 14px;font:inherit;cursor:pointer;text-align:left}
+  button:hover{border-color:var(--acc)}
+  button.sel{background:#153352;border-color:var(--acc);color:#cfe6ff}
+  .scen{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+  .out{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+  .spk{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .spk h4{margin:0 0 6px;font-size:.95rem}
+  .spk .plays{font-size:1rem;font-weight:600;margin-bottom:4px}
+  .spk .why{font-size:.83rem;color:var(--dim)}
+  .spk.silent{opacity:.65}
+  .spk.silent .plays{color:var(--dim)}
+  .spk.custom .plays{color:var(--ok)}
+  .spk.builtin .plays{color:var(--warn)}
+
+  /* PR / git */
+  .git{font:13px/1.7 ui-monospace,Consolas,monospace;background:var(--panel2);border:1px solid var(--line);
+    border-radius:10px;padding:14px 16px;overflow-x:auto;white-space:pre}
+  .git .m{color:var(--acc)} .git .f{color:var(--ok)} .git .d{color:var(--dim)}
+  footer{margin-top:40px;color:var(--dim);font-size:.8rem;text-align:center}
 </style>
 </head>
 <body>
-<header>
-  <h1>📡 The Traffic Monitor</h1>
-  <p class="sub">How the harness now measures its own HTTP throughput — and tells you when it's getting high. (OpenSpec change: <span class="k">traffic-monitor</span>, branch <span class="k">feat/traffic-monitor</span>)</p>
-</header>
-<nav id="tabs">
-  <button data-v="why" class="on">1 · Why</button>
-  <button data-v="pipe">2 · Where it counts</button>
-  <button data-v="ring">3 · The ring of seconds</button>
-  <button data-v="panel">4 · What you see</button>
-</nav>
 <main>
+  <h1>Event sounds — what you expected vs what shipped</h1>
+  <p class="sub">You expected one system. The repo had <b>two separate ones</b>, and the one you wanted —
+    custom sounds on the <b>host</b>, driven by events — was the unbuilt part. <b>Update:</b> it is now
+    built and verified on branch <code>feat/host-event-sound-rules</code> (OpenSpec change
+    <code>add-host-event-sound-rules</code>), awaiting deploy to live.</p>
 
-<section id="why" class="on">
-  <div class="card">
-    <h2>Every open tab is a metronome</h2>
-    <p>The web UI keeps itself live by <b>polling</b>: the Dashboard snapshot, account chips,
-    event console, files viewer, understanding panel, host clock … most tick every
-    <b>5 seconds</b>. One phone tab is cheap. But the volume multiplies with every open
-    tab, every summoned panel, every device — and until now <b>nothing measured it</b>.
-    The server only had a manual request counter; nobody counted bytes.</p>
-    <p>Below: each row is a poller; a pulse is one request. Open tabs and watch requests/second climb.</p>
-    <div class="ctrl">
-      <button id="addTab">+ open a tab</button>
-      <button id="rmTab">− close a tab</button>
-      <span class="muted" id="tabCount">1 tab open</span>
-      <span style="flex:1"></span>
-      <b id="rpsOut" class="teal"></b>
+  <h2>1 · The mismatch, in one picture</h2>
+  <div class="vs">
+    <div class="vsbox want">
+      <h3>⚠️ What you expected</h3>
+      <div class="chain">
+        <div class="hop">Event happens (e.g. an agent finishes)</div>
+        <div class="down">↓</div>
+        <div class="hop">Harness looks up <b>your chosen custom sound</b> for that event type</div>
+        <div class="down">↓</div>
+        <div class="hop">🖥️ Host PC plays <b>your sound</b> — <span class="yes">NOW BUILT</span> (awaiting deploy)</div>
+      </div>
+      <p class="dim" style="font-size:.85rem;margin:10px 0 0">This was the "🔗 Event → sound rules —
+      <i>coming soon</i>" placeholder in the Sounds tab — it is now the real panel: upload a wav/mp3 per
+      event type, stored on the host, played by the host on matching events.</p>
     </div>
-    <svg id="pollViz" width="100%" height="190" viewBox="0 0 1000 190"></svg>
-    <p class="muted" style="font-size:12.5px">Pollers shown: Dashboard snapshot · AccountChips ×2 · EventConsole · Files viewer · Understanding · HostClock — a subset; the real UI has more.</p>
-  </div>
-</section>
-
-<section id="pipe">
-  <div class="card">
-    <h2>One middleware, wrapped around everything</h2>
-    <p>The counter is a Kestrel middleware registered <b>outermost</b> — before even the IP filter.
-    So the numbers are <b>true wire volume</b>: static assets, the localview proxy legs, even rejected
-    requests. Nothing opts in; nothing can forget to count.</p>
-    <p>Streamed responses (the chat's SSE stream — precisely the heavy ones) have <b>no Content-Length</b>,
-    so the middleware swaps <span class="k">Response.Body</span> for a pass-through
-    <span class="k">CountingStream</span> that tallies every write as it flows. No buffering — streaming
-    behavior is untouched (verified with a real CLI turn through the isolated instance).</p>
-    <svg id="pipeViz" width="100%" height="240" viewBox="0 0 1000 240"></svg>
-    <div class="legendrow">
-      <span><span class="dot" style="background:#2b8a8a"></span>request travelling in</span>
-      <span><span class="dot" style="background:#d9770a"></span>response bytes counted on the way out</span>
-    </div>
-    <p>Attribution collapses IDs so the table stays readable: <span class="k">/api/repos/A/events</span> and
-    <span class="k">/api/repos/B/events</span> are one bucket — <span class="k">GET api/repos/{repoId}/events</span>.
-    Non-endpoint traffic falls back to a normalized prefix (<span class="k">assets/*</span>,
-    <span class="k">api/localview/*</span>), capped at 100 buckets with an <span class="k">other</span> overflow.</p>
-  </div>
-</section>
-
-<section id="ring">
-  <div class="card">
-    <h2>900 one-second slots, indexed by clock modulo</h2>
-    <p>Per bucket, counts land in a ring of <b>900 slots</b> (15 minutes), slot = <span class="k">unixSecond % 900</span>.
-    A slot is lazily reset when its stored second no longer matches — so idle buckets cost nothing
-    and rates <b>decay to zero on their own</b>. No database, no persistence: restart the harness,
-    counters reset. This is monitoring, not billing.</p>
-    <p>Watch the write head sweep the ring (sped up; showing 60 of the 900 slots). Reads answer
-    "rate now" by summing the trailing window — <b>10s</b> for the live number, <b>60s</b> for the average
-    the <b>high</b> decision uses.</p>
-    <svg id="ringViz" width="100%" height="300" viewBox="0 0 1000 300"></svg>
-    <div class="legendrow">
-      <span><span class="dot" style="background:#2b8a8a"></span>write head (current second)</span>
-      <span><span class="dot" style="background:#9fd0d0"></span>trailing 10s — "now"</span>
-      <span><span class="dot" style="background:#e7c9a3"></span>trailing 60s — feeds the high signal</span>
+    <div class="vsbox got">
+      <h3>What actually shipped — two unconnected systems</h3>
+      <div class="chain">
+        <div class="hop">Event happens</div>
+        <div class="down">↓ &nbsp;(fans out to two independent players)</div>
+        <div class="hop">📱 <b>Browser</b> viewing the page plays your custom sound —
+          but <b>only if the 🔇 Device toggle is ON</b> <span class="yes">BUILT</span></div>
+        <div class="hop">🖥️ <b>Host PC</b> plays a <b>fixed built-in</b> cue (Windows sound or spoken phrase,
+          start ≠ finish) — custom audio <span class="no">can't</span> be assigned to it <span class="yes">BUILT</span></div>
+      </div>
     </div>
   </div>
-</section>
 
-<section id="panel">
+  <h2>2 · Why you heard exactly what you heard</h2>
   <div class="card">
-    <h2>The Traffic panel — and the amber line</h2>
-    <p>Summon <b>📡 Traffic</b> from the Dashboard's panel rail (Advanced mode). The header shows
-    <b>req/s · KB/s</b> even collapsed; the body has a 60-second sparkline, the threshold line, and the
-    top talkers. <span class="k">GET /api/traffic</span> serves it all in one small JSON.</p>
-    <p>"High" is decided <b>server-side</b>: when the 60s average of response bytes/s exceeds
-    <span class="k">TrafficHighBytesPerSec</span> (appsettings, default 512 KB/s) the report says
-    <span class="k">high: true</span>, and the panel + rail chip turn <span class="amber">amber</span>.
-    One definition, every consumer agrees.</p>
-    <div class="ctrl">
-      <button id="calmBtn">calm traffic</button>
-      <button id="burstBtn" class="hot">simulate a burst</button>
-      <span class="muted">threshold: 512 KB/s</span>
+    <p style="margin-top:0">Pick your situation — this reproduces your observation:</p>
+    <div class="scen">
+      <button data-s="test" class="sel">I press <b>Test</b> next to a custom sound</button>
+      <button data-s="evOff">An event arrives — Device toggle <b>OFF</b> (the default)</button>
+      <button data-s="evOn">An event arrives — Device toggle <b>ON</b> (🔈)</button>
     </div>
-    <div id="miniPanel"></div>
-    <p class="muted" style="font-size:12.5px">The panel's own 5-second poll of <span class="k">/api/traffic</span> is counted too and shows in its
-    own table — deliberate honesty, not a bug.</p>
+    <div class="out" id="out"></div>
+    <p class="dim" style="font-size:.85rem;margin-bottom:0" id="note"></p>
   </div>
-</section>
 
+  <h2>3 · The two systems side by side</h2>
+  <div class="card">
+    <table>
+      <tr><th></th><th>📱 Device sound (browser)</th><th>🖥️ Host cue (harness)</th></tr>
+      <tr><td>Where it plays</td><td>In whichever browser has the page open — even if that browser is on the host PC, it's still this system, not the host cue</td><td>Through the host PC's speakers, from the C# server; no browser needed</td></tr>
+      <tr><td>Custom sounds?</td><td class="yes">Yes — the "Custom event sounds" grid, per event type</td><td class="no">No — fixed: Windows Asterisk/Exclamation/Beep, or spoken "agent … started / has finished"</td></tr>
+      <tr><td>Plays on real events when…</td><td>the 🔇/🔈 <b>Device</b> toggle is ON (Test ignores the toggle on purpose — that's why Test worked while events stayed silent)</td><td>the <b>Host cue</b> toggle is ON</td></tr>
+      <tr><td>What this deploy changed</td><td>nothing (already live from the working tree)</td><td>start/finish/other now get <i>different</i> built-in cues, + separate Test beep / Test voice</td></tr>
+      <tr><td>Per-event custom control</td><td class="yes">exists</td><td class="no">doesn't exist — the missing feature</td></tr>
+    </table>
+  </div>
+
+  <h2>4 · "Has the PR been merged?"</h2>
+  <div class="card">
+    <p style="margin-top:0">There was <b>no GitHub PR</b> — the branch was merged into <code>main</code> locally and
+    pushed straight to <code>origin/main</code> (this repo's agent workflow since the ruleset became bypassable).
+    So yes, everything is in main; there's just no PR page to look at:</p>
+    <div class="git"><span class="f">feat/event-feed-sounds</span> ──┐  (branch still exists, tip <span class="d">4a61eda</span>)
+                         ├─ merged locally, then two deploy fixes
+<span class="m">main = origin/main</span> ───────┴─→ <span class="d">a58e23c → </span><span class="m">2ca02bf</span>  ← deployed live</div>
+    <p class="dim" style="font-size:.85rem;margin-bottom:0">Being on <code>main</code> now is the normal
+    end-of-feature state, not an accident.</p>
+  </div>
+
+  <h2>5 · The gap — now closed</h2>
+  <div class="card" style="border-color:var(--ok)">
+    <p style="margin-top:0"><b>Built and verified</b> (OpenSpec change <code>add-host-event-sound-rules</code>,
+    branch <code>feat/host-event-sound-rules</code>): the Sounds tab's "Event → sound rules" panel is real.
+    Upload a wav or mp3 (max 2 MB) per event type — it's stored <b>on the host</b>, survives restarts, wins
+    over Beep/Voice for that type, and the host plays it on matching events with no browser open. Each row
+    has its own <b>▸ Test on host</b>; types without a file keep the built-in cue, and a broken file falls
+    back to it. Verified end-to-end on an isolated instance (API + headless-browser flow).</p>
+    <p style="margin-bottom:0" class="dim"><b>One skew to know about until it's deployed:</b> the events-app
+    page is served live from the working tree, so the new panel is <i>already visible</i> on live — but
+    live's compiled backend doesn't have the rules endpoints yet, so uploads/tests there fail until the
+    branch is merged and deployed. (Same UI-vs-binary skew that caused today's confusion.) Per-<i>source</i>
+    rules remain future headroom.</p>
+  </div>
+
+  <footer>Understanding app · rolling latest · 2026-07-23</footer>
 </main>
 <script>
-// ---------- tabs ----------
-const tabs = document.getElementById('tabs');
-tabs.addEventListener('click', (e) => {
-  const b = e.target.closest('button'); if (!b) return;
-  for (const x of tabs.querySelectorAll('button')) x.classList.toggle('on', x === b);
-  for (const s of document.querySelectorAll('main > section')) s.classList.toggle('on', s.id === b.dataset.v);
-});
-
-// ---------- view 1: pollers ----------
-const POLLERS = [
-  ['Dashboard snapshot', 5], ['AccountChips · gh', 5], ['AccountChips · claude', 5],
-  ['EventConsole', 5], ['Files viewer', 5], ['Understanding panel', 5], ['HostClock', 5],
-];
-let tabsOpen = 1;
-const pollSvg = document.getElementById('pollViz');
-function drawPollers(t) {
-  const rows = POLLERS.length;
-  let s = '';
-  for (let i = 0; i < rows; i++) {
-    const y = 18 + i * 24;
-    s += `<text x="0" y="${y + 4}" font-size="12" fill="#6b6b66">${POLLERS[i][0]}</text>`;
-    s += `<line x1="190" y1="${y}" x2="1000" y2="${y}" stroke="#e3e0d8"/>`;
-    for (let k = 0; k < tabsOpen; k++) {
-      const period = POLLERS[i][1] * 1000;
-      const phase = ((t + i * 700 + k * 1700) % period) / period;
-      const x = 190 + phase * 810;
-      s += `<circle cx="${x}" cy="${y}" r="5" fill="#2b8a8a" opacity="${1 - phase * 0.55}"/>`;
+(function(){
+  var out = document.getElementById("out"), note = document.getElementById("note");
+  var SCEN = {
+    test: {
+      note: "Test is deliberately wired to ignore the Device toggle so you can audition sounds — which is why it played while real events stayed silent. Nothing server-side is involved.",
+      spk: [
+        {cls:"custom", h:"📱 Your browser", plays:"🎵 your custom sound", why:"Test always plays, toggle or not. If you're sitting at the host PC, this is still just the browser."},
+        {cls:"silent", h:"🖥️ Host cue (server)", plays:"— not involved —", why:"The custom-sound Test button never touches the host cue system. (Test beep / Test voice in the Host section do.)"}
+      ]
+    },
+    evOff: {
+      note: "This is the state you were in: custom sounds configured, but the Device toggle off — so on real events the only sound was the host's built-in cue, same family of sounds as before.",
+      spk: [
+        {cls:"silent", h:"📱 Your browser", plays:"🔇 silence", why:"Custom sounds only play on events when the 🔇 Device toggle is switched to 🔈. Browsers also require that click once to unlock audio at all."},
+        {cls:"builtin", h:"🖥️ Host cue (server)", plays:"fixed built-in cue", why:"Windows Asterisk (start) / Exclamation (finish) / Beep, or the spoken phrase — never your uploaded audio."}
+      ]
+    },
+    evOn: {
+      note: "Turn the Device toggle ON and your custom sounds do fire on real events — but in the browser. The host still plays only its built-in cue. That host-side gap is the unbuilt feature.",
+      spk: [
+        {cls:"custom", h:"📱 Your browser", plays:"🎵 your custom sound per event type", why:"This is as far as custom sounds currently reach."},
+        {cls:"builtin", h:"🖥️ Host cue (server)", plays:"fixed built-in cue", why:"Unchanged — there is no way to point it at a custom file today."}
+      ]
     }
+  };
+  function render(key){
+    var s = SCEN[key];
+    out.innerHTML = s.spk.map(function(x){
+      return '<div class="spk '+x.cls+'"><h4>'+x.h+'</h4><div class="plays">'+x.plays+'</div><div class="why">'+x.why+'</div></div>';
+    }).join("");
+    note.textContent = s.note;
   }
-  pollSvg.innerHTML = s;
-  const rps = (POLLERS.length * tabsOpen) / 5;
-  document.getElementById('rpsOut').textContent = rps.toFixed(1) + ' req/s from polling alone';
-  document.getElementById('tabCount').textContent = tabsOpen + (tabsOpen === 1 ? ' tab open' : ' tabs open');
-}
-document.getElementById('addTab').onclick = () => { tabsOpen = Math.min(8, tabsOpen + 1); };
-document.getElementById('rmTab').onclick = () => { tabsOpen = Math.max(1, tabsOpen - 1); };
-
-// ---------- view 2: pipeline ----------
-const STAGES = ['TrafficMiddleware', 'IP filter', 'Static files', 'Auth gate', 'Controllers / proxy'];
-const pipeSvg = document.getElementById('pipeViz');
-function drawPipe(t) {
-  const w = 176, gap = 24, y = 70, h = 54;
-  let s = `<text x="4" y="30" font-size="13" fill="#6b6b66">request →</text>`;
-  STAGES.forEach((name, i) => {
-    const x = 4 + i * (w + gap);
-    const first = i === 0;
-    s += `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="9" fill="${first ? '#e5f2f2' : '#fff'}" stroke="${first ? '#2b8a8a' : '#e3e0d8'}" stroke-width="${first ? 2 : 1}"/>`;
-    s += `<text x="${x + w / 2}" y="${y + 24}" font-size="12.5" text-anchor="middle" fill="#2b2a26">${name}</text>`;
-    if (first) s += `<text x="${x + w / 2}" y="${y + 42}" font-size="11" text-anchor="middle" fill="#2b8a8a">counts EVERYTHING</text>`;
-    if (i < STAGES.length - 1) s += `<line x1="${x + w}" y1="${y + h / 2}" x2="${x + w + gap}" y2="${y + h / 2}" stroke="#c9c5ba" marker-end="url(#arr)"/>`;
+  document.querySelectorAll("[data-s]").forEach(function(b){
+    b.onclick = function(){
+      document.querySelectorAll("[data-s]").forEach(function(x){x.classList.toggle("sel", x===b);});
+      render(b.dataset.s);
+    };
   });
-  const span = STAGES.length * (w + gap) - gap;
-  const p = (t % 4000) / 4000;
-  const rx = 4 + p * span;
-  s += `<circle cx="${rx}" cy="${y - 14}" r="6" fill="#2b8a8a"/>`;
-  const ox = 4 + span - p * span;
-  s += `<circle cx="${ox}" cy="${y + h + 16}" r="6" fill="#d9770a"/>`;
-  s += `<text x="4" y="${y + h + 52}" font-size="13" fill="#6b6b66">← response, tallied by CountingStream as each chunk is written (SSE-safe: no buffering)</text>`;
-  s += `<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#c9c5ba"/></marker></defs>`;
-  pipeSvg.innerHTML = s;
-}
-
-// ---------- view 3: ring ----------
-const ringSvg = document.getElementById('ringViz');
-const SLOTS = 60;
-const slotVals = new Array(SLOTS).fill(0);
-let lastSec = 0;
-function sumBack(head, n) {
-  let tot = 0;
-  for (let k = 0; k <= n; k++) tot += slotVals[(head - k + SLOTS) % SLOTS] || 0;
-  return tot;
-}
-function drawRing(t) {
-  const sec = Math.floor(t / 400); // sped-up "seconds"
-  if (sec !== lastSec) {
-    lastSec = sec;
-    slotVals[sec % SLOTS] = 2 + Math.random() * 8 + (Math.random() < 0.08 ? 26 : 0);
-  }
-  const cx = 500, cy = 158, R = 118;
-  const head = sec % SLOTS;
-  let s = `<text x="500" y="26" font-size="13" text-anchor="middle" fill="#6b6b66">slot = second % ${SLOTS}  (real thing: % 900)</text>`;
-  for (let i = 0; i < SLOTS; i++) {
-    const a0 = (i / SLOTS) * 2 * Math.PI - Math.PI / 2;
-    const back = (head - i + SLOTS) % SLOTS;
-    let fill = '#f1efe9';
-    if (back === 0) fill = '#2b8a8a';
-    else if (back <= 10) fill = '#9fd0d0';
-    else if (back <= 59) fill = '#e7c9a3';
-    const v = slotVals[i] || 0;
-    const len = 10 + v * 2.2;
-    const x1 = cx + Math.cos(a0) * R, y1 = cy + Math.sin(a0) * R;
-    const x2 = cx + Math.cos(a0) * (R + len), y2 = cy + Math.sin(a0) * (R + len);
-    s += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${fill}" stroke-width="8" stroke-linecap="round"/>`;
-  }
-  const now10 = sumBack(head, 10), now60 = sumBack(head, 59);
-  s += `<text x="500" y="${cy - 8}" font-size="15" text-anchor="middle" fill="#2b2a26" font-weight="700">${(now10 / 10).toFixed(1)} KB/s now</text>`;
-  s += `<text x="500" y="${cy + 14}" font-size="12.5" text-anchor="middle" fill="#6b6b66">${(now60 / 60).toFixed(1)} KB/s avg-60 → high?</text>`;
-  ringSvg.innerHTML = s;
-}
-
-// ---------- view 4: mini panel ----------
-let burst = false;
-const hist = new Array(60).fill(0);
-const THRESH = 512;
-document.getElementById('burstBtn').onclick = () => { burst = true; };
-document.getElementById('calmBtn').onclick = () => { burst = false; };
-let lastPanelSec = 0;
-function drawPanel(t) {
-  const sec = Math.floor(t / 250);
-  if (sec !== lastPanelSec) {
-    lastPanelSec = sec;
-    hist.shift();
-    hist.push(burst ? 400 + Math.random() * 600 : 15 + Math.random() * 60);
-  }
-  const avg = hist.reduce((a, b) => a + b, 0) / hist.length;
-  const high = avg > THRESH;
-  const acc = high ? '#d9770a' : '#2b8a8a';
-  const peak = Math.max(...hist, THRESH * 1.1);
-  const W = 620, H = 64;
-  let bars = '';
-  hist.forEach((v, i) => {
-    const bh = Math.max(1, (v / peak) * H);
-    bars += `<rect x="${(i * W) / 60}" y="${H - bh}" width="${W / 60 - 1.4}" height="${bh}" fill="${acc}" opacity=".75"/>`;
-  });
-  const ty = H - (THRESH / peak) * H;
-  document.getElementById('miniPanel').innerHTML = `
-  <div style="border:1px solid var(--border);border-top:3px solid ${acc};border-radius:10px;overflow:hidden">
-    <div style="display:flex;align-items:center;gap:12px;padding:9px 14px;background:${high ? '#fbf1e3' : '#eef5f5'}">
-      <b>📡 Traffic</b>
-      <span class="muted" style="font-size:13px">${(hist[59] / 5).toFixed(1)} req/s · ${hist[59].toFixed(0)} KB/s out
-      ${high ? '· <b class="amber">HIGH</b>' : ''}</span>
-    </div>
-    <div style="padding:10px 14px">
-      <svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-        ${bars}
-        <line x1="0" y1="${ty}" x2="${W}" y2="${ty}" stroke="#d9770a" stroke-dasharray="4 3"/>
-      </svg>
-      <div class="muted" style="font-size:12px;margin-top:6px">avg-60s ${avg.toFixed(0)} KB/s ${high ? '≥' : '<'} threshold ${THRESH} KB/s → <b style="color:${acc}">high: ${high}</b></div>
-    </div>
-  </div>`;
-}
-
-// ---------- animation loop ----------
-function frame(t) {
-  drawPollers(t); drawPipe(t); drawRing(t); drawPanel(t);
-  requestAnimationFrame(frame);
-}
-requestAnimationFrame(frame);
+  render("test");
+})();
 </script>
 </body>
 </html>
