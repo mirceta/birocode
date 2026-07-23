@@ -667,7 +667,8 @@ const RUNNING_MAX_AGE = 4 * 3600 * 1000; // mirror the board's RunningMaxAge gua
 const TRAIL_CAP = 50;
 const dockWrap = document.getElementById("dock");
 const dockData = new Map();   // sourceId -> { label, repos: Map<repo, rec> }
-let dockOpen = null;          // "sourceId repo" of the open trail, or null
+const KEY_SEP = String.fromCharCode(0); // NUL: collision-free composite-key separator
+let dockOpen = null;          // sourceId + KEY_SEP + repo of the open trail, or null
 let dockDirty = false;
 
 function dockIngest(ev){
@@ -735,7 +736,7 @@ function renderDock(){
     html += `<div class="sqs">`;
     for (const [repo, rec] of repos){
       const running = dockRunning(rec, now);
-      const key = m.id + " " + repo;
+      const key = m.id + KEY_SEP + repo;
       const stats = [];
       if (running) stats.push(`<span class="run"><span class="ci-dot pass"></span>${running} running</span>`);
       if (rec.runs) stats.push(`${rec.runs} run${rec.runs === 1 ? "" : "s"}`);
@@ -783,7 +784,7 @@ if (dockWrap && !DISPLAY){
     if (e.target.closest("[data-dockact='close']")){ dockOpen = null; renderDock(); return; }
     const sq = e.target.closest(".sq");
     if (!sq) return;
-    const key = sq.dataset.src + " " + sq.dataset.repo;
+    const key = sq.dataset.src + KEY_SEP + sq.dataset.repo;
     dockOpen = dockOpen === key ? null : key;
     renderDock();
   });
