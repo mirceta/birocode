@@ -330,6 +330,7 @@
   "dashboard.panelIdeas": "Ideas panel",
   "dashboard.panelAutopilot": "Autopilot panel",
   "dashboard.panelAudit": "Agent audit panel",
+  "dashboard.panelTraffic": "Traffic panel",
   "agents.status.idle": "Idle",
   "agents.status.running": "Running...",
   "agents.status.done": "Done",

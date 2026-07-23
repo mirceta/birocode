@@ -1,0 +1,157 @@
+/* Harness HTTP throughput monitor panel (openspec traffic-monitor). Same
+   collapsible dock chrome as the audit panel (agent-audit-panel.css) with its
+   own accent; strictly read-only. The --high modifier re-tints the whole
+   chrome amber — the "throughput is getting high" signal. */
+.tp-panel {
+  --tp-accent: #2b8a8a;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-top: 3px solid var(--tp-accent);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  max-height: min(440px, 70vh);
+}
+.tp-panel--high {
+  --tp-accent: #d9770a;
+}
+
+.tp-panel__bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--tp-accent) 8%, var(--color-surface));
+}
+
+.tp-panel__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  font: inherit;
+  color: var(--color-text);
+}
+
+.tp-panel__chev {
+  display: inline-block;
+  transition: transform 0.15s ease;
+  color: var(--color-text-soft, #888);
+  font-size: 13px;
+}
+.tp-panel__chev.is-collapsed {
+  transform: rotate(-90deg);
+}
+
+.tp-panel__title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.tp-panel__summary {
+  font-size: 13px;
+  color: var(--color-text-soft, #6b6b66);
+  white-space: nowrap;
+}
+.tp-panel__high-badge {
+  color: #d9770a;
+}
+
+.tp-panel__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 14px 14px;
+  border-top: 1px solid var(--color-border);
+}
+
+.tp-panel__sparkrow {
+  display: flex;
+  align-items: stretch;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+.tp-spark {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 56px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--tp-accent) 4%, var(--color-surface));
+}
+.tp-spark--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--color-text-soft, #6b6b66);
+}
+.tp-spark__bar {
+  fill: var(--tp-accent);
+  opacity: 0.75;
+}
+.tp-spark__threshold {
+  stroke: #d9770a;
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  /* vector-effect keeps the dash visible under preserveAspectRatio=none */
+  vector-effect: non-scaling-stroke;
+}
+
+.tp-panel__legend {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.tp-panel__legend-label {
+  display: inline-block;
+  min-width: 72px;
+  color: var(--color-text-soft, #6b6b66);
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tp-panel__empty {
+  font-size: 13px;
+  color: var(--color-text-soft, #6b6b66);
+  padding: 10px 2px;
+}
+
+.tp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.tp-table th {
+  text-align: left;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-soft, #6b6b66);
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+.tp-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 45%, transparent);
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+.tp-table__key {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+}
