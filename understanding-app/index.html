@@ -1,153 +1,293 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Shipped: sound settings are now a first-class Sounds tab</title>
-<link rel="stylesheet" href="./styles.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Understanding — the Traffic Monitor</title>
+<style>
+  :root {
+    --bg: #faf9f6; --surface: #fff; --border: #e3e0d8; --text: #2b2a26;
+    --soft: #6b6b66; --accent: #2b8a8a; --amber: #d9770a; --radius: 10px;
+    font-size: 15px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); }
+  header { padding: 18px 22px 6px; }
+  h1 { font-size: 21px; margin: 0 0 4px; }
+  .sub { color: var(--soft); font-size: 13.5px; margin: 0; }
+  nav { display: flex; gap: 6px; padding: 12px 22px; flex-wrap: wrap; }
+  nav button {
+    font: inherit; font-size: 13.5px; padding: 7px 14px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--surface); cursor: pointer; color: var(--soft);
+  }
+  nav button.on { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+  main { padding: 6px 22px 40px; max-width: 1050px; }
+  section { display: none; }
+  section.on { display: block; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px 18px; margin: 12px 0;
+  }
+  .card h2 { font-size: 16px; margin: 0 0 8px; }
+  .card p { line-height: 1.55; margin: 8px 0; }
+  .k { font-family: ui-monospace, monospace; font-size: 12.5px; background: #f1efe9; padding: 1px 6px; border-radius: 5px; }
+  .muted { color: var(--soft); }
+  .amber { color: var(--amber); font-weight: 700; }
+  .teal { color: var(--accent); font-weight: 700; }
+  svg text { font-family: system-ui, sans-serif; }
+  .legendrow { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; color: var(--soft); margin-top: 6px; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+  .ctrl { display: flex; align-items: center; gap: 10px; margin: 10px 0; flex-wrap: wrap; }
+  .ctrl button { font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 7px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; }
+  .ctrl button.hot { border-color: var(--amber); color: var(--amber); font-weight: 700; }
+</style>
 </head>
 <body>
-<div class="wrap">
+<header>
+  <h1>📡 The Traffic Monitor</h1>
+  <p class="sub">How the harness now measures its own HTTP throughput — and tells you when it's getting high. (OpenSpec change: <span class="k">traffic-monitor</span>, branch <span class="k">feat/traffic-monitor</span>)</p>
+</header>
+<nav id="tabs">
+  <button data-v="why" class="on">1 · Why</button>
+  <button data-v="pipe">2 · Where it counts</button>
+  <button data-v="ring">3 · The ring of seconds</button>
+  <button data-v="panel">4 · What you see</button>
+</nav>
+<main>
 
-  <header class="hero">
-    <div class="badge">Understanding app · rolling latest</div>
-    <h1>Five loose sound buttons are now one <em>Sounds tab</em></h1>
-    <p class="sub">OpenSpec change <code>promote-sound-settings-to-tab</code> is
-    <strong>implemented and verified</strong>. The event feed's five sound controls used to sit
-    crammed in the page header — a <em>Device</em> toggle, a <em>🎵 Sounds</em> button that opened a
-    floating modal, and three host-cue buttons — with no grouping, so nobody could tell what they were
-    or how they related. This change promotes them into a fourth first-class tab (<code>Sounds</code>),
-    laid out as a settings dashboard. The trick: <strong>move the markup, keep every element ID</strong>,
-    so all the playback / IndexedDB / host-cue logic keeps working with zero rewiring.</p>
-    <div class="chips">
-      <span class="chip ok">4th tab, reuses the tab system</span>
-      <span class="chip ok">modal retired &amp; inlined</span>
-      <span class="chip ok">no behaviour change</span>
-      <span class="chip ok">17/17 headless checks</span>
-      <span class="chip soon">event→sound rules (next)</span>
-    </div>
-  </header>
-
-  <h2>Before → after · press the button</h2>
-  <div class="demo">
-    <div class="demo-bar">
-      <span class="cap">The event feed's header &amp; tabbar</span>
-      <span class="sp"></span>
-      <button class="tgl" id="promote" aria-pressed="false">▶ Promote to a Sounds tab</button>
-    </div>
-
-    <div class="stage" id="stage">
-      <div class="fauxhead">
-        <span class="h1">Harness Event Collector</span>
-        <span class="btn disp">🖥 Display mode</span>
-        <span class="btn snd">🔇 Device</span>
-        <span class="btn snd">🎵 Sounds</span>
-        <span class="btn snd">🖥️ Host off</span>
-        <span class="btn snd">🔊 Beep</span>
-        <span class="btn snd">🔔 Test host</span>
-      </div>
-
-      <div class="tab-strip">
-        <span class="t">Activity</span>
-        <span class="t">Agents</span>
-        <span class="t">GitHub</span>
-        <span class="t new on">Sounds</span>
-      </div>
-
-      <div class="sections">
-        <div class="sec">
-          <h3>🔊 Device sound</h3>
-          <p>Play a cue in <b>this browser</b> on each event — private to this device. The toggle is
-          also the audio-unlock gesture.</p>
-          <div class="btnrow"><span class="btn snd">🔇 Device</span></div>
-        </div>
-        <div class="sec">
-          <h3>🎵 Custom event sounds</h3>
-          <p>The old modal's per-type grid, now always visible: assign your own file per event type
-          (IndexedDB, device-local). No more open/close.</p>
-        </div>
-        <div class="sec">
-          <h3>🖥️ Host cue</h3>
-          <p>Beep on the <b>host computer running the harness</b> — shared, audible with no browser open.
-          Beep/voice + a live test.</p>
-          <div class="btnrow"><span class="btn snd">🖥️ Host off</span><span class="btn snd">🔊 Beep</span><span class="btn snd">🔔 Test host</span></div>
-        </div>
-        <div class="sec future">
-          <h3>🔗 Event → sound rules <span class="hint" style="margin:0">— coming soon</span></h3>
-          <p>Reserved headroom for mapping <i>which</i> event triggers <i>which</i> sound. Deliberately
-          not built here — it's the operator's explicit next order of business.</p>
-        </div>
-      </div>
-      <p class="hint">Notice what didn't move: the <code>🖥 Display mode</code> link stays in the header.
-      Only the sound controls migrate — the two "unknown" buttons turn out to be the two <b>poles</b> of
-      where a sound plays: this device vs. the host PC.</p>
-    </div>
-  </div>
-
-  <h2>Why "move markup, keep IDs" is the whole point</h2>
-  <div class="grid">
-    <div class="card">
-      <h3>The controls bind by <span class="k">id</span></h3>
-      <p>Every handler already looked its element up by ID —
-      <span class="k">#snd</span>, <span class="k">#hsnd</span>, <span class="k">#hmode</span>,
-      <span class="k">#htest</span>, and the per-type grid rows. Relocating the DOM node doesn't touch
-      the handler, so <span class="k">renderSnd()</span>, <span class="k">playCue()</span>, the host
-      fetches and the IndexedDB assign/clear all keep working untouched.</p>
-    </div>
-    <div class="card">
-      <h3>The modal was pure chrome</h3>
-      <p>The <span class="k">🎵 Sounds</span> button and floating overlay existed only to
-      <em>open and close</em> the custom-audio editor. In a dedicated tab that editor is always on
-      screen, so the opener, the <span class="k">#sndClose</span> ✕, the backdrop and the three
-      open/close handlers are gone — the grid renders inline.</p>
-    </div>
-    <div class="card">
-      <h3>The tab system was already there</h3>
-      <p>A generic CSS rule shows the panel whose <span class="k">data-tab</span> matches
-      <span class="k">body[data-tab]</span>, and the resolver routes any tab name. Adding
-      <code>sounds</code> meant one tab button, one panel, one CSS selector, and one array entry —
-      no new show/hide mechanism.</p>
-    </div>
-    <div class="card">
-      <h3>Device vs. Host — the real fix</h3>
-      <p>The confusing pair wasn't redundant, it was <em>two scopes</em>: <b>Device</b> = beep on the
-      phone/browser you're holding (localStorage, private); <b>Host</b> = beep on the machine running
-      the harness (shared server state, fires with no browser open). Grouping + one-line explainers
-      make that legible.</p>
-    </div>
-  </div>
-
-  <h2>How a Sounds selection travels</h2>
+<section id="why" class="on">
   <div class="card">
-    <ol class="flow">
-      <li><b>Pick the tab</b> — click <code>Sounds</code>, or deep-link <code>?tab=sounds</code>.
-      The URL query wins, else <code>localStorage</code>, else Activity.</li>
-      <li><b>It's remembered</b> — the choice is written to <code>localStorage["eventsapp.tab"]</code>,
-      so a reload with no query re-opens Sounds.</li>
-      <li><b>CSS reveals the panel</b> — <code>body[data-tab="sounds"]</code> flips
-      <code>#panel-sounds</code> visible; the other three panels hide.</li>
-      <li><b>Display mode is different</b> — <code>?display=1</code> is tabless and force-shows every
-      panel stacked, Sounds included, mirroring how Agents &amp; GitHub already appear.</li>
-    </ol>
-    <div class="note">Verified headlessly (Playwright): the tab appears with no loose buttons left in
-    the header, <code>?tab=sounds</code> selects it and survives a reload, the Device toggle flips and
-    persists, a custom file assigns → persists across reload → Clear reverts, the host Test button is
-    live, and display mode renders the section — <b>17/17</b>, zero uncaught page errors.</div>
+    <h2>Every open tab is a metronome</h2>
+    <p>The web UI keeps itself live by <b>polling</b>: the Dashboard snapshot, account chips,
+    event console, files viewer, understanding panel, host clock … most tick every
+    <b>5 seconds</b>. One phone tab is cheap. But the volume multiplies with every open
+    tab, every summoned panel, every device — and until now <b>nothing measured it</b>.
+    The server only had a manual request counter; nobody counted bytes.</p>
+    <p>Below: each row is a poller; a pulse is one request. Open tabs and watch requests/second climb.</p>
+    <div class="ctrl">
+      <button id="addTab">+ open a tab</button>
+      <button id="rmTab">− close a tab</button>
+      <span class="muted" id="tabCount">1 tab open</span>
+      <span style="flex:1"></span>
+      <b id="rpsOut" class="teal"></b>
+    </div>
+    <svg id="pollViz" width="100%" height="190" viewBox="0 0 1000 190"></svg>
+    <p class="muted" style="font-size:12.5px">Pollers shown: Dashboard snapshot · AccountChips ×2 · EventConsole · Files viewer · Understanding · HostClock — a subset; the real UI has more.</p>
   </div>
+</section>
 
-  <h2>Deliberately left for next time</h2>
+<section id="pipe">
   <div class="card">
-    <h3>Event → sound <em>rules</em></h3>
-    <p>This change only carries the existing behaviour into a better home and leaves a marked-empty
-    section for it. The mapping UI — “when <i>this</i> event happens, play <i>that</i> sound,” per
-    source and per type — is tracked as out-of-scope (tasks §6.1) and is the operator's stated next
-    order of business.</p>
+    <h2>One middleware, wrapped around everything</h2>
+    <p>The counter is a Kestrel middleware registered <b>outermost</b> — before even the IP filter.
+    So the numbers are <b>true wire volume</b>: static assets, the localview proxy legs, even rejected
+    requests. Nothing opts in; nothing can forget to count.</p>
+    <p>Streamed responses (the chat's SSE stream — precisely the heavy ones) have <b>no Content-Length</b>,
+    so the middleware swaps <span class="k">Response.Body</span> for a pass-through
+    <span class="k">CountingStream</span> that tallies every write as it flows. No buffering — streaming
+    behavior is untouched (verified with a real CLI turn through the isolated instance).</p>
+    <svg id="pipeViz" width="100%" height="240" viewBox="0 0 1000 240"></svg>
+    <div class="legendrow">
+      <span><span class="dot" style="background:#2b8a8a"></span>request travelling in</span>
+      <span><span class="dot" style="background:#d9770a"></span>response bytes counted on the way out</span>
+    </div>
+    <p>Attribution collapses IDs so the table stays readable: <span class="k">/api/repos/A/events</span> and
+    <span class="k">/api/repos/B/events</span> are one bucket — <span class="k">GET api/repos/{repoId}/events</span>.
+    Non-endpoint traffic falls back to a normalized prefix (<span class="k">assets/*</span>,
+    <span class="k">api/localview/*</span>), capped at 100 buckets with an <span class="k">other</span> overflow.</p>
   </div>
+</section>
 
-  <p class="foot">understanding-app · rolling latest · overwritten each time the explanation changes ·
-  build-less, self-contained, relative URLs only</p>
+<section id="ring">
+  <div class="card">
+    <h2>900 one-second slots, indexed by clock modulo</h2>
+    <p>Per bucket, counts land in a ring of <b>900 slots</b> (15 minutes), slot = <span class="k">unixSecond % 900</span>.
+    A slot is lazily reset when its stored second no longer matches — so idle buckets cost nothing
+    and rates <b>decay to zero on their own</b>. No database, no persistence: restart the harness,
+    counters reset. This is monitoring, not billing.</p>
+    <p>Watch the write head sweep the ring (sped up; showing 60 of the 900 slots). Reads answer
+    "rate now" by summing the trailing window — <b>10s</b> for the live number, <b>60s</b> for the average
+    the <b>high</b> decision uses.</p>
+    <svg id="ringViz" width="100%" height="300" viewBox="0 0 1000 300"></svg>
+    <div class="legendrow">
+      <span><span class="dot" style="background:#2b8a8a"></span>write head (current second)</span>
+      <span><span class="dot" style="background:#9fd0d0"></span>trailing 10s — "now"</span>
+      <span><span class="dot" style="background:#e7c9a3"></span>trailing 60s — feeds the high signal</span>
+    </div>
+  </div>
+</section>
 
-</div>
-<script src="./app.js"></script>
+<section id="panel">
+  <div class="card">
+    <h2>The Traffic panel — and the amber line</h2>
+    <p>Summon <b>📡 Traffic</b> from the Dashboard's panel rail (Advanced mode). The header shows
+    <b>req/s · KB/s</b> even collapsed; the body has a 60-second sparkline, the threshold line, and the
+    top talkers. <span class="k">GET /api/traffic</span> serves it all in one small JSON.</p>
+    <p>"High" is decided <b>server-side</b>: when the 60s average of response bytes/s exceeds
+    <span class="k">TrafficHighBytesPerSec</span> (appsettings, default 512 KB/s) the report says
+    <span class="k">high: true</span>, and the panel + rail chip turn <span class="amber">amber</span>.
+    One definition, every consumer agrees.</p>
+    <div class="ctrl">
+      <button id="calmBtn">calm traffic</button>
+      <button id="burstBtn" class="hot">simulate a burst</button>
+      <span class="muted">threshold: 512 KB/s</span>
+    </div>
+    <div id="miniPanel"></div>
+    <p class="muted" style="font-size:12.5px">The panel's own 5-second poll of <span class="k">/api/traffic</span> is counted too and shows in its
+    own table — deliberate honesty, not a bug.</p>
+  </div>
+</section>
+
+</main>
+<script>
+// ---------- tabs ----------
+const tabs = document.getElementById('tabs');
+tabs.addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  for (const x of tabs.querySelectorAll('button')) x.classList.toggle('on', x === b);
+  for (const s of document.querySelectorAll('main > section')) s.classList.toggle('on', s.id === b.dataset.v);
+});
+
+// ---------- view 1: pollers ----------
+const POLLERS = [
+  ['Dashboard snapshot', 5], ['AccountChips · gh', 5], ['AccountChips · claude', 5],
+  ['EventConsole', 5], ['Files viewer', 5], ['Understanding panel', 5], ['HostClock', 5],
+];
+let tabsOpen = 1;
+const pollSvg = document.getElementById('pollViz');
+function drawPollers(t) {
+  const rows = POLLERS.length;
+  let s = '';
+  for (let i = 0; i < rows; i++) {
+    const y = 18 + i * 24;
+    s += `<text x="0" y="${y + 4}" font-size="12" fill="#6b6b66">${POLLERS[i][0]}</text>`;
+    s += `<line x1="190" y1="${y}" x2="1000" y2="${y}" stroke="#e3e0d8"/>`;
+    for (let k = 0; k < tabsOpen; k++) {
+      const period = POLLERS[i][1] * 1000;
+      const phase = ((t + i * 700 + k * 1700) % period) / period;
+      const x = 190 + phase * 810;
+      s += `<circle cx="${x}" cy="${y}" r="5" fill="#2b8a8a" opacity="${1 - phase * 0.55}"/>`;
+    }
+  }
+  pollSvg.innerHTML = s;
+  const rps = (POLLERS.length * tabsOpen) / 5;
+  document.getElementById('rpsOut').textContent = rps.toFixed(1) + ' req/s from polling alone';
+  document.getElementById('tabCount').textContent = tabsOpen + (tabsOpen === 1 ? ' tab open' : ' tabs open');
+}
+document.getElementById('addTab').onclick = () => { tabsOpen = Math.min(8, tabsOpen + 1); };
+document.getElementById('rmTab').onclick = () => { tabsOpen = Math.max(1, tabsOpen - 1); };
+
+// ---------- view 2: pipeline ----------
+const STAGES = ['TrafficMiddleware', 'IP filter', 'Static files', 'Auth gate', 'Controllers / proxy'];
+const pipeSvg = document.getElementById('pipeViz');
+function drawPipe(t) {
+  const w = 176, gap = 24, y = 70, h = 54;
+  let s = `<text x="4" y="30" font-size="13" fill="#6b6b66">request →</text>`;
+  STAGES.forEach((name, i) => {
+    const x = 4 + i * (w + gap);
+    const first = i === 0;
+    s += `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="9" fill="${first ? '#e5f2f2' : '#fff'}" stroke="${first ? '#2b8a8a' : '#e3e0d8'}" stroke-width="${first ? 2 : 1}"/>`;
+    s += `<text x="${x + w / 2}" y="${y + 24}" font-size="12.5" text-anchor="middle" fill="#2b2a26">${name}</text>`;
+    if (first) s += `<text x="${x + w / 2}" y="${y + 42}" font-size="11" text-anchor="middle" fill="#2b8a8a">counts EVERYTHING</text>`;
+    if (i < STAGES.length - 1) s += `<line x1="${x + w}" y1="${y + h / 2}" x2="${x + w + gap}" y2="${y + h / 2}" stroke="#c9c5ba" marker-end="url(#arr)"/>`;
+  });
+  const span = STAGES.length * (w + gap) - gap;
+  const p = (t % 4000) / 4000;
+  const rx = 4 + p * span;
+  s += `<circle cx="${rx}" cy="${y - 14}" r="6" fill="#2b8a8a"/>`;
+  const ox = 4 + span - p * span;
+  s += `<circle cx="${ox}" cy="${y + h + 16}" r="6" fill="#d9770a"/>`;
+  s += `<text x="4" y="${y + h + 52}" font-size="13" fill="#6b6b66">← response, tallied by CountingStream as each chunk is written (SSE-safe: no buffering)</text>`;
+  s += `<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#c9c5ba"/></marker></defs>`;
+  pipeSvg.innerHTML = s;
+}
+
+// ---------- view 3: ring ----------
+const ringSvg = document.getElementById('ringViz');
+const SLOTS = 60;
+const slotVals = new Array(SLOTS).fill(0);
+let lastSec = 0;
+function sumBack(head, n) {
+  let tot = 0;
+  for (let k = 0; k <= n; k++) tot += slotVals[(head - k + SLOTS) % SLOTS] || 0;
+  return tot;
+}
+function drawRing(t) {
+  const sec = Math.floor(t / 400); // sped-up "seconds"
+  if (sec !== lastSec) {
+    lastSec = sec;
+    slotVals[sec % SLOTS] = 2 + Math.random() * 8 + (Math.random() < 0.08 ? 26 : 0);
+  }
+  const cx = 500, cy = 158, R = 118;
+  const head = sec % SLOTS;
+  let s = `<text x="500" y="26" font-size="13" text-anchor="middle" fill="#6b6b66">slot = second % ${SLOTS}  (real thing: % 900)</text>`;
+  for (let i = 0; i < SLOTS; i++) {
+    const a0 = (i / SLOTS) * 2 * Math.PI - Math.PI / 2;
+    const back = (head - i + SLOTS) % SLOTS;
+    let fill = '#f1efe9';
+    if (back === 0) fill = '#2b8a8a';
+    else if (back <= 10) fill = '#9fd0d0';
+    else if (back <= 59) fill = '#e7c9a3';
+    const v = slotVals[i] || 0;
+    const len = 10 + v * 2.2;
+    const x1 = cx + Math.cos(a0) * R, y1 = cy + Math.sin(a0) * R;
+    const x2 = cx + Math.cos(a0) * (R + len), y2 = cy + Math.sin(a0) * (R + len);
+    s += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${fill}" stroke-width="8" stroke-linecap="round"/>`;
+  }
+  const now10 = sumBack(head, 10), now60 = sumBack(head, 59);
+  s += `<text x="500" y="${cy - 8}" font-size="15" text-anchor="middle" fill="#2b2a26" font-weight="700">${(now10 / 10).toFixed(1)} KB/s now</text>`;
+  s += `<text x="500" y="${cy + 14}" font-size="12.5" text-anchor="middle" fill="#6b6b66">${(now60 / 60).toFixed(1)} KB/s avg-60 → high?</text>`;
+  ringSvg.innerHTML = s;
+}
+
+// ---------- view 4: mini panel ----------
+let burst = false;
+const hist = new Array(60).fill(0);
+const THRESH = 512;
+document.getElementById('burstBtn').onclick = () => { burst = true; };
+document.getElementById('calmBtn').onclick = () => { burst = false; };
+let lastPanelSec = 0;
+function drawPanel(t) {
+  const sec = Math.floor(t / 250);
+  if (sec !== lastPanelSec) {
+    lastPanelSec = sec;
+    hist.shift();
+    hist.push(burst ? 400 + Math.random() * 600 : 15 + Math.random() * 60);
+  }
+  const avg = hist.reduce((a, b) => a + b, 0) / hist.length;
+  const high = avg > THRESH;
+  const acc = high ? '#d9770a' : '#2b8a8a';
+  const peak = Math.max(...hist, THRESH * 1.1);
+  const W = 620, H = 64;
+  let bars = '';
+  hist.forEach((v, i) => {
+    const bh = Math.max(1, (v / peak) * H);
+    bars += `<rect x="${(i * W) / 60}" y="${H - bh}" width="${W / 60 - 1.4}" height="${bh}" fill="${acc}" opacity=".75"/>`;
+  });
+  const ty = H - (THRESH / peak) * H;
+  document.getElementById('miniPanel').innerHTML = `
+  <div style="border:1px solid var(--border);border-top:3px solid ${acc};border-radius:10px;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:12px;padding:9px 14px;background:${high ? '#fbf1e3' : '#eef5f5'}">
+      <b>📡 Traffic</b>
+      <span class="muted" style="font-size:13px">${(hist[59] / 5).toFixed(1)} req/s · ${hist[59].toFixed(0)} KB/s out
+      ${high ? '· <b class="amber">HIGH</b>' : ''}</span>
+    </div>
+    <div style="padding:10px 14px">
+      <svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+        ${bars}
+        <line x1="0" y1="${ty}" x2="${W}" y2="${ty}" stroke="#d9770a" stroke-dasharray="4 3"/>
+      </svg>
+      <div class="muted" style="font-size:12px;margin-top:6px">avg-60s ${avg.toFixed(0)} KB/s ${high ? '≥' : '<'} threshold ${THRESH} KB/s → <b style="color:${acc}">high: ${high}</b></div>
+    </div>
+  </div>`;
+}
+
+// ---------- animation loop ----------
+function frame(t) {
+  drawPollers(t); drawPipe(t); drawRing(t); drawPanel(t);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
 </body>
 </html>

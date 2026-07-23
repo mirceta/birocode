@@ -15,6 +15,7 @@ import WaitingOnField from '../components/dashboard/WaitingOnField';
 import IdeasPanel from '../components/ideas/IdeasPanel';
 import AutopilotPanel from '../components/dashboard/AutopilotPanel';
 import AgentAuditPanel from '../components/dashboard/AgentAuditPanel';
+import TrafficPanel from '../components/dashboard/TrafficPanel';
 import DockToolbar from '../components/dashboard/DockToolbar';
 import './dashboard.css';
 
@@ -100,6 +101,24 @@ function readOnlyImportant() {
   } catch {
     return false;
   }
+}
+
+// Summonable auxiliary panels (openspec dashboard-focus-docks): Ideas,
+// Autopilot, and Agent-audit render only when summoned from the header's panel
+// rail — hidden means unmounted (no fetches, not a layout citizen). Default is
+// all-hidden (a docks-only dashboard); the choice is remembered per device.
+const PANELS_KEY = 'claudeweb_dash_panels';
+function readPanels() {
+  try {
+    const raw = localStorage.getItem(PANELS_KEY);
+    const v = raw ? JSON.parse(raw) : null;
+    if (v && typeof v === 'object') {
+      return { ideas: !!v.ideas, autopilot: !!v.autopilot, audit: !!v.audit, traffic: !!v.traffic };
+    }
+  } catch {
+    /* private mode / malformed */
+  }
+  return { ideas: false, autopilot: false, audit: false, traffic: false };
 }
 
 // Expandable Ideas dock (plans/ideas-arch-plan.md): the pinned-left dock can be
@@ -489,15 +508,44 @@ export default function Dashboard({ onClose }) {
   // Agent audit trail joins the same way (openspec add-agent-audit-trail): a
   // read-only citizen right below Autopilot, above the agents row.
   const agentAuditOn = useFeature('agenticAudit');
+  // Throughput monitor joins the same way (openspec traffic-monitor): a
+  // read-only citizen showing what the harness is serving right now.
+  const trafficOn = useFeature('trafficPanel');
+  // Server-decided "high throughput" flag, lifted from the panel's poll so the
+  // rail chip can carry a warning dot. Only live while the panel is summoned —
+  // a hidden panel is unmounted and never fetches (dashboard-focus-docks), so
+  // no data, no dot.
+  const [trafficHigh, setTrafficHigh] = useState(false);
+  // Which aux panels are summoned (openspec dashboard-focus-docks). Effective
+  // visibility is chip state AND feature gate; a hidden panel is not mounted.
+  const [panels, setPanels] = useState(readPanels);
+  function togglePanel(key) {
+    setPanels((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      try {
+        localStorage.setItem(PANELS_KEY, JSON.stringify(next));
+      } catch {
+        /* private mode — fall back to in-memory only */
+      }
+      return next;
+    });
+  }
+  const showAutopilot = autopilotOn && panels.autopilot;
+  const showAudit = agentAuditOn && panels.audit;
+  const showTraffic = trafficOn && panels.traffic;
+  const showIdeas = panels.ideas;
   // The panels the free 2D drag layout manages, in DOM order. Autopilot leads so
-  // it sits on top in grid-mode flow. (The task graph used to be a citizen here;
-  // it now lives as a tab inside Ideas — plans/ideas-taskgraph-merge.md. Files is
-  // NOT a citizen here: it lives as a tab INSIDE each agent dock — see
-  // PinnedAgent and plans/agent-dock-files-tab.md.)
+  // it sits on top in grid-mode flow. Only summoned panels are citizens; their
+  // saved layout state survives a hide and reapplies on the next summon. (The
+  // task graph used to be a citizen here; it now lives as a tab inside Ideas —
+  // plans/ideas-taskgraph-merge.md. Files is NOT a citizen here: it lives as a
+  // tab INSIDE each agent dock — see PinnedAgent and
+  // plans/agent-dock-files-tab.md.)
   const dragKeys = [
-    ...(autopilotOn ? ['autopilot'] : []),
-    ...(agentAuditOn ? ['agentAudit'] : []),
-    'ideas',
+    ...(showAutopilot ? ['autopilot'] : []),
+    ...(showAudit ? ['agentAudit'] : []),
+    ...(showTraffic ? ['traffic'] : []),
+    ...(showIdeas ? ['ideas'] : []),
     'agents',
   ];
 
@@ -610,7 +658,8 @@ export default function Dashboard({ onClose }) {
   // So in grid mode we lift the grown dock OUT of the flex flow and float it as an
   // absolute overlay (z-index:15) over the agent grid: the agents reclaim the row
   // and the dock paints on top of them. Swapped/free layouts keep their own logic.
-  const ideasFloating = !free && !gridSwapped && !ideasCollapsed && (!!ideasSize || ideasWide);
+  const ideasFloating =
+    showIdeas && !free && !gridSwapped && !ideasCollapsed && (!!ideasSize || ideasWide);
   // The float is anchored to where the agents row starts (just below the
   // full-width Autopilot strip, if present), measured from the live DOM so it
   // tracks Autopilot's height without hardcoding it.
@@ -619,7 +668,7 @@ export default function Dashboard({ onClose }) {
     if (!ideasFloating) return;
     const agentsEl = bodyRef.current?.querySelector('[data-panel="agents"]');
     if (agentsEl) setFloatTop(agentsEl.offsetTop);
-  }, [ideasFloating, autopilotOn, agentAuditOn, ideasSize, ideasWide, gridSwapped, tabs.length]);
+  }, [ideasFloating, showAutopilot, showAudit, ideasSize, ideasWide, gridSwapped, tabs.length]);
 
   // { [tabId]: { status, activity } } — fresher than the dock list, view-local.
   const [live, setLive] = useState({});
@@ -958,6 +1007,61 @@ export default function Dashboard({ onClose }) {
             stay reachable. Gated on the roster, not the visible `tabs`, so it
             still shows (all-inactive) when every dock is hidden. */}
         <DockToolbar tabs={rosterTabs} onToggle={toggleDashboard} />
+        {/* Panel rail (openspec dashboard-focus-docks): summon/dismiss the aux
+            panels. One chip per panel, pressed while its panel is visible;
+            feature-gated chips render only when their feature is on. */}
+        <div className="dash__panel-rail" role="group" aria-label={t('dashboard.panels')}>
+          <button
+            type="button"
+            className={`dash__panel-chip${panels.ideas ? ' dash__panel-chip--on' : ''}`}
+            onClick={() => togglePanel('ideas')}
+            aria-pressed={panels.ideas}
+            title={t('dashboard.panelIdeas')}
+            aria-label={t('dashboard.panelIdeas')}
+          >
+            <span aria-hidden="true">💡</span>
+            <span className="dash__panel-chip-label">{t('nav.ideas')}</span>
+          </button>
+          {autopilotOn && (
+            <button
+              type="button"
+              className={`dash__panel-chip${panels.autopilot ? ' dash__panel-chip--on' : ''}`}
+              onClick={() => togglePanel('autopilot')}
+              aria-pressed={panels.autopilot}
+              title={t('dashboard.panelAutopilot')}
+              aria-label={t('dashboard.panelAutopilot')}
+            >
+              <span aria-hidden="true">⚙</span>
+              <span className="dash__panel-chip-label">{t('nav.autopilot')}</span>
+            </button>
+          )}
+          {agentAuditOn && (
+            <button
+              type="button"
+              className={`dash__panel-chip${panels.audit ? ' dash__panel-chip--on' : ''}`}
+              onClick={() => togglePanel('audit')}
+              aria-pressed={panels.audit}
+              title={t('dashboard.panelAudit')}
+              aria-label={t('dashboard.panelAudit')}
+            >
+              <span aria-hidden="true">🛡</span>
+              <span className="dash__panel-chip-label">{t('audit.title')}</span>
+            </button>
+          )}
+          {trafficOn && (
+            <button
+              type="button"
+              className={`dash__panel-chip${panels.traffic ? ' dash__panel-chip--on' : ''}${trafficHigh ? ' dash__panel-chip--warn' : ''}`}
+              onClick={() => togglePanel('traffic')}
+              aria-pressed={panels.traffic}
+              title={t('dashboard.panelTraffic')}
+              aria-label={t('dashboard.panelTraffic')}
+            >
+              <span aria-hidden="true">📡</span>
+              <span className="dash__panel-chip-label">Traffic</span>
+            </button>
+          )}
+        </div>
         {tabs.length > 0 && (
           // Layout popover (openspec dock-layout-controls): the one trigger that
           // replaced the −/+ size stepper and A−/A+ zoom buttons. Per-row and
@@ -1135,8 +1239,9 @@ export default function Dashboard({ onClose }) {
             (plans/autopilot-to-harness.md): a dock-styled, free-floating,
             collapsible panel — box-level control over every agent. First child
             so it tops the grid-mode flow; absolutely placed in free mode like
-            Ideas/agents. Self-gates on the autopilotTab feature. */}
-        {autopilotOn && (
+            Ideas/agents. Renders only when summoned from the panel rail AND the
+            autopilotTab feature is on (openspec dashboard-focus-docks). */}
+        {showAutopilot && (
           <section
             data-panel="autopilot"
             className={`dash__auto${dragKey === 'autopilot' ? ' dash__panel--lifted' : ''}`}
@@ -1164,8 +1269,9 @@ export default function Dashboard({ onClose }) {
         )}
         {/* Agent audit trail (openspec add-agent-audit-trail): read-only list of
             agentic feature calls, a drag-layout citizen below Autopilot / above
-            the agents row (the Activity area). Self-gates on agenticAudit. */}
-        {agentAuditOn && (
+            the agents row (the Activity area). Summoned from the panel rail,
+            gated on agenticAudit. */}
+        {showAudit && (
           <section
             data-panel="agentAudit"
             className={`dash__audit${dragKey === 'agentAudit' ? ' dash__panel--lifted' : ''}`}
@@ -1191,81 +1297,113 @@ export default function Dashboard({ onClose }) {
             />
           </section>
         )}
-        <aside
-          ref={ideasRef}
-          data-panel="ideas"
-          className={`dash__ideas${ideasWide ? ' dash__ideas--wide' : ''}${ideasSize ? ' dash__ideas--sized' : ''}${ideasFloating ? ' dash__ideas--floating' : ''}${ideasCollapsed ? ' dash__ideas--collapsed' : ''}${dragKey === 'ideas' ? ' dash__panel--lifted' : ''}`}
-          style={{
-            ...(free ? posStyle('ideas') : null),
-            // A saved drag-size only applies while expanded; collapsed folds to the header.
-            ...(ideasSize && !ideasCollapsed
-              ? {
-                  width: ideasSize.w,
-                  height: ideasSize.h,
-                  maxHeight: 'none',
-                  // Floating (grid + grown) sizes via width above; otherwise size the flex
-                  // track so the dock occupies its width in flow.
-                  ...(ideasFloating ? null : { flexBasis: ideasSize.w }),
-                }
-              : null),
-            // Anchor the grid-mode float to the agents-row top (below Autopilot).
-            ...(ideasFloating ? { top: floatTop } : null),
-          }}
-        >
-          <div className="dash__ideas-head">
-            {free && (
-              <button
-                type="button"
-                className="dash__drag"
-                onPointerDown={(e) => startPanelDrag('ideas', e)}
-                onPointerMove={movePanelDrag}
-                onPointerUp={endPanelDrag}
-                onPointerCancel={endPanelDrag}
-                title={t('dashboard.dragPanel')}
-                aria-label={t('dashboard.dragPanel')}
-              >
-                ⠿
-              </button>
-            )}
-            <span className="dash__ideas-title">💡 {t('nav.ideas')}</span>
-            <button
-              type="button"
-              className="dash__ideas-expand"
-              onClick={toggleIdeasCollapsed}
-              aria-pressed={ideasCollapsed}
-              title={ideasCollapsed ? t('dashboard.ideasShow') : t('dashboard.ideasCollapse')}
-            >
-              {ideasCollapsed ? '▸' : '▾'}
-            </button>
-            {!ideasCollapsed && (
+        {/* Throughput monitor (openspec traffic-monitor): read-only view of the
+            HTTP volume the harness is serving, a drag-layout citizen below the
+            audit trail. Summoned from the panel rail, gated on trafficPanel. */}
+        {showTraffic && (
+          <section
+            data-panel="traffic"
+            className={`dash__traffic${dragKey === 'traffic' ? ' dash__panel--lifted' : ''}`}
+            style={free ? posStyle('traffic') : undefined}
+          >
+            <TrafficPanel
+              onHighChange={setTrafficHigh}
+              dragHandle={
+                free ? (
+                  <button
+                    type="button"
+                    className="dash__drag"
+                    onPointerDown={(e) => startPanelDrag('traffic', e)}
+                    onPointerMove={movePanelDrag}
+                    onPointerUp={endPanelDrag}
+                    onPointerCancel={endPanelDrag}
+                    title={t('dashboard.dragPanel')}
+                    aria-label={t('dashboard.dragPanel')}
+                  >
+                    ⠿
+                  </button>
+                ) : null
+              }
+            />
+          </section>
+        )}
+        {showIdeas && (
+          <aside
+            ref={ideasRef}
+            data-panel="ideas"
+            className={`dash__ideas${ideasWide ? ' dash__ideas--wide' : ''}${ideasSize ? ' dash__ideas--sized' : ''}${ideasFloating ? ' dash__ideas--floating' : ''}${ideasCollapsed ? ' dash__ideas--collapsed' : ''}${dragKey === 'ideas' ? ' dash__panel--lifted' : ''}`}
+            style={{
+              ...(free ? posStyle('ideas') : null),
+              // A saved drag-size only applies while expanded; collapsed folds to the header.
+              ...(ideasSize && !ideasCollapsed
+                ? {
+                    width: ideasSize.w,
+                    height: ideasSize.h,
+                    maxHeight: 'none',
+                    // Floating (grid + grown) sizes via width above; otherwise size the flex
+                    // track so the dock occupies its width in flow.
+                    ...(ideasFloating ? null : { flexBasis: ideasSize.w }),
+                  }
+                : null),
+              // Anchor the grid-mode float to the agents-row top (below Autopilot).
+              ...(ideasFloating ? { top: floatTop } : null),
+            }}
+          >
+            <div className="dash__ideas-head">
+              {free && (
+                <button
+                  type="button"
+                  className="dash__drag"
+                  onPointerDown={(e) => startPanelDrag('ideas', e)}
+                  onPointerMove={movePanelDrag}
+                  onPointerUp={endPanelDrag}
+                  onPointerCancel={endPanelDrag}
+                  title={t('dashboard.dragPanel')}
+                  aria-label={t('dashboard.dragPanel')}
+                >
+                  ⠿
+                </button>
+              )}
+              <span className="dash__ideas-title">💡 {t('nav.ideas')}</span>
               <button
                 type="button"
                 className="dash__ideas-expand"
-                onClick={toggleIdeasWide}
-                aria-pressed={ideasWide}
-                title={ideasWide ? t('dashboard.ideasNarrow') : t('dashboard.ideasWide')}
+                onClick={toggleIdeasCollapsed}
+                aria-pressed={ideasCollapsed}
+                title={ideasCollapsed ? t('dashboard.ideasShow') : t('dashboard.ideasCollapse')}
               >
-                {ideasWide ? '⇤' : '⇥'}
+                {ideasCollapsed ? '▸' : '▾'}
               </button>
+              {!ideasCollapsed && (
+                <button
+                  type="button"
+                  className="dash__ideas-expand"
+                  onClick={toggleIdeasWide}
+                  aria-pressed={ideasWide}
+                  title={ideasWide ? t('dashboard.ideasNarrow') : t('dashboard.ideasWide')}
+                >
+                  {ideasWide ? '⇤' : '⇥'}
+                </button>
+              )}
+            </div>
+            {!ideasCollapsed && (
+              <>
+                <IdeasPanel />
+                <span
+                  className="dash__ideas-resize"
+                  role="separator"
+                  aria-label="Resize ideas panel"
+                  title="Drag to resize · double-click to reset"
+                  onPointerDown={startIdeasResize}
+                  onPointerMove={moveIdeasResize}
+                  onPointerUp={endIdeasResize}
+                  onPointerCancel={endIdeasResize}
+                  onDoubleClick={clearIdeasSize}
+                />
+              </>
             )}
-          </div>
-          {!ideasCollapsed && (
-            <>
-              <IdeasPanel />
-              <span
-                className="dash__ideas-resize"
-                role="separator"
-                aria-label="Resize ideas panel"
-                title="Drag to resize · double-click to reset"
-                onPointerDown={startIdeasResize}
-                onPointerMove={moveIdeasResize}
-                onPointerUp={endIdeasResize}
-                onPointerCancel={endIdeasResize}
-                onDoubleClick={clearIdeasSize}
-              />
-            </>
-          )}
-        </aside>
+          </aside>
+        )}
         <div
           ref={agentsPanelRef}
           data-panel="agents"
