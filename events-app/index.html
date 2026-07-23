@@ -308,13 +308,15 @@
 
       <section class="sndsec">
         <h3>🖥️ Host cue</h3>
-        <p class="sndnote">Beep on the <b>host computer running the harness</b> on each new event — shared by
-          everyone and audible even with no browser open. Choose a beep tone or a spoken
-          "an agent has finished", and test it on the host right now.</p>
+        <p class="sndnote">Sound on the <b>host computer running the harness</b> on each new event — shared by
+          everyone and audible even with no browser open. It's <b>event-determined</b>: a start cue vs a
+          finish cue (in voice mode, "agent … started" vs "… has finished"). Pick how live events sound,
+          then audition each on the host right now.</p>
         <div class="sndctl">
-          <button id="hsnd" title="Beep on the HOST computer (running the harness) on each new event">🖥️ Host off</button>
-          <button id="hmode" title="Host cue: a beep tone, or a spoken 'an agent has finished'">🔊 Beep</button>
-          <button id="htest" title="Play the host sound right now, to test it">🔔 Test host</button>
+          <button id="hsnd" title="Turn the host-computer cue on or off (shared by everyone)">🖥️ Host cue: Off</button>
+          <button id="hmode" title="How live events sound on the host: a beep tone, or a spoken phrase">🔊 Live sound: Beep</button>
+          <button id="htestb" title="Play the host beep right now, to test it">🔔 Test beep</button>
+          <button id="htestv" title="Speak the host voice cue right now, to test it">🗣️ Test voice</button>
         </div>
       </section>
 
@@ -542,10 +544,10 @@ loadCustomSounds();
 let hostOn = false, hostMode = "beep";
 const btnHost = document.getElementById("hsnd");
 const btnHMode = document.getElementById("hmode");
-function renderHost(){ btnHost.textContent = hostOn ? "🖥️ Host on" : "🖥️ Host off"; btnHost.classList.toggle("on", hostOn); }
-// Mode is beep vs voice ("an agent has finished"); it applies to both the on-each-event cue
-// and the Test button. Shared backend state, same endpoint as the on/off toggle.
-function renderHMode(){ const v = hostMode === "voice"; btnHMode.textContent = v ? "🗣️ Voice" : "🔊 Beep"; btnHMode.classList.toggle("on", v); }
+function renderHost(){ btnHost.textContent = hostOn ? "🖥️ Host cue: On" : "🖥️ Host cue: Off"; btnHost.classList.toggle("on", hostOn); }
+// Mode is how LIVE events sound: beep vs voice. It's the default for the on-each-event cue; the
+// two Test buttons audition either mode directly. Shared backend state, same endpoint as on/off.
+function renderHMode(){ const v = hostMode === "voice"; btnHMode.textContent = v ? "🗣️ Live sound: Voice" : "🔊 Live sound: Beep"; btnHMode.classList.toggle("on", v); }
 function applyHost(j){ hostOn = !!j.on; if (j.mode) hostMode = j.mode; renderHost(); renderHMode(); }
 async function loadHost(){
   try { const r = await fetch(`${API}/collector/sound`, { headers: { Accept: "application/json" } });
@@ -563,18 +565,24 @@ btnHMode.onclick = async () => {
 };
 renderHost(); renderHMode(); loadHost();
 
-// One-shot host-sound test (POST /api/collector/sound/test) — plays on the host now,
-// regardless of the Host toggle, to confirm the machine can actually make the sound.
-const btnHTest = document.getElementById("htest");
-btnHTest.onclick = async () => {
-  const old = btnHTest.textContent;
-  btnHTest.textContent = "🔔 …";
-  try {
-    const r = await fetch(`${API}/collector/sound/test`, { method: "POST" });
-    btnHTest.textContent = r.ok ? "🔔 Sent" : "🔔 Failed";
-  } catch { btnHTest.textContent = "🔔 Failed"; }
-  setTimeout(() => { btnHTest.textContent = old; }, 1200);
-};
+// One-shot host-sound tests (POST /api/collector/sound/test with an explicit mode) — play on the
+// host now, regardless of the Host toggle and the live mode, to confirm the machine can make each.
+function wireHTest(id, mode){
+  const btn = document.getElementById(id);
+  btn.onclick = async () => {
+    const old = btn.textContent;
+    btn.textContent = "⏳ …";
+    try {
+      const r = await fetch(`${API}/collector/sound/test`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode })
+      });
+      btn.textContent = r.ok ? "✅ Sent" : "⚠ Failed";
+    } catch { btn.textContent = "⚠ Failed"; }
+    setTimeout(() => { btn.textContent = old; }, 1200);
+  };
+}
+wireHTest("htestb", "beep");
+wireHTest("htestv", "voice");
 
 function setStatus(t, cls){ elStatus.textContent = t; elDot.className = "dot" + (cls ? " " + cls : ""); }
 function esc(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }

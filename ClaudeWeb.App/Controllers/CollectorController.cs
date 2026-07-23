@@ -118,12 +118,13 @@ public class CollectorController : ControllerBase
         return Ok(new { on = _hostSound.Enabled, mode = _hostSound.Mode });
     }
 
-    // Play the host cue right now in the current mode (ignores the on/off toggle) — to verify audio works.
+    // Play the host cue right now (ignores the on/off toggle) — to verify audio works. An optional
+    // "mode" in the body auditions beep or voice directly; with no body it plays the current mode.
     [HttpPost("sound/test")]
-    public IActionResult TestSound()
+    public IActionResult TestSound([FromBody] SoundRequest? req = null)
     {
         _logger.CountRequest();
-        _hostSound.PlayNow();
+        _hostSound.PlayNow(req?.Mode);
         return Ok(new { ok = true });
     }
 }

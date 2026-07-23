@@ -38,4 +38,4 @@
 
 ## 7. Out of scope (tracked, not done here)
 
-- [ ] 7.1 Host-side per-type cue — coordinate with / follow `name-source-in-host-voice` after it archives
+- [x] 7.1 Host-side per-type cue — done as its own change **`add-host-event-determined-cue`** (after `name-source-in-host-voice` archived): event-determined beep + voice on the host, plus per-mode test buttons

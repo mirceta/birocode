@@ -8,17 +8,18 @@ namespace ClaudeWeb.Services.Events;
 /// counterpart to the events-app's in-browser blip: it sounds on the computer running the
 /// harness, with no browser open.
 ///
-/// Off by default and operator-toggleable; the choice persists across restarts. The cue has a
-/// selectable, persisted <see cref="SoundMode"/>: <c>beep</c> (default) plays a short tone,
-/// <c>voice</c> instead speaks "an agent has finished" in a soft female voice through the
-/// default audio device via Windows SAPI. Debounced so a burst of events collapses to one cue, and played on a
-/// background thread so it can never block the poll loop. Every path is best-effort — a host
-/// with no audio (or no speech voice) just stays silent, and voice falls back to the beep.
+/// Off by default and operator-toggleable; the choice persists across restarts. The cue is
+/// event-determined — a turn.start, a turn.ended and any other type each get their own sound — in
+/// both of the selectable, persisted modes: <c>beep</c> (default) plays a distinct short host
+/// notification sound per type, <c>voice</c> instead speaks a type-appropriate phrase ("…started"
+/// vs "…has finished") in a soft female voice through the default audio device via Windows SAPI.
+/// Debounced so a burst of events collapses to one cue, and played on a background thread so it
+/// can never block the poll loop. Every path is best-effort — a host with no audio (or no speech
+/// voice) just stays silent, and voice falls back to the beep.
 /// </summary>
 public class HostEventSound
 {
     private const long MinGapMs = 400; // debounce: at most ~2-3 cues/sec on a burst
-    private const string VoicePhrase = "an agent has finished";
 
     public const string ModeBeep = "beep";
     public const string ModeVoice = "voice";
@@ -84,9 +85,11 @@ public class HostEventSound
     }
 
     /// <summary>Cheap and non-blocking: debounce, then fire one cue on a background thread.
-    /// Safe to call from inside the poll path for every event. In voice mode the cue names the
-    /// source it came from — "agent {sourceLabel} has finished".</summary>
-    public void Notify(string? sourceLabel = null)
+    /// Safe to call from inside the poll path for every event. The cue is event-determined:
+    /// beep mode picks a distinct host sound per <paramref name="eventType"/>, and voice mode
+    /// speaks a phrase that reflects it — "agent {sourceLabel} started" for a turn.start,
+    /// "agent {sourceLabel} has finished" for a turn.ended.</summary>
+    public void Notify(string? sourceLabel = null, string? eventType = null)
     {
         if (!_enabled) return;
 
@@ -95,26 +98,38 @@ public class HostEventSound
         if (now - last < MinGapMs) return;                                   // within the debounce window
         if (Interlocked.CompareExchange(ref _lastBeepTicks, now, last) != last) return; // lost the race — someone else cued
 
-        _ = Task.Run(() => Play(sourceLabel));
+        _ = Task.Run(() => Play(sourceLabel, eventType));
     }
 
-    /// <summary>Play the host cue immediately, ignoring the enable flag and debounce, in the
-    /// currently selected mode — used by the "test" button to verify audio works on the host.
-    /// No source, so the voice speaks the generic phrase.</summary>
-    public void PlayNow() => _ = Task.Run(() => Play(null));
+    /// <summary>Play the host cue immediately, ignoring the enable flag and debounce — used by
+    /// the "test" buttons to verify audio works on the host. Plays in <paramref name="mode"/>
+    /// when it is a known mode, else the currently selected one, so the operator can audition
+    /// beep and voice independently. Uses the canonical "finished" cue (no source label).</summary>
+    public void PlayNow(string? mode = null) => _ = Task.Run(() => Play(null, "turn.ended", mode));
 
-    // Play the cue for the current mode. Voice speaks a phrase via SAPI; beep plays the
-    // Windows notification sound (falling back to Console.Beep). All best-effort: any failure
-    // in the voice path falls through to the beep, and a host with no audio stays silent.
-    private void Play(string? sourceLabel)
+    // Play the event-determined cue. Voice speaks a type-appropriate phrase via SAPI; beep plays
+    // a type-appropriate Windows notification sound (falling back to Console.Beep). An optional
+    // modeOverride lets the test buttons force a mode. All best-effort: any failure in the voice
+    // path falls through to the beep, and a host with no audio stays silent.
+    private void Play(string? sourceLabel, string? eventType, string? modeOverride = null)
     {
-        if (_mode == ModeVoice && TrySpeak(PhraseFor(sourceLabel))) return;
-        DoBeep();
+        var mode = modeOverride == ModeBeep || modeOverride == ModeVoice ? modeOverride : _mode;
+        if (mode == ModeVoice && TrySpeak(PhraseFor(sourceLabel, eventType))) return;
+        DoBeep(eventType);
     }
 
-    // "agent {label} has finished" when we know the source, else the generic phrase.
-    private static string PhraseFor(string? label) =>
-        string.IsNullOrWhiteSpace(label) ? VoicePhrase : $"agent {label!.Trim()} has finished";
+    // Event-determined phrase: "started" for a turn.start, "has finished" for a turn.ended, a
+    // neutral phrase otherwise; naming the source when we know it, else "an agent".
+    private static string PhraseFor(string? label, string? eventType)
+    {
+        var who = string.IsNullOrWhiteSpace(label) ? "an agent" : $"agent {label!.Trim()}";
+        return eventType switch
+        {
+            "turn.start" => $"{who} started",
+            "turn.ended" => $"{who} has finished",
+            _            => $"{who} sent an event",
+        };
+    }
 
     // Speak the phrase through the default audio device using the OS SAPI voice (SpVoice via
     // COM — no NuGet dependency). Tuned to sound soft and soothing: prefer a female voice
@@ -148,12 +163,32 @@ public class HostEventSound
         catch { return false; }                                              // no voice / no audio / COM unavailable
     }
 
-    // Prefer the Windows notification sound (plays through the default audio device, so it's
-    // actually audible), and fall back to Console.Beep (legacy PC-speaker tone) if that path
-    // is unavailable. Both are best-effort — a host with no audio just stays silent.
-    private static void DoBeep()
+    // Event-determined and audible: a distinct Windows notification sound per event type, each
+    // routed through the default audio device so it actually sounds. Console.Beep (legacy
+    // PC-speaker tone) is the fallback only — often inaudible on modern machines — but still
+    // type-shaped (rising for start, resolving for finish) so the two stay distinguishable.
+    // Both are best-effort — a host with no audio just stays silent.
+    private static void DoBeep(string? eventType)
     {
-        try { System.Media.SystemSounds.Asterisk.Play(); return; } catch { /* fall through */ }
-        try { Console.Beep(880, 150); } catch { /* no audio device / unsupported host */ }
+        try
+        {
+            switch (eventType)
+            {
+                case "turn.start": System.Media.SystemSounds.Asterisk.Play(); return;
+                case "turn.ended": System.Media.SystemSounds.Exclamation.Play(); return;
+                default:           System.Media.SystemSounds.Beep.Play(); return;
+            }
+        }
+        catch { /* fall through to the PC-speaker tone */ }
+        try
+        {
+            switch (eventType)
+            {
+                case "turn.start": Console.Beep(660, 110); Console.Beep(988, 140); break; // rising query
+                case "turn.ended": Console.Beep(988, 110); Console.Beep(660, 150); break; // resolving fall
+                default:           Console.Beep(880, 150); break;
+            }
+        }
+        catch { /* no audio device / unsupported host */ }
     }
 }
