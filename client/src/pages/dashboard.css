@@ -210,6 +210,25 @@
   width: min(560px, 92vw);
 }
 
+/* Throughput monitor as a drag-layout citizen (openspec traffic-monitor):
+   same full-width-strip-in-flow / compact-float-in-free behaviour as the
+   audit panel. */
+.dash__traffic {
+  flex: 1 1 100%;
+  min-width: 0;
+  position: relative;
+}
+.dash__traffic .tp-panel {
+  width: 100%;
+}
+.dash__body--free .dash__traffic {
+  flex: none;
+  width: auto;
+}
+.dash__body--free .dash__traffic .tp-panel {
+  width: min(560px, 92vw);
+}
+
 /* (Files is not a dashboard citizen — it lives as a tab INSIDE each agent dock;
    see PinnedAgent and plans/agent-dock-files-tab.md.) */
 
@@ -949,6 +968,14 @@
 .dash__panel-chip--on {
   border-color: var(--color-accent);
   filter: none;
+}
+
+/* High-throughput warning on the Traffic chip (openspec traffic-monitor):
+   amber ring while the server reports sustained bytes/s over the threshold.
+   Only ever set while the panel is summoned (its poll is the data source). */
+.dash__panel-chip--warn {
+  border-color: #d9770a;
+  box-shadow: 0 0 0 1px #d9770a;
 }
 
 .dash__layout-btn {

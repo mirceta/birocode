@@ -15,6 +15,7 @@ import WaitingOnField from '../components/dashboard/WaitingOnField';
 import IdeasPanel from '../components/ideas/IdeasPanel';
 import AutopilotPanel from '../components/dashboard/AutopilotPanel';
 import AgentAuditPanel from '../components/dashboard/AgentAuditPanel';
+import TrafficPanel from '../components/dashboard/TrafficPanel';
 import DockToolbar from '../components/dashboard/DockToolbar';
 import './dashboard.css';
 
@@ -112,12 +113,12 @@ function readPanels() {
     const raw = localStorage.getItem(PANELS_KEY);
     const v = raw ? JSON.parse(raw) : null;
     if (v && typeof v === 'object') {
-      return { ideas: !!v.ideas, autopilot: !!v.autopilot, audit: !!v.audit };
+      return { ideas: !!v.ideas, autopilot: !!v.autopilot, audit: !!v.audit, traffic: !!v.traffic };
     }
   } catch {
     /* private mode / malformed */
   }
-  return { ideas: false, autopilot: false, audit: false };
+  return { ideas: false, autopilot: false, audit: false, traffic: false };
 }
 
 // Expandable Ideas dock (plans/ideas-arch-plan.md): the pinned-left dock can be
@@ -507,6 +508,14 @@ export default function Dashboard({ onClose }) {
   // Agent audit trail joins the same way (openspec add-agent-audit-trail): a
   // read-only citizen right below Autopilot, above the agents row.
   const agentAuditOn = useFeature('agenticAudit');
+  // Throughput monitor joins the same way (openspec traffic-monitor): a
+  // read-only citizen showing what the harness is serving right now.
+  const trafficOn = useFeature('trafficPanel');
+  // Server-decided "high throughput" flag, lifted from the panel's poll so the
+  // rail chip can carry a warning dot. Only live while the panel is summoned —
+  // a hidden panel is unmounted and never fetches (dashboard-focus-docks), so
+  // no data, no dot.
+  const [trafficHigh, setTrafficHigh] = useState(false);
   // Which aux panels are summoned (openspec dashboard-focus-docks). Effective
   // visibility is chip state AND feature gate; a hidden panel is not mounted.
   const [panels, setPanels] = useState(readPanels);
@@ -523,6 +532,7 @@ export default function Dashboard({ onClose }) {
   }
   const showAutopilot = autopilotOn && panels.autopilot;
   const showAudit = agentAuditOn && panels.audit;
+  const showTraffic = trafficOn && panels.traffic;
   const showIdeas = panels.ideas;
   // The panels the free 2D drag layout manages, in DOM order. Autopilot leads so
   // it sits on top in grid-mode flow. Only summoned panels are citizens; their
@@ -534,6 +544,7 @@ export default function Dashboard({ onClose }) {
   const dragKeys = [
     ...(showAutopilot ? ['autopilot'] : []),
     ...(showAudit ? ['agentAudit'] : []),
+    ...(showTraffic ? ['traffic'] : []),
     ...(showIdeas ? ['ideas'] : []),
     'agents',
   ];
@@ -1037,6 +1048,19 @@ export default function Dashboard({ onClose }) {
               <span className="dash__panel-chip-label">{t('audit.title')}</span>
             </button>
           )}
+          {trafficOn && (
+            <button
+              type="button"
+              className={`dash__panel-chip${panels.traffic ? ' dash__panel-chip--on' : ''}${trafficHigh ? ' dash__panel-chip--warn' : ''}`}
+              onClick={() => togglePanel('traffic')}
+              aria-pressed={panels.traffic}
+              title={t('dashboard.panelTraffic')}
+              aria-label={t('dashboard.panelTraffic')}
+            >
+              <span aria-hidden="true">📡</span>
+              <span className="dash__panel-chip-label">Traffic</span>
+            </button>
+          )}
         </div>
         {tabs.length > 0 && (
           // Layout popover (openspec dock-layout-controls): the one trigger that
@@ -1260,6 +1284,36 @@ export default function Dashboard({ onClose }) {
                     type="button"
                     className="dash__drag"
                     onPointerDown={(e) => startPanelDrag('agentAudit', e)}
+                    onPointerMove={movePanelDrag}
+                    onPointerUp={endPanelDrag}
+                    onPointerCancel={endPanelDrag}
+                    title={t('dashboard.dragPanel')}
+                    aria-label={t('dashboard.dragPanel')}
+                  >
+                    ⠿
+                  </button>
+                ) : null
+              }
+            />
+          </section>
+        )}
+        {/* Throughput monitor (openspec traffic-monitor): read-only view of the
+            HTTP volume the harness is serving, a drag-layout citizen below the
+            audit trail. Summoned from the panel rail, gated on trafficPanel. */}
+        {showTraffic && (
+          <section
+            data-panel="traffic"
+            className={`dash__traffic${dragKey === 'traffic' ? ' dash__panel--lifted' : ''}`}
+            style={free ? posStyle('traffic') : undefined}
+          >
+            <TrafficPanel
+              onHighChange={setTrafficHigh}
+              dragHandle={
+                free ? (
+                  <button
+                    type="button"
+                    className="dash__drag"
+                    onPointerDown={(e) => startPanelDrag('traffic', e)}
                     onPointerMove={movePanelDrag}
                     onPointerUp={endPanelDrag}
                     onPointerCancel={endPanelDrag}
