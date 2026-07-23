@@ -56,6 +56,9 @@ $logDir = Join-Path $repo '.claudeweb-deploy'
 $log    = Join-Path $logDir 'deploy.log'
 
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+# Rotate: auto-keep.ps1 pattern-matches the whole log, so stale ARMED/ABORT
+# lines from a previous run would false-trigger it.
+if (Test-Path $log) { Rename-Item $log ("deploy.prev.{0}.log" -f (Get-Date).Ticks) }
 # Log as UTF-8 (5.1's Out-File/Tee default to UTF-16, which is awkward to grep).
 function Say($m) {
   $line = ((Get-Date).ToString('s')) + '  ' + $m
