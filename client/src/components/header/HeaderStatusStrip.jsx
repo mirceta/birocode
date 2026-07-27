@@ -4,6 +4,7 @@ import { useT } from '../../i18n/LanguageContext';
 import Scoreboard from '../dashboard/Scoreboard';
 import AccountChips from '../dashboard/AccountChips';
 import HostClock from '../dashboard/HostClock';
+import AdminStatusTile from '../dashboard/AdminStatusTile';
 import './headerStrip.css';
 
 // Header status strip (openspec add-header-status-strip): the at-a-glance
@@ -29,6 +30,7 @@ export default function HeaderStatusStrip() {
   const stripOn = useFeature('headerStatusStrip');
   const accountChipsOn = useFeature('accountChips');
   const hostClockOn = useFeature('hostClock');
+  const adminStatusOn = useFeature('adminStatus');
   const [collapsed, setCollapsed] = useState(readCollapsed);
 
   if (!stripOn) return null;
@@ -65,6 +67,7 @@ export default function HeaderStatusStrip() {
           <Scoreboard />
           {accountChipsOn && <AccountChips />}
           {hostClockOn && <HostClock />}
+          {adminStatusOn && <AdminStatusTile />}
         </div>
       )}
     </div>
