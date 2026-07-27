@@ -26,14 +26,34 @@ public class LocalAppDiscoveryJobs
     private readonly LocalAppDiscoveryAsk _discovery;
     private readonly RepoEventLog _events;
     private readonly AgenticAuditLog _audit;
+    private readonly LocalAppDiscoveryCache _cache;
     private readonly ConcurrentDictionary<string, DiscoveryJob> _jobs = new();
 
-    public LocalAppDiscoveryJobs(LocalAppDiscoveryAsk discovery, RepoEventLog events, AgenticAuditLog audit)
+    public LocalAppDiscoveryJobs(LocalAppDiscoveryAsk discovery, RepoEventLog events, AgenticAuditLog audit, LocalAppDiscoveryCache cache)
     {
         _discovery = discovery;
         _events = events;
         _audit = audit;
+        _cache = cache;
     }
+
+    /// <summary>
+    /// Seed a Done job from a cached discovery WITHOUT running the agent (openspec
+    /// change cache-discovered-local-apps). After a "Load cache" the dock's per-row
+    /// Run / Check / register affordances must work identically to a live scan — and
+    /// Run resolves its command server-side from the repo's latest job by port, never
+    /// from the wire. Seeding a Done job from the cache keeps that guarantee (the
+    /// command still comes from a real scan, just a persisted one). Overwrites any
+    /// terminal job; a still-running scan is left untouched so a cache load never
+    /// clobbers a live discovery.
+    /// </summary>
+    public DiscoveryJob SeedFromCache(string repoId, LocalAppExposureReport report) =>
+        _jobs.AddOrUpdate(
+            repoId,
+            _ => DiscoveryJob.Completed(report),
+            (_, existing) => existing.Status == DiscoveryStatus.Running
+                ? existing
+                : DiscoveryJob.Completed(report));
 
     /// <summary>
     /// Join the repo's discovery if one is already running, otherwise start a new
@@ -85,9 +105,13 @@ public class LocalAppDiscoveryJobs
                 if (result.Success)
                 {
                     job.MarkDone(result.Report!);
+                    // Write-through to the durable per-repo cache (openspec change
+                    // cache-discovered-local-apps). Best-effort inside the service —
+                    // a cache-write failure is logged there and never fails discovery.
+                    _cache.Save(repoId, result.Report!, job.FinishedAt ?? DateTimeOffset.UtcNow);
                     var n = result.Report!.Apps.Count;
                     _events.Emit(repoId, "discovery", "done", "Discovery",
-                        $"returned {n} app{(n == 1 ? "" : "s")} — produced for the dock to render");
+                        $"returned {n} app{(n == 1 ? "" : "s")} — produced for the dock to render, cached for reuse");
                     AuditEnd("done");
                 }
                 else
@@ -139,6 +163,20 @@ public class DiscoveryJob
     /// add-agent-audit-trail) — lets the trail endpoint distinguish a live
     /// "running" call from a start orphaned by a harness restart.</summary>
     public string? AuditCallId { get; set; }
+
+    /// <summary>
+    /// A job that is already Done, holding a report from a cached discovery rather
+    /// than a live agent run (openspec change cache-discovered-local-apps). No
+    /// background task or audit call is attached — it exists only so the dock's
+    /// Run / Check affordances can resolve against a repo's latest result after a
+    /// "Load cache".
+    /// </summary>
+    public static DiscoveryJob Completed(LocalAppExposureReport report)
+    {
+        var job = new DiscoveryJob();
+        job.MarkDone(report);
+        return job;
+    }
 
     public void MarkDone(LocalAppExposureReport report)
     {

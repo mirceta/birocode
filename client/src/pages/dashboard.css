@@ -1617,6 +1617,13 @@
   gap: 6px;
 }
 
+/* Discover + Load cache side by side (openspec change cache-discovered-local-apps). */
+.phone__discover-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .phone__loop-recipe {
   padding: 2px 9px;
   border: 1px solid var(--color-border);
@@ -1696,6 +1703,10 @@
 
 .phone__loop-msg--gate {
   color: #b45309;
+}
+
+.phone__discover-msg--cache {
+  color: var(--color-accent);
 }
 
 /* Ask-for-understanding row: the Ask button + the per-repo Auto toggle side by

@@ -284,6 +284,25 @@ export default function PinnedAgent({
     }
   };
 
+  // Load the persisted discovery from disk WITHOUT running an agent (openspec change
+  // cache-discovered-local-apps). Same result shape as a live scan so register / Run /
+  // Check rows render identically; a miss returns status:"no-cache" so we can prompt
+  // to run Discover. There's no scan to poll, so stop any poll and just show the snapshot.
+  const loadCache = async () => {
+    setRegisterErr(null);
+    stopPoll();
+    try {
+      const r = await apiGet('/local-apps/cache', { repoId: tab.repoId });
+      setDiscovery(r);
+    } catch (err) {
+      let text = err.message;
+      try {
+        text = JSON.parse(err.message).error || text;
+      } catch { /* raw text */ }
+      setDiscovery({ status: 'error', error: text });
+    }
+  };
+
   // Re-fetch the discovery status, which recomputes each app's live `running` flag
   // (the backend reads port liveness per fetch). Reuses the reattach path — does NOT
   // start a new scan. Defined after fetchDiscoverStatus so the dep is in scope.
@@ -572,15 +591,37 @@ export default function PinnedAgent({
           furniture like the git block; hidden while Files / a local app is open. */}
       {canDiscover && !showFiles && !openApp && !showConsole && (
         <div className="phone__discover">
-          <button
-            type="button"
-            className="phone__discover-btn"
-            onClick={discover}
-            disabled={discovering}
-            title={t('dashboard.discoverHint')}
-          >
-            {discovering ? t('dashboard.discovering') : `🛰️ ${t('dashboard.discoverLocalApps')}`}
-          </button>
+          <div className="phone__discover-buttons">
+            <button
+              type="button"
+              className="phone__discover-btn"
+              onClick={discover}
+              disabled={discovering}
+              title={t('dashboard.discoverHint')}
+            >
+              {discovering ? t('dashboard.discovering') : `🛰️ ${t('dashboard.discoverLocalApps')}`}
+            </button>
+            {/* Load the saved list from disk without spending an agent scan; Discover
+                stays the way to re-run the agent when the repo gained new apps
+                (openspec change cache-discovered-local-apps). */}
+            <button
+              type="button"
+              className="phone__discover-btn phone__discover-btn--cache"
+              onClick={loadCache}
+              disabled={discovering}
+              title={t('dashboard.loadCacheHint')}
+            >
+              {`💾 ${t('dashboard.loadCache')}`}
+            </button>
+          </div>
+          {discovery?.status === 'no-cache' && (
+            <div className="phone__discover-msg" role="status">{t('dashboard.discoverNoCache')}</div>
+          )}
+          {discovery?.fromCache && discovery?.cachedAt && (
+            <div className="phone__discover-msg phone__discover-msg--cache" role="status">
+              {t('dashboard.discoverCachedAt', { when: new Date(discovery.cachedAt).toLocaleString() })}
+            </div>
+          )}
           {discovery?.error && (
             <div className="phone__discover-msg phone__discover-msg--err" role="status">
               {t('dashboard.discoverError', { error: discovery.error })}
