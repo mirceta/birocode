@@ -1,662 +1,222 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Understanding — Always-admin status tile</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Deploy &amp; the Dead-Man's Switch — Understanding</title>
 <style>
-  :root {
-    --bg: #0f1218;
-    --surface: #171c26;
-    --surface2: #1e2532;
-    --border: #2c3547;
-    --text: #e6ebf4;
-    --soft: #93a0b5;
-    --accent: #6ea8fe;
-    --green: #3fb950;
-    --green-bg: #12261a;
-    --amber: #d29922;
-    --amber-bg: #2a2113;
-    --grey: #8b949e;
-    --grey-bg: #21262d;
-    --red: #f85149;
-    --red-bg: #2d1517;
-    --mono: 'Consolas', 'Cascadia Code', monospace;
-    --radius: 12px;
+  :root{
+    --bg:#0b0e14; --panel:#131824; --panel2:#1a2130; --ink:#e7edf6; --dim:#93a2ba;
+    --line:#2a3446; --accent:#59b0ff; --good:#4bd08b; --warn:#ffb454; --bad:#ff6b6b;
+    --wire:#3a465c; --mono:'SFMono-Regular',ui-monospace,Menlo,Consolas,monospace;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    background: var(--bg); color: var(--text);
-    font: 15px/1.55 'Segoe UI', system-ui, sans-serif;
-    padding: 24px 16px 80px;
-  }
-  .wrap { max-width: 980px; margin: 0 auto; }
-  h1 { font-size: 24px; margin-bottom: 4px; }
-  .subtitle { color: var(--soft); margin-bottom: 20px; font-size: 14px; }
-  .subtitle code { color: var(--accent); }
-  code { font-family: var(--mono); font-size: 0.92em; background: var(--surface2); padding: 1px 6px; border-radius: 5px; }
-  /* tabs */
-  .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
-  .tab {
-    background: var(--surface); color: var(--soft); border: 1px solid var(--border);
-    border-radius: 999px; padding: 8px 16px; font: inherit; font-size: 14px;
-    cursor: pointer; transition: all .15s;
-  }
-  .tab:hover { border-color: var(--accent); color: var(--text); }
-  .tab.on { background: var(--accent); border-color: var(--accent); color: #0b1220; font-weight: 600; }
-  .view { display: none; animation: fadein .25s ease; }
-  .view.on { display: block; }
-  @keyframes fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-  .card {
-    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 20px; margin-bottom: 16px;
-  }
-  .card h2 { font-size: 17px; margin-bottom: 10px; }
-  .card p { color: var(--soft); font-size: 14px; margin-bottom: 8px; }
-  .card p strong { color: var(--text); }
-  .hint { font-size: 13px; color: var(--soft); font-style: italic; }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;}
+  a{color:var(--accent)}
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 20px 80px}
+  header h1{font-size:26px;margin:0 0 6px}
+  header p.sub{color:var(--dim);margin:0 0 4px;font-size:15px}
+  .pill{display:inline-block;font:12px/1 var(--mono);color:var(--dim);
+    border:1px solid var(--line);border-radius:999px;padding:5px 10px;margin:8px 6px 0 0}
+  .pill b{color:var(--ink)}
+  h2{font-size:17px;margin:34px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .muted{color:var(--dim)}
+  code{font-family:var(--mono);background:var(--panel2);padding:1px 6px;border-radius:5px;font-size:.9em}
 
-  /* ============ view 1: state machine ============ */
-  .facts { display: flex; gap: 14px; flex-wrap: wrap; margin: 16px 0; }
-  .fact {
-    flex: 1; min-width: 260px; background: var(--surface2); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 16px; cursor: pointer; transition: border-color .15s;
-    text-align: left; color: var(--text); font: inherit;
-  }
-  .fact:hover { border-color: var(--accent); }
-  .fact .fname { font-weight: 700; font-family: var(--mono); font-size: 14px; }
-  .fact .fdesc { color: var(--soft); font-size: 12.5px; margin-top: 6px; }
-  .fact .fval { margin-top: 10px; font-family: var(--mono); font-weight: 700; font-size: 15px; }
-  .fact.true .fval { color: var(--green); }
-  .fact.false .fval { color: var(--grey); }
-  .fact .switch {
-    display: inline-block; width: 40px; height: 22px; border-radius: 11px; background: var(--border);
-    position: relative; vertical-align: middle; margin-right: 8px; transition: background .2s;
-  }
-  .fact .switch::after {
-    content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px;
-    border-radius: 50%; background: var(--soft); transition: all .2s;
-  }
-  .fact.true .switch { background: var(--green); }
-  .fact.true .switch::after { left: 21px; background: #fff; }
-  .derived { text-align: center; margin: 18px 0 6px; }
-  .arrow-down { color: var(--soft); font-size: 22px; }
-  .state-big {
-    display: inline-block; margin-top: 8px; padding: 14px 30px; border-radius: var(--radius);
-    font-weight: 700; font-size: 19px; border: 2px solid; transition: all .25s;
-  }
-  .state-big .sdesc { display: block; font-weight: 400; font-size: 13px; margin-top: 4px; }
-  .st-active { color: var(--green); background: var(--green-bg); border-color: var(--green); }
-  .st-pending { color: var(--amber); background: var(--amber-bg); border-color: var(--amber); }
-  .st-disabled { color: var(--grey); background: var(--grey-bg); border-color: var(--grey); }
-  table.truth { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13.5px; }
-  table.truth th, table.truth td { border: 1px solid var(--border); padding: 8px 12px; text-align: center; }
-  table.truth th { background: var(--surface2); color: var(--soft); font-weight: 600; }
-  table.truth tr.hilite td { background: rgba(110,168,254,.12); }
-  table.truth td.st { font-weight: 700; font-family: var(--mono); }
-  .regbox { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-top: 12px; font-family: var(--mono); font-size: 12.5px; line-height: 1.8; overflow-x: auto; white-space: nowrap; }
-  .regbox .k { color: var(--accent); }
-  .regbox .v { color: var(--green); }
-  .regbox .v.unset { color: var(--grey); }
-  .edge { border-left: 3px solid var(--amber); padding: 10px 14px; background: var(--amber-bg); border-radius: 0 8px 8px 0; margin-top: 14px; font-size: 13.5px; color: var(--text); }
+  /* ---------- pipeline ---------- */
+  .stage-controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  button{font:14px inherit;background:var(--panel2);color:var(--ink);border:1px solid var(--line);
+    border-radius:9px;padding:9px 15px;cursor:pointer;transition:.15s}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent);color:#04101f;border-color:var(--accent);font-weight:600}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  .flow{display:grid;grid-template-columns:repeat(8,1fr);gap:8px;margin-top:6px}
+  .step{position:relative;background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+    padding:10px 8px;text-align:center;min-height:82px;display:flex;flex-direction:column;
+    justify-content:center;gap:4px;transition:.25s;opacity:.5}
+  .step .n{font:11px var(--mono);color:var(--dim)}
+  .step .t{font-size:12.5px;font-weight:600;line-height:1.25}
+  .step .ico{font-size:17px}
+  .step.done{opacity:1;border-color:var(--good)}
+  .step.done .ico{color:var(--good)}
+  .step.active{opacity:1;border-color:var(--accent);box-shadow:0 0 0 2px rgba(89,176,255,.25);transform:translateY(-2px)}
+  .step.active .ico{color:var(--accent)}
+  .step.crit{border-style:dashed}
+  .flow .step:not(:last-child)::after{content:'';position:absolute;right:-6px;top:50%;
+    width:8px;height:2px;background:var(--wire)}
+  .console{margin-top:16px;background:#05070c;border:1px solid var(--line);border-radius:10px;
+    padding:12px 14px;font:12.5px/1.7 var(--mono);color:#cdd7e6;min-height:120px;white-space:pre-wrap}
+  .console .ts{color:#5b6b85}
+  .console .ok{color:var(--good)} .console .arm{color:var(--warn)} .console .er{color:var(--bad)}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:12.5px;color:var(--dim)}
+  .legend span::before{content:'';display:inline-block;width:11px;height:11px;border-radius:3px;
+    margin-right:6px;vertical-align:-1px}
+  .lg-crit::before{border:1px dashed var(--dim);background:transparent}
+  .lg-good::before{background:var(--good)} .lg-acc::before{background:var(--accent)}
 
-  /* ============ view 2: enable flow ============ */
-  .flow { position: relative; margin: 18px 0; }
-  .fstep {
-    display: flex; gap: 14px; align-items: flex-start; padding: 14px;
-    border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 10px;
-    background: var(--surface2); opacity: .35; transition: all .3s;
-  }
-  .fstep.now { opacity: 1; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-  .fstep.done { opacity: .8; border-color: var(--green); }
-  .fstep.skipped { opacity: .25; }
-  .fstep .num {
-    flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--border);
-    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px;
-  }
-  .fstep.now .num { background: var(--accent); color: #0b1220; }
-  .fstep.done .num { background: var(--green); color: #0b1220; }
-  .fstep .ft { font-weight: 600; font-size: 14.5px; }
-  .fstep .fd { color: var(--soft); font-size: 13px; margin-top: 3px; }
-  .fstep .fd code { font-size: 12px; }
-  .flowctl { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
-  .btn {
-    background: var(--accent); color: #0b1220; border: none; border-radius: 8px;
-    padding: 9px 18px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
-  }
-  .btn:hover { filter: brightness(1.1); }
-  .btn.ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
-  .btn:disabled { opacity: .4; cursor: default; }
-  .branchpick { display: flex; gap: 10px; flex-wrap: wrap; margin: 4px 0 14px; }
-  .scenario-lbl { font-size: 13px; color: var(--soft); margin-bottom: 6px; }
-  .uacprompt {
-    border: 2px solid var(--amber); border-radius: var(--radius); padding: 16px; margin: 10px 0;
-    background: #1a1f2b; display: none;
-  }
-  .uacprompt.show { display: block; animation: fadein .3s; }
-  .uacprompt .uachead { font-weight: 700; color: var(--amber); font-size: 14px; margin-bottom: 6px; }
-  .uacprompt .uacbody { font-size: 13px; color: var(--soft); margin-bottom: 12px; }
-  .verdict { border-radius: var(--radius); padding: 14px 16px; margin-top: 12px; font-size: 14px; display: none; }
-  .verdict.show { display: block; animation: fadein .3s; }
-  .verdict.ok { background: var(--green-bg); border: 1px solid var(--green); color: var(--text); }
-  .verdict.fail { background: var(--red-bg); border: 1px solid var(--red); color: var(--text); }
-  .verdict .vt { font-weight: 700; }
-  .verdict.ok .vt { color: var(--green); }
-  .verdict.fail .vt { color: var(--red); }
+  /* ---------- dead-man switch ---------- */
+  .switch{display:grid;grid-template-columns:1.1fr 1fr;gap:16px;margin-top:6px}
+  @media(max-width:760px){.switch{grid-template-columns:1fr}.flow{grid-template-columns:repeat(4,1fr)}}
+  .clock{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}
+  .dial{position:relative;width:180px;height:180px}
+  .dial svg{transform:rotate(-90deg)}
+  .dial .label{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center}
+  .dial .big{font:26px var(--mono);font-weight:600}
+  .dial .cap{font-size:11px;color:var(--dim);letter-spacing:.5px}
+  .verdict{font-size:14px;font-weight:600;min-height:22px;text-align:center}
+  .sw-actions{display:flex;flex-direction:column;gap:10px;justify-content:center}
+  .sw-actions .row{display:flex;gap:10px}
+  .outcome{border-radius:10px;padding:12px 14px;font-size:13.5px;border:1px solid var(--line);
+    background:var(--panel2);min-height:96px}
+  .outcome.keep{border-color:var(--good)}
+  .outcome.roll{border-color:var(--bad)}
+  .outcome h4{margin:0 0 6px;font-size:14px}
 
-  /* ============ view 3: tile mockup ============ */
-  .strip-mock {
-    border: 1px solid var(--border); border-radius: var(--radius); background: #131824;
-    padding: 10px; margin: 14px 0;
-  }
-  .strip-title { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--soft); padding: 4px 6px 8px; }
-  .strip-row { display: flex; flex-wrap: wrap; gap: 10px; }
-  .chip {
-    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 10px 12px; font-size: 13px; min-width: 130px;
-  }
-  .chip .ckind {
-    display: inline-block; padding: 0 5px; border: 1px solid var(--border); border-radius: 5px;
-    font-size: 10px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--soft);
-    margin-right: 7px;
-  }
-  .chip .cdot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
-  .chip.faded { opacity: .45; }
-  .admtile { border-width: 2px; transition: border-color .2s; }
-  .admtile.s-active { border-color: var(--green); }
-  .admtile.s-pending { border-color: var(--amber); }
-  .admtile.s-disabled { border-color: var(--border); }
-  .admtile.s-unsupported { border-color: var(--border); opacity: .5; }
-  .admtile .clabel { font-weight: 600; }
-  .admtile .cdet { display: block; margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--soft); max-width: 240px; }
-  .admtile .enbtn {
-    display: inline-block; margin-top: 8px; background: var(--accent); color: #0b1220;
-    border: none; border-radius: 6px; padding: 5px 14px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
-  }
-  .statepick { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
-  .spick {
-    border: 1px solid var(--border); background: var(--surface2); color: var(--soft);
-    border-radius: 8px; padding: 7px 14px; font: inherit; font-size: 13px; cursor: pointer;
-  }
-  .spick.on { color: var(--text); border-color: var(--accent); background: rgba(110,168,254,.12); }
-  .gates { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
-  .gate { flex: 1; min-width: 210px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; font-size: 13px; }
-  .gate .gname { font-weight: 600; margin-bottom: 4px; }
-  .gate .gd { color: var(--soft); font-size: 12.5px; }
-
-  /* ============ view 4: pattern map ============ */
-  .mapgrid { display: grid; grid-template-columns: 1fr 34px 1fr; gap: 8px 0; align-items: stretch; margin-top: 14px; }
-  .mapcell {
-    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
-    padding: 10px 14px; font-size: 13px;
-  }
-  .mapcell .mn { font-family: var(--mono); font-weight: 700; font-size: 12.5px; color: var(--accent); word-break: break-all; }
-  .mapcell .md { color: var(--soft); font-size: 12px; margin-top: 4px; }
-  .mapcell.new { border-color: var(--green); }
-  .mapcell.new .mn { color: var(--green); }
-  .maparrow { display: flex; align-items: center; justify-content: center; color: var(--soft); font-size: 17px; }
-  .maphead { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--soft); padding: 4px 2px; }
-  @media (max-width: 640px) {
-    .mapgrid { grid-template-columns: 1fr; }
-    .maparrow { transform: rotate(90deg); padding: 2px 0; }
-    .maphead.right { display: none; }
-  }
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:6px}
+  @media(max-width:760px){.cards{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .card h4{margin:0 0 6px;font-size:14px}
+  .card p{margin:0;color:var(--dim);font-size:13px}
+  .tag{display:inline-block;font:11px var(--mono);border-radius:6px;padding:2px 7px;margin-bottom:8px}
+  .tag.g{background:rgba(75,208,139,.15);color:var(--good)}
+  .tag.a{background:rgba(89,176,255,.15);color:var(--accent)}
+  .tag.w{background:rgba(255,180,84,.15);color:var(--warn)}
+  .note{font-size:12.5px;color:var(--dim);margin-top:14px}
+  .foot{margin-top:40px;color:var(--dim);font-size:12.5px;border-top:1px solid var(--line);padding-top:14px}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Always-admin status tile</h1>
-  <div class="subtitle">
-    OpenSpec change <code>add-always-admin-status</code> — a header STATUS-strip tile that reports whether
-    this Windows box runs every process with full admin rights (UAC off), and can flip it on with one tap.
+  <header>
+    <h1>Deploy to live &amp; the dead-man's switch</h1>
+    <p class="sub">What just happened when we shipped to <code>:5099</code> and you said <b>“keep it.”</b></p>
+    <div>
+      <span class="pill">repo <b>birocode-copy</b></span>
+      <span class="pill">port <b>:5099</b></span>
+      <span class="pill">live PID <b>20324</b> @ 14:43:24</span>
+      <span class="pill">DLL + dist <b>hash-match ✓</b></span>
+      <span class="pill">debug endpoint <b>200 ✓</b></span>
+    </div>
+  </header>
+
+  <!-- ============ PIPELINE ============ -->
+  <h2>1 · What <code>swap.ps1</code> did — press Play to step through it</h2>
+  <div class="panel">
+    <div class="stage-controls">
+      <button class="primary" id="play">▶ Play deploy</button>
+      <button id="step">Step ›</button>
+      <button id="reset">↺ Reset</button>
+      <span class="muted" id="stagelabel" style="margin-left:6px"></span>
+    </div>
+    <div class="flow" id="flow"></div>
+    <div class="legend">
+      <span class="lg-acc">running now</span>
+      <span class="lg-good">done</span>
+      <span class="lg-crit">non-obvious / safety-critical</span>
+    </div>
+    <div class="console" id="console">Idle. Press ▶ Play deploy.</div>
   </div>
 
-  <div class="tabs">
-    <button class="tab on" data-v="v1">1 · State model</button>
-    <button class="tab" data-v="v2">2 · Enable flow</button>
-    <button class="tab" data-v="v3">3 · The tile</button>
-    <button class="tab" data-v="v4">4 · Pattern map</button>
+  <!-- ============ DEAD-MAN SWITCH ============ -->
+  <h2>2 · The armed 15-minute window — the fork you were in</h2>
+  <div class="panel">
+    <p class="muted" style="margin-top:0">
+      After a healthy restart, <code>swap.ps1</code> arms a scheduled task
+      (<code>ClaudeWebAutoRollback</code>) set to fire in 15 minutes. Two exits: you disarm with
+      <code>keep.ps1</code>, or the timer wins and <code>rollback.ps1</code> restores last-good.
+      Drag the clock or press the buttons.
+    </p>
+    <div class="switch">
+      <div class="clock">
+        <div class="dial">
+          <svg width="180" height="180" viewBox="0 0 180 180">
+            <circle cx="90" cy="90" r="78" fill="none" stroke="#222c3d" stroke-width="12"/>
+            <circle id="arc" cx="90" cy="90" r="78" fill="none" stroke="var(--warn)" stroke-width="12"
+              stroke-linecap="round" stroke-dasharray="490" stroke-dashoffset="0"/>
+          </svg>
+          <div class="label">
+            <div class="big" id="clockTime">15:00</div>
+            <div class="cap" id="clockCap">UNTIL ROLLBACK</div>
+          </div>
+        </div>
+        <input type="range" id="slider" min="0" max="900" value="0" style="width:180px" />
+        <div class="verdict" id="verdict" style="color:var(--warn)">⏳ Armed — deployed 14:43, fires 14:58</div>
+      </div>
+      <div class="sw-actions">
+        <div class="row">
+          <button class="primary" id="keepBtn" style="flex:1">✓ keep it → keep.ps1</button>
+          <button id="letBtn" style="flex:1">⏱ let timer run</button>
+        </div>
+        <div class="outcome" id="outcome">
+          <h4>Two ways out</h4>
+          <p class="muted" style="font-size:12.5px;margin:0">
+            <b>keep.ps1</b> deletes the scheduled task — the new build stays live forever.<br>
+            <b>timeout</b> → <code>rollback.ps1</code> <code>robocopy /MIR</code>s
+            <code>run-bin.lastgood</code> back over <code>run-bin</code> and restarts. No operator.
+          </p>
+        </div>
+      </div>
+    </div>
+    <p class="note" id="realNote">
+      ↳ In this session you said <b>“keep it”</b> inside the window — so we ran <code>keep.ps1</code>. The switch is off.
+    </p>
   </div>
 
-  <!-- ================= VIEW 1 ================= -->
-  <div class="view on" id="v1">
-    <div class="card">
-      <h2>Two facts → one state</h2>
-      <p>The whole feature derives from <strong>two independent facts</strong> the backend reads on every
-        <code>GET /api/always-admin/status</code>. Neither read needs elevation, and neither changes anything.</p>
-      <p class="hint">Click each fact to toggle it and watch the derived state.</p>
-
-      <div class="facts">
-        <button class="fact true" id="factReg">
-          <span class="fname">registrySet</span>
-          <div class="fdesc">All three UAC-off DWORDs are <code>0</code> under
-            <code>HKLM\...\Policies\System</code></div>
-          <div class="fval"><span class="switch"></span><span class="fvtext">true</span></div>
-        </button>
-        <button class="fact false" id="factTok">
-          <span class="fname">tokenElevated</span>
-          <div class="fdesc">The harness's <em>own process token</em> is elevated —
-            <code>WindowsPrincipal.IsInRole(Administrator)</code>. This is the <strong>reboot proxy</strong>.</div>
-          <div class="fval"><span class="switch"></span><span class="fvtext">false</span></div>
-        </button>
+  <!-- ============ THE keep.ps1 WRINKLE ============ -->
+  <h2>3 · The wrinkle in <code>keep.ps1</code>’s output</h2>
+  <div class="panel">
+    <div class="console" style="min-height:auto">kept: auto-rollback disarmed (ClaudeWebAutoRollback deleted). The deployed build stays live.
+<span class="er">ERROR: The system cannot find the file specified.</span></div>
+    <div class="cards" style="margin-top:14px">
+      <div class="card">
+        <span class="tag g">the line that matters</span>
+        <h4>“disarmed … deleted”</h4>
+        <p>keep.ps1 printed success first: the scheduled task was found and removed. The switch is <b>off</b> — no rollback fires. This build is now permanent.</p>
       </div>
-
-      <div class="regbox" id="regbox"></div>
-
-      <div class="derived">
-        <div class="arrow-down">↓</div>
-        <div class="state-big" id="stateBig"></div>
-      </div>
-
-      <table class="truth" id="truthTable">
-        <tr><th>registrySet</th><th>tokenElevated</th><th>state</th><th>meaning</th></tr>
-        <tr data-k="f-f"><td>false</td><td>false</td><td class="st" style="color:var(--grey)">disabled</td><td>Normal UAC — offer Enable</td></tr>
-        <tr data-k="f-t"><td>false</td><td>true</td><td class="st" style="color:var(--grey)">disabled</td><td>Harness launched elevated, but UAC still on</td></tr>
-        <tr data-k="t-f"><td>true</td><td>false</td><td class="st" style="color:var(--amber)">reboot_pending</td><td>Values written, reboot not yet applied</td></tr>
-        <tr data-k="t-t"><td>true</td><td>true</td><td class="st" style="color:var(--green)">active</td><td>UAC-off is live — every process elevated</td></tr>
-      </table>
-
-      <div class="edge">
-        <strong>The edge case that matters:</strong> <code>tokenElevated=true</code> with
-        <code>registrySet=false</code> is still <strong>disabled</strong> — the Operator merely launched the
-        harness elevated under normal UAC. Token elevation only <em>promotes</em> the enabled reading to
-        Active; it never fabricates Active on its own. (Try it: registry off, token on.)
+      <div class="card">
+        <span class="tag w">the trailing ERROR</span>
+        <h4>A harmless echo</h4>
+        <p>The follow-up <code>schtasks /Query</code> I ran to <i>confirm</i> the task was gone returned “cannot find the file” — <b>because it’s gone.</b> The verify step succeeding <i>is</i> the not-found error.</p>
       </div>
     </div>
-    <div class="card">
-      <h2>Why the token is the reboot proxy</h2>
-      <p>Writing <code>EnableLUA=0</code> doesn't take effect until reboot. There's no clean "reboot pending"
-        flag in Windows — but the harness's own token tells the truth: <strong>after</strong> the reboot,
-        every process of an admin account gets the full token, so the harness reads its own principal and
-        finds <code>Administrator</code>. Before the reboot the account still hands out the filtered token,
-        so the read is <code>false</code>. Registry says "requested"; token says "applied".</p>
-      <p>This box (as of 2026-07-27) had the values written by a prior agent — so it should read
-        <strong>reboot_pending</strong> or <strong>active</strong> depending on whether it restarted since.</p>
-    </div>
+    <p class="note">Exit code 1 came from that confirmation query, not from keep.ps1 itself. Reading both lines together: <b>disarm succeeded, and the proof is the “not found.”</b></p>
   </div>
 
-  <!-- ================= VIEW 2 ================= -->
-  <div class="view" id="v2">
+  <!-- ============ SAFETY RAILS ============ -->
+  <h2>4 · The safety rails baked into the deploy</h2>
+  <div class="cards">
     <div class="card">
-      <h2>POST /api/always-admin/enable — one write, at most one consent</h2>
-      <p>The Enable button's whole contract: write three DWORDs, prompt <strong>at most once</strong>,
-        never reboot. Pick a scenario and step through.</p>
-      <div class="scenario-lbl">Scenario:</div>
-      <div class="branchpick">
-        <button class="btn ghost spick on" data-sc="direct">Harness already elevated</button>
-        <button class="btn ghost spick" data-sc="consent">Not elevated — Operator grants UAC</button>
-        <button class="btn ghost spick" data-sc="declined">Not elevated — Operator declines UAC</button>
-      </div>
-      <div class="flowctl">
-        <button class="btn" id="stepBtn">Step ▸</button>
-        <button class="btn ghost" id="resetBtn">Reset</button>
-      </div>
-
-      <div class="flow" id="flow">
-        <div class="fstep" data-s="0">
-          <div class="num">1</div>
-          <div><div class="ft">Operator taps Enable (state = disabled)</div>
-            <div class="fd">Tile posts <code>apiPost('/always-admin/enable')</code>; button disables with a spinner. Enable is only rendered in the <code>disabled</code> state.</div></div>
-        </div>
-        <div class="fstep" data-s="1">
-          <div class="num">2</div>
-          <div><div class="ft">Try the direct write first</div>
-            <div class="fd"><code>Registry.LocalMachine.OpenSubKey(path, writable: true)</code> → set
-              <code>EnableLUA=0</code>, <code>ConsentPromptBehaviorAdmin=0</code>, <code>PromptOnSecureDesktop=0</code>.
-              If the harness process is already elevated this just works — <strong>zero prompts</strong>.</div></div>
-        </div>
-        <div class="fstep" data-s="2">
-          <div class="num">3</div>
-          <div><div class="ft">Denied? Elevate exactly once</div>
-            <div class="fd">On <code>UnauthorizedAccessException</code>: shell-execute one child with
-              <code>Verb = "runas"</code> that performs <em>all three</em> writes in a single elevated action
-              (batched <code>reg add</code> / <code>reg import</code>) — one UAC consent, not three.</div></div>
-        </div>
-        <div class="fstep" data-s="3">
-          <div class="num">4</div>
-          <div><div class="ft">UAC consent appears on the HOST desktop</div>
-            <div class="fd">Only the <strong>Operator</strong> at the PC can answer it — the End User on the
-              phone cannot. Cancelled consent = <code>Win32Exception 1223</code>, mapped to a typed failure.</div></div>
-        </div>
-        <div class="fstep" data-s="4">
-          <div class="num">5</div>
-          <div><div class="ft">Return a fresh read — never reboot</div>
-            <div class="fd">Response: <code>{ ok, method: "direct"|"elevated", state }</code> where
-              <code>state</code> is re-read after the write. Success lands on
-              <code>reboot_pending</code> — the token can't flip until the Operator restarts. Idempotent:
-              re-writing set values is a no-op success.</div></div>
-        </div>
-      </div>
-
-      <div class="uacprompt" id="uacBox">
-        <div class="uachead">⚠ User Account Control — host desktop</div>
-        <div class="uacbody">Do you want to allow this app to make changes to your device?<br>
-          <em>reg.exe — writes 3 values under Policies\System</em></div>
-        <button class="btn" id="uacYes">Yes</button>
-        <button class="btn ghost" id="uacNo">No</button>
-      </div>
-
-      <div class="verdict" id="verdictBox"></div>
+      <span class="tag a">before build</span>
+      <h4>Ancestry guard</h4>
+      <p>Refuses to deploy unless local <code>HEAD</code> already contains <code>origin/main</code>. Today it caught a sibling session shipping <i>always-admin</i> (<code>94fead6</code>) — so I merged origin/main first, and this deploy carries <b>both</b> features.</p>
     </div>
     <div class="card">
-      <h2>What Enable deliberately does NOT do</h2>
-      <p><strong>No reboot.</strong> Auto-restarting the box from a phone tap is too destructive; the tile
-        shows "restart required" and the Operator reboots when ready.</p>
-      <p><strong>No Disable button</strong> (this change). Rollback = set <code>EnableLUA=1</code> + reboot —
-        documented on the tile, not automated, so UAC can't be re-armed by an accidental tap. A future
-        change can add it.</p>
-      <p><strong>No three separate elevations.</strong> Batching the writes into one elevated child is why
-        there's one consent instead of three.</p>
+      <span class="tag a">before stop</span>
+      <h4>Stage-before-stop</h4>
+      <p>The new build is fully staged and validated <i>while the old one still serves</i>. Only once the staged copy is proven complete does it kill the live PID — minimizing the dark window.</p>
+    </div>
+    <div class="card">
+      <span class="tag a">before swap</span>
+      <h4>Snapshot → last-good</h4>
+      <p><code>robocopy /MIR</code> mirrors the current <code>run-bin</code> to <code>run-bin.lastgood</code>. That snapshot is exactly what the dead-man switch restores if the new build misbehaves.</p>
+    </div>
+    <div class="card">
+      <span class="tag w">this box’s gotchas</span>
+      <h4>Two locale/tooling traps</h4>
+      <p>Auto-rollback uses a real <code>DateTime</code> trigger (never <code>schtasks /SD</code> — locale bug). And the launcher is <code>powershell.exe</code>, not <code>pwsh</code> — there’s no PS7 here, so <code>pwsh</code> would silently no-op.</p>
     </div>
   </div>
 
-  <!-- ================= VIEW 3 ================= -->
-  <div class="view" id="v3">
-    <div class="card">
-      <h2>Where it lives: the header STATUS strip</h2>
-      <p>The collapsible strip under the app header (<code>HeaderStatusStrip.jsx</code>) already hosts three
-        self-contained chips. <code>AdminStatusTile</code> becomes the fourth. Pick a state to preview it.</p>
-      <div class="statepick" id="tileStates">
-        <button class="spick" data-st="active">active</button>
-        <button class="spick on" data-st="pending">reboot_pending</button>
-        <button class="spick" data-st="disabled">disabled</button>
-        <button class="spick" data-st="unsupported">unsupported</button>
-      </div>
-      <div class="strip-mock">
-        <div class="strip-title">Status ⌄ &nbsp;(collapsed by default — chips unmount &amp; stop polling)</div>
-        <div class="strip-row">
-          <div class="chip faded"><span class="ckind">Score</span>Scoreboard</div>
-          <div class="chip faded"><span class="ckind">GH</span>Accounts</div>
-          <div class="chip faded"><span class="ckind">Host</span>14:07:31 <span style="color:var(--soft)">UTC+2</span></div>
-          <div class="chip admtile" id="admTile"></div>
-        </div>
-      </div>
-      <p class="hint">The caveat + rollback line is <strong>always visible</strong> on the tile in every
-        supported state — that's a spec requirement, not decoration. Try the Enable button in the
-        <code>disabled</code> preview.</p>
-
-      <div class="gates">
-        <div class="gate">
-          <div class="gname">Feature-gated</div>
-          <div class="gd"><code>useFeature('adminStatus')</code> — declared <code>'advanced'</code> in
-            <code>UiModeContext.jsx</code>'s FEATURES map, per the "new features default to Advanced" convention.
-            End Users in Basic mode never see it.</div>
-        </div>
-        <div class="gate">
-          <div class="gname">Self-contained poller</div>
-          <div class="gd">Own 5&nbsp;s <code>apiGet('/always-admin/status')</code> loop — the same idiom as
-            HostClock / AccountChips. Strip collapsed ⇒ chip unmounted ⇒ zero API traffic.</div>
-        </div>
-        <div class="gate">
-          <div class="gname">Both locales</div>
-          <div class="gd">All strings via i18n keys in <code>en.json</code> + <code>tr.json</code> (flat dotted
-            keys, e.g. <code>adminstatus.active</code>), matching the existing catalog style.</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ================= VIEW 4 ================= -->
-  <div class="view" id="v4">
-    <div class="card">
-      <h2>Nothing novel: every piece copies a proven pattern</h2>
-      <p>Before implementing, the codebase was scouted for the idioms this feature must match. Each new file
-        (green) is modeled on an existing one (blue).</p>
-      <div class="mapgrid">
-        <div class="maphead">Existing pattern</div><div></div><div class="maphead right">New file</div>
-
-        <div class="mapcell"><div class="mn">Controllers/HostTimeController.cs</div>
-          <div class="md">Probe idiom: attribute-routed, <code>_logger.CountRequest()</code>, always 200,
-            typed record, no state change on GET.</div></div>
-        <div class="maparrow">→</div>
-        <div class="mapcell new"><div class="mn">Controllers/AlwaysAdminController.cs</div>
-          <div class="md"><code>GET /api/always-admin/status</code> +
-            <code>POST /api/always-admin/enable</code>. Auto-discovered by <code>AddControllers()</code> —
-            drop-in, no EmbeddedApi wiring needed.</div></div>
-
-        <div class="mapcell"><div class="mn">dashboard/HostClock.jsx + hostClock.css</div>
-          <div class="md">Self-contained chip: own poller, stale-after-3-failures dimming, collapse key,
-            <code>aliveRef</code> cleanup.</div></div>
-        <div class="maparrow">→</div>
-        <div class="mapcell new"><div class="mn">dashboard/AdminStatusTile.jsx + adminStatusTile.css</div>
-          <div class="md">Same shape; renders by <code>state</code>, Enable button only when
-            <code>disabled</code>, caveat always shown.</div></div>
-
-        <div class="mapcell"><div class="mn">header/HeaderStatusStrip.jsx</div>
-          <div class="md">Mount point — <code>header-strip__row</code> already conditionally renders each
-            chip behind its own feature flag.</div></div>
-        <div class="maparrow">→</div>
-        <div class="mapcell new"><div class="mn">+ one line: {adminStatusOn &amp;&amp; &lt;AdminStatusTile /&gt;}</div>
-          <div class="md">Alongside Scoreboard, AccountChips, HostClock.</div></div>
-
-        <div class="mapcell"><div class="mn">context/UiModeContext.jsx — FEATURES</div>
-          <div class="md">Capability map; every feature is one line, moving between modes is a one-line change.</div></div>
-        <div class="maparrow">→</div>
-        <div class="mapcell new"><div class="mn">adminStatus: 'advanced'</div>
-          <div class="md">With the openspec change id in the trailing comment, like its neighbors.</div></div>
-
-        <div class="mapcell"><div class="mn">Services/Accounts/ProcessProbe.cs</div>
-          <div class="md">Bounded child-process runs. Note the contrast: probes use
-            <code>UseShellExecute=false</code>; the elevation fallback is the one place that
-            <em>must</em> use <code>UseShellExecute=true</code> — <code>Verb="runas"</code> only works
-            through ShellExecute.</div></div>
-        <div class="maparrow">→</div>
-        <div class="mapcell new"><div class="mn">elevated-write helper in the controller</div>
-          <div class="md">Single <code>runas</code> child batching all three <code>reg add</code> writes;
-            maps exit code / 1223 to typed results.</div></div>
-      </div>
-    </div>
-    <div class="card">
-      <h2>Why this feature exists at all</h2>
-      <p>UAC hands even admin accounts a <strong>filtered token</strong>: every process the harness spawns
-        (Claude Code, git, deploy scripts) starts non-elevated, so admin-needing work either throws a UAC
-        prompt the phone user can't answer or fails silently. The dead-man's-switch rollback already hit
-        this in practice. UAC-off (<code>EnableLUA=0</code> + reboot) is the machine-wide cure — this tile
-        makes that state <em>visible</em> and <em>settable</em> instead of invisible.</p>
-      <p><strong>The known cost:</strong> with UAC off, Windows Store / packaged apps (e.g. Windows Terminal)
-        may fail to launch. That's why the caveat + rollback (<code>EnableLUA=1</code> + reboot) are pinned
-        to the tile itself.</p>
-    </div>
+  <div class="foot">
+    Companion to the chat turn. Self-contained, build-less, relative-URL only —
+    served live at <code>/api/localview/&lt;repo&gt;/app/understanding/</code>.
+    Overwrites the rolling-latest <code>understanding-app/index.html</code>.
   </div>
 </div>
 
-<script>
-(function () {
-  'use strict';
-
-  /* ---------- tabs ---------- */
-  var tabs = document.querySelectorAll('.tab');
-  tabs.forEach(function (t) {
-    t.addEventListener('click', function () {
-      tabs.forEach(function (x) { x.classList.remove('on'); });
-      document.querySelectorAll('.view').forEach(function (v) { v.classList.remove('on'); });
-      t.classList.add('on');
-      document.getElementById(t.dataset.v).classList.add('on');
-    });
-  });
-
-  /* ---------- view 1: state machine ---------- */
-  var reg = true, tok = false; // this box's likely state: values written, reboot pending
-  var factReg = document.getElementById('factReg');
-  var factTok = document.getElementById('factTok');
-  var stateBig = document.getElementById('stateBig');
-  var regbox = document.getElementById('regbox');
-  var truth = document.getElementById('truthTable');
-
-  function renderFacts() {
-    factReg.className = 'fact ' + reg;
-    factTok.className = 'fact ' + tok;
-    factReg.querySelector('.fvtext').textContent = reg;
-    factTok.querySelector('.fvtext').textContent = tok;
-
-    var v = reg
-      ? '<span class="v">0</span>'
-      : '<span class="v unset">1 / absent</span>';
-    regbox.innerHTML =
-      'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System<br>' +
-      '&nbsp;&nbsp;<span class="k">EnableLUA</span> = ' + v + '<br>' +
-      '&nbsp;&nbsp;<span class="k">ConsentPromptBehaviorAdmin</span> = ' + v + '<br>' +
-      '&nbsp;&nbsp;<span class="k">PromptOnSecureDesktop</span> = ' + v;
-
-    var st, cls, desc;
-    if (!reg) { st = 'disabled'; cls = 'st-disabled'; desc = 'Normal UAC — tile is grey and offers Enable'; }
-    else if (!tok) { st = 'reboot_pending'; cls = 'st-pending'; desc = 'Written but not applied — amber "restart required"'; }
-    else { st = 'active'; cls = 'st-active'; desc = 'UAC-off live — green, every process runs elevated'; }
-    stateBig.className = 'state-big ' + cls;
-    stateBig.innerHTML = st + '<span class="sdesc">' + desc + '</span>';
-
-    var key = (reg ? 't' : 'f') + '-' + (tok ? 't' : 'f');
-    truth.querySelectorAll('tr[data-k]').forEach(function (r) {
-      r.classList.toggle('hilite', r.dataset.k === key);
-    });
-  }
-  factReg.addEventListener('click', function () { reg = !reg; renderFacts(); });
-  factTok.addEventListener('click', function () { tok = !tok; renderFacts(); });
-  renderFacts();
-
-  /* ---------- view 2: enable flow ---------- */
-  var scenario = 'direct';
-  var stepIdx = -1;
-  var steps = document.querySelectorAll('#flow .fstep');
-  var stepBtn = document.getElementById('stepBtn');
-  var uacBox = document.getElementById('uacBox');
-  var verdictBox = document.getElementById('verdictBox');
-  var awaitingUac = false;
-
-  // per-scenario: which step indices run (others are skipped)
-  var paths = {
-    direct:   [0, 1, 4],
-    consent:  [0, 1, 2, 3, 4],
-    declined: [0, 1, 2, 3]
-  };
-
-  document.querySelectorAll('[data-sc]').forEach(function (b) {
-    b.addEventListener('click', function () {
-      document.querySelectorAll('[data-sc]').forEach(function (x) { x.classList.remove('on'); });
-      b.classList.add('on');
-      scenario = b.dataset.sc;
-      resetFlow();
-    });
-  });
-
-  function resetFlow() {
-    stepIdx = -1; awaitingUac = false;
-    steps.forEach(function (s) { s.className = 'fstep'; });
-    uacBox.classList.remove('show');
-    verdictBox.className = 'verdict';
-    stepBtn.disabled = false;
-  }
-
-  function showVerdict(ok, title, body) {
-    verdictBox.className = 'verdict show ' + (ok ? 'ok' : 'fail');
-    verdictBox.innerHTML = '<span class="vt">' + title + '</span> — ' + body;
-    stepBtn.disabled = true;
-  }
-
-  function advance() {
-    if (awaitingUac) return;
-    var path = paths[scenario];
-    if (stepIdx >= 0) steps[path[stepIdx]].className = 'fstep done';
-    stepIdx++;
-    if (stepIdx >= path.length) { stepBtn.disabled = true; return; }
-    var s = path[stepIdx];
-    steps.forEach(function (el, i) {
-      if (path.indexOf(i) === -1) el.className = 'fstep skipped';
-    });
-    steps[s].className = 'fstep now';
-
-    if (s === 3) {
-      uacBox.classList.add('show');
-      awaitingUac = true;
-      return;
-    }
-    if (s === 4) {
-      var method = scenario === 'direct' ? 'direct' : 'elevated';
-      showVerdict(true, '200 OK',
-        '<code>{ ok: true, method: "' + method + '", state: "reboot_pending" }</code> — tile re-polls and turns amber: <em>Enabled — restart required</em>.' +
-        (scenario === 'direct' ? ' Zero prompts were shown.' : ' Exactly one consent was shown.'));
-    }
-  }
-
-  document.getElementById('uacYes').addEventListener('click', function () {
-    if (!awaitingUac) return;
-    awaitingUac = false;
-    uacBox.classList.remove('show');
-    if (scenario === 'declined') {
-      // honor the actual click: granting consent moves us onto the consent path
-      scenario = 'consent';
-      document.querySelectorAll('[data-sc]').forEach(function (x) {
-        x.classList.toggle('on', x.dataset.sc === 'consent');
-      });
-    }
-    advance();
-  });
-  document.getElementById('uacNo').addEventListener('click', function () {
-    if (!awaitingUac) return;
-    awaitingUac = false;
-    uacBox.classList.remove('show');
-    steps[3].className = 'fstep done';
-    showVerdict(false, 'Win32Exception 1223',
-      'Consent declined. No registry value changed; state stays <code>disabled</code>; the tile shows a ' +
-      '"consent declined — try again" hint. Nothing to roll back.');
-  });
-
-  stepBtn.addEventListener('click', advance);
-  document.getElementById('resetBtn').addEventListener('click', resetFlow);
-  resetFlow();
-
-  /* ---------- view 3: tile mockup ---------- */
-  var admTile = document.getElementById('admTile');
-  var tileDefs = {
-    active: {
-      cls: 's-active', dot: 'var(--green)',
-      label: 'Always-admin <b style="color:var(--green)">active</b>',
-      det: 'Caveat: Store/packaged apps may not launch. Rollback: EnableLUA=1 + reboot.', btn: false
-    },
-    pending: {
-      cls: 's-pending', dot: 'var(--amber)',
-      label: 'Enabled — <b style="color:var(--amber)">restart required</b>',
-      det: 'Caveat: Store/packaged apps may not launch. Rollback: EnableLUA=1 + reboot.', btn: false
-    },
-    disabled: {
-      cls: 's-disabled', dot: 'var(--grey)',
-      label: 'UAC on <span style="color:var(--soft)">(admin filtered)</span>',
-      det: 'Caveat: Store/packaged apps may not launch. Rollback: EnableLUA=1 + reboot.', btn: true
-    },
-    unsupported: {
-      cls: 's-unsupported', dot: 'var(--grey)',
-      label: 'Unsupported <span style="color:var(--soft)">(Windows only)</span>',
-      det: null, btn: false
-    }
-  };
-  function renderTile(key) {
-    var d = tileDefs[key];
-    admTile.className = 'chip admtile ' + d.cls;
-    var h = '<span class="ckind">Admin</span><span class="cdot" style="background:' + d.dot + '"></span>' +
-            '<span class="clabel">' + d.label + '</span>';
-    if (d.btn) h += '<br><button class="enbtn" type="button">Enable</button>';
-    if (d.det) h += '<span class="cdet">' + d.det + '</span>';
-    admTile.innerHTML = h;
-    var en = admTile.querySelector('.enbtn');
-    if (en) en.addEventListener('click', function () {
-      en.textContent = 'Writing…'; en.disabled = true;
-      setTimeout(function () {
-        renderTile('pending');
-        document.querySelectorAll('#tileStates .spick').forEach(function (x) {
-          x.classList.toggle('on', x.dataset.st === 'pending');
-        });
-      }, 700);
-    });
-  }
-  document.querySelectorAll('#tileStates .spick').forEach(function (b) {
-    b.addEventListener('click', function () {
-      document.querySelectorAll('#tileStates .spick').forEach(function (x) { x.classList.remove('on'); });
-      b.classList.add('on');
-      renderTile(b.dataset.st);
-    });
-  });
-  renderTile('pending');
-})();
-</script>
+<script src="./app.js"></script>
 </body>
 </html>
