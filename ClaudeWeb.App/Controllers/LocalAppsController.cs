@@ -42,15 +42,17 @@ public class LocalAppsController : ControllerBase
 {
     private readonly RepositoryResolver _repos;
     private readonly LocalAppDiscoveryJobs _jobs;
+    private readonly LocalAppDiscoveryCache _cache;
     private readonly LocalAppRunner _runner;
     private readonly RepoEventLog _events;
     private readonly AuditService _audit;
     private readonly Logger _logger;
 
-    public LocalAppsController(RepositoryResolver repos, LocalAppDiscoveryJobs jobs, LocalAppRunner runner, RepoEventLog events, AuditService audit, Logger logger)
+    public LocalAppsController(RepositoryResolver repos, LocalAppDiscoveryJobs jobs, LocalAppDiscoveryCache cache, LocalAppRunner runner, RepoEventLog events, AuditService audit, Logger logger)
     {
         _repos = repos;
         _jobs = jobs;
+        _cache = cache;
         _runner = runner;
         _events = events;
         _audit = audit;
@@ -98,6 +100,51 @@ public class LocalAppsController : ControllerBase
         var job = _jobs.Get(repo.Id);
         if (probe) EmitCheck(repo.Id, job);
         return Ok(JobBody(repo.Id, repo.Name, job));
+    }
+
+    // Load the caller's repo's most recent discovery from the durable on-disk cache
+    // WITHOUT running an agent (openspec change cache-discovered-local-apps). Returns
+    // the same JobBody shape as /discover/status on a hit — each app's `running` flag
+    // recomputed LIVE here, never served from the cache — plus `cachedAt`, so the dock
+    // can render register / Run / Check identically to a live scan. On a miss it
+    // returns an explicit status:"no-cache" (distinct from idle and from a successful
+    // empty done) so the dock can tell the operator to run Discover first. Read-only:
+    // no agent, no repo mutation, no registration. Seeding the job registry from the
+    // cache lets a later Run/Check resolve its command from this result (still a real
+    // scan's command, just persisted).
+    [HttpGet("cache")]
+    public IActionResult LoadCache()
+    {
+        _logger.CountRequest();
+
+        var repo = _repos.Current();
+        if (repo is null)
+            return NotFound(new { error = "No repository selected." });
+
+        var cached = _cache.Load(repo.Id);
+        if (cached is null)
+            return Ok(new { repoId = repo.Id, repoName = repo.Name, status = "no-cache" });
+
+        // Rehydrate the in-memory job so per-row Run/Check work after a cache load
+        // (e.g. following a harness restart, when no live job exists).
+        _jobs.SeedFromCache(repo.Id, cached.Report);
+        return Ok(new
+        {
+            repoId = repo.Id,
+            repoName = repo.Name,
+            status = "done",
+            apps = cached.Report.Apps.Select(a => new
+            {
+                name = a.Name,
+                port = a.Port,
+                folder = a.Folder,
+                evidence = a.Evidence,
+                startCommand = a.StartCommand,
+                running = _runner.IsListening(a.Port),
+            }),
+            fromCache = true,
+            cachedAt = cached.CachedAt,
+        });
     }
 
     // Emit a check boundary event: we probe each discovered app's port (in-process

@@ -1323,6 +1323,17 @@
   color: #dc2626;
 }
 
+/* Discover + Load cache side by side (openspec change cache-discovered-local-apps). */
+.phone__discover-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.phone__discover-msg--cache {
+  color: var(--color-accent);
+}
+
 /* Ask-for-understanding row: the Ask button + the per-repo Auto toggle side by
    side (openspec auto-understanding-after-turn). */
 .phone__understanding-row {
