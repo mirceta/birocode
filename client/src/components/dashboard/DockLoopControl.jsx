@@ -24,6 +24,33 @@ import { useT } from '../../i18n/LanguageContext';
 const KINDS = ['suggestion', 'recipe', 'goal'];
 const EMOJI = { suggestion: '💡', recipe: '📋', goal: '🎯' };
 
+// Clipboard with a fallback chain (openspec: add-loop-debug-handoff): the async
+// API needs a secure context (the harness is often plain http off-box), so fall
+// back to the synchronous execCommand copy; a false return means both failed and
+// the caller shows the text for manual copying instead.
+async function copyToClipboard(text) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch { /* insecure context or permission — try the legacy path */ }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 export default function DockLoopControl({ repoId, loop, recipes = [], onChanged, onUsePending }) {
   const { t } = useT();
   const [open, setOpen] = useState(false);
@@ -39,6 +66,9 @@ export default function DockLoopControl({ repoId, loop, recipes = [], onChanged,
   const [busy, setBusy] = useState(false);
   const [gateHint, setGateHint] = useState(false);
   const [err, setErr] = useState('');
+  // Copy-for-debugging: idle | busy | copied | manual (clipboard failed — show
+  // the text for hand-copying) | error (fetch failed).
+  const [dbg, setDbg] = useState({ phase: 'idle', text: '' });
 
   const armed = !!loop?.active;
   const armedKind = armed ? loop.kind : null;
@@ -114,6 +144,26 @@ export default function DockLoopControl({ repoId, loop, recipes = [], onChanged,
 
   // One Disarm for whatever is armed — the agent has one loop slot.
   const disarm = () => act('/autopilot/loop', { repoId, action: 'disarm' });
+
+  // Copy-for-debugging (openspec: add-loop-debug-handoff): fetch the server's
+  // debug bundle and put a paste-ready block on the clipboard, so the user can
+  // hand this exact loop to an agent in chat. Works in every loop state — a
+  // stopped-when-it-shouldn't-have loop is the primary use.
+  const copyDebug = async () => {
+    setDbg({ phase: 'busy', text: '' });
+    try {
+      const bundle = await apiGet(`/autopilot/loops/${repoId}/debug`);
+      const text = `Claude Web loop debug bundle — repo "${bundle?.repo?.name ?? repoId}", generated ${bundle?.generatedAt}. Paste this whole block to an agent; it is self-describing.\n\`\`\`json\n${JSON.stringify(bundle, null, 2)}\n\`\`\``;
+      if (await copyToClipboard(text)) {
+        setDbg({ phase: 'copied', text: '' });
+        setTimeout(() => setDbg((d) => (d.phase === 'copied' ? { phase: 'idle', text: '' } : d)), 2500);
+      } else {
+        setDbg({ phase: 'manual', text });
+      }
+    } catch {
+      setDbg({ phase: 'error', text: '' });
+    }
+  };
   // Flip a live instance's mode without resetting it (revision 2, D9).
   const setLiveMode = (m) => act('/autopilot/loop', { repoId, action: 'mode', mode: m }, true);
 
@@ -291,6 +341,32 @@ export default function DockLoopControl({ repoId, loop, recipes = [], onChanged,
             <div className="phone__loop-replace">
               {t('dashboard.loopReplaces', { mode: kindName(armedKind) })}
             </div>
+          )}
+
+          {/* Copy-for-debugging: always offered — terminal and even missing
+              loop states are exactly when the user needs to hand this to an
+              agent ("here is what my loop did"). */}
+          <button
+            type="button"
+            className="phone__loop-debugcopy"
+            onClick={copyDebug}
+            disabled={dbg.phase === 'busy'}
+          >
+            {dbg.phase === 'copied' ? `✓ ${t('dashboard.loopDebugCopied')}` : `⧉ ${t('dashboard.loopDebugCopy')}`}
+          </button>
+          {dbg.phase === 'error' && (
+            <div className="phone__loop-msg phone__loop-msg--err" role="status">
+              {t('dashboard.loopDebugFailed')}
+            </div>
+          )}
+          {dbg.phase === 'manual' && (
+            <textarea
+              readOnly
+              className="phone__loop-debug-manual"
+              rows={6}
+              value={dbg.text}
+              onFocus={(e) => e.target.select()}
+            />
           )}
 
           {gateHint && (

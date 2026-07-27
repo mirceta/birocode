@@ -71,6 +71,11 @@ public class LoopConfigStore
     private readonly object _gate = new();
     private Data _data = new();
 
+    /// <summary>Where the loop records live on disk, for the debug bundle
+    /// (openspec: add-loop-debug-handoff) — so a pasted bundle tells an agent on
+    /// the host exactly which file holds the durable loop state.</summary>
+    public string FilePath => _path;
+
     public LoopConfigStore(Logger logger)
     {
         _logger = logger;

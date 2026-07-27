@@ -1568,6 +1568,33 @@
   overflow: auto;
 }
 
+/* Copy-for-debugging (openspec: add-loop-debug-handoff): same quiet pill as the
+   inspect toggle, plus the manual-copy textarea for clipboard-less contexts. */
+.phone__loop-debugcopy {
+  align-self: flex-start;
+  padding: 1px 8px;
+  border: 1px dashed var(--color-border);
+  border-radius: 999px;
+  background: none;
+  color: var(--color-text-soft);
+  font-size: 10.5px;
+  cursor: pointer;
+}
+
+.phone__loop-debug-manual {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px 7px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 10px;
+  line-height: 1.4;
+  font-family: var(--font-mono, monospace);
+  resize: vertical;
+}
+
 .phone__loop-replace {
   font-size: 10.5px;
   color: #b45309;

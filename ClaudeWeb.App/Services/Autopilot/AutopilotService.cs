@@ -196,6 +196,36 @@ public class AutopilotService : BackgroundService
         lock (_interceptGate) return _intercepts.ToList();
     }
 
+    /// <summary>A point-in-time dump of the engine's per-repo IN-MEMORY evidence for
+    /// the loop debug bundle (openspec: add-loop-debug-handoff) — the state that
+    /// explains "why didn't it tick" and lives nowhere on disk: the busy flag, the
+    /// current decision + hold reason, and the dedup guards that hold a loop until
+    /// the agent's reply changes.</summary>
+    public sealed record EngineDebug(
+        bool Busy, double TickSeconds, AgentState? State,
+        string? LastDriveSentSnippet, string? SuggestWaitSnippet,
+        long? ArmGenerationSeen, string? LastInterceptedSnippet,
+        IReadOnlyList<InterceptEvent> Intercepts, IReadOnlyList<LogEntry> Log);
+
+    public EngineDebug DebugSnapshot(string repoId, string? repoName)
+    {
+        List<InterceptEvent> intercepts;
+        lock (_interceptGate)
+            intercepts = _intercepts.Where(i => i.RepoId == repoId).Take(10).ToList();
+        List<LogEntry> log;
+        lock (_logGate)
+            log = _log.Where(l => l.RepoName == repoName).Take(10).ToList();
+        return new EngineDebug(
+            _runs.IsBusy(repoId),
+            Interval.TotalSeconds,
+            _states.TryGetValue(repoId, out var s) ? s : null,
+            _lastDriveSent.TryGetValue(repoId, out var d) ? d : null,
+            _suggestWait.TryGetValue(repoId, out var w) ? w : null,
+            _armGen.TryGetValue(repoId, out var g) ? g : null,
+            _lastIntercepted.TryGetValue(repoId, out var li) ? li : null,
+            intercepts, log);
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         // First tick after a short delay so startup isn't competing with the build.

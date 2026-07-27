@@ -1,5 +1,8 @@
+using ClaudeWeb.Services;
 using ClaudeWeb.Services.Autopilot;
+using ClaudeWeb.Services.Chat;
 using ClaudeWeb.Services.Logging;
+using ClaudeWeb.Services.Repositories;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -37,13 +40,14 @@ public class AutopilotController : ControllerBase
     private readonly AutopilotGate _operatorGate;
     private readonly AutopilotAuditLog _audit;
     private readonly SystemTestsService _systests;
+    private readonly RepositoryRegistry _repos;
     private readonly Logger _logger;
 
     public AutopilotController(
         AutopilotDiscoveryService discovery, AutopilotService engine,
         AutopilotConfigStore config, LoopConfigStore loops, LoopRecipeStore recipes,
         AutopilotGate operatorGate, AutopilotAuditLog audit,
-        SystemTestsService systests, Logger logger)
+        SystemTestsService systests, RepositoryRegistry repos, Logger logger)
     {
         _discovery = discovery;
         _engine = engine;
@@ -53,6 +57,7 @@ public class AutopilotController : ControllerBase
         _operatorGate = operatorGate;
         _audit = audit;
         _systests = systests;
+        _repos = repos;
         _logger = logger;
     }
 
@@ -241,6 +246,130 @@ public class AutopilotController : ControllerBase
                 name = r.Name,
                 maxIterations = r.MaxIterations,
             }),
+        });
+    }
+
+    /// <summary>The loop debug bundle (openspec: add-loop-debug-handoff): everything
+    /// needed to hand a misbehaving loop to an agent, as ONE pasteable JSON object —
+    /// gate/kill-switch state, the repo, the full loop record, the engine's in-memory
+    /// evidence (busy, decision + hold reason, dedup guards, intercepts, log), the
+    /// repo's audit slice, and the on-disk paths where the durable record lives so an
+    /// agent on the host can dig deeper. Session-auth but NOT operator-gated — a
+    /// loop's terminal state must stay debuggable after the gate closes — so, like
+    /// the status projection above, every prompt-bearing field is redacted while the
+    /// gate is closed and the marker points at the on-disk files instead.</summary>
+    [HttpGet("loops/{repoId}/debug")]
+    public IActionResult LoopDebug(string repoId)
+    {
+        _logger.CountRequest();
+        var gateOpen = _operatorGate.Enabled;
+        const string redactedMarker =
+            "[redacted — operator gate closed; an agent on the host can read the files listed under \"files\"]";
+        string? Text(string? s) => gateOpen || s is null ? s : redactedMarker;
+
+        var cfg = _config.Get();
+        var repo = _repos.GetAll().FirstOrDefault(r => r.Id == repoId);
+        var loop = _loops.Get(repoId);
+        var engine = _engine.DebugSnapshot(repoId, repo?.Name);
+
+        return Ok(new
+        {
+            bundle = "claude-web-loop-debug",
+            generatedAt = DateTimeOffset.UtcNow.ToString("O"),
+            agentHint = "Debug bundle for one Claude Web autopilot loop. The engine ticks every "
+                + $"{engine.TickSeconds:0}s (ClaudeWeb.App/Services/Autopilot/AutopilotService.cs, Tick/Execute); "
+                + "kind semantics live in SuggestionLoop/RecipeLoop/GoalLoop.cs, the store in LoopConfigStore.cs, "
+                + "the API in Controllers/AutopilotController.cs. engine.* is in-memory truth at generation time "
+                + "(guards explain why a tick held); the paths under files.* are on the harness host and hold the "
+                + "durable record. A loop only acts when: gateOpen && killSwitchEnabled && loop.active && !engine.busy "
+                + "&& the agent's trailing message differs from the matching guard snippet.",
+            gateOpen,
+            killSwitchEnabled = cfg.Enabled,
+            threshold = cfg.Threshold,
+            denyList = gateOpen ? (object)cfg.DenyList : redactedMarker,
+            repo = repo is null
+                ? null
+                : new { id = repo.Id, name = repo.Name, path = repo.Path, exists = repo.Exists },
+            loop = loop is null
+                ? null
+                : new
+                {
+                    kind = loop.Kind,
+                    mode = loop.Mode,
+                    phase = loop.Phase,
+                    active = loop.Active,
+                    status = loop.Status,
+                    stopReason = loop.StopReason,
+                    stopDetail = loop.StopDetail,
+                    iterationsDone = loop.IterationsDone,
+                    maxIterations = loop.MaxIterations,
+                    lastSentAt = loop.LastSentAt,
+                    armedAt = loop.ArmedAt,
+                    sentinel = loop.Sentinel,
+                    recipeId = loop.RecipeId,
+                    recipeName = loop.RecipeName,
+                    prompt = Text(loop.Prompt),
+                    goal = Text(loop.Goal),
+                    verifyPrompt = Text(loop.VerifyPrompt),
+                    pendingPrompt = Text(loop.PendingPrompt),
+                },
+            engine = new
+            {
+                busy = engine.Busy,
+                tickSeconds = engine.TickSeconds,
+                state = engine.State is null
+                    ? null
+                    : new
+                    {
+                        decision = engine.State.Decision,
+                        armed = engine.State.Armed,
+                        reason = engine.State.Reason,
+                        label = Text(engine.State.Label),
+                        confidence = engine.State.Confidence,
+                        lastMessage = Text(engine.State.LastMessage),
+                        updatedAt = engine.State.UpdatedAt,
+                    },
+                guards = new
+                {
+                    lastDriveSentSnippet = Text(engine.LastDriveSentSnippet),
+                    suggestWaitSnippet = Text(engine.SuggestWaitSnippet),
+                    armGenerationSeen = engine.ArmGenerationSeen,
+                    lastInterceptedSnippet = Text(engine.LastInterceptedSnippet),
+                },
+                intercepts = engine.Intercepts.Select(i => new
+                {
+                    at = i.At,
+                    phase = i.Phase,
+                    outcome = i.Outcome,
+                    label = Text(i.Label),
+                    confidence = i.Confidence,
+                    snippet = Text(i.Snippet),
+                    doneAt = i.DoneAt,
+                }),
+                log = engine.Log.Select(l => new
+                {
+                    at = l.At,
+                    outcome = l.Outcome,
+                    label = Text(l.Label),
+                    confidence = l.Confidence,
+                }),
+            },
+            audit = _audit.Recent().Where(a => a.RepoId == repoId).Take(10).Select(a => new
+            {
+                at = a.At,
+                outcome = a.Outcome,
+                confidence = a.Confidence,
+                prompt = Text(a.Prompt),
+                answeredMessage = Text(a.AnsweredMessage),
+            }),
+            files = new
+            {
+                loops = _loops.FilePath,
+                audit = _audit.FilePath,
+                gate = _operatorGate.FilePath,
+                transcripts = repo is null ? null : SessionService.ProjectsDirectoryFor(repo.Path),
+                dataDir = AppPaths.DataDir,
+            },
         });
     }
 

@@ -29,6 +29,10 @@ public sealed class AutopilotAuditLog
         _path = Path.Combine(dir, "autopilot-audit.jsonl");
     }
 
+    /// <summary>The on-disk audit path, for the debug bundle (openspec:
+    /// add-loop-debug-handoff).</summary>
+    public string FilePath => _path;
+
     public sealed record Entry(
         long At, string RepoId, string RepoName, string Prompt,
         double Confidence, string AnsweredMessage, string Outcome);
