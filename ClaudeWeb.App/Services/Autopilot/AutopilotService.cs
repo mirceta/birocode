@@ -33,6 +33,10 @@ public class AutopilotService : BackgroundService
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(10);
     private const int MaxLog = 50;
     private const int MaxIntercepts = 50;
+    // The looped-agent escalation marker (docs/loop-driven-agent-convention.md): a
+    // driven agent ends its reply with "NEEDS_HUMAN: <question>" when blocked on a
+    // decision only the human can make. Deterministic string match, like the sentinel.
+    public const string NeedsHumanMarker = "NEEDS_HUMAN:";
 
     private readonly RepositoryRegistry _repos;
     private readonly SessionService _sessions;
@@ -349,12 +353,16 @@ public class AutopilotService : BackgroundService
     /// <list type="number">
     /// <item>run errored → pause (mark <c>error</c>);</item>
     /// <item>sentinel phrase present → the job is genuinely done (mark <c>done</c>);</item>
+    /// <item><c>NEEDS_HUMAN:</c> marker present → the agent is blocked on the human;
+    /// escalate, carrying the trailing question (mark <c>escalate</c>);</item>
     /// <item>deny-listed risky action mentioned → hand back to the human (mark <c>escalate</c>);</item>
     /// <item>iteration cap reached → stop (mark <c>capped</c>);</item>
     /// <item>otherwise → resend the fixed prompt, bump the counter, audit it.</item>
     /// </list>
-    /// No classifier and no LLM judge — sentinel + cap are deterministic and add no new
-    /// prompt-injection surface. Risk fails safe: a deny-list hit stops rather than sends.
+    /// No classifier and no LLM judge — every match is deterministic string matching and
+    /// adds no new prompt-injection surface. Risk fails safe: a deny-list hit stops rather
+    /// than sends. Every resolution records WHY it stopped (reason + detail) via
+    /// <see cref="LoopConfigStore.Resolve"/>.
     /// </summary>
     private void HandleLoop(
         RepositoryRegistry.RepositoryInfo repo, LoopConfigStore.LoopState loop,
@@ -369,7 +377,7 @@ public class AutopilotService : BackgroundService
         // 1. The last run errored → pause; don't resend into a broken run.
         if (run?.Status == "error")
         {
-            if (loop.Status != "error") _loops.Resolve(repo.Id, "error");
+            if (loop.Status != "error") _loops.Resolve(repo.Id, "error", "error", "the agent's run errored");
             return;
         }
 
@@ -388,32 +396,47 @@ public class AutopilotService : BackgroundService
             && lastAssistant != null
             && lastAssistant.Contains(loop.Sentinel, StringComparison.OrdinalIgnoreCase))
         {
-            _loops.Resolve(repo.Id, "done");
+            _loops.Resolve(repo.Id, "done", "sentinel", $"agent emitted \"{loop.Sentinel}\"");
             _logger.Info($"[LOOP] {repo.Name} hit sentinel \"{loop.Sentinel}\" — done");
             return;
         }
 
-        // 3. Deny-list hit → the reply mentions a risky action. Hand back to the human.
+        // 3. NEEDS_HUMAN marker (docs/loop-driven-agent-convention.md) → the agent is
+        // blocked on a decision only the human can make. Escalate, carrying its question.
+        if (lastAssistant != null)
+        {
+            var idx = lastAssistant.IndexOf(NeedsHumanMarker, StringComparison.OrdinalIgnoreCase);
+            if (idx >= 0)
+            {
+                var question = Snippet(lastAssistant[(idx + NeedsHumanMarker.Length)..]);
+                _loops.Resolve(repo.Id, "escalate", "needs-human",
+                    string.IsNullOrEmpty(question) ? "the agent asked for the human" : question);
+                _logger.Info($"[LOOP] {repo.Name} escalated — NEEDS_HUMAN: {question}");
+                return;
+            }
+        }
+
+        // 4. Deny-list hit → the reply mentions a risky action. Hand back to the human.
         if (lastAssistant != null)
         {
             var hit = denyList.FirstOrDefault(d =>
                 !string.IsNullOrEmpty(d) && lastAssistant.Contains(d, StringComparison.OrdinalIgnoreCase));
             if (hit != null)
             {
-                _loops.Resolve(repo.Id, "escalate");
+                _loops.Resolve(repo.Id, "escalate", "deny-list", $"reply mentions deny-listed \"{hit}\"");
                 _logger.Info($"[LOOP] {repo.Name} escalated — deny-listed \"{hit}\" in reply");
                 return;
             }
         }
 
-        // 4. Iteration cap reached → refuse to run past it.
+        // 5. Iteration cap reached → refuse to run past it.
         if (loop.IterationsDone >= loop.MaxIterations)
         {
-            _loops.Resolve(repo.Id, "capped");
+            _loops.Resolve(repo.Id, "capped", "cap", $"cap {loop.IterationsDone}/{loop.MaxIterations} reached");
             return;
         }
 
-        // 5. Otherwise → resend the fixed prompt.
+        // 6. Otherwise → resend the fixed prompt.
         TrySendLoop(repo, sessionId!, loop, snippet, now);
     }
 

@@ -380,6 +380,26 @@
 /* --- finished loop --- */
 .lp-done { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 13px; }
 
+/* --- adopt-autopilot-loops: recipes + stop-reason readout --- */
+.lp-card__recipe {
+  font-size: 11px; font-weight: 600; color: var(--color-text-muted, #888);
+  border: 1px solid var(--color-border, #ddd); border-radius: 999px; padding: 1px 8px;
+}
+/* Why the loop stopped — full width under the outcome line; the needs-human
+   variant is the agent's verbatim question, so it reads loudest. */
+.lp-reason {
+  flex: 1 1 100%; font-size: 12.5px; color: var(--color-text-soft, #666);
+  background: var(--color-bg, #f0ece4); border-radius: 8px; padding: 6px 10px;
+  white-space: pre-wrap; word-break: break-word;
+}
+.lp-reason--human { color: #b45309; background: rgba(245, 158, 11, 0.12); font-weight: 600; }
+.lp-recipe__prompt {
+  display: block; background: var(--color-bg, #f0ece4); padding: 8px 10px; border-radius: 8px;
+  font-size: 12.5px; white-space: pre-wrap; word-break: break-word; margin: 8px 0;
+}
+.lp-list--recipes { margin-bottom: 10px; }
+.lp-form--add { margin: 10px 0 4px; }
+
 /* ---- System Tests tab (understanding.md: real-runner): inner sub-tabs + run panel ---- */
 .st-wrap { display: flex; flex-direction: column; gap: 12px; }
 

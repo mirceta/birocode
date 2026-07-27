@@ -25,12 +25,15 @@ export default function AutopilotOverviewView() {
       <section className="ca-sec">
         <h3 className="ca-sec__h">What&apos;s here today</h3>
         <p className="ca-sec__p">
-          Every piece below is built, fenced and verified — and, honestly,
-          barely used. The features grew one at a time and never connected into
-          the real workflow: starting a loop means hand-composing a prompt, a
-          finish phrase and a cap in a blank form, and nothing tells a driven
-          agent how to behave inside one. That disconnect is exactly what the
-          plan below addresses.
+          Every piece below is built, fenced and verified. The old adoption
+          gap — loops started from a blank form in the wrong place, driven
+          agents had no output contract, loop state was invisible on the
+          dashboard — has been closed (openspec: adopt-autopilot-loops):
+          loops now arm one-tap from a dock card via named <b>recipes</b>,
+          driven agents follow the documented sentinel /
+          <code> NEEDS_HUMAN:</code> contract
+          (<code>docs/loop-driven-agent-convention.md</code>), and every stop
+          records <b>why</b>. What remains is real-world tuning.
         </p>
         <ul className="ov-list">
           <li>
@@ -41,8 +44,14 @@ export default function AutopilotOverviewView() {
           </li>
           <li>
             <b>Loops</b> — the deterministic loop engine: resend one fixed
-            prompt at the end of every turn until a sentinel phrase stops it as
-            done, a deny-listed word escalates it, or the iteration cap ends it.
+            prompt at the end of every turn until the sentinel stops it as
+            done, a <code>NEEDS_HUMAN:</code> marker or deny-listed word
+            escalates it, or the iteration cap ends it — each stop recorded
+            with its reason and detail. Armed from named <b>recipes</b>
+            (seeded: &quot;Drive the feature&quot;, &quot;Finish and
+            ship&quot;) — one tap on the dashboard&apos;s dock card, where a
+            live badge shows looping n/cap and terminal states even while the
+            gate is closed.
           </li>
           <li>
             <b>Routine prompts</b> — the editable library that is the

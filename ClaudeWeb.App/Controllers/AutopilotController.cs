@@ -18,6 +18,12 @@ namespace ClaudeWeb.Controllers;
 /// of them return 403 — there is DELIBERATELY no endpoint that can turn the gate on
 /// (that lives only in the WinForms host), so a steered web client or
 /// prompt-injected brain can never grant autopilot the authority to act.
+///
+/// ONE deliberate exception (openspec: adopt-autopilot-loops, design §5):
+/// <c>GET /api/autopilot/loops</c> is session-auth only, NOT operator-gated, so the
+/// dashboard can still show a loop's terminal state (done/escalated/capped + why)
+/// after the operator closes the gate. It discloses loop STATUS and recipe NAMES
+/// only — no prompts, no config, no action surface.
 /// </summary>
 [ApiController]
 [Route("api/autopilot")]
@@ -27,6 +33,7 @@ public class AutopilotController : ControllerBase
     private readonly AutopilotService _engine;
     private readonly AutopilotConfigStore _config;
     private readonly LoopConfigStore _loops;
+    private readonly LoopRecipeStore _recipes;
     private readonly AutopilotGate _operatorGate;
     private readonly AutopilotAuditLog _audit;
     private readonly SystemTestsService _systests;
@@ -34,13 +41,15 @@ public class AutopilotController : ControllerBase
 
     public AutopilotController(
         AutopilotDiscoveryService discovery, AutopilotService engine,
-        AutopilotConfigStore config, LoopConfigStore loops, AutopilotGate operatorGate,
-        AutopilotAuditLog audit, SystemTestsService systests, Logger logger)
+        AutopilotConfigStore config, LoopConfigStore loops, LoopRecipeStore recipes,
+        AutopilotGate operatorGate, AutopilotAuditLog audit, SystemTestsService systests,
+        Logger logger)
     {
         _discovery = discovery;
         _engine = engine;
         _config = config;
         _loops = loops;
+        _recipes = recipes;
         _operatorGate = operatorGate;
         _audit = audit;
         _systests = systests;
@@ -93,11 +102,15 @@ public class AutopilotController : ControllerBase
     }
 
     public sealed record LoopRequest(
-        string? RepoId, string? Action, string? Prompt, string? Sentinel, int? MaxIterations);
+        string? RepoId, string? Action, string? Prompt, string? Sentinel, int? MaxIterations,
+        string? RecipeId);
 
     /// <summary>Loop mode (plans/autopilot-loop-mode.md): arm / edit / stop the
     /// per-agent fixed-prompt resend loop. <c>action</c> = start | update | stop.
-    /// Gated like every other autopilot endpoint; returns the fresh state.</summary>
+    /// A start may name a <c>recipeId</c> instead of composing fields: the server
+    /// fills prompt/sentinel/cap from the stored recipe (cap still overridable),
+    /// sending the recipe's prompt text byte-identical — nothing injected.
+    /// Gated like every other autopilot action; returns the fresh state.</summary>
     [HttpPost("loop")]
     public IActionResult Loop([FromBody] LoopRequest req)
     {
@@ -109,6 +122,14 @@ public class AutopilotController : ControllerBase
         switch ((req.Action ?? "start").ToLowerInvariant())
         {
             case "start":
+                if (!string.IsNullOrWhiteSpace(req.RecipeId))
+                {
+                    if (_recipes.Get(req.RecipeId) is not { } recipe)
+                        return NotFound(new { error = $"unknown recipe \"{req.RecipeId}\"" });
+                    _loops.Start(req.RepoId, recipe.Prompt, recipe.Sentinel,
+                        req.MaxIterations ?? recipe.MaxIterations, recipe.Id, recipe.Name);
+                    break;
+                }
                 if (string.IsNullOrWhiteSpace(req.Prompt))
                     return BadRequest(new { error = "a loop needs a prompt to resend" });
                 _loops.Start(req.RepoId, req.Prompt.Trim(), req.Sentinel, req.MaxIterations);
@@ -123,6 +144,76 @@ public class AutopilotController : ControllerBase
                 return BadRequest(new { error = $"unknown action \"{req.Action}\"" });
         }
 
+        return Ok(BuildState());
+    }
+
+    // --- Loop status (read-only, NOT operator-gated) ------------------------
+
+    /// <summary>The one deliberately ungated autopilot read (design §5): per-repo loop
+    /// STATUS for dashboard surfaces — state, iterations, stop reason/detail, recipe
+    /// name — plus the recipe name list for the dock's picker. Session auth still
+    /// applies like every other /api route. No prompts, no sentinels, no config, and
+    /// no actions here: a loop's outcome stays visible after the gate closes, but
+    /// nothing can be armed or read out of autopilot's configuration.</summary>
+    [HttpGet("loops")]
+    public IActionResult Loops()
+    {
+        _logger.CountRequest();
+        return Ok(new
+        {
+            gateOpen = _operatorGate.Enabled,
+            loops = _loops.All().Select(l => new
+            {
+                repoId = l.RepoId,
+                active = l.Active,
+                status = l.Status,
+                iterationsDone = l.IterationsDone,
+                maxIterations = l.MaxIterations,
+                lastSentAt = l.LastSentAt,
+                stopReason = l.StopReason,
+                stopDetail = l.StopDetail,
+                recipeName = l.RecipeName,
+            }),
+            recipes = _recipes.List().Select(r => new
+            {
+                id = r.Id,
+                name = r.Name,
+                maxIterations = r.MaxIterations,
+            }),
+        });
+    }
+
+    // --- Loop recipes (openspec: loop-recipes) ------------------------------
+    // CRUD for the named loop templates. Gated like every other action surface.
+
+    public sealed record RecipeRequest(string? Name, string? Prompt, string? Sentinel, int? MaxIterations);
+
+    [HttpPost("recipes")]
+    public IActionResult AddRecipe([FromBody] RecipeRequest req)
+    {
+        _logger.CountRequest();
+        if (GateClosed() is { } closed) return closed;
+        var recipe = _recipes.Add(req?.Name, req?.Prompt, req?.Sentinel, req?.MaxIterations);
+        if (recipe is null) return BadRequest(new { error = "a recipe needs a name and a prompt" });
+        return Ok(BuildState());
+    }
+
+    [HttpPost("recipes/{id}")]
+    public IActionResult UpdateRecipe(string id, [FromBody] RecipeRequest req)
+    {
+        _logger.CountRequest();
+        if (GateClosed() is { } closed) return closed;
+        var recipe = _recipes.Update(id, req?.Name, req?.Prompt, req?.Sentinel, req?.MaxIterations);
+        if (recipe is null) return NotFound(new { error = $"unknown recipe \"{id}\" (or empty name/prompt)" });
+        return Ok(BuildState());
+    }
+
+    [HttpDelete("recipes/{id}")]
+    public IActionResult DeleteRecipe(string id)
+    {
+        _logger.CountRequest();
+        if (GateClosed() is { } closed) return closed;
+        if (!_recipes.Delete(id)) return NotFound(new { error = $"unknown recipe \"{id}\"" });
         return Ok(BuildState());
     }
 
@@ -178,6 +269,7 @@ public class AutopilotController : ControllerBase
             denyList = cfg.DenyList,
             agents = _engine.States(),
             loops = _loops.All(),
+            recipes = _recipes.List(),
             log = _engine.Log(),
             intercepts = _engine.Intercepts(),
             audit = _audit.Recent(),

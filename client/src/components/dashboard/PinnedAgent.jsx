@@ -17,6 +17,7 @@ import WideToggle from './WideToggle';
 import WaitingBadge from './WaitingBadge';
 import WaitingOnField from './WaitingOnField';
 import DependsOnPicker from './DependsOnPicker';
+import DockLoopControl from './DockLoopControl';
 
 // One "phone" in the Agent Dashboard's wall of phones (plans/agent-dashboard.md):
 // a single agent's live Chat view, pinned to that agent's repo regardless of
@@ -43,6 +44,9 @@ export default function PinnedAgent({
   dependsOn,
   dependsCandidates = [],
   onSetDependsOn,
+  loop,
+  loopRecipes = [],
+  onLoopChanged,
 }) {
   const { t } = useT();
   // Per-dock lane toggle (plans/repo-ask-chat.md slice 3): each phone can switch
@@ -87,6 +91,9 @@ export default function PinnedAgent({
   // feature (Advanced default).
   const consoleOn = useFeature('eventConsole');
   const [showConsole, setShowConsole] = useState(false);
+
+  // Loop badge + control (openspec adopt-autopilot-loops), Advanced-gated.
+  const canLoop = useFeature('dockLoopControls');
 
   // Maximize chat to fill the dock (openspec add-maximize-chat-dock): an ephemeral,
   // per-dock toggle that collapses the non-chat chrome (bar, lanes, apps, git,
@@ -449,6 +456,19 @@ export default function PinnedAgent({
           value={tab.waitingOn}
           onCommit={(text) => onSetWaitingOn?.(tab.id, text)}
           className="phone__waiting-on"
+        />
+      )}
+      {/* Autopilot loop badge + start/stop control (openspec adopt-autopilot-loops):
+          header-area furniture like the waiting field. Badge state arrives via the
+          Dashboard's poll of the read-only /autopilot/loops projection, so a
+          terminal state (done / escalated + the agent's question) stays visible
+          even while the operator gate is closed. Advanced-gated. */}
+      {canLoop && (
+        <DockLoopControl
+          repoId={tab.repoId}
+          loop={loop}
+          recipes={loopRecipes}
+          onChanged={onLoopChanged}
         />
       )}
       {onSetDependsOn && dependsCandidates.length > 0 && (

@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Understanding · Autopilot loops, adopted</title>
+<style>
+  :root {
+    --bg: #12141a; --panel: #1b1e27; --panel2: #232733; --line: #333949;
+    --txt: #e6e9f0; --soft: #9aa3b5; --blue: #5b9cf5; --green: #4fc07a;
+    --amber: #f0a83c; --red: #e0605c; --mono: ui-monospace, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--txt); font: 15px/1.55 system-ui, Segoe UI, sans-serif; }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 28px 20px 60px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  .sub { color: var(--soft); margin: 0 0 18px; }
+  .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+  .tabs button { background: var(--panel); color: var(--soft); border: 1px solid var(--line); border-radius: 999px; padding: 7px 16px; font-size: 14px; cursor: pointer; }
+  .tabs button.on { color: var(--txt); border-color: var(--blue); background: var(--panel2); font-weight: 600; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+  .panel h2 { margin: 0 0 10px; font-size: 18px; }
+  .panel p { color: var(--soft); }
+  .panel b, .panel strong { color: var(--txt); }
+  code { font-family: var(--mono); font-size: 13px; background: var(--panel2); border-radius: 5px; padding: 1px 6px; color: var(--blue); }
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-top: 14px; }
+  .card { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .card h3 { margin: 0 0 6px; font-size: 15px; }
+  .card p { margin: 0; font-size: 13.5px; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 1px 9px; margin-bottom: 8px; letter-spacing: .03em; }
+  .tag--new { color: var(--green); border: 1px solid var(--green); }
+  .tag--was { color: var(--soft); border: 1px solid var(--line); }
+  /* decision chain */
+  .chain { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 16px 0; }
+  .step { border: 1.5px solid var(--line); background: var(--panel2); border-radius: 10px; padding: 8px 13px; cursor: pointer; font-size: 13.5px; font-weight: 600; color: var(--txt); }
+  .step small { display: block; font-weight: 400; color: var(--soft); font-size: 11.5px; }
+  .step.on { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(91,156,245,.18); }
+  .step--stop.on { border-color: var(--amber); box-shadow: 0 0 0 3px rgba(240,168,60,.18); }
+  .arrow { color: var(--soft); }
+  .detail { min-height: 74px; background: var(--panel2); border: 1px dashed var(--line); border-radius: 10px; padding: 12px 16px; font-size: 14px; color: var(--soft); }
+  .detail b { color: var(--txt); }
+  /* simulator */
+  .sim { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 14px; }
+  @media (max-width: 760px) { .sim { grid-template-columns: 1fr; } }
+  .sim .replies button { display: block; width: 100%; text-align: left; margin-bottom: 8px; background: var(--panel2); color: var(--txt); border: 1px solid var(--line); border-radius: 9px; padding: 9px 13px; cursor: pointer; font-size: 13.5px; }
+  .sim .replies button span { display: block; color: var(--soft); font-size: 11.5px; }
+  .sim .replies button:disabled { opacity: .45; cursor: default; }
+  .badge { display: inline-block; border-radius: 999px; padding: 2px 12px; font-weight: 700; font-size: 13px; border: 1.5px solid var(--line); }
+  .badge--looping { color: var(--blue); border-color: var(--blue); }
+  .badge--done { color: var(--green); border-color: var(--green); }
+  .badge--escalate { color: var(--amber); border-color: var(--amber); background: rgba(240,168,60,.12); }
+  .badge--capped, .badge--error { color: var(--red); border-color: var(--red); }
+  .badge--stopped, .badge--idle { color: var(--soft); }
+  .simstate { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .simstate .why { margin-top: 10px; background: var(--bg); border-radius: 8px; padding: 8px 12px; font-size: 13px; color: var(--amber); min-height: 20px; }
+  .simlog { margin: 10px 0 0; padding: 0; list-style: none; max-height: 190px; overflow: auto; font-family: var(--mono); font-size: 12px; }
+  .simlog li { padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,.04); color: var(--soft); }
+  .simlog li.ok { color: var(--green); } .simlog li.rej { color: var(--amber); } .simlog li.ev { color: var(--blue); }
+  .ctl { margin-top: 10px; display: flex; gap: 8px; }
+  .ctl button { background: var(--panel2); color: var(--txt); border: 1px solid var(--line); border-radius: 8px; padding: 6px 14px; cursor: pointer; }
+  pre.contract { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-family: var(--mono); font-size: 12.5px; color: var(--txt); white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Autopilot loops — adopted into the real workflow</h1>
+  <p class="sub">openspec change <code>adopt-autopilot-loops</code> · the loop engine existed and was never used once; this change moves loops to where the work is.</p>
+
+  <div class="tabs" id="tabs">
+    <button data-v="what" class="on">What changed</button>
+    <button data-v="decision">The stop decision</button>
+    <button data-v="sim">Drive a loop</button>
+    <button data-v="contract">The agent contract</button>
+    <button data-v="safety">Safety</button>
+  </div>
+
+  <div class="panel" id="view"></div>
+</div>
+
+<script>
+const VIEWS = {
+  what: `
+    <h2>Three adoption gaps, closed</h2>
+    <p>The deterministic loop engine (resend one fixed prompt after every agent turn until a stop
+    condition fires) was fully built and verified — and never used. Each gap that caused that now has
+    a concrete fix:</p>
+    <div class="cols">
+      <div class="card"><span class="tag tag--was">was</span> <span class="tag tag--new">now</span>
+        <h3>Loops started in the wrong place</h3>
+        <p><b>Was:</b> open the Autopilot tab, hand-compose prompt + sentinel + cap in a blank form.<br>
+        <b>Now:</b> <b>recipes</b> — named templates (<i>Drive the feature</i>, <i>Finish and ship</i>,
+        seeded server-side in <code>loop-recipes.json</code>, editable, never re-seeded over your edits)
+        — armed <b>one-tap from the agent's dock card</b>: pick a recipe, optionally tweak the cap, arm.</p></div>
+      <div class="card"><span class="tag tag--was">was</span> <span class="tag tag--new">now</span>
+        <h3>Driven agents had no output contract</h3>
+        <p><b>Was:</b> done-detection worked only if you hand-wrote sentinel instructions into every prompt.<br>
+        <b>Now:</b> every recipe prompt visibly ends with the contract: emit <code>LOOP_DONE</code> when the
+        whole job is done, or <code>NEEDS_HUMAN: &lt;question&gt;</code> when blocked — and
+        <code>NEEDS_HUMAN:</code> is a first-class engine stop that captures the question. The
+        agent-agnostic statement lives in <code>docs/loop-driven-agent-convention.md</code>.</p></div>
+      <div class="card"><span class="tag tag--was">was</span> <span class="tag tag--new">now</span>
+        <h3>Loop state was invisible</h3>
+        <p><b>Was:</b> outcomes landed in the Autopilot tab nobody watches.<br>
+        <b>Now:</b> a live <b>badge on the dock card</b> — looping n/cap while active, then
+        done / <b style="color:var(--amber)">escalated (with the agent's question inline)</b> / capped /
+        error / stopped — fed by a read-only endpoint that keeps working after the operator gate closes.
+        Every stop records <b>why</b> (reason + detail) for tuning recipes and caps.</p></div>
+    </div>`,
+
+  decision: `
+    <h2>The per-turn stop decision — click a step</h2>
+    <p>When a looping agent's turn completes, <code>AutopilotService.HandleLoop</code> checks, in this
+    exact order (all deterministic string matching — no LLM judge):</p>
+    <div class="chain" id="chain"></div>
+    <div class="detail" id="detail">Click any step above to see exactly what it does and what gets recorded.</div>`,
+
+  sim: `
+    <h2>Drive a loop by hand</h2>
+    <p>Arm the loop (cap 3 here), then choose what the agent replied each turn — the same decision the
+    engine runs.</p>
+    <div class="sim">
+      <div class="replies" id="replies"></div>
+      <div class="simstate">
+        <div>loop status &nbsp; <span class="badge badge--idle" id="simbadge">idle</span> &nbsp;
+          <span id="simiters" style="color:var(--soft);font-size:13px"></span></div>
+        <div class="why" id="simwhy">stop reason will appear here</div>
+        <div class="ctl"><button id="simarm">▸ Arm (cap 3)</button><button id="simreset">↺ Reset</button></div>
+        <ul class="simlog" id="simlog"></ul>
+      </div>
+    </div>`,
+
+  contract: `
+    <h2>The looped-agent output contract</h2>
+    <p>Canonical, agent-agnostic doc: <code>docs/loop-driven-agent-convention.md</code> (any agent on
+    the box reads it off disk; CLAUDE.md points at it). The whole contract:</p>
+    <pre class="contract">1. DONE — when the WHOLE job is genuinely finished and verified,
+   end your reply with the sentinel (default LOOP_DONE) as the final line.
+   Never mention it otherwise: matching is a substring check.
+
+2. BLOCKED — when only the human can decide, end with
+   NEEDS_HUMAN: &lt;one concise, self-contained question&gt;
+   and stop. The loop escalates and shows the question verbatim
+   on the dashboard.
+
+Anything else = "more work to do" → the loop resends its prompt.</pre>
+    <p>What you see is what is sent: the recipe editor's prompt text is byte-identical to what the
+    agent receives — nothing is injected at send time.</p>`,
+
+  safety: `
+    <h2>Safety posture — unchanged, plus one deliberate deviation</h2>
+    <div class="cols">
+      <div class="card"><h3>Unchanged fences</h3>
+        <p>Operator gate (host PC only, off by default) fences every action — arm / edit / stop, recipe
+        CRUD, everything. Kill switch, deny-list backstop, hard iteration cap (1–100), append-only
+        audit of every resend: all as before. NEEDS_HUMAN <b>adds</b> an escalation path; none are removed.</p></div>
+      <div class="card"><h3>The one ungated read</h3>
+        <p><code>GET /api/autopilot/loops</code> is session-auth only, NOT operator-gated — so a loop's
+        terminal state (done / escalated + why) stays visible on the dashboard after the gate closes.
+        It discloses loop <b>status</b> and recipe <b>names</b> only: no prompts, no sentinels, no
+        config, no action surface. Verified in the e2e: gate closed → actions 403, status still 200.</p></div>
+      <div class="card"><h3>Verified end-to-end</h3>
+        <p>Isolated-harness e2e (own datadir + port, seeded transcripts, zero real agent runs):
+        needs-human beats deny words in the same reply; deny detail names the matched word; an
+        at-cap loop resumes across restart and resolves capped "cap 2/2"; recipes seed once, edits
+        and deletes survive restarts. Playwright covers the dock badges, arm-from-recipe flow, Basic
+        mode (nothing renders), and the gate-closed hint.</p></div>
+    </div>`,
+};
+
+const STEPS = [
+  { k: 'error', t: '1 · errored?', s: '→ error', stop: true,
+    d: '<b>run.Status == "error"</b> → Resolve("error"). Never resend into a broken run. Recorded: reason <code>error</code>.' },
+  { k: 'done', t: '2 · sentinel?', s: '→ done', stop: true,
+    d: 'Reply contains the loop\'s sentinel (default <b>LOOP_DONE</b>) → Resolve("done"). The intended happy ending. Recorded: reason <code>sentinel</code>.' },
+  { k: 'human', t: '3 · NEEDS_HUMAN:?', s: '→ escalate', stop: true,
+    d: 'NEW. Reply contains <b>NEEDS_HUMAN:</b> → Resolve("escalate"). The trailing question is captured into the stop detail and shown on the dock badge — checked BEFORE the deny-list, so a question about "deploy" still surfaces as the agent\'s question, not a deny hit.' },
+  { k: 'deny', t: '4 · deny-list?', s: '→ escalate', stop: true,
+    d: 'Reply mentions a deny-listed term (deploy · push · force · …) → Resolve("escalate"). The backstop for agents that ignore the contract. Recorded: reason <code>deny-list</code>, detail = the matched word.' },
+  { k: 'cap', t: '5 · cap reached?', s: '→ capped', stop: true,
+    d: '<b>IterationsDone ≥ MaxIterations</b> → Resolve("capped"). The hard ceiling — a loop can never run forever. Recorded: reason <code>cap</code>, detail "cap n/n reached".' },
+  { k: 'resend', t: '6 · resend', s: 'continue', stop: false,
+    d: 'No stop fired → claim the shared builder slot, resend the fixed prompt into the agent\'s session, bump the counter, append an audit line (outcome="loop").' },
+];
+
+const view = document.getElementById('view');
+const tabs = document.getElementById('tabs');
+function show(v) {
+  view.innerHTML = VIEWS[v];
+  for (const b of tabs.querySelectorAll('button')) b.classList.toggle('on', b.dataset.v === v);
+  if (v === 'decision') buildChain();
+  if (v === 'sim') buildSim();
+}
+tabs.addEventListener('click', (e) => { if (e.target.dataset.v) show(e.target.dataset.v); });
+
+function buildChain() {
+  const chain = document.getElementById('chain');
+  const detail = document.getElementById('detail');
+  chain.innerHTML = '';
+  STEPS.forEach((st, i) => {
+    const b = document.createElement('button');
+    b.className = 'step' + (st.stop ? ' step--stop' : '');
+    b.innerHTML = st.t + '<small>' + st.s + '</small>';
+    b.onclick = () => {
+      for (const x of chain.children) x.classList?.remove('on');
+      b.classList.add('on');
+      detail.innerHTML = st.d;
+    };
+    chain.appendChild(b);
+    if (i < STEPS.length - 1) {
+      const a = document.createElement('span');
+      a.className = 'arrow'; a.textContent = '→';
+      chain.appendChild(a);
+    }
+  });
+}
+
+function buildSim() {
+  const CAP = 3;
+  let status = 'idle', iters = 0;
+  const badge = document.getElementById('simbadge');
+  const itersEl = document.getElementById('simiters');
+  const why = document.getElementById('simwhy');
+  const logEl = document.getElementById('simlog');
+  const replies = document.getElementById('replies');
+  const R = [
+    { k: 'work', t: 'The agent is still working', s: 'no marker, nothing risky' },
+    { k: 'done', t: 'The agent says "LOOP_DONE"', s: 'the agreed finish signal' },
+    { k: 'human', t: 'The agent says "NEEDS_HUMAN: which port?"', s: 'blocked on your decision' },
+    { k: 'deny', t: 'The agent proposes to "deploy"', s: 'a deny-listed word' },
+    { k: 'error', t: 'The run crashed', s: 'run status = error' },
+  ];
+  function log(cls, msg) {
+    const li = document.createElement('li'); li.className = cls; li.textContent = msg;
+    logEl.prepend(li);
+  }
+  function render() {
+    badge.textContent = status === 'looping' ? '⟳ looping' : status;
+    badge.className = 'badge badge--' + status;
+    itersEl.textContent = status === 'idle' ? '' : iters + ' / ' + CAP + ' resends';
+    for (const b of replies.querySelectorAll('button')) b.disabled = status !== 'looping';
+  }
+  function stop(st, reason, detail) {
+    status = st;
+    why.textContent = 'stop reason: ' + reason + ' — ' + detail;
+    render();
+  }
+  replies.innerHTML = '';
+  R.forEach((r) => {
+    const b = document.createElement('button');
+    b.innerHTML = '<b>' + r.t + '</b><span>' + r.s + '</span>';
+    b.onclick = () => {
+      if (r.k === 'error') { stop('error', 'error', 'the agent’s run errored'); log('rej', '✗ error → Resolve("error")'); return; }
+      if (r.k === 'done') { stop('done', 'sentinel', 'agent emitted "LOOP_DONE"'); log('ok', '✓ sentinel → Resolve("done")'); return; }
+      if (r.k === 'human') { stop('escalate', 'needs-human', 'which port?'); log('rej', '✗ NEEDS_HUMAN → Resolve("escalate") + question captured'); return; }
+      if (r.k === 'deny') { stop('escalate', 'deny-list', 'reply mentions "deploy"'); log('rej', '✗ deny-list → Resolve("escalate")'); return; }
+      if (iters >= CAP) { stop('capped', 'cap', 'cap ' + iters + '/' + CAP + ' reached'); log('rej', '✗ cap → Resolve("capped")'); return; }
+      iters++; log('ev', '→ resend #' + iters + ' (audit outcome="loop")'); render();
+    };
+    replies.appendChild(b);
+  });
+  document.getElementById('simarm').onclick = () => {
+    status = 'looping'; iters = 0; why.textContent = 'stop reason will appear here';
+    log('ok', '✓ armed from recipe (prompt + sentinel + cap filled)');
+    render();
+  };
+  document.getElementById('simreset').onclick = () => { status = 'idle'; iters = 0; logEl.innerHTML = ''; why.textContent = 'stop reason will appear here'; render(); };
+  render();
+}
+
+show('what');
+</script>
+</body>
+</html>

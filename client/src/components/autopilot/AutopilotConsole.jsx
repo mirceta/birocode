@@ -110,6 +110,29 @@ export default function AutopilotConsole({ embedded = false }) {
     }
   }, []);
 
+  // Loop-recipe CRUD (openspec adopt-autopilot-loops): named loop templates the
+  // dock's one-tap control arms from. Each action returns the fresh state.
+  const recipeAction = useCallback(async (call, failText) => {
+    try {
+      setData(await call());
+      setError('');
+    } catch {
+      setError(failText);
+    }
+  }, []);
+  const addRecipe = useCallback(
+    (body) => recipeAction(() => apiPost('/autopilot/recipes', body), 'Could not add the recipe.'),
+    [recipeAction],
+  );
+  const saveRecipe = useCallback(
+    (id, body) => recipeAction(() => apiPost(`/autopilot/recipes/${id}`, body), 'Could not save the recipe.'),
+    [recipeAction],
+  );
+  const removeRecipe = useCallback(
+    (id) => recipeAction(() => apiDelete(`/autopilot/recipes/${id}`), 'Could not delete the recipe.'),
+    [recipeAction],
+  );
+
   // --- editable custom-prompt CRUD (the recommender's label space) ---
   const addPrompt = useCallback(async (body) => {
     if (!body.text?.trim()) return;
@@ -246,7 +269,15 @@ export default function AutopilotConsole({ embedded = false }) {
       <>
       {tab === 'agents' && <AgentsView data={data} mutate={mutate} />}
 
-      {tab === 'loops' && <LoopsView data={data} loopAction={loopAction} />}
+      {tab === 'loops' && (
+        <LoopsView
+          data={data}
+          loopAction={loopAction}
+          addRecipe={addRecipe}
+          saveRecipe={saveRecipe}
+          removeRecipe={removeRecipe}
+        />
+      )}
 
       {tab === 'systests' && <SystemTestsView />}
 

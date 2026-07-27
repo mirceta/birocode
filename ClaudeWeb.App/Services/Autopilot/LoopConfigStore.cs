@@ -30,7 +30,9 @@ public class LoopConfigStore
     public LoopConfigStore(Logger logger)
     {
         _logger = logger;
-        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ClaudeWeb");
+        // AppPaths (not %APPDATA% directly) so an isolated CLAUDEWEB_DATADIR
+        // instance keeps its own loops instead of sharing the operator's live ones.
+        var dir = AppPaths.DataDir;
         Directory.CreateDirectory(dir);
         _path = Path.Combine(dir, "loops.json");
         Load();
@@ -47,6 +49,18 @@ public class LoopConfigStore
         public int IterationsDone { get; set; }
         public string Status { get; set; } = "stopped"; // looping | done | escalate | capped | error | stopped
         public long LastSentAt { get; set; }
+        // Why the loop stopped, written by Resolve (additive fields — old loops.json
+        // files load with both null). Reason is the machine string naming the condition
+        // that fired (sentinel | needs-human | deny-list | cap | error | user); Detail
+        // is the human-readable specifics (the NEEDS_HUMAN question, the matched deny
+        // word, "cap 10/10").
+        public string? StopReason { get; set; }
+        public string? StopDetail { get; set; }
+        // The recipe this loop was armed from, if any (additive; display only —
+        // the loop keeps its own copy of prompt/sentinel/cap, so a later recipe
+        // edit never mutates a running loop).
+        public string? RecipeId { get; set; }
+        public string? RecipeName { get; set; }
     }
 
     private sealed class Data
@@ -57,7 +71,8 @@ public class LoopConfigStore
     /// <summary>One loop's state, as the API and engine see it.</summary>
     public sealed record LoopState(
         string RepoId, string Prompt, string Sentinel, int MaxIterations,
-        bool Active, int IterationsDone, string Status, long LastSentAt);
+        bool Active, int IterationsDone, string Status, long LastSentAt,
+        string? StopReason, string? StopDetail, string? RecipeId, string? RecipeName);
 
     public IReadOnlyList<LoopState> All()
     {
@@ -74,8 +89,10 @@ public class LoopConfigStore
             return _data.Loops.TryGetValue(repoId, out var e) ? ToState(repoId, e) : null;
     }
 
-    /// <summary>Arms (or re-arms) a loop: resets counters and sets it running.</summary>
-    public LoopState Start(string repoId, string prompt, string? sentinel, int? maxIterations)
+    /// <summary>Arms (or re-arms) a loop: resets counters and sets it running.
+    /// When armed from a recipe, the recipe's id/name are stamped on for display.</summary>
+    public LoopState Start(string repoId, string prompt, string? sentinel, int? maxIterations,
+        string? recipeId = null, string? recipeName = null)
     {
         lock (_gate)
         {
@@ -88,6 +105,8 @@ public class LoopConfigStore
                 IterationsDone = 0,
                 Status = "looping",
                 LastSentAt = 0,
+                RecipeId = recipeId,
+                RecipeName = recipeName,
             };
             _data.Loops[repoId] = e;
             Save();
@@ -112,19 +131,23 @@ public class LoopConfigStore
     }
 
     /// <summary>Stops a loop by the user's hand (the Stop button).</summary>
-    public LoopState? Stop(string repoId) => Resolve(repoId, "stopped");
+    public LoopState? Stop(string repoId) => Resolve(repoId, "stopped", "user", "stopped by the user");
 
-    /// <summary>Engine: terminal/stop outcome (done | escalate | capped | error | stopped).
+    /// <summary>Engine: terminal/stop outcome (done | escalate | capped | error | stopped),
+    /// plus WHY it stopped (reason = the condition that fired, detail = its specifics).
     /// Clears Active so the loop no longer ticks; keeps the counter for the UI.</summary>
-    public LoopState? Resolve(string repoId, string status)
+    public LoopState? Resolve(string repoId, string status, string? reason = null, string? detail = null)
     {
         lock (_gate)
         {
             if (!_data.Loops.TryGetValue(repoId, out var e)) return null;
             e.Active = false;
             e.Status = status;
+            e.StopReason = reason;
+            e.StopDetail = detail;
             Save();
-            _logger.Info($"[LOOP] {repoId} -> {status} after {e.IterationsDone} iteration(s)");
+            _logger.Info($"[LOOP] {repoId} -> {status} after {e.IterationsDone} iteration(s)"
+                + (reason is null ? "" : $" ({reason}{(string.IsNullOrEmpty(detail) ? "" : $": {detail}")})"));
             return ToState(repoId, e);
         }
     }
@@ -138,13 +161,16 @@ public class LoopConfigStore
             e.IterationsDone++;
             e.LastSentAt = at;
             e.Status = "looping";
+            e.StopReason = null;
+            e.StopDetail = null;
             Save();
             return ToState(repoId, e);
         }
     }
 
     private static LoopState ToState(string repoId, Entry e) =>
-        new(repoId, e.Prompt, e.Sentinel, e.MaxIterations, e.Active, e.IterationsDone, e.Status, e.LastSentAt);
+        new(repoId, e.Prompt, e.Sentinel, e.MaxIterations, e.Active, e.IterationsDone, e.Status, e.LastSentAt,
+            e.StopReason, e.StopDetail, e.RecipeId, e.RecipeName);
 
     private void Load()
     {

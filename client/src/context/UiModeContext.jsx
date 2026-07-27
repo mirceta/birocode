@@ -65,6 +65,7 @@ export const FEATURES = {
   headerStatusStrip: 'advanced', // collapsible status strip under the app header hosting Scoreboard + account chips + host clock (openspec: add-header-status-strip)
   agenticAudit: 'advanced', // read-only agentic-call audit trail panel on the dashboard (openspec: add-agent-audit-trail)
   trafficPanel: 'advanced', // harness HTTP throughput monitor panel on the dashboard (openspec: traffic-monitor)
+  dockLoopControls: 'advanced', // loop badge + arm-from-recipe control on dock agent cards (openspec: adopt-autopilot-loops)
 };
 
 const MODE_KEY = 'claudeweb_ui_mode';

@@ -1,15 +1,18 @@
 import { useState } from 'react';
 import '../../pages/autopilot.css';
 
-// The "Loops" sub-tab of the AutopilotConsole (plans/autopilot-loop-mode.md). Loop
-// mode is the deterministic sibling of the classifier: for an armed agent it resends
-// ONE fixed prompt every time the agent finishes a turn, until a stop condition —
-// the sentinel phrase, a deny-list hit, the iteration cap, or a run error. No brain,
-// no LLM judge. One loop per agent.
+// The "Loops" sub-tab of the AutopilotConsole (plans/autopilot-loop-mode.md +
+// openspec adopt-autopilot-loops). Loop mode is the deterministic sibling of the
+// classifier: for an armed agent it resends ONE fixed prompt every time the agent
+// finishes a turn, until a stop condition — the sentinel phrase, a NEEDS_HUMAN
+// escalation, a deny-list hit, the iteration cap, or a run error. No brain, no
+// LLM judge. One loop per agent.
 //
-// Per agent we show either the ARM form (prompt + sentinel + cap) or, once armed, the
-// LIVE status (iteration counter, state badge, Stop). A finished loop shows its
-// outcome and an "Arm again" affordance that reopens the form, pre-filled.
+// This is the DEEP console: recipe management (the named templates the dock's
+// one-tap control arms from — seeded with "Drive the feature" / "Finish and
+// ship"), per-agent arm forms (recipe-fillable, still hand-editable), live loop
+// status, and the stop-reason readout that teaches us how to tune recipes/caps
+// from real runs.
 
 const DEFAULT_SENTINEL = 'LOOP_DONE';
 const DEFAULT_CAP = 10;
@@ -24,7 +27,17 @@ const LOOP_BADGE = {
   stopped: { cls: 'off', label: 'stopped' },
 };
 
-function LoopRow({ agent, loop, loopAction }) {
+// Human phrasing per stop reason for the "why did it stop" readout.
+const STOP_REASON = {
+  sentinel: 'agent reported done',
+  'needs-human': 'agent needs you',
+  'deny-list': 'risky action mentioned',
+  cap: 'iteration cap reached',
+  error: 'run error',
+  user: 'stopped by you',
+};
+
+function LoopRow({ agent, loop, recipes, loopAction }) {
   const active = loop?.active;
   // The form is open whenever there's no active loop and the user hasn't dismissed it.
   const [editing, setEditing] = useState(false);
@@ -34,6 +47,16 @@ function LoopRow({ agent, loop, loopAction }) {
   const [busy, setBusy] = useState(false);
 
   const showForm = !active && (editing || !loop);
+
+  // Arm-from-recipe: picking a recipe FILLS the visible fields (prompt / sentinel /
+  // cap) — what you see below is exactly what will be resent, and stays editable.
+  const applyRecipe = (id) => {
+    const r = recipes.find((x) => x.id === id);
+    if (!r) return;
+    setPrompt(r.prompt);
+    setSentinel(r.sentinel || DEFAULT_SENTINEL);
+    setCap(r.maxIterations || DEFAULT_CAP);
+  };
 
   const arm = async () => {
     if (!prompt.trim()) return;
@@ -60,6 +83,7 @@ function LoopRow({ agent, loop, loopAction }) {
     <li className={`lp-card ${active ? 'is-active' : ''}`}>
       <div className="lp-card__head">
         <span className="lp-card__repo">{agent.repoName}</span>
+        {loop?.recipeName && <span className="lp-card__recipe">{loop.recipeName}</span>}
         {loop && <span className={`ap-state st-${b.cls}`}>{b.label}</span>}
       </div>
 
@@ -92,6 +116,21 @@ function LoopRow({ agent, loop, loopAction }) {
       ) : showForm ? (
         // --- arm form ---
         <form className="lp-form" onSubmit={(e) => { e.preventDefault(); arm(); }}>
+          {recipes.length > 0 && (
+            <label className="lp-field">
+              <span className="lp-field__k">Fill from a recipe</span>
+              <select
+                className="lp-field__in"
+                defaultValue=""
+                onChange={(e) => { applyRecipe(e.target.value); }}
+              >
+                <option value="">— compose by hand —</option>
+                {recipes.map((r) => (
+                  <option key={r.id} value={r.id}>{r.name} (cap {r.maxIterations})</option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="lp-field">
             <span className="lp-field__k">Prompt to resend</span>
             <textarea
@@ -118,16 +157,17 @@ function LoopRow({ agent, loop, loopAction }) {
           </div>
         </form>
       ) : (
-        // --- finished loop: outcome + re-arm ---
+        // --- finished loop: outcome + WHY (stop reason + detail) + re-arm ---
         <div className="lp-done">
           <span className="ap-muted">
             {loop.iterationsDone} iteration{loop.iterationsDone === 1 ? '' : 's'} sent
-            {loop.status === 'done' && ' · agent reported done'}
-            {loop.status === 'escalate' && ' · handed back to you (risky action)'}
-            {loop.status === 'capped' && ' · stopped at the cap'}
-            {loop.status === 'error' && ' · paused on a run error'}
-            {loop.status === 'stopped' && ' · stopped by you'}
+            {loop.stopReason && ` · ${STOP_REASON[loop.stopReason] ?? loop.stopReason}`}
           </span>
+          {loop.stopDetail && (
+            <div className={`lp-reason${loop.stopReason === 'needs-human' ? ' lp-reason--human' : ''}`}>
+              {loop.stopDetail}
+            </div>
+          )}
           <button className="lp-mini on" onClick={() => setEditing(true)}>Arm again</button>
         </div>
       )}
@@ -135,23 +175,172 @@ function LoopRow({ agent, loop, loopAction }) {
   );
 }
 
-export default function LoopsView({ data, loopAction }) {
+// One recipe card: display or inline-edit. The prompt is fully visible — what is
+// shown here is byte-identical to what an armed loop sends (nothing injected).
+function RecipeCard({ recipe, saveRecipe, removeRecipe }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const startEdit = () => {
+    setDraft({
+      name: recipe.name,
+      prompt: recipe.prompt,
+      sentinel: recipe.sentinel,
+      maxIterations: recipe.maxIterations,
+    });
+    setEditing(true);
+  };
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      await saveRecipe(recipe.id, { ...draft, maxIterations: Number(draft.maxIterations) || DEFAULT_CAP });
+      setEditing(false);
+    } finally { setBusy(false); }
+  };
+
+  const remove = async () => {
+    setBusy(true);
+    try { await removeRecipe(recipe.id); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <li className="lp-card lp-recipe">
+      {editing ? (
+        <form className="lp-form" onSubmit={(e) => { e.preventDefault(); save(); }}>
+          <div className="lp-form__row">
+            <label className="lp-field">
+              <span className="lp-field__k">Name</span>
+              <input className="lp-field__in" value={draft.name}
+                onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))} />
+            </label>
+            <label className="lp-field">
+              <span className="lp-field__k">Sentinel</span>
+              <input className="lp-field__in" value={draft.sentinel}
+                onChange={(e) => setDraft((d) => ({ ...d, sentinel: e.target.value }))} />
+            </label>
+            <label className="lp-field lp-field--cap">
+              <span className="lp-field__k">Cap</span>
+              <input className="lp-field__in" type="number" min={1} max={100} value={draft.maxIterations}
+                onChange={(e) => setDraft((d) => ({ ...d, maxIterations: e.target.value }))} />
+            </label>
+          </div>
+          <label className="lp-field">
+            <span className="lp-field__k">Prompt (sent verbatim — keep the contract paragraph)</span>
+            <textarea className="lp-field__prompt" rows={5} value={draft.prompt}
+              onChange={(e) => setDraft((d) => ({ ...d, prompt: e.target.value }))} />
+          </label>
+          <div className="lp-form__actions">
+            <button className="lp-arm" type="submit"
+              disabled={busy || !draft.name.trim() || !draft.prompt.trim()}>
+              Save
+            </button>
+            <button className="lp-mini" type="button" onClick={() => setEditing(false)}>Cancel</button>
+          </div>
+        </form>
+      ) : (
+        <>
+          <div className="lp-card__head">
+            <span className="lp-card__repo">{recipe.name}</span>
+            <span className="ap-muted">cap {recipe.maxIterations} · sentinel <code>{recipe.sentinel}</code></span>
+          </div>
+          <code className="lp-recipe__prompt">{recipe.prompt}</code>
+          <div className="lp-form__actions">
+            <button className="lp-mini" disabled={busy} onClick={startEdit}>Edit</button>
+            <button className="lp-mini rp-mini--danger" disabled={busy} onClick={remove}>Delete</button>
+          </div>
+        </>
+      )}
+    </li>
+  );
+}
+
+export default function LoopsView({ data, loopAction, addRecipe, saveRecipe, removeRecipe }) {
   const agents = data?.agents ?? [];
   const loops = data?.loops ?? [];
+  const recipes = data?.recipes ?? [];
   const byRepo = Object.fromEntries(loops.map((l) => [l.repoId, l]));
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState({ name: '', prompt: '', sentinel: DEFAULT_SENTINEL, maxIterations: DEFAULT_CAP });
+  const [busy, setBusy] = useState(false);
+
+  const add = async () => {
+    setBusy(true);
+    try {
+      await addRecipe({ ...draft, maxIterations: Number(draft.maxIterations) || DEFAULT_CAP });
+      setAdding(false);
+      setDraft({ name: '', prompt: '', sentinel: DEFAULT_SENTINEL, maxIterations: DEFAULT_CAP });
+    } finally { setBusy(false); }
+  };
 
   return (
     <>
       <p className="autopilot__summary">
         Loop mode resends <b>one fixed prompt</b> every time the agent finishes a turn, so it
         pushes itself through “which slice next?”-style questions. It stops the moment the agent
-        prints the <b>sentinel</b>, mentions a deny-listed risky action, or hits the iteration
-        cap. Deterministic — no brain, no LLM judge. Sends are still fenced by the operator gate
-        and the kill switch, and every resend is audited.
+        prints the <b>sentinel</b>, asks for you with <code>NEEDS_HUMAN:</code>, mentions a
+        deny-listed risky action, or hits the iteration cap — and records <b>why</b> it stopped.
+        Deterministic — no brain, no LLM judge. Sends are still fenced by the operator gate and
+        the kill switch, and every resend is audited. The contract a driven agent follows lives
+        in <code>docs/loop-driven-agent-convention.md</code>.
       </p>
+
+      {/* --- Recipes: the named templates the dock's one-tap control arms from --- */}
+      <h3 className="rp-section">Loop recipes</h3>
+      <p className="autopilot__summary autopilot__summary--sub">
+        Reusable templates (prompt + sentinel + cap) so starting a codified loop is a pick, not
+        a composition. Seeded with the delivery ritual — <b>Drive the feature</b> and
+        <b> Finish and ship</b>; edits stick, and deleted seeds stay deleted.
+      </p>
+      <ul className="lp-list lp-list--recipes">
+        {recipes.map((r) => (
+          <RecipeCard key={r.id} recipe={r} saveRecipe={saveRecipe} removeRecipe={removeRecipe} />
+        ))}
+        {recipes.length === 0 && <li className="autopilot__empty">No recipes yet — add one below.</li>}
+      </ul>
+      {adding ? (
+        <form className="lp-form lp-form--add" onSubmit={(e) => { e.preventDefault(); add(); }}>
+          <div className="lp-form__row">
+            <label className="lp-field">
+              <span className="lp-field__k">Name</span>
+              <input className="lp-field__in" value={draft.name}
+                onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))} />
+            </label>
+            <label className="lp-field">
+              <span className="lp-field__k">Sentinel</span>
+              <input className="lp-field__in" value={draft.sentinel}
+                onChange={(e) => setDraft((d) => ({ ...d, sentinel: e.target.value }))} />
+            </label>
+            <label className="lp-field lp-field--cap">
+              <span className="lp-field__k">Cap</span>
+              <input className="lp-field__in" type="number" min={1} max={100} value={draft.maxIterations}
+                onChange={(e) => setDraft((d) => ({ ...d, maxIterations: e.target.value }))} />
+            </label>
+          </div>
+          <label className="lp-field">
+            <span className="lp-field__k">Prompt (include the done/needs-human contract paragraph)</span>
+            <textarea className="lp-field__prompt" rows={4} value={draft.prompt}
+              onChange={(e) => setDraft((d) => ({ ...d, prompt: e.target.value }))} />
+          </label>
+          <div className="lp-form__actions">
+            <button className="lp-arm" type="submit"
+              disabled={busy || !draft.name.trim() || !draft.prompt.trim()}>
+              Add recipe
+            </button>
+            <button className="lp-mini" type="button" onClick={() => setAdding(false)}>Cancel</button>
+          </div>
+        </form>
+      ) : (
+        <button className="lp-mini on" onClick={() => setAdding(true)}>+ Add recipe</button>
+      )}
+
+      {/* --- Per-agent loops --- */}
+      <h3 className="rp-section">Agents</h3>
       <ul className="lp-list">
         {agents.map((a) => (
-          <LoopRow key={a.repoId} agent={a} loop={byRepo[a.repoId]} loopAction={loopAction} />
+          <LoopRow key={a.repoId} agent={a} loop={byRepo[a.repoId]} recipes={recipes} loopAction={loopAction} />
         ))}
         {agents.length === 0 && <li className="autopilot__empty">No agents yet.</li>}
       </ul>
