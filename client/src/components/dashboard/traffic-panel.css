@@ -19,6 +19,30 @@
   --tp-accent: #d9770a;
 }
 
+/* Pop-up fill mode (openspec dashboard-panel-popups): the dashboard's centered
+   pop-up frames and sizes the dock, so it fills that frame. */
+.tp-panel--popup {
+  height: 100%;
+  max-height: none;
+}
+
+/* × in the dock bar, popup mode only — the pop-up's off switch. */
+.tp-panel__close {
+  margin-left: auto;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--color-text-soft);
+  font-size: 20px;
+  line-height: 1;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+.tp-panel__close:hover {
+  color: var(--tp-accent, #2b8a8a);
+  background: var(--color-bg);
+}
+
 .tp-panel__bar {
   display: flex;
   align-items: center;

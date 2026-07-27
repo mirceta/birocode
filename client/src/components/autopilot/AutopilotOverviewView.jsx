@@ -1,0 +1,167 @@
+import '../../pages/autopilot.css';
+
+// The "Overview" tab of the AutopilotConsole — the console's front page and the
+// tab it opens on (openspec/changes/add-autopilot-overview-tab). Two jobs:
+// (1) an honest inventory of the autopilot surface as it exists today, and
+// (2) the plan — autopilot is THE dashboard for anything that prompts agents
+// automatically, running on three everyday modes: the suggestion-based loop
+// (already built — the Agents-tab classifier machinery) plus the goal-based
+// and queue-based loops it still has to grow.
+//
+// Pure static reference content: no backend calls, nothing here can act — which
+// is also why the console renders this tab even while the operator gate is
+// closed, unlike every operational tab.
+
+export default function AutopilotOverviewView() {
+  return (
+    <div className="ca ov">
+      <p className="autopilot__summary">
+        <b>Autopilot is the dashboard for anything that prompts your agents
+        automatically.</b> This page is its map: what exists today, honestly
+        stated, and the three modes it runs on — one already built, two we mean
+        to build — so autopilot becomes something we actually use every day.
+      </p>
+
+      <section className="ca-sec">
+        <h3 className="ca-sec__h">What&apos;s here today</h3>
+        <p className="ca-sec__p">
+          Every piece below is built, fenced and verified — and, honestly,
+          barely used. The features grew one at a time and never connected into
+          the real workflow: starting a loop means hand-composing a prompt, a
+          finish phrase and a cap in a blank form, and nothing tells a driven
+          agent how to behave inside one. That disconnect is exactly what the
+          plan below addresses.
+        </p>
+        <ul className="ov-list">
+          <li>
+            <b>Agents</b> — arm or disarm each agent and pick the global mode:
+            <b> suggest-only</b> (autopilot predicts your next routine prompt,
+            you press send) or <b>auto-advance</b> (confident, non-risky
+            prompts are sent for you).
+          </li>
+          <li>
+            <b>Loops</b> — the deterministic loop engine: resend one fixed
+            prompt at the end of every turn until a sentinel phrase stops it as
+            done, a deny-listed word escalates it, or the iteration cap ends it.
+          </li>
+          <li>
+            <b>Routine prompts</b> — the editable library that is the
+            recommender&apos;s entire label space, plus drafts mined from your
+            chat history across repos.
+          </li>
+          <li>
+            <b>Intercepted · Suggestion history · Audit</b> — the observability
+            surfaces: a live feed of every agent reply the engine grabs, every
+            prediction it made, and the append-only record of every prompt it
+            actually sent.
+          </li>
+          <li>
+            <b>System tests &amp; the two &quot;How … works&quot; explainers</b> —
+            in-app verification runs and the interactive architecture maps of
+            the chat and autopilot subsystems.
+          </li>
+          <li>
+            <b>Safety posture</b> — the whole API sits behind the operator gate
+            (host PC only, off by default), with the deny-list, hard iteration
+            caps and the audit trail on top. This Overview is the one surface
+            the gate never hides.
+          </li>
+        </ul>
+      </section>
+
+      <section className="ca-sec">
+        <h3 className="ca-sec__h">The plan — three modes for every day</h3>
+        <p className="ca-sec__p">
+          Autopilot keeps one identity — the home of automatic prompting — and
+          instead of more disconnected machinery it settles on three
+          first-class modes shaped around how we actually drive agents. The
+          suggestion-based loop already exists (it is the Agents-tab machinery
+          above); the other two are to build, and today&apos;s fixed-prompt
+          loop engine is the seed they grow from.
+        </p>
+        <div className="ov-features">
+          <article className="ov-card">
+            <h4 className="ov-card__name">💡 Suggestion-based loop</h4>
+            <p className="ov-card__tag">Already built — teach it your prompts; it decides when to send them.</p>
+            <ul>
+              <li>
+                You maintain a small set of <b>custom routine prompts</b> — the
+                editable library in the Routine prompts tab.
+              </li>
+              <li>
+                At the end of each armed agent&apos;s turn, the classifier
+                <b> decides whether one of those prompts</b> is the right next
+                thing to send — the label space is exactly your library, never
+                a free-form invention.
+              </li>
+              <li>
+                Two postures: <b>suggest-only</b> (the prediction waits for
+                your press of send) or <b>auto-advance</b> (confident,
+                non-risky prompts are sent for you).
+              </li>
+              <li>
+                This is the one mode that <b>exists today</b> — the Agents +
+                Routine prompts machinery above. Its remaining work is trust
+                and tuning, not construction.
+              </li>
+            </ul>
+          </article>
+          <article className="ov-card">
+            <h4 className="ov-card__name">🎯 Goal-based loop</h4>
+            <p className="ov-card__tag">Give one agent a goal, not a stream of prompts.</p>
+            <ul>
+              <li>You set a <b>goal</b> for a single agent.</li>
+              <li>
+                The driven agent receives, along with the goal,
+                <b> instructions on how the goal will be verified</b> — it knows
+                from turn one what &quot;done&quot; has to look like.
+              </li>
+              <li>
+                At the end of each turn a <b>background agent verifies</b>
+                whether the goal was actually achieved — the driven agent never
+                grades its own work.
+              </li>
+              <li>
+                Optionally the loop also runs the repo&apos;s
+                <b> <code>checks.ps1</code></b> — the established pattern of a
+                committed, repo-local verification script — as a deterministic
+                check beside the verifier&apos;s judgement.
+              </li>
+              <li>
+                Explicit <b>stopping conditions / max turns</b> bound the loop:
+                it ends on verified done, on escalation, or at the cap — never
+                on a hunch.
+              </li>
+            </ul>
+          </article>
+          <article className="ov-card">
+            <h4 className="ov-card__name">📋 Queue-based loop</h4>
+            <p className="ov-card__tag">Line up the prompts you&apos;d send by hand anyway.</p>
+            <ul>
+              <li>
+                You build a <b>queue of prompts</b> for an agent — the ritual
+                you&apos;d otherwise babysit turn by turn (continue → play it
+                back → verify → deploy → …).
+              </li>
+              <li>
+                When the agent&apos;s turn ends, the <b>next prompt is
+                auto-sent</b>; the queue drains one prompt per turn.
+              </li>
+              <li>
+                Optionally a <b>verification step</b> runs between prompts: did
+                the previous prompt actually produce what we expected? If not,
+                the queue stops and escalates instead of blindly sending the
+                next prompt into a broken state.
+              </li>
+            </ul>
+          </article>
+        </div>
+        <p className="ca-sec__foot">
+          All three modes run behind the unchanged safety posture — the host-only
+          operator gate, deny-list escalation, hard caps and the append-only
+          audit trail.
+        </p>
+      </section>
+    </div>
+  );
+}

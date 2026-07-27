@@ -74,7 +74,10 @@ function Sparkline({ history, threshold }) {
   );
 }
 
-export default function TrafficPanel({ dragHandle = null, onHighChange = null }) {
+// `popup` (openspec dashboard-panel-popups): the dashboard's centered pop-up
+// frames and sizes this dock — render always-expanded (closed via `onClose`,
+// not folded). `dragHandle` is legacy chrome from the drag-layout-citizen era.
+export default function TrafficPanel({ dragHandle = null, onHighChange = null, popup = false, onClose = null }) {
   const on = useFeature('trafficPanel');
   const [data, setData] = useState(null); // null = not loaded yet
   const [failed, setFailed] = useState(false);
@@ -130,21 +133,26 @@ export default function TrafficPanel({ dragHandle = null, onHighChange = null })
 
   const high = !!data?.high;
   const now = data?.now;
+  const folded = popup ? false : collapsed;
 
   return (
-    <section className={`tp-panel${high ? ' tp-panel--high' : ''}`}>
+    <section className={`tp-panel${high ? ' tp-panel--high' : ''}${popup ? ' tp-panel--popup' : ''}`}>
       <div className="tp-panel__bar">
         {dragHandle}
-        <button
-          type="button"
-          className="tp-panel__toggle"
-          onClick={toggleCollapsed}
-          aria-expanded={!collapsed}
-          title={collapsed ? 'Expand traffic' : 'Collapse traffic'}
-        >
-          <span className={`tp-panel__chev${collapsed ? ' is-collapsed' : ''}`}>▾</span>
+        {popup ? (
           <span className="tp-panel__title">📡 Traffic</span>
-        </button>
+        ) : (
+          <button
+            type="button"
+            className="tp-panel__toggle"
+            onClick={toggleCollapsed}
+            aria-expanded={!collapsed}
+            title={collapsed ? 'Expand traffic' : 'Collapse traffic'}
+          >
+            <span className={`tp-panel__chev${collapsed ? ' is-collapsed' : ''}`}>▾</span>
+            <span className="tp-panel__title">📡 Traffic</span>
+          </button>
+        )}
         <span className="tp-panel__summary">
           {data === null ? (
             failed ? 'unreachable' : 'loading…'
@@ -155,9 +163,20 @@ export default function TrafficPanel({ dragHandle = null, onHighChange = null })
             </>
           )}
         </span>
+        {popup && onClose && (
+          <button
+            type="button"
+            className="tp-panel__close"
+            onClick={onClose}
+            title="Close"
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        )}
       </div>
 
-      {!collapsed && (
+      {!folded && (
         <div className="tp-panel__body">
           {data === null ? (
             <div className="tp-panel__empty">{failed ? 'Could not load /api/traffic.' : 'Loading…'}</div>
