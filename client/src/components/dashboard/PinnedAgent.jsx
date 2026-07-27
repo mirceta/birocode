@@ -466,6 +466,7 @@ export default function PinnedAgent({
       {canLoop && (
         <DockLoopControl
           repoId={tab.repoId}
+          sessionId={chat.sessionId || tab.sessionId || null}
           loop={loop}
           recipes={loopRecipes}
           onChanged={onLoopChanged}

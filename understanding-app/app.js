@@ -1,127 +1,97 @@
-/* Understanding app — why the goal loop stopped at iteration 0, and the
-   arm-freshness fix. Build-less, no deps, relative URLs only. */
-(function () {
-  'use strict';
+// Goal-loop post-mortem explainer — 2026-07-27 test loop.
+// Build-less, relative-URL, self-contained (docs/understanding-app-convention.md).
 
-  // ---- tabs ----------------------------------------------------------------
-  var tabs = document.querySelectorAll('.tab');
-  tabs.forEach(function (t) {
-    t.addEventListener('click', function () {
-      tabs.forEach(function (x) { x.classList.remove('on'); });
-      document.querySelectorAll('.view').forEach(function (v) { v.classList.remove('on'); });
-      t.classList.add('on');
-      document.getElementById(t.dataset.v).classList.add('on');
-    });
+// ---------- tabs ----------
+const tabs = document.getElementById('tabs');
+tabs.addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-tab]');
+  if (!btn) return;
+  tabs.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b === btn));
+  document.querySelectorAll('main .tab').forEach((s) =>
+    s.classList.toggle('active', s.id === 'tab-' + btn.dataset.tab));
+});
+
+// ---------- tab 1: the send timeline (from autopilot-audit.jsonl) ----------
+// t = seconds after arming (armedAt 17:09:03 UTC).
+const SENDS = [
+  {
+    n: 1, t: 5, session: 'watched', prompt: 'work prompt',
+    believed: 'Fresh arm — pre-arm gate nulled the stale trailing reply ("Health is 200…" from the deploy turn), so send the work prompt. Correct behaviour.',
+    truth: 'Landed in the conversation you watched. The agent replied "OK". ✔ This is real turn 1 of 2 you saw.',
+    ok: true,
+  },
+  {
+    n: 2, t: 16, session: 'watched', prompt: 'work prompt',
+    believed: 'Trailing message is now "OK" — differs from what I sent against, so the agent replied. Ask again.',
+    truth: 'Also landed in your watched conversation → second "OK". ✔ Real turn 2 of 2 you saw. But note the pace: 11 s after send #1.',
+    ok: true,
+  },
+  {
+    n: 3, t: 49, session: 'auto', prompt: 'VERIFY prompt (!)',
+    believed: 'Trailing message contains "LOOP_DONE" → the goal is claimed done → send the verification prompt.',
+    truth: 'The "reply" was the auto-understanding BACKGROUND JOB writing "…the \'reply OK until the 3rd ask, then LOOP_DONE\' mechanism" — it merely QUOTED the sentinel. Contains() matched it. The verify prompt then resumed the newest file: a fork, not your conversation.',
+    ok: false,
+  },
+  {
+    n: 4, t: 79, session: 'fork', prompt: 'work prompt',
+    believed: 'Verification reply says "Not verified…" (no GOAL_VERIFIED) → gaps found → back to the work prompt.',
+    truth: 'All of this happened in the fork session (60494991…). Your open page never saw it. The fork agent answered "OK — this is ask #2, not the 3rd."',
+    ok: false,
+  },
+  {
+    n: 5, t: 90, session: 'fork', prompt: 'work prompt',
+    believed: 'New reply again → ask again. RecordSend → iteration 5/5 → CAP → resolve "capped before verification".',
+    truth: 'Still the fork. Its agent eventually said "This is the 3rd time… LOOP_DONE" — but the loop was already capped. Net: 5 counted sends, 2 visible turns, 3 in sessions you never watched.',
+    ok: false,
+  },
+];
+
+const SESSION_LABEL = {
+  watched: 'your watched conversation (194f3269…)',
+  fork: 'fork session (60494991…)',
+  auto: 'decided against the auto-understanding job (65192ef9…)',
+};
+
+const tl = document.getElementById('timeline');
+const detail = document.getElementById('send-detail');
+const MAXT = 95;
+SENDS.forEach((s) => {
+  const el = document.createElement('button');
+  el.className = 'send s-' + s.session + (s.ok ? '' : ' bad');
+  el.style.left = (s.t / MAXT) * 100 + '%';
+  el.innerHTML = `<span class="n">${s.n}</span><span class="t">+${s.t}s</span>`;
+  el.addEventListener('click', () => {
+    tl.querySelectorAll('.send').forEach((x) => x.classList.remove('sel'));
+    el.classList.add('sel');
+    detail.innerHTML = `
+      <h3>Send #${s.n} — ${s.prompt} <small>(+${s.t}s, ${SESSION_LABEL[s.session]})</small></h3>
+      <p><b>Engine believed:</b> ${s.believed}</p>
+      <p><b>Actually:</b> ${s.truth}</p>`;
   });
+  tl.appendChild(el);
+});
+const axis = document.createElement('div');
+axis.className = 'axis';
+axis.innerHTML = '<span>arm</span><span>+30s</span><span>+60s</span><span>+90s</span>';
+tl.appendChild(axis);
 
-  // ---- tab 1: arm + tick simulator ----------------------------------------
-  // The exact shape of what happened this morning: the trailing message is the
-  // human/agent DEPLOY conversation; then the goal loop is armed; then ticks.
-  var lane = document.getElementById('lane');
-  var verdicts = document.getElementById('verdicts');
-  var armBtn = document.getElementById('simArm');
-  var tickBtn = document.getElementById('simTick');
-  var resetBtn = document.getElementById('simReset');
-  var modePill = document.getElementById('modePill');
+// ---------- tab 2: newest-file diagram ----------
+document.getElementById('bug1-diagram').innerHTML = `
+<div class="filebox">
+  <div class="fbtitle">~/.claude/projects/&lt;repo&gt;/ — ONE shared folder, THREE writers</div>
+  <div class="frow watched"><span class="fname">194f3269….jsonl</span><span class="fdesc">the conversation on your screen</span></div>
+  <div class="frow fork"><span class="fname">60494991….jsonl</span><span class="fdesc">fork created by the loop's own --resume</span></div>
+  <div class="frow auto"><span class="fname">65192ef9….jsonl</span><span class="fdesc">auto-understanding background job</span></div>
+  <div class="fbfoot">Every 10 s the engine asks: <b>"whichever file was written last = the agent's reply."</b><br>
+  Whoever wrote last — including the loop's own forks and unrelated jobs — becomes "the agent".</div>
+</div>`;
 
-  var fixed = false;   // false = engine before the fix
-  var armed = false;
-  var step = 0;        // ticks taken since arming
-
-  modePill.addEventListener('click', function () {
-    fixed = !fixed;
-    modePill.textContent = fixed ? 'engine: AFTER the fix' : 'engine: BEFORE the fix';
-    modePill.className = 'pill ' + (fixed ? 'on-new' : 'on-old');
-    reset();
-  });
-  resetBtn.addEventListener('click', reset);
-
-  function msg(who, html, cls) {
-    var d = document.createElement('div');
-    d.className = 'msg' + (cls ? ' ' + cls : '');
-    d.innerHTML = '<div class="who">' + who + '</div><div class="txt">' + html + '</div>';
-    lane.appendChild(d);
-    d.scrollIntoView({ block: 'nearest' });
-    return d;
-  }
-  function armline() {
-    var d = document.createElement('div');
-    d.className = 'armline';
-    d.innerHTML = '<span>🎯 goal loop ARMED here (ArmedAt stamped)</span>';
-    lane.appendChild(d);
-  }
-  function verdict(ok, html) {
-    var d = document.createElement('div');
-    d.className = 'verdict ' + (ok ? 'ok' : 'bad');
-    d.innerHTML = html;
-    verdicts.appendChild(d);
-    d.scrollIntoView({ block: 'nearest' });
-  }
-
-  function seed() {
-    msg('🤖 agent — 14:43 (BEFORE arming: your deploy conversation)',
-      '<b>Deployed and verified on live :5099</b> — the <span class="deny">deploy</span> carried the ' +
-      'always-admin <span class="deny">merge</span>… say “keep it”.');
-  }
-
-  function reset() {
-    lane.innerHTML = '';
-    verdicts.innerHTML = '';
-    armed = false; step = 0;
-    armBtn.disabled = false;
-    tickBtn.disabled = true;
-    seed();
-  }
-
-  armBtn.addEventListener('click', function () {
-    if (armed) return;
-    armed = true; step = 0;
-    armBtn.disabled = true;
-    tickBtn.disabled = false;
-    armline();
-    verdict(true, 'Loop armed: goal <i>“reply OK; the 3rd time, reply LOOP_DONE”</i>, drive mode, phase work. ' +
-      'Nothing has been sent yet — <b>iterationsDone = 0</b>. Now click <b>Engine tick</b>.');
-  });
-
-  tickBtn.addEventListener('click', function () {
-    if (!armed) return;
-    step++;
-    if (!fixed) {
-      // Old engine: first tick judges the PRE-ARM deploy message with the ladder.
-      verdict(false,
-        '<b>Tick ' + step + ' (old engine):</b> trailing reply contains deny-listed ' +
-        '<span class="deny">“deploy”</span> → <b>Stop(escalate, deny-list)</b> at iterationsDone 0. ' +
-        'The loop is dead — <i>this is exactly your debug bundle</i>: ' +
-        '<code>stopReason: "deny-list", iterationsDone: 0</code>. It judged a message it never caused. ' +
-        'Click the red pill above to switch to the fixed engine.');
-      tickBtn.disabled = true;
-      return;
-    }
-    // Fixed engine walkthrough.
-    if (step === 1) {
-      verdict(true,
-        '<b>Tick 1 (fixed):</b> trailing reply timestamp (14:43) &lt; ArmedAt → <b>pre-arm, ignored by the ladder</b>. ' +
-        'Decision: Propose(stored work prompt) → <b>SEND, iteration 1</b>.');
-      msg('🚗 loop → agent', 'Work toward this goal until it is genuinely achieved: …reply OK… (stored work prompt)');
-      msg('🤖 agent — now (fresh: produced AFTER arming)', 'OK');
-    } else if (step === 2) {
-      verdict(true, '<b>Tick 2:</b> fresh reply “OK” — ladder applies (no deny words, no sentinel) → resend work prompt, iteration 2.');
-      msg('🚗 loop → agent', '(same stored work prompt)');
-      msg('🤖 agent', 'OK');
-    } else if (step === 3) {
-      verdict(true, '<b>Tick 3:</b> resend, iteration 3 — the 3rd ask.');
-      msg('🚗 loop → agent', '(same stored work prompt)');
-      msg('🤖 agent', 'That was the 3rd time. <b>LOOP_DONE</b>');
-    } else if (step === 4) {
-      verdict(true, '<b>Tick 4:</b> fresh reply carries the sentinel → send the <b>verification prompt</b>, phase → verify. ' +
-        'Only <code>GOAL_VERIFIED</code> in the verification reply resolves the loop as done.');
-      msg('🚗 loop → agent', 'You declared the goal done… verify against the ACTUAL state… end with GOAL_VERIFIED.');
-      tickBtn.disabled = true;
-      verdict(true, '<b>Note:</b> fresh replies are still fully guarded — in the e2e, a post-arm reply saying ' +
-        '“I will deploy to production” escalated the loop with <code>deny-list</code> as before. ' +
-        'Only <i>stale</i> history is immune.');
-    }
-  });
-
-  reset();
-})();
+// ---------- tab 3: attach-moment diagram ----------
+document.getElementById('bug2-diagram').innerHTML = `
+<div class="attach-grid">
+  <div class="acard yes"><b>page load / refresh</b><span>reconcile() → attachToRun()</span></div>
+  <div class="acard yes"><b>tab becomes visible</b><span>visibilitychange → reconcile()</span></div>
+  <div class="acard yes"><b>you press Send</b><span>send() opens the stream itself</span></div>
+  <div class="acard yes"><b>manual ↻ on a dock</b><span>refreshOne()</span></div>
+  <div class="acard no"><b>autopilot starts a run<br>while you watch</b><span>— no signal. Nothing attaches. This is the whole bug.</span></div>
+</div>`;

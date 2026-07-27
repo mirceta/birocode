@@ -221,6 +221,35 @@ public class AutopilotService : BackgroundService
             intercepts, log);
     }
 
+    public override Task StartAsync(CancellationToken cancellationToken)
+    {
+        _runs.RunCompleted += OnRunCompleted;
+        return base.StartAsync(cancellationToken);
+    }
+
+    public override Task StopAsync(CancellationToken cancellationToken)
+    {
+        _runs.RunCompleted -= OnRunCompleted;
+        return base.StopAsync(cancellationToken);
+    }
+
+    /// <summary>The pin's lineage tracker (fix-loop-conversation-identity, D3):
+    /// every <c>--resume</c> FORKS a new session id, so when a builder-lane run for
+    /// a repo with an active DRIVEN loop completes with a captured session id, the
+    /// loop's pin advances to that fork. Unconditional on who started the run:
+    /// there is one builder conversation per repo and both legitimate writers move
+    /// it — the loop's own sends AND the human (a suggest-mode pending prompt is
+    /// sent by the human from the composer). Understanding jobs never claim the
+    /// builder lane, so background work can't move the pin. A run that dies before
+    /// its session event carries null and leaves the pin unmoved.</summary>
+    private void OnRunCompleted(RunSessionService.RunCompletedEvent e)
+    {
+        if (e.Lane != "builder" || string.IsNullOrWhiteSpace(e.SessionId)) return;
+        if (_loops.Get(e.RepoId) is not { Active: true } loop
+            || loop.Kind == LoopConfigStore.KindSuggestion) return;
+        _loops.SetSessionId(e.RepoId, e.SessionId);
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         // First tick after a short delay so startup isn't competing with the build.
@@ -285,7 +314,32 @@ public class AutopilotService : BackgroundService
             }
 
             var run = _runs.Get(repo.Id);
-            var (sessionId, lastAssistant, lastAssistantAt) = LastAssistantMessage(repo.Path);
+            // Conversation identity (openspec: fix-loop-conversation-identity, D4):
+            // driven kinds read from and resume the loop's PINNED session only —
+            // the repo's transcript folder is shared by every conversation and every
+            // --resume fork, so "newest file" is an unrelated-writer race. The
+            // suggestion kind keeps the newest-file read by design (it reacts to
+            // whatever the repo's current trailing message is; it drives nothing).
+            string? sessionId;
+            string? lastAssistant;
+            DateTime? lastAssistantAt;
+            if (isSuggestionKind)
+            {
+                (sessionId, lastAssistant, lastAssistantAt) = LastAssistantMessage(repo.Path);
+            }
+            else
+            {
+                sessionId = loop.SessionId;
+                if (sessionId is null)
+                {
+                    // Null pin (pre-pin loops.json, or no transcript at arm time):
+                    // resolve newest-file ONCE and lock it in — never per tick.
+                    (sessionId, _, _) = LastAssistantMessage(repo.Path);
+                    if (sessionId != null) _loops.SetSessionId(repo.Id, sessionId);
+                }
+                if (sessionId is null) { lastAssistant = null; lastAssistantAt = null; }
+                else (lastAssistant, lastAssistantAt) = LastAssistantMessageIn(repo.Path, sessionId);
+            }
             var snippet = Snippet(lastAssistant ?? "");
 
             // A NEW arm generation clears the per-repo dedup guards: a freshly
@@ -553,14 +607,32 @@ public class AutopilotService : BackgroundService
                 .OrderByDescending(f => f.LastWriteTimeUtc).FirstOrDefault();
             if (newest is null) return (null, null, null);
             var sessionId = Path.GetFileNameWithoutExtension(newest.Name);
-            var msgs = _sessions.GetMessages(repoPath, sessionId);
-            var last = msgs.LastOrDefault(m => m.Role == "assistant");
-            return (sessionId, last?.Text, last?.Timestamp?.ToUniversalTime());
+            var (text, at) = LastAssistantMessageIn(repoPath, sessionId);
+            return (sessionId, text, at);
         }
         catch (Exception ex)
         {
             _logger.Error($"[AUTOPILOT] read last message for {repoPath} failed: {ex.Message}");
             return (null, null, null);
+        }
+    }
+
+    // The pinned read (fix-loop-conversation-identity, D4): the last assistant
+    // message of ONE named session — a fixed file, immune to whatever else writes
+    // to the repo's shared transcript folder. A missing/empty session reads as
+    // "the agent has not spoken yet", which sends the stored prompt into the pin.
+    private (string? Text, DateTime? AtUtc) LastAssistantMessageIn(string repoPath, string sessionId)
+    {
+        try
+        {
+            var last = _sessions.GetMessages(repoPath, sessionId)
+                .LastOrDefault(m => m.Role == "assistant");
+            return (last?.Text, last?.Timestamp?.ToUniversalTime());
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[AUTOPILOT] read session {sessionId} for {repoPath} failed: {ex.Message}");
+            return (null, null);
         }
     }
 

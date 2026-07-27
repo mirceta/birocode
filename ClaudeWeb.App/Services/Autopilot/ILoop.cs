@@ -98,6 +98,25 @@ public abstract class DrivenLoop : ILoop
 
     protected static bool SentinelHit(LoopContext ctx) =>
         !string.IsNullOrEmpty(ctx.Instance.Sentinel)
-        && ctx.LastAssistant != null
-        && ctx.LastAssistant.Contains(ctx.Instance.Sentinel, StringComparison.OrdinalIgnoreCase);
+        && FinalLineContains(ctx.LastAssistant, ctx.Instance.Sentinel);
+
+    /// <summary>Completion tokens (the sentinel, <c>GOAL_VERIFIED</c>) count only on
+    /// the reply's FINAL non-empty line (fix-loop-conversation-identity, D5) — the
+    /// contract docs/loop-driven-agent-convention.md states ("end your reply with …
+    /// as the final line"). Containment within that one line, case-insensitive, so
+    /// trailing punctuation survives; a reply that merely quotes or mentions the
+    /// token earlier no longer completes a loop. <c>NEEDS_HUMAN:</c> and the
+    /// deny-list stay whole-reply matches above: their false-positive direction is
+    /// "stop and ask a human", the safe side.</summary>
+    protected static bool FinalLineContains(string? reply, string token)
+    {
+        if (string.IsNullOrWhiteSpace(reply)) return false;
+        foreach (var raw in reply.Split('\n').Reverse())
+        {
+            var line = raw.Trim();
+            if (line.Length == 0) continue;
+            return line.Contains(token, StringComparison.OrdinalIgnoreCase);
+        }
+        return false;
+    }
 }

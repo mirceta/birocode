@@ -130,6 +130,11 @@ public class LoopConfigStore
         // freshly armed loop acts on the agent's CURRENT trailing message even if
         // a previous instance already acted on that same message.
         public long ArmedAt { get; set; }
+        // Driven kinds: the session id of the ONE conversation this loop drives
+        // (openspec: fix-loop-conversation-identity). Seeded at arm time, advanced
+        // to each builder-lane run's forked session id on completion. Null on old
+        // loops.json entries and suggestion instances (additive).
+        public string? SessionId { get; set; }
     }
 
     private sealed class Data
@@ -146,7 +151,8 @@ public class LoopConfigStore
         string RepoId, string Kind, string Mode, string Prompt, string Sentinel, int MaxIterations,
         bool Active, int IterationsDone, string Status, long LastSentAt,
         string? StopReason, string? StopDetail, string? RecipeId, string? RecipeName,
-        string? Goal, string? VerifyPrompt, string? Phase, string? PendingPrompt, long ArmedAt);
+        string? Goal, string? VerifyPrompt, string? Phase, string? PendingPrompt, long ArmedAt,
+        string? SessionId);
 
     public IReadOnlyList<LoopState> All()
     {
@@ -167,7 +173,7 @@ public class LoopConfigStore
     /// When armed from a recipe, the recipe's id/name are stamped on for display.
     /// Replaces this agent's one loop slot — XOR by construction (revision 2, D8).</summary>
     public LoopState Start(string repoId, string prompt, string? sentinel, int? maxIterations,
-        string? recipeId = null, string? recipeName = null, string? mode = null)
+        string? recipeId = null, string? recipeName = null, string? mode = null, string? sessionId = null)
     {
         lock (_gate)
         {
@@ -186,10 +192,11 @@ public class LoopConfigStore
                 LastSentAt = 0,
                 RecipeId = recipeId,
                 RecipeName = recipeName,
+                SessionId = Clean(sessionId),
             };
             _data.Loops[repoId] = e;
             Save();
-            _logger.Info($"[LOOP] armed recipe loop {repoId} ({e.Mode}, cap {e.MaxIterations}, sentinel \"{e.Sentinel}\")");
+            _logger.Info($"[LOOP] armed recipe loop {repoId} ({e.Mode}, cap {e.MaxIterations}, sentinel \"{e.Sentinel}\", pinned {e.SessionId ?? "<none yet>"})");
             return ToState(repoId, e);
         }
     }
@@ -197,7 +204,8 @@ public class LoopConfigStore
     /// <summary>Arms (or re-arms) a GOAL loop (openspec: unify-loop-types): composes the
     /// work + verification prompts from the templates ONCE, stores them verbatim, and
     /// starts in the work phase. The engine only ever sends the stored text.</summary>
-    public LoopState StartGoal(string repoId, string goal, int? maxIterations, string? mode = null)
+    public LoopState StartGoal(string repoId, string goal, int? maxIterations, string? mode = null,
+        string? sessionId = null)
     {
         lock (_gate)
         {
@@ -217,10 +225,11 @@ public class LoopConfigStore
                 IterationsDone = 0,
                 Status = "looping",
                 LastSentAt = 0,
+                SessionId = Clean(sessionId),
             };
             _data.Loops[repoId] = e;
             Save();
-            _logger.Info($"[LOOP] armed goal loop {repoId} ({e.Mode}, cap {e.MaxIterations})");
+            _logger.Info($"[LOOP] armed goal loop {repoId} ({e.Mode}, cap {e.MaxIterations}, pinned {e.SessionId ?? "<none yet>"})");
             return ToState(repoId, e);
         }
     }
@@ -281,6 +290,25 @@ public class LoopConfigStore
         }
     }
 
+    /// <summary>Pins (or advances) the ONE conversation a driven loop follows
+    /// (openspec: fix-loop-conversation-identity): the engine's read and resume
+    /// target. Called at first resolve (null-pin fallback) and on every
+    /// builder-lane run completion — the fork's new session id replaces the old.
+    /// Idempotent: saves only on change.</summary>
+    public LoopState? SetSessionId(string repoId, string? sessionId)
+    {
+        lock (_gate)
+        {
+            if (!_data.Loops.TryGetValue(repoId, out var e)) return null;
+            var clean = Clean(sessionId);
+            if (e.SessionId == clean) return ToState(repoId, e);
+            _logger.Info($"[LOOP] {repoId} pin {e.SessionId ?? "<none>"} -> {clean ?? "<none>"}");
+            e.SessionId = clean;
+            Save();
+            return ToState(repoId, e);
+        }
+    }
+
     /// <summary>Engine: flips a goal loop's phase ("work" | "verify"). No-op for
     /// unknown repos; other kinds never call this.</summary>
     public LoopState? SetPhase(string repoId, string phase)
@@ -302,6 +330,8 @@ public class LoopConfigStore
         if (_data.Loops.TryGetValue(repoId, out var prev) && prev.Active && prev.Kind != newKind)
             _logger.Info($"[LOOP] {repoId}: active {prev.Kind ?? KindRecipe} loop displaced by arming the {newKind} loop");
     }
+
+    private static string? Clean(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
     private static string CleanMode(string? mode, string defaultMode = ModeDrive) =>
         string.Equals(mode, ModeSuggest, StringComparison.OrdinalIgnoreCase) ? ModeSuggest
@@ -370,7 +400,8 @@ public class LoopConfigStore
             e.Prompt, e.Sentinel,
             e.MaxIterations, e.Active, e.IterationsDone, e.Status, e.LastSentAt,
             e.StopReason, e.StopDetail, e.RecipeId, e.RecipeName,
-            e.Goal, e.VerifyPrompt, e.Phase, e.PendingPrompt, e.ArmedAt);
+            e.Goal, e.VerifyPrompt, e.Phase, e.PendingPrompt, e.ArmedAt,
+            e.SessionId);
 
     private void Load()
     {

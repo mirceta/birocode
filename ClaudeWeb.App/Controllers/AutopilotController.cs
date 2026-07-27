@@ -129,7 +129,8 @@ public class AutopilotController : ControllerBase
 
     public sealed record LoopRequest(
         string? RepoId, string? Action, string? Kind, string? Mode, string? Prompt,
-        string? Goal, string? Sentinel, int? MaxIterations, string? RecipeId);
+        string? Goal, string? Sentinel, int? MaxIterations, string? RecipeId,
+        string? SessionId);
 
     /// <summary>The loop control (openspec: unify-loop-types, revision 2): one
     /// endpoint arms / edits / disarms an agent's ONE loop instance of any kind.
@@ -159,11 +160,20 @@ public class AutopilotController : ControllerBase
                         ?? (_config.Get().AutoAdvance ? LoopConfigStore.ModeDrive : LoopConfigStore.ModeSuggest));
                     break;
                 }
+                // The conversation pin (openspec: fix-loop-conversation-identity, D2):
+                // driven kinds arm pinned to the conversation the dock was showing.
+                // Fallback for callers that name none: the repo's newest transcript
+                // session, resolved ONCE here at arm time — never per tick. A repo
+                // with no transcript arms unpinned; the engine locks a pin in before
+                // its first send.
+                var pin = string.IsNullOrWhiteSpace(req.SessionId)
+                    ? NewestSessionId(req.RepoId)
+                    : req.SessionId.Trim();
                 if (string.Equals(req.Kind, LoopConfigStore.KindGoal, StringComparison.OrdinalIgnoreCase))
                 {
                     if (string.IsNullOrWhiteSpace(req.Goal))
                         return BadRequest(new { error = "a goal loop needs a goal" });
-                    _loops.StartGoal(req.RepoId, req.Goal.Trim(), req.MaxIterations, req.Mode);
+                    _loops.StartGoal(req.RepoId, req.Goal.Trim(), req.MaxIterations, req.Mode, pin);
                     break;
                 }
                 if (!string.IsNullOrWhiteSpace(req.RecipeId))
@@ -171,12 +181,13 @@ public class AutopilotController : ControllerBase
                     if (_recipes.Get(req.RecipeId) is not { } recipe)
                         return NotFound(new { error = $"unknown recipe \"{req.RecipeId}\"" });
                     _loops.Start(req.RepoId, recipe.Prompt, recipe.Sentinel,
-                        req.MaxIterations ?? recipe.MaxIterations, recipe.Id, recipe.Name, req.Mode);
+                        req.MaxIterations ?? recipe.MaxIterations, recipe.Id, recipe.Name, req.Mode, pin);
                     break;
                 }
                 if (string.IsNullOrWhiteSpace(req.Prompt))
                     return BadRequest(new { error = "a loop needs a prompt to resend" });
-                _loops.Start(req.RepoId, req.Prompt.Trim(), req.Sentinel, req.MaxIterations, mode: req.Mode);
+                _loops.Start(req.RepoId, req.Prompt.Trim(), req.Sentinel, req.MaxIterations,
+                    mode: req.Mode, sessionId: pin);
                 break;
             case "mode":
                 if (string.IsNullOrWhiteSpace(req.Mode))
@@ -197,6 +208,27 @@ public class AutopilotController : ControllerBase
         }
 
         return Ok(BuildState());
+    }
+
+    // The arm-time pin fallback: the repo's newest transcript session RIGHT NOW.
+    // One directory listing, once per arm — the engine never re-resolves this
+    // (re-resolving per tick was the conversation-identity bug).
+    private string? NewestSessionId(string repoId)
+    {
+        try
+        {
+            if (_repos.GetAll().FirstOrDefault(r => r.Id == repoId) is not { } repo) return null;
+            var dir = SessionService.ProjectsDirectoryFor(repo.Path);
+            if (!Directory.Exists(dir)) return null;
+            var newest = new DirectoryInfo(dir).EnumerateFiles("*.jsonl")
+                .OrderByDescending(f => f.LastWriteTimeUtc).FirstOrDefault();
+            return newest is null ? null : Path.GetFileNameWithoutExtension(newest.Name);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[LOOP] newest-session fallback for {repoId} failed: {ex.Message}");
+            return null;
+        }
     }
 
     // --- Loop status (read-only, NOT operator-gated) ------------------------
@@ -308,6 +340,10 @@ public class AutopilotController : ControllerBase
                     sentinel = loop.Sentinel,
                     recipeId = loop.RecipeId,
                     recipeName = loop.RecipeName,
+                    // The pinned conversation (fix-loop-conversation-identity). It
+                    // names a conversation, not prompt text, but stays behind the
+                    // gate with the rest of the loop internals (design D1).
+                    sessionId = Text(loop.SessionId),
                     prompt = Text(loop.Prompt),
                     goal = Text(loop.Goal),
                     verifyPrompt = Text(loop.VerifyPrompt),

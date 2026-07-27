@@ -1,0 +1,92 @@
+:root {
+  --bg: #12141a; --panel: #1b1f2a; --edge: #2c3242; --ink: #e8eaf0;
+  --dim: #8b93a7; --ok: #4cc38a; --done: #6c9ef8; --bad: #e5484d; --warn: #f0b429;
+  --accent: #6c9ef8; --mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --watched: #4cc38a; --fork: #e5484d; --auto: #f0b429;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.55 system-ui, 'Segoe UI', sans-serif;
+}
+header { padding: 24px 28px 8px; max-width: 980px; margin: 0 auto; }
+h1 { font-size: 1.35rem; margin: 0 0 6px; }
+.sub { color: var(--dim); margin: 0; }
+h2 { font-size: 1.1rem; margin-top: 0; }
+code { font-family: var(--mono); font-size: 0.88em; background: #10131b; padding: 1px 5px; border-radius: 4px; }
+
+#tabs { display: flex; gap: 6px; flex-wrap: wrap; padding: 14px 28px; max-width: 980px; margin: 0 auto; }
+#tabs button {
+  background: var(--panel); color: var(--dim); border: 1px solid var(--edge);
+  border-radius: 8px; padding: 8px 14px; cursor: pointer; font-size: 0.9rem;
+}
+#tabs button.active { color: var(--ink); border-color: var(--accent); background: #202737; }
+
+main { max-width: 980px; margin: 0 auto; padding: 4px 28px 40px; }
+main .tab { display: none; }
+main .tab.active { display: block; }
+
+/* ---- timeline ---- */
+#timeline {
+  position: relative; height: 96px; margin: 22px 0 14px;
+  border-bottom: 2px solid var(--edge);
+}
+.send {
+  position: absolute; top: 12px; transform: translateX(-50%);
+  width: 46px; height: 46px; border-radius: 50%;
+  border: 2px solid var(--watched); background: var(--panel); color: var(--ink);
+  cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.send .n { font-weight: 700; font-size: 1rem; }
+.send .t { font-size: 0.62rem; color: var(--dim); }
+.send.s-fork { border-color: var(--fork); }
+.send.s-auto { border-color: var(--auto); }
+.send.sel { background: #202737; box-shadow: 0 0 0 3px rgba(108, 158, 248, 0.35); }
+.axis {
+  position: absolute; left: 0; right: 0; bottom: -24px;
+  display: flex; justify-content: space-between; color: var(--dim); font-size: 0.75rem;
+}
+.detail-card {
+  margin-top: 40px; background: var(--panel); border: 1px solid var(--edge);
+  border-radius: 10px; padding: 14px 18px; min-height: 90px;
+}
+.detail-card h3 { margin: 0 0 8px; font-size: 0.98rem; }
+.detail-card small { color: var(--dim); font-weight: 400; }
+.legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 14px; color: var(--dim); font-size: 0.85rem; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+.dot.s-watched { background: var(--watched); }
+.dot.s-fork { background: var(--fork); }
+.dot.s-auto { background: var(--auto); }
+
+/* ---- bug1 file diagram ---- */
+.filebox { background: var(--panel); border: 1px solid var(--edge); border-radius: 10px; padding: 14px 18px; margin: 14px 0; }
+.fbtitle { font-family: var(--mono); color: var(--dim); font-size: 0.82rem; margin-bottom: 10px; }
+.frow {
+  display: flex; justify-content: space-between; gap: 12px; padding: 7px 10px;
+  border-left: 3px solid var(--edge); margin: 5px 0; background: #10131b; border-radius: 4px;
+}
+.frow.watched { border-left-color: var(--watched); }
+.frow.fork { border-left-color: var(--fork); }
+.frow.auto { border-left-color: var(--auto); }
+.fname { font-family: var(--mono); font-size: 0.85rem; }
+.fdesc { color: var(--dim); font-size: 0.85rem; text-align: right; }
+.fbfoot { margin-top: 10px; color: var(--dim); font-size: 0.88rem; }
+.fault-list li { margin: 10px 0; }
+
+/* ---- bug2 attach grid ---- */
+.attach-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin: 16px 0; }
+.acard {
+  background: var(--panel); border: 1px solid var(--edge); border-radius: 10px;
+  padding: 12px; display: flex; flex-direction: column; gap: 6px;
+}
+.acard.yes { border-top: 3px solid var(--ok); }
+.acard.no { border-top: 3px solid var(--bad); background: #241a1d; }
+.acard span { color: var(--dim); font-size: 0.83rem; }
+
+/* ---- fix cards ---- */
+.fix-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.fix-card { background: var(--panel); border: 1px solid var(--edge); border-radius: 10px; padding: 14px 16px; }
+.fix-card h3 { margin: 0 0 8px; font-size: 0.95rem; color: var(--accent); }
+.fix-card p { margin: 0; color: #c7cddc; font-size: 0.9rem; }
+
+footer { max-width: 980px; margin: 0 auto; padding: 0 28px 30px; color: var(--dim); font-size: 0.8rem; }

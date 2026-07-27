@@ -572,6 +572,20 @@ export function ChatProvider({ children }) {
   useEffect(() => {
     if (dockLoaded) reconcileRef.current();
   }, [dockLoaded]);
+  // Visible-page run discovery (openspec: fix-loop-conversation-identity, D6):
+  // a backend-started run (an autopilot loop send) must show up on an OPEN
+  // page too, not only on mount/visibility/own-send/manual refresh. Poll the
+  // in-memory GET /api/runs snapshot and reattach through the same reconcile
+  // path; attachToRun no-ops while a reader is attached (abortRefs guard), so
+  // the poll is idempotent. Skipped while hidden — the visibilitychange
+  // reconcile above covers the return.
+  useEffect(() => {
+    if (!dockLoaded) return undefined;
+    const id = setInterval(() => {
+      if (!document.hidden) reconcileRef.current();
+    }, 5000);
+    return () => clearInterval(id);
+  }, [dockLoaded]);
 
   function stopTo({ key, repoId, tabId, lane = 'builder' }) {
     stopRefs.current[key] = true;

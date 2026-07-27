@@ -21,8 +21,7 @@ public sealed class GoalLoop : DrivenLoop
 
         if (inst.Phase == LoopConfigStore.PhaseVerify)
         {
-            if (ctx.LastAssistant != null && ctx.LastAssistant.Contains(
-                    LoopConfigStore.VerifiedToken, StringComparison.OrdinalIgnoreCase))
+            if (FinalLineContains(ctx.LastAssistant, LoopConfigStore.VerifiedToken))
                 return new LoopDecision.Stop("done", "verified",
                     $"verification turn emitted {LoopConfigStore.VerifiedToken}");
 

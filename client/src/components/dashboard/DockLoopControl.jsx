@@ -51,7 +51,7 @@ async function copyToClipboard(text) {
   }
 }
 
-export default function DockLoopControl({ repoId, loop, recipes = [], onChanged, onUsePending }) {
+export default function DockLoopControl({ repoId, sessionId, loop, recipes = [], onChanged, onUsePending }) {
   const { t } = useT();
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState(null);
@@ -136,6 +136,10 @@ export default function DockLoopControl({ repoId, loop, recipes = [], onChanged,
   };
 
   const capNum = Number(cap);
+  // Driven kinds arm PINNED to the conversation this dock is showing (openspec:
+  // fix-loop-conversation-identity): the loop then reads and resumes that
+  // session's lineage only. Null (no conversation yet) lets the server fall
+  // back to the repo's newest session at arm time.
   const arm = () => {
     if (selected === 'suggestion') {
       return act('/autopilot/loop', { repoId, action: 'start', kind: 'suggestion', mode });
@@ -145,12 +149,14 @@ export default function DockLoopControl({ repoId, loop, recipes = [], onChanged,
       return act('/autopilot/loop', {
         repoId, action: 'start', recipeId: chosenRecipe.id, mode,
         maxIterations: capNum >= 1 ? capNum : undefined,
+        sessionId: sessionId || undefined,
       });
     }
     if (!goal.trim()) return undefined;
     return act('/autopilot/loop', {
       repoId, action: 'start', kind: 'goal', goal: goal.trim(), mode,
       maxIterations: capNum >= 1 ? capNum : undefined,
+      sessionId: sessionId || undefined,
     });
   };
 

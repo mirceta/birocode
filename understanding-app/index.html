@@ -1,139 +1,131 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Why your loop stopped — and the three fixes</title>
-<style>
-  :root {
-    --bg: #12141a; --panel: #1b1f2a; --edge: #2c3242; --ink: #e8eaf0;
-    --dim: #8b93a7; --ok: #4cc38a; --bad: #e5484d; --warn: #f0b429;
-    --accent: #6c9ef8; --mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink);
-         font: 15px/1.5 system-ui, 'Segoe UI', sans-serif; padding: 20px; }
-  h1 { font-size: 21px; margin: 0 0 4px; }
-  .sub { color: var(--dim); margin: 0 0 18px; max-width: 860px; }
-  .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
-  .tab { background: var(--panel); border: 1px solid var(--edge); color: var(--dim);
-         padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 14px; }
-  .tab.on { color: var(--ink); border-color: var(--accent); background: #202638; }
-  .view { display: none; } .view.on { display: block; }
-  .card { background: var(--panel); border: 1px solid var(--edge); border-radius: 10px;
-          padding: 16px; margin-bottom: 14px; max-width: 980px; }
-  .card h2 { font-size: 16px; margin: 0 0 8px; }
-  .card p { color: var(--dim); margin: 6px 0; }
-  .card p strong { color: var(--ink); }
-  code, .mono { font-family: var(--mono); font-size: 13px; }
-  code { background: #0e1118; padding: 1px 5px; border-radius: 4px; }
-  /* timeline sim */
-  .lane { position: relative; border-left: 3px solid var(--edge); margin: 14px 0 10px 10px; padding-left: 18px; min-height: 40px; }
-  .msg { position: relative; background: #161a24; border: 1px solid var(--edge); border-radius: 8px;
-         padding: 8px 12px; margin: 10px 0; max-width: 760px; }
-  .msg::before { content: ''; position: absolute; left: -25px; top: 14px; width: 11px; height: 11px;
-                 border-radius: 50%; background: var(--edge); }
-  .msg .who { font-size: 12px; color: var(--dim); }
-  .msg .txt { font-family: var(--mono); font-size: 13px; white-space: pre-wrap; }
-  .msg .deny { color: var(--bad); font-weight: 600; }
-  .armline { border-top: 2px dashed var(--warn); margin: 16px 0; position: relative; }
-  .armline span { position: absolute; top: -11px; left: 8px; background: var(--panel);
-                  color: var(--warn); font-size: 12px; padding: 0 8px; }
-  .verdict { border-radius: 8px; padding: 10px 14px; margin-top: 10px; font-size: 14px;
-             border: 1px solid var(--edge); max-width: 760px; }
-  .verdict.bad { border-color: var(--bad); background: #2a1518; }
-  .verdict.ok  { border-color: var(--ok);  background: #12261c; }
-  .btnrow { display: flex; gap: 10px; margin: 12px 0; flex-wrap: wrap; align-items: center; }
-  button.act { background: var(--accent); color: #0d1117; border: 0; border-radius: 8px;
-               padding: 9px 16px; font-size: 14px; font-weight: 600; cursor: pointer; }
-  button.act:disabled { opacity: .4; cursor: default; }
-  button.act.alt { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
-  .pill { display: inline-block; border: 1px solid var(--edge); border-radius: 99px;
-          padding: 3px 12px; font-size: 13px; color: var(--dim); cursor: pointer; }
-  .pill.on-old { border-color: var(--bad); color: var(--bad); }
-  .pill.on-new { border-color: var(--ok); color: var(--ok); }
-  table { border-collapse: collapse; width: 100%; font-size: 14px; }
-  th, td { text-align: left; border-bottom: 1px solid var(--edge); padding: 8px 10px; vertical-align: top; }
-  th { color: var(--dim); font-weight: 600; font-size: 13px; }
-  .good { color: var(--ok); } .bad-t { color: var(--bad); } .warn-t { color: var(--warn); }
-</style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Why the goal loop said 5/5 but you saw 2 turns</title>
+<link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-  <h1>Why your loop stopped — and the three fixes</h1>
-  <p class="sub">Your goal loop died at <b>iteration 0</b>, your goal looked erased after restart, and
-  suggestion loops appeared armed on their own. All three are real, all three are fixed
-  (OpenSpec change <code>fix-loop-arm-freshness</code>). Pick a tab.</p>
+<header>
+  <h1>Goal-loop post-mortem: 5/5 sends, 2 visible turns, and the invisible autopilot</h1>
+  <p class="sub">The 2026-07-27 test loop ("reply OK until the 3rd ask"). Two independent bugs — both now FIXED (openspec: fix-loop-conversation-identity); tabs 1–3 describe the pre-fix behavior.</p>
+</header>
 
-  <div class="tabs">
-    <button class="tab on" data-v="v1">1 · Why it never sent (simulator)</button>
-    <button class="tab" data-v="v2">2 · "My goal was erased"</button>
-    <button class="tab" data-v="v3">3 · Loops are OFF by default</button>
+<nav id="tabs">
+  <button data-tab="timeline" class="active">1 · What actually happened</button>
+  <button data-tab="bug1">2 · Bug: no conversation identity</button>
+  <button data-tab="bug2">3 · Bug: invisible sends</button>
+  <button data-tab="fix">4 · The fix (implemented)</button>
+</nav>
+
+<main>
+<!-- ============ TAB 1: TIMELINE ============ -->
+<section id="tab-timeline" class="tab active">
+  <p>The engine audited <b>5 sends in 85 seconds</b> — but they landed in <b>three different
+  session transcripts</b>. The conversation you were watching received only two of them.
+  Click a send to see what the engine believed vs. what was true.</p>
+  <div id="timeline"></div>
+  <div id="send-detail" class="detail-card">
+    <em>Click a send above.</em>
   </div>
+  <div class="legend">
+    <span><i class="dot s-watched"></i> your watched conversation</span>
+    <span><i class="dot s-fork"></i> loop-driven fork session</span>
+    <span><i class="dot s-auto"></i> auto-understanding background job</span>
+  </div>
+</section>
 
-  <div id="v1" class="view on">
-    <div class="card">
-      <h2>The stale-reply trap</h2>
-      <p>Every 10s the engine reads the agent's <strong>trailing chat message</strong> and runs the safety
-      ladder over it: <code>NEEDS_HUMAN:</code> → deny-list words → sentinel. But at arm time that trailing
-      message is just <strong>whatever you and the agent were last talking about</strong> — in your case our
-      deploy conversation, full of the deny-listed word <span class="deny">"deploy"</span>. The old engine
-      judged that old message as if it were a reply to itself and escalated before sending anything.
-      The fix: a reply older than the loop's arm time is history — the ladder only judges replies the
-      loop actually caused.</p>
-      <div class="btnrow">
-        <span class="pill on-old" id="modePill" title="Click to toggle engine version">engine: BEFORE the fix</span>
-        <button class="act" id="simArm">▶ Arm the goal loop</button>
-        <button class="act alt" id="simTick" disabled>⏲ Engine tick</button>
-        <button class="act alt" id="simReset">↺ Reset</button>
-      </div>
-      <div class="lane" id="lane"></div>
-      <div id="verdicts"></div>
+<!-- ============ TAB 2: BUG 1 ============ -->
+<section id="tab-bug1" class="tab">
+  <h2>The engine has no idea which conversation it is driving</h2>
+  <p><code>AutopilotService.LastAssistantMessage()</code> defines "the agent's reply" as:
+  <b>the last assistant message of the newest <code>.jsonl</code> file in the repo's
+  transcript folder</b>. That folder is shared by every conversation touching the repo.
+  Three things then break at once:</p>
+  <div id="bug1-diagram"></div>
+  <ol class="fault-list">
+    <li><b>Resume forks a new session.</b> Every <code>claude --resume &lt;id&gt; -p</code>
+      the loop fires writes a <em>new</em> session file (new session_id, full history copied —
+      hence three ~165&nbsp;MB files). The "newest file" is now the fork, not the conversation
+      you watched.</li>
+    <li><b>Other agents pollute the reply.</b> The auto-understanding background job was
+      writing turns in the same repo during the window. The engine read <em>its</em> messages
+      as the loop agent's reply.</li>
+    <li><b>Sentinel matches anywhere in the text.</b> <code>SentinelHit</code> uses
+      <code>Contains("LOOP_DONE")</code>. The auto-understanding agent wrote
+      <i>"…the 'reply OK until the 3rd ask, then LOOP_DONE' mechanism"</i> — merely
+      <em>quoting</em> the sentinel — and the goal loop flipped into its verify phase.</li>
+    <li><b>The dedup guard is defeated.</b> The "already sent against this reply" guard
+      compares one snippet. Every time a <em>different</em> session file became newest, the
+      snippet changed, the engine believed "the agent replied", and sent again — ~10s apart,
+      far faster than any real turn.</li>
+    <li><b>The cap counts sends, not turns.</b> <code>RecordSend</code> bumps the counter on
+      every dispatch, misfires included → 5/5 → status <code>capped</code>.</li>
+  </ol>
+</section>
+
+<!-- ============ TAB 3: BUG 2 ============ -->
+<section id="tab-bug2" class="tab">
+  <h2>Backend-side it IS the same pipeline — the frontend just never looks</h2>
+  <p>The loop send is not a shadow path: it claims the same run slot
+  (<code>RunSessionService.TryBeginRun</code>), streams through the same
+  <code>CliRunnerService</code>, and buffers the same seq-numbered events the Send button
+  produces. The dock badge, <code>/api/runs</code>, everything backend-side is identical.</p>
+  <p><b>The gap is client-side attachment.</b> The React chat only discovers a backend run at
+  four moments — and "while you sit on an open page" is not one of them:</p>
+  <div id="bug2-diagram"></div>
+  <p>So when the autopilot starts a turn, the event buffer fills server-side, but no client is
+  attached: no bubbles stream in, <code>streaming</code> stays <code>false</code>, and the
+  composer keeps showing <b>Send</b> instead of the black <b>Stop</b>. A refresh remounts the
+  app → <code>reconcile()</code> runs → it finally sees the run (or the finished transcript).
+  Nothing was hidden on purpose; there is simply <b>no push or poll signal for runs the client
+  didn't start</b>.</p>
+</section>
+
+<!-- ============ TAB 4: FIX ============ -->
+<section id="tab-fix" class="tab">
+  <h2>The shipped fix (openspec: fix-loop-conversation-identity)</h2>
+  <div class="fix-grid">
+    <div class="fix-card">
+      <h3>A · The loop is pinned to ONE conversation</h3>
+      <p><b>Implemented.</b> The loop record carries a <code>SessionId</code> pin. Arming
+      stamps it — the dock passes the conversation it is showing; API callers without one get
+      the repo's newest session <em>resolved once at arm time</em>. The engine reads "the
+      agent's reply" from the pinned session only (<code>LastAssistantMessageIn</code>) and
+      resumes the pinned session only. Because every <code>--resume</code> forks a new
+      session id, the pin <b>advances on builder-lane RunCompleted</b> to the run's captured
+      id — loop-sent and human-sent turns both move it; background jobs (auto-understanding)
+      never claim the builder lane, so they can't. Unrelated sessions can no longer feed,
+      advance, or resolve a loop.</p>
+    </div>
+    <div class="fix-card">
+      <h3>B · Completion tokens anchor to the final line</h3>
+      <p><b>Implemented.</b> <code>LOOP_DONE</code> and <code>GOAL_VERIFIED</code> count only
+      on the reply's final non-empty line (case-insensitive, punctuation-tolerant) — exactly
+      what the convention doc promises. A reply that merely <em>quotes</em> the sentinel does
+      nothing. <code>NEEDS_HUMAN:</code> and the deny-list stay whole-reply substring matches:
+      their false-positive direction is "stop and ask", the safe side.</p>
+    </div>
+    <div class="fix-card">
+      <h3>C · The open page discovers engine-started runs</h3>
+      <p><b>Implemented.</b> <code>ChatContext</code> polls the in-memory
+      <code>/api/runs</code> snapshot every ~5s while the page is visible and attaches through
+      the existing <code>reconcile()</code> → <code>attachToRun()</code> path (idempotent —
+      it no-ops while a reader is attached). An engine-started run now streams bubbles and
+      flips Send to the black Stop on the open page, because it's the same
+      <code>streaming</code> flag a manual Send flips.</p>
     </div>
   </div>
+</section>
+</main>
 
-  <div id="v2" class="view">
-    <div class="card">
-      <h2>The goal was never lost — the form just didn't read it back</h2>
-      <p>Every parameter of every loop is written to
-      <code>%APPDATA%\ClaudeWeb\loops.json</code> the moment you arm (goal text, composed work +
-      verification prompts, cap, mode, phase, counters, stop reason). A restart reloads that file —
-      your goal was sitting in it the whole time; the debug bundle you pasted proves it
-      (<code>loop.goal</code> was fully populated).</p>
-      <p>The bug was one layer up: the dock popover's goal and cap fields were blank component state,
-      never seeded from the store. <strong>Fix:</strong> opening the popover now reads this agent's persisted
-      record (through the same operator-gated detail endpoint the prompt preview uses) and pre-fills
-      goal, cap, and mode. Verified end-to-end: armed a goal loop, killed and restarted the harness,
-      reopened the popover — goal and cap were back.</p>
-      <table>
-        <tr><th>Field</th><th>Persisted in (always was)</th><th>Shown after restart</th></tr>
-        <tr><td>Goal text</td><td class="mono">loops.json → Goal</td><td><span class="bad-t">before: blank</span> · <span class="good">now: restored</span></td></tr>
-        <tr><td>Iteration cap</td><td class="mono">loops.json → MaxIterations</td><td><span class="bad-t">before: blank</span> · <span class="good">now: restored</span></td></tr>
-        <tr><td>Mode (suggest/drive)</td><td class="mono">loops.json → Mode</td><td><span class="bad-t">before: default</span> · <span class="good">now: restored</span></td></tr>
-        <tr><td>Counters + stop reason</td><td class="mono">loops.json → IterationsDone…</td><td class="good">always shown (unchanged)</td></tr>
-      </table>
-    </div>
-  </div>
+<footer>
+  <p>Evidence: autopilot-audit.jsonl (5 "loop" sends 17:09:08–17:10:33 UTC) · three ~165 MB
+  transcripts written 17:12–17:15 UTC · <code>AutopilotService.cs</code> (LastAssistantMessage,
+  SendPrompt) · <code>ILoop.cs</code> (SentinelHit) · <code>ChatContext.jsx</code> (reconcile).</p>
+</footer>
 
-  <div id="v3" class="view">
-    <div class="card">
-      <h2>No loop runs unless you armed it</h2>
-      <p>The rule is now absolute, and there was exactly one violator: a startup migration that
-      converted the <em>old</em> suggestion-autopilot's armed-repo list (<code>autopilot.json →
-      ArmedRepoIds</code>) into <strong>live suggestion loops</strong> when the harness booted. That is what you
-      found armed after the restart and had to stop by hand.</p>
-      <p><strong>Fix:</strong> the migration now just clears the legacy list and logs what it dropped —
-      it arms nothing. The full arming truth table:</p>
-      <table>
-        <tr><th>Event</th><th>Arms a loop?</th></tr>
-        <tr><td>You click <b>Arm loop</b> in the dock popover</td><td class="good">yes — the only way</td></tr>
-        <tr><td>Harness restart, loop was still armed by you</td><td class="warn-t">resumes that loop (your arming survives)</td></tr>
-        <tr><td>Harness restart, loop had stopped / escalated</td><td class="good">stays off</td></tr>
-        <tr><td>Legacy ArmedRepoIds in autopilot.json</td><td class="good">never (was: armed silently — fixed)</td></tr>
-        <tr><td>Operator gate or kill switch toggled</td><td class="good">never arms; only pauses / permits</td></tr>
-      </table>
-    </div>
-  </div>
-
-  <script src="./app.js"></script>
+<script src="./app.js"></script>
 </body>
 </html>
