@@ -1,232 +1,196 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Shipped: the "commits as" identity is now editable</title>
-<link rel="stylesheet" href="./styles.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Event sounds — what you expected vs what shipped</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b24; --panel2:#1d2430; --line:#2a3444;
+    --txt:#dfe6f0; --dim:#8fa0b8; --acc:#5aa9ff; --ok:#4fd08a; --warn:#ffb454; --bad:#ff6b6b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.55 system-ui,Segoe UI,Roboto,sans-serif;padding:24px 16px 80px}
+  main{max-width:900px;margin:0 auto}
+  h1{font-size:1.45rem;margin:0 0 4px}
+  h2{font-size:1.15rem;margin:36px 0 10px;border-bottom:1px solid var(--line);padding-bottom:6px}
+  .sub{color:var(--dim);margin:0 0 24px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:14px 0}
+  .dim{color:var(--dim)}
+  code{background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:.86em}
+
+  /* expected vs shipped */
+  .vs{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+  .vsbox{border-radius:12px;padding:16px 18px;border:1px solid var(--line);background:var(--panel)}
+  .vsbox.want{border-color:var(--warn)}
+  .vsbox.got{border-color:var(--acc)}
+  .vsbox h3{margin:0 0 10px;font-size:1rem}
+  .vsbox.want h3{color:var(--warn)} .vsbox.got h3{color:var(--acc)}
+  .chain{display:flex;flex-direction:column;gap:6px;font-size:.92rem}
+  .chain .hop{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+  .chain .down{color:var(--dim);text-align:center;font-size:1rem;line-height:1}
+  .missing{border-style:dashed !important;color:var(--dim)}
+  .no{color:var(--bad);font-weight:700} .yes{color:var(--ok);font-weight:700}
+
+  /* two layers table */
+  table{width:100%;border-collapse:collapse;font-size:.9rem}
+  td,th{padding:9px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  th{color:var(--dim);font-weight:600}
+  tr.hd td{font-weight:700;color:var(--acc);border-bottom:none;padding-top:14px}
+
+  /* scenario picker */
+  button{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:8px;
+    padding:9px 14px;font:inherit;cursor:pointer;text-align:left}
+  button:hover{border-color:var(--acc)}
+  button.sel{background:#153352;border-color:var(--acc);color:#cfe6ff}
+  .scen{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+  .out{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+  .spk{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .spk h4{margin:0 0 6px;font-size:.95rem}
+  .spk .plays{font-size:1rem;font-weight:600;margin-bottom:4px}
+  .spk .why{font-size:.83rem;color:var(--dim)}
+  .spk.silent{opacity:.65}
+  .spk.silent .plays{color:var(--dim)}
+  .spk.custom .plays{color:var(--ok)}
+  .spk.builtin .plays{color:var(--warn)}
+
+  /* PR / git */
+  .git{font:13px/1.7 ui-monospace,Consolas,monospace;background:var(--panel2);border:1px solid var(--line);
+    border-radius:10px;padding:14px 16px;overflow-x:auto;white-space:pre}
+  .git .m{color:var(--acc)} .git .f{color:var(--ok)} .git .d{color:var(--dim)}
+  footer{margin-top:40px;color:var(--dim);font-size:.8rem;text-align:center}
+</style>
 </head>
 <body>
+<main>
+  <h1>Event sounds — what you expected vs what shipped</h1>
+  <p class="sub">You expected one system. The repo had <b>two separate ones</b>, and the one you wanted —
+    custom sounds on the <b>host</b>, driven by events — was the unbuilt part. <b>Update:</b> it is now
+    built and verified on branch <code>feat/host-event-sound-rules</code> (OpenSpec change
+    <code>add-host-event-sound-rules</code>), awaiting deploy to live.</p>
 
-<header class="hero">
-  <div class="hero-badge">Understanding app · rolling latest</div>
-  <h1>Both halves of "who am I to git" are now <em>editable in the harness</em></h1>
-  <p class="hero-sub">OpenSpec change <code>add-commit-identity-write</code> is
-  <strong>implemented, tested, and running live</strong>. The agent dock's git section always showed two
-  identities — <strong>commits as</strong> (the repo's <code>user.name</code>/<code>user.email</code>) and
-  <strong>pushes as</strong> (the GitHub account). Only <em>pushes as</em> was settable from the UI; the
-  <em>commits as</em> half was read-only, so the only way to change a commit author was to drop into a
-  terminal and run <code>git config</code>. This change closes that asymmetry: a new
-  <code>POST /api/git/identity</code> writer plus an inline editor on the dock row. This app walks
-  the split, the write path, the guards, and the first-ever C# tests.</p>
-  <div class="hero-chips">
-    <span class="chip ok">backend writer + endpoint</span>
-    <span class="chip ok">inline dock editor</span>
-    <span class="chip ok">first C# test project · green</span>
-    <span class="chip ok">openspec validate --strict ✓</span>
-    <span class="chip ok">verified live · it works</span>
-  </div>
-</header>
-
-<nav class="tabs" id="tabs">
-  <button class="tab active" data-view="split">1 · The asymmetry</button>
-  <button class="tab" data-view="edit">2 · Edit it live</button>
-  <button class="tab" data-view="path">3 · The write path</button>
-  <button class="tab" data-view="guards">4 · Guards &amp; rules</button>
-  <button class="tab" data-view="tests">5 · First tests</button>
-</nav>
-
-<main id="views">
-
-<!-- ============ VIEW 1: THE ASYMMETRY ============ -->
-<section class="view active" id="view-split">
-  <div class="panel">
-    <h2>Two identities, one used to be a dead end</h2>
-    <p>Every commit records an <b>author</b> (git's <code>user.name</code>/<code>user.email</code>) and every
-    push <b>authenticates</b> as a GitHub account. The dock has always shown both. The difference this change
-    erases: the push side was already wired to a control (the dashboard PAT box sets the box's <code>gh</code>
-    login), while the commit side was <em>surfacing only</em> — <code>git-identity-surface</code> was explicitly
-    "read-only." Below: what each row is, where it comes from, and which was editable <b>before</b> vs
-    <b>after</b>.</p>
-
-    <div class="split">
-      <div class="idcard commit">
-        <h3>commits as <span class="pill was">read-only</span> <span class="pill rw">now writable</span></h3>
-        <div class="who">mirceta-agents &lt;caffe.klinika@gmail.com&gt;</div>
-        <div class="src">source: <code>git config user.name / user.email</code> for this repo, with a
-        <span class="pill local">local</span> / <span class="pill global">global</span> scope badge.</div>
-        <p class="small" style="margin-top:10px">Local scope = the repo's own <code>.git/config</code>, a
-        per-repo override. Global = the outer user config that every repo on the box inherits.
-        <b>This is the half the change makes editable.</b></p>
+  <h2>1 · The mismatch, in one picture</h2>
+  <div class="vs">
+    <div class="vsbox want">
+      <h3>⚠️ What you expected</h3>
+      <div class="chain">
+        <div class="hop">Event happens (e.g. an agent finishes)</div>
+        <div class="down">↓</div>
+        <div class="hop">Harness looks up <b>your chosen custom sound</b> for that event type</div>
+        <div class="down">↓</div>
+        <div class="hop">🖥️ Host PC plays <b>your sound</b> — <span class="yes">NOW BUILT</span> (awaiting deploy)</div>
       </div>
-      <div class="idcard push">
-        <h3>pushes as <span class="pill ro">unchanged</span></h3>
-        <div class="who">@mirceta-agents</div>
-        <div class="src">source: <code>GET /api/github-account</code> — the box's authenticated GitHub login.</div>
-        <p class="small" style="margin-top:10px">Already settable outside this change via the dashboard PAT
-        control. This change <b>does not touch it</b> — the row stays read-only, and account switch/logout stay
-        out of scope.</p>
-      </div>
+      <p class="dim" style="font-size:.85rem;margin:10px 0 0">This was the "🔗 Event → sound rules —
+      <i>coming soon</i>" placeholder in the Sounds tab — it is now the real panel: upload a wav/mp3 per
+      event type, stored on the host, played by the host on matching events.</p>
     </div>
-
-    <div class="callout">Key insight: these are <b>independent</b>. You can author commits as one identity and
-    push them under a different GitHub account — a normal setup for agent commits. The change makes the
-    <em>author</em> half controllable from the same place it's shown.</div>
-  </div>
-</section>
-
-<!-- ============ VIEW 2: EDIT IT LIVE ============ -->
-<section class="view" id="view-edit">
-  <div class="panel">
-    <h2>The inline editor — a working simulation</h2>
-    <p>This is the real dock row behaviour. Press <b>Edit</b> on the <em>commits as</em> row: an inline
-    name/email form opens with a local/global scope toggle. Hit <b>Save</b> and watch the request trace on the
-    right run exactly as the harness does — endpoint → writer → <code>git config</code> → re-read → dock
-    refresh. Try the edge cases too: clear <b>both</b> fields and save (rejected), or flip the busy switch
-    first.</p>
-
-    <div class="dockdemo">
-      <div class="dock" id="dock">
-        <div class="dock-head">Agent dock · git</div>
-        <!-- rows injected by app.js -->
-      </div>
-      <div>
-        <div class="trace" id="trace"><div class="step hot">— idle. Press <span class="k">Edit</span> then <span class="k">Save</span> —</div></div>
-        <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:var(--ink-dim)">
-          <input type="checkbox" id="busy"> Simulate a chat run active in this repo (<code>_runs.IsBusy</code> → 409)
-        </label>
+    <div class="vsbox got">
+      <h3>What actually shipped — two unconnected systems</h3>
+      <div class="chain">
+        <div class="hop">Event happens</div>
+        <div class="down">↓ &nbsp;(fans out to two independent players)</div>
+        <div class="hop">📱 <b>Browser</b> viewing the page plays your custom sound —
+          but <b>only if the 🔇 Device toggle is ON</b> <span class="yes">BUILT</span></div>
+        <div class="hop">🖥️ <b>Host PC</b> plays a <b>fixed built-in</b> cue (Windows sound or spoken phrase,
+          start ≠ finish) — custom audio <span class="no">can't</span> be assigned to it <span class="yes">BUILT</span></div>
       </div>
     </div>
   </div>
-</section>
 
-<!-- ============ VIEW 3: THE WRITE PATH ============ -->
-<section class="view" id="view-path">
-  <div class="panel">
-    <h2>From row click to <code>.git/config</code> — the real code path</h2>
-    <p>No new controller, no new service, no new module registration. The write rides the existing
-    <code>GitController</code>, reusing the injected <code>GitService</code>, <code>RepositoryResolver</code>,
-    and the run-busy guard (design decision D2). Every arrow below is an actual call in the shipped code.</p>
-
-    <div class="flow">
-      <div class="node">
-        <b>DockIdentityRows.jsx <span class="pill rw">edited</span></b>
-        <span class="file">client/src/…/DockIdentityRows.jsx</span>
-        <p>Edit affordance on the <b>commits as</b> row opens an inline name/email + scope form. On save:
-        <code>apiPost('/git/identity', { name, email, scope }, { repoId })</code>, then calls
-        <code>onRefreshGit</code> (the dock's existing git-status refresh, threaded down from
-        <code>PinnedAgent.jsx</code>). Disabled while saving; inline error on failure. The <b>pushes as</b> row
-        is untouched.</p>
-      </div>
-      <div class="arrowdown">↓ POST /api/git/identity { name, email, scope }</div>
-      <div class="node">
-        <b>GitController.SetIdentity <span class="pill rw">added</span></b>
-        <span class="file">ClaudeWeb.App/Controllers/GitController.cs</span>
-        <p>Resolves the current repo. <code>409</code> if <code>_runs.IsBusy(repo.Id)</code>. Maps
-        <code>scope</code> (<code>"global"</code>→global, else local) and calls the writer. On success returns
-        <code>{ ok:true, name, email, scope }</code>; on the writer's failure returns
-        <code>422 { ok:false, error }</code>. Never throws to a 500 for a normal rejection.</p>
-      </div>
-      <div class="arrowdown">↓ _git.SetCommitIdentity(repo.Path, name, email, scope)</div>
-      <div class="node">
-        <b>GitService.SetCommitIdentity <span class="pill rw">added</span></b>
-        <span class="file">ClaudeWeb.App/Services/Git/GitService.cs</span>
-        <p>Trims inputs; rejects when both empty (typed <code>SetIdentityResult</code>, no throw). Writes via
-        <code>RunGit(dir, "config --local user.name", value)</code> / <code>--global</code> — values ride the
-        <code>ArgumentList</code>, so no shell, no escaping. Partial writes allowed (only name, or only email).
-        Then <b>re-reads</b> via <code>ReadCommitIdentity</code> and returns the authoritative
-        <code>{ name, email, scope }</code>. Any git failure degrades into <code>Error</code>, not a 500.</p>
-      </div>
-      <div class="arrowdown">↓ git config --local/--global user.name/user.email</div>
-      <div class="node">
-        <b>.git/config (local) or ~/.gitconfig (global)</b>
-        <span class="file">the repo's own config, or the outer user config</span>
-        <p>Local is the default and the safe choice for a per-repo dock. Global is offered but separately
-        labelled because it changes every repo on the box (design decision D3).</p>
-      </div>
-      <div class="arrowdown">↑ re-read → response → onRefreshGit → next git/status</div>
-      <div class="node">
-        <b>Dock reflects the authoritative value</b>
-        <p>D6 — optimistic-then-authoritative: the row saves, then the dock re-fetches
-        <code>git/status.commitIdentity</code> so what you see is the re-read config, not a hopeful echo.</p>
-      </div>
+  <h2>2 · Why you heard exactly what you heard</h2>
+  <div class="card">
+    <p style="margin-top:0">Pick your situation — this reproduces your observation:</p>
+    <div class="scen">
+      <button data-s="test" class="sel">I press <b>Test</b> next to a custom sound</button>
+      <button data-s="evOff">An event arrives — Device toggle <b>OFF</b> (the default)</button>
+      <button data-s="evOn">An event arrives — Device toggle <b>ON</b> (🔈)</button>
     </div>
-  </div>
-</section>
-
-<!-- ============ VIEW 4: GUARDS ============ -->
-<section class="view" id="view-guards">
-  <div class="panel">
-    <h2>Four rules that keep the write safe</h2>
-    <div class="guards">
-      <div class="guard g-409">
-        <h3>Busy guard · 409</h3>
-        <p>Rejected while a chat run is active in the repo, consistent with merge/pull/push — so a commit
-        identity can't change under an in-flight commit (D4).</p>
-        <div class="code">if (_runs.IsBusy(repo.Id)) → Conflict</div>
-      </div>
-      <div class="guard g-422">
-        <h3>Empty rejected · 422</h3>
-        <p>A request with neither name nor email mutates nothing and returns the empty-rejection result. No
-        blank writes.</p>
-        <div class="code">n=="" &amp;&amp; e=="" → "Provide a name or email."</div>
-      </div>
-      <div class="guard g-ok">
-        <h3>Partial writes · allowed</h3>
-        <p>Git stores name and email independently, so setting only one is valid; the other keeps its previous
-        value (D5). Inputs are trimmed.</p>
-        <div class="code">only name → sets user.name, leaves user.email</div>
-      </div>
-      <div class="guard g-ok">
-        <h3>No injection · literal args</h3>
-        <p>Values pass through <code>RunGit</code>'s <code>ArgumentList</code> — never a shell string — so a name
-        or email needs no escaping and can't inject.</p>
-        <div class="code">RunGit(dir, "config --local user.name", value)</div>
-      </div>
-    </div>
-    <div class="callout">Scope default is <b>local</b> (this repo only). Choosing <b>global</b> is deliberate and
-    separately labelled — it rewrites the identity every repo on the box inherits.</div>
-  </div>
-</section>
-
-<!-- ============ VIEW 5: TESTS ============ -->
-<section class="view" id="view-tests">
-  <div class="panel">
-    <h2>The first automated coverage in this repo</h2>
-    <p>Before this change there was no test project at all. <code>add-commit-identity-write</code> introduces
-    <code>tests/ClaudeWeb.Tests</code> (xUnit, referencing <code>ClaudeWeb.App</code>, wired into
-    <code>ClaudeWeb.sln</code>), driving the writer against a throwaway <code>git init</code> repo — read →
-    write → read back. <b>Green.</b></p>
-    <ul class="tests" id="tests-list"></ul>
-    <p class="small" style="margin-top:12px">The global-scope test isolates <code>HOME</code> /
-    <code>GIT_CONFIG_GLOBAL</code> to a temp path, so it can prove a global write reads back with
-    <code>scope: global</code> <b>without ever touching the developer's real <code>~/.gitconfig</code></b>
-    (design decision D7).</p>
+    <div class="out" id="out"></div>
+    <p class="dim" style="font-size:.85rem;margin-bottom:0" id="note"></p>
   </div>
 
-  <div class="panel">
-    <h2>Where this leaves the change</h2>
-    <div class="fact-grid">
-      <div class="fact"><b>Backend</b><span><code>dotnet build</code> clean · <code>dotnet test</code> green</span></div>
-      <div class="fact"><b>Frontend</b><span><code>npm run build</code> clean · i18n en + tr</span></div>
-      <div class="fact"><b>Spec</b><span>MODIFIED <code>git-identity-surface</code> · validate --strict ✓</span></div>
-      <div class="fact"><b>Live</b><span>running on <code>:5099</code> · manually verified</span></div>
-    </div>
-    <div class="next-strip">
-      <b>Wrap-up:</b> tick tasks.md
-      <span class="arrow">→</span> <code>openspec validate --strict</code>
-      <span class="arrow">→</span> <code>openspec archive</code> folds the delta into the living baseline
-      <span class="arrow">→</span> merge to <code>main</code>
-      <span class="arrow">→</span> sync origin
-    </div>
+  <h2>3 · The two systems side by side</h2>
+  <div class="card">
+    <table>
+      <tr><th></th><th>📱 Device sound (browser)</th><th>🖥️ Host cue (harness)</th></tr>
+      <tr><td>Where it plays</td><td>In whichever browser has the page open — even if that browser is on the host PC, it's still this system, not the host cue</td><td>Through the host PC's speakers, from the C# server; no browser needed</td></tr>
+      <tr><td>Custom sounds?</td><td class="yes">Yes — the "Custom event sounds" grid, per event type</td><td class="no">No — fixed: Windows Asterisk/Exclamation/Beep, or spoken "agent … started / has finished"</td></tr>
+      <tr><td>Plays on real events when…</td><td>the 🔇/🔈 <b>Device</b> toggle is ON (Test ignores the toggle on purpose — that's why Test worked while events stayed silent)</td><td>the <b>Host cue</b> toggle is ON</td></tr>
+      <tr><td>What this deploy changed</td><td>nothing (already live from the working tree)</td><td>start/finish/other now get <i>different</i> built-in cues, + separate Test beep / Test voice</td></tr>
+      <tr><td>Per-event custom control</td><td class="yes">exists</td><td class="no">doesn't exist — the missing feature</td></tr>
+    </table>
   </div>
-</section>
 
+  <h2>4 · "Has the PR been merged?"</h2>
+  <div class="card">
+    <p style="margin-top:0">There was <b>no GitHub PR</b> — the branch was merged into <code>main</code> locally and
+    pushed straight to <code>origin/main</code> (this repo's agent workflow since the ruleset became bypassable).
+    So yes, everything is in main; there's just no PR page to look at:</p>
+    <div class="git"><span class="f">feat/event-feed-sounds</span> ──┐  (branch still exists, tip <span class="d">4a61eda</span>)
+                         ├─ merged locally, then two deploy fixes
+<span class="m">main = origin/main</span> ───────┴─→ <span class="d">a58e23c → </span><span class="m">2ca02bf</span>  ← deployed live</div>
+    <p class="dim" style="font-size:.85rem;margin-bottom:0">Being on <code>main</code> now is the normal
+    end-of-feature state, not an accident.</p>
+  </div>
+
+  <h2>5 · The gap — now closed</h2>
+  <div class="card" style="border-color:var(--ok)">
+    <p style="margin-top:0"><b>Built and verified</b> (OpenSpec change <code>add-host-event-sound-rules</code>,
+    branch <code>feat/host-event-sound-rules</code>): the Sounds tab's "Event → sound rules" panel is real.
+    Upload a wav or mp3 (max 2 MB) per event type — it's stored <b>on the host</b>, survives restarts, wins
+    over Beep/Voice for that type, and the host plays it on matching events with no browser open. Each row
+    has its own <b>▸ Test on host</b>; types without a file keep the built-in cue, and a broken file falls
+    back to it. Verified end-to-end on an isolated instance (API + headless-browser flow).</p>
+    <p style="margin-bottom:0" class="dim"><b>One skew to know about until it's deployed:</b> the events-app
+    page is served live from the working tree, so the new panel is <i>already visible</i> on live — but
+    live's compiled backend doesn't have the rules endpoints yet, so uploads/tests there fail until the
+    branch is merged and deployed. (Same UI-vs-binary skew that caused today's confusion.) Per-<i>source</i>
+    rules remain future headroom.</p>
+  </div>
+
+  <footer>Understanding app · rolling latest · 2026-07-23</footer>
 </main>
-
-<footer class="foot">Understanding app · overwritten per explanation · served no-store under
-<code>/api/localview/&lt;repo&gt;/app/understanding/</code></footer>
-
-<script src="./app.js"></script>
+<script>
+(function(){
+  var out = document.getElementById("out"), note = document.getElementById("note");
+  var SCEN = {
+    test: {
+      note: "Test is deliberately wired to ignore the Device toggle so you can audition sounds — which is why it played while real events stayed silent. Nothing server-side is involved.",
+      spk: [
+        {cls:"custom", h:"📱 Your browser", plays:"🎵 your custom sound", why:"Test always plays, toggle or not. If you're sitting at the host PC, this is still just the browser."},
+        {cls:"silent", h:"🖥️ Host cue (server)", plays:"— not involved —", why:"The custom-sound Test button never touches the host cue system. (Test beep / Test voice in the Host section do.)"}
+      ]
+    },
+    evOff: {
+      note: "This is the state you were in: custom sounds configured, but the Device toggle off — so on real events the only sound was the host's built-in cue, same family of sounds as before.",
+      spk: [
+        {cls:"silent", h:"📱 Your browser", plays:"🔇 silence", why:"Custom sounds only play on events when the 🔇 Device toggle is switched to 🔈. Browsers also require that click once to unlock audio at all."},
+        {cls:"builtin", h:"🖥️ Host cue (server)", plays:"fixed built-in cue", why:"Windows Asterisk (start) / Exclamation (finish) / Beep, or the spoken phrase — never your uploaded audio."}
+      ]
+    },
+    evOn: {
+      note: "Turn the Device toggle ON and your custom sounds do fire on real events — but in the browser. The host still plays only its built-in cue. That host-side gap is the unbuilt feature.",
+      spk: [
+        {cls:"custom", h:"📱 Your browser", plays:"🎵 your custom sound per event type", why:"This is as far as custom sounds currently reach."},
+        {cls:"builtin", h:"🖥️ Host cue (server)", plays:"fixed built-in cue", why:"Unchanged — there is no way to point it at a custom file today."}
+      ]
+    }
+  };
+  function render(key){
+    var s = SCEN[key];
+    out.innerHTML = s.spk.map(function(x){
+      return '<div class="spk '+x.cls+'"><h4>'+x.h+'</h4><div class="plays">'+x.plays+'</div><div class="why">'+x.why+'</div></div>';
+    }).join("");
+    note.textContent = s.note;
+  }
+  document.querySelectorAll("[data-s]").forEach(function(b){
+    b.onclick = function(){
+      document.querySelectorAll("[data-s]").forEach(function(x){x.classList.toggle("sel", x===b);});
+      render(b.dataset.s);
+    };
+  });
+  render("test");
+})();
+</script>
 </body>
 </html>

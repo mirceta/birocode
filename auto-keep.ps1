@@ -5,7 +5,7 @@
 # switch to arm, re-verifies live health 3x over 90s, and only then disarms.
 # A build that goes unhealthy after the swap is left armed and still rolls back.
 $repo = Split-Path -Parent $MyInvocation.MyCommand.Path
-$log  = Join-Path $repo '.claudeweb-deploy\deploy-out.log'
+$log  = Join-Path $repo '.claudeweb-deploy\deploy.log'
 $own  = Join-Path $repo '.claudeweb-deploy\auto-keep.log'
 function Say($m){ Add-Content $own ("{0}  {1}" -f (Get-Date -Format s), $m) }
 Say "auto-keep watcher started"

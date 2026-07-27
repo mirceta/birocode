@@ -15,6 +15,7 @@ import WaitingOnField from '../components/dashboard/WaitingOnField';
 import IdeasPanel from '../components/ideas/IdeasPanel';
 import AutopilotPanel from '../components/dashboard/AutopilotPanel';
 import AgentAuditPanel from '../components/dashboard/AgentAuditPanel';
+import TrafficPanel from '../components/dashboard/TrafficPanel';
 import DockToolbar from '../components/dashboard/DockToolbar';
 import './dashboard.css';
 
@@ -112,12 +113,12 @@ function readPanels() {
     const raw = localStorage.getItem(PANELS_KEY);
     const v = raw ? JSON.parse(raw) : null;
     if (v && typeof v === 'object') {
-      return { ideas: !!v.ideas, autopilot: !!v.autopilot, audit: !!v.audit };
+      return { ideas: !!v.ideas, autopilot: !!v.autopilot, audit: !!v.audit, traffic: !!v.traffic };
     }
   } catch {
     /* private mode / malformed */
   }
-  return { ideas: false, autopilot: false, audit: false };
+  return { ideas: false, autopilot: false, audit: false, traffic: false };
 }
 
 // Free-mode horizontal resize of the agents panel from a right-edge grip
@@ -382,6 +383,14 @@ export default function Dashboard({ onClose }) {
   // their features are on; the Ideas panel always can be summoned.
   const autopilotOn = useFeature('autopilotTab');
   const agentAuditOn = useFeature('agenticAudit');
+  // Throughput monitor joins the same way (openspec traffic-monitor): a
+  // read-only citizen showing what the harness is serving right now.
+  const trafficOn = useFeature('trafficPanel');
+  // Server-decided "high throughput" flag, lifted from the panel's poll so the
+  // rail chip can carry a warning dot. Only live while the panel is summoned —
+  // a hidden panel is unmounted and never fetches (dashboard-focus-docks), so
+  // no data, no dot.
+  const [trafficHigh, setTrafficHigh] = useState(false);
   // Which aux panels are summoned (openspec dashboard-focus-docks). Effective
   // visibility is chip state AND feature gate; a hidden panel is not mounted.
   // Summoned panels open as big centered pop-ups over the dashboard (openspec
@@ -389,7 +398,7 @@ export default function Dashboard({ onClose }) {
   // recently summoned pop-up stacks on top.
   const [panels, setPanels] = useState(readPanels);
   const [popupOrder, setPopupOrder] = useState(() =>
-    ['autopilot', 'audit', 'ideas'].filter((k) => readPanels()[k]),
+    ['autopilot', 'audit', 'traffic', 'ideas'].filter((k) => readPanels()[k]),
   );
   function togglePanel(key) {
     const on = !panels[key];
@@ -404,8 +413,14 @@ export default function Dashboard({ onClose }) {
   }
   const showAutopilot = autopilotOn && panels.autopilot;
   const showAudit = agentAuditOn && panels.audit;
+  const showTraffic = trafficOn && panels.traffic;
   const showIdeas = panels.ideas;
-  const popupShown = { autopilot: showAutopilot, audit: showAudit, ideas: showIdeas };
+  const popupShown = {
+    autopilot: showAutopilot,
+    audit: showAudit,
+    traffic: showTraffic,
+    ideas: showIdeas,
+  };
   const popupKeys = popupOrder.filter((k) => popupShown[k]);
   // Esc dismisses the topmost pop-up. Capture + stopPropagation so the
   // overlay's own window-level Escape handler (Layout.jsx) doesn't also close
@@ -896,6 +911,19 @@ export default function Dashboard({ onClose }) {
               <span className="dash__panel-chip-label">{t('audit.title')}</span>
             </button>
           )}
+          {trafficOn && (
+            <button
+              type="button"
+              className={`dash__panel-chip${panels.traffic ? ' dash__panel-chip--on' : ''}${trafficHigh ? ' dash__panel-chip--warn' : ''}`}
+              onClick={() => togglePanel('traffic')}
+              aria-pressed={panels.traffic}
+              title={t('dashboard.panelTraffic')}
+              aria-label={t('dashboard.panelTraffic')}
+            >
+              <span aria-hidden="true">📡</span>
+              <span className="dash__panel-chip-label">Traffic</span>
+            </button>
+          )}
         </div>
         {tabs.length > 0 && (
           // Layout popover (openspec dock-layout-controls): the one trigger that
@@ -1069,12 +1097,14 @@ export default function Dashboard({ onClose }) {
               ? t('nav.ideas')
               : key === 'autopilot'
                 ? t('nav.autopilot')
-                : t('audit.title')
+                : key === 'traffic'
+                  ? t('dashboard.panelTraffic')
+                  : t('audit.title')
           }
           style={{ zIndex: 30 + i }}
         >
           {/* Ideas gets a pop-up header (the panel itself is chromeless);
-              Autopilot/Audit keep their own dock bar, which hosts the ×. */}
+              Autopilot/Audit/Traffic keep their own dock bar, which hosts the ×. */}
           {key === 'ideas' && (
             <div className="dash__popup-head">
               <span className="dash__popup-title">💡 {t('nav.ideas')}</span>
@@ -1093,6 +1123,9 @@ export default function Dashboard({ onClose }) {
             {key === 'ideas' && <IdeasPanel />}
             {key === 'autopilot' && <AutopilotPanel popup onClose={() => togglePanel('autopilot')} />}
             {key === 'audit' && <AgentAuditPanel popup onClose={() => togglePanel('audit')} />}
+            {key === 'traffic' && (
+              <TrafficPanel popup onHighChange={setTrafficHigh} onClose={() => togglePanel('traffic')} />
+            )}
           </div>
         </div>
       ))}

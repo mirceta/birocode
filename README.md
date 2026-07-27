@@ -112,6 +112,11 @@ The monitoring GUI opens and Kestrel listens on the configured port
   Minted on a guest's first approved login; afterwards the IP gate admits an
   approved IP **or** a valid device cookie, so a phone's rotating 4G IP no longer
   needs re-approval. Revoke a device from the desktop "Guests (IPs)" dialog.
+- `TrafficHighBytesPerSec` -- threshold for the dashboard Traffic panel's "high
+  throughput" signal (default 512000 = 512 KB/s of response bytes, averaged over
+  60s). The panel and its rail chip turn amber above it. Like every setting here
+  it can be overridden per-instance with a `CLAUDEWEB_`-prefixed env var
+  (`CLAUDEWEB_TRAFFICHIGHBYTESPERSEC`).
 
 ## Security: the trust boundary is the harness's OS account
 

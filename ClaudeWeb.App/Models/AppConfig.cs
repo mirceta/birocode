@@ -89,4 +89,13 @@ public class AppConfig
     /// client IP, so list ONLY your own proxy.
     /// </summary>
     public string[] TrustedProxyIps { get; set; } = [];
+
+    /// <summary>
+    /// Traffic monitor (openspec traffic-monitor): sustained response throughput
+    /// (bytes-out/sec averaged over 60s) above this marks the /api/traffic report
+    /// "high" — the Dashboard Traffic panel's amber signal. Default 512 KB/s;
+    /// tune once real numbers are visible in the panel. &lt;= 0 falls back to the
+    /// default.
+    /// </summary>
+    public long TrafficHighBytesPerSec { get; set; } = 512_000;
 }

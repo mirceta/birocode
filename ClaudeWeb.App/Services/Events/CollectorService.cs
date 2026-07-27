@@ -366,9 +366,10 @@ public class CollectorService
             if (_events.Count > Cap) _events.RemoveRange(0, TrimChunk);
         }
         // Best-effort host cue (debounced, non-blocking; no-op unless the operator enabled it).
-        // Pass the source label so voice mode can say "agent {label} has finished". Outside the
+        // Pass the source label and event type so the cue is event-determined — voice can say
+        // "agent {label} started" vs "has finished", beep picks a per-type sound. Outside the
         // lock so audio scheduling never holds up polling.
-        _hostSound.Notify(s.Label);
+        _hostSound.Notify(s.Label, type);
     }
 
     // Unified state update: status + scrubbed detail + alive + lastPolled, optional watermark.

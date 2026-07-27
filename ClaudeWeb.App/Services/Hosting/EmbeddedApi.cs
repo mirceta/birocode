@@ -28,6 +28,7 @@ using ClaudeWeb.Services.StatusMonitor;
 using ClaudeWeb.Services.StructuredAsk;
 using ClaudeWeb.Services.TaskGraph;
 using ClaudeWeb.Services.Terminal;
+using ClaudeWeb.Services.Traffic;
 using ClaudeWeb.Services.Understanding;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -180,9 +181,16 @@ public class EmbeddedApi
             builder.Services.AddAgenticAuditModule(); // durable agentic-call audit trail (openspec add-agent-audit-trail)
             builder.Services.AddOpenspecCockpitModule(); // harness OpenSpec Cockpit (openspec openspec-cockpit-in-harness)
             builder.Services.AddStatusMonitorModule(); // third-monitor wallboard board endpoint (openspec status-monitor-dashboard)
+            builder.Services.AddTrafficModule(); // HTTP throughput counters (openspec traffic-monitor)
             // === END MODULE SERVICE REGISTRATION ===
 
             _app = builder.Build();
+
+            // Traffic counters wrap EVERYTHING — outermost so the numbers are
+            // true wire volume: static files, the localview proxy legs, even
+            // IP-filter rejections (openspec traffic-monitor). Measures only;
+            // never blocks.
+            _app.UseMiddleware<TrafficMiddleware>();
 
             // IP allowlist gate — the OUTERMOST check, before even static
             // files: an unapproved IP never receives the SPA shell or the
