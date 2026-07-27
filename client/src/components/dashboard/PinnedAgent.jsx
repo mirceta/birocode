@@ -46,6 +46,7 @@ export default function PinnedAgent({
   onSetDependsOn,
   loop,
   loopRecipes = [],
+  loopSuggestion,
   onLoopChanged,
 }) {
   const { t } = useT();
@@ -468,6 +469,7 @@ export default function PinnedAgent({
           repoId={tab.repoId}
           loop={loop}
           recipes={loopRecipes}
+          suggestion={loopSuggestion}
           onChanged={onLoopChanged}
         />
       )}

@@ -409,6 +409,17 @@ export default function Dashboard({ onClose }) {
     () => Object.fromEntries((loopInfo?.loops ?? []).map((l) => [l.repoId, l])),
     [loopInfo],
   );
+  // Suggestion-loop arming status per repo, from the same ungated poll (openspec
+  // align-dock-loop-model) — lets each card's loop control show/flip this agent's
+  // 💡 suggestion arming next to the 🎯 recipe picker.
+  const suggestionFor = useCallback(
+    (repoId) => ({
+      armed: !!loopInfo?.suggestionArmedRepoIds?.includes(repoId),
+      autoAdvance: !!loopInfo?.autoAdvance,
+      enabled: loopInfo?.suggestionEnabled ?? true,
+    }),
+    [loopInfo],
+  );
   // Server-decided "high throughput" flag, lifted from the panel's poll so the
   // rail chip can carry a warning dot. Only live while the panel is summoned —
   // a hidden panel is unmounted and never fetches (dashboard-focus-docks), so
@@ -731,6 +742,7 @@ export default function Dashboard({ onClose }) {
             onSetDependsOn={setDependsOn}
             loop={loopsByRepo[tab.repoId]}
             loopRecipes={loopInfo?.recipes ?? []}
+            loopSuggestion={suggestionFor(tab.repoId)}
             onLoopChanged={loadLoops}
           />
         </Wrapper>

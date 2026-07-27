@@ -22,8 +22,8 @@ namespace ClaudeWeb.Controllers;
 /// ONE deliberate exception (openspec: adopt-autopilot-loops, design §5):
 /// <c>GET /api/autopilot/loops</c> is session-auth only, NOT operator-gated, so the
 /// dashboard can still show a loop's terminal state (done/escalated/capped + why)
-/// after the operator closes the gate. It discloses loop STATUS and recipe NAMES
-/// only — no prompts, no config, no action surface.
+/// after the operator closes the gate. It discloses loop STATUS, recipe NAMES, and
+/// suggestion-arming STATUS only — no prompts, no config, no action surface.
 /// </summary>
 [ApiController]
 [Route("api/autopilot")]
@@ -151,7 +151,8 @@ public class AutopilotController : ControllerBase
 
     /// <summary>The one deliberately ungated autopilot read (design §5): per-repo loop
     /// STATUS for dashboard surfaces — state, iterations, stop reason/detail, recipe
-    /// name — plus the recipe name list for the dock's picker. Session auth still
+    /// name — plus the recipe name list for the dock's picker and the suggestion
+    /// loop's arming status (openspec: align-dock-loop-model). Session auth still
     /// applies like every other /api route. No prompts, no sentinels, no config, and
     /// no actions here: a loop's outcome stays visible after the gate closes, but
     /// nothing can be armed or read out of autopilot's configuration.</summary>
@@ -159,9 +160,17 @@ public class AutopilotController : ControllerBase
     public IActionResult Loops()
     {
         _logger.CountRequest();
+        var cfg = _config.Get();
         return Ok(new
         {
             gateOpen = _operatorGate.Enabled,
+            // Suggestion-loop arming STATUS (openspec: align-dock-loop-model) — which
+            // repos are armed + the auto-advance / kill-switch flags, so the dock can
+            // type its badges honestly with the gate closed. Still no prompts,
+            // threshold, or deny-list: the disclosure stays status-only.
+            suggestionArmedRepoIds = cfg.ArmedRepoIds,
+            autoAdvance = cfg.AutoAdvance,
+            suggestionEnabled = cfg.Enabled,
             loops = _loops.All().Select(l => new
             {
                 repoId = l.RepoId,
