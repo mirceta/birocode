@@ -5,8 +5,8 @@ import '../../pages/autopilot.css';
 // (1) an honest inventory of the autopilot surface as it exists today, and
 // (2) the plan — autopilot is THE dashboard for anything that prompts agents
 // automatically, running on three everyday modes: the suggestion-based loop
-// (already built — the Agents-tab classifier machinery) plus the goal-based
-// and queue-based loops it still has to grow.
+// (already built — the classifier machinery under its root tab) plus the
+// goal-based and queue-based loops it still has to grow.
 //
 // Pure static reference content: no backend calls, nothing here can act — which
 // is also why the console renders this tab even while the operator gate is
@@ -37,13 +37,13 @@ export default function AutopilotOverviewView() {
         </p>
         <ul className="ov-list">
           <li>
-            <b>Agents</b> — arm or disarm each agent and pick the global mode:
-            <b> suggest-only</b> (autopilot predicts your next routine prompt,
-            you press send) or <b>auto-advance</b> (confident, non-risky
-            prompts are sent for you).
+            <b>Suggestion-based loop → Control</b> — arm or disarm each agent
+            and pick the global mode: <b>suggest-only</b> (autopilot predicts
+            your next routine prompt, you press send) or <b>auto-advance</b>
+            (confident, non-risky prompts are sent for you).
           </li>
           <li>
-            <b>Loops</b> — the deterministic loop engine: resend one fixed
+            <b>Goal-based loop (Agents · Recipes)</b> — the deterministic loop engine: resend one fixed
             prompt at the end of every turn until the sentinel stops it as
             done, a <code>NEEDS_HUMAN:</code> marker or deny-listed word
             escalates it, or the iteration cap ends it — each stop recorded
@@ -54,20 +54,21 @@ export default function AutopilotOverviewView() {
             gate is closed.
           </li>
           <li>
-            <b>Routine prompts</b> — the editable library that is the
-            recommender&apos;s entire label space, plus drafts mined from your
-            chat history across repos.
+            <b>Suggestion-based loop → Prompt library</b> — the editable
+            library that is the recommender&apos;s entire label space, plus
+            drafts mined from your chat history across repos.
           </li>
           <li>
-            <b>Intercepted · Suggestion history · Audit</b> — the observability
+            <b>Live feed · History · Audit</b> — the observability
             surfaces: a live feed of every agent reply the engine grabs, every
-            prediction it made, and the append-only record of every prompt it
-            actually sent.
+            prediction it made, and — cross-loop-type, hence its own root
+            tab — the append-only record of every prompt autopilot actually
+            sent, each marked as a suggestion send or a loop resend.
           </li>
           <li>
-            <b>System tests &amp; the two &quot;How … works&quot; explainers</b> —
-            in-app verification runs and the interactive architecture maps of
-            the chat and autopilot subsystems.
+            <b>Reference</b> — the two interactive &quot;How … works&quot;
+            architecture maps of the chat and autopilot subsystems, plus the
+            in-app System tests runs.
           </li>
           <li>
             <b>Safety posture</b> — the whole API sits behind the operator gate
@@ -84,8 +85,8 @@ export default function AutopilotOverviewView() {
           Autopilot keeps one identity — the home of automatic prompting — and
           instead of more disconnected machinery it settles on three
           first-class modes shaped around how we actually drive agents. The
-          suggestion-based loop already exists (it is the Agents-tab machinery
-          above); the other two are to build, and today&apos;s fixed-prompt
+          suggestion-based loop already exists (it is the machinery under its
+          root tab); the other two are to build, and today&apos;s fixed-prompt
           loop engine is the seed they grow from.
         </p>
         <div className="ov-features">
@@ -95,7 +96,7 @@ export default function AutopilotOverviewView() {
             <ul>
               <li>
                 You maintain a small set of <b>custom routine prompts</b> — the
-                editable library in the Routine prompts tab.
+                editable library in the Prompt library subtab.
               </li>
               <li>
                 At the end of each armed agent&apos;s turn, the classifier
@@ -109,9 +110,9 @@ export default function AutopilotOverviewView() {
                 non-risky prompts are sent for you).
               </li>
               <li>
-                This is the one mode that <b>exists today</b> — the Agents +
-                Routine prompts machinery above. Its remaining work is trust
-                and tuning, not construction.
+                This is the one mode that <b>exists today</b> — the Control +
+                Prompt library machinery under its own root tab. Its remaining
+                work is trust and tuning, not construction.
               </li>
             </ul>
           </article>
@@ -140,6 +141,11 @@ export default function AutopilotOverviewView() {
                 Explicit <b>stopping conditions / max turns</b> bound the loop:
                 it ends on verified done, on escalation, or at the cap — never
                 on a hunch.
+              </li>
+              <li>
+                Its <b>seed exists today</b> — the fixed-prompt loop engine
+                under the Goal-based loop tab (Agents · Recipes); the verifier
+                machinery is the part still to build.
               </li>
             </ul>
           </article>

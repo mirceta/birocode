@@ -257,7 +257,10 @@ function RecipeCard({ recipe, saveRecipe, removeRecipe }) {
   );
 }
 
-export default function LoopsView({ data, loopAction, addRecipe, saveRecipe, removeRecipe }) {
+// `section` picks which half renders (openspec restructure-autopilot-tabs): the
+// Goal-based loop root shows 'agents' and 'recipes' as separate subtabs, both
+// over this one component so the shared intro and subcomponents stay in one place.
+export default function LoopsView({ section = 'agents', data, loopAction, addRecipe, saveRecipe, removeRecipe }) {
   const agents = data?.agents ?? [];
   const loops = data?.loops ?? [];
   const recipes = data?.recipes ?? [];
@@ -288,6 +291,7 @@ export default function LoopsView({ data, loopAction, addRecipe, saveRecipe, rem
       </p>
 
       {/* --- Recipes: the named templates the dock's one-tap control arms from --- */}
+      {section === 'recipes' && (<>
       <h3 className="rp-section">Loop recipes</h3>
       <p className="autopilot__summary autopilot__summary--sub">
         Reusable templates (prompt + sentinel + cap) so starting a codified loop is a pick, not
@@ -335,8 +339,10 @@ export default function LoopsView({ data, loopAction, addRecipe, saveRecipe, rem
       ) : (
         <button className="lp-mini on" onClick={() => setAdding(true)}>+ Add recipe</button>
       )}
+      </>)}
 
       {/* --- Per-agent loops --- */}
+      {section === 'agents' && (<>
       <h3 className="rp-section">Agents</h3>
       <ul className="lp-list">
         {agents.map((a) => (
@@ -344,6 +350,7 @@ export default function LoopsView({ data, loopAction, addRecipe, saveRecipe, rem
         ))}
         {agents.length === 0 && <li className="autopilot__empty">No agents yet.</li>}
       </ul>
+      </>)}
     </>
   );
 }

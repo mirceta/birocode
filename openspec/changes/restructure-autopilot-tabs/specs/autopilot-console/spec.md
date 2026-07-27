@@ -1,0 +1,83 @@
+## ADDED Requirements
+
+### Requirement: The console groups its surfaces by loop type in a two-level hierarchy
+
+The Autopilot console SHALL present its surfaces as a two-level navigation: a root
+tab row of exactly five entries — **Overview**, **Suggestion-based loop**,
+**Goal-based loop**, **Audit**, and **Reference** — where the two loop-type roots
+and Reference each expose a second-level subtab row, and Overview and Audit render
+directly. The Suggestion-based loop root SHALL contain the subtabs **Control**
+(kill switch, auto-advance, confidence threshold, deny-list, per-agent arming),
+**Prompt library** (the editable routine-prompt set plus mined drafts), **Live
+feed** (the intercept feed), and **History** (the suggestion decision log). The
+Goal-based loop root SHALL contain the subtabs **Agents** (per-agent loop
+status/arming with stop reasons) and **Recipes** (the named loop templates). The
+Reference root SHALL contain the subtabs **How autopilot works**, **How chat
+works**, and **System tests**. The console SHALL still open on Overview by
+default, and each grouped root SHALL open on its first subtab.
+
+#### Scenario: Root row shows five grouped tabs
+
+- **WHEN** the End User opens the Autopilot console
+- **THEN** the root tab row shows exactly Overview, Suggestion-based loop, Goal-based loop, Audit, and Reference — no flat tabs for the grouped views
+
+#### Scenario: Suggestion-based loop subtabs
+
+- **WHEN** the End User selects the Suggestion-based loop root tab
+- **THEN** a subtab row appears with Control, Prompt library, Live feed, and History, opening on Control, and each subtab renders the same view the corresponding flat tab rendered before
+
+#### Scenario: Goal-based loop subtabs
+
+- **WHEN** the End User selects the Goal-based loop root tab
+- **THEN** a subtab row appears with Agents and Recipes, opening on Agents, together covering everything the former flat Loops tab showed
+
+#### Scenario: Reference subtabs
+
+- **WHEN** the End User selects the Reference root tab
+- **THEN** a subtab row appears with How autopilot works, How chat works, and System tests
+
+### Requirement: Badge counts live on the tab that owns the data
+
+The navigation SHALL surface the live counters on the entries that own them: the
+active-loop count on the Goal-based loop root tab, the routine-prompt count on the
+Prompt library subtab, and the audit-entry count on the Audit root tab.
+
+#### Scenario: Active loops badge the Goal-based loop root
+
+- **WHEN** at least one goal-based loop is active
+- **THEN** the Goal-based loop root tab shows the active-loop count without the user opening it
+
+### Requirement: The operator gate fences everything except the Overview
+
+When the operator-side autopilot gate is off, the console SHALL render the
+gate-off explanation for every root tab and subtab except Overview, which SHALL
+remain fully readable as pure reference content. The gate state SHALL NOT hide
+the navigation itself — the user can still see what exists.
+
+#### Scenario: Gated console still shows Overview and the hierarchy
+
+- **WHEN** the operator gate is off and the End User opens the console
+- **THEN** the Overview renders normally, all five root tabs remain visible, and selecting any non-Overview tab shows the gate-off notice instead of the view
+
+### Requirement: One console implementation renders identically in both hosts
+
+The two-level hierarchy SHALL be rendered by the single console implementation
+used by both the routed Autopilot tab and the dashboard dock's autopilot panel,
+so the grouping can never drift between hosts.
+
+#### Scenario: Dock shows the same hierarchy
+
+- **WHEN** the End User opens the autopilot panel from the dashboard dock
+- **THEN** the same five root tabs and the same subtab rows appear as on the routed Autopilot tab
+
+### Requirement: The audit trail distinguishes the loop type of each send
+
+The Audit view SHALL show, for every recorded autopilot send, which driver issued
+it — a suggestion-engine auto-advance send or a goal-based loop resend — using the
+recorded outcome of the entry, so the one cross-loop-type record stays attributable
+per loop type.
+
+#### Scenario: Loop resend is marked as such
+
+- **WHEN** a goal-based loop resend has been recorded and the End User opens the Audit tab
+- **THEN** that entry is visibly marked as a loop send, distinct from suggestion-engine sends
