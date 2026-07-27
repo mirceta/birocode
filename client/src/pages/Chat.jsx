@@ -371,6 +371,7 @@ export default function Chat({
         onAttach={setAttachment}
         embedded={embedded}
         stashTabId={stashTabId}
+        repoId={activeRepoId}
       />
 
       <SessionPicker
