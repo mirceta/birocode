@@ -58,6 +58,16 @@ public class AutopilotService : BackgroundService
     // prompt for), so a tick that fires before the new run registers as busy can't
     // double-send.
     private readonly ConcurrentDictionary<string, string> _lastDriveSent = new();
+    // DRIVE no-reply escape (fix-loop-noreply-stall): a run can complete without
+    // writing any assistant message (empty completion — seen live 2026-07-27), so
+    // the snippet the guard above waits on never changes and the loop would stall
+    // forever. _driveNoReply marks "run finished, snippet unmoved" for one grace
+    // tick (covers transcript flush); if still unmoved on the next tick the guard
+    // is cleared so the kind decides again. _driveNoReplyMisses counts consecutive
+    // reply-less runs so a pathological agent stops instead of burning turns.
+    private readonly ConcurrentDictionary<string, byte> _driveNoReply = new();
+    private readonly ConcurrentDictionary<string, int> _driveNoReplyMisses = new();
+    private const int MaxNoReplyRetries = 2;
     // Per-repo guard for SUGGEST mode: the snippet a pending proposal was recorded
     // against. Until the agent's reply changes, the instance is not re-decided —
     // this is what "the loop advances when the reply changes" means, and it keeps a
@@ -350,6 +360,8 @@ public class AutopilotService : BackgroundService
                 _armGen[repo.Id] = loop.ArmedAt;
                 _lastDriveSent.TryRemove(repo.Id, out _);
                 _suggestWait.TryRemove(repo.Id, out _);
+                _driveNoReply.TryRemove(repo.Id, out _);
+                _driveNoReplyMisses.TryRemove(repo.Id, out _);
             }
 
             // Driven kinds need a session to resume into; wait for the agent to speak.
@@ -365,7 +377,40 @@ public class AutopilotService : BackgroundService
             // Drive dedup: already sent against this exact trailing message (a tick
             // that fired before the new run registered busy) → don't double-send.
             if (loop.Mode == LoopConfigStore.ModeDrive
-                && _lastDriveSent.TryGetValue(repo.Id, out var ds) && ds == snippet) continue;
+                && _lastDriveSent.TryGetValue(repo.Id, out var ds) && ds == snippet)
+            {
+                // We're past the IsBusy gate, so the send's run has finished — yet
+                // the trailing message never moved: the run completed WITHOUT
+                // writing an assistant reply. One grace tick, then clear the guard
+                // and decide again (every resend still bumps the iteration counter,
+                // so the cap bounds retries too); after MaxNoReplyRetries
+                // consecutive reply-less runs, stop the loop instead.
+                if (run is null || run.Status == "running") continue;
+                if (_driveNoReply.TryAdd(repo.Id, 0))
+                {
+                    Set(repo.Id, new AgentState(repo.Id, repo.Name, isSuggestionKind, "idle",
+                        null, 0, $"run {run.Status} with no new reply — retrying", snippet, now));
+                    continue;
+                }
+                _driveNoReply.TryRemove(repo.Id, out _);
+                var misses = _driveNoReplyMisses.AddOrUpdate(repo.Id, 1, (_, n) => n + 1);
+                if (misses > MaxNoReplyRetries)
+                {
+                    _loops.Resolve(repo.Id, "error", "no-reply",
+                        $"agent produced no reply in {misses} consecutive runs");
+                    _logger.Error($"[LOOP] {repo.Name}: no reply in {misses} consecutive runs — stopping");
+                    Append(new LogEntry(now, repo.Name, "escalated", "no reply from agent", 0));
+                    continue;
+                }
+                _lastDriveSent.TryRemove(repo.Id, out _);
+                _logger.Info($"[LOOP] {repo.Name}: run {run.Status} produced no new reply — deciding again (retry {misses}/{MaxNoReplyRetries})");
+            }
+            else if (loop.Mode == LoopConfigStore.ModeDrive)
+            {
+                // The trailing message moved — the reply arrived; episode over.
+                _driveNoReply.TryRemove(repo.Id, out _);
+                _driveNoReplyMisses.TryRemove(repo.Id, out _);
+            }
             // Suggest dedup: a pending proposal is already recorded against this
             // message — the loop advances when the agent's reply changes (D9).
             if (loop.Mode == LoopConfigStore.ModeSuggest
