@@ -449,6 +449,15 @@
 .ca-foot { font-size: 12px; color: var(--color-text-muted, #888); line-height: 1.6; }
 .ca code { background: var(--color-bg, #f0ece4); padding: 1px 5px; border-radius: 5px; font-size: 12px; }
 
+/* Overview tab (openspec add-autopilot-overview-tab): today-inventory list + the plan's mode cards */
+.ov-list { margin: 0; padding-left: 18px; display: grid; gap: 8px; font-size: 13px; line-height: 1.55; }
+.ov-list li { max-width: 78ch; }
+.ov-features { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.ov-card { border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-bg, #f7f4ee); padding: 14px 16px; }
+.ov-card__name { margin: 0 0 4px; font-size: 14px; font-weight: 700; }
+.ov-card__tag { margin: 0 0 10px; font-size: 12.5px; font-style: italic; color: var(--color-text-muted, #666); }
+.ov-card ul { margin: 0; padding-left: 16px; display: grid; gap: 7px; font-size: 12.5px; line-height: 1.5; }
+
 /* 1 · embedded interactive map — native React (<ChatMap>/<ChatGraph>), a self-contained
    dark "stage". Scoped CSS vars keep the dark palette local; the surrounding tab is the
    harness's (light) theme. Ported from the old understanding-app snapshot index.html. */

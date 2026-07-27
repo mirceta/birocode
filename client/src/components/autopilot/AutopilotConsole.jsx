@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiGet, apiPost, apiPatch, apiDelete } from '../../api/client';
 import ErrorBanner from '../shared/ErrorBanner';
+import AutopilotOverviewView from './AutopilotOverviewView';
 import AgentsView from './AgentsView';
 import LoopsView from './LoopsView';
 import SystemTestsView from './SystemTestsView';
@@ -9,9 +10,11 @@ import AutopilotArchitectureView from './AutopilotArchitectureView';
 import '../../pages/autopilot.css';
 
 // The full Autopilot console (plans/autopilot-to-harness.md): the complete
-// detailed surface — Agents controls, Routine-prompt CRUD + mined drafts,
-// Intercepted live feed, Suggestion history, and the Audit trail, all over
-// /api/autopilot. This is the SINGLE implementation rendered by BOTH the routed
+// detailed surface — the Overview front page (what autopilot is + the
+// three-mode plan, openspec add-autopilot-overview-tab), Agents controls, Routine-prompt
+// CRUD + mined drafts, Intercepted live feed, Suggestion history, and the
+// Audit trail, all over /api/autopilot. The Overview is pure reference and is
+// the one tab the operator gate never hides. This is the SINGLE implementation rendered by BOTH the routed
 // Autopilot tab (pages/Autopilot.jsx, the mobile-first view) and the dashboard
 // dock (components/dashboard/AutopilotPanel.jsx, viewable anywhere) — they are
 // the same console, never two drifting copies.
@@ -27,7 +30,9 @@ const POLL_MS = 4000;
 const OUT_CLS = { suggested: 'sugg', sent: 'sent', escalated: 'esc', skipped: 'skip' };
 
 export default function AutopilotConsole({ embedded = false }) {
-  const [tab, setTab] = useState('agents');
+  // Opens on the Overview — the console's front page (what autopilot is today +
+  // the three-mode plan), per openspec/changes/add-autopilot-overview-tab.
+  const [tab, setTab] = useState('overview');
   const [data, setData] = useState(null); // { enabled, threshold, denyList, agents, log }
   const [discover, setDiscover] = useState(null);
   const [prompts, setPrompts] = useState(null); // the EDITABLE custom-prompt library
@@ -189,24 +194,8 @@ export default function AutopilotConsole({ embedded = false }) {
 
       {error && <ErrorBanner message={error} />}
 
-      {gated ? (
-        <div className="ap-gateoff" role="status">
-          <h3 className="ap-gateoff__title">Autopilot is turned off by the operator</h3>
-          <p>
-            Every <code>/api/autopilot</code> endpoint is fenced by an operator-side
-            gate that defaults to <b>off</b>. The web UI <b>can never turn it on</b> —
-            that switch lives only in the desktop app, so a steered web client or a
-            prompt-injected brain can’t grant autopilot the authority to act.
-          </p>
-          <p>
-            To enable it, open the <b>Claude Web</b> window on the host PC and click the
-            <b> Autopilot: OFF</b> button (it turns green <b>ON</b>). It takes effect
-            immediately — then reload.
-          </p>
-        </div>
-      ) : (
-      <>
       <nav className="ap-tabs">
+        <button className={tab === 'overview' ? 'on' : ''} onClick={() => setTab('overview')}>Overview</button>
         <button className={tab === 'agents' ? 'on' : ''} onClick={() => setTab('agents')}>Agents</button>
         <button className={tab === 'loops' ? 'on' : ''} onClick={() => setTab('loops')}>
           Loops{activeLoops ? ` ${activeLoops}` : ''}
@@ -234,6 +223,27 @@ export default function AutopilotConsole({ embedded = false }) {
         </button>
       </nav>
 
+      {tab === 'overview' && <AutopilotOverviewView />}
+
+      {/* The gate fences every operational surface; the Overview above is pure
+          reference content and stays visible either way. */}
+      {tab !== 'overview' && (gated ? (
+        <div className="ap-gateoff" role="status">
+          <h3 className="ap-gateoff__title">Autopilot is turned off by the operator</h3>
+          <p>
+            Every <code>/api/autopilot</code> endpoint is fenced by an operator-side
+            gate that defaults to <b>off</b>. The web UI <b>can never turn it on</b> —
+            that switch lives only in the desktop app, so a steered web client or a
+            prompt-injected brain can’t grant autopilot the authority to act.
+          </p>
+          <p>
+            To enable it, open the <b>Claude Web</b> window on the host PC and click the
+            <b> Autopilot: OFF</b> button (it turns green <b>ON</b>). It takes effect
+            immediately — then reload.
+          </p>
+        </div>
+      ) : (
+      <>
       {tab === 'agents' && <AgentsView data={data} mutate={mutate} />}
 
       {tab === 'loops' && <LoopsView data={data} loopAction={loopAction} />}
@@ -470,7 +480,7 @@ export default function AutopilotConsole({ embedded = false }) {
         </>
       )}
       </>
-      )}
+      ))}
     </div>
   );
 }

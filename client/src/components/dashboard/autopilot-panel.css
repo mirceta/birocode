@@ -33,6 +33,31 @@
   max-height: none;
 }
 
+/* Pop-up fill mode (openspec dashboard-panel-popups): the dashboard's centered
+   pop-up frames and sizes the dock, so it fills that frame — no compact cap,
+   no saved size, no resize grip. */
+.ap-panel--popup {
+  height: 100%;
+  max-height: none;
+}
+
+/* × in the dock bar, popup mode only — the pop-up's off switch. */
+.ap-panel__close {
+  margin-left: auto;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--color-text-soft);
+  font-size: 20px;
+  line-height: 1;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+.ap-panel__close:hover {
+  color: var(--ap-accent, #b85c00);
+  background: var(--color-bg);
+}
+
 .ap-panel--dock .ap-panel__bar {
   background: color-mix(in srgb, var(--ap-accent) 8%, var(--color-surface));
 }

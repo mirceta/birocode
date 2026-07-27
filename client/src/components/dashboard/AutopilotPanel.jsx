@@ -40,10 +40,12 @@ function readSize() {
   return null;
 }
 
-// `dragHandle` (optional) is the ⠿ grip the dashboard injects in free-drag mode
-// so this dock joins the 2D layout like Ideas/agents; it lives in the dock's
-// header bar. Omitted (null) in grid mode.
-export default function AutopilotPanel({ dragHandle = null }) {
+// `popup` (openspec dashboard-panel-popups) means the dashboard's centered
+// pop-up frames and sizes this dock: skip the saved size and the resize grip,
+// render always-expanded (a pop-up you don't want is closed via `onClose`, not
+// folded). `dragHandle` is legacy chrome from the drag-layout-citizen era and
+// is no longer passed by the dashboard.
+export default function AutopilotPanel({ dragHandle = null, popup = false, onClose = null }) {
   const on = useFeature('autopilotTab');
   const [data, setData] = useState(null);
   // The whole /api/autopilot surface is fenced by the operator gate (default
@@ -138,6 +140,7 @@ export default function AutopilotPanel({ dragHandle = null }) {
 
   if (!on) return null;
 
+  const folded = popup ? false : collapsed;
   const agents = data?.agents ?? [];
   const enabled = data?.enabled ?? true;
   const autoAdvance = data?.autoAdvance ?? false;
@@ -147,29 +150,34 @@ export default function AutopilotPanel({ dragHandle = null }) {
   // Width sticks in both states; height only when expanded (collapsed = just the
   // header bar, so a fixed height would leave dead space). A pinned height also
   // lifts the default max-height cap (.is-sized) so the operator can go taller.
-  const heightApplied = !!(size?.h && !collapsed);
-  const sizeStyle = size
+  // In popup mode the pop-up frame sizes the dock, so neither applies.
+  const heightApplied = !popup && !!(size?.h && !collapsed);
+  const sizeStyle = !popup && size
     ? { width: size.w, ...(heightApplied ? { height: size.h } : {}) }
     : undefined;
 
   return (
     <section
       ref={sectionRef}
-      className={`ap-panel ap-panel--dock${heightApplied ? ' is-sized' : ''}`}
+      className={`ap-panel ap-panel--dock${popup ? ' ap-panel--popup' : ''}${heightApplied ? ' is-sized' : ''}`}
       style={sizeStyle}
     >
       <div className="ap-panel__bar">
         {dragHandle}
-        <button
-          type="button"
-          className="ap-panel__toggle"
-          onClick={toggleCollapsed}
-          aria-expanded={!collapsed}
-          title={collapsed ? 'Expand autopilot' : 'Collapse autopilot'}
-        >
-          <span className={`ap-panel__chev${collapsed ? ' is-collapsed' : ''}`}>▾</span>
+        {popup ? (
           <span className="ap-panel__title">🛞 Autopilot</span>
-        </button>
+        ) : (
+          <button
+            type="button"
+            className="ap-panel__toggle"
+            onClick={toggleCollapsed}
+            aria-expanded={!collapsed}
+            title={collapsed ? 'Expand autopilot' : 'Collapse autopilot'}
+          >
+            <span className={`ap-panel__chev${collapsed ? ' is-collapsed' : ''}`}>▾</span>
+            <span className="ap-panel__title">🛞 Autopilot</span>
+          </button>
+        )}
         <span className="ap-panel__summary">
           {gated ? (
             <span className="ap-muted">off · turned off by operator</span>
@@ -185,9 +193,20 @@ export default function AutopilotPanel({ dragHandle = null }) {
             <span className="ap-muted">killed · all manual</span>
           )}
         </span>
+        {popup && onClose && (
+          <button
+            type="button"
+            className="ap-panel__close"
+            onClick={onClose}
+            title="Close panel"
+            aria-label="Close panel"
+          >
+            &times;
+          </button>
+        )}
       </div>
 
-      {!collapsed && (
+      {!folded && (
         <div className="ap-panel__body">
           {/* The full console — same surface as the routed tab. It runs its own
               poll + gate handling; the dock's header summary above uses the
@@ -196,7 +215,7 @@ export default function AutopilotPanel({ dragHandle = null }) {
         </div>
       )}
 
-      {!collapsed && (
+      {!popup && !collapsed && (
         <span
           className="ap-panel__resize"
           role="separator"

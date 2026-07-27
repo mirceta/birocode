@@ -57,7 +57,10 @@ function formatDuration(ms) {
   return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
 }
 
-export default function AgentAuditPanel({ dragHandle = null }) {
+// `popup` (openspec dashboard-panel-popups): the dashboard's centered pop-up
+// frames and sizes this dock — render always-expanded (closed via `onClose`,
+// not folded). `dragHandle` is legacy chrome from the drag-layout-citizen era.
+export default function AgentAuditPanel({ dragHandle = null, popup = false, onClose = null }) {
   const on = useFeature('agenticAudit');
   const { t } = useT();
   const [calls, setCalls] = useState(null); // null = not loaded yet
@@ -131,22 +134,27 @@ export default function AgentAuditPanel({ dragHandle = null }) {
 
   if (!on) return null;
 
+  const folded = popup ? false : collapsed;
   const runningCount = (calls ?? []).filter((c) => c.outcome === 'running').length;
 
   return (
-    <section className="aa-panel">
+    <section className={`aa-panel${popup ? ' aa-panel--popup' : ''}`}>
       <div className="aa-panel__bar">
         {dragHandle}
-        <button
-          type="button"
-          className="aa-panel__toggle"
-          onClick={toggleCollapsed}
-          aria-expanded={!collapsed}
-          title={collapsed ? t('audit.expand') : t('audit.collapse')}
-        >
-          <span className={`aa-panel__chev${collapsed ? ' is-collapsed' : ''}`}>▾</span>
+        {popup ? (
           <span className="aa-panel__title">🧾 {t('audit.title')}</span>
-        </button>
+        ) : (
+          <button
+            type="button"
+            className="aa-panel__toggle"
+            onClick={toggleCollapsed}
+            aria-expanded={!collapsed}
+            title={collapsed ? t('audit.expand') : t('audit.collapse')}
+          >
+            <span className={`aa-panel__chev${collapsed ? ' is-collapsed' : ''}`}>▾</span>
+            <span className="aa-panel__title">🧾 {t('audit.title')}</span>
+          </button>
+        )}
         <span className="aa-panel__summary">
           {calls === null ? (
             t('audit.loading')
@@ -162,9 +170,20 @@ export default function AgentAuditPanel({ dragHandle = null }) {
             </>
           )}
         </span>
+        {popup && onClose && (
+          <button
+            type="button"
+            className="aa-panel__close"
+            onClick={onClose}
+            title={t('dashboard.panelClose')}
+            aria-label={t('dashboard.panelClose')}
+          >
+            &times;
+          </button>
+        )}
       </div>
 
-      {!collapsed && (
+      {!folded && (
         <div className="aa-panel__body">
           <div className="aa-panel__filters">
             <select
