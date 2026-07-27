@@ -330,6 +330,7 @@
   "dashboard.panelIdeas": "Fikirler paneli",
   "dashboard.panelAutopilot": "Otopilot paneli",
   "dashboard.panelAudit": "Ajan denetim paneli",
+  "dashboard.panelTraffic": "Trafik paneli",
   "agents.status.idle": "Bosta",
   "agents.status.running": "Calisiyor...",
   "agents.status.done": "Tamamlandi",

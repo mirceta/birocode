@@ -6,9 +6,7 @@ Keeps the dashboard overlay's own chrome (header bar, dock toolbar, controls,
 spacing) as small as possible so the agent grid gets the vertical space. The
 dashboard is the Operator's monitoring surface; every pixel of chrome is a
 pixel taken from the docks.
-
 ## Requirements
-
 ### Requirement: The dashboard header shows no title label
 
 The dashboard overlay's header SHALL NOT render a visible "Dashboard" title
@@ -31,13 +29,15 @@ free-drag agents panel's handle) SHALL keep working.
 ### Requirement: Dock toolbar and header controls share one horizontal bar
 
 The dashboard header SHALL lay the dock toolbar (docks bar) and the header
-controls — size stepper, content zoom, layout-mode controls, view tabs, the
+controls — the Layout popover trigger, layout-mode controls, view tabs, the
 only-important switch, and the close button — on a single horizontal bar when
 the viewport is wide enough: the dock toolbar leading (left), the controls
-trailing (right). The dock toolbar SHALL keep its horizontal scrolling for
+trailing (right). The former standalone size stepper (−/+) and content-zoom
+buttons (A−/A+) SHALL NOT render on the bar; their capabilities live in the
+Layout popover. The dock toolbar SHALL keep its horizontal scrolling for
 large rosters and SHALL retain a usable minimum width rather than being
-squeezed out by the controls. Every control SHALL keep its existing function,
-labels, and gating; this requirement changes placement only.
+squeezed out by the controls. Every remaining control SHALL keep its existing
+function, labels, and gating.
 
 #### Scenario: One bar on a wide viewport
 
@@ -62,21 +62,30 @@ labels, and gating; this requirement changes placement only.
 
 #### Scenario: Controls keep working from the shared bar
 
-- **WHEN** the operator uses the size stepper, zoom, layout-mode, view tabs,
-  only-important switch, or close button from the shared bar
-- **THEN** each behaves exactly as it did before the layout change
+- **WHEN** the operator uses the Layout popover trigger, layout-mode controls,
+  view tabs, only-important switch, or close button from the shared bar
+- **THEN** each behaves as specified, and the old standalone size/zoom button
+  groups are absent
 
 ### Requirement: Compact chrome above the agent grid
 
 The dashboard SHALL reserve less vertical space for chrome than the former
 two-row header: the only chrome above the agent grid SHALL be the shared bar
-(plus the wrapped controls line on narrow viewports), and the overlay's outer
-vertical padding and the gap between the bar and the grid SHALL be reduced so
-the first row of dock tiles starts visibly higher.
+(plus the wrapped controls line on narrow viewports). The shared bar SHALL
+start with zero top margin/padding — no content-region inset or overlay
+padding above it while the dashboard overlay is open — and the gap between
+the bar and the grid SHALL stay minimal so the first row of dock tiles starts
+as high as the bar allows.
+
+#### Scenario: The docks bar starts at the top
+
+- **WHEN** the dashboard overlay is open
+- **THEN** the shared bar's top edge sits directly below the app header /
+  status strip with no margin or padding above it
 
 #### Scenario: The grid starts higher
 
 - **WHEN** the dashboard is open with at least one dock in the grid
 - **THEN** the first dock tile's top edge sits higher in the viewport than under
-  the former layout (title row removed, spacing reduced), with the shared bar as
-  the only chrome above it
+  the former layout, with the shared bar as the only chrome above it
+
