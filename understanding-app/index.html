@@ -1,471 +1,662 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>One loop model — ILoop · one store slot · suggest/drive</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Understanding — Always-admin status tile</title>
 <style>
   :root {
-    --bg:#0b0f17; --panel:#111826; --panel2:#0e1420; --line:#1e2a3d;
-    --ink:#e6edf7; --dim:#8ea0bd; --mut:#63748f;
-    --sugg:#f0b429; --recipe:#4aa3ff; --goal:#38d39f;
-    --drive:#f472b6; --suggest:#a78bfa; --bad:#ff6b6b; --warn:#ffab5e;
-    --mono:'SFMono-Regular',ui-monospace,Menlo,Consolas,monospace;
+    --bg: #0f1218;
+    --surface: #171c26;
+    --surface2: #1e2532;
+    --border: #2c3547;
+    --text: #e6ebf4;
+    --soft: #93a0b5;
+    --accent: #6ea8fe;
+    --green: #3fb950;
+    --green-bg: #12261a;
+    --amber: #d29922;
+    --amber-bg: #2a2113;
+    --grey: #8b949e;
+    --grey-bg: #21262d;
+    --red: #f85149;
+    --red-bg: #2d1517;
+    --mono: 'Consolas', 'Cascadia Code', monospace;
+    --radius: 12px;
   }
-  * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--ink); line-height:1.55;
-    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; }
-  .wrap { max-width:1020px; margin:0 auto; padding:26px 18px 80px; }
-  h1 { font-size:24px; margin:0 0 6px; letter-spacing:-.02em; }
-  h2 { font-size:17px; margin:0 0 10px; }
-  .sub { color:var(--dim); margin:0 0 6px; max-width:78ch; }
-  .src { color:var(--mut); font-size:12px; font-family:var(--mono); margin:6px 0 18px; }
-  code { background:var(--panel2); border:1px solid var(--line); border-radius:5px;
-    padding:1px 6px; font-size:12.5px; color:#c9d4ff; font-family:var(--mono); }
-  pre { background:var(--panel2); border:1px solid var(--line); border-radius:10px;
-    padding:12px 14px; font-size:12.5px; line-height:1.5; white-space:pre-wrap;
-    word-break:break-word; color:#c9d4ff; margin:8px 0 0; font-family:var(--mono); }
-  .tabs { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px; border-bottom:1px solid var(--line); padding-bottom:10px; }
-  .tab { padding:6px 14px; border:1px solid var(--line); border-radius:999px;
-    background:var(--panel); color:var(--dim); cursor:pointer; font-size:13.5px; }
-  .tab.on { color:var(--ink); border-color:#4aa3ff; font-weight:700; }
-  .view { display:none; } .view.on { display:block; }
-  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px;
-    padding:16px 18px; margin-bottom:14px; }
-  .grid3 { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; }
-  .type { border-top:3px solid var(--line); }
-  .type.sugg { border-top-color:var(--sugg); }
-  .type.recipe { border-top-color:var(--recipe); }
-  .type.goal { border-top-color:var(--goal); }
-  .type h4 { margin:0 0 6px; font-size:15px; }
-  .type p, .type li { color:var(--dim); font-size:13px; }
-  .type ul { margin:8px 0 0; padding-left:18px; }
-  .k { color:var(--ink); font-weight:600; }
-  .note { border-left:3px solid var(--warn); padding:8px 12px; background:var(--panel2);
-    border-radius:0 8px 8px 0; color:var(--dim); font-size:13.5px; margin-top:10px; }
-  .flow { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:10px 0; }
-  .st { padding:6px 12px; border:1px solid var(--line); border-radius:10px;
-    background:var(--panel2); font-size:12.5px; }
-  .arr { color:var(--mut); }
-  table { width:100%; border-collapse:collapse; font-size:13px; margin-top:8px; }
-  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
-  th { color:var(--mut); font-size:11.5px; text-transform:uppercase; letter-spacing:.05em; }
-  td:first-child { white-space:nowrap; font-family:var(--mono); font-size:12px; }
-  .pill { display:inline-block; padding:1px 9px; border-radius:999px; border:1px solid var(--line);
-    font-size:11.5px; color:var(--dim); }
-  /* simulator */
-  .sim { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
-  @media (max-width:720px){ .sim { grid-template-columns:1fr; } }
-  .sim-state { background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:14px; }
-  .sim-row { display:flex; justify-content:space-between; padding:4px 0; font-size:13.5px; }
-  .sim-row .v { font-weight:700; }
-  .m-drive { color:var(--drive); } .m-suggest { color:var(--suggest); }
-  .s-loop { color:var(--recipe); } .s-done { color:var(--goal); }
-  .s-esc { color:var(--bad); } .s-cap { color:var(--warn); } .s-stop { color:var(--mut); }
-  .sim-btn { display:block; width:100%; text-align:left; margin:6px 0; padding:8px 12px;
-    border:1px solid var(--line); border-radius:10px; background:var(--panel);
-    color:var(--ink); cursor:pointer; font-size:13px; }
-  .sim-btn:hover { border-color:#4aa3ff; }
-  .sim-btn:disabled { opacity:.35; cursor:default; }
-  .sim-log { margin-top:10px; font-size:12px; color:var(--dim); max-height:210px; overflow:auto; font-family:var(--mono); }
-  .sim-log div { padding:2px 0; border-bottom:1px dashed var(--line); }
-  .modes { display:flex; gap:6px; margin:8px 0; }
-  .modebtn { flex:1; padding:5px 10px; border:1px solid var(--line); border-radius:8px;
-    background:var(--panel); color:var(--dim); cursor:pointer; font-size:12.5px; }
-  .modebtn.on { color:var(--ink); font-weight:700; }
-  .modebtn.on.md { border-color:var(--drive); } .modebtn.on.ms { border-color:var(--suggest); }
-  .pending { border:1px dashed var(--suggest); border-radius:10px; padding:8px 10px; margin-top:8px;
-    font-size:12px; color:var(--dim); }
-  .pending b { color:var(--suggest); font-size:11px; letter-spacing:.04em; }
-  .reset { margin-top:10px; padding:5px 12px; border-radius:999px; border:1px solid var(--line);
-    background:none; color:var(--dim); cursor:pointer; }
-  /* phantom diagram */
-  .phantom { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:12px 0 2px; }
-  .phantom .target { grid-column:1 / -1; }
-  .proc, .target { border:1px solid var(--line); border-radius:10px; padding:10px 12px; background:var(--panel2);
-    position:relative; }
-  .proc.live { border-color:var(--goal); }
-  .proc.dead { border-color:var(--mut); opacity:.85; }
-  .proc.dead.killed { border-color:var(--bad); opacity:.35; text-decoration:line-through; }
-  .target { border-color:var(--warn); }
-  .target.safe { border-color:var(--goal); }
-  .pt { font-size:13.5px; font-weight:700; }
-  .pd { font-size:12px; color:var(--dim); margin-top:3px; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 15px/1.55 'Segoe UI', system-ui, sans-serif;
+    padding: 24px 16px 80px;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  h1 { font-size: 24px; margin-bottom: 4px; }
+  .subtitle { color: var(--soft); margin-bottom: 20px; font-size: 14px; }
+  .subtitle code { color: var(--accent); }
+  code { font-family: var(--mono); font-size: 0.92em; background: var(--surface2); padding: 1px 6px; border-radius: 5px; }
+  /* tabs */
+  .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+  .tab {
+    background: var(--surface); color: var(--soft); border: 1px solid var(--border);
+    border-radius: 999px; padding: 8px 16px; font: inherit; font-size: 14px;
+    cursor: pointer; transition: all .15s;
+  }
+  .tab:hover { border-color: var(--accent); color: var(--text); }
+  .tab.on { background: var(--accent); border-color: var(--accent); color: #0b1220; font-weight: 600; }
+  .view { display: none; animation: fadein .25s ease; }
+  .view.on { display: block; }
+  @keyframes fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 20px; margin-bottom: 16px;
+  }
+  .card h2 { font-size: 17px; margin-bottom: 10px; }
+  .card p { color: var(--soft); font-size: 14px; margin-bottom: 8px; }
+  .card p strong { color: var(--text); }
+  .hint { font-size: 13px; color: var(--soft); font-style: italic; }
+
+  /* ============ view 1: state machine ============ */
+  .facts { display: flex; gap: 14px; flex-wrap: wrap; margin: 16px 0; }
+  .fact {
+    flex: 1; min-width: 260px; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px; cursor: pointer; transition: border-color .15s;
+    text-align: left; color: var(--text); font: inherit;
+  }
+  .fact:hover { border-color: var(--accent); }
+  .fact .fname { font-weight: 700; font-family: var(--mono); font-size: 14px; }
+  .fact .fdesc { color: var(--soft); font-size: 12.5px; margin-top: 6px; }
+  .fact .fval { margin-top: 10px; font-family: var(--mono); font-weight: 700; font-size: 15px; }
+  .fact.true .fval { color: var(--green); }
+  .fact.false .fval { color: var(--grey); }
+  .fact .switch {
+    display: inline-block; width: 40px; height: 22px; border-radius: 11px; background: var(--border);
+    position: relative; vertical-align: middle; margin-right: 8px; transition: background .2s;
+  }
+  .fact .switch::after {
+    content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px;
+    border-radius: 50%; background: var(--soft); transition: all .2s;
+  }
+  .fact.true .switch { background: var(--green); }
+  .fact.true .switch::after { left: 21px; background: #fff; }
+  .derived { text-align: center; margin: 18px 0 6px; }
+  .arrow-down { color: var(--soft); font-size: 22px; }
+  .state-big {
+    display: inline-block; margin-top: 8px; padding: 14px 30px; border-radius: var(--radius);
+    font-weight: 700; font-size: 19px; border: 2px solid; transition: all .25s;
+  }
+  .state-big .sdesc { display: block; font-weight: 400; font-size: 13px; margin-top: 4px; }
+  .st-active { color: var(--green); background: var(--green-bg); border-color: var(--green); }
+  .st-pending { color: var(--amber); background: var(--amber-bg); border-color: var(--amber); }
+  .st-disabled { color: var(--grey); background: var(--grey-bg); border-color: var(--grey); }
+  table.truth { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13.5px; }
+  table.truth th, table.truth td { border: 1px solid var(--border); padding: 8px 12px; text-align: center; }
+  table.truth th { background: var(--surface2); color: var(--soft); font-weight: 600; }
+  table.truth tr.hilite td { background: rgba(110,168,254,.12); }
+  table.truth td.st { font-weight: 700; font-family: var(--mono); }
+  .regbox { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-top: 12px; font-family: var(--mono); font-size: 12.5px; line-height: 1.8; overflow-x: auto; white-space: nowrap; }
+  .regbox .k { color: var(--accent); }
+  .regbox .v { color: var(--green); }
+  .regbox .v.unset { color: var(--grey); }
+  .edge { border-left: 3px solid var(--amber); padding: 10px 14px; background: var(--amber-bg); border-radius: 0 8px 8px 0; margin-top: 14px; font-size: 13.5px; color: var(--text); }
+
+  /* ============ view 2: enable flow ============ */
+  .flow { position: relative; margin: 18px 0; }
+  .fstep {
+    display: flex; gap: 14px; align-items: flex-start; padding: 14px;
+    border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 10px;
+    background: var(--surface2); opacity: .35; transition: all .3s;
+  }
+  .fstep.now { opacity: 1; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .fstep.done { opacity: .8; border-color: var(--green); }
+  .fstep.skipped { opacity: .25; }
+  .fstep .num {
+    flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--border);
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px;
+  }
+  .fstep.now .num { background: var(--accent); color: #0b1220; }
+  .fstep.done .num { background: var(--green); color: #0b1220; }
+  .fstep .ft { font-weight: 600; font-size: 14.5px; }
+  .fstep .fd { color: var(--soft); font-size: 13px; margin-top: 3px; }
+  .fstep .fd code { font-size: 12px; }
+  .flowctl { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+  .btn {
+    background: var(--accent); color: #0b1220; border: none; border-radius: 8px;
+    padding: 9px 18px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .btn:hover { filter: brightness(1.1); }
+  .btn.ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn:disabled { opacity: .4; cursor: default; }
+  .branchpick { display: flex; gap: 10px; flex-wrap: wrap; margin: 4px 0 14px; }
+  .scenario-lbl { font-size: 13px; color: var(--soft); margin-bottom: 6px; }
+  .uacprompt {
+    border: 2px solid var(--amber); border-radius: var(--radius); padding: 16px; margin: 10px 0;
+    background: #1a1f2b; display: none;
+  }
+  .uacprompt.show { display: block; animation: fadein .3s; }
+  .uacprompt .uachead { font-weight: 700; color: var(--amber); font-size: 14px; margin-bottom: 6px; }
+  .uacprompt .uacbody { font-size: 13px; color: var(--soft); margin-bottom: 12px; }
+  .verdict { border-radius: var(--radius); padding: 14px 16px; margin-top: 12px; font-size: 14px; display: none; }
+  .verdict.show { display: block; animation: fadein .3s; }
+  .verdict.ok { background: var(--green-bg); border: 1px solid var(--green); color: var(--text); }
+  .verdict.fail { background: var(--red-bg); border: 1px solid var(--red); color: var(--text); }
+  .verdict .vt { font-weight: 700; }
+  .verdict.ok .vt { color: var(--green); }
+  .verdict.fail .vt { color: var(--red); }
+
+  /* ============ view 3: tile mockup ============ */
+  .strip-mock {
+    border: 1px solid var(--border); border-radius: var(--radius); background: #131824;
+    padding: 10px; margin: 14px 0;
+  }
+  .strip-title { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--soft); padding: 4px 6px 8px; }
+  .strip-row { display: flex; flex-wrap: wrap; gap: 10px; }
+  .chip {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 10px 12px; font-size: 13px; min-width: 130px;
+  }
+  .chip .ckind {
+    display: inline-block; padding: 0 5px; border: 1px solid var(--border); border-radius: 5px;
+    font-size: 10px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--soft);
+    margin-right: 7px;
+  }
+  .chip .cdot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+  .chip.faded { opacity: .45; }
+  .admtile { border-width: 2px; transition: border-color .2s; }
+  .admtile.s-active { border-color: var(--green); }
+  .admtile.s-pending { border-color: var(--amber); }
+  .admtile.s-disabled { border-color: var(--border); }
+  .admtile.s-unsupported { border-color: var(--border); opacity: .5; }
+  .admtile .clabel { font-weight: 600; }
+  .admtile .cdet { display: block; margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--soft); max-width: 240px; }
+  .admtile .enbtn {
+    display: inline-block; margin-top: 8px; background: var(--accent); color: #0b1220;
+    border: none; border-radius: 6px; padding: 5px 14px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  }
+  .statepick { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+  .spick {
+    border: 1px solid var(--border); background: var(--surface2); color: var(--soft);
+    border-radius: 8px; padding: 7px 14px; font: inherit; font-size: 13px; cursor: pointer;
+  }
+  .spick.on { color: var(--text); border-color: var(--accent); background: rgba(110,168,254,.12); }
+  .gates { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  .gate { flex: 1; min-width: 210px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; font-size: 13px; }
+  .gate .gname { font-weight: 600; margin-bottom: 4px; }
+  .gate .gd { color: var(--soft); font-size: 12.5px; }
+
+  /* ============ view 4: pattern map ============ */
+  .mapgrid { display: grid; grid-template-columns: 1fr 34px 1fr; gap: 8px 0; align-items: stretch; margin-top: 14px; }
+  .mapcell {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 14px; font-size: 13px;
+  }
+  .mapcell .mn { font-family: var(--mono); font-weight: 700; font-size: 12.5px; color: var(--accent); word-break: break-all; }
+  .mapcell .md { color: var(--soft); font-size: 12px; margin-top: 4px; }
+  .mapcell.new { border-color: var(--green); }
+  .mapcell.new .mn { color: var(--green); }
+  .maparrow { display: flex; align-items: center; justify-content: center; color: var(--soft); font-size: 17px; }
+  .maphead { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--soft); padding: 4px 2px; }
+  @media (max-width: 640px) {
+    .mapgrid { grid-template-columns: 1fr; }
+    .maparrow { transform: rotate(90deg); padding: 2px 0; }
+    .maphead.right { display: none; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>One loop model <span style="color:var(--mut);font-weight:400">— unify-loop-types, revision 2</span></h1>
-  <p class="sub">Every autopilot mode is now literally the same thing: a <b>loop instance</b> —
-  <code>{ kind, mode, armed, agent }</code> — whose kind is an implementation of one interface. The engine has no
-  per-kind branching left; the dock has one section that says type · armed · mode.</p>
-  <div class="src">ILoop.cs · SuggestionLoop / RecipeLoop / GoalLoop · LoopConfigStore.cs · AutopilotService.cs · DockLoopControl.jsx</div>
-
-  <div class="tabs">
-    <button class="tab on" data-v="model">① The interface</button>
-    <button class="tab" data-v="mode">② Suggest vs drive</button>
-    <button class="tab" data-v="sim">③ Drive a loop yourself</button>
-    <button class="tab" data-v="dock">④ Dock &amp; API</button>
-    <button class="tab" data-v="notes">⑤ Two surprises</button>
+  <h1>Always-admin status tile</h1>
+  <div class="subtitle">
+    OpenSpec change <code>add-always-admin-status</code> — a header STATUS-strip tile that reports whether
+    this Windows box runs every process with full admin rights (UAC off), and can flip it on with one tap.
   </div>
 
-  <!-- ============ ① MODEL ============ -->
-  <section class="view on" id="v-model">
-    <div class="card">
-      <h2>ILoop — semantics in the kinds, mechanics in the engine</h2>
-      <pre>interface ILoop {
-  string Kind;                       // "suggestion" | "recipe" | "goal"
-  LoopDecision Decide(LoopContext);  // exactly one of:
-}
-LoopDecision.Hold    (reason, escalate?)          // stay armed, do nothing this turn
-LoopDecision.Stop    (status, reason, detail)     // terminal: done / escalate / error
-LoopDecision.Propose (prompt, enterPhase?)        // "the agent's NEXT prompt is this"</pre>
-      <p class="sub" style="margin-top:10px">The engine (<code>AutopilotService.Tick</code>) does the same thing for
-      every agent: find its one active instance, ask the kind's implementation for a decision, execute it. Idle
-      detection, dedup, the cap check, sending, pending-prompt recording, and auditing are shared mechanics —
-      identical for all three kinds.</p>
-    </div>
-    <div class="grid3">
-      <div class="card type sugg">
-        <h4>💡 SuggestionLoop</h4>
-        <p>Wraps the <code>PromptClassifier</code>: which of <b>your routine prompts</b> comes next?</p>
-        <ul>
-          <li>Confident, non-risky verdict → <span class="k">Propose(label)</span></li>
-          <li>Unclear / risky → <span class="k">Hold</span> — non-terminal, stays armed</li>
-          <li>Uncapped by default; no sentinel, no "done"</li>
-        </ul>
-      </div>
-      <div class="card type recipe">
-        <h4>📋 RecipeLoop</h4>
-        <p>Drives one <b>stored ritual prompt</b> (e.g. "Drive the OpenSpec change").</p>
-        <ul>
-          <li>Sentinel <code>LOOP_DONE</code> → <span class="k">Stop(done)</span></li>
-          <li>Otherwise → <span class="k">Propose(stored prompt)</span></li>
-        </ul>
-      </div>
-      <div class="card type goal">
-        <h4>🎯 GoalLoop</h4>
-        <p>Free-text <b>goal</b>; work + verification prompts composed once at arm time.</p>
-        <ul>
-          <li>Work + done-claim → <span class="k">Propose(verify prompt, phase→verify)</span></li>
-          <li>Verify + <code>GOAL_VERIFIED</code> → <span class="k">Stop(done, verified)</span></li>
-          <li>Verify + gaps → <span class="k">Propose(work prompt, phase→work)</span></li>
-        </ul>
-      </div>
-    </div>
-    <div class="card">
-      <h2>Shared safety ladder — <code>DrivenLoop</code> base (recipe + goal)</h2>
-      <div class="flow">
-        <span class="st">run errored → Stop(error)</span><span class="arr">→</span>
-        <span class="st">NEEDS_HUMAN → Stop(escalate)</span><span class="arr">→</span>
-        <span class="st">deny-list word → Stop(escalate)</span><span class="arr">→</span>
-        <span class="st">kind's own DecideCore</span>
-      </div>
-      <p class="sub" style="font-size:13px">NEEDS_HUMAN outranks the sentinel — a reply carrying both means blocked,
-      not done. All matching is deterministic string search; no LLM judge. The suggestion kind doesn't use this
-      ladder: it never drives a blocked agent (its escalations are non-terminal holds), and its risk handling is the
-      classifier gate.</p>
-    </div>
-    <div class="card">
-      <h2>Exclusive arming is now structural — the coordinator is gone</h2>
-      <p class="sub" style="font-size:13.5px"><code>LoopConfigStore</code> holds <b>one dictionary slot per agent</b>.
-      Arming any kind replaces the slot, so "at most one autopilot mode per agent" can't be violated — it isn't a
-      rule anyone enforces, it's the shape of the data. <code>AutopilotArming</code> was deleted; legacy suggestion
-      arming (<code>autopilot.json</code> ArmedRepoIds + the global auto-advance flag) drains into suggestion
-      instances once at startup. One <b>Disarm</b> clears whatever runs. A fresh arm also resets the engine's
-      dedup guards, so a new loop acts on the agent's current message immediately.</p>
-      <div class="flow">
-        <span class="st">💡 armed</span><span class="arr">— arm 🎯 →</span>
-        <span class="st">slot now holds 🎯 (💡 displaced)</span><span class="arr">— Disarm →</span>
-        <span class="st">slot stopped</span>
-      </div>
-    </div>
-  </section>
+  <div class="tabs">
+    <button class="tab on" data-v="v1">1 · State model</button>
+    <button class="tab" data-v="v2">2 · Enable flow</button>
+    <button class="tab" data-v="v3">3 · The tile</button>
+    <button class="tab" data-v="v4">4 · Pattern map</button>
+  </div>
 
-  <!-- ============ ② MODE ============ -->
-  <section class="view" id="v-mode">
+  <!-- ================= VIEW 1 ================= -->
+  <div class="view on" id="v1">
     <div class="card">
-      <h2>The common axis: what happens to a proposed next prompt</h2>
-      <p class="sub">A loop's whole job is to decide the agent's <b>next prompt</b>. The instance's
-      <code>mode</code> decides what that means — for <b>every</b> kind:</p>
-      <table>
-        <tr><th>mode</th><th>a Propose(prompt) becomes…</th></tr>
-        <tr><td style="color:var(--suggest)">suggest</td><td>the instance's <b>pending prompt</b> — shown on the dock
-          with <i>"Put in chat box"</i>, pre-filling the composer. Nothing is sent; the counter doesn't advance; the
-          loop waits until the agent's reply changes (i.e. until you send something).</td></tr>
-        <tr><td style="color:var(--drive)">drive</td><td>actually <b>sent</b> to the agent (resuming its session through
-          the same run path the chat uses) — capped, audited, double-send-guarded.</td></tr>
+      <h2>Two facts → one state</h2>
+      <p>The whole feature derives from <strong>two independent facts</strong> the backend reads on every
+        <code>GET /api/always-admin/status</code>. Neither read needs elevation, and neither changes anything.</p>
+      <p class="hint">Click each fact to toggle it and watch the derived state.</p>
+
+      <div class="facts">
+        <button class="fact true" id="factReg">
+          <span class="fname">registrySet</span>
+          <div class="fdesc">All three UAC-off DWORDs are <code>0</code> under
+            <code>HKLM\...\Policies\System</code></div>
+          <div class="fval"><span class="switch"></span><span class="fvtext">true</span></div>
+        </button>
+        <button class="fact false" id="factTok">
+          <span class="fname">tokenElevated</span>
+          <div class="fdesc">The harness's <em>own process token</em> is elevated —
+            <code>WindowsPrincipal.IsInRole(Administrator)</code>. This is the <strong>reboot proxy</strong>.</div>
+          <div class="fval"><span class="switch"></span><span class="fvtext">false</span></div>
+        </button>
+      </div>
+
+      <div class="regbox" id="regbox"></div>
+
+      <div class="derived">
+        <div class="arrow-down">↓</div>
+        <div class="state-big" id="stateBig"></div>
+      </div>
+
+      <table class="truth" id="truthTable">
+        <tr><th>registrySet</th><th>tokenElevated</th><th>state</th><th>meaning</th></tr>
+        <tr data-k="f-f"><td>false</td><td>false</td><td class="st" style="color:var(--grey)">disabled</td><td>Normal UAC — offer Enable</td></tr>
+        <tr data-k="f-t"><td>false</td><td>true</td><td class="st" style="color:var(--grey)">disabled</td><td>Harness launched elevated, but UAC still on</td></tr>
+        <tr data-k="t-f"><td>true</td><td>false</td><td class="st" style="color:var(--amber)">reboot_pending</td><td>Values written, reboot not yet applied</td></tr>
+        <tr data-k="t-t"><td>true</td><td>true</td><td class="st" style="color:var(--green)">active</td><td>UAC-off is live — every process elevated</td></tr>
       </table>
-      <div class="note">This dissolves the old special case: "auto-advance" was a private, <i>global</i> flag of the
-      suggestion mode. Now it's a per-instance property of every loop — a recipe or goal loop can run human-paced
-      (each turn lands in your textbox for approval), and the suggestion watcher can drive. The mode flips live
-      without resetting the loop. The old global toggle survives as the <i>default</i> mode for newly armed
-      suggestion instances (and flips armed ones, keeping its old meaning).</div>
-    </div>
-    <div class="card">
-      <h2>Cap &amp; disclosure follow the mode</h2>
-      <p class="sub" style="font-size:13.5px">The iteration cap bounds <b>drive-mode sends only</b> (suggest mode
-      never sends; suggestion instances default to uncapped). A pending prompt is prompt TEXT, so the ungated status
-      projection carries it <b>only while the operator gate is open</b> — gate closed means the engine is idle and
-      pends nothing, so the closed-gate disclosure surface is unchanged: kind, mode, phase, counts, stop reason
-      stay visible; text never leaks.</p>
-    </div>
-  </section>
 
-  <!-- ============ ③ SIM ============ -->
-  <section class="view" id="v-sim">
-    <div class="card">
-      <h2>You are the agent — the engine reacts</h2>
-      <p class="sub" style="font-size:13px">A 🎯 goal loop armed with cap 6. Flip the mode any time (it never resets
-      the loop). In <span class="m-suggest">suggest</span> the engine only pends; in
-      <span class="m-drive">drive</span> it sends.</p>
-      <div class="sim">
-        <div>
-          <div class="modes">
-            <button class="modebtn ms" id="m-suggest">✍ Suggest only</button>
-            <button class="modebtn md on" id="m-drive">▶ Drive autonomously</button>
-          </div>
-          <button class="sim-btn" id="b-work">Agent replies: keeps working (no markers)</button>
-          <button class="sim-btn" id="b-claim">Agent replies: "… everything is finished. LOOP_DONE"</button>
-          <button class="sim-btn" id="b-verified">Verification reply: "checked build+tests — GOAL_VERIFIED"</button>
-          <button class="sim-btn" id="b-gaps">Verification reply: "checks fail, X missing — continuing"</button>
-          <button class="sim-btn" id="b-human">Agent replies: "NEEDS_HUMAN: which DB do we target?"</button>
-          <button class="reset" id="b-reset">↺ re-arm the loop</button>
-        </div>
-        <div class="sim-state">
-          <div class="sim-row"><span>status</span><span class="v s-loop" id="s-status">looping</span></div>
-          <div class="sim-row"><span>mode</span><span class="v m-drive" id="s-mode">drive</span></div>
-          <div class="sim-row"><span>phase</span><span class="v" id="s-phase">work</span></div>
-          <div class="sim-row"><span>iterations (drive sends)</span><span class="v" id="s-iter">0 / 6</span></div>
-          <div class="pending" id="s-pending" style="display:none"><b>NEXT PROMPT, WAITING FOR YOU</b><div id="s-pending-t"></div></div>
-          <div class="sim-log" id="s-log"></div>
-        </div>
+      <div class="edge">
+        <strong>The edge case that matters:</strong> <code>tokenElevated=true</code> with
+        <code>registrySet=false</code> is still <strong>disabled</strong> — the Operator merely launched the
+        harness elevated under normal UAC. Token elevation only <em>promotes</em> the enabled reading to
+        Active; it never fabricates Active on its own. (Try it: registry off, token on.)
       </div>
     </div>
     <div class="card">
-      <h2>Why verification before "done"</h2>
-      <p class="sub" style="font-size:13.5px">A recipe's steps are externally checkable, so its <code>LOOP_DONE</code>
-      is trusted. A goal is a claim about the world — so the goal kind turns the done-claim into a verification turn
-      (re-check the ACTUAL repo state: build, tests, app) and only the distinct <code>GOAL_VERIFIED</code> token in
-      that turn's reply ends the loop. A failed verification feeds what's missing straight into the next work turn.</p>
+      <h2>Why the token is the reboot proxy</h2>
+      <p>Writing <code>EnableLUA=0</code> doesn't take effect until reboot. There's no clean "reboot pending"
+        flag in Windows — but the harness's own token tells the truth: <strong>after</strong> the reboot,
+        every process of an admin account gets the full token, so the harness reads its own principal and
+        finds <code>Administrator</code>. Before the reboot the account still hands out the filtered token,
+        so the read is <code>false</code>. Registry says "requested"; token says "applied".</p>
+      <p>This box (as of 2026-07-27) had the values written by a prior agent — so it should read
+        <strong>reboot_pending</strong> or <strong>active</strong> depending on whether it restarted since.</p>
     </div>
-  </section>
+  </div>
 
-  <!-- ============ ④ DOCK & API ============ -->
-  <section class="view" id="v-dock">
+  <!-- ================= VIEW 2 ================= -->
+  <div class="view" id="v2">
     <div class="card">
-      <h2>The dock loop section speaks the model</h2>
-      <table>
-        <tr><th>Piece</th><th>What it says / does</th></tr>
-        <tr><td>collapsed header</td><td><code>⟳ 📋 Recipe loop · armed · Suggest only · 3/10</code> — type, armed
-          state, mode, progress at a glance; or the terminal state (<code>🎯 Goal loop · stopped</code>); or
-          <code>Loop: none</code>.</td></tr>
-        <tr><td>armed row</td><td>the one instance's live status + the single <b>■ Disarm</b>.</td></tr>
-        <tr><td>pending block</td><td>suggest mode's decided next prompt + <b>Put in chat box</b> → pre-fills this
-          agent's composer (nothing sent until you send).</td></tr>
-        <tr><td>type picker</td><td>💡 / 📋 / 🎯 pills + one-line description; params per type (recipe pills + cap,
-          goal textarea + cap).</td></tr>
-        <tr><td>mode toggle</td><td><b>Suggest only</b> / <b>Drive autonomously</b> with a plain-words hint — flips a
-          live instance in place, or rides along on the arm.</td></tr>
-        <tr><td>Show prompts</td><td>byte-identical previews from the operator-gated detail read; gate closed → the
-          explicit hint, never silence.</td></tr>
-        <tr><td>replace notice</td><td>"Arming this replaces the armed …" — the one-slot rule stated before the
-          click.</td></tr>
-      </table>
-    </div>
-    <div class="card">
-      <h2>API — one endpoint, one record shape</h2>
-      <table>
-        <tr><th>request</th><th>meaning</th></tr>
-        <tr><td>POST /api/autopilot/loop · start</td><td><code>kind</code> = suggestion | goal (+<code>goal</code>) |
-          recipe (<code>recipeId</code> or raw <code>prompt</code>), common <code>mode</code> + cap. Replaces the
-          agent's slot.</td></tr>
-        <tr><td>POST /api/autopilot/loop · mode</td><td>flip a live instance's suggest/drive without resetting it.</td></tr>
-        <tr><td>POST /api/autopilot/loop · stop / disarm</td><td>the same single clear — one slot, one disarm.</td></tr>
-        <tr><td>GET /api/autopilot/loops <span class="pill">ungated</span></td><td>unified records: kind · mode · phase ·
-          status · counts · stop reason (+ <code>pendingPrompt</code> only while the gate is open). No more parallel
-          suggestion fields.</td></tr>
-        <tr><td>GET /api/autopilot/loops/detail <span class="pill">gated</span></td><td>full prompt text: stored
-          work/verify prompts, goal text, recipe bodies, goal templates.</td></tr>
-        <tr><td>POST /api/autopilot/config</td><td>global engine settings (kill switch, threshold); legacy
-          <code>armed:true</code> still works — it arms a suggestion instance.</td></tr>
-      </table>
-      <div class="note">Verified end-to-end on isolated harnesses: 27 backend checks
-      (<code>verify-loop-interface-api.mjs</code>) + a Playwright pass over the dock control
-      (<code>verify-loop-interface-ui.mjs</code>) including the pending → composer pre-fill.</div>
-    </div>
-  </section>
+      <h2>POST /api/always-admin/enable — one write, at most one consent</h2>
+      <p>The Enable button's whole contract: write three DWORDs, prompt <strong>at most once</strong>,
+        never reboot. Pick a scenario and step through.</p>
+      <div class="scenario-lbl">Scenario:</div>
+      <div class="branchpick">
+        <button class="btn ghost spick on" data-sc="direct">Harness already elevated</button>
+        <button class="btn ghost spick" data-sc="consent">Not elevated — Operator grants UAC</button>
+        <button class="btn ghost spick" data-sc="declined">Not elevated — Operator declines UAC</button>
+      </div>
+      <div class="flowctl">
+        <button class="btn" id="stepBtn">Step ▸</button>
+        <button class="btn ghost" id="resetBtn">Reset</button>
+      </div>
 
-  <!-- ============ ⑤ NOTES / SURPRISES ============ -->
-  <section class="view" id="v-notes">
-    <div class="card">
-      <h2>Surprise 1 — a phantom claude.exe was co-driving the repo</h2>
-      <p class="sub" style="font-size:13.5px">Mid-turn, files I hadn't touched kept changing. Cause: a
-      <b>second, orphaned</b> <code>claude.exe</code> — spawned by a since-dead harness instance — was still running
-      the user's <b>previous</b> turn with <code>--resume &lt;this same session id&gt;</code>. Two runs interleaved
-      into <i>one</i> transcript and edited the <i>same</i> worktree; it even wrote its own variants of files I was
-      writing. Detached runs deliberately outlive disconnects, so when the parent harness dies the run is orphaned
-      with no API to stop it.</p>
-      <div class="phantom">
-        <div class="proc live">
-          <div class="pt">🟢 this run</div>
-          <div class="pd">alive · owned by the current harness</div>
+      <div class="flow" id="flow">
+        <div class="fstep" data-s="0">
+          <div class="num">1</div>
+          <div><div class="ft">Operator taps Enable (state = disabled)</div>
+            <div class="fd">Tile posts <code>apiPost('/always-admin/enable')</code>; button disables with a spinner. Enable is only rendered in the <code>disabled</code> state.</div></div>
         </div>
-        <div class="proc dead">
-          <div class="pt">🩶 orphan · claude.exe PID&nbsp;8048</div>
-          <div class="pd">parent harness dead · still <code>--resume</code> of the same session</div>
+        <div class="fstep" data-s="1">
+          <div class="num">2</div>
+          <div><div class="ft">Try the direct write first</div>
+            <div class="fd"><code>Registry.LocalMachine.OpenSubKey(path, writable: true)</code> → set
+              <code>EnableLUA=0</code>, <code>ConsentPromptBehaviorAdmin=0</code>, <code>PromptOnSecureDesktop=0</code>.
+              If the harness process is already elevated this just works — <strong>zero prompts</strong>.</div></div>
         </div>
-        <div class="target" id="ph-target">
-          <div class="pt">📄 shared worktree + transcript.jsonl</div>
-          <div class="pd">both processes append &amp; edit here → interleaved edits</div>
+        <div class="fstep" data-s="2">
+          <div class="num">3</div>
+          <div><div class="ft">Denied? Elevate exactly once</div>
+            <div class="fd">On <code>UnauthorizedAccessException</code>: shell-execute one child with
+              <code>Verb = "runas"</code> that performs <em>all three</em> writes in a single elevated action
+              (batched <code>reg add</code> / <code>reg import</code>) — one UAC consent, not three.</div></div>
+        </div>
+        <div class="fstep" data-s="3">
+          <div class="num">4</div>
+          <div><div class="ft">UAC consent appears on the HOST desktop</div>
+            <div class="fd">Only the <strong>Operator</strong> at the PC can answer it — the End User on the
+              phone cannot. Cancelled consent = <code>Win32Exception 1223</code>, mapped to a typed failure.</div></div>
+        </div>
+        <div class="fstep" data-s="4">
+          <div class="num">5</div>
+          <div><div class="ft">Return a fresh read — never reboot</div>
+            <div class="fd">Response: <code>{ ok, method: "direct"|"elevated", state }</code> where
+              <code>state</code> is re-read after the write. Success lands on
+              <code>reboot_pending</code> — the token can't flip until the Operator restarts. Idempotent:
+              re-writing set values is a no-op success.</div></div>
         </div>
       </div>
-      <button class="sim-btn" id="ph-kill" style="margin-top:12px">▶ detect &amp; kill the orphan</button>
-      <pre id="ph-out" style="display:none"></pre>
-      <div class="note">Product lesson, not just an incident: an orphaned detached run has <b>no owner and no stop
-      button</b>. If worktree files change that you didn't touch, enumerate <code>claude.exe</code>, find another
-      <code>--resume</code> of your session whose parent PID is dead, kill it, then reconcile its half-done edits
-      (they may be good — read before reverting). Saved to memory as <i>orphaned-run-double-drive</i>.</div>
-    </div>
 
-    <div class="card">
-      <h2>Surprise 2 — the tests caught a real engine bug: re-arm was ignored</h2>
-      <p class="sub" style="font-size:13.5px">The per-repo <b>dedup guard</b> (the watermark that stops the engine
-      acting twice on the same agent message) used to <b>survive re-arming</b>. So a freshly armed loop would look at
-      the agent's current reply, decide "already handled that message," and sit idle for a whole turn. Fix: every
-      instance carries an <code>ArmedAt</code> generation stamp; on a new arm the engine <b>resets its guards</b>, so
-      the loop acts on the current message immediately.</p>
-      <p class="sub" style="font-size:13px">Toggle the fix and press <b>Arm</b> on a repo whose last message is
-      already seen:</p>
-      <div class="modes" style="max-width:360px">
-        <button class="modebtn on" id="fx-off">🐞 old: guard persists</button>
-        <button class="modebtn" id="fx-on">✅ new: ArmedAt resets guard</button>
+      <div class="uacprompt" id="uacBox">
+        <div class="uachead">⚠ User Account Control — host desktop</div>
+        <div class="uacbody">Do you want to allow this app to make changes to your device?<br>
+          <em>reg.exe — writes 3 values under Policies\System</em></div>
+        <button class="btn" id="uacYes">Yes</button>
+        <button class="btn ghost" id="uacNo">No</button>
       </div>
-      <button class="sim-btn" id="fx-arm" style="max-width:360px">▶ Arm loop (last msg already in watermark)</button>
-      <div class="sim-state" id="fx-state" style="margin-top:10px;max-width:360px">
-        <div class="sim-row"><span>seen watermark</span><span class="v" id="fx-seen">msg #42</span></div>
-        <div class="sim-row"><span>current message</span><span class="v" id="fx-cur">msg #42</span></div>
-        <div class="sim-row"><span>first action after arm</span><span class="v" id="fx-act" style="color:var(--mut)">—</span></div>
-      </div>
-    </div>
 
-    <div class="card">
-      <h2>Judgment calls baked in</h2>
-      <ul>
-        <li class="k" style="font-weight:400"><b class="k">stop = disarm.</b> One slot, one clear action — no separate
-          "stop the loop" vs "unarm the agent".</li>
-        <li class="k" style="font-weight:400"><b class="k">suggestion defaults:</b> new suggestion instances arm in
-          <span style="color:var(--suggest)">suggest</span> mode and uncapped.</li>
-        <li class="k" style="font-weight:400"><b class="k">the old global auto-advance toggle lives on</b> as the
-          <i>default mode</i> for newly armed suggestion instances — and flips armed ones, keeping its old meaning.</li>
-        <li class="k" style="font-weight:400"><b class="k">nothing committed yet</b> — awaiting the preview-on-live
-          ritual before deploy.</li>
-      </ul>
+      <div class="verdict" id="verdictBox"></div>
     </div>
-  </section>
+    <div class="card">
+      <h2>What Enable deliberately does NOT do</h2>
+      <p><strong>No reboot.</strong> Auto-restarting the box from a phone tap is too destructive; the tile
+        shows "restart required" and the Operator reboots when ready.</p>
+      <p><strong>No Disable button</strong> (this change). Rollback = set <code>EnableLUA=1</code> + reboot —
+        documented on the tile, not automated, so UAC can't be re-armed by an accidental tap. A future
+        change can add it.</p>
+      <p><strong>No three separate elevations.</strong> Batching the writes into one elevated child is why
+        there's one consent instead of three.</p>
+    </div>
+  </div>
+
+  <!-- ================= VIEW 3 ================= -->
+  <div class="view" id="v3">
+    <div class="card">
+      <h2>Where it lives: the header STATUS strip</h2>
+      <p>The collapsible strip under the app header (<code>HeaderStatusStrip.jsx</code>) already hosts three
+        self-contained chips. <code>AdminStatusTile</code> becomes the fourth. Pick a state to preview it.</p>
+      <div class="statepick" id="tileStates">
+        <button class="spick" data-st="active">active</button>
+        <button class="spick on" data-st="pending">reboot_pending</button>
+        <button class="spick" data-st="disabled">disabled</button>
+        <button class="spick" data-st="unsupported">unsupported</button>
+      </div>
+      <div class="strip-mock">
+        <div class="strip-title">Status ⌄ &nbsp;(collapsed by default — chips unmount &amp; stop polling)</div>
+        <div class="strip-row">
+          <div class="chip faded"><span class="ckind">Score</span>Scoreboard</div>
+          <div class="chip faded"><span class="ckind">GH</span>Accounts</div>
+          <div class="chip faded"><span class="ckind">Host</span>14:07:31 <span style="color:var(--soft)">UTC+2</span></div>
+          <div class="chip admtile" id="admTile"></div>
+        </div>
+      </div>
+      <p class="hint">The caveat + rollback line is <strong>always visible</strong> on the tile in every
+        supported state — that's a spec requirement, not decoration. Try the Enable button in the
+        <code>disabled</code> preview.</p>
+
+      <div class="gates">
+        <div class="gate">
+          <div class="gname">Feature-gated</div>
+          <div class="gd"><code>useFeature('adminStatus')</code> — declared <code>'advanced'</code> in
+            <code>UiModeContext.jsx</code>'s FEATURES map, per the "new features default to Advanced" convention.
+            End Users in Basic mode never see it.</div>
+        </div>
+        <div class="gate">
+          <div class="gname">Self-contained poller</div>
+          <div class="gd">Own 5&nbsp;s <code>apiGet('/always-admin/status')</code> loop — the same idiom as
+            HostClock / AccountChips. Strip collapsed ⇒ chip unmounted ⇒ zero API traffic.</div>
+        </div>
+        <div class="gate">
+          <div class="gname">Both locales</div>
+          <div class="gd">All strings via i18n keys in <code>en.json</code> + <code>tr.json</code> (flat dotted
+            keys, e.g. <code>adminstatus.active</code>), matching the existing catalog style.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= VIEW 4 ================= -->
+  <div class="view" id="v4">
+    <div class="card">
+      <h2>Nothing novel: every piece copies a proven pattern</h2>
+      <p>Before implementing, the codebase was scouted for the idioms this feature must match. Each new file
+        (green) is modeled on an existing one (blue).</p>
+      <div class="mapgrid">
+        <div class="maphead">Existing pattern</div><div></div><div class="maphead right">New file</div>
+
+        <div class="mapcell"><div class="mn">Controllers/HostTimeController.cs</div>
+          <div class="md">Probe idiom: attribute-routed, <code>_logger.CountRequest()</code>, always 200,
+            typed record, no state change on GET.</div></div>
+        <div class="maparrow">→</div>
+        <div class="mapcell new"><div class="mn">Controllers/AlwaysAdminController.cs</div>
+          <div class="md"><code>GET /api/always-admin/status</code> +
+            <code>POST /api/always-admin/enable</code>. Auto-discovered by <code>AddControllers()</code> —
+            drop-in, no EmbeddedApi wiring needed.</div></div>
+
+        <div class="mapcell"><div class="mn">dashboard/HostClock.jsx + hostClock.css</div>
+          <div class="md">Self-contained chip: own poller, stale-after-3-failures dimming, collapse key,
+            <code>aliveRef</code> cleanup.</div></div>
+        <div class="maparrow">→</div>
+        <div class="mapcell new"><div class="mn">dashboard/AdminStatusTile.jsx + adminStatusTile.css</div>
+          <div class="md">Same shape; renders by <code>state</code>, Enable button only when
+            <code>disabled</code>, caveat always shown.</div></div>
+
+        <div class="mapcell"><div class="mn">header/HeaderStatusStrip.jsx</div>
+          <div class="md">Mount point — <code>header-strip__row</code> already conditionally renders each
+            chip behind its own feature flag.</div></div>
+        <div class="maparrow">→</div>
+        <div class="mapcell new"><div class="mn">+ one line: {adminStatusOn &amp;&amp; &lt;AdminStatusTile /&gt;}</div>
+          <div class="md">Alongside Scoreboard, AccountChips, HostClock.</div></div>
+
+        <div class="mapcell"><div class="mn">context/UiModeContext.jsx — FEATURES</div>
+          <div class="md">Capability map; every feature is one line, moving between modes is a one-line change.</div></div>
+        <div class="maparrow">→</div>
+        <div class="mapcell new"><div class="mn">adminStatus: 'advanced'</div>
+          <div class="md">With the openspec change id in the trailing comment, like its neighbors.</div></div>
+
+        <div class="mapcell"><div class="mn">Services/Accounts/ProcessProbe.cs</div>
+          <div class="md">Bounded child-process runs. Note the contrast: probes use
+            <code>UseShellExecute=false</code>; the elevation fallback is the one place that
+            <em>must</em> use <code>UseShellExecute=true</code> — <code>Verb="runas"</code> only works
+            through ShellExecute.</div></div>
+        <div class="maparrow">→</div>
+        <div class="mapcell new"><div class="mn">elevated-write helper in the controller</div>
+          <div class="md">Single <code>runas</code> child batching all three <code>reg add</code> writes;
+            maps exit code / 1223 to typed results.</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Why this feature exists at all</h2>
+      <p>UAC hands even admin accounts a <strong>filtered token</strong>: every process the harness spawns
+        (Claude Code, git, deploy scripts) starts non-elevated, so admin-needing work either throws a UAC
+        prompt the phone user can't answer or fails silently. The dead-man's-switch rollback already hit
+        this in practice. UAC-off (<code>EnableLUA=0</code> + reboot) is the machine-wide cure — this tile
+        makes that state <em>visible</em> and <em>settable</em> instead of invisible.</p>
+      <p><strong>The known cost:</strong> with UAC off, Windows Store / packaged apps (e.g. Windows Terminal)
+        may fail to launch. That's why the caveat + rollback (<code>EnableLUA=1</code> + reboot) are pinned
+        to the tile itself.</p>
+    </div>
+  </div>
 </div>
 
 <script>
-  document.querySelectorAll('.tab').forEach(function (b) {
-    b.addEventListener('click', function () {
-      document.querySelectorAll('.tab').forEach(function (x) { x.classList.remove('on'); });
-      document.querySelectorAll('.view').forEach(function (x) { x.classList.remove('on'); });
-      b.classList.add('on');
-      document.getElementById('v-' + b.dataset.v).classList.add('on');
+(function () {
+  'use strict';
+
+  /* ---------- tabs ---------- */
+  var tabs = document.querySelectorAll('.tab');
+  tabs.forEach(function (t) {
+    t.addEventListener('click', function () {
+      tabs.forEach(function (x) { x.classList.remove('on'); });
+      document.querySelectorAll('.view').forEach(function (v) { v.classList.remove('on'); });
+      t.classList.add('on');
+      document.getElementById(t.dataset.v).classList.add('on');
     });
   });
 
-  // 🎯 goal-loop simulator — mirrors GoalLoop.Decide + the engine's mode dispatch.
-  var CAP = 6;
-  var st = { status:'looping', mode:'drive', phase:'work', iter:0, pending:null };
-  var E = function (id) { return document.getElementById(id); };
-  function log(m){ var d=document.createElement('div'); d.textContent=m; E('s-log').prepend(d); }
-  function render(){
-    E('s-status').textContent = st.status;
-    E('s-status').className = 'v ' + ({looping:'s-loop','done (verified)':'s-done',escalated:'s-esc',capped:'s-cap'}[st.status]||'s-stop');
-    E('s-mode').textContent = st.mode;
-    E('s-mode').className = 'v ' + (st.mode==='drive'?'m-drive':'m-suggest');
-    E('s-phase').textContent = st.phase;
-    E('s-iter').textContent = st.iter + ' / ' + CAP;
-    E('s-pending').style.display = st.pending ? '' : 'none';
-    E('s-pending-t').textContent = st.pending || '';
-    E('m-drive').classList.toggle('on', st.mode==='drive');
-    E('m-suggest').classList.toggle('on', st.mode==='suggest');
-    var active = st.status==='looping';
-    E('b-work').disabled = !active || st.phase!=='work';
-    E('b-claim').disabled = !active || st.phase!=='work';
-    E('b-verified').disabled = !active || st.phase!=='verify';
-    E('b-gaps').disabled = !active || st.phase!=='verify';
-    E('b-human').disabled = !active;
+  /* ---------- view 1: state machine ---------- */
+  var reg = true, tok = false; // this box's likely state: values written, reboot pending
+  var factReg = document.getElementById('factReg');
+  var factTok = document.getElementById('factTok');
+  var stateBig = document.getElementById('stateBig');
+  var regbox = document.getElementById('regbox');
+  var truth = document.getElementById('truthTable');
+
+  function renderFacts() {
+    factReg.className = 'fact ' + reg;
+    factTok.className = 'fact ' + tok;
+    factReg.querySelector('.fvtext').textContent = reg;
+    factTok.querySelector('.fvtext').textContent = tok;
+
+    var v = reg
+      ? '<span class="v">0</span>'
+      : '<span class="v unset">1 / absent</span>';
+    regbox.innerHTML =
+      'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System<br>' +
+      '&nbsp;&nbsp;<span class="k">EnableLUA</span> = ' + v + '<br>' +
+      '&nbsp;&nbsp;<span class="k">ConsentPromptBehaviorAdmin</span> = ' + v + '<br>' +
+      '&nbsp;&nbsp;<span class="k">PromptOnSecureDesktop</span> = ' + v;
+
+    var st, cls, desc;
+    if (!reg) { st = 'disabled'; cls = 'st-disabled'; desc = 'Normal UAC — tile is grey and offers Enable'; }
+    else if (!tok) { st = 'reboot_pending'; cls = 'st-pending'; desc = 'Written but not applied — amber "restart required"'; }
+    else { st = 'active'; cls = 'st-active'; desc = 'UAC-off live — green, every process runs elevated'; }
+    stateBig.className = 'state-big ' + cls;
+    stateBig.innerHTML = st + '<span class="sdesc">' + desc + '</span>';
+
+    var key = (reg ? 't' : 'f') + '-' + (tok ? 't' : 'f');
+    truth.querySelectorAll('tr[data-k]').forEach(function (r) {
+      r.classList.toggle('hilite', r.dataset.k === key);
+    });
   }
-  // The engine executing a Propose under the current mode.
-  function propose(what, enterPhase){
-    if (st.mode==='suggest'){
-      st.pending = what;
-      if (enterPhase) st.phase = enterPhase;
-      log('engine PENDS the ' + what + ' — in your textbox, you send it');
+  factReg.addEventListener('click', function () { reg = !reg; renderFacts(); });
+  factTok.addEventListener('click', function () { tok = !tok; renderFacts(); });
+  renderFacts();
+
+  /* ---------- view 2: enable flow ---------- */
+  var scenario = 'direct';
+  var stepIdx = -1;
+  var steps = document.querySelectorAll('#flow .fstep');
+  var stepBtn = document.getElementById('stepBtn');
+  var uacBox = document.getElementById('uacBox');
+  var verdictBox = document.getElementById('verdictBox');
+  var awaitingUac = false;
+
+  // per-scenario: which step indices run (others are skipped)
+  var paths = {
+    direct:   [0, 1, 4],
+    consent:  [0, 1, 2, 3, 4],
+    declined: [0, 1, 2, 3]
+  };
+
+  document.querySelectorAll('[data-sc]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('[data-sc]').forEach(function (x) { x.classList.remove('on'); });
+      b.classList.add('on');
+      scenario = b.dataset.sc;
+      resetFlow();
+    });
+  });
+
+  function resetFlow() {
+    stepIdx = -1; awaitingUac = false;
+    steps.forEach(function (s) { s.className = 'fstep'; });
+    uacBox.classList.remove('show');
+    verdictBox.className = 'verdict';
+    stepBtn.disabled = false;
+  }
+
+  function showVerdict(ok, title, body) {
+    verdictBox.className = 'verdict show ' + (ok ? 'ok' : 'fail');
+    verdictBox.innerHTML = '<span class="vt">' + title + '</span> — ' + body;
+    stepBtn.disabled = true;
+  }
+
+  function advance() {
+    if (awaitingUac) return;
+    var path = paths[scenario];
+    if (stepIdx >= 0) steps[path[stepIdx]].className = 'fstep done';
+    stepIdx++;
+    if (stepIdx >= path.length) { stepBtn.disabled = true; return; }
+    var s = path[stepIdx];
+    steps.forEach(function (el, i) {
+      if (path.indexOf(i) === -1) el.className = 'fstep skipped';
+    });
+    steps[s].className = 'fstep now';
+
+    if (s === 3) {
+      uacBox.classList.add('show');
+      awaitingUac = true;
       return;
     }
-    if (st.iter >= CAP){ st.status='capped'; st.pending=null; log('cap ' + st.iter + '/' + CAP + ' → capped'); return; }
-    st.iter++; st.pending=null;
-    if (enterPhase) st.phase = enterPhase;
-    log('engine SENDS the ' + what + ' (iteration ' + st.iter + '/' + CAP + ', audited)');
+    if (s === 4) {
+      var method = scenario === 'direct' ? 'direct' : 'elevated';
+      showVerdict(true, '200 OK',
+        '<code>{ ok: true, method: "' + method + '", state: "reboot_pending" }</code> — tile re-polls and turns amber: <em>Enabled — restart required</em>.' +
+        (scenario === 'direct' ? ' Zero prompts were shown.' : ' Exactly one consent was shown.'));
+    }
   }
-  E('m-drive').onclick = function(){ if(st.mode!=='drive'){ st.mode='drive'; log('mode → drive (counters kept)'); render(); } };
-  E('m-suggest').onclick = function(){ if(st.mode!=='suggest'){ st.mode='suggest'; log('mode → suggest (counters kept)'); render(); } };
-  E('b-work').onclick = function(){ log('agent: made progress, no markers'); propose('work prompt'); render(); };
-  E('b-claim').onclick = function(){
-    log('agent: … LOOP_DONE (done-claim, not trusted)');
-    propose('VERIFICATION prompt', 'verify'); render();
-  };
-  E('b-verified').onclick = function(){
-    log('agent: checked real state — GOAL_VERIFIED');
-    st.status='done (verified)'; st.pending=null; log('Stop(done, verified) ✓'); render();
-  };
-  E('b-gaps').onclick = function(){
-    log('agent: verification found gaps');
-    propose('work prompt', 'work'); render();
-  };
-  E('b-human').onclick = function(){
-    log('agent: NEEDS_HUMAN: which DB do we target?');
-    st.status='escalated'; st.pending=null; log('Stop(escalate, needs-human) — question shown on the dock'); render();
-  };
-  E('b-reset').onclick = function(){
-    st = { status:'looping', mode:st.mode, phase:'work', iter:0, pending:null };
-    E('s-log').innerHTML=''; log('re-armed (cap ' + CAP + ', mode ' + st.mode + ')'); render();
-  };
-  log('armed (cap ' + CAP + ', mode drive)'); render();
 
-  // ⑤ phantom co-driver — detect & kill
-  E('ph-kill').onclick = function(){
-    document.querySelector('.proc.dead').classList.add('killed');
-    E('ph-target').classList.add('safe');
-    E('ph-target').querySelector('.pd').textContent = 'single owner again → edits reconciled';
-    var out = E('ph-out'); out.style.display='';
-    out.textContent =
-      '# enumerate every claude.exe, show its parent + command line\n' +
-      'wmic process where "name=\'claude.exe\'" get ProcessId,ParentProcessId,CommandLine /format:list\n' +
-      '\n  ProcessId=8048  ParentProcessId=<dead harness>  --resume <THIS session id>   ← the orphan\n' +
-      '\n# parent is gone → no owner, no stop API. kill it, then reconcile its edits.\n' +
-      'taskkill //PID 8048 //F';
-    E('ph-kill').disabled = true;
-  };
+  document.getElementById('uacYes').addEventListener('click', function () {
+    if (!awaitingUac) return;
+    awaitingUac = false;
+    uacBox.classList.remove('show');
+    if (scenario === 'declined') {
+      // honor the actual click: granting consent moves us onto the consent path
+      scenario = 'consent';
+      document.querySelectorAll('[data-sc]').forEach(function (x) {
+        x.classList.toggle('on', x.dataset.sc === 'consent');
+      });
+    }
+    advance();
+  });
+  document.getElementById('uacNo').addEventListener('click', function () {
+    if (!awaitingUac) return;
+    awaitingUac = false;
+    uacBox.classList.remove('show');
+    steps[3].className = 'fstep done';
+    showVerdict(false, 'Win32Exception 1223',
+      'Consent declined. No registry value changed; state stays <code>disabled</code>; the tile shows a ' +
+      '"consent declined — try again" hint. Nothing to roll back.');
+  });
 
-  // ⑤ re-arm dedup bug — ArmedAt generation stamp
-  var fxFixed = false;
-  E('fx-off').onclick = function(){ fxFixed=false; E('fx-off').classList.add('on'); E('fx-on').classList.remove('on'); resetFx(); };
-  E('fx-on').onclick  = function(){ fxFixed=true;  E('fx-on').classList.add('on'); E('fx-off').classList.remove('on'); resetFx(); };
-  function resetFx(){ E('fx-act').textContent='—'; E('fx-act').style.color='var(--mut)'; }
-  E('fx-arm').onclick = function(){
-    var a = E('fx-act');
-    if (fxFixed){
-      a.textContent = 'ArmedAt bumped → guard reset → acts on msg #42 now';
-      a.style.color = 'var(--goal)';
-    } else {
-      a.textContent = 'guard says "#42 already handled" → idle a whole turn 🐞';
-      a.style.color = 'var(--bad)';
+  stepBtn.addEventListener('click', advance);
+  document.getElementById('resetBtn').addEventListener('click', resetFlow);
+  resetFlow();
+
+  /* ---------- view 3: tile mockup ---------- */
+  var admTile = document.getElementById('admTile');
+  var tileDefs = {
+    active: {
+      cls: 's-active', dot: 'var(--green)',
+      label: 'Always-admin <b style="color:var(--green)">active</b>',
+      det: 'Caveat: Store/packaged apps may not launch. Rollback: EnableLUA=1 + reboot.', btn: false
+    },
+    pending: {
+      cls: 's-pending', dot: 'var(--amber)',
+      label: 'Enabled — <b style="color:var(--amber)">restart required</b>',
+      det: 'Caveat: Store/packaged apps may not launch. Rollback: EnableLUA=1 + reboot.', btn: false
+    },
+    disabled: {
+      cls: 's-disabled', dot: 'var(--grey)',
+      label: 'UAC on <span style="color:var(--soft)">(admin filtered)</span>',
+      det: 'Caveat: Store/packaged apps may not launch. Rollback: EnableLUA=1 + reboot.', btn: true
+    },
+    unsupported: {
+      cls: 's-unsupported', dot: 'var(--grey)',
+      label: 'Unsupported <span style="color:var(--soft)">(Windows only)</span>',
+      det: null, btn: false
     }
   };
+  function renderTile(key) {
+    var d = tileDefs[key];
+    admTile.className = 'chip admtile ' + d.cls;
+    var h = '<span class="ckind">Admin</span><span class="cdot" style="background:' + d.dot + '"></span>' +
+            '<span class="clabel">' + d.label + '</span>';
+    if (d.btn) h += '<br><button class="enbtn" type="button">Enable</button>';
+    if (d.det) h += '<span class="cdet">' + d.det + '</span>';
+    admTile.innerHTML = h;
+    var en = admTile.querySelector('.enbtn');
+    if (en) en.addEventListener('click', function () {
+      en.textContent = 'Writing…'; en.disabled = true;
+      setTimeout(function () {
+        renderTile('pending');
+        document.querySelectorAll('#tileStates .spick').forEach(function (x) {
+          x.classList.toggle('on', x.dataset.st === 'pending');
+        });
+      }, 700);
+    });
+  }
+  document.querySelectorAll('#tileStates .spick').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('#tileStates .spick').forEach(function (x) { x.classList.remove('on'); });
+      b.classList.add('on');
+      renderTile(b.dataset.st);
+    });
+  });
+  renderTile('pending');
+})();
 </script>
 </body>
 </html>

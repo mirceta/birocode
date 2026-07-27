@@ -1,0 +1,133 @@
+/* Always-admin status tile (openspec add-always-admin-status): reports the host
+   box's UAC-off state beside the Scoreboard + host clock. Same chip idiom as
+   hostClock.css — width-only, collapsible, wraps via the parent row's
+   flex-wrap. */
+.astile {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius, 12px);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.astile--collapsed {
+  max-width: 240px;
+}
+
+.astile__hd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.astile__kind {
+  flex: none;
+  padding: 0 5px;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-soft);
+}
+
+.astile__dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--color-text-soft);
+}
+
+.astile__dot--ok {
+  background: #2e7d32;
+}
+.astile__dot--pending {
+  background: #b7791f;
+}
+.astile__dot--off {
+  background: var(--color-text-soft);
+}
+.astile__dot--loading {
+  background: var(--color-text-soft);
+}
+
+.astile__label {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.astile__chevron {
+  flex: none;
+  margin-left: auto;
+  padding-left: 6px;
+  color: var(--color-text-soft);
+  font-size: 11px;
+  transition: transform 0.15s ease;
+}
+
+.astile--collapsed .astile__chevron {
+  transform: rotate(-90deg);
+}
+
+.astile__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+  font-size: 12px;
+}
+
+.astile__enable {
+  align-self: flex-start;
+  padding: 5px 12px;
+  border: 1px solid var(--color-accent, #2e7d32);
+  border-radius: 7px;
+  background: var(--color-accent, #2e7d32);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.astile__enable:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.astile__enable:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.astile__error {
+  color: #c62828;
+  font-weight: 600;
+}
+
+.astile__note {
+  color: var(--color-text);
+  line-height: 1.4;
+}
+
+.astile__note--soft {
+  color: var(--color-text-soft);
+}
