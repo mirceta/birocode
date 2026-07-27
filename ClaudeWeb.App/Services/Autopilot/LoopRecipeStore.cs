@@ -58,6 +58,9 @@ public class LoopRecipeStore
         // Seed ids that have EVER been planted. A deleted or edited seed id stays
         // here, so reseeding can't overwrite or resurrect it.
         public List<string> SeededIds { get; set; } = new();
+        // Seed ids the one-time honest-name migration has already visited (additive;
+        // old files load with an empty list and migrate once on next start).
+        public List<string> MigratedIds { get; set; } = new();
     }
 
     /// <summary>The whole recipe set (insertion order).</summary>
@@ -119,14 +122,15 @@ public class LoopRecipeStore
         }
     }
 
-    // The built-in recipes codifying the feature-delivery ritual. Stable ids so the
-    // seeded-once guard can recognize them across restarts. Exact wording is a draft
-    // to be tuned from the first real looped runs (openspec: adopt-autopilot-loops 6.4).
+    // The built-in recipes codifying the feature-delivery ritual, named for what they
+    // drive (openspec: unify-loop-types — a recipe loop drives a ritual, so its name
+    // must say which one). Stable ids so the seeded-once guard can recognize them
+    // across restarts. Exact wording is a draft to be tuned from real looped runs.
     private static IEnumerable<Recipe> SeedRecipes() => new[]
     {
         new Recipe(
             "seed-drive-feature",
-            "Drive the feature",
+            "Drive the OpenSpec change",
             "Continue driving the current OpenSpec change: pick the next unchecked task in its "
             + "tasks.md, implement it, verify it actually works, and mark it complete. Commit "
             + "finished work with a clear message before moving on. Stay on the feature branch.\n\n"
@@ -134,7 +138,7 @@ public class LoopRecipeStore
             "LOOP_DONE", 10),
         new Recipe(
             "seed-finish-ship",
-            "Finish and ship",
+            "Finish and ship the change",
             "Finish and ship the current work: verify the build and tests pass, update the docs "
             + "and the understanding-app so they match what is actually built, commit everything "
             + "on the feature branch, and open a pull request.\n\n"
@@ -142,21 +146,56 @@ public class LoopRecipeStore
             "LOOP_DONE", 5),
     };
 
+    // The pre-rename seed versions, kept only so Migrate() can recognize a planted
+    // seed the user never touched. Prompts were unchanged by the rename, so the old
+    // name plus the CURRENT prompt is the byte-identical fingerprint.
+    private static readonly IReadOnlyDictionary<string, string> OldSeedNames =
+        new Dictionary<string, string>
+        {
+            ["seed-drive-feature"] = "Drive the feature",
+            ["seed-finish-ship"] = "Finish and ship",
+        };
+
     private void Seed()
     {
         lock (_gate)
         {
-            var planted = false;
+            var changed = false;
             foreach (var seed in SeedRecipes())
             {
-                if (_store.SeededIds.Contains(seed.Id)) continue;
-                _store.Recipes.Add(seed);
-                _store.SeededIds.Add(seed.Id);
-                planted = true;
-                _logger.Info($"[LOOP-RECIPES] Seeded \"{seed.Name}\"");
+                if (!_store.SeededIds.Contains(seed.Id))
+                {
+                    _store.Recipes.Add(seed);
+                    _store.SeededIds.Add(seed.Id);
+                    changed = true;
+                    _logger.Info($"[LOOP-RECIPES] Seeded \"{seed.Name}\"");
+                    continue;
+                }
+                changed |= Migrate(seed);
             }
-            if (planted) Save();
+            if (changed) Save();
         }
+    }
+
+    // One-time honest-name migration (openspec: unify-loop-types, design D6): a
+    // planted seed still byte-identical to the OLD seed (old name + unchanged prompt)
+    // gets the new name; anything the user edited or deleted is left alone, and each
+    // id migrates at most once so a later user rename can never be overwritten again.
+    // Caller holds _gate; returns whether anything changed.
+    private bool Migrate(Recipe seed)
+    {
+        if (_store.MigratedIds.Contains(seed.Id)) return false;
+        _store.MigratedIds.Add(seed.Id);
+        var i = _store.Recipes.FindIndex(r => r.Id == seed.Id);
+        if (i < 0) return true; // deleted seed: just remember not to look again
+        var planted = _store.Recipes[i];
+        if (OldSeedNames.TryGetValue(seed.Id, out var oldName)
+            && planted.Name == oldName && planted.Prompt == seed.Prompt)
+        {
+            _store.Recipes[i] = planted with { Name = seed.Name };
+            _logger.Info($"[LOOP-RECIPES] Migrated seed \"{oldName}\" -> \"{seed.Name}\"");
+        }
+        return true;
     }
 
     private static string? CleanName(string? name)
@@ -188,6 +227,7 @@ public class LoopRecipeStore
             if (store is null) return;
             store.Recipes ??= new();
             store.SeededIds ??= new();
+            store.MigratedIds ??= new();
             _store = store;
         }
         catch (Exception ex)

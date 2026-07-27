@@ -405,19 +405,11 @@ export default function Dashboard({ onClose }) {
     const timer = setInterval(loadLoops, POLL_MS);
     return () => clearInterval(timer);
   }, [dockLoopsOn, loadLoops]);
+  // Revision 2 (openspec unify-loop-types): ONE unified record per agent — a
+  // suggestion instance is a loop like the others (kind/mode/status all on it),
+  // so there is no parallel suggestion-arming lookup anymore.
   const loopsByRepo = useMemo(
     () => Object.fromEntries((loopInfo?.loops ?? []).map((l) => [l.repoId, l])),
-    [loopInfo],
-  );
-  // Suggestion-loop arming status per repo, from the same ungated poll (openspec
-  // align-dock-loop-model) — lets each card's loop control show/flip this agent's
-  // 💡 suggestion arming next to the 🎯 recipe picker.
-  const suggestionFor = useCallback(
-    (repoId) => ({
-      armed: !!loopInfo?.suggestionArmedRepoIds?.includes(repoId),
-      autoAdvance: !!loopInfo?.autoAdvance,
-      enabled: loopInfo?.suggestionEnabled ?? true,
-    }),
     [loopInfo],
   );
   // Server-decided "high throughput" flag, lifted from the panel's poll so the
@@ -742,7 +734,6 @@ export default function Dashboard({ onClose }) {
             onSetDependsOn={setDependsOn}
             loop={loopsByRepo[tab.repoId]}
             loopRecipes={loopInfo?.recipes ?? []}
-            loopSuggestion={suggestionFor(tab.repoId)}
             onLoopChanged={loadLoops}
           />
         </Wrapper>

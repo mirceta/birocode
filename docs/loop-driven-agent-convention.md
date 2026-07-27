@@ -10,10 +10,18 @@ once and it can be looped reliably from then on.
 
 ## The situation you are in
 
-A loop resends you **one fixed prompt** every time your turn completes, until a stop
+A loop resends you a **stored prompt** every time your turn completes, until a stop
 condition fires. There is no human reading your replies between iterations. The loop's
 stop detection is **deterministic string matching on your last message** — no LLM judges
 you, so the only way to end the loop cleanly is to emit the markers below exactly.
+
+Loops come in two kinds; the prompt you receive tells you which you are in:
+
+- **📋 Recipe loop** — the prompt is a stored ritual (e.g. "drive the current OpenSpec
+  change"). Your done-claim (the sentinel) ends the loop directly.
+- **🎯 Goal loop** — the prompt states a user-written goal. Your done-claim does **not**
+  end the loop: it triggers a **verification turn** (see below), and only a verified
+  confirmation ends it.
 
 ## The output contract — two markers
 
@@ -38,13 +46,31 @@ you, so the only way to end the loop cleanly is to emit the markers below exactl
 If neither marker appears, the loop assumes there is more work and resends its prompt.
 Just keep making real progress each turn; don't emit filler.
 
+## The goal loop's verification turn — a third marker
+
+In a **goal loop**, after you claim done with the sentinel, the loop sends you a
+**verification prompt**: re-check the stated goal against the **actual state** of the
+repository — run the build, the tests, the app as appropriate; do not trust your memory
+of the work. Then:
+
+- If the goal is genuinely achieved, end your reply with **`GOAL_VERIFIED`** as the final
+  line. The loop resolves **done (verified)**.
+- If it is not, list exactly what is missing and **continue working**; the loop returns
+  to its work phase and keeps driving you.
+
+Same substring rule as the other markers: `GOAL_VERIFIED` is only meaningful in the
+verification turn's reply — never write it otherwise. (Emitting it during a work turn
+does nothing, but it muddies the transcript.)
+
 ## What stops a loop (in order)
 
-When your turn completes the harness checks, deterministically: run **error** → the
-**sentinel** (done) → **`NEEDS_HUMAN:`** (escalate) → a **deny-listed term** in your reply
-(escalate — the fail-safe for agents that ignore this contract) → the **iteration cap**
-(capped) → otherwise it resends. Every resolution records a stop reason + detail that the
-user reviews afterward.
+When your turn completes the harness checks, deterministically: run **error** →
+**`NEEDS_HUMAN:`** (escalate — checked first, so a blocked agent is never re-driven) → a
+**deny-listed term** in your reply (escalate — the fail-safe for agents that ignore this
+contract) → the **sentinel** (recipe loop: done; goal loop: send the verification turn,
+or **`GOAL_VERIFIED`** in that turn's reply: done) → the **iteration cap** (capped,
+checked before every send including the verification send) → otherwise it resends. Every
+resolution records a stop reason + detail that the user reviews afterward.
 
 ## Safety posture (why you can trust the loop, and it you)
 
@@ -56,5 +82,8 @@ user reviews afterward.
   dashboard. It discloses status and recipe names only — no prompts, no config, no way to
   act.
 - Resends carry a hard iteration cap and are recorded in an append-only audit log.
-- The prompt you receive is **exactly** the recipe text the user sees in the editor —
-  nothing is injected at send time.
+- The prompt you receive is **exactly** the stored text the user can inspect — the recipe
+  text in the editor, or a goal loop's work/verification prompts composed once at arm
+  time and shown in the dock's prompt inspection. Nothing is injected at send time.
+- Arming is **exclusive per agent**: a loop and the suggestion-based autopilot are never
+  armed on the same repo at once.

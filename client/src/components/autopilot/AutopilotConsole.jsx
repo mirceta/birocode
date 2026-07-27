@@ -13,7 +13,7 @@ import '../../pages/autopilot.css';
 // detailed surface, grouped by loop type (openspec restructure-autopilot-tabs)
 // into five root tabs — the Overview front page (what autopilot is + the
 // three-mode plan), the Suggestion-based loop (Control, Prompt library, Live
-// feed, History), the Goal-based loop (Agents, Recipes), the cross-loop-type
+// feed, History), the Loops root (📋 recipe + 🎯 goal: Agents, Recipes), the cross-loop-type
 // Audit trail, and Reference (the two explainers + System tests), all over
 // /api/autopilot. The Overview is pure reference and is
 // the one tab the operator gate never hides. This is the SINGLE implementation rendered by BOTH the routed
@@ -247,7 +247,7 @@ export default function AutopilotConsole({ embedded = false }) {
           💡 Suggestion-based loop
         </button>
         <button className={root === 'goal' ? 'on' : ''} onClick={() => setRoot('goal')}>
-          🎯 Goal-based loop{activeLoops ? ` ${activeLoops}` : ''}
+          ⟳ Loops (📋 recipe · 🎯 goal){activeLoops ? ` ${activeLoops}` : ''}
         </button>
         <button className={root === 'audit' ? 'on' : ''} onClick={() => setRoot('audit')}>
           Audit{audit.length ? ` ${audit.length}` : ''}
@@ -530,9 +530,9 @@ export default function AutopilotConsole({ embedded = false }) {
         <>
           <p className="autopilot__summary">
             Every prompt autopilot actually <b>sent</b> on your behalf — the durable,
-            append-only record (most recent first). The one log that spans both loop
-            types: <b>sent</b> = the suggestion engine's auto-advance, <b>loop</b> = a
-            goal-based loop resend.
+            append-only record (most recent first). The one log that spans every loop
+            type: <b>sent</b> = the suggestion engine's auto-advance, <b>loop</b> = a
+            recipe- or goal-loop send (including a goal loop's verification turns).
           </p>
           <ul className="ap-log ap-log--audit">
             {audit.map((e, i) => (

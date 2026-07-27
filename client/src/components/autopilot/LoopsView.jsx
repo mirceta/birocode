@@ -2,17 +2,20 @@ import { useState } from 'react';
 import '../../pages/autopilot.css';
 
 // The "Loops" sub-tab of the AutopilotConsole (plans/autopilot-loop-mode.md +
-// openspec adopt-autopilot-loops). Loop mode is the deterministic sibling of the
-// classifier: for an armed agent it resends ONE fixed prompt every time the agent
-// finishes a turn, until a stop condition — the sentinel phrase, a NEEDS_HUMAN
-// escalation, a deny-list hit, the iteration cap, or a run error. No brain, no
-// LLM judge. One loop per agent.
+// openspec adopt-autopilot-loops + unify-loop-types). Loop mode is the
+// deterministic sibling of the classifier, and a loop has a KIND: a 📋 RECIPE
+// loop resends one stored ritual prompt each turn until the agent's own
+// LOOP_DONE; a 🎯 GOAL loop drives toward a stated goal and, on the agent's
+// done-claim, sends a verification turn — only GOAL_VERIFIED stops it. Both
+// also stop on NEEDS_HUMAN, a deny-list hit, the iteration cap, or a run
+// error. No brain, no LLM judge. One loop per agent, XOR with suggestion
+// arming (server-enforced).
 //
 // This is the DEEP console: recipe management (the named templates the dock's
-// one-tap control arms from — seeded with "Drive the feature" / "Finish and
-// ship"), per-agent arm forms (recipe-fillable, still hand-editable), live loop
-// status, and the stop-reason readout that teaches us how to tune recipes/caps
-// from real runs.
+// control arms from — seeded with "Drive the OpenSpec change" / "Finish and
+// ship the change"), per-agent arm forms (recipe-fillable, still
+// hand-editable), live loop status with kind + phase, and the stop-reason
+// readout that teaches us how to tune recipes/caps from real runs.
 
 const DEFAULT_SENTINEL = 'LOOP_DONE';
 const DEFAULT_CAP = 10;
@@ -30,12 +33,16 @@ const LOOP_BADGE = {
 // Human phrasing per stop reason for the "why did it stop" readout.
 const STOP_REASON = {
   sentinel: 'agent reported done',
+  verified: 'goal verified achieved',
   'needs-human': 'agent needs you',
   'deny-list': 'risky action mentioned',
   cap: 'iteration cap reached',
   error: 'run error',
   user: 'stopped by you',
 };
+
+// Loop kind → marker, matching the dock control and the console's nav emoji.
+const KIND_EMOJI = { recipe: '📋', goal: '🎯' };
 
 function LoopRow({ agent, loop, recipes, loopAction }) {
   const active = loop?.active;
@@ -83,13 +90,21 @@ function LoopRow({ agent, loop, recipes, loopAction }) {
     <li className={`lp-card ${active ? 'is-active' : ''}`}>
       <div className="lp-card__head">
         <span className="lp-card__repo">{agent.repoName}</span>
+        {loop && <span className="lp-card__kind">{KIND_EMOJI[loop.kind] ?? '📋'} {loop.kind ?? 'recipe'}</span>}
         {loop?.recipeName && <span className="lp-card__recipe">{loop.recipeName}</span>}
-        {loop && <span className={`ap-state st-${b.cls}`}>{b.label}</span>}
+        {loop && (
+          <span className={`ap-state st-${b.cls}`}>
+            {active && loop.kind === 'goal' && loop.phase === 'verify' ? 'verifying' : b.label}
+          </span>
+        )}
       </div>
 
       {active ? (
         // --- live status ---
         <div className="lp-live">
+          {loop.kind === 'goal' && loop.goal && (
+            <div className="lp-live__goal" title={loop.goal}>🎯 {loop.goal}</div>
+          )}
           <code className="lp-live__prompt" title={loop.prompt}>{loop.prompt}</code>
           <div className="lp-live__meta">
             <span className="lp-stat">
@@ -281,22 +296,26 @@ export default function LoopsView({ section = 'agents', data, loopAction, addRec
   return (
     <>
       <p className="autopilot__summary">
-        Loop mode resends <b>one fixed prompt</b> every time the agent finishes a turn, so it
-        pushes itself through “which slice next?”-style questions. It stops the moment the agent
-        prints the <b>sentinel</b>, asks for you with <code>NEEDS_HUMAN:</code>, mentions a
-        deny-listed risky action, or hits the iteration cap — and records <b>why</b> it stopped.
-        Deterministic — no brain, no LLM judge. Sends are still fenced by the operator gate and
-        the kill switch, and every resend is audited. The contract a driven agent follows lives
-        in <code>docs/loop-driven-agent-convention.md</code>.
+        A loop drives the agent every time it finishes a turn. A <b>📋 recipe loop</b> resends
+        one stored ritual prompt until the agent prints the <b>sentinel</b>; a <b>🎯 goal
+        loop</b> drives toward a stated goal and, on the agent’s done-claim, sends a
+        <b> verification turn</b> — only <code>GOAL_VERIFIED</code> stops it. Both stop when the
+        agent asks for you with <code>NEEDS_HUMAN:</code>, mentions a deny-listed risky action,
+        or hits the iteration cap — and record <b>why</b> they stopped. Deterministic — no
+        brain, no LLM judge. Arming is exclusive per agent (a loop displaces suggestion arming
+        and vice versa); sends are fenced by the operator gate and the kill switch, and every
+        send is audited. The contract a driven agent follows lives in
+        <code> docs/loop-driven-agent-convention.md</code>.
       </p>
 
       {/* --- Recipes: the named templates the dock's one-tap control arms from --- */}
       {section === 'recipes' && (<>
       <h3 className="rp-section">Loop recipes</h3>
       <p className="autopilot__summary autopilot__summary--sub">
-        Reusable templates (prompt + sentinel + cap) so starting a codified loop is a pick, not
-        a composition. Seeded with the delivery ritual — <b>Drive the feature</b> and
-        <b> Finish and ship</b>; edits stick, and deleted seeds stay deleted.
+        Reusable templates (prompt + sentinel + cap) the 📋 recipe loop arms from, so starting a
+        codified loop is a pick, not a composition. Seeded with the delivery ritual —
+        <b> Drive the OpenSpec change</b> and <b>Finish and ship the change</b>; edits stick,
+        and deleted seeds stay deleted.
       </p>
       <ul className="lp-list lp-list--recipes">
         {recipes.map((r) => (

@@ -1344,50 +1344,6 @@
   min-width: 0;
 }
 
-.loop-badge {
-  padding: 1px 8px;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.6;
-  color: var(--color-text-soft);
-  white-space: nowrap;
-}
-
-.loop-badge--looping {
-  color: #2563eb;
-  border-color: #2563eb;
-}
-
-.loop-badge--done {
-  color: #16a34a;
-  border-color: #16a34a;
-}
-
-.loop-badge--escalate {
-  color: #b45309;
-  border-color: #f59e0b;
-  background: rgba(245, 158, 11, 0.14);
-}
-
-.loop-badge--capped,
-.loop-badge--error {
-  color: #dc2626;
-  border-color: #dc2626;
-}
-
-.loop-badge--stopped {
-  opacity: 0.7;
-}
-
-/* 💡 marker while the agent is suggestion-armed (openspec align-dock-loop-model). */
-.loop-badge--sugg {
-  padding: 1px 6px;
-  color: #b45309;
-  border-color: #f59e0b;
-}
-
 /* The escalated loop's NEEDS_HUMAN question, inline at a glance (full text in
    the tooltip). */
 .phone__loop-question {
@@ -1425,23 +1381,131 @@
   padding: 2px 0;
 }
 
-/* One loop-type group in the popover (openspec align-dock-loop-model): the same
-   💡 / 🎯 grouping the Autopilot console's root tabs teach. */
-.phone__loop-section {
+/* Unified loop control (openspec unify-loop-types): armed header, then the
+   💡 / 📋 / 🎯 type picker, then the selected type's parameters. */
+.phone__loop-armed {
   display: flex;
-  flex-direction: column;
-  gap: 5px;
-  padding: 6px 8px;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
   border: 1px solid var(--color-border);
   border-radius: 8px;
   background: var(--color-bg);
 }
 
-.phone__loop-sect-head {
-  margin: 0;
+.phone__loop-armed-k {
   font-size: 11.5px;
   font-weight: 700;
   color: var(--color-text);
+  white-space: nowrap;
+}
+
+.phone__loop-armed-v {
+  flex: 1 1 auto;
+  font-size: 11px;
+  color: var(--color-text-soft);
+}
+
+.phone__loop-types {
+  display: flex;
+  gap: 6px;
+}
+
+.phone__loop-type {
+  flex: 1 1 0;
+  padding: 3px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text-soft);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.phone__loop-type--on {
+  color: var(--color-text);
+  border-color: var(--color-accent);
+  font-weight: 700;
+}
+
+/* Revision 2: the collapsed header speaks the whole state (type · armed · mode),
+   so it may grow — let it truncate instead of blowing up the card row. */
+.phone__loop-btn {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.phone__loop-btn--armed {
+  color: var(--color-text);
+  border-color: var(--color-accent);
+}
+
+/* The common suggest/drive mode toggle — same pill language as the type picker. */
+.phone__loop-modes {
+  display: flex;
+  gap: 6px;
+}
+
+.phone__loop-mode {
+  flex: 1 1 0;
+  padding: 3px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text-soft);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.phone__loop-mode--on {
+  color: var(--color-text);
+  border-color: var(--color-ok, #16a34a);
+  font-weight: 700;
+}
+
+.phone__loop-mode:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Suggest-mode pending prompt: the loop's decided next prompt + the one action
+   that puts it into the agent's composer. */
+.phone__loop-pending {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 6px 8px;
+  border: 1px dashed var(--color-accent);
+  border-radius: 8px;
+  background: var(--color-bg);
+}
+
+.phone__loop-pending-k {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-accent);
+}
+
+.phone__loop-use {
+  align-self: flex-start;
+  padding: 3px 10px;
+  border: 1px solid var(--color-accent);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.phone__loop-use:hover {
+  background: var(--color-bg);
 }
 
 .phone__loop-sect-desc {
@@ -1451,12 +1515,62 @@
   color: var(--color-text-soft);
 }
 
-.phone__loop-recipes-label {
+.phone__loop-goal {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px 7px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 11.5px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.phone__loop-inspect-toggle {
+  align-self: flex-start;
+  padding: 1px 8px;
+  border: 1px dashed var(--color-border);
+  border-radius: 999px;
+  background: none;
+  color: var(--color-text-soft);
   font-size: 10.5px;
+  cursor: pointer;
+}
+
+.phone__loop-inspect {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.phone__loop-inspect-k {
+  font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--color-text-soft);
+}
+
+.phone__loop-inspect-pre {
+  margin: 0;
+  padding: 5px 7px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 10px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 140px;
+  overflow: auto;
+}
+
+.phone__loop-replace {
+  font-size: 10.5px;
+  color: #b45309;
 }
 
 .phone__loop-sugg-state {

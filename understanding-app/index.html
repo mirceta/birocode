@@ -1,421 +1,471 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Aligning the dock with the loop-type model</title>
-<link rel="stylesheet" href="./app.css" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>One loop model — ILoop · one store slot · suggest/drive</title>
+<style>
+  :root {
+    --bg:#0b0f17; --panel:#111826; --panel2:#0e1420; --line:#1e2a3d;
+    --ink:#e6edf7; --dim:#8ea0bd; --mut:#63748f;
+    --sugg:#f0b429; --recipe:#4aa3ff; --goal:#38d39f;
+    --drive:#f472b6; --suggest:#a78bfa; --bad:#ff6b6b; --warn:#ffab5e;
+    --mono:'SFMono-Regular',ui-monospace,Menlo,Consolas,monospace;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); line-height:1.55;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; }
+  .wrap { max-width:1020px; margin:0 auto; padding:26px 18px 80px; }
+  h1 { font-size:24px; margin:0 0 6px; letter-spacing:-.02em; }
+  h2 { font-size:17px; margin:0 0 10px; }
+  .sub { color:var(--dim); margin:0 0 6px; max-width:78ch; }
+  .src { color:var(--mut); font-size:12px; font-family:var(--mono); margin:6px 0 18px; }
+  code { background:var(--panel2); border:1px solid var(--line); border-radius:5px;
+    padding:1px 6px; font-size:12.5px; color:#c9d4ff; font-family:var(--mono); }
+  pre { background:var(--panel2); border:1px solid var(--line); border-radius:10px;
+    padding:12px 14px; font-size:12.5px; line-height:1.5; white-space:pre-wrap;
+    word-break:break-word; color:#c9d4ff; margin:8px 0 0; font-family:var(--mono); }
+  .tabs { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px; border-bottom:1px solid var(--line); padding-bottom:10px; }
+  .tab { padding:6px 14px; border:1px solid var(--line); border-radius:999px;
+    background:var(--panel); color:var(--dim); cursor:pointer; font-size:13.5px; }
+  .tab.on { color:var(--ink); border-color:#4aa3ff; font-weight:700; }
+  .view { display:none; } .view.on { display:block; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:16px 18px; margin-bottom:14px; }
+  .grid3 { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; }
+  .type { border-top:3px solid var(--line); }
+  .type.sugg { border-top-color:var(--sugg); }
+  .type.recipe { border-top-color:var(--recipe); }
+  .type.goal { border-top-color:var(--goal); }
+  .type h4 { margin:0 0 6px; font-size:15px; }
+  .type p, .type li { color:var(--dim); font-size:13px; }
+  .type ul { margin:8px 0 0; padding-left:18px; }
+  .k { color:var(--ink); font-weight:600; }
+  .note { border-left:3px solid var(--warn); padding:8px 12px; background:var(--panel2);
+    border-radius:0 8px 8px 0; color:var(--dim); font-size:13.5px; margin-top:10px; }
+  .flow { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:10px 0; }
+  .st { padding:6px 12px; border:1px solid var(--line); border-radius:10px;
+    background:var(--panel2); font-size:12.5px; }
+  .arr { color:var(--mut); }
+  table { width:100%; border-collapse:collapse; font-size:13px; margin-top:8px; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--mut); font-size:11.5px; text-transform:uppercase; letter-spacing:.05em; }
+  td:first-child { white-space:nowrap; font-family:var(--mono); font-size:12px; }
+  .pill { display:inline-block; padding:1px 9px; border-radius:999px; border:1px solid var(--line);
+    font-size:11.5px; color:var(--dim); }
+  /* simulator */
+  .sim { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:720px){ .sim { grid-template-columns:1fr; } }
+  .sim-state { background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:14px; }
+  .sim-row { display:flex; justify-content:space-between; padding:4px 0; font-size:13.5px; }
+  .sim-row .v { font-weight:700; }
+  .m-drive { color:var(--drive); } .m-suggest { color:var(--suggest); }
+  .s-loop { color:var(--recipe); } .s-done { color:var(--goal); }
+  .s-esc { color:var(--bad); } .s-cap { color:var(--warn); } .s-stop { color:var(--mut); }
+  .sim-btn { display:block; width:100%; text-align:left; margin:6px 0; padding:8px 12px;
+    border:1px solid var(--line); border-radius:10px; background:var(--panel);
+    color:var(--ink); cursor:pointer; font-size:13px; }
+  .sim-btn:hover { border-color:#4aa3ff; }
+  .sim-btn:disabled { opacity:.35; cursor:default; }
+  .sim-log { margin-top:10px; font-size:12px; color:var(--dim); max-height:210px; overflow:auto; font-family:var(--mono); }
+  .sim-log div { padding:2px 0; border-bottom:1px dashed var(--line); }
+  .modes { display:flex; gap:6px; margin:8px 0; }
+  .modebtn { flex:1; padding:5px 10px; border:1px solid var(--line); border-radius:8px;
+    background:var(--panel); color:var(--dim); cursor:pointer; font-size:12.5px; }
+  .modebtn.on { color:var(--ink); font-weight:700; }
+  .modebtn.on.md { border-color:var(--drive); } .modebtn.on.ms { border-color:var(--suggest); }
+  .pending { border:1px dashed var(--suggest); border-radius:10px; padding:8px 10px; margin-top:8px;
+    font-size:12px; color:var(--dim); }
+  .pending b { color:var(--suggest); font-size:11px; letter-spacing:.04em; }
+  .reset { margin-top:10px; padding:5px 12px; border-radius:999px; border:1px solid var(--line);
+    background:none; color:var(--dim); cursor:pointer; }
+  /* phantom diagram */
+  .phantom { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:12px 0 2px; }
+  .phantom .target { grid-column:1 / -1; }
+  .proc, .target { border:1px solid var(--line); border-radius:10px; padding:10px 12px; background:var(--panel2);
+    position:relative; }
+  .proc.live { border-color:var(--goal); }
+  .proc.dead { border-color:var(--mut); opacity:.85; }
+  .proc.dead.killed { border-color:var(--bad); opacity:.35; text-decoration:line-through; }
+  .target { border-color:var(--warn); }
+  .target.safe { border-color:var(--goal); }
+  .pt { font-size:13.5px; font-weight:700; }
+  .pd { font-size:12px; color:var(--dim); margin-top:3px; }
+</style>
 </head>
 <body>
-<header class="hero">
-  <div class="hero__in">
-    <div class="hero__kicker">Understanding · autopilot</div>
-    <h1>“wtf are these two things?” — aligning the dock with the loop&#8209;type model</h1>
-    <p class="hero__sub">
-      Why <b>Drive the feature</b> / <b>Finish and ship</b> showed up on the agent dock with no
-      framing, what they actually are, and the <b>now-built</b> change that makes the dock speak
-      the same loop&#8209;type vocabulary the new Autopilot nav introduced.
-    </p>
-    <div class="hero__chips">
-      <span class="chip chip--sugg">💡 Suggestion&#8209;based loop</span>
-      <span class="chip chip--goal">🎯 Goal&#8209;based loop</span>
-      <span class="chip chip--queue">🗂️ Queue&#8209;based loop <em>(plan only)</em></span>
+<div class="wrap">
+  <h1>One loop model <span style="color:var(--mut);font-weight:400">— unify-loop-types, revision 2</span></h1>
+  <p class="sub">Every autopilot mode is now literally the same thing: a <b>loop instance</b> —
+  <code>{ kind, mode, armed, agent }</code> — whose kind is an implementation of one interface. The engine has no
+  per-kind branching left; the dock has one section that says type · armed · mode.</p>
+  <div class="src">ILoop.cs · SuggestionLoop / RecipeLoop / GoalLoop · LoopConfigStore.cs · AutopilotService.cs · DockLoopControl.jsx</div>
+
+  <div class="tabs">
+    <button class="tab on" data-v="model">① The interface</button>
+    <button class="tab" data-v="mode">② Suggest vs drive</button>
+    <button class="tab" data-v="sim">③ Drive a loop yourself</button>
+    <button class="tab" data-v="dock">④ Dock &amp; API</button>
+    <button class="tab" data-v="notes">⑤ Two surprises</button>
+  </div>
+
+  <!-- ============ ① MODEL ============ -->
+  <section class="view on" id="v-model">
+    <div class="card">
+      <h2>ILoop — semantics in the kinds, mechanics in the engine</h2>
+      <pre>interface ILoop {
+  string Kind;                       // "suggestion" | "recipe" | "goal"
+  LoopDecision Decide(LoopContext);  // exactly one of:
+}
+LoopDecision.Hold    (reason, escalate?)          // stay armed, do nothing this turn
+LoopDecision.Stop    (status, reason, detail)     // terminal: done / escalate / error
+LoopDecision.Propose (prompt, enterPhase?)        // "the agent's NEXT prompt is this"</pre>
+      <p class="sub" style="margin-top:10px">The engine (<code>AutopilotService.Tick</code>) does the same thing for
+      every agent: find its one active instance, ask the kind's implementation for a decision, execute it. Idle
+      detection, dedup, the cap check, sending, pending-prompt recording, and auditing are shared mechanics —
+      identical for all three kinds.</p>
     </div>
-  </div>
-</header>
-
-<nav class="tabs" id="tabs">
-  <button class="tabs__btn is-on" data-tab="what">The disconnect</button>
-  <button class="tabs__btn" data-tab="types">Two loop types</button>
-  <button class="tabs__btn" data-tab="dock">Before → after</button>
-  <button class="tabs__btn" data-tab="sim">Step a goal loop</button>
-  <button class="tabs__btn" data-tab="plan">The change</button>
-  <button class="tabs__btn" data-tab="verified">Verified ✓</button>
-</nav>
-
-<main>
-
-<!-- ───────────────────────── THE DISCONNECT ───────────────────────── -->
-<section class="panel is-on" data-panel="what">
-  <h2>The “wtf” in one picture</h2>
-  <p class="lede">
-    The dock card whispered a word — <em>Recipes</em> — that the redesigned Autopilot nav
-    never introduced you to. Two vocabularies, no bridge.
-  </p>
-
-  <div class="split">
-    <figure class="card card--nav">
-      <figcaption>The console <b>learned</b> a two‑level, loop‑typed nav…</figcaption>
-      <div class="mininav">
-        <span class="mininav__t">Overview</span>
-        <span class="mininav__t mininav__t--sugg">💡 Suggestion‑based loop</span>
-        <span class="mininav__t mininav__t--goal is-on">🎯 Goal‑based loop</span>
-        <span class="mininav__t">Audit</span>
-        <span class="mininav__t">Reference</span>
+    <div class="grid3">
+      <div class="card type sugg">
+        <h4>💡 SuggestionLoop</h4>
+        <p>Wraps the <code>PromptClassifier</code>: which of <b>your routine prompts</b> comes next?</p>
+        <ul>
+          <li>Confident, non-risky verdict → <span class="k">Propose(label)</span></li>
+          <li>Unclear / risky → <span class="k">Hold</span> — non-terminal, stays armed</li>
+          <li>Uncapped by default; no sentinel, no "done"</li>
+        </ul>
       </div>
-      <div class="mininav__sub">
-        <span>Agents</span><span class="is-on">Recipes</span>
+      <div class="card type recipe">
+        <h4>📋 RecipeLoop</h4>
+        <p>Drives one <b>stored ritual prompt</b> (e.g. "Drive the OpenSpec change").</p>
+        <ul>
+          <li>Sentinel <code>LOOP_DONE</code> → <span class="k">Stop(done)</span></li>
+          <li>Otherwise → <span class="k">Propose(stored prompt)</span></li>
+        </ul>
       </div>
-      <p class="card__note">Here “recipe” has a home: it’s a <b>goal‑loop template</b>.</p>
-    </figure>
-
-    <div class="arrowgap" aria-hidden="true">
-      <span class="arrowgap__break">≠</span>
+      <div class="card type goal">
+        <h4>🎯 GoalLoop</h4>
+        <p>Free-text <b>goal</b>; work + verification prompts composed once at arm time.</p>
+        <ul>
+          <li>Work + done-claim → <span class="k">Propose(verify prompt, phase→verify)</span></li>
+          <li>Verify + <code>GOAL_VERIFIED</code> → <span class="k">Stop(done, verified)</span></li>
+          <li>Verify + gaps → <span class="k">Propose(work prompt, phase→work)</span></li>
+        </ul>
+      </div>
     </div>
-
-    <figure class="card card--dock">
-      <figcaption>…but the <b>dock</b> still spoke the old dialect.</figcaption>
-      <div class="oldpop">
-        <div class="oldpop__badge">⟳ Loop</div>
-        <div class="oldpop__row is-on">Drive the feature</div>
-        <div class="oldpop__row">Finish and ship</div>
-        <div class="oldpop__cap">cap <input value="10" disabled /></div>
-        <button class="oldpop__arm" disabled>Arm</button>
+    <div class="card">
+      <h2>Shared safety ladder — <code>DrivenLoop</code> base (recipe + goal)</h2>
+      <div class="flow">
+        <span class="st">run errored → Stop(error)</span><span class="arr">→</span>
+        <span class="st">NEEDS_HUMAN → Stop(escalate)</span><span class="arr">→</span>
+        <span class="st">deny-list word → Stop(escalate)</span><span class="arr">→</span>
+        <span class="st">kind's own DecideCore</span>
       </div>
-      <p class="card__note card__note--bad">
-        No loop‑type label. No suggestion loop at all. Just two names and a cap.
-      </p>
-    </figure>
-  </div>
-
-  <div class="callout">
-    <b>So what are they?</b> <code>Drive the feature</code> and <code>Finish and ship</code> are the
-    <b>two seeded recipes</b> from the <code>adopt‑autopilot‑loops</code> change — named templates for the
-    <span class="tag tag--goal">🎯 goal‑based loop</span>. They live in
-    <code>LoopRecipeStore.cs</code> and are rendered by the console’s
-    <b>Goal‑based loop → Recipes</b> subtab. The dock armed one of them but never said which
-    <em>kind</em> of loop it was arming — that was the whole disconnect, fixed by
-    <code>align‑dock‑loop‑model</code> (the Before → after tab shows the shipped popover).
-  </div>
-</section>
-
-<!-- ───────────────────────── TWO LOOP TYPES ───────────────────────── -->
-<section class="panel" data-panel="types">
-  <h2>Two loop types (and a third that’s only a plan)</h2>
-  <p class="lede">Autopilot advances an idle agent in one of two ways. Click a card to expand it.</p>
-
-  <div class="looprow">
-    <article class="loopcard loopcard--sugg" data-loop="sugg" tabindex="0">
-      <header><span class="loopcard__icon">💡</span><h3>Suggestion‑based loop</h3></header>
-      <p class="loopcard__one">Watches an idle agent, then <b>predicts</b> one of your routine prompts.</p>
-      <div class="loopcard__more">
-        <ul>
-          <li><b>Brain:</b> a classifier picks from your editable prompt library.</li>
-          <li><b>Suggest‑only:</b> it proposes, <em>you</em> press send.</li>
-          <li><b>Auto‑advance ON:</b> a confident, non‑risky prompt is <b>sent for you</b>.</li>
-          <li>Risky / low‑confidence → it <b>escalates</b> instead.</li>
-          <li>Armed <b>per agent</b> in the console’s <b>Control</b> subtab.</li>
-        </ul>
-        <div class="loopcard__where">Console: 💡 Suggestion‑based loop → Control · Prompt library · Live feed · History</div>
+      <p class="sub" style="font-size:13px">NEEDS_HUMAN outranks the sentinel — a reply carrying both means blocked,
+      not done. All matching is deterministic string search; no LLM judge. The suggestion kind doesn't use this
+      ladder: it never drives a blocked agent (its escalations are non-terminal holds), and its risk handling is the
+      classifier gate.</p>
+    </div>
+    <div class="card">
+      <h2>Exclusive arming is now structural — the coordinator is gone</h2>
+      <p class="sub" style="font-size:13.5px"><code>LoopConfigStore</code> holds <b>one dictionary slot per agent</b>.
+      Arming any kind replaces the slot, so "at most one autopilot mode per agent" can't be violated — it isn't a
+      rule anyone enforces, it's the shape of the data. <code>AutopilotArming</code> was deleted; legacy suggestion
+      arming (<code>autopilot.json</code> ArmedRepoIds + the global auto-advance flag) drains into suggestion
+      instances once at startup. One <b>Disarm</b> clears whatever runs. A fresh arm also resets the engine's
+      dedup guards, so a new loop acts on the agent's current message immediately.</p>
+      <div class="flow">
+        <span class="st">💡 armed</span><span class="arr">— arm 🎯 →</span>
+        <span class="st">slot now holds 🎯 (💡 displaced)</span><span class="arr">— Disarm →</span>
+        <span class="st">slot stopped</span>
       </div>
-    </article>
+    </div>
+  </section>
 
-    <article class="loopcard loopcard--goal" data-loop="goal" tabindex="0">
-      <header><span class="loopcard__icon">🎯</span><h3>Goal‑based loop</h3></header>
-      <p class="loopcard__one">Resends <b>one fixed goal prompt</b> every turn until the job is done.</p>
-      <div class="loopcard__more">
-        <ul>
-          <li><b>No brain:</b> deterministic — the same prompt, resent each turn.</li>
-          <li>Stops on the <b>sentinel</b> (<code>LOOP_DONE</code>), <code>NEEDS_HUMAN:</code>,
-              a deny‑list hit, the <b>iteration cap</b>, or a run error.</li>
-          <li>Armed from a <b>recipe</b> — a named template carrying prompt + sentinel + cap.</li>
-          <li>Seeded recipes: <code>Drive the feature</code>, <code>Finish and ship</code>.</li>
-          <li>One loop per agent.</li>
-        </ul>
-        <div class="loopcard__where">Console: 🎯 Goal‑based loop → Agents · Recipes</div>
-      </div>
-    </article>
+  <!-- ============ ② MODE ============ -->
+  <section class="view" id="v-mode">
+    <div class="card">
+      <h2>The common axis: what happens to a proposed next prompt</h2>
+      <p class="sub">A loop's whole job is to decide the agent's <b>next prompt</b>. The instance's
+      <code>mode</code> decides what that means — for <b>every</b> kind:</p>
+      <table>
+        <tr><th>mode</th><th>a Propose(prompt) becomes…</th></tr>
+        <tr><td style="color:var(--suggest)">suggest</td><td>the instance's <b>pending prompt</b> — shown on the dock
+          with <i>"Put in chat box"</i>, pre-filling the composer. Nothing is sent; the counter doesn't advance; the
+          loop waits until the agent's reply changes (i.e. until you send something).</td></tr>
+        <tr><td style="color:var(--drive)">drive</td><td>actually <b>sent</b> to the agent (resuming its session through
+          the same run path the chat uses) — capped, audited, double-send-guarded.</td></tr>
+      </table>
+      <div class="note">This dissolves the old special case: "auto-advance" was a private, <i>global</i> flag of the
+      suggestion mode. Now it's a per-instance property of every loop — a recipe or goal loop can run human-paced
+      (each turn lands in your textbox for approval), and the suggestion watcher can drive. The mode flips live
+      without resetting the loop. The old global toggle survives as the <i>default</i> mode for newly armed
+      suggestion instances (and flips armed ones, keeping its old meaning).</div>
+    </div>
+    <div class="card">
+      <h2>Cap &amp; disclosure follow the mode</h2>
+      <p class="sub" style="font-size:13.5px">The iteration cap bounds <b>drive-mode sends only</b> (suggest mode
+      never sends; suggestion instances default to uncapped). A pending prompt is prompt TEXT, so the ungated status
+      projection carries it <b>only while the operator gate is open</b> — gate closed means the engine is idle and
+      pends nothing, so the closed-gate disclosure surface is unchanged: kind, mode, phase, counts, stop reason
+      stay visible; text never leaks.</p>
+    </div>
+  </section>
 
-    <article class="loopcard loopcard--queue" data-loop="queue" tabindex="0">
-      <header><span class="loopcard__icon">🗂️</span><h3>Queue‑based loop</h3></header>
-      <p class="loopcard__one">Work a queue of tasks — <b>doesn’t exist yet</b>.</p>
-      <div class="loopcard__more">
-        <ul>
-          <li>Only a <b>plan card</b> on the Overview today; no root tab, no code.</li>
-          <li><b>Stays off the dock</b> — the dock is for actions, not plans.</li>
-        </ul>
-        <div class="loopcard__where">Console: Overview → three‑mode plan</div>
-      </div>
-    </article>
-  </div>
-
-  <div class="matrix">
-    <h3>The one‑glance difference</h3>
-    <table>
-      <thead><tr><th></th><th class="th--sugg">💡 Suggestion</th><th class="th--goal">🎯 Goal</th></tr></thead>
-      <tbody>
-        <tr><td>Chooses what to send</td><td>a classifier (brain)</td><td>you — one fixed prompt</td></tr>
-        <tr><td>Prompt varies per turn</td><td>yes</td><td>no, identical each turn</td></tr>
-        <tr><td>Armed from</td><td>Control toggle</td><td>a Recipe</td></tr>
-        <tr><td>Stops when</td><td>you turn it off</td><td>LOOP_DONE · NEEDS_HUMAN · cap</td></tr>
-        <tr><td>On the dock now</td><td class="td--yes">Arm/Disarm + 💡 badge</td><td class="td--yes">framed Recipes + 🎯 badge</td></tr>
-      </tbody>
-    </table>
-  </div>
-</section>
-
-<!-- ───────────────────────── BEFORE / AFTER ───────────────────────── -->
-<section class="panel" data-panel="dock">
-  <h2>The dock popover: before → after</h2>
-  <p class="lede">Drag the handle to wipe between the old card and the shipped one.</p>
-
-  <div class="ba">
-    <div class="ba__stage" id="baStage">
-      <!-- AFTER (underneath) -->
-      <div class="ba__after">
-        <div class="pop">
-          <div class="pop__badges">
-            <span class="pop__badge pop__badge--goal">🎯 2/10</span>
-            <span class="pop__badge pop__badge--sugg">💡 armed</span>
+  <!-- ============ ③ SIM ============ -->
+  <section class="view" id="v-sim">
+    <div class="card">
+      <h2>You are the agent — the engine reacts</h2>
+      <p class="sub" style="font-size:13px">A 🎯 goal loop armed with cap 6. Flip the mode any time (it never resets
+      the loop). In <span class="m-suggest">suggest</span> the engine only pends; in
+      <span class="m-drive">drive</span> it sends.</p>
+      <div class="sim">
+        <div>
+          <div class="modes">
+            <button class="modebtn ms" id="m-suggest">✍ Suggest only</button>
+            <button class="modebtn md on" id="m-drive">▶ Drive autonomously</button>
           </div>
-          <section class="pop__sec pop__sec--sugg">
-            <div class="pop__sechead">💡 Suggestion‑based loop</div>
-            <p class="pop__cap">Watches this agent when idle; suggests (or auto‑sends) a routine prompt.</p>
-            <div class="pop__toggle is-on">Disarm suggestions</div>
-            <span class="pop__meta">auto‑advance: ON</span>
-          </section>
-          <section class="pop__sec pop__sec--goal">
-            <div class="pop__sechead">🎯 Goal‑based loop</div>
-            <p class="pop__cap">Resends one fixed goal until <code>LOOP_DONE</code> / <code>NEEDS_HUMAN</code> / cap.</p>
-            <div class="pop__reclabel">Recipes:</div>
-            <div class="pop__recs">
-              <span class="pop__rec is-on">Drive the feature</span>
-              <span class="pop__rec">Finish and ship</span>
-            </div>
-            <div class="pop__armrow"><label>cap<input value="10" /></label><button class="pop__arm">Arm</button></div>
-          </section>
+          <button class="sim-btn" id="b-work">Agent replies: keeps working (no markers)</button>
+          <button class="sim-btn" id="b-claim">Agent replies: "… everything is finished. LOOP_DONE"</button>
+          <button class="sim-btn" id="b-verified">Verification reply: "checked build+tests — GOAL_VERIFIED"</button>
+          <button class="sim-btn" id="b-gaps">Verification reply: "checks fail, X missing — continuing"</button>
+          <button class="sim-btn" id="b-human">Agent replies: "NEEDS_HUMAN: which DB do we target?"</button>
+          <button class="reset" id="b-reset">↺ re-arm the loop</button>
         </div>
-        <div class="ba__tag ba__tag--after">AFTER — framed by loop type</div>
-      </div>
-      <!-- BEFORE (on top, clipped) -->
-      <div class="ba__before" id="baBefore">
-        <div class="pop pop--old">
-          <div class="pop__badges"><span class="pop__badge">⟳ Loop</span></div>
-          <div class="oldpop__row is-on">Drive the feature</div>
-          <div class="oldpop__row">Finish and ship</div>
-          <div class="pop__armrow"><label>cap<input value="10" /></label><button class="pop__arm">Arm</button></div>
+        <div class="sim-state">
+          <div class="sim-row"><span>status</span><span class="v s-loop" id="s-status">looping</span></div>
+          <div class="sim-row"><span>mode</span><span class="v m-drive" id="s-mode">drive</span></div>
+          <div class="sim-row"><span>phase</span><span class="v" id="s-phase">work</span></div>
+          <div class="sim-row"><span>iterations (drive sends)</span><span class="v" id="s-iter">0 / 6</span></div>
+          <div class="pending" id="s-pending" style="display:none"><b>NEXT PROMPT, WAITING FOR YOU</b><div id="s-pending-t"></div></div>
+          <div class="sim-log" id="s-log"></div>
         </div>
-        <div class="ba__tag ba__tag--before">BEFORE — bare recipe names</div>
-      </div>
-      <div class="ba__handle" id="baHandle"><span>‹ ›</span></div>
-    </div>
-    <input id="baRange" class="ba__range" type="range" min="0" max="100" value="55" aria-label="wipe between before and after" />
-  </div>
-
-  <ul class="changelist">
-    <li><span class="dot dot--sugg"></span>A <b>Suggestion‑based</b> section appears — one Arm/Disarm for <em>this</em> agent, mirroring the console’s Control list, plus whether auto‑advance is on.</li>
-    <li><span class="dot dot--goal"></span>The <b>Goal‑based</b> section keeps the exact same recipe picker + cap + Arm — now under a caption that says what a goal loop <em>is</em>.</li>
-    <li><span class="dot dot--badge"></span>The badge gets <b>typed</b>: 🎯 <code>2/10</code> while a goal loop runs; a small 💡 marker when the agent is suggestion‑armed.</li>
-  </ul>
-</section>
-
-<!-- ───────────────────────── SIMULATOR ───────────────────────── -->
-<section class="panel" data-panel="sim">
-  <h2>Step a goal loop</h2>
-  <p class="lede">
-    See exactly what the 🎯 goal loop does with a recipe: resend the same prompt each turn, watch the
-    cap and the stop conditions. Press <b>Step turn</b>, or change the agent’s reply first.
-  </p>
-
-  <div class="sim">
-    <div class="sim__ctl">
-      <label class="sim__recipe">Recipe
-        <select id="simRecipe">
-          <option value="drive">Drive the feature (cap 10)</option>
-          <option value="ship">Finish and ship (cap 5)</option>
-        </select>
-      </label>
-      <label class="sim__reply">Agent’s next reply ends with
-        <select id="simReply">
-          <option value="work">…more work (keep looping)</option>
-          <option value="done">LOOP_DONE</option>
-          <option value="human">NEEDS_HUMAN: which base?</option>
-          <option value="risky">“let’s force‑push” (deny‑list)</option>
-        </select>
-      </label>
-      <div class="sim__btns">
-        <button id="simStep" class="sim__step">▶ Step turn</button>
-        <button id="simReset" class="sim__reset">Reset</button>
       </div>
     </div>
-
-    <div class="sim__stage">
-      <div class="sim__gauge">
-        <div class="sim__gaugebar" id="simBar"></div>
-        <div class="sim__gaugetxt"><span id="simIter">0</span> / <span id="simCap">10</span> iterations</div>
-      </div>
-      <div class="sim__badge" id="simBadge" data-state="stopped">stopped</div>
-      <div class="sim__prompt">
-        <div class="sim__promptk">resent prompt (fixed each turn)</div>
-        <code id="simPrompt">Continue driving the current OpenSpec change: pick the next unchecked task…</code>
-      </div>
-      <ul class="sim__log" id="simLog"></ul>
+    <div class="card">
+      <h2>Why verification before "done"</h2>
+      <p class="sub" style="font-size:13.5px">A recipe's steps are externally checkable, so its <code>LOOP_DONE</code>
+      is trusted. A goal is a claim about the world — so the goal kind turns the done-claim into a verification turn
+      (re-check the ACTUAL repo state: build, tests, app) and only the distinct <code>GOAL_VERIFIED</code> token in
+      that turn's reply ends the loop. A failed verification feeds what's missing straight into the next work turn.</p>
     </div>
-  </div>
-</section>
+  </section>
 
-<!-- ───────────────────────── THE PLAN ───────────────────────── -->
-<section class="panel" data-panel="plan">
-  <h2>The change — <code>align‑dock‑loop‑model</code></h2>
-  <p class="lede">Three moves, plus the judgment calls. Built and verified (17/17 Playwright checks
-  on an isolated harness) as an OpenSpec change on <code>feat/autopilot‑tab‑hierarchy</code>.</p>
+  <!-- ============ ④ DOCK & API ============ -->
+  <section class="view" id="v-dock">
+    <div class="card">
+      <h2>The dock loop section speaks the model</h2>
+      <table>
+        <tr><th>Piece</th><th>What it says / does</th></tr>
+        <tr><td>collapsed header</td><td><code>⟳ 📋 Recipe loop · armed · Suggest only · 3/10</code> — type, armed
+          state, mode, progress at a glance; or the terminal state (<code>🎯 Goal loop · stopped</code>); or
+          <code>Loop: none</code>.</td></tr>
+        <tr><td>armed row</td><td>the one instance's live status + the single <b>■ Disarm</b>.</td></tr>
+        <tr><td>pending block</td><td>suggest mode's decided next prompt + <b>Put in chat box</b> → pre-fills this
+          agent's composer (nothing sent until you send).</td></tr>
+        <tr><td>type picker</td><td>💡 / 📋 / 🎯 pills + one-line description; params per type (recipe pills + cap,
+          goal textarea + cap).</td></tr>
+        <tr><td>mode toggle</td><td><b>Suggest only</b> / <b>Drive autonomously</b> with a plain-words hint — flips a
+          live instance in place, or rides along on the arm.</td></tr>
+        <tr><td>Show prompts</td><td>byte-identical previews from the operator-gated detail read; gate closed → the
+          explicit hint, never silence.</td></tr>
+        <tr><td>replace notice</td><td>"Arming this replaces the armed …" — the one-slot rule stated before the
+          click.</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h2>API — one endpoint, one record shape</h2>
+      <table>
+        <tr><th>request</th><th>meaning</th></tr>
+        <tr><td>POST /api/autopilot/loop · start</td><td><code>kind</code> = suggestion | goal (+<code>goal</code>) |
+          recipe (<code>recipeId</code> or raw <code>prompt</code>), common <code>mode</code> + cap. Replaces the
+          agent's slot.</td></tr>
+        <tr><td>POST /api/autopilot/loop · mode</td><td>flip a live instance's suggest/drive without resetting it.</td></tr>
+        <tr><td>POST /api/autopilot/loop · stop / disarm</td><td>the same single clear — one slot, one disarm.</td></tr>
+        <tr><td>GET /api/autopilot/loops <span class="pill">ungated</span></td><td>unified records: kind · mode · phase ·
+          status · counts · stop reason (+ <code>pendingPrompt</code> only while the gate is open). No more parallel
+          suggestion fields.</td></tr>
+        <tr><td>GET /api/autopilot/loops/detail <span class="pill">gated</span></td><td>full prompt text: stored
+          work/verify prompts, goal text, recipe bodies, goal templates.</td></tr>
+        <tr><td>POST /api/autopilot/config</td><td>global engine settings (kill switch, threshold); legacy
+          <code>armed:true</code> still works — it arms a suggestion instance.</td></tr>
+      </table>
+      <div class="note">Verified end-to-end on isolated harnesses: 27 backend checks
+      (<code>verify-loop-interface-api.mjs</code>) + a Playwright pass over the dock control
+      (<code>verify-loop-interface-ui.mjs</code>) including the pending → composer pre-fill.</div>
+    </div>
+  </section>
 
-  <ol class="steps">
-    <li class="step step--fe">
-      <div class="step__n">1</div>
-      <div class="step__b">
-        <h3>Popover mirrors the console nav</h3>
-        <p>Two captioned sections — 💡 Suggestion‑based and 🎯 Goal‑based — each with a one‑line
-           what‑it‑does. The suggestion section adds a per‑agent Arm/Disarm (same as Control);
-           the goal section keeps the recipe picker + cap + Arm, unchanged.</p>
-        <span class="step__file">client/src/components/dashboard/DockLoopControl.jsx</span>
+  <!-- ============ ⑤ NOTES / SURPRISES ============ -->
+  <section class="view" id="v-notes">
+    <div class="card">
+      <h2>Surprise 1 — a phantom claude.exe was co-driving the repo</h2>
+      <p class="sub" style="font-size:13.5px">Mid-turn, files I hadn't touched kept changing. Cause: a
+      <b>second, orphaned</b> <code>claude.exe</code> — spawned by a since-dead harness instance — was still running
+      the user's <b>previous</b> turn with <code>--resume &lt;this same session id&gt;</code>. Two runs interleaved
+      into <i>one</i> transcript and edited the <i>same</i> worktree; it even wrote its own variants of files I was
+      writing. Detached runs deliberately outlive disconnects, so when the parent harness dies the run is orphaned
+      with no API to stop it.</p>
+      <div class="phantom">
+        <div class="proc live">
+          <div class="pt">🟢 this run</div>
+          <div class="pd">alive · owned by the current harness</div>
+        </div>
+        <div class="proc dead">
+          <div class="pt">🩶 orphan · claude.exe PID&nbsp;8048</div>
+          <div class="pd">parent harness dead · still <code>--resume</code> of the same session</div>
+        </div>
+        <div class="target" id="ph-target">
+          <div class="pt">📄 shared worktree + transcript.jsonl</div>
+          <div class="pd">both processes append &amp; edit here → interleaved edits</div>
+        </div>
       </div>
-    </li>
-    <li class="step step--fe">
-      <div class="step__n">2</div>
-      <div class="step__b">
-        <h3>Typed badge</h3>
-        <p>🎯 <code>2/10</code> while a goal loop runs (terminal states as today); a small 💡 marker
-           when the agent is suggestion‑armed. The glance now tells you the <em>kind</em>.</p>
-        <span class="step__file">DockLoopControl.jsx (badge)</span>
-      </div>
-    </li>
-    <li class="step step--be">
-      <div class="step__n">3</div>
-      <div class="step__b">
-        <h3>Honest badge data</h3>
-        <p>Extend the read‑only, <b>non‑gated</b> <code>GET /api/autopilot/loops</code> projection with each
-           repo’s suggestion‑armed flag — so the 💡 marker is truthful even when the operator gate is
-           closed. <b>Arming still goes through the gated endpoints</b> (403 → the existing “gate is closed” hint).</p>
-        <span class="step__file">AutopilotController · loops projection</span>
-      </div>
-    </li>
-  </ol>
+      <button class="sim-btn" id="ph-kill" style="margin-top:12px">▶ detect &amp; kill the orphan</button>
+      <pre id="ph-out" style="display:none"></pre>
+      <div class="note">Product lesson, not just an incident: an orphaned detached run has <b>no owner and no stop
+      button</b>. If worktree files change that you didn't touch, enumerate <code>claude.exe</code>, find another
+      <code>--resume</code> of your session whose parent PID is dead, kill it, then reconcile its half-done edits
+      (they may be good — read before reverting). Saved to memory as <i>orphaned-run-double-drive</i>.</div>
+    </div>
 
-  <div class="judgment">
-    <h3>Judgment calls</h3>
-    <div class="judgment__grid">
-      <div class="jcard">
-        <div class="jcard__h">🗂️ Queue loop stays off the dock</div>
-        <p>It doesn’t exist yet — it’s a plan card on the Overview. The dock is for actions, not plans.</p>
+    <div class="card">
+      <h2>Surprise 2 — the tests caught a real engine bug: re-arm was ignored</h2>
+      <p class="sub" style="font-size:13.5px">The per-repo <b>dedup guard</b> (the watermark that stops the engine
+      acting twice on the same agent message) used to <b>survive re-arming</b>. So a freshly armed loop would look at
+      the agent's current reply, decide "already handled that message," and sit idle for a whole turn. Fix: every
+      instance carries an <code>ArmedAt</code> generation stamp; on a new arm the engine <b>resets its guards</b>, so
+      the loop acts on the current message immediately.</p>
+      <p class="sub" style="font-size:13px">Toggle the fix and press <b>Arm</b> on a repo whose last message is
+      already seen:</p>
+      <div class="modes" style="max-width:360px">
+        <button class="modebtn on" id="fx-off">🐞 old: guard persists</button>
+        <button class="modebtn" id="fx-on">✅ new: ArmedAt resets guard</button>
       </div>
-      <div class="jcard">
-        <div class="jcard__h">New OpenSpec change</div>
-        <p><code>align‑dock‑loop‑model</code> on top of <code>feat/autopilot‑tab‑hierarchy</code>, since it
-           builds on the nav vocabulary that branch introduced.</p>
-      </div>
-      <div class="jcard">
-        <div class="jcard__h">Gate discipline unchanged</div>
-        <p>Read the badge without the gate; act only through it. Same safety line as today.</p>
+      <button class="sim-btn" id="fx-arm" style="max-width:360px">▶ Arm loop (last msg already in watermark)</button>
+      <div class="sim-state" id="fx-state" style="margin-top:10px;max-width:360px">
+        <div class="sim-row"><span>seen watermark</span><span class="v" id="fx-seen">msg #42</span></div>
+        <div class="sim-row"><span>current message</span><span class="v" id="fx-cur">msg #42</span></div>
+        <div class="sim-row"><span>first action after arm</span><span class="v" id="fx-act" style="color:var(--mut)">—</span></div>
       </div>
     </div>
-  </div>
 
-  <div class="cycle">
-    <h3>Where this sits in the delivery cycle</h3>
-    <div class="cycle__row">
-      <span class="cycle__step is-done">playback ✓</span>
-      <span class="cycle__arr">→</span>
-      <span class="cycle__step is-done">“create it” ✓</span>
-      <span class="cycle__arr">→</span>
-      <span class="cycle__step is-done">build + verify (iso :5221) ✓</span>
-      <span class="cycle__arr">→</span>
-      <span class="cycle__step is-next">“deploy”</span>
-      <span class="cycle__arr">→</span>
-      <span class="cycle__step">“keep it”</span>
-    </div>
-    <p class="cycle__note">Built and verified. Say <b>“deploy”</b> to ship it to live.</p>
-  </div>
-</section>
-
-<!-- ───────────────────────── VERIFIED ───────────────────────── -->
-<section class="panel" data-panel="verified">
-  <h2>What the browser actually proved</h2>
-  <p class="lede">
-    Not "it builds" — a Playwright script drove a real isolated harness (its own data dir,
-    two scratch agent docks) and asserted the shipped behaviour. <b>17 / 17 checks passed</b>,
-    and the screenshots were read before this was called done.
-  </p>
-
-  <div class="verihead">
-    <div class="verihead__score" role="img" aria-label="17 of 17 checks passed">
-      <span class="verihead__num">17</span><span class="verihead__den">/17</span>
-    </div>
-    <div class="verihead__meta">
-      <div><b>verify-dock-loop-model.mjs</b> · isolated harness on <code>:5221</code></div>
-      <div class="verihead__sub">own <code>%APPDATA%</code>-style data dir · scratch repos <code>loop-model-a/-b</code> · cleaned up after</div>
-    </div>
-  </div>
-
-  <div class="vgrid">
-    <div class="vcol vcol--sugg">
-      <div class="vcol__h">💡 Suggestion section</div>
-      <ul class="vlist">
-        <li>state starts <b>“Not armed”</b></li>
-        <li>arm flips it to <b>Armed · suggest‑only</b></li>
-        <li>the 💡 badge appears while armed</li>
-        <li>the ungated projection lists the armed repo id</li>
-        <li>projection stays <b>status‑only</b> — no threshold / deny‑list / prompts leak</li>
+    <div class="card">
+      <h2>Judgment calls baked in</h2>
+      <ul>
+        <li class="k" style="font-weight:400"><b class="k">stop = disarm.</b> One slot, one clear action — no separate
+          "stop the loop" vs "unarm the agent".</li>
+        <li class="k" style="font-weight:400"><b class="k">suggestion defaults:</b> new suggestion instances arm in
+          <span style="color:var(--suggest)">suggest</span> mode and uncapped.</li>
+        <li class="k" style="font-weight:400"><b class="k">the old global auto-advance toggle lives on</b> as the
+          <i>default mode</i> for newly armed suggestion instances — and flips armed ones, keeping its old meaning.</li>
+        <li class="k" style="font-weight:400"><b class="k">nothing committed yet</b> — awaiting the preview-on-live
+          ritual before deploy.</li>
       </ul>
     </div>
-    <div class="vcol vcol--goal">
-      <div class="vcol__h">🎯 Goal section</div>
-      <ul class="vlist">
-        <li>exactly <b>2 sections</b>, no stray queue section</li>
-        <li>section heads read 💡 Suggestion‑based + 🎯 Goal‑based</li>
-        <li>both carry a one‑line description</li>
-        <li>a <b>Recipes</b> label sits inside the goal section</li>
-        <li>seeded recipes <code>Drive the feature</code> / <code>Finish and ship</code> live under it</li>
-      </ul>
-    </div>
-    <div class="vcol vcol--badge">
-      <div class="vcol__h">🏷️ Typed badges &amp; gate</div>
-      <ul class="vlist">
-        <li>goal badge is 🎯‑typed with n/cap (<code>🎯 0/4</code>)</li>
-        <li>💡 coexists with the 🎯 badge</li>
-        <li>terminal state is 🎯‑typed (<code>🎯 escalated</code>)</li>
-        <li><code>NEEDS_HUMAN</code> question shows inline on the agent</li>
-        <li>gate closed → 💡 still visible, hint names the <b>host action</b></li>
-      </ul>
-    </div>
-  </div>
+  </section>
+</div>
 
-  <div class="callout callout--note">
-    <b>One honest snag.</b> The first Debug build reported 153 phantom errors — a Roslyn
-    <em>compiler‑server crash</em> surfaced through the build pipe, not a code problem. A
-    <code>dotnet build-server shutdown</code> + rebuild came back clean (0 errors), and only
-    then did the verify run. Flagged here so "it built" isn't taken on faith.
-  </div>
+<script>
+  document.querySelectorAll('.tab').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('.tab').forEach(function (x) { x.classList.remove('on'); });
+      document.querySelectorAll('.view').forEach(function (x) { x.classList.remove('on'); });
+      b.classList.add('on');
+      document.getElementById('v-' + b.dataset.v).classList.add('on');
+    });
+  });
 
-  <div class="cycle cycle--v">
-    <h3>Where this sits now</h3>
-    <div class="cycle__row">
-      <span class="cycle__step is-done">playback ✓</span>
-      <span class="cycle__arr">→</span>
-      <span class="cycle__step is-done">create ✓</span>
-      <span class="cycle__arr">→</span>
-      <span class="cycle__step is-done">build + verify (iso :5221) ✓</span>
-      <span class="cycle__arr">→</span>
-      <span class="cycle__step is-done">commit 748b1e6 ✓</span>
-      <span class="cycle__arr">→</span>
-      <span class="cycle__step is-next">“deploy”</span>
-      <span class="cycle__arr">→</span>
-      <span class="cycle__step">“keep it”</span>
-    </div>
-    <p class="cycle__note">
-      Committed and green. The UI change reaches live only on a deploy (<code>swap.ps1</code>) —
-      say <b>“deploy”</b> when you want it shipped.
-    </p>
-  </div>
-</section>
+  // 🎯 goal-loop simulator — mirrors GoalLoop.Decide + the engine's mode dispatch.
+  var CAP = 6;
+  var st = { status:'looping', mode:'drive', phase:'work', iter:0, pending:null };
+  var E = function (id) { return document.getElementById(id); };
+  function log(m){ var d=document.createElement('div'); d.textContent=m; E('s-log').prepend(d); }
+  function render(){
+    E('s-status').textContent = st.status;
+    E('s-status').className = 'v ' + ({looping:'s-loop','done (verified)':'s-done',escalated:'s-esc',capped:'s-cap'}[st.status]||'s-stop');
+    E('s-mode').textContent = st.mode;
+    E('s-mode').className = 'v ' + (st.mode==='drive'?'m-drive':'m-suggest');
+    E('s-phase').textContent = st.phase;
+    E('s-iter').textContent = st.iter + ' / ' + CAP;
+    E('s-pending').style.display = st.pending ? '' : 'none';
+    E('s-pending-t').textContent = st.pending || '';
+    E('m-drive').classList.toggle('on', st.mode==='drive');
+    E('m-suggest').classList.toggle('on', st.mode==='suggest');
+    var active = st.status==='looping';
+    E('b-work').disabled = !active || st.phase!=='work';
+    E('b-claim').disabled = !active || st.phase!=='work';
+    E('b-verified').disabled = !active || st.phase!=='verify';
+    E('b-gaps').disabled = !active || st.phase!=='verify';
+    E('b-human').disabled = !active;
+  }
+  // The engine executing a Propose under the current mode.
+  function propose(what, enterPhase){
+    if (st.mode==='suggest'){
+      st.pending = what;
+      if (enterPhase) st.phase = enterPhase;
+      log('engine PENDS the ' + what + ' — in your textbox, you send it');
+      return;
+    }
+    if (st.iter >= CAP){ st.status='capped'; st.pending=null; log('cap ' + st.iter + '/' + CAP + ' → capped'); return; }
+    st.iter++; st.pending=null;
+    if (enterPhase) st.phase = enterPhase;
+    log('engine SENDS the ' + what + ' (iteration ' + st.iter + '/' + CAP + ', audited)');
+  }
+  E('m-drive').onclick = function(){ if(st.mode!=='drive'){ st.mode='drive'; log('mode → drive (counters kept)'); render(); } };
+  E('m-suggest').onclick = function(){ if(st.mode!=='suggest'){ st.mode='suggest'; log('mode → suggest (counters kept)'); render(); } };
+  E('b-work').onclick = function(){ log('agent: made progress, no markers'); propose('work prompt'); render(); };
+  E('b-claim').onclick = function(){
+    log('agent: … LOOP_DONE (done-claim, not trusted)');
+    propose('VERIFICATION prompt', 'verify'); render();
+  };
+  E('b-verified').onclick = function(){
+    log('agent: checked real state — GOAL_VERIFIED');
+    st.status='done (verified)'; st.pending=null; log('Stop(done, verified) ✓'); render();
+  };
+  E('b-gaps').onclick = function(){
+    log('agent: verification found gaps');
+    propose('work prompt', 'work'); render();
+  };
+  E('b-human').onclick = function(){
+    log('agent: NEEDS_HUMAN: which DB do we target?');
+    st.status='escalated'; st.pending=null; log('Stop(escalate, needs-human) — question shown on the dock'); render();
+  };
+  E('b-reset').onclick = function(){
+    st = { status:'looping', mode:st.mode, phase:'work', iter:0, pending:null };
+    E('s-log').innerHTML=''; log('re-armed (cap ' + CAP + ', mode ' + st.mode + ')'); render();
+  };
+  log('armed (cap ' + CAP + ', mode drive)'); render();
 
-</main>
+  // ⑤ phantom co-driver — detect & kill
+  E('ph-kill').onclick = function(){
+    document.querySelector('.proc.dead').classList.add('killed');
+    E('ph-target').classList.add('safe');
+    E('ph-target').querySelector('.pd').textContent = 'single owner again → edits reconciled';
+    var out = E('ph-out'); out.style.display='';
+    out.textContent =
+      '# enumerate every claude.exe, show its parent + command line\n' +
+      'wmic process where "name=\'claude.exe\'" get ProcessId,ParentProcessId,CommandLine /format:list\n' +
+      '\n  ProcessId=8048  ParentProcessId=<dead harness>  --resume <THIS session id>   ← the orphan\n' +
+      '\n# parent is gone → no owner, no stop API. kill it, then reconcile its edits.\n' +
+      'taskkill //PID 8048 //F';
+    E('ph-kill').disabled = true;
+  };
 
-<footer class="foot">
-  Companion to the chat reply · overwrites <code>understanding-app/index.html</code> each turn ·
-  seeded recipes live in <code>ClaudeWeb.App/Services/Autopilot/LoopRecipeStore.cs</code>
-</footer>
-
-<script src="./app.js"></script>
+  // ⑤ re-arm dedup bug — ArmedAt generation stamp
+  var fxFixed = false;
+  E('fx-off').onclick = function(){ fxFixed=false; E('fx-off').classList.add('on'); E('fx-on').classList.remove('on'); resetFx(); };
+  E('fx-on').onclick  = function(){ fxFixed=true;  E('fx-on').classList.add('on'); E('fx-off').classList.remove('on'); resetFx(); };
+  function resetFx(){ E('fx-act').textContent='—'; E('fx-act').style.color='var(--mut)'; }
+  E('fx-arm').onclick = function(){
+    var a = E('fx-act');
+    if (fxFixed){
+      a.textContent = 'ArmedAt bumped → guard reset → acts on msg #42 now';
+      a.style.color = 'var(--goal)';
+    } else {
+      a.textContent = 'guard says "#42 already handled" → idle a whole turn 🐞';
+      a.style.color = 'var(--bad)';
+    }
+  };
+</script>
 </body>
 </html>

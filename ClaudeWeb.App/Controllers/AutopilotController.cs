@@ -42,8 +42,8 @@ public class AutopilotController : ControllerBase
     public AutopilotController(
         AutopilotDiscoveryService discovery, AutopilotService engine,
         AutopilotConfigStore config, LoopConfigStore loops, LoopRecipeStore recipes,
-        AutopilotGate operatorGate, AutopilotAuditLog audit, SystemTestsService systests,
-        Logger logger)
+        AutopilotGate operatorGate, AutopilotAuditLog audit,
+        SystemTestsService systests, Logger logger)
     {
         _discovery = discovery;
         _engine = engine;
@@ -94,23 +94,49 @@ public class AutopilotController : ControllerBase
         if (req is null) return BadRequest(new { error = "missing body" });
 
         if (req.Enabled is bool enabled) _config.SetEnabled(enabled);
-        if (req.AutoAdvance is bool autoAdvance) _config.SetAutoAdvance(autoAdvance);
+        if (req.AutoAdvance is bool autoAdvance)
+        {
+            // Revision 2: auto-advance is the DEFAULT MODE for newly armed suggestion
+            // loops, and (keeping the console toggle's old meaning) flips the mode of
+            // every ACTIVE suggestion instance live.
+            _config.SetAutoAdvance(autoAdvance);
+            var mode = autoAdvance ? LoopConfigStore.ModeDrive : LoopConfigStore.ModeSuggest;
+            foreach (var l in _loops.All().Where(l =>
+                         l is { Active: true, Kind: LoopConfigStore.KindSuggestion }))
+                _loops.SetMode(l.RepoId, mode);
+        }
         if (req.Threshold is double threshold) _config.SetThreshold(threshold);
-        if (!string.IsNullOrEmpty(req.RepoId) && req.Armed is bool armed) _config.SetArmed(req.RepoId, armed);
+        // Arming the suggestion mode is arming its loop instance — the one store slot
+        // per agent IS the exclusive-arming rule (revision 2, D8), so this displaces
+        // whatever loop was armed. Disarm only clears a suggestion instance here
+        // (this endpoint never touches a driven loop).
+        if (!string.IsNullOrEmpty(req.RepoId) && req.Armed is bool armed)
+        {
+            if (armed)
+                _loops.StartSuggestion(req.RepoId,
+                    _config.Get().AutoAdvance ? LoopConfigStore.ModeDrive : LoopConfigStore.ModeSuggest);
+            else if (_loops.Get(req.RepoId) is { Active: true, Kind: LoopConfigStore.KindSuggestion })
+                _loops.Stop(req.RepoId);
+        }
 
         return Ok(BuildState());
     }
 
     public sealed record LoopRequest(
-        string? RepoId, string? Action, string? Prompt, string? Sentinel, int? MaxIterations,
-        string? RecipeId);
+        string? RepoId, string? Action, string? Kind, string? Mode, string? Prompt,
+        string? Goal, string? Sentinel, int? MaxIterations, string? RecipeId);
 
-    /// <summary>Loop mode (plans/autopilot-loop-mode.md): arm / edit / stop the
-    /// per-agent fixed-prompt resend loop. <c>action</c> = start | update | stop.
-    /// A start may name a <c>recipeId</c> instead of composing fields: the server
-    /// fills prompt/sentinel/cap from the stored recipe (cap still overridable),
-    /// sending the recipe's prompt text byte-identical — nothing injected.
-    /// Gated like every other autopilot action; returns the fresh state.</summary>
+    /// <summary>The loop control (openspec: unify-loop-types, revision 2): one
+    /// endpoint arms / edits / disarms an agent's ONE loop instance of any kind.
+    /// <c>action</c> = start | mode | update | stop | disarm. A start's <c>kind</c>
+    /// picks the implementation — "suggestion" (no params), "goal" (free-text
+    /// <c>goal</c>), else recipe (a <c>recipeId</c> whose stored prompt/sentinel/cap
+    /// the server fills byte-identical, or a raw <c>prompt</c>). Every start accepts
+    /// the common <c>mode</c> (suggest | drive; drive is the driven kinds' default);
+    /// <c>mode</c> as an action flips a live instance without resetting it. Arming
+    /// replaces the agent's slot — exclusive arming by construction; <c>stop</c> and
+    /// <c>disarm</c> are the same single clear. Gated like every other autopilot
+    /// action; returns the fresh state.</summary>
     [HttpPost("loop")]
     public IActionResult Loop([FromBody] LoopRequest req)
     {
@@ -122,22 +148,43 @@ public class AutopilotController : ControllerBase
         switch ((req.Action ?? "start").ToLowerInvariant())
         {
             case "start":
+                if (string.Equals(req.Kind, LoopConfigStore.KindSuggestion, StringComparison.OrdinalIgnoreCase))
+                {
+                    _loops.StartSuggestion(req.RepoId, req.Mode
+                        ?? (_config.Get().AutoAdvance ? LoopConfigStore.ModeDrive : LoopConfigStore.ModeSuggest));
+                    break;
+                }
+                if (string.Equals(req.Kind, LoopConfigStore.KindGoal, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (string.IsNullOrWhiteSpace(req.Goal))
+                        return BadRequest(new { error = "a goal loop needs a goal" });
+                    _loops.StartGoal(req.RepoId, req.Goal.Trim(), req.MaxIterations, req.Mode);
+                    break;
+                }
                 if (!string.IsNullOrWhiteSpace(req.RecipeId))
                 {
                     if (_recipes.Get(req.RecipeId) is not { } recipe)
                         return NotFound(new { error = $"unknown recipe \"{req.RecipeId}\"" });
                     _loops.Start(req.RepoId, recipe.Prompt, recipe.Sentinel,
-                        req.MaxIterations ?? recipe.MaxIterations, recipe.Id, recipe.Name);
+                        req.MaxIterations ?? recipe.MaxIterations, recipe.Id, recipe.Name, req.Mode);
                     break;
                 }
                 if (string.IsNullOrWhiteSpace(req.Prompt))
                     return BadRequest(new { error = "a loop needs a prompt to resend" });
-                _loops.Start(req.RepoId, req.Prompt.Trim(), req.Sentinel, req.MaxIterations);
+                _loops.Start(req.RepoId, req.Prompt.Trim(), req.Sentinel, req.MaxIterations, mode: req.Mode);
+                break;
+            case "mode":
+                if (string.IsNullOrWhiteSpace(req.Mode))
+                    return BadRequest(new { error = "the mode action needs a mode (suggest | drive)" });
+                if (_loops.SetMode(req.RepoId, req.Mode) is null)
+                    return NotFound(new { error = "no loop instance on this agent" });
                 break;
             case "update":
                 _loops.Update(req.RepoId, req.Prompt, req.Sentinel, req.MaxIterations);
                 break;
             case "stop":
+            case "disarm":
+                // One slot per agent → one clear, whatever the kind (revision 2, D8).
                 _loops.Stop(req.RepoId);
                 break;
             default:
@@ -160,20 +207,20 @@ public class AutopilotController : ControllerBase
     public IActionResult Loops()
     {
         _logger.CountRequest();
-        var cfg = _config.Get();
+        var gateOpen = _operatorGate.Enabled;
         return Ok(new
         {
-            gateOpen = _operatorGate.Enabled,
-            // Suggestion-loop arming STATUS (openspec: align-dock-loop-model) — which
-            // repos are armed + the auto-advance / kill-switch flags, so the dock can
-            // type its badges honestly with the gate closed. Still no prompts,
-            // threshold, or deny-list: the disclosure stays status-only.
-            suggestionArmedRepoIds = cfg.ArmedRepoIds,
-            autoAdvance = cfg.AutoAdvance,
-            suggestionEnabled = cfg.Enabled,
+            gateOpen,
+            // Revision 2: ONE unified record per agent — a suggestion instance is a
+            // loop like the others, so there are no parallel suggestion fields.
             loops = _loops.All().Select(l => new
             {
                 repoId = l.RepoId,
+                // kind + mode + phase are status words (openspec: unify-loop-types) —
+                // the goal/prompt TEXT stays gated, in the detail endpoint below.
+                kind = l.Kind,
+                mode = l.Mode,
+                phase = l.Phase,
                 active = l.Active,
                 status = l.Status,
                 iterationsDone = l.IterationsDone,
@@ -182,6 +229,11 @@ public class AutopilotController : ControllerBase
                 stopReason = l.StopReason,
                 stopDetail = l.StopDetail,
                 recipeName = l.RecipeName,
+                // The one prompt-text exception (revision 2, D9): a suggest-mode
+                // instance's pending prompt, disclosed ONLY while the gate is open —
+                // with the gate closed the engine is idle and pends nothing, so the
+                // closed-gate disclosure surface is unchanged.
+                pendingPrompt = gateOpen ? l.PendingPrompt : null,
             }),
             recipes = _recipes.List().Select(r => new
             {
@@ -189,6 +241,28 @@ public class AutopilotController : ControllerBase
                 name = r.Name,
                 maxIterations = r.MaxIterations,
             }),
+        });
+    }
+
+    /// <summary>The prompt-level counterpart (openspec: unify-loop-types, design D5),
+    /// OPERATOR-GATED like every prompt disclosure: full loop records (stored work +
+    /// verification prompts, goal text, phase), full recipe bodies, and the goal-loop
+    /// composition templates — so the dock can preview byte-identical what the engine
+    /// will send before and after arming.</summary>
+    [HttpGet("loops/detail")]
+    public IActionResult LoopsDetail()
+    {
+        _logger.CountRequest();
+        if (GateClosed() is { } closed) return closed;
+        return Ok(new
+        {
+            loops = _loops.All(),
+            recipes = _recipes.List(),
+            goalTemplates = new
+            {
+                work = LoopConfigStore.GoalWorkTemplate,
+                verify = LoopConfigStore.GoalVerifyTemplate,
+            },
         });
     }
 

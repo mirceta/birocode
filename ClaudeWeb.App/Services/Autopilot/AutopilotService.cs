@@ -8,22 +8,24 @@ using Microsoft.Extensions.Hosting;
 namespace ClaudeWeb.Services.Autopilot;
 
 /// <summary>
-/// The engine (plans/loop-autopilot-engine.md, option A — backend polling). A hosted
-/// <see cref="BackgroundService"/> that, every ~10s, looks at each <b>armed</b> agent
-/// (repo) that is idle, reads its last assistant message, asks the
-/// <see cref="PromptClassifier"/> brain for a routine prompt or escalate, and records
-/// the verdict as that agent's state — plus an append-only suggestion log.
+/// The engine (plans/loop-autopilot-engine.md; openspec: unify-loop-types revision 2).
+/// A hosted <see cref="BackgroundService"/> that, every ~10s, looks at each agent
+/// (repo) with an ACTIVE loop instance that is idle, reads its last assistant
+/// message, and asks the instance's <see cref="ILoop"/> implementation (💡
+/// suggestion / 📋 recipe / 🎯 goal) for exactly one decision — hold, stop, or
+/// propose-a-prompt. The engine owns only MECHANICS, applied uniformly to every
+/// kind: idle detection, per-message dedup, the cap check before any drive-mode
+/// send, sending, pending-prompt recording, intercept/log/audit records.
 ///
-/// When <b>auto-advance</b> is on (Slice 3, off by default), a confident, non-risky
-/// suggestion is not just surfaced — the engine SENDS that routine prompt to the
-/// agent (resuming its session) through the same <see cref="CliRunnerService"/> path
-/// the chat UI uses, and records the send in the append-only
-/// <see cref="AutopilotAuditLog"/>. When auto-advance is off it stays suggest-only
-/// (the original Slice 2 behaviour): it classifies and surfaces, never sends.
+/// A proposed prompt dispatches on the instance's MODE: <b>drive</b> sends it
+/// (resuming the agent's session through the same <see cref="CliRunnerService"/>
+/// path the chat UI uses, capped and audited); <b>suggest</b> records it as the
+/// instance's pending prompt for the human to send from the composer — the loop
+/// advances only when the agent's reply changes.
 ///
 /// The gate (threshold + deny-list + kill switch + operator gate) lives in
 /// <see cref="AutopilotConfigStore"/>/<see cref="AutopilotGate"/> and is applied
-/// before any send: ambiguity or risk → escalate, never auto-send.
+/// before any send: ambiguity or risk → escalate/hold, never auto-send.
 ///
 /// It reads the last message from the on-disk transcript (the same source as
 /// discovery), so it needs no new hook into the live run buffer.
@@ -52,11 +54,18 @@ public class AutopilotService : BackgroundService
     private readonly Logger _logger;
 
     private readonly ConcurrentDictionary<string, AgentState> _states = new();
-    // Per-repo guard: the assistant-message snippet we last auto-sent against, so a
-    // tick that fires before the new run registers as busy can't double-send.
-    private readonly ConcurrentDictionary<string, string> _lastSent = new();
-    // Same guard, but for loop-mode resends (plans/autopilot-loop-mode.md).
-    private readonly ConcurrentDictionary<string, string> _lastLoopSent = new();
+    // Per-repo guard: the assistant-message snippet we last DROVE against (sent a
+    // prompt for), so a tick that fires before the new run registers as busy can't
+    // double-send.
+    private readonly ConcurrentDictionary<string, string> _lastDriveSent = new();
+    // Per-repo guard for SUGGEST mode: the snippet a pending proposal was recorded
+    // against. Until the agent's reply changes, the instance is not re-decided —
+    // this is what "the loop advances when the reply changes" means, and it keeps a
+    // goal loop's phase from oscillating while its verification prompt sits unsent.
+    private readonly ConcurrentDictionary<string, string> _suggestWait = new();
+    // The ArmedAt stamp last seen per repo — a change means a re-arm, which
+    // resets both guards above (see Tick).
+    private readonly ConcurrentDictionary<string, long> _armGen = new();
     private readonly object _logGate = new();
     private readonly LinkedList<LogEntry> _log = new();
     // The live "Intercepted" feed: one entry per NEW agent message the engine grabs
@@ -66,11 +75,14 @@ public class AutopilotService : BackgroundService
     private readonly LinkedList<InterceptEvent> _intercepts = new();
     private readonly ConcurrentDictionary<string, string> _lastIntercepted = new();
 
+    // Kind name -> semantics implementation (revision 2, D7). Resolved once from DI.
+    private readonly IReadOnlyDictionary<string, ILoop> _kinds;
+
     public AutopilotService(
         RepositoryRegistry repos, SessionService sessions, RunSessionService runs,
         CliRunnerService cli, AutopilotConfigStore config, LoopConfigStore loops,
         AutopilotGate operatorGate, PromptClassifier brain, AutopilotDiscoveryService discovery,
-        PromptsService prompts, AutopilotAuditLog audit, Logger logger)
+        PromptsService prompts, AutopilotAuditLog audit, IEnumerable<ILoop> kinds, Logger logger)
     {
         _repos = repos;
         _sessions = sessions;
@@ -84,6 +96,27 @@ public class AutopilotService : BackgroundService
         _prompts = prompts;
         _audit = audit;
         _logger = logger;
+        _kinds = kinds.ToDictionary(k => k.Kind);
+
+        DrainLegacyArming();
+    }
+
+    /// <summary>One-time migration (revision 2, D8): legacy autopilot.json
+    /// ArmedRepoIds become armed suggestion loop instances (drive iff the legacy
+    /// global auto-advance was on), then the legacy list is cleared so this never
+    /// repeats. A repo that already has a loop instance keeps it — the loop won the
+    /// slot under the old precedence rule too.</summary>
+    private void DrainLegacyArming()
+    {
+        var cfg = _config.Get();
+        if (cfg.ArmedRepoIds.Count == 0) return;
+        var mode = cfg.AutoAdvance ? LoopConfigStore.ModeDrive : LoopConfigStore.ModeSuggest;
+        foreach (var repoId in cfg.ArmedRepoIds)
+        {
+            if (_loops.Get(repoId) is { Active: true }) continue;
+            _loops.StartSuggestion(repoId, mode);
+        }
+        _config.ClearLegacyArming();
     }
 
     // The brain's label space is the user's EDITABLE custom prompts, enriched by a
@@ -193,135 +226,211 @@ public class AutopilotService : BackgroundService
         var nowOffset = DateTimeOffset.UtcNow;
         var now = nowOffset.ToUnixTimeMilliseconds();
 
-        // The label space the brain may pick from — the user's editable custom prompts
-        // (enriched by the cached mining pass), not a built-in list.
+        // The label space the suggestion kind may pick from — the user's editable
+        // custom prompts (enriched by the cached mining pass), not a built-in list.
         var routines = Routines(nowOffset);
 
         foreach (var repo in _repos.GetAll().Where(r => r.Exists))
         {
-            // Loop mode (plans/autopilot-loop-mode.md) takes precedence and is its own
-            // arming, independent of the classifier. A repo with an ACTIVE loop is driven
-            // deterministically here and skips classification entirely, so the two can
-            // never both send to the same agent. The kill switch still pauses sends.
-            if (_loops.Get(repo.Id) is { Active: true } loop)
+            var loop = _loops.Get(repo.Id);
+
+            // No active instance → nothing to do; surface the terminal state if any.
+            if (loop is not { Active: true })
             {
-                if (cfg.Enabled) HandleLoop(repo, loop, cfg.DenyList, now);
-                Set(repo.Id, new AgentState(
-                    repo.Id, repo.Name, cfg.ArmedRepoIds.Contains(repo.Id), "off",
-                    null, 0, cfg.Enabled ? "loop mode running" : "loop paused (kill switch off)", "", now));
+                Set(repo.Id, new AgentState(repo.Id, repo.Name, false, "off", null, 0,
+                    loop is null ? "" : $"loop {loop.Status}", "", now));
                 continue;
             }
 
-            var armed = cfg.ArmedRepoIds.Contains(repo.Id);
+            var isSuggestionKind = loop.Kind == LoopConfigStore.KindSuggestion;
 
-            // Not armed → it's listed as "off"; we don't classify it.
-            if (!armed)
-            {
-                Set(repo.Id, new AgentState(repo.Id, repo.Name, false, "off", null, 0, "", "", now));
-                continue;
-            }
-
-            // Kill switch off → armed agents are paused (reverts to manual), no classifying.
+            // Kill switch off → every armed instance is paused (reverts to manual).
             if (!cfg.Enabled)
             {
-                Set(repo.Id, new AgentState(repo.Id, repo.Name, true, "paused", null, 0, "kill switch is off", "", now));
+                Set(repo.Id, new AgentState(repo.Id, repo.Name, isSuggestionKind, "paused",
+                    null, 0, "kill switch is off", "", now));
                 continue;
             }
 
             // A running agent isn't idle — wait for its turn to finish.
             if (_runs.IsBusy(repo.Id))
             {
-                Keep(repo.Id, "running", repo, armed, now);
+                Keep(repo.Id, "running", repo, isSuggestionKind, now);
                 continue;
             }
 
+            var run = _runs.Get(repo.Id);
             var (sessionId, lastAssistant) = LastAssistantMessage(repo.Path);
-            if (string.IsNullOrWhiteSpace(lastAssistant))
+            var snippet = Snippet(lastAssistant ?? "");
+
+            // A NEW arm generation clears the per-repo dedup guards: a freshly
+            // armed instance must act on the agent's CURRENT trailing message even
+            // if a previous instance already acted on that very message.
+            if (!_armGen.TryGetValue(repo.Id, out var gen) || gen != loop.ArmedAt)
             {
-                Set(repo.Id, new AgentState(repo.Id, repo.Name, true, "idle", null, 0, "no recent agent message", "", now));
+                _armGen[repo.Id] = loop.ArmedAt;
+                _lastDriveSent.TryRemove(repo.Id, out _);
+                _suggestWait.TryRemove(repo.Id, out _);
+            }
+
+            // Driven kinds need a session to resume into; wait for the agent to speak.
+            if (!isSuggestionKind && string.IsNullOrWhiteSpace(sessionId)) continue;
+
+            if (isSuggestionKind && string.IsNullOrWhiteSpace(lastAssistant))
+            {
+                Set(repo.Id, new AgentState(repo.Id, repo.Name, true, "idle", null, 0,
+                    "no recent agent message", "", now));
                 continue;
             }
 
-            var v = _brain.Classify(lastAssistant, cfg.Threshold, cfg.DenyList, routines);
-            var snippet = Snippet(lastAssistant);
-            var prev = _states.TryGetValue(repo.Id, out var p) ? p : null;
+            // Drive dedup: already sent against this exact trailing message (a tick
+            // that fired before the new run registered busy) → don't double-send.
+            if (loop.Mode == LoopConfigStore.ModeDrive
+                && _lastDriveSent.TryGetValue(repo.Id, out var ds) && ds == snippet) continue;
+            // Suggest dedup: a pending proposal is already recorded against this
+            // message — the loop advances when the agent's reply changes (D9).
+            if (loop.Mode == LoopConfigStore.ModeSuggest
+                && _suggestWait.TryGetValue(repo.Id, out var sw) && sw == snippet) continue;
 
-            // Interception: record one feed entry the first time we see this trailing
-            // message for the repo (so an idle agent isn't re-intercepted every tick).
-            // It starts in "processing"; the resolve below — or, for an auto-send, the
-            // run's completion — flips it to "done".
+            // Interception feed (suggestion kind only, as before): one entry the
+            // first time we see this trailing message for the repo.
             InterceptEvent? intercept = null;
-            if (!_lastIntercepted.TryGetValue(repo.Id, out var li) || li != snippet)
+            if (isSuggestionKind
+                && (!_lastIntercepted.TryGetValue(repo.Id, out var li) || li != snippet))
             {
                 _lastIntercepted[repo.Id] = snippet;
                 intercept = BeginIntercept(repo, snippet, now);
             }
 
-            // Auto-advance (Slice 3): a confident, non-risky suggestion is SENT, not
-            // just surfaced. Everything else (escalate, low confidence, deny-listed)
-            // has already been folded into v.Escalate by the gate, so we only ever
-            // send a verdict the gate cleared.
-            if (!v.Escalate && cfg.AutoAdvance && cfg.Enabled
-                && !string.IsNullOrWhiteSpace(v.Label) && !string.IsNullOrWhiteSpace(sessionId))
+            // The kind's SEMANTICS — one decision (revision 2, D7).
+            if (!_kinds.TryGetValue(loop.Kind, out var impl))
             {
-                if (TrySend(repo, sessionId!, v, snippet, now, intercept))
+                _logger.Error($"[LOOP] {repo.Name}: no implementation for kind \"{loop.Kind}\"");
+                continue;
+            }
+            var decision = impl.Decide(new LoopContext(
+                loop, lastAssistant, run?.Status == "error", cfg.DenyList, cfg.Threshold, routines));
+
+            Execute(repo, loop, decision, sessionId, snippet, intercept, now);
+        }
+    }
+
+    /// <summary>The shared MECHANICS for a kind's decision (revision 2, D7/D9).</summary>
+    private void Execute(
+        RepositoryRegistry.RepositoryInfo repo, LoopConfigStore.LoopState loop,
+        LoopDecision decision, string? sessionId, string snippet,
+        InterceptEvent? intercept, long now)
+    {
+        var isSuggestionKind = loop.Kind == LoopConfigStore.KindSuggestion;
+        var prev = _states.TryGetValue(repo.Id, out var p) ? p : null;
+
+        switch (decision)
+        {
+            case LoopDecision.Stop stop:
+                // Error stops repeat while the run stays errored — resolve once.
+                if (loop.Status != stop.Status)
                 {
-                    Set(repo.Id, new AgentState(
-                        repo.Id, repo.Name, true, "sent", v.Label, v.Confidence,
-                        $"auto-sent \"{v.Label}\"", snippet, now));
-                    Append(new LogEntry(now, repo.Name, "sent", v.Label, v.Confidence));
-                    continue; // intercept stays "processing" until the run completes
+                    _loops.Resolve(repo.Id, stop.Status, stop.Reason, stop.Detail);
+                    _logger.Info($"[LOOP] {repo.Name} {loop.Kind} -> {stop.Status} ({stop.Reason}: {stop.Detail})");
                 }
-                // Send didn't fire (already running, or no slot) — fall through to
-                // surfacing the suggestion; next idle tick retries.
+                if (intercept != null)
+                    FinishIntercept(intercept, "escalated", null, 0, now);
+                return;
+
+            case LoopDecision.Hold hold:
+            {
+                var state = hold.Escalate ? "escalate" : "idle";
+                Set(repo.Id, new AgentState(repo.Id, repo.Name, isSuggestionKind, state,
+                    hold.Label, hold.Confidence, hold.Reason, snippet, now));
+                if (hold.Escalate && (prev is null || prev.Decision != state || prev.Label != hold.Label))
+                    Append(new LogEntry(now, repo.Name, "escalated", hold.Label, hold.Confidence));
+                if (intercept != null)
+                    FinishIntercept(intercept, "escalated", hold.Label, hold.Confidence, now);
+                return;
             }
 
-            var decision = v.Escalate ? "escalate" : "suggestion";
-            Set(repo.Id, new AgentState(
-                repo.Id, repo.Name, true, decision, v.Label, v.Confidence, v.Reason, snippet, now));
+            case LoopDecision.Propose propose:
+                if (loop.Mode == LoopConfigStore.ModeSuggest)
+                {
+                    // Suggest: record the pending prompt (pre-fills the composer);
+                    // nothing is sent, the counter does not advance, and we hold
+                    // until the agent's reply changes.
+                    _loops.SetPending(repo.Id, propose.Prompt);
+                    if (propose.EnterPhase != null) _loops.SetPhase(repo.Id, propose.EnterPhase);
+                    _suggestWait[repo.Id] = snippet;
+                    Set(repo.Id, new AgentState(repo.Id, repo.Name, isSuggestionKind, "suggestion",
+                        propose.Prompt, propose.Confidence, "pending — pre-filled for you to send", snippet, now));
+                    if (prev is null || prev.Decision != "suggestion" || prev.Label != propose.Prompt)
+                        Append(new LogEntry(now, repo.Name, "suggested", Snippet(propose.Prompt), propose.Confidence));
+                    if (intercept != null)
+                        FinishIntercept(intercept, "suggested", propose.Prompt, propose.Confidence, now);
+                    return;
+                }
 
-            // Log only when the verdict for this agent actually changes (not every tick).
-            if (prev is null || prev.Decision != decision || prev.Label != v.Label)
-                Append(new LogEntry(now, repo.Name, v.Escalate ? "escalated" : "suggested", v.Label, v.Confidence));
-
-            // Resolve the interception (suggest-only, or a send that didn't fire).
-            if (intercept != null)
-                FinishIntercept(intercept, v.Escalate ? "escalated" : "suggested", v.Label, v.Confidence, now);
+                // Drive: the cap gates every send, including a goal loop's
+                // verification send (0 = uncapped, the suggestion default).
+                if (loop.MaxIterations > 0 && loop.IterationsDone >= loop.MaxIterations)
+                {
+                    var detail = $"cap {loop.IterationsDone}/{loop.MaxIterations} reached"
+                        + (propose.EnterPhase == LoopConfigStore.PhaseVerify ? " before verification" : "");
+                    _loops.Resolve(repo.Id, "capped", "cap", detail);
+                    if (intercept != null) FinishIntercept(intercept, "escalated", null, 0, now);
+                    return;
+                }
+                if (string.IsNullOrWhiteSpace(sessionId)) return;
+                if (SendPrompt(repo, sessionId!, loop, propose.Prompt, propose.Confidence, snippet, intercept, now))
+                {
+                    // Flip the phase only after the send actually fired — a failed
+                    // slot claim leaves the loop as-is so the next tick retries.
+                    if (propose.EnterPhase != null) _loops.SetPhase(repo.Id, propose.EnterPhase);
+                    Set(repo.Id, new AgentState(repo.Id, repo.Name, isSuggestionKind, "sent",
+                        Snippet(propose.Prompt), propose.Confidence,
+                        isSuggestionKind ? $"auto-sent \"{propose.Prompt}\"" : $"{loop.Kind} loop sent",
+                        snippet, now));
+                    if (isSuggestionKind)
+                        Append(new LogEntry(now, repo.Name, "sent", propose.Prompt, propose.Confidence));
+                }
+                else if (intercept != null)
+                {
+                    FinishIntercept(intercept, "suggested", propose.Prompt, propose.Confidence, now);
+                }
+                return;
         }
     }
 
     /// <summary>
-    /// Sends the routine prompt <paramref name="v"/>.Label to the agent, resuming its
-    /// session, through the same detached-run path the chat UI uses. Returns false
-    /// without sending if the slot is already claimed or we just sent against this
-    /// very message (the pre-busy double-send guard). Every real send is audited.
+    /// The ONE send path (revision 2): sends a decided prompt to the agent, resuming
+    /// its session through the same detached-run path the chat UI uses. Returns false
+    /// without sending if the run slot is already claimed (the next tick retries).
+    /// Every send bumps the instance's iteration counter and is audited — outcome
+    /// "sent" for the suggestion kind (matching the old auto-advance rows), "loop"
+    /// for the driven kinds — so unattended sends stay durably recorded. A suggestion
+    /// intercept stays "processing" (spinner) for the whole resumed run and flips to
+    /// "sent" only when the run completes.
     /// </summary>
-    private bool TrySend(
+    private bool SendPrompt(
         RepositoryRegistry.RepositoryInfo repo, string sessionId,
-        PromptClassifier.Verdict v, string snippet, long now, InterceptEvent? intercept)
+        LoopConfigStore.LoopState loop, string prompt, double confidence, string snippet,
+        InterceptEvent? intercept, long now)
     {
-        // Guard: don't send twice against the same trailing message before the run
-        // we just started shows up as busy. A genuinely new agent reply has a new
-        // snippet, so the loop still advances naturally.
-        if (_lastSent.TryGetValue(repo.Id, out var sent) && sent == snippet)
-            return false;
-
         // Atomically claim the builder slot. If a turn is already running for this
         // repo (started by the user or a prior tick), don't pile on.
-        if (!_runs.TryBeginRun(repo.Id, "builder", out var session))
-            return false;
+        if (!_runs.TryBeginRun(repo.Id, "builder", out var session)) return false;
 
-        _lastSent[repo.Id] = snippet;
-        var prompt = v.Label!;
+        _lastDriveSent[repo.Id] = snippet;
+        var state = _loops.RecordSend(repo.Id, now);
+        var iter = state?.IterationsDone ?? loop.IterationsDone + 1;
+        var isSuggestionKind = loop.Kind == LoopConfigStore.KindSuggestion;
         var path = repo.Path;
 
         _audit.Record(new AutopilotAuditLog.Entry(
-            now, repo.Id, repo.Name, prompt, v.Confidence, snippet, "sent"));
-        _logger.Info($"[AUTOPILOT] auto-sent \"{prompt}\" to \"{repo.Name}\" (conf {v.Confidence:0.00})");
+            now, repo.Id, repo.Name, prompt, confidence, snippet,
+            isSuggestionKind ? "sent" : "loop"));
+        _logger.Info(isSuggestionKind
+            ? $"[AUTOPILOT] auto-sent \"{prompt}\" to \"{repo.Name}\" (conf {confidence:0.00})"
+            : $"[LOOP] resent to \"{repo.Name}\" (iteration {iter}{(loop.MaxIterations > 0 ? $"/{loop.MaxIterations}" : "")})");
 
-        // The intercept stays "processing" (spinner) for the whole resumed run — a
-        // real in-flight window — and flips to "sent" only when the run completes.
-        if (intercept != null) { intercept.Label = prompt; intercept.Confidence = v.Confidence; }
+        if (intercept != null) { intercept.Label = prompt; intercept.Confidence = confidence; }
 
         _ = Task.Run(async () =>
         {
@@ -333,151 +442,14 @@ public class AutopilotService : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.Error($"[AUTOPILOT] auto-send run for \"{repo.Name}\" crashed: {ex.Message}");
+                _logger.Error($"[LOOP] {loop.Kind} send run for \"{repo.Name}\" crashed: {ex.Message}");
             }
             finally
             {
                 session.Complete();
                 if (intercept != null)
-                    FinishIntercept(intercept, "sent", prompt, v.Confidence,
+                    FinishIntercept(intercept, "sent", prompt, confidence,
                         DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
-            }
-        });
-        return true;
-    }
-
-    /// <summary>
-    /// Loop mode's deterministic per-turn decision (plans/autopilot-loop-mode.md). The
-    /// agent's turn is done (we only get here when the repo isn't busy); read its last
-    /// message and either stop the loop or resend the one fixed prompt:
-    /// <list type="number">
-    /// <item>run errored → pause (mark <c>error</c>);</item>
-    /// <item>sentinel phrase present → the job is genuinely done (mark <c>done</c>);</item>
-    /// <item><c>NEEDS_HUMAN:</c> marker present → the agent is blocked on the human;
-    /// escalate, carrying the trailing question (mark <c>escalate</c>);</item>
-    /// <item>deny-listed risky action mentioned → hand back to the human (mark <c>escalate</c>);</item>
-    /// <item>iteration cap reached → stop (mark <c>capped</c>);</item>
-    /// <item>otherwise → resend the fixed prompt, bump the counter, audit it.</item>
-    /// </list>
-    /// No classifier and no LLM judge — every match is deterministic string matching and
-    /// adds no new prompt-injection surface. Risk fails safe: a deny-list hit stops rather
-    /// than sends. Every resolution records WHY it stopped (reason + detail) via
-    /// <see cref="LoopConfigStore.Resolve"/>.
-    /// </summary>
-    private void HandleLoop(
-        RepositoryRegistry.RepositoryInfo repo, LoopConfigStore.LoopState loop,
-        IReadOnlyList<string> denyList, long now)
-    {
-        // The agent's current turn is still running — wait for it to finish.
-        if (_runs.IsBusy(repo.Id)) return;
-
-        var run = _runs.Get(repo.Id);
-        var (sessionId, lastAssistant) = LastAssistantMessage(repo.Path);
-
-        // 1. The last run errored → pause; don't resend into a broken run.
-        if (run?.Status == "error")
-        {
-            if (loop.Status != "error") _loops.Resolve(repo.Id, "error", "error", "the agent's run errored");
-            return;
-        }
-
-        // No transcript/session yet → nothing to resume into; wait for the agent to speak.
-        if (string.IsNullOrWhiteSpace(sessionId)) return;
-
-        var snippet = Snippet(lastAssistant ?? "");
-
-        // Already acted on this exact trailing message (a tick that fired before the new
-        // run registered busy) → don't double-handle. A real new agent reply has a new
-        // snippet, so the loop still advances.
-        if (_lastLoopSent.TryGetValue(repo.Id, out var ls) && ls == snippet) return;
-
-        // 2. Sentinel present → the agent declared the whole job done. Stop.
-        if (!string.IsNullOrEmpty(loop.Sentinel)
-            && lastAssistant != null
-            && lastAssistant.Contains(loop.Sentinel, StringComparison.OrdinalIgnoreCase))
-        {
-            _loops.Resolve(repo.Id, "done", "sentinel", $"agent emitted \"{loop.Sentinel}\"");
-            _logger.Info($"[LOOP] {repo.Name} hit sentinel \"{loop.Sentinel}\" — done");
-            return;
-        }
-
-        // 3. NEEDS_HUMAN marker (docs/loop-driven-agent-convention.md) → the agent is
-        // blocked on a decision only the human can make. Escalate, carrying its question.
-        if (lastAssistant != null)
-        {
-            var idx = lastAssistant.IndexOf(NeedsHumanMarker, StringComparison.OrdinalIgnoreCase);
-            if (idx >= 0)
-            {
-                var question = Snippet(lastAssistant[(idx + NeedsHumanMarker.Length)..]);
-                _loops.Resolve(repo.Id, "escalate", "needs-human",
-                    string.IsNullOrEmpty(question) ? "the agent asked for the human" : question);
-                _logger.Info($"[LOOP] {repo.Name} escalated — NEEDS_HUMAN: {question}");
-                return;
-            }
-        }
-
-        // 4. Deny-list hit → the reply mentions a risky action. Hand back to the human.
-        if (lastAssistant != null)
-        {
-            var hit = denyList.FirstOrDefault(d =>
-                !string.IsNullOrEmpty(d) && lastAssistant.Contains(d, StringComparison.OrdinalIgnoreCase));
-            if (hit != null)
-            {
-                _loops.Resolve(repo.Id, "escalate", "deny-list", $"reply mentions deny-listed \"{hit}\"");
-                _logger.Info($"[LOOP] {repo.Name} escalated — deny-listed \"{hit}\" in reply");
-                return;
-            }
-        }
-
-        // 5. Iteration cap reached → refuse to run past it.
-        if (loop.IterationsDone >= loop.MaxIterations)
-        {
-            _loops.Resolve(repo.Id, "capped", "cap", $"cap {loop.IterationsDone}/{loop.MaxIterations} reached");
-            return;
-        }
-
-        // 6. Otherwise → resend the fixed prompt.
-        TrySendLoop(repo, sessionId!, loop, snippet, now);
-    }
-
-    /// <summary>
-    /// Resends the loop's fixed prompt, resuming the agent's session through the same
-    /// detached-run path the chat UI uses. Returns false without sending if the run slot
-    /// is already claimed. Every resend bumps the iteration counter and is audited with
-    /// <c>outcome = "loop"</c> so unattended sends are durably recorded.
-    /// </summary>
-    private bool TrySendLoop(
-        RepositoryRegistry.RepositoryInfo repo, string sessionId,
-        LoopConfigStore.LoopState loop, string snippet, long now)
-    {
-        // Atomically claim the builder slot. If a turn is already running, don't pile on.
-        if (!_runs.TryBeginRun(repo.Id, "builder", out var session)) return false;
-
-        _lastLoopSent[repo.Id] = snippet;
-        var state = _loops.RecordSend(repo.Id, now);
-        var iter = state?.IterationsDone ?? loop.IterationsDone + 1;
-        var prompt = loop.Prompt;
-        var path = repo.Path;
-
-        _audit.Record(new AutopilotAuditLog.Entry(
-            now, repo.Id, repo.Name, prompt, 1.0, snippet, "loop"));
-        _logger.Info($"[LOOP] resent to \"{repo.Name}\" (iteration {iter}/{loop.MaxIterations})");
-
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await _cli.RunAsync(
-                    prompt, sessionId, workingDirectory: path,
-                    emit: session.EmitAsync, ct: session.Cts.Token);
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"[LOOP] resend run for \"{repo.Name}\" crashed: {ex.Message}");
-            }
-            finally
-            {
-                session.Complete();
             }
         });
         return true;
@@ -553,7 +525,7 @@ public class AutopilotService : BackgroundService
         }
     }
 
-    private static string Snippet(string text)
+    public static string Snippet(string text)
     {
         var s = text.Replace('\n', ' ').Replace('\r', ' ').Trim();
         return s.Length > 180 ? s[..180] + "…" : s;

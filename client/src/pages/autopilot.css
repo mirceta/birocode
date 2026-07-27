@@ -239,7 +239,7 @@
 .out-sent { background: #d8f3df; color: #1a7f37; }
 .out-esc { background: #ffe0c2; color: #b85c00; }
 .out-skip { background: #eef0f3; color: #6b7787; }
-.out-loop { background: #ead9ff; color: #6b2fb3; } /* goal-based loop resend in the audit trail */
+.out-loop { background: #ead9ff; color: #6b2fb3; } /* recipe/goal loop send in the audit trail */
 
 /* Deny-list transparency line (ported from autopilot-app/): which risky actions
    always escalate regardless of confidence. */
@@ -399,6 +399,15 @@
 .lp-card__recipe {
   font-size: 11px; font-weight: 600; color: var(--color-text-muted, #888);
   border: 1px solid var(--color-border, #ddd); border-radius: 999px; padding: 1px 8px;
+}
+/* Loop kind chip (openspec unify-loop-types) + a goal loop's stated goal. */
+.lp-card__kind {
+  font-size: 11px; font-weight: 700; color: var(--color-text-soft, #666);
+  border: 1px solid var(--color-border, #ddd); border-radius: 999px; padding: 1px 8px;
+}
+.lp-live__goal {
+  font-size: 12.5px; font-weight: 600; color: var(--color-text, #222);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 /* Why the loop stopped — full width under the outcome line; the needs-human
    variant is the agent's verbatim question, so it reads loudest. */

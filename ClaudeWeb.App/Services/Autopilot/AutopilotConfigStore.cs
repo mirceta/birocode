@@ -90,12 +90,29 @@ public class AutopilotConfigStore
         _logger.Info($"[AUTOPILOT] kill switch -> enabled={enabled}");
     }
 
-    /// <summary>Slice 3 auto-advance. true = a confident, non-risky suggestion is
-    /// actually SENT to the agent; false = suggest-only (Slice 2 behaviour).</summary>
+    /// <summary>Auto-advance is now the DEFAULT MODE preference for newly armed
+    /// suggestion loop instances (openspec: unify-loop-types, revision 2 — the
+    /// per-instance suggest/drive mode is the real switch; the controller also flips
+    /// armed suggestion instances when this toggles, so the console toggle keeps its
+    /// old meaning).</summary>
     public void SetAutoAdvance(bool on)
     {
         lock (_gate) { _data.AutoAdvance = on; Save(); }
-        _logger.Info($"[AUTOPILOT] auto-advance -> {on}");
+        _logger.Info($"[AUTOPILOT] auto-advance default -> {on}");
+    }
+
+    /// <summary>One-time drain (revision 2, D8): after the legacy per-repo arming
+    /// list has been converted into suggestion loop instances, clear it so this store
+    /// holds only global engine settings and the drain never repeats.</summary>
+    public void ClearLegacyArming()
+    {
+        lock (_gate)
+        {
+            if (_data.ArmedRepoIds.Count == 0) return;
+            _data.ArmedRepoIds.Clear();
+            Save();
+        }
+        _logger.Info("[AUTOPILOT] legacy ArmedRepoIds drained into suggestion loop instances");
     }
 
     private void Load()
