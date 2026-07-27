@@ -90,15 +90,27 @@ export default function DockLoopControl({ repoId, loop, recipes = [], onChanged,
   useEffect(() => { setOpen(false); setPicked(null); setPickedMode(null); }, [armedKind]);
 
   // Prompt inspection needs the gated detail; fetch once per popover open so
-  // the previews are byte-identical to what the engine will send.
+  // the previews are byte-identical to what the engine will send. The same
+  // fetch seeds the parameter fields from the PERSISTED loop record (openspec:
+  // fix-loop-arm-freshness) — a resolved or restart-survived loop reopens with
+  // the goal/cap/mode it was armed with, not blanks. Untouched fields only:
+  // anything the user already typed wins.
   useEffect(() => {
     if (!open) return undefined;
     let alive = true;
     apiGet('/autopilot/loops/detail')
-      .then((d) => { if (alive) setDetail(d); })
+      .then((d) => {
+        if (!alive) return;
+        setDetail(d);
+        const mine = d?.loops?.find((l) => l.repoId === repoId);
+        if (!mine) return;
+        if (mine.goal) setGoal((g) => g || mine.goal);
+        if (mine.maxIterations > 0) setCap((c) => (c === '' ? String(mine.maxIterations) : c));
+        if (!mine.active && mine.mode) setPickedMode((m) => m ?? mine.mode);
+      })
       .catch((e) => { if (alive) setDetail(e?.status === 403 ? 'gate-closed' : null); });
     return () => { alive = false; };
-  }, [open]);
+  }, [open, repoId]);
 
   const act = async (path, body, keepOpen = false) => {
     setBusy(true);

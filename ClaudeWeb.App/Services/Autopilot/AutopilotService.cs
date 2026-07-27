@@ -101,21 +101,16 @@ public class AutopilotService : BackgroundService
         DrainLegacyArming();
     }
 
-    /// <summary>One-time migration (revision 2, D8): legacy autopilot.json
-    /// ArmedRepoIds become armed suggestion loop instances (drive iff the legacy
-    /// global auto-advance was on), then the legacy list is cleared so this never
-    /// repeats. A repo that already has a loop instance keeps it — the loop won the
-    /// slot under the old precedence rule too.</summary>
+    /// <summary>Legacy autopilot.json ArmedRepoIds are DROPPED, not migrated
+    /// (openspec: fix-loop-arm-freshness): a loop is armed only by an explicit user
+    /// action, never by startup — the old drain silently resurrected armed
+    /// suggestion loops the user never asked for this session. Clears the legacy
+    /// list once, logging what was dropped.</summary>
     private void DrainLegacyArming()
     {
         var cfg = _config.Get();
         if (cfg.ArmedRepoIds.Count == 0) return;
-        var mode = cfg.AutoAdvance ? LoopConfigStore.ModeDrive : LoopConfigStore.ModeSuggest;
-        foreach (var repoId in cfg.ArmedRepoIds)
-        {
-            if (_loops.Get(repoId) is { Active: true }) continue;
-            _loops.StartSuggestion(repoId, mode);
-        }
+        _logger.Info($"[LOOP] dropping legacy armed repos without arming (loops are off by default): {string.Join(", ", cfg.ArmedRepoIds)}");
         _config.ClearLegacyArming();
     }
 
@@ -290,7 +285,7 @@ public class AutopilotService : BackgroundService
             }
 
             var run = _runs.Get(repo.Id);
-            var (sessionId, lastAssistant) = LastAssistantMessage(repo.Path);
+            var (sessionId, lastAssistant, lastAssistantAt) = LastAssistantMessage(repo.Path);
             var snippet = Snippet(lastAssistant ?? "");
 
             // A NEW arm generation clears the per-repo dedup guards: a freshly
@@ -338,8 +333,20 @@ public class AutopilotService : BackgroundService
                 _logger.Error($"[LOOP] {repo.Name}: no implementation for kind \"{loop.Kind}\"");
                 continue;
             }
+            // Pre-arm freshness gate (openspec: fix-loop-arm-freshness): for DRIVEN
+            // kinds, a trailing reply older than this arming is the human's previous
+            // conversation, not a response to the loop — deciding on it fired the
+            // deny-list/sentinel/NEEDS_HUMAN ladder against stale history (iteration
+            // 0 escalates). Decide as if the agent had not spoken yet, so the first
+            // act is sending the stored prompt. A missing timestamp keeps the old
+            // behavior; the suggestion kind acts on the current message by design.
+            var preArm = !isSuggestionKind && lastAssistantAt is { } atUtc
+                && atUtc < DateTimeOffset.FromUnixTimeMilliseconds(loop.ArmedAt).UtcDateTime;
             var decision = impl.Decide(new LoopContext(
-                loop, lastAssistant, run?.Status == "error", cfg.DenyList, cfg.Threshold, routines));
+                loop,
+                preArm ? null : lastAssistant,
+                !preArm && run?.Status == "error",
+                cfg.DenyList, cfg.Threshold, routines));
 
             Execute(repo, loop, decision, sessionId, snippet, intercept, now);
         }
@@ -532,26 +539,28 @@ public class AutopilotService : BackgroundService
         }
     }
 
-    // Newest transcript's session id + its last assistant message, read directly
-    // (light: one file read, no metadata parse of every session like ListSessions
-    // does). The session id is what an auto-send resumes.
-    private (string? SessionId, string? Text) LastAssistantMessage(string repoPath)
+    // Newest transcript's session id + its last assistant message (with its UTC
+    // timestamp, for the pre-arm freshness gate in Tick), read directly (light:
+    // one file read, no metadata parse of every session like ListSessions does).
+    // The session id is what an auto-send resumes.
+    private (string? SessionId, string? Text, DateTime? AtUtc) LastAssistantMessage(string repoPath)
     {
         try
         {
             var dir = SessionService.ProjectsDirectoryFor(repoPath);
-            if (!Directory.Exists(dir)) return (null, null);
+            if (!Directory.Exists(dir)) return (null, null, null);
             var newest = new DirectoryInfo(dir).EnumerateFiles("*.jsonl")
                 .OrderByDescending(f => f.LastWriteTimeUtc).FirstOrDefault();
-            if (newest is null) return (null, null);
+            if (newest is null) return (null, null, null);
             var sessionId = Path.GetFileNameWithoutExtension(newest.Name);
             var msgs = _sessions.GetMessages(repoPath, sessionId);
-            return (sessionId, msgs.LastOrDefault(m => m.Role == "assistant")?.Text);
+            var last = msgs.LastOrDefault(m => m.Role == "assistant");
+            return (sessionId, last?.Text, last?.Timestamp?.ToUniversalTime());
         }
         catch (Exception ex)
         {
             _logger.Error($"[AUTOPILOT] read last message for {repoPath} failed: {ex.Message}");
-            return (null, null);
+            return (null, null, null);
         }
     }
 

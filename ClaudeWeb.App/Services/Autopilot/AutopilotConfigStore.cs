@@ -101,9 +101,10 @@ public class AutopilotConfigStore
         _logger.Info($"[AUTOPILOT] auto-advance default -> {on}");
     }
 
-    /// <summary>One-time drain (revision 2, D8): after the legacy per-repo arming
-    /// list has been converted into suggestion loop instances, clear it so this store
-    /// holds only global engine settings and the drain never repeats.</summary>
+    /// <summary>One-time cleanup: clears the legacy per-repo arming list so this
+    /// store holds only global engine settings and the cleanup never repeats.
+    /// Nothing is armed from it (openspec: fix-loop-arm-freshness — loops are
+    /// armed only by explicit user action).</summary>
     public void ClearLegacyArming()
     {
         lock (_gate)
@@ -112,7 +113,7 @@ public class AutopilotConfigStore
             _data.ArmedRepoIds.Clear();
             Save();
         }
-        _logger.Info("[AUTOPILOT] legacy ArmedRepoIds drained into suggestion loop instances");
+        _logger.Info("[AUTOPILOT] legacy ArmedRepoIds cleared (nothing armed — loops arm only by user action)");
     }
 
     private void Load()

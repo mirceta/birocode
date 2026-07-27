@@ -1,208 +1,127 @@
-/* Understanding app — deploy pipeline + dead-man's switch.
-   Build-less, no deps. Mirrors the actual swap.ps1 / keep.ps1 run from this session. */
+/* Understanding app — why the goal loop stopped at iteration 0, and the
+   arm-freshness fix. Build-less, no deps, relative URLs only. */
 (function () {
   'use strict';
 
-  // ---- Pipeline stages (verbatim shape of the deploy log this session) ----
-  var STAGES = [
-    { ico: '🛡️', t: 'Guard', crit: true,
-      log: ['guard: git fetch origin', 'guard OK: HEAD contains origin/main'] },
-    { ico: '🏗️', t: 'Build', crit: false,
-      log: ['build: npm --prefix client run build'] },
-    { ico: '📦', t: 'Stage', crit: false,
-      log: ['stage OK: full build present'] },
-    { ico: '⏹️', t: 'Stop', crit: false,
-      log: ['live: PID 33312 serving from run-bin', 'stop: killing PID 33312 on :5099'] },
-    { ico: '📸', t: 'Snapshot', crit: true,
-      log: ['snapshot: mirror run-bin -> run-bin.lastgood', 'snapshot OK: last-good captured'] },
-    { ico: '🔀', t: 'Swap', crit: false,
-      log: ['swap: robocopy staged -> run-bin (keep logs/ + appsettings.json)'] },
-    { ico: '🚀', t: 'Restart + health', crit: false,
-      log: ['restart: launched ClaudeWeb.exe', 'health: 200 on :5099'] },
-    { ico: '⏱️', t: 'Arm rollback', crit: true,
-      log: ['armed: ClaudeWebAutoRollback fires 14:58 (15 min)',
-            'DEAD-MAN SWITCH ARMED — say "keep it" (keep.ps1) to disarm'] }
-  ];
-
-  var flow = document.getElementById('flow');
-  var cons = document.getElementById('console');
-  var stageLabel = document.getElementById('stagelabel');
-  var playBtn = document.getElementById('play');
-  var stepBtn = document.getElementById('step');
-  var resetBtn = document.getElementById('reset');
-
-  // Build the step cards
-  STAGES.forEach(function (s, i) {
-    var el = document.createElement('div');
-    el.className = 'step' + (s.crit ? ' crit' : '');
-    el.id = 'st' + i;
-    el.innerHTML = '<div class="n">' + (i + 1) + '/8</div>' +
-      '<div class="ico">' + s.ico + '</div><div class="t">' + s.t + '</div>';
-    flow.appendChild(el);
+  // ---- tabs ----------------------------------------------------------------
+  var tabs = document.querySelectorAll('.tab');
+  tabs.forEach(function (t) {
+    t.addEventListener('click', function () {
+      tabs.forEach(function (x) { x.classList.remove('on'); });
+      document.querySelectorAll('.view').forEach(function (v) { v.classList.remove('on'); });
+      t.classList.add('on');
+      document.getElementById(t.dataset.v).classList.add('on');
+    });
   });
 
-  var cur = -1;        // index of last-activated stage
-  var timer = null;
-  var baseTs = 14 * 3600 + 43 * 60 + 6; // 14:43:06 start, seconds since midnight
+  // ---- tab 1: arm + tick simulator ----------------------------------------
+  // The exact shape of what happened this morning: the trailing message is the
+  // human/agent DEPLOY conversation; then the goal loop is armed; then ticks.
+  var lane = document.getElementById('lane');
+  var verdicts = document.getElementById('verdicts');
+  var armBtn = document.getElementById('simArm');
+  var tickBtn = document.getElementById('simTick');
+  var resetBtn = document.getElementById('simReset');
+  var modePill = document.getElementById('modePill');
 
-  function fmt(sec) {
-    var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
-    return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  var fixed = false;   // false = engine before the fix
+  var armed = false;
+  var step = 0;        // ticks taken since arming
+
+  modePill.addEventListener('click', function () {
+    fixed = !fixed;
+    modePill.textContent = fixed ? 'engine: AFTER the fix' : 'engine: BEFORE the fix';
+    modePill.className = 'pill ' + (fixed ? 'on-new' : 'on-old');
+    reset();
+  });
+  resetBtn.addEventListener('click', reset);
+
+  function msg(who, html, cls) {
+    var d = document.createElement('div');
+    d.className = 'msg' + (cls ? ' ' + cls : '');
+    d.innerHTML = '<div class="who">' + who + '</div><div class="txt">' + html + '</div>';
+    lane.appendChild(d);
+    d.scrollIntoView({ block: 'nearest' });
+    return d;
+  }
+  function armline() {
+    var d = document.createElement('div');
+    d.className = 'armline';
+    d.innerHTML = '<span>🎯 goal loop ARMED here (ArmedAt stamped)</span>';
+    lane.appendChild(d);
+  }
+  function verdict(ok, html) {
+    var d = document.createElement('div');
+    d.className = 'verdict ' + (ok ? 'ok' : 'bad');
+    d.innerHTML = html;
+    verdicts.appendChild(d);
+    d.scrollIntoView({ block: 'nearest' });
   }
 
-  function render() {
-    STAGES.forEach(function (s, i) {
-      var el = document.getElementById('st' + i);
-      el.classList.remove('active', 'done');
-      if (i < cur) el.classList.add('done');
-      else if (i === cur) el.classList.add('active');
-    });
+  function seed() {
+    msg('🤖 agent — 14:43 (BEFORE arming: your deploy conversation)',
+      '<b>Deployed and verified on live :5099</b> — the <span class="deny">deploy</span> carried the ' +
+      'always-admin <span class="deny">merge</span>… say “keep it”.');
   }
 
-  function writeConsole() {
-    if (cur < 0) { cons.textContent = 'Idle. Press ▶ Play deploy.'; return; }
-    var html = '';
-    var t = baseTs;
-    for (var i = 0; i <= cur; i++) {
-      STAGES[i].log.forEach(function (line, k) {
-        var cls = /OK|200|captured|present|contains/.test(line) ? 'ok'
-          : /ARMED|armed|fires/.test(line) ? 'arm' : '';
-        html += '<span class="ts">2026-07-27T' + fmt(t).slice(0, 8) + '</span>  ' +
-          '<span class="' + cls + '">' + esc(line) + '</span>\n';
-        t += (i === cur ? 0 : 1) + k;
-      });
-      t += 2;
-    }
-    cons.innerHTML = html;
-    cons.scrollTop = cons.scrollHeight;
-  }
-
-  function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
-
-  function advance() {
-    if (cur >= STAGES.length - 1) { stop(); return; }
-    cur++;
-    stageLabel.textContent = 'Stage ' + (cur + 1) + '/8 — ' + STAGES[cur].t;
-    render(); writeConsole();
-    if (cur === STAGES.length - 1) {
-      stop();
-      stageLabel.innerHTML = '✅ Deploy finished — <b style="color:var(--warn)">switch armed, 15 min on the clock</b>';
-    }
-  }
-
-  function play() {
-    if (timer) return;
-    if (cur >= STAGES.length - 1) reset();
-    playBtn.textContent = '⏸ Running…'; playBtn.disabled = true;
-    timer = setInterval(advance, 850);
-  }
-  function stop() {
-    if (timer) { clearInterval(timer); timer = null; }
-    playBtn.textContent = '▶ Play deploy'; playBtn.disabled = false;
-  }
   function reset() {
-    stop(); cur = -1; stageLabel.textContent = ''; render(); writeConsole();
+    lane.innerHTML = '';
+    verdicts.innerHTML = '';
+    armed = false; step = 0;
+    armBtn.disabled = false;
+    tickBtn.disabled = true;
+    seed();
   }
 
-  playBtn.onclick = play;
-  stepBtn.onclick = function () { stop(); advance(); };
-  resetBtn.onclick = reset;
-  render();
+  armBtn.addEventListener('click', function () {
+    if (armed) return;
+    armed = true; step = 0;
+    armBtn.disabled = true;
+    tickBtn.disabled = false;
+    armline();
+    verdict(true, 'Loop armed: goal <i>“reply OK; the 3rd time, reply LOOP_DONE”</i>, drive mode, phase work. ' +
+      'Nothing has been sent yet — <b>iterationsDone = 0</b>. Now click <b>Engine tick</b>.');
+  });
 
-  // -------------------- Dead-man switch clock --------------------
-  var CIRC = 2 * Math.PI * 78; // ~490
-  var arc = document.getElementById('arc');
-  var slider = document.getElementById('slider');
-  var clockTime = document.getElementById('clockTime');
-  var clockCap = document.getElementById('clockCap');
-  var verdict = document.getElementById('verdict');
-  var outcome = document.getElementById('outcome');
-  var keepBtn = document.getElementById('keepBtn');
-  var letBtn = document.getElementById('letBtn');
-  arc.style.strokeDasharray = CIRC;
-
-  var elapsed = 0;      // seconds elapsed within the 900s window
-  var decided = null;   // 'keep' | 'roll' | null
-  var swTimer = null;
-
-  function paintClock() {
-    var remain = Math.max(0, 900 - elapsed);
-    var mm = Math.floor(remain / 60), ss = remain % 60;
-    clockTime.textContent = String(mm).padStart(2, '0') + ':' + String(ss).padStart(2, '0');
-    var frac = remain / 900;
-    arc.style.strokeDashoffset = CIRC * (1 - frac);
-    // colour shifts warn -> bad as it runs down
-    var col = decided === 'keep' ? 'var(--good)'
-      : remain <= 0 ? 'var(--bad)'
-      : remain < 180 ? 'var(--bad)' : 'var(--warn)';
-    arc.setAttribute('stroke', col);
-    slider.value = elapsed;
-  }
-
-  function setVerdict() {
-    if (decided === 'keep') {
-      clockCap.textContent = 'DISARMED';
-      verdict.style.color = 'var(--good)';
-      verdict.innerHTML = '✓ keep.ps1 ran — switch off, build permanent';
-      outcome.className = 'outcome keep';
-      outcome.innerHTML = '<h4 style="color:var(--good)">✓ Kept</h4>' +
-        '<p class="muted" style="margin:0;font-size:12.5px">' +
-        '<code>keep.ps1</code> deleted <code>ClaudeWebAutoRollback</code>. ' +
-        'No rollback will ever fire. The new build (PID 20324) stays live.<br>' +
-        '<span style="color:var(--warn)">The trailing “cannot find the file” is the <b>verify</b> query ' +
-        'confirming the task is gone — not a failure.</span></p>';
+  tickBtn.addEventListener('click', function () {
+    if (!armed) return;
+    step++;
+    if (!fixed) {
+      // Old engine: first tick judges the PRE-ARM deploy message with the ladder.
+      verdict(false,
+        '<b>Tick ' + step + ' (old engine):</b> trailing reply contains deny-listed ' +
+        '<span class="deny">“deploy”</span> → <b>Stop(escalate, deny-list)</b> at iterationsDone 0. ' +
+        'The loop is dead — <i>this is exactly your debug bundle</i>: ' +
+        '<code>stopReason: "deny-list", iterationsDone: 0</code>. It judged a message it never caused. ' +
+        'Click the red pill above to switch to the fixed engine.');
+      tickBtn.disabled = true;
       return;
     }
-    if (decided === 'roll') {
-      clockCap.textContent = 'ROLLED BACK';
-      verdict.style.color = 'var(--bad)';
-      verdict.innerHTML = '↺ Timer won — rollback.ps1 restored last-good';
-      outcome.className = 'outcome roll';
-      outcome.innerHTML = '<h4 style="color:var(--bad)">↺ Auto-rolled back</h4>' +
-        '<p class="muted" style="margin:0;font-size:12.5px">' +
-        'No “keep it” arrived in 15 min. <code>rollback.ps1</code> <code>robocopy /MIR</code>d ' +
-        '<code>run-bin.lastgood</code> over <code>run-bin</code> and restarted. ' +
-        'Live is back on the previous build — <b>no operator needed.</b></p>';
-      return;
+    // Fixed engine walkthrough.
+    if (step === 1) {
+      verdict(true,
+        '<b>Tick 1 (fixed):</b> trailing reply timestamp (14:43) &lt; ArmedAt → <b>pre-arm, ignored by the ladder</b>. ' +
+        'Decision: Propose(stored work prompt) → <b>SEND, iteration 1</b>.');
+      msg('🚗 loop → agent', 'Work toward this goal until it is genuinely achieved: …reply OK… (stored work prompt)');
+      msg('🤖 agent — now (fresh: produced AFTER arming)', 'OK');
+    } else if (step === 2) {
+      verdict(true, '<b>Tick 2:</b> fresh reply “OK” — ladder applies (no deny words, no sentinel) → resend work prompt, iteration 2.');
+      msg('🚗 loop → agent', '(same stored work prompt)');
+      msg('🤖 agent', 'OK');
+    } else if (step === 3) {
+      verdict(true, '<b>Tick 3:</b> resend, iteration 3 — the 3rd ask.');
+      msg('🚗 loop → agent', '(same stored work prompt)');
+      msg('🤖 agent', 'That was the 3rd time. <b>LOOP_DONE</b>');
+    } else if (step === 4) {
+      verdict(true, '<b>Tick 4:</b> fresh reply carries the sentinel → send the <b>verification prompt</b>, phase → verify. ' +
+        'Only <code>GOAL_VERIFIED</code> in the verification reply resolves the loop as done.');
+      msg('🚗 loop → agent', 'You declared the goal done… verify against the ACTUAL state… end with GOAL_VERIFIED.');
+      tickBtn.disabled = true;
+      verdict(true, '<b>Note:</b> fresh replies are still fully guarded — in the e2e, a post-arm reply saying ' +
+        '“I will deploy to production” escalated the loop with <code>deny-list</code> as before. ' +
+        'Only <i>stale</i> history is immune.');
     }
-    // undecided / live
-    var remain = 900 - elapsed;
-    clockCap.textContent = 'UNTIL ROLLBACK';
-    if (remain <= 0) { decided = 'roll'; setVerdict(); paintClock(); return; }
-    verdict.style.color = 'var(--warn)';
-    verdict.innerHTML = '⏳ Armed — ' + Math.ceil(remain / 60) + ' min left to say “keep it”';
-    outcome.className = 'outcome';
-    outcome.innerHTML = '<h4>Two ways out</h4>' +
-      '<p class="muted" style="margin:0;font-size:12.5px">' +
-      '<b>keep.ps1</b> deletes the task — build stays.<br>' +
-      '<b>timeout</b> → <code>rollback.ps1</code> restores <code>run-bin.lastgood</code>. No operator.</p>';
-  }
+  });
 
-  function stopSw() { if (swTimer) { clearInterval(swTimer); swTimer = null; } }
-
-  slider.oninput = function () {
-    stopSw();
-    if (decided) return; // locked once decided
-    elapsed = parseInt(slider.value, 10);
-    paintClock(); setVerdict();
-  };
-
-  keepBtn.onclick = function () {
-    stopSw(); decided = 'keep';
-    // freeze the clock wherever it is
-    paintClock(); setVerdict();
-  };
-
-  letBtn.onclick = function () {
-    if (decided) return;
-    stopSw();
-    letBtn.textContent = '⏱ running…';
-    swTimer = setInterval(function () {
-      elapsed = Math.min(900, elapsed + 30); // 30s per tick, fast-forward
-      paintClock(); setVerdict();
-      if (elapsed >= 900) { stopSw(); letBtn.textContent = '⏱ let timer run'; }
-    }, 120);
-  };
-
-  paintClock(); setVerdict();
+  reset();
 })();
