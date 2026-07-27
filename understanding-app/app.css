@@ -317,5 +317,28 @@ input { background: var(--bg2); border: 1px solid var(--line2); color: var(--ink
 .cycle__arr { color: var(--muted); }
 .cycle__note { font-size: .88rem; color: var(--muted); margin: 12px 0 0; }
 
+/* ── VERIFIED ── */
+.verihead { display: flex; align-items: center; gap: 18px; background: var(--panel); border: 1px solid var(--goal); border-radius: var(--radius); padding: 16px 18px; margin: 18px 0 22px; }
+.verihead__score { flex: none; display: flex; align-items: baseline; gap: 2px; padding: 8px 16px; border-radius: 12px; background: var(--goal-dim); border: 1px solid var(--goal); }
+.verihead__num { font-size: 2rem; font-weight: 800; color: var(--goal); line-height: 1; }
+.verihead__den { font-size: 1rem; font-weight: 700; color: var(--goal); opacity: .8; }
+.verihead__meta { font-size: .95rem; }
+.verihead__sub { font-size: .82rem; color: var(--muted); margin-top: 4px; }
+
+.vgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 22px; }
+@media (max-width: 820px) { .vgrid { grid-template-columns: 1fr; } }
+.vcol { background: var(--panel); border: 1px solid var(--line2); border-radius: 12px; padding: 14px 16px; }
+.vcol--sugg { border-top: 3px solid var(--sugg); }
+.vcol--goal { border-top: 3px solid var(--goal); }
+.vcol--badge { border-top: 3px solid var(--badge); }
+.vcol__h { font-weight: 700; font-size: .98rem; margin-bottom: 10px; }
+.vlist { list-style: none; margin: 0; padding: 0; }
+.vlist li { position: relative; padding: 4px 0 4px 24px; font-size: .88rem; color: var(--muted); }
+.vlist li::before { content: "✓"; position: absolute; left: 0; top: 4px; color: var(--goal); font-weight: 800; }
+.vlist li b, .vlist li code { color: var(--ink); }
+
+.callout--note { border-color: var(--sugg); background: var(--sugg-dim); }
+.cycle--v { margin-top: 4px; }
+
 /* ── FOOT ── */
 .foot { max-width: 1000px; margin: 0 auto; padding: 22px; border-top: 1px solid var(--line); color: var(--muted); font-size: .82rem; }

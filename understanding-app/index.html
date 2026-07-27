@@ -30,6 +30,7 @@
   <button class="tabs__btn" data-tab="dock">Before → after</button>
   <button class="tabs__btn" data-tab="sim">Step a goal loop</button>
   <button class="tabs__btn" data-tab="plan">The change</button>
+  <button class="tabs__btn" data-tab="verified">Verified ✓</button>
 </nav>
 
 <main>
@@ -324,6 +325,87 @@
       <span class="cycle__step">“keep it”</span>
     </div>
     <p class="cycle__note">Built and verified. Say <b>“deploy”</b> to ship it to live.</p>
+  </div>
+</section>
+
+<!-- ───────────────────────── VERIFIED ───────────────────────── -->
+<section class="panel" data-panel="verified">
+  <h2>What the browser actually proved</h2>
+  <p class="lede">
+    Not "it builds" — a Playwright script drove a real isolated harness (its own data dir,
+    two scratch agent docks) and asserted the shipped behaviour. <b>17 / 17 checks passed</b>,
+    and the screenshots were read before this was called done.
+  </p>
+
+  <div class="verihead">
+    <div class="verihead__score" role="img" aria-label="17 of 17 checks passed">
+      <span class="verihead__num">17</span><span class="verihead__den">/17</span>
+    </div>
+    <div class="verihead__meta">
+      <div><b>verify-dock-loop-model.mjs</b> · isolated harness on <code>:5221</code></div>
+      <div class="verihead__sub">own <code>%APPDATA%</code>-style data dir · scratch repos <code>loop-model-a/-b</code> · cleaned up after</div>
+    </div>
+  </div>
+
+  <div class="vgrid">
+    <div class="vcol vcol--sugg">
+      <div class="vcol__h">💡 Suggestion section</div>
+      <ul class="vlist">
+        <li>state starts <b>“Not armed”</b></li>
+        <li>arm flips it to <b>Armed · suggest‑only</b></li>
+        <li>the 💡 badge appears while armed</li>
+        <li>the ungated projection lists the armed repo id</li>
+        <li>projection stays <b>status‑only</b> — no threshold / deny‑list / prompts leak</li>
+      </ul>
+    </div>
+    <div class="vcol vcol--goal">
+      <div class="vcol__h">🎯 Goal section</div>
+      <ul class="vlist">
+        <li>exactly <b>2 sections</b>, no stray queue section</li>
+        <li>section heads read 💡 Suggestion‑based + 🎯 Goal‑based</li>
+        <li>both carry a one‑line description</li>
+        <li>a <b>Recipes</b> label sits inside the goal section</li>
+        <li>seeded recipes <code>Drive the feature</code> / <code>Finish and ship</code> live under it</li>
+      </ul>
+    </div>
+    <div class="vcol vcol--badge">
+      <div class="vcol__h">🏷️ Typed badges &amp; gate</div>
+      <ul class="vlist">
+        <li>goal badge is 🎯‑typed with n/cap (<code>🎯 0/4</code>)</li>
+        <li>💡 coexists with the 🎯 badge</li>
+        <li>terminal state is 🎯‑typed (<code>🎯 escalated</code>)</li>
+        <li><code>NEEDS_HUMAN</code> question shows inline on the agent</li>
+        <li>gate closed → 💡 still visible, hint names the <b>host action</b></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout callout--note">
+    <b>One honest snag.</b> The first Debug build reported 153 phantom errors — a Roslyn
+    <em>compiler‑server crash</em> surfaced through the build pipe, not a code problem. A
+    <code>dotnet build-server shutdown</code> + rebuild came back clean (0 errors), and only
+    then did the verify run. Flagged here so "it built" isn't taken on faith.
+  </div>
+
+  <div class="cycle cycle--v">
+    <h3>Where this sits now</h3>
+    <div class="cycle__row">
+      <span class="cycle__step is-done">playback ✓</span>
+      <span class="cycle__arr">→</span>
+      <span class="cycle__step is-done">create ✓</span>
+      <span class="cycle__arr">→</span>
+      <span class="cycle__step is-done">build + verify (iso :5221) ✓</span>
+      <span class="cycle__arr">→</span>
+      <span class="cycle__step is-done">commit 748b1e6 ✓</span>
+      <span class="cycle__arr">→</span>
+      <span class="cycle__step is-next">“deploy”</span>
+      <span class="cycle__arr">→</span>
+      <span class="cycle__step">“keep it”</span>
+    </div>
+    <p class="cycle__note">
+      Committed and green. The UI change reaches live only on a deploy (<code>swap.ps1</code>) —
+      say <b>“deploy”</b> when you want it shipped.
+    </p>
   </div>
 </section>
 
