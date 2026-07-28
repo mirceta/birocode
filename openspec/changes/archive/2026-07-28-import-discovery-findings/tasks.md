@@ -23,4 +23,4 @@
 - [x] 4.1 `npm --prefix client run build` and isolated `dotnet build` pass; `tests/ClaudeWeb.Tests` green (32/32)
 - [x] 4.2 Headless Playwright pass per `docs/claude-web/browser-testing.md`: open panel, import a pasted array (new + overlapping port), rows appear with fresh age, invalid paste shows error and leaves list intact (`.preview-test/discover-import-check.mjs`, 16/16 PASS against an isolated :5200 instance)
 - [x] 4.3 `openspec validate import-discovery-findings --strict` passes; update `understanding-app/` with the import flow
-- [ ] 4.4 Manual acceptance on live: user imports a real agent-produced JSON array and confirms the union (operator acceptance — left for the user)
+- [x] 4.4 Manual acceptance on live: user imports a real agent-produced JSON array and confirms the union (operator accepted on live 2026-07-28 — "keep it")
