@@ -572,6 +572,12 @@ public class AutopilotService : BackgroundService
         {
             try
             {
+                // A loop send bypasses the composer, so no client ever draws the
+                // prompt bubble. Publish the prompt into the run's seq buffer
+                // ahead of the CLI's events: attached clients render it live and
+                // late attachers get it in the ?after=N replay (openspec
+                // fix-loop-prompt-render).
+                await session.EmitAsync(new { type = "user", text = prompt, actor = "loop" });
                 await _cli.RunAsync(
                     prompt, sessionId, workingDirectory: path,
                     emit: session.EmitAsync, ct: session.Cts.Token);

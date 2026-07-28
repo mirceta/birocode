@@ -1,131 +1,214 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Why the goal loop said 5/5 but you saw 2 turns</title>
-<link rel="stylesheet" href="./styles.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Why loop prompts don't render in chat</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #161a22; --panel2: #1c2230; --line: #2a3245;
+    --text: #d7dce6; --dim: #8a93a6; --accent: #5ab0f7; --good: #4fc98b;
+    --bad: #e5687a; --warn: #e0b455; --user: #2d4a6b; --asst: #24303f;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); }
+  header { padding: 18px 24px 10px; border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0 0 4px; font-size: 20px; }
+  header p { margin: 0; color: var(--dim); font-size: 13px; }
+  nav { display: flex; gap: 8px; padding: 12px 24px; flex-wrap: wrap; }
+  nav button { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; cursor: pointer; font-size: 14px; }
+  nav button.on { background: var(--accent); color: #08111c; border-color: var(--accent); font-weight: 600; }
+  main { padding: 8px 24px 40px; max-width: 1100px; margin: 0 auto; }
+  section { display: none; }
+  section.on { display: block; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin: 14px 0; }
+  .card h2 { margin: 0 0 8px; font-size: 16px; color: var(--accent); }
+  .card h3 { margin: 14px 0 6px; font-size: 14px; }
+  .dim { color: var(--dim); }
+  code { background: var(--panel2); border-radius: 4px; padding: 1px 5px; font-size: 13px; }
+  .cols { display: flex; gap: 14px; flex-wrap: wrap; }
+  .cols > div { flex: 1 1 320px; }
+  /* phone mock */
+  .phone { background: var(--panel2); border: 1px solid var(--line); border-radius: 14px; padding: 12px; min-height: 240px; }
+  .phone .title { font-size: 12px; color: var(--dim); margin-bottom: 8px; text-transform: uppercase; letter-spacing: .06em; }
+  .bubble { border-radius: 10px; padding: 7px 11px; margin: 6px 0; font-size: 13px; max-width: 92%; opacity: 0; transform: translateY(6px); transition: opacity .35s, transform .35s; }
+  .bubble.show { opacity: 1; transform: none; }
+  .bubble.user { background: var(--user); margin-left: auto; }
+  .bubble.asst { background: var(--asst); }
+  .bubble.ghost { background: transparent; border: 1px dashed var(--bad); color: var(--bad); }
+  .legend { font-size: 12px; color: var(--dim); margin-top: 8px; }
+  .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin: 0 4px 0 10px; vertical-align: middle; }
+  .controls { margin: 10px 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .controls button { background: var(--accent); color: #08111c; border: 0; border-radius: 8px; padding: 7px 14px; cursor: pointer; font-weight: 600; }
+  .controls .step-label { color: var(--warn); font-size: 13px; min-height: 20px; }
+  /* flow */
+  .flow { display: flex; flex-direction: column; gap: 6px; }
+  .fnode { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; background: var(--panel2); font-size: 13px; position: relative; }
+  .fnode.hot { border-color: var(--warn); box-shadow: 0 0 0 1px var(--warn); }
+  .fnode.miss { border-color: var(--bad); }
+  .fnode .tag { float: right; font-size: 11px; color: var(--dim); }
+  .arrow { text-align: center; color: var(--dim); font-size: 12px; line-height: 1; }
+  /* timeline */
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; }
+  .ok { color: var(--good); } .no { color: var(--bad); } .wa { color: var(--warn); }
+  .pill { display: inline-block; border-radius: 999px; padding: 1px 9px; font-size: 11px; border: 1px solid var(--line); }
+  .pill.sent { border-color: var(--accent); color: var(--accent); }
+  .pill.missing { border-color: var(--bad); color: var(--bad); }
+  .pill.written { border-color: var(--good); color: var(--good); }
+</style>
 </head>
 <body>
 <header>
-  <h1>Goal-loop post-mortem: 5/5 sends, 2 visible turns, and the invisible autopilot</h1>
-  <p class="sub">The 2026-07-27 test loop ("reply OK until the 3rd ask"). Two independent bugs — both now FIXED (openspec: fix-loop-conversation-identity); tabs 1–3 describe the pre-fix behavior.</p>
+  <h1>Why autopilot loop prompts don't render in the chat</h1>
+  <p>Investigated 2026-07-28 against the live goal-loop test (repo "Claude Web", session 194f3269, sends 08:53–08:54 UTC). Two separate causes.</p>
 </header>
-
-<nav id="tabs">
-  <button data-tab="timeline" class="active">1 · What actually happened</button>
-  <button data-tab="bug1">2 · Bug: no conversation identity</button>
-  <button data-tab="bug2">3 · Bug: invisible sends</button>
-  <button data-tab="fix">4 · The fix (implemented)</button>
+<nav>
+  <button data-tab="bug" class="on">1 · The live-render gap</button>
+  <button data-tab="timeline">2 · Evidence timeline</button>
+  <button data-tab="fix">3 · The fix</button>
 </nav>
-
 <main>
-<!-- ============ TAB 1: TIMELINE ============ -->
-<section id="tab-timeline" class="tab active">
-  <p>The engine audited <b>5 sends in 85 seconds</b> — but they landed in <b>three different
-  session transcripts</b>. The conversation you were watching received only two of them.
-  Click a send to see what the engine believed vs. what was true.</p>
-  <div id="timeline"></div>
-  <div id="send-detail" class="detail-card">
-    <em>Click a send above.</em>
+
+<section id="tab-bug" class="on">
+  <div class="card">
+    <h2>Two send paths — only one draws the user bubble</h2>
+    <p>The backend SSE contract (<code>CliRunnerService</code>) has <b>no user-message event</b>: it emits <code>session / thinking / tool / token / usage / done</code>. The user bubble you normally see is drawn <b>client-side by the composer</b> (<code>sendTo()</code> in <code>ChatContext.jsx</code>) before the stream starts. An autopilot loop send never goes through the composer — the open page discovers the run via the 5s <code>reconcile()</code> poll and calls <code>attachToRun()</code>, which only appends an <i>empty assistant bubble</i> and streams the reply into it.</p>
+    <div class="controls">
+      <button id="playBtn">▶ Play one loop turn</button>
+      <span class="step-label" id="stepLabel"></span>
+    </div>
+    <div class="cols">
+      <div class="phone">
+        <div class="title">Composer send (works)</div>
+        <div id="phoneA"></div>
+      </div>
+      <div class="phone">
+        <div class="title">Autopilot loop send (the bug)</div>
+        <div id="phoneB"></div>
+      </div>
+    </div>
+    <div class="legend">
+      <span class="sw" style="background:var(--user)"></span>user bubble
+      <span class="sw" style="background:var(--asst)"></span>assistant bubble
+      <span class="sw" style="border:1px dashed var(--bad)"></span>never rendered
+    </div>
   </div>
-  <div class="legend">
-    <span><i class="dot s-watched"></i> your watched conversation</span>
-    <span><i class="dot s-fork"></i> loop-driven fork session</span>
-    <span><i class="dot s-auto"></i> auto-understanding background job</span>
+  <div class="card">
+    <h2>Where the prompt gets lost on the live path</h2>
+    <div class="flow" id="flowLive"></div>
   </div>
 </section>
 
-<!-- ============ TAB 2: BUG 1 ============ -->
-<section id="tab-bug1" class="tab">
-  <h2>The engine has no idea which conversation it is driving</h2>
-  <p><code>AutopilotService.LastAssistantMessage()</code> defines "the agent's reply" as:
-  <b>the last assistant message of the newest <code>.jsonl</code> file in the repo's
-  transcript folder</b>. That folder is shared by every conversation touching the repo.
-  Three things then break at once:</p>
-  <div id="bug1-diagram"></div>
-  <ol class="fault-list">
-    <li><b>Resume forks a new session.</b> Every <code>claude --resume &lt;id&gt; -p</code>
-      the loop fires writes a <em>new</em> session file (new session_id, full history copied —
-      hence three ~165&nbsp;MB files). The "newest file" is now the fork, not the conversation
-      you watched.</li>
-    <li><b>Other agents pollute the reply.</b> The auto-understanding background job was
-      writing turns in the same repo during the window. The engine read <em>its</em> messages
-      as the loop agent's reply.</li>
-    <li><b>Sentinel matches anywhere in the text.</b> <code>SentinelHit</code> uses
-      <code>Contains("LOOP_DONE")</code>. The auto-understanding agent wrote
-      <i>"…the 'reply OK until the 3rd ask, then LOOP_DONE' mechanism"</i> — merely
-      <em>quoting</em> the sentinel — and the goal loop flipped into its verify phase.</li>
-    <li><b>The dedup guard is defeated.</b> The "already sent against this reply" guard
-      compares one snippet. Every time a <em>different</em> session file became newest, the
-      snippet changed, the engine believed "the agent replied", and sent again — ~10s apart,
-      far faster than any real turn.</li>
-    <li><b>The cap counts sends, not turns.</b> <code>RecordSend</code> bumps the counter on
-      every dispatch, misfires included → 5/5 → status <code>capped</code>.</li>
-  </ol>
-</section>
-
-<!-- ============ TAB 3: BUG 2 ============ -->
-<section id="tab-bug2" class="tab">
-  <h2>Backend-side it IS the same pipeline — the frontend just never looks</h2>
-  <p>The loop send is not a shadow path: it claims the same run slot
-  (<code>RunSessionService.TryBeginRun</code>), streams through the same
-  <code>CliRunnerService</code>, and buffers the same seq-numbered events the Send button
-  produces. The dock badge, <code>/api/runs</code>, everything backend-side is identical.</p>
-  <p><b>The gap is client-side attachment.</b> The React chat only discovers a backend run at
-  four moments — and "while you sit on an open page" is not one of them:</p>
-  <div id="bug2-diagram"></div>
-  <p>So when the autopilot starts a turn, the event buffer fills server-side, but no client is
-  attached: no bubbles stream in, <code>streaming</code> stays <code>false</code>, and the
-  composer keeps showing <b>Send</b> instead of the black <b>Stop</b>. A refresh remounts the
-  app → <code>reconcile()</code> runs → it finally sees the run (or the finished transcript).
-  Nothing was hidden on purpose; there is simply <b>no push or poll signal for runs the client
-  didn't start</b>.</p>
-</section>
-
-<!-- ============ TAB 4: FIX ============ -->
-<section id="tab-fix" class="tab">
-  <h2>The shipped fix (openspec: fix-loop-conversation-identity)</h2>
-  <div class="fix-grid">
-    <div class="fix-card">
-      <h3>A · The loop is pinned to ONE conversation</h3>
-      <p><b>Implemented.</b> The loop record carries a <code>SessionId</code> pin. Arming
-      stamps it — the dock passes the conversation it is showing; API callers without one get
-      the repo's newest session <em>resolved once at arm time</em>. The engine reads "the
-      agent's reply" from the pinned session only (<code>LastAssistantMessageIn</code>) and
-      resumes the pinned session only. Because every <code>--resume</code> forks a new
-      session id, the pin <b>advances on builder-lane RunCompleted</b> to the run's captured
-      id — loop-sent and human-sent turns both move it; background jobs (auto-understanding)
-      never claim the builder lane, so they can't. Unrelated sessions can no longer feed,
-      advance, or resolve a loop.</p>
-    </div>
-    <div class="fix-card">
-      <h3>B · Completion tokens anchor to the final line</h3>
-      <p><b>Implemented.</b> <code>LOOP_DONE</code> and <code>GOAL_VERIFIED</code> count only
-      on the reply's final non-empty line (case-insensitive, punctuation-tolerant) — exactly
-      what the convention doc promises. A reply that merely <em>quotes</em> the sentinel does
-      nothing. <code>NEEDS_HUMAN:</code> and the deny-list stay whole-reply substring matches:
-      their false-positive direction is "stop and ask", the safe side.</p>
-    </div>
-    <div class="fix-card">
-      <h3>C · The open page discovers engine-started runs</h3>
-      <p><b>Implemented.</b> <code>ChatContext</code> polls the in-memory
-      <code>/api/runs</code> snapshot every ~5s while the page is visible and attaches through
-      the existing <code>reconcile()</code> → <code>attachToRun()</code> path (idempotent —
-      it no-ops while a reader is attached). An engine-started run now streams bubbles and
-      flips Send to the black Stop on the open page, because it's the same
-      <code>streaming</code> flag a manual Send flips.</p>
-    </div>
+<section id="tab-timeline">
+  <div class="card">
+    <h2>What actually happened (reconstructed from disk)</h2>
+    <p class="dim">Sources: <code>loops.json</code> (4 sends recorded), <code>autopilot-audit.jsonl</code> (send timestamps + answered snippets), and the pinned transcript <code>194f3269….jsonl</code> lines 41941–41963.</p>
+    <table>
+      <thead><tr><th>When (UTC)</th><th>Event</th><th>User line on disk</th><th>Reply on disk</th><th>Rendered live?</th></tr></thead>
+      <tbody>
+        <tr><td>08:53:11</td><td>Goal loop armed (cap 5), pinned to session 194f3269</td><td>—</td><td>—</td><td>—</td></tr>
+        <tr><td>08:53:21</td><td><span class="pill sent">send 1</span> work prompt</td><td><span class="pill missing">MISSING</span> no <code>user</code> line, no <code>queue-operation</code></td><td class="ok">"OK" @ 08:53:26 (+ <code>last-prompt</code> proves the CLI processed the prompt)</td><td class="no">prompt ✗ / reply ✓</td></tr>
+        <tr><td>08:53:31</td><td><span class="pill sent">send 2</span> work prompt (loop saw "OK", decided again)</td><td><span class="pill written">written</span> @ 08:53:35 via enqueue/dequeue</td><td class="no">NONE — empty completion (the known no-reply case)</td><td class="no">prompt ✗</td></tr>
+        <tr><td>08:53:42→52</td><td>No-reply escape: grace tick, then guard cleared (fix-loop-noreply-stall working as designed)</td><td>—</td><td>—</td><td>—</td></tr>
+        <tr><td>08:53:53</td><td><span class="pill sent">send 3</span> work prompt retry; CLI first stitches a synthetic <code>"Continue from where you left off." / "No response requested."</code> pair over send 2's orphaned prompt</td><td><span class="pill written">written</span> @ 08:53:56</td><td class="ok">"LOOP_DONE" @ 08:54:00</td><td class="no">prompt ✗ / reply ✓</td></tr>
+        <tr><td>08:54:04</td><td><span class="pill sent">send 4</span> verification prompt (phase → verify)</td><td><span class="pill written">written</span> @ 08:54:07</td><td class="ok">"…GOAL_VERIFIED" @ 08:54:12</td><td class="no">prompt ✗ / reply ✓</td></tr>
+        <tr><td>08:54:12</td><td>Loop resolved <b>done / verified</b> — the 5-turn test itself passed</td><td>—</td><td>—</td><td>—</td></tr>
+      </tbody>
+    </table>
+    <h3>So the two symptoms decompose as:</h3>
+    <p><b>"Prompts only appeared after a full refresh"</b> — refresh reloads the transcript from disk (<code>loadTranscript</code>), and sends 2–4's user lines <i>are</i> on disk. Live, nothing ever draws them (cause 1).</p>
+    <p><b>"Even after refresh, the first one never appeared"</b> — send 1's user line was <b>never written to the .jsonl by claude.exe</b> (v2.1.220). The reply "OK" and the <code>last-prompt</code> record are there; the <code>user</code> entry is not. The harness renders the transcript faithfully — the data is genuinely absent on disk. This is a CLI persistence quirk on the first resumed <code>-p</code> run, not a harness render bug.</p>
   </div>
 </section>
+
+<section id="tab-fix">
+  <div class="card">
+    <h2>The fix — one synthetic event, one client case (implemented &amp; verified)</h2>
+    <p class="dim">Shipped as openspec change <code>fix-loop-prompt-render</code>; e2e-verified on isolated :5227 (<code>verify-loop-prompt-render.mjs</code>, 12/12 PASS): a sleeper-stub <code>claude.exe</code> that never writes transcripts proves the bubble comes from the new event, not the disk.</p>
+    <h3>Backend (fixes live rendering + reattach replay)</h3>
+    <p>In <code>AutopilotService.SendPrompt</code>, right after the run slot is claimed and before <code>_cli.RunAsync</code>, emit the prompt into the run's seq-numbered buffer:</p>
+    <p><code>await session.EmitAsync(new { type = "user", text = prompt, actor = "loop" });</code></p>
+    <p>Because it lands in the <code>RunSession</code> buffer it is (a) broadcast to any attached client, and (b) <b>replayed</b> to a client that attaches later via <code>?after=N</code> — so the 5s poll's <code>attachToRun</code> gets it for free.</p>
+    <h3>Frontend</h3>
+    <p>In <code>makeEventHandler</code> (<code>ChatContext.jsx</code>) add a <code>case 'user'</code>: insert a user bubble <i>before</i> the trailing streaming assistant bubble (attachToRun appends the empty assistant bubble before replay starts, so the insert must go one position up).</p>
+    <h3>What this does NOT fix</h3>
+    <p>The first-send user line missing <i>on disk</i> (CLI quirk). After a full page refresh the transcript is still the source of truth, so a prompt the CLI never persisted stays absent there. The harness's own durable record of every loop send exists in <code>autopilot-audit.jsonl</code> if we ever want to overlay it into transcript reconstruction — but that is a separate, larger change.</p>
+    <div class="flow" id="flowFix"></div>
+  </div>
+</section>
+
 </main>
+<script>
+(function () {
+  // tabs
+  document.querySelectorAll('nav button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('nav button').forEach(function (x) { x.classList.remove('on'); });
+      document.querySelectorAll('main section').forEach(function (x) { x.classList.remove('on'); });
+      b.classList.add('on');
+      document.getElementById('tab-' + b.dataset.tab).classList.add('on');
+    });
+  });
 
-<footer>
-  <p>Evidence: autopilot-audit.jsonl (5 "loop" sends 17:09:08–17:10:33 UTC) · three ~165 MB
-  transcripts written 17:12–17:15 UTC · <code>AutopilotService.cs</code> (LastAssistantMessage,
-  SendPrompt) · <code>ILoop.cs</code> (SentinelHit) · <code>ChatContext.jsx</code> (reconcile).</p>
-</footer>
+  // flow diagrams
+  function flow(el, nodes) {
+    var root = document.getElementById(el);
+    nodes.forEach(function (n, i) {
+      if (i > 0) { var a = document.createElement('div'); a.className = 'arrow'; a.textContent = '↓'; root.appendChild(a); }
+      var d = document.createElement('div');
+      d.className = 'fnode' + (n.cls ? ' ' + n.cls : '');
+      d.innerHTML = n.html + (n.tag ? '<span class="tag">' + n.tag + '</span>' : '');
+      root.appendChild(d);
+    });
+  }
+  flow('flowLive', [
+    { html: '<b>Engine tick</b> decides → <code>SendPrompt()</code> claims run slot, spawns CLI', tag: 'AutopilotService.cs' },
+    { html: 'CLI streams <code>session / thinking / token / done</code> into the RunSession buffer — <b>no user event exists in the contract</b>', cls: 'miss', tag: 'CliRunnerService.cs' },
+    { html: 'Open page: 5s poll <code>reconcile()</code> sees the run → <code>attachToRun()</code>', tag: 'ChatContext.jsx' },
+    { html: 'Conversation not "fresh" (already has messages) → <b>no transcript reload</b>; just append empty assistant bubble + stream', cls: 'hot', tag: 'attachToRun, fresh check' },
+    { html: 'Result: the reply renders live, the prompt bubble is never drawn', cls: 'miss' }
+  ]);
+  flow('flowFix', [
+    { html: '<code>SendPrompt()</code> emits <code>{type:"user", text: prompt}</code> into the buffer <b>before</b> the CLI starts', cls: 'hot', tag: 'new' },
+    { html: 'Buffer replays it to late attachers (seq-tagged, deduped like every event)', tag: 'RunSession' },
+    { html: 'Client <code>case "user"</code> inserts the bubble above the streaming assistant bubble', cls: 'hot', tag: 'new' },
+    { html: 'Loop prompts render live and on reattach — same contract, one new event type' }
+  ]);
 
-<script src="./app.js"></script>
+  // phone animation
+  var A = document.getElementById('phoneA'), B = document.getElementById('phoneB');
+  var label = document.getElementById('stepLabel');
+  var steps = [
+    { l: 'Composer: sendTo() draws the user bubble locally, then opens the stream', a: [{ c: 'user', t: 'Work toward this goal…' }], b: [] },
+    { l: 'Autopilot: engine sends straight to the CLI — nothing touches the page yet', a: [], b: [{ c: 'ghost', t: '(prompt sent server-side — no event, no bubble)' }] },
+    { l: 'Both runs stream the reply; attachToRun appends an assistant bubble on the loop side', a: [{ c: 'asst', t: 'OK' }], b: [{ c: 'asst', t: 'OK' }] },
+    { l: 'Net effect: loop side shows replies appearing with no questions above them', a: [], b: [] }
+  ];
+  var timer = null;
+  document.getElementById('playBtn').addEventListener('click', function () {
+    if (timer) { clearTimeout(timer); timer = null; }
+    A.innerHTML = ''; B.innerHTML = ''; label.textContent = '';
+    var i = 0;
+    function next() {
+      if (i >= steps.length) { timer = null; return; }
+      var s = steps[i++];
+      label.textContent = 'Step ' + i + '/' + steps.length + ' — ' + s.l;
+      s.a.forEach(function (m) { addBubble(A, m); });
+      s.b.forEach(function (m) { addBubble(B, m); });
+      timer = setTimeout(next, 2200);
+    }
+    function addBubble(root, m) {
+      var d = document.createElement('div');
+      d.className = 'bubble ' + m.c;
+      d.textContent = m.t;
+      root.appendChild(d);
+      requestAnimationFrame(function () { requestAnimationFrame(function () { d.classList.add('show'); }); });
+    }
+    next();
+  });
+})();
+</script>
 </body>
 </html>
