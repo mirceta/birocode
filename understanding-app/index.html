@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Understanding — Discovered local-apps cache</title>
+<title>Understanding — Discover Apps Panel</title>
 <style>
   :root {
     --bg: #0f1218;
@@ -20,6 +20,7 @@
     --grey: #8b949e;
     --grey-bg: #21262d;
     --red: #f85149;
+    --red-bg: #2a1416;
     --violet: #a371f7;
     --violet-bg: #1c1630;
     --mono: 'Consolas', 'Cascadia Code', monospace;
@@ -34,259 +35,320 @@
     line-height: 1.55;
     padding: 28px 20px 80px;
   }
-  .wrap { max-width: 940px; margin: 0 auto; }
+  .wrap { max-width: 960px; margin: 0 auto; }
   h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.02em; }
+  h2 { font-size: 18px; margin: 26px 0 10px; }
   .sub { color: var(--soft); margin: 0 0 22px; font-size: 15px; }
   .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
   .tab {
-    padding: 7px 14px; border: 1px solid var(--border); border-radius: 999px;
-    background: var(--surface); color: var(--soft); cursor: pointer; font-size: 13px;
-    font-weight: 600;
+    padding: 7px 14px; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--soft); font-size: 13.5px; font-weight: 600;
+    cursor: pointer;
   }
-  .tab.active { color: var(--text); border-color: var(--accent); background: var(--surface2); }
-  .panel { display: none; }
-  .panel.active { display: block; animation: fade .25s ease; }
-  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-
+  .tab.on { background: var(--accent); border-color: var(--accent); color: #0b1524; }
+  .view { display: none; }
+  .view.on { display: block; }
   .card {
     background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 18px 20px; margin-bottom: 16px;
+    border-radius: var(--radius); padding: 16px 18px; margin-bottom: 14px;
   }
-  .card h2 { font-size: 17px; margin: 0 0 10px; }
-  p { margin: 0 0 12px; }
-  code { font-family: var(--mono); background: var(--surface2); padding: 1px 6px; border-radius: 6px; font-size: 13px; }
+  .card p { margin: 8px 0; font-size: 14.5px; }
   .soft { color: var(--soft); }
-  ul { margin: 6px 0 12px; padding-left: 20px; }
-  li { margin: 4px 0; }
+  code, .mono { font-family: var(--mono); font-size: 13px; }
+  code { background: var(--surface2); padding: 1px 6px; border-radius: 6px; }
+  .pill {
+    display: inline-block; padding: 1px 9px; border-radius: 999px;
+    font-size: 11.5px; font-weight: 700;
+  }
+  .pill.green { color: var(--green); background: var(--green-bg); }
+  .pill.amber { color: var(--amber); background: var(--amber-bg); }
+  .pill.grey  { color: var(--grey); background: var(--grey-bg); }
+  .pill.red   { color: var(--red); background: var(--red-bg); }
+  .pill.violet{ color: var(--violet); background: var(--violet-bg); }
 
-  /* Simulator */
-  .sim { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  @media (max-width: 720px) { .sim { grid-template-columns: 1fr; } }
-  .stage {
-    background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 14px; position: relative; min-height: 150px;
+  /* mock dock + panel */
+  .mockrow { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
+  .phone-mock {
+    width: 300px; border: 1px solid var(--border); border-radius: 14px;
+    background: var(--surface2); overflow: hidden; position: relative; min-height: 330px;
+    flex: 0 0 auto;
   }
-  .stage .label { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--soft); margin-bottom: 8px; }
-  .dock-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
-  button.act {
-    padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border);
-    background: var(--surface); color: var(--text); font-weight: 600; font-size: 12.5px; cursor: pointer;
+  .pm-bar { padding: 8px 12px; background: #232c3d; font-size: 12.5px; font-weight: 700; display:flex; gap:8px; align-items:center; }
+  .pm-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+  .pm-lanes { display: flex; gap: 4px; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+  .pm-lane { font-size: 11px; padding: 2px 9px; border-radius: 999px; background: var(--surface); color: var(--soft); }
+  .pm-lane.on { color: var(--text); background: #2a3346; }
+  .pm-strip { padding: 8px 10px; border-bottom: 1px solid var(--border); display: flex; gap: 6px; }
+  .pm-btn {
+    font-size: 11.5px; font-weight: 600; padding: 3px 10px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--surface); color: var(--soft); cursor: pointer;
   }
-  button.act:hover:not(:disabled) { border-color: var(--accent); }
-  button.act:disabled { opacity: .45; cursor: default; }
-  button.cache { border-color: var(--violet); }
-  .app-row {
-    display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 8px;
-    background: var(--surface); border: 1px solid var(--border); margin: 5px 0; font-size: 13px;
+  .pm-btn:hover { border-color: var(--accent); color: var(--text); }
+  .pm-chat { padding: 14px 12px; color: var(--soft); font-size: 12.5px; }
+  .pm-panel {
+    position: absolute; inset: 0; background: var(--surface2);
+    display: flex; flex-direction: column; border-radius: 14px;
+    animation: fadein .18s ease;
   }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--grey); flex: 0 0 auto; }
-  .dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
-  .port { color: var(--soft); font-family: var(--mono); font-size: 12px; }
-  .empty { color: var(--soft); font-size: 13px; font-style: italic; padding: 8px 0; }
-  .disk {
-    border-style: dashed;
-  }
-  .disk.has { border-color: var(--violet); }
-  .badge {
-    display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 999px;
-    border: 1px solid var(--border); color: var(--soft); margin-left: 6px;
-  }
-  .badge.agent { color: var(--amber); border-color: var(--amber); background: var(--amber-bg); }
-  .badge.cache { color: var(--violet); border-color: var(--violet); background: var(--violet-bg); }
-  .controls { display: flex; gap: 10px; align-items: center; margin: 14px 0 4px; flex-wrap: wrap; }
-  .log {
-    font-family: var(--mono); font-size: 12px; background: #0b0e14; border: 1px solid var(--border);
-    border-radius: 8px; padding: 10px 12px; margin-top: 12px; max-height: 150px; overflow-y: auto;
-    color: var(--soft);
-  }
-  .log div { margin: 2px 0; }
-  .log .hi { color: var(--accent); }
-  .log .warn { color: var(--amber); }
-  .log .vio { color: var(--violet); }
-  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--border);
-    border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -1px; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; } }
+  .pm-panel-head { display: flex; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--border); font-size: 12.5px; font-weight: 700; }
+  .pm-close { margin-left: auto; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border); background: none; color: var(--soft); cursor: pointer; }
+  .pm-body { padding: 10px 12px; display: flex; flex-direction: column; gap: 7px; overflow-y: auto; }
+  .pm-row { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+  .pm-row .name { font-weight: 700; }
+  .pm-row .port { font-family: var(--mono); color: var(--accent); }
+  .pm-row .age { font-size: 10px; color: var(--soft); }
+  .pm-row .acts { margin-left: auto; display: flex; gap: 5px; }
+  .pm-act { font-size: 10px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--soft); cursor: pointer; }
+  .pm-act.run { color: var(--green); border-color: #2a4a33; }
+  .pm-act.del:hover { border-color: var(--red); color: var(--red); }
+  .pm-act[disabled] { opacity: .4; cursor: default; }
+  .pm-msg { font-size: 11.5px; color: var(--soft); }
+  .pm-msg.cachey { color: var(--accent); }
+  .rowdot { width: 7px; height: 7px; border-radius: 50%; background: var(--border); flex: 0 0 auto; }
+  .rowdot.on { background: var(--green); box-shadow: 0 0 0 2px rgba(63,185,80,.25); }
 
-  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
-  th { color: var(--soft); font-weight: 600; }
-  .k { color: var(--accent); font-family: var(--mono); font-size: 12.5px; }
-  .flag { color: var(--green); }
-  .flag.no { color: var(--red); }
+  /* simulator */
+  .sim-cols { display: flex; gap: 14px; flex-wrap: wrap; }
+  .sim-col { flex: 1 1 260px; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+  .sim-col h3 { margin: 0 0 8px; font-size: 13.5px; }
+  .sim-app {
+    display: flex; align-items: center; gap: 8px; font-size: 12.5px;
+    padding: 5px 8px; border-radius: 8px; margin-bottom: 5px; background: var(--surface);
+    border: 1px solid var(--border);
+  }
+  .sim-app.new { border-color: #2a4a33; }
+  .sim-app .port { font-family: var(--mono); color: var(--accent); }
+  .sim-app .when { margin-left: auto; font-size: 10.5px; color: var(--soft); }
+  .sim-app .x { border: none; background: none; color: var(--red); cursor: pointer; font-size: 12px; padding: 0 2px; }
+  .sim-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+  .sim-btn {
+    padding: 6px 14px; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .sim-btn:hover { border-color: var(--accent); }
+  .sim-log { font-family: var(--mono); font-size: 11.5px; color: var(--soft); background: #10141c; border-radius: 8px; padding: 10px 12px; max-height: 150px; overflow-y: auto; }
+  .sim-log .ln { margin: 2px 0; }
+  .flow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; margin: 10px 0; }
+  .flow .node { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; }
+  .flow .arr { color: var(--soft); }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--soft); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Discovered local-apps cache</h1>
-  <p class="sub">Why a scan is now saved to disk — and how <b>Load cache</b> reuses it without paying for another agent run. <span class="badge cache">openspec: cache-discovered-local-apps</span></p>
+  <h1>Discover Apps Panel</h1>
+  <p class="sub">openspec change <code>discover-apps-panel</code> — the dock slims to two buttons, a panel overlay hosts the findings, the cache becomes a union, and records get an explicit delete.</p>
 
   <div class="tabs">
-    <div class="tab active" data-tab="try">Try it</div>
-    <div class="tab" data-tab="flow">The flow</div>
-    <div class="tab" data-tab="contract">Contract</div>
+    <button class="tab on" data-v="what">What changed</button>
+    <button class="tab" data-v="panel">Dock &amp; panel (live mock)</button>
+    <button class="tab" data-v="union">Union cache simulator</button>
+    <button class="tab" data-v="where">Where things live</button>
   </div>
 
-  <!-- TRY IT -->
-  <section class="panel active" data-panel="try">
+  <!-- ============ WHAT CHANGED ============ -->
+  <div class="view on" id="v-what">
     <div class="card">
-      <h2>Simulate the dock</h2>
-      <p class="soft">The <b>agent scan</b> is expensive; the <b>disk cache</b> is instant. Click around — watch what survives a restart.</p>
-      <div class="sim">
-        <div class="stage" id="dockStage">
-          <div class="label">Agent dock · in-memory job</div>
-          <div class="dock-btns">
-            <button class="act" id="btnDiscover">🛰️ Discover local apps</button>
-            <button class="act cache" id="btnLoad">💾 Load cache</button>
+      <h2 style="margin-top:0">The two problems</h2>
+      <p><span class="pill red">UI sprawl</span> The dock's discover section had grown into a full findings list with per-row Run / Check / Register, a Load-cache button and status messages — eating the phone on repos with many apps.</p>
+      <p><span class="pill red">Data loss</span> <code>LocalAppDiscoveryCache.Save</code> <b>overwrote</b> the cache on every successful scan. The discovery agent routinely finds only a subset per run, so a later partial scan silently erased apps an earlier scan had found.</p>
+    </div>
+    <div class="card">
+      <h2 style="margin-top:0">The four fixes</h2>
+      <table>
+        <tr><th>Fix</th><th>How</th></tr>
+        <tr><td><span class="pill green">Two-button dock</span></td><td>The strip keeps only <b>🛰️ Discover</b> (runs the scan, shows the spinner) and <b>📋 Local apps</b> (opens the panel). Nothing else renders inline.</td></tr>
+        <tr><td><span class="pill green">Panel overlay</span></td><td><code>DiscoverAppsPanel.jsx</code> renders <i>inside</i> the dock (the <code>.phone</code> is <code>position:relative</code>), hosting findings + all per-row actions + cache/job state. Same hook state as the dock buttons — one poll, one snapshot.</td></tr>
+        <tr><td><span class="pill green">Union cache</span></td><td><code>Save</code> merges <b>by port</b>: new scan wins its ports, cached ports the scan missed are kept. Each finding carries its own <code>discoveredAt</code>; the merged set becomes the in-memory job result too, so Run-by-port works for every cached app.</td></tr>
+        <tr><td><span class="pill green">Explicit delete</span></td><td><code>DELETE /api/local-apps/cache/{port}</code> — the <b>only</b> removal path now (a rescan never drops records). Edits the disk cache <i>and</i> the in-memory job; deleting the last record leaves cached-<i>empty</i>, distinct from no-cache.</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <p><span class="pill amber">BREAKING semantics</span> Before: an app that disappeared from the repo vanished from the cache on the next scan. Now it <b>persists until you delete it</b> — that implicit drop was exactly the data loss being fixed. The per-row age makes stale records visible; the 🗑 removes them.</p>
+    </div>
+  </div>
+
+  <!-- ============ DOCK & PANEL MOCK ============ -->
+  <div class="view" id="v-panel">
+    <div class="card">
+      <p style="margin-top:0">A working miniature of the real dock. Click <b>📋 Local apps</b> to open the panel; delete rows with 🗑 (state resets on reload).</p>
+      <div class="mockrow">
+        <div class="phone-mock" id="mock">
+          <div class="pm-bar"><span class="pm-dot"></span> Claude Web (this app) <span style="margin-left:auto;color:var(--soft);font-weight:400">idle</span></div>
+          <div class="pm-lanes"><span class="pm-lane on">Builder</span><span class="pm-lane">Ask</span><span class="pm-lane">Files</span><span class="pm-lane">Console</span></div>
+          <div class="pm-strip">
+            <button class="pm-btn" id="mock-discover">🛰️ Discover local apps</button>
+            <button class="pm-btn" id="mock-open">📋 Local apps</button>
           </div>
-          <div id="dockApps"><div class="empty">Idle — nothing discovered yet.</div></div>
+          <div class="pm-chat">— embedded chat —<br><span style="opacity:.5">(the findings list no longer lives here)</span></div>
         </div>
-        <div class="stage disk" id="diskStage">
-          <div class="label">Harness data dir · <code>local-app-cache/&lt;repoId&gt;.json</code></div>
-          <div id="diskBody"><div class="empty">Empty — no discovery has been cached.</div></div>
+        <div style="flex:1 1 280px; font-size:13.5px" class="soft">
+          <p><b style="color:var(--text)">What the mock shows</b></p>
+          <p>• The strip holds <i>exactly two</i> buttons — everything else moved into the overlay.</p>
+          <p>• The panel opens over the whole dock; repo context stays implicit (it's <i>this</i> dock's repo).</p>
+          <p>• Opening is <b>passive</b>: no agent run, no repo mutation. With no recent job it auto-loads the cache from disk.</p>
+          <p>• Rows: live-port dot · name · <span class="mono" style="color:var(--accent)">:port</span> · per-row age · Run / Register / 🗑.</p>
+          <p>• Discover clicked mid-scan? The panel shows the running state live — same hook, same poll.</p>
         </div>
       </div>
-      <div class="controls">
-        <button class="act" id="btnRestart">⟳ Restart harness</button>
-        <span class="soft" style="font-size:12.5px">Clears the in-memory job — <b>not</b> the disk cache.</span>
+    </div>
+  </div>
+
+  <!-- ============ UNION SIMULATOR ============ -->
+  <div class="view" id="v-union">
+    <div class="card">
+      <p style="margin-top:0">The exact merge <code>LocalAppDiscoveryCache.Save</code> performs. Run partial scans and deletes; watch the cache accumulate instead of losing records.</p>
+      <div class="sim-actions">
+        <button class="sim-btn" id="sim-scan1">Scan finds A + B</button>
+        <button class="sim-btn" id="sim-scan2">Partial rescan finds only B′</button>
+        <button class="sim-btn" id="sim-scan3">Scan finds C</button>
+        <button class="sim-btn" id="sim-reset">Reset</button>
       </div>
-      <div class="log" id="log"></div>
+      <div class="sim-cols">
+        <div class="sim-col"><h3>Latest scan result</h3><div id="sim-scan"><div class="pm-msg">— no scan yet —</div></div></div>
+        <div class="sim-col"><h3>On-disk cache (union by port)</h3><div id="sim-cache"><div class="pm-msg">— empty —</div></div></div>
+      </div>
+      <h2>Merge log</h2>
+      <div class="sim-log" id="sim-log"><div class="ln">ready — the old Save() replaced the whole file each time</div></div>
     </div>
-  </section>
+  </div>
 
-  <!-- FLOW -->
-  <section class="panel" data-panel="flow">
+  <!-- ============ WHERE THINGS LIVE ============ -->
+  <div class="view" id="v-where">
     <div class="card">
-      <h2>Two paths, one result shape</h2>
-      <p><b>Discover local apps</b> — runs the read-only agent scan of the repo, returns the typed list, and now <b>write-throughs</b> that result to a per-repo JSON file on disk. The scan itself never touches the scanned repo; the write is a separate harness-side artifact in the harness data dir.</p>
-      <p><b>Load cache</b> — reads that JSON straight back and returns the <i>same</i> shape as a live scan (<code>name, port, folder, evidence, startCommand</code>), so the register / Run / Check rows work identically. No agent runs. Each app's <code>running</code> dot is still recomputed live from a port check at load time — never frozen into the cache.</p>
-      <ul>
-        <li><b>Restart-proof:</b> the old registry was in-memory latest-only — a restart dropped it. The cache survives on disk.</li>
-        <li><b>Rediscover stays one click away:</b> added a new app? Hit Discover; a fresh scan overwrites the cache.</li>
-        <li><b>Best-effort write:</b> a cache-write failure is logged and swallowed — discovery still returns its result.</li>
-        <li><b>No cache yet</b> returns an explicit <code>status:"no-cache"</code> so the dock says "run Discover first" rather than showing an empty list.</li>
-      </ul>
+      <h2 style="margin-top:0">Data flow</h2>
+      <div class="flow">
+        <span class="node">agent scan</span><span class="arr">→</span>
+        <span class="node"><code>Save()</code> union-merge</span><span class="arr">→</span>
+        <span class="node">disk: <code>data/local-app-cache/&lt;repoId&gt;.json</code></span><span class="arr">and</span>
+        <span class="node">job result = <b>merged</b> set</span><span class="arr">→</span>
+        <span class="node">status / Run / Check see the union</span>
+      </div>
+      <div class="flow">
+        <span class="node">🗑 in panel</span><span class="arr">→</span>
+        <span class="node"><code>DELETE /api/local-apps/cache/{port}</code></span><span class="arr">→</span>
+        <span class="node">edits cache file + in-memory job</span><span class="arr">→</span>
+        <span class="node">returns updated snapshot (panel re-renders, no refetch)</span>
+      </div>
     </div>
     <div class="card">
-      <h2>Where it lives in the code</h2>
       <table>
-        <tr><th>Piece</th><th>What it does</th></tr>
-        <tr><td class="k">LocalAppDiscoveryCache</td><td>Owns the file path (harness data dir, keyed by repo id), Save / Load, best-effort.</td></tr>
-        <tr><td class="k">LocalAppDiscoveryJobs</td><td>On a successful <code>MarkDone</code>, write-throughs to the cache. <code>SeedFromCache</code> rehydrates a Done job so Run/Check work after a load.</td></tr>
-        <tr><td class="k">GET /api/local-apps/cache</td><td>Loads from disk, recomputes live <code>running</code>, returns <code>done</code>+<code>cachedAt</code> or <code>no-cache</code>. No agent.</td></tr>
-        <tr><td class="k">PinnedAgent.jsx</td><td>The 💾 Load cache button beside Discover; shows cache age or the no-cache hint.</td></tr>
+        <tr><th>Piece</th><th>File</th><th>Note</th></tr>
+        <tr><td>Union merge + Delete</td><td class="mono">ClaudeWeb.App/Services/StructuredAsk/LocalAppDiscoveryCache.cs</td><td><code>DiscoveredAtByPort</code> is a sidecar map, <i>not</i> a field on the finding — the report model is reflected into the agent's prompt skeleton and must stay the agent's exact output contract.</td></tr>
+        <tr><td>Job holds the union</td><td class="mono">…/LocalAppDiscoveryJobs.cs</td><td><code>MarkDone(merged)</code>; <code>RemoveFromResult</code> swaps in a filtered copy after a delete.</td></tr>
+        <tr><td>Endpoints</td><td class="mono">ClaudeWeb.App/Controllers/LocalAppsController.cs</td><td><code>GET /cache</code> and <code>DELETE /cache/{port}</code> share one snapshot shape: apps + live <code>running</code> + per-row <code>discoveredAt</code> + <code>cachedAt</code>.</td></tr>
+        <tr><td>Shared hook</td><td class="mono">client/src/components/dashboard/useLocalAppDiscovery.js</td><td>One state for dock buttons + panel: reattach on mount/repo-change, 5s poll, discover/loadCache/check/run/register/deleteCached.</td></tr>
+        <tr><td>Panel</td><td class="mono">client/src/components/dashboard/DiscoverAppsPanel.jsx</td><td>Overlay in the dock; auto-loads cache when idle; Advanced-mode (<code>localAppDiscovery</code> capability).</td></tr>
+        <tr><td>Tests</td><td class="mono">tests/ClaudeWeb.Tests/LocalAppDiscoveryCacheTests.cs</td><td>Union keeps missed ports · port refresh not duplicate · pre-union file loads · delete one / last / no-match.</td></tr>
       </table>
+      <p class="soft" style="margin-top:12px">Old cache files (no per-finding times) still load — every finding defaults to the file's <code>CachedAt</code>. No migration step.</p>
     </div>
-  </section>
-
-  <!-- CONTRACT -->
-  <section class="panel" data-panel="contract">
-    <div class="card">
-      <h2>What each path guarantees</h2>
-      <table>
-        <tr><th>Property</th><th>Discover (agent)</th><th>Load cache (disk)</th></tr>
-        <tr><td>Runs the agent</td><td class="flag no">yes — costs a scan</td><td class="flag">no</td></tr>
-        <tr><td>Mutates the scanned repo</td><td class="flag">never</td><td class="flag">never</td></tr>
-        <tr><td>Survives a harness restart</td><td>writes the cache that does</td><td class="flag">reads it</td></tr>
-        <tr><td><code>running</code> flag</td><td>live port check</td><td>live port check (not cached)</td></tr>
-        <tr><td>Run command source</td><td>this scan, by port</td><td>cached scan, by port (still server-side)</td></tr>
-        <tr><td>Empty vs missing</td><td>empty list = "none found"</td><td><code>no-cache</code> = "run Discover first"</td></tr>
-      </table>
-      <p class="soft" style="margin-top:12px">The cache is a harness-owned artifact, not a repo file — so it never dirties the scanned repo's git tree, and the read-only-scan guarantee holds.</p>
-    </div>
-  </section>
+  </div>
 </div>
 
 <script>
-  // --- tabs ---
-  const tabs = document.querySelectorAll('.tab');
-  tabs.forEach(t => t.addEventListener('click', () => {
-    tabs.forEach(x => x.classList.remove('active'));
-    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-    t.classList.add('active');
-    document.querySelector(`.panel[data-panel="${t.dataset.tab}"]`).classList.add('active');
-  }));
+// tabs
+document.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('on', x === b));
+  document.querySelectorAll('.view').forEach((v) => v.classList.toggle('on', v.id === 'v-' + b.dataset.v));
+}));
 
-  // --- simulator state ---
-  const APPS = [
-    { name: 'homepage', port: 5200 },
-    { name: 'understanding-app', port: 5210 },
-  ];
-  let memJob = null;   // in-memory job: null | { apps, source }
-  let disk = null;     // cache file: null | { apps, cachedAt }
-  let scanning = false;
+// ---- dock & panel mock ----
+const mock = document.getElementById('mock');
+let mockApps = [
+  { name: 'StateA', port: 5301, age: '24h', running: true, registered: true },
+  { name: 'old-scanner', port: 5400, age: '26d', running: false, registered: false, noCmd: true },
+];
+function openPanel() {
+  const p = document.createElement('div');
+  p.className = 'pm-panel';
+  p.innerHTML = '<div class="pm-panel-head">Discovered local apps<button class="pm-close">×</button></div><div class="pm-body"></div>';
+  p.querySelector('.pm-close').addEventListener('click', () => p.remove());
+  renderPanelBody(p.querySelector('.pm-body'));
+  mock.appendChild(p);
+}
+function renderPanelBody(body) {
+  body.innerHTML = '<div style="display:flex;gap:5px"><button class="pm-act">💾 Load cache</button><button class="pm-act">🔄 Check running</button></div>'
+    + '<div class="pm-msg cachey">Latest scan: 27/07/2026, 11:00</div>';
+  if (mockApps.length === 0) {
+    body.insertAdjacentHTML('beforeend', '<div class="pm-msg">No local apps found in this repo</div>');
+    return;
+  }
+  mockApps.forEach((a, i) => {
+    const row = document.createElement('div');
+    row.className = 'pm-row';
+    row.innerHTML = `<span class="rowdot${a.running ? ' on' : ''}"></span><span class="name">${a.name}</span>`
+      + `<span class="port">:${a.port}</span><span class="age">${a.age}</span>`
+      + `<span class="acts">${a.running ? '' : `<button class="pm-act run"${a.noCmd ? ' disabled' : ''}>▶ Run</button>`}`
+      + `${a.registered ? '<span class="pm-act" style="color:var(--green);border:none">✓ Registered</span>' : '<button class="pm-act">Register</button>'}`
+      + `<button class="pm-act del" title="Delete from cache">🗑</button></span>`;
+    row.querySelector('.del').addEventListener('click', () => {
+      mockApps = mockApps.filter((_, j) => j !== i);
+      renderPanelBody(body);
+    });
+    body.appendChild(row);
+  });
+}
+document.getElementById('mock-open').addEventListener('click', () => {
+  if (!mock.querySelector('.pm-panel')) openPanel();
+});
+document.getElementById('mock-discover').addEventListener('click', (e) => {
+  const b = e.target;
+  b.textContent = 'Discovering…'; b.disabled = true;
+  setTimeout(() => { b.textContent = '🛰️ Discover local apps'; b.disabled = false; }, 2200);
+});
 
-  const $ = id => document.getElementById(id);
-  const logEl = $('log');
-  function log(msg, cls) {
+// ---- union simulator ----
+let cache = new Map(); // port -> {name, port, when}
+let clock = 0;
+const scanEl = document.getElementById('sim-scan');
+const cacheEl = document.getElementById('sim-cache');
+const logEl = document.getElementById('sim-log');
+function log(msg) {
+  const d = document.createElement('div');
+  d.className = 'ln'; d.textContent = msg;
+  logEl.prepend(d);
+}
+function renderApps(el, apps, readOnly) {
+  el.innerHTML = apps.length ? '' : '<div class="pm-msg">— empty —</div>';
+  apps.forEach((a) => {
     const d = document.createElement('div');
-    if (cls) d.className = cls;
-    d.innerHTML = msg;
-    logEl.prepend(d);
-  }
-  // Live running flag is decided at render time (recomputed each read), not stored.
-  function liveRunning(port) { return port === 5200; } // pretend homepage is up
-
-  function appRows(apps, sourceBadge) {
-    if (!apps) return '<div class="empty">Idle — nothing discovered yet.</div>';
-    if (!apps.length) return '<div class="empty">No local apps found.</div>';
-    const badge = sourceBadge === 'agent'
-      ? '<span class="badge agent">from agent scan</span>'
-      : '<span class="badge cache">from cache</span>';
-    return badge + apps.map(a => {
-      const on = liveRunning(a.port);
-      return `<div class="app-row"><span class="dot ${on ? 'on' : ''}"></span>
-        <span>${a.name}</span><span class="port">:${a.port}</span></div>`;
-    }).join('');
-  }
-  function diskRows() {
-    if (!disk) return '<div class="empty">Empty — no discovery has been cached.</div>';
-    return `<span class="badge cache">cached ${disk.cachedAt}</span>` +
-      disk.apps.map(a => `<div class="app-row"><span class="dot"></span><span>${a.name}</span><span class="port">:${a.port}</span></div>`).join('');
-  }
-  function render() {
-    $('dockApps').innerHTML = scanning
-      ? '<div class="empty"><span class="spinner"></span> Agent scanning the repo…</div>'
-      : appRows(memJob?.apps, memJob?.source);
-    $('diskBody').innerHTML = diskRows();
-    $('diskStage').classList.toggle('has', !!disk);
-    $('btnDiscover').disabled = scanning;
-    $('btnLoad').disabled = scanning;
-  }
-
-  $('btnDiscover').addEventListener('click', () => {
-    if (scanning) return;
-    scanning = true; render();
-    log('🛰️ <span class="hi">Discover</span> → running read-only agent scan…');
-    setTimeout(() => {
-      scanning = false;
-      memJob = { apps: APPS, source: 'agent' };
-      const now = new Date().toLocaleTimeString();
-      disk = { apps: APPS, cachedAt: now };   // write-through on success
-      log(`✓ scan found ${APPS.length} apps → <span class="vio">written to cache</span> (${now})`, 'vio');
-      render();
-    }, 1400);
+    d.className = 'sim-app' + (readOnly ? ' new' : '');
+    d.innerHTML = `<span>${a.name}</span><span class="port">:${a.port}</span><span class="when">scan #${a.when}</span>`
+      + (readOnly ? '' : `<button class="x" title="delete">🗑</button>`);
+    if (!readOnly) d.querySelector('.x').addEventListener('click', () => {
+      cache.delete(a.port);
+      log(`DELETE :${a.port} → removed from cache file + in-memory job${cache.size === 0 ? ' (cache now EMPTY, distinct from no-cache)' : ''}`);
+      renderCache();
+    });
+    el.appendChild(d);
   });
-
-  $('btnLoad').addEventListener('click', () => {
-    if (!disk) {
-      memJob = { apps: [], source: 'nocache' };
-      $('dockApps').innerHTML = '<div class="empty">No cached discovery yet — run Discover local apps first.</div>';
-      log('💾 <span class="vio">Load cache</span> → <span class="warn">no-cache</span>: nothing saved for this repo yet', 'warn');
-      $('diskStage').classList.remove('has');
-      return;
-    }
-    memJob = { apps: disk.apps, source: 'cache' };  // rehydrate job from disk, no agent
-    log(`💾 <span class="vio">Load cache</span> → returned ${disk.apps.length} apps instantly, no agent (cached ${disk.cachedAt})`, 'vio');
-    render();
+}
+function renderCache() { renderApps(cacheEl, [...cache.values()], false); }
+function scan(apps, label) {
+  clock++;
+  renderApps(scanEl, apps.map((a) => ({ ...a, when: clock })), true);
+  const kept = [...cache.keys()].filter((p) => !apps.some((a) => a.port === p));
+  apps.forEach((a) => {
+    const had = cache.has(a.port);
+    cache.set(a.port, { ...a, when: clock });
+    log(`scan #${clock} (${label}): :${a.port} ${had ? 'refreshed (port matched — replaced, not duplicated)' : 'added'}`);
   });
-
-  $('btnRestart').addEventListener('click', () => {
-    memJob = null; scanning = false;            // in-memory registry cleared…
-    log('⟳ harness restarted — in-memory job cleared; <span class="vio">disk cache intact</span>');
-    render();
-  });
-
-  render();
+  if (kept.length) log(`scan #${clock}: kept ${kept.map((p) => ':' + p).join(', ')} — missed by this scan, union keeps them`);
+  renderCache();
+}
+document.getElementById('sim-scan1').addEventListener('click', () => scan([{ name: 'app-A', port: 5301 }, { name: 'app-B', port: 5302 }], 'A+B'));
+document.getElementById('sim-scan2').addEventListener('click', () => scan([{ name: 'app-B v2', port: 5302 }], 'only B′'));
+document.getElementById('sim-scan3').addEventListener('click', () => scan([{ name: 'app-C', port: 5400 }], 'C'));
+document.getElementById('sim-reset').addEventListener('click', () => {
+  cache = new Map(); clock = 0;
+  scanEl.innerHTML = '<div class="pm-msg">— no scan yet —</div>';
+  logEl.innerHTML = '<div class="ln">ready</div>';
+  renderCache();
+});
 </script>
 </body>
 </html>
