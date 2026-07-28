@@ -17,6 +17,6 @@
 
 ## 4. Verify + ship
 
-- [ ] 4.1 Build backend + frontend; run isolated harness — engine tick + poller logs within seconds, mining logged in background, health 200
-- [ ] 4.2 openspec validate --strict
-- [ ] 4.3 Merge origin/main into feat/loop-debug-ref, deploy via detached swap.ps1, verify live PID + health
+- [x] 4.1 Build backend + frontend; run isolated harness — engine tick + poller logs within seconds, mining logged in background, health 200
+- [x] 4.2 openspec validate --strict
+- [x] 4.3 Merge origin/main into feat/loop-debug-ref, deploy via detached swap.ps1, verify live PID + health
