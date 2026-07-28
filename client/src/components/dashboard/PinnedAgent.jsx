@@ -48,6 +48,7 @@ export default function PinnedAgent({
   loop,
   loopRecipes = [],
   onLoopChanged,
+  onSplitChange,
 }) {
   const { t } = useT();
   // Per-dock lane toggle (plans/repo-ask-chat.md slice 3): each phone can switch
@@ -75,6 +76,22 @@ export default function PinnedAgent({
   const apps = canLocalApp ? (localApps || []) : [];
   const [openAppId, setOpenAppId] = useState(null);
   const openApp = apps.find((a) => a.id === openAppId) || null;
+
+  // Split view (openspec dock-app-split-view): per-dock, ephemeral choice to show
+  // the opened app BESIDE the chat instead of over it — left pane is the dock
+  // exactly as with no app open, right pane is the app frame. Effective only
+  // while an app is open, so closing the app / switching to Files or Console
+  // needs no extra bookkeeping. Advanced-gated toggle; Basic always gets cover.
+  const canSplit = useFeature('dockAppSplit');
+  const [splitApp, setSplitApp] = useState(false);
+  const split = !!(canSplit && splitApp && openApp);
+
+  // Report effective split up so the Dashboard can widen this dock's grid cell
+  // while the two panes are showing (and restore it when the dock unmounts).
+  useEffect(() => {
+    onSplitChange?.(tab.id, split);
+    return () => onSplitChange?.(tab.id, false);
+  }, [split, tab.id, onSplitChange]);
 
   // Files tab on the dock (plans/agent-dock-files-tab.md): a third screen the
   // phone can show — the SAME browse-and-view surface as the routed Files tab
@@ -105,7 +122,9 @@ export default function PinnedAgent({
   // showing (not Files / a local app), so we gate the modifier on that.
   const [chatMaximized, setChatMaximized] = useState(false);
   const toggleChatMaximized = () => setChatMaximized((v) => !v);
-  const chatShowing = !showFiles && !openApp && !showConsole;
+  // Split counts as "chat showing": the left pane holds the full chat, so the
+  // composer-only collapse and the chrome-hiding below only apply to cover mode.
+  const chatShowing = !showFiles && !showConsole && (!openApp || split);
   const maximized = chatMaximized && chatShowing;
   // Any alternate view open? (openspec local-app-overlay-keep-composer) The view
   // no longer REPLACES the chat in phone__screen — it renders above one shared
@@ -281,7 +300,7 @@ export default function PinnedAgent({
 
   return (
     <div
-      className={`phone phone--${status}${tab.important ? ' phone--important' : ''}${tab.waiting ? ' phone--waiting' : ''}${tab.stash?.length ? ' phone--queued' : ''}${maximized ? ' phone--chat-max' : ''}`}
+      className={`phone phone--${status}${tab.important ? ' phone--important' : ''}${tab.waiting ? ' phone--waiting' : ''}${tab.stash?.length ? ' phone--queued' : ''}${maximized ? ' phone--chat-max' : ''}${split ? ' phone--split' : ''}`}
       data-colored={tab.color ? 'true' : undefined}
       data-recency={recency}
       style={tab.color ? { '--agent-color': tab.color } : undefined}
@@ -426,13 +445,27 @@ export default function PinnedAgent({
               {a.name}{a.kind === 'repo' && <span className="phone__app-port"> :{a.port}</span>}
             </button>
           ))}
+          {/* Split toggle (openspec dock-app-split-view): only while an app is
+              open — flips the SAME open app between cover and side-by-side. */}
+          {canSplit && openApp && (
+            <button
+              type="button"
+              className={`phone__app phone__split${split ? ' phone__app--on' : ''}`}
+              aria-pressed={split}
+              aria-label={t('dashboard.splitToggle')}
+              title={split ? t('dashboard.splitExitHint') : t('dashboard.splitHint')}
+              onClick={() => setSplitApp((v) => !v)}
+            >
+              ◫
+            </button>
+          )}
         </div>
       )}
       {/* Discover local apps (openspec discover-apps-panel): the dock's ONLY two
           affordances — run a scan, open the panel. Findings, cache state, and all
           per-row actions live in the DiscoverAppsPanel overlay below. Chat-context
           furniture like the git block; hidden while Files / a local app is open. */}
-      {canDiscover && !showFiles && !openApp && !showConsole && (
+      {canDiscover && !showFiles && (!openApp || split) && !showConsole && (
         <div className="phone__discover">
           <div className="phone__discover-buttons">
             <button
@@ -460,7 +493,7 @@ export default function PinnedAgent({
           Sibling of Discover; reuses the .phone__discover furniture styling. Hidden
           while Files / a local app / the Console is open; disabled until the builder
           lane has a conversation. */}
-      {canUnderstand && !showFiles && !openApp && !showConsole && (
+      {canUnderstand && !showFiles && (!openApp || split) && !showConsole && (
         <div className="phone__discover phone__understanding">
           <div className="phone__understanding-row">
             <button
@@ -503,7 +536,7 @@ export default function PinnedAgent({
           a local app is open so that surface gets the full dock height (not just
           the strip below git) — plans/agent-dock-files-tab.md (Files) and
           plans/dock-local-app-full-height.md (local app). */}
-      {git && !showFiles && !openApp && !showConsole && (
+      {git && !showFiles && (!openApp || split) && !showConsole && (
         <div className="phone__git">
           <div className="phone__git-top">
             <GitStatusSummary status={git} compact />
@@ -578,31 +611,53 @@ export default function PinnedAgent({
           )}
         </div>
       )}
-      <div className="phone__screen" style={contentZoom !== 1 ? { zoom: contentZoom } : undefined}>
-        {showConsole ? (
-          <EventConsole repoId={tab.repoId} />
-        ) : showFiles ? (
-          <FilesBrowser repoId={tab.repoId} />
-        ) : openApp ? (
-          // Hosted keep-alive frame (openspec local-app-state-preserve): keyed
-          // per (dock, app), so closing the app view / switching dock views
-          // only unregisters the slot — the live frame waits for the reopen.
-          <ProductFrame
-            url={`/api/localview/${tab.repoId}/app/${openApp.id}/`}
-            port={openApp.port}
-            zoomable
-            frameKey={`dock:${tab.id}:${tab.repoId}:${openApp.id}`}
-            frameMeta={{ kind: 'dock', dockId: tab.id, repoId: tab.repoId, appId: openApp.id }}
+      {/* Two stable panes (openspec dock-app-split-view, design D2): phone__main
+          always exists and always holds the Chat as its LAST child, so toggling
+          split only adds/removes the sibling phone__side — the chat subtree keeps
+          its position and never remounts (the keep-composer contract). The app
+          frame renders in main (cover) or side (split) with the SAME frameKey, so
+          the keep-alive host keeps one iframe and just tracks the moved slot. */}
+      <div
+        className={`phone__screen${split ? ' phone__screen--split' : ''}`}
+        style={contentZoom !== 1 ? { zoom: contentZoom } : undefined}
+      >
+        <div className="phone__main">
+          {showConsole ? (
+            <EventConsole repoId={tab.repoId} />
+          ) : showFiles ? (
+            <FilesBrowser repoId={tab.repoId} />
+          ) : openApp && !split ? (
+            // Hosted keep-alive frame (openspec local-app-state-preserve): keyed
+            // per (dock, app), so closing the app view / switching dock views
+            // only unregisters the slot — the live frame waits for the reopen.
+            <ProductFrame
+              url={`/api/localview/${tab.repoId}/app/${openApp.id}/`}
+              port={openApp.port}
+              zoomable
+              frameKey={`dock:${tab.id}:${tab.repoId}:${openApp.id}`}
+              frameMeta={{ kind: 'dock', dockId: tab.id, repoId: tab.repoId, appId: openApp.id }}
+            />
+          ) : null}
+          <Chat
+            chat={chat}
+            embedded
+            composerOnly={altViewActive}
+            stashTabId={tab.id}
+            chatMaximized={maximized}
+            toggleChatMaximized={toggleChatMaximized}
           />
-        ) : null}
-        <Chat
-          chat={chat}
-          embedded
-          composerOnly={altViewActive}
-          stashTabId={tab.id}
-          chatMaximized={maximized}
-          toggleChatMaximized={toggleChatMaximized}
-        />
+        </div>
+        {split && (
+          <div className="phone__side">
+            <ProductFrame
+              url={`/api/localview/${tab.repoId}/app/${openApp.id}/`}
+              port={openApp.port}
+              zoomable
+              frameKey={`dock:${tab.id}:${tab.repoId}:${openApp.id}`}
+              frameMeta={{ kind: 'dock', dockId: tab.id, repoId: tab.repoId, appId: openApp.id }}
+            />
+          </div>
+        )}
       </div>
       {/* Discover Local Apps panel (openspec discover-apps-panel): a dock-contained
           overlay (the .phone is position:relative), so the repo context stays
