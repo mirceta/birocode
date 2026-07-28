@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { apiGet, apiPost, apiDelete } from '../../api/client';
+import { apiGet, apiPost, apiPostText, apiDelete } from '../../api/client';
 import { useRepo } from '../../context/RepoContext';
 
 // Shared Discover-Local-Apps state for one dock's repo (openspec
@@ -36,6 +36,10 @@ export default function useLocalAppDiscovery({ repoId, enabled }) {
   // Per-row cache delete (openspec discover-apps-panel, D5).
   const [deleting, setDeleting] = useState(null); // port currently being deleted
   const [deleteErr, setDeleteErr] = useState(null); // { port, text } | null
+
+  // Import of another agent's findings (openspec import-discovery-findings).
+  const [importing, setImporting] = useState(false);
+  const [importErr, setImportErr] = useState(null); // text | null
 
   const stopPoll = () => {
     if (pollRef.current) {
@@ -183,6 +187,26 @@ export default function useLocalAppDiscovery({ repoId, enabled }) {
     }
   };
 
+  // Import findings another agent produced (openspec import-discovery-findings):
+  // POST the operator's pasted JSON AS-IS — the server is the one validator (bare
+  // array or {apps:[...]}, all-or-nothing) — and apply the returned merged
+  // snapshot, same pattern as deleteCached. Returns true on success so the panel
+  // can close its import area.
+  const importFindings = async (text) => {
+    setImporting(true);
+    setImportErr(null);
+    try {
+      const r = await apiPostText('/local-apps/cache/import', text, { repoId });
+      setDiscovery(r);
+      return true;
+    } catch (err) {
+      setImportErr(parseErr(err));
+      return false;
+    } finally {
+      setImporting(false);
+    }
+  };
+
   return {
     discovery,
     discovering,
@@ -199,5 +223,8 @@ export default function useLocalAppDiscovery({ repoId, enabled }) {
     deleteCached,
     deleting,
     deleteErr,
+    importFindings,
+    importing,
+    importErr,
   };
 }

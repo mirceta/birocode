@@ -43,6 +43,23 @@ public class LocalAppExposureReport
         return report;
     }
 
+    /// <summary>
+    /// Parse an operator-supplied import payload (openspec import-discovery-findings).
+    /// Another agent typically hands back a bare JSON array of findings, while the
+    /// harness's own contract is the { "apps": [...] } object — accept both by
+    /// wrapping a bare array, then run the ONE validator (<see cref="Parse"/>) so an
+    /// import gets the same all-or-nothing guarantee as an agent scan.
+    /// </summary>
+    public static LocalAppExposureReport ParseImport(string payload)
+    {
+        var json = payload.Trim();
+        if (json.Length == 0)
+            throw new JsonException("empty payload — paste a JSON array of findings");
+        if (json.StartsWith('['))
+            json = "{\"apps\":" + json + "}";
+        return Parse(json);
+    }
+
     [JsonPropertyName("apps")]
     [Description("Every directory in this repository that exposes itself as a local app. Empty array if none.")]
     public List<LocalAppFinding> Apps { get; set; } = new();
