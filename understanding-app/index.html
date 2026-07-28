@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Understanding — Discover Apps Panel</title>
+<title>Understanding — Discover Apps Panel + JSON Import</title>
 <style>
   :root {
     --bg: #0f1218;
@@ -139,8 +139,8 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>Discover Apps Panel</h1>
-  <p class="sub">openspec change <code>discover-apps-panel</code> — the dock slims to two buttons, a panel overlay hosts the findings, the cache becomes a union, and records get an explicit delete.</p>
+  <h1>Discover Apps Panel + JSON Import</h1>
+  <p class="sub">openspec changes <code>discover-apps-panel</code> + <code>import-discovery-findings</code> — the dock slims to two buttons, a panel overlay hosts the findings, the cache becomes a union with explicit delete, and now the panel can <b>import a JSON array of findings another agent produced</b>.</p>
 
   <div class="tabs">
     <button class="tab on" data-v="what">What changed</button>
@@ -164,7 +164,12 @@
         <tr><td><span class="pill green">Panel overlay</span></td><td><code>DiscoverAppsPanel.jsx</code> renders <i>inside</i> the dock (the <code>.phone</code> is <code>position:relative</code>), hosting findings + all per-row actions + cache/job state. Same hook state as the dock buttons — one poll, one snapshot.</td></tr>
         <tr><td><span class="pill green">Union cache</span></td><td><code>Save</code> merges <b>by port</b>: new scan wins its ports, cached ports the scan missed are kept. Each finding carries its own <code>discoveredAt</code>; the merged set becomes the in-memory job result too, so Run-by-port works for every cached app.</td></tr>
         <tr><td><span class="pill green">Explicit delete</span></td><td><code>DELETE /api/local-apps/cache/{port}</code> — the <b>only</b> removal path now (a rescan never drops records). Edits the disk cache <i>and</i> the in-memory job; deleting the last record leaves cached-<i>empty</i>, distinct from no-cache.</td></tr>
+        <tr><td><span class="pill violet">JSON import</span></td><td><b>NEW</b> — <code>POST /api/local-apps/cache/import</code>. Paste a bare <code>[ … ]</code> array of findings (or the <code>{"apps":[…]}</code> report shape, or pick a <code>.json</code> file) in the panel's 📥 Import area. Validation is <b>all-or-nothing</b> via the same <code>LocalAppExposureReport.Parse</code> the scan agent goes through — one bad finding rejects the whole payload, cache untouched. A valid payload runs the <i>same union-by-port merge as a finishing scan</i>, stamped with the import time; imported rows are immediately runnable/registerable/deletable. A running scan is never clobbered — its completion merge unions on top of the just-imported cache.</td></tr>
       </table>
+    </div>
+    <div class="card">
+      <h2 style="margin-top:0">Why import?</h2>
+      <p class="soft">The harness's own scan is not the only source of findings: the operator sometimes prompts <b>another agent</b> to hunt for more apps, and it answers with a JSON array in the same shape (<code>name</code>, <code>port</code>, <code>folder</code>, <code>evidence</code>, <code>startCommand</code>). Until now there was no way to get those into the cache — import closes that loop.</p>
     </div>
     <div class="card">
       <p><span class="pill amber">BREAKING semantics</span> Before: an app that disappeared from the repo vanished from the cache on the next scan. Now it <b>persists until you delete it</b> — that implicit drop was exactly the data loss being fixed. The per-row age makes stale records visible; the 🗑 removes them.</p>
@@ -205,6 +210,8 @@
         <button class="sim-btn" id="sim-scan1">Scan finds A + B</button>
         <button class="sim-btn" id="sim-scan2">Partial rescan finds only B′</button>
         <button class="sim-btn" id="sim-scan3">Scan finds C</button>
+        <button class="sim-btn" id="sim-import">📥 Import JSON (B″ + D)</button>
+        <button class="sim-btn" id="sim-import-bad">📥 Import invalid JSON</button>
         <button class="sim-btn" id="sim-reset">Reset</button>
       </div>
       <div class="sim-cols">
@@ -233,6 +240,13 @@
         <span class="node">edits cache file + in-memory job</span><span class="arr">→</span>
         <span class="node">returns updated snapshot (panel re-renders, no refetch)</span>
       </div>
+      <div class="flow">
+        <span class="node">📥 paste / .json file</span><span class="arr">→</span>
+        <span class="node"><code>POST /api/local-apps/cache/import</code> (raw body)</span><span class="arr">→</span>
+        <span class="node"><code>ParseImport</code>: wrap bare array, validate all-or-nothing</span><span class="arr">→</span>
+        <span class="node"><code>Save()</code> union-merge (import time = <code>discoveredAt</code>)</span><span class="arr">→</span>
+        <span class="node">seed job (unless a scan runs) + return snapshot</span>
+      </div>
     </div>
     <div class="card">
       <table>
@@ -242,7 +256,10 @@
         <tr><td>Endpoints</td><td class="mono">ClaudeWeb.App/Controllers/LocalAppsController.cs</td><td><code>GET /cache</code> and <code>DELETE /cache/{port}</code> share one snapshot shape: apps + live <code>running</code> + per-row <code>discoveredAt</code> + <code>cachedAt</code>.</td></tr>
         <tr><td>Shared hook</td><td class="mono">client/src/components/dashboard/useLocalAppDiscovery.js</td><td>One state for dock buttons + panel: reattach on mount/repo-change, 5s poll, discover/loadCache/check/run/register/deleteCached.</td></tr>
         <tr><td>Panel</td><td class="mono">client/src/components/dashboard/DiscoverAppsPanel.jsx</td><td>Overlay in the dock; auto-loads cache when idle; Advanced-mode (<code>localAppDiscovery</code> capability).</td></tr>
-        <tr><td>Tests</td><td class="mono">tests/ClaudeWeb.Tests/LocalAppDiscoveryCacheTests.cs</td><td>Union keeps missed ports · port refresh not duplicate · pre-union file loads · delete one / last / no-match.</td></tr>
+        <tr><td>Import normalization</td><td class="mono">…/LocalAppExposureReport.cs</td><td><code>ParseImport</code>: trims, wraps a bare <code>[…]</code> as <code>{"apps":…}</code>, then the one true <code>Parse</code> validator — so imports and agent scans share the same all-or-nothing gate.</td></tr>
+        <tr><td>Import endpoint</td><td class="mono">ClaudeWeb.App/Controllers/LocalAppsController.cs</td><td><code>POST /cache/import</code> reads the raw body (≤1&nbsp;MB), merges via <code>Save</code>, seeds the job (never clobbering a running scan), emits a Cache event, returns the snapshot.</td></tr>
+        <tr><td>Import UI</td><td class="mono">client/src/components/dashboard/DiscoverAppsPanel.jsx</td><td>📥 Import toggles a paste textarea + <code>.json</code> picker (FileReader fills the same box); submit posts the text AS-IS via <code>apiPostText</code> — the server is the single validator.</td></tr>
+        <tr><td>Tests</td><td class="mono">tests/ClaudeWeb.Tests/LocalAppDiscoveryCacheTests.cs + LocalAppImportTests.cs</td><td>Union keeps missed ports · port refresh not duplicate · pre-union file loads · delete one / last / no-match · import shapes, rejection, merge, duplicate-port, unchanged-file-on-reject.</td></tr>
       </table>
       <p class="soft" style="margin-top:12px">Old cache files (no per-finding times) still load — every finding defaults to the file's <code>CachedAt</code>. No migration step.</p>
     </div>
@@ -343,6 +360,12 @@ function scan(apps, label) {
 document.getElementById('sim-scan1').addEventListener('click', () => scan([{ name: 'app-A', port: 5301 }, { name: 'app-B', port: 5302 }], 'A+B'));
 document.getElementById('sim-scan2').addEventListener('click', () => scan([{ name: 'app-B v2', port: 5302 }], 'only B′'));
 document.getElementById('sim-scan3').addEventListener('click', () => scan([{ name: 'app-C', port: 5400 }], 'C'));
+// Import goes through the EXACT same union merge as a scan — only the source
+// (operator-pasted JSON) and the timestamp label differ.
+document.getElementById('sim-import').addEventListener('click', () =>
+  scan([{ name: 'app-B v3 (imported)', port: 5302 }, { name: 'app-D (imported)', port: 5500 }], 'import'));
+document.getElementById('sim-import-bad').addEventListener('click', () =>
+  log('IMPORT REJECTED: app "broken" has an out-of-range port: 0 — all-or-nothing, cache unchanged (even valid findings in the same payload are dropped)'));
 document.getElementById('sim-reset').addEventListener('click', () => {
   cache = new Map(); clock = 0;
   scanEl.innerHTML = '<div class="pm-msg">— no scan yet —</div>';

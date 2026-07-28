@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ClaudeWeb.Services.Audit;
 using ClaudeWeb.Services.Events;
 using ClaudeWeb.Services.Logging;
@@ -157,6 +158,51 @@ public class LocalAppsController : ControllerBase
         _jobs.RemoveFromResult(repo.Id, port);
         _events.Emit(repo.Id, "cache", "done", "Cache", $"deleted cached app on :{port}");
         return Ok(CacheBody(repo.Id, repo.Name, updated!));
+    }
+
+    // Import externally produced findings into the caller's repo cache (openspec
+    // import-discovery-findings): the operator sometimes has ANOTHER agent hunt for
+    // apps, and it hands back a JSON array of findings. Accepts either that bare
+    // array or the harness's own { apps: [...] } report shape (D1: a bare array is
+    // wrapped, then LocalAppExposureReport.Parse is the ONE validator — all-or-
+    // nothing, so a single bad finding rejects the whole payload with the cache
+    // untouched). A valid payload goes through the SAME union-by-port merge as a
+    // finishing scan (Save), each imported finding stamped with the import time;
+    // SeedFromCache then updates the in-memory job so Run/Check resolve imported
+    // ports — unless a scan is running, which it never clobbers (the scan's own
+    // completion merge unions on top of the just-written cache). Returns the updated
+    // snapshot (same shape as GET /cache). Never touches the repository's files,
+    // never runs the agent, never registers or starts anything.
+    [HttpPost("cache/import")]
+    [RequestSizeLimit(1_000_000)]
+    public async Task<IActionResult> ImportFindings()
+    {
+        _logger.CountRequest();
+
+        var repo = _repos.Current();
+        if (repo is null)
+            return NotFound(new { error = "No repository selected." });
+
+        string body;
+        using (var reader = new StreamReader(Request.Body))
+            body = await reader.ReadToEndAsync();
+
+        LocalAppExposureReport report;
+        try
+        {
+            report = LocalAppExposureReport.ParseImport(body);
+        }
+        catch (JsonException ex)
+        {
+            return BadRequest(new { error = $"Invalid findings JSON: {ex.Message}" });
+        }
+
+        var merged = _cache.Save(repo.Id, report, DateTimeOffset.UtcNow);
+        _jobs.SeedFromCache(repo.Id, merged);
+        var n = report.Apps.Count;
+        _events.Emit(repo.Id, "cache", "done", "Cache",
+            $"imported {n} finding{(n == 1 ? "" : "s")} — merged into cache ({merged.Report.Apps.Count} total)");
+        return Ok(CacheBody(repo.Id, repo.Name, merged));
     }
 
     // Shared cache-snapshot projection (GET /cache hit + DELETE /cache/{port}):

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useT } from '../../i18n/LanguageContext';
 
 // Discover Local Apps panel (openspec discover-apps-panel): an overlay on one
@@ -28,9 +28,33 @@ export default function DiscoverAppsPanel({ disc, localApps, onClose }) {
     deleteCached,
     deleting,
     deleteErr,
+    importFindings,
+    importing,
+    importErr,
   } = disc;
 
   const registeredPorts = new Set((localApps || []).map((a) => a.port));
+
+  // Import area (openspec import-discovery-findings): paste-first, with a .json
+  // file picker that only fills the same textarea (read client-side) — submitting
+  // always sends the textarea's text, so what the operator sees is what the server
+  // validates. Closed on success; the error text stays inside the area otherwise.
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState('');
+  const fileRef = useRef(null);
+
+  const submitImport = async () => {
+    if (await importFindings(importText)) {
+      setImportOpen(false);
+      setImportText('');
+    }
+  };
+
+  const pickFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (file) setImportText(await file.text());
+    e.target.value = ''; // re-picking the same file must re-fire onChange
+  };
 
   // Opening with no recent job (idle — e.g. after a harness restart) auto-loads
   // the cache: a passive disk read, so the panel shows the cached apps (or the
@@ -91,7 +115,64 @@ export default function DiscoverAppsPanel({ disc, localApps, onClose }) {
           >
             {checking ? t('dashboard.discoverChecking') : `🔄 ${t('dashboard.discoverCheck')}`}
           </button>
+          <button
+            type="button"
+            className="phone__discover-btn"
+            onClick={() => setImportOpen((v) => !v)}
+            title={t('dashboard.discoverImportHint')}
+          >
+            {`📥 ${t('dashboard.discoverImport')}`}
+          </button>
         </div>
+        {importOpen && (
+          <div className="phone__discover-import">
+            <textarea
+              className="phone__discover-import-text"
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+              placeholder={t('dashboard.discoverImportPlaceholder')}
+              rows={5}
+              spellCheck={false}
+            />
+            <div className="phone__discover-import-actions">
+              <button
+                type="button"
+                className="phone__discover-btn"
+                onClick={() => fileRef.current?.click()}
+                title={t('dashboard.discoverImportFileHint')}
+              >
+                {t('dashboard.discoverImportFile')}
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".json,application/json"
+                onChange={pickFile}
+                style={{ display: 'none' }}
+              />
+              <button
+                type="button"
+                className="phone__discover-btn phone__discover-btn--cache"
+                onClick={submitImport}
+                disabled={importing || !importText.trim()}
+              >
+                {importing ? t('dashboard.discoverImporting') : t('dashboard.discoverImportSubmit')}
+              </button>
+              <button
+                type="button"
+                className="phone__discover-btn"
+                onClick={() => { setImportOpen(false); }}
+              >
+                {t('dashboard.discoverImportCancel')}
+              </button>
+            </div>
+            {importErr && (
+              <div className="phone__discover-msg phone__discover-msg--err" role="status">
+                {t('dashboard.discoverImportError', { error: importErr })}
+              </div>
+            )}
+          </div>
+        )}
         {discovering && (
           <div className="phone__discover-msg" role="status">{t('dashboard.discovering')}</div>
         )}
