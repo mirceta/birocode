@@ -48,7 +48,6 @@ export default function PinnedAgent({
   loop,
   loopRecipes = [],
   onLoopChanged,
-  onSplitChange,
 }) {
   const { t } = useT();
   // Per-dock lane toggle (plans/repo-ask-chat.md slice 3): each phone can switch
@@ -86,13 +85,6 @@ export default function PinnedAgent({
   const [splitApp, setSplitApp] = useState(false);
   const split = !!(canSplit && splitApp && openApp);
 
-  // Report effective split up so the Dashboard can widen this dock's grid cell
-  // while the two panes are showing (and restore it when the dock unmounts).
-  useEffect(() => {
-    onSplitChange?.(tab.id, split);
-    return () => onSplitChange?.(tab.id, false);
-  }, [split, tab.id, onSplitChange]);
-
   // Draggable divider (openspec split-divider-drag): percent of the row given to
   // the chat pane. Dock-local and session-ephemeral like splitApp itself, so it
   // survives split off/on while the dock stays mounted. Ratio math is done in
@@ -107,10 +99,11 @@ export default function PinnedAgent({
       const rect = screenRef.current?.getBoundingClientRect();
       if (!rect || !rect.width) return;
       const z = contentZoom || 1;
-      const loFloor = ((300 * z) / rect.width) * 100;
-      const hiFloor = 100 - ((260 * z) / rect.width) * 100;
-      const lo = loFloor <= hiFloor ? loFloor : 20;
-      const hi = loFloor <= hiFloor ? hiFloor : 80;
+      // Floors mirror the CSS min(px, %) rule (openspec split-no-forced-wide):
+      // px on wide rows, proportional on narrow ones — 45 + 38 < 100, so
+      // lo < hi at every width and the panes always fit the row.
+      const lo = Math.min(((300 * z) / rect.width) * 100, 45);
+      const hi = 100 - Math.min(((260 * z) / rect.width) * 100, 38);
       const pct = ((clientX - rect.left) / rect.width) * 100;
       setSplitRatio(Math.min(hi, Math.max(lo, pct)));
     },

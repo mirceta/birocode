@@ -2082,14 +2082,20 @@
   flex-direction: row;
 }
 
+/* Pane floors are container-aware (openspec split-no-forced-wide): px on a
+   wide row, proportional on a narrow one — 45% + 38% + the 7px divider always
+   fits, so a split never overflows a normal-width (unwidened) dock cell. */
 .phone__screen--split > .phone__main {
   flex: 1 1 50%;
-  min-width: 300px;
+  min-width: min(300px, 45%);
+  /* Chat rows that refuse to wrap (toolbar pills) must clip at the divider,
+     not bleed under the app pane. */
+  overflow: hidden;
 }
 
 .phone__side {
   flex: 1 1 50%;
-  min-width: 260px;
+  min-width: min(260px, 38%);
   min-height: 0;
   display: flex;
   flex-direction: column;
