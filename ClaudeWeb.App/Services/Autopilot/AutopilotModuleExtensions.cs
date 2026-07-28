@@ -21,6 +21,7 @@ public static class AutopilotModuleExtensions
         services.AddSingleton<LoopRecipeStore>();
         services.AddSingleton<AutopilotAuditLog>();
         services.AddSingleton<PromptClassifier>();
+        services.AddSingleton<CliPromptClassifier>();
         services.AddSingleton<ILoop, SuggestionLoop>();
         services.AddSingleton<ILoop, RecipeLoop>();
         services.AddSingleton<ILoop, GoalLoop>();

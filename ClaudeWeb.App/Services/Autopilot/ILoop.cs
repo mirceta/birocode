@@ -24,14 +24,18 @@ public interface ILoop
 /// <summary>Everything a kind may look at: its own instance record, the agent's
 /// trailing assistant message, whether the last run errored, and the global gate
 /// inputs (deny list; classifier threshold + label space, used by the suggestion
-/// kind only).</summary>
+/// kind only). <c>Verdict</c>, when non-null, is a classification the ENGINE
+/// already obtained off the tick path (the CLI brain's cached result —
+/// fix-suggestion-loop-inert, D5); the suggestion kind then maps it instead of
+/// running the stub itself.</summary>
 public sealed record LoopContext(
     LoopConfigStore.LoopState Instance,
     string? LastAssistant,
     bool RunErrored,
     IReadOnlyList<string> DenyList,
     double Threshold,
-    IReadOnlyList<PromptClassifier.Routine> Routines);
+    IReadOnlyList<PromptClassifier.Routine> Routines,
+    PromptClassifier.Verdict? Verdict = null);
 
 /// <summary>The one value a kind returns — exactly one of the three cases below.</summary>
 public abstract record LoopDecision

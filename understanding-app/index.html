@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Understanding: the startup handle race</title>
+<title>Understanding: why the 💡 suggestion loop did nothing — and what changed</title>
 <style>
   :root {
     --bg: #0f1218; --panel: #171c26; --panel2: #1d2433; --line: #2b3446;
@@ -16,8 +16,7 @@
   header { padding: 18px 22px 10px; border-bottom: 1px solid var(--line); }
   header h1 { margin: 0 0 4px; font-size: 20px; }
   header p { margin: 0; color: var(--dim); font-size: 13px; }
-  nav { display: flex; gap: 6px; padding: 10px 22px; border-bottom: 1px solid var(--line);
-        flex-wrap: wrap; }
+  nav { display: flex; gap: 6px; padding: 10px 22px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
   nav button { background: var(--panel); color: var(--dim); border: 1px solid var(--line);
         border-radius: 8px; padding: 7px 14px; cursor: pointer; font-size: 14px; }
   nav button.active { background: var(--panel2); color: var(--text); border-color: var(--accent); }
@@ -28,269 +27,252 @@
           padding: 14px 16px; margin: 12px 0; }
   .card h3 { margin: 0 0 6px; font-size: 15px; }
   code, pre { font-family: var(--mono); font-size: 13px; }
-  code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; }
   pre { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
         padding: 10px 12px; overflow-x: auto; }
-  .dim { color: var(--dim); }
   .bad { color: var(--bad); } .good { color: var(--good); } .warn { color: var(--warn); }
-  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  @media (max-width: 800px) { .cols { grid-template-columns: 1fr; } }
-
-  /* --- simulator --- */
-  .sim-controls { display: flex; gap: 8px; align-items: center; margin: 12px 0; flex-wrap: wrap; }
-  .sim-controls button { background: var(--panel2); color: var(--text); border: 1px solid var(--line);
-        border-radius: 8px; padding: 6px 14px; cursor: pointer; font-size: 14px; }
-  .sim-controls button:disabled { opacity: .4; cursor: default; }
-  .mode-toggle { margin-left: auto; display: flex; gap: 0; }
-  .mode-toggle button { border-radius: 0; }
-  .mode-toggle button:first-child { border-radius: 8px 0 0 8px; }
-  .mode-toggle button:last-child { border-radius: 0 8px 8px 0; }
-  .mode-toggle button.on-bad { background: #3a2026; border-color: var(--bad); color: var(--bad); }
-  .mode-toggle button.on-good { background: #22301f; border-color: var(--good); color: var(--good); }
-  .lanes { display: grid; grid-template-columns: 130px 1fr; gap: 8px; }
-  .lane-label { color: var(--dim); font-size: 12px; padding-top: 10px; text-align: right;
-        padding-right: 6px; }
-  .lane { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
-        min-height: 46px; padding: 8px 10px; font-family: var(--mono); font-size: 12.5px;
-        color: var(--dim); transition: border-color .2s, background .2s; }
-  .lane.hot { border-color: var(--accent); background: var(--panel2); color: var(--text); }
-  .lane.dead { border-color: var(--bad); background: #2a1a1e; color: var(--bad); }
-  .lane.ok { border-color: var(--good); }
-  .caption { min-height: 84px; margin-top: 12px; padding: 12px 14px; background: var(--panel2);
-        border-left: 3px solid var(--accent); border-radius: 6px; font-size: 14px; }
-  .caption.bad { border-left-color: var(--bad); }
-  .caption.good { border-left-color: var(--good); }
-  .stepnum { color: var(--dim); font-size: 12px; margin-bottom: 4px; }
-
-  table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 14px; }
+  .dim { color: var(--dim); }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
   th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
   th { background: var(--panel2); }
-  .fix-tag { display: inline-block; font-size: 11px; font-family: var(--mono); background: var(--panel2);
-        border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; margin-right: 6px; }
+  .pill { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px;
+          border: 1px solid var(--line); background: var(--panel2); white-space: nowrap; }
+  .pill.b { color: var(--bad); border-color: var(--bad); }
+  .pill.g { color: var(--good); border-color: var(--good); }
+  /* simulator */
+  .sim { display: grid; grid-template-columns: 300px 1fr; gap: 14px; }
+  @media (max-width: 800px) { .sim { grid-template-columns: 1fr; } }
+  .sim label { display: block; margin: 10px 0 4px; font-size: 13px; color: var(--dim); }
+  .sim select, .sim input[type=range] { width: 100%; background: var(--panel2);
+        color: var(--text); border: 1px solid var(--line); border-radius: 7px; padding: 6px; }
+  .seg { display: flex; gap: 6px; }
+  .seg button { flex: 1; background: var(--panel2); color: var(--dim); border: 1px solid var(--line);
+        border-radius: 7px; padding: 6px; cursor: pointer; }
+  .seg button.on { color: var(--text); border-color: var(--accent); }
+  .flow { display: flex; flex-direction: column; gap: 8px; }
+  .step { border: 1px solid var(--line); border-radius: 9px; padding: 9px 12px; background: var(--panel2);
+          opacity: .38; transition: opacity .15s; }
+  .step.hit { opacity: 1; }
+  .step .t { font-weight: 700; font-size: 13.5px; }
+  .step .d { font-size: 12.5px; color: var(--dim); }
+  .outcome { border-radius: 9px; padding: 12px 14px; font-size: 14.5px; border: 1px solid; margin-top: 10px; }
+  .outcome.pend { border-color: var(--accent); color: var(--accent); }
+  .outcome.send { border-color: var(--good); color: var(--good); }
+  .outcome.hold { border-color: var(--warn); color: var(--warn); }
+  .outcome.err  { border-color: var(--bad); color: var(--bad); }
 </style>
 </head>
 <body>
 <header>
-  <h1>The startup handle race — why loops "silently never started"</h1>
-  <p>openspec change <code>fix-startup-handle-race</code> · diagnosed 2026-07-28 on live with stack + heap dumps</p>
+  <h1>Why the 💡 suggestion loop did nothing — and what changed</h1>
+  <p>openspec change <code>fix-suggestion-loop-inert</code> · diagnosed live 2026-07-28 · rolling latest Understanding app</p>
 </header>
-<nav id="tabs">
-  <button data-tab="symptom" class="active">1 · Symptom</button>
-  <button data-tab="race">2 · The race, step by step</button>
-  <button data-tab="fixes">3 · The fixes</button>
-  <button data-tab="verify">4 · Verification</button>
+<nav>
+  <button data-s="why" class="active">1 · Why it was inert</button>
+  <button data-s="fix">2 · What changed</button>
+  <button data-s="sim">3 · Try a decision</button>
+  <button data-s="brain">4 · The CLI brain</button>
 </nav>
 <main>
 
-<section id="symptom" class="active">
+<section id="why" class="active">
   <div class="card">
-    <h3>What the operator saw</h3>
-    <p>A goal loop armed from the phone, every gate green — and <b>zero iterations, forever</b>.
-    No <code>[LOOP]</code> log lines, no errors, <code>engine.state</code> null. Meanwhile the web UI
-    worked perfectly, which is exactly what made it confusing: the API answered, so the harness
-    <i>looked</i> healthy.</p>
-  </div>
-  <div class="cols">
-    <div class="card">
-      <h3 class="bad">Actually broken</h3>
-      <ul>
-        <li>Desktop GUI: frozen (deadlocked in <code>SetParent</code>)</li>
-        <li>Autopilot engine: parked on its first 3-second delay — <b>for 76 minutes</b></li>
-        <li>Collector poller: frozen the same way</li>
-      </ul>
-    </div>
-    <div class="card">
-      <h3 class="good">Still healthy (the mask)</h3>
-      <ul>
-        <li>Kestrel API on :5099 — the phone UI worked</li>
-        <li>Chat runs, file browsing, everything request-driven</li>
-      </ul>
-    </div>
+    <h3>The observed symptom</h3>
+    <p>You armed 💡 on this repo in drive mode (19:57:25), watched ~30&nbsp;s of nothing — no send,
+    no pending prompt, no visible state — and disarmed (19:57:54). A second suggestion loop
+    (<code>web-flow-autodev</code>) had been "looping" for a day on a repo folder that no longer exists.</p>
   </div>
   <div class="card">
-    <h3>Why it comes and goes</h3>
-    <p>It is a startup <b>race</b>: most restarts win it and everything works. A deploy restart with a
-    phone actively polling the instant Kestrel comes up can lose it. That is why earlier loop tests
-    passed and the 10:19 deploy produced a broken process — same code, different coin flip.</p>
+    <h3>Four stacked causes</h3>
+    <table>
+      <tr><th>#</th><th>Cause</th><th>Mechanism</th></tr>
+      <tr><td>1</td><td><span class="pill b">Classifier could ~never fire</span></td>
+        <td>Every routine's base confidence was exactly <code>0.85</code> (mining enrichment needs the
+        prompt text to <i>equal</i> a mined key — never true for long prompts). Threshold 0.75 ⇒ the agent's
+        reply had to contain ≥&nbsp;88% match strength of <i>your prompt's own wording</i>. So every tick ended
+        in a silent escalate-hold.</td></tr>
+      <tr><td>2</td><td><span class="pill b">Holds invisible at the dock</span></td>
+        <td>The decision + reason lived only in the Advanced Autopilot console. The dock — where you armed —
+        showed just the armed badge. "Armed but holding" looked identical to "broken".</td></tr>
+      <tr><td>3</td><td><span class="pill b">Deny-list matched substrings</span></td>
+        <td><code>"…merge to master…"</code> inside a prompt permanently blocked that routine
+        ("prod" blocked "production"), with no visible reason.</td></tr>
+      <tr><td>4</td><td><span class="pill b">Missing repos skipped silently</span></td>
+        <td><code>Tick()</code> iterated only repos whose folder exists — an armed loop on a deleted repo
+        got no state, no log, no resolution. Forever "looping".</td></tr>
+    </table>
   </div>
 </section>
 
-<section id="race">
-  <div class="sim-controls">
-    <button id="prev">◀ Back</button>
-    <button id="next">Next ▶</button>
-    <button id="reset">Reset</button>
-    <div class="mode-toggle">
-      <button id="mode-bad" class="on-bad">Broken (old code)</button>
-      <button id="mode-good">Fixed (new code)</button>
+<section id="fix">
+  <div class="card">
+    <h3>The four fixes (slice 1) + the real brain (slice 2)</h3>
+    <table>
+      <tr><th>Fix</th><th>Now</th><th>Where</th></tr>
+      <tr><td><span class="pill g">Suggest mode always pends</span></td>
+        <td>The classifier's best candidate becomes the pending prompt <b>even below the threshold</b>, with its
+        honest confidence shown ("· 42% sure"). A human still sends every suggest-mode prompt, so the threshold
+        keeps gating only <b>drive</b>-mode sends — safety unchanged.</td>
+        <td><code>SuggestionLoop.cs</code> (D1)</td></tr>
+      <tr><td><span class="pill g">Decisions visible at the dock</span></td>
+        <td>The loop popover shows the engine's live decision word (always) and its reason/confidence
+        (gate open — same disclosure rule as the pending prompt).</td>
+        <td><code>AutopilotController.cs</code> · <code>DockLoopControl.jsx</code> (D3)</td></tr>
+      <tr><td><span class="pill g">Deny-list word-scoped + named</span></td>
+        <td>"prod" no longer blocks "production"; a real hit escalates with the term named:
+        <code>routine contains deny-listed "prod"</code>. A deny-listed routine is never pended or sent in any mode.</td>
+        <td><code>PromptClassifier.ContainsWholeWord</code> (D4)</td></tr>
+      <tr><td><span class="pill g">Missing repo ⇒ explicit error</span></td>
+        <td>An armed loop on a deleted/moved repo resolves once as
+        <code>error / repo-missing</code> — the dock shows a terminal state. The live
+        <code>web-flow-autodev</code> zombie self-resolves on the first tick after deploy.</td>
+        <td><code>AutopilotService.Tick</code> (D2)</td></tr>
+      <tr><td><span class="pill g">A real classifier</span></td>
+        <td>Default brain is now a one-shot <code>claude&nbsp;-p</code> call (fast model) that picks one of
+        <i>your</i> prompts or abstains — this is what makes drive-mode sends actually reachable. Stub stays
+        as fallback + config choice. See tab 4.</td>
+        <td><code>CliPromptClassifier.cs</code> (D5)</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h3>What deliberately did <i>not</i> change</h3>
+    <p class="dim">Drive-mode safety: threshold + word-scoped deny-list + kill switch + operator gate still fence
+    every automatic send. The brain can only ever pick from your editable prompt library — never free text.
+    Recipe/goal kinds, the conversation pin, and arm-freshness rules are untouched. Note: the default deny-list
+    (deploy · push · merge · …) still blocks routines containing those words — now as whole words, with the
+    term named in the visible reason so you can curate the list.</p>
+  </div>
+</section>
+
+<section id="sim">
+  <div class="card">
+    <h3>Step one engine decision by hand</h3>
+    <div class="sim">
+      <div>
+        <label>Instance mode</label>
+        <div class="seg" id="mode">
+          <button data-v="suggest" class="on">suggest</button>
+          <button data-v="drive">drive</button>
+        </div>
+        <label>Classifier verdict for the trailing message</label>
+        <select id="verdict">
+          <option value="match">best candidate found</option>
+          <option value="none">no routine matched at all</option>
+          <option value="deny">best candidate is deny-listed</option>
+        </select>
+        <label>Confidence <span id="confv" class="dim">0.42</span> · threshold 0.75</label>
+        <input type="range" id="conf" min="0" max="99" value="42">
+        <label>Repo folder</label>
+        <div class="seg" id="repo">
+          <button data-v="exists" class="on">exists</button>
+          <button data-v="missing">missing</button>
+        </div>
+      </div>
+      <div>
+        <div class="flow">
+          <div class="step" id="s-repo"><div class="t">Repo check</div><div class="d">missing folder ⇒ resolve error/repo-missing (once)</div></div>
+          <div class="step" id="s-classify"><div class="t">Classify</div><div class="d">CLI brain (single-flight, off-tick) or stub — Verdict{label, confidence, reason, denied}</div></div>
+          <div class="step" id="s-deny"><div class="t">Deny fence</div><div class="d">whole-word match against the routine text; reason names the term</div></div>
+          <div class="step" id="s-threshold"><div class="t">Threshold</div><div class="d">gates DRIVE sends only</div></div>
+          <div class="step" id="s-dispatch"><div class="t">Mode dispatch</div><div class="d">suggest ⇒ pend into composer · drive ⇒ capped, audited send</div></div>
+        </div>
+        <div class="outcome hold" id="out">…</div>
+      </div>
     </div>
   </div>
-  <div class="lanes">
-    <div class="lane-label">Main (UI) thread</div>  <div class="lane" id="lane-main"></div>
-    <div class="lane-label">Threadpool thread</div> <div class="lane" id="lane-pool"></div>
-    <div class="lane-label">Form message queue</div><div class="lane" id="lane-queue"></div>
-    <div class="lane-label">Autopilot engine</div>  <div class="lane" id="lane-engine"></div>
-  </div>
-  <div class="caption" id="caption"><div class="stepnum" id="stepnum"></div><div id="captext"></div></div>
 </section>
 
-<section id="fixes">
-  <table>
-    <tr><th>Fix</th><th>Where</th><th>What it does</th></tr>
-    <tr>
-      <td><span class="fix-tag">root</span>Handle before API</td>
-      <td><code>Program.cs</code></td>
-      <td>Construct <code>MainForm</code> and force its native handle on the STA main thread
-          <b>before</b> <code>api.Start()</code>. Once the handle exists, <code>InvokeRequired</code>
-          is truthful from every thread — no background event can ever be first to create a handle.</td>
-    </tr>
-    <tr>
-      <td><span class="fix-tag">guard</span>SafeInvoke handle check</td>
-      <td><code>MainForm.cs</code></td>
-      <td>Refuse to touch controls while <code>!IsHandleCreated</code> (drop the monitoring update)
-          instead of running inline on the calling thread. Defense in depth.</td>
-    </tr>
-    <tr>
-      <td><span class="fix-tag">immunity</span><code>ConfigureAwait(false)</code></td>
-      <td><code>AutopilotService.cs</code><br><code>CollectorPoller.cs</code></td>
-      <td>Hosted services resume on the threadpool no matter what synchronization context is
-          ambient — a phantom UI context can never strangle them again.</td>
-    </tr>
-    <tr>
-      <td><span class="fix-tag">liveness</span>Background mining</td>
-      <td><code>AutopilotService.cs</code></td>
-      <td>Transcript mining (~50 s warm / ~2 min cold) moves off the tick path into a single-flight
-          background task. A loop armed right after startup ticks on schedule; until the first pass
-          lands, the label space is the custom prompts alone (logged).</td>
-    </tr>
-    <tr>
-      <td><span class="fix-tag">cleanup</span>Async pipe read</td>
-      <td><code>CliRunnerService.cs</code></td>
-      <td>Read CLI stdout with <code>ReadLineAsync</code> until null instead of gating on the
-          synchronous <code>EndOfStream</code> property, which parked a pool thread per active run.</td>
-    </tr>
-  </table>
+<section id="brain">
   <div class="card">
-    <h3>Startup order, before → after</h3>
-    <pre><span class="bad">// before                              </span><span class="good">// after</span>
-api.Start();                            var form = new MainForm(...);
-var form = new MainForm(...);           _ = form.Handle;   <span class="good">// born on UI thread</span>
-Application.Run(form);                  api.Start();
-                                        Application.Run(form);</pre>
-  </div>
-</section>
-
-<section id="verify">
-  <div class="card">
-    <h3>What was proven, and how</h3>
-    <ul>
-      <li><b>Diagnosis</b> — <code>dotnet-stack</code> + <code>dotnet-dump dumpasync</code> on the live
-        process: main thread in <code>SetParent</code>, engine state machine at
-        <code>&lt;&gt;1__state = 0</code> (first delay) 76 minutes after start, continuation posted to a
-        queue nobody pumps.</li>
-      <li><b>Fix verified on an isolated harness (:5218)</b> — at t+3s the engine's first tick ran and
-        logged <code>mining transcripts in background...</code>; mining finished 64 s later
-        (<code>378 routine prompts from 257 sessions</code>) while ticks continued; collector poller
-        started; API health 200; GUI responsive.</li>
-    </ul>
+    <h3>The CLI brain, in one pass</h3>
+    <pre>tick sees NEW trailing agent message
+  └─ Brain == "cli"?  ──no──▶ stub classifies synchronously
+       │yes
+       ├─ cache hit for this message?  ──yes──▶ consume verdict, decide
+       ├─ classification in flight?    ──yes──▶ HOLD "classifying with the CLI brain…" (tick never blocks)
+       └─ else: start ONE background call
+            claude -p (stdin prompt) --output-format json --model haiku
+            ├─ reply: {"index": N | -1, "confidence": 0..1, "reason": "…"}
+            ├─ index → one of YOUR routine prompts (never free text) → deny fence → threshold
+            └─ error/timeout/unparseable ⇒ stub verdict, reason notes "cli fallback (…)"</pre>
+    <p class="dim">One CLI call per new agent message per armed repo (single-flight per repo, cache keyed by
+    message). Selectable in the console's Control bar ("Claude brain" toggle) and persisted as
+    <code>autopilot.json · Brain</code> ("cli" default | "stub"); model in <code>BrainModel</code> (default "haiku").</p>
   </div>
   <div class="card">
-    <h3>The startup log, healthy shape</h3>
-    <pre>[10:59:26] [SERVER] Kestrel running on http://0.0.0.0:5218
-[10:59:26] [COLLECTOR] poller started
-[10:59:29] [AUTOPILOT] mining transcripts in background...   <span class="good">← first tick, 3 s in</span>
-[11:00:33] [AUTOPILOT] mining done in 64s (378 routine prompts from 257 sessions)</pre>
-    <p class="dim">If a future process ever shows the server lines but never the
-    <code>[AUTOPILOT]</code>/<code>[COLLECTOR]</code> lines, the engines are not running — that is the
-    old signature.</p>
+    <h3>Verified end-to-end (isolated harnesses, no live state touched)</h3>
+    <table>
+      <tr><th>Script</th><th>Proves</th></tr>
+      <tr><td><code>verify-suggestion-inert.mjs</code> (:5227)</td>
+        <td>below-threshold pend @0.42 · drive still holds · no-candidate holds · deny word-boundary + named term ·
+        repo-missing resolution · gate-closed nulls reason/label/confidence/pending but keeps the decision word</td></tr>
+      <tr><td><code>verify-suggestion-dock.mjs</code> (:5228)</td>
+        <td>dock popover renders the decision line + "· 42% sure" pending chip</td></tr>
+      <tr><td><code>verify-suggestion-cli-brain.mjs</code> (:5229)</td>
+        <td>classifying hold, exactly 1 CLI call across 4 ticks, confident verdict drives an audited send,
+        CLI failure falls back to stub with an honest reason, brain toggles via config</td></tr>
+    </table>
   </div>
 </section>
 
 </main>
 <script>
-(function () {
-  // --- tabs ---
-  var tabs = document.getElementById('tabs');
-  tabs.addEventListener('click', function (e) {
-    var btn = e.target.closest('button'); if (!btn) return;
-    tabs.querySelectorAll('button').forEach(function (b) { b.classList.remove('active'); });
-    document.querySelectorAll('main > section').forEach(function (s) { s.classList.remove('active'); });
-    btn.classList.add('active');
-    document.getElementById(btn.dataset.tab).classList.add('active');
+  // tabs
+  document.querySelectorAll('nav button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('nav button').forEach(function (x) { x.classList.remove('active'); });
+      document.querySelectorAll('main section').forEach(function (x) { x.classList.remove('active'); });
+      b.classList.add('active');
+      document.getElementById(b.dataset.s).classList.add('active');
+    });
   });
 
-  // --- race simulator ---
-  // Each step: text per lane, lane state (hot/dead/ok), and a caption.
-  var BROKEN = [
-    { main: 'api.Start()', pool: '', queue: '', engine: '',
-      hot: ['main'],
-      cap: 'Old order: the API starts serving BEFORE the form has a window handle. The phone is already polling from the moment the port opens.' },
-    { main: 'new MainForm(...) — no handle yet', pool: 'log event fires (phone request)', queue: '', engine: '',
-      hot: ['main', 'pool'],
-      cap: 'A logger/call event fires on a threadpool thread. The form exists but its native handle does not — this is the race window.' },
-    { main: '', pool: 'SafeInvoke: InvokeRequired == false → runs action() INLINE', queue: '', engine: '',
-      hot: ['pool'], bad: ['pool'],
-      cap: 'With no handle, InvokeRequired lies (false). SafeInvoke runs the UI update inline — creating the form’s control handles ON THE THREADPOOL THREAD and installing a WinForms sync context there.' },
-    { main: 'Application.Run → Show → SetParent → SendMessage…', pool: 'owns child handles, never pumps messages', queue: '', engine: '',
-      hot: ['main'], dead: ['main', 'pool'],
-      cap: 'The main thread shows the form. WinForms must SendMessage to the thread that owns the child handles — a threadpool thread that never pumps. The GUI deadlocks in SetParent, forever.' },
-    { main: 'DEADLOCKED', pool: 'phantom WindowsFormsSynchronizationContext installed', queue: 'engine continuation posted here — never runs', engine: 'await Task.Delay(3s) …captured the phantom context',
-      dead: ['main', 'queue', 'engine'], hot: ['engine'],
-      cap: 'The autopilot engine’s first await captured the phantom context. When the delay elapses, its wake-up is POSTED into a message queue nobody pumps. Engine frozen at state 0; CollectorPoller identical.' },
-    { main: 'DEADLOCKED', pool: '', queue: 'dead letters', engine: 'frozen — 76 minutes and counting',
-      dead: ['main', 'queue', 'engine'],
-      cap: 'End state: GUI dead, engines dead — but Kestrel runs on its own threads, so the phone UI works. Armed loops show every gate green and never tick. This is exactly what the debug bundle showed.' }
-  ];
-  var FIXED = [
-    { main: 'new MainForm(...); _ = form.Handle', pool: '', queue: '', engine: '',
-      hot: ['main'], ok: ['main'],
-      cap: 'New order: the form’s native handle is forced on the STA main thread FIRST. From this instant, InvokeRequired is truthful from every other thread.' },
-    { main: 'api.Start()', pool: 'log event fires (phone request)', queue: '', engine: '',
-      hot: ['main', 'pool'], ok: ['main'],
-      cap: 'Only now does the API start serving. The same hot-polling phone fires the same early event…' },
-    { main: '', pool: 'SafeInvoke: handle exists → InvokeRequired == true → BeginInvoke', queue: 'UI update queued for the UI thread', engine: '',
-      hot: ['pool', 'queue'], ok: ['pool', 'queue'],
-      cap: 'SafeInvoke marshals correctly: BeginInvoke posts the update to the form’s queue. (And if anything ever fired pre-handle, the new IsHandleCreated guard drops it instead of running inline.)' },
-    { main: 'Application.Run pumps the queue, form shows', pool: '', queue: 'drained ✓', engine: 'await Task.Delay(3s).ConfigureAwait(false)',
-      hot: ['main', 'engine'], ok: ['main', 'queue', 'engine'],
-      cap: 'Application.Run starts pumping; queued updates drain; the GUI shows normally. The engine’s awaits use ConfigureAwait(false) — resumes go to the threadpool regardless of any ambient context.' },
-    { main: 'GUI alive', pool: 'mining runs here, in background (single-flight)', queue: '', engine: 'tick @ 3s: "mining transcripts in background…", keeps ticking',
-      hot: ['engine', 'pool'], ok: ['main', 'pool', 'engine'],
-      cap: 'First tick fires at t+3s. Transcript mining (~1–2 min cold) now runs in a background task — the tick path never blocks, so a loop armed right after startup runs on schedule.' }
-  ];
-
-  var mode = BROKEN, step = 0;
-  var lanes = { main: document.getElementById('lane-main'), pool: document.getElementById('lane-pool'),
-                queue: document.getElementById('lane-queue'), engine: document.getElementById('lane-engine') };
-  var caption = document.getElementById('caption'), captext = document.getElementById('captext'),
-      stepnum = document.getElementById('stepnum');
-  var prev = document.getElementById('prev'), next = document.getElementById('next');
+  // simulator
+  var st = { mode: 'suggest', verdict: 'match', conf: 0.42, repo: 'exists' };
+  function seg(id, key) {
+    document.querySelectorAll('#' + id + ' button').forEach(function (b) {
+      b.addEventListener('click', function () {
+        document.querySelectorAll('#' + id + ' button').forEach(function (x) { x.classList.remove('on'); });
+        b.classList.add('on'); st[key] = b.dataset.v; render();
+      });
+    });
+  }
+  seg('mode', 'mode'); seg('repo', 'repo');
+  document.getElementById('verdict').addEventListener('change', function (e) { st.verdict = e.target.value; render(); });
+  document.getElementById('conf').addEventListener('input', function (e) {
+    st.conf = e.target.value / 100;
+    document.getElementById('confv').textContent = st.conf.toFixed(2);
+    render();
+  });
 
   function render() {
-    var s = mode[step];
-    Object.keys(lanes).forEach(function (k) {
-      var el = lanes[k];
-      el.textContent = s[k] || '';
-      el.className = 'lane' +
-        ((s.hot || []).indexOf(k) >= 0 ? ' hot' : '') +
-        ((s.dead || []).indexOf(k) >= 0 ? ' dead' : '') +
-        ((s.ok || []).indexOf(k) >= 0 ? ' ok' : '');
-    });
-    caption.className = 'caption ' + (mode === BROKEN ? (s.dead ? 'bad' : '') : 'good');
-    stepnum.textContent = 'Step ' + (step + 1) + ' of ' + mode.length +
-      (mode === BROKEN ? ' — broken (old code)' : ' — fixed (new code)');
-    captext.textContent = s.cap;
-    prev.disabled = step === 0;
-    next.disabled = step === mode.length - 1;
+    function hit(id, on) { document.getElementById(id).classList.toggle('hit', on); }
+    var out = document.getElementById('out');
+    function set(cls, text) { out.className = 'outcome ' + cls; out.textContent = text; }
+    hit('s-repo', true);
+    if (st.repo === 'missing') {
+      hit('s-classify', false); hit('s-deny', false); hit('s-threshold', false); hit('s-dispatch', false);
+      return set('err', 'RESOLVE error / repo-missing — the loop ends visibly (was: silent skip, forever)');
+    }
+    hit('s-classify', true);
+    if (st.verdict === 'none') {
+      hit('s-deny', false); hit('s-threshold', false); hit('s-dispatch', false);
+      return set('hold', 'HOLD — "no routine matched this message". Nothing pends: there is no candidate to offer.');
+    }
+    hit('s-deny', true);
+    if (st.verdict === 'deny') {
+      hit('s-threshold', false); hit('s-dispatch', false);
+      return set('hold', 'HOLD (escalate) — routine contains deny-listed "…"; never pended or sent, in any mode. The dock now shows this reason.');
+    }
+    hit('s-threshold', st.mode === 'drive');
+    hit('s-dispatch', true);
+    if (st.mode === 'suggest')
+      return set('pend', 'PEND — the candidate pre-fills your composer at ' + Math.round(st.conf * 100)
+        + '% confidence (even below 0.75 — you send it). This is the fix: an armed 💡 always visibly does something.');
+    if (st.conf < 0.75)
+      return set('hold', 'HOLD (escalate) — "below threshold (' + st.conf.toFixed(2) + ' < 0.75)". Drive mode never sends an unsure prompt. Unchanged.');
+    return set('send', 'SEND — capped, audited, through the same builder slot your own turn uses.');
   }
-  prev.addEventListener('click', function () { if (step > 0) { step--; render(); } });
-  next.addEventListener('click', function () { if (step < mode.length - 1) { step++; render(); } });
-  document.getElementById('reset').addEventListener('click', function () { step = 0; render(); });
-  var mb = document.getElementById('mode-bad'), mg = document.getElementById('mode-good');
-  mb.addEventListener('click', function () { mode = BROKEN; step = 0; mb.className = 'on-bad'; mg.className = ''; render(); });
-  mg.addEventListener('click', function () { mode = FIXED; step = 0; mg.className = 'on-good'; mb.className = ''; render(); });
   render();
-})();
 </script>
 </body>
 </html>

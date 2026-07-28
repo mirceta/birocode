@@ -21,6 +21,8 @@ export default function AgentsView({ data, mutate }) {
   const autoAdvance = data?.autoAdvance ?? false;
   const threshold = data?.threshold ?? 0.85;
   const denyList = data?.denyList ?? [];
+  const brain = data?.brain ?? 'cli';
+  const brainModel = data?.brainModel ?? 'haiku';
 
   return (
     <>
@@ -46,6 +48,21 @@ export default function AgentsView({ data, mutate }) {
         </button>
         <b>Auto-advance</b>
         <span className="ap-muted">{autoAdvance ? 'sending for you' : 'suggest-only'}</span>
+
+        <span className="ap-bar__sep" />
+        {/* The classifier behind the suggestion kind (fix-suggestion-loop-inert,
+            D5): "cli" = a one-shot Claude call routes to one of your prompts
+            (the default); "stub" = the offline word-overlap matcher. */}
+        <button
+          className={`ap-switch ${brain === 'cli' ? 'on' : ''}`}
+          onClick={() => mutate({ brain: brain === 'cli' ? 'stub' : 'cli' })}
+          disabled={!enabled}
+          title="Brain: cli = one-shot Claude classification; stub = offline word-overlap matcher"
+        >
+          <span className="ap-switch__knob" />
+        </button>
+        <b>Claude brain</b>
+        <span className="ap-muted">{brain === 'cli' ? `cli · ${brainModel}` : 'stub matcher'}</span>
 
         <span className="ap-bar__spacer" />
         <span className="ap-thresh">

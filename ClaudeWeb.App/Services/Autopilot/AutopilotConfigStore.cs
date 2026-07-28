@@ -18,6 +18,14 @@ public class AutopilotConfigStore
 {
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
 
+    // The suggestion kind's classifier selection (fix-suggestion-loop-inert, D5):
+    // "cli" = the one-shot Claude CLI classifier (the ship default — it is what
+    // makes drive-mode suggestion sends actually reachable); "stub" = the
+    // deterministic word-overlap matcher, kept as the fallback setting.
+    public const string BrainCli = "cli";
+    public const string BrainStub = "stub";
+    public const string DefaultBrainModel = "haiku";
+
     // Default risky-action fence: a routine prompt whose label hits one of these is
     // never auto-advanced — it always escalates (plans/loop-autopilot-safety.md).
     private static readonly string[] DefaultDenyList =
@@ -47,15 +55,32 @@ public class AutopilotConfigStore
         public double Threshold { get; set; } = 0.85;       // min confidence to suggest, else escalate
         public List<string> ArmedRepoIds { get; set; } = new();
         public List<string> DenyList { get; set; } = DefaultDenyList.ToList();
+        // Additive (fix-suggestion-loop-inert, D5): absent in old files → defaults.
+        public string? Brain { get; set; }
+        public string? BrainModel { get; set; }
     }
 
-    public sealed record Snapshot(bool Enabled, bool AutoAdvance, double Threshold, IReadOnlySet<string> ArmedRepoIds, IReadOnlyList<string> DenyList);
+    public sealed record Snapshot(bool Enabled, bool AutoAdvance, double Threshold,
+        IReadOnlySet<string> ArmedRepoIds, IReadOnlyList<string> DenyList,
+        string Brain, string BrainModel);
 
     public Snapshot Get()
     {
         lock (_gate)
             return new Snapshot(_data.Enabled, _data.AutoAdvance, _data.Threshold,
-                _data.ArmedRepoIds.ToHashSet(), _data.DenyList.ToList());
+                _data.ArmedRepoIds.ToHashSet(), _data.DenyList.ToList(),
+                CleanBrain(_data.Brain), string.IsNullOrWhiteSpace(_data.BrainModel) ? DefaultBrainModel : _data.BrainModel!.Trim());
+    }
+
+    // Only the two known values; anything else (including null) is the default.
+    private static string CleanBrain(string? brain) =>
+        string.Equals(brain, BrainStub, StringComparison.OrdinalIgnoreCase) ? BrainStub : BrainCli;
+
+    /// <summary>Selects the suggestion classifier ("stub" | "cli").</summary>
+    public void SetBrain(string brain)
+    {
+        lock (_gate) { _data.Brain = CleanBrain(brain); Save(); }
+        _logger.Info($"[AUTOPILOT] brain -> {CleanBrain(brain)}");
     }
 
     public bool IsArmed(string repoId)

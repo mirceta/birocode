@@ -230,11 +230,38 @@ export default function DockLoopControl({ repoId, sessionId, loop, recipes = [],
             </div>
           )}
 
+          {/* Live decision readout (fix-suggestion-loop-inert, D3): what the
+              engine last decided for this armed instance and why. The decision
+              WORD is always in the ungated projection; the reason arrives only
+              while the operator gate is open (same rule as the pending prompt),
+              so gate-closed shows the word alone. */}
+          {armed && loop.decision && (
+            <div className="phone__loop-decision">
+              <span className={`phone__loop-decision-word phone__loop-decision-word--${loop.decision}`}>
+                {t(`dashboard.loopDecision.${loop.decision}`)}
+              </span>
+              {loop.decisionReason && (
+                <span className="phone__loop-decision-reason" title={loop.decisionReason}>
+                  {loop.decisionReason}
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Pending suggestion (suggest mode): the loop's decided next prompt,
-              waiting for the human — one action puts it in the composer. */}
+              waiting for the human — one action puts it in the composer. With a
+              below-threshold near-miss now pending too (D1), the chip shows the
+              brain's honest confidence for suggestion-kind pendings. */}
           {armed && loop.pendingPrompt && (
             <div className="phone__loop-pending">
-              <div className="phone__loop-pending-k">{t('dashboard.loopPendingLabel')}</div>
+              <div className="phone__loop-pending-k">
+                {t('dashboard.loopPendingLabel')}
+                {loop.kind === 'suggestion' && typeof loop.decisionConfidence === 'number' && loop.decisionConfidence > 0 && (
+                  <span className="phone__loop-pending-conf">
+                    {t('dashboard.loopPendingConfidence', { pct: Math.round(loop.decisionConfidence * 100) })}
+                  </span>
+                )}
+              </div>
               <pre className="phone__loop-inspect-pre">{loop.pendingPrompt}</pre>
               <button
                 type="button"

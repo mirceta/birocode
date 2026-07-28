@@ -87,7 +87,7 @@ public class AutopilotController : ControllerBase
         return Ok(BuildState());
     }
 
-    public sealed record ConfigRequest(string? RepoId, bool? Armed, double? Threshold, bool? Enabled, bool? AutoAdvance);
+    public sealed record ConfigRequest(string? RepoId, bool? Armed, double? Threshold, bool? Enabled, bool? AutoAdvance, string? Brain);
 
     /// <summary>Mutates one or more settings per call. Returns the new state so the
     /// UI can reconcile without a second round-trip.</summary>
@@ -111,6 +111,9 @@ public class AutopilotController : ControllerBase
                 _loops.SetMode(l.RepoId, mode);
         }
         if (req.Threshold is double threshold) _config.SetThreshold(threshold);
+        // The suggestion classifier selection (fix-suggestion-loop-inert, D5):
+        // "cli" (default) | "stub" — the stub stays as the fallback setting.
+        if (!string.IsNullOrWhiteSpace(req.Brain)) _config.SetBrain(req.Brain);
         // Arming the suggestion mode is arming its loop instance — the one store slot
         // per agent IS the exclusive-arming rule (revision 2, D8), so this displaces
         // whatever loop was armed. Disarm only clears a suggestion instance here
@@ -235,7 +238,8 @@ public class AutopilotController : ControllerBase
 
     /// <summary>The one deliberately ungated autopilot read (design §5): per-repo loop
     /// STATUS for dashboard surfaces — state, iterations, stop reason/detail, recipe
-    /// name — plus the recipe name list for the dock's picker and the suggestion
+    /// name, and the engine's live decision word (fix-suggestion-loop-inert, D3) —
+    /// plus the recipe name list for the dock's picker and the suggestion
     /// loop's arming status (openspec: align-dock-loop-model). Session auth still
     /// applies like every other /api route. No prompts, no sentinels, no config, and
     /// no actions here: a loop's outcome stays visible after the gate closes, but
@@ -245,32 +249,48 @@ public class AutopilotController : ControllerBase
     {
         _logger.CountRequest();
         var gateOpen = _operatorGate.Enabled;
+        var engineStates = _engine.States().ToDictionary(s => s.RepoId, StringComparer.Ordinal);
         return Ok(new
         {
             gateOpen,
             // Revision 2: ONE unified record per agent — a suggestion instance is a
             // loop like the others, so there are no parallel suggestion fields.
-            loops = _loops.All().Select(l => new
+            loops = _loops.All().Select(l =>
             {
-                repoId = l.RepoId,
-                // kind + mode + phase are status words (openspec: unify-loop-types) —
-                // the goal/prompt TEXT stays gated, in the detail endpoint below.
-                kind = l.Kind,
-                mode = l.Mode,
-                phase = l.Phase,
-                active = l.Active,
-                status = l.Status,
-                iterationsDone = l.IterationsDone,
-                maxIterations = l.MaxIterations,
-                lastSentAt = l.LastSentAt,
-                stopReason = l.StopReason,
-                stopDetail = l.StopDetail,
-                recipeName = l.RecipeName,
-                // The one prompt-text exception (revision 2, D9): a suggest-mode
-                // instance's pending prompt, disclosed ONLY while the gate is open —
-                // with the gate closed the engine is idle and pends nothing, so the
-                // closed-gate disclosure surface is unchanged.
-                pendingPrompt = gateOpen ? l.PendingPrompt : null,
+                var st = engineStates.TryGetValue(l.RepoId, out var s) ? s : null;
+                return new
+                {
+                    repoId = l.RepoId,
+                    // kind + mode + phase are status words (openspec: unify-loop-types) —
+                    // the goal/prompt TEXT stays gated, in the detail endpoint below.
+                    kind = l.Kind,
+                    mode = l.Mode,
+                    phase = l.Phase,
+                    active = l.Active,
+                    status = l.Status,
+                    iterationsDone = l.IterationsDone,
+                    maxIterations = l.MaxIterations,
+                    lastSentAt = l.LastSentAt,
+                    stopReason = l.StopReason,
+                    stopDetail = l.StopDetail,
+                    recipeName = l.RecipeName,
+                    // The engine's live decision (fix-suggestion-loop-inert, D3): the
+                    // bare decision WORD is a status word like kind/mode/phase and
+                    // stays ungated ("off" when the engine holds no state — a closed
+                    // gate idles the engine and clears its states). The reason, the
+                    // matched label, and the confidence can quote prompt text, so
+                    // they follow the pendingPrompt gate rule below.
+                    decision = st?.Decision ?? "off",
+                    decisionAt = st?.UpdatedAt,
+                    decisionReason = gateOpen ? st?.Reason : null,
+                    decisionLabel = gateOpen ? st?.Label : null,
+                    decisionConfidence = gateOpen ? (double?)st?.Confidence : null,
+                    // The one prompt-text exception (revision 2, D9): a suggest-mode
+                    // instance's pending prompt, disclosed ONLY while the gate is open —
+                    // with the gate closed the engine is idle and pends nothing, so the
+                    // closed-gate disclosure surface is unchanged.
+                    pendingPrompt = gateOpen ? l.PendingPrompt : null,
+                };
             }),
             recipes = _recipes.List().Select(r => new
             {
@@ -514,6 +534,8 @@ public class AutopilotController : ControllerBase
             enabled = cfg.Enabled,
             autoAdvance = cfg.AutoAdvance,
             threshold = cfg.Threshold,
+            brain = cfg.Brain,
+            brainModel = cfg.BrainModel,
             denyList = cfg.DenyList,
             agents = _engine.States(),
             loops = _loops.All(),

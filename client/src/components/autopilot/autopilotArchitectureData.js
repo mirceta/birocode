@@ -42,8 +42,8 @@ export const AUTOPILOT_MAP = {
       role: 'The web edge of the autopilot', desc: 'Every /api/autopilot endpoint passes through the operator gate first; with the gate off they all return 403.' },
     { id: 'B_engine', label: 'Engine · background', box: 'sub', grp: 'auto', p: 'T_backend',
       role: 'The tick loop + its state', desc: 'A hosted BackgroundService that wakes every 10s and, per repo, decides whether to drive a turn. Holds the gate singleton and the loop/config stores it consults.' },
-    { id: 'B_brain', label: 'Decision · stub', box: 'sub', grp: 'auto', p: 'T_backend',
-      role: 'Picks a prompt — or escalates', desc: 'The classifier path: a keyword matcher (NOT an LLM) that scores the last reply against your routine prompts, gated by a confidence threshold and the deny-list.' },
+    { id: 'B_brain', label: 'Decision · brain', box: 'sub', grp: 'auto', p: 'T_backend',
+      role: 'Picks a prompt — or escalates', desc: 'The classifier path: by default a one-shot Claude CLI call (fast model, off the tick path) that picks one of your routine prompts or abstains; a keyword-overlap stub is the fallback and a config choice. Both are gated by the confidence threshold and the deny-list.' },
     { id: 'B_runs', label: 'Run ownership · slot', box: 'sub', grp: 'backend', p: 'T_backend',
       role: 'The single writer slot', desc: 'The same RunSessionService + builder slot a human chat claims. The autopilot calls the identical TryBeginRun, so it can never run concurrently with you on one repo.' },
 
@@ -85,7 +85,7 @@ export const AUTOPILOT_MAP = {
       src: 'ClaudeWeb.App/Services/Autopilot/LoopConfigStore.cs' },
     { id: 'cfg', label: 'AutopilotConfigStore', x: 430, y: 250, grp: 'backend', kind: 'db', p: 'B_engine',
       role: 'Global settings (autopilot.json)',
-      desc: 'Enabled (kill switch, default on), AutoAdvance (actually send vs suggest, default off), Threshold (0.85), ArmedRepoIds, and the DenyList. The web can flip these — but only to SHRINK authority.',
+      desc: 'Enabled (kill switch, default on), AutoAdvance (actually send vs suggest, default off), Threshold (0.85), Brain ("cli" default | "stub"), the DenyList, and legacy ArmedRepoIds. The web can flip these — but only to SHRINK authority.',
       src: 'ClaudeWeb.App/Services/Autopilot/AutopilotConfigStore.cs' },
     { id: 'audit', label: 'AutopilotAuditLog', x: 340, y: 380, grp: 'auto', p: 'B_engine',
       role: 'Append-only record of every send',
@@ -93,13 +93,13 @@ export const AUTOPILOT_MAP = {
       src: 'ClaudeWeb.App/Services/Autopilot/AutopilotAuditLog.cs' },
 
     // ---- backend tier: brain ----
-    { id: 'brain', label: 'PromptClassifier · stub', x: 620, y: 110, grp: 'auto', p: 'B_brain',
-      role: 'Keyword matcher (NOT an LLM)',
-      desc: 'Scores the last reply by word-overlap against your routine prompts and returns a Verdict(Escalate, Label, Confidence, Reason). Below threshold → escalate; a deny-listed label → escalate even if confident. Still the Slice-2 stub.',
-      src: 'ClaudeWeb.App/Services/Autopilot/PromptClassifier.cs' },
+    { id: 'brain', label: 'CliPromptClassifier + stub', x: 620, y: 110, grp: 'auto', p: 'B_brain',
+      role: 'Routes to one of YOUR prompts — or abstains',
+      desc: 'Default brain (Brain:"cli"): one background claude -p call per new agent message (single-flight per repo; ticks hold with "classifying…" and never block) that picks a routine index or abstains — it can never introduce free text. On CLI failure the word-overlap stub answers and the reason notes the fallback. Both return Verdict(Escalate, Label, Confidence, Reason): below threshold → escalate (suggest mode still pre-fills the near-miss); deny-listed → escalate even if confident.',
+      src: 'ClaudeWeb.App/Services/Autopilot/CliPromptClassifier.cs' },
     { id: 'deny', label: 'deny-list', x: 620, y: 250, grp: 'backend', kind: 'slot', p: 'B_brain',
       role: 'The risky-word fence (shared)',
-      desc: 'deploy · push · force · reset --hard · delete · drop · prod · overwrite · merge. Hit by a classifier label → escalate; hit in a loop reply → the loop escalates and stops. One fence, both drivers.',
+      desc: 'deploy · push · force · reset --hard · delete · drop · prod · overwrite · merge. A term hits a routine only as a WHOLE WORD ("prod" no longer blocks "production") and the escalate reason names the matched term. Hit by a classifier label → escalate (never pended or sent); hit in a loop reply → the loop escalates and stops.',
       src: 'ClaudeWeb.App/Services/Autopilot/AutopilotConfigStore.cs' },
 
     // ---- backend tier: run ownership ----

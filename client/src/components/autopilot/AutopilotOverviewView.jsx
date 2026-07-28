@@ -38,9 +38,12 @@ export default function AutopilotOverviewView() {
         <ul className="ov-list">
           <li>
             <b>Suggestion-based loop → Control</b> — arm or disarm each agent
-            and pick the global mode: <b>suggest-only</b> (autopilot predicts
-            your next routine prompt, you press send) or <b>auto-advance</b>
-            (confident, non-risky prompts are sent for you).
+            and pick the global mode: <b>suggest-only</b> (the brain&apos;s best
+            candidate always pre-fills your composer with its honest confidence,
+            even below the threshold — you press send) or <b>auto-advance</b>
+            (only confident, non-risky prompts are sent for you). The classifier
+            is a one-shot Claude call by default (the <b>Claude brain</b> toggle;
+            an offline word-overlap stub is its fallback).
           </li>
           <li>
             <b>Loops (Agents · Recipes)</b> — the deterministic loop engine,
@@ -104,15 +107,18 @@ export default function AutopilotOverviewView() {
                 editable library in the Prompt library subtab.
               </li>
               <li>
-                At the end of each armed agent&apos;s turn, the classifier
+                At the end of each armed agent&apos;s turn, the classifier — a
+                one-shot Claude call on a fast model (stub matcher as fallback) —
                 <b> decides whether one of those prompts</b> is the right next
                 thing to send — the label space is exactly your library, never
                 a free-form invention.
               </li>
               <li>
-                Two postures: <b>suggest-only</b> (the prediction waits for
-                your press of send) or <b>auto-advance</b> (confident,
-                non-risky prompts are sent for you).
+                Two postures: <b>suggest-only</b> (the best candidate always
+                pre-fills the composer with its confidence; you press send) or
+                <b> auto-advance</b> (confident, non-risky prompts are sent for
+                you — the threshold gates only these sends). The dock&apos;s loop
+                popover shows the engine&apos;s live decision and why.
               </li>
               <li>
                 This is the one mode that <b>exists today</b> — the Control +
