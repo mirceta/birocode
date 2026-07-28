@@ -134,6 +134,7 @@ public class AutopilotService : BackgroundService
     private AutopilotDiscoveryService.DiscoveryResult _mined =
         new(0, 0, Array.Empty<AutopilotDiscoveryService.RoutinePrompt>());
     private DateTimeOffset _minedAt = DateTimeOffset.MinValue;
+    private bool _miningInFlight; // guarded by _routineGate
 
     /// <summary>The brain's current label space — the user's custom prompts, enriched by
     /// the (cached) mining pass. Cheap; safe to call every tick and from the API.</summary>
@@ -141,22 +142,43 @@ public class AutopilotService : BackgroundService
 
     private IReadOnlyList<PromptClassifier.Routine> Routines(DateTimeOffset now)
     {
+        // Mining scans every transcript (~50s warm / ~2min cold) — it must never run
+        // on the tick path or block an API caller (openspec fix-startup-handle-race):
+        // return the cached result immediately and refresh via a single-flight
+        // background task. Until the first pass lands, the label space is the user's
+        // custom prompts alone.
         AutopilotDiscoveryService.DiscoveryResult mined;
-        lock (_routineGate) mined = _mined;
-
-        // Refresh the (expensive) mining cache at most once per window.
-        if (now - _minedAt >= DiscoveryRefresh)
+        var startRefresh = false;
+        lock (_routineGate)
         {
-            try
+            mined = _mined;
+            if (now - _minedAt >= DiscoveryRefresh && !_miningInFlight)
+                _miningInFlight = startRefresh = true;
+        }
+
+        if (startRefresh)
+        {
+            _ = Task.Run(() =>
             {
-                mined = _discovery.Discover();
-                lock (_routineGate) { _mined = mined; _minedAt = now; }
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"[AUTOPILOT] discovery refresh failed (keeping previous): {ex.Message}");
-                lock (_routineGate) mined = _mined;
-            }
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                try
+                {
+                    _logger.Info("[AUTOPILOT] mining transcripts in background...");
+                    var fresh = _discovery.Discover();
+                    lock (_routineGate) { _mined = fresh; _minedAt = DateTimeOffset.UtcNow; }
+                    _logger.Info($"[AUTOPILOT] mining done in {sw.Elapsed.TotalSeconds:0}s " +
+                        $"({fresh.Routines.Count} routine prompts from {fresh.SessionsScanned} sessions)");
+                }
+                catch (Exception ex)
+                {
+                    // Keep the previous cache; the stale _minedAt retries next call.
+                    _logger.Error($"[AUTOPILOT] discovery refresh failed (keeping previous): {ex.Message}");
+                }
+                finally
+                {
+                    lock (_routineGate) _miningInFlight = false;
+                }
+            });
         }
 
         return PromptClassifier.BuildRoutines(_prompts.List(), mined);
@@ -262,15 +284,18 @@ public class AutopilotService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // ConfigureAwait(false) throughout: a hosted service must never depend on
+        // the ambient synchronization context — a captured WinForms context once
+        // froze this engine at its first await (openspec fix-startup-handle-race).
         // First tick after a short delay so startup isn't competing with the build.
-        try { await Task.Delay(TimeSpan.FromSeconds(3), stoppingToken); } catch { return; }
+        try { await Task.Delay(TimeSpan.FromSeconds(3), stoppingToken).ConfigureAwait(false); } catch { return; }
 
         while (!stoppingToken.IsCancellationRequested)
         {
             try { Tick(); }
             catch (Exception ex) { _logger.Error($"[AUTOPILOT] engine tick failed: {ex.Message}"); }
 
-            try { await Task.Delay(Interval, stoppingToken); }
+            try { await Task.Delay(Interval, stoppingToken).ConfigureAwait(false); }
             catch (OperationCanceledException) { break; }
         }
     }

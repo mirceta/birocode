@@ -550,6 +550,11 @@ public class MainForm : Form
     private void SafeInvoke(Action action)
     {
         if (IsDisposed) return;
+        // Before the handle exists InvokeRequired is false even from a worker
+        // thread, and running inline would create control handles on that thread
+        // (the SetParent-deadlock startup race — openspec fix-startup-handle-race).
+        // Drop the update; the monitoring surfaces repopulate continuously.
+        if (!IsHandleCreated) return;
         if (InvokeRequired)
             try { BeginInvoke(action); } catch { }
         else

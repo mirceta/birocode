@@ -118,10 +118,14 @@ public class CliRunnerService
             var sawError = false;
 
             var reader = process.StandardOutput;
-            while (!reader.EndOfStream)
+            while (true)
             {
                 ct.ThrowIfCancellationRequested();
+                // EOF is the null line; gating on the synchronous EndOfStream
+                // property would park a pool thread per active run while the
+                // pipe is quiet (openspec fix-startup-handle-race).
                 var line = await reader.ReadLineAsync(ct);
+                if (line is null) break;
                 if (string.IsNullOrWhiteSpace(line)) continue;
 
                 await TranslateLine(line, emit, record,
