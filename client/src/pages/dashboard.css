@@ -1924,6 +1924,38 @@
   padding: 10px 12px;
 }
 
+/* Import area (openspec import-discovery-findings): paste box for another
+   agent's JSON findings + file picker / submit / cancel row. */
+.phone__discover-import {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+
+.phone__discover-import-text {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 6px;
+}
+
+.phone__discover-import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 /* Per-dock git refresh — re-fetches this agent's git status (hits origin). */
 .phone__git-refresh {
   flex: 0 0 auto;

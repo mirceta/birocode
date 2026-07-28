@@ -103,6 +103,18 @@ export async function apiPost(path, body, { repoId } = {}) {
   return handle(res);
 }
 
+// POST /api/<path> with a raw, pre-serialized body — for operator-pasted JSON
+// the SERVER must validate as-is (openspec import-discovery-findings). Going
+// through apiPost would JSON.stringify the string and double-encode it.
+export async function apiPostText(path, text, { repoId } = {}) {
+  const res = await fetch(url(path), {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }, repoId),
+    body: text,
+  });
+  return handle(res);
+}
+
 export async function apiPut(path, body, { repoId } = {}) {
   const res = await fetch(url(path), {
     method: 'PUT',
