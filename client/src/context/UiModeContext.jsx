@@ -66,6 +66,7 @@ export const FEATURES = {
   agenticAudit: 'advanced', // read-only agentic-call audit trail panel on the dashboard (openspec: add-agent-audit-trail)
   trafficPanel: 'advanced', // harness HTTP throughput monitor panel on the dashboard (openspec: traffic-monitor)
   dockLoopControls: 'advanced', // loop badge + arm-from-recipe control on dock agent cards (openspec: adopt-autopilot-loops)
+  dockAppSplit: 'advanced', // dock split view: opened local app beside the chat instead of over the dock (openspec: dock-app-split-view)
   adminStatus: 'advanced', // always-admin status tile in the header strip: UAC-off state + enabler (openspec: add-always-admin-status)
 };
 
