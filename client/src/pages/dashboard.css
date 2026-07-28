@@ -2097,6 +2097,47 @@
   border-left: 1px solid var(--color-border);
 }
 
+/* Draggable divider (openspec split-divider-drag): a slim grab strip between
+   the panes — visually a hairline (the side pane's border-left doubles as the
+   resting line), widening to an accent bar on hover/drag. touch-action:none is
+   what makes pointer-capture dragging work on touch. While dragging, the row
+   pins the col-resize cursor, kills selection, and blanks pointer events on
+   the app pane so the iframe can't swallow the pointer stream (design D3). */
+.phone__divider {
+  flex: 0 0 7px;
+  margin-right: -1px; /* overlap the side pane's border-left hairline */
+  cursor: col-resize;
+  position: relative;
+  touch-action: none;
+}
+
+.phone__divider::before {
+  content: '';
+  position: absolute;
+  inset: 0 2px;
+}
+
+.phone__divider:hover::before,
+.phone__divider:focus-visible::before,
+.phone__screen--dragging .phone__divider::before {
+  background: var(--color-accent);
+  opacity: 0.45;
+  border-radius: 2px;
+}
+
+.phone__divider:focus-visible {
+  outline: none;
+}
+
+.phone__screen--dragging {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.phone__screen--dragging .phone__side {
+  pointer-events: none;
+}
+
 /* Maximize chat to fill the dock (openspec add-maximize-chat-dock): collapse the
    non-chat chrome so .phone__screen (and the embedded chat within) gets the dock's
    full height. The regions stay mounted but hidden — CSS owns visibility — so the
