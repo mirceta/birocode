@@ -1,213 +1,295 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Why loop prompts don't render in chat</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Understanding: the startup handle race</title>
 <style>
   :root {
-    --bg: #0f1115; --panel: #161a22; --panel2: #1c2230; --line: #2a3245;
-    --text: #d7dce6; --dim: #8a93a6; --accent: #5ab0f7; --good: #4fc98b;
-    --bad: #e5687a; --warn: #e0b455; --user: #2d4a6b; --asst: #24303f;
+    --bg: #0f1218; --panel: #171c26; --panel2: #1d2433; --line: #2b3446;
+    --text: #d8dee9; --dim: #8b96a8; --accent: #5da9f6; --bad: #e06c75;
+    --good: #7cc76f; --warn: #e5c07b; --mono: 'Consolas', 'Cascadia Code', monospace;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; font: 15px/1.5 "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); }
-  header { padding: 18px 24px 10px; border-bottom: 1px solid var(--line); }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.55 'Segoe UI', system-ui, sans-serif; }
+  header { padding: 18px 22px 10px; border-bottom: 1px solid var(--line); }
   header h1 { margin: 0 0 4px; font-size: 20px; }
   header p { margin: 0; color: var(--dim); font-size: 13px; }
-  nav { display: flex; gap: 8px; padding: 12px 24px; flex-wrap: wrap; }
-  nav button { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; cursor: pointer; font-size: 14px; }
-  nav button.on { background: var(--accent); color: #08111c; border-color: var(--accent); font-weight: 600; }
-  main { padding: 8px 24px 40px; max-width: 1100px; margin: 0 auto; }
+  nav { display: flex; gap: 6px; padding: 10px 22px; border-bottom: 1px solid var(--line);
+        flex-wrap: wrap; }
+  nav button { background: var(--panel); color: var(--dim); border: 1px solid var(--line);
+        border-radius: 8px; padding: 7px 14px; cursor: pointer; font-size: 14px; }
+  nav button.active { background: var(--panel2); color: var(--text); border-color: var(--accent); }
+  main { padding: 18px 22px 40px; max-width: 1060px; margin: 0 auto; }
   section { display: none; }
-  section.on { display: block; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin: 14px 0; }
-  .card h2 { margin: 0 0 8px; font-size: 16px; color: var(--accent); }
-  .card h3 { margin: 14px 0 6px; font-size: 14px; }
+  section.active { display: block; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+          padding: 14px 16px; margin: 12px 0; }
+  .card h3 { margin: 0 0 6px; font-size: 15px; }
+  code, pre { font-family: var(--mono); font-size: 13px; }
+  code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
+        padding: 10px 12px; overflow-x: auto; }
   .dim { color: var(--dim); }
-  code { background: var(--panel2); border-radius: 4px; padding: 1px 5px; font-size: 13px; }
-  .cols { display: flex; gap: 14px; flex-wrap: wrap; }
-  .cols > div { flex: 1 1 320px; }
-  /* phone mock */
-  .phone { background: var(--panel2); border: 1px solid var(--line); border-radius: 14px; padding: 12px; min-height: 240px; }
-  .phone .title { font-size: 12px; color: var(--dim); margin-bottom: 8px; text-transform: uppercase; letter-spacing: .06em; }
-  .bubble { border-radius: 10px; padding: 7px 11px; margin: 6px 0; font-size: 13px; max-width: 92%; opacity: 0; transform: translateY(6px); transition: opacity .35s, transform .35s; }
-  .bubble.show { opacity: 1; transform: none; }
-  .bubble.user { background: var(--user); margin-left: auto; }
-  .bubble.asst { background: var(--asst); }
-  .bubble.ghost { background: transparent; border: 1px dashed var(--bad); color: var(--bad); }
-  .legend { font-size: 12px; color: var(--dim); margin-top: 8px; }
-  .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin: 0 4px 0 10px; vertical-align: middle; }
-  .controls { margin: 10px 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .controls button { background: var(--accent); color: #08111c; border: 0; border-radius: 8px; padding: 7px 14px; cursor: pointer; font-weight: 600; }
-  .controls .step-label { color: var(--warn); font-size: 13px; min-height: 20px; }
-  /* flow */
-  .flow { display: flex; flex-direction: column; gap: 6px; }
-  .fnode { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; background: var(--panel2); font-size: 13px; position: relative; }
-  .fnode.hot { border-color: var(--warn); box-shadow: 0 0 0 1px var(--warn); }
-  .fnode.miss { border-color: var(--bad); }
-  .fnode .tag { float: right; font-size: 11px; color: var(--dim); }
-  .arrow { text-align: center; color: var(--dim); font-size: 12px; line-height: 1; }
-  /* timeline */
-  table { border-collapse: collapse; width: 100%; font-size: 13px; }
-  th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
-  th { color: var(--dim); font-weight: 600; }
-  .ok { color: var(--good); } .no { color: var(--bad); } .wa { color: var(--warn); }
-  .pill { display: inline-block; border-radius: 999px; padding: 1px 9px; font-size: 11px; border: 1px solid var(--line); }
-  .pill.sent { border-color: var(--accent); color: var(--accent); }
-  .pill.missing { border-color: var(--bad); color: var(--bad); }
-  .pill.written { border-color: var(--good); color: var(--good); }
+  .bad { color: var(--bad); } .good { color: var(--good); } .warn { color: var(--warn); }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 800px) { .cols { grid-template-columns: 1fr; } }
+
+  /* --- simulator --- */
+  .sim-controls { display: flex; gap: 8px; align-items: center; margin: 12px 0; flex-wrap: wrap; }
+  .sim-controls button { background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+        border-radius: 8px; padding: 6px 14px; cursor: pointer; font-size: 14px; }
+  .sim-controls button:disabled { opacity: .4; cursor: default; }
+  .mode-toggle { margin-left: auto; display: flex; gap: 0; }
+  .mode-toggle button { border-radius: 0; }
+  .mode-toggle button:first-child { border-radius: 8px 0 0 8px; }
+  .mode-toggle button:last-child { border-radius: 0 8px 8px 0; }
+  .mode-toggle button.on-bad { background: #3a2026; border-color: var(--bad); color: var(--bad); }
+  .mode-toggle button.on-good { background: #22301f; border-color: var(--good); color: var(--good); }
+  .lanes { display: grid; grid-template-columns: 130px 1fr; gap: 8px; }
+  .lane-label { color: var(--dim); font-size: 12px; padding-top: 10px; text-align: right;
+        padding-right: 6px; }
+  .lane { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+        min-height: 46px; padding: 8px 10px; font-family: var(--mono); font-size: 12.5px;
+        color: var(--dim); transition: border-color .2s, background .2s; }
+  .lane.hot { border-color: var(--accent); background: var(--panel2); color: var(--text); }
+  .lane.dead { border-color: var(--bad); background: #2a1a1e; color: var(--bad); }
+  .lane.ok { border-color: var(--good); }
+  .caption { min-height: 84px; margin-top: 12px; padding: 12px 14px; background: var(--panel2);
+        border-left: 3px solid var(--accent); border-radius: 6px; font-size: 14px; }
+  .caption.bad { border-left-color: var(--bad); }
+  .caption.good { border-left-color: var(--good); }
+  .stepnum { color: var(--dim); font-size: 12px; margin-bottom: 4px; }
+
+  table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); }
+  .fix-tag { display: inline-block; font-size: 11px; font-family: var(--mono); background: var(--panel2);
+        border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; margin-right: 6px; }
 </style>
 </head>
 <body>
 <header>
-  <h1>Why autopilot loop prompts don't render in the chat</h1>
-  <p>Investigated 2026-07-28 against the live goal-loop test (repo "Claude Web", session 194f3269, sends 08:53–08:54 UTC). Two separate causes.</p>
+  <h1>The startup handle race — why loops "silently never started"</h1>
+  <p>openspec change <code>fix-startup-handle-race</code> · diagnosed 2026-07-28 on live with stack + heap dumps</p>
 </header>
-<nav>
-  <button data-tab="bug" class="on">1 · The live-render gap</button>
-  <button data-tab="timeline">2 · Evidence timeline</button>
-  <button data-tab="fix">3 · The fix</button>
+<nav id="tabs">
+  <button data-tab="symptom" class="active">1 · Symptom</button>
+  <button data-tab="race">2 · The race, step by step</button>
+  <button data-tab="fixes">3 · The fixes</button>
+  <button data-tab="verify">4 · Verification</button>
 </nav>
 <main>
 
-<section id="tab-bug" class="on">
+<section id="symptom" class="active">
   <div class="card">
-    <h2>Two send paths — only one draws the user bubble</h2>
-    <p>The backend SSE contract (<code>CliRunnerService</code>) has <b>no user-message event</b>: it emits <code>session / thinking / tool / token / usage / done</code>. The user bubble you normally see is drawn <b>client-side by the composer</b> (<code>sendTo()</code> in <code>ChatContext.jsx</code>) before the stream starts. An autopilot loop send never goes through the composer — the open page discovers the run via the 5s <code>reconcile()</code> poll and calls <code>attachToRun()</code>, which only appends an <i>empty assistant bubble</i> and streams the reply into it.</p>
-    <div class="controls">
-      <button id="playBtn">▶ Play one loop turn</button>
-      <span class="step-label" id="stepLabel"></span>
+    <h3>What the operator saw</h3>
+    <p>A goal loop armed from the phone, every gate green — and <b>zero iterations, forever</b>.
+    No <code>[LOOP]</code> log lines, no errors, <code>engine.state</code> null. Meanwhile the web UI
+    worked perfectly, which is exactly what made it confusing: the API answered, so the harness
+    <i>looked</i> healthy.</p>
+  </div>
+  <div class="cols">
+    <div class="card">
+      <h3 class="bad">Actually broken</h3>
+      <ul>
+        <li>Desktop GUI: frozen (deadlocked in <code>SetParent</code>)</li>
+        <li>Autopilot engine: parked on its first 3-second delay — <b>for 76 minutes</b></li>
+        <li>Collector poller: frozen the same way</li>
+      </ul>
     </div>
-    <div class="cols">
-      <div class="phone">
-        <div class="title">Composer send (works)</div>
-        <div id="phoneA"></div>
-      </div>
-      <div class="phone">
-        <div class="title">Autopilot loop send (the bug)</div>
-        <div id="phoneB"></div>
-      </div>
-    </div>
-    <div class="legend">
-      <span class="sw" style="background:var(--user)"></span>user bubble
-      <span class="sw" style="background:var(--asst)"></span>assistant bubble
-      <span class="sw" style="border:1px dashed var(--bad)"></span>never rendered
+    <div class="card">
+      <h3 class="good">Still healthy (the mask)</h3>
+      <ul>
+        <li>Kestrel API on :5099 — the phone UI worked</li>
+        <li>Chat runs, file browsing, everything request-driven</li>
+      </ul>
     </div>
   </div>
   <div class="card">
-    <h2>Where the prompt gets lost on the live path</h2>
-    <div class="flow" id="flowLive"></div>
-  </div>
-</section>
-
-<section id="tab-timeline">
-  <div class="card">
-    <h2>What actually happened (reconstructed from disk)</h2>
-    <p class="dim">Sources: <code>loops.json</code> (4 sends recorded), <code>autopilot-audit.jsonl</code> (send timestamps + answered snippets), and the pinned transcript <code>194f3269….jsonl</code> lines 41941–41963.</p>
-    <table>
-      <thead><tr><th>When (UTC)</th><th>Event</th><th>User line on disk</th><th>Reply on disk</th><th>Rendered live?</th></tr></thead>
-      <tbody>
-        <tr><td>08:53:11</td><td>Goal loop armed (cap 5), pinned to session 194f3269</td><td>—</td><td>—</td><td>—</td></tr>
-        <tr><td>08:53:21</td><td><span class="pill sent">send 1</span> work prompt</td><td><span class="pill missing">MISSING</span> no <code>user</code> line, no <code>queue-operation</code></td><td class="ok">"OK" @ 08:53:26 (+ <code>last-prompt</code> proves the CLI processed the prompt)</td><td class="no">prompt ✗ / reply ✓</td></tr>
-        <tr><td>08:53:31</td><td><span class="pill sent">send 2</span> work prompt (loop saw "OK", decided again)</td><td><span class="pill written">written</span> @ 08:53:35 via enqueue/dequeue</td><td class="no">NONE — empty completion (the known no-reply case)</td><td class="no">prompt ✗</td></tr>
-        <tr><td>08:53:42→52</td><td>No-reply escape: grace tick, then guard cleared (fix-loop-noreply-stall working as designed)</td><td>—</td><td>—</td><td>—</td></tr>
-        <tr><td>08:53:53</td><td><span class="pill sent">send 3</span> work prompt retry; CLI first stitches a synthetic <code>"Continue from where you left off." / "No response requested."</code> pair over send 2's orphaned prompt</td><td><span class="pill written">written</span> @ 08:53:56</td><td class="ok">"LOOP_DONE" @ 08:54:00</td><td class="no">prompt ✗ / reply ✓</td></tr>
-        <tr><td>08:54:04</td><td><span class="pill sent">send 4</span> verification prompt (phase → verify)</td><td><span class="pill written">written</span> @ 08:54:07</td><td class="ok">"…GOAL_VERIFIED" @ 08:54:12</td><td class="no">prompt ✗ / reply ✓</td></tr>
-        <tr><td>08:54:12</td><td>Loop resolved <b>done / verified</b> — the 5-turn test itself passed</td><td>—</td><td>—</td><td>—</td></tr>
-      </tbody>
-    </table>
-    <h3>So the two symptoms decompose as:</h3>
-    <p><b>"Prompts only appeared after a full refresh"</b> — refresh reloads the transcript from disk (<code>loadTranscript</code>), and sends 2–4's user lines <i>are</i> on disk. Live, nothing ever draws them (cause 1).</p>
-    <p><b>"Even after refresh, the first one never appeared"</b> — send 1's user line was <b>never written to the .jsonl by claude.exe</b> (v2.1.220). The reply "OK" and the <code>last-prompt</code> record are there; the <code>user</code> entry is not. The harness renders the transcript faithfully — the data is genuinely absent on disk. This is a CLI persistence quirk on the first resumed <code>-p</code> run, not a harness render bug.</p>
+    <h3>Why it comes and goes</h3>
+    <p>It is a startup <b>race</b>: most restarts win it and everything works. A deploy restart with a
+    phone actively polling the instant Kestrel comes up can lose it. That is why earlier loop tests
+    passed and the 10:19 deploy produced a broken process — same code, different coin flip.</p>
   </div>
 </section>
 
-<section id="tab-fix">
+<section id="race">
+  <div class="sim-controls">
+    <button id="prev">◀ Back</button>
+    <button id="next">Next ▶</button>
+    <button id="reset">Reset</button>
+    <div class="mode-toggle">
+      <button id="mode-bad" class="on-bad">Broken (old code)</button>
+      <button id="mode-good">Fixed (new code)</button>
+    </div>
+  </div>
+  <div class="lanes">
+    <div class="lane-label">Main (UI) thread</div>  <div class="lane" id="lane-main"></div>
+    <div class="lane-label">Threadpool thread</div> <div class="lane" id="lane-pool"></div>
+    <div class="lane-label">Form message queue</div><div class="lane" id="lane-queue"></div>
+    <div class="lane-label">Autopilot engine</div>  <div class="lane" id="lane-engine"></div>
+  </div>
+  <div class="caption" id="caption"><div class="stepnum" id="stepnum"></div><div id="captext"></div></div>
+</section>
+
+<section id="fixes">
+  <table>
+    <tr><th>Fix</th><th>Where</th><th>What it does</th></tr>
+    <tr>
+      <td><span class="fix-tag">root</span>Handle before API</td>
+      <td><code>Program.cs</code></td>
+      <td>Construct <code>MainForm</code> and force its native handle on the STA main thread
+          <b>before</b> <code>api.Start()</code>. Once the handle exists, <code>InvokeRequired</code>
+          is truthful from every thread — no background event can ever be first to create a handle.</td>
+    </tr>
+    <tr>
+      <td><span class="fix-tag">guard</span>SafeInvoke handle check</td>
+      <td><code>MainForm.cs</code></td>
+      <td>Refuse to touch controls while <code>!IsHandleCreated</code> (drop the monitoring update)
+          instead of running inline on the calling thread. Defense in depth.</td>
+    </tr>
+    <tr>
+      <td><span class="fix-tag">immunity</span><code>ConfigureAwait(false)</code></td>
+      <td><code>AutopilotService.cs</code><br><code>CollectorPoller.cs</code></td>
+      <td>Hosted services resume on the threadpool no matter what synchronization context is
+          ambient — a phantom UI context can never strangle them again.</td>
+    </tr>
+    <tr>
+      <td><span class="fix-tag">liveness</span>Background mining</td>
+      <td><code>AutopilotService.cs</code></td>
+      <td>Transcript mining (~50 s warm / ~2 min cold) moves off the tick path into a single-flight
+          background task. A loop armed right after startup ticks on schedule; until the first pass
+          lands, the label space is the custom prompts alone (logged).</td>
+    </tr>
+    <tr>
+      <td><span class="fix-tag">cleanup</span>Async pipe read</td>
+      <td><code>CliRunnerService.cs</code></td>
+      <td>Read CLI stdout with <code>ReadLineAsync</code> until null instead of gating on the
+          synchronous <code>EndOfStream</code> property, which parked a pool thread per active run.</td>
+    </tr>
+  </table>
   <div class="card">
-    <h2>The fix — one synthetic event, one client case (implemented &amp; verified)</h2>
-    <p class="dim">Shipped as openspec change <code>fix-loop-prompt-render</code>; e2e-verified on isolated :5227 (<code>verify-loop-prompt-render.mjs</code>, 12/12 PASS): a sleeper-stub <code>claude.exe</code> that never writes transcripts proves the bubble comes from the new event, not the disk.</p>
-    <h3>Backend (fixes live rendering + reattach replay)</h3>
-    <p>In <code>AutopilotService.SendPrompt</code>, right after the run slot is claimed and before <code>_cli.RunAsync</code>, emit the prompt into the run's seq-numbered buffer:</p>
-    <p><code>await session.EmitAsync(new { type = "user", text = prompt, actor = "loop" });</code></p>
-    <p>Because it lands in the <code>RunSession</code> buffer it is (a) broadcast to any attached client, and (b) <b>replayed</b> to a client that attaches later via <code>?after=N</code> — so the 5s poll's <code>attachToRun</code> gets it for free.</p>
-    <h3>Frontend</h3>
-    <p>In <code>makeEventHandler</code> (<code>ChatContext.jsx</code>) add a <code>case 'user'</code>: insert a user bubble <i>before</i> the trailing streaming assistant bubble (attachToRun appends the empty assistant bubble before replay starts, so the insert must go one position up).</p>
-    <h3>What this does NOT fix</h3>
-    <p>The first-send user line missing <i>on disk</i> (CLI quirk). After a full page refresh the transcript is still the source of truth, so a prompt the CLI never persisted stays absent there. The harness's own durable record of every loop send exists in <code>autopilot-audit.jsonl</code> if we ever want to overlay it into transcript reconstruction — but that is a separate, larger change.</p>
-    <div class="flow" id="flowFix"></div>
+    <h3>Startup order, before → after</h3>
+    <pre><span class="bad">// before                              </span><span class="good">// after</span>
+api.Start();                            var form = new MainForm(...);
+var form = new MainForm(...);           _ = form.Handle;   <span class="good">// born on UI thread</span>
+Application.Run(form);                  api.Start();
+                                        Application.Run(form);</pre>
+  </div>
+</section>
+
+<section id="verify">
+  <div class="card">
+    <h3>What was proven, and how</h3>
+    <ul>
+      <li><b>Diagnosis</b> — <code>dotnet-stack</code> + <code>dotnet-dump dumpasync</code> on the live
+        process: main thread in <code>SetParent</code>, engine state machine at
+        <code>&lt;&gt;1__state = 0</code> (first delay) 76 minutes after start, continuation posted to a
+        queue nobody pumps.</li>
+      <li><b>Fix verified on an isolated harness (:5218)</b> — at t+3s the engine's first tick ran and
+        logged <code>mining transcripts in background...</code>; mining finished 64 s later
+        (<code>378 routine prompts from 257 sessions</code>) while ticks continued; collector poller
+        started; API health 200; GUI responsive.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>The startup log, healthy shape</h3>
+    <pre>[10:59:26] [SERVER] Kestrel running on http://0.0.0.0:5218
+[10:59:26] [COLLECTOR] poller started
+[10:59:29] [AUTOPILOT] mining transcripts in background...   <span class="good">← first tick, 3 s in</span>
+[11:00:33] [AUTOPILOT] mining done in 64s (378 routine prompts from 257 sessions)</pre>
+    <p class="dim">If a future process ever shows the server lines but never the
+    <code>[AUTOPILOT]</code>/<code>[COLLECTOR]</code> lines, the engines are not running — that is the
+    old signature.</p>
   </div>
 </section>
 
 </main>
 <script>
 (function () {
-  // tabs
-  document.querySelectorAll('nav button').forEach(function (b) {
-    b.addEventListener('click', function () {
-      document.querySelectorAll('nav button').forEach(function (x) { x.classList.remove('on'); });
-      document.querySelectorAll('main section').forEach(function (x) { x.classList.remove('on'); });
-      b.classList.add('on');
-      document.getElementById('tab-' + b.dataset.tab).classList.add('on');
-    });
+  // --- tabs ---
+  var tabs = document.getElementById('tabs');
+  tabs.addEventListener('click', function (e) {
+    var btn = e.target.closest('button'); if (!btn) return;
+    tabs.querySelectorAll('button').forEach(function (b) { b.classList.remove('active'); });
+    document.querySelectorAll('main > section').forEach(function (s) { s.classList.remove('active'); });
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.tab).classList.add('active');
   });
 
-  // flow diagrams
-  function flow(el, nodes) {
-    var root = document.getElementById(el);
-    nodes.forEach(function (n, i) {
-      if (i > 0) { var a = document.createElement('div'); a.className = 'arrow'; a.textContent = '↓'; root.appendChild(a); }
-      var d = document.createElement('div');
-      d.className = 'fnode' + (n.cls ? ' ' + n.cls : '');
-      d.innerHTML = n.html + (n.tag ? '<span class="tag">' + n.tag + '</span>' : '');
-      root.appendChild(d);
-    });
-  }
-  flow('flowLive', [
-    { html: '<b>Engine tick</b> decides → <code>SendPrompt()</code> claims run slot, spawns CLI', tag: 'AutopilotService.cs' },
-    { html: 'CLI streams <code>session / thinking / token / done</code> into the RunSession buffer — <b>no user event exists in the contract</b>', cls: 'miss', tag: 'CliRunnerService.cs' },
-    { html: 'Open page: 5s poll <code>reconcile()</code> sees the run → <code>attachToRun()</code>', tag: 'ChatContext.jsx' },
-    { html: 'Conversation not "fresh" (already has messages) → <b>no transcript reload</b>; just append empty assistant bubble + stream', cls: 'hot', tag: 'attachToRun, fresh check' },
-    { html: 'Result: the reply renders live, the prompt bubble is never drawn', cls: 'miss' }
-  ]);
-  flow('flowFix', [
-    { html: '<code>SendPrompt()</code> emits <code>{type:"user", text: prompt}</code> into the buffer <b>before</b> the CLI starts', cls: 'hot', tag: 'new' },
-    { html: 'Buffer replays it to late attachers (seq-tagged, deduped like every event)', tag: 'RunSession' },
-    { html: 'Client <code>case "user"</code> inserts the bubble above the streaming assistant bubble', cls: 'hot', tag: 'new' },
-    { html: 'Loop prompts render live and on reattach — same contract, one new event type' }
-  ]);
-
-  // phone animation
-  var A = document.getElementById('phoneA'), B = document.getElementById('phoneB');
-  var label = document.getElementById('stepLabel');
-  var steps = [
-    { l: 'Composer: sendTo() draws the user bubble locally, then opens the stream', a: [{ c: 'user', t: 'Work toward this goal…' }], b: [] },
-    { l: 'Autopilot: engine sends straight to the CLI — nothing touches the page yet', a: [], b: [{ c: 'ghost', t: '(prompt sent server-side — no event, no bubble)' }] },
-    { l: 'Both runs stream the reply; attachToRun appends an assistant bubble on the loop side', a: [{ c: 'asst', t: 'OK' }], b: [{ c: 'asst', t: 'OK' }] },
-    { l: 'Net effect: loop side shows replies appearing with no questions above them', a: [], b: [] }
+  // --- race simulator ---
+  // Each step: text per lane, lane state (hot/dead/ok), and a caption.
+  var BROKEN = [
+    { main: 'api.Start()', pool: '', queue: '', engine: '',
+      hot: ['main'],
+      cap: 'Old order: the API starts serving BEFORE the form has a window handle. The phone is already polling from the moment the port opens.' },
+    { main: 'new MainForm(...) — no handle yet', pool: 'log event fires (phone request)', queue: '', engine: '',
+      hot: ['main', 'pool'],
+      cap: 'A logger/call event fires on a threadpool thread. The form exists but its native handle does not — this is the race window.' },
+    { main: '', pool: 'SafeInvoke: InvokeRequired == false → runs action() INLINE', queue: '', engine: '',
+      hot: ['pool'], bad: ['pool'],
+      cap: 'With no handle, InvokeRequired lies (false). SafeInvoke runs the UI update inline — creating the form’s control handles ON THE THREADPOOL THREAD and installing a WinForms sync context there.' },
+    { main: 'Application.Run → Show → SetParent → SendMessage…', pool: 'owns child handles, never pumps messages', queue: '', engine: '',
+      hot: ['main'], dead: ['main', 'pool'],
+      cap: 'The main thread shows the form. WinForms must SendMessage to the thread that owns the child handles — a threadpool thread that never pumps. The GUI deadlocks in SetParent, forever.' },
+    { main: 'DEADLOCKED', pool: 'phantom WindowsFormsSynchronizationContext installed', queue: 'engine continuation posted here — never runs', engine: 'await Task.Delay(3s) …captured the phantom context',
+      dead: ['main', 'queue', 'engine'], hot: ['engine'],
+      cap: 'The autopilot engine’s first await captured the phantom context. When the delay elapses, its wake-up is POSTED into a message queue nobody pumps. Engine frozen at state 0; CollectorPoller identical.' },
+    { main: 'DEADLOCKED', pool: '', queue: 'dead letters', engine: 'frozen — 76 minutes and counting',
+      dead: ['main', 'queue', 'engine'],
+      cap: 'End state: GUI dead, engines dead — but Kestrel runs on its own threads, so the phone UI works. Armed loops show every gate green and never tick. This is exactly what the debug bundle showed.' }
   ];
-  var timer = null;
-  document.getElementById('playBtn').addEventListener('click', function () {
-    if (timer) { clearTimeout(timer); timer = null; }
-    A.innerHTML = ''; B.innerHTML = ''; label.textContent = '';
-    var i = 0;
-    function next() {
-      if (i >= steps.length) { timer = null; return; }
-      var s = steps[i++];
-      label.textContent = 'Step ' + i + '/' + steps.length + ' — ' + s.l;
-      s.a.forEach(function (m) { addBubble(A, m); });
-      s.b.forEach(function (m) { addBubble(B, m); });
-      timer = setTimeout(next, 2200);
-    }
-    function addBubble(root, m) {
-      var d = document.createElement('div');
-      d.className = 'bubble ' + m.c;
-      d.textContent = m.t;
-      root.appendChild(d);
-      requestAnimationFrame(function () { requestAnimationFrame(function () { d.classList.add('show'); }); });
-    }
-    next();
-  });
+  var FIXED = [
+    { main: 'new MainForm(...); _ = form.Handle', pool: '', queue: '', engine: '',
+      hot: ['main'], ok: ['main'],
+      cap: 'New order: the form’s native handle is forced on the STA main thread FIRST. From this instant, InvokeRequired is truthful from every other thread.' },
+    { main: 'api.Start()', pool: 'log event fires (phone request)', queue: '', engine: '',
+      hot: ['main', 'pool'], ok: ['main'],
+      cap: 'Only now does the API start serving. The same hot-polling phone fires the same early event…' },
+    { main: '', pool: 'SafeInvoke: handle exists → InvokeRequired == true → BeginInvoke', queue: 'UI update queued for the UI thread', engine: '',
+      hot: ['pool', 'queue'], ok: ['pool', 'queue'],
+      cap: 'SafeInvoke marshals correctly: BeginInvoke posts the update to the form’s queue. (And if anything ever fired pre-handle, the new IsHandleCreated guard drops it instead of running inline.)' },
+    { main: 'Application.Run pumps the queue, form shows', pool: '', queue: 'drained ✓', engine: 'await Task.Delay(3s).ConfigureAwait(false)',
+      hot: ['main', 'engine'], ok: ['main', 'queue', 'engine'],
+      cap: 'Application.Run starts pumping; queued updates drain; the GUI shows normally. The engine’s awaits use ConfigureAwait(false) — resumes go to the threadpool regardless of any ambient context.' },
+    { main: 'GUI alive', pool: 'mining runs here, in background (single-flight)', queue: '', engine: 'tick @ 3s: "mining transcripts in background…", keeps ticking',
+      hot: ['engine', 'pool'], ok: ['main', 'pool', 'engine'],
+      cap: 'First tick fires at t+3s. Transcript mining (~1–2 min cold) now runs in a background task — the tick path never blocks, so a loop armed right after startup runs on schedule.' }
+  ];
+
+  var mode = BROKEN, step = 0;
+  var lanes = { main: document.getElementById('lane-main'), pool: document.getElementById('lane-pool'),
+                queue: document.getElementById('lane-queue'), engine: document.getElementById('lane-engine') };
+  var caption = document.getElementById('caption'), captext = document.getElementById('captext'),
+      stepnum = document.getElementById('stepnum');
+  var prev = document.getElementById('prev'), next = document.getElementById('next');
+
+  function render() {
+    var s = mode[step];
+    Object.keys(lanes).forEach(function (k) {
+      var el = lanes[k];
+      el.textContent = s[k] || '';
+      el.className = 'lane' +
+        ((s.hot || []).indexOf(k) >= 0 ? ' hot' : '') +
+        ((s.dead || []).indexOf(k) >= 0 ? ' dead' : '') +
+        ((s.ok || []).indexOf(k) >= 0 ? ' ok' : '');
+    });
+    caption.className = 'caption ' + (mode === BROKEN ? (s.dead ? 'bad' : '') : 'good');
+    stepnum.textContent = 'Step ' + (step + 1) + ' of ' + mode.length +
+      (mode === BROKEN ? ' — broken (old code)' : ' — fixed (new code)');
+    captext.textContent = s.cap;
+    prev.disabled = step === 0;
+    next.disabled = step === mode.length - 1;
+  }
+  prev.addEventListener('click', function () { if (step > 0) { step--; render(); } });
+  next.addEventListener('click', function () { if (step < mode.length - 1) { step++; render(); } });
+  document.getElementById('reset').addEventListener('click', function () { step = 0; render(); });
+  var mb = document.getElementById('mode-bad'), mg = document.getElementById('mode-good');
+  mb.addEventListener('click', function () { mode = BROKEN; step = 0; mb.className = 'on-bad'; mg.className = ''; render(); });
+  mg.addEventListener('click', function () { mode = FIXED; step = 0; mg.className = 'on-good'; mb.className = ''; render(); });
+  render();
 })();
 </script>
 </body>

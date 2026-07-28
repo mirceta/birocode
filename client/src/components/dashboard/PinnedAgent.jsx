@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import Chat from '../../pages/Chat';
 import { apiGet, apiPost } from '../../api/client';
 import { useChatFor } from '../../context/ChatContext';
-import { useRepo } from '../../context/RepoContext';
 import { useT } from '../../i18n/LanguageContext';
 import { useFeature } from '../../context/UiModeContext';
 import GitStatusSummary from '../git/GitStatusSummary';
@@ -18,6 +17,8 @@ import WaitingBadge from './WaitingBadge';
 import WaitingOnField from './WaitingOnField';
 import DependsOnPicker from './DependsOnPicker';
 import DockLoopControl from './DockLoopControl';
+import useLocalAppDiscovery from './useLocalAppDiscovery';
+import DiscoverAppsPanel from './DiscoverAppsPanel';
 
 // One "phone" in the Agent Dashboard's wall of phones (plans/agent-dashboard.md):
 // a single agent's live Chat view, pinned to that agent's repo regardless of
@@ -112,38 +113,17 @@ export default function PinnedAgent({
   // never remounts when opening/closing/switching views.
   const altViewActive = !chatShowing;
 
-  // "Discover local apps" (openspec discover-local-apps + discover-local-apps-resilient):
-  // a read-only agent scan of THIS dock's repo for self-serving local-app exposures,
-  // returning a typed { name, port } list. Discovery is now BACKEND-OWNED: the scan
-  // is a per-repo server job, so a refresh mid-scan no longer cancels it or loses the
-  // result. We drive the UI from server state instead of fire-and-forget local state —
-  // on mount/repo-change we GET .../discover/status to reattach (spinner if running,
-  // result/error if it finished while we were away), and the Discover button hits the
-  // start-or-join endpoint then polls status at the dock cadence until terminal.
-  // Single repo per click (the dock's), scoped by X-Repo-Id. Advanced-mode only.
+  // "Discover local apps" (openspec discover-apps-panel): the dock keeps exactly
+  // TWO affordances — a Discover button (shows the scan's running state) and an
+  // opener for the DiscoverAppsPanel overlay, which hosts everything else
+  // (findings with register / Run / Check / delete, cache state, job state). All
+  // discovery state lives in the shared useLocalAppDiscovery hook so the dock
+  // button's spinner and the panel render from ONE server-driven state (backend-
+  // owned scan, reattach on mount/repo-change, 5s poll — see the hook).
+  // Advanced-mode only.
   const canDiscover = useFeature('localAppDiscovery');
-  const [discovery, setDiscovery] = useState(null); // { status, apps?, error? } | null
-  const discovering = discovery?.status === 'running';
-  const pollRef = useRef(null);
-
-  // Register a discovered app as a real local app, closing the loop with the Local
-  // tab's name+port form (POST /repos/{id}/localapps). A discovered row whose port
-  // already matches a registered app shows "✓ Registered" instead of a button — that
-  // state is derived from the localApps prop, so a freshly-registered row flips on
-  // its own once reloadRepos refreshes the dock's app list (and switcher above).
-  const { reloadRepos } = useRepo();
-  const [registering, setRegistering] = useState(null); // port currently being registered
-  const [registerErr, setRegisterErr] = useState(null); // { port, text } | null
-  const registeredPorts = new Set((localApps || []).map((a) => a.port));
-
-  // Run / Check (openspec discover-local-apps-run-controls): start a discovered app
-  // and confirm it came up. "running" is computed LIVE by the backend per fetch (port
-  // liveness), so Check is simply "re-fetch status". Run posts the app's port — the
-  // server launches the command the SCAN extracted (never a client-supplied string) —
-  // then we re-check after a short grace so the row's running dot reflects reality.
-  const [running, setRunning] = useState(null); // port currently being launched
-  const [runErr, setRunErr] = useState(null); // { port, text } | null
-  const [checking, setChecking] = useState(false);
+  const disc = useLocalAppDiscovery({ repoId: tab.repoId, enabled: canDiscover });
+  const [showDiscoverPanel, setShowDiscoverPanel] = useState(false);
 
   // "Ask for understanding" (openspec add-ask-for-understanding): the second, more
   // advanced agentic dock button. It FORKS this dock's builder conversation into
@@ -165,25 +145,6 @@ export default function PinnedAgent({
   // browser attached, which is the point). The dock only views/flips the flag;
   // same capability gate as the Ask button. Optimistic flip, reverted on error.
   const [autoUnderstanding, setAutoUnderstanding] = useState(false);
-
-  const registerApp = async (app) => {
-    setRegistering(app.port);
-    setRegisterErr(null);
-    try {
-      // The endpoint resolves the repo by URL id, not X-Repo-Id — same call the
-      // Local tab's add-app form makes.
-      await apiPost(`/repos/${tab.repoId}/localapps`, { name: app.name, port: app.port });
-      await reloadRepos(); // refreshes repos → this dock's localApps prop → row flips to registered
-    } catch (err) {
-      let text = err.message;
-      try {
-        text = JSON.parse(err.message).error || text;
-      } catch { /* raw text */ }
-      setRegisterErr({ port: app.port, text });
-    } finally {
-      setRegistering(null);
-    }
-  };
 
   // Inward-sync git actions in the dock's git row (plans/dock-git-actions.md):
   // the SAME merge / pull-main / pull-branch actions as the Git tab, scoped to
@@ -213,125 +174,6 @@ export default function PinnedAgent({
     } finally {
       setGitActing('');
       onRefreshGit?.(); // re-fetch this dock's status (hits origin) like the Git tab
-    }
-  };
-
-  const stopPoll = () => {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-  };
-
-  // Read the server's current job state for this dock's repo. Stops polling once
-  // the job is no longer running (done/error/idle), so a finished scan settles.
-  // `probe` marks an explicit user "Check running" (or the post-Run auto-check) so
-  // the backend emits a check event to the Event Console; the background poll omits
-  // it so the log isn't flooded (openspec agent-dock-event-console).
-  const fetchDiscoverStatus = useCallback(async (probe = false) => {
-    try {
-      const path = probe
-        ? '/local-apps/discover/status?probe=true'
-        : '/local-apps/discover/status';
-      const r = await apiGet(path, { repoId: tab.repoId });
-      setDiscovery(r);
-      if (r.status !== 'running') stopPoll();
-      return r;
-    } catch {
-      stopPoll();
-      return null;
-    }
-  }, [tab.repoId]);
-
-  const startPoll = () => {
-    if (pollRef.current) return;
-    pollRef.current = setInterval(fetchDiscoverStatus, 5000); // dock cadence
-  };
-
-  // Reattach on mount / repo-change: observe a running scan (show spinner + poll)
-  // or pick up a result/error that landed while this dock was away — without
-  // starting a new scan. Idle (no recent job) just renders the bare button.
-  useEffect(() => {
-    if (!canDiscover) return undefined;
-    let alive = true;
-    setDiscovery(null);
-    (async () => {
-      const r = await fetchDiscoverStatus();
-      if (alive && r?.status === 'running') startPoll();
-    })();
-    return () => {
-      alive = false;
-      stopPoll();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canDiscover, tab.repoId, fetchDiscoverStatus]);
-
-  const discover = async () => {
-    setRegisterErr(null);
-    try {
-      // Start-or-join: X-Repo-Id = this dock's repo, so the server scans only that
-      // repo. Returns the current job state immediately; we drive off server state
-      // and poll until terminal, so a refresh mid-scan re-derives it.
-      const r = await apiGet('/local-apps/discover', { repoId: tab.repoId });
-      setDiscovery(r);
-      if (r.status === 'running') startPoll();
-    } catch (err) {
-      let text = err.message;
-      try {
-        text = JSON.parse(err.message).error || text;
-      } catch { /* raw text */ }
-      setDiscovery({ status: 'error', error: text });
-    }
-  };
-
-  // Load the persisted discovery from disk WITHOUT running an agent (openspec change
-  // cache-discovered-local-apps). Same result shape as a live scan so register / Run /
-  // Check rows render identically; a miss returns status:"no-cache" so we can prompt
-  // to run Discover. There's no scan to poll, so stop any poll and just show the snapshot.
-  const loadCache = async () => {
-    setRegisterErr(null);
-    stopPoll();
-    try {
-      const r = await apiGet('/local-apps/cache', { repoId: tab.repoId });
-      setDiscovery(r);
-    } catch (err) {
-      let text = err.message;
-      try {
-        text = JSON.parse(err.message).error || text;
-      } catch { /* raw text */ }
-      setDiscovery({ status: 'error', error: text });
-    }
-  };
-
-  // Re-fetch the discovery status, which recomputes each app's live `running` flag
-  // (the backend reads port liveness per fetch). Reuses the reattach path — does NOT
-  // start a new scan. Defined after fetchDiscoverStatus so the dep is in scope.
-  const checkRunning = useCallback(async () => {
-    setChecking(true);
-    try {
-      await fetchDiscoverStatus(true); // probe → emits a check event to the console
-    } finally {
-      setChecking(false);
-    }
-  }, [fetchDiscoverStatus]);
-
-  // Start a discovered app, then re-check its running state after a short grace so
-  // the row's dot flips on once the server is listening. The server resolves the
-  // command from its own scan result by port — we only send the port.
-  const runApp = async (app) => {
-    setRunning(app.port);
-    setRunErr(null);
-    try {
-      await apiPost('/local-apps/run', { port: app.port }, { repoId: tab.repoId });
-      setTimeout(() => { checkRunning(); }, 1500);
-    } catch (err) {
-      let text = err.message;
-      try {
-        text = JSON.parse(err.message).error || text;
-      } catch { /* raw text */ }
-      setRunErr({ port: app.port, text });
-    } finally {
-      setRunning(null);
     }
   };
 
@@ -586,8 +428,9 @@ export default function PinnedAgent({
           ))}
         </div>
       )}
-      {/* Discover local apps (openspec discover-local-apps): one read-only agent
-          scan of THIS dock's repo → typed { name, port } list. Chat-context
+      {/* Discover local apps (openspec discover-apps-panel): the dock's ONLY two
+          affordances — run a scan, open the panel. Findings, cache state, and all
+          per-row actions live in the DiscoverAppsPanel overlay below. Chat-context
           furniture like the git block; hidden while Files / a local app is open. */}
       {canDiscover && !showFiles && !openApp && !showConsole && (
         <div className="phone__discover">
@@ -595,110 +438,21 @@ export default function PinnedAgent({
             <button
               type="button"
               className="phone__discover-btn"
-              onClick={discover}
-              disabled={discovering}
+              onClick={disc.discover}
+              disabled={disc.discovering}
               title={t('dashboard.discoverHint')}
             >
-              {discovering ? t('dashboard.discovering') : `🛰️ ${t('dashboard.discoverLocalApps')}`}
+              {disc.discovering ? t('dashboard.discovering') : `🛰️ ${t('dashboard.discoverLocalApps')}`}
             </button>
-            {/* Load the saved list from disk without spending an agent scan; Discover
-                stays the way to re-run the agent when the repo gained new apps
-                (openspec change cache-discovered-local-apps). */}
             <button
               type="button"
-              className="phone__discover-btn phone__discover-btn--cache"
-              onClick={loadCache}
-              disabled={discovering}
-              title={t('dashboard.loadCacheHint')}
+              className="phone__discover-btn phone__discover-btn--panel"
+              onClick={() => setShowDiscoverPanel(true)}
+              title={t('dashboard.discoverPanelOpenHint')}
             >
-              {`💾 ${t('dashboard.loadCache')}`}
+              {`📋 ${t('dashboard.discoverPanelOpen')}`}
             </button>
           </div>
-          {discovery?.status === 'no-cache' && (
-            <div className="phone__discover-msg" role="status">{t('dashboard.discoverNoCache')}</div>
-          )}
-          {discovery?.fromCache && discovery?.cachedAt && (
-            <div className="phone__discover-msg phone__discover-msg--cache" role="status">
-              {t('dashboard.discoverCachedAt', { when: new Date(discovery.cachedAt).toLocaleString() })}
-            </div>
-          )}
-          {discovery?.error && (
-            <div className="phone__discover-msg phone__discover-msg--err" role="status">
-              {t('dashboard.discoverError', { error: discovery.error })}
-            </div>
-          )}
-          {discovery?.apps && (discovery.apps.length === 0 ? (
-            <div className="phone__discover-msg" role="status">{t('dashboard.discoverNone')}</div>
-          ) : (
-            <>
-              <ul className="phone__discover-list">
-                {discovery.apps.map((a, i) => {
-                  const isRegistered = registeredPorts.has(a.port);
-                  const busy = registering === a.port;
-                  const isRunning = !!a.running;
-                  const launching = running === a.port;
-                  return (
-                    <li key={i} title={a.evidence || a.folder || ''}>
-                      <span
-                        className={`phone__discover-dot${isRunning ? ' phone__discover-dot--on' : ''}`}
-                        title={isRunning ? t('dashboard.discoverRunning') : t('dashboard.discoverNotRunning')}
-                        aria-label={isRunning ? t('dashboard.discoverRunning') : t('dashboard.discoverNotRunning')}
-                      />
-                      <span className="phone__discover-name">{a.name}</span>
-                      <span className="phone__discover-port">:{a.port}</span>
-                      <span className="phone__discover-actions">
-                        {!isRunning && (
-                          <button
-                            type="button"
-                            className="phone__discover-run"
-                            onClick={() => runApp(a)}
-                            disabled={launching || !a.startCommand}
-                            title={a.startCommand
-                              ? t('dashboard.discoverRunHint', { command: a.startCommand })
-                              : t('dashboard.discoverNoCommand')}
-                          >
-                            {launching ? t('dashboard.discoverRunning') : `▶ ${t('dashboard.discoverRun')}`}
-                          </button>
-                        )}
-                        {isRegistered ? (
-                          <span className="phone__discover-reg" title={t('dashboard.discoverRegistered')}>
-                            ✓ {t('dashboard.discoverRegistered')}
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            className="phone__discover-add"
-                            onClick={() => registerApp(a)}
-                            disabled={busy}
-                          >
-                            {busy ? t('dashboard.discoverRegistering') : t('dashboard.discoverRegister')}
-                          </button>
-                        )}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-              <button
-                type="button"
-                className="phone__discover-check"
-                onClick={checkRunning}
-                disabled={checking}
-              >
-                {checking ? t('dashboard.discoverChecking') : `🔄 ${t('dashboard.discoverCheck')}`}
-              </button>
-              {runErr && (
-                <div className="phone__discover-msg phone__discover-msg--err" role="status">
-                  {t('dashboard.discoverRunError', { error: runErr.text })}
-                </div>
-              )}
-            </>
-          ))}
-          {registerErr && (
-            <div className="phone__discover-msg phone__discover-msg--err" role="status">
-              {t('dashboard.discoverRegisterError', { error: registerErr.text })}
-            </div>
-          )}
         </div>
       )}
       {/* Ask for understanding (openspec add-ask-for-understanding): the second
@@ -850,6 +604,17 @@ export default function PinnedAgent({
           toggleChatMaximized={toggleChatMaximized}
         />
       </div>
+      {/* Discover Local Apps panel (openspec discover-apps-panel): a dock-contained
+          overlay (the .phone is position:relative), so the repo context stays
+          implicit — no routing, no global modal. Renders from the SAME hook state
+          as the Discover button above. */}
+      {canDiscover && showDiscoverPanel && (
+        <DiscoverAppsPanel
+          disc={disc}
+          localApps={localApps}
+          onClose={() => setShowDiscoverPanel(false)}
+        />
+      )}
     </div>
   );
 }

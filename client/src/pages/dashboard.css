@@ -1279,8 +1279,10 @@
   color: #dc2626;
 }
 
-/* Discover local apps (openspec discover-local-apps): button + result list, chat-
-   context furniture below the lanes, styled like the git action row. */
+/* Discover local apps (openspec discover-apps-panel): the dock strip holds just
+   the two buttons (Discover + panel opener); the findings list and its per-row
+   affordances render inside the .phone__discover-panel overlay, reusing these
+   same phone__discover-* row styles. */
 .phone__discover {
   flex: 0 0 auto;
   display: flex;
@@ -1832,30 +1834,94 @@
   color: #16a34a;
 }
 
-/* Re-check running state of all discovered apps (re-fetch status → recompute the
-   live dots). Sits under the list, left-aligned. */
-.phone__discover-check {
-  align-self: flex-start;
-  margin-top: 6px;
-  padding: 1px 8px;
+/* Delete a cached finding (openspec discover-apps-panel): the explicit removal
+   path — under the union cache a rescan never drops a record. */
+.phone__discover-del {
+  flex: 0 0 auto;
+  padding: 1px 6px;
   border: 1px solid var(--color-border);
   border-radius: 999px;
   background: var(--color-surface);
-  color: var(--color-text-soft);
   font-size: 10.5px;
-  font-weight: 600;
   line-height: 1.5;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.phone__discover-del:hover:not(:disabled) {
+  border-color: #dc2626;
+  opacity: 1;
+}
+
+.phone__discover-del:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+/* Per-row last-discovered age (openspec discover-apps-panel): under the union
+   cache rows can come from different scans, so each shows its own staleness. */
+.phone__discover-age {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--color-text-soft);
+  opacity: 0.8;
+}
+
+/* The Discover Local Apps panel (openspec discover-apps-panel): a dock-contained
+   overlay — .phone is position:relative + overflow:hidden, so inset:0 covers
+   exactly this dock. Hosts the findings list + cache/job state that used to sit
+   inline in the dock strip. */
+.phone__discover-panel {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border-radius: var(--radius);
+}
+
+.phone__discover-panel-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.phone__discover-panel-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.phone__discover-panel-close {
+  margin-left: auto;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-surface);
+  color: var(--color-text-soft);
+  font-size: 14px;
+  line-height: 1;
   cursor: pointer;
 }
 
-.phone__discover-check:hover:not(:disabled) {
+.phone__discover-panel-close:hover {
   color: var(--color-text);
   border-color: var(--color-accent);
 }
 
-.phone__discover-check:disabled {
-  cursor: default;
-  opacity: 0.45;
+.phone__discover-panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
 }
 
 /* Per-dock git refresh — re-fetches this agent's git status (hits origin). */
