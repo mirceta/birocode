@@ -386,6 +386,32 @@ export default function Dashboard({ onClose }) {
   // Throughput monitor joins the same way (openspec traffic-monitor): a
   // read-only citizen showing what the harness is serving right now.
   const trafficOn = useFeature('trafficPanel');
+  // Dock loop badges + controls (openspec adopt-autopilot-loops): one dashboard
+  // poll of the READ-ONLY, non-operator-gated /autopilot/loops projection feeds
+  // every card, so a loop's terminal state (done / escalated + why) stays
+  // visible on the wall even after the host closes the gate.
+  const dockLoopsOn = useFeature('dockLoopControls');
+  const [loopInfo, setLoopInfo] = useState(null); // { loops: [], recipes: [] }
+  const loadLoops = useCallback(async () => {
+    try {
+      setLoopInfo(await apiGet('/autopilot/loops'));
+    } catch {
+      /* transient — keep the last good states */
+    }
+  }, []);
+  useEffect(() => {
+    if (!dockLoopsOn) return undefined;
+    loadLoops();
+    const timer = setInterval(loadLoops, POLL_MS);
+    return () => clearInterval(timer);
+  }, [dockLoopsOn, loadLoops]);
+  // Revision 2 (openspec unify-loop-types): ONE unified record per agent — a
+  // suggestion instance is a loop like the others (kind/mode/status all on it),
+  // so there is no parallel suggestion-arming lookup anymore.
+  const loopsByRepo = useMemo(
+    () => Object.fromEntries((loopInfo?.loops ?? []).map((l) => [l.repoId, l])),
+    [loopInfo],
+  );
   // Server-decided "high throughput" flag, lifted from the panel's poll so the
   // rail chip can carry a warning dot. Only live while the panel is summoned —
   // a hidden panel is unmounted and never fetches (dashboard-focus-docks), so
@@ -706,6 +732,9 @@ export default function Dashboard({ onClose }) {
             dependsOn={tab.dependsOn}
             dependsCandidates={candidatesFor(tab)}
             onSetDependsOn={setDependsOn}
+            loop={loopsByRepo[tab.repoId]}
+            loopRecipes={loopInfo?.recipes ?? []}
+            onLoopChanged={loadLoops}
           />
         </Wrapper>
       );

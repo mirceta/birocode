@@ -68,12 +68,24 @@ static class Program
         // elevated authority) and the web API share one instance (openspec add-desktop-access-code).
         var auth = new Services.Auth.AuthService(config, logger);
 
-        // Start the embedded Kestrel server on a background thread.
         var api = new EmbeddedApi(config, logger, callLog, repositories, ipAllowlist, autopilotGate, deviceTokens, audit, auth);
+
+        // Create the monitoring GUI and force its native handle on this STA thread
+        // BEFORE the API starts serving (openspec fix-startup-handle-race): the form
+        // subscribes to Logger/CallLog events in its constructor, and until its handle
+        // exists InvokeRequired is false — so a background event racing in from a hot
+        // client would create control handles on a threadpool thread, deadlocking the
+        // GUI in SetParent and strangling every BackgroundService via the phantom
+        // sync context. With the handle born here, cross-thread marshalling is
+        // truthful from the first request onward (BeginInvoke posts queue until
+        // Application.Run pumps).
+        var form = new MainForm(config, logger, api, callLog, repositories, ipAllowlist, autopilotGate, deviceTokens, audit, auth);
+        _ = form.Handle;
+
+        // Start the embedded Kestrel server on a background thread.
         api.Start();
 
         // Launch the monitoring GUI (blocks on the WinForms message loop).
-        var form = new MainForm(config, logger, api, callLog, repositories, ipAllowlist, autopilotGate, deviceTokens, audit, auth);
         Application.Run(form);
 
         // Shut the server down cleanly when the GUI closes.

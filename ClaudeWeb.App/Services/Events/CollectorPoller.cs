@@ -29,14 +29,16 @@ public class CollectorPoller : BackgroundService
         {
             try
             {
-                await _collector.PollActiveSourcesAsync(stoppingToken);
+                // ConfigureAwait(false): never let an ambient UI synchronization
+                // context capture this loop (openspec fix-startup-handle-race).
+                await _collector.PollActiveSourcesAsync(stoppingToken).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 _logger.Error($"[COLLECTOR] poll pass failed: {ex.Message}");
             }
 
-            try { await Task.Delay(Interval, stoppingToken); }
+            try { await Task.Delay(Interval, stoppingToken).ConfigureAwait(false); }
             catch (OperationCanceledException) { break; }
         }
     }

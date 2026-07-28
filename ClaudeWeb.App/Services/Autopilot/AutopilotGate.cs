@@ -46,6 +46,10 @@ public sealed class AutopilotGate
         get { lock (_gate) return _enabled; }
     }
 
+    /// <summary>The on-disk gate path, for the debug bundle (openspec:
+    /// add-loop-debug-handoff). Read-only disclosure; flipping stays host-only.</summary>
+    public string FilePath => _path;
+
     /// <summary>HOST-ONLY. Turns the autopilot endpoints + engine on.</summary>
     public void Enable() => Set(true);
 

@@ -94,6 +94,11 @@ root, relative URLs) plus the `/api/localview/<repo>/app/<appId>/` proxy path. I
 the homepage's "Local exposure, done right" topic points other agents at; same rule —
 change the convention **there**, not here or in the paste.
 
+An agent being **driven by an autopilot loop** follows its own agent-agnostic contract,
+`docs/loop-driven-agent-convention.md`: end with the sentinel (`LOOP_DONE`) only when the
+whole job is genuinely done, or `NEEDS_HUMAN: <question>` when blocked on the human —
+same rule, change the convention **there**.
+
 ## Build / run the harness normally
 
 ```

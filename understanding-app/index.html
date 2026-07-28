@@ -3,375 +3,294 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Understanding — Discover Apps Panel + JSON Import</title>
+<title>Understanding: the startup handle race</title>
 <style>
   :root {
-    --bg: #0f1218;
-    --surface: #171c26;
-    --surface2: #1e2532;
-    --border: #2c3547;
-    --text: #e6ebf4;
-    --soft: #93a0b5;
-    --accent: #6ea8fe;
-    --green: #3fb950;
-    --green-bg: #12261a;
-    --amber: #d29922;
-    --amber-bg: #2a2113;
-    --grey: #8b949e;
-    --grey-bg: #21262d;
-    --red: #f85149;
-    --red-bg: #2a1416;
-    --violet: #a371f7;
-    --violet-bg: #1c1630;
-    --mono: 'Consolas', 'Cascadia Code', monospace;
-    --radius: 12px;
+    --bg: #0f1218; --panel: #171c26; --panel2: #1d2433; --line: #2b3446;
+    --text: #d8dee9; --dim: #8b96a8; --accent: #5da9f6; --bad: #e06c75;
+    --good: #7cc76f; --warn: #e5c07b; --mono: 'Consolas', 'Cascadia Code', monospace;
   }
   * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    background: radial-gradient(1200px 700px at 70% -10%, #182234 0%, var(--bg) 60%);
-    color: var(--text);
-    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-    line-height: 1.55;
-    padding: 28px 20px 80px;
-  }
-  .wrap { max-width: 960px; margin: 0 auto; }
-  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.02em; }
-  h2 { font-size: 18px; margin: 26px 0 10px; }
-  .sub { color: var(--soft); margin: 0 0 22px; font-size: 15px; }
-  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
-  .tab {
-    padding: 7px 14px; border-radius: 999px; border: 1px solid var(--border);
-    background: var(--surface); color: var(--soft); font-size: 13.5px; font-weight: 600;
-    cursor: pointer;
-  }
-  .tab.on { background: var(--accent); border-color: var(--accent); color: #0b1524; }
-  .view { display: none; }
-  .view.on { display: block; }
-  .card {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 16px 18px; margin-bottom: 14px;
-  }
-  .card p { margin: 8px 0; font-size: 14.5px; }
-  .soft { color: var(--soft); }
-  code, .mono { font-family: var(--mono); font-size: 13px; }
-  code { background: var(--surface2); padding: 1px 6px; border-radius: 6px; }
-  .pill {
-    display: inline-block; padding: 1px 9px; border-radius: 999px;
-    font-size: 11.5px; font-weight: 700;
-  }
-  .pill.green { color: var(--green); background: var(--green-bg); }
-  .pill.amber { color: var(--amber); background: var(--amber-bg); }
-  .pill.grey  { color: var(--grey); background: var(--grey-bg); }
-  .pill.red   { color: var(--red); background: var(--red-bg); }
-  .pill.violet{ color: var(--violet); background: var(--violet-bg); }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.55 'Segoe UI', system-ui, sans-serif; }
+  header { padding: 18px 22px 10px; border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0 0 4px; font-size: 20px; }
+  header p { margin: 0; color: var(--dim); font-size: 13px; }
+  nav { display: flex; gap: 6px; padding: 10px 22px; border-bottom: 1px solid var(--line);
+        flex-wrap: wrap; }
+  nav button { background: var(--panel); color: var(--dim); border: 1px solid var(--line);
+        border-radius: 8px; padding: 7px 14px; cursor: pointer; font-size: 14px; }
+  nav button.active { background: var(--panel2); color: var(--text); border-color: var(--accent); }
+  main { padding: 18px 22px 40px; max-width: 1060px; margin: 0 auto; }
+  section { display: none; }
+  section.active { display: block; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+          padding: 14px 16px; margin: 12px 0; }
+  .card h3 { margin: 0 0 6px; font-size: 15px; }
+  code, pre { font-family: var(--mono); font-size: 13px; }
+  code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
+        padding: 10px 12px; overflow-x: auto; }
+  .dim { color: var(--dim); }
+  .bad { color: var(--bad); } .good { color: var(--good); } .warn { color: var(--warn); }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 800px) { .cols { grid-template-columns: 1fr; } }
 
-  /* mock dock + panel */
-  .mockrow { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
-  .phone-mock {
-    width: 300px; border: 1px solid var(--border); border-radius: 14px;
-    background: var(--surface2); overflow: hidden; position: relative; min-height: 330px;
-    flex: 0 0 auto;
-  }
-  .pm-bar { padding: 8px 12px; background: #232c3d; font-size: 12.5px; font-weight: 700; display:flex; gap:8px; align-items:center; }
-  .pm-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
-  .pm-lanes { display: flex; gap: 4px; padding: 6px 10px; border-bottom: 1px solid var(--border); }
-  .pm-lane { font-size: 11px; padding: 2px 9px; border-radius: 999px; background: var(--surface); color: var(--soft); }
-  .pm-lane.on { color: var(--text); background: #2a3346; }
-  .pm-strip { padding: 8px 10px; border-bottom: 1px solid var(--border); display: flex; gap: 6px; }
-  .pm-btn {
-    font-size: 11.5px; font-weight: 600; padding: 3px 10px; border-radius: 999px;
-    border: 1px solid var(--border); background: var(--surface); color: var(--soft); cursor: pointer;
-  }
-  .pm-btn:hover { border-color: var(--accent); color: var(--text); }
-  .pm-chat { padding: 14px 12px; color: var(--soft); font-size: 12.5px; }
-  .pm-panel {
-    position: absolute; inset: 0; background: var(--surface2);
-    display: flex; flex-direction: column; border-radius: 14px;
-    animation: fadein .18s ease;
-  }
-  @keyframes fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; } }
-  .pm-panel-head { display: flex; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--border); font-size: 12.5px; font-weight: 700; }
-  .pm-close { margin-left: auto; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border); background: none; color: var(--soft); cursor: pointer; }
-  .pm-body { padding: 10px 12px; display: flex; flex-direction: column; gap: 7px; overflow-y: auto; }
-  .pm-row { display: flex; align-items: center; gap: 6px; font-size: 12px; }
-  .pm-row .name { font-weight: 700; }
-  .pm-row .port { font-family: var(--mono); color: var(--accent); }
-  .pm-row .age { font-size: 10px; color: var(--soft); }
-  .pm-row .acts { margin-left: auto; display: flex; gap: 5px; }
-  .pm-act { font-size: 10px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--soft); cursor: pointer; }
-  .pm-act.run { color: var(--green); border-color: #2a4a33; }
-  .pm-act.del:hover { border-color: var(--red); color: var(--red); }
-  .pm-act[disabled] { opacity: .4; cursor: default; }
-  .pm-msg { font-size: 11.5px; color: var(--soft); }
-  .pm-msg.cachey { color: var(--accent); }
-  .rowdot { width: 7px; height: 7px; border-radius: 50%; background: var(--border); flex: 0 0 auto; }
-  .rowdot.on { background: var(--green); box-shadow: 0 0 0 2px rgba(63,185,80,.25); }
+  /* --- simulator --- */
+  .sim-controls { display: flex; gap: 8px; align-items: center; margin: 12px 0; flex-wrap: wrap; }
+  .sim-controls button { background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+        border-radius: 8px; padding: 6px 14px; cursor: pointer; font-size: 14px; }
+  .sim-controls button:disabled { opacity: .4; cursor: default; }
+  .mode-toggle { margin-left: auto; display: flex; gap: 0; }
+  .mode-toggle button { border-radius: 0; }
+  .mode-toggle button:first-child { border-radius: 8px 0 0 8px; }
+  .mode-toggle button:last-child { border-radius: 0 8px 8px 0; }
+  .mode-toggle button.on-bad { background: #3a2026; border-color: var(--bad); color: var(--bad); }
+  .mode-toggle button.on-good { background: #22301f; border-color: var(--good); color: var(--good); }
+  .lanes { display: grid; grid-template-columns: 130px 1fr; gap: 8px; }
+  .lane-label { color: var(--dim); font-size: 12px; padding-top: 10px; text-align: right;
+        padding-right: 6px; }
+  .lane { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+        min-height: 46px; padding: 8px 10px; font-family: var(--mono); font-size: 12.5px;
+        color: var(--dim); transition: border-color .2s, background .2s; }
+  .lane.hot { border-color: var(--accent); background: var(--panel2); color: var(--text); }
+  .lane.dead { border-color: var(--bad); background: #2a1a1e; color: var(--bad); }
+  .lane.ok { border-color: var(--good); }
+  .caption { min-height: 84px; margin-top: 12px; padding: 12px 14px; background: var(--panel2);
+        border-left: 3px solid var(--accent); border-radius: 6px; font-size: 14px; }
+  .caption.bad { border-left-color: var(--bad); }
+  .caption.good { border-left-color: var(--good); }
+  .stepnum { color: var(--dim); font-size: 12px; margin-bottom: 4px; }
 
-  /* simulator */
-  .sim-cols { display: flex; gap: 14px; flex-wrap: wrap; }
-  .sim-col { flex: 1 1 260px; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
-  .sim-col h3 { margin: 0 0 8px; font-size: 13.5px; }
-  .sim-app {
-    display: flex; align-items: center; gap: 8px; font-size: 12.5px;
-    padding: 5px 8px; border-radius: 8px; margin-bottom: 5px; background: var(--surface);
-    border: 1px solid var(--border);
-  }
-  .sim-app.new { border-color: #2a4a33; }
-  .sim-app .port { font-family: var(--mono); color: var(--accent); }
-  .sim-app .when { margin-left: auto; font-size: 10.5px; color: var(--soft); }
-  .sim-app .x { border: none; background: none; color: var(--red); cursor: pointer; font-size: 12px; padding: 0 2px; }
-  .sim-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
-  .sim-btn {
-    padding: 6px 14px; border-radius: 999px; border: 1px solid var(--border);
-    background: var(--surface); color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer;
-  }
-  .sim-btn:hover { border-color: var(--accent); }
-  .sim-log { font-family: var(--mono); font-size: 11.5px; color: var(--soft); background: #10141c; border-radius: 8px; padding: 10px 12px; max-height: 150px; overflow-y: auto; }
-  .sim-log .ln { margin: 2px 0; }
-  .flow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; margin: 10px 0; }
-  .flow .node { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; }
-  .flow .arr { color: var(--soft); }
-  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
-  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
-  th { color: var(--soft); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); }
+  .fix-tag { display: inline-block; font-size: 11px; font-family: var(--mono); background: var(--panel2);
+        border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; margin-right: 6px; }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>Discover Apps Panel + JSON Import</h1>
-  <p class="sub">openspec changes <code>discover-apps-panel</code> + <code>import-discovery-findings</code> — the dock slims to two buttons, a panel overlay hosts the findings, the cache becomes a union with explicit delete, and now the panel can <b>import a JSON array of findings another agent produced</b>.</p>
+<header>
+  <h1>The startup handle race — why loops "silently never started"</h1>
+  <p>openspec change <code>fix-startup-handle-race</code> · diagnosed 2026-07-28 on live with stack + heap dumps</p>
+</header>
+<nav id="tabs">
+  <button data-tab="symptom" class="active">1 · Symptom</button>
+  <button data-tab="race">2 · The race, step by step</button>
+  <button data-tab="fixes">3 · The fixes</button>
+  <button data-tab="verify">4 · Verification</button>
+</nav>
+<main>
 
-  <div class="tabs">
-    <button class="tab on" data-v="what">What changed</button>
-    <button class="tab" data-v="panel">Dock &amp; panel (live mock)</button>
-    <button class="tab" data-v="union">Union cache simulator</button>
-    <button class="tab" data-v="where">Where things live</button>
+<section id="symptom" class="active">
+  <div class="card">
+    <h3>What the operator saw</h3>
+    <p>A goal loop armed from the phone, every gate green — and <b>zero iterations, forever</b>.
+    No <code>[LOOP]</code> log lines, no errors, <code>engine.state</code> null. Meanwhile the web UI
+    worked perfectly, which is exactly what made it confusing: the API answered, so the harness
+    <i>looked</i> healthy.</p>
   </div>
-
-  <!-- ============ WHAT CHANGED ============ -->
-  <div class="view on" id="v-what">
+  <div class="cols">
     <div class="card">
-      <h2 style="margin-top:0">The two problems</h2>
-      <p><span class="pill red">UI sprawl</span> The dock's discover section had grown into a full findings list with per-row Run / Check / Register, a Load-cache button and status messages — eating the phone on repos with many apps.</p>
-      <p><span class="pill red">Data loss</span> <code>LocalAppDiscoveryCache.Save</code> <b>overwrote</b> the cache on every successful scan. The discovery agent routinely finds only a subset per run, so a later partial scan silently erased apps an earlier scan had found.</p>
+      <h3 class="bad">Actually broken</h3>
+      <ul>
+        <li>Desktop GUI: frozen (deadlocked in <code>SetParent</code>)</li>
+        <li>Autopilot engine: parked on its first 3-second delay — <b>for 76 minutes</b></li>
+        <li>Collector poller: frozen the same way</li>
+      </ul>
     </div>
     <div class="card">
-      <h2 style="margin-top:0">The four fixes</h2>
-      <table>
-        <tr><th>Fix</th><th>How</th></tr>
-        <tr><td><span class="pill green">Two-button dock</span></td><td>The strip keeps only <b>🛰️ Discover</b> (runs the scan, shows the spinner) and <b>📋 Local apps</b> (opens the panel). Nothing else renders inline.</td></tr>
-        <tr><td><span class="pill green">Panel overlay</span></td><td><code>DiscoverAppsPanel.jsx</code> renders <i>inside</i> the dock (the <code>.phone</code> is <code>position:relative</code>), hosting findings + all per-row actions + cache/job state. Same hook state as the dock buttons — one poll, one snapshot.</td></tr>
-        <tr><td><span class="pill green">Union cache</span></td><td><code>Save</code> merges <b>by port</b>: new scan wins its ports, cached ports the scan missed are kept. Each finding carries its own <code>discoveredAt</code>; the merged set becomes the in-memory job result too, so Run-by-port works for every cached app.</td></tr>
-        <tr><td><span class="pill green">Explicit delete</span></td><td><code>DELETE /api/local-apps/cache/{port}</code> — the <b>only</b> removal path now (a rescan never drops records). Edits the disk cache <i>and</i> the in-memory job; deleting the last record leaves cached-<i>empty</i>, distinct from no-cache.</td></tr>
-        <tr><td><span class="pill violet">JSON import</span></td><td><b>NEW</b> — <code>POST /api/local-apps/cache/import</code>. Paste a bare <code>[ … ]</code> array of findings (or the <code>{"apps":[…]}</code> report shape, or pick a <code>.json</code> file) in the panel's 📥 Import area. Validation is <b>all-or-nothing</b> via the same <code>LocalAppExposureReport.Parse</code> the scan agent goes through — one bad finding rejects the whole payload, cache untouched. A valid payload runs the <i>same union-by-port merge as a finishing scan</i>, stamped with the import time; imported rows are immediately runnable/registerable/deletable. A running scan is never clobbered — its completion merge unions on top of the just-imported cache.</td></tr>
-      </table>
-    </div>
-    <div class="card">
-      <h2 style="margin-top:0">Why import?</h2>
-      <p class="soft">The harness's own scan is not the only source of findings: the operator sometimes prompts <b>another agent</b> to hunt for more apps, and it answers with a JSON array in the same shape (<code>name</code>, <code>port</code>, <code>folder</code>, <code>evidence</code>, <code>startCommand</code>). Until now there was no way to get those into the cache — import closes that loop.</p>
-    </div>
-    <div class="card">
-      <p><span class="pill amber">BREAKING semantics</span> Before: an app that disappeared from the repo vanished from the cache on the next scan. Now it <b>persists until you delete it</b> — that implicit drop was exactly the data loss being fixed. The per-row age makes stale records visible; the 🗑 removes them.</p>
-    </div>
-  </div>
-
-  <!-- ============ DOCK & PANEL MOCK ============ -->
-  <div class="view" id="v-panel">
-    <div class="card">
-      <p style="margin-top:0">A working miniature of the real dock. Click <b>📋 Local apps</b> to open the panel; delete rows with 🗑 (state resets on reload).</p>
-      <div class="mockrow">
-        <div class="phone-mock" id="mock">
-          <div class="pm-bar"><span class="pm-dot"></span> Claude Web (this app) <span style="margin-left:auto;color:var(--soft);font-weight:400">idle</span></div>
-          <div class="pm-lanes"><span class="pm-lane on">Builder</span><span class="pm-lane">Ask</span><span class="pm-lane">Files</span><span class="pm-lane">Console</span></div>
-          <div class="pm-strip">
-            <button class="pm-btn" id="mock-discover">🛰️ Discover local apps</button>
-            <button class="pm-btn" id="mock-open">📋 Local apps</button>
-          </div>
-          <div class="pm-chat">— embedded chat —<br><span style="opacity:.5">(the findings list no longer lives here)</span></div>
-        </div>
-        <div style="flex:1 1 280px; font-size:13.5px" class="soft">
-          <p><b style="color:var(--text)">What the mock shows</b></p>
-          <p>• The strip holds <i>exactly two</i> buttons — everything else moved into the overlay.</p>
-          <p>• The panel opens over the whole dock; repo context stays implicit (it's <i>this</i> dock's repo).</p>
-          <p>• Opening is <b>passive</b>: no agent run, no repo mutation. With no recent job it auto-loads the cache from disk.</p>
-          <p>• Rows: live-port dot · name · <span class="mono" style="color:var(--accent)">:port</span> · per-row age · Run / Register / 🗑.</p>
-          <p>• Discover clicked mid-scan? The panel shows the running state live — same hook, same poll.</p>
-        </div>
-      </div>
+      <h3 class="good">Still healthy (the mask)</h3>
+      <ul>
+        <li>Kestrel API on :5099 — the phone UI worked</li>
+        <li>Chat runs, file browsing, everything request-driven</li>
+      </ul>
     </div>
   </div>
+  <div class="card">
+    <h3>Why it comes and goes</h3>
+    <p>It is a startup <b>race</b>: most restarts win it and everything works. A deploy restart with a
+    phone actively polling the instant Kestrel comes up can lose it. That is why earlier loop tests
+    passed and the 10:19 deploy produced a broken process — same code, different coin flip.</p>
+  </div>
+</section>
 
-  <!-- ============ UNION SIMULATOR ============ -->
-  <div class="view" id="v-union">
-    <div class="card">
-      <p style="margin-top:0">The exact merge <code>LocalAppDiscoveryCache.Save</code> performs. Run partial scans and deletes; watch the cache accumulate instead of losing records.</p>
-      <div class="sim-actions">
-        <button class="sim-btn" id="sim-scan1">Scan finds A + B</button>
-        <button class="sim-btn" id="sim-scan2">Partial rescan finds only B′</button>
-        <button class="sim-btn" id="sim-scan3">Scan finds C</button>
-        <button class="sim-btn" id="sim-import">📥 Import JSON (B″ + D)</button>
-        <button class="sim-btn" id="sim-import-bad">📥 Import invalid JSON</button>
-        <button class="sim-btn" id="sim-reset">Reset</button>
-      </div>
-      <div class="sim-cols">
-        <div class="sim-col"><h3>Latest scan result</h3><div id="sim-scan"><div class="pm-msg">— no scan yet —</div></div></div>
-        <div class="sim-col"><h3>On-disk cache (union by port)</h3><div id="sim-cache"><div class="pm-msg">— empty —</div></div></div>
-      </div>
-      <h2>Merge log</h2>
-      <div class="sim-log" id="sim-log"><div class="ln">ready — the old Save() replaced the whole file each time</div></div>
+<section id="race">
+  <div class="sim-controls">
+    <button id="prev">◀ Back</button>
+    <button id="next">Next ▶</button>
+    <button id="reset">Reset</button>
+    <div class="mode-toggle">
+      <button id="mode-bad" class="on-bad">Broken (old code)</button>
+      <button id="mode-good">Fixed (new code)</button>
     </div>
   </div>
-
-  <!-- ============ WHERE THINGS LIVE ============ -->
-  <div class="view" id="v-where">
-    <div class="card">
-      <h2 style="margin-top:0">Data flow</h2>
-      <div class="flow">
-        <span class="node">agent scan</span><span class="arr">→</span>
-        <span class="node"><code>Save()</code> union-merge</span><span class="arr">→</span>
-        <span class="node">disk: <code>data/local-app-cache/&lt;repoId&gt;.json</code></span><span class="arr">and</span>
-        <span class="node">job result = <b>merged</b> set</span><span class="arr">→</span>
-        <span class="node">status / Run / Check see the union</span>
-      </div>
-      <div class="flow">
-        <span class="node">🗑 in panel</span><span class="arr">→</span>
-        <span class="node"><code>DELETE /api/local-apps/cache/{port}</code></span><span class="arr">→</span>
-        <span class="node">edits cache file + in-memory job</span><span class="arr">→</span>
-        <span class="node">returns updated snapshot (panel re-renders, no refetch)</span>
-      </div>
-      <div class="flow">
-        <span class="node">📥 paste / .json file</span><span class="arr">→</span>
-        <span class="node"><code>POST /api/local-apps/cache/import</code> (raw body)</span><span class="arr">→</span>
-        <span class="node"><code>ParseImport</code>: wrap bare array, validate all-or-nothing</span><span class="arr">→</span>
-        <span class="node"><code>Save()</code> union-merge (import time = <code>discoveredAt</code>)</span><span class="arr">→</span>
-        <span class="node">seed job (unless a scan runs) + return snapshot</span>
-      </div>
-    </div>
-    <div class="card">
-      <table>
-        <tr><th>Piece</th><th>File</th><th>Note</th></tr>
-        <tr><td>Union merge + Delete</td><td class="mono">ClaudeWeb.App/Services/StructuredAsk/LocalAppDiscoveryCache.cs</td><td><code>DiscoveredAtByPort</code> is a sidecar map, <i>not</i> a field on the finding — the report model is reflected into the agent's prompt skeleton and must stay the agent's exact output contract.</td></tr>
-        <tr><td>Job holds the union</td><td class="mono">…/LocalAppDiscoveryJobs.cs</td><td><code>MarkDone(merged)</code>; <code>RemoveFromResult</code> swaps in a filtered copy after a delete.</td></tr>
-        <tr><td>Endpoints</td><td class="mono">ClaudeWeb.App/Controllers/LocalAppsController.cs</td><td><code>GET /cache</code> and <code>DELETE /cache/{port}</code> share one snapshot shape: apps + live <code>running</code> + per-row <code>discoveredAt</code> + <code>cachedAt</code>.</td></tr>
-        <tr><td>Shared hook</td><td class="mono">client/src/components/dashboard/useLocalAppDiscovery.js</td><td>One state for dock buttons + panel: reattach on mount/repo-change, 5s poll, discover/loadCache/check/run/register/deleteCached.</td></tr>
-        <tr><td>Panel</td><td class="mono">client/src/components/dashboard/DiscoverAppsPanel.jsx</td><td>Overlay in the dock; auto-loads cache when idle; Advanced-mode (<code>localAppDiscovery</code> capability).</td></tr>
-        <tr><td>Import normalization</td><td class="mono">…/LocalAppExposureReport.cs</td><td><code>ParseImport</code>: trims, wraps a bare <code>[…]</code> as <code>{"apps":…}</code>, then the one true <code>Parse</code> validator — so imports and agent scans share the same all-or-nothing gate.</td></tr>
-        <tr><td>Import endpoint</td><td class="mono">ClaudeWeb.App/Controllers/LocalAppsController.cs</td><td><code>POST /cache/import</code> reads the raw body (≤1&nbsp;MB), merges via <code>Save</code>, seeds the job (never clobbering a running scan), emits a Cache event, returns the snapshot.</td></tr>
-        <tr><td>Import UI</td><td class="mono">client/src/components/dashboard/DiscoverAppsPanel.jsx</td><td>📥 Import toggles a paste textarea + <code>.json</code> picker (FileReader fills the same box); submit posts the text AS-IS via <code>apiPostText</code> — the server is the single validator.</td></tr>
-        <tr><td>Tests</td><td class="mono">tests/ClaudeWeb.Tests/LocalAppDiscoveryCacheTests.cs + LocalAppImportTests.cs</td><td>Union keeps missed ports · port refresh not duplicate · pre-union file loads · delete one / last / no-match · import shapes, rejection, merge, duplicate-port, unchanged-file-on-reject.</td></tr>
-      </table>
-      <p class="soft" style="margin-top:12px">Old cache files (no per-finding times) still load — every finding defaults to the file's <code>CachedAt</code>. No migration step.</p>
-    </div>
+  <div class="lanes">
+    <div class="lane-label">Main (UI) thread</div>  <div class="lane" id="lane-main"></div>
+    <div class="lane-label">Threadpool thread</div> <div class="lane" id="lane-pool"></div>
+    <div class="lane-label">Form message queue</div><div class="lane" id="lane-queue"></div>
+    <div class="lane-label">Autopilot engine</div>  <div class="lane" id="lane-engine"></div>
   </div>
-</div>
+  <div class="caption" id="caption"><div class="stepnum" id="stepnum"></div><div id="captext"></div></div>
+</section>
 
+<section id="fixes">
+  <table>
+    <tr><th>Fix</th><th>Where</th><th>What it does</th></tr>
+    <tr>
+      <td><span class="fix-tag">root</span>Handle before API</td>
+      <td><code>Program.cs</code></td>
+      <td>Construct <code>MainForm</code> and force its native handle on the STA main thread
+          <b>before</b> <code>api.Start()</code>. Once the handle exists, <code>InvokeRequired</code>
+          is truthful from every thread — no background event can ever be first to create a handle.</td>
+    </tr>
+    <tr>
+      <td><span class="fix-tag">guard</span>SafeInvoke handle check</td>
+      <td><code>MainForm.cs</code></td>
+      <td>Refuse to touch controls while <code>!IsHandleCreated</code> (drop the monitoring update)
+          instead of running inline on the calling thread. Defense in depth.</td>
+    </tr>
+    <tr>
+      <td><span class="fix-tag">immunity</span><code>ConfigureAwait(false)</code></td>
+      <td><code>AutopilotService.cs</code><br><code>CollectorPoller.cs</code></td>
+      <td>Hosted services resume on the threadpool no matter what synchronization context is
+          ambient — a phantom UI context can never strangle them again.</td>
+    </tr>
+    <tr>
+      <td><span class="fix-tag">liveness</span>Background mining</td>
+      <td><code>AutopilotService.cs</code></td>
+      <td>Transcript mining (~50 s warm / ~2 min cold) moves off the tick path into a single-flight
+          background task. A loop armed right after startup ticks on schedule; until the first pass
+          lands, the label space is the custom prompts alone (logged).</td>
+    </tr>
+    <tr>
+      <td><span class="fix-tag">cleanup</span>Async pipe read</td>
+      <td><code>CliRunnerService.cs</code></td>
+      <td>Read CLI stdout with <code>ReadLineAsync</code> until null instead of gating on the
+          synchronous <code>EndOfStream</code> property, which parked a pool thread per active run.</td>
+    </tr>
+  </table>
+  <div class="card">
+    <h3>Startup order, before → after</h3>
+    <pre><span class="bad">// before                              </span><span class="good">// after</span>
+api.Start();                            var form = new MainForm(...);
+var form = new MainForm(...);           _ = form.Handle;   <span class="good">// born on UI thread</span>
+Application.Run(form);                  api.Start();
+                                        Application.Run(form);</pre>
+  </div>
+</section>
+
+<section id="verify">
+  <div class="card">
+    <h3>What was proven, and how</h3>
+    <ul>
+      <li><b>Diagnosis</b> — <code>dotnet-stack</code> + <code>dotnet-dump dumpasync</code> on the live
+        process: main thread in <code>SetParent</code>, engine state machine at
+        <code>&lt;&gt;1__state = 0</code> (first delay) 76 minutes after start, continuation posted to a
+        queue nobody pumps.</li>
+      <li><b>Fix verified on an isolated harness (:5218)</b> — at t+3s the engine's first tick ran and
+        logged <code>mining transcripts in background...</code>; mining finished 64 s later
+        (<code>378 routine prompts from 257 sessions</code>) while ticks continued; collector poller
+        started; API health 200; GUI responsive.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>The startup log, healthy shape</h3>
+    <pre>[10:59:26] [SERVER] Kestrel running on http://0.0.0.0:5218
+[10:59:26] [COLLECTOR] poller started
+[10:59:29] [AUTOPILOT] mining transcripts in background...   <span class="good">← first tick, 3 s in</span>
+[11:00:33] [AUTOPILOT] mining done in 64s (378 routine prompts from 257 sessions)</pre>
+    <p class="dim">If a future process ever shows the server lines but never the
+    <code>[AUTOPILOT]</code>/<code>[COLLECTOR]</code> lines, the engines are not running — that is the
+    old signature.</p>
+  </div>
+</section>
+
+</main>
 <script>
-// tabs
-document.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => {
-  document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('on', x === b));
-  document.querySelectorAll('.view').forEach((v) => v.classList.toggle('on', v.id === 'v-' + b.dataset.v));
-}));
+(function () {
+  // --- tabs ---
+  var tabs = document.getElementById('tabs');
+  tabs.addEventListener('click', function (e) {
+    var btn = e.target.closest('button'); if (!btn) return;
+    tabs.querySelectorAll('button').forEach(function (b) { b.classList.remove('active'); });
+    document.querySelectorAll('main > section').forEach(function (s) { s.classList.remove('active'); });
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.tab).classList.add('active');
+  });
 
-// ---- dock & panel mock ----
-const mock = document.getElementById('mock');
-let mockApps = [
-  { name: 'StateA', port: 5301, age: '24h', running: true, registered: true },
-  { name: 'old-scanner', port: 5400, age: '26d', running: false, registered: false, noCmd: true },
-];
-function openPanel() {
-  const p = document.createElement('div');
-  p.className = 'pm-panel';
-  p.innerHTML = '<div class="pm-panel-head">Discovered local apps<button class="pm-close">×</button></div><div class="pm-body"></div>';
-  p.querySelector('.pm-close').addEventListener('click', () => p.remove());
-  renderPanelBody(p.querySelector('.pm-body'));
-  mock.appendChild(p);
-}
-function renderPanelBody(body) {
-  body.innerHTML = '<div style="display:flex;gap:5px"><button class="pm-act">💾 Load cache</button><button class="pm-act">🔄 Check running</button></div>'
-    + '<div class="pm-msg cachey">Latest scan: 27/07/2026, 11:00</div>';
-  if (mockApps.length === 0) {
-    body.insertAdjacentHTML('beforeend', '<div class="pm-msg">No local apps found in this repo</div>');
-    return;
+  // --- race simulator ---
+  // Each step: text per lane, lane state (hot/dead/ok), and a caption.
+  var BROKEN = [
+    { main: 'api.Start()', pool: '', queue: '', engine: '',
+      hot: ['main'],
+      cap: 'Old order: the API starts serving BEFORE the form has a window handle. The phone is already polling from the moment the port opens.' },
+    { main: 'new MainForm(...) — no handle yet', pool: 'log event fires (phone request)', queue: '', engine: '',
+      hot: ['main', 'pool'],
+      cap: 'A logger/call event fires on a threadpool thread. The form exists but its native handle does not — this is the race window.' },
+    { main: '', pool: 'SafeInvoke: InvokeRequired == false → runs action() INLINE', queue: '', engine: '',
+      hot: ['pool'], bad: ['pool'],
+      cap: 'With no handle, InvokeRequired lies (false). SafeInvoke runs the UI update inline — creating the form’s control handles ON THE THREADPOOL THREAD and installing a WinForms sync context there.' },
+    { main: 'Application.Run → Show → SetParent → SendMessage…', pool: 'owns child handles, never pumps messages', queue: '', engine: '',
+      hot: ['main'], dead: ['main', 'pool'],
+      cap: 'The main thread shows the form. WinForms must SendMessage to the thread that owns the child handles — a threadpool thread that never pumps. The GUI deadlocks in SetParent, forever.' },
+    { main: 'DEADLOCKED', pool: 'phantom WindowsFormsSynchronizationContext installed', queue: 'engine continuation posted here — never runs', engine: 'await Task.Delay(3s) …captured the phantom context',
+      dead: ['main', 'queue', 'engine'], hot: ['engine'],
+      cap: 'The autopilot engine’s first await captured the phantom context. When the delay elapses, its wake-up is POSTED into a message queue nobody pumps. Engine frozen at state 0; CollectorPoller identical.' },
+    { main: 'DEADLOCKED', pool: '', queue: 'dead letters', engine: 'frozen — 76 minutes and counting',
+      dead: ['main', 'queue', 'engine'],
+      cap: 'End state: GUI dead, engines dead — but Kestrel runs on its own threads, so the phone UI works. Armed loops show every gate green and never tick. This is exactly what the debug bundle showed.' }
+  ];
+  var FIXED = [
+    { main: 'new MainForm(...); _ = form.Handle', pool: '', queue: '', engine: '',
+      hot: ['main'], ok: ['main'],
+      cap: 'New order: the form’s native handle is forced on the STA main thread FIRST. From this instant, InvokeRequired is truthful from every other thread.' },
+    { main: 'api.Start()', pool: 'log event fires (phone request)', queue: '', engine: '',
+      hot: ['main', 'pool'], ok: ['main'],
+      cap: 'Only now does the API start serving. The same hot-polling phone fires the same early event…' },
+    { main: '', pool: 'SafeInvoke: handle exists → InvokeRequired == true → BeginInvoke', queue: 'UI update queued for the UI thread', engine: '',
+      hot: ['pool', 'queue'], ok: ['pool', 'queue'],
+      cap: 'SafeInvoke marshals correctly: BeginInvoke posts the update to the form’s queue. (And if anything ever fired pre-handle, the new IsHandleCreated guard drops it instead of running inline.)' },
+    { main: 'Application.Run pumps the queue, form shows', pool: '', queue: 'drained ✓', engine: 'await Task.Delay(3s).ConfigureAwait(false)',
+      hot: ['main', 'engine'], ok: ['main', 'queue', 'engine'],
+      cap: 'Application.Run starts pumping; queued updates drain; the GUI shows normally. The engine’s awaits use ConfigureAwait(false) — resumes go to the threadpool regardless of any ambient context.' },
+    { main: 'GUI alive', pool: 'mining runs here, in background (single-flight)', queue: '', engine: 'tick @ 3s: "mining transcripts in background…", keeps ticking',
+      hot: ['engine', 'pool'], ok: ['main', 'pool', 'engine'],
+      cap: 'First tick fires at t+3s. Transcript mining (~1–2 min cold) now runs in a background task — the tick path never blocks, so a loop armed right after startup runs on schedule.' }
+  ];
+
+  var mode = BROKEN, step = 0;
+  var lanes = { main: document.getElementById('lane-main'), pool: document.getElementById('lane-pool'),
+                queue: document.getElementById('lane-queue'), engine: document.getElementById('lane-engine') };
+  var caption = document.getElementById('caption'), captext = document.getElementById('captext'),
+      stepnum = document.getElementById('stepnum');
+  var prev = document.getElementById('prev'), next = document.getElementById('next');
+
+  function render() {
+    var s = mode[step];
+    Object.keys(lanes).forEach(function (k) {
+      var el = lanes[k];
+      el.textContent = s[k] || '';
+      el.className = 'lane' +
+        ((s.hot || []).indexOf(k) >= 0 ? ' hot' : '') +
+        ((s.dead || []).indexOf(k) >= 0 ? ' dead' : '') +
+        ((s.ok || []).indexOf(k) >= 0 ? ' ok' : '');
+    });
+    caption.className = 'caption ' + (mode === BROKEN ? (s.dead ? 'bad' : '') : 'good');
+    stepnum.textContent = 'Step ' + (step + 1) + ' of ' + mode.length +
+      (mode === BROKEN ? ' — broken (old code)' : ' — fixed (new code)');
+    captext.textContent = s.cap;
+    prev.disabled = step === 0;
+    next.disabled = step === mode.length - 1;
   }
-  mockApps.forEach((a, i) => {
-    const row = document.createElement('div');
-    row.className = 'pm-row';
-    row.innerHTML = `<span class="rowdot${a.running ? ' on' : ''}"></span><span class="name">${a.name}</span>`
-      + `<span class="port">:${a.port}</span><span class="age">${a.age}</span>`
-      + `<span class="acts">${a.running ? '' : `<button class="pm-act run"${a.noCmd ? ' disabled' : ''}>▶ Run</button>`}`
-      + `${a.registered ? '<span class="pm-act" style="color:var(--green);border:none">✓ Registered</span>' : '<button class="pm-act">Register</button>'}`
-      + `<button class="pm-act del" title="Delete from cache">🗑</button></span>`;
-    row.querySelector('.del').addEventListener('click', () => {
-      mockApps = mockApps.filter((_, j) => j !== i);
-      renderPanelBody(body);
-    });
-    body.appendChild(row);
-  });
-}
-document.getElementById('mock-open').addEventListener('click', () => {
-  if (!mock.querySelector('.pm-panel')) openPanel();
-});
-document.getElementById('mock-discover').addEventListener('click', (e) => {
-  const b = e.target;
-  b.textContent = 'Discovering…'; b.disabled = true;
-  setTimeout(() => { b.textContent = '🛰️ Discover local apps'; b.disabled = false; }, 2200);
-});
-
-// ---- union simulator ----
-let cache = new Map(); // port -> {name, port, when}
-let clock = 0;
-const scanEl = document.getElementById('sim-scan');
-const cacheEl = document.getElementById('sim-cache');
-const logEl = document.getElementById('sim-log');
-function log(msg) {
-  const d = document.createElement('div');
-  d.className = 'ln'; d.textContent = msg;
-  logEl.prepend(d);
-}
-function renderApps(el, apps, readOnly) {
-  el.innerHTML = apps.length ? '' : '<div class="pm-msg">— empty —</div>';
-  apps.forEach((a) => {
-    const d = document.createElement('div');
-    d.className = 'sim-app' + (readOnly ? ' new' : '');
-    d.innerHTML = `<span>${a.name}</span><span class="port">:${a.port}</span><span class="when">scan #${a.when}</span>`
-      + (readOnly ? '' : `<button class="x" title="delete">🗑</button>`);
-    if (!readOnly) d.querySelector('.x').addEventListener('click', () => {
-      cache.delete(a.port);
-      log(`DELETE :${a.port} → removed from cache file + in-memory job${cache.size === 0 ? ' (cache now EMPTY, distinct from no-cache)' : ''}`);
-      renderCache();
-    });
-    el.appendChild(d);
-  });
-}
-function renderCache() { renderApps(cacheEl, [...cache.values()], false); }
-function scan(apps, label) {
-  clock++;
-  renderApps(scanEl, apps.map((a) => ({ ...a, when: clock })), true);
-  const kept = [...cache.keys()].filter((p) => !apps.some((a) => a.port === p));
-  apps.forEach((a) => {
-    const had = cache.has(a.port);
-    cache.set(a.port, { ...a, when: clock });
-    log(`scan #${clock} (${label}): :${a.port} ${had ? 'refreshed (port matched — replaced, not duplicated)' : 'added'}`);
-  });
-  if (kept.length) log(`scan #${clock}: kept ${kept.map((p) => ':' + p).join(', ')} — missed by this scan, union keeps them`);
-  renderCache();
-}
-document.getElementById('sim-scan1').addEventListener('click', () => scan([{ name: 'app-A', port: 5301 }, { name: 'app-B', port: 5302 }], 'A+B'));
-document.getElementById('sim-scan2').addEventListener('click', () => scan([{ name: 'app-B v2', port: 5302 }], 'only B′'));
-document.getElementById('sim-scan3').addEventListener('click', () => scan([{ name: 'app-C', port: 5400 }], 'C'));
-// Import goes through the EXACT same union merge as a scan — only the source
-// (operator-pasted JSON) and the timestamp label differ.
-document.getElementById('sim-import').addEventListener('click', () =>
-  scan([{ name: 'app-B v3 (imported)', port: 5302 }, { name: 'app-D (imported)', port: 5500 }], 'import'));
-document.getElementById('sim-import-bad').addEventListener('click', () =>
-  log('IMPORT REJECTED: app "broken" has an out-of-range port: 0 — all-or-nothing, cache unchanged (even valid findings in the same payload are dropped)'));
-document.getElementById('sim-reset').addEventListener('click', () => {
-  cache = new Map(); clock = 0;
-  scanEl.innerHTML = '<div class="pm-msg">— no scan yet —</div>';
-  logEl.innerHTML = '<div class="ln">ready</div>';
-  renderCache();
-});
+  prev.addEventListener('click', function () { if (step > 0) { step--; render(); } });
+  next.addEventListener('click', function () { if (step < mode.length - 1) { step++; render(); } });
+  document.getElementById('reset').addEventListener('click', function () { step = 0; render(); });
+  var mb = document.getElementById('mode-bad'), mg = document.getElementById('mode-good');
+  mb.addEventListener('click', function () { mode = BROKEN; step = 0; mb.className = 'on-bad'; mg.className = ''; render(); });
+  mg.addEventListener('click', function () { mode = FIXED; step = 0; mg.className = 'on-good'; mb.className = ''; render(); });
+  render();
+})();
 </script>
 </body>
 </html>

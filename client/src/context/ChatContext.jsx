@@ -226,6 +226,30 @@ export function ChatProvider({ children }) {
     [updateAssistant],
   );
 
+  // A server-initiated (autopilot loop) send never passes through the composer,
+  // so the backend emits the prompt as a 'user' stream event and this draws the
+  // bubble the composer would have drawn. attachToRun appends an empty assistant
+  // bubble before replay starts, so the user bubble slots in above it; without
+  // one (already-attached client), append it plus a fresh assistant bubble for
+  // the reply that follows.
+  const addServerPrompt = useCallback(
+    (key, text) =>
+      updateConvo(key, (c) => {
+        const msgs = c.messages.slice();
+        const last = msgs[msgs.length - 1];
+        if (
+          last && last.role === 'assistant' && last.text === '' &&
+          (!last.steps || last.steps.length === 0)
+        ) {
+          msgs.splice(msgs.length - 1, 0, { role: 'user', text });
+        } else {
+          msgs.push({ role: 'user', text }, { role: 'assistant', text: '', steps: [] });
+        }
+        return { ...c, messages: msgs, streaming: true };
+      }),
+    [updateConvo],
+  );
+
   const handleTool = useCallback(
     (key, evt) =>
       updateAssistant(key, (m) => {
@@ -278,6 +302,11 @@ export function ChatProvider({ children }) {
             updateConvo(key, { sessionId: evt.sessionId });
             if (tabId) updateTab(tabId, { sessionId: evt.sessionId });
           }
+          break;
+        case 'user':
+          // Autopilot loop prompt (openspec fix-loop-prompt-render). Composer
+          // sends never receive this event, so no duplicate bubbles.
+          if (evt.text) addServerPrompt(key, evt.text);
           break;
         case 'thinking':
           addThinking(key, evt.text);
@@ -571,6 +600,20 @@ export function ChatProvider({ children }) {
   // First reconcile happens once the backend dock list has loaded.
   useEffect(() => {
     if (dockLoaded) reconcileRef.current();
+  }, [dockLoaded]);
+  // Visible-page run discovery (openspec: fix-loop-conversation-identity, D6):
+  // a backend-started run (an autopilot loop send) must show up on an OPEN
+  // page too, not only on mount/visibility/own-send/manual refresh. Poll the
+  // in-memory GET /api/runs snapshot and reattach through the same reconcile
+  // path; attachToRun no-ops while a reader is attached (abortRefs guard), so
+  // the poll is idempotent. Skipped while hidden — the visibilitychange
+  // reconcile above covers the return.
+  useEffect(() => {
+    if (!dockLoaded) return undefined;
+    const id = setInterval(() => {
+      if (!document.hidden) reconcileRef.current();
+    }, 5000);
+    return () => clearInterval(id);
   }, [dockLoaded]);
 
   function stopTo({ key, repoId, tabId, lane = 'builder' }) {

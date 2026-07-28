@@ -81,7 +81,7 @@ export const AUTOPILOT_MAP = {
       src: 'ClaudeWeb.App/Services/Autopilot/AutopilotService.cs' },
     { id: 'loopstore', label: 'LoopConfigStore', x: 250, y: 250, grp: 'backend', kind: 'db', p: 'B_engine',
       role: 'Per-repo loop state (loops.json)',
-      desc: 'A LoopState per repo: Prompt, Sentinel (default "LOOP_DONE"), MaxIterations (default 10), Active, IterationsDone, Status, LastSentAt. RecordSend() bumps the counter on each resend.',
+      desc: 'A LoopState per repo: Prompt, Sentinel (default "LOOP_DONE"), MaxIterations (default 10), Active, IterationsDone, Status, LastSentAt — plus StopReason/StopDetail (why it stopped) and RecipeId/RecipeName when armed from a recipe. RecordSend() bumps the counter on each resend.',
       src: 'ClaudeWeb.App/Services/Autopilot/LoopConfigStore.cs' },
     { id: 'cfg', label: 'AutopilotConfigStore', x: 430, y: 250, grp: 'backend', kind: 'db', p: 'B_engine',
       role: 'Global settings (autopilot.json)',
@@ -151,8 +151,9 @@ export const AUTOPILOT_MAP = {
 
 // ───────────────────────── 2 · DECISION PER TURN (loop mode) ─────────────────────────
 // The deterministic loop decision, in the EXACT order HandleLoop() runs it: errored →
-// sentinel(done) → deny-list(escalate) → cap(capped) → else resend. Four of the five
-// outcomes are terminal (the loop stops, Active=false); only "resend" continues.
+// sentinel(done) → NEEDS_HUMAN(escalate) → deny-list(escalate) → cap(capped) → else
+// resend. Every outcome except "resend" is terminal (the loop stops, Active=false),
+// and each resolution records StopReason + StopDetail — the "why did it stop" readout.
 export const LOOP_FLOW = {
   nodes: [
     { id: 'start', label: '① Tick · loop active', x: 0, y: 180, grp: 'auto', kind: 'proc',
@@ -168,20 +169,23 @@ export const LOOP_FLOW = {
       role: 'Resolve(repo, "error")', desc: 'Terminal. The loop stops and is handed back to you.' },
     { id: 'c_done', label: 'sentinel?', x: 470, y: 180, grp: 'auto',
       role: 'reply contains the Sentinel phrase',
-      desc: 'Default "LOOP_DONE". The agreed "I am finished" signal — the intended happy ending of a loop.' },
+      desc: 'Default "LOOP_DONE". The agreed "I am finished" signal — the intended happy ending of a loop. StopReason "sentinel".' },
     { id: 'done', label: '■ done', x: 700, y: 110, grp: 'store',
       role: 'Resolve(repo, "done")', desc: 'Terminal, success. The loop completed because the agent said the sentinel.' },
-    { id: 'c_deny', label: 'deny-list hit?', x: 470, y: 300, grp: 'auto',
+    { id: 'c_human', label: 'NEEDS_HUMAN:?', x: 470, y: 290, grp: 'auto',
+      role: 'reply contains the escalation marker',
+      desc: 'The looped-agent contract (docs/loop-driven-agent-convention.md): a driven agent blocked on a decision only the human can make ends with "NEEDS_HUMAN: <question>". The question is captured into StopDetail and shown on the dock badge.' },
+    { id: 'c_deny', label: 'deny-list hit?', x: 470, y: 400, grp: 'auto',
       role: 'risky word in the reply',
-      desc: 'deploy · push · force · reset --hard · delete · drop · prod · overwrite · merge. The same fence the classifier uses.' },
-    { id: 'escalate', label: '■ escalate', x: 700, y: 260, grp: 'actor', kind: 'actor',
-      role: 'Resolve(repo, "escalate")', desc: 'Terminal. A risky reply is never auto-continued — the loop stops and waits for a human.' },
-    { id: 'c_cap', label: 'cap reached?', x: 470, y: 420, grp: 'auto',
+      desc: 'deploy · push · force · reset --hard · delete · drop · prod · overwrite · merge. The same fence the classifier uses — the backstop for agents that ignore the contract. StopDetail records the matched word.' },
+    { id: 'escalate', label: '■ escalate', x: 700, y: 330, grp: 'actor', kind: 'actor',
+      role: 'Resolve(repo, "escalate", reason, detail)', desc: 'Terminal. A blocked or risky reply is never auto-continued — the loop stops and waits for a human, recording WHY (needs-human question or matched deny word).' },
+    { id: 'c_cap', label: 'cap reached?', x: 470, y: 510, grp: 'auto',
       role: 'IterationsDone >= MaxIterations',
-      desc: 'The hard ceiling (default 10). Guarantees a loop can never run forever, even if the sentinel is never said.' },
-    { id: 'capped', label: '■ capped', x: 700, y: 410, grp: 'cli',
+      desc: 'The hard ceiling (default 10). Guarantees a loop can never run forever, even if the sentinel is never said. StopDetail records "cap n/n".' },
+    { id: 'capped', label: '■ capped', x: 700, y: 500, grp: 'cli',
       role: 'Resolve(repo, "capped")', desc: 'Terminal. The loop hit its iteration ceiling and stopped on its own.' },
-    { id: 'resend', label: '③ Resend the prompt', x: 360, y: 540, grp: 'auto', kind: 'proc',
+    { id: 'resend', label: '③ Resend the prompt', x: 360, y: 630, grp: 'auto', kind: 'proc',
       role: 'TrySendLoop → TryBeginRun("builder")',
       desc: 'None of the stops fired → claim the slot, resend the fixed Prompt, RecordSend() bumps IterationsDone, and append an audit line with outcome="loop".' },
   ],
@@ -191,7 +195,9 @@ export const LOOP_FLOW = {
     { s: 'c_err', t: 'error', label: 'yes', rel: 'reject' },
     { s: 'c_err', t: 'c_done', label: 'no' },
     { s: 'c_done', t: 'done', label: 'yes' },
-    { s: 'c_done', t: 'c_deny', label: 'no' },
+    { s: 'c_done', t: 'c_human', label: 'no' },
+    { s: 'c_human', t: 'escalate', label: 'yes', rel: 'reject' },
+    { s: 'c_human', t: 'c_deny', label: 'no' },
     { s: 'c_deny', t: 'escalate', label: 'yes', rel: 'reject' },
     { s: 'c_deny', t: 'c_cap', label: 'no' },
     { s: 'c_cap', t: 'capped', label: 'yes' },
