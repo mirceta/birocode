@@ -11,10 +11,10 @@ sit side by side: chat/dock as it is today on the left, the clicked app on the r
 
 ## What Changes
 
-- Add a **split (side-by-side) view mode** for a dock's opened local app: the dock
-  renders exactly as it does with no app open (bar, lanes, app switcher, git/discover
-  blocks, full chat with message list and composer) in a **left pane**, and the opened
-  app's frame renders in a **right pane** next to it.
+- Add a **split (side-by-side) view mode** for a dock's opened local app: the dock's
+  chrome (bar, lanes, app switcher, git/discover blocks) stays in place exactly as
+  with no app open, and the screen area below splits — full chat (message list and
+  composer) in a **left pane**, the opened app's frame in a **right pane**.
 - Split is **a mode, not a replacement**: the current cover ("over the whole dock",
   composer-only) presentation remains, and the operator can switch between cover and
   split per dock. Split state is device-local and ephemeral like the dock's other view

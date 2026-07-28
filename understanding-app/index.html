@@ -3,294 +3,271 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Understanding: the startup handle race</title>
+<title>Understanding — Dock App Split View</title>
 <style>
   :root {
-    --bg: #0f1218; --panel: #171c26; --panel2: #1d2433; --line: #2b3446;
-    --text: #d8dee9; --dim: #8b96a8; --accent: #5da9f6; --bad: #e06c75;
-    --good: #7cc76f; --warn: #e5c07b; --mono: 'Consolas', 'Cascadia Code', monospace;
+    --bg: #0f1218;
+    --surface: #171c26;
+    --surface2: #1e2532;
+    --border: #2c3547;
+    --text: #e6ebf4;
+    --soft: #93a0b5;
+    --accent: #6ea8fe;
+    --green: #3fb950;
+    --green-bg: #12261a;
+    --amber: #d29922;
+    --amber-bg: #2a2113;
+    --red: #f85149;
+    --red-bg: #2a1416;
+    --violet: #a371f7;
+    --violet-bg: #1c1630;
+    --mono: 'Consolas', 'Cascadia Code', monospace;
+    --radius: 12px;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text);
-         font: 15px/1.55 'Segoe UI', system-ui, sans-serif; }
-  header { padding: 18px 22px 10px; border-bottom: 1px solid var(--line); }
-  header h1 { margin: 0 0 4px; font-size: 20px; }
-  header p { margin: 0; color: var(--dim); font-size: 13px; }
-  nav { display: flex; gap: 6px; padding: 10px 22px; border-bottom: 1px solid var(--line);
-        flex-wrap: wrap; }
-  nav button { background: var(--panel); color: var(--dim); border: 1px solid var(--line);
-        border-radius: 8px; padding: 7px 14px; cursor: pointer; font-size: 14px; }
-  nav button.active { background: var(--panel2); color: var(--text); border-color: var(--accent); }
-  main { padding: 18px 22px 40px; max-width: 1060px; margin: 0 auto; }
-  section { display: none; }
-  section.active { display: block; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-          padding: 14px 16px; margin: 12px 0; }
-  .card h3 { margin: 0 0 6px; font-size: 15px; }
-  code, pre { font-family: var(--mono); font-size: 13px; }
-  code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; }
-  pre { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
-        padding: 10px 12px; overflow-x: auto; }
-  .dim { color: var(--dim); }
-  .bad { color: var(--bad); } .good { color: var(--good); } .warn { color: var(--warn); }
-  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  @media (max-width: 800px) { .cols { grid-template-columns: 1fr; } }
+  body {
+    margin: 0;
+    background: radial-gradient(1200px 700px at 70% -10%, #182234 0%, var(--bg) 60%);
+    color: var(--text);
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.55;
+    padding: 28px 20px 80px;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.02em; }
+  h2 { font-size: 18px; margin: 26px 0 10px; }
+  .sub { color: var(--soft); margin: 0 0 22px; font-size: 15px; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
+  .tab {
+    padding: 7px 14px; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--soft); font-size: 13.5px; font-weight: 600;
+    cursor: pointer;
+  }
+  .tab.on { background: var(--accent); border-color: var(--accent); color: #0b1524; }
+  .view { display: none; }
+  .view.on { display: block; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px 18px; margin-bottom: 14px;
+  }
+  .card p { margin: 8px 0; font-size: 14.5px; }
+  .soft { color: var(--soft); }
+  code, .mono { font-family: var(--mono); font-size: 13px; }
+  code { background: var(--surface2); padding: 1px 6px; border-radius: 6px; }
+  .pill {
+    display: inline-block; padding: 1px 9px; border-radius: 999px;
+    font-size: 11.5px; font-weight: 700;
+  }
+  .pill.green { color: var(--green); background: var(--green-bg); }
+  .pill.amber { color: var(--amber); background: var(--amber-bg); }
+  .pill.red   { color: var(--red); background: var(--red-bg); }
+  .pill.violet{ color: var(--violet); background: var(--violet-bg); }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--soft); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .flow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; margin: 10px 0; }
+  .flow .node { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; }
+  .flow .arr { color: var(--soft); }
 
-  /* --- simulator --- */
-  .sim-controls { display: flex; gap: 8px; align-items: center; margin: 12px 0; flex-wrap: wrap; }
-  .sim-controls button { background: var(--panel2); color: var(--text); border: 1px solid var(--line);
-        border-radius: 8px; padding: 6px 14px; cursor: pointer; font-size: 14px; }
-  .sim-controls button:disabled { opacity: .4; cursor: default; }
-  .mode-toggle { margin-left: auto; display: flex; gap: 0; }
-  .mode-toggle button { border-radius: 0; }
-  .mode-toggle button:first-child { border-radius: 8px 0 0 8px; }
-  .mode-toggle button:last-child { border-radius: 0 8px 8px 0; }
-  .mode-toggle button.on-bad { background: #3a2026; border-color: var(--bad); color: var(--bad); }
-  .mode-toggle button.on-good { background: #22301f; border-color: var(--good); color: var(--good); }
-  .lanes { display: grid; grid-template-columns: 130px 1fr; gap: 8px; }
-  .lane-label { color: var(--dim); font-size: 12px; padding-top: 10px; text-align: right;
-        padding-right: 6px; }
-  .lane { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
-        min-height: 46px; padding: 8px 10px; font-family: var(--mono); font-size: 12.5px;
-        color: var(--dim); transition: border-color .2s, background .2s; }
-  .lane.hot { border-color: var(--accent); background: var(--panel2); color: var(--text); }
-  .lane.dead { border-color: var(--bad); background: #2a1a1e; color: var(--bad); }
-  .lane.ok { border-color: var(--good); }
-  .caption { min-height: 84px; margin-top: 12px; padding: 12px 14px; background: var(--panel2);
-        border-left: 3px solid var(--accent); border-radius: 6px; font-size: 14px; }
-  .caption.bad { border-left-color: var(--bad); }
-  .caption.good { border-left-color: var(--good); }
-  .stepnum { color: var(--dim); font-size: 12px; margin-bottom: 4px; }
-
-  table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 14px; }
-  th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
-  th { background: var(--panel2); }
-  .fix-tag { display: inline-block; font-size: 11px; font-family: var(--mono); background: var(--panel2);
-        border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; margin-right: 6px; }
+  /* dock mock */
+  .stage { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
+  .gridbox {
+    flex: 0 0 auto; display: grid; grid-template-columns: repeat(2, 220px);
+    gap: 10px; padding: 12px; border: 1px dashed var(--border); border-radius: 12px;
+    transition: all .25s ease;
+  }
+  .dockm {
+    border: 1px solid var(--border); border-radius: 12px; background: var(--surface2);
+    overflow: hidden; display: flex; flex-direction: column; min-height: 260px;
+    transition: all .25s ease;
+  }
+  .dockm.split { grid-column: span 2; }
+  .dm-bar { padding: 7px 10px; background: #232c3d; font-size: 12px; font-weight: 700; display: flex; gap: 7px; align-items: center; }
+  .dm-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+  .dm-lanes { display: flex; gap: 4px; padding: 5px 8px; border-bottom: 1px solid var(--border); }
+  .dm-lane { font-size: 10.5px; padding: 2px 8px; border-radius: 999px; background: var(--surface); color: var(--soft); }
+  .dm-lane.on { color: var(--text); background: #2a3346; }
+  .dm-apps { display: flex; gap: 4px; padding: 5px 8px; border-bottom: 1px solid var(--border); align-items: center; }
+  .dm-app { font-size: 10.5px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--soft); cursor: pointer; }
+  .dm-app.on { background: var(--accent); border-color: var(--accent); color: #0b1524; }
+  .dm-split-btn { margin-left: auto; font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--soft); cursor: pointer; display: none; }
+  .dm-split-btn.show { display: block; }
+  .dm-split-btn.on { background: var(--accent); border-color: var(--accent); color: #0b1524; }
+  .dm-git { font-size: 10.5px; color: var(--soft); padding: 5px 8px; border-bottom: 1px solid var(--border); }
+  .dm-screen { flex: 1; display: flex; min-height: 0; }
+  .dm-main { flex: 1 1 50%; min-width: 0; display: flex; flex-direction: column; }
+  .dm-msgs { flex: 1; font-size: 10.5px; color: var(--soft); padding: 8px; overflow: hidden; }
+  .dm-composer { border-top: 1px solid var(--border); padding: 6px 8px; font-size: 10.5px; color: var(--soft); background: var(--surface); }
+  .dm-side { flex: 1 1 50%; min-width: 0; border-left: 1px solid var(--border); background: #0d2216; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--green); flex-direction: column; gap: 6px; }
+  .dm-cover { flex: 1; background: #0d2216; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--green); flex-direction: column; gap: 6px; }
+  .dm-note { font-size: 9.5px; color: var(--soft); }
+  .legend { flex: 1 1 280px; font-size: 13.5px; }
 </style>
 </head>
 <body>
-<header>
-  <h1>The startup handle race — why loops "silently never started"</h1>
-  <p>openspec change <code>fix-startup-handle-race</code> · diagnosed 2026-07-28 on live with stack + heap dumps</p>
-</header>
-<nav id="tabs">
-  <button data-tab="symptom" class="active">1 · Symptom</button>
-  <button data-tab="race">2 · The race, step by step</button>
-  <button data-tab="fixes">3 · The fixes</button>
-  <button data-tab="verify">4 · Verification</button>
-</nav>
-<main>
+<div class="wrap">
+  <h1>Dock App Split View</h1>
+  <p class="sub">openspec change <code>dock-app-split-view</code> — a per-dock mode that puts the opened local app <b>beside</b> the chat instead of over it, widening the dock's grid cell while it's split.</p>
 
-<section id="symptom" class="active">
-  <div class="card">
-    <h3>What the operator saw</h3>
-    <p>A goal loop armed from the phone, every gate green — and <b>zero iterations, forever</b>.
-    No <code>[LOOP]</code> log lines, no errors, <code>engine.state</code> null. Meanwhile the web UI
-    worked perfectly, which is exactly what made it confusing: the API answered, so the harness
-    <i>looked</i> healthy.</p>
+  <div class="tabs">
+    <button class="tab on" data-v="what">What changed</button>
+    <button class="tab" data-v="mock">Live mock</button>
+    <button class="tab" data-v="state">Why nothing reloads</button>
+    <button class="tab" data-v="where">Where things live</button>
   </div>
-  <div class="cols">
+
+  <!-- ============ WHAT ============ -->
+  <div class="view on" id="v-what">
     <div class="card">
-      <h3 class="bad">Actually broken</h3>
-      <ul>
-        <li>Desktop GUI: frozen (deadlocked in <code>SetParent</code>)</li>
-        <li>Autopilot engine: parked on its first 3-second delay — <b>for 76 minutes</b></li>
-        <li>Collector poller: frozen the same way</li>
-      </ul>
+      <h2 style="margin-top:0">The problem</h2>
+      <p><span class="pill red">Cover only</span> Clicking a local app in a dock rendered it over the whole dock: the chat collapsed to a composer-only strip and the git/discover chrome hid. Fine for a quick look — useless when you want to <b>watch the app while talking to the agent about it</b>.</p>
     </div>
     <div class="card">
-      <h3 class="good">Still healthy (the mask)</h3>
-      <ul>
-        <li>Kestrel API on :5099 — the phone UI worked</li>
-        <li>Chat runs, file browsing, everything request-driven</li>
-      </ul>
+      <h2 style="margin-top:0">The change</h2>
+      <table>
+        <tr><th>Piece</th><th>Behavior</th></tr>
+        <tr><td><span class="pill green">Split mode</span></td><td>A ◫ toggle appears in the dock's app-switcher row while an app is open. On: the dock's chrome stays in place, and the screen area splits — <b>full chat</b> (message list + composer) left, <b>the app</b> right. Off: cover, exactly as before.</td></tr>
+        <tr><td><span class="pill green">Chrome returns</span></td><td>In split the dock is treated as "chat showing": git block, Discover buttons, Understanding row all come back (they hide only in cover).</td></tr>
+        <tr><td><span class="pill green">Wider cell</span></td><td>While split, the dock's dashboard grid cell spans 2 columns (same mechanism as the Wide toggle) so the chat keeps a usable width. Restored on exit. Skipped in a 1-column grid, where a span would overflow.</td></tr>
+        <tr><td><span class="pill violet">Ephemeral</span></td><td>Per-dock, device-local, resets on reload — the same class of state as maximize-chat. Advanced-mode toggle (<code>dockAppSplit</code>); Basic keeps cover.</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <p><span class="pill amber">Guarantees kept</span> Toggling cover ↔ split <b>never reloads the app</b> (same keep-alive <code>frameKey</code>, so in-app state and per-frame zoom survive) and <b>never remounts the chat</b> (composer draft, scroll, live stream survive). Verified headlessly: 27/27 checks.</p>
     </div>
   </div>
-  <div class="card">
-    <h3>Why it comes and goes</h3>
-    <p>It is a startup <b>race</b>: most restarts win it and everything works. A deploy restart with a
-    phone actively polling the instant Kestrel comes up can lose it. That is why earlier loop tests
-    passed and the 10:19 deploy produced a broken process — same code, different coin flip.</p>
-  </div>
-</section>
 
-<section id="race">
-  <div class="sim-controls">
-    <button id="prev">◀ Back</button>
-    <button id="next">Next ▶</button>
-    <button id="reset">Reset</button>
-    <div class="mode-toggle">
-      <button id="mode-bad" class="on-bad">Broken (old code)</button>
-      <button id="mode-good">Fixed (new code)</button>
+  <!-- ============ MOCK ============ -->
+  <div class="view" id="v-mock">
+    <div class="card">
+      <p style="margin-top:0">A working miniature. Click <b>StateA</b> to open the app (cover), then the <b>◫</b> toggle — watch the dock widen in its grid and the chat come back beside the app.</p>
+      <div class="stage">
+        <div class="gridbox">
+          <div class="dockm" id="dock1">
+            <div class="dm-bar"><span class="dm-dot"></span> Claude Web (this app)</div>
+            <div class="dm-lanes"><span class="dm-lane on">Builder</span><span class="dm-lane">Ask</span><span class="dm-lane">Files</span><span class="dm-lane">Console</span></div>
+            <div class="dm-apps">
+              <button class="dm-app" id="dm-appbtn">StateA :5301</button>
+              <button class="dm-split-btn" id="dm-splitbtn" title="Split view">◫</button>
+            </div>
+            <div class="dm-git" id="dm-git">⎇ feat/local-app-split-view · 1 ahead</div>
+            <div class="dm-screen" id="dm-screen">
+              <div class="dm-main">
+                <div class="dm-msgs" id="dm-msgs">— message list —</div>
+                <div class="dm-composer">draft: fix the header, then…</div>
+              </div>
+            </div>
+          </div>
+          <div class="dockm">
+            <div class="dm-bar"><span class="dm-dot"></span> other-repo</div>
+            <div class="dm-lanes"><span class="dm-lane on">Builder</span><span class="dm-lane">Ask</span></div>
+            <div class="dm-screen"><div class="dm-main"><div class="dm-msgs">— message list —</div><div class="dm-composer">Ask anything…</div></div></div>
+          </div>
+        </div>
+        <div class="legend soft">
+          <p><b style="color:var(--text)">What to notice</b></p>
+          <p>• The ◫ toggle only exists while an app is open — it changes <i>how</i> the app shows, not <i>which</i> app.</p>
+          <p>• Cover hides the git row and collapses the chat to its composer; split brings both back.</p>
+          <p>• Entering split makes the cell span two grid columns; the neighbor dock reflows. Leaving restores it.</p>
+          <p>• The app pane is the <i>same iframe</i> in both modes — the mock fakes it, the real dock moves a slot the keep-alive host tracks.</p>
+        </div>
+      </div>
     </div>
   </div>
-  <div class="lanes">
-    <div class="lane-label">Main (UI) thread</div>  <div class="lane" id="lane-main"></div>
-    <div class="lane-label">Threadpool thread</div> <div class="lane" id="lane-pool"></div>
-    <div class="lane-label">Form message queue</div><div class="lane" id="lane-queue"></div>
-    <div class="lane-label">Autopilot engine</div>  <div class="lane" id="lane-engine"></div>
-  </div>
-  <div class="caption" id="caption"><div class="stepnum" id="stepnum"></div><div id="captext"></div></div>
-</section>
 
-<section id="fixes">
-  <table>
-    <tr><th>Fix</th><th>Where</th><th>What it does</th></tr>
-    <tr>
-      <td><span class="fix-tag">root</span>Handle before API</td>
-      <td><code>Program.cs</code></td>
-      <td>Construct <code>MainForm</code> and force its native handle on the STA main thread
-          <b>before</b> <code>api.Start()</code>. Once the handle exists, <code>InvokeRequired</code>
-          is truthful from every thread — no background event can ever be first to create a handle.</td>
-    </tr>
-    <tr>
-      <td><span class="fix-tag">guard</span>SafeInvoke handle check</td>
-      <td><code>MainForm.cs</code></td>
-      <td>Refuse to touch controls while <code>!IsHandleCreated</code> (drop the monitoring update)
-          instead of running inline on the calling thread. Defense in depth.</td>
-    </tr>
-    <tr>
-      <td><span class="fix-tag">immunity</span><code>ConfigureAwait(false)</code></td>
-      <td><code>AutopilotService.cs</code><br><code>CollectorPoller.cs</code></td>
-      <td>Hosted services resume on the threadpool no matter what synchronization context is
-          ambient — a phantom UI context can never strangle them again.</td>
-    </tr>
-    <tr>
-      <td><span class="fix-tag">liveness</span>Background mining</td>
-      <td><code>AutopilotService.cs</code></td>
-      <td>Transcript mining (~50 s warm / ~2 min cold) moves off the tick path into a single-flight
-          background task. A loop armed right after startup ticks on schedule; until the first pass
-          lands, the label space is the custom prompts alone (logged).</td>
-    </tr>
-    <tr>
-      <td><span class="fix-tag">cleanup</span>Async pipe read</td>
-      <td><code>CliRunnerService.cs</code></td>
-      <td>Read CLI stdout with <code>ReadLineAsync</code> until null instead of gating on the
-          synchronous <code>EndOfStream</code> property, which parked a pool thread per active run.</td>
-    </tr>
-  </table>
-  <div class="card">
-    <h3>Startup order, before → after</h3>
-    <pre><span class="bad">// before                              </span><span class="good">// after</span>
-api.Start();                            var form = new MainForm(...);
-var form = new MainForm(...);           _ = form.Handle;   <span class="good">// born on UI thread</span>
-Application.Run(form);                  api.Start();
-                                        Application.Run(form);</pre>
+  <!-- ============ STATE ============ -->
+  <div class="view" id="v-state">
+    <div class="card">
+      <h2 style="margin-top:0">Why toggling loses nothing</h2>
+      <p>Two prior contracts do the heavy lifting; split just leans on them:</p>
+      <div class="flow">
+        <span class="node">Chat is <b>always mounted</b> in <code>.phone__main</code>, last child, both modes</span><span class="arr">→</span>
+        <span class="node">toggling split only adds/removes the sibling <code>.phone__side</code></span><span class="arr">→</span>
+        <span class="node">React never remounts the chat (keep-composer contract)</span>
+      </div>
+      <div class="flow">
+        <span class="node">iframe lives in the root <code>LocalAppFrameHost</code>, not the pane</span><span class="arr">→</span>
+        <span class="node">both panes render a slot with the <b>same</b> <code>frameKey</code> <span class="mono">dock:&lt;dock&gt;:&lt;repo&gt;:&lt;app&gt;</span></span><span class="arr">→</span>
+        <span class="node">host re-tracks geometry; the iframe is never re-parented → no reload (state-preserve contract)</span>
+      </div>
+      <p class="soft">The alternative — actually moving the <code>&lt;iframe&gt;</code> between panes — would reload the app on every toggle: re-parenting an iframe resets its document. That's the whole reason the keep-alive host exists.</p>
+    </div>
+    <div class="card">
+      <h2 style="margin-top:0">Headless proof (27/27)</h2>
+      <p class="soft">The check seeds three kinds of state before toggling: an in-app counter + input (inside the iframe), a composer draft (chat subtree), and per-frame zoom (host). It then asserts all three survive cover → split → cover, that exactly one app iframe ever exists, and that the grid cell widens and restores. <code>.preview-test/split-view-check.mjs</code>.</p>
+    </div>
   </div>
-</section>
 
-<section id="verify">
-  <div class="card">
-    <h3>What was proven, and how</h3>
-    <ul>
-      <li><b>Diagnosis</b> — <code>dotnet-stack</code> + <code>dotnet-dump dumpasync</code> on the live
-        process: main thread in <code>SetParent</code>, engine state machine at
-        <code>&lt;&gt;1__state = 0</code> (first delay) 76 minutes after start, continuation posted to a
-        queue nobody pumps.</li>
-      <li><b>Fix verified on an isolated harness (:5218)</b> — at t+3s the engine's first tick ran and
-        logged <code>mining transcripts in background...</code>; mining finished 64 s later
-        (<code>378 routine prompts from 257 sessions</code>) while ticks continued; collector poller
-        started; API health 200; GUI responsive.</li>
-    </ul>
+  <!-- ============ WHERE ============ -->
+  <div class="view" id="v-where">
+    <div class="card">
+      <table>
+        <tr><th>Piece</th><th>File</th><th>Note</th></tr>
+        <tr><td>Split state + toggle + panes</td><td class="mono">client/src/components/dashboard/PinnedAgent.jsx</td><td><code>splitApp</code> state; effective <code>split = canSplit && splitApp && openApp</code>; chrome conditions widen from <code>!openApp</code> to <code>(!openApp || split)</code>; reports up via <code>onSplitChange</code>.</td></tr>
+        <tr><td>Grid widening</td><td class="mono">client/src/pages/Dashboard.jsx</td><td><code>splitDocks</code> map; cell gets <code>dash__cell--wide</code> when split AND columns ≥ 2 (a span-2 cell in a 1-column grid would overflow).</td></tr>
+        <tr><td>Pane layout</td><td class="mono">client/src/pages/dashboard.css</td><td><code>.phone__main</code> is a pass-through flex column normally; <code>.phone__screen--split</code> turns the screen into a row, both panes <code>flex: 1 1 50%</code> with min-width floors (300 / 260px).</td></tr>
+        <tr><td>Advanced gate</td><td class="mono">client/src/context/UiModeContext.jsx</td><td><code>dockAppSplit: 'advanced'</code> — gates only the toggle; opening apps stays <code>localAppTab</code> (Basic).</td></tr>
+        <tr><td>Spec home</td><td class="mono">openspec/specs/agent-dock/spec.md</td><td>Two new requirements on archive: the split presentation + the grid widening.</td></tr>
+      </table>
+      <p class="soft" style="margin-top:12px">Backend untouched — the app URL, proxy path, zoom, and frame host all behave exactly as in cover mode.</p>
+    </div>
   </div>
-  <div class="card">
-    <h3>The startup log, healthy shape</h3>
-    <pre>[10:59:26] [SERVER] Kestrel running on http://0.0.0.0:5218
-[10:59:26] [COLLECTOR] poller started
-[10:59:29] [AUTOPILOT] mining transcripts in background...   <span class="good">← first tick, 3 s in</span>
-[11:00:33] [AUTOPILOT] mining done in 64s (378 routine prompts from 257 sessions)</pre>
-    <p class="dim">If a future process ever shows the server lines but never the
-    <code>[AUTOPILOT]</code>/<code>[COLLECTOR]</code> lines, the engines are not running — that is the
-    old signature.</p>
-  </div>
-</section>
+</div>
 
-</main>
 <script>
-(function () {
-  // --- tabs ---
-  var tabs = document.getElementById('tabs');
-  tabs.addEventListener('click', function (e) {
-    var btn = e.target.closest('button'); if (!btn) return;
-    tabs.querySelectorAll('button').forEach(function (b) { b.classList.remove('active'); });
-    document.querySelectorAll('main > section').forEach(function (s) { s.classList.remove('active'); });
-    btn.classList.add('active');
-    document.getElementById(btn.dataset.tab).classList.add('active');
+// tabs
+document.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('on', x === b));
+  document.querySelectorAll('.view').forEach((v) => v.classList.toggle('on', v.id === 'v-' + b.dataset.v));
+}));
+
+// ---- dock mock ----
+const dock = document.getElementById('dock1');
+const appBtn = document.getElementById('dm-appbtn');
+const splitBtn = document.getElementById('dm-splitbtn');
+const gitRow = document.getElementById('dm-git');
+const screen = document.getElementById('dm-screen');
+const main = screen.querySelector('.dm-main');
+const msgs = document.getElementById('dm-msgs');
+const composer = main.querySelector('.dm-composer');
+let open = false;
+let split = false;
+let clicks = 0; // fake in-app state so the mock can show it surviving
+
+function appPane(cls) {
+  const d = document.createElement('div');
+  d.className = cls;
+  d.innerHTML = `<div>StateA test app</div><button class="dm-app" style="cursor:pointer">clicked <span>${clicks}</span>×</button><div class="dm-note">same iframe in both modes — state survives the toggle</div>`;
+  d.querySelector('button').addEventListener('click', (e) => {
+    clicks += 1;
+    e.currentTarget.querySelector('span').textContent = clicks;
   });
-
-  // --- race simulator ---
-  // Each step: text per lane, lane state (hot/dead/ok), and a caption.
-  var BROKEN = [
-    { main: 'api.Start()', pool: '', queue: '', engine: '',
-      hot: ['main'],
-      cap: 'Old order: the API starts serving BEFORE the form has a window handle. The phone is already polling from the moment the port opens.' },
-    { main: 'new MainForm(...) — no handle yet', pool: 'log event fires (phone request)', queue: '', engine: '',
-      hot: ['main', 'pool'],
-      cap: 'A logger/call event fires on a threadpool thread. The form exists but its native handle does not — this is the race window.' },
-    { main: '', pool: 'SafeInvoke: InvokeRequired == false → runs action() INLINE', queue: '', engine: '',
-      hot: ['pool'], bad: ['pool'],
-      cap: 'With no handle, InvokeRequired lies (false). SafeInvoke runs the UI update inline — creating the form’s control handles ON THE THREADPOOL THREAD and installing a WinForms sync context there.' },
-    { main: 'Application.Run → Show → SetParent → SendMessage…', pool: 'owns child handles, never pumps messages', queue: '', engine: '',
-      hot: ['main'], dead: ['main', 'pool'],
-      cap: 'The main thread shows the form. WinForms must SendMessage to the thread that owns the child handles — a threadpool thread that never pumps. The GUI deadlocks in SetParent, forever.' },
-    { main: 'DEADLOCKED', pool: 'phantom WindowsFormsSynchronizationContext installed', queue: 'engine continuation posted here — never runs', engine: 'await Task.Delay(3s) …captured the phantom context',
-      dead: ['main', 'queue', 'engine'], hot: ['engine'],
-      cap: 'The autopilot engine’s first await captured the phantom context. When the delay elapses, its wake-up is POSTED into a message queue nobody pumps. Engine frozen at state 0; CollectorPoller identical.' },
-    { main: 'DEADLOCKED', pool: '', queue: 'dead letters', engine: 'frozen — 76 minutes and counting',
-      dead: ['main', 'queue', 'engine'],
-      cap: 'End state: GUI dead, engines dead — but Kestrel runs on its own threads, so the phone UI works. Armed loops show every gate green and never tick. This is exactly what the debug bundle showed.' }
-  ];
-  var FIXED = [
-    { main: 'new MainForm(...); _ = form.Handle', pool: '', queue: '', engine: '',
-      hot: ['main'], ok: ['main'],
-      cap: 'New order: the form’s native handle is forced on the STA main thread FIRST. From this instant, InvokeRequired is truthful from every other thread.' },
-    { main: 'api.Start()', pool: 'log event fires (phone request)', queue: '', engine: '',
-      hot: ['main', 'pool'], ok: ['main'],
-      cap: 'Only now does the API start serving. The same hot-polling phone fires the same early event…' },
-    { main: '', pool: 'SafeInvoke: handle exists → InvokeRequired == true → BeginInvoke', queue: 'UI update queued for the UI thread', engine: '',
-      hot: ['pool', 'queue'], ok: ['pool', 'queue'],
-      cap: 'SafeInvoke marshals correctly: BeginInvoke posts the update to the form’s queue. (And if anything ever fired pre-handle, the new IsHandleCreated guard drops it instead of running inline.)' },
-    { main: 'Application.Run pumps the queue, form shows', pool: '', queue: 'drained ✓', engine: 'await Task.Delay(3s).ConfigureAwait(false)',
-      hot: ['main', 'engine'], ok: ['main', 'queue', 'engine'],
-      cap: 'Application.Run starts pumping; queued updates drain; the GUI shows normally. The engine’s awaits use ConfigureAwait(false) — resumes go to the threadpool regardless of any ambient context.' },
-    { main: 'GUI alive', pool: 'mining runs here, in background (single-flight)', queue: '', engine: 'tick @ 3s: "mining transcripts in background…", keeps ticking',
-      hot: ['engine', 'pool'], ok: ['main', 'pool', 'engine'],
-      cap: 'First tick fires at t+3s. Transcript mining (~1–2 min cold) now runs in a background task — the tick path never blocks, so a loop armed right after startup runs on schedule.' }
-  ];
-
-  var mode = BROKEN, step = 0;
-  var lanes = { main: document.getElementById('lane-main'), pool: document.getElementById('lane-pool'),
-                queue: document.getElementById('lane-queue'), engine: document.getElementById('lane-engine') };
-  var caption = document.getElementById('caption'), captext = document.getElementById('captext'),
-      stepnum = document.getElementById('stepnum');
-  var prev = document.getElementById('prev'), next = document.getElementById('next');
-
-  function render() {
-    var s = mode[step];
-    Object.keys(lanes).forEach(function (k) {
-      var el = lanes[k];
-      el.textContent = s[k] || '';
-      el.className = 'lane' +
-        ((s.hot || []).indexOf(k) >= 0 ? ' hot' : '') +
-        ((s.dead || []).indexOf(k) >= 0 ? ' dead' : '') +
-        ((s.ok || []).indexOf(k) >= 0 ? ' ok' : '');
-    });
-    caption.className = 'caption ' + (mode === BROKEN ? (s.dead ? 'bad' : '') : 'good');
-    stepnum.textContent = 'Step ' + (step + 1) + ' of ' + mode.length +
-      (mode === BROKEN ? ' — broken (old code)' : ' — fixed (new code)');
-    captext.textContent = s.cap;
-    prev.disabled = step === 0;
-    next.disabled = step === mode.length - 1;
+  return d;
+}
+function render() {
+  appBtn.classList.toggle('on', open);
+  splitBtn.classList.toggle('show', open);
+  splitBtn.classList.toggle('on', split && open);
+  dock.classList.toggle('split', split && open);
+  // chrome: git row hides only in cover
+  gitRow.style.display = open && !split ? 'none' : '';
+  // chat: composer-only in cover
+  msgs.style.display = open && !split ? 'none' : '';
+  screen.querySelector('.dm-cover')?.remove();
+  screen.querySelector('.dm-side')?.remove();
+  main.style.display = '';
+  if (open && !split) {
+    main.style.display = 'flex';
+    main.insertBefore(appPane('dm-cover'), composer.parentElement === main ? composer : null);
+    // cover: app above the composer strip — hide the message list only
+    main.insertBefore(main.querySelector('.dm-cover'), composer);
+  } else if (open && split) {
+    screen.appendChild(appPane('dm-side'));
   }
-  prev.addEventListener('click', function () { if (step > 0) { step--; render(); } });
-  next.addEventListener('click', function () { if (step < mode.length - 1) { step++; render(); } });
-  document.getElementById('reset').addEventListener('click', function () { step = 0; render(); });
-  var mb = document.getElementById('mode-bad'), mg = document.getElementById('mode-good');
-  mb.addEventListener('click', function () { mode = BROKEN; step = 0; mb.className = 'on-bad'; mg.className = ''; render(); });
-  mg.addEventListener('click', function () { mode = FIXED; step = 0; mg.className = 'on-good'; mb.className = ''; render(); });
-  render();
-})();
+}
+appBtn.addEventListener('click', () => { open = !open; if (!open) split = false; render(); });
+splitBtn.addEventListener('click', () => { split = !split; render(); });
+render();
 </script>
 </body>
 </html>

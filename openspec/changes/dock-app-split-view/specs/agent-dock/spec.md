@@ -5,12 +5,13 @@
 ### Requirement: Side-by-side view mode for an opened local app
 
 The system SHALL offer, per agent dock, a **split** presentation for the dock's opened
-local app alongside the existing **cover** presentation. In split, the dock renders as
-two side-by-side panes: the **left pane** SHALL contain the dock exactly as it renders
-with no app open — dock header, lane switcher, local-apps switcher, the chat with its
-full message list and composer, and the dock's other chrome per its usual visibility
-rules — and the **right pane** SHALL contain the opened app's frame (the same
-same-origin proxied frame as the cover presentation). In cover, behavior is unchanged:
+local app alongside the existing **cover** presentation. In split, the dock's chrome
+(header, lane switcher, local-apps switcher, git and discovery blocks) SHALL remain
+visible in its normal full-dock-width placement and under its usual visibility rules —
+exactly as with no app open — and the dock's screen area SHALL render as two
+side-by-side panes: the **left pane** holding the chat with its full message list and
+composer, the **right pane** holding the opened app's frame (the same same-origin
+proxied frame as the cover presentation). In cover, behavior is unchanged:
 the app takes the dock's surface and the chat collapses to its composer-only strip. The
 operator SHALL be able to switch a dock between cover and split while an app is open,
 via an explicit per-dock affordance. The mode SHALL be per-dock, device-local, and
@@ -26,7 +27,7 @@ remains governed by its existing gate.
 #### Scenario: Split shows chat and app side by side
 
 - **WHEN** the operator opens a local app in a dock and selects the split presentation
-- **THEN** the dock shows its full normal content (including the chat's message list and composer) in a left pane and the opened app in a right pane, both visible and interactive at the same time
+- **THEN** the dock keeps its normal chrome and shows the chat's full message list and composer in a left pane with the opened app in a right pane, all visible and interactive at the same time
 
 #### Scenario: Cover remains the existing behavior
 
