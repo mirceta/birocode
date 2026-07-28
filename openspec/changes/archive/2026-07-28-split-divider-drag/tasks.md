@@ -18,4 +18,4 @@
 - [x] 3.1 `npm --prefix client run build` passes; isolated `dotnet build` + `tests/ClaudeWeb.Tests` stay green
 - [x] 3.2 Headless Playwright per `docs/claude-web/browser-testing.md` against an isolated :5200 instance: drag moves the boundary (pane widths change), no iframe reload (in-app state survives a drag), clamp stops at floors, double-click restores 50/50, ratio survives split off/on, second dock unaffected
 - [x] 3.3 `openspec validate split-divider-drag --strict` passes; refresh `understanding-app/` with the divider behavior
-- [ ] 3.4 Deploy the feature branch to live via the persisted deploy task; user acceptance on live ("keep it"), then sync + archive + merge to main
+- [x] 3.4 Deploy the feature branch to live via the persisted deploy task; user acceptance on live ("keep it"), then sync + archive + merge to main
