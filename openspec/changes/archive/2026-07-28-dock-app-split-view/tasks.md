@@ -24,4 +24,4 @@
 - [x] 4.1 `npm --prefix client run build` and isolated `dotnet build` pass; `tests/ClaudeWeb.Tests` stays green (32/32)
 - [x] 4.2 Headless Playwright per `docs/claude-web/browser-testing.md` against an isolated :5200 instance: open app → toggle split → two panes with full chat visible; composer draft text survives the toggle; app in-page state survives cover→split→cover (no iframe reload); closing the app restores single-pane; cell span appears/restores (`.preview-test/split-view-check.mjs`, 27/27 PASS; screenshots eyeballed)
 - [x] 4.3 `openspec validate dock-app-split-view --strict` passes; update `understanding-app/` with the split-view explanation (delta spec wording aligned with the built layout: chrome stays full-width above, the screen area splits)
-- [ ] 4.4 Deploy the feature branch to live via the persisted deploy task; user acceptance on live ("keep it"), then sync + archive + merge to main
+- [x] 4.4 Deploy the feature branch to live via the persisted deploy task; user acceptance on live ("keep it" 2026-07-28), then sync + archive + merge to main
