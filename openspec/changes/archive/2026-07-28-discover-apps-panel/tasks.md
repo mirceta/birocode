@@ -30,5 +30,5 @@
 
 - [x] 5.1 `npm --prefix client run build` and `dotnet build` (isolated per self-dev doc) pass; run `tests/ClaudeWeb.Tests` (16/16 pass)
 - [x] 5.2 Headless Playwright pass per `docs/claude-web/browser-testing.md`: two-button dock, panel opens/closes, rows render with age, delete removes a row, no-cache guidance (`.preview-test/discover-panel-check.mjs`, 19/19 PASS against an isolated :5200 instance)
-- [ ] 5.3 Manual end-to-end on this repo: run discovery (partial ok), confirm union with an older cache, delete a record, restart harness, load cache — union minus deleted record survives (operator acceptance — left for the user)
+- [x] 5.3 Manual end-to-end on this repo: run discovery (partial ok), confirm union with an older cache, delete a record, restart harness, load cache — union minus deleted record survives (operator accepted on live 2026-07-28: "this is actually what I want")
 - [x] 5.4 `openspec validate discover-apps-panel --strict` passes; update `understanding-app/` with the new flow
