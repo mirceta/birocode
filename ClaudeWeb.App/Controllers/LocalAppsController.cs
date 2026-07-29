@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ClaudeWeb.Services.Audit;
 using ClaudeWeb.Services.Events;
 using ClaudeWeb.Services.Logging;
@@ -127,25 +128,105 @@ public class LocalAppsController : ControllerBase
 
         // Rehydrate the in-memory job so per-row Run/Check work after a cache load
         // (e.g. following a harness restart, when no live job exists).
-        _jobs.SeedFromCache(repo.Id, cached.Report);
-        return Ok(new
-        {
-            repoId = repo.Id,
-            repoName = repo.Name,
-            status = "done",
-            apps = cached.Report.Apps.Select(a => new
-            {
-                name = a.Name,
-                port = a.Port,
-                folder = a.Folder,
-                evidence = a.Evidence,
-                startCommand = a.StartCommand,
-                running = _runner.IsListening(a.Port),
-            }),
-            fromCache = true,
-            cachedAt = cached.CachedAt,
-        });
+        _jobs.SeedFromCache(repo.Id, cached);
+        return Ok(CacheBody(repo.Id, repo.Name, cached));
     }
+
+    // Delete ONE cached finding by port — the explicit cache edit introduced by
+    // openspec discover-apps-panel (D5): under the union cache a rescan never drops
+    // a record, so this is the only removal path. Edits the on-disk cache AND the
+    // repo's in-memory job result, so the record can't resurface on the next status
+    // poll or be relaunched via Run-by-port. Returns the updated snapshot (same
+    // shape as GET /cache) so the panel re-renders without a second fetch; deleting
+    // the last record yields a valid cached-EMPTY snapshot, distinct from no-cache.
+    // Never touches the scanned repository or any running process.
+    [HttpDelete("cache/{port:int}")]
+    public IActionResult DeleteCached(int port)
+    {
+        _logger.CountRequest();
+
+        var repo = _repos.Current();
+        if (repo is null)
+            return NotFound(new { error = "No repository selected." });
+
+        var (outcome, updated) = _cache.Delete(repo.Id, port);
+        if (outcome == CacheDeleteOutcome.NoCache)
+            return NotFound(new { error = "No cached discovery for this repository." });
+        if (outcome == CacheDeleteOutcome.NotFound)
+            return NotFound(new { error = $"No cached app on port {port} for this repository." });
+
+        _jobs.RemoveFromResult(repo.Id, port);
+        _events.Emit(repo.Id, "cache", "done", "Cache", $"deleted cached app on :{port}");
+        return Ok(CacheBody(repo.Id, repo.Name, updated!));
+    }
+
+    // Import externally produced findings into the caller's repo cache (openspec
+    // import-discovery-findings): the operator sometimes has ANOTHER agent hunt for
+    // apps, and it hands back a JSON array of findings. Accepts either that bare
+    // array or the harness's own { apps: [...] } report shape (D1: a bare array is
+    // wrapped, then LocalAppExposureReport.Parse is the ONE validator — all-or-
+    // nothing, so a single bad finding rejects the whole payload with the cache
+    // untouched). A valid payload goes through the SAME union-by-port merge as a
+    // finishing scan (Save), each imported finding stamped with the import time;
+    // SeedFromCache then updates the in-memory job so Run/Check resolve imported
+    // ports — unless a scan is running, which it never clobbers (the scan's own
+    // completion merge unions on top of the just-written cache). Returns the updated
+    // snapshot (same shape as GET /cache). Never touches the repository's files,
+    // never runs the agent, never registers or starts anything.
+    [HttpPost("cache/import")]
+    [RequestSizeLimit(1_000_000)]
+    public async Task<IActionResult> ImportFindings()
+    {
+        _logger.CountRequest();
+
+        var repo = _repos.Current();
+        if (repo is null)
+            return NotFound(new { error = "No repository selected." });
+
+        string body;
+        using (var reader = new StreamReader(Request.Body))
+            body = await reader.ReadToEndAsync();
+
+        LocalAppExposureReport report;
+        try
+        {
+            report = LocalAppExposureReport.ParseImport(body);
+        }
+        catch (JsonException ex)
+        {
+            return BadRequest(new { error = $"Invalid findings JSON: {ex.Message}" });
+        }
+
+        var merged = _cache.Save(repo.Id, report, DateTimeOffset.UtcNow);
+        _jobs.SeedFromCache(repo.Id, merged);
+        var n = report.Apps.Count;
+        _events.Emit(repo.Id, "cache", "done", "Cache",
+            $"imported {n} finding{(n == 1 ? "" : "s")} — merged into cache ({merged.Report.Apps.Count} total)");
+        return Ok(CacheBody(repo.Id, repo.Name, merged));
+    }
+
+    // Shared cache-snapshot projection (GET /cache hit + DELETE /cache/{port}):
+    // the JobBody "done" shape plus fromCache/cachedAt, each app's `running`
+    // recomputed LIVE and its own last-discovered time alongside (union cache —
+    // rows can come from different scans; openspec discover-apps-panel, D4).
+    private object CacheBody(string repoId, string repoName, CachedDiscovery cached) => new
+    {
+        repoId,
+        repoName,
+        status = "done",
+        apps = cached.Report.Apps.Select(a => new
+        {
+            name = a.Name,
+            port = a.Port,
+            folder = a.Folder,
+            evidence = a.Evidence,
+            startCommand = a.StartCommand,
+            running = _runner.IsListening(a.Port),
+            discoveredAt = cached.DiscoveredAtByPort!.TryGetValue(a.Port, out var t) ? t : cached.CachedAt,
+        }),
+        fromCache = true,
+        cachedAt = cached.CachedAt,
+    };
 
     // Emit a check boundary event: we probe each discovered app's port (in-process
     // listener snapshot) and report which are live. Best-effort; a check with no
@@ -255,11 +336,20 @@ public class LocalAppsController : ControllerBase
                     evidence = a.Evidence,
                     startCommand = a.StartCommand,
                     running = _runner.IsListening(a.Port),
+                    // Per-row age (openspec discover-apps-panel, D4): under the union
+                    // cache a done result mixes scans; falls back to the job's finish
+                    // time for results that never carried per-port times.
+                    discoveredAt = job.DiscoveredAt is not null && job.DiscoveredAt.TryGetValue(a.Port, out var t)
+                        ? t
+                        : job.FinishedAt,
                 })
                 : null,
             error = job.Status == DiscoveryStatus.Error ? job.Error : null,
             startedAt = job.StartedAt,
             finishedAt = job.FinishedAt,
+            // The cache's latest-scan time (openspec discover-apps-panel): truthful
+            // even for a cache-seeded job, whose finishedAt is only the seed time.
+            cachedAt = job.CachedAt,
         };
     }
 }

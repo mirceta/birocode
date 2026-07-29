@@ -47,13 +47,26 @@ public class LocalAppDiscoveryJobs
     /// terminal job; a still-running scan is left untouched so a cache load never
     /// clobbers a live discovery.
     /// </summary>
-    public DiscoveryJob SeedFromCache(string repoId, LocalAppExposureReport report) =>
+    public DiscoveryJob SeedFromCache(string repoId, CachedDiscovery cached) =>
         _jobs.AddOrUpdate(
             repoId,
-            _ => DiscoveryJob.Completed(report),
+            _ => DiscoveryJob.Completed(cached),
             (_, existing) => existing.Status == DiscoveryStatus.Running
                 ? existing
-                : DiscoveryJob.Completed(report));
+                : DiscoveryJob.Completed(cached));
+
+    /// <summary>
+    /// Drop one finding from the repo's in-memory result after a cache delete
+    /// (openspec discover-apps-panel, D5) — so a deleted record cannot resurface on
+    /// the next status poll or be relaunched via Run-by-port. The job swaps in a
+    /// filtered copy of its result; a running or absent job is left alone (a running
+    /// scan has no result yet, and its eventual Save re-merges against the already-
+    /// edited cache).
+    /// </summary>
+    public void RemoveFromResult(string repoId, int port)
+    {
+        if (_jobs.TryGetValue(repoId, out var job)) job.RemoveResultApp(port);
+    }
 
     /// <summary>
     /// Join the repo's discovery if one is already running, otherwise start a new
@@ -104,14 +117,17 @@ public class LocalAppDiscoveryJobs
                 var result = await _discovery.DiscoverAsync(workingDirectory, job.Cts.Token);
                 if (result.Success)
                 {
-                    job.MarkDone(result.Report!);
-                    // Write-through to the durable per-repo cache (openspec change
-                    // cache-discovered-local-apps). Best-effort inside the service —
-                    // a cache-write failure is logged there and never fails discovery.
-                    _cache.Save(repoId, result.Report!, job.FinishedAt ?? DateTimeOffset.UtcNow);
+                    // Union-merge into the durable per-repo cache FIRST (openspec
+                    // discover-apps-panel, D3) — the WRITE is best-effort inside the
+                    // service, but the returned merge always succeeds — then mark the
+                    // job done with the MERGED set, so status reads, Run-by-port and
+                    // Check resolve every cached port, not just this scan's.
+                    var merged = _cache.Save(repoId, result.Report!, DateTimeOffset.UtcNow);
+                    job.MarkDone(merged);
                     var n = result.Report!.Apps.Count;
+                    var total = merged.Report.Apps.Count;
                     _events.Emit(repoId, "discovery", "done", "Discovery",
-                        $"returned {n} app{(n == 1 ? "" : "s")} — produced for the dock to render, cached for reuse");
+                        $"returned {n} app{(n == 1 ? "" : "s")} — merged into cache ({total} total)");
                     AuditEnd("done");
                 }
                 else
@@ -151,6 +167,18 @@ public class DiscoveryJob
 {
     public DiscoveryStatus Status { get; private set; } = DiscoveryStatus.Running;
     public LocalAppExposureReport? Result { get; private set; }
+
+    /// <summary>Per-port last-discovered times for <see cref="Result"/>'s findings —
+    /// under the union cache (openspec discover-apps-panel) rows can come from
+    /// different scans, so the panel shows each row's own age. Null only for a
+    /// not-yet-done job.</summary>
+    public IReadOnlyDictionary<int, DateTimeOffset>? DiscoveredAt { get; private set; }
+
+    /// <summary>The cache's latest-successful-scan time for this result — the truthful
+    /// "latest scan" for the panel (a cache-seeded job's <see cref="FinishedAt"/> is
+    /// only the seed time, not when the scan actually ran).</summary>
+    public DateTimeOffset? CachedAt { get; private set; }
+
     public string? Error { get; private set; }
     public DateTimeOffset StartedAt { get; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? FinishedAt { get; private set; }
@@ -171,18 +199,32 @@ public class DiscoveryJob
     /// Run / Check affordances can resolve against a repo's latest result after a
     /// "Load cache".
     /// </summary>
-    public static DiscoveryJob Completed(LocalAppExposureReport report)
+    public static DiscoveryJob Completed(CachedDiscovery cached)
     {
         var job = new DiscoveryJob();
-        job.MarkDone(report);
+        job.MarkDone(cached);
         return job;
     }
 
-    public void MarkDone(LocalAppExposureReport report)
+    public void MarkDone(CachedDiscovery cached)
     {
-        Result = report;
+        Result = cached.Report;
+        DiscoveredAt = cached.DiscoveredAtByPort;
+        CachedAt = cached.CachedAt;
         Status = DiscoveryStatus.Done;
         FinishedAt = DateTimeOffset.UtcNow;
+    }
+
+    /// <summary>Swap in a filtered COPY of the result without the given port (cache
+    /// delete, openspec discover-apps-panel). A copy — not an in-place list edit — so
+    /// a concurrent status projection never enumerates a mutating list. No-op unless
+    /// the job is Done with a result.</summary>
+    public void RemoveResultApp(int port)
+    {
+        if (Status != DiscoveryStatus.Done || Result is null) return;
+        Result = new LocalAppExposureReport { Apps = Result.Apps.Where(a => a.Port != port).ToList() };
+        if (DiscoveredAt is not null)
+            DiscoveredAt = DiscoveredAt.Where(kv => kv.Key != port).ToDictionary(kv => kv.Key, kv => kv.Value);
     }
 
     public void MarkError(string error)

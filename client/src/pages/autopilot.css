@@ -166,6 +166,20 @@
 }
 .ap-tabs button.on { color: var(--color-text, inherit); font-weight: 600; border-bottom-color: var(--color-accent, #c0392b); }
 
+/* Second-level row under a grouped root tab (openspec restructure-autopilot-tabs) —
+   a lighter sibling of .ap-tabs. */
+.ap-subtabs { display: flex; gap: 2px; flex-wrap: wrap; padding: 4px 0 0 10px; }
+.ap-subtabs button {
+  border: none; background: none; color: var(--color-text-muted, #888);
+  font: inherit; font-size: 12.5px; padding: 5px 10px; cursor: pointer;
+  border-radius: 999px;
+}
+.ap-subtabs button.on {
+  color: var(--color-text, inherit); font-weight: 600;
+  background: var(--color-surface, #fff);
+  box-shadow: inset 0 0 0 1px var(--color-border, #ddd);
+}
+
 .ap-bar {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   border: 1px solid var(--color-border); border-radius: 12px;
@@ -225,6 +239,7 @@
 .out-sent { background: #d8f3df; color: #1a7f37; }
 .out-esc { background: #ffe0c2; color: #b85c00; }
 .out-skip { background: #eef0f3; color: #6b7787; }
+.out-loop { background: #ead9ff; color: #6b2fb3; } /* recipe/goal loop send in the audit trail */
 
 /* Deny-list transparency line (ported from autopilot-app/): which risky actions
    always escalate regardless of confidence. */
@@ -379,6 +394,35 @@
 
 /* --- finished loop --- */
 .lp-done { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 13px; }
+
+/* --- adopt-autopilot-loops: recipes + stop-reason readout --- */
+.lp-card__recipe {
+  font-size: 11px; font-weight: 600; color: var(--color-text-muted, #888);
+  border: 1px solid var(--color-border, #ddd); border-radius: 999px; padding: 1px 8px;
+}
+/* Loop kind chip (openspec unify-loop-types) + a goal loop's stated goal. */
+.lp-card__kind {
+  font-size: 11px; font-weight: 700; color: var(--color-text-soft, #666);
+  border: 1px solid var(--color-border, #ddd); border-radius: 999px; padding: 1px 8px;
+}
+.lp-live__goal {
+  font-size: 12.5px; font-weight: 600; color: var(--color-text, #222);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Why the loop stopped — full width under the outcome line; the needs-human
+   variant is the agent's verbatim question, so it reads loudest. */
+.lp-reason {
+  flex: 1 1 100%; font-size: 12.5px; color: var(--color-text-soft, #666);
+  background: var(--color-bg, #f0ece4); border-radius: 8px; padding: 6px 10px;
+  white-space: pre-wrap; word-break: break-word;
+}
+.lp-reason--human { color: #b45309; background: rgba(245, 158, 11, 0.12); font-weight: 600; }
+.lp-recipe__prompt {
+  display: block; background: var(--color-bg, #f0ece4); padding: 8px 10px; border-radius: 8px;
+  font-size: 12.5px; white-space: pre-wrap; word-break: break-word; margin: 8px 0;
+}
+.lp-list--recipes { margin-bottom: 10px; }
+.lp-form--add { margin: 10px 0 4px; }
 
 /* ---- System Tests tab (understanding.md: real-runner): inner sub-tabs + run panel ---- */
 .st-wrap { display: flex; flex-direction: column; gap: 12px; }

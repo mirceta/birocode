@@ -10,10 +10,12 @@ import AutopilotArchitectureView from './AutopilotArchitectureView';
 import '../../pages/autopilot.css';
 
 // The full Autopilot console (plans/autopilot-to-harness.md): the complete
-// detailed surface — the Overview front page (what autopilot is + the
-// three-mode plan, openspec add-autopilot-overview-tab), Agents controls, Routine-prompt
-// CRUD + mined drafts, Intercepted live feed, Suggestion history, and the
-// Audit trail, all over /api/autopilot. The Overview is pure reference and is
+// detailed surface, grouped by loop type (openspec restructure-autopilot-tabs)
+// into five root tabs — the Overview front page (what autopilot is + the
+// three-mode plan), the Suggestion-based loop (Control, Prompt library, Live
+// feed, History), the Loops root (📋 recipe + 🎯 goal: Agents, Recipes), the cross-loop-type
+// Audit trail, and Reference (the two explainers + System tests), all over
+// /api/autopilot. The Overview is pure reference and is
 // the one tab the operator gate never hides. This is the SINGLE implementation rendered by BOTH the routed
 // Autopilot tab (pages/Autopilot.jsx, the mobile-first view) and the dashboard
 // dock (components/dashboard/AutopilotPanel.jsx, viewable anywhere) — they are
@@ -29,10 +31,29 @@ const POLL_MS = 4000;
 // Intercept outcome → the badge class suffix (reuses .out-* from autopilot.css).
 const OUT_CLS = { suggested: 'sugg', sent: 'sent', escalated: 'esc', skipped: 'skip' };
 
+// Second-level tab row under a grouped root (openspec restructure-autopilot-tabs).
+function SubTabs({ items, active, onPick }) {
+  return (
+    <nav className="ap-subtabs">
+      {items.map(([key, label]) => (
+        <button key={key} className={active === key ? 'on' : ''} onClick={() => onPick(key)}>
+          {label}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
 export default function AutopilotConsole({ embedded = false }) {
   // Opens on the Overview — the console's front page (what autopilot is today +
   // the three-mode plan), per openspec/changes/add-autopilot-overview-tab.
-  const [tab, setTab] = useState('overview');
+  // Navigation is two-level (openspec restructure-autopilot-tabs): a root row
+  // grouped by loop type, plus a per-root subtab memory so returning to a group
+  // reopens where you left it. The queue-based loop has no root yet — it only
+  // exists as a plan card on the Overview.
+  const [root, setRoot] = useState('overview');
+  const [sub, setSub] = useState({ suggestion: 'control', goal: 'agents', reference: 'autoarch' });
+  const pickSub = useCallback((r, key) => setSub((s) => ({ ...s, [r]: key })), []);
   const [data, setData] = useState(null); // { enabled, threshold, denyList, agents, log }
   const [discover, setDiscover] = useState(null);
   const [prompts, setPrompts] = useState(null); // the EDITABLE custom-prompt library
@@ -68,7 +89,7 @@ export default function AutopilotConsole({ embedded = false }) {
     return () => clearInterval(timer.current);
   }, [load]);
 
-  // The editable library and the mined drafts back the Routine-prompts tab.
+  // The editable library and the mined drafts back the Prompt library subtab.
   const loadPrompts = useCallback(async () => {
     try {
       setPrompts(await apiGet('/prompts'));
@@ -84,12 +105,12 @@ export default function AutopilotConsole({ embedded = false }) {
     }
   }, []);
 
-  // Lazy-load both the first time the Routine-prompts tab opens.
+  // Lazy-load both the first time the Prompt library subtab opens.
   useEffect(() => {
-    if (tab !== 'prompts') return;
+    if (root !== 'suggestion' || sub.suggestion !== 'prompts') return;
     if (!prompts) loadPrompts();
     if (!discover) loadDiscover();
-  }, [tab, prompts, discover, loadPrompts, loadDiscover]);
+  }, [root, sub.suggestion, prompts, discover, loadPrompts, loadDiscover]);
 
   const mutate = useCallback(async (body) => {
     try {
@@ -109,6 +130,29 @@ export default function AutopilotConsole({ embedded = false }) {
       setError('Could not update the loop.');
     }
   }, []);
+
+  // Loop-recipe CRUD (openspec adopt-autopilot-loops): named loop templates the
+  // dock's one-tap control arms from. Each action returns the fresh state.
+  const recipeAction = useCallback(async (call, failText) => {
+    try {
+      setData(await call());
+      setError('');
+    } catch {
+      setError(failText);
+    }
+  }, []);
+  const addRecipe = useCallback(
+    (body) => recipeAction(() => apiPost('/autopilot/recipes', body), 'Could not add the recipe.'),
+    [recipeAction],
+  );
+  const saveRecipe = useCallback(
+    (id, body) => recipeAction(() => apiPost(`/autopilot/recipes/${id}`, body), 'Could not save the recipe.'),
+    [recipeAction],
+  );
+  const removeRecipe = useCallback(
+    (id) => recipeAction(() => apiDelete(`/autopilot/recipes/${id}`), 'Could not delete the recipe.'),
+    [recipeAction],
+  );
 
   // --- editable custom-prompt CRUD (the recommender's label space) ---
   const addPrompt = useCallback(async (body) => {
@@ -194,40 +238,59 @@ export default function AutopilotConsole({ embedded = false }) {
 
       {error && <ErrorBanner message={error} />}
 
+      {/* Root row, grouped by loop type. Badge counts live on the tab that owns
+          the data: active loops on the goal root, audit entries on Audit; the
+          prompt count sits on the Prompt library subtab below. */}
       <nav className="ap-tabs">
-        <button className={tab === 'overview' ? 'on' : ''} onClick={() => setTab('overview')}>Overview</button>
-        <button className={tab === 'agents' ? 'on' : ''} onClick={() => setTab('agents')}>Agents</button>
-        <button className={tab === 'loops' ? 'on' : ''} onClick={() => setTab('loops')}>
-          Loops{activeLoops ? ` ${activeLoops}` : ''}
+        <button className={root === 'overview' ? 'on' : ''} onClick={() => setRoot('overview')}>Overview</button>
+        <button className={root === 'suggestion' ? 'on' : ''} onClick={() => setRoot('suggestion')}>
+          💡 Suggestion-based loop
         </button>
-        <button className={tab === 'prompts' ? 'on' : ''} onClick={() => setTab('prompts')}>
-          Routine prompts{library.length ? ` ${library.length}` : ''}
+        <button className={root === 'goal' ? 'on' : ''} onClick={() => setRoot('goal')}>
+          ⟳ Loops (📋 recipe · 🎯 goal){activeLoops ? ` ${activeLoops}` : ''}
         </button>
-        <button className={tab === 'intercepts' ? 'on' : ''} onClick={() => setTab('intercepts')}>
-          Intercepted
-        </button>
-        <button className={tab === 'history' ? 'on' : ''} onClick={() => setTab('history')}>
-          Suggestion history
-        </button>
-        <button className={tab === 'audit' ? 'on' : ''} onClick={() => setTab('audit')}>
+        <button className={root === 'audit' ? 'on' : ''} onClick={() => setRoot('audit')}>
           Audit{audit.length ? ` ${audit.length}` : ''}
         </button>
-        <button className={tab === 'systests' ? 'on' : ''} onClick={() => setTab('systests')}>
-          System tests
-        </button>
-        <button className={tab === 'chatarch' ? 'on' : ''} onClick={() => setTab('chatarch')}>
-          How chat works
-        </button>
-        <button className={tab === 'autoarch' ? 'on' : ''} onClick={() => setTab('autoarch')}>
-          How autopilot works
-        </button>
+        <button className={root === 'reference' ? 'on' : ''} onClick={() => setRoot('reference')}>Reference</button>
       </nav>
 
-      {tab === 'overview' && <AutopilotOverviewView />}
+      {root === 'suggestion' && (
+        <SubTabs
+          active={sub.suggestion}
+          onPick={(k) => pickSub('suggestion', k)}
+          items={[
+            ['control', 'Control'],
+            ['prompts', `Prompt library${library.length ? ` ${library.length}` : ''}`],
+            ['intercepts', 'Live feed'],
+            ['history', 'History'],
+          ]}
+        />
+      )}
+      {root === 'goal' && (
+        <SubTabs
+          active={sub.goal}
+          onPick={(k) => pickSub('goal', k)}
+          items={[['agents', 'Agents'], ['recipes', 'Recipes']]}
+        />
+      )}
+      {root === 'reference' && (
+        <SubTabs
+          active={sub.reference}
+          onPick={(k) => pickSub('reference', k)}
+          items={[
+            ['autoarch', 'How autopilot works'],
+            ['chatarch', 'How chat works'],
+            ['systests', 'System tests'],
+          ]}
+        />
+      )}
+
+      {root === 'overview' && <AutopilotOverviewView />}
 
       {/* The gate fences every operational surface; the Overview above is pure
           reference content and stays visible either way. */}
-      {tab !== 'overview' && (gated ? (
+      {root !== 'overview' && (gated ? (
         <div className="ap-gateoff" role="status">
           <h3 className="ap-gateoff__title">Autopilot is turned off by the operator</h3>
           <p>
@@ -244,17 +307,26 @@ export default function AutopilotConsole({ embedded = false }) {
         </div>
       ) : (
       <>
-      {tab === 'agents' && <AgentsView data={data} mutate={mutate} />}
+      {root === 'suggestion' && sub.suggestion === 'control' && <AgentsView data={data} mutate={mutate} />}
 
-      {tab === 'loops' && <LoopsView data={data} loopAction={loopAction} />}
+      {root === 'goal' && (
+        <LoopsView
+          section={sub.goal}
+          data={data}
+          loopAction={loopAction}
+          addRecipe={addRecipe}
+          saveRecipe={saveRecipe}
+          removeRecipe={removeRecipe}
+        />
+      )}
 
-      {tab === 'systests' && <SystemTestsView />}
+      {root === 'reference' && sub.reference === 'systests' && <SystemTestsView />}
 
-      {tab === 'chatarch' && <ChatArchitectureView />}
+      {root === 'reference' && sub.reference === 'chatarch' && <ChatArchitectureView />}
 
-      {tab === 'autoarch' && <AutopilotArchitectureView />}
+      {root === 'reference' && sub.reference === 'autoarch' && <AutopilotArchitectureView />}
 
-      {tab === 'prompts' && (
+      {root === 'suggestion' && sub.suggestion === 'prompts' && (
         <>
           <p className="autopilot__summary">
             The brain's entire label space — <b>your editable list</b>. Autopilot can only
@@ -402,7 +474,7 @@ export default function AutopilotConsole({ embedded = false }) {
         </>
       )}
 
-      {tab === 'intercepts' && (
+      {root === 'suggestion' && sub.suggestion === 'intercepts' && (
         <>
           <p className="autopilot__summary">
             Every agent message the engine <b>grabs and processes</b>, newest first — a live feed
@@ -439,7 +511,7 @@ export default function AutopilotConsole({ embedded = false }) {
         </>
       )}
 
-      {tab === 'history' && (
+      {root === 'suggestion' && sub.suggestion === 'history' && (
         <ul className="ap-log">
           {log.map((e, i) => (
             <li key={i}>
@@ -454,18 +526,22 @@ export default function AutopilotConsole({ embedded = false }) {
         </ul>
       )}
 
-      {tab === 'audit' && (
+      {root === 'audit' && (
         <>
           <p className="autopilot__summary">
             Every prompt autopilot actually <b>sent</b> on your behalf — the durable,
-            append-only record (most recent first).
+            append-only record (most recent first). The one log that spans every loop
+            type: <b>sent</b> = the suggestion engine's auto-advance, <b>loop</b> = a
+            recipe- or goal-loop send (including a goal loop's verification turns).
           </p>
           <ul className="ap-log ap-log--audit">
             {audit.map((e, i) => (
               <li key={i}>
                 <span className="ap-log__t">{new Date(e.at).toLocaleString()}</span>
                 <span className="ap-log__ag">{e.repoName}</span>
-                <span className="ap-out out-sent">sent</span>
+                <span className={`ap-out ${e.outcome === 'loop' ? 'out-loop' : 'out-sent'}`}>
+                  {e.outcome === 'loop' ? 'loop' : 'sent'}
+                </span>
                 <span className="ap-log__pr"><code>{e.prompt}</code></span>
                 <span className="ap-log__cf">{e.confidence ? e.confidence.toFixed(2) : ''}</span>
                 <span className="ap-log__ans" title={e.answeredMessage}>↳ {e.answeredMessage}</span>

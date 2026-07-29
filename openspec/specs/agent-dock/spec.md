@@ -196,3 +196,124 @@ Clicking a repo square outside display mode SHALL open the reconstructed trail f
 - **WHEN** the page is in display mode
 - **THEN** dock cards and running indicators render, but squares have no click affordance and no trail opens
 
+### Requirement: Side-by-side view mode for an opened local app
+
+The system SHALL offer, per agent dock, a **split** presentation for the dock's opened
+local app alongside the existing **cover** presentation. In split, the dock's chrome
+(header, lane switcher, local-apps switcher, git and discovery blocks) SHALL remain
+visible in its normal full-dock-width placement and under its usual visibility rules —
+exactly as with no app open — and the dock's screen area SHALL render as two
+side-by-side panes: the **left pane** holding the chat with its full message list and
+composer, the **right pane** holding the opened app's frame (the same same-origin
+proxied frame as the cover presentation). In cover, behavior is unchanged:
+the app takes the dock's surface and the chat collapses to its composer-only strip. The
+operator SHALL be able to switch a dock between cover and split while an app is open,
+via an explicit per-dock affordance. The mode SHALL be per-dock, device-local, and
+ephemeral (like the dock's maximize-chat toggle): it SHALL NOT be shared between
+devices and MAY reset on reload. Switching modes or opening/closing the app SHALL NOT
+remount the dock's chat subtree and SHALL NOT reload the app frame: the frame keeps its
+keep-alive identity, its per-frame zoom, and its in-app state across cover ↔ split
+switches. Closing the app, or switching the dock to another full-surface view (files,
+console), SHALL return the dock to its normal single-pane rendering. The split
+affordance is an Advanced-mode affordance; the underlying ability to open a local app
+remains governed by its existing gate.
+
+#### Scenario: Split shows chat and app side by side
+
+- **WHEN** the operator opens a local app in a dock and selects the split presentation
+- **THEN** the dock keeps its normal chrome and shows the chat's full message list and composer in a left pane with the opened app in a right pane, all visible and interactive at the same time
+
+#### Scenario: Cover remains the existing behavior
+
+- **WHEN** an app is open in cover presentation
+- **THEN** the app occupies the dock's surface with the composer-only chat strip, exactly as before this change
+
+#### Scenario: Switching modes preserves app and chat state
+
+- **WHEN** the operator switches an open app between cover and split (in either direction)
+- **THEN** the app frame is not reloaded — its in-app state and per-frame zoom persist — and the chat subtree is not remounted
+
+#### Scenario: Closing the app leaves split cleanly
+
+- **WHEN** the operator closes the opened app (or switches the dock to the files or console view) while in split
+- **THEN** the dock returns to its normal single-pane rendering with no leftover second pane
+
+#### Scenario: Split mode is per-dock and ephemeral
+
+- **WHEN** the operator puts one dock into split while other docks have apps open
+- **THEN** only that dock renders side-by-side, and the choice does not propagate to other docks, other devices, or (necessarily) across a reload
+
+#### Scenario: Split affordance honors the Advanced gate
+
+- **WHEN** the web UI is in Basic (Simple) mode
+- **THEN** the split affordance is not offered, and opening a local app uses the cover presentation
+
+### Requirement: Split fits the dock's existing cell
+
+Entering or leaving split presentation SHALL NOT change the dock's dashboard
+grid cell width. The per-dock wide (⤢) toggle SHALL keep working independently
+of split — a dock manually widened stays wide through split transitions, and a
+normal dock stays normal. The two panes SHALL fit the dock's actual width at
+any cell size: the pane minimum-width floors SHALL adapt (shrinking
+proportionally on narrow cells) so the split row never overflows the dock
+horizontally, and the divider's drag clamp SHALL honor the same adapted floors.
+
+#### Scenario: Entering split keeps the cell width
+
+- **WHEN** a dock in a multi-column dashboard grid enters split with an app open
+- **THEN** its grid cell keeps the width it had (no forced span), and other docks do not reflow
+
+#### Scenario: Manual wide survives split transitions
+
+- **WHEN** a dock marked wide via the ⤢ toggle enters and then leaves split
+- **THEN** it remains wide throughout, and toggling ⤢ while split takes effect immediately
+
+#### Scenario: Panes fit a normal-width cell
+
+- **WHEN** a dock at normal (single-column) cell width is split
+- **THEN** both panes and the divider render within the dock's width with no horizontal overflow, and dragging the divider clamps at floors scaled to that width
+
+### Requirement: Adjustable split ratio via a draggable divider
+
+While a dock is in split presentation, the system SHALL render a draggable
+vertical divider between the chat pane and the app pane, and dragging it
+horizontally SHALL reallocate width between the two panes without reloading
+the app frame or remounting the chat. The ratio SHALL be clamped so both
+panes remain usable, and SHALL be per-dock and session-ephemeral.
+
+#### Scenario: Dragging reallocates width
+
+- **WHEN** the operator drags the divider horizontally (mouse or touch)
+- **THEN** the chat and app panes resize live to follow the pointer, and the
+  app iframe is not reloaded and the chat subtree is not remounted
+
+#### Scenario: Drag crosses the app iframe
+
+- **WHEN** the pointer moves over the embedded app frame mid-drag
+- **THEN** the drag keeps tracking (the frame does not capture the pointer)
+  and ends only when the operator releases
+
+#### Scenario: Ratio is clamped
+
+- **WHEN** the operator drags the divider toward either edge
+- **THEN** the divider stops at the pane's minimum usable width (chat ≥
+  300px, app ≥ 260px at normal zoom) instead of collapsing a pane
+
+#### Scenario: Double-click resets
+
+- **WHEN** the operator double-clicks the divider
+- **THEN** the panes return to the 50/50 split
+
+#### Scenario: Ratio persists per dock while mounted
+
+- **WHEN** the operator sets a ratio, leaves split (or switches the opened
+  app), and re-enters split on the same dock in the same session
+- **THEN** the previously chosen ratio is restored, and other docks are
+  unaffected
+
+#### Scenario: Ratio is ephemeral
+
+- **WHEN** the page is reloaded or the dock is closed and reopened
+- **THEN** the split ratio starts back at 50/50 (no server or cross-device
+  persistence)
+

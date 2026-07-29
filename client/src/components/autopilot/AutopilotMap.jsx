@@ -6,7 +6,8 @@ import { AUTOPILOT_MAP, LOOP_FLOW } from './autopilotArchitectureData';
 // React code in the dock tab. Same self-contained dark stage and the same <ChatGraph>
 // renderer; new content. Five internal views — Overview · System map · Step a loop
 // (simulator) · Decision per turn · Safety fences — where "Step a loop" is a hands-on
-// model of the deterministic loop decision (errored → done → escalate → capped → resend).
+// model of the deterministic loop decision (errored → done → needs-human → deny →
+// capped → resend).
 
 const VIEWS = [
   { id: 'overview', label: 'Overview' },
@@ -29,6 +30,7 @@ const SENTINEL = 'LOOP_DONE';
 const REPLIES = [
   { key: 'work',  label: '…still working', sub: 'no sentinel, nothing risky', cls: 'work' },
   { key: 'done',  label: `…says “${SENTINEL}”`, sub: 'the agreed finish signal', cls: 'done' },
+  { key: 'human', label: '…says “NEEDS_HUMAN: …?”', sub: 'blocked on your decision', cls: 'deny' },
   { key: 'deny',  label: '…proposes to “deploy”', sub: 'a deny-listed word', cls: 'deny' },
   { key: 'error', label: 'run crashed (error)', sub: 'the run errored out', cls: 'error' },
 ];
@@ -72,7 +74,8 @@ function LoopSim() {
         : '· loop isn’t running — Arm it first.');
       return;
     }
-    // HandleLoop order: errored → sentinel(done) → deny(escalate) → cap(capped) → resend.
+    // HandleLoop order: errored → sentinel(done) → needs-human(escalate) →
+    // deny(escalate) → cap(capped) → resend.
     if (kind === 'error') {
       setStatus('error');
       addLog('rej', '✗ run.Status=="error" → Resolve("error"). Loop stops — won’t hammer a broken agent.');
@@ -83,9 +86,14 @@ function LoopSim() {
       addLog('ok', `✓ sentinel “${SENTINEL}” seen → Resolve("done"). Loop stops, success.`);
       return;
     }
+    if (kind === 'human') {
+      setStatus('escalate');
+      addLog('rej', '✗ NEEDS_HUMAN: marker → Resolve("escalate", "needs-human", question). The agent’s question is captured and shown on the dock badge.');
+      return;
+    }
     if (kind === 'deny') {
       setStatus('escalate');
-      addLog('rej', '✗ deny-list hit ("deploy") → Resolve("escalate"). Risky reply is never auto-continued.');
+      addLog('rej', '✗ deny-list hit ("deploy") → Resolve("escalate", "deny-list", word). Risky reply is never auto-continued.');
       return;
     }
     // "work": no stop fired → check the cap, then resend.
@@ -143,7 +151,8 @@ function LoopSim() {
         </div>
         <div className="cm-ask">
           <b>Loop mode</b> = a <em>deterministic</em> driver. No classifier, no LLM — it resends one
-          fixed prompt and stops on the first of <b>error · sentinel · deny · cap</b>.
+          fixed prompt and stops on the first of <b>error · sentinel · needs-human · deny · cap</b>,
+          recording why it stopped.
         </div>
       </div>
 
@@ -205,7 +214,7 @@ export default function AutopilotMap() {
           <div className="cm-ov">
             <div className="cm-ovcard cm-ovcard--a"><h4>🗺️ System map</h4><p>The whole subsystem — host PC → backend engine → the shared builder slot → CLI + disk — as one interactive graph. Click any box for its file and role.</p></div>
             <div className="cm-ovcard cm-ovcard--c"><h4>🔁 Step a loop</h4><p>A live model of loop mode. Arm a loop, then say what the agent replied each turn and watch it resend, count iterations, and stop on done / escalate / capped / error.</p></div>
-            <div className="cm-ovcard cm-ovcard--b"><h4>🧭 Decision per turn</h4><p>The deterministic check order the loop runs — <code>errored → sentinel → deny-list → cap → resend</code> — as a flow graph.</p></div>
+            <div className="cm-ovcard cm-ovcard--b"><h4>🧭 Decision per turn</h4><p>The deterministic check order the loop runs — <code>errored → sentinel → needs-human → deny-list → cap → resend</code> — as a flow graph.</p></div>
             <div className="cm-ovcard cm-ovcard--d"><h4>🛡️ Safety fences</h4><p>Every layer that keeps the autopilot from doing something you didn’t ask for — the gate, kill switch, threshold, deny-list, cap, single-writer slot and audit.</p></div>
           </div>
           <p className="cm-note">
@@ -251,10 +260,10 @@ export default function AutopilotMap() {
         <div className="cm-panel">
           <p className="cm-note">
             Loop mode is the <b className="cm-lp">deterministic</b> driver: it resends one fixed prompt
-            each idle turn and stops on the first of <b>error · sentinel · deny-list · cap</b> — no
-            classifier, no model in the loop. Open the operator gate, <b>Arm the loop</b>, then tell it
-            what the agent replied each turn. (Cap is {CAP} here so you can reach it fast; the real
-            default is 10.)
+            each idle turn and stops on the first of <b>error · sentinel · needs-human · deny-list ·
+            cap</b> — no classifier, no model in the loop. Open the operator gate, <b>Arm the
+            loop</b>, then tell it what the agent replied each turn. (Cap is {CAP} here so you can
+            reach it fast; the real default is 10.)
           </p>
           <LoopSim />
           <p className="cm-note">
@@ -269,8 +278,9 @@ export default function AutopilotMap() {
       {view === 'decision' && (
         <div className="cm-panel">
           <p className="cm-note">The loop’s decision, in the <b>exact order</b> <code>HandleLoop()</code>
-            runs it: <code>errored → sentinel(done) → deny-list(escalate) → cap(capped) → resend</code>.
-            Four outcomes are terminal; only <b>resend</b> loops back. Hover a step to isolate it.</p>
+            runs it: <code>errored → sentinel(done) → NEEDS_HUMAN(escalate) → deny-list(escalate) →
+            cap(capped) → resend</code>. Every outcome but <b>resend</b> is terminal, and each records
+            its stop reason + detail. Hover a step to isolate it.</p>
           <ChatGraph spec={LOOP_FLOW} intro={DECIDE_INTRO} />
           <p className="cm-note">
             An <b>active loop takes precedence</b> over the classifier entirely — a repo running a loop
@@ -295,7 +305,7 @@ export default function AutopilotMap() {
               <tr><td>Iteration cap</td><td><code>loops.json · MaxIterations</code></td><td>A loop stops at the ceiling (default 10) even if the sentinel is never said.</td></tr>
               <tr><td>Single-writer slot</td><td><code>TryBeginRun("builder")</code></td><td>The autopilot claims the same one slot you do — it can never collide with your turn.</td></tr>
               <tr><td>Audit log</td><td><code>autopilot-audit.jsonl</code></td><td>Every auto-send (and only sends) is recorded append-only — a durable trail.</td></tr>
-              <tr><td><b>The brain is a stub</b></td><td><code>PromptClassifier</code></td><td>Honest today: it’s keyword overlap, <b>not an LLM</b>. It can only pick one of <i>your</i> prompts or escalate.</td></tr>
+              <tr><td><b>The brain picks, never writes</b></td><td><code>CliPromptClassifier</code> / <code>PromptClassifier</code></td><td>The default brain is a one-shot Claude call (fast model) that can only pick one of <i>your</i> prompts or abstain — never free text; the offline word-overlap stub remains as its fallback and as a config choice.</td></tr>
             </tbody>
           </table>
           <p className="cm-note">
