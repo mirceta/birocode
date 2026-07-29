@@ -3,276 +3,306 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Understanding: why the 💡 suggestion loop did nothing — and what changed</title>
+<title>Understanding — Dock App Split View + Draggable Divider</title>
 <style>
   :root {
-    --bg: #0f1218; --panel: #171c26; --panel2: #1d2433; --line: #2b3446;
-    --text: #d8dee9; --dim: #8b96a8; --accent: #5da9f6; --bad: #e06c75;
-    --good: #7cc76f; --warn: #e5c07b; --mono: 'Consolas', 'Cascadia Code', monospace;
+    --bg: #0f1218;
+    --surface: #171c26;
+    --surface2: #1e2532;
+    --border: #2c3547;
+    --text: #e6ebf4;
+    --soft: #93a0b5;
+    --accent: #6ea8fe;
+    --green: #3fb950;
+    --green-bg: #12261a;
+    --amber: #d29922;
+    --amber-bg: #2a2113;
+    --red: #f85149;
+    --red-bg: #2a1416;
+    --violet: #a371f7;
+    --violet-bg: #1c1630;
+    --mono: 'Consolas', 'Cascadia Code', monospace;
+    --radius: 12px;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text);
-         font: 15px/1.55 'Segoe UI', system-ui, sans-serif; }
-  header { padding: 18px 22px 10px; border-bottom: 1px solid var(--line); }
-  header h1 { margin: 0 0 4px; font-size: 20px; }
-  header p { margin: 0; color: var(--dim); font-size: 13px; }
-  nav { display: flex; gap: 6px; padding: 10px 22px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-  nav button { background: var(--panel); color: var(--dim); border: 1px solid var(--line);
-        border-radius: 8px; padding: 7px 14px; cursor: pointer; font-size: 14px; }
-  nav button.active { background: var(--panel2); color: var(--text); border-color: var(--accent); }
-  main { padding: 18px 22px 40px; max-width: 1060px; margin: 0 auto; }
-  section { display: none; }
-  section.active { display: block; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-          padding: 14px 16px; margin: 12px 0; }
-  .card h3 { margin: 0 0 6px; font-size: 15px; }
-  code, pre { font-family: var(--mono); font-size: 13px; }
-  pre { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
-        padding: 10px 12px; overflow-x: auto; }
-  .bad { color: var(--bad); } .good { color: var(--good); } .warn { color: var(--warn); }
-  .dim { color: var(--dim); }
+  body {
+    margin: 0;
+    background: radial-gradient(1200px 700px at 70% -10%, #182234 0%, var(--bg) 60%);
+    color: var(--text);
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.55;
+    padding: 28px 20px 80px;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.02em; }
+  h2 { font-size: 18px; margin: 26px 0 10px; }
+  .sub { color: var(--soft); margin: 0 0 22px; font-size: 15px; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
+  .tab {
+    padding: 7px 14px; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--soft); font-size: 13.5px; font-weight: 600;
+    cursor: pointer;
+  }
+  .tab.on { background: var(--accent); border-color: var(--accent); color: #0b1524; }
+  .view { display: none; }
+  .view.on { display: block; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px 18px; margin-bottom: 14px;
+  }
+  .card p { margin: 8px 0; font-size: 14.5px; }
+  .soft { color: var(--soft); }
+  code, .mono { font-family: var(--mono); font-size: 13px; }
+  code { background: var(--surface2); padding: 1px 6px; border-radius: 6px; }
+  .pill {
+    display: inline-block; padding: 1px 9px; border-radius: 999px;
+    font-size: 11.5px; font-weight: 700;
+  }
+  .pill.green { color: var(--green); background: var(--green-bg); }
+  .pill.amber { color: var(--amber); background: var(--amber-bg); }
+  .pill.red   { color: var(--red); background: var(--red-bg); }
+  .pill.violet{ color: var(--violet); background: var(--violet-bg); }
   table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
-  th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
-  th { background: var(--panel2); }
-  .pill { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px;
-          border: 1px solid var(--line); background: var(--panel2); white-space: nowrap; }
-  .pill.b { color: var(--bad); border-color: var(--bad); }
-  .pill.g { color: var(--good); border-color: var(--good); }
-  /* simulator */
-  .sim { display: grid; grid-template-columns: 300px 1fr; gap: 14px; }
-  @media (max-width: 800px) { .sim { grid-template-columns: 1fr; } }
-  .sim label { display: block; margin: 10px 0 4px; font-size: 13px; color: var(--dim); }
-  .sim select, .sim input[type=range] { width: 100%; background: var(--panel2);
-        color: var(--text); border: 1px solid var(--line); border-radius: 7px; padding: 6px; }
-  .seg { display: flex; gap: 6px; }
-  .seg button { flex: 1; background: var(--panel2); color: var(--dim); border: 1px solid var(--line);
-        border-radius: 7px; padding: 6px; cursor: pointer; }
-  .seg button.on { color: var(--text); border-color: var(--accent); }
-  .flow { display: flex; flex-direction: column; gap: 8px; }
-  .step { border: 1px solid var(--line); border-radius: 9px; padding: 9px 12px; background: var(--panel2);
-          opacity: .38; transition: opacity .15s; }
-  .step.hit { opacity: 1; }
-  .step .t { font-weight: 700; font-size: 13.5px; }
-  .step .d { font-size: 12.5px; color: var(--dim); }
-  .outcome { border-radius: 9px; padding: 12px 14px; font-size: 14.5px; border: 1px solid; margin-top: 10px; }
-  .outcome.pend { border-color: var(--accent); color: var(--accent); }
-  .outcome.send { border-color: var(--good); color: var(--good); }
-  .outcome.hold { border-color: var(--warn); color: var(--warn); }
-  .outcome.err  { border-color: var(--bad); color: var(--bad); }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--soft); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .flow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; margin: 10px 0; }
+  .flow .node { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; }
+  .flow .arr { color: var(--soft); }
+
+  /* dock mock */
+  .stage { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
+  .gridbox {
+    flex: 0 0 auto; display: grid; grid-template-columns: repeat(2, 220px);
+    gap: 10px; padding: 12px; border: 1px dashed var(--border); border-radius: 12px;
+    transition: all .25s ease;
+  }
+  .dockm {
+    border: 1px solid var(--border); border-radius: 12px; background: var(--surface2);
+    overflow: hidden; display: flex; flex-direction: column; min-height: 260px;
+    transition: all .25s ease;
+  }
+  .dm-bar { padding: 7px 10px; background: #232c3d; font-size: 12px; font-weight: 700; display: flex; gap: 7px; align-items: center; }
+  .dm-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+  .dm-lanes { display: flex; gap: 4px; padding: 5px 8px; border-bottom: 1px solid var(--border); }
+  .dm-lane { font-size: 10.5px; padding: 2px 8px; border-radius: 999px; background: var(--surface); color: var(--soft); }
+  .dm-lane.on { color: var(--text); background: #2a3346; }
+  .dm-apps { display: flex; gap: 4px; padding: 5px 8px; border-bottom: 1px solid var(--border); align-items: center; }
+  .dm-app { font-size: 10.5px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--soft); cursor: pointer; }
+  .dm-app.on { background: var(--accent); border-color: var(--accent); color: #0b1524; }
+  .dm-split-btn { margin-left: auto; font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--soft); cursor: pointer; display: none; }
+  .dm-split-btn.show { display: block; }
+  .dm-split-btn.on { background: var(--accent); border-color: var(--accent); color: #0b1524; }
+  .dm-git { font-size: 10.5px; color: var(--soft); padding: 5px 8px; border-bottom: 1px solid var(--border); }
+  .dm-screen { flex: 1; display: flex; min-height: 0; }
+  .dm-main { flex: 1 1 50%; min-width: 0; display: flex; flex-direction: column; }
+  .dm-msgs { flex: 1; font-size: 10.5px; color: var(--soft); padding: 8px; overflow: hidden; }
+  .dm-composer { border-top: 1px solid var(--border); padding: 6px 8px; font-size: 10.5px; color: var(--soft); background: var(--surface); }
+  .dm-side { flex: 1 1 50%; min-width: 0; border-left: 1px solid var(--border); background: #0d2216; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--green); flex-direction: column; gap: 6px; }
+  .dm-divider { flex: 0 0 7px; cursor: col-resize; position: relative; touch-action: none; }
+  .dm-divider::before { content: ''; position: absolute; inset: 0 2px; border-radius: 2px; }
+  .dm-divider:hover::before, .dm-divider.drag::before { background: var(--accent); opacity: .5; }
+  .dm-cover { flex: 1; background: #0d2216; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--green); flex-direction: column; gap: 6px; }
+  .dm-note { font-size: 9.5px; color: var(--soft); }
+  .legend { flex: 1 1 280px; font-size: 13.5px; }
 </style>
 </head>
 <body>
-<header>
-  <h1>Why the 💡 suggestion loop did nothing — and what changed</h1>
-  <p>openspec change <code>fix-suggestion-loop-inert</code> · diagnosed live 2026-07-28 · rolling latest Understanding app</p>
-</header>
-<nav>
-  <button data-s="why" class="active">1 · Why it was inert</button>
-  <button data-s="fix">2 · What changed</button>
-  <button data-s="sim">3 · Try a decision</button>
-  <button data-s="brain">4 · The CLI brain</button>
-</nav>
-<main>
+<div class="wrap">
+  <h1>Dock App Split View</h1>
+  <p class="sub">openspec changes <code>dock-app-split-view</code> + <code>split-divider-drag</code> + <code>split-no-forced-wide</code> — a per-dock mode that puts the opened local app <b>beside</b> the chat instead of over it, with a <b>draggable divider</b> between the two panes. Split stays inside the dock's normal footprint; widening is always the manual ⤢ choice.</p>
 
-<section id="why" class="active">
-  <div class="card">
-    <h3>The observed symptom</h3>
-    <p>You armed 💡 on this repo in drive mode (19:57:25), watched ~30&nbsp;s of nothing — no send,
-    no pending prompt, no visible state — and disarmed (19:57:54). A second suggestion loop
-    (<code>web-flow-autodev</code>) had been "looping" for a day on a repo folder that no longer exists.</p>
+  <div class="tabs">
+    <button class="tab on" data-v="what">What changed</button>
+    <button class="tab" data-v="mock">Live mock</button>
+    <button class="tab" data-v="state">Why nothing reloads</button>
+    <button class="tab" data-v="where">Where things live</button>
   </div>
-  <div class="card">
-    <h3>Four stacked causes</h3>
-    <table>
-      <tr><th>#</th><th>Cause</th><th>Mechanism</th></tr>
-      <tr><td>1</td><td><span class="pill b">Classifier could ~never fire</span></td>
-        <td>Every routine's base confidence was exactly <code>0.85</code> (mining enrichment needs the
-        prompt text to <i>equal</i> a mined key — never true for long prompts). Threshold 0.75 ⇒ the agent's
-        reply had to contain ≥&nbsp;88% match strength of <i>your prompt's own wording</i>. So every tick ended
-        in a silent escalate-hold.</td></tr>
-      <tr><td>2</td><td><span class="pill b">Holds invisible at the dock</span></td>
-        <td>The decision + reason lived only in the Advanced Autopilot console. The dock — where you armed —
-        showed just the armed badge. "Armed but holding" looked identical to "broken".</td></tr>
-      <tr><td>3</td><td><span class="pill b">Deny-list matched substrings</span></td>
-        <td><code>"…merge to master…"</code> inside a prompt permanently blocked that routine
-        ("prod" blocked "production"), with no visible reason.</td></tr>
-      <tr><td>4</td><td><span class="pill b">Missing repos skipped silently</span></td>
-        <td><code>Tick()</code> iterated only repos whose folder exists — an armed loop on a deleted repo
-        got no state, no log, no resolution. Forever "looping".</td></tr>
-    </table>
-  </div>
-</section>
 
-<section id="fix">
-  <div class="card">
-    <h3>The four fixes (slice 1) + the real brain (slice 2)</h3>
-    <table>
-      <tr><th>Fix</th><th>Now</th><th>Where</th></tr>
-      <tr><td><span class="pill g">Suggest mode always pends</span></td>
-        <td>The classifier's best candidate becomes the pending prompt <b>even below the threshold</b>, with its
-        honest confidence shown ("· 42% sure"). A human still sends every suggest-mode prompt, so the threshold
-        keeps gating only <b>drive</b>-mode sends — safety unchanged.</td>
-        <td><code>SuggestionLoop.cs</code> (D1)</td></tr>
-      <tr><td><span class="pill g">Decisions visible at the dock</span></td>
-        <td>The loop popover shows the engine's live decision word (always) and its reason/confidence
-        (gate open — same disclosure rule as the pending prompt).</td>
-        <td><code>AutopilotController.cs</code> · <code>DockLoopControl.jsx</code> (D3)</td></tr>
-      <tr><td><span class="pill g">Deny-list word-scoped + named</span></td>
-        <td>"prod" no longer blocks "production"; a real hit escalates with the term named:
-        <code>routine contains deny-listed "prod"</code>. A deny-listed routine is never pended or sent in any mode.</td>
-        <td><code>PromptClassifier.ContainsWholeWord</code> (D4)</td></tr>
-      <tr><td><span class="pill g">Missing repo ⇒ explicit error</span></td>
-        <td>An armed loop on a deleted/moved repo resolves once as
-        <code>error / repo-missing</code> — the dock shows a terminal state. The live
-        <code>web-flow-autodev</code> zombie self-resolves on the first tick after deploy.</td>
-        <td><code>AutopilotService.Tick</code> (D2)</td></tr>
-      <tr><td><span class="pill g">A real classifier</span></td>
-        <td>Default brain is now a one-shot <code>claude&nbsp;-p</code> call (fast model) that picks one of
-        <i>your</i> prompts or abstains — this is what makes drive-mode sends actually reachable. Stub stays
-        as fallback + config choice. See tab 4.</td>
-        <td><code>CliPromptClassifier.cs</code> (D5)</td></tr>
-    </table>
+  <!-- ============ WHAT ============ -->
+  <div class="view on" id="v-what">
+    <div class="card">
+      <h2 style="margin-top:0">The problem</h2>
+      <p><span class="pill red">Cover only</span> Clicking a local app in a dock rendered it over the whole dock: the chat collapsed to a composer-only strip and the git/discover chrome hid. Fine for a quick look — useless when you want to <b>watch the app while talking to the agent about it</b>.</p>
+    </div>
+    <div class="card">
+      <h2 style="margin-top:0">The change</h2>
+      <table>
+        <tr><th>Piece</th><th>Behavior</th></tr>
+        <tr><td><span class="pill green">Split mode</span></td><td>A ◫ toggle appears in the dock's app-switcher row while an app is open. On: the dock's chrome stays in place, and the screen area splits — <b>full chat</b> (message list + composer) left, <b>the app</b> right. Off: cover, exactly as before.</td></tr>
+        <tr><td><span class="pill green">Chrome returns</span></td><td>In split the dock is treated as "chat showing": git block, Discover buttons, Understanding row all come back (they hide only in cover).</td></tr>
+        <tr><td><span class="pill amber">No forced widening</span></td><td>(openspec <code>split-no-forced-wide</code>) Split originally forced the dock's grid cell to span 2 columns — the same "expanded" state as the ⤢ toggle. That coupling is now removed: split renders inside whatever cell width the dock already has, and widening is always your explicit ⤢ choice (which works independently, before/during/after split). Pane floors adapt on narrow cells (<code>min(300px, 45%)</code> chat / <code>min(260px, 38%)</code> app) so the panes always fit, and the chat clips at the divider instead of bleeding under the app.</td></tr>
+        <tr><td><span class="pill green">Draggable divider</span></td><td>The line between the panes is a real separator: drag it (mouse or touch) to give the app or the chat more room. Clamped so neither pane collapses (chat ≥ 300px, app ≥ 260px); double-click resets to 50/50; arrow keys nudge it when focused. The drag keeps tracking even over the app's iframe.</td></tr>
+        <tr><td><span class="pill violet">Ephemeral</span></td><td>Per-dock, device-local, resets on reload — the same class of state as maximize-chat; the drag ratio follows the same rule (it survives split off/on while the dock is mounted). Advanced-mode toggle (<code>dockAppSplit</code>); Basic keeps cover.</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <p><span class="pill amber">Guarantees kept</span> Toggling cover ↔ split <b>never reloads the app</b> (same keep-alive <code>frameKey</code>, so in-app state and per-frame zoom survive) and <b>never remounts the chat</b> (composer draft, scroll, live stream survive). Verified headlessly: 32/32 + 18/18 checks.</p>
+    </div>
   </div>
-  <div class="card">
-    <h3>What deliberately did <i>not</i> change</h3>
-    <p class="dim">Drive-mode safety: threshold + word-scoped deny-list + kill switch + operator gate still fence
-    every automatic send. The brain can only ever pick from your editable prompt library — never free text.
-    Recipe/goal kinds, the conversation pin, and arm-freshness rules are untouched. Note: the default deny-list
-    (deploy · push · merge · …) still blocks routines containing those words — now as whole words, with the
-    term named in the visible reason so you can curate the list.</p>
-  </div>
-</section>
 
-<section id="sim">
-  <div class="card">
-    <h3>Step one engine decision by hand</h3>
-    <div class="sim">
-      <div>
-        <label>Instance mode</label>
-        <div class="seg" id="mode">
-          <button data-v="suggest" class="on">suggest</button>
-          <button data-v="drive">drive</button>
+  <!-- ============ MOCK ============ -->
+  <div class="view" id="v-mock">
+    <div class="card">
+      <p style="margin-top:0">A working miniature. Click <b>StateA</b> to open the app (cover), then the <b>◫</b> toggle — the chat comes back beside the app <i>inside the dock's own footprint</i> (the dock does not widen; the neighbor stays put). Then <b>drag the divider</b> between the panes (double-click it to reset) — the fake in-app counter proves resizing reloads nothing.</p>
+      <div class="stage">
+        <div class="gridbox">
+          <div class="dockm" id="dock1">
+            <div class="dm-bar"><span class="dm-dot"></span> Claude Web (this app)</div>
+            <div class="dm-lanes"><span class="dm-lane on">Builder</span><span class="dm-lane">Ask</span><span class="dm-lane">Files</span><span class="dm-lane">Console</span></div>
+            <div class="dm-apps">
+              <button class="dm-app" id="dm-appbtn">StateA :5301</button>
+              <button class="dm-split-btn" id="dm-splitbtn" title="Split view">◫</button>
+            </div>
+            <div class="dm-git" id="dm-git">⎇ feat/local-app-split-view · 1 ahead</div>
+            <div class="dm-screen" id="dm-screen">
+              <div class="dm-main">
+                <div class="dm-msgs" id="dm-msgs">— message list —</div>
+                <div class="dm-composer">draft: fix the header, then…</div>
+              </div>
+            </div>
+          </div>
+          <div class="dockm">
+            <div class="dm-bar"><span class="dm-dot"></span> other-repo</div>
+            <div class="dm-lanes"><span class="dm-lane on">Builder</span><span class="dm-lane">Ask</span></div>
+            <div class="dm-screen"><div class="dm-main"><div class="dm-msgs">— message list —</div><div class="dm-composer">Ask anything…</div></div></div>
+          </div>
         </div>
-        <label>Classifier verdict for the trailing message</label>
-        <select id="verdict">
-          <option value="match">best candidate found</option>
-          <option value="none">no routine matched at all</option>
-          <option value="deny">best candidate is deny-listed</option>
-        </select>
-        <label>Confidence <span id="confv" class="dim">0.42</span> · threshold 0.75</label>
-        <input type="range" id="conf" min="0" max="99" value="42">
-        <label>Repo folder</label>
-        <div class="seg" id="repo">
-          <button data-v="exists" class="on">exists</button>
-          <button data-v="missing">missing</button>
+        <div class="legend soft">
+          <p><b style="color:var(--text)">What to notice</b></p>
+          <p>• The ◫ toggle only exists while an app is open — it changes <i>how</i> the app shows, not <i>which</i> app.</p>
+          <p>• Cover hides the git row and collapses the chat to its composer; split brings both back.</p>
+          <p>• Split does NOT change the dock's size in the grid — the panes share whatever width the dock has. (It used to force the ⤢ two-column span; that's gone.)</p>
+          <p>• The app pane is the <i>same iframe</i> in both modes — the mock fakes it, the real dock moves a slot the keep-alive host tracks.</p>
+      <p>• The divider drags between the panes' minimum widths, resets on double-click, and its ratio sticks per dock until reload.</p>
         </div>
-      </div>
-      <div>
-        <div class="flow">
-          <div class="step" id="s-repo"><div class="t">Repo check</div><div class="d">missing folder ⇒ resolve error/repo-missing (once)</div></div>
-          <div class="step" id="s-classify"><div class="t">Classify</div><div class="d">CLI brain (single-flight, off-tick) or stub — Verdict{label, confidence, reason, denied}</div></div>
-          <div class="step" id="s-deny"><div class="t">Deny fence</div><div class="d">whole-word match against the routine text; reason names the term</div></div>
-          <div class="step" id="s-threshold"><div class="t">Threshold</div><div class="d">gates DRIVE sends only</div></div>
-          <div class="step" id="s-dispatch"><div class="t">Mode dispatch</div><div class="d">suggest ⇒ pend into composer · drive ⇒ capped, audited send</div></div>
-        </div>
-        <div class="outcome hold" id="out">…</div>
       </div>
     </div>
   </div>
-</section>
 
-<section id="brain">
-  <div class="card">
-    <h3>The CLI brain, in one pass</h3>
-    <pre>tick sees NEW trailing agent message
-  └─ Brain == "cli"?  ──no──▶ stub classifies synchronously
-       │yes
-       ├─ cache hit for this message?  ──yes──▶ consume verdict, decide
-       ├─ classification in flight?    ──yes──▶ HOLD "classifying with the CLI brain…" (tick never blocks)
-       └─ else: start ONE background call
-            claude -p (stdin prompt) --output-format json --model haiku
-            ├─ reply: {"index": N | -1, "confidence": 0..1, "reason": "…"}
-            ├─ index → one of YOUR routine prompts (never free text) → deny fence → threshold
-            └─ error/timeout/unparseable ⇒ stub verdict, reason notes "cli fallback (…)"</pre>
-    <p class="dim">One CLI call per new agent message per armed repo (single-flight per repo, cache keyed by
-    message). Selectable in the console's Control bar ("Claude brain" toggle) and persisted as
-    <code>autopilot.json · Brain</code> ("cli" default | "stub"); model in <code>BrainModel</code> (default "haiku").</p>
+  <!-- ============ STATE ============ -->
+  <div class="view" id="v-state">
+    <div class="card">
+      <h2 style="margin-top:0">Why toggling loses nothing</h2>
+      <p>Two prior contracts do the heavy lifting; split just leans on them:</p>
+      <div class="flow">
+        <span class="node">Chat is <b>always mounted</b> in <code>.phone__main</code>, last child, both modes</span><span class="arr">→</span>
+        <span class="node">toggling split only adds/removes the sibling <code>.phone__side</code></span><span class="arr">→</span>
+        <span class="node">React never remounts the chat (keep-composer contract)</span>
+      </div>
+      <div class="flow">
+        <span class="node">iframe lives in the root <code>LocalAppFrameHost</code>, not the pane</span><span class="arr">→</span>
+        <span class="node">both panes render a slot with the <b>same</b> <code>frameKey</code> <span class="mono">dock:&lt;dock&gt;:&lt;repo&gt;:&lt;app&gt;</span></span><span class="arr">→</span>
+        <span class="node">host re-tracks geometry; the iframe is never re-parented → no reload (state-preserve contract)</span>
+      </div>
+      <p class="soft">The alternative — actually moving the <code>&lt;iframe&gt;</code> between panes — would reload the app on every toggle: re-parenting an iframe resets its document. That's the whole reason the keep-alive host exists.</p>
+    </div>
+    <div class="card">
+      <h2 style="margin-top:0">Headless proof (32/32 + 18/18)</h2>
+      <p class="soft">The split check seeds three kinds of state before toggling: an in-app counter + input (inside the iframe), a composer draft (chat subtree), and per-frame zoom (host). It then asserts all three survive cover → split → cover, that exactly one app iframe ever exists, that the grid cell keeps its width (and manual ⤢ works independently of split), and that the panes fit a normal-width cell with no horizontal overflow. <code>.preview-test/split-view-check.mjs</code>. The divider check drags across the iframe, asserts live pane resize with no reload, both clamps, double-click reset, keyboard nudge, and that the ratio survives split off/on. <code>.preview-test/split-drag-check.mjs</code>.</p>
+    </div>
   </div>
-  <div class="card">
-    <h3>Verified end-to-end (isolated harnesses, no live state touched)</h3>
-    <table>
-      <tr><th>Script</th><th>Proves</th></tr>
-      <tr><td><code>verify-suggestion-inert.mjs</code> (:5227)</td>
-        <td>below-threshold pend @0.42 · drive still holds · no-candidate holds · deny word-boundary + named term ·
-        repo-missing resolution · gate-closed nulls reason/label/confidence/pending but keeps the decision word</td></tr>
-      <tr><td><code>verify-suggestion-dock.mjs</code> (:5228)</td>
-        <td>dock popover renders the decision line + "· 42% sure" pending chip</td></tr>
-      <tr><td><code>verify-suggestion-cli-brain.mjs</code> (:5229)</td>
-        <td>classifying hold, exactly 1 CLI call across 4 ticks, confident verdict drives an audited send,
-        CLI failure falls back to stub with an honest reason, brain toggles via config</td></tr>
-    </table>
-  </div>
-</section>
 
-</main>
+  <!-- ============ WHERE ============ -->
+  <div class="view" id="v-where">
+    <div class="card">
+      <table>
+        <tr><th>Piece</th><th>File</th><th>Note</th></tr>
+        <tr><td>Split state + toggle + panes</td><td class="mono">client/src/components/dashboard/PinnedAgent.jsx</td><td><code>splitApp</code> state; effective <code>split = canSplit && splitApp && openApp</code>; chrome conditions widen from <code>!openApp</code> to <code>(!openApp || split)</code>; reports up via <code>onSplitChange</code>.</td></tr>
+        <tr><td>Cell width (unchanged by split)</td><td class="mono">client/src/pages/Dashboard.jsx</td><td><code>dash__cell--wide</code> is driven by the persisted per-dock <code>tab.wide</code> (⤢) alone — the old split-driven <code>splitDocks</code> report-up was removed in <code>split-no-forced-wide</code>.</td></tr>
+        <tr><td>Pane layout</td><td class="mono">client/src/pages/dashboard.css</td><td><code>.phone__main</code> is a pass-through flex column normally; <code>.phone__screen--split</code> turns the screen into a row, both panes <code>flex: 1 1 50%</code> with min-width floors (300 / 260px).</td></tr>
+        <tr><td>Draggable divider</td><td class="mono">PinnedAgent.jsx + dashboard.css</td><td><code>splitRatio</code> state applied as inline flex-basis; <code>.phone__divider</code> uses pointer capture, and <code>.phone__screen--dragging</code> blanks iframe pointer-events mid-drag so the frame can't eat the stream. Clamped in JS to the same floors CSS enforces (zoom-scaled).</td></tr>
+        <tr><td>Advanced gate</td><td class="mono">client/src/context/UiModeContext.jsx</td><td><code>dockAppSplit: 'advanced'</code> — gates only the toggle; opening apps stays <code>localAppTab</code> (Basic).</td></tr>
+        <tr><td>Spec home</td><td class="mono">openspec/specs/agent-dock/spec.md</td><td>Two new requirements on archive: the split presentation + the grid widening.</td></tr>
+      </table>
+      <p class="soft" style="margin-top:12px">Backend untouched — the app URL, proxy path, zoom, and frame host all behave exactly as in cover mode.</p>
+    </div>
+  </div>
+</div>
+
 <script>
-  // tabs
-  document.querySelectorAll('nav button').forEach(function (b) {
-    b.addEventListener('click', function () {
-      document.querySelectorAll('nav button').forEach(function (x) { x.classList.remove('active'); });
-      document.querySelectorAll('main section').forEach(function (x) { x.classList.remove('active'); });
-      b.classList.add('active');
-      document.getElementById(b.dataset.s).classList.add('active');
-    });
-  });
+// tabs
+document.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('on', x === b));
+  document.querySelectorAll('.view').forEach((v) => v.classList.toggle('on', v.id === 'v-' + b.dataset.v));
+}));
 
-  // simulator
-  var st = { mode: 'suggest', verdict: 'match', conf: 0.42, repo: 'exists' };
-  function seg(id, key) {
-    document.querySelectorAll('#' + id + ' button').forEach(function (b) {
-      b.addEventListener('click', function () {
-        document.querySelectorAll('#' + id + ' button').forEach(function (x) { x.classList.remove('on'); });
-        b.classList.add('on'); st[key] = b.dataset.v; render();
-      });
+// ---- dock mock ----
+const dock = document.getElementById('dock1');
+const appBtn = document.getElementById('dm-appbtn');
+const splitBtn = document.getElementById('dm-splitbtn');
+const gitRow = document.getElementById('dm-git');
+const screen = document.getElementById('dm-screen');
+const main = screen.querySelector('.dm-main');
+const msgs = document.getElementById('dm-msgs');
+const composer = main.querySelector('.dm-composer');
+let open = false;
+let split = false;
+let clicks = 0; // fake in-app state so the mock can show it surviving
+
+function appPane(cls) {
+  const d = document.createElement('div');
+  d.className = cls;
+  d.innerHTML = `<div>StateA test app</div><button class="dm-app" style="cursor:pointer">clicked <span>${clicks}</span>×</button><div class="dm-note">same iframe in both modes — state survives the toggle</div>`;
+  d.querySelector('button').addEventListener('click', (e) => {
+    clicks += 1;
+    e.currentTarget.querySelector('span').textContent = clicks;
+  });
+  return d;
+}
+let ratio = 50; // divider ratio, % of the row given to the chat — sticks across split off/on
+function render() {
+  appBtn.classList.toggle('on', open);
+  splitBtn.classList.toggle('show', open);
+  splitBtn.classList.toggle('on', split && open);
+  dock.classList.toggle('split', split && open);
+  // chrome: git row hides only in cover
+  gitRow.style.display = open && !split ? 'none' : '';
+  // chat: composer-only in cover
+  msgs.style.display = open && !split ? 'none' : '';
+  screen.querySelector('.dm-cover')?.remove();
+  screen.querySelector('.dm-side')?.remove();
+  screen.querySelector('.dm-divider')?.remove();
+  main.style.display = '';
+  main.style.flex = '';
+  if (open && !split) {
+    main.style.display = 'flex';
+    main.insertBefore(appPane('dm-cover'), composer.parentElement === main ? composer : null);
+    // cover: app above the composer strip — hide the message list only
+    main.insertBefore(main.querySelector('.dm-cover'), composer);
+  } else if (open && split) {
+    const div = document.createElement('div');
+    div.className = 'dm-divider';
+    div.title = 'drag to resize · double-click to reset';
+    screen.appendChild(div);
+    const side = appPane('dm-side');
+    screen.appendChild(side);
+    main.style.flex = `1 1 ${ratio}%`;
+    side.style.flex = `1 1 ${100 - ratio}%`;
+    div.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      div.setPointerCapture(e.pointerId);
+      div.classList.add('drag');
+    });
+    div.addEventListener('pointermove', (e) => {
+      if (!div.classList.contains('drag')) return;
+      const r = screen.getBoundingClientRect();
+      ratio = Math.min(80, Math.max(20, ((e.clientX - r.left) / r.width) * 100));
+      main.style.flex = `1 1 ${ratio}%`;
+      side.style.flex = `1 1 ${100 - ratio}%`;
+    });
+    const end = () => div.classList.remove('drag');
+    div.addEventListener('pointerup', end);
+    div.addEventListener('pointercancel', end);
+    div.addEventListener('dblclick', () => {
+      ratio = 50;
+      main.style.flex = '1 1 50%';
+      side.style.flex = '1 1 50%';
     });
   }
-  seg('mode', 'mode'); seg('repo', 'repo');
-  document.getElementById('verdict').addEventListener('change', function (e) { st.verdict = e.target.value; render(); });
-  document.getElementById('conf').addEventListener('input', function (e) {
-    st.conf = e.target.value / 100;
-    document.getElementById('confv').textContent = st.conf.toFixed(2);
-    render();
-  });
-
-  function render() {
-    function hit(id, on) { document.getElementById(id).classList.toggle('hit', on); }
-    var out = document.getElementById('out');
-    function set(cls, text) { out.className = 'outcome ' + cls; out.textContent = text; }
-    hit('s-repo', true);
-    if (st.repo === 'missing') {
-      hit('s-classify', false); hit('s-deny', false); hit('s-threshold', false); hit('s-dispatch', false);
-      return set('err', 'RESOLVE error / repo-missing — the loop ends visibly (was: silent skip, forever)');
-    }
-    hit('s-classify', true);
-    if (st.verdict === 'none') {
-      hit('s-deny', false); hit('s-threshold', false); hit('s-dispatch', false);
-      return set('hold', 'HOLD — "no routine matched this message". Nothing pends: there is no candidate to offer.');
-    }
-    hit('s-deny', true);
-    if (st.verdict === 'deny') {
-      hit('s-threshold', false); hit('s-dispatch', false);
-      return set('hold', 'HOLD (escalate) — routine contains deny-listed "…"; never pended or sent, in any mode. The dock now shows this reason.');
-    }
-    hit('s-threshold', st.mode === 'drive');
-    hit('s-dispatch', true);
-    if (st.mode === 'suggest')
-      return set('pend', 'PEND — the candidate pre-fills your composer at ' + Math.round(st.conf * 100)
-        + '% confidence (even below 0.75 — you send it). This is the fix: an armed 💡 always visibly does something.');
-    if (st.conf < 0.75)
-      return set('hold', 'HOLD (escalate) — "below threshold (' + st.conf.toFixed(2) + ' < 0.75)". Drive mode never sends an unsure prompt. Unchanged.');
-    return set('send', 'SEND — capped, audited, through the same builder slot your own turn uses.');
-  }
-  render();
+}
+appBtn.addEventListener('click', () => { open = !open; if (!open) split = false; render(); });
+splitBtn.addEventListener('click', () => { split = !split; render(); });
+render();
 </script>
 </body>
 </html>

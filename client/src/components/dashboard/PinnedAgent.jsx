@@ -48,7 +48,6 @@ export default function PinnedAgent({
   loop,
   loopRecipes = [],
   onLoopChanged,
-  onSplitChange,
 }) {
   const { t } = useT();
   // Per-dock lane toggle (plans/repo-ask-chat.md slice 3): each phone can switch
@@ -86,12 +85,30 @@ export default function PinnedAgent({
   const [splitApp, setSplitApp] = useState(false);
   const split = !!(canSplit && splitApp && openApp);
 
-  // Report effective split up so the Dashboard can widen this dock's grid cell
-  // while the two panes are showing (and restore it when the dock unmounts).
-  useEffect(() => {
-    onSplitChange?.(tab.id, split);
-    return () => onSplitChange?.(tab.id, false);
-  }, [split, tab.id, onSplitChange]);
+  // Draggable divider (openspec split-divider-drag): percent of the row given to
+  // the chat pane. Dock-local and session-ephemeral like splitApp itself, so it
+  // survives split off/on while the dock stays mounted. Ratio math is done in
+  // visual coordinates (clientX vs the row's rect), where the contentZoom on the
+  // row cancels out — but the CSS min-width floors are LAYOUT px, so they are
+  // scaled by the zoom before converting to a percent of the visual width.
+  const [splitRatio, setSplitRatio] = useState(50);
+  const [dividerDrag, setDividerDrag] = useState(false);
+  const screenRef = useRef(null);
+  const moveDivider = useCallback(
+    (clientX) => {
+      const rect = screenRef.current?.getBoundingClientRect();
+      if (!rect || !rect.width) return;
+      const z = contentZoom || 1;
+      // Floors mirror the CSS min(px, %) rule (openspec split-no-forced-wide):
+      // px on wide rows, proportional on narrow ones — 45 + 38 < 100, so
+      // lo < hi at every width and the panes always fit the row.
+      const lo = Math.min(((300 * z) / rect.width) * 100, 45);
+      const hi = 100 - Math.min(((260 * z) / rect.width) * 100, 38);
+      const pct = ((clientX - rect.left) / rect.width) * 100;
+      setSplitRatio(Math.min(hi, Math.max(lo, pct)));
+    },
+    [contentZoom]
+  );
 
   // Files tab on the dock (plans/agent-dock-files-tab.md): a third screen the
   // phone can show — the SAME browse-and-view surface as the routed Files tab
@@ -618,10 +635,14 @@ export default function PinnedAgent({
           frame renders in main (cover) or side (split) with the SAME frameKey, so
           the keep-alive host keeps one iframe and just tracks the moved slot. */}
       <div
-        className={`phone__screen${split ? ' phone__screen--split' : ''}`}
+        ref={screenRef}
+        className={`phone__screen${split ? ' phone__screen--split' : ''}${dividerDrag ? ' phone__screen--dragging' : ''}`}
         style={contentZoom !== 1 ? { zoom: contentZoom } : undefined}
       >
-        <div className="phone__main">
+        <div
+          className="phone__main"
+          style={split ? { flex: `1 1 ${splitRatio}%` } : undefined}
+        >
           {showConsole ? (
             <EventConsole repoId={tab.repoId} />
           ) : showFiles ? (
@@ -647,8 +668,43 @@ export default function PinnedAgent({
             toggleChatMaximized={toggleChatMaximized}
           />
         </div>
+        {/* Divider (openspec split-divider-drag): a separator BETWEEN the two
+            stable panes, so dragging never touches their DOM identity. Pointer
+            capture keeps the stream on the divider; the --dragging class
+            additionally blanks pointer-events on the app pane so the iframe
+            can't swallow a stray move if capture is ever lost. */}
         {split && (
-          <div className="phone__side">
+          <div
+            className="phone__divider"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label={t('dashboard.splitDivider')}
+            title={t('dashboard.splitDividerHint')}
+            tabIndex={0}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              e.currentTarget.setPointerCapture(e.pointerId);
+              setDividerDrag(true);
+            }}
+            onPointerMove={(e) => {
+              if (dividerDrag) moveDivider(e.clientX);
+            }}
+            onPointerUp={() => setDividerDrag(false)}
+            onPointerCancel={() => setDividerDrag(false)}
+            onDoubleClick={() => setSplitRatio(50)}
+            onKeyDown={(e) => {
+              if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+              e.preventDefault();
+              const step = e.key === 'ArrowLeft' ? -2 : 2;
+              setSplitRatio((r) => Math.min(80, Math.max(20, r + step)));
+            }}
+          />
+        )}
+        {split && (
+          <div
+            className="phone__side"
+            style={{ flex: `1 1 ${100 - splitRatio}%` }}
+          >
             <ProductFrame
               url={`/api/localview/${tab.repoId}/app/${openApp.id}/`}
               port={openApp.port}
