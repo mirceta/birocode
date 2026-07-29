@@ -640,6 +640,11 @@ public class CliRunnerService
     /// </summary>
     private static readonly Lazy<string> ClaudeCommand = new(ResolveClaudeCommand);
 
+    /// <summary>The resolved CLI executable, shared with the one-shot autopilot
+    /// classifier (fix-suggestion-loop-inert, D5) so both spawn the exact same
+    /// binary.</summary>
+    public static string ClaudeExecutable => ClaudeCommand.Value;
+
     private static string ResolveClaudeCommand()
     {
         if (!OperatingSystem.IsWindows()) return "claude";

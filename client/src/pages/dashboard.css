@@ -1485,6 +1485,48 @@
 
 /* Suggest-mode pending prompt: the loop's decided next prompt + the one action
    that puts it into the agent's composer. */
+/* Live decision readout (fix-suggestion-loop-inert): the engine's last decision
+   for the armed instance — word chip + (gate open) its reason. */
+.phone__loop-decision {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg);
+}
+
+.phone__loop-decision-word {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-soft);
+  white-space: nowrap;
+}
+
+.phone__loop-decision-word--suggestion,
+.phone__loop-decision-word--sent {
+  color: var(--color-accent);
+}
+
+.phone__loop-decision-word--escalate {
+  color: #b45309;
+}
+
+.phone__loop-decision-reason {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--color-text-soft);
+}
+
 .phone__loop-pending {
   display: flex;
   flex-direction: column;
@@ -1501,6 +1543,14 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--color-accent);
+}
+
+.phone__loop-pending-conf {
+  margin-left: 5px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--color-text-soft);
 }
 
 .phone__loop-use {

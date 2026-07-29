@@ -305,7 +305,7 @@ export default function AutopilotMap() {
               <tr><td>Iteration cap</td><td><code>loops.json · MaxIterations</code></td><td>A loop stops at the ceiling (default 10) even if the sentinel is never said.</td></tr>
               <tr><td>Single-writer slot</td><td><code>TryBeginRun("builder")</code></td><td>The autopilot claims the same one slot you do — it can never collide with your turn.</td></tr>
               <tr><td>Audit log</td><td><code>autopilot-audit.jsonl</code></td><td>Every auto-send (and only sends) is recorded append-only — a durable trail.</td></tr>
-              <tr><td><b>The brain is a stub</b></td><td><code>PromptClassifier</code></td><td>Honest today: it’s keyword overlap, <b>not an LLM</b>. It can only pick one of <i>your</i> prompts or escalate.</td></tr>
+              <tr><td><b>The brain picks, never writes</b></td><td><code>CliPromptClassifier</code> / <code>PromptClassifier</code></td><td>The default brain is a one-shot Claude call (fast model) that can only pick one of <i>your</i> prompts or abstain — never free text; the offline word-overlap stub remains as its fallback and as a config choice.</td></tr>
             </tbody>
           </table>
           <p className="cm-note">

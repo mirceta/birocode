@@ -48,6 +48,7 @@ public class AutopilotService : BackgroundService
     private readonly LoopConfigStore _loops;
     private readonly AutopilotGate _operatorGate;
     private readonly PromptClassifier _brain;
+    private readonly CliPromptClassifier _cliBrain;
     private readonly AutopilotDiscoveryService _discovery;
     private readonly PromptsService _prompts;
     private readonly AutopilotAuditLog _audit;
@@ -91,7 +92,8 @@ public class AutopilotService : BackgroundService
     public AutopilotService(
         RepositoryRegistry repos, SessionService sessions, RunSessionService runs,
         CliRunnerService cli, AutopilotConfigStore config, LoopConfigStore loops,
-        AutopilotGate operatorGate, PromptClassifier brain, AutopilotDiscoveryService discovery,
+        AutopilotGate operatorGate, PromptClassifier brain, CliPromptClassifier cliBrain,
+        AutopilotDiscoveryService discovery,
         PromptsService prompts, AutopilotAuditLog audit, IEnumerable<ILoop> kinds, Logger logger)
     {
         _repos = repos;
@@ -102,6 +104,7 @@ public class AutopilotService : BackgroundService
         _loops = loops;
         _operatorGate = operatorGate;
         _brain = brain;
+        _cliBrain = cliBrain;
         _discovery = discovery;
         _prompts = prompts;
         _audit = audit;
@@ -319,9 +322,25 @@ public class AutopilotService : BackgroundService
         // custom prompts (enriched by the cached mining pass), not a built-in list.
         var routines = Routines(nowOffset);
 
-        foreach (var repo in _repos.GetAll().Where(r => r.Exists))
+        foreach (var repo in _repos.GetAll())
         {
             var loop = _loops.Get(repo.Id);
+
+            // A missing repo folder RESOLVES an armed loop instead of silently
+            // skipping it forever (fix-suggestion-loop-inert, D2): Resolve clears
+            // Active, so this fires exactly once and the dock shows a terminal
+            // error instead of an eternally-"looping" zombie. Repos without an
+            // active loop are still just skipped.
+            if (!repo.Exists)
+            {
+                if (loop is { Active: true })
+                {
+                    _loops.Resolve(repo.Id, "error", "repo-missing",
+                        $"repo folder no longer exists: {repo.Path}");
+                    _logger.Error($"[LOOP] {repo.Name}: repo folder missing ({repo.Path}) — resolving armed {loop.Kind} loop as error");
+                }
+                continue;
+            }
 
             // No active instance → nothing to do; surface the terminal state if any.
             if (loop is not { Active: true })
@@ -441,6 +460,26 @@ public class AutopilotService : BackgroundService
             if (loop.Mode == LoopConfigStore.ModeSuggest
                 && _suggestWait.TryGetValue(repo.Id, out var sw) && sw == snippet) continue;
 
+            // The CLI brain runs OFF the tick path (fix-suggestion-loop-inert,
+            // D5): the first tick that sees a new trailing message starts one
+            // background classification and holds; a later tick consumes the
+            // cached verdict. Placed BEFORE the interception block so the
+            // intercept entry is created on the tick that actually decides.
+            PromptClassifier.Verdict? cliVerdict = null;
+            if (isSuggestionKind && cfg.Brain == AutopilotConfigStore.BrainCli
+                && !string.IsNullOrWhiteSpace(lastAssistant))
+            {
+                var (v, inFlight) = _cliBrain.TryGetOrStart(
+                    repo.Id, lastAssistant!, snippet, cfg.Threshold, cfg.DenyList, routines, cfg.BrainModel);
+                if (inFlight)
+                {
+                    Set(repo.Id, new AgentState(repo.Id, repo.Name, true, "idle",
+                        null, 0, "classifying with the CLI brain…", snippet, now));
+                    continue;
+                }
+                cliVerdict = v;
+            }
+
             // Interception feed (suggestion kind only, as before): one entry the
             // first time we see this trailing message for the repo.
             InterceptEvent? intercept = null;
@@ -470,7 +509,7 @@ public class AutopilotService : BackgroundService
                 loop,
                 preArm ? null : lastAssistant,
                 !preArm && run?.Status == "error",
-                cfg.DenyList, cfg.Threshold, routines));
+                cfg.DenyList, cfg.Threshold, routines, cliVerdict));
 
             Execute(repo, loop, decision, sessionId, snippet, intercept, now);
         }
