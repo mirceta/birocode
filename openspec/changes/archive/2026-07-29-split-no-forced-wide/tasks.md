@@ -15,4 +15,4 @@
 - [x] 3.1 `npm --prefix client run build` passes; `tests/ClaudeWeb.Tests` stays green
 - [x] 3.2 Headless per `docs/claude-web/browser-testing.md`: entering split does NOT add `dash__cell--wide`; a manually-⤢-wide dock stays wide through split on/off; panes fit a normal-width cell (no horizontal overflow); divider drag/clamp/reset still pass (`split-drag-check.mjs` rerun)
 - [x] 3.3 `openspec validate split-no-forced-wide --strict`; refresh `understanding-app/`
-- [ ] 3.4 Deploy branch to live via persisted deploy task; user acceptance ("keep it"); then archive + merge to main
+- [x] 3.4 Deploy branch to live via persisted deploy task; user acceptance ("keep it"); then archive + merge to main
