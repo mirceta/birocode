@@ -561,19 +561,6 @@ export default function Dashboard({ onClose }) {
   }
   // { [tabId]: { status, activity } } — fresher than the dock list, view-local.
   const [live, setLive] = useState({});
-  // { [tabId]: true } while that dock shows its local app split beside the chat
-  // (openspec dock-app-split-view). Reported up by PinnedAgent; view-local and
-  // ephemeral like the mode itself — used only to widen the dock's grid cell.
-  const [splitDocks, setSplitDocks] = useState({});
-  const handleSplitChange = useCallback((tabId, on) => {
-    setSplitDocks((prev) => {
-      if (!!prev[tabId] === !!on) return prev;
-      const next = { ...prev };
-      if (on) next[tabId] = true;
-      else delete next[tabId];
-      return next;
-    });
-  }, []);
   // { [repoId]: /git/status payload } — branch + ahead/behind, like the Agents
   // tab. Fetched once when the overlay opens (git state moves slowly).
   const [gitInfo, setGitInfo] = useState({});
@@ -716,14 +703,13 @@ export default function Dashboard({ onClose }) {
     // `wide` makes this grid cell span two columns (plans/dock-double-width.md).
     // Only meaningful on a top-level grid child, so the caller opts in (standalone
     // docks pass it; a "together" group carries it on its own <li> instead).
-    // A dock split beside its local app widens the same way while split (openspec
-    // dock-app-split-view) — but only when a second column exists to take: in a
-    // 1-column grid a span-2 cell would overflow, so the panes just share the cell.
-    const splitWide = Wrapper === 'li' && asPhone && !!splitDocks[tab.id] && columns >= 2;
+    // Split view deliberately does NOT touch cell width (openspec
+    // split-no-forced-wide): the panes fit whatever width the dock has, and
+    // widening stays the user's explicit ⤢ choice.
     const wrapClass = [
       asPhone ? 'dash__phone-cell' : '',
       small ? 'dash__dependent' : '',
-      wide || splitWide ? 'dash__cell--wide' : '',
+      wide ? 'dash__cell--wide' : '',
     ]
       .filter(Boolean)
       .join(' ');
@@ -752,7 +738,6 @@ export default function Dashboard({ onClose }) {
             loop={loopsByRepo[tab.repoId]}
             loopRecipes={loopInfo?.recipes ?? []}
             onLoopChanged={loadLoops}
-            onSplitChange={handleSplitChange}
           />
         </Wrapper>
       );

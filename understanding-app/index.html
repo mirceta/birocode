@@ -81,7 +81,6 @@
     overflow: hidden; display: flex; flex-direction: column; min-height: 260px;
     transition: all .25s ease;
   }
-  .dockm.split { grid-column: span 2; }
   .dm-bar { padding: 7px 10px; background: #232c3d; font-size: 12px; font-weight: 700; display: flex; gap: 7px; align-items: center; }
   .dm-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
   .dm-lanes { display: flex; gap: 4px; padding: 5px 8px; border-bottom: 1px solid var(--border); }
@@ -110,7 +109,7 @@
 <body>
 <div class="wrap">
   <h1>Dock App Split View</h1>
-  <p class="sub">openspec changes <code>dock-app-split-view</code> + <code>split-divider-drag</code> — a per-dock mode that puts the opened local app <b>beside</b> the chat instead of over it (widening the dock's grid cell), with a <b>draggable divider</b> between the two panes.</p>
+  <p class="sub">openspec changes <code>dock-app-split-view</code> + <code>split-divider-drag</code> + <code>split-no-forced-wide</code> — a per-dock mode that puts the opened local app <b>beside</b> the chat instead of over it, with a <b>draggable divider</b> between the two panes. Split stays inside the dock's normal footprint; widening is always the manual ⤢ choice.</p>
 
   <div class="tabs">
     <button class="tab on" data-v="what">What changed</button>
@@ -131,20 +130,20 @@
         <tr><th>Piece</th><th>Behavior</th></tr>
         <tr><td><span class="pill green">Split mode</span></td><td>A ◫ toggle appears in the dock's app-switcher row while an app is open. On: the dock's chrome stays in place, and the screen area splits — <b>full chat</b> (message list + composer) left, <b>the app</b> right. Off: cover, exactly as before.</td></tr>
         <tr><td><span class="pill green">Chrome returns</span></td><td>In split the dock is treated as "chat showing": git block, Discover buttons, Understanding row all come back (they hide only in cover).</td></tr>
-        <tr><td><span class="pill green">Wider cell</span></td><td>While split, the dock's dashboard grid cell spans 2 columns (same mechanism as the Wide toggle) so the chat keeps a usable width. Restored on exit. Skipped in a 1-column grid, where a span would overflow.</td></tr>
+        <tr><td><span class="pill amber">No forced widening</span></td><td>(openspec <code>split-no-forced-wide</code>) Split originally forced the dock's grid cell to span 2 columns — the same "expanded" state as the ⤢ toggle. That coupling is now removed: split renders inside whatever cell width the dock already has, and widening is always your explicit ⤢ choice (which works independently, before/during/after split). Pane floors adapt on narrow cells (<code>min(300px, 45%)</code> chat / <code>min(260px, 38%)</code> app) so the panes always fit, and the chat clips at the divider instead of bleeding under the app.</td></tr>
         <tr><td><span class="pill green">Draggable divider</span></td><td>The line between the panes is a real separator: drag it (mouse or touch) to give the app or the chat more room. Clamped so neither pane collapses (chat ≥ 300px, app ≥ 260px); double-click resets to 50/50; arrow keys nudge it when focused. The drag keeps tracking even over the app's iframe.</td></tr>
         <tr><td><span class="pill violet">Ephemeral</span></td><td>Per-dock, device-local, resets on reload — the same class of state as maximize-chat; the drag ratio follows the same rule (it survives split off/on while the dock is mounted). Advanced-mode toggle (<code>dockAppSplit</code>); Basic keeps cover.</td></tr>
       </table>
     </div>
     <div class="card">
-      <p><span class="pill amber">Guarantees kept</span> Toggling cover ↔ split <b>never reloads the app</b> (same keep-alive <code>frameKey</code>, so in-app state and per-frame zoom survive) and <b>never remounts the chat</b> (composer draft, scroll, live stream survive). Verified headlessly: 27/27 checks.</p>
+      <p><span class="pill amber">Guarantees kept</span> Toggling cover ↔ split <b>never reloads the app</b> (same keep-alive <code>frameKey</code>, so in-app state and per-frame zoom survive) and <b>never remounts the chat</b> (composer draft, scroll, live stream survive). Verified headlessly: 32/32 + 18/18 checks.</p>
     </div>
   </div>
 
   <!-- ============ MOCK ============ -->
   <div class="view" id="v-mock">
     <div class="card">
-      <p style="margin-top:0">A working miniature. Click <b>StateA</b> to open the app (cover), then the <b>◫</b> toggle — watch the dock widen in its grid and the chat come back beside the app. Then <b>drag the divider</b> between the panes (double-click it to reset) — the fake in-app counter proves resizing reloads nothing.</p>
+      <p style="margin-top:0">A working miniature. Click <b>StateA</b> to open the app (cover), then the <b>◫</b> toggle — the chat comes back beside the app <i>inside the dock's own footprint</i> (the dock does not widen; the neighbor stays put). Then <b>drag the divider</b> between the panes (double-click it to reset) — the fake in-app counter proves resizing reloads nothing.</p>
       <div class="stage">
         <div class="gridbox">
           <div class="dockm" id="dock1">
@@ -172,7 +171,7 @@
           <p><b style="color:var(--text)">What to notice</b></p>
           <p>• The ◫ toggle only exists while an app is open — it changes <i>how</i> the app shows, not <i>which</i> app.</p>
           <p>• Cover hides the git row and collapses the chat to its composer; split brings both back.</p>
-          <p>• Entering split makes the cell span two grid columns; the neighbor dock reflows. Leaving restores it.</p>
+          <p>• Split does NOT change the dock's size in the grid — the panes share whatever width the dock has. (It used to force the ⤢ two-column span; that's gone.)</p>
           <p>• The app pane is the <i>same iframe</i> in both modes — the mock fakes it, the real dock moves a slot the keep-alive host tracks.</p>
       <p>• The divider drags between the panes' minimum widths, resets on double-click, and its ratio sticks per dock until reload.</p>
         </div>
@@ -198,8 +197,8 @@
       <p class="soft">The alternative — actually moving the <code>&lt;iframe&gt;</code> between panes — would reload the app on every toggle: re-parenting an iframe resets its document. That's the whole reason the keep-alive host exists.</p>
     </div>
     <div class="card">
-      <h2 style="margin-top:0">Headless proof (27/27 + 18/18)</h2>
-      <p class="soft">The split check seeds three kinds of state before toggling: an in-app counter + input (inside the iframe), a composer draft (chat subtree), and per-frame zoom (host). It then asserts all three survive cover → split → cover, that exactly one app iframe ever exists, and that the grid cell widens and restores. <code>.preview-test/split-view-check.mjs</code>. The divider check drags across the iframe, asserts live pane resize with no reload, both clamps, double-click reset, keyboard nudge, and that the ratio survives split off/on. <code>.preview-test/split-drag-check.mjs</code>.</p>
+      <h2 style="margin-top:0">Headless proof (32/32 + 18/18)</h2>
+      <p class="soft">The split check seeds three kinds of state before toggling: an in-app counter + input (inside the iframe), a composer draft (chat subtree), and per-frame zoom (host). It then asserts all three survive cover → split → cover, that exactly one app iframe ever exists, that the grid cell keeps its width (and manual ⤢ works independently of split), and that the panes fit a normal-width cell with no horizontal overflow. <code>.preview-test/split-view-check.mjs</code>. The divider check drags across the iframe, asserts live pane resize with no reload, both clamps, double-click reset, keyboard nudge, and that the ratio survives split off/on. <code>.preview-test/split-drag-check.mjs</code>.</p>
     </div>
   </div>
 
@@ -209,7 +208,7 @@
       <table>
         <tr><th>Piece</th><th>File</th><th>Note</th></tr>
         <tr><td>Split state + toggle + panes</td><td class="mono">client/src/components/dashboard/PinnedAgent.jsx</td><td><code>splitApp</code> state; effective <code>split = canSplit && splitApp && openApp</code>; chrome conditions widen from <code>!openApp</code> to <code>(!openApp || split)</code>; reports up via <code>onSplitChange</code>.</td></tr>
-        <tr><td>Grid widening</td><td class="mono">client/src/pages/Dashboard.jsx</td><td><code>splitDocks</code> map; cell gets <code>dash__cell--wide</code> when split AND columns ≥ 2 (a span-2 cell in a 1-column grid would overflow).</td></tr>
+        <tr><td>Cell width (unchanged by split)</td><td class="mono">client/src/pages/Dashboard.jsx</td><td><code>dash__cell--wide</code> is driven by the persisted per-dock <code>tab.wide</code> (⤢) alone — the old split-driven <code>splitDocks</code> report-up was removed in <code>split-no-forced-wide</code>.</td></tr>
         <tr><td>Pane layout</td><td class="mono">client/src/pages/dashboard.css</td><td><code>.phone__main</code> is a pass-through flex column normally; <code>.phone__screen--split</code> turns the screen into a row, both panes <code>flex: 1 1 50%</code> with min-width floors (300 / 260px).</td></tr>
         <tr><td>Draggable divider</td><td class="mono">PinnedAgent.jsx + dashboard.css</td><td><code>splitRatio</code> state applied as inline flex-basis; <code>.phone__divider</code> uses pointer capture, and <code>.phone__screen--dragging</code> blanks iframe pointer-events mid-drag so the frame can't eat the stream. Clamped in JS to the same floors CSS enforces (zoom-scaled).</td></tr>
         <tr><td>Advanced gate</td><td class="mono">client/src/context/UiModeContext.jsx</td><td><code>dockAppSplit: 'advanced'</code> — gates only the toggle; opening apps stays <code>localAppTab</code> (Basic).</td></tr>

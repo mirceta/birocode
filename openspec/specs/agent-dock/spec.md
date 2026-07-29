@@ -248,31 +248,30 @@ remains governed by its existing gate.
 - **WHEN** the web UI is in Basic (Simple) mode
 - **THEN** the split affordance is not offered, and opening a local app uses the cover presentation
 
-### Requirement: A split dock widens in the dashboard grid
+### Requirement: Split fits the dock's existing cell
 
-While a dock is in split presentation with an app open, the system SHALL widen that
-dock's cell in the dashboard grid (using the grid's existing wider-cell mechanism, e.g.
-spanning an extra column) so the left pane retains a usable chat width rather than
-halving a normal-width dock. When the dock leaves split (app closed or mode switched
-back to cover), its cell SHALL return to the width it would otherwise have. The
-widening SHALL degrade gracefully where extra width does not exist — a single-column
-grid or a narrow free-layout panel SHALL still render both panes without breaking the
-dashboard layout.
+Entering or leaving split presentation SHALL NOT change the dock's dashboard
+grid cell width. The per-dock wide (⤢) toggle SHALL keep working independently
+of split — a dock manually widened stays wide through split transitions, and a
+normal dock stays normal. The two panes SHALL fit the dock's actual width at
+any cell size: the pane minimum-width floors SHALL adapt (shrinking
+proportionally on narrow cells) so the split row never overflows the dock
+horizontally, and the divider's drag clamp SHALL honor the same adapted floors.
 
-#### Scenario: Entering split widens the cell
+#### Scenario: Entering split keeps the cell width
 
 - **WHEN** a dock in a multi-column dashboard grid enters split with an app open
-- **THEN** that dock's cell becomes wider (spans an additional column) while other docks keep their normal width
+- **THEN** its grid cell keeps the width it had (no forced span), and other docks do not reflow
 
-#### Scenario: Leaving split restores the cell
+#### Scenario: Manual wide survives split transitions
 
-- **WHEN** the dock leaves split presentation
-- **THEN** its cell returns to the width it had before entering split (including a previously set per-dock wide flag)
+- **WHEN** a dock marked wide via the ⤢ toggle enters and then leaves split
+- **THEN** it remains wide throughout, and toggling ⤢ while split takes effect immediately
 
-#### Scenario: No room to widen still renders
+#### Scenario: Panes fit a normal-width cell
 
-- **WHEN** a dock enters split in a one-column grid or a narrow agents panel
-- **THEN** the two panes still render side by side within the available width and the rest of the dashboard layout is not broken
+- **WHEN** a dock at normal (single-column) cell width is split
+- **THEN** both panes and the divider render within the dock's width with no horizontal overflow, and dragging the divider clamps at floors scaled to that width
 
 ### Requirement: Adjustable split ratio via a draggable divider
 
