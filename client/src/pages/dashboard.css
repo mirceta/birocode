@@ -2015,6 +2015,13 @@
   gap: 6px;
 }
 
+/* Export view reuses the import area's shell; the JSON textarea is read-only
+   and capped so a big cache scrolls instead of swallowing the dock overlay. */
+.phone__discover-export-text {
+  max-height: 180px;
+  overflow-y: auto;
+}
+
 /* Per-dock git refresh — re-fetches this agent's git status (hits origin). */
 .phone__git-refresh {
   flex: 0 0 auto;
