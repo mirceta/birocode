@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useT } from '../../i18n/LanguageContext';
+import { copyText } from '../../lib/copyText';
 
 // Discover Local Apps panel (openspec discover-apps-panel): an overlay on one
 // agent dock hosting everything about the feature that used to crowd the dock
@@ -47,6 +48,56 @@ export default function DiscoverAppsPanel({ disc, localApps, onClose }) {
     if (await importFindings(importText)) {
       setImportOpen(false);
       setImportText('');
+    }
+  };
+
+  // Export area (openspec local-apps-cache-export-import): the current findings
+  // list as JSON in EXACTLY the shape ParseImport accepts, so a copy from this
+  // machine pastes straight into another machine's Import. Explicit field
+  // whitelist — must stay in sync with LocalAppFinding (name/port/folder/
+  // evidence/startCommand); machine-local projections (running, discoveredAt)
+  // must never ride along.
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportCopied, setExportCopied] = useState(false);
+  const [exportManual, setExportManual] = useState(false);
+  const exportRef = useRef(null);
+
+  const exportJson = JSON.stringify(
+    {
+      apps: (discovery?.apps || []).map(({ name, port, folder, evidence, startCommand }) => ({
+        name,
+        port,
+        folder,
+        evidence,
+        ...(startCommand != null ? { startCommand } : {}),
+      })),
+    },
+    null,
+    2,
+  );
+
+  const toggleExport = () => {
+    setExportOpen((v) => !v);
+    setImportOpen(false);
+    setExportManual(false);
+  };
+
+  const toggleImport = () => {
+    setImportOpen((v) => !v);
+    setExportOpen(false);
+  };
+
+  const copyExport = async () => {
+    if (await copyText(exportJson)) {
+      setExportManual(false);
+      setExportCopied(true);
+      setTimeout(() => setExportCopied(false), 1200);
+    } else {
+      // No clipboard (plain-HTTP phone): hand the user the Ctrl+C path instead
+      // of an error — the JSON is right there, pre-selected.
+      exportRef.current?.focus();
+      exportRef.current?.select();
+      setExportManual(true);
     }
   };
 
@@ -118,12 +169,56 @@ export default function DiscoverAppsPanel({ disc, localApps, onClose }) {
           <button
             type="button"
             className="phone__discover-btn"
-            onClick={() => setImportOpen((v) => !v)}
+            onClick={toggleImport}
             title={t('dashboard.discoverImportHint')}
           >
             {`📥 ${t('dashboard.discoverImport')}`}
           </button>
+          <button
+            type="button"
+            className="phone__discover-btn"
+            onClick={toggleExport}
+            disabled={!discovery?.apps?.length}
+            title={t('dashboard.discoverExportHint')}
+          >
+            {`📤 ${t('dashboard.discoverExport')}`}
+          </button>
         </div>
+        {exportOpen && (
+          <div className="phone__discover-import">
+            <textarea
+              ref={exportRef}
+              className="phone__discover-import-text phone__discover-export-text"
+              value={exportJson}
+              readOnly
+              rows={8}
+              spellCheck={false}
+              onFocus={(e) => e.target.select()}
+              aria-label={t('dashboard.discoverExport')}
+            />
+            <div className="phone__discover-import-actions">
+              <button
+                type="button"
+                className="phone__discover-btn phone__discover-btn--cache"
+                onClick={copyExport}
+              >
+                {exportCopied ? `✓ ${t('dashboard.discoverExportCopied')}` : `📋 ${t('dashboard.discoverExportCopy')}`}
+              </button>
+              <button
+                type="button"
+                className="phone__discover-btn"
+                onClick={() => { setExportOpen(false); setExportManual(false); }}
+              >
+                {t('dashboard.discoverExportClose')}
+              </button>
+            </div>
+            {exportManual && (
+              <div className="phone__discover-msg" role="status">
+                {t('dashboard.discoverExportManual')}
+              </div>
+            )}
+          </div>
+        )}
         {importOpen && (
           <div className="phone__discover-import">
             <textarea

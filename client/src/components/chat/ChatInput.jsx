@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { apiPost } from '../../api/client';
 import { useDock } from '../../context/DockContext';
 import { useFeature } from '../../context/UiModeContext';
 import { usePrompts } from '../../context/PromptsContext';
@@ -22,7 +23,16 @@ import PromptExpandModal from './PromptExpandModal';
 // Each chip above the row has a Send button (approve → send as the next turn,
 // disabled while busy), an × to delete, and tapping its body loads it back into
 // the composer to edit. Nothing ever auto-sends, and nothing is ever lost.
-export default function ChatInput({ value, onChange, onSend, onStop, streaming, attachment, onAttach, embedded = false, stashTabId }) {
+
+// chat.focus feed event (openspec add-chat-focus-event): a dock-embedded composer
+// reports "the End User clicked into this dock's chat" so the sound system can cue
+// it. Focus is a fidgety gesture, so emission is damped: per composer (repo + dock
+// tab), at most one event per cooldown window. Module-level so remounts don't
+// reset the window. Fire-and-forget — a failed publish must never disturb typing.
+const FOCUS_EVENT_COOLDOWN_MS = 10_000;
+const lastFocusEmitAt = new Map();
+
+export default function ChatInput({ value, onChange, onSend, onStop, streaming, attachment, onAttach, embedded = false, stashTabId, repoId }) {
   const { t } = useT();
   const { tabs, activeTabId, activeTab, addStash, removeStash, reorderStash, globalStash } = useDock();
   // The queue attaches to a specific agent tab. Normally that's the ACTIVE tab,
@@ -86,6 +96,18 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
       e.preventDefault();
       submit();
     }
+  }
+
+  // Emit chat.focus for a dock composer only — the main chat page stays silent.
+  function handleFocus() {
+    if (!embedded) return;
+    const key = `${repoId || ''}:${stashTabId || ''}`;
+    const now = Date.now();
+    if (now - (lastFocusEmitAt.get(key) || 0) < FOCUS_EVENT_COOLDOWN_MS) return;
+    lastFocusEmitAt.set(key, now);
+    apiPost('events/chat-focus', { tabId: stashTabId || '' }, { repoId }).catch(() => {
+      /* best-effort: the feed cue is observation, never worth an error */
+    });
   }
 
   function handleFileChange(e) {
@@ -314,6 +336,7 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
+          onFocus={handleFocus}
           aria-label={t('chat.inputAria')}
         />
         {stashEnabled && (

@@ -18,7 +18,7 @@ namespace ClaudeWeb.Services.Events;
 /// voice) just stays silent, and voice falls back to the beep.
 ///
 /// The cue is additionally rule-driven (openspec change add-host-event-sound-rules): each
-/// recognized slot (turn.start, turn.ended, _default — the browser grid's taxonomy) can carry an
+/// recognized slot (turn.start, turn.ended, chat.focus, _default — the browser grid's taxonomy) can carry an
 /// operator-uploaded audio file stored under the data dir. An assigned file wins over both modes
 /// for its slot; an unknown event type uses the _default slot's file when present. Slots without
 /// a file keep the mode-determined built-in cue, and an unplayable file falls back to it.
@@ -31,7 +31,7 @@ public class HostEventSound
     public const string ModeVoice = "voice";
 
     public const string SlotDefault = "_default";
-    public static readonly string[] Slots = { "turn.start", "turn.ended", SlotDefault };
+    public static readonly string[] Slots = { "turn.start", "turn.ended", "chat.focus", SlotDefault };
     public static readonly string[] AllowedExtensions = { ".wav", ".mp3" };
     public const int MaxRuleBytes = 2 * 1024 * 1024;
 
@@ -284,8 +284,9 @@ public class HostEventSound
         catch { return false; }                                      // winmm missing / non-Windows host
     }
 
-    // Event-determined phrase: "started" for a turn.start, "has finished" for a turn.ended, a
-    // neutral phrase otherwise; naming the source when we know it, else "an agent".
+    // Event-determined phrase: "started" for a turn.start, "has finished" for a turn.ended,
+    // "someone is writing to …" for a chat.focus (the actor is the End User, not the agent),
+    // a neutral phrase otherwise; naming the source when we know it, else "an agent".
     private static string PhraseFor(string? label, string? eventType)
     {
         var who = string.IsNullOrWhiteSpace(label) ? "an agent" : $"agent {label!.Trim()}";
@@ -293,6 +294,7 @@ public class HostEventSound
         {
             "turn.start" => $"{who} started",
             "turn.ended" => $"{who} has finished",
+            "chat.focus" => $"someone is writing to {who}",
             _            => $"{who} sent an event",
         };
     }
@@ -342,6 +344,7 @@ public class HostEventSound
             {
                 case "turn.start": System.Media.SystemSounds.Asterisk.Play(); return;
                 case "turn.ended": System.Media.SystemSounds.Exclamation.Play(); return;
+                case "chat.focus": System.Media.SystemSounds.Question.Play(); return;
                 default:           System.Media.SystemSounds.Beep.Play(); return;
             }
         }
@@ -352,6 +355,7 @@ public class HostEventSound
             {
                 case "turn.start": Console.Beep(660, 110); Console.Beep(988, 140); break; // rising query
                 case "turn.ended": Console.Beep(988, 110); Console.Beep(660, 150); break; // resolving fall
+                case "chat.focus": Console.Beep(523, 90); Console.Beep(659, 90); break;   // soft double tap
                 default:           Console.Beep(880, 150); break;
             }
         }

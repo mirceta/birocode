@@ -410,9 +410,11 @@ function unlockAudio(){
 // each note: {freq, type, dur, gain, at(stagger s), to(glide target)}.
 const N = (freq, opt={}) => Object.assign({ freq }, opt);
 const SOUNDS = {
-  // start = bright rising query, ended = crisp affirmative resolve, else a neutral blip.
+  // start = bright rising query, ended = crisp affirmative resolve,
+  // chat.focus = two soft low sine taps ("someone's here"), else a neutral blip.
   "turn.start": [N(587,{type:"square",dur:.07,gain:.10}), N(880,{type:"square",dur:.10,gain:.11,at:.07}), N(1175,{type:"triangle",dur:.12,gain:.09,at:.15})],
   "turn.ended": [N(784,{type:"square",dur:.08,gain:.11}), N(1046,{type:"square",dur:.14,gain:.11,at:.09})],
+  "chat.focus": [N(523,{type:"sine",dur:.06,gain:.07}), N(659,{type:"sine",dur:.10,gain:.07,at:.07})],
   _default:     [N(740,{type:"triangle"})],
 };
 function note(n, t0){
@@ -488,6 +490,7 @@ renderSnd();
 const CUE_SLOTS = [
   { type:"turn.start", label:"Turn start", hint:"an agent began working" },
   { type:"turn.ended", label:"Turn ended", hint:"an agent finished" },
+  { type:"chat.focus", label:"Chat focused", hint:"someone clicked into a dock's chat box" },
   { type:"_default",   label:"Other / unknown events", hint:"anything without its own sound" },
 ];
 const sndRows = document.getElementById("sndRows");
