@@ -1,4 +1,4 @@
-# local-app-discovery — delta for local-apps-cache-export-import
+# discover-local-apps — delta for local-apps-cache-export-import
 
 ## ADDED Requirements
 
