@@ -24,7 +24,7 @@ import PromptExpandModal from './PromptExpandModal';
 // the composer to edit. Nothing ever auto-sends, and nothing is ever lost.
 export default function ChatInput({ value, onChange, onSend, onStop, streaming, attachment, onAttach, embedded = false, stashTabId }) {
   const { t } = useT();
-  const { tabs, activeTabId, activeTab, addStash, removeStash, globalStash } = useDock();
+  const { tabs, activeTabId, activeTab, addStash, removeStash, reorderStash, globalStash } = useDock();
   // The queue attaches to a specific agent tab. Normally that's the ACTIVE tab,
   // or — with no tab (the plain main chat) — the tab-independent global queue
   // (plans/queued-prompts.md). Inside a dashboard dock it must attach to THIS
@@ -138,6 +138,22 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
     removeStash(queueTabId, item.id);
   }
 
+  // Reorder (openspec queue-based-loop): move a chip one place earlier/later in
+  // the strip — the order IS what an armed queue loop unloads next. Tab stashes
+  // only; the global queue feeds no loop and stays insertion-ordered.
+  const canReorder = !!queueTabId && stash.length > 1;
+  function handleChipMove(e, item, dir) {
+    e.stopPropagation();
+    if (!canReorder) return;
+    const ids = stash.map((s) => s.id);
+    const idx = ids.indexOf(item.id);
+    const to = idx + dir;
+    if (idx < 0 || to < 0 || to >= ids.length) return;
+    ids.splice(idx, 1);
+    ids.splice(to, 0, item.id);
+    reorderStash(queueTabId, ids);
+  }
+
   const canSend = ((value || '').trim().length > 0 || !!attachment) && !sendDisabled;
   const canStash = stashEnabled && (value || '').trim().length > 0;
 
@@ -180,7 +196,31 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
               title={item.text}
               onClick={() => handleChipTap(item)}
             >
+              {canReorder && (
+                <span
+                  className={`chat-stash__move${stash.indexOf(item) === 0 ? ' chat-stash__move--disabled' : ''}`}
+                  role="button"
+                  aria-disabled={stash.indexOf(item) === 0}
+                  aria-label={t('chat.queueMoveEarlier')}
+                  title={t('chat.queueMoveEarlier')}
+                  onClick={(e) => handleChipMove(e, item, -1)}
+                >
+                  &lsaquo;
+                </span>
+              )}
               <span className="chat-stash__text">{item.text}</span>
+              {canReorder && (
+                <span
+                  className={`chat-stash__move${stash.indexOf(item) === stash.length - 1 ? ' chat-stash__move--disabled' : ''}`}
+                  role="button"
+                  aria-disabled={stash.indexOf(item) === stash.length - 1}
+                  aria-label={t('chat.queueMoveLater')}
+                  title={t('chat.queueMoveLater')}
+                  onClick={(e) => handleChipMove(e, item, 1)}
+                >
+                  &rsaquo;
+                </span>
+              )}
               <span
                 className={`chat-stash__send${sendDisabled ? ' chat-stash__send--disabled' : ''}`}
                 role="button"

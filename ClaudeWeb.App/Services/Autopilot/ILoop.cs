@@ -1,3 +1,5 @@
+using ClaudeWeb.Services.Dock;
+
 namespace ClaudeWeb.Services.Autopilot;
 
 /// <summary>
@@ -35,7 +37,18 @@ public sealed record LoopContext(
     IReadOnlyList<string> DenyList,
     double Threshold,
     IReadOnlyList<PromptClassifier.Routine> Routines,
-    PromptClassifier.Verdict? Verdict = null);
+    PromptClassifier.Verdict? Verdict = null,
+    // Queue kind only (openspec: queue-based-loop, D2): the bound tab's LIVE stash,
+    // read by the ENGINE this tick — the stash IS the queue, so the head item here
+    // is the next unload. Null means the bound tab no longer exists (the kind stops
+    // as error); other kinds always see null and never look.
+    IReadOnlyList<StashItem>? QueueStash = null);
+
+/// <summary>Names the stash item a queue-kind proposal was read from, so the ENGINE
+/// can consume it when — and only when — the proposal lands (openspec:
+/// queue-based-loop, D2: drive = the send fires; suggest = the pend is consumed).
+/// Never consumed at decide time, so a held tick re-decides idempotently.</summary>
+public sealed record StashRef(string TabId, string ItemId);
 
 /// <summary>The one value a kind returns — exactly one of the three cases below.</summary>
 public abstract record LoopDecision
@@ -54,12 +67,14 @@ public abstract record LoopDecision
     /// <summary><c>Prompt</c> is the agent's next prompt; the ENGINE dispatches on the
     /// instance's mode (drive → send, suggest → pend into the composer).
     /// <c>EnterPhase</c>, when set, is applied once the proposal lands (a goal loop's
-    /// work/verify transitions).</summary>
-    public sealed record Propose(string Prompt, string? EnterPhase = null, double Confidence = 1.0) : LoopDecision;
+    /// work/verify transitions). <c>ConsumeStash</c>, when set, is the queue kind's
+    /// consume-on-land marker (see <see cref="StashRef"/>).</summary>
+    public sealed record Propose(string Prompt, string? EnterPhase = null, double Confidence = 1.0,
+        StashRef? ConsumeStash = null) : LoopDecision;
 }
 
 /// <summary>
-/// Shared ladder for the DRIVEN kinds (recipe, goal) — the ordered safety checks that
+/// Shared ladder for the DRIVEN kinds (recipe, goal, queue) — the ordered safety checks that
 /// precede any kind-specific sentinel handling, preserved exactly from the
 /// pre-interface engine: (1) run errored → stop <c>error</c>; (2) the
 /// <c>NEEDS_HUMAN:</c> marker → stop <c>escalate</c> (checked before sentinels, so a

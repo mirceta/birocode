@@ -220,6 +220,33 @@ public class DockRegistry
         }
     }
 
+    /// <summary>
+    /// Reorders a tab's stash to the given full id order (plans/prompt-stash.md,
+    /// openspec queue-based-loop). Ids no longer present (e.g. consumed by an
+    /// armed queue loop meanwhile) are ignored; items not named in the request
+    /// (e.g. added by another device meanwhile) keep their relative order at the
+    /// end. Last-write-wins under the registry lock. Returns the reordered stash
+    /// copies, or null when the tab is unknown.
+    /// </summary>
+    public IReadOnlyList<StashItem>? ReorderStash(string tabId, IReadOnlyList<string> orderedIds)
+    {
+        lock (_gate)
+        {
+            var tab = _tabs.FirstOrDefault(t => string.Equals(t.Id, tabId, StringComparison.Ordinal));
+            if (tab is null) return null;
+            var byId = tab.Stash.ToDictionary(s => s.Id, StringComparer.Ordinal);
+            var reordered = new List<StashItem>(tab.Stash.Count);
+            foreach (var id in orderedIds ?? Array.Empty<string>())
+                if (id != null && byId.Remove(id, out var item))
+                    reordered.Add(item);
+            // Anything the request didn't name stays, in its existing order.
+            reordered.AddRange(tab.Stash.Where(s => byId.ContainsKey(s.Id)));
+            tab.Stash = reordered;
+            Save();
+            return tab.Stash.Select(CloneStash).ToList();
+        }
+    }
+
     /// <summary>Removes a stashed idea. False if the tab or item is unknown.</summary>
     public bool RemoveStash(string tabId, string stashId)
     {

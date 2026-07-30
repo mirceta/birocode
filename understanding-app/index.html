@@ -1,308 +1,287 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Understanding — Dock App Split View + Draggable Divider</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Queue-based loop — the stash IS the queue, verified by default</title>
 <style>
-  :root {
-    --bg: #0f1218;
-    --surface: #171c26;
-    --surface2: #1e2532;
-    --border: #2c3547;
-    --text: #e6ebf4;
-    --soft: #93a0b5;
-    --accent: #6ea8fe;
-    --green: #3fb950;
-    --green-bg: #12261a;
-    --amber: #d29922;
-    --amber-bg: #2a2113;
-    --red: #f85149;
-    --red-bg: #2a1416;
-    --violet: #a371f7;
-    --violet-bg: #1c1630;
-    --mono: 'Consolas', 'Cascadia Code', monospace;
-    --radius: 12px;
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c232c; --line:#30363d;
+    --ink:#e6edf3; --muted:#8b949e; --dim:#6e7681;
+    --accent:#58a6ff; --green:#3fb950; --amber:#d29922; --purple:#bc8cff; --red:#f85149; --pink:#f778ba;
+    --mono:'SF Mono',ui-monospace,'Cascadia Code',Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
   }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    background: radial-gradient(1200px 700px at 70% -10%, #182234 0%, var(--bg) 60%);
-    color: var(--text);
-    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-    line-height: 1.55;
-    padding: 28px 20px 80px;
-  }
-  .wrap { max-width: 980px; margin: 0 auto; }
-  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.02em; }
-  h2 { font-size: 18px; margin: 26px 0 10px; }
-  .sub { color: var(--soft); margin: 0 0 22px; font-size: 15px; }
-  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
-  .tab {
-    padding: 7px 14px; border-radius: 999px; border: 1px solid var(--border);
-    background: var(--surface); color: var(--soft); font-size: 13.5px; font-weight: 600;
-    cursor: pointer;
-  }
-  .tab.on { background: var(--accent); border-color: var(--accent); color: #0b1524; }
-  .view { display: none; }
-  .view.on { display: block; }
-  .card {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 16px 18px; margin-bottom: 14px;
-  }
-  .card p { margin: 8px 0; font-size: 14.5px; }
-  .soft { color: var(--soft); }
-  code, .mono { font-family: var(--mono); font-size: 13px; }
-  code { background: var(--surface2); padding: 1px 6px; border-radius: 6px; }
-  .pill {
-    display: inline-block; padding: 1px 9px; border-radius: 999px;
-    font-size: 11.5px; font-weight: 700;
-  }
-  .pill.green { color: var(--green); background: var(--green-bg); }
-  .pill.amber { color: var(--amber); background: var(--amber-bg); }
-  .pill.red   { color: var(--red); background: var(--red-bg); }
-  .pill.violet{ color: var(--violet); background: var(--violet-bg); }
-  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
-  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
-  th { color: var(--soft); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
-  .flow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; margin: 10px 0; }
-  .flow .node { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; }
-  .flow .arr { color: var(--soft); }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5}
+  a{color:var(--accent)}
+  code{font-family:var(--mono);font-size:.92em;background:#0b0f14;border:1px solid var(--line);border-radius:5px;padding:.5px 5px}
+  .wrap{max-width:1120px;margin:0 auto;padding:28px 20px 90px}
+  header h1{font-size:24px;margin:0 0 8px;letter-spacing:-.01em}
+  header p.sub{color:var(--muted);margin:0;font-size:14.5px;max-width:840px}
+  .tag{display:inline-block;font-family:var(--mono);font-size:11px;padding:2px 8px;border:1px solid var(--line);
+    border-radius:999px;color:var(--muted);margin-right:6px;background:var(--panel)}
 
-  /* dock mock */
-  .stage { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
-  .gridbox {
-    flex: 0 0 auto; display: grid; grid-template-columns: repeat(2, 220px);
-    gap: 10px; padding: 12px; border: 1px dashed var(--border); border-radius: 12px;
-    transition: all .25s ease;
-  }
-  .dockm {
-    border: 1px solid var(--border); border-radius: 12px; background: var(--surface2);
-    overflow: hidden; display: flex; flex-direction: column; min-height: 260px;
-    transition: all .25s ease;
-  }
-  .dm-bar { padding: 7px 10px; background: #232c3d; font-size: 12px; font-weight: 700; display: flex; gap: 7px; align-items: center; }
-  .dm-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
-  .dm-lanes { display: flex; gap: 4px; padding: 5px 8px; border-bottom: 1px solid var(--border); }
-  .dm-lane { font-size: 10.5px; padding: 2px 8px; border-radius: 999px; background: var(--surface); color: var(--soft); }
-  .dm-lane.on { color: var(--text); background: #2a3346; }
-  .dm-apps { display: flex; gap: 4px; padding: 5px 8px; border-bottom: 1px solid var(--border); align-items: center; }
-  .dm-app { font-size: 10.5px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--soft); cursor: pointer; }
-  .dm-app.on { background: var(--accent); border-color: var(--accent); color: #0b1524; }
-  .dm-split-btn { margin-left: auto; font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--soft); cursor: pointer; display: none; }
-  .dm-split-btn.show { display: block; }
-  .dm-split-btn.on { background: var(--accent); border-color: var(--accent); color: #0b1524; }
-  .dm-git { font-size: 10.5px; color: var(--soft); padding: 5px 8px; border-bottom: 1px solid var(--border); }
-  .dm-screen { flex: 1; display: flex; min-height: 0; }
-  .dm-main { flex: 1 1 50%; min-width: 0; display: flex; flex-direction: column; }
-  .dm-msgs { flex: 1; font-size: 10.5px; color: var(--soft); padding: 8px; overflow: hidden; }
-  .dm-composer { border-top: 1px solid var(--border); padding: 6px 8px; font-size: 10.5px; color: var(--soft); background: var(--surface); }
-  .dm-side { flex: 1 1 50%; min-width: 0; border-left: 1px solid var(--border); background: #0d2216; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--green); flex-direction: column; gap: 6px; }
-  .dm-divider { flex: 0 0 7px; cursor: col-resize; position: relative; touch-action: none; }
-  .dm-divider::before { content: ''; position: absolute; inset: 0 2px; border-radius: 2px; }
-  .dm-divider:hover::before, .dm-divider.drag::before { background: var(--accent); opacity: .5; }
-  .dm-cover { flex: 1; background: #0d2216; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--green); flex-direction: column; gap: 6px; }
-  .dm-note { font-size: 9.5px; color: var(--soft); }
-  .legend { flex: 1 1 280px; font-size: 13.5px; }
+  section{margin-top:40px}
+  h2{font-size:17px;margin:0 0 6px;display:flex;align-items:center;gap:10px}
+  h2 .n{font-family:var(--mono);font-size:13px;color:var(--bg);background:var(--accent);
+    width:24px;height:24px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-weight:700}
+  .lead{color:var(--muted);font-size:13.5px;margin:0 0 16px;max-width:860px}
+
+  /* property chips */
+  .chips{display:flex;flex-wrap:wrap;gap:9px}
+  .chip{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:13px;
+    display:flex;align-items:center;gap:8px}
+  .chip .tick{color:var(--green);font-weight:700}
+
+  /* ============ SIM ============ */
+  .simbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+  .toggle{display:inline-flex;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px}
+  .toggle button{border:none;background:transparent;color:var(--muted);font-family:var(--sans);font-size:13px;
+    font-weight:600;padding:8px 14px;border-radius:7px;cursor:pointer;transition:.15s;display:flex;align-items:center;gap:7px}
+  .toggle button.on{color:var(--ink)}
+  .toggle button.on.live{background:rgba(63,185,80,.16);box-shadow:inset 0 0 0 1px rgba(63,185,80,.4)}
+  .toggle button.on.snap{background:rgba(210,153,34,.16);box-shadow:inset 0 0 0 1px rgba(210,153,34,.4)}
+  .toggle .swatch{width:9px;height:9px;border-radius:50%}
+  .sw-live{background:var(--green)} .sw-snap{background:var(--amber)}
+
+  .ctrls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-left:auto}
+  button.btn{font-family:var(--sans);font-size:13px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);
+    border-radius:8px;padding:8px 14px;cursor:pointer;transition:border-color .15s,background .15s}
+  button.btn:hover:not(:disabled){border-color:var(--accent)}
+  button.btn.primary{background:var(--accent);color:#08111f;border-color:var(--accent);font-weight:600}
+  button.btn:disabled{opacity:.4;cursor:default}
+  .steplbl{font-family:var(--mono);font-size:12px;color:var(--muted)}
+
+  .stage{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .lanes{display:grid;grid-template-columns:1fr 1.15fr;gap:0}
+  @media(max-width:800px){.lanes{grid-template-columns:1fr;gap:14px}}
+  .lane{padding:0 16px;position:relative}
+  .lane + .lane{border-left:1px dashed var(--line)}
+  @media(max-width:800px){.lane + .lane{border-left:none;border-top:1px dashed var(--line);padding-top:14px}}
+  .lane h4{margin:0 0 4px;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);font-weight:700;
+    display:flex;align-items:center;gap:7px;min-height:20px}
+  .lane .subh{font-size:11.5px;color:var(--dim);margin:0 0 12px;font-family:var(--mono);min-height:16px}
+  .lane .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+  .dot.stash{background:var(--accent)} .dot.queue{background:var(--pink)} .dot.sent{background:var(--green)}
+  .lane.merged::after{content:'one live object — drains as it lands';position:absolute;top:-2px;right:16px;
+    font-size:10.5px;font-family:var(--mono);color:var(--green)}
+
+  .card{background:#0b0f14;border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin-bottom:8px;
+    display:flex;gap:9px;align-items:flex-start;transition:.25s;position:relative}
+  .card .cid{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--dim);margin-top:1px;min-width:20px}
+  .card .clabel{font-size:12.5px;color:var(--ink);line-height:1.35;padding-right:78px}
+  .card.q{border-color:rgba(247,120,186,.35)}
+  .card.q.head::before{content:'next';position:absolute;right:9px;top:9px;font-size:10px;font-family:var(--mono);color:var(--pink)}
+  .card.sent{border-color:rgba(63,185,80,.4);background:rgba(63,185,80,.06)}
+  .card.sent::after{content:'▶ sent';position:absolute;right:9px;top:9px;font-size:10px;font-family:var(--mono);color:var(--green)}
+  .card.vok{border-color:rgba(63,185,80,.35);border-style:dashed}
+  .card.vok::after{content:'✓ STEP_VERIFIED';position:absolute;right:9px;top:9px;font-size:10px;font-family:var(--mono);color:var(--green)}
+  .card.vok .clabel{color:var(--muted)}
+  .card.vfail{border-color:var(--red);background:rgba(248,81,73,.08)}
+  .card.vfail::after{content:'✗ not verified';position:absolute;right:9px;top:9px;font-size:10px;font-family:var(--mono);color:var(--red)}
+  .card.areply{border-color:rgba(210,153,34,.45)}
+  .card.areply::after{content:'🤖 reply';position:absolute;right:9px;top:9px;font-size:10px;font-family:var(--mono);color:var(--amber)}
+  .card.buried{opacity:.55;filter:saturate(.6)}
+  .card.buried::after{content:'⚠ buried';color:var(--red)}
+  .card.human{border-color:rgba(188,140,255,.5)}
+  .card.human::after{content:'👤 you';position:absolute;right:9px;top:9px;font-size:10px;font-family:var(--mono);color:var(--purple)}
+  .card.fresh{animation:pop .35s}
+  .card.new-flag{border-color:var(--purple);box-shadow:0 0 0 1px rgba(188,140,255,.3)}
+  .card.new-flag .cid{color:var(--purple)}
+  @keyframes pop{0%{transform:scale(.9) translateY(-6px);opacity:0}100%{transform:scale(1);opacity:1}}
+  .empty{color:var(--dim);font-size:12px;font-style:italic;padding:8px 2px}
+
+  .agentbox{margin-top:12px;display:flex;align-items:center;gap:11px;padding:11px 14px;background:var(--panel2);
+    border:1px solid var(--line);border-radius:10px;flex-wrap:wrap}
+  .agentbox .av{width:34px;height:34px;border-radius:9px;background:#0b0f14;border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;font-size:17px}
+  .agentbox .st{font-size:13px}
+  .agentbox .st b{color:var(--ink)}
+  .agentbox .pulse{width:8px;height:8px;border-radius:50%;background:var(--amber);box-shadow:0 0 0 0 rgba(210,153,34,.6);animation:pl 1.3s infinite}
+  .agentbox.idle .pulse{background:var(--green);animation:none}
+  @keyframes pl{0%{box-shadow:0 0 0 0 rgba(210,153,34,.5)}70%{box-shadow:0 0 0 7px rgba(210,153,34,0)}100%{box-shadow:0 0 0 0 rgba(210,153,34,0)}}
+  .loopchip{margin-left:auto;font-family:var(--mono);font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;border:1px solid var(--line);color:var(--dim)}
+  .loopchip.armed{color:var(--green);border-color:rgba(63,185,80,.4);background:rgba(63,185,80,.08)}
+  .loopchip.stopped{color:var(--red);border-color:rgba(248,81,73,.4);background:rgba(248,81,73,.08)}
+  .loopchip.done{color:var(--accent);border-color:rgba(88,166,255,.4);background:rgba(88,166,255,.08)}
+
+  .narrate{margin-top:14px;padding:12px 14px;border-radius:10px;font-size:13.5px;border:1px solid var(--line);background:#0b0f14;min-height:44px;display:flex;gap:10px;align-items:flex-start}
+  .narrate .marker{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;white-space:nowrap;margin-top:1px}
+  .narrate.diverge{border-color:var(--red);background:rgba(248,81,73,.07)}
+  .narrate.good{border-color:rgba(63,185,80,.45);background:rgba(63,185,80,.05)}
+  .marker.def{background:var(--panel2);color:var(--muted)}
+  .marker.div{background:rgba(248,81,73,.15);color:var(--red)}
+  .marker.win{background:rgba(63,185,80,.15);color:var(--green)}
+  .marker.flag{background:rgba(188,140,255,.15);color:var(--purple)}
+
+  .scorebar{display:flex;gap:22px;margin-top:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+  .scorebar b{color:var(--ink)}
+  .scorebar .big{font-family:var(--mono);font-size:15px}
+
+  /* ============ LEDGER ============ */
+  .ledger{display:flex;flex-direction:column;gap:10px}
+  .drow{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;border-left:3px solid var(--accent)}
+  .drow .top{display:grid;grid-template-columns:52px 1fr;align-items:center;gap:12px;padding:13px 16px;cursor:pointer}
+  .drow .did{font-family:var(--mono);font-weight:700;font-size:13px;color:var(--dim)}
+  .drow .dtitle{font-size:14px;font-weight:600}
+  .drow .dtitle .k{font-family:var(--mono);font-size:11px;color:var(--dim);font-weight:400;display:block;margin-top:2px}
+  .drow .detail{border-top:1px solid var(--line);display:none;padding:13px 16px}
+  .drow.open .detail{display:block}
+  .drow .detail p{margin:0;font-size:13px;color:var(--muted)}
+  .drow .detail p b{color:var(--ink)}
+
+  /* ============ two/three-panel generic ============ */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:720px){.grid2{grid-template-columns:1fr}}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+  @media(max-width:860px){.grid3{grid-template-columns:1fr}}
+  .card2{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .card2 h3{margin:0 0 10px;font-size:14px;display:flex;align-items:center;gap:8px}
+  .card2 p{margin:0;font-size:13px;color:var(--muted)}
+  .card2 p b{color:var(--ink)}
+  .card2 .where{margin-top:10px;font-family:var(--mono);font-size:11px;color:var(--dim)}
+
+  /* honesty invariant flow */
+  .honest{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-family:var(--mono);font-size:12px;margin-top:14px}
+  .hbox{background:#0b0f14;border:1px solid var(--line);border-radius:8px;padding:9px 12px;color:var(--ink)}
+  .hbox.stashy{border-color:rgba(88,166,255,.4)}
+  .hbox.chat{border-color:rgba(63,185,80,.4)}
+  .harrow{color:var(--green);font-size:18px}
+  .heq{color:var(--amber);font-weight:700}
+
+  .ladder{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+  .ladder li{display:flex;gap:11px;align-items:flex-start;font-size:13px}
+  .ladder .rung{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--red);border:1px solid rgba(248,81,73,.35);
+    background:rgba(248,81,73,.08);border-radius:6px;padding:2px 8px;white-space:nowrap;margin-top:1px}
+  .ladder .rt{color:var(--muted)} .ladder .rt b{color:var(--ink)}
+
+  .foot{margin-top:48px;color:var(--dim);font-size:12px;text-align:center;line-height:1.7}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Dock App Split View</h1>
-  <p class="sub">openspec changes <code>dock-app-split-view</code> + <code>split-divider-drag</code> + <code>split-no-forced-wide</code> — a per-dock mode that puts the opened local app <b>beside</b> the chat instead of over it, with a <b>draggable divider</b> between the two panes. Split stays inside the dock's normal footprint; widening is always the manual ⤢ choice.</p>
+  <header>
+    <div><span class="tag">queue-based-loop</span><span class="tag">final design</span><span class="tag">2026-07-30</span></div>
+    <h1>The stash IS the queue — verified by default</h1>
+    <p class="sub">The third promised autopilot mode is a <b>wire between two things that already exist</b>: the per-tab
+    <b>prompt stash</b> (the ideas you flag while the agent is busy) and the <b>loop engine</b>. Arming a 🗒️ queue loop means:
+    <i>automatically unload my stash into the agent whenever it's free</i> — and, by default, <b>verify each step actually
+    got solved</b> before unloading the next.</p>
+  </header>
 
-  <div class="tabs">
-    <button class="tab on" data-v="what">What changed</button>
-    <button class="tab" data-v="mock">Live mock</button>
-    <button class="tab" data-v="state">Why nothing reloads</button>
-    <button class="tab" data-v="where">Where things live</button>
-  </div>
+  <!-- ============ PROPERTIES ============ -->
+  <section>
+    <h2><span class="n">≡</span> The design in six properties</h2>
+    <p class="lead">Decided in <code>openspec/changes/queue-based-loop</code> — the live-stash model merged with the loop
+    engine's existing machinery.</p>
+    <div class="chips" id="chips"></div>
+  </section>
 
-  <!-- ============ WHAT ============ -->
-  <div class="view on" id="v-what">
-    <div class="card">
-      <h2 style="margin-top:0">The problem</h2>
-      <p><span class="pill red">Cover only</span> Clicking a local app in a dock rendered it over the whole dock: the chat collapsed to a composer-only strip and the git/discover chrome hid. Fine for a quick look — useless when you want to <b>watch the app while talking to the agent about it</b>.</p>
-    </div>
-    <div class="card">
-      <h2 style="margin-top:0">The change</h2>
-      <table>
-        <tr><th>Piece</th><th>Behavior</th></tr>
-        <tr><td><span class="pill green">Split mode</span></td><td>A ◫ toggle appears in the dock's app-switcher row while an app is open. On: the dock's chrome stays in place, and the screen area splits — <b>full chat</b> (message list + composer) left, <b>the app</b> right. Off: cover, exactly as before.</td></tr>
-        <tr><td><span class="pill green">Chrome returns</span></td><td>In split the dock is treated as "chat showing": git block, Discover buttons, Understanding row all come back (they hide only in cover).</td></tr>
-        <tr><td><span class="pill amber">No forced widening</span></td><td>(openspec <code>split-no-forced-wide</code>) Split originally forced the dock's grid cell to span 2 columns — the same "expanded" state as the ⤢ toggle. That coupling is now removed: split renders inside whatever cell width the dock already has, and widening is always your explicit ⤢ choice (which works independently, before/during/after split). Pane floors adapt on narrow cells (<code>min(300px, 45%)</code> chat / <code>min(260px, 38%)</code> app) so the panes always fit, and the chat clips at the divider instead of bleeding under the app.</td></tr>
-        <tr><td><span class="pill green">Draggable divider</span></td><td>The line between the panes is a real separator: drag it (mouse or touch) to give the app or the chat more room. Clamped so neither pane collapses (chat ≥ 300px, app ≥ 260px); double-click resets to 50/50; arrow keys nudge it when focused. The drag keeps tracking even over the app's iframe.</td></tr>
-        <tr><td><span class="pill violet">Ephemeral</span></td><td>Per-dock, device-local, resets on reload — the same class of state as maximize-chat; the drag ratio follows the same rule (it survives split off/on while the dock is mounted). Advanced-mode toggle (<code>dockAppSplit</code>); Basic keeps cover.</td></tr>
-      </table>
-    </div>
-    <div class="card">
-      <p><span class="pill amber">Guarantees kept</span> Toggling cover ↔ split <b>never reloads the app</b> (same keep-alive <code>frameKey</code>, so in-app state and per-frame zoom survive) and <b>never remounts the chat</b> (composer draft, scroll, live stream survive). Verified headlessly: 32/32 + 18/18 checks.</p>
-    </div>
-  </div>
+  <!-- ============ SIM ============ -->
+  <section>
+    <h2><span class="n">▸</span> One run, stepped through</h2>
+    <p class="lead">The same queue, both postures. In <b>verified</b> mode (the default) the agent's mid-queue question
+    <b>stops the loop</b>; in <b>blind</b> mode (the opt-out) watch what happens to that same question. This is the
+    amendment: <i>delivered ≠ solved</i>.</p>
 
-  <!-- ============ MOCK ============ -->
-  <div class="view" id="v-mock">
-    <div class="card">
-      <p style="margin-top:0">A working miniature. Click <b>StateA</b> to open the app (cover), then the <b>◫</b> toggle — the chat comes back beside the app <i>inside the dock's own footprint</i> (the dock does not widen; the neighbor stays put). Then <b>drag the divider</b> between the panes (double-click it to reset) — the fake in-app counter proves resizing reloads nothing.</p>
-      <div class="stage">
-        <div class="gridbox">
-          <div class="dockm" id="dock1">
-            <div class="dm-bar"><span class="dm-dot"></span> Claude Web (this app)</div>
-            <div class="dm-lanes"><span class="dm-lane on">Builder</span><span class="dm-lane">Ask</span><span class="dm-lane">Files</span><span class="dm-lane">Console</span></div>
-            <div class="dm-apps">
-              <button class="dm-app" id="dm-appbtn">StateA :5301</button>
-              <button class="dm-split-btn" id="dm-splitbtn" title="Split view">◫</button>
-            </div>
-            <div class="dm-git" id="dm-git">⎇ feat/local-app-split-view · 1 ahead</div>
-            <div class="dm-screen" id="dm-screen">
-              <div class="dm-main">
-                <div class="dm-msgs" id="dm-msgs">— message list —</div>
-                <div class="dm-composer">draft: fix the header, then…</div>
-              </div>
-            </div>
-          </div>
-          <div class="dockm">
-            <div class="dm-bar"><span class="dm-dot"></span> other-repo</div>
-            <div class="dm-lanes"><span class="dm-lane on">Builder</span><span class="dm-lane">Ask</span></div>
-            <div class="dm-screen"><div class="dm-main"><div class="dm-msgs">— message list —</div><div class="dm-composer">Ask anything…</div></div></div>
-          </div>
+    <div class="simbar">
+      <div class="toggle" id="modeToggle">
+        <button data-mode="verify" class="on live"><span class="swatch sw-live"></span>Verified — the default</button>
+        <button data-mode="blind" class="snap"><span class="swatch sw-snap"></span>Blind unload — the opt-out</button>
+      </div>
+      <div class="ctrls">
+        <button class="btn" id="back">‹ Back</button>
+        <button class="btn primary" id="step">Step ›</button>
+        <button class="btn" id="play">▶ Play</button>
+        <button class="btn" id="reset">Reset</button>
+        <span class="steplbl" id="steplbl"></span>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="lanes" id="lanes"></div>
+      <div class="agentbox idle" id="agent">
+        <div class="av">🤖</div>
+        <span class="pulse"></span>
+        <div class="st" id="agentst"><b>Agent idle</b></div>
+        <span class="loopchip" id="loopchip">not armed</span>
+      </div>
+    </div>
+
+    <div class="narrate" id="narrate"></div>
+    <div class="scorebar" id="score"></div>
+  </section>
+
+  <!-- ============ SAFETY ============ -->
+  <section>
+    <h2><span class="n">🛡</span> Why this stays honest and safe</h2>
+    <div class="grid2">
+      <div class="card2">
+        <h3>🔎 Honesty without a frozen copy</h3>
+        <p>Every auto-sent byte is a <b>stash item you can already see</b> above the composer; verification prompts are a
+        <b>stored template</b> (gated-inspectable) + that visible step text, composed deterministically at send time. The
+        audit trail still records every actual send verbatim.</p>
+        <div class="honest">
+          <span class="hbox stashy">visible stash item</span>
+          <span class="heq">≡</span>
+          <span class="harrow">→</span>
+          <span class="hbox chat">auto-sent chat message</span>
         </div>
-        <div class="legend soft">
-          <p><b style="color:var(--text)">What to notice</b></p>
-          <p>• The ◫ toggle only exists while an app is open — it changes <i>how</i> the app shows, not <i>which</i> app.</p>
-          <p>• Cover hides the git row and collapses the chat to its composer; split brings both back.</p>
-          <p>• Split does NOT change the dock's size in the grid — the panes share whatever width the dock has. (It used to force the ⤢ two-column span; that's gone.)</p>
-          <p>• The app pane is the <i>same iframe</i> in both modes — the mock fakes it, the real dock moves a slot the keep-alive host tracks.</p>
-      <p>• The divider drags between the panes' minimum widths, resets on double-click, and its ratio sticks per dock until reload.</p>
-        </div>
+      </div>
+      <div class="card2">
+        <h3>🪜 Four ways it stops before making things worse</h3>
+        <p>As a driven <code>QueueLoop</code> kind it inherits the ladder, plus the new verification gate — and because
+        unsent items never leave the stash, <b>every stop is lossless</b>:</p>
+        <ul class="ladder">
+          <li><span class="rung">errored run</span><span class="rt">the last turn failed → <b>stop</b>, don't pile on</span></li>
+          <li><span class="rung">NEEDS_HUMAN:</span><span class="rt">the agent used the sentinel → <b>escalate</b></span></li>
+          <li><span class="rung">deny-list</span><span class="rt">the load-bearing fence → <b>never auto-send past it</b></span></li>
+          <li><span class="rung">step-unverified</span><span class="rt">no <code>STEP_VERIFIED</code> → <b>escalate</b> — catches plain questions the ladder can't, because ordinary agents don't know any sentinel</span></li>
+        </ul>
       </div>
     </div>
-  </div>
+  </section>
 
-  <!-- ============ STATE ============ -->
-  <div class="view" id="v-state">
-    <div class="card">
-      <h2 style="margin-top:0">Why toggling loses nothing</h2>
-      <p>Two prior contracts do the heavy lifting; split just leans on them:</p>
-      <div class="flow">
-        <span class="node">Chat is <b>always mounted</b> in <code>.phone__main</code>, last child, both modes</span><span class="arr">→</span>
-        <span class="node">toggling split only adds/removes the sibling <code>.phone__side</code></span><span class="arr">→</span>
-        <span class="node">React never remounts the chat (keep-composer contract)</span>
+  <!-- ============ SURFACES ============ -->
+  <section>
+    <h2><span class="n">⌘</span> Three surfaces, one list</h2>
+    <p class="lead">The stash strip stays the queue's only editor — the loop surfaces add settings and arming, never a
+    duplicate list.</p>
+    <div class="grid3">
+      <div class="card2">
+        <h3>📥 Stash strip <span class="tag" style="margin:0">the editor</span></h3>
+        <p>Where you already flag prompts, above the composer. Gains <b>reordering</b> (new, works armed or not) via
+        <code>POST …/stash/reorder</code>. Add / remove / reorder while the queue runs — it simply changes what unloads next.</p>
+        <div class="where">ChatInput / PinnedAgent · DockRegistry.Stash</div>
       </div>
-      <div class="flow">
-        <span class="node">iframe lives in the root <code>LocalAppFrameHost</code>, not the pane</span><span class="arr">→</span>
-        <span class="node">both panes render a slot with the <b>same</b> <code>frameKey</code> <span class="mono">dock:&lt;dock&gt;:&lt;repo&gt;:&lt;app&gt;</span></span><span class="arr">→</span>
-        <span class="node">host re-tracks geometry; the iframe is never re-parented → no reload (state-preserve contract)</span>
+      <div class="card2">
+        <h3>🗒️ Dock loop control <span class="tag" style="margin:0">quick arm</span></h3>
+        <p>The unified type picker gains Queue beside 💡 📋 🎯: mode (drive / suggest), cap, verification toggle
+        (<b>on by default</b>), a next-up preview and remaining count. Arming requires a non-empty stash.</p>
+        <div class="where">DockLoopControl · badge: remaining / sent</div>
       </div>
-      <p class="soft">The alternative — actually moving the <code>&lt;iframe&gt;</code> between panes — would reload the app on every toggle: re-parenting an iframe resets its document. That's the whole reason the keep-alive host exists.</p>
+      <div class="card2">
+        <h3>🎛 Console → Loops → Queue tab <span class="tag" style="margin:0">settings home</span></h3>
+        <p>The new tab in the autopilot console's Loops section: per-agent queue status (remaining · sent · phase), the same
+        settings, arm / disarm. Ungated status shows <b>counts only</b>; texts follow the gated-detail rule.</p>
+        <div class="where">AutopilotConsole · gated disclosure</div>
+      </div>
     </div>
-    <div class="card">
-      <h2 style="margin-top:0">Headless proof (32/32 + 18/18)</h2>
-      <p class="soft">The split check seeds three kinds of state before toggling: an in-app counter + input (inside the iframe), a composer draft (chat subtree), and per-frame zoom (host). It then asserts all three survive cover → split → cover, that exactly one app iframe ever exists, that the grid cell keeps its width (and manual ⤢ works independently of split), and that the panes fit a normal-width cell with no horizontal overflow. <code>.preview-test/split-view-check.mjs</code>. The divider check drags across the iframe, asserts live pane resize with no reload, both clamps, double-click reset, keyboard nudge, and that the ratio survives split off/on. <code>.preview-test/split-drag-check.mjs</code>.</p>
-    </div>
-  </div>
+  </section>
 
-  <!-- ============ WHERE ============ -->
-  <div class="view" id="v-where">
-    <div class="card">
-      <table>
-        <tr><th>Piece</th><th>File</th><th>Note</th></tr>
-        <tr><td>Split state + toggle + panes</td><td class="mono">client/src/components/dashboard/PinnedAgent.jsx</td><td><code>splitApp</code> state; effective <code>split = canSplit && splitApp && openApp</code>; chrome conditions widen from <code>!openApp</code> to <code>(!openApp || split)</code>; reports up via <code>onSplitChange</code>.</td></tr>
-        <tr><td>Cell width (unchanged by split)</td><td class="mono">client/src/pages/Dashboard.jsx</td><td><code>dash__cell--wide</code> is driven by the persisted per-dock <code>tab.wide</code> (⤢) alone — the old split-driven <code>splitDocks</code> report-up was removed in <code>split-no-forced-wide</code>.</td></tr>
-        <tr><td>Pane layout</td><td class="mono">client/src/pages/dashboard.css</td><td><code>.phone__main</code> is a pass-through flex column normally; <code>.phone__screen--split</code> turns the screen into a row, both panes <code>flex: 1 1 50%</code> with min-width floors (300 / 260px).</td></tr>
-        <tr><td>Draggable divider</td><td class="mono">PinnedAgent.jsx + dashboard.css</td><td><code>splitRatio</code> state applied as inline flex-basis; <code>.phone__divider</code> uses pointer capture, and <code>.phone__screen--dragging</code> blanks iframe pointer-events mid-drag so the frame can't eat the stream. Clamped in JS to the same floors CSS enforces (zoom-scaled).</td></tr>
-        <tr><td>Advanced gate</td><td class="mono">client/src/context/UiModeContext.jsx</td><td><code>dockAppSplit: 'advanced'</code> — gates only the toggle; opening apps stays <code>localAppTab</code> (Basic).</td></tr>
-        <tr><td>Spec home</td><td class="mono">openspec/specs/agent-dock/spec.md</td><td>Two new requirements on archive: the split presentation + the grid widening.</td></tr>
-      </table>
-      <p class="soft" style="margin-top:12px">Backend untouched — the app URL, proxy path, zoom, and frame host all behave exactly as in cover mode.</p>
-    </div>
+  <!-- ============ LEDGER ============ -->
+  <section>
+    <h2><span class="n">⚖</span> The eight decisions</h2>
+    <p class="lead">The final ledger — the merged model's design decisions, D1–D8. Click a row for the reasoning.</p>
+    <div class="ledger" id="ledger"></div>
+  </section>
+
+  <div class="foot">
+    Rolling-latest Understanding app · overwrites <code>understanding-app/index.html</code> · served no-store by the harness<br/>
+    Companion to <code>openspec/changes/queue-based-loop</code> (proposal · design · delta specs · tasks).
   </div>
 </div>
-
-<script>
-// tabs
-document.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => {
-  document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('on', x === b));
-  document.querySelectorAll('.view').forEach((v) => v.classList.toggle('on', v.id === 'v-' + b.dataset.v));
-}));
-
-// ---- dock mock ----
-const dock = document.getElementById('dock1');
-const appBtn = document.getElementById('dm-appbtn');
-const splitBtn = document.getElementById('dm-splitbtn');
-const gitRow = document.getElementById('dm-git');
-const screen = document.getElementById('dm-screen');
-const main = screen.querySelector('.dm-main');
-const msgs = document.getElementById('dm-msgs');
-const composer = main.querySelector('.dm-composer');
-let open = false;
-let split = false;
-let clicks = 0; // fake in-app state so the mock can show it surviving
-
-function appPane(cls) {
-  const d = document.createElement('div');
-  d.className = cls;
-  d.innerHTML = `<div>StateA test app</div><button class="dm-app" style="cursor:pointer">clicked <span>${clicks}</span>×</button><div class="dm-note">same iframe in both modes — state survives the toggle</div>`;
-  d.querySelector('button').addEventListener('click', (e) => {
-    clicks += 1;
-    e.currentTarget.querySelector('span').textContent = clicks;
-  });
-  return d;
-}
-let ratio = 50; // divider ratio, % of the row given to the chat — sticks across split off/on
-function render() {
-  appBtn.classList.toggle('on', open);
-  splitBtn.classList.toggle('show', open);
-  splitBtn.classList.toggle('on', split && open);
-  dock.classList.toggle('split', split && open);
-  // chrome: git row hides only in cover
-  gitRow.style.display = open && !split ? 'none' : '';
-  // chat: composer-only in cover
-  msgs.style.display = open && !split ? 'none' : '';
-  screen.querySelector('.dm-cover')?.remove();
-  screen.querySelector('.dm-side')?.remove();
-  screen.querySelector('.dm-divider')?.remove();
-  main.style.display = '';
-  main.style.flex = '';
-  if (open && !split) {
-    main.style.display = 'flex';
-    main.insertBefore(appPane('dm-cover'), composer.parentElement === main ? composer : null);
-    // cover: app above the composer strip — hide the message list only
-    main.insertBefore(main.querySelector('.dm-cover'), composer);
-  } else if (open && split) {
-    const div = document.createElement('div');
-    div.className = 'dm-divider';
-    div.title = 'drag to resize · double-click to reset';
-    screen.appendChild(div);
-    const side = appPane('dm-side');
-    screen.appendChild(side);
-    main.style.flex = `1 1 ${ratio}%`;
-    side.style.flex = `1 1 ${100 - ratio}%`;
-    div.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      div.setPointerCapture(e.pointerId);
-      div.classList.add('drag');
-    });
-    div.addEventListener('pointermove', (e) => {
-      if (!div.classList.contains('drag')) return;
-      const r = screen.getBoundingClientRect();
-      ratio = Math.min(80, Math.max(20, ((e.clientX - r.left) / r.width) * 100));
-      main.style.flex = `1 1 ${ratio}%`;
-      side.style.flex = `1 1 ${100 - ratio}%`;
-    });
-    const end = () => div.classList.remove('drag');
-    div.addEventListener('pointerup', end);
-    div.addEventListener('pointercancel', end);
-    div.addEventListener('dblclick', () => {
-      ratio = 50;
-      main.style.flex = '1 1 50%';
-      side.style.flex = '1 1 50%';
-    });
-  }
-}
-appBtn.addEventListener('click', () => { open = !open; if (!open) split = false; render(); });
-splitBtn.addEventListener('click', () => { split = !split; render(); });
-render();
-</script>
+<script src="./app.js"></script>
 </body>
 </html>

@@ -1537,6 +1537,31 @@ details.step > summary::-webkit-details-marker {
   pointer-events: none;
 }
 
+/* Reorder arrows on a queued-prompt chip (openspec queue-based-loop): the strip
+   order is what an armed queue loop unloads next. */
+.chat-stash__move {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--color-text-soft);
+}
+
+.chat-stash__move:hover {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
+.chat-stash__move--disabled {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
 .chat-stash__remove {
   flex: 0 0 auto;
   width: 18px;

@@ -517,6 +517,8 @@
   "chat.stashListAria": "Kuyruga alinan istemler",
   "chat.queueSend": "Kuyruga alinan bu istemi simdi gonder",
   "chat.queueSendBusy": "Ajan mesgul — bosaldiginda gonder",
+  "chat.queueMoveEarlier": "Kuyrukta one al",
+  "chat.queueMoveLater": "Kuyrukta arkaya al",
   "chat.uploadError": "Dosya yuklenemedi. Lutfen tekrar dene.",
   "chat.loadingConversation": "Bu sohbet yukleniyor...",
   "chat.resumed": "Kaldigin yerden devam ediyoruz. Sirada ne yapmak istersin?",

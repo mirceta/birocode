@@ -245,6 +245,29 @@ export function DockProvider({ children }) {
     });
   }, []);
 
+  // Reorder a TAB stash to the given full id order (openspec queue-based-loop).
+  // Optimistic local reorder + last-write-wins POST; ids consumed on the backend
+  // meanwhile are ignored there, and the next refresh re-syncs. The global
+  // (tab-independent) queue has no reorder — only agent-tab stashes feed a
+  // queue loop.
+  const reorderStash = useCallback((tabId, orderedIds) => {
+    if (!tabId || !Array.isArray(orderedIds)) return;
+    setTabs((prev) =>
+      prev.map((t) => {
+        if (t.id !== tabId) return t;
+        const byId = new Map((t.stash || []).map((s) => [s.id, s]));
+        const next = orderedIds.map((id) => byId.get(id)).filter(Boolean);
+        // Items not named (e.g. added meanwhile) keep their order at the end,
+        // mirroring the backend's merge.
+        for (const s of t.stash || []) if (!orderedIds.includes(s.id)) next.push(s);
+        return { ...t, stash: next };
+      }),
+    );
+    apiPost(`/dock/${tabId}/stash/reorder`, { ids: orderedIds }).catch(() => {
+      /* transient; the next refresh re-syncs */
+    });
+  }, []);
+
   const updateTab = useCallback((id, patch) => {
     setTabs((prev) =>
       prev.map((t) => (t.id === id ? { ...t, ...patch } : t)),
@@ -272,6 +295,7 @@ export function DockProvider({ children }) {
     updateTab,
     addStash,
     removeStash,
+    reorderStash,
     globalStash,
     repos,
   };
