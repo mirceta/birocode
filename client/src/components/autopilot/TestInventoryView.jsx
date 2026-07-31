@@ -1,11 +1,12 @@
 import '../../pages/autopilot.css';
 
 // The documentation subtabs of the 🧪 Tests root tab (openspec:
-// add-autopilot-tests-tab) — the stated map of what automated test coverage the
-// loop engine has, so the inventory lives in the app instead of chat history.
-// Three sections: the unit-test layer, the end-to-end rehearsal layer, and the
-// honest coverage gap + the plan to close it. The fourth subtab (runnable
-// browser tests) is the existing SystemTestsView, rendered by the console.
+// add-autopilot-tests-tab, updated by add-loop-eval-suite) — the stated map of
+// what automated test coverage the loop engine has, so the inventory lives in
+// the app instead of chat history. Three sections: the unit-test layer, the
+// end-to-end eval layer, and the honest coverage gap + the plan to close it.
+// The fourth subtab (runnable browser tests) is the existing SystemTestsView,
+// rendered by the console.
 //
 // Pure static reference content: no backend calls. Every fact below cites the
 // real file it describes — when the code moves, move this with it.
@@ -77,39 +78,56 @@ export default function TestInventoryView({ section }) {
     return (
       <div className="ca ov">
         <p className="autopilot__summary">
-          The slow, honest layer: an <b>end-to-end rehearsal</b> that drives the
-          <b> real engine with real Claude turns</b> on a scratch repo — arm a queue
-          loop, let it drive and verify, stop it mid-run as the operator, resume, and
-          drain to <code>done · drained</code>. It exercises the tick → send →
-          watch-run → verify choreography that nothing else touches.
+          The slow, honest layer: the <b>committed eval suite in
+          <code> tests/loop-eval/</code></b> (openspec: add-loop-eval-suite) drives the
+          <b> real engine with real Claude turns</b> on committed fixture repos and
+          asserts the outcomes mechanically — the one layer that can answer
+          <i> &quot;does the loop actually drive an agent to the goal?&quot;</i>
         </p>
         <section className="ca-sec">
-          <h3 className="ca-sec__h">What it is — and what it costs</h3>
+          <h3 className="ca-sec__h">The two scenarios</h3>
           <ul className="ov-list">
             <li>
-              <b>Scratch scripts, not a committed suite.</b> The rehearsal script
-              (<code>.claudeweb-preview/rehearsal.mjs</code>) and the focused browser
-              check (<code>.preview-test/queue-loop-advance-check.mjs</code>) are
-              <b> untracked scratch</b>, rewritten per feature. The committed cousins
-              live in <code>.claudeweb-preview/playwright/</code> — the per-feature
-              verify scripts, four of which are runnable from the <b>Browser (System
-              tests)</b> subtab.
+              <b>Goal loop</b> (<code>node tests/loop-eval/goal.mjs</code>) — a fixture
+              todo CLI with a deliberately missing <code>done</code> command and a
+              failing <code>goal-check.mjs</code>. Passes only if the loop resolves
+              <code> done · verified</code> (LOOP_DONE → verify → GOAL_VERIFIED) and
+              the check genuinely exits 0 afterwards.
             </li>
             <li>
-              <b>It runs against an isolated instance</b> on the preview port (:5200)
-              with a copied data dir — never against live.
+              <b>Queue loop</b> (<code>node tests/loop-eval/queue.mjs</code>) — six
+              prepared prompts stashed on a dock tab, each mapped to an expected
+              artifact (path + regex). Passes only if the queue drains to
+              <code> done · drained</code> with all six sent in order and every
+              artifact present and matching.
+            </li>
+          </ul>
+        </section>
+        <section className="ca-sec">
+          <h3 className="ca-sec__h">How it runs — and what it costs</h3>
+          <ul className="ov-list">
+            <li>
+              <b>Fully isolated:</b> binaries copied outside the repo tree, own port
+              (:5210), fresh data dir with the gate + kill switch seeded before boot —
+              never against live. Everything after boot goes through the shipped API,
+              exactly as an operator would.
             </li>
             <li>
-              <b>It spends real agent turns and real minutes</b>, so it is a
-              before-shipping gate for loop changes, never CI. A green rehearsal is
-              recorded in the change&apos;s tasks (see openspec:
-              advance-queue-loop, ticks 5.4/5.5).
+              <b>It spends real agent turns and real minutes</b> (~15–20 turns,
+              ~30–45 min for <code>run-all.mjs</code>), so it is a before-shipping
+              gate for loop changes, <b>never CI</b>. Preconditions (fixture drift,
+              CLI probe) fail fast before tokens are spent.
+            </li>
+            <li>
+              <b>Lineage:</b> it is the tracked successor of the one-off rehearsal
+              scratch (<code>.claudeweb-preview/rehearsal.mjs</code>, openspec:
+              advance-queue-loop tick 5.5), which stays on disk as history only.
             </li>
           </ul>
           <p className="ca-sec__foot">
             Rule of thumb: decision logic goes in unit tests; UI truth goes in the
-            browser tests; the rehearsal is reserved for the choreography only it can
-            reach.
+            browser tests; the eval suite is reserved for the choreography and agent
+            behavior only it can reach. See <code>tests/loop-eval/README.md</code>.
           </p>
         </section>
       </div>
@@ -121,8 +139,9 @@ export default function TestInventoryView({ section }) {
     <div className="ca ov">
       <p className="autopilot__summary">
         <b>The gap, stated plainly:</b> <code>AutopilotService</code> — the background
-        tick engine that actually grabs replies and sends prompts — has <b>no automated
-        tests</b>. Today only the manual rehearsal exercises it.
+        tick engine that actually grabs replies and sends prompts — has <b>no cheap
+        automated tests</b>. The <code>tests/loop-eval/</code> suite covers it end to
+        end, but at real-token cost; what&apos;s missing is the fast layer between.
       </p>
       <section className="ca-sec">
         <h3 className="ca-sec__h">Why it&apos;s hard today</h3>
@@ -157,14 +176,16 @@ export default function TestInventoryView({ section }) {
           <li>
             <b>Then whole scenarios run in milliseconds</b> with no CLI: deny-list
             escalation mid-queue, operator stop between steps, resume after stop,
-            drain to done.
+            drain to done — the same choreography the eval suite proves for real,
+            but cheap enough to run on every commit.
           </li>
         </ul>
         <p className="ca-sec__foot">
           Status: <b>planned, not started</b> — a moderate refactor of
-          <code> AutopilotService</code>, not a rewrite. It becomes worth paying for as
-          loop kinds keep growing; until then this page is the honest record that the
-          gap exists.
+          <code> AutopilotService</code>, not a rewrite. The eval suite
+          (<code>tests/loop-eval/</code>) narrows this gap from &quot;nothing exercises
+          the engine&quot; to &quot;no <i>cheap</i> regression layer&quot;; this seam is
+          how the two eventually meet.
         </p>
       </section>
     </div>
