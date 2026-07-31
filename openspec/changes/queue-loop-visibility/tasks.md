@@ -41,6 +41,6 @@
       head badge; arm popover lists all items; sent rows render after a land.
 - [x] 4.3 Playwright race check: reorder during reconcile keeps the operator's
       order (no visible revert).
-- [ ] 4.4 `openspec validate queue-loop-visibility --strict` + understanding-app
+- [x] 4.4 `openspec validate queue-loop-visibility --strict` + understanding-app
       honesty pass (queue surface descriptions match the build) + commit on the
       branch.
