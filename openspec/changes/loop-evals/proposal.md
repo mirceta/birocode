@@ -31,8 +31,10 @@ against evidence instead of vibes.
 - Support **repeated runs** (N > 1) of the same loop on the same example, because agent
   turns are non-deterministic — reliability is part of the score (mirrors
   `discovery-eval`).
-- Support **capturing** a golden example from a real human-driven session (snapshotting
-  the repo at each turn alongside the transcript), so examples come from real work, not
+- Support **curating** a golden example from a real human-driven session after the fact,
+  through an Operator-facing UI: take a copy of the repository and its stored
+  conversation, select the span of relevant turns, associate turns with commits in the
+  repository's history, and hand-label each turn — so examples come from real work, not
   hand-assembly.
 - This is an **offline, developer-facing harness** run on demand — no End-User dashboard
   surface, following the `discovery-eval` precedent. Where capture hooks touch the
@@ -59,10 +61,11 @@ against evidence instead of vibes.
 - **New code**: eval bundle store/format, runner, scorer — likely a new
   `ClaudeWeb.App/Services/Evals/` (or standalone tool) area; placement is an open design
   question (see design.md).
-- **Existing code touched**: capture needs per-turn repo snapshots from a live session —
-  integration point around `SessionService`/`RunSessionService` or a git-based snapshot
-  convention; the runner needs to drive a loop headlessly against a scratch repo —
-  integration point around `AutopilotService`/`ILoop`.
+- **Existing code touched**: curation reads stored session conversations
+  (`SessionService` store) and a repo copy's git history, plus an Operator-gated
+  curation UI in the client; the runner needs to drive a loop headlessly against a
+  scratch repo — integration point around `AutopilotService`/`ILoop` (first target:
+  the queue-based loop).
 - **Storage**: golden examples contain whole repo copies — size and location (in-repo
   fixtures vs. external directory registered like a normal Repo) is a design decision.
 - **No End-User UI**, no new always-on service; `autopilot-loops` runtime behavior is

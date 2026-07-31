@@ -83,25 +83,47 @@ Small synthetic examples are committed under `tests/loop-evals/examples/<id>/`
 (discovery-eval precedent); a configurable external examples root is also honored for
 large real-world captures that should not live in this repo.
 
-### D3 — Capture is armed on a live session and piggybacks on git
+### D3 — Capture is retroactive curation over a repo copy + stored conversation
 
-To record a golden example the operator **arms capture** for a repo/dock before (or
-during) the babysat session. While armed, after each completed agent turn the harness
-commits the repo working tree to a dedicated **shadow branch**
-(`eval-capture/<session-id>`) with the turn index in the message — using the same git
-plumbing the harness already trusts. On "finish capture", an export assembles the
-bundle: the shadow branch becomes `golden`, the arming-time commit becomes
-`eval/start`, the session transcript (already stored by `SessionService`) is exported
-to `conversation.jsonl` with SHAs joined by turn index, and the operator writes
-`plan.md`.
+You don't know in advance which babysat session will turn out golden — you know it
+when it's over. So capture is **after-the-fact curation**, done in an Operator-facing
+UI over two artifacts that already exist: a **copy of the repository** (with its
+`.git` history) and the session's **stored conversation** (the `SessionService`
+store). The curation flow is:
 
-This is the one place the harness runtime is touched: a turn-completion hook plus
-operator-facing endpoints (arm / status / finish). It is operator-only, gated like
-other operator surfaces, and inert when not armed.
+1. **Select sources** — point the UI at a repo copy and one of that repo's stored
+   session conversations.
+2. **Set the span** — mark the first and last relevant turns of the conversation;
+   everything outside the span is excluded from the example.
+3. **Associate turns with commits** — join the in-span turns to commits in the repo
+   copy's history. This association is **partial by nature**: a turn only has its own
+   repo state if a commit was made after it. Turns with no commit (discussion,
+   corrections, multi-turn stretches between commits) **carry forward** the previous
+   state — the golden trajectory is really the associated commit chain, with turns
+   grouped into spans between commits. `eval/start` is the state *before* the first
+   associated commit; `eval/final` is the last associated commit.
+4. **Hand-label each turn** — a short intent label per in-span turn (starter
+   taxonomy: `instruct`, `course-correct`, `approve`, `verify-ask`, `unblock`; free
+   text allowed). Labels ride in `conversation.jsonl` and feed the trajectory report;
+   v1 uses them for reporting, not scoring.
+5. **Author** `plan.md` and the acceptance checks in the same UI, then **export** the
+   bundle: refs `eval/start` / `golden` / `eval/final` cut from the copied repo into
+   `repo.bundle`, plus manifest and labeled transcript, into the examples root.
 
-*Alternative considered:* fully manual capture (human runs a commit-per-turn
-discipline by hand and assembles the bundle) — remains possible since the format is
-plain git + files, but is exactly the toil that would mean no examples ever get made.
+Curation is strictly **read-only** toward the source repo and the stored session —
+it reads history and conversation, writes only the bundle. The UI is an
+Operator-gated, Advanced-mode client surface (per the UI-modes convention) backed by
+read-only endpoints (list sessions/turns, list commits) plus the export action.
+
+The known trade-off: per-turn fidelity depends on the session's commit cadence. For
+this repo that cadence is already good — the queue-loop convention commits every
+tick, and babysat work here tends to commit per completed step. For sessions likely
+to become golden, commit-per-turn discipline makes the example sharper.
+
+*Alternative considered:* live "armed capture" that shadow-commits the working tree
+after every turn — guarantees a state per turn, but requires deciding *before* the
+session that it will be golden, and adds a hook to the live turn path. Rejected for
+v1; it can be added later as a delta if carry-forward granularity proves too coarse.
 
 ### D4 — The runner drives the real loop in-process, `tests/loop-evals/LoopEvals`
 
@@ -109,9 +131,11 @@ A standalone console project `tests/loop-evals/LoopEvals/` (mirror of
 `DiscoveryEval`) that, per run: clones `repo.bundle` at `eval/start` into a scratch
 working copy, hosts the production loop services (`AutopilotService` / `ILoop`
 implementations from `ClaudeWeb.App`, the same way `ClaudeWeb.Tests` references app
-code) pointed at the scratch repo, seeds the loop with `plan.md` per the selected loop
-kind (goal loop goal, queue loop queue, …), and lets it run under a hard **turn cap**
-and wall-clock timeout. After each loop-driven agent turn the runner commits the
+code) pointed at the scratch repo, seeds the loop from `plan.md` per the selected loop
+kind, and lets it run under a hard **turn cap** and wall-clock timeout. The **first
+supported kind is the queue-based loop**: the manifest's seed hints define how the
+plan becomes the loop's queue (a single plan-sized item by default; optionally a
+pre-split item list authored at curation time). After each loop-driven agent turn the runner commits the
 scratch tree to its own `run/<n>` branch — the same shape as the golden branch, so the
 scorer compares like with like.
 
@@ -149,11 +173,12 @@ an objective verdict without a second model in the loop.
   `eval/start` forward.
 - [Eval runs cost real agent tokens and minutes] → hard turn cap + timeout per run, N
   configurable, runner is on-demand only; cost surfaces in the report (turns used).
-- [Capture shadow-commits could pollute the working repo] → shadow branch only, never
-  touches the user's branch or index (commit via temporary index / `git stash
-  create`-style plumbing); finish/abandon deletes the branch.
+- [Turn↔commit association is partial — turns without commits lose their own state] →
+  carry-forward semantics are explicit in the format; the trajectory compares the
+  associated commit chain, not imaginary per-turn states; commit-per-turn discipline
+  (or a later live-capture delta) sharpens examples that need it.
 - [Loops read `plan.md` differently per kind] → manifest carries per-loop-kind seed
-  hints; first supported kind is chosen at implementation start (open question below).
+  hints; first supported kind is the queue-based loop (D4).
 - [Acceptance checks can be too weak (loop "passes" while wrong)] → checks are
   authored with the example and reviewed with it; diff-vs-golden evidence sits next to
   the verdict so a hollow pass is visible.
@@ -162,11 +187,12 @@ an objective verdict without a second model in the loop.
 
 ## Open Questions
 
-- Which loop kind is the first eval target — the queue-based loop or the goal loop?
-- Source of the first golden example: capture one from a real babysat session in a
-  playground repo, or hand-author a small synthetic one to unblock the runner/scorer
-  first?
-- Should the capture arm/finish surface be dock UI (operator-gated) or
-  endpoint/CLI-only in v1?
+- Turn label taxonomy: is the starter set (`instruct`, `course-correct`, `approve`,
+  `verify-ask`, `unblock`, free text) the right shape, and should labels ever feed
+  scoring rather than just the report?
 - Per-turn comparison granularity: is files-touched overlap enough, or do we want
   diff-hunk similarity per turn from day one?
+- (Resolved: first eval target is the **queue-based loop**; first golden example is
+  **curated from a real babysat session** via the D3 UI — the small synthetic example
+  in tasks §1 remains only as the cheap fixture that unblocks runner/scorer
+  development before the first real curation.)

@@ -9,7 +9,7 @@
 ## 2. Runner
 
 - [ ] 2.1 Scaffold `tests/loop-evals/LoopEvals/` console project referencing `ClaudeWeb.App` (DiscoveryEval precedent)
-- [ ] 2.2 Compose the production loop services in-process (`AutopilotModuleExtensions`) against a scratch repo; pick and wire the first loop kind, seeded from `plan.md`
+- [ ] 2.2 Compose the production loop services in-process (`AutopilotModuleExtensions`) against a scratch repo; wire the queue-based loop, seeded from `plan.md` per the manifest's seed hints
 - [ ] 2.3 Turn cap + wall-clock timeout; commit scratch tree per completed agent turn to a `run/<n>` branch (spec: runaway cut-off; runs isolated)
 - [ ] 2.4 N-runs mode: repeat (example, config) N times into separate scratch clones
 
@@ -20,12 +20,12 @@
 - [ ] 3.3 Trajectory compare: turn counts, per-turn files-touched overlap vs golden, first-divergence turn
 - [ ] 3.4 Report output: JSON + console table per run, aggregate (pass rate, worst case, turn spread) for N runs
 
-## 4. Capture (harness runtime, operator-facing)
+## 4. Curation (operator-facing UI over repo copy + stored conversation)
 
-- [ ] 4.1 Turn-completion hook: when capture armed for a repo, commit working tree to shadow branch `eval-capture/<session-id>` with turn index — no touch of user branch/index; inert when unarmed
-- [ ] 4.2 Operator endpoints: arm / status / finish / abandon capture for a repo
-- [ ] 4.3 Finish-export: assemble bundle (shadow branch → `golden`, arm point → `eval/start`, tip → `eval/final`, transcript export joined by turn index) into the configured examples root
-- [ ] 4.4 C# tests for the capture writer (shadow-branch isolation, unarmed inertness, export round-trip)
+- [ ] 4.1 Read-only Operator endpoints: list a repo's stored session conversations with turns; list a repo copy's commit history (subject, SHA, files touched) for association
+- [ ] 4.2 Curation UI in the client (Advanced mode + operator gate, added to the UiModeContext capability map): pick repo copy + conversation, mark turn span, associate turns↔commits side by side, label each in-span turn, author plan + acceptance checks
+- [ ] 4.3 Export endpoint: build the bundle from the associations (`eval/start` before first associated commit, `golden` chain, `eval/final` tip, labeled `conversation.jsonl`, manifest) into the configured examples root
+- [ ] 4.4 C# tests for the exporter (five-commit chain round-trip, carry-forward turn mapping, sources byte-identical after export)
 
 ## 5. Verify + docs
 

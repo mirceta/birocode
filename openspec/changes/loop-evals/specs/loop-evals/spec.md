@@ -7,8 +7,9 @@
 The system SHALL define a golden example as a self-contained, version-controlled bundle
 holding: a `manifest.json` (identity, description, loop seed hints, turn-to-commit map,
 acceptance checks), a `plan.md` (the human-readable task statement), a
-`conversation.jsonl` (the finished human-babysat transcript, one turn per line, each
-agent turn referencing the commit that captures the repo state after that turn), and a
+`conversation.jsonl` (the curated span of the human-babysat transcript, one turn per
+line, each turn carrying its hand-authored intent label and referencing the commit
+that captures the repo state after that turn), and a
 `repo.bundle` (the example repository as a git bundle in which tag `eval/start` marks
 the start state, branch `golden` holds one commit per human turn, and tag `eval/final`
 marks the desired final state at the tip of `golden`).
@@ -40,31 +41,35 @@ NOT require the loop's final tree to be byte-identical to `eval/final`.
 - **WHEN** any acceptance check fails in the loop run's final working copy
 - **THEN** the run is scored as not reaching the desired state, and the failing check is named in the report
 
-### Requirement: Capture golden examples from a live babysat session
+### Requirement: Golden examples are curated from a repo copy and a stored conversation
 
-The harness SHALL let an Operator arm golden-example capture for a repo before or during
-a human-driven session. While armed, the harness SHALL commit the repo working tree to a
-dedicated shadow branch after each completed agent turn, recording the turn index, and
-SHALL NOT modify the user's checked-out branch, index, or working tree. On finish, the
-system SHALL export the bundle: shadow branch as `golden`, the arming-point state as
-`eval/start`, the stored session transcript joined to the per-turn commits, and the
-final turn tagged `eval/final`. When capture is not armed, session behavior SHALL be
-completely unchanged.
+The harness SHALL provide an Operator-facing curation flow that builds a golden example
+after the fact from a copy of a repository (with its git history) and one of that
+repository's stored session conversations. The flow SHALL let the Operator: select the
+span of relevant turns; associate in-span turns with commits in the repo copy's history;
+hand-label each in-span turn with an intent label; and author the plan and acceptance
+checks. Turn-to-commit association SHALL be permitted to be partial: a turn with no
+associated commit SHALL carry forward the previous state, so the golden trajectory is
+the chain of associated commits with turns grouped between them. Export SHALL produce
+the standard bundle — `eval/start` cut before the first associated commit, `golden` as
+the associated commit chain, `eval/final` at its tip, plus manifest and labeled
+transcript. The curation flow SHALL be read-only toward the source repository and the
+stored session.
 
-#### Scenario: Armed capture snapshots every turn
+#### Scenario: Curated span exports a working bundle
 
-- **WHEN** capture is armed and the human drives the agent for twelve turns
-- **THEN** the shadow branch holds twelve turn commits, and the user's own branch and working tree are untouched by capture
+- **WHEN** the Operator selects a repo copy and conversation, marks a turn span, associates turns with five commits, labels the turns, and exports
+- **THEN** a bundle is produced whose cloned `golden` branch is exactly those five commits in order, with `eval/start` at the state before the first and `eval/final` at the fifth, and whose transcript carries the labels and associations
 
-#### Scenario: Finish exports a working bundle
+#### Scenario: A turn without a commit carries the previous state forward
 
-- **WHEN** the Operator finishes a capture
-- **THEN** a bundle directory with manifest, transcript, and `repo.bundle` is produced whose cloned history replays the session's per-turn states
+- **WHEN** an in-span turn (e.g. a discussion or correction turn) has no associated commit
+- **THEN** the exported transcript maps that turn to the same repo state as the preceding turn, and the golden branch gains no commit for it
 
-#### Scenario: Unarmed sessions are inert
+#### Scenario: Curation never mutates its sources
 
-- **WHEN** capture has not been armed for a repo
-- **THEN** no shadow branch is created and no capture code runs in the turn path
+- **WHEN** a curation session is performed and exported
+- **THEN** the source repository copy's branches and the stored session conversation are byte-identical to before curation began
 
 ### Requirement: Runner replays the real loop from the start state
 
@@ -127,8 +132,8 @@ successful one.
 
 The eval runner and scorer SHALL be offline, developer-facing tools run on demand. The
 change SHALL NOT add any End-User dashboard surface or always-on service, and SHALL NOT
-alter the runtime behavior of `autopilot-loops` for normal sessions. Capture's
-arm/finish controls SHALL be Operator-facing only. Committed example bundles SHALL be
+alter the runtime behavior of `autopilot-loops` for normal sessions. The curation UI
+SHALL be Operator-facing only. Committed example bundles SHALL be
 synthetic; real-world captures SHALL be storable outside the repository via a
 configurable examples root.
 
