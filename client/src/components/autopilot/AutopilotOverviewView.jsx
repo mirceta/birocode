@@ -77,8 +77,13 @@ export default function AutopilotOverviewView() {
           </li>
           <li>
             <b>Reference</b> — the two interactive &quot;How … works&quot;
-            architecture maps of the chat and autopilot subsystems, plus the
-            in-app System tests runs.
+            architecture maps of the chat and autopilot subsystems.
+          </li>
+          <li>
+            <b>🧪 Tests</b> — the stated coverage map of the loop engine
+            (openspec: add-autopilot-tests-tab): the unit-test layer, the
+            in-app runnable browser tests, the end-to-end rehearsal layer,
+            and the honest gap + plan for the untested tick engine.
           </li>
           <li>
             <b>Safety posture</b> — the whole API sits behind the operator gate
@@ -183,6 +188,19 @@ export default function AutopilotOverviewView() {
                 the agent must confirm <code>STEP_VERIFIED</code>, otherwise
                 the queue stops and escalates instead of sending the next
                 prompt into a broken state.
+              </li>
+              <li>
+                The arm form <b>names its binding</b> (&quot;drives &lt;repo&gt; ·
+                N queued&quot; — the first prompt fires when the agent is next
+                free), and the <b>deny-list is trimmable per arm</b> (whole-word
+                matching; drop <code>push</code> for a commit-and-push repo
+                without touching the global default).
+              </li>
+              <li>
+                A stopped queue with items left offers one-tap <b>Resume</b> —
+                same instance, current head, fresh iteration budget; pressing
+                Stop on the agent&apos;s run records honestly as
+                <b> stopped · by-operator</b>, never as an agent error.
               </li>
             </ul>
           </article>

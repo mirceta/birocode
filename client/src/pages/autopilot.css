@@ -423,6 +423,8 @@
 /* Queue visibility (openspec queue-loop-visibility): the numbered unload-order
    preview in the arm form and the "sent ✓" history rows on queue cards. */
 .lp-queue-preview, .lp-queue-sent { display: flex; flex-direction: column; gap: 4px; flex: 1 1 100%; }
+/* Per-arm deny-list chips (openspec advance-queue-loop, D2). */
+.lp-denychips { display: flex; flex-wrap: wrap; gap: 4px; }
 .lp-queue-list, .lp-queue-sentlist {
   margin: 0; padding: 6px 10px 6px 28px;
   background: var(--color-bg, #f0ece4); border-radius: 8px;

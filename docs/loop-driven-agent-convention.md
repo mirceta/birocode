@@ -120,15 +120,29 @@ is only meaningful in the verification turn's reply.
 
 ## What stops a loop (in order)
 
-When your turn completes the harness checks, deterministically: run **error** →
-**`NEEDS_HUMAN:`** (escalate — checked first, so a blocked agent is never re-driven) → a
-**deny-listed term** in your reply (escalate — the fail-safe for agents that ignore this
-contract) → the **sentinel** (recipe loop: done; goal loop: send the verification turn,
-or **`GOAL_VERIFIED`** in that turn's reply: done; queue loop: ignored) → the queue
-loop's own checks (**`STEP_VERIFIED`** missing from a step-verification reply: escalate;
-queue empty: done) → the **iteration cap** (capped, checked before every send including
-verification sends) → otherwise it resends. Every resolution records a stop reason +
-detail that the user reviews afterward.
+When your turn completes the harness checks, deterministically: an **operator stop**
+(the human pressed Stop on your run — the loop resolves **stopped · by-operator**, a
+user action, never reported as your failure) → run **error** → **`NEEDS_HUMAN:`**
+(escalate — checked before the completion markers, so a blocked agent is never
+re-driven) → a **deny-listed term** in your reply (escalate — the fail-safe for agents
+that ignore this contract) → the **sentinel** (recipe loop: done; goal loop: send the
+verification turn, or **`GOAL_VERIFIED`** in that turn's reply: done; queue loop:
+ignored) → the queue loop's own checks (**`STEP_VERIFIED`** missing from a
+step-verification reply: escalate; queue empty: done) → the **iteration cap** (capped,
+checked before every send including verification sends) → otherwise it resends. Every
+resolution records a stop reason + detail that the user reviews afterward.
+
+Deny-list matching is **whole-word** (case-insensitive, anywhere in your reply): the
+term `push` matches "commit and push" but not "pushed". Honest past-tense reporting of
+work your repo's own conventions required does not trip the fence — but naming a risky
+action you are *about to take* still does, which is the point. The operator can also
+trim the deny-list **per arm** (e.g. dropping `push` for a commit-and-push repo); the
+trimmed list is stored on the loop instance and disclosed with its gated detail.
+
+A **🗒️ queue loop** that stopped with items still queued (escalated, capped, errored, or
+operator-stopped) offers the operator a one-step **Resume**: the same instance
+re-activates and drives the remainder from the current head of the stash, with a fresh
+iteration budget and no leftover verification obligation from the interrupted step.
 
 ## Safety posture (why you can trust the loop, and it you)
 

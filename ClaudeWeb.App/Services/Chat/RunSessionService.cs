@@ -58,8 +58,24 @@ public class RunSession
     /// </summary>
     public Action<RunSession>? Completed { get; set; }
 
-    /// <summary>"running" | "done" | "error".</summary>
+    /// <summary>"running" | "done" | "stopped" | "error". "stopped" is an
+    /// operator-requested cancel (openspec: advance-queue-loop, D1) — a user
+    /// action, distinct from a crash/is_error so consumers (the loop engine
+    /// above all) never report a rescue Stop as an agent failure.</summary>
     public string Status { get; private set; } = "running";
+
+    private bool _stopRequested;
+
+    /// <summary>Cancels the run because the OPERATOR asked (the chat Stop
+    /// button). Records the intent before firing <see cref="Cts"/>, so
+    /// <see cref="Complete"/> finalizes as "stopped" rather than "error".
+    /// Shutdown/internal cancels keep calling <see cref="Cts"/> directly and
+    /// still finalize as "error".</summary>
+    public void RequestStop()
+    {
+        lock (_lock) _stopRequested = true;
+        Cts.Cancel();
+    }
 
     /// <summary>Claude session id, captured from the "session" event.</summary>
     public string? SessionId { get; private set; }
@@ -124,7 +140,8 @@ public class RunSession
     /// <summary>
     /// Marks the run finished (after the CLI process has fully ended) and
     /// closes all attached streams. "done" only if the terminal done event was
-    /// emitted; a cancelled, crashed, or is_error run finalizes as "error".
+    /// emitted; an operator-stopped run finalizes as "stopped"; a crashed,
+    /// is_error, or shutdown-cancelled run finalizes as "error".
     /// </summary>
     public void Complete()
     {
@@ -132,7 +149,7 @@ public class RunSession
         lock (_lock)
         {
             if (Status != "running") return;
-            Status = _sawDone ? "done" : "error";
+            Status = _sawDone ? "done" : (_stopRequested ? "stopped" : "error");
             foreach (var ch in _subscribers) ch.Writer.TryComplete();
             _subscribers.Clear();
             completed = Completed;
@@ -210,7 +227,7 @@ public class RunSessionService
 
     /// <summary>
     /// Raised exactly once per run, when it reaches its terminal status
-    /// ("done" or "error") — the single choke point for "a chat turn ended",
+    /// ("done", "stopped", or "error") — the single choke point for "a chat turn ended",
     /// whatever started it (user send, autopilot auto-send, loop resend). Other
     /// modules subscribe here (dependency direction stays module → chat); the
     /// understanding module's auto-trigger is the first consumer (openspec
