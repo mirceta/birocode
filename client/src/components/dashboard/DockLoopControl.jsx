@@ -598,6 +598,9 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
       b.frame.intro,
       ...(b.rules || []).filter((r) => r.enabled).map((r) => `- ${r.text}`),
       b.frame.escalationLine,
+      // The FLAG: teaching line rides along only while the channel is on
+      // (POST /api/flags/enabled) — same condition the server composes with.
+      ...(b.flagsEnabled !== false && b.frame.flagLine ? [b.frame.flagLine] : []),
       kind === 'queue'
         ? b.frame.contractQueueItem
         : b.frame.contractSentinelTemplate.replace('{0}', sentinel || 'LOOP_DONE'),

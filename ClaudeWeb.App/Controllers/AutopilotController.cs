@@ -44,6 +44,7 @@ public class AutopilotController : ControllerBase
     private readonly LoopConfigStore _loops;
     private readonly LoopRecipeStore _recipes;
     private readonly BriefingRulesStore _briefing;
+    private readonly FlagsStore _flags;
     private readonly AutopilotGate _operatorGate;
     private readonly AutopilotAuditLog _audit;
     private readonly SystemTestsService _systests;
@@ -54,7 +55,8 @@ public class AutopilotController : ControllerBase
     public AutopilotController(
         AutopilotDiscoveryService discovery, AutopilotService engine,
         AutopilotConfigStore config, LoopConfigStore loops, LoopRecipeStore recipes,
-        BriefingRulesStore briefing, AutopilotGate operatorGate, AutopilotAuditLog audit,
+        BriefingRulesStore briefing, FlagsStore flags, AutopilotGate operatorGate,
+        AutopilotAuditLog audit,
         SystemTestsService systests, RepositoryRegistry repos, DockRegistry dock, Logger logger)
     {
         _discovery = discovery;
@@ -63,6 +65,7 @@ public class AutopilotController : ControllerBase
         _loops = loops;
         _recipes = recipes;
         _briefing = briefing;
+        _flags = flags;
         _operatorGate = operatorGate;
         _audit = audit;
         _systests = systests;
@@ -585,10 +588,15 @@ public class AutopilotController : ControllerBase
         return Ok(BriefingPayload(snap));
     }
 
-    private static object BriefingPayload(BriefingRulesStore.Snapshot snap) => new
+    private object BriefingPayload(BriefingRulesStore.Snapshot snap) => new
     {
         rev = snap.Rev,
         rules = snap.Rules.Select(r => new { id = r.Id, text = r.Text, enabled = r.Enabled }),
+        // The FLAG: channel switch (FlagsStore, toggled via POST /api/flags/enabled)
+        // — disclosed here so the editor's fixed-frame row and both composed
+        // previews (workPreview below, the dock's client-side mirror) stay honest
+        // about whether driven sends currently teach the marker.
+        flagsEnabled = _flags.Enabled,
         frame = new
         {
             header = LoopConfigStore.BriefingHeader,
@@ -604,7 +612,8 @@ public class AutopilotController : ControllerBase
         // it (default sentinel, empty stored text) — the editor's live preview.
         workPreview = LoopConfigStore.ComposeBriefedPrompt(
             LoopConfigStore.KindRecipe, null, LoopConfigStore.DefaultSentinel, "",
-            snap.Rules.Where(r => r.Enabled).Select(r => r.Text).ToList()).TrimEnd(),
+            snap.Rules.Where(r => r.Enabled).Select(r => r.Text).ToList(),
+            _flags.Enabled).TrimEnd(),
     };
 
     // --- Loop recipes (openspec: loop-recipes) ------------------------------

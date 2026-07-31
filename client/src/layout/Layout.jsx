@@ -8,6 +8,7 @@ import ModeToggle from '../components/shared/ModeToggle';
 import ProjectChip from '../components/shared/ProjectChip';
 import StaleVersionBanner from '../components/shared/StaleVersionBanner';
 import FlagsFooter from '../components/shared/FlagsFooter';
+import { FlagsProvider } from '../context/FlagsContext';
 import { SaveProvider } from '../components/history/SaveHandler';
 import { ChatProvider } from '../context/ChatContext';
 import { RepoProvider, useRepo } from '../context/RepoContext';
@@ -191,13 +192,15 @@ export default function Layout() {
             <LocalAppFramesProvider>
               <SaveProvider>
                 <ChatProvider>
-                  <PromptsProvider>
-                    <PromptPlansProvider>
-                      <PromptNotesProvider>
-                        <StudioShell />
-                      </PromptNotesProvider>
-                    </PromptPlansProvider>
-                  </PromptsProvider>
+                  <FlagsProvider>
+                    <PromptsProvider>
+                      <PromptPlansProvider>
+                        <PromptNotesProvider>
+                          <StudioShell />
+                        </PromptNotesProvider>
+                      </PromptPlansProvider>
+                    </PromptsProvider>
+                  </FlagsProvider>
                 </ChatProvider>
               </SaveProvider>
             </LocalAppFramesProvider>

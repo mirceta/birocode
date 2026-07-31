@@ -85,6 +85,11 @@ The division of labor: `NEEDS_HUMAN:` is for decisions that **block** you;
 `FLAG:` is for "I proceeded, but note this." A flag in the same reply as a
 sentinel or an escalation still gets collected.
 
+The channel is **operator-switchable**: when the human turns it off, driven
+prompts stop carrying the `FLAG:` instruction and replies are no longer mined.
+Write flags only when the prompt you received teaches the marker; if it does
+not, fold anything noteworthy into your reply text instead.
+
 ## How to behave
 
 Nobody reads your replies in real time, so a reply that only asks or plans goes

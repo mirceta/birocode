@@ -39,6 +39,10 @@ public class FlagsStore
 
     private sealed class Store
     {
+        // The channel switch: OFF stops both capture (the engine's mining guard)
+        // and teaching (the briefing's FLAG line) — additive, so a pre-toggle
+        // flags.json loads as enabled, the shipped behavior.
+        public bool? Enabled { get; set; }
         public List<Flag> Flags { get; set; } = new();
     }
 
@@ -115,6 +119,37 @@ public class FlagsStore
     {
         lock (_gate)
             return _store.Flags.Where(f => !f.Dismissed).OrderByDescending(f => f.At).ToList();
+    }
+
+    /// <summary>Every dismissed flag still in the ledger, newest dismissal first —
+    /// the console's audit trail, so a dismissal never silently disappears
+    /// (overflow beyond <see cref="MaxEntries"/> still drops the oldest).</summary>
+    public IReadOnlyList<Flag> Dismissed()
+    {
+        lock (_gate)
+            return _store.Flags.Where(f => f.Dismissed)
+                .OrderByDescending(f => f.DismissedAt ?? f.At).ToList();
+    }
+
+    /// <summary>Whether the FLAG: channel is on — capture AND briefing teaching
+    /// follow this together, so an agent is never taught a marker nobody collects.</summary>
+    public bool Enabled
+    {
+        get { lock (_gate) return _store.Enabled != false; }
+    }
+
+    public bool SetEnabled(bool enabled)
+    {
+        lock (_gate)
+        {
+            if ((_store.Enabled != false) == enabled) return enabled;
+            _store.Enabled = enabled;
+            Save();
+            _logger.Info($"[FLAGS] channel {(enabled ? "enabled" : "disabled")} — "
+                + (enabled ? "driven sends teach FLAG: again and replies are mined"
+                           : "driven sends stop teaching FLAG: and replies are no longer mined"));
+            return enabled;
+        }
     }
 
     public bool Dismiss(string id)

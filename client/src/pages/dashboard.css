@@ -2693,3 +2693,72 @@
   color: var(--color-text-soft);
   white-space: nowrap;
 }
+
+/* Fixed-frame FLAG: channel row in the briefing editor: visually a rule
+   (checkbox + text) but set apart — server-worded, switchable, not editable. */
+.phone__brief-rule--fixed {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--color-border);
+}
+
+.phone__brief-fixedtext {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--color-text-soft);
+}
+
+.phone__brief-rule--off .phone__brief-fixedtext {
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+}
+
+/* Per-dock agent-flags badge: same row/popover furniture as the loop controls,
+   rose-tinted like the footer strip — open complaints, not chrome. */
+.phone__flags-btn {
+  color: #a04141;
+  border-color: #d98a8a;
+}
+
+.phone__flags-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.phone__flags-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 12px;
+  padding: 3px 6px;
+  background: #fdf0f0;
+  border: 1px solid #e5b8b8;
+  border-radius: 6px;
+  color: #7a2626;
+}
+
+.phone__flags-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.phone__flags-dismiss {
+  flex: none;
+  border: none;
+  background: transparent;
+  color: #a04141;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.phone__flags-dismiss:hover {
+  color: #6e1f1f;
+}

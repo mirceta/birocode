@@ -69,6 +69,7 @@ export const FEATURES = {
   dockAppSplit: 'advanced', // dock split view: opened local app beside the chat instead of over the dock (openspec: dock-app-split-view)
   adminStatus: 'advanced', // always-admin status tile in the header strip: UAC-off state + enabler (openspec: add-always-admin-status)
   flagsFooter: 'advanced', // agent-flags footer strip: undismissed FLAG: lines from driven-loop replies (docs/loop-driven-agent-convention.md; no openspec — user opted out 2026-07-31)
+  flagsDockBadge: 'advanced', // per-dock ⚑ badge + inline dismiss for that agent's open flags (same opt-out as flagsFooter)
 };
 
 const MODE_KEY = 'claudeweb_ui_mode';

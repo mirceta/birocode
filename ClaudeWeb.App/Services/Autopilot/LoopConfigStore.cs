@@ -152,17 +152,21 @@ public class LoopConfigStore
 
     /// <summary>The send-time composition (D2): the fixed frame around the enabled
     /// rules, then the stored text. <paramref name="phase"/> is the send's own phase
-    /// (the proposal's EnterPhase) — verify sends get the honesty note only.</summary>
+    /// (the proposal's EnterPhase) — verify sends get the honesty note only.
+    /// <paramref name="flagLineEnabled"/> is the FLAG: channel switch (FlagsStore):
+    /// off drops the teaching line, so an agent is never taught a marker the
+    /// harness has stopped collecting. The line's WORDING stays compiled-in either
+    /// way — the switch only includes or omits it.</summary>
     public static string ComposeBriefedPrompt(
         string kind, string? phase, string? sentinel, string storedText,
-        IReadOnlyList<string> enabledRules)
+        IReadOnlyList<string> enabledRules, bool flagLineEnabled = true)
     {
         if (phase == PhaseVerify)
             return BriefingVerifyNote + "\n\n" + storedText;
         var lines = new List<string> { BriefingHeader, BriefingIntro };
         lines.AddRange(enabledRules.Select(r => "- " + r));
         lines.Add(BriefingEscalationLine);
-        lines.Add(BriefingFlagLine);
+        if (flagLineEnabled) lines.Add(BriefingFlagLine);
         lines.Add(kind == KindQueue
             ? BriefingContractQueueItem
             : string.Format(BriefingContractSentinelTemplate,

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { apiGet, apiPut } from '../../api/client';
+import { apiGet, apiPost, apiPut } from '../../api/client';
 import { useT } from '../../i18n/LanguageContext';
 
 // The always-visible briefing rules editor beside the loop section (openspec:
@@ -61,6 +61,23 @@ export default function BriefingRules() {
     if (!text) return; // emptied text = abandoned edit, not a delete
     if (rules.find((r) => r.id === id)?.text === text) return;
     put(rules.map((r) => (r.id === id ? { ...r, text } : r)));
+  };
+
+  // The FLAG: channel switch (fixed-frame row, not a rule): off removes the
+  // teaching line from every subsequent driven send AND stops mining replies —
+  // POST /api/flags/enabled, then reload so the composed preview stays honest.
+  const flagsOn = data?.flagsEnabled !== false;
+  const toggleFlags = async () => {
+    setBusy(true);
+    setErr(false);
+    try {
+      await apiPost('/flags/enabled', { enabled: !flagsOn });
+      await load();
+    } catch {
+      setErr(true);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const words = (data?.workPreview || '').split(/\s+/).filter(Boolean).length;
@@ -128,6 +145,21 @@ export default function BriefingRules() {
               </li>
             ))}
           </ul>
+          {/* Fixed-frame row, styled apart from the editable rules: the FLAG:
+              channel is server-worded (its spelling is parser-coupled) but
+              operator-switchable — nothing about driven sends is untouchable. */}
+          <div className={`phone__brief-rule phone__brief-rule--fixed${flagsOn ? '' : ' phone__brief-rule--off'}`}>
+            <input
+              type="checkbox"
+              checked={flagsOn}
+              disabled={busy || !data}
+              title={t(flagsOn ? 'dashboard.briefingFlagsDisable' : 'dashboard.briefingFlagsEnable')}
+              onChange={toggleFlags}
+            />
+            <span className="phone__brief-fixedtext" title={data?.frame?.flagLine || ''}>
+              ⚑ {t('dashboard.briefingFlagsLabel')}
+            </span>
+          </div>
           <div className="phone__brief-addrow">
             <input
               type="text"

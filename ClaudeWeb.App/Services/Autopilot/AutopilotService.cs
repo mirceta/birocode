@@ -590,7 +590,10 @@ public class AutopilotService : BackgroundService
             // (sentinel, NEEDS_HUMAN, deny-list) still gets its flags kept. Never
             // feeds the decision ladder; pre-arm history is never mined (those
             // flags belong to the human's previous conversation, if anything).
-            if (!isSuggestionKind && !noReply && !string.IsNullOrWhiteSpace(lastAssistant)
+            // The channel switch (FlagsStore.Enabled) fences capture and the
+            // briefing's teaching line together — off means off end to end.
+            if (_flags.Enabled
+                && !isSuggestionKind && !noReply && !string.IsNullOrWhiteSpace(lastAssistant)
                 && lastAssistantAt is { } minedAt
                 && (!_lastFlagMined.TryGetValue(repo.Id, out var mined) || mined != minedAt))
             {
@@ -705,7 +708,8 @@ public class AutopilotService : BackgroundService
                     var (rev, rules) = _briefing.EnabledTexts();
                     briefingRev = rev;
                     briefed = LoopConfigStore.ComposeBriefedPrompt(
-                        loop.Kind, propose.EnterPhase, loop.Sentinel, propose.Prompt, rules);
+                        loop.Kind, propose.EnterPhase, loop.Sentinel, propose.Prompt, rules,
+                        _flags.Enabled);
                 }
                 if (SendPrompt(repo, sessionId!, loop, propose.Prompt, briefed, briefingRev,
                         propose.Confidence, snippet, intercept, now))

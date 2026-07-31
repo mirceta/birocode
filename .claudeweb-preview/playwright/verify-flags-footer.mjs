@@ -13,6 +13,13 @@
 //      text records it fresh.
 //   D. Browser (Advanced mode): the .flags-footer strip shows the open flags;
 //      × dismisses one; dismissing the last one removes the footer entirely.
+//   E. Controllability: dismissed flags land in the payload's dismissed history;
+//      POST /flags/enabled false drops the teaching line from the briefing
+//      preview AND from the actual driven send, and stops capture — a griping
+//      reply records nothing while the channel is off.
+//   F. Browser: the dock card's ⚑ badge lists this repo's open flags with
+//      inline dismiss, and the Briefing popover's fixed FLAG row unchecks the
+//      channel (server agrees).
 import { chromium } from 'playwright'
 import { spawn, execSync } from 'node:child_process'
 import { mkdir, rm, writeFile, readFile } from 'node:fs/promises'
@@ -49,7 +56,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const api = (method, path, body) => fetch(`${BASE}/api${path}`, {
   method, headers: H, body: body ? JSON.stringify(body) : undefined,
 })
-const openFlags = async () => (await (await api('GET', '/flags')).json()).flags ?? []
+const flagsPayload = async () => await (await api('GET', '/flags')).json()
+const openFlags = async () => (await flagsPayload()).flags ?? []
 
 const setStub = (mode, stepText, verifyText) =>
   writeFile(CFG, [mode, '-----', stepText, '-----', verifyText].join('\n'))
@@ -243,7 +251,9 @@ try {
   await ctx.addCookies([{ name: 'claudeweb_session', value: session, url: BASE }])
   await ctx.addInitScript(() => localStorage.setItem('claudeweb_ui_mode', 'advanced'))
   const page = await ctx.newPage()
-  await page.goto(`${BASE}/studio`, { waitUntil: 'networkidle' })
+  // domcontentloaded, not networkidle: the shell's steady polls can keep the
+  // network from ever going idle; the selector waits below gate readiness.
+  await page.goto(`${BASE}/studio`, { waitUntil: 'domcontentloaded' })
 
   const footer = page.locator('.flags-footer')
   await footer.waitFor({ state: 'visible', timeout: 15000 })
@@ -268,6 +278,96 @@ try {
   check('empty ledger removes the footer entirely', !(await page.locator('.flags-footer').count()))
   await page.screenshot({ path: join(OUT, 'flags-footer-empty.png'), fullPage: true })
   await ctx.close()
+
+  // ---- E: dismissed history + channel off stops teaching AND capture --------
+  // 4 dismissed so far: FLAG1 via the API in section C + the 3 footer taps in D.
+  let payload = await flagsPayload()
+  check(`dismissals landed in the history, not the void (got ${payload.dismissed?.length})`,
+    (payload.dismissed?.length ?? 0) === 4 && payload.dismissed.every((f) => f.dismissedAt))
+  check('channel defaults enabled', payload.enabled === true)
+
+  const off = await api('POST', '/flags/enabled', { enabled: false })
+  check(`channel toggled off (${off.status})`, off.status === 200 && (await off.json()).enabled === false)
+  let briefing = await (await api('GET', '/autopilot/briefing')).json()
+  check('briefing payload reports flagsEnabled=false', briefing.flagsEnabled === false)
+  check('composed work preview drops the FLAG teaching line', !briefing.workPreview.includes('FLAG:'))
+
+  const promptCountBefore = (await promptsSoFar()).length
+  await setStub('nopersist',
+    'Done with the step.\nFLAG: this gripe must NOT be collected',
+    'Checked the work against the request.\nSTEP_VERIFIED')
+  await addItem('Step four: gripe into a disabled channel.')
+  r = await armQueue()
+  check(`re-armed with channel off (${r.status})`, r.status === 200)
+  l = await waitLoop(repo.id, (x) => !x.active)
+  check(`third drain (status ${l?.status}/${l?.stopReason})`, l?.status === 'done' && l?.stopReason === 'drained')
+  const newPrompts = (await promptsSoFar()).slice(promptCountBefore)
+  const offItemPrompts = newPrompts.filter((p) => p.includes('Below is one item from a stored queue'))
+  check('channel-off item send carries NO FLAG teaching line',
+    offItemPrompts.length === 1 && !offItemPrompts[0].includes('FLAG:'))
+  flags = await openFlags()
+  check(`griping reply recorded nothing while off (got ${flags.length})`, flags.length === 0)
+
+  const on = await api('POST', '/flags/enabled', { enabled: true })
+  check(`channel re-enabled (${on.status})`, on.status === 200 && (await on.json()).enabled === true)
+  briefing = await (await api('GET', '/autopilot/briefing')).json()
+  check('preview teaches FLAG again once re-enabled', briefing.workPreview.includes('FLAG:'))
+
+  // ---- F: dock ⚑ badge + Briefing fixed row in a real browser ---------------
+  await setStub('nopersist',
+    'Done.\nFLAG: badge gripe for the dock card',
+    'Checked the work against the request.\nSTEP_VERIFIED')
+  await addItem('Step five: raise one flag for the badge.')
+  r = await armQueue()
+  check(`re-armed for the badge run (${r.status})`, r.status === 200)
+  l = await waitLoop(repo.id, (x) => !x.active)
+  check(`fourth drain (status ${l?.status}/${l?.stopReason})`, l?.status === 'done' && l?.stopReason === 'drained')
+  flags = await openFlags()
+  check(`1 open flag for the badge (got ${flags.length})`, flags.length === 1)
+
+  const ctx2 = await browser.newContext({ viewport: { width: 1300, height: 1100 } })
+  await ctx2.addCookies([{ name: 'claudeweb_session', value: session, url: BASE }])
+  await ctx2.addInitScript((tab) => {
+    localStorage.setItem('claudeweb_ui_mode', 'advanced')
+    localStorage.setItem('claudeweb_dash_view', 'phones')
+    localStorage.setItem('claudeweb_dock_active', tab)
+  }, TAB)
+  const page2 = await ctx2.newPage()
+  page2.on('pageerror', (e) => log('PAGEERROR:', e.message))
+  await page2.goto(`${BASE}/studio`, { waitUntil: 'domcontentloaded', timeout: 20000 })
+  await page2.waitForTimeout(1500)
+  if ((await page2.locator('.dash').count()) === 0) {
+    await page2.keyboard.press('Control+Shift+D')
+    await page2.waitForSelector('.dash', { timeout: 5000 })
+  }
+  const badge = page2.locator('.phone__flags-btn')
+  await badge.waitFor({ state: 'visible', timeout: 15000 })
+  check('dock card shows the ⚑ badge', (await badge.textContent()).includes('⚑ 1'))
+  await badge.click()
+  const items2 = page2.locator('.phone__flags-item')
+  check(`badge popover lists the repo's open flag (got ${await items2.count()})`,
+    await items2.count() === 1 && (await items2.first().textContent()).includes('badge gripe'))
+  await page2.screenshot({ path: join(OUT, 'flags-dock-badge.png'), fullPage: true })
+  await page2.locator('.phone__flags-dismiss').first().click()
+  await page2.waitForFunction(() => !document.querySelector('.phone__flags-btn'), null, { timeout: 10000 })
+  check('badge disappears once its last flag is dismissed', !(await page2.locator('.phone__flags-btn').count()))
+  flags = await openFlags()
+  check(`server agrees after badge dismiss (got ${flags.length})`, flags.length === 0)
+
+  // The Briefing popover's fixed FLAG row switches the channel.
+  await page2.locator('.phone__brief-btn').first().click()
+  const fixedRow = page2.locator('.phone__brief-rule--fixed input')
+  await fixedRow.waitFor({ state: 'visible', timeout: 10000 })
+  check('fixed FLAG row is checked while the channel is on', await fixedRow.isChecked())
+  await fixedRow.click()
+  await page2.waitForFunction(() => {
+    const el = document.querySelector('.phone__brief-rule--fixed input')
+    return el && !el.checked && !el.disabled
+  }, null, { timeout: 10000 })
+  payload = await flagsPayload()
+  check('unchecking the fixed row turned the channel off server-side', payload.enabled === false)
+  await page2.screenshot({ path: join(OUT, 'flags-briefing-toggle.png'), fullPage: true })
+  await ctx2.close()
 } catch (e) {
   failures++
   log('FATAL:', e.stack || e.message)

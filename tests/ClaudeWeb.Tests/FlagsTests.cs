@@ -87,6 +87,35 @@ public sealed class FlagsTests : IDisposable
         Assert.DoesNotContain(open, f => f.Text == "gripe 0");
     }
 
+    [Fact]
+    public void Dismissed_flags_move_to_the_history_not_into_the_void()
+    {
+        _store.Record("r1", "Repo 1", "queue", 1, new[] { "gripe A", "gripe B" });
+        var a = _store.Open().Single(f => f.Text == "gripe A");
+        Assert.True(_store.Dismiss(a.Id));
+
+        Assert.Single(_store.Open());
+        var dismissed = _store.Dismissed();
+        Assert.Single(dismissed);
+        Assert.Equal("gripe A", dismissed[0].Text);
+        Assert.NotNull(dismissed[0].DismissedAt);
+    }
+
+    // --- channel switch ------------------------------------------------------
+
+    [Fact]
+    public void Channel_defaults_on_and_the_switch_persists_across_reload()
+    {
+        Assert.True(_store.Enabled);
+        _store.SetEnabled(false);
+        Assert.False(_store.Enabled);
+
+        var reloaded = new FlagsStore(new Logger(), _dir);
+        Assert.False(reloaded.Enabled);
+        reloaded.SetEnabled(true);
+        Assert.True(new FlagsStore(new Logger(), _dir).Enabled);
+    }
+
     // --- briefing composition -----------------------------------------------
 
     [Fact]
@@ -100,5 +129,18 @@ public sealed class FlagsTests : IDisposable
             LoopConfigStore.KindQueue, LoopConfigStore.PhaseVerify, null, "verify text",
             Array.Empty<string>());
         Assert.DoesNotContain(FlagsStore.FlagMarker, verify);
+    }
+
+    [Fact]
+    public void Channel_off_drops_the_teaching_line_and_nothing_else()
+    {
+        var on = LoopConfigStore.ComposeBriefedPrompt(
+            LoopConfigStore.KindRecipe, null, null, "stored text", new[] { "rule" }, flagLineEnabled: true);
+        var off = LoopConfigStore.ComposeBriefedPrompt(
+            LoopConfigStore.KindRecipe, null, null, "stored text", new[] { "rule" }, flagLineEnabled: false);
+
+        Assert.DoesNotContain(FlagsStore.FlagMarker, off);
+        // Only the FLAG teaching line differs — frame, rules, contract intact.
+        Assert.Equal(on.Replace(LoopConfigStore.BriefingFlagLine + "\n", ""), off);
     }
 }
