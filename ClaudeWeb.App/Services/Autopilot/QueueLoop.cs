@@ -32,12 +32,21 @@ public sealed class QueueLoop : DrivenLoop
 
         if (inst.Phase == LoopConfigStore.PhaseVerify)
         {
+            // No reply to the verification send yet (the engine passes null —
+            // openspec: fix-loop-verify-stale-reply): re-send the verification
+            // prompt instead of judging absent text. Bounded by the engine's
+            // no-reply ladder and the iteration cap.
+            if (ctx.LastAssistant is null)
+                return new LoopDecision.Propose(
+                    LoopConfigStore.ComposeQueueVerifyPrompt(inst.LastStepText ?? ""),
+                    EnterPhase: LoopConfigStore.PhaseVerify);
+
             // The verification turn's reply decides: verified → fall through and
             // unload the next item; anything else — a question, a blocker, a
             // partial — needs the human (D4).
             if (!FinalLineContains(ctx.LastAssistant, LoopConfigStore.StepVerifiedToken))
                 return new LoopDecision.Stop("escalate", "step-unverified",
-                    $"verification reply was not {LoopConfigStore.StepVerifiedToken}: \"{AutopilotService.Snippet(ctx.LastAssistant ?? "")}\"");
+                    $"verification reply was not {LoopConfigStore.StepVerifiedToken}: \"{AutopilotService.Snippet(ctx.LastAssistant)}\"");
         }
         else if (inst.Phase == LoopConfigStore.PhaseVerifyOwed && inst.VerifyEnabled)
         {

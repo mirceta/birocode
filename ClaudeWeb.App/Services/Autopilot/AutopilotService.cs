@@ -29,7 +29,9 @@ namespace ClaudeWeb.Services.Autopilot;
 /// before any send: ambiguity or risk → escalate/hold, never auto-send.
 ///
 /// It reads the last message from the on-disk transcript (the same source as
-/// discovery), so it needs no new hook into the live run buffer.
+/// discovery); when a drive send's reply is missing there — the CLI can stream
+/// a reply without ever persisting it — it falls back to the reply text the run
+/// buffer witnessed (openspec: fix-loop-verify-stale-reply).
 /// </summary>
 public class AutopilotService : BackgroundService
 {
@@ -57,17 +59,21 @@ public class AutopilotService : BackgroundService
     private readonly Logger _logger;
 
     private readonly ConcurrentDictionary<string, AgentState> _states = new();
-    // Per-repo guard: the assistant-message snippet we last DROVE against (sent a
-    // prompt for), so a tick that fires before the new run registers as busy can't
-    // double-send.
+    // The assistant-message snippet each drive send was decided against. DEBUG
+    // EVIDENCE ONLY since fix-loop-verify-stale-reply: reply freshness is temporal
+    // (LastSentAt vs the reply's timestamp), never textual — snippet equality both
+    // deadlocks on identical re-replies and mistakes ANY moved text (a synthetic
+    // repair line, another writer) for the reply to our send.
     private readonly ConcurrentDictionary<string, string> _lastDriveSent = new();
-    // DRIVE no-reply escape (fix-loop-noreply-stall): a run can complete without
-    // writing any assistant message (empty completion — seen live 2026-07-27), so
-    // the snippet the guard above waits on never changes and the loop would stall
-    // forever. _driveNoReply marks "run finished, snippet unmoved" for one grace
-    // tick (covers transcript flush); if still unmoved on the next tick the guard
-    // is cleared so the kind decides again. _driveNoReplyMisses counts consecutive
-    // reply-less runs so a pathological agent stops instead of burning turns.
+    // DRIVE no-reply escape (fix-loop-noreply-stall; reworked by
+    // fix-loop-verify-stale-reply): a run can complete without a reply landing
+    // anywhere — an empty completion (seen live 2026-07-27), or a streamed reply
+    // the CLI never persisted AND a restart dropped the run buffer. _driveNoReply
+    // marks "run finished, no fresh reply" for one grace tick (covers transcript
+    // flush); on the next tick the kind decides again with NO reply text (it
+    // re-proposes its phase's prompt — stale text is never judged).
+    // _driveNoReplyMisses counts consecutive reply-less runs so a pathological
+    // agent stops (error/no-reply) instead of burning turns.
     private readonly ConcurrentDictionary<string, byte> _driveNoReply = new();
     private readonly ConcurrentDictionary<string, int> _driveNoReplyMisses = new();
     private const int MaxNoReplyRetries = 2;
@@ -405,6 +411,37 @@ public class AutopilotService : BackgroundService
                 if (sessionId is null) { lastAssistant = null; lastAssistantAt = null; }
                 else (lastAssistant, lastAssistantAt) = LastAssistantMessageIn(repo.Path, sessionId);
             }
+
+            // Reply freshness is TEMPORAL (openspec: fix-loop-verify-stale-reply):
+            // once a drive loop has sent this arming, the trailing transcript
+            // message counts as the reply to that send only if it is NEWER than
+            // the send. When the transcript has no fresh reply, fall back to the
+            // reply the run buffer WITNESSED streaming (the CLI can complete a
+            // run, bill it, stream the reply — and never persist it; seen live
+            // 2026-07-31, escalating a queue verification against the previous
+            // step's stale reply). Only when neither source is fresh is the reply
+            // treated as missing — never judged, only retried or resolved no-reply.
+            var replyMissing = false;
+            if (!isSuggestionKind && loop.Mode == LoopConfigStore.ModeDrive
+                && loop.LastSentAt > 0 && loop.LastSentAt >= loop.ArmedAt)
+            {
+                var sentUtc = DateTimeOffset.FromUnixTimeMilliseconds(loop.LastSentAt).UtcDateTime;
+                if (lastAssistantAt is not { } replyAt || replyAt <= sentUtc)
+                {
+                    if (run is { } r && r.Status != "running"
+                        && r.ReplyTextAtUtc is { } witnessedAt && witnessedAt > sentUtc
+                        && !string.IsNullOrWhiteSpace(r.ReplyText))
+                    {
+                        lastAssistant = r.ReplyText;
+                        lastAssistantAt = witnessedAt;
+                        _logger.Info($"[LOOP] {repo.Name}: transcript has no reply newer than the last send — judging the run's streamed reply");
+                    }
+                    else
+                    {
+                        replyMissing = true;
+                    }
+                }
+            }
             var snippet = Snippet(lastAssistant ?? "");
 
             // A NEW arm generation clears the per-repo dedup guards: a freshly
@@ -432,17 +469,15 @@ public class AutopilotService : BackgroundService
                 continue;
             }
 
-            // Drive dedup: already sent against this exact trailing message (a tick
-            // that fired before the new run registered busy) → don't double-send.
-            if (loop.Mode == LoopConfigStore.ModeDrive
-                && _lastDriveSent.TryGetValue(repo.Id, out var ds) && ds == snippet)
+            // Drive no-reply handling: our last send has no fresh reply in either
+            // source. While the run is in flight, just wait. Once it has finished:
+            // one grace tick (covers transcript flush), then let the kind decide
+            // again WITH NO REPLY TEXT — it re-proposes its phase's prompt, and
+            // every resend still bumps the iteration counter, so the cap bounds
+            // retries too. After MaxNoReplyRetries consecutive reply-less runs,
+            // stop the loop instead. Stale trailing text is never judged.
+            if (loop.Mode == LoopConfigStore.ModeDrive && replyMissing)
             {
-                // We're past the IsBusy gate, so the send's run has finished — yet
-                // the trailing message never moved: the run completed WITHOUT
-                // writing an assistant reply. One grace tick, then clear the guard
-                // and decide again (every resend still bumps the iteration counter,
-                // so the cap bounds retries too); after MaxNoReplyRetries
-                // consecutive reply-less runs, stop the loop instead.
                 if (run is null || run.Status == "running") continue;
                 if (_driveNoReply.TryAdd(repo.Id, 0))
                 {
@@ -460,12 +495,11 @@ public class AutopilotService : BackgroundService
                     Append(new LogEntry(now, repo.Name, "escalated", "no reply from agent", 0));
                     continue;
                 }
-                _lastDriveSent.TryRemove(repo.Id, out _);
-                _logger.Info($"[LOOP] {repo.Name}: run {run.Status} produced no new reply — deciding again (retry {misses}/{MaxNoReplyRetries})");
+                _logger.Info($"[LOOP] {repo.Name}: run {run.Status} produced no new reply — deciding again without one (retry {misses}/{MaxNoReplyRetries})");
             }
             else if (loop.Mode == LoopConfigStore.ModeDrive)
             {
-                // The trailing message moved — the reply arrived; episode over.
+                // A fresh reply arrived (or nothing was sent yet); episode over.
                 _driveNoReply.TryRemove(repo.Id, out _);
                 _driveNoReplyMisses.TryRemove(repo.Id, out _);
             }
@@ -532,9 +566,14 @@ public class AutopilotService : BackgroundService
             // behavior; the suggestion kind acts on the current message by design.
             var preArm = !isSuggestionKind && lastAssistantAt is { } atUtc
                 && atUtc < DateTimeOffset.FromUnixTimeMilliseconds(loop.ArmedAt).UtcDateTime;
+            // Null LastAssistant uniformly means "the agent has not answered yet"
+            // (openspec: fix-loop-verify-stale-reply): pre-arm history and a
+            // send whose reply never landed both decide as if unanswered — the
+            // kind (re)proposes its phase's prompt and judges nothing.
+            var noReply = preArm || replyMissing;
             var decision = impl.Decide(new LoopContext(
                 loop,
-                preArm ? null : lastAssistant,
+                noReply ? null : lastAssistant,
                 !preArm && run?.Status == "error",
                 cfg.DenyList, cfg.Threshold, routines, cliVerdict,
                 // Queue kind (openspec: queue-based-loop, D2): the bound tab's LIVE
@@ -784,12 +823,16 @@ public class AutopilotService : BackgroundService
     // message of ONE named session — a fixed file, immune to whatever else writes
     // to the repo's shared transcript folder. A missing/empty session reads as
     // "the agent has not spoken yet", which sends the stored prompt into the pin.
+    // Synthetic lines (the CLI's "No response requested." resume repair) are not
+    // agent replies and are skipped (openspec: fix-loop-verify-stale-reply) — a
+    // repair carries a CURRENT timestamp, so without this it would pass the
+    // temporal freshness gate and be judged as a verification verdict.
     private (string? Text, DateTime? AtUtc) LastAssistantMessageIn(string repoPath, string sessionId)
     {
         try
         {
             var last = _sessions.GetMessages(repoPath, sessionId)
-                .LastOrDefault(m => m.Role == "assistant");
+                .LastOrDefault(m => m.Role == "assistant" && !m.Synthetic);
             return (last?.Text, last?.Timestamp?.ToUniversalTime());
         }
         catch (Exception ex)
