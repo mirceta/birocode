@@ -4,7 +4,7 @@ import { useT } from '../../i18n/LanguageContext';
 
 // THE loop section on the agent dock card (openspec: unify-loop-types, revision 2).
 // One mental model, spoken plainly by the UI: this agent has (at most) ONE loop
-// instance — kind 💡 suggestion / 📋 recipe / 🎯 goal — that is armed or not, and
+// instance — kind 💡 suggestion / 📋 recipe / 🎯 goal / 🗒️ queue — armed or not, and
 // runs in one of two MODES: "suggest" (its decided next prompt only pre-fills the
 // chat composer, as a pending suggestion) or "drive" (it actually sends, capped).
 //
@@ -21,8 +21,11 @@ import { useT } from '../../i18n/LanguageContext';
 // fetches the gated GET /api/autopilot/loops/detail on open — a 403 renders the
 // explicit gate-closed hint in place of prompt text. Actions go through the fully
 // gated endpoints; a 403 there shows the same hint.
-const KINDS = ['suggestion', 'recipe', 'goal'];
-const EMOJI = { suggestion: '💡', recipe: '📋', goal: '🎯' };
+// The queue kind (openspec: queue-based-loop) drains THIS dock tab's live
+// prompt stash top-down — its parameters are the stash itself (reorder the
+// strip to reorder the loop) plus the per-step verification toggle.
+const KINDS = ['suggestion', 'recipe', 'goal', 'queue'];
+const EMOJI = { suggestion: '💡', recipe: '📋', goal: '🎯', queue: '🗒️' };
 
 // Clipboard with a fallback chain (openspec: add-loop-debug-handoff): the async
 // API needs a secure context (the harness is often plain http off-box), so fall
@@ -51,7 +54,7 @@ async function copyToClipboard(text) {
   }
 }
 
-export default function DockLoopControl({ repoId, sessionId, loop, recipes = [], onChanged, onUsePending }) {
+export default function DockLoopControl({ repoId, sessionId, tabId, stash = [], loop, recipes = [], onChanged, onUsePending }) {
   const { t } = useT();
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState(null);
@@ -59,6 +62,10 @@ export default function DockLoopControl({ repoId, sessionId, loop, recipes = [],
   const [recipeId, setRecipeId] = useState(recipes[0]?.id || '');
   const [cap, setCap] = useState('');
   const [goal, setGoal] = useState('');
+  // Queue verification toggle: null = untouched (defaults ON — the safe
+  // posture); a persisted opt-out re-hydrates via the gated detail.
+  const [verifyPick, setVerifyPick] = useState(null);
+  const [verifySeed, setVerifySeed] = useState(null);
   const [inspect, setInspect] = useState(false);
   // Gated prompt-level detail: null = not fetched, 'gate-closed' = 403,
   // otherwise { loops, recipes, goalTemplates }.
@@ -107,6 +114,7 @@ export default function DockLoopControl({ repoId, sessionId, loop, recipes = [],
         if (mine.goal) setGoal((g) => g || mine.goal);
         if (mine.maxIterations > 0) setCap((c) => (c === '' ? String(mine.maxIterations) : c));
         if (!mine.active && mine.mode) setPickedMode((m) => m ?? mine.mode);
+        if (mine.kind === 'queue' && typeof mine.verifyEnabled === 'boolean') setVerifySeed(mine.verifyEnabled);
       })
       .catch((e) => { if (alive) setDetail(e?.status === 403 ? 'gate-closed' : null); });
     return () => { alive = false; };
@@ -140,9 +148,21 @@ export default function DockLoopControl({ repoId, sessionId, loop, recipes = [],
   // fix-loop-conversation-identity): the loop then reads and resumes that
   // session's lineage only. Null (no conversation yet) lets the server fall
   // back to the repo's newest session at arm time.
+  // Effective verify setting for the queue kind: the user's explicit pick, else
+  // the persisted value a re-arm hydrated, else the default ON.
+  const verifyOn = verifyPick ?? verifySeed ?? true;
   const arm = () => {
     if (selected === 'suggestion') {
       return act('/autopilot/loop', { repoId, action: 'start', kind: 'suggestion', mode });
+    }
+    if (selected === 'queue') {
+      if (!tabId || stash.length === 0) return undefined;
+      return act('/autopilot/loop', {
+        repoId, action: 'start', kind: 'queue', tabId, mode,
+        verifyEnabled: verifyOn,
+        maxIterations: capNum >= 1 ? capNum : undefined,
+        sessionId: sessionId || undefined,
+      });
     }
     if (selected === 'recipe') {
       if (!chosenRecipe) return undefined;
@@ -186,12 +206,18 @@ export default function DockLoopControl({ repoId, sessionId, loop, recipes = [],
   const setLiveMode = (m) => act('/autopilot/loop', { repoId, action: 'mode', mode: m }, true);
 
   // ---- collapsed header: type · armed · mode at a glance ----
-  const verifying = loop?.kind === 'goal' && loop?.phase === 'verify';
+  const verifying = (loop?.kind === 'goal' || loop?.kind === 'queue') && loop?.phase === 'verify';
   const capText = loop?.maxIterations > 0 ? `${loop.iterationsDone}/${loop.maxIterations}` : `${loop?.iterationsDone ?? 0}`;
+  // Queue progress (openspec: queue-based-loop): sent / remaining from the
+  // ungated projection — remaining is the bound tab's LIVE stash length, so
+  // stashing mid-run visibly grows it.
+  const queueText = loop?.kind === 'queue'
+    ? ` · ${t('dashboard.loopQueueProgress', { sent: loop.queueSent ?? 0, left: loop.queueRemaining ?? 0 })}`
+    : '';
   const summary = loop
     ? (armed
-      ? `${EMOJI[loop.kind]} ${kindName(loop.kind)} · ${t('dashboard.loopArmedWord')} · ${modeName(loop.mode)}${loop.kind === 'suggestion' ? '' : ` · ${capText}`}${verifying ? ` · ${t('dashboard.loopVerifying')}` : ''}`
-      : `${EMOJI[loop.kind]} ${kindName(loop.kind)} · ${t(`dashboard.loopStatus.${loop.status}`) || loop.status}`)
+      ? `${EMOJI[loop.kind]} ${kindName(loop.kind)} · ${t('dashboard.loopArmedWord')} · ${modeName(loop.mode)}${loop.kind === 'suggestion' ? '' : ` · ${capText}`}${queueText}${verifying ? ` · ${t('dashboard.loopVerifying')}` : ''}`
+      : `${EMOJI[loop.kind]} ${kindName(loop.kind)} · ${t(`dashboard.loopStatus.${loop.status}`) || loop.status}${loop.kind === 'queue' ? queueText : ''}`)
     : t('dashboard.loopNone');
 
   return (
@@ -222,7 +248,7 @@ export default function DockLoopControl({ repoId, sessionId, loop, recipes = [],
               <span className="phone__loop-armed-v">
                 {loop.kind === 'suggestion'
                   ? modeName(loop.mode)
-                  : `${modeName(loop.mode)} · ${capText} · ${verifying ? t('dashboard.loopVerifying') : t(`dashboard.loopStatus.${loop.status}`) || loop.status}`}
+                  : `${modeName(loop.mode)} · ${capText}${queueText} · ${verifying ? t('dashboard.loopVerifying') : t(`dashboard.loopStatus.${loop.status}`) || loop.status}`}
               </span>
               <button type="button" className="phone__loop-stop" onClick={disarm} disabled={busy}>
                 ■ {t('dashboard.loopDisarm')}
@@ -340,6 +366,36 @@ export default function DockLoopControl({ repoId, sessionId, loop, recipes = [],
               onChange={(e) => setGoal(e.target.value)}
             />
           )}
+          {/* Queue parameters: the queue ITSELF is the stash strip below the
+              composer — here only the next-up preview, the live count, and the
+              per-step verification toggle (default on). Arming an empty queue
+              is refused server-side too; the hint teaches instead of failing. */}
+          {selected === 'queue' && armedKind !== 'queue' && (
+            stash.length === 0 ? (
+              <div className="phone__loop-msg">{t('dashboard.loopQueueEmpty')}</div>
+            ) : (
+              <div className="phone__loop-queue">
+                <div className="phone__loop-inspect-k">
+                  {t('dashboard.loopQueueNext')}
+                  <span className="phone__loop-queue-count">
+                    {t('dashboard.loopQueueCount', { n: stash.length })}
+                  </span>
+                </div>
+                <pre className="phone__loop-inspect-pre">{stash[0].text}</pre>
+                <label className="phone__loop-verifytoggle">
+                  <input
+                    type="checkbox"
+                    checked={verifyOn}
+                    onChange={(e) => setVerifyPick(e.target.checked)}
+                  />
+                  {t('dashboard.loopQueueVerify')}
+                </label>
+                <p className="phone__loop-sect-desc">
+                  {t(verifyOn ? 'dashboard.loopQueueVerifyHint' : 'dashboard.loopQueueVerifyOffHint')}
+                </p>
+              </div>
+            )
+          )}
 
           {/* Prompt inspection (gated detail) */}
           {selected !== 'suggestion' && (
@@ -357,7 +413,7 @@ export default function DockLoopControl({ repoId, sessionId, loop, recipes = [],
               header's Disarm is the action there) */}
           {armedKind !== selected && (
             <div className="phone__loop-armrow">
-              {(selected === 'recipe' || selected === 'goal') && (
+              {(selected === 'recipe' || selected === 'goal' || selected === 'queue') && (
                 <label className="phone__loop-cap">
                   {t('dashboard.loopCap')}
                   <input
@@ -365,7 +421,11 @@ export default function DockLoopControl({ repoId, sessionId, loop, recipes = [],
                     min={1}
                     max={100}
                     value={cap}
-                    placeholder={selected === 'recipe' && chosenRecipe ? String(chosenRecipe.maxIterations) : '10'}
+                    // Queue placeholder = 2× the queued items: with verification
+                    // on, every item costs a step turn PLUS a verify turn.
+                    placeholder={selected === 'queue'
+                      ? String(Math.max(stash.length * 2, 2))
+                      : selected === 'recipe' && chosenRecipe ? String(chosenRecipe.maxIterations) : '10'}
                     onChange={(e) => setCap(e.target.value)}
                   />
                 </label>
@@ -376,7 +436,8 @@ export default function DockLoopControl({ repoId, sessionId, loop, recipes = [],
                 onClick={arm}
                 disabled={busy
                   || (selected === 'recipe' && !chosenRecipe)
-                  || (selected === 'goal' && !goal.trim())}
+                  || (selected === 'goal' && !goal.trim())
+                  || (selected === 'queue' && (!tabId || stash.length === 0))}
               >
                 {busy ? t('dashboard.loopArming') : t('dashboard.loopArm')}
               </button>
@@ -433,6 +494,24 @@ export default function DockLoopControl({ repoId, sessionId, loop, recipes = [],
   function renderInspection() {
     if (detail === 'gate-closed' || detail === null) {
       return <div className="phone__loop-msg phone__loop-msg--gate">{t('dashboard.loopGateClosed')}</div>;
+    }
+    if (selected === 'queue') {
+      // Queue inspection: the verification template the engine composes from
+      // (prompt text — gated detail only) and, once a step has landed, the
+      // last unloaded step it would verify against.
+      const mine = detail.loops?.find((l) => l.repoId === repoId);
+      return (
+        <div className="phone__loop-inspect">
+          <div className="phone__loop-inspect-k">{t('dashboard.loopQueueVerifyTplLabel')}</div>
+          <pre className="phone__loop-inspect-pre">{detail.queueVerifyTemplate || '—'}</pre>
+          {mine?.lastStepText && (
+            <>
+              <div className="phone__loop-inspect-k">{t('dashboard.loopQueueLastStepLabel')}</div>
+              <pre className="phone__loop-inspect-pre">{mine.lastStepText}</pre>
+            </>
+          )}
+        </div>
+      );
     }
     if (selected === 'recipe') {
       const armedRecipeLoop = armedKind === 'recipe'

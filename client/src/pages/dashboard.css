@@ -1589,6 +1589,29 @@
   resize: vertical;
 }
 
+/* Queue-loop parameters (openspec queue-based-loop): next-up preview,
+   live queued count, and the per-step verification toggle. */
+.phone__loop-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.phone__loop-queue-count {
+  margin-left: 6px;
+  font-weight: 400;
+  color: var(--color-text-soft);
+}
+
+.phone__loop-verifytoggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
 .phone__loop-inspect-toggle {
   align-self: flex-start;
   padding: 1px 8px;

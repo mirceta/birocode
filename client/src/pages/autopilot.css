@@ -351,6 +351,9 @@
 .lp-form__row { display: flex; gap: 10px; flex-wrap: wrap; }
 .lp-form__actions { display: flex; gap: 8px; align-items: center; }
 
+/* Queue-loop verify toggle (openspec queue-based-loop). */
+.lp-check { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--color-text); cursor: pointer; }
+
 .lp-field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 180px; }
 .lp-field--cap { flex: 0 0 110px; }
 .lp-field__k { font-size: 11px; font-weight: 600; color: var(--color-text-muted, #888); text-transform: uppercase; letter-spacing: 0.03em; }
