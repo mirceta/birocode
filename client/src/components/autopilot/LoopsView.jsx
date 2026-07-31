@@ -226,6 +226,24 @@ function QueueRow({ agent, loop, tabs, loopAction }) {
 
   const b = LOOP_BADGE[loop?.status] ?? LOOP_BADGE.stopped;
 
+  // Sent-history (openspec: queue-loop-visibility): the step texts that landed
+  // this arm, oldest first — from the gated console state, so it renders here
+  // for live AND stopped queue loops. Labeled "last N" when the record's bound
+  // has dropped older entries.
+  const sentTexts = isQueue ? (loop?.queueSentTexts ?? []) : [];
+  const sentBlock = sentTexts.length > 0 && (
+    <div className="lp-queue-sent">
+      <span className="lp-field__k">
+        Sent{(loop?.queueSent ?? 0) > sentTexts.length ? ` (last ${sentTexts.length})` : ''}
+      </span>
+      <ol className="lp-queue-sentlist">
+        {sentTexts.map((s, i) => (
+          <li key={i} className="lp-queue-sentrow">{s}</li>
+        ))}
+      </ol>
+    </div>
+  );
+
   return (
     <li className={`lp-card ${active ? 'is-active' : ''}`}>
       <div className="lp-card__head">
@@ -258,6 +276,7 @@ function QueueRow({ agent, loop, tabs, loopAction }) {
               <span className="lp-stat__v">{loop.verifyEnabled === false ? 'off' : 'each step'}</span>
             </span>
           </div>
+          {sentBlock}
           <button className="lp-stop" onClick={() => act({ repoId: agent.repoId, action: 'stop' })} disabled={busy}>
             ■ Stop loop
           </button>
@@ -275,6 +294,7 @@ function QueueRow({ agent, loop, tabs, loopAction }) {
               {loop.stopDetail}
             </div>
           )}
+          {sentBlock}
           {repoTabs.length === 0 ? (
             <span className="ap-muted">
               No dashboard dock tab for this repo — a queue lives on a dock tab’s prompt stash.
@@ -301,6 +321,19 @@ function QueueRow({ agent, loop, tabs, loopAction }) {
                   />
                 </label>
               </div>
+              {/* Full unload-order preview (openspec: queue-loop-visibility, D4):
+                  every stash item of the chosen tab, numbered — the live stash,
+                  so reordering the strip reorders this list. */}
+              {stashLen > 0 && (
+                <div className="lp-queue-preview">
+                  <span className="lp-field__k">Will unload in this order ({stashLen})</span>
+                  <ol className="lp-queue-list">
+                    {(chosen?.stash ?? []).map((s) => (
+                      <li key={s.id} className="lp-queue-item">{s.text}</li>
+                    ))}
+                  </ol>
+                </div>
+              )}
               <label className="lp-check">
                 <input type="checkbox" checked={verify} onChange={(e) => setVerify(e.target.checked)} />
                 Verify each step (agent must answer <code>STEP_VERIFIED</code>) — ~2 turns per item

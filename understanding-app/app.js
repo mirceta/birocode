@@ -275,9 +275,11 @@ const LEDGER = [
   { id: 'D6', title: 'Cap', key: 'a true bound on sends',
     text: 'A live queue has no arm-time length, so the cap uses the standard driven-kind default (overridable, 1..100). Verification roughly doubles sends per item — the arm UI says so.' },
   { id: 'D7', title: 'Three surfaces, one list', key: 'stash strip · dock control · console tab',
-    text: 'The stash strip is the only editor (now reorderable). The dock loop control adds settings + next-up; the console’s Loops section gains a <b>Queue tab</b> as the settings home. Ungated status shows counts and phase only; texts stay behind the operator gate.' },
+    text: 'The stash strip is the only editor (now reorderable). The dock loop control adds settings + a <b>full numbered unload-order preview</b>; the console’s Loops section gains a <b>Queue tab</b> as the settings home. Ungated status shows counts and phase only; texts stay behind the operator gate.' },
   { id: 'D8', title: 'API follows the existing arms', key: 'additive, migration-free',
     text: 'A queue arm endpoint beside recipe/goal — <code>{ tabId, mode, verifyEnabled?, maxIterations?, sessionId? }</code>, refused on an empty stash. New loop-record fields are additive nullable, normalized on read like every prior migration; plus <code>POST …/stash/reorder</code> for the strip.' },
+  { id: 'D9', title: 'Consumption made visible', key: 'openspec queue-loop-visibility',
+    text: 'Three visibility fixes, D2 untouched: the strip <b>reconciles engine consumption</b> on a ~10s visible-page poll (a draining queue visibly shrinks — the old strip never refreshed unless you refocused); while a queue is armed on a tab, that tab’s strip renders as the live queue (chips numbered in unload order, the head badged <b>▶ in flight</b> during work/verify and <b>next up</b> when idle); and the loop record keeps a bounded (last 20) <b>sent-history</b> of the step texts that actually landed — reset on re-arm, disclosed only through the gated detail/debug surfaces, rendered as “sent ✓” rows in the dock inspection and the console Queue tab.' },
 ];
 
 $('ledger').innerHTML = LEDGER.map((d) => `

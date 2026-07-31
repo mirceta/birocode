@@ -668,6 +668,7 @@ export default function PinnedAgent({
             stashTabId={tab.id}
             chatMaximized={maximized}
             toggleChatMaximized={toggleChatMaximized}
+            queueLoop={canLoop ? loop : undefined}
           />
         </div>
         {/* Divider (openspec split-divider-drag): a separator BETWEEN the two

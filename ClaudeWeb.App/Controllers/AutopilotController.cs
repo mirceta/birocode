@@ -411,6 +411,12 @@ public class AutopilotController : ControllerBase
                     queueVerifyEnabled = loop.Kind == LoopConfigStore.KindQueue ? (bool?)loop.VerifyEnabled : null,
                     queueSent = loop.Kind == LoopConfigStore.KindQueue ? (int?)loop.QueueSent : null,
                     lastStepText = Text(loop.LastStepText),
+                    // Sent-history (openspec: queue-loop-visibility, D3): the step
+                    // texts that landed this arm — prompt text, so the whole list
+                    // collapses to the marker while the gate is closed.
+                    queueSentTexts = loop.Kind == LoopConfigStore.KindQueue
+                        ? (gateOpen ? (object)loop.QueueSentTexts : redactedMarker)
+                        : null,
                     queueVerifyTemplate = loop.Kind == LoopConfigStore.KindQueue
                         ? Text(LoopConfigStore.QueueVerifyTemplate)
                         : null,

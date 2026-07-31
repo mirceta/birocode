@@ -375,13 +375,20 @@ export default function DockLoopControl({ repoId, sessionId, tabId, stash = [], 
               <div className="phone__loop-msg">{t('dashboard.loopQueueEmpty')}</div>
             ) : (
               <div className="phone__loop-queue">
+                {/* Full unload-order preview (openspec: queue-loop-visibility,
+                    D4): every stash item, numbered top-down — the live stash
+                    prop, so reordering the strip reorders this list. */}
                 <div className="phone__loop-inspect-k">
-                  {t('dashboard.loopQueueNext')}
+                  {t('dashboard.loopQueueOrder')}
                   <span className="phone__loop-queue-count">
                     {t('dashboard.loopQueueCount', { n: stash.length })}
                   </span>
                 </div>
-                <pre className="phone__loop-inspect-pre">{stash[0].text}</pre>
+                <ol className="phone__loop-queue-list">
+                  {stash.map((s) => (
+                    <li key={s.id} className="phone__loop-queue-item">{s.text}</li>
+                  ))}
+                </ol>
                 <label className="phone__loop-verifytoggle">
                   <input
                     type="checkbox"
@@ -508,6 +515,26 @@ export default function DockLoopControl({ repoId, sessionId, tabId, stash = [], 
             <>
               <div className="phone__loop-inspect-k">{t('dashboard.loopQueueLastStepLabel')}</div>
               <pre className="phone__loop-inspect-pre">{mine.lastStepText}</pre>
+            </>
+          )}
+          {/* Sent-history (openspec: queue-loop-visibility, D3): the step texts
+              that actually landed this arm, oldest first — labeled honestly as
+              the last N when the bound has dropped older ones. */}
+          {mine?.queueSentTexts?.length > 0 && (
+            <>
+              <div className="phone__loop-inspect-k">
+                {t('dashboard.loopQueueSentLabel')}
+                {(mine.queueSent ?? 0) > mine.queueSentTexts.length && (
+                  <span className="phone__loop-queue-count">
+                    {t('dashboard.loopQueueSentPartial', { n: mine.queueSentTexts.length })}
+                  </span>
+                )}
+              </div>
+              <ol className="phone__loop-sent-list">
+                {mine.queueSentTexts.map((s, i) => (
+                  <li key={i} className="phone__loop-sent-row">{s}</li>
+                ))}
+              </ol>
             </>
           )}
         </div>

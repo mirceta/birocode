@@ -32,7 +32,7 @@ import PromptExpandModal from './PromptExpandModal';
 const FOCUS_EVENT_COOLDOWN_MS = 10_000;
 const lastFocusEmitAt = new Map();
 
-export default function ChatInput({ value, onChange, onSend, onStop, streaming, attachment, onAttach, embedded = false, stashTabId, repoId }) {
+export default function ChatInput({ value, onChange, onSend, onStop, streaming, attachment, onAttach, embedded = false, stashTabId, repoId, queueLoop }) {
   const { t } = useT();
   const { tabs, activeTabId, activeTab, addStash, removeStash, reorderStash, globalStash } = useDock();
   // The queue attaches to a specific agent tab. Normally that's the ACTIVE tab,
@@ -75,6 +75,17 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
   const textareaRef = useRef(null);
   const fileRef = useRef(null);
   const sendDisabled = streaming;
+
+  // Queue-armed strip (openspec: queue-loop-visibility, D2): while an armed 🗒️
+  // queue loop is bound to THIS strip's tab, the stash IS the live queue — so
+  // disclose it: chips numbered in unload order, the head badged in-flight
+  // (work/verify phase — the engine is executing or verifying a step) or
+  // next-up (idle between unloads). Derived from the ungated loop projection
+  // only; unarmed tabs and the global stash render as plain chips.
+  const queueArmed =
+    !!queueLoop?.active && !!queueTabId && queueLoop.queueTabId === queueTabId;
+  const headBusy =
+    queueArmed && (queueLoop.phase === 'work' || queueLoop.phase === 'verify');
 
   // Auto-grow to fit the content. Runs on every value change -- including when
   // the draft is restored after navigating back, or cleared after sending.
@@ -209,15 +220,30 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
         />
       )}
       {stash.length > 0 && (
-        <div className="chat-stash" aria-label={t('chat.stashListAria')}>
-          {stash.map((item) => (
+        <div
+          className={`chat-stash${queueArmed ? ' chat-stash--queue' : ''}`}
+          aria-label={queueArmed ? t('chat.queueStripAria') : t('chat.stashListAria')}
+        >
+          {stash.map((item, idx) => (
             <button
               key={item.id}
               type="button"
-              className="chat-stash__chip"
+              className={`chat-stash__chip${queueArmed && idx === 0 ? ' chat-stash__chip--head' : ''}`}
               title={item.text}
               onClick={() => handleChipTap(item)}
             >
+              {queueArmed && (
+                <span className="chat-stash__num" aria-hidden="true">
+                  {idx + 1}
+                </span>
+              )}
+              {queueArmed && idx === 0 && (
+                <span
+                  className={`chat-stash__head-badge${headBusy ? ' chat-stash__head-badge--busy' : ''}`}
+                >
+                  {headBusy ? t('chat.queueInFlight') : t('chat.queueNextUp')}
+                </span>
+              )}
               {canReorder && (
                 <span
                   className={`chat-stash__move${stash.indexOf(item) === 0 ? ' chat-stash__move--disabled' : ''}`}

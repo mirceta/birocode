@@ -86,7 +86,20 @@ export function DockProvider({ children }) {
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
 
+  // Stash mutations in flight (openspec: queue-loop-visibility, D1). While an
+  // optimistic add/remove/reorder's request is outstanding, a reconcile would
+  // clobber the optimistic state with the server's not-yet-updated truth — so
+  // refresh() skips while this is non-zero and the next tick converges.
+  const pendingStashMutations = useRef(0);
+  const trackStash = useCallback((promise) => {
+    pendingStashMutations.current += 1;
+    return promise.finally(() => {
+      pendingStashMutations.current -= 1;
+    });
+  }, []);
+
   const refresh = useCallback(async () => {
+    if (pendingStashMutations.current > 0) return;
     let list;
     try {
       list = await apiGet('/dock');
@@ -145,6 +158,19 @@ export function DockProvider({ children }) {
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [refresh]);
+
+  // Visible-page reconcile (openspec: queue-loop-visibility, D1): the ENGINE
+  // consumes stash items on land (queue loops), and mount/visibility alone
+  // never shows that on a page the operator keeps watching — the strip would
+  // literally never shrink. Same idiom as ChatContext's run poll; skipped
+  // while hidden, and refresh() itself skips while a stash mutation is in
+  // flight.
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (!document.hidden) refresh();
+    }, 10000);
+    return () => clearInterval(id);
   }, [refresh]);
 
   // Persist which tab this browser tab is viewing (tab-local by design — see
@@ -210,7 +236,7 @@ export function DockProvider({ children }) {
     const item = { id: genId(), text, createdAt: Date.now() };
     if (!tabId) {
       setGlobalStash((prev) => [...prev, item]);
-      apiPost('/dock/stash', item).catch(() => {
+      trackStash(apiPost('/dock/stash', item)).catch(() => {
         setGlobalStash((prev) => prev.filter((s) => s.id !== item.id));
       });
       return;
@@ -218,19 +244,19 @@ export function DockProvider({ children }) {
     setTabs((prev) =>
       prev.map((t) => (t.id === tabId ? { ...t, stash: [...(t.stash || []), item] } : t)),
     );
-    apiPost(`/dock/${tabId}/stash`, item).catch(() => {
+    trackStash(apiPost(`/dock/${tabId}/stash`, item)).catch(() => {
       setTabs((prev) =>
         prev.map((t) =>
           t.id === tabId ? { ...t, stash: (t.stash || []).filter((s) => s.id !== item.id) } : t,
         ),
       );
     });
-  }, []);
+  }, [trackStash]);
 
   const removeStash = useCallback((tabId, stashId) => {
     if (!tabId) {
       setGlobalStash((prev) => prev.filter((s) => s.id !== stashId));
-      apiDelete(`/dock/stash/${stashId}`).catch(() => {
+      trackStash(apiDelete(`/dock/stash/${stashId}`)).catch(() => {
         /* already gone on the backend; the next refresh re-syncs */
       });
       return;
@@ -240,10 +266,10 @@ export function DockProvider({ children }) {
         t.id === tabId ? { ...t, stash: (t.stash || []).filter((s) => s.id !== stashId) } : t,
       ),
     );
-    apiDelete(`/dock/${tabId}/stash/${stashId}`).catch(() => {
+    trackStash(apiDelete(`/dock/${tabId}/stash/${stashId}`)).catch(() => {
       /* already gone on the backend; the next refresh re-syncs */
     });
-  }, []);
+  }, [trackStash]);
 
   // Reorder a TAB stash to the given full id order (openspec queue-based-loop).
   // Optimistic local reorder + last-write-wins POST; ids consumed on the backend
@@ -263,10 +289,10 @@ export function DockProvider({ children }) {
         return { ...t, stash: next };
       }),
     );
-    apiPost(`/dock/${tabId}/stash/reorder`, { ids: orderedIds }).catch(() => {
+    trackStash(apiPost(`/dock/${tabId}/stash/reorder`, { ids: orderedIds })).catch(() => {
       /* transient; the next refresh re-syncs */
     });
-  }, []);
+  }, [trackStash]);
 
   const updateTab = useCallback((id, patch) => {
     setTabs((prev) =>

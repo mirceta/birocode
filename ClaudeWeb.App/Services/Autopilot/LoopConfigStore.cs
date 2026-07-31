@@ -53,6 +53,9 @@ public class LoopConfigStore
     /// deliberately NOT <see cref="VerifiedToken"/>, so a queue driving goal-contract
     /// agents can't cross-trigger. Only meaningful in a verification turn's reply.</summary>
     public const string StepVerifiedToken = "STEP_VERIFIED";
+    /// <summary>Bound on the queue kind's sent-history (openspec: queue-loop-visibility,
+    /// D3): oldest entries drop beyond this; the full trail stays in the audit log.</summary>
+    public const int QueueSentTextsCap = 20;
 
     // The goal-loop composition templates (openspec: unify-loop-types, design D2).
     // {0} is the user's goal text. Composed ONCE at arm time and stored on the loop;
@@ -170,6 +173,13 @@ public class LoopConfigStore
         public bool? VerifyEnabled { get; set; }
         public string? LastStepText { get; set; }
         public int? QueueSent { get; set; }
+        // Queue kind, sent-history (openspec: queue-loop-visibility, D3): the texts of
+        // the steps that actually landed this arm, newest last, bounded at
+        // QueueSentTextsCap (drop-oldest). Prompt-bearing — disclosed only via the
+        // gated detail/debug surfaces, never the ungated projection. Additive: null on
+        // old entries loads as empty; a new arm creates a fresh Entry, so the history
+        // resets structurally.
+        public List<string>? QueueSentTexts { get; set; }
     }
 
     private sealed class Data
@@ -188,7 +198,8 @@ public class LoopConfigStore
         string? StopReason, string? StopDetail, string? RecipeId, string? RecipeName,
         string? Goal, string? VerifyPrompt, string? Phase, string? PendingPrompt, long ArmedAt,
         string? SessionId,
-        string? QueueTabId, bool VerifyEnabled, string? LastStepText, int QueueSent);
+        string? QueueTabId, bool VerifyEnabled, string? LastStepText, int QueueSent,
+        IReadOnlyList<string> QueueSentTexts);
 
     public IReadOnlyList<LoopState> All()
     {
@@ -317,6 +328,8 @@ public class LoopConfigStore
             if (!_data.Loops.TryGetValue(repoId, out var e)) return null;
             e.LastStepText = stepText;
             e.QueueSent = (e.QueueSent ?? 0) + 1;
+            (e.QueueSentTexts ??= new()).Add(stepText);
+            while (e.QueueSentTexts.Count > QueueSentTextsCap) e.QueueSentTexts.RemoveAt(0);
             e.Phase = e.VerifyEnabled != false ? PhaseVerifyOwed : PhaseWork;
             Save();
             return ToState(repoId, e);
@@ -494,7 +507,8 @@ public class LoopConfigStore
             e.StopReason, e.StopDetail, e.RecipeId, e.RecipeName,
             e.Goal, e.VerifyPrompt, e.Phase, e.PendingPrompt, e.ArmedAt,
             e.SessionId,
-            e.QueueTabId, e.VerifyEnabled != false, e.LastStepText, e.QueueSent ?? 0);
+            e.QueueTabId, e.VerifyEnabled != false, e.LastStepText, e.QueueSent ?? 0,
+            e.QueueSentTexts?.ToList() ?? (IReadOnlyList<string>)Array.Empty<string>());
 
     private void Load()
     {

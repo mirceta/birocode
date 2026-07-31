@@ -420,6 +420,16 @@
   white-space: pre-wrap; word-break: break-word;
 }
 .lp-reason--human { color: #b45309; background: rgba(245, 158, 11, 0.12); font-weight: 600; }
+/* Queue visibility (openspec queue-loop-visibility): the numbered unload-order
+   preview in the arm form and the "sent ✓" history rows on queue cards. */
+.lp-queue-preview, .lp-queue-sent { display: flex; flex-direction: column; gap: 4px; flex: 1 1 100%; }
+.lp-queue-list, .lp-queue-sentlist {
+  margin: 0; padding: 6px 10px 6px 28px;
+  background: var(--color-bg, #f0ece4); border-radius: 8px;
+  font-size: 12.5px; max-height: 180px; overflow: auto;
+}
+.lp-queue-item, .lp-queue-sentrow { white-space: pre-wrap; word-break: break-word; margin: 2px 0; }
+.lp-queue-sentrow::before { content: '✓ '; color: var(--color-ok, #4caf50); }
 .lp-recipe__prompt {
   display: block; background: var(--color-bg, #f0ece4); padding: 8px 10px; border-radius: 8px;
   font-size: 12.5px; white-space: pre-wrap; word-break: break-word; margin: 8px 0;

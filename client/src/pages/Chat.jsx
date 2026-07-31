@@ -11,7 +11,9 @@ import ErrorBanner from '../components/shared/ErrorBanner';
 import ClaudeViewToggle from '../components/shared/ClaudeViewToggle';
 import ModelSelector from '../components/chat/ModelSelector';
 import { useChat } from '../context/ChatContext';
+import { useDock } from '../context/DockContext';
 import { useFeature } from '../context/UiModeContext';
+import useQueueLoopStatus from '../hooks/useQueueLoopStatus';
 import { useT } from '../i18n/LanguageContext';
 import '../components/chat/chat.css';
 
@@ -35,6 +37,11 @@ export default function Chat({
   chat: injected,
   embedded = false,
   stashTabId,
+  // Queue-armed strip marking (openspec: queue-loop-visibility, D2): the dock
+  // chat receives its agent's loop projection row from the Dashboard's
+  // existing poll (Dashboard → PinnedAgent → here); the main chat page polls
+  // its own via useQueueLoopStatus below.
+  queueLoop: queueLoopProp,
   // Per-dock "maximize chat" toggle (openspec add-maximize-chat-dock): owned by
   // PinnedAgent (which collapses the .phone__* chrome). Only passed in the
   // embedded dock chat context, so the button below renders only there.
@@ -77,6 +84,18 @@ export default function Chat({
     liveToolCalls,
     activeRepoId,
   } = injected || active;
+
+  // Main-page counterpart of the dock's queueLoop prop: poll the ungated loop
+  // projection only while an agent tab is active with a non-empty stash — the
+  // exact condition under which the strip could mark anything.
+  const { activeTabId: dockActiveTabId, activeTab: dockActiveTab } = useDock();
+  const canDockLoops = useFeature('dockLoopControls');
+  const polledQueueLoop = useQueueLoopStatus({
+    enabled:
+      !embedded && canDockLoops && !!dockActiveTabId && (dockActiveTab?.stash?.length || 0) > 0,
+    repoId: dockActiveTab?.repoId,
+  });
+  const queueLoop = embedded ? queueLoopProp : polledQueueLoop;
 
   const showContextMeter = useFeature('contextMeter');
   const showDualChat = useFeature('dualChat');
@@ -372,6 +391,7 @@ export default function Chat({
         embedded={embedded}
         stashTabId={stashTabId}
         repoId={activeRepoId}
+        queueLoop={queueLoop}
       />
 
       <SessionPicker
