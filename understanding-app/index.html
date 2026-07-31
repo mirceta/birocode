@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Queue-based loop — the stash IS the queue, verified by default</title>
+<title>Loop evals — golden human runs as ground truth for autopilot loops</title>
 <style>
   :root{
     --bg:#0d1117; --panel:#161b22; --panel2:#1c232c; --line:#30363d;
@@ -18,271 +18,283 @@
   code{font-family:var(--mono);font-size:.92em;background:#0b0f14;border:1px solid var(--line);border-radius:5px;padding:.5px 5px}
   .wrap{max-width:1120px;margin:0 auto;padding:28px 20px 90px}
   header h1{font-size:24px;margin:0 0 8px;letter-spacing:-.01em}
-  header p.sub{color:var(--muted);margin:0;font-size:14.5px;max-width:840px}
+  header p.sub{color:var(--muted);margin:0;font-size:14.5px;max-width:860px}
   .tag{display:inline-block;font-family:var(--mono);font-size:11px;padding:2px 8px;border:1px solid var(--line);
     border-radius:999px;color:var(--muted);margin-right:6px;background:var(--panel)}
-
   section{margin-top:40px}
   h2{font-size:17px;margin:0 0 6px;display:flex;align-items:center;gap:10px}
   h2 .n{font-family:var(--mono);font-size:13px;color:var(--bg);background:var(--accent);
     width:24px;height:24px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-weight:700}
-  .lead{color:var(--muted);font-size:13.5px;margin:0 0 16px;max-width:860px}
+  .lead{color:var(--muted);font-size:13.5px;margin:0 0 16px;max-width:880px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
 
-  /* property chips */
-  .chips{display:flex;flex-wrap:wrap;gap:9px}
-  .chip{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:13px;
-    display:flex;align-items:center;gap:8px}
-  .chip .tick{color:var(--green);font-weight:700}
+  /* pipeline */
+  .pipe{display:flex;gap:8px;flex-wrap:wrap;align-items:stretch}
+  .stage{flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;
+    padding:10px 12px;cursor:pointer;transition:border-color .15s}
+  .stage:hover{border-color:var(--accent)}
+  .stage.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+  .stage b{display:block;font-size:13px}
+  .stage span{font-size:11.5px;color:var(--muted)}
+  .stage .who{font-family:var(--mono);font-size:10px;color:var(--dim);display:block;margin-top:6px}
+  .arrow{align-self:center;color:var(--dim);font-size:16px}
+  #pipeDetail{margin-top:12px;padding:12px;background:#0b0f14;border:1px solid var(--line);border-radius:8px;
+    font-size:13px;color:var(--ink);min-height:64px}
+  #pipeDetail b{color:var(--accent)}
 
-  /* ============ SIM ============ */
-  .simbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:14px}
-  .toggle{display:inline-flex;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px}
-  .toggle button{border:none;background:transparent;color:var(--muted);font-family:var(--sans);font-size:13px;
-    font-weight:600;padding:8px 14px;border-radius:7px;cursor:pointer;transition:.15s;display:flex;align-items:center;gap:7px}
-  .toggle button.on{color:var(--ink)}
-  .toggle button.on.live{background:rgba(63,185,80,.16);box-shadow:inset 0 0 0 1px rgba(63,185,80,.4)}
-  .toggle button.on.snap{background:rgba(210,153,34,.16);box-shadow:inset 0 0 0 1px rgba(210,153,34,.4)}
-  .toggle .swatch{width:9px;height:9px;border-radius:50%}
-  .sw-live{background:var(--green)} .sw-snap{background:var(--amber)}
+  /* bundle refs diagram + turn mapper */
+  .refrow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:var(--mono);font-size:12px;margin:14px 0}
+  .commit{width:34px;height:34px;border-radius:50%;border:2px solid var(--dim);display:inline-flex;
+    align-items:center;justify-content:center;background:var(--panel2);font-size:11px}
+  .commit.gold{border-color:var(--amber)}
+  .commit.lit{box-shadow:0 0 0 3px rgba(210,153,34,.35)}
+  .refname{font-size:10.5px;color:var(--muted);text-align:center}
+  .edge{color:var(--dim)}
+  .tagref{color:var(--green)} .branchref{color:var(--amber)}
+  .turns{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+  .turn{display:flex;gap:10px;align-items:center;padding:7px 10px;border:1px solid var(--line);border-radius:7px;
+    background:var(--panel2);cursor:pointer;font-size:12.5px}
+  .turn:hover{border-color:var(--accent)}
+  .turn.sel{border-color:var(--amber);box-shadow:0 0 0 1px var(--amber)}
+  .turn .role{font-family:var(--mono);font-size:10.5px;color:var(--dim);width:74px;flex:none}
+  .turn .lbl{font-family:var(--mono);font-size:10px;color:var(--purple);width:96px;flex:none}
+  .turn .st{margin-left:auto;font-family:var(--mono);font-size:10.5px;flex:none}
+  .turn .st.own{color:var(--amber)} .turn .st.carry{color:var(--dim);font-style:italic}
+  .mapnote{margin-top:10px;font-size:12.5px;color:var(--muted)}
 
-  .ctrls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-left:auto}
-  button.btn{font-family:var(--sans);font-size:13px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);
-    border-radius:8px;padding:8px 14px;cursor:pointer;transition:border-color .15s,background .15s}
-  button.btn:hover:not(:disabled){border-color:var(--accent)}
-  button.btn.primary{background:var(--accent);color:#08111f;border-color:var(--accent);font-weight:600}
-  button.btn:disabled{opacity:.4;cursor:default}
-  .steplbl{font-family:var(--mono);font-size:12px;color:var(--muted)}
+  /* curation steps */
+  ol.cur{margin:0;padding-left:20px;font-size:13.5px}
+  ol.cur li{margin-bottom:8px}
+  ol.cur b{color:var(--ink)}
+  .rule{border-left:3px solid var(--amber);padding:6px 12px;margin-top:12px;font-size:12.5px;color:var(--muted);background:var(--panel2);border-radius:0 7px 7px 0}
+  .rule b{color:var(--amber)}
+  .rule.green{border-color:var(--green)} .rule.green b{color:var(--green)}
 
-  .stage{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
-  .lanes{display:grid;grid-template-columns:1fr 1.15fr;gap:0}
-  @media(max-width:800px){.lanes{grid-template-columns:1fr;gap:14px}}
-  .lane{padding:0 16px;position:relative}
-  .lane + .lane{border-left:1px dashed var(--line)}
-  @media(max-width:800px){.lane + .lane{border-left:none;border-top:1px dashed var(--line);padding-top:14px}}
-  .lane h4{margin:0 0 4px;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);font-weight:700;
-    display:flex;align-items:center;gap:7px;min-height:20px}
-  .lane .subh{font-size:11.5px;color:var(--dim);margin:0 0 12px;font-family:var(--mono);min-height:16px}
-  .lane .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
-  .dot.stash{background:var(--accent)} .dot.queue{background:var(--pink)} .dot.sent{background:var(--green)}
-  .lane.merged::after{content:'one live object — drains as it lands';position:absolute;top:-2px;right:16px;
-    font-size:10.5px;font-family:var(--mono);color:var(--green)}
+  /* report tabs */
+  .tabs{display:flex;gap:8px;margin-bottom:10px}
+  .tabs button{background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:7px;
+    padding:6px 14px;cursor:pointer;font-size:12.5px;font-family:var(--mono)}
+  .tabs button.on{border-color:var(--accent);color:var(--accent)}
+  pre.report{margin:0;background:#0b0f14;border:1px solid var(--line);border-radius:8px;padding:14px;
+    font-family:var(--mono);font-size:12px;line-height:1.55;overflow-x:auto;white-space:pre}
+  pre.report .ok{color:var(--green)} pre.report .bad{color:var(--red)} pre.report .dim{color:var(--dim)}
+  .verdictline{margin-top:10px;font-size:13px;color:var(--muted)}
+  .verdictline b.g{color:var(--green)} .verdictline b.r{color:var(--red)}
 
-  .card{background:#0b0f14;border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin-bottom:8px;
-    display:flex;gap:9px;align-items:flex-start;transition:.25s;position:relative}
-  .card .cid{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--dim);margin-top:1px;min-width:20px}
-  .card .clabel{font-size:12.5px;color:var(--ink);line-height:1.35;padding-right:78px}
-  .card.q{border-color:rgba(247,120,186,.35)}
-  .card.q.head::before{content:'next';position:absolute;right:9px;top:9px;font-size:10px;font-family:var(--mono);color:var(--pink)}
-  .card.sent{border-color:rgba(63,185,80,.4);background:rgba(63,185,80,.06)}
-  .card.sent::after{content:'▶ sent';position:absolute;right:9px;top:9px;font-size:10px;font-family:var(--mono);color:var(--green)}
-  .card.vok{border-color:rgba(63,185,80,.35);border-style:dashed}
-  .card.vok::after{content:'✓ STEP_VERIFIED';position:absolute;right:9px;top:9px;font-size:10px;font-family:var(--mono);color:var(--green)}
-  .card.vok .clabel{color:var(--muted)}
-  .card.vfail{border-color:var(--red);background:rgba(248,81,73,.08)}
-  .card.vfail::after{content:'✗ not verified';position:absolute;right:9px;top:9px;font-size:10px;font-family:var(--mono);color:var(--red)}
-  .card.areply{border-color:rgba(210,153,34,.45)}
-  .card.areply::after{content:'🤖 reply';position:absolute;right:9px;top:9px;font-size:10px;font-family:var(--mono);color:var(--amber)}
-  .card.buried{opacity:.55;filter:saturate(.6)}
-  .card.buried::after{content:'⚠ buried';color:var(--red)}
-  .card.human{border-color:rgba(188,140,255,.5)}
-  .card.human::after{content:'👤 you';position:absolute;right:9px;top:9px;font-size:10px;font-family:var(--mono);color:var(--purple)}
-  .card.fresh{animation:pop .35s}
-  .card.new-flag{border-color:var(--purple);box-shadow:0 0 0 1px rgba(188,140,255,.3)}
-  .card.new-flag .cid{color:var(--purple)}
-  @keyframes pop{0%{transform:scale(.9) translateY(-6px);opacity:0}100%{transform:scale(1);opacity:1}}
-  .empty{color:var(--dim);font-size:12px;font-style:italic;padding:8px 2px}
-
-  .agentbox{margin-top:12px;display:flex;align-items:center;gap:11px;padding:11px 14px;background:var(--panel2);
-    border:1px solid var(--line);border-radius:10px;flex-wrap:wrap}
-  .agentbox .av{width:34px;height:34px;border-radius:9px;background:#0b0f14;border:1px solid var(--line);
-    display:flex;align-items:center;justify-content:center;font-size:17px}
-  .agentbox .st{font-size:13px}
-  .agentbox .st b{color:var(--ink)}
-  .agentbox .pulse{width:8px;height:8px;border-radius:50%;background:var(--amber);box-shadow:0 0 0 0 rgba(210,153,34,.6);animation:pl 1.3s infinite}
-  .agentbox.idle .pulse{background:var(--green);animation:none}
-  @keyframes pl{0%{box-shadow:0 0 0 0 rgba(210,153,34,.5)}70%{box-shadow:0 0 0 7px rgba(210,153,34,0)}100%{box-shadow:0 0 0 0 rgba(210,153,34,0)}}
-  .loopchip{margin-left:auto;font-family:var(--mono);font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;border:1px solid var(--line);color:var(--dim)}
-  .loopchip.armed{color:var(--green);border-color:rgba(63,185,80,.4);background:rgba(63,185,80,.08)}
-  .loopchip.stopped{color:var(--red);border-color:rgba(248,81,73,.4);background:rgba(248,81,73,.08)}
-  .loopchip.done{color:var(--accent);border-color:rgba(88,166,255,.4);background:rgba(88,166,255,.08)}
-
-  .narrate{margin-top:14px;padding:12px 14px;border-radius:10px;font-size:13.5px;border:1px solid var(--line);background:#0b0f14;min-height:44px;display:flex;gap:10px;align-items:flex-start}
-  .narrate .marker{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;white-space:nowrap;margin-top:1px}
-  .narrate.diverge{border-color:var(--red);background:rgba(248,81,73,.07)}
-  .narrate.good{border-color:rgba(63,185,80,.45);background:rgba(63,185,80,.05)}
-  .marker.def{background:var(--panel2);color:var(--muted)}
-  .marker.div{background:rgba(248,81,73,.15);color:var(--red)}
-  .marker.win{background:rgba(63,185,80,.15);color:var(--green)}
-  .marker.flag{background:rgba(188,140,255,.15);color:var(--purple)}
-
-  .scorebar{display:flex;gap:22px;margin-top:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
-  .scorebar b{color:var(--ink)}
-  .scorebar .big{font-family:var(--mono);font-size:15px}
-
-  /* ============ LEDGER ============ */
-  .ledger{display:flex;flex-direction:column;gap:10px}
-  .drow{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;border-left:3px solid var(--accent)}
-  .drow .top{display:grid;grid-template-columns:52px 1fr;align-items:center;gap:12px;padding:13px 16px;cursor:pointer}
-  .drow .did{font-family:var(--mono);font-weight:700;font-size:13px;color:var(--dim)}
-  .drow .dtitle{font-size:14px;font-weight:600}
-  .drow .dtitle .k{font-family:var(--mono);font-size:11px;color:var(--dim);font-weight:400;display:block;margin-top:2px}
-  .drow .detail{border-top:1px solid var(--line);display:none;padding:13px 16px}
-  .drow.open .detail{display:block}
-  .drow .detail p{margin:0;font-size:13px;color:var(--muted)}
-  .drow .detail p b{color:var(--ink)}
-
-  /* ============ two/three-panel generic ============ */
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  @media(max-width:720px){.grid2{grid-template-columns:1fr}}
-  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
-  @media(max-width:860px){.grid3{grid-template-columns:1fr}}
-  .card2{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
-  .card2 h3{margin:0 0 10px;font-size:14px;display:flex;align-items:center;gap:8px}
-  .card2 p{margin:0;font-size:13px;color:var(--muted)}
-  .card2 p b{color:var(--ink)}
-  .card2 .where{margin-top:10px;font-family:var(--mono);font-size:11px;color:var(--dim)}
-
-  /* honesty invariant flow */
-  .honest{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-family:var(--mono);font-size:12px;margin-top:14px}
-  .hbox{background:#0b0f14;border:1px solid var(--line);border-radius:8px;padding:9px 12px;color:var(--ink)}
-  .hbox.stashy{border-color:rgba(88,166,255,.4)}
-  .hbox.chat{border-color:rgba(63,185,80,.4)}
-  .harrow{color:var(--green);font-size:18px}
-  .heq{color:var(--amber);font-weight:700}
-
-  .ladder{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
-  .ladder li{display:flex;gap:11px;align-items:flex-start;font-size:13px}
-  .ladder .rung{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--red);border:1px solid rgba(248,81,73,.35);
-    background:rgba(248,81,73,.08);border-radius:6px;padding:2px 8px;white-space:nowrap;margin-top:1px}
-  .ladder .rt{color:var(--muted)} .ladder .rt b{color:var(--ink)}
-
-  .foot{margin-top:48px;color:var(--dim);font-size:12px;text-align:center;line-height:1.7}
+  table{border-collapse:collapse;width:100%;font-size:12.5px;margin-top:8px}
+  th,td{border:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);font-size:11.5px;color:var(--muted)}
+  td code{white-space:nowrap}
+  .foot{margin-top:46px;color:var(--dim);font-size:12px;border-top:1px solid var(--line);padding-top:14px}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <div><span class="tag">queue-based-loop</span><span class="tag">built 2026-07-31</span></div>
-    <h1>The stash IS the queue — verified by default</h1>
-    <p class="sub">The third promised autopilot mode is a <b>wire between two things that already exist</b>: the per-tab
-    <b>prompt stash</b> (the ideas you flag while the agent is busy) and the <b>loop engine</b>. Arming a 🗒️ queue loop means:
-    <i>automatically unload my stash into the agent whenever it's free</i> — and, by default, <b>verify each step actually
-    got solved</b> before unloading the next.</p>
-  </header>
+<header>
+  <span class="tag">openspec: loop-evals</span><span class="tag">tests/loop-evals/</span>
+  <span class="tag">tab: Loop Evals (Advanced)</span>
+  <h1>Loop evals — golden human runs as ground truth for autopilot loops</h1>
+  <p class="sub">Is a change to a loop recipe better or worse at driving a long task? Instead of a static
+  expected-answer file, the ground truth is a <b>recorded human-babysat run</b>: start state, plan, the finished
+  conversation, and the repo state after every turn — packaged as a git history. The runner replays the
+  <b>production loop engine</b> from the same start and the scorer compares outcomes and trajectories.</p>
+</header>
 
-  <!-- ============ PROPERTIES ============ -->
-  <section>
-    <h2><span class="n">≡</span> The design in six properties</h2>
-    <p class="lead">Decided in <code>openspec/changes/queue-based-loop</code> — the live-stash model merged with the loop
-    engine's existing machinery. Implemented: <code>QueueLoop.cs</code> + engine consume-on-land, the dock control's
-    Queue type, and the console's Loops → Queue tab.</p>
-    <div class="chips" id="chips"></div>
-  </section>
-
-  <!-- ============ SIM ============ -->
-  <section>
-    <h2><span class="n">▸</span> One run, stepped through</h2>
-    <p class="lead">The same queue, both postures. In <b>verified</b> mode (the default) the agent's mid-queue question
-    <b>stops the loop</b>; in <b>blind</b> mode (the opt-out) watch what happens to that same question. This is the
-    amendment: <i>delivered ≠ solved</i>.</p>
-
-    <div class="simbar">
-      <div class="toggle" id="modeToggle">
-        <button data-mode="verify" class="on live"><span class="swatch sw-live"></span>Verified — the default</button>
-        <button data-mode="blind" class="snap"><span class="swatch sw-snap"></span>Blind unload — the opt-out</button>
-      </div>
-      <div class="ctrls">
-        <button class="btn" id="back">‹ Back</button>
-        <button class="btn primary" id="step">Step ›</button>
-        <button class="btn" id="play">▶ Play</button>
-        <button class="btn" id="reset">Reset</button>
-        <span class="steplbl" id="steplbl"></span>
-      </div>
-    </div>
-
-    <div class="stage">
-      <div class="lanes" id="lanes"></div>
-      <div class="agentbox idle" id="agent">
-        <div class="av">🤖</div>
-        <span class="pulse"></span>
-        <div class="st" id="agentst"><b>Agent idle</b></div>
-        <span class="loopchip" id="loopchip">not armed</span>
-      </div>
-    </div>
-
-    <div class="narrate" id="narrate"></div>
-    <div class="scorebar" id="score"></div>
-  </section>
-
-  <!-- ============ SAFETY ============ -->
-  <section>
-    <h2><span class="n">🛡</span> Why this stays honest and safe</h2>
-    <div class="grid2">
-      <div class="card2">
-        <h3>🔎 Honesty without a frozen copy</h3>
-        <p>Every auto-sent byte is a <b>stash item you can already see</b> above the composer; verification prompts are a
-        <b>stored template</b> (gated-inspectable) + that visible step text, composed deterministically at send time. The
-        audit trail still records every actual send verbatim.</p>
-        <div class="honest">
-          <span class="hbox stashy">visible stash item</span>
-          <span class="heq">≡</span>
-          <span class="harrow">→</span>
-          <span class="hbox chat">auto-sent chat message</span>
-        </div>
-      </div>
-      <div class="card2">
-        <h3>🪜 Four ways it stops before making things worse</h3>
-        <p>As a driven <code>QueueLoop</code> kind it inherits the ladder, plus the new verification gate — and because
-        unsent items never leave the stash, <b>every stop is lossless</b>:</p>
-        <ul class="ladder">
-          <li><span class="rung">errored run</span><span class="rt">the last turn failed → <b>stop</b>, don't pile on</span></li>
-          <li><span class="rung">NEEDS_HUMAN:</span><span class="rt">the agent used the sentinel → <b>escalate</b></span></li>
-          <li><span class="rung">deny-list</span><span class="rt">the load-bearing fence → <b>never auto-send past it</b></span></li>
-          <li><span class="rung">step-unverified</span><span class="rt">no <code>STEP_VERIFIED</code> → <b>escalate</b> — catches plain questions the ladder can't, because ordinary agents don't know any sentinel</span></li>
-        </ul>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ SURFACES ============ -->
-  <section>
-    <h2><span class="n">⌘</span> Three surfaces, one list</h2>
-    <p class="lead">The stash strip stays the queue's only editor — the loop surfaces add settings and arming, never a
-    duplicate list.</p>
-    <div class="grid3">
-      <div class="card2">
-        <h3>📥 Stash strip <span class="tag" style="margin:0">the editor</span></h3>
-        <p>Where you already flag prompts, above the composer. Gains <b>reordering</b> (new, works armed or not) via
-        <code>POST …/stash/reorder</code>. Add / remove / reorder while the queue runs — it simply changes what unloads next.</p>
-        <div class="where">ChatInput / PinnedAgent · DockRegistry.Stash</div>
-      </div>
-      <div class="card2">
-        <h3>🗒️ Dock loop control <span class="tag" style="margin:0">quick arm</span></h3>
-        <p>The unified type picker gains Queue beside 💡 📋 🎯: mode (drive / suggest), cap, verification toggle
-        (<b>on by default</b>), a next-up preview and remaining count. Arming requires a non-empty stash.</p>
-        <div class="where">DockLoopControl · badge: remaining / sent</div>
-      </div>
-      <div class="card2">
-        <h3>🎛 Console → Loops → Queue tab <span class="tag" style="margin:0">settings home</span></h3>
-        <p>The new tab in the autopilot console's Loops section: per-agent queue status (remaining · sent · phase), the same
-        settings, arm / disarm. Ungated status shows <b>counts only</b>; texts follow the gated-detail rule.</p>
-        <div class="where">AutopilotConsole · gated disclosure</div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ LEDGER ============ -->
-  <section>
-    <h2><span class="n">⚖</span> The eight decisions</h2>
-    <p class="lead">The final ledger — the merged model's design decisions, D1–D8. Click a row for the reasoning.</p>
-    <div class="ledger" id="ledger"></div>
-  </section>
-
-  <div class="foot">
-    Rolling-latest Understanding app · overwrites <code>understanding-app/index.html</code> · served no-store by the harness<br/>
-    Companion to <code>openspec/changes/queue-based-loop</code> (proposal · design · delta specs · tasks).
+<section>
+  <h2><span class="n">1</span>The pipeline — click a stage</h2>
+  <p class="lead">Five stages, two of them human-facing (babysit, curate) and three mechanical (validate, run, score).</p>
+  <div class="panel">
+    <div class="pipe" id="pipe"></div>
+    <div id="pipeDetail"></div>
   </div>
+</section>
+
+<section>
+  <h2><span class="n">2</span>The bundle — a git history with three refs</h2>
+  <p class="lead">A golden example is a directory: <code>manifest.json</code> + <code>plan.md</code> +
+  <code>conversation.jsonl</code> + <code>repo.bundle</code>. The repo states live in the bundle as ordinary
+  commits. Click a transcript turn to see which repo state it maps to — turns without their own commit
+  <b>carry the previous state forward</b>.</p>
+  <div class="panel">
+    <div class="refrow" id="refrow"></div>
+    <div class="turns" id="turnlist"></div>
+    <div class="mapnote" id="mapnote">Click a turn. <span style="color:var(--amber)">Amber</span> = the turn's own commit;
+      <i>carry</i> = no commit was made after this turn, so its state is the previous one.</div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">3</span>Capture = retroactive curation (Loop Evals tab)</h2>
+  <p class="lead">You only know a babysat session was golden when it's over. So capture is after-the-fact curation
+  over two things that already exist: a <b>copy of the repo</b> (with its <code>.git</code>) and the session's
+  <b>stored conversation</b>. Operator-facing, Advanced mode, <code>api/loop-evals/*</code>.</p>
+  <div class="panel">
+    <ol class="cur">
+      <li><b>Select sources</b> — pick the repo (its stored conversations) and type the repo copy's path (its commit history, listed with files touched).</li>
+      <li><b>Set the span</b> — mark first/last relevant turn with <code>[</code> <code>]</code>; everything outside is excluded.</li>
+      <li><b>Associate turns ↔ commits</b> — select a turn (<code>⇄</code>), click a commit. One commit per turn; association is partial by nature.</li>
+      <li><b>Label each turn</b> — <code>instruct</code>, <code>course-correct</code>, <code>approve</code>, <code>verify-ask</code>, <code>unblock</code>, or free text. Labels ride in the transcript (reporting, not scoring).</li>
+      <li><b>Author &amp; export</b> — write <code>plan.md</code> and the acceptance checks, then export the bundle into the examples root.</li>
+    </ol>
+    <div class="rule"><b>Contiguity rule:</b> the associated commits must form an unbroken parent chain — the exported
+    <code>golden</code> branch is <i>exactly those commits in order</i>. Skipping a commit in between is rejected:
+    associate every commit in the stretch, or none of them.</div>
+    <div class="rule green"><b>Sources stay byte-identical:</b> refs are cut in a throwaway clone, never in the repo copy;
+    the stored conversation is only read. Export writes one place: the examples root
+    (default <code>%APPDATA%\ClaudeWeb\loop-evals-examples</code> — external, because a bundle carries full repo history;
+    committed examples under <code>tests/loop-evals/examples/</code> must be synthetic).</div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">4</span>The runner — the real engine, isolated</h2>
+  <p class="lead"><code>LoopEvals run --example &lt;id&gt;</code> hosts the production modules
+  (<code>AddChatModule / AddDockModule / AddPromptsModule / AddAutopilotModule</code>) in-process against a scratch
+  <code>CLAUDEWEB_DATADIR</code> — the same <code>AutopilotService</code> tick, recipes, and Claude CLI turns the
+  harness runs, so changing shipped loop logic changes eval results.</p>
+  <div class="panel">
+    <table>
+      <tr><th>Step</th><th>What happens</th><th>Why</th></tr>
+      <tr><td><code>clone + strip</code></td><td>Clone <code>repo.bundle</code> at <code>eval/start</code> onto a <code>run/&lt;n&gt;</code> branch; delete the <code>golden</code> branch, both <code>eval/*</code> tags, and the origin remote.</td><td>Anti-cheat: the driven agent can never peek at the answer.</td></tr>
+      <tr><td><code>primer turn</code></td><td>One minimal real CLI turn ("reply READY") mints a session id.</td><td>A driven loop resumes a pinned session; a fresh clone has none.</td></tr>
+      <tr><td><code>seed queue</code></td><td><code>plan.md</code> becomes the dock stash per the manifest's seed hints (whole plan, or pre-split items).</td><td>The stash IS the queue-loop's queue.</td></tr>
+      <tr><td><code>arm + drive</code></td><td><code>StartQueue(..., mode: drive, verify: on, maxIterations: cap)</code>; every completed agent turn is committed to <code>run/&lt;n&gt;</code>.</td><td>Run trajectory gets the same shape as the golden branch.</td></tr>
+      <tr><td><code>cut-off</code></td><td>Engine turn cap + runner wall-clock timeout.</td><td>A runaway loop ends, scored as not-done with the reason stated.</td></tr>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">5</span>The scorer — verdict, evidence, trajectory. Real output:</h2>
+  <p class="lead">Acceptance checks are the <b>verdict</b> (never byte-identity); the diff vs <code>eval/final</code> is
+  <b>evidence</b> so a hollow pass stays visible; the trajectory compares state-changing turns positionally against the
+  golden chain. These are the two real runs of <code>hello-notes</code> — same engine, one with the queue seeded from the
+  plan, one deliberately mis-seeded (<code>--broken</code>):</p>
+  <div class="panel">
+    <div class="tabs">
+      <button id="tabGood" class="on">good config</button>
+      <button id="tabBroken">--broken config</button>
+    </div>
+    <pre class="report" id="report"></pre>
+    <div class="verdictline" id="verdictline"></div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">6</span>Reliability — N runs, not one</h2>
+  <p class="lead">Loops are non-deterministic, so one pass proves little. <code>--runs N</code> repeats the same
+  (example, config) into separate scratch clones and aggregates: pass rate, worst case, turn spread. A loop that
+  passes 3/5 is a different animal from one that passes 5/5 — the report keeps them distinguishable.
+  Every run costs real agent tokens; the runner is on-demand, developer-facing, never a service.</p>
+</section>
+
+<div class="foot">
+  Rolling-latest Understanding app · overwrites <code>understanding-app/index.html</code> · served no-store by the harness<br/>
+  Sources: <code>openspec/changes/loop-evals/</code> (proposal · design D1–D5 · delta spec) ·
+  <code>tests/loop-evals/</code> (README, LoopEvals console: Bundle/EvalRunner/Scoring) ·
+  <code>ClaudeWeb.App/Services/LoopEvals/</code> + <code>LoopEvalsController</code> (curation API) ·
+  <code>client/src/pages/LoopEvals.jsx</code> (curation UI, Advanced mode).
 </div>
-<script src="./app.js"></script>
+</div>
+
+<script>
+// --- 1. pipeline ------------------------------------------------------------
+const STAGES = [
+  { k:'babysit', t:'Babysit a session', s:'human drives the agent turn by turn, committing per step', who:'human + harness',
+    d:'<b>Where ground truth is born.</b> A long task done the slow way: the human instructs, corrects, approves; the agent works; commits land per completed step. Nothing eval-specific happens here — you only know afterwards that this session was golden. Commit-per-turn discipline is what makes the later association sharp.' },
+  { k:'curate', t:'Curate & export', s:'Loop Evals tab: span, associate, label, author, export', who:'Operator UI',
+    d:'<b>Retroactive curation</b> over a repo copy + the stored conversation (both read-only). Mark the turn span, pair turns with commits (partial, carry-forward allowed, contiguity enforced), label intents, author plan.md + acceptance checks. Export cuts eval/start · golden · eval/final in a throwaway clone and writes the bundle to the examples root.' },
+  { k:'validate', t:'Validate bundle', s:'LoopEvals validate — offline, no agent calls', who:'dev console',
+    d:'<b>Cheap sanity gate.</b> Loads the bundle, clones repo.bundle to scratch, verifies the ref contract (eval/final = tip of golden; manifest chain = eval/start..eval/final exactly) and that every transcript turn joins to a real repo state.' },
+  { k:'run', t:'Run the loop', s:'production engine drives real agent turns from eval/start', who:'dev console + tokens',
+    d:'<b>The replay.</b> Scratch clone at eval/start with golden refs stripped (no peeking), primer turn mints a session, plan.md seeds the queue, the REAL queue loop drives in drive-mode under a turn cap + wall-clock timeout. Each completed agent turn is committed to run/&lt;n&gt; — same shape as golden.' },
+  { k:'score', t:'Score & aggregate', s:'checks verdict · diff evidence · trajectory · N-run stats', who:'dev console',
+    d:'<b>The answer.</b> Acceptance checks give pass/fail (with the failing check named); diff vs eval/final sits beside it as evidence; the trajectory shows per-turn files-touched overlap and the first divergence. --runs N aggregates pass rate, worst case, turn spread.' },
+];
+const pipe = document.getElementById('pipe'), pd = document.getElementById('pipeDetail');
+STAGES.forEach((st, i) => {
+  if (i) { const a = document.createElement('div'); a.className = 'arrow'; a.textContent = '→'; pipe.appendChild(a); }
+  const el = document.createElement('div');
+  el.className = 'stage'; el.id = 'st-' + st.k;
+  el.innerHTML = `<b>${st.t}</b><span>${st.s}</span><span class="who">${st.who}</span>`;
+  el.onclick = () => { document.querySelectorAll('.stage').forEach(x => x.classList.remove('on')); el.classList.add('on'); pd.innerHTML = st.d; };
+  pipe.appendChild(el);
+});
+document.getElementById('st-curate').click();
+
+// --- 2. refs + turn mapper (the real hello-notes example) --------------------
+const CHAIN = [
+  { sha:'8221ee0c', ref:'eval/start', tag:true },
+  { sha:'78ee2e0a', gold:true },
+  { sha:'8fccb7d2', gold:true },
+  { sha:'21f1b5b2', gold:true, ref:'eval/final · golden', tag:true },
+];
+const TURNS = [
+  { i:0, role:'user',      lbl:'instruct',       txt:'Create notes/alpha.md with an H1 title Alpha…', state:0, own:false },
+  { i:1, role:'assistant', lbl:'',               txt:'Added notes/alpha.md with the Alpha title.',    state:1, own:true  },
+  { i:2, role:'user',      lbl:'instruct',       txt:'Good. Now notes/beta.md the same way, titled Beta.', state:1, own:false },
+  { i:3, role:'assistant', lbl:'',               txt:'Added notes/beta.md titled Beta.',              state:2, own:true  },
+  { i:4, role:'user',      lbl:'course-correct', txt:'We also need an index.md linking both notes.',  state:2, own:false },
+  { i:5, role:'assistant', lbl:'',               txt:'Added index.md linking alpha and beta.',        state:3, own:true  },
+];
+const refrow = document.getElementById('refrow'), turnlist = document.getElementById('turnlist'), mapnote = document.getElementById('mapnote');
+CHAIN.forEach((c, i) => {
+  if (i) { const e = document.createElement('span'); e.className = 'edge'; e.textContent = '──▶'; refrow.appendChild(e); }
+  const box = document.createElement('span'); box.style.textAlign = 'center';
+  box.innerHTML = `<span class="commit ${c.gold ? 'gold' : ''}" id="c${i}">${c.sha.slice(0, 4)}</span>` +
+    (c.ref ? `<div class="refname ${c.tag ? 'tagref' : 'branchref'}">${c.ref}</div>` : '<div class="refname">&nbsp;</div>');
+  refrow.appendChild(box);
+});
+TURNS.forEach(t => {
+  const el = document.createElement('div');
+  el.className = 'turn';
+  el.innerHTML = `<span class="role">${t.i} · ${t.role}</span><span class="lbl">${t.lbl}</span>` +
+    `<span>${t.txt}</span><span class="st ${t.own ? 'own' : 'carry'}">${t.own ? 'commit ' + CHAIN[t.state].sha.slice(0, 8) : 'carry'}</span>`;
+  el.onclick = () => {
+    document.querySelectorAll('.turn').forEach(x => x.classList.remove('sel')); el.classList.add('sel');
+    CHAIN.forEach((_, i) => document.getElementById('c' + i).classList.toggle('lit', i === t.state));
+    mapnote.innerHTML = t.own
+      ? `Turn ${t.i} made commit <code>${CHAIN[t.state].sha}</code> — its repo state is its own commit.`
+      : `Turn ${t.i} made <b>no commit</b> — its state <i>carries forward</i> to <code>${CHAIN[t.state].sha}</code>` +
+        (t.state === 0 ? ' (the eval/start state itself).' : ' (the previous turn\'s commit).');
+  };
+  turnlist.appendChild(el);
+});
+
+// --- 5. real reports ---------------------------------------------------------
+const GOOD = `example  hello-notes: build a two-note collection with an index (golden: 3 commits)
+config   queue drive, cap 8, verify on; 1 run(s)
+
+run 1  <span class="ok">PASS</span>       status done (drained)  turns 2 (1 changed state; golden 3)  33s
+        diff vs eval/final: +0 added, -0 missing, ~2 changed
+        turn 0: overlap 0.33  run[index.md, notes/alpha.md, notes/beta.md] golden[notes/alpha.md]
+        turn 1: overlap 0.00  run[] golden[notes/beta.md]
+        turn 2: overlap 0.00  run[] golden[index.md]
+        <span class="dim">first divergence at state-change 1</span>
+
+pass rate <span class="ok">1/1 (100%)</span>  worst: passed  turns min/mean/max: 2/2.0/2`;
+const BROKEN = `example  hello-notes: build a two-note collection with an index (golden: 3 commits)
+config   queue drive, cap 8, verify on, <span class="bad">BROKEN seed</span>; 1 run(s)
+
+run 1  <span class="bad">FAIL (alpha-note)</span>  status done (drained)  turns 2 (0 changed state; golden 3)  33s
+        diff vs eval/final: +0 added, <span class="bad">-3 missing</span>, ~0 changed
+        turn 0: overlap 0.00  run[] golden[notes/alpha.md]
+        turn 1: overlap 0.00  run[] golden[notes/beta.md]
+        turn 2: overlap 0.00  run[] golden[index.md]
+        <span class="bad">first divergence at state-change 0</span>
+
+pass rate <span class="bad">0/1 (0%)</span>  worst: done  turns min/mean/max: 2/2.0/2`;
+const rep = document.getElementById('report'), vl = document.getElementById('verdictline');
+const tg = document.getElementById('tabGood'), tb = document.getElementById('tabBroken');
+function show(good) {
+  tg.classList.toggle('on', good); tb.classList.toggle('on', !good);
+  rep.innerHTML = good ? GOOD : BROKEN;
+  vl.innerHTML = good
+    ? 'The agent did the whole task in <b class="g">one</b> state-changing turn (golden took 3) and every check passed — a valid pass with a different trajectory. The ~2 changed files are content differences the checks deliberately tolerate.'
+    : 'Mis-seed the queue and the same engine drains without touching a file: the <b class="r">named failing check</b>, the missing files, and divergence-at-0 all point at the seed. A worse config scores worse — the eval discriminates.';
+}
+tg.onclick = () => show(true); tb.onclick = () => show(false);
+show(true);
+</script>
 </body>
 </html>

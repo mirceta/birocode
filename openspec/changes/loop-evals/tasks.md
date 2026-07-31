@@ -29,6 +29,6 @@
 
 ## 5. Verify + docs
 
-- [ ] 5.1 End-to-end: run the synthetic example through the runner + scorer; confirm a deliberately-broken loop config scores worse than a good one
-- [ ] 5.2 External examples root honored (config outside repo); committed-example-must-be-synthetic note in README
-- [ ] 5.3 `openspec validate loop-evals --strict` passes; update Understanding app for the eval flow
+- [x] 5.1 End-to-end: run the synthetic example through the runner + scorer; confirm a deliberately-broken loop config scores worse than a good one
+- [x] 5.2 External examples root honored (config outside repo); committed-example-must-be-synthetic note in README
+- [x] 5.3 `openspec validate loop-evals --strict` passes; update Understanding app for the eval flow
