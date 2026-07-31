@@ -41,19 +41,19 @@
 
 ## 4. Verify
 
-- [ ] 4.1 Builds + isolated-port e2e: drive-mode drain → done/drained;
+- [x] 4.1 Builds + isolated-port e2e: drive-mode drain → done/drained;
       item stashed mid-run gets unloaded; verified reply advances; unverified
       reply → step-unverified escalate; opt-out sends no verify turn; disarm
       keeps remaining stash + re-arm resumes; NEEDS_HUMAN mid-queue → escalate;
       cap → capped; suggest-mode pends and consumes only on human send;
       reorder-while-armed
-- [ ] 4.2 Playwright dock check (arm over a stash, progress badge, empty-stash
+- [x] 4.2 Playwright dock check (arm over a stash, progress badge, empty-stash
       arm refused, gate-closed non-disclosure) +
       `openspec validate --strict queue-based-loop`
 
 ## 5. Docs + honesty + wrap-up
 
-- [ ] 5.1 `docs/loop-driven-agent-convention.md`: STEP_VERIFIED contract note;
+- [x] 5.1 `docs/loop-driven-agent-convention.md`: STEP_VERIFIED contract note;
       `AutopilotOverviewView` card → built; stale "does not exist yet" copy in
       `AutopilotConsole`/dock comments
-- [ ] 5.2 Understanding app honesty pass + final builds + validate
+- [x] 5.2 Understanding app honesty pass + final builds + validate
