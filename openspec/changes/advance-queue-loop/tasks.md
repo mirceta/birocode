@@ -17,7 +17,7 @@
 - [x] 3.1 `LoopConfigStore`: `Resume(repoId)` mutation — same instance re-activated (`Active`, `Status looping`, fresh `ArmedAt`, `IterationsDone = 0`, stop reason/detail cleared), `QueueSent`/`QueueSentTexts` preserved; `Arm` and `Resume` both clear `Phase` + `LastStepText`
 - [x] 3.2 `AutopilotController`: gated resume — implemented as `action: "resume"` on the existing `POST /api/autopilot/loop` (consistent with the one-endpoint action switch); valid only for an inactive queue instance whose bound tab exists with a non-empty stash; audit `resume` with remaining count
 - [x] 3.3 Frontend: Resume button on the dock popover and console Queue tab wherever a stopped-with-remainder queue instance renders (eligibility from the projection); i18n en/tr
-- [ ] 3.4 Verify against today's real stranded state: the busi-dec instance (`escalate / verify-owed`, 7 items) resumes cleanly from the head with no verification of the dead drive's step
+- [x] 3.4 Verify against today's real stranded state: on an isolated :5200 instance seeded with the LIVE loops.json + dock.json, the busi-dec instance (`escalate / verify-owed`) resumed to `looping / work` with iterations reset, sent-history kept, audit `resume · 1 item(s) remaining`; the drained harness-tab instance was correctly refused (400 stash empty)
 
 ## 4. Binding disclosure (D5)
 
@@ -26,8 +26,8 @@
 
 ## 5. Validation + docs
 
-- [ ] 5.1 Tests: whole-word deny matcher (pushed/push, prod/product, reset --hard), operator-stop attribution, resume eligibility + state reset, per-arm deny-list fallthrough to default
-- [ ] 5.2 `docs/loop-driven-agent-convention.md`: "what stops a loop" gains operator-stop; deny-list note updated to whole-word matching
-- [ ] 5.3 Understanding app + autopilot explainer honesty pass (queue card copy: resume, per-arm deny, binding line)
-- [ ] 5.4 `openspec validate advance-queue-loop --strict`; build backend + frontend; headless Playwright pass per docs/claude-web/browser-testing.md on the arm form, Resume, and deny chips
-- [ ] 5.5 End-to-end rehearsal of the busi-dec scenario on :5200 (isolated preview recipe): arm a queue on a commit-and-push repo with "push" trimmed, drive ≥2 items through STEP_VERIFIED, operator-stop mid-step, resume, drain
+- [x] 5.1 Tests: whole-word deny matcher (pushed/push, prod/product, reset --hard), operator-stop attribution, resume eligibility + state reset, per-arm deny-list fallthrough to default — 12 new xunit cases, 47/47 green
+- [x] 5.2 `docs/loop-driven-agent-convention.md`: "what stops a loop" gains operator-stop; deny-list note updated to whole-word matching + per-arm trim + resume
+- [x] 5.3 Understanding app + autopilot explainer honesty pass (queue card copy: resume, per-arm deny, binding line)
+- [x] 5.4 `openspec validate advance-queue-loop --strict`; build backend + frontend; headless Playwright pass per docs/claude-web/browser-testing.md on the arm form, Resume, and deny chips — all green (binding line, fires-when-free note, per-arm chip drop + trimmed-terms note, dock Resume row, console binding/chips/Resume; screenshots taken)
+- [x] 5.5 End-to-end rehearsal of the busi-dec scenario on :5200 (isolated preview recipe, scratch repo `qloop-lab` with commit-and-push CLAUDE.md + bare local origin, "push" trimmed per-arm): item 1 drove through STEP_VERIFIED; operator-stop mid-item-2 resolved `stopped · by-operator` with remainder kept; Resume drove the remainder to `done · drained` ("queue: 3 prompt(s) completed"); commits confirmed in the bare origin. Note: per the resume-from-stash-head spec, the mid-run-stopped item was consumed, not replayed — re-queueing it is the operator's call
