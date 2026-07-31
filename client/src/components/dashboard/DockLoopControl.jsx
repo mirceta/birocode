@@ -498,6 +498,43 @@ export default function DockLoopControl({ repoId, sessionId, tabId, stash = [], 
   );
 
   // ---- inspection pane content for the selected type ----
+
+  // Client-side mirror of the server's ComposeBriefedPrompt work-phase frame
+  // (openspec loop-agent-briefing): same parts, same order, from the detail
+  // payload — so the arm preview shows the exact prefix every driven work send
+  // will carry. Verify sends carry frame.verifyNote instead.
+  function composeBriefing(kind, sentinel) {
+    const b = detail?.briefing;
+    if (!b?.frame) return null;
+    return [
+      b.frame.header,
+      b.frame.intro,
+      ...(b.rules || []).filter((r) => r.enabled).map((r) => `- ${r.text}`),
+      b.frame.escalationLine,
+      kind === 'queue'
+        ? b.frame.contractQueueItem
+        : b.frame.contractSentinelTemplate.replace('{0}', sentinel || 'LOOP_DONE'),
+      b.frame.separator,
+    ].join('\n');
+  }
+
+  function briefingBlock(kind, sentinel, withVerifyNote) {
+    const text = composeBriefing(kind, sentinel);
+    if (!text) return null;
+    return (
+      <>
+        <div className="phone__loop-inspect-k">{t('dashboard.loopBriefingLabel')}</div>
+        <pre className="phone__loop-inspect-pre">{text}</pre>
+        {withVerifyNote && (
+          <>
+            <div className="phone__loop-inspect-k">{t('dashboard.loopBriefingVerifyLabel')}</div>
+            <pre className="phone__loop-inspect-pre">{detail.briefing.frame.verifyNote}</pre>
+          </>
+        )}
+      </>
+    );
+  }
+
   function renderInspection() {
     if (detail === 'gate-closed' || detail === null) {
       return <div className="phone__loop-msg phone__loop-msg--gate">{t('dashboard.loopGateClosed')}</div>;
@@ -509,6 +546,7 @@ export default function DockLoopControl({ repoId, sessionId, tabId, stash = [], 
       const mine = detail.loops?.find((l) => l.repoId === repoId);
       return (
         <div className="phone__loop-inspect">
+          {briefingBlock('queue', null, true)}
           <div className="phone__loop-inspect-k">{t('dashboard.loopQueueVerifyTplLabel')}</div>
           <pre className="phone__loop-inspect-pre">{detail.queueVerifyTemplate || '—'}</pre>
           {mine?.lastStepText && (
@@ -531,8 +569,22 @@ export default function DockLoopControl({ repoId, sessionId, tabId, stash = [], 
                 )}
               </div>
               <ol className="phone__loop-sent-list">
+                {/* Briefed mark (openspec loop-agent-briefing, D3): the raw item
+                    text is what's shown; the badge says it was sent wrapped in
+                    the briefing at rules revision N. Rev 0 = sent raw (suggest-
+                    mode consume or pre-feature row). */}
                 {mine.queueSentTexts.map((s, i) => (
-                  <li key={i} className="phone__loop-sent-row">{s}</li>
+                  <li key={i} className="phone__loop-sent-row">
+                    {s}
+                    {(mine.queueSentRevs?.[i] ?? 0) > 0 && (
+                      <span
+                        className="phone__loop-sent-briefed"
+                        title={t('dashboard.loopSentBriefedTitle', { rev: mine.queueSentRevs[i] })}
+                      >
+                        📝{t('dashboard.loopSentBriefed')}
+                      </span>
+                    )}
+                  </li>
                 ))}
               </ol>
             </>
@@ -547,6 +599,8 @@ export default function DockLoopControl({ repoId, sessionId, tabId, stash = [], 
         ?? detail.recipes?.find((r) => r.id === chosenRecipe?.id)?.prompt;
       return (
         <div className="phone__loop-inspect">
+          {briefingBlock('recipe', armedRecipeLoop?.sentinel
+            ?? detail.recipes?.find((r) => r.id === chosenRecipe?.id)?.sentinel, false)}
           <div className="phone__loop-inspect-k">{t('dashboard.loopPromptLabel')}</div>
           <pre className="phone__loop-inspect-pre">{text || '—'}</pre>
         </div>
@@ -561,6 +615,7 @@ export default function DockLoopControl({ repoId, sessionId, tabId, stash = [], 
     const verify = armedGoalLoop?.verifyPrompt ?? detail.goalTemplates?.verify?.replace('{0}', g);
     return (
       <div className="phone__loop-inspect">
+        {briefingBlock('goal', armedGoalLoop?.sentinel, true)}
         <div className="phone__loop-inspect-k">{t('dashboard.loopWorkPromptLabel')}</div>
         <pre className="phone__loop-inspect-pre">{work || '—'}</pre>
         <div className="phone__loop-inspect-k">{t('dashboard.loopVerifyPromptLabel')}</div>

@@ -2538,3 +2538,108 @@
   font-size: 11px;
   word-break: break-word;
 }
+
+/* Briefing rules editor beside the loop section (openspec loop-agent-briefing,
+   D5) — same pill/pop visual language as the loop control above it. */
+.phone__brief-btn {
+  margin-left: auto;
+}
+
+.phone__brief-pop {
+  gap: 6px;
+}
+
+.phone__brief-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.phone__brief-rule {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.phone__brief-rule--off .phone__brief-text {
+  color: var(--color-text-soft);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+}
+
+.phone__brief-text {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-text);
+  font: inherit;
+  cursor: text;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.phone__brief-edit {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 12px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-accent);
+  border-radius: 6px;
+  padding: 3px 6px;
+  resize: vertical;
+}
+
+.phone__brief-del {
+  background: none;
+  border: none;
+  color: var(--color-text-soft);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+}
+
+.phone__brief-del:hover {
+  color: var(--color-danger, #e5534b);
+}
+
+.phone__brief-addrow {
+  display: flex;
+  gap: 6px;
+}
+
+.phone__brief-add {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
+.phone__brief-long {
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-warn, #d29922);
+}
+
+/* Sent-history briefed mark (D3): raw item text + honest "sent briefed" badge. */
+.phone__loop-sent-briefed {
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-text-soft);
+  white-space: nowrap;
+}
