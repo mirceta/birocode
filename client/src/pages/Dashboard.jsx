@@ -818,7 +818,8 @@ export default function Dashboard({ onClose }) {
         const pairs = await Promise.all(
           current.map(async (tab) => {
             const run = runs[tab.repoId];
-            const status = run?.status || tab.status;
+            // 'stopped' (operator Stop) badges as idle — same as a local Stop.
+            const status = (run?.status === 'stopped' ? 'idle' : run?.status) || tab.status;
             const sessionId = run?.sessionId || tab.sessionId;
             let activity = '';
             let at = 0;

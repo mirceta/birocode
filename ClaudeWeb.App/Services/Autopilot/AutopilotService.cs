@@ -476,8 +476,12 @@ public class AutopilotService : BackgroundService
             // every resend still bumps the iteration counter, so the cap bounds
             // retries too. After MaxNoReplyRetries consecutive reply-less runs,
             // stop the loop instead. Stale trailing text is never judged.
-            if (loop.Mode == LoopConfigStore.ModeDrive && replyMissing)
+            if (loop.Mode == LoopConfigStore.ModeDrive && replyMissing
+                && run?.Status != "stopped")
             {
+                // An operator-stopped run skips the retry dance entirely: the
+                // ladder resolves it stopped · by-operator below (advance-queue-loop,
+                // D1) — resending the prompt the human just killed would fight them.
                 if (run is null || run.Status == "running") continue;
                 if (_driveNoReply.TryAdd(repo.Id, 0))
                 {
@@ -575,7 +579,11 @@ public class AutopilotService : BackgroundService
                 loop,
                 noReply ? null : lastAssistant,
                 !preArm && run?.Status == "error",
-                cfg.DenyList, cfg.Threshold, routines, cliVerdict,
+                !preArm && run?.Status == "stopped",
+                // Per-arm deny-list when the instance carries one (advance-queue-loop,
+                // D2); null = the global default. An empty per-arm list is honored —
+                // it is the operator's explicit "no deny terms this arm".
+                loop.DenyList ?? cfg.DenyList, cfg.Threshold, routines, cliVerdict,
                 // Queue kind (openspec: queue-based-loop, D2): the bound tab's LIVE
                 // stash, read this tick — null when the tab no longer exists (the
                 // kind resolves error). Other kinds never look.

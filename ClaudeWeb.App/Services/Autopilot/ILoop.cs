@@ -34,6 +34,10 @@ public sealed record LoopContext(
     LoopConfigStore.LoopState Instance,
     string? LastAssistant,
     bool RunErrored,
+    // The last run ended because the OPERATOR pressed Stop (openspec:
+    // advance-queue-loop, D1). Checked before RunErrored: a rescue Stop is a
+    // user action, never an agent failure.
+    bool RunStopped,
     IReadOnlyList<string> DenyList,
     double Threshold,
     IReadOnlyList<PromptClassifier.Routine> Routines,
@@ -76,11 +80,16 @@ public abstract record LoopDecision
 /// <summary>
 /// Shared ladder for the DRIVEN kinds (recipe, goal, queue) — the ordered safety checks that
 /// precede any kind-specific sentinel handling, preserved exactly from the
-/// pre-interface engine: (1) run errored → stop <c>error</c>; (2) the
+/// pre-interface engine: (0) the operator stopped the run → stop <c>stopped</c>
+/// (advance-queue-loop, D1: a user action is never an agent failure);
+/// (1) run errored → stop <c>error</c>; (2) the
 /// <c>NEEDS_HUMAN:</c> marker → stop <c>escalate</c> (checked before sentinels, so a
 /// reply carrying both means blocked, not done); (3) a deny-listed term in the reply
-/// → stop <c>escalate</c>. All matching is deterministic, case-insensitive string
-/// search — no classifier, no LLM judge. The suggestion kind does NOT use this
+/// → stop <c>escalate</c>. All matching is deterministic and case-insensitive — no
+/// classifier, no LLM judge. Deny terms match as WHOLE WORDS (advance-queue-loop,
+/// D2: "pushed" no longer trips "push" — an honest commit-and-push report is not a
+/// risky action), via the same <see cref="PromptClassifier.ContainsWholeWord"/> the
+/// routine deny fence uses. The suggestion kind does NOT use this
 /// ladder: it never drives a blocked agent (its escalations are non-terminal holds),
 /// and its deny handling is the classifier gate's label check.
 /// </summary>
@@ -90,6 +99,9 @@ public abstract class DrivenLoop : ILoop
 
     public LoopDecision Decide(LoopContext ctx)
     {
+        if (ctx.RunStopped)
+            return new LoopDecision.Stop("stopped", "by-operator", "the operator stopped the agent's run");
+
         if (ctx.RunErrored)
             return new LoopDecision.Stop("error", "error", "the agent's run errored");
 
@@ -105,7 +117,7 @@ public abstract class DrivenLoop : ILoop
             }
 
             var hit = ctx.DenyList.FirstOrDefault(d =>
-                !string.IsNullOrEmpty(d) && last.Contains(d, StringComparison.OrdinalIgnoreCase));
+                !string.IsNullOrEmpty(d) && PromptClassifier.ContainsWholeWord(last, d));
             if (hit != null)
                 return new LoopDecision.Stop("escalate", "deny-list", $"reply mentions deny-listed \"{hit}\"");
         }

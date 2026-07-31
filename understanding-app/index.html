@@ -1,288 +1,151 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Queue-based loop — the stash IS the queue, verified by default</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>advance-queue-loop — why the queue died on item 1</title>
 <style>
-  :root{
-    --bg:#0d1117; --panel:#161b22; --panel2:#1c232c; --line:#30363d;
-    --ink:#e6edf3; --muted:#8b949e; --dim:#6e7681;
-    --accent:#58a6ff; --green:#3fb950; --amber:#d29922; --purple:#bc8cff; --red:#f85149; --pink:#f778ba;
-    --mono:'SF Mono',ui-monospace,'Cascadia Code',Consolas,monospace;
-    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  :root {
+    --bg: #10141a; --panel: #1a2028; --panel2: #222a35; --ink: #dce3ec;
+    --dim: #8b97a6; --line: #2e3947; --ok: #4fc38a; --bad: #e06c6c;
+    --warn: #e0b56c; --acc: #6ca8e0; --radius: 10px;
   }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5}
-  a{color:var(--accent)}
-  code{font-family:var(--mono);font-size:.92em;background:#0b0f14;border:1px solid var(--line);border-radius:5px;padding:.5px 5px}
-  .wrap{max-width:1120px;margin:0 auto;padding:28px 20px 90px}
-  header h1{font-size:24px;margin:0 0 8px;letter-spacing:-.01em}
-  header p.sub{color:var(--muted);margin:0;font-size:14.5px;max-width:840px}
-  .tag{display:inline-block;font-family:var(--mono);font-size:11px;padding:2px 8px;border:1px solid var(--line);
-    border-radius:999px;color:var(--muted);margin-right:6px;background:var(--panel)}
-
-  section{margin-top:40px}
-  h2{font-size:17px;margin:0 0 6px;display:flex;align-items:center;gap:10px}
-  h2 .n{font-family:var(--mono);font-size:13px;color:var(--bg);background:var(--accent);
-    width:24px;height:24px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-weight:700}
-  .lead{color:var(--muted);font-size:13.5px;margin:0 0 16px;max-width:860px}
-
-  /* property chips */
-  .chips{display:flex;flex-wrap:wrap;gap:9px}
-  .chip{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:13px;
-    display:flex;align-items:center;gap:8px}
-  .chip .tick{color:var(--green);font-weight:700}
-
-  /* ============ SIM ============ */
-  .simbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:14px}
-  .toggle{display:inline-flex;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px}
-  .toggle button{border:none;background:transparent;color:var(--muted);font-family:var(--sans);font-size:13px;
-    font-weight:600;padding:8px 14px;border-radius:7px;cursor:pointer;transition:.15s;display:flex;align-items:center;gap:7px}
-  .toggle button.on{color:var(--ink)}
-  .toggle button.on.live{background:rgba(63,185,80,.16);box-shadow:inset 0 0 0 1px rgba(63,185,80,.4)}
-  .toggle button.on.snap{background:rgba(210,153,34,.16);box-shadow:inset 0 0 0 1px rgba(210,153,34,.4)}
-  .toggle .swatch{width:9px;height:9px;border-radius:50%}
-  .sw-live{background:var(--green)} .sw-snap{background:var(--amber)}
-
-  .ctrls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-left:auto}
-  button.btn{font-family:var(--sans);font-size:13px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);
-    border-radius:8px;padding:8px 14px;cursor:pointer;transition:border-color .15s,background .15s}
-  button.btn:hover:not(:disabled){border-color:var(--accent)}
-  button.btn.primary{background:var(--accent);color:#08111f;border-color:var(--accent);font-weight:600}
-  button.btn:disabled{opacity:.4;cursor:default}
-  .steplbl{font-family:var(--mono);font-size:12px;color:var(--muted)}
-
-  .stage{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
-  .lanes{display:grid;grid-template-columns:1fr 1.15fr;gap:0}
-  @media(max-width:800px){.lanes{grid-template-columns:1fr;gap:14px}}
-  .lane{padding:0 16px;position:relative}
-  .lane + .lane{border-left:1px dashed var(--line)}
-  @media(max-width:800px){.lane + .lane{border-left:none;border-top:1px dashed var(--line);padding-top:14px}}
-  .lane h4{margin:0 0 4px;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);font-weight:700;
-    display:flex;align-items:center;gap:7px;min-height:20px}
-  .lane .subh{font-size:11.5px;color:var(--dim);margin:0 0 12px;font-family:var(--mono);min-height:16px}
-  .lane .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
-  .dot.stash{background:var(--accent)} .dot.queue{background:var(--pink)} .dot.sent{background:var(--green)}
-  .lane.merged::after{content:'one live object — drains as it lands';position:absolute;top:-2px;right:16px;
-    font-size:10.5px;font-family:var(--mono);color:var(--green)}
-
-  .card{background:#0b0f14;border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin-bottom:8px;
-    display:flex;gap:9px;align-items:flex-start;transition:.25s;position:relative}
-  .card .cid{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--dim);margin-top:1px;min-width:20px}
-  .card .clabel{font-size:12.5px;color:var(--ink);line-height:1.35;padding-right:78px}
-  .card.q{border-color:rgba(247,120,186,.35)}
-  .card.q.head::before{content:'next';position:absolute;right:9px;top:9px;font-size:10px;font-family:var(--mono);color:var(--pink)}
-  .card.sent{border-color:rgba(63,185,80,.4);background:rgba(63,185,80,.06)}
-  .card.sent::after{content:'▶ sent';position:absolute;right:9px;top:9px;font-size:10px;font-family:var(--mono);color:var(--green)}
-  .card.vok{border-color:rgba(63,185,80,.35);border-style:dashed}
-  .card.vok::after{content:'✓ STEP_VERIFIED';position:absolute;right:9px;top:9px;font-size:10px;font-family:var(--mono);color:var(--green)}
-  .card.vok .clabel{color:var(--muted)}
-  .card.vfail{border-color:var(--red);background:rgba(248,81,73,.08)}
-  .card.vfail::after{content:'✗ not verified';position:absolute;right:9px;top:9px;font-size:10px;font-family:var(--mono);color:var(--red)}
-  .card.areply{border-color:rgba(210,153,34,.45)}
-  .card.areply::after{content:'🤖 reply';position:absolute;right:9px;top:9px;font-size:10px;font-family:var(--mono);color:var(--amber)}
-  .card.buried{opacity:.55;filter:saturate(.6)}
-  .card.buried::after{content:'⚠ buried';color:var(--red)}
-  .card.human{border-color:rgba(188,140,255,.5)}
-  .card.human::after{content:'👤 you';position:absolute;right:9px;top:9px;font-size:10px;font-family:var(--mono);color:var(--purple)}
-  .card.fresh{animation:pop .35s}
-  .card.new-flag{border-color:var(--purple);box-shadow:0 0 0 1px rgba(188,140,255,.3)}
-  .card.new-flag .cid{color:var(--purple)}
-  @keyframes pop{0%{transform:scale(.9) translateY(-6px);opacity:0}100%{transform:scale(1);opacity:1}}
-  .empty{color:var(--dim);font-size:12px;font-style:italic;padding:8px 2px}
-
-  .agentbox{margin-top:12px;display:flex;align-items:center;gap:11px;padding:11px 14px;background:var(--panel2);
-    border:1px solid var(--line);border-radius:10px;flex-wrap:wrap}
-  .agentbox .av{width:34px;height:34px;border-radius:9px;background:#0b0f14;border:1px solid var(--line);
-    display:flex;align-items:center;justify-content:center;font-size:17px}
-  .agentbox .st{font-size:13px}
-  .agentbox .st b{color:var(--ink)}
-  .agentbox .pulse{width:8px;height:8px;border-radius:50%;background:var(--amber);box-shadow:0 0 0 0 rgba(210,153,34,.6);animation:pl 1.3s infinite}
-  .agentbox.idle .pulse{background:var(--green);animation:none}
-  @keyframes pl{0%{box-shadow:0 0 0 0 rgba(210,153,34,.5)}70%{box-shadow:0 0 0 7px rgba(210,153,34,0)}100%{box-shadow:0 0 0 0 rgba(210,153,34,0)}}
-  .loopchip{margin-left:auto;font-family:var(--mono);font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;border:1px solid var(--line);color:var(--dim)}
-  .loopchip.armed{color:var(--green);border-color:rgba(63,185,80,.4);background:rgba(63,185,80,.08)}
-  .loopchip.stopped{color:var(--red);border-color:rgba(248,81,73,.4);background:rgba(248,81,73,.08)}
-  .loopchip.done{color:var(--accent);border-color:rgba(88,166,255,.4);background:rgba(88,166,255,.08)}
-
-  .narrate{margin-top:14px;padding:12px 14px;border-radius:10px;font-size:13.5px;border:1px solid var(--line);background:#0b0f14;min-height:44px;display:flex;gap:10px;align-items:flex-start}
-  .narrate .marker{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;white-space:nowrap;margin-top:1px}
-  .narrate.diverge{border-color:var(--red);background:rgba(248,81,73,.07)}
-  .narrate.good{border-color:rgba(63,185,80,.45);background:rgba(63,185,80,.05)}
-  .marker.def{background:var(--panel2);color:var(--muted)}
-  .marker.div{background:rgba(248,81,73,.15);color:var(--red)}
-  .marker.win{background:rgba(63,185,80,.15);color:var(--green)}
-  .marker.flag{background:rgba(188,140,255,.15);color:var(--purple)}
-
-  .scorebar{display:flex;gap:22px;margin-top:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
-  .scorebar b{color:var(--ink)}
-  .scorebar .big{font-family:var(--mono);font-size:15px}
-
-  /* ============ LEDGER ============ */
-  .ledger{display:flex;flex-direction:column;gap:10px}
-  .drow{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;border-left:3px solid var(--accent)}
-  .drow .top{display:grid;grid-template-columns:52px 1fr;align-items:center;gap:12px;padding:13px 16px;cursor:pointer}
-  .drow .did{font-family:var(--mono);font-weight:700;font-size:13px;color:var(--dim)}
-  .drow .dtitle{font-size:14px;font-weight:600}
-  .drow .dtitle .k{font-family:var(--mono);font-size:11px;color:var(--dim);font-weight:400;display:block;margin-top:2px}
-  .drow .detail{border-top:1px solid var(--line);display:none;padding:13px 16px}
-  .drow.open .detail{display:block}
-  .drow .detail p{margin:0;font-size:13px;color:var(--muted)}
-  .drow .detail p b{color:var(--ink)}
-
-  /* ============ two/three-panel generic ============ */
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  @media(max-width:720px){.grid2{grid-template-columns:1fr}}
-  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
-  @media(max-width:860px){.grid3{grid-template-columns:1fr}}
-  .card2{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
-  .card2 h3{margin:0 0 10px;font-size:14px;display:flex;align-items:center;gap:8px}
-  .card2 p{margin:0;font-size:13px;color:var(--muted)}
-  .card2 p b{color:var(--ink)}
-  .card2 .where{margin-top:10px;font-family:var(--mono);font-size:11px;color:var(--dim)}
-
-  /* honesty invariant flow */
-  .honest{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-family:var(--mono);font-size:12px;margin-top:14px}
-  .hbox{background:#0b0f14;border:1px solid var(--line);border-radius:8px;padding:9px 12px;color:var(--ink)}
-  .hbox.stashy{border-color:rgba(88,166,255,.4)}
-  .hbox.chat{border-color:rgba(63,185,80,.4)}
-  .harrow{color:var(--green);font-size:18px}
-  .heq{color:var(--amber);font-weight:700}
-
-  .ladder{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
-  .ladder li{display:flex;gap:11px;align-items:flex-start;font-size:13px}
-  .ladder .rung{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--red);border:1px solid rgba(248,81,73,.35);
-    background:rgba(248,81,73,.08);border-radius:6px;padding:2px 8px;white-space:nowrap;margin-top:1px}
-  .ladder .rt{color:var(--muted)} .ladder .rt b{color:var(--ink)}
-
-  .foot{margin-top:48px;color:var(--dim);font-size:12px;text-align:center;line-height:1.7}
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.55 "Segoe UI", system-ui, sans-serif; padding: 24px 16px 64px; }
+  main { max-width: 880px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--dim); margin: 0 0 20px; }
+  .tabs { display: flex; gap: 8px; margin: 0 0 18px; flex-wrap: wrap; }
+  .tabs button { background: var(--panel); color: var(--dim); border: 1px solid var(--line);
+    border-radius: 999px; padding: 7px 16px; cursor: pointer; font: inherit; font-size: 14px; }
+  .tabs button.on { background: var(--acc); color: #0c1116; border-color: var(--acc); font-weight: 600; }
+  section { display: none; }
+  section.on { display: block; animation: fade .18s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px);} to { opacity: 1; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+          padding: 14px 16px; margin-bottom: 12px; }
+  .card h3 { margin: 0 0 6px; font-size: 15px; }
+  .card p { margin: 6px 0; color: var(--dim); }
+  .card p b, .card p code { color: var(--ink); }
+  code { background: var(--panel2); border-radius: 4px; padding: 1px 6px; font-size: 13px; }
+  .flow { display: flex; align-items: stretch; gap: 0; flex-wrap: wrap; margin: 14px 0; }
+  .step { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
+          padding: 10px 12px; min-width: 130px; flex: 1; text-align: center; position: relative; }
+  .step small { display: block; color: var(--dim); margin-top: 3px; }
+  .arrow { align-self: center; padding: 0 8px; color: var(--dim); font-size: 18px; }
+  .tl { border-left: 3px solid var(--line); margin-left: 8px; padding-left: 18px; }
+  .ev { position: relative; margin-bottom: 16px; cursor: pointer; }
+  .ev::before { content: ""; position: absolute; left: -25.5px; top: 6px; width: 12px; height: 12px;
+    border-radius: 50%; background: var(--dim); border: 2px solid var(--bg); }
+  .ev.bad::before { background: var(--bad); } .ev.ok::before { background: var(--ok); }
+  .ev.warn::before { background: var(--warn); }
+  .ev time { color: var(--dim); font-size: 13px; margin-right: 8px; font-variant-numeric: tabular-nums; }
+  .ev .what { font-weight: 600; }
+  .ev .detail { display: none; margin-top: 6px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 8px; padding: 10px 12px; color: var(--dim); font-size: 14px; }
+  .ev.open .detail { display: block; }
+  .pill { font-size: 12px; border-radius: 999px; padding: 2px 10px; margin-left: 8px; vertical-align: 1px; }
+  .pill.bad { background: #3a2323; color: var(--bad); } .pill.ok { background: #1f3a2c; color: var(--ok); }
+  .pill.warn { background: #3a3323; color: var(--warn); }
+  .fix { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 700px) { .fix { grid-template-columns: 1fr; } }
+  .fix .card { margin: 0; }
+  .was { color: var(--bad); } .now { color: var(--ok); }
+  .hint { color: var(--dim); font-size: 13px; margin-top: -8px; margin-bottom: 14px; }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <div><span class="tag">queue-based-loop</span><span class="tag">built 2026-07-31</span></div>
-    <h1>The stash IS the queue — verified by default</h1>
-    <p class="sub">The third promised autopilot mode is a <b>wire between two things that already exist</b>: the per-tab
-    <b>prompt stash</b> (the ideas you flag while the agent is busy) and the <b>loop engine</b>. Arming a 🗒️ queue loop means:
-    <i>automatically unload my stash into the agent whenever it's free</i> — and, by default, <b>verify each step actually
-    got solved</b> before unloading the next.</p>
-  </header>
+<main>
+  <h1>🗒️ advance-queue-loop</h1>
+  <p class="sub">Why the queue loop's first real drive (busi-dec, 2026-07-31) died on item 1 — twice — and the four fixes implemented by <code>openspec/changes/advance-queue-loop</code>.</p>
 
-  <!-- ============ PROPERTIES ============ -->
-  <section>
-    <h2><span class="n">≡</span> The design in six properties</h2>
-    <p class="lead">Decided in <code>openspec/changes/queue-based-loop</code> — the live-stash model merged with the loop
-    engine's existing machinery. Implemented: <code>QueueLoop.cs</code> + engine consume-on-land, the dock control's
-    Queue type, and the console's Loops → Queue tab.</p>
-    <div class="chips" id="chips"></div>
-  </section>
-
-  <!-- ============ SIM ============ -->
-  <section>
-    <h2><span class="n">▸</span> One run, stepped through</h2>
-    <p class="lead">The same queue, both postures. In <b>verified</b> mode (the default) the agent's mid-queue question
-    <b>stops the loop</b>; in <b>blind</b> mode (the opt-out) watch what happens to that same question. This is the
-    amendment: <i>delivered ≠ solved</i>.</p>
-
-    <div class="simbar">
-      <div class="toggle" id="modeToggle">
-        <button data-mode="verify" class="on live"><span class="swatch sw-live"></span>Verified — the default</button>
-        <button data-mode="blind" class="snap"><span class="swatch sw-snap"></span>Blind unload — the opt-out</button>
-      </div>
-      <div class="ctrls">
-        <button class="btn" id="back">‹ Back</button>
-        <button class="btn primary" id="step">Step ›</button>
-        <button class="btn" id="play">▶ Play</button>
-        <button class="btn" id="reset">Reset</button>
-        <span class="steplbl" id="steplbl"></span>
-      </div>
-    </div>
-
-    <div class="stage">
-      <div class="lanes" id="lanes"></div>
-      <div class="agentbox idle" id="agent">
-        <div class="av">🤖</div>
-        <span class="pulse"></span>
-        <div class="st" id="agentst"><b>Agent idle</b></div>
-        <span class="loopchip" id="loopchip">not armed</span>
-      </div>
-    </div>
-
-    <div class="narrate" id="narrate"></div>
-    <div class="scorebar" id="score"></div>
-  </section>
-
-  <!-- ============ SAFETY ============ -->
-  <section>
-    <h2><span class="n">🛡</span> Why this stays honest and safe</h2>
-    <div class="grid2">
-      <div class="card2">
-        <h3>🔎 Honesty without a frozen copy</h3>
-        <p>Every auto-sent byte is a <b>stash item you can already see</b> above the composer; verification prompts are a
-        <b>stored template</b> (gated-inspectable) + that visible step text, composed deterministically at send time. The
-        audit trail still records every actual send verbatim.</p>
-        <div class="honest">
-          <span class="hbox stashy">visible stash item</span>
-          <span class="heq">≡</span>
-          <span class="harrow">→</span>
-          <span class="hbox chat">auto-sent chat message</span>
-        </div>
-      </div>
-      <div class="card2">
-        <h3>🪜 Four ways it stops before making things worse</h3>
-        <p>As a driven <code>QueueLoop</code> kind it inherits the ladder, plus the new verification gate — and because
-        unsent items never leave the stash, <b>every stop is lossless</b>:</p>
-        <ul class="ladder">
-          <li><span class="rung">errored run</span><span class="rt">the last turn failed → <b>stop</b>, don't pile on</span></li>
-          <li><span class="rung">NEEDS_HUMAN:</span><span class="rt">the agent used the sentinel → <b>escalate</b></span></li>
-          <li><span class="rung">deny-list</span><span class="rt">the load-bearing fence → <b>never auto-send past it</b></span></li>
-          <li><span class="rung">step-unverified</span><span class="rt">no <code>STEP_VERIFIED</code> → <b>escalate</b> — catches plain questions the ladder can't, because ordinary agents don't know any sentinel</span></li>
-        </ul>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ SURFACES ============ -->
-  <section>
-    <h2><span class="n">⌘</span> Three surfaces, one list</h2>
-    <p class="lead">The stash strip stays the queue's only editor — the loop surfaces add settings and arming, never a
-    duplicate list.</p>
-    <div class="grid3">
-      <div class="card2">
-        <h3>📥 Stash strip <span class="tag" style="margin:0">the editor</span></h3>
-        <p>Where you already flag prompts, above the composer. Gains <b>reordering</b> (new, works armed or not) via
-        <code>POST …/stash/reorder</code>. Add / remove / reorder while the queue runs — it simply changes what unloads next.</p>
-        <div class="where">ChatInput / PinnedAgent · DockRegistry.Stash</div>
-      </div>
-      <div class="card2">
-        <h3>🗒️ Dock loop control <span class="tag" style="margin:0">quick arm</span></h3>
-        <p>The unified type picker gains Queue beside 💡 📋 🎯: mode (drive / suggest), cap, verification toggle
-        (<b>on by default</b>), a next-up preview and remaining count. Arming requires a non-empty stash.</p>
-        <div class="where">DockLoopControl · badge: remaining / sent</div>
-      </div>
-      <div class="card2">
-        <h3>🎛 Console → Loops → Queue tab <span class="tag" style="margin:0">settings home</span></h3>
-        <p>The new tab in the autopilot console's Loops section: per-agent queue status (remaining · sent · phase), the same
-        settings, arm / disarm. Ungated status shows <b>counts only</b>; texts follow the gated-detail rule.</p>
-        <div class="where">AutopilotConsole · gated disclosure</div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ LEDGER ============ -->
-  <section>
-    <h2><span class="n">⚖</span> The eight decisions</h2>
-    <p class="lead">The final ledger — the merged model's design decisions, D1–D8. Click a row for the reasoning.</p>
-    <div class="ledger" id="ledger"></div>
-  </section>
-
-  <div class="foot">
-    Rolling-latest Understanding app · overwrites <code>understanding-app/index.html</code> · served no-store by the harness<br/>
-    Companion to <code>openspec/changes/queue-based-loop</code> (proposal · design · delta specs · tasks).
+  <div class="tabs" id="tabs">
+    <button data-t="how" class="on">How the queue drives</button>
+    <button data-t="tl">What happened (timeline)</button>
+    <button data-t="fix">The four fixes</button>
   </div>
-</div>
-<script src="./app.js"></script>
+
+  <section id="how" class="on">
+    <div class="card">
+      <h3>The stash IS the queue</h3>
+      <p>The operator stashes prompts on a dock tab; arming the 🗒️ kind binds the agent's loop slot to that <b>live</b> stash. No snapshot, no cursor — reorder, add, remove while armed.</p>
+    </div>
+    <div class="flow">
+      <div class="step">agent idle<small>engine tick</small></div><div class="arrow">→</div>
+      <div class="step">safety ladder<small>error · NEEDS_HUMAN · deny-list</small></div><div class="arrow">→</div>
+      <div class="step">unload HEAD<small>consume on land</small></div><div class="arrow">→</div>
+      <div class="step">verify turn<small>STEP_VERIFIED?</small></div><div class="arrow">→</div>
+      <div class="step">next item…<small>empty = done · drained</small></div>
+    </div>
+    <div class="card">
+      <h3>Any stop is lossless</h3>
+      <p>Unsent items never leave the stash — escalate, cap, error, disarm all keep the remainder. <b>But today, recovery from a stop was entirely manual.</b> That gap is half of this change.</p>
+    </div>
+  </section>
+
+  <section id="tl">
+    <p class="hint">Click an event for the evidence.</p>
+    <div class="tl" id="events"></div>
+  </section>
+
+  <section id="fix">
+    <div class="fix">
+      <div class="card">
+        <h3>1 · Operator stop ≠ agent error</h3>
+        <p><span class="was">Was:</span> a rescue Stop finalized the run as <code>error</code>, so the loop reported <code>error · the agent's run errored</code>.</p>
+        <p><span class="now">Now:</span> runs get a third status <code>stopped</code>; the loop resolves <code>stopped · by-operator</code>. Honest record, remainder kept.</p>
+      </div>
+      <div class="card">
+        <h3>2 · Deny-list that fits honest repos</h3>
+        <p><span class="was">Was:</span> whole-reply substring — "pushed" hit the term <code>push</code>, so a commit-and-push repo could never pass item 1.</p>
+        <p><span class="now">Now:</span> whole-word matching, plus a per-arm trim (drop <code>push</code>/<code>merge</code> for this arm only; global default untouched, disclosed in the gated detail).</p>
+      </div>
+      <div class="card">
+        <h3>3 · One-step Resume</h3>
+        <p><span class="was">Was:</span> 7 items stranded behind a dead <code>escalate / verify-owed</code> instance; only path back was the full arm form.</p>
+        <p><span class="now">Now:</span> a gated <b>Resume</b> re-activates the same instance from the current head — fresh iteration budget, sent-history kept, audit logged. Every activation resets phase, so stale <code>verify-owed</code> never leaks.</p>
+      </div>
+      <div class="card">
+        <h3>4 · The binding is unmistakable</h3>
+        <p><span class="was">Was:</span> nothing made "this queue drives <i>that</i> repo/tab" conspicuous — the first arm drove the harness itself.</p>
+        <p><span class="now">Now:</span> arm surfaces state <b>drives &lt;repo&gt; · tab · N queued</b> and that the head fires when the agent is next free; armed surfaces repeat it.</p>
+      </div>
+    </div>
+  </section>
+</main>
+<script>
+  const EVENTS = [
+    { t: "16:33", cls: "ok",   what: "8 expense prompts stashed", pill: "setup",
+      d: "One per building expense (ogrevanje, RTV, elektrika ×2, voda, NUSZ, hišnik…), all following one 'verify in the management system' template. One (NUSZ) was already done before it was stashed — a stale duplicate the queue would re-verify." },
+    { t: "16:41", cls: "bad",  what: "Arm #1 — wrong tab", pill: "failure A",
+      d: "The queue bound to the harness's own tab (mid self-dev deploy), not busi-dec. The head item fired straight into the harness agent's conversation, which started answering a busi-dec question inside Claude Web's own repo." },
+    { t: "16:42", cls: "bad",  what: "Rescue Stop → recorded as agent error", pill: "failure A",
+      d: "The operator stopped the run; RunSessionService only knows running|done|error, so the cancel finalized as error and the loop logged 'error · the agent's run errored'. A user action, misreported as an agent failure." },
+    { t: "16:43", cls: "ok",   what: "Arm #2 — correct tab, step runs perfectly", pill: "1 iteration",
+      d: "Iteration 1/10 sent the ogrevanje item to busi-dec; 4 turns, commit 8f02afb landed ('gas facts recorded on the expense row')." },
+    { t: "16:44", cls: "bad",  what: "Deny-list kills it on the word 'push'", pill: "failure B",
+      d: "busi-dec's convention is commit-and-push every change, so the reply honestly said 'pushed'. The whole-reply substring match on the default deny term 'push' escalated the queue before the verification turn ever ran. Structurally, this repo could never pass item 1." },
+    { t: "16:45", cls: "warn", what: "7 items stranded, loop dead", pill: "failure C",
+      d: "Instance frozen at escalate / verify-owed. Losslessness held (nothing was lost), but there is no one-step resume — the operator would have to re-arm through the full form." },
+    { t: "16:46", cls: "warn", what: "Operator finishes the job by hand", pill: "workaround",
+      d: "The same session was driven manually (~$11.5 across runs, commits 659796e + four more) — queue-shaped work completed outside the queue. The queue's value was exactly zero on its first real outing." },
+  ];
+  const box = document.getElementById("events");
+  for (const e of EVENTS) {
+    const div = document.createElement("div");
+    div.className = "ev " + e.cls;
+    div.innerHTML = `<time>${e.t}</time><span class="what">${e.what}</span>` +
+      `<span class="pill ${e.cls}">${e.pill}</span><div class="detail">${e.d}</div>`;
+    div.addEventListener("click", () => div.classList.toggle("open"));
+    box.appendChild(div);
+  }
+  const tabs = document.getElementById("tabs");
+  tabs.addEventListener("click", (ev) => {
+    const b = ev.target.closest("button"); if (!b) return;
+    for (const x of tabs.querySelectorAll("button")) x.classList.toggle("on", x === b);
+    for (const s of document.querySelectorAll("section")) s.classList.toggle("on", s.id === b.dataset.t);
+  });
+</script>
 </body>
 </html>
