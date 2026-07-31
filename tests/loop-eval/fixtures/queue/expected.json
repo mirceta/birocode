@@ -1,0 +1,32 @@
+[
+  {
+    "prompt": "Create src/add.mjs exporting a function add(a, b) that returns the sum. Plain ESM, no dependencies, per CLAUDE.md. Commit it.",
+    "path": "src/add.mjs",
+    "pattern": "export\\s+function\\s+add\\s*\\("
+  },
+  {
+    "prompt": "Create src/sub.mjs exporting a function sub(a, b) that returns a minus b. Same style as src/add.mjs. Commit it.",
+    "path": "src/sub.mjs",
+    "pattern": "export\\s+function\\s+sub\\s*\\("
+  },
+  {
+    "prompt": "Add a test suite at test/math.test.mjs using the built-in node:test runner, covering add and sub from src/. It must pass with `node --test test/`. Commit it.",
+    "path": "test/math.test.mjs",
+    "pattern": "node:test"
+  },
+  {
+    "prompt": "Add a Usage section to README.md (heading exactly `## Usage`) showing how to import and call add and sub. Commit it.",
+    "path": "README.md",
+    "pattern": "## Usage"
+  },
+  {
+    "prompt": "Create package.json for this library: name \"qmath\", version \"0.1.0\", type \"module\", and a test script that runs `node --test test/`. Commit it.",
+    "path": "package.json",
+    "pattern": "\"name\"\\s*:\\s*\"qmath\""
+  },
+  {
+    "prompt": "Create CHANGELOG.md with a `## 0.1.0` section listing the add and sub functions and the test suite. Commit it.",
+    "path": "CHANGELOG.md",
+    "pattern": "## 0\\.1\\.0"
+  }
+]
