@@ -77,8 +77,13 @@ export default function AutopilotOverviewView() {
           </li>
           <li>
             <b>Reference</b> — the two interactive &quot;How … works&quot;
-            architecture maps of the chat and autopilot subsystems, plus the
-            in-app System tests runs.
+            architecture maps of the chat and autopilot subsystems.
+          </li>
+          <li>
+            <b>🧪 Tests</b> — the stated coverage map of the loop engine
+            (openspec: add-autopilot-tests-tab): the unit-test layer, the
+            in-app runnable browser tests, the end-to-end rehearsal layer,
+            and the honest gap + plan for the untested tick engine.
           </li>
           <li>
             <b>Safety posture</b> — the whole API sits behind the operator gate

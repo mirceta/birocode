@@ -5,16 +5,19 @@ import AutopilotOverviewView from './AutopilotOverviewView';
 import AgentsView from './AgentsView';
 import LoopsView from './LoopsView';
 import SystemTestsView from './SystemTestsView';
+import TestInventoryView from './TestInventoryView';
 import ChatArchitectureView from './ChatArchitectureView';
 import AutopilotArchitectureView from './AutopilotArchitectureView';
 import '../../pages/autopilot.css';
 
 // The full Autopilot console (plans/autopilot-to-harness.md): the complete
 // detailed surface, grouped by loop type (openspec restructure-autopilot-tabs)
-// into five root tabs — the Overview front page (what autopilot is + the
+// into six root tabs — the Overview front page (what autopilot is + the
 // three-mode plan), the Suggestion-based loop (Control, Prompt library, Live
 // feed, History), the Loops root (📋 recipe + 🎯 goal: Agents, Recipes), the cross-loop-type
-// Audit trail, and Reference (the two explainers + System tests), all over
+// Audit trail, the 🧪 Tests coverage map (openspec add-autopilot-tests-tab:
+// unit / runnable browser / rehearsal / the engine-seam plan — System tests
+// live here now), and Reference (the two explainers), all over
 // /api/autopilot. The Overview is pure reference and is
 // the one tab the operator gate never hides. This is the SINGLE implementation rendered by BOTH the routed
 // Autopilot tab (pages/Autopilot.jsx, the mobile-first view) and the dashboard
@@ -52,7 +55,7 @@ export default function AutopilotConsole({ embedded = false }) {
   // reopens where you left it. The 🗒️ queue-based loop lives as a subtab of the
   // Loops root (openspec: queue-based-loop).
   const [root, setRoot] = useState('overview');
-  const [sub, setSub] = useState({ suggestion: 'control', goal: 'agents', reference: 'autoarch' });
+  const [sub, setSub] = useState({ suggestion: 'control', goal: 'agents', tests: 'unit', reference: 'autoarch' });
   const pickSub = useCallback((r, key) => setSub((s) => ({ ...s, [r]: key })), []);
   const [data, setData] = useState(null); // { enabled, threshold, denyList, agents, log }
   const [discover, setDiscover] = useState(null);
@@ -252,6 +255,7 @@ export default function AutopilotConsole({ embedded = false }) {
         <button className={root === 'audit' ? 'on' : ''} onClick={() => setRoot('audit')}>
           Audit{audit.length ? ` ${audit.length}` : ''}
         </button>
+        <button className={root === 'tests' ? 'on' : ''} onClick={() => setRoot('tests')}>🧪 Tests</button>
         <button className={root === 'reference' ? 'on' : ''} onClick={() => setRoot('reference')}>Reference</button>
       </nav>
 
@@ -274,6 +278,18 @@ export default function AutopilotConsole({ embedded = false }) {
           items={[['agents', 'Agents'], ['queue', 'Queue'], ['recipes', 'Recipes']]}
         />
       )}
+      {root === 'tests' && (
+        <SubTabs
+          active={sub.tests}
+          onPick={(k) => pickSub('tests', k)}
+          items={[
+            ['unit', 'Unit tests'],
+            ['browser', 'Browser (System tests)'],
+            ['rehearsal', 'E2E rehearsal'],
+            ['plan', 'Plan: engine seam'],
+          ]}
+        />
+      )}
       {root === 'reference' && (
         <SubTabs
           active={sub.reference}
@@ -281,7 +297,6 @@ export default function AutopilotConsole({ embedded = false }) {
           items={[
             ['autoarch', 'How autopilot works'],
             ['chatarch', 'How chat works'],
-            ['systests', 'System tests'],
           ]}
         />
       )}
@@ -320,7 +335,9 @@ export default function AutopilotConsole({ embedded = false }) {
         />
       )}
 
-      {root === 'reference' && sub.reference === 'systests' && <SystemTestsView />}
+      {root === 'tests' && sub.tests === 'browser' && <SystemTestsView />}
+
+      {root === 'tests' && sub.tests !== 'browser' && <TestInventoryView section={sub.tests} />}
 
       {root === 'reference' && sub.reference === 'chatarch' && <ChatArchitectureView />}
 
