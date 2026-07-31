@@ -285,7 +285,7 @@ export default function AutopilotConsole({ embedded = false }) {
           items={[
             ['unit', 'Unit tests'],
             ['browser', 'Browser (System tests)'],
-            ['rehearsal', 'E2E rehearsal'],
+            ['rehearsal', 'E2E eval'],
             ['plan', 'Plan: engine seam'],
           ]}
         />

@@ -81,11 +81,14 @@ Constraints that shape the design:
    expected artifacts (file exists / content regex). Alternative — pointing at an
    external scratch repo like `qloop-lab` — rejected: not committed, not repeatable.
 
-4. **Queue seeding via `dock.json` in the seeded data dir.** The 6 prompts are written
-   as a dock tab's stash items in the pre-boot `dock.json` (the rehearsal proved the
-   engine consumes exactly this shape); the arm call binds `tabId` to that tab.
-   Alternative — driving the dock UI/API to stash items — more moving parts for no
-   extra signal; the suite is about the loop engine, not the dock.
+4. **Queue seeding via the dock API.** (Revised during apply: the dock has a full
+   HTTP surface — `POST /api/dock` creates the tab, `POST /api/dock/{id}/stash`
+   enqueues.) The runner creates the tab and stashes the 6 prompts through the
+   shipped API after registering the fixture repo, then binds the arm call's `tabId`
+   to it. This is strictly more front-door than the originally planned pre-boot
+   `dock.json` seed and needs no fixed repo id, so registration stays uniform via
+   `POST /api/repos` for both scenarios. Only the gate/kill-switch files remain
+   pre-boot seeds (decision 2), because those are host-only by design.
 
 5. **Fixture product = tiny node scripts, no build step.** The goal fixture is a
    ~3-file node mini-app with an obvious missing feature and `node goal-check.mjs`
