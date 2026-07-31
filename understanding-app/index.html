@@ -1,204 +1,288 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Understanding — the chat.focus event</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Queue-based loop — the stash IS the queue, verified by default</title>
 <style>
   :root{
-    --bg:#faf7f2; --card:#ffffff; --ink:#2b2620; --sub:#6f6558;
-    --line:#e6ded2; --accent:#b3552e; --accent2:#2e7db3; --ok:#3d8a4e;
-    --soft:#f3ece1; --code:#f0e9dd;
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c232c; --line:#30363d;
+    --ink:#e6edf3; --muted:#8b949e; --dim:#6e7681;
+    --accent:#58a6ff; --green:#3fb950; --amber:#d29922; --purple:#bc8cff; --red:#f85149; --pink:#f778ba;
+    --mono:'SF Mono',ui-monospace,'Cascadia Code',Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
   }
   *{box-sizing:border-box}
-  body{margin:0;font:16px/1.55 system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink);padding:24px 16px 64px}
-  main{max-width:960px;margin:0 auto}
-  h1{font-size:1.5rem;margin:0 0 4px}
-  h2{font-size:1.12rem;margin:34px 0 10px}
-  .sub{color:var(--sub);margin:0 0 22px}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin:14px 0}
-  code,.k{background:var(--code);border-radius:5px;padding:1px 6px;font-family:Consolas,ui-monospace,monospace;font-size:.88em}
-  .muted{color:var(--sub);font-size:.9rem}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5}
+  a{color:var(--accent)}
+  code{font-family:var(--mono);font-size:.92em;background:#0b0f14;border:1px solid var(--line);border-radius:5px;padding:.5px 5px}
+  .wrap{max-width:1120px;margin:0 auto;padding:28px 20px 90px}
+  header h1{font-size:24px;margin:0 0 8px;letter-spacing:-.01em}
+  header p.sub{color:var(--muted);margin:0;font-size:14.5px;max-width:840px}
+  .tag{display:inline-block;font-family:var(--mono);font-size:11px;padding:2px 8px;border:1px solid var(--line);
+    border-radius:999px;color:var(--muted);margin-right:6px;background:var(--panel)}
 
-  /* pipeline */
-  .pipe{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch;margin-top:12px}
-  .stage{flex:1 1 150px;min-width:150px;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--soft);position:relative;transition:border-color .2s, box-shadow .2s}
-  .stage b{display:block;font-size:.92rem}
-  .stage small{color:var(--sub);display:block;margin-top:3px;line-height:1.35}
-  .stage.lit{border-color:var(--accent);box-shadow:0 0 0 3px rgba(179,85,46,.15);background:#fff}
-  .stage.gate.lit{border-color:var(--accent2);box-shadow:0 0 0 3px rgba(46,125,179,.15)}
-  .stage .tag{position:absolute;top:-9px;right:8px;font-size:.68rem;background:var(--card);border:1px solid var(--line);border-radius:99px;padding:0 8px;color:var(--sub)}
+  section{margin-top:40px}
+  h2{font-size:17px;margin:0 0 6px;display:flex;align-items:center;gap:10px}
+  h2 .n{font-family:var(--mono);font-size:13px;color:var(--bg);background:var(--accent);
+    width:24px;height:24px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-weight:700}
+  .lead{color:var(--muted);font-size:13.5px;margin:0 0 16px;max-width:860px}
 
-  /* demo dock */
-  .dock{border:1.5px solid var(--line);border-radius:12px;background:#fff;max-width:420px;padding:10px}
-  .dock .bar{display:flex;align-items:center;gap:8px;font-size:.85rem;color:var(--sub);padding-bottom:8px}
-  .dock .dot{width:9px;height:9px;border-radius:50%;background:var(--ok)}
-  .dock textarea{width:100%;border:1.5px solid var(--line);border-radius:9px;padding:9px 11px;font:inherit;resize:none;outline:none}
-  .dock textarea:focus{border-color:var(--accent)}
-  .cool{height:7px;border-radius:99px;background:var(--soft);margin-top:9px;overflow:hidden}
-  .cool i{display:block;height:100%;width:0;background:var(--accent2);transition:width .1s linear}
-  .verdict{min-height:24px;font-size:.9rem;margin-top:8px}
-  .verdict .emit{color:var(--accent);font-weight:600}
-  .verdict .damp{color:var(--accent2);font-weight:600}
+  /* property chips */
+  .chips{display:flex;flex-wrap:wrap;gap:9px}
+  .chip{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:13px;
+    display:flex;align-items:center;gap:8px}
+  .chip .tick{color:var(--green);font-weight:700}
 
-  .row{display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start}
-  .row>div{flex:1 1 320px}
+  /* ============ SIM ============ */
+  .simbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+  .toggle{display:inline-flex;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px}
+  .toggle button{border:none;background:transparent;color:var(--muted);font-family:var(--sans);font-size:13px;
+    font-weight:600;padding:8px 14px;border-radius:7px;cursor:pointer;transition:.15s;display:flex;align-items:center;gap:7px}
+  .toggle button.on{color:var(--ink)}
+  .toggle button.on.live{background:rgba(63,185,80,.16);box-shadow:inset 0 0 0 1px rgba(63,185,80,.4)}
+  .toggle button.on.snap{background:rgba(210,153,34,.16);box-shadow:inset 0 0 0 1px rgba(210,153,34,.4)}
+  .toggle .swatch{width:9px;height:9px;border-radius:50%}
+  .sw-live{background:var(--green)} .sw-snap{background:var(--amber)}
 
-  button.play{border:1.5px solid var(--line);background:#fff;border-radius:9px;padding:8px 14px;font:inherit;cursor:pointer;margin:4px 6px 4px 0}
-  button.play:hover{border-color:var(--accent)}
-  button.play b{color:var(--accent)}
+  .ctrls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-left:auto}
+  button.btn{font-family:var(--sans);font-size:13px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);
+    border-radius:8px;padding:8px 14px;cursor:pointer;transition:border-color .15s,background .15s}
+  button.btn:hover:not(:disabled){border-color:var(--accent)}
+  button.btn.primary{background:var(--accent);color:#08111f;border-color:var(--accent);font-weight:600}
+  button.btn:disabled{opacity:.4;cursor:default}
+  .steplbl{font-family:var(--mono);font-size:12px;color:var(--muted)}
 
-  .log{font-family:Consolas,ui-monospace,monospace;font-size:.8rem;background:#241f1a;color:#e8e0d2;border-radius:10px;padding:12px 14px;min-height:120px;max-height:220px;overflow:auto;margin-top:10px}
-  .log .t{color:#8fbe97}
-  .log .d{color:#7fb3d6}
-  table{border-collapse:collapse;width:100%;font-size:.92rem}
-  td,th{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left;vertical-align:top}
-  th{font-size:.8rem;text-transform:uppercase;letter-spacing:.04em;color:var(--sub)}
+  .stage{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .lanes{display:grid;grid-template-columns:1fr 1.15fr;gap:0}
+  @media(max-width:800px){.lanes{grid-template-columns:1fr;gap:14px}}
+  .lane{padding:0 16px;position:relative}
+  .lane + .lane{border-left:1px dashed var(--line)}
+  @media(max-width:800px){.lane + .lane{border-left:none;border-top:1px dashed var(--line);padding-top:14px}}
+  .lane h4{margin:0 0 4px;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);font-weight:700;
+    display:flex;align-items:center;gap:7px;min-height:20px}
+  .lane .subh{font-size:11.5px;color:var(--dim);margin:0 0 12px;font-family:var(--mono);min-height:16px}
+  .lane .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+  .dot.stash{background:var(--accent)} .dot.queue{background:var(--pink)} .dot.sent{background:var(--green)}
+  .lane.merged::after{content:'one live object — drains as it lands';position:absolute;top:-2px;right:16px;
+    font-size:10.5px;font-family:var(--mono);color:var(--green)}
+
+  .card{background:#0b0f14;border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin-bottom:8px;
+    display:flex;gap:9px;align-items:flex-start;transition:.25s;position:relative}
+  .card .cid{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--dim);margin-top:1px;min-width:20px}
+  .card .clabel{font-size:12.5px;color:var(--ink);line-height:1.35;padding-right:78px}
+  .card.q{border-color:rgba(247,120,186,.35)}
+  .card.q.head::before{content:'next';position:absolute;right:9px;top:9px;font-size:10px;font-family:var(--mono);color:var(--pink)}
+  .card.sent{border-color:rgba(63,185,80,.4);background:rgba(63,185,80,.06)}
+  .card.sent::after{content:'▶ sent';position:absolute;right:9px;top:9px;font-size:10px;font-family:var(--mono);color:var(--green)}
+  .card.vok{border-color:rgba(63,185,80,.35);border-style:dashed}
+  .card.vok::after{content:'✓ STEP_VERIFIED';position:absolute;right:9px;top:9px;font-size:10px;font-family:var(--mono);color:var(--green)}
+  .card.vok .clabel{color:var(--muted)}
+  .card.vfail{border-color:var(--red);background:rgba(248,81,73,.08)}
+  .card.vfail::after{content:'✗ not verified';position:absolute;right:9px;top:9px;font-size:10px;font-family:var(--mono);color:var(--red)}
+  .card.areply{border-color:rgba(210,153,34,.45)}
+  .card.areply::after{content:'🤖 reply';position:absolute;right:9px;top:9px;font-size:10px;font-family:var(--mono);color:var(--amber)}
+  .card.buried{opacity:.55;filter:saturate(.6)}
+  .card.buried::after{content:'⚠ buried';color:var(--red)}
+  .card.human{border-color:rgba(188,140,255,.5)}
+  .card.human::after{content:'👤 you';position:absolute;right:9px;top:9px;font-size:10px;font-family:var(--mono);color:var(--purple)}
+  .card.fresh{animation:pop .35s}
+  .card.new-flag{border-color:var(--purple);box-shadow:0 0 0 1px rgba(188,140,255,.3)}
+  .card.new-flag .cid{color:var(--purple)}
+  @keyframes pop{0%{transform:scale(.9) translateY(-6px);opacity:0}100%{transform:scale(1);opacity:1}}
+  .empty{color:var(--dim);font-size:12px;font-style:italic;padding:8px 2px}
+
+  .agentbox{margin-top:12px;display:flex;align-items:center;gap:11px;padding:11px 14px;background:var(--panel2);
+    border:1px solid var(--line);border-radius:10px;flex-wrap:wrap}
+  .agentbox .av{width:34px;height:34px;border-radius:9px;background:#0b0f14;border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;font-size:17px}
+  .agentbox .st{font-size:13px}
+  .agentbox .st b{color:var(--ink)}
+  .agentbox .pulse{width:8px;height:8px;border-radius:50%;background:var(--amber);box-shadow:0 0 0 0 rgba(210,153,34,.6);animation:pl 1.3s infinite}
+  .agentbox.idle .pulse{background:var(--green);animation:none}
+  @keyframes pl{0%{box-shadow:0 0 0 0 rgba(210,153,34,.5)}70%{box-shadow:0 0 0 7px rgba(210,153,34,0)}100%{box-shadow:0 0 0 0 rgba(210,153,34,0)}}
+  .loopchip{margin-left:auto;font-family:var(--mono);font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;border:1px solid var(--line);color:var(--dim)}
+  .loopchip.armed{color:var(--green);border-color:rgba(63,185,80,.4);background:rgba(63,185,80,.08)}
+  .loopchip.stopped{color:var(--red);border-color:rgba(248,81,73,.4);background:rgba(248,81,73,.08)}
+  .loopchip.done{color:var(--accent);border-color:rgba(88,166,255,.4);background:rgba(88,166,255,.08)}
+
+  .narrate{margin-top:14px;padding:12px 14px;border-radius:10px;font-size:13.5px;border:1px solid var(--line);background:#0b0f14;min-height:44px;display:flex;gap:10px;align-items:flex-start}
+  .narrate .marker{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;white-space:nowrap;margin-top:1px}
+  .narrate.diverge{border-color:var(--red);background:rgba(248,81,73,.07)}
+  .narrate.good{border-color:rgba(63,185,80,.45);background:rgba(63,185,80,.05)}
+  .marker.def{background:var(--panel2);color:var(--muted)}
+  .marker.div{background:rgba(248,81,73,.15);color:var(--red)}
+  .marker.win{background:rgba(63,185,80,.15);color:var(--green)}
+  .marker.flag{background:rgba(188,140,255,.15);color:var(--purple)}
+
+  .scorebar{display:flex;gap:22px;margin-top:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+  .scorebar b{color:var(--ink)}
+  .scorebar .big{font-family:var(--mono);font-size:15px}
+
+  /* ============ LEDGER ============ */
+  .ledger{display:flex;flex-direction:column;gap:10px}
+  .drow{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;border-left:3px solid var(--accent)}
+  .drow .top{display:grid;grid-template-columns:52px 1fr;align-items:center;gap:12px;padding:13px 16px;cursor:pointer}
+  .drow .did{font-family:var(--mono);font-weight:700;font-size:13px;color:var(--dim)}
+  .drow .dtitle{font-size:14px;font-weight:600}
+  .drow .dtitle .k{font-family:var(--mono);font-size:11px;color:var(--dim);font-weight:400;display:block;margin-top:2px}
+  .drow .detail{border-top:1px solid var(--line);display:none;padding:13px 16px}
+  .drow.open .detail{display:block}
+  .drow .detail p{margin:0;font-size:13px;color:var(--muted)}
+  .drow .detail p b{color:var(--ink)}
+
+  /* ============ two/three-panel generic ============ */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:720px){.grid2{grid-template-columns:1fr}}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+  @media(max-width:860px){.grid3{grid-template-columns:1fr}}
+  .card2{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .card2 h3{margin:0 0 10px;font-size:14px;display:flex;align-items:center;gap:8px}
+  .card2 p{margin:0;font-size:13px;color:var(--muted)}
+  .card2 p b{color:var(--ink)}
+  .card2 .where{margin-top:10px;font-family:var(--mono);font-size:11px;color:var(--dim)}
+
+  /* honesty invariant flow */
+  .honest{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-family:var(--mono);font-size:12px;margin-top:14px}
+  .hbox{background:#0b0f14;border:1px solid var(--line);border-radius:8px;padding:9px 12px;color:var(--ink)}
+  .hbox.stashy{border-color:rgba(88,166,255,.4)}
+  .hbox.chat{border-color:rgba(63,185,80,.4)}
+  .harrow{color:var(--green);font-size:18px}
+  .heq{color:var(--amber);font-weight:700}
+
+  .ladder{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+  .ladder li{display:flex;gap:11px;align-items:flex-start;font-size:13px}
+  .ladder .rung{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--red);border:1px solid rgba(248,81,73,.35);
+    background:rgba(248,81,73,.08);border-radius:6px;padding:2px 8px;white-space:nowrap;margin-top:1px}
+  .ladder .rt{color:var(--muted)} .ladder .rt b{color:var(--ink)}
+
+  .foot{margin-top:48px;color:var(--dim);font-size:12px;text-align:center;line-height:1.7}
 </style>
 </head>
 <body>
-<main>
-  <h1>The <code>chat.focus</code> event</h1>
-  <p class="sub">openspec change <code>add-chat-focus-event</code> — the feed's third event type, and its first browser-originated one: the moment the End User clicks into an agent dock's chat textbox, so the sound system can cue it.</p>
+<div class="wrap">
+  <header>
+    <div><span class="tag">queue-based-loop</span><span class="tag">built 2026-07-31</span></div>
+    <h1>The stash IS the queue — verified by default</h1>
+    <p class="sub">The third promised autopilot mode is a <b>wire between two things that already exist</b>: the per-tab
+    <b>prompt stash</b> (the ideas you flag while the agent is busy) and the <b>loop engine</b>. Arming a 🗒️ queue loop means:
+    <i>automatically unload my stash into the agent whenever it's free</i> — and, by default, <b>verify each step actually
+    got solved</b> before unloading the next.</p>
+  </header>
 
-  <h2>Try it — a fake dock</h2>
-  <div class="card">
-    <div class="row">
-      <div>
-        <div class="dock">
-          <div class="bar"><span class="dot"></span> Claude Web (this app) · <b>agent dock</b></div>
-          <textarea id="demoBox" rows="2" placeholder="Click me — I'm the dock's chat composer"></textarea>
-          <div class="cool"><i id="coolBar"></i></div>
-          <div class="verdict" id="verdict">Focus the box to see what a real dock would send.</div>
+  <!-- ============ PROPERTIES ============ -->
+  <section>
+    <h2><span class="n">≡</span> The design in six properties</h2>
+    <p class="lead">Decided in <code>openspec/changes/queue-based-loop</code> — the live-stash model merged with the loop
+    engine's existing machinery. Implemented: <code>QueueLoop.cs</code> + engine consume-on-land, the dock control's
+    Queue type, and the console's Loops → Queue tab.</p>
+    <div class="chips" id="chips"></div>
+  </section>
+
+  <!-- ============ SIM ============ -->
+  <section>
+    <h2><span class="n">▸</span> One run, stepped through</h2>
+    <p class="lead">The same queue, both postures. In <b>verified</b> mode (the default) the agent's mid-queue question
+    <b>stops the loop</b>; in <b>blind</b> mode (the opt-out) watch what happens to that same question. This is the
+    amendment: <i>delivered ≠ solved</i>.</p>
+
+    <div class="simbar">
+      <div class="toggle" id="modeToggle">
+        <button data-mode="verify" class="on live"><span class="swatch sw-live"></span>Verified — the default</button>
+        <button data-mode="blind" class="snap"><span class="swatch sw-snap"></span>Blind unload — the opt-out</button>
+      </div>
+      <div class="ctrls">
+        <button class="btn" id="back">‹ Back</button>
+        <button class="btn primary" id="step">Step ›</button>
+        <button class="btn" id="play">▶ Play</button>
+        <button class="btn" id="reset">Reset</button>
+        <span class="steplbl" id="steplbl"></span>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="lanes" id="lanes"></div>
+      <div class="agentbox idle" id="agent">
+        <div class="av">🤖</div>
+        <span class="pulse"></span>
+        <div class="st" id="agentst"><b>Agent idle</b></div>
+        <span class="loopchip" id="loopchip">not armed</span>
+      </div>
+    </div>
+
+    <div class="narrate" id="narrate"></div>
+    <div class="scorebar" id="score"></div>
+  </section>
+
+  <!-- ============ SAFETY ============ -->
+  <section>
+    <h2><span class="n">🛡</span> Why this stays honest and safe</h2>
+    <div class="grid2">
+      <div class="card2">
+        <h3>🔎 Honesty without a frozen copy</h3>
+        <p>Every auto-sent byte is a <b>stash item you can already see</b> above the composer; verification prompts are a
+        <b>stored template</b> (gated-inspectable) + that visible step text, composed deterministically at send time. The
+        audit trail still records every actual send verbatim.</p>
+        <div class="honest">
+          <span class="hbox stashy">visible stash item</span>
+          <span class="heq">≡</span>
+          <span class="harrow">→</span>
+          <span class="hbox chat">auto-sent chat message</span>
         </div>
-        <p class="muted">Cooldown here is 3&nbsp;s so the demo is snappy; the real composer uses <b>10&nbsp;s per dock</b>. Tab away and back, or click repeatedly — only the first focus per window emits.</p>
       </div>
-      <div>
-        <div class="log" id="log"><span class="muted">event log…</span></div>
+      <div class="card2">
+        <h3>🪜 Four ways it stops before making things worse</h3>
+        <p>As a driven <code>QueueLoop</code> kind it inherits the ladder, plus the new verification gate — and because
+        unsent items never leave the stash, <b>every stop is lossless</b>:</p>
+        <ul class="ladder">
+          <li><span class="rung">errored run</span><span class="rt">the last turn failed → <b>stop</b>, don't pile on</span></li>
+          <li><span class="rung">NEEDS_HUMAN:</span><span class="rt">the agent used the sentinel → <b>escalate</b></span></li>
+          <li><span class="rung">deny-list</span><span class="rt">the load-bearing fence → <b>never auto-send past it</b></span></li>
+          <li><span class="rung">step-unverified</span><span class="rt">no <code>STEP_VERIFIED</code> → <b>escalate</b> — catches plain questions the ladder can't, because ordinary agents don't know any sentinel</span></li>
+        </ul>
       </div>
     </div>
-  </div>
+  </section>
 
-  <h2>The path an event takes</h2>
-  <div class="card">
-    <div class="pipe" id="pipe">
-      <div class="stage" data-s="0"><span class="tag">browser</span><b>Dock composer</b><small><code>ChatInput.jsx</code> textarea gets an <code>onFocus</code> — dock-embedded only; the main chat page never emits.</small></div>
-      <div class="stage gate" data-s="1"><span class="tag">browser</span><b>Debounce gate</b><small>One emit per composer per 10&nbsp;s (module-level timestamp). Fire-and-forget — errors never disturb typing.</small></div>
-      <div class="stage" data-s="2"><span class="tag">HTTP</span><b>POST /api/events/chat-focus</b><small>The feed's single, <b>fixed-type</b> write endpoint. Session-authed; type is set server-side, repo from <code>X-Repo-Id</code>.</small></div>
-      <div class="stage" data-s="3"><span class="tag">backend</span><b>HarnessEventFeed</b><small><code>Publish("chat.focus", …)</code> — same envelope as the turn events, best-effort, soft-capped.</small></div>
-      <div class="stage" data-s="4"><span class="tag">backend</span><b>Collector</b><small>Self source ingests it into the aggregate; <code>HostEventSound.Notify</code> fires the <b>host cue</b>.</small></div>
-      <div class="stage" data-s="5"><span class="tag">browser</span><b>events-app</b><small>Next poll renders it and <code>playCue("chat.focus")</code> plays the <b>device cue</b>.</small></div>
+  <!-- ============ SURFACES ============ -->
+  <section>
+    <h2><span class="n">⌘</span> Three surfaces, one list</h2>
+    <p class="lead">The stash strip stays the queue's only editor — the loop surfaces add settings and arming, never a
+    duplicate list.</p>
+    <div class="grid3">
+      <div class="card2">
+        <h3>📥 Stash strip <span class="tag" style="margin:0">the editor</span></h3>
+        <p>Where you already flag prompts, above the composer. Gains <b>reordering</b> (new, works armed or not) via
+        <code>POST …/stash/reorder</code>. Add / remove / reorder while the queue runs — it simply changes what unloads next.</p>
+        <div class="where">ChatInput / PinnedAgent · DockRegistry.Stash</div>
+      </div>
+      <div class="card2">
+        <h3>🗒️ Dock loop control <span class="tag" style="margin:0">quick arm</span></h3>
+        <p>The unified type picker gains Queue beside 💡 📋 🎯: mode (drive / suggest), cap, verification toggle
+        (<b>on by default</b>), a next-up preview and remaining count. Arming requires a non-empty stash.</p>
+        <div class="where">DockLoopControl · badge: remaining / sent</div>
+      </div>
+      <div class="card2">
+        <h3>🎛 Console → Loops → Queue tab <span class="tag" style="margin:0">settings home</span></h3>
+        <p>The new tab in the autopilot console's Loops section: per-agent queue status (remaining · sent · phase), the same
+        settings, arm / disarm. Ungated status shows <b>counts only</b>; texts follow the gated-detail rule.</p>
+        <div class="where">AutopilotConsole · gated disclosure</div>
+      </div>
     </div>
+  </section>
+
+  <!-- ============ LEDGER ============ -->
+  <section>
+    <h2><span class="n">⚖</span> The eight decisions</h2>
+    <p class="lead">The final ledger — the merged model's design decisions, D1–D8. Click a row for the reasoning.</p>
+    <div class="ledger" id="ledger"></div>
+  </section>
+
+  <div class="foot">
+    Rolling-latest Understanding app · overwrites <code>understanding-app/index.html</code> · served no-store by the harness<br/>
+    Companion to <code>openspec/changes/queue-based-loop</code> (proposal · design · delta specs · tasks).
   </div>
-
-  <h2>Hear the cues (device layer, same synth as events-app)</h2>
-  <div class="card">
-    <button class="play" onclick="cue('chat.focus')"><b>chat.focus</b> — two soft sine taps, “someone's here”</button>
-    <button class="play" onclick="cue('turn.start')">turn.start — rising query</button>
-    <button class="play" onclick="cue('turn.ended')">turn.ended — resolving affirmative</button>
-    <button class="play" onclick="cue('_default')">unknown type — neutral blip</button>
-    <p class="muted">Host layer counterpart: beep mode plays the Windows <i>Question</i> sound, voice mode says “someone is writing to agent &lt;source&gt;”, and the Event → sound rules table has a <code>chat.focus</code> slot for a custom file — precedence: custom file › voice/beep.</p>
-  </div>
-
-  <h2>Why a write endpoint, when the feed is “read-only”?</h2>
-  <div class="card">
-    <p>Every publisher so far was backend code (<code>CliRunnerService</code> around agent turns). But <i>focusing a textbox</i> exists only in the browser — the server can't observe it. So the spec's “feed reads are authenticated and expose no new actions” requirement was amended with one narrow carve-out:</p>
-    <table>
-      <tr><th>Guarantee</th><th>How it's kept</th></tr>
-      <tr><td>No arbitrary publishing</td><td>The endpoint accepts no <code>type</code> — it can only ever append <code>chat.focus</code>. Clients can't forge <code>turn.ended</code>.</td></tr>
-      <tr><td>No harness actions</td><td>Appending one best-effort event <i>is</i> the entire effect. Nothing else happens.</td></tr>
-      <tr><td>Authenticated</td><td>Same session gate as every <code>/api/*</code> route — verified: unauthenticated POST → 401, nothing appended.</td></tr>
-      <tr><td>No feed flooding</td><td>Client-side 10&nbsp;s cooldown per composer + the feed's existing soft cap.</td></tr>
-    </table>
-  </div>
-
-  <h2>Envelope, as verified end-to-end</h2>
-  <div class="card">
-    <pre style="margin:0;font-size:.85rem;overflow:auto"><code>{ "seq": 2, "at": 1785178607069, "type": "chat.focus",
-  "source": { "repoId": "057eb…", "repoName": "Claude Web (this app)" },
-  "data":   { "tabId": "tb-chatfocus-test" } }   // which dock, when known</code></pre>
-    <p class="muted">Playwright-verified against an isolated preview: main composer → 0 emits · dock composer → 1 · rapid refocus → still 1 · event visible in <code>/api/events</code> and <code>/api/collector/events</code> · both sound panels show the “Chat focused” slot.</p>
-  </div>
-</main>
-
-<script>
-  // ---- demo dock: focus -> debounce -> animate the pipeline -------------------
-  const COOL_MS = 3000;                 // demo-speed stand-in for the real 10s
-  let lastEmit = 0, coolTimer = null;
-  const box = document.getElementById('demoBox');
-  const bar = document.getElementById('coolBar');
-  const verdict = document.getElementById('verdict');
-  const logEl = document.getElementById('log');
-  const stages = [...document.querySelectorAll('.stage')];
-  let seq = 2;                          // continues the verified transcript above
-
-  function log(msg){
-    if (logEl.firstChild && logEl.firstChild.className === 'muted') logEl.innerHTML = '';
-    const line = document.createElement('div');
-    line.innerHTML = `<span class="t">${new Date().toLocaleTimeString()}</span> ${msg}`;
-    logEl.appendChild(line); logEl.scrollTop = logEl.scrollHeight;
-  }
-  function lightPipeline(){
-    stages.forEach(s => s.classList.remove('lit'));
-    stages.forEach((s, i) => {
-      setTimeout(() => s.classList.add('lit'), i * 260);
-      setTimeout(() => s.classList.remove('lit'), i * 260 + 900);
-    });
-  }
-  function runCooldown(){
-    const started = Date.now();
-    clearInterval(coolTimer);
-    coolTimer = setInterval(() => {
-      const p = Math.min(1, (Date.now() - started) / COOL_MS);
-      bar.style.width = (100 - p * 100) + '%';
-      if (p >= 1) clearInterval(coolTimer);
-    }, 80);
-    bar.style.width = '100%';
-  }
-  box.addEventListener('focus', () => {
-    const now = Date.now();
-    if (now - lastEmit < COOL_MS){
-      verdict.innerHTML = '<span class="damp">damped</span> — inside the cooldown window, nothing sent.';
-      log('focus <span class="d">→ damped (cooldown)</span>');
-      return;
-    }
-    lastEmit = now;
-    seq += 1;
-    verdict.innerHTML = '<span class="emit">emitted</span> — <code>POST /api/events/chat-focus</code> → <code>chat.focus</code> seq ' + seq;
-    log(`focus → <b>chat.focus</b> <span class="d">{ seq: ${seq}, data: { tabId: "demo-dock" } }</span>`);
-    lightPipeline();
-    runCooldown();
-    cue('chat.focus');
-  });
-
-  // ---- the same synth motifs as events-app/index.html -------------------------
-  let audioCtx = null;
-  const N = (freq, opt={}) => Object.assign({ freq }, opt);
-  const SOUNDS = {
-    "turn.start": [N(587,{type:"square",dur:.07,gain:.10}), N(880,{type:"square",dur:.10,gain:.11,at:.07}), N(1175,{type:"triangle",dur:.12,gain:.09,at:.15})],
-    "turn.ended": [N(784,{type:"square",dur:.08,gain:.11}), N(1046,{type:"square",dur:.14,gain:.11,at:.09})],
-    "chat.focus": [N(523,{type:"sine",dur:.06,gain:.07}), N(659,{type:"sine",dur:.10,gain:.07,at:.07})],
-    _default:     [N(740,{type:"triangle"})],
-  };
-  function cue(type){
-    try{
-      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-      const t0 = audioCtx.currentTime + 0.02;
-      for (const n of (SOUNDS[type] || SOUNDS._default)){
-        const t = t0 + (n.at || 0);
-        const osc = audioCtx.createOscillator(), g = audioCtx.createGain();
-        osc.type = n.type || 'triangle';
-        osc.frequency.setValueAtTime(n.freq, t);
-        const peak = n.gain || 0.16, dur = n.dur || 0.16;
-        g.gain.setValueAtTime(0.0001, t);
-        g.gain.exponentialRampToValueAtTime(peak, t + 0.012);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-        osc.connect(g); g.connect(audioCtx.destination);
-        osc.start(t); osc.stop(t + dur + 0.02);
-      }
-    }catch{}
-  }
-</script>
+</div>
+<script src="./app.js"></script>
 </body>
 </html>

@@ -32,9 +32,9 @@ import PromptExpandModal from './PromptExpandModal';
 const FOCUS_EVENT_COOLDOWN_MS = 10_000;
 const lastFocusEmitAt = new Map();
 
-export default function ChatInput({ value, onChange, onSend, onStop, streaming, attachment, onAttach, embedded = false, stashTabId, repoId }) {
+export default function ChatInput({ value, onChange, onSend, onStop, streaming, attachment, onAttach, embedded = false, stashTabId, repoId, queueLoop }) {
   const { t } = useT();
-  const { tabs, activeTabId, activeTab, addStash, removeStash, globalStash } = useDock();
+  const { tabs, activeTabId, activeTab, addStash, removeStash, reorderStash, globalStash } = useDock();
   // The queue attaches to a specific agent tab. Normally that's the ACTIVE tab,
   // or — with no tab (the plain main chat) — the tab-independent global queue
   // (plans/queued-prompts.md). Inside a dashboard dock it must attach to THIS
@@ -75,6 +75,17 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
   const textareaRef = useRef(null);
   const fileRef = useRef(null);
   const sendDisabled = streaming;
+
+  // Queue-armed strip (openspec: queue-loop-visibility, D2): while an armed 🗒️
+  // queue loop is bound to THIS strip's tab, the stash IS the live queue — so
+  // disclose it: chips numbered in unload order, the head badged in-flight
+  // (work/verify phase — the engine is executing or verifying a step) or
+  // next-up (idle between unloads). Derived from the ungated loop projection
+  // only; unarmed tabs and the global stash render as plain chips.
+  const queueArmed =
+    !!queueLoop?.active && !!queueTabId && queueLoop.queueTabId === queueTabId;
+  const headBusy =
+    queueArmed && (queueLoop.phase === 'work' || queueLoop.phase === 'verify');
 
   // Auto-grow to fit the content. Runs on every value change -- including when
   // the draft is restored after navigating back, or cleared after sending.
@@ -160,6 +171,22 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
     removeStash(queueTabId, item.id);
   }
 
+  // Reorder (openspec queue-based-loop): move a chip one place earlier/later in
+  // the strip — the order IS what an armed queue loop unloads next. Tab stashes
+  // only; the global queue feeds no loop and stays insertion-ordered.
+  const canReorder = !!queueTabId && stash.length > 1;
+  function handleChipMove(e, item, dir) {
+    e.stopPropagation();
+    if (!canReorder) return;
+    const ids = stash.map((s) => s.id);
+    const idx = ids.indexOf(item.id);
+    const to = idx + dir;
+    if (idx < 0 || to < 0 || to >= ids.length) return;
+    ids.splice(idx, 1);
+    ids.splice(to, 0, item.id);
+    reorderStash(queueTabId, ids);
+  }
+
   const canSend = ((value || '').trim().length > 0 || !!attachment) && !sendDisabled;
   const canStash = stashEnabled && (value || '').trim().length > 0;
 
@@ -193,16 +220,55 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
         />
       )}
       {stash.length > 0 && (
-        <div className="chat-stash" aria-label={t('chat.stashListAria')}>
-          {stash.map((item) => (
+        <div
+          className={`chat-stash${queueArmed ? ' chat-stash--queue' : ''}`}
+          aria-label={queueArmed ? t('chat.queueStripAria') : t('chat.stashListAria')}
+        >
+          {stash.map((item, idx) => (
             <button
               key={item.id}
               type="button"
-              className="chat-stash__chip"
+              className={`chat-stash__chip${queueArmed && idx === 0 ? ' chat-stash__chip--head' : ''}`}
               title={item.text}
               onClick={() => handleChipTap(item)}
             >
+              {queueArmed && (
+                <span className="chat-stash__num" aria-hidden="true">
+                  {idx + 1}
+                </span>
+              )}
+              {queueArmed && idx === 0 && (
+                <span
+                  className={`chat-stash__head-badge${headBusy ? ' chat-stash__head-badge--busy' : ''}`}
+                >
+                  {headBusy ? t('chat.queueInFlight') : t('chat.queueNextUp')}
+                </span>
+              )}
+              {canReorder && (
+                <span
+                  className={`chat-stash__move${stash.indexOf(item) === 0 ? ' chat-stash__move--disabled' : ''}`}
+                  role="button"
+                  aria-disabled={stash.indexOf(item) === 0}
+                  aria-label={t('chat.queueMoveEarlier')}
+                  title={t('chat.queueMoveEarlier')}
+                  onClick={(e) => handleChipMove(e, item, -1)}
+                >
+                  &lsaquo;
+                </span>
+              )}
               <span className="chat-stash__text">{item.text}</span>
+              {canReorder && (
+                <span
+                  className={`chat-stash__move${stash.indexOf(item) === stash.length - 1 ? ' chat-stash__move--disabled' : ''}`}
+                  role="button"
+                  aria-disabled={stash.indexOf(item) === stash.length - 1}
+                  aria-label={t('chat.queueMoveLater')}
+                  title={t('chat.queueMoveLater')}
+                  onClick={(e) => handleChipMove(e, item, 1)}
+                >
+                  &rsaquo;
+                </span>
+              )}
               <span
                 className={`chat-stash__send${sendDisabled ? ' chat-stash__send--disabled' : ''}`}
                 role="button"

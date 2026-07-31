@@ -1537,6 +1537,78 @@ details.step > summary::-webkit-details-marker {
   pointer-events: none;
 }
 
+/* Reorder arrows on a queued-prompt chip (openspec queue-based-loop): the strip
+   order is what an armed queue loop unloads next. */
+.chat-stash__move {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--color-text-soft);
+}
+
+.chat-stash__move:hover {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
+.chat-stash__move--disabled {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+/* Queue-armed strip (openspec queue-loop-visibility): while a 🗒️ queue loop is
+   armed on this tab the stash IS the live queue — accent the strip, number the
+   chips in unload order, and badge the head next-up / in-flight. */
+.chat-stash--queue {
+  padding: 6px 4px 2px;
+  border-left: 3px solid var(--color-accent);
+  border-radius: 4px;
+}
+
+.chat-stash__num {
+  flex: 0 0 auto;
+  min-width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--color-border);
+  color: var(--color-text-soft);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.chat-stash__chip--head {
+  border-color: var(--color-accent);
+}
+
+.chat-stash__chip--head .chat-stash__num {
+  background: var(--color-accent);
+  color: var(--color-bg);
+}
+
+.chat-stash__head-badge {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--color-border);
+  color: var(--color-text-soft);
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+.chat-stash__head-badge--busy {
+  background: var(--color-accent);
+  color: var(--color-bg);
+}
+
 .chat-stash__remove {
   flex: 0 0 auto;
   width: 18px;

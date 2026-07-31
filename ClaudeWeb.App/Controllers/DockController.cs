@@ -12,6 +12,7 @@ namespace ClaudeWeb.Controllers;
 ///   PATCH  /api/dock/{id} -- partial update { sessionId?, status?, repoName?, color?, dashboard?, important?, waiting?, waitingOn?, dependsOn?, wide? }
 ///   DELETE /api/dock/{id} -- close a tab
 ///   POST   /api/dock/{id}/stash           -- stash a prompt idea { text, id?, createdAt? }
+///   POST   /api/dock/{id}/stash/reorder   -- reorder the stash { ids: [full ordered id list] }
 ///   DELETE /api/dock/{id}/stash/{stashId} -- remove a stashed idea
 ///   GET    /api/dock/stash               -- the main chat's tab-independent queue
 ///   POST   /api/dock/stash               -- enqueue on it { text, id?, createdAt? }
@@ -24,6 +25,7 @@ public class DockController : ControllerBase
     public record CreateRequest(string? Id, string? RepoId, string? RepoName, string? SessionId, string? Status, long? CreatedAt, string? Color);
     public record PatchRequest(string? SessionId, string? Status, string? RepoName, string? Color, bool? Dashboard, bool? Important, bool? Waiting, string? WaitingOn, string? DependsOn, bool? Wide);
     public record StashRequest(string? Id, string? Text, long? CreatedAt);
+    public record StashReorderRequest(List<string>? Ids);
 
     private readonly DockRegistry _dock;
     private readonly Logger _logger;
@@ -126,6 +128,19 @@ public class DockController : ControllerBase
             return BadRequest(new { error = "text is required" });
         var item = _dock.AddStash(id, req.Text, req.Id, req.CreatedAt);
         return item is null ? NotFound(new { error = "unknown tab" }) : Ok(StashDto(item));
+    }
+
+    // Reorder the whole stash (openspec queue-based-loop): the client sends the
+    // full ordered id list; ids consumed meanwhile (e.g. by an armed queue loop)
+    // are ignored, last-write-wins. Returns the resulting stash.
+    [HttpPost("{id}/stash/reorder")]
+    public IActionResult ReorderStash(string id, [FromBody] StashReorderRequest req)
+    {
+        _logger.CountRequest();
+        if (req?.Ids is null)
+            return BadRequest(new { error = "ids is required" });
+        var stash = _dock.ReorderStash(id, req.Ids);
+        return stash is null ? NotFound(new { error = "unknown tab" }) : Ok(stash.Select(StashDto));
     }
 
     [HttpDelete("{id}/stash/{stashId}")]

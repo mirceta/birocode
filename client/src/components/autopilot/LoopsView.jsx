@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useDock } from '../../context/DockContext';
 import '../../pages/autopilot.css';
 
 // The "Loops" sub-tab of the AutopilotConsole (plans/autopilot-loop-mode.md +
@@ -39,10 +40,13 @@ const STOP_REASON = {
   cap: 'iteration cap reached',
   error: 'run error',
   user: 'stopped by you',
+  drained: 'queue drained — every prompt sent',
+  'step-unverified': 'a step failed verification',
+  'stash-tab-gone': 'the queue’s dock tab was closed',
 };
 
 // Loop kind → marker, matching the dock control and the console's nav emoji.
-const KIND_EMOJI = { recipe: '📋', goal: '🎯' };
+const KIND_EMOJI = { recipe: '📋', goal: '🎯', queue: '🗒️' };
 
 function LoopRow({ agent, loop, recipes, loopAction }) {
   const active = loop?.active;
@@ -190,6 +194,166 @@ function LoopRow({ agent, loop, recipes, loopAction }) {
   );
 }
 
+// One agent's 🗒️ queue loop (openspec: queue-based-loop): status over the LIVE
+// stash of the bound dock tab, plus an arm form with a tab picker — a repo can
+// hold several dock tabs and the queue is per-tab. Arming an empty stash is
+// refused server-side; the button stays disabled with the reason instead.
+function QueueRow({ agent, loop, tabs, loopAction }) {
+  const repoTabs = tabs.filter((tb) => tb.repoId === agent.repoId);
+  const [tabId, setTabId] = useState('');
+  const [verify, setVerify] = useState(true);
+  const [cap, setCap] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const isQueue = loop?.kind === 'queue';
+  const active = !!loop?.active && isQueue;
+  const chosen = repoTabs.find((tb) => tb.id === tabId) || repoTabs[0] || null;
+  const stashLen = chosen?.stash?.length ?? 0;
+
+  const act = async (body) => {
+    setBusy(true);
+    try { await loopAction(body); } finally { setBusy(false); }
+  };
+  const arm = () => {
+    if (!chosen || stashLen === 0) return;
+    act({
+      repoId: agent.repoId, action: 'start', kind: 'queue', tabId: chosen.id,
+      mode: 'drive', verifyEnabled: verify,
+      maxIterations: Number(cap) >= 1 ? Number(cap) : undefined,
+      sessionId: chosen.sessionId || undefined,
+    });
+  };
+
+  const b = LOOP_BADGE[loop?.status] ?? LOOP_BADGE.stopped;
+
+  // Sent-history (openspec: queue-loop-visibility): the step texts that landed
+  // this arm, oldest first — from the gated console state, so it renders here
+  // for live AND stopped queue loops. Labeled "last N" when the record's bound
+  // has dropped older entries.
+  const sentTexts = isQueue ? (loop?.queueSentTexts ?? []) : [];
+  const sentBlock = sentTexts.length > 0 && (
+    <div className="lp-queue-sent">
+      <span className="lp-field__k">
+        Sent{(loop?.queueSent ?? 0) > sentTexts.length ? ` (last ${sentTexts.length})` : ''}
+      </span>
+      <ol className="lp-queue-sentlist">
+        {sentTexts.map((s, i) => (
+          <li key={i} className="lp-queue-sentrow">{s}</li>
+        ))}
+      </ol>
+    </div>
+  );
+
+  return (
+    <li className={`lp-card ${active ? 'is-active' : ''}`}>
+      <div className="lp-card__head">
+        <span className="lp-card__repo">{agent.repoName}</span>
+        <span className="lp-card__kind">🗒️ queue</span>
+        {isQueue && (
+          <span className={`ap-state st-${b.cls}`}>
+            {active && loop.phase === 'verify' ? 'verifying' : b.label}
+          </span>
+        )}
+      </div>
+
+      {active ? (
+        <div className="lp-live">
+          <div className="lp-live__meta">
+            <span className="lp-stat">
+              <span className="lp-stat__k">sent</span>
+              <span className="lp-stat__v">{loop.queueSent ?? 0}</span>
+            </span>
+            <span className="lp-stat">
+              <span className="lp-stat__k">queued</span>
+              <span className="lp-stat__v">{loop.queueRemaining ?? 0}</span>
+            </span>
+            <span className="lp-stat">
+              <span className="lp-stat__k">iterations</span>
+              <span className="lp-stat__v">{loop.iterationsDone} / {loop.maxIterations}</span>
+            </span>
+            <span className="lp-stat">
+              <span className="lp-stat__k">verify</span>
+              <span className="lp-stat__v">{loop.verifyEnabled === false ? 'off' : 'each step'}</span>
+            </span>
+          </div>
+          {sentBlock}
+          <button className="lp-stop" onClick={() => act({ repoId: agent.repoId, action: 'stop' })} disabled={busy}>
+            ■ Stop loop
+          </button>
+        </div>
+      ) : (
+        <form className="lp-form" onSubmit={(e) => { e.preventDefault(); arm(); }}>
+          {isQueue && loop?.stopReason && (
+            <span className="ap-muted">
+              {loop.queueSent ?? 0} step{(loop.queueSent ?? 0) === 1 ? '' : 's'} sent
+              {` · ${STOP_REASON[loop.stopReason] ?? loop.stopReason}`}
+            </span>
+          )}
+          {isQueue && loop?.stopDetail && (
+            <div className={`lp-reason${loop.stopReason === 'needs-human' ? ' lp-reason--human' : ''}`}>
+              {loop.stopDetail}
+            </div>
+          )}
+          {sentBlock}
+          {repoTabs.length === 0 ? (
+            <span className="ap-muted">
+              No dashboard dock tab for this repo — a queue lives on a dock tab’s prompt stash.
+            </span>
+          ) : (
+            <>
+              <div className="lp-form__row">
+                <label className="lp-field">
+                  <span className="lp-field__k">Dock tab (its stash IS the queue)</span>
+                  <select className="lp-field__in" value={chosen?.id || ''} onChange={(e) => setTabId(e.target.value)}>
+                    {repoTabs.map((tb) => (
+                      <option key={tb.id} value={tb.id}>
+                        {tb.repoName} · {tb.stash?.length ?? 0} queued
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="lp-field lp-field--cap">
+                  <span className="lp-field__k">Cap</span>
+                  <input
+                    className="lp-field__in" type="number" min={1} max={100} value={cap}
+                    placeholder={String(Math.max(stashLen * 2, 2))}
+                    onChange={(e) => setCap(e.target.value)}
+                  />
+                </label>
+              </div>
+              {/* Full unload-order preview (openspec: queue-loop-visibility, D4):
+                  every stash item of the chosen tab, numbered — the live stash,
+                  so reordering the strip reorders this list. */}
+              {stashLen > 0 && (
+                <div className="lp-queue-preview">
+                  <span className="lp-field__k">Will unload in this order ({stashLen})</span>
+                  <ol className="lp-queue-list">
+                    {(chosen?.stash ?? []).map((s) => (
+                      <li key={s.id} className="lp-queue-item">{s.text}</li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+              <label className="lp-check">
+                <input type="checkbox" checked={verify} onChange={(e) => setVerify(e.target.checked)} />
+                Verify each step (agent must answer <code>STEP_VERIFIED</code>) — ~2 turns per item
+              </label>
+              <div className="lp-form__actions">
+                <button className="lp-arm" type="submit" disabled={busy || !chosen || stashLen === 0}>
+                  Arm queue loop
+                </button>
+                {stashLen === 0 && (
+                  <span className="ap-muted">stash is empty — queue prompts from the agent’s chat box first</span>
+                )}
+              </div>
+            </>
+          )}
+        </form>
+      )}
+    </li>
+  );
+}
+
 // One recipe card: display or inline-edit. The prompt is fully visible — what is
 // shown here is byte-identical to what an armed loop sends (nothing injected).
 function RecipeCard({ recipe, saveRecipe, removeRecipe }) {
@@ -279,6 +443,9 @@ export default function LoopsView({ section = 'agents', data, loopAction, addRec
   const agents = data?.agents ?? [];
   const loops = data?.loops ?? [];
   const recipes = data?.recipes ?? [];
+  // Dock tabs back the 🗒️ Queue subtab: each tab's prompt stash is a candidate
+  // queue, so the arm form picks among THIS repo's tabs.
+  const { tabs } = useDock();
   const byRepo = Object.fromEntries(loops.map((l) => [l.repoId, l]));
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState({ name: '', prompt: '', sentinel: DEFAULT_SENTINEL, maxIterations: DEFAULT_CAP });
@@ -299,7 +466,8 @@ export default function LoopsView({ section = 'agents', data, loopAction, addRec
         A loop drives the agent every time it finishes a turn. A <b>📋 recipe loop</b> resends
         one stored ritual prompt until the agent prints the <b>sentinel</b>; a <b>🎯 goal
         loop</b> drives toward a stated goal and, on the agent’s done-claim, sends a
-        <b> verification turn</b> — only <code>GOAL_VERIFIED</code> stops it. Both stop when the
+        <b> verification turn</b> — only <code>GOAL_VERIFIED</code> stops it; a <b>🗒️ queue
+        loop</b> (its own subtab) drains a dock tab’s prompt stash step by step. All stop when the
         agent asks for you with <code>NEEDS_HUMAN:</code>, mentions a deny-listed risky action,
         or hits the iteration cap — and record <b>why</b> they stopped. Deterministic — no
         brain, no LLM judge. Arming is exclusive per agent (a loop displaces suggestion arming
@@ -358,6 +526,25 @@ export default function LoopsView({ section = 'agents', data, loopAction, addRec
       ) : (
         <button className="lp-mini on" onClick={() => setAdding(true)}>+ Add recipe</button>
       )}
+      </>)}
+
+      {/* --- Queue loops over dock-tab stashes (openspec queue-based-loop) --- */}
+      {section === 'queue' && (<>
+      <h3 className="rp-section">Queue loops</h3>
+      <p className="autopilot__summary autopilot__summary--sub">
+        A <b>🗒️ queue loop</b> drains a dock tab’s <b>prompt stash</b> top-down: it sends the
+        head prompt, waits for the reply, verifies it (<code>STEP_VERIFIED</code>, on by
+        default), then unloads the next. The strip under that agent’s chat box IS the
+        queue — reorder it to reorder the loop, stash more mid-run and they join the end.
+        An item leaves the stash only when its send lands, so stopping mid-way loses
+        nothing: re-arm and it resumes from the head.
+      </p>
+      <ul className="lp-list">
+        {agents.map((a) => (
+          <QueueRow key={a.repoId} agent={a} loop={byRepo[a.repoId]} tabs={tabs} loopAction={loopAction} />
+        ))}
+        {agents.length === 0 && <li className="autopilot__empty">No agents yet.</li>}
+      </ul>
       </>)}
 
       {/* --- Per-agent loops --- */}

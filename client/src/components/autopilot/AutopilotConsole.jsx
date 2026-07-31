@@ -49,8 +49,8 @@ export default function AutopilotConsole({ embedded = false }) {
   // the three-mode plan), per openspec/changes/add-autopilot-overview-tab.
   // Navigation is two-level (openspec restructure-autopilot-tabs): a root row
   // grouped by loop type, plus a per-root subtab memory so returning to a group
-  // reopens where you left it. The queue-based loop has no root yet — it only
-  // exists as a plan card on the Overview.
+  // reopens where you left it. The 🗒️ queue-based loop lives as a subtab of the
+  // Loops root (openspec: queue-based-loop).
   const [root, setRoot] = useState('overview');
   const [sub, setSub] = useState({ suggestion: 'control', goal: 'agents', reference: 'autoarch' });
   const pickSub = useCallback((r, key) => setSub((s) => ({ ...s, [r]: key })), []);
@@ -247,7 +247,7 @@ export default function AutopilotConsole({ embedded = false }) {
           💡 Suggestion-based loop
         </button>
         <button className={root === 'goal' ? 'on' : ''} onClick={() => setRoot('goal')}>
-          ⟳ Loops (📋 recipe · 🎯 goal){activeLoops ? ` ${activeLoops}` : ''}
+          ⟳ Loops (📋 recipe · 🎯 goal · 🗒️ queue){activeLoops ? ` ${activeLoops}` : ''}
         </button>
         <button className={root === 'audit' ? 'on' : ''} onClick={() => setRoot('audit')}>
           Audit{audit.length ? ` ${audit.length}` : ''}
@@ -271,7 +271,7 @@ export default function AutopilotConsole({ embedded = false }) {
         <SubTabs
           active={sub.goal}
           onPick={(k) => pickSub('goal', k)}
-          items={[['agents', 'Agents'], ['recipes', 'Recipes']]}
+          items={[['agents', 'Agents'], ['queue', 'Queue'], ['recipes', 'Recipes']]}
         />
       )}
       {root === 'reference' && (

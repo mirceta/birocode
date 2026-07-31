@@ -19,7 +19,11 @@ public record SessionSummary(
 /// <summary>One human-visible message in a transcript: role is "user" or "assistant".
 /// Timestamp is the JSONL line time (when available) — the dashboard uses the last
 /// user message's timestamp to colour an agent dock by recency.</summary>
-public record ChatMessage(string Role, string Text, DateTime? Timestamp = null);
+/// <para><c>Synthetic</c> marks an assistant line the CLI fabricated rather than the
+/// model spoke — <c>message.model == "&lt;synthetic&gt;"</c>, e.g. the "No response
+/// requested." repair a resume writes over a dangling user turn. Not an agent
+/// reply: the autopilot loops skip these (openspec: fix-loop-verify-stale-reply).</para>
+public record ChatMessage(string Role, string Text, DateTime? Timestamp = null, bool Synthetic = false);
 
 /// <summary>
 /// One tool call reconstructed from a transcript, in the same shape the live SSE
@@ -143,7 +147,11 @@ public class SessionService
                     DateTime.TryParse(tsProp.GetString(), out var parsed))
                     ts = parsed;
 
-                messages.Add(new ChatMessage(type == "user" ? "user" : "assistant", text!.Trim(), ts));
+                var synthetic = msg.TryGetProperty("model", out var modelProp)
+                    && modelProp.ValueKind == JsonValueKind.String
+                    && modelProp.GetString() == "<synthetic>";
+
+                messages.Add(new ChatMessage(type == "user" ? "user" : "assistant", text!.Trim(), ts, synthetic));
             }
         }
         catch (Exception ex)

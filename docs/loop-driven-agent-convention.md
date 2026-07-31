@@ -15,13 +15,18 @@ condition fires. There is no human reading your replies between iterations. The 
 stop detection is **deterministic string matching on your last message** — no LLM judges
 you, so the only way to end the loop cleanly is to emit the markers below exactly.
 
-Loops come in two kinds; the prompt you receive tells you which you are in:
+Loops come in three kinds; the prompt you receive tells you which you are in:
 
 - **📋 Recipe loop** — the prompt is a stored ritual (e.g. "drive the current OpenSpec
   change"). Your done-claim (the sentinel) ends the loop directly.
 - **🎯 Goal loop** — the prompt states a user-written goal. Your done-claim does **not**
   end the loop: it triggers a **verification turn** (see below), and only a verified
   confirmation ends it.
+- **🗒️ Queue loop** — each prompt you receive is the next item of a **queue of
+  user-written prompts**, sent to you one at a time. The queue is the operator's plan,
+  not yours: the sentinel does **nothing** here (finishing one item never means the job
+  is over), and the queue simply ends when it runs dry. Between items you normally get a
+  **step-verification turn** (see below). `NEEDS_HUMAN:` works as everywhere.
 
 ## The output contract — two markers
 
@@ -64,15 +69,34 @@ of the work. Then:
 only meaningful in the verification turn's reply — never write it otherwise. (Emitting
 it during a work turn does nothing, but it muddies the transcript.)
 
+## The queue loop's step verification — a fourth marker
+
+In a **🗒️ queue loop** (on by default, the operator can opt out), after each item's
+reply you get a **step-verification prompt** quoting the item you just handled: re-check
+whether that request was **genuinely accomplished** — actually done, not just discussed,
+partially done, or answered with a question. Then:
+
+- If yes, end your reply with **`STEP_VERIFIED`** as the final line (enforced final-line
+  rule, same as the sentinel). The loop unloads the next queued item.
+- If not — including when you asked a question or hit a blocker — state the open question
+  or blocker plainly and do **not** write `STEP_VERIFIED`. The loop stops and escalates
+  to the human instead of sending the next item into a broken state.
+
+`STEP_VERIFIED` is deliberately distinct from `GOAL_VERIFIED` so a queue driving
+goal-contract agents can never cross-trigger, and like the other completion markers it
+is only meaningful in the verification turn's reply.
+
 ## What stops a loop (in order)
 
 When your turn completes the harness checks, deterministically: run **error** →
 **`NEEDS_HUMAN:`** (escalate — checked first, so a blocked agent is never re-driven) → a
 **deny-listed term** in your reply (escalate — the fail-safe for agents that ignore this
 contract) → the **sentinel** (recipe loop: done; goal loop: send the verification turn,
-or **`GOAL_VERIFIED`** in that turn's reply: done) → the **iteration cap** (capped,
-checked before every send including the verification send) → otherwise it resends. Every
-resolution records a stop reason + detail that the user reviews afterward.
+or **`GOAL_VERIFIED`** in that turn's reply: done; queue loop: ignored) → the queue
+loop's own checks (**`STEP_VERIFIED`** missing from a step-verification reply: escalate;
+queue empty: done) → the **iteration cap** (capped, checked before every send including
+verification sends) → otherwise it resends. Every resolution records a stop reason +
+detail that the user reviews afterward.
 
 ## Safety posture (why you can trust the loop, and it you)
 
@@ -85,7 +109,10 @@ resolution records a stop reason + detail that the user reviews afterward.
   act.
 - Resends carry a hard iteration cap and are recorded in an append-only audit log.
 - The prompt you receive is **exactly** the stored text the user can inspect — the recipe
-  text in the editor, or a goal loop's work/verification prompts composed once at arm
-  time and shown in the dock's prompt inspection. Nothing is injected at send time.
+  text in the editor, a goal loop's work/verification prompts composed once at arm time,
+  or a queue item's text as it sits in the stash strip above the composer. The one
+  send-time composition is the queue's step-verification prompt: a fixed, inspectable
+  template plus the item text just sent — both operator-visible. Nothing else is
+  injected at send time.
 - Arming is **exclusive per agent**: a loop and the suggestion-based autopilot are never
   armed on the same repo at once.

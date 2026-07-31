@@ -34,6 +34,7 @@ public class LoopConfigStore
     public const string KindSuggestion = "suggestion";
     public const string KindRecipe = "recipe";
     public const string KindGoal = "goal";
+    public const string KindQueue = "queue";
     // The common mode axis (revision 2, D9): what happens to a proposed next
     // prompt. "drive" = the engine sends it; "suggest" = it becomes the pending
     // prompt pre-filling the agent's composer for the human to send.
@@ -41,9 +42,20 @@ public class LoopConfigStore
     public const string ModeDrive = "drive";
     public const string PhaseWork = "work";
     public const string PhaseVerify = "verify";
+    /// <summary>Queue kind (openspec: queue-based-loop, D4): a step landed and its
+    /// verification turn has not been sent yet. Distinct from <see cref="PhaseVerify"/>
+    /// (the verification prompt itself has landed, its reply decides).</summary>
+    public const string PhaseVerifyOwed = "verify-owed";
     /// <summary>The goal loop's verified-done token (docs/loop-driven-agent-convention.md):
     /// only meaningful in a verification turn's reply.</summary>
     public const string VerifiedToken = "GOAL_VERIFIED";
+    /// <summary>The queue loop's step-verification token (openspec: queue-based-loop, D4) —
+    /// deliberately NOT <see cref="VerifiedToken"/>, so a queue driving goal-contract
+    /// agents can't cross-trigger. Only meaningful in a verification turn's reply.</summary>
+    public const string StepVerifiedToken = "STEP_VERIFIED";
+    /// <summary>Bound on the queue kind's sent-history (openspec: queue-loop-visibility,
+    /// D3): oldest entries drop beyond this; the full trail stays in the audit log.</summary>
+    public const int QueueSentTextsCap = 20;
 
     // The goal-loop composition templates (openspec: unify-loop-types, design D2).
     // {0} is the user's goal text. Composed ONCE at arm time and stored on the loop;
@@ -65,6 +77,21 @@ public class LoopConfigStore
 
     public static string ComposeGoalWorkPrompt(string goal) => string.Format(GoalWorkTemplate, goal);
     public static string ComposeGoalVerifyPrompt(string goal) => string.Format(GoalVerifyTemplate, goal);
+
+    // The queue kind's between-step verification template (openspec: queue-based-loop,
+    // D4). {0} is the landed step's text (LastStepText). Unlike the goal templates this
+    // is composed at SEND time — a live queue has no arm-time step list — but the
+    // composition stays deterministic from two operator-visible texts: this stored
+    // template (gated-inspectable) and the stash item shown above the composer.
+    // Wording is a draft to be tuned from real runs, like the goal templates.
+    public const string QueueVerifyTemplate =
+        "Review your previous turn against the request below. The request was:\n{0}\n\n"
+        + "Was it genuinely accomplished — actually done, not just discussed, partially done, "
+        + "or answered with a question? If yes, end your reply with STEP_VERIFIED as the final line. "
+        + "If not — including if you asked a question or hit a blocker — state the open question "
+        + "or blocker plainly and do NOT write STEP_VERIFIED.";
+
+    public static string ComposeQueueVerifyPrompt(string stepText) => string.Format(QueueVerifyTemplate, stepText);
 
     private readonly Logger _logger;
     private readonly string _path;
@@ -135,6 +162,24 @@ public class LoopConfigStore
         // to each builder-lane run's forked session id on completion. Null on old
         // loops.json entries and suggestion instances (additive).
         public string? SessionId { get; set; }
+        // Queue kind only (openspec: queue-based-loop — all additive nullable, so
+        // legacy loops.json entries load unchanged): the dock tab whose live stash
+        // IS the queue (D2 — no snapshot, no cursor); whether between-step
+        // verification is on (null loads as true, the default posture); the last
+        // unloaded step's text, stamped when its send lands so a restart mid-step
+        // still verifies the right thing; and how many stash items landed this arm
+        // (IterationsDone keeps counting ALL sends, verification turns included).
+        public string? QueueTabId { get; set; }
+        public bool? VerifyEnabled { get; set; }
+        public string? LastStepText { get; set; }
+        public int? QueueSent { get; set; }
+        // Queue kind, sent-history (openspec: queue-loop-visibility, D3): the texts of
+        // the steps that actually landed this arm, newest last, bounded at
+        // QueueSentTextsCap (drop-oldest). Prompt-bearing — disclosed only via the
+        // gated detail/debug surfaces, never the ungated projection. Additive: null on
+        // old entries loads as empty; a new arm creates a fresh Entry, so the history
+        // resets structurally.
+        public List<string>? QueueSentTexts { get; set; }
     }
 
     private sealed class Data
@@ -152,7 +197,9 @@ public class LoopConfigStore
         bool Active, int IterationsDone, string Status, long LastSentAt,
         string? StopReason, string? StopDetail, string? RecipeId, string? RecipeName,
         string? Goal, string? VerifyPrompt, string? Phase, string? PendingPrompt, long ArmedAt,
-        string? SessionId);
+        string? SessionId,
+        string? QueueTabId, bool VerifyEnabled, string? LastStepText, int QueueSent,
+        IReadOnlyList<string> QueueSentTexts);
 
     public IReadOnlyList<LoopState> All()
     {
@@ -230,6 +277,61 @@ public class LoopConfigStore
             _data.Loops[repoId] = e;
             Save();
             _logger.Info($"[LOOP] armed goal loop {repoId} ({e.Mode}, cap {e.MaxIterations}, pinned {e.SessionId ?? "<none yet>"})");
+            return ToState(repoId, e);
+        }
+    }
+
+    /// <summary>Arms (or re-arms) a 🗒️ QUEUE loop (openspec: queue-based-loop, D2/D8):
+    /// binds the agent's one loop slot to a dock tab whose LIVE stash is the queue —
+    /// no step list is copied here, the engine reads the stash head at each tick.
+    /// Between-step verification defaults ON (D4); the caller (controller) guards
+    /// against arming over an empty stash. Mirrors <see cref="StartGoal"/>: counters
+    /// reset, ArmedAt stamped, session pinned.</summary>
+    public LoopState StartQueue(string repoId, string tabId, bool? verifyEnabled,
+        int? maxIterations, string? mode = null, string? sessionId = null)
+    {
+        lock (_gate)
+        {
+            LogDisplaced(repoId, KindQueue);
+            var e = new Entry
+            {
+                Kind = KindQueue,
+                Mode = CleanMode(mode),
+                QueueTabId = tabId,
+                VerifyEnabled = verifyEnabled ?? true,
+                QueueSent = 0,
+                Phase = PhaseWork,
+                Sentinel = DefaultSentinel,
+                MaxIterations = Math.Clamp(maxIterations ?? DefaultMaxIterations, 1, 100),
+                Active = true,
+                ArmedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                IterationsDone = 0,
+                Status = "looping",
+                LastSentAt = 0,
+                SessionId = Clean(sessionId),
+            };
+            _data.Loops[repoId] = e;
+            Save();
+            _logger.Info($"[LOOP] armed queue loop {repoId} on tab {tabId} ({e.Mode}, verify {(e.VerifyEnabled == true ? "on" : "off")}, cap {e.MaxIterations}, pinned {e.SessionId ?? "<none yet>"})");
+            return ToState(repoId, e);
+        }
+    }
+
+    /// <summary>Engine, queue kind (openspec: queue-based-loop): a stash item's send
+    /// LANDED — stamp its text (so a restart mid-step verifies the right thing), count
+    /// it, and owe a verification turn (or go straight back to work when verification
+    /// is opted out).</summary>
+    public LoopState? RecordQueueStep(string repoId, string stepText)
+    {
+        lock (_gate)
+        {
+            if (!_data.Loops.TryGetValue(repoId, out var e)) return null;
+            e.LastStepText = stepText;
+            e.QueueSent = (e.QueueSent ?? 0) + 1;
+            (e.QueueSentTexts ??= new()).Add(stepText);
+            while (e.QueueSentTexts.Count > QueueSentTextsCap) e.QueueSentTexts.RemoveAt(0);
+            e.Phase = e.VerifyEnabled != false ? PhaseVerifyOwed : PhaseWork;
+            Save();
             return ToState(repoId, e);
         }
     }
@@ -395,13 +497,18 @@ public class LoopConfigStore
 
     private static LoopState ToState(string repoId, Entry e) =>
         new(repoId,
-            e.Kind == KindGoal ? KindGoal : e.Kind == KindSuggestion ? KindSuggestion : KindRecipe,
+            e.Kind == KindGoal ? KindGoal
+                : e.Kind == KindSuggestion ? KindSuggestion
+                : e.Kind == KindQueue ? KindQueue
+                : KindRecipe,
             e.Mode == ModeSuggest ? ModeSuggest : ModeDrive,
             e.Prompt, e.Sentinel,
             e.MaxIterations, e.Active, e.IterationsDone, e.Status, e.LastSentAt,
             e.StopReason, e.StopDetail, e.RecipeId, e.RecipeName,
             e.Goal, e.VerifyPrompt, e.Phase, e.PendingPrompt, e.ArmedAt,
-            e.SessionId);
+            e.SessionId,
+            e.QueueTabId, e.VerifyEnabled != false, e.LastStepText, e.QueueSent ?? 0,
+            e.QueueSentTexts?.ToList() ?? (IReadOnlyList<string>)Array.Empty<string>());
 
     private void Load()
     {

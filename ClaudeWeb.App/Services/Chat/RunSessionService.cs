@@ -29,6 +29,8 @@ public class RunSession
     private readonly object _lock = new();
     private readonly List<(int Seq, string Json)> _events = new();
     private readonly List<Channel<string>> _subscribers = new();
+    private readonly System.Text.StringBuilder _reply = new();
+    private DateTime? _replyAtUtc;
     private int _seq;
     private bool _sawDone;
 
@@ -68,6 +70,19 @@ public class RunSession
 
     public int LastSeq { get { lock (_lock) return _seq; } }
 
+    /// <summary>The turn's WITNESSED reply (openspec: fix-loop-verify-stale-reply):
+    /// every streamed "token" event's text, concatenated as it arrived. The CLI can
+    /// complete a run without ever persisting the reply to the transcript (seen live
+    /// 2026-07-31), so this is the harness's first-hand record of what the agent
+    /// said — kept for the session object's lifetime (until the next run replaces
+    /// it). Empty string when the turn streamed no visible text.</summary>
+    public string ReplyText { get { lock (_lock) return _reply.ToString(); } }
+
+    /// <summary>UTC arrival time of the last streamed reply token; null when the
+    /// turn streamed no visible text. Compared against a loop's last-send stamp to
+    /// establish that the witnessed reply answers THAT send.</summary>
+    public DateTime? ReplyTextAtUtc { get { lock (_lock) return _replyAtUtc; } }
+
     /// <summary>
     /// Appends one stable SSE event to the buffer (tagged with the next seq)
     /// and broadcasts it to all attached clients. Also sniffs the event to
@@ -88,6 +103,15 @@ public class RunSession
                 if (!string.IsNullOrEmpty(sid)) SessionId = sid;
             }
             if (type == "done") _sawDone = true;
+            if (type == "token")
+            {
+                var text = (string?)node["text"];
+                if (!string.IsNullOrEmpty(text))
+                {
+                    _reply.Append(text);
+                    _replyAtUtc = DateTime.UtcNow;
+                }
+            }
 
             _events.Add((_seq, json));
             if (_events.Count > MaxBufferedEvents) _events.RemoveRange(0, TrimChunk);

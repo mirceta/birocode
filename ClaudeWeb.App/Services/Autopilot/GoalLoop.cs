@@ -21,6 +21,14 @@ public sealed class GoalLoop : DrivenLoop
 
         if (inst.Phase == LoopConfigStore.PhaseVerify)
         {
+            // No reply to the verification send yet (the engine passes null —
+            // openspec: fix-loop-verify-stale-reply): re-send the verification
+            // prompt; falling back to the work prompt would silently treat a
+            // missing verdict as "gaps found".
+            if (ctx.LastAssistant is null)
+                return new LoopDecision.Propose(inst.VerifyPrompt ?? inst.Prompt,
+                    EnterPhase: LoopConfigStore.PhaseVerify);
+
             if (FinalLineContains(ctx.LastAssistant, LoopConfigStore.VerifiedToken))
                 return new LoopDecision.Stop("done", "verified",
                     $"verification turn emitted {LoopConfigStore.VerifiedToken}");

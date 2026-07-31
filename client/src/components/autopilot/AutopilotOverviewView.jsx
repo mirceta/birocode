@@ -5,8 +5,8 @@ import '../../pages/autopilot.css';
 // (1) an honest inventory of the autopilot surface as it exists today, and
 // (2) the plan — autopilot is THE dashboard for anything that prompts agents
 // automatically, running on three everyday modes: the 💡 suggestion loop and
-// the ⟳ loop engine's two kinds (📋 recipe, 🎯 goal — both built, openspec
-// unify-loop-types) plus the queue-based loop it still has to grow.
+// the ⟳ loop engine's kinds (📋 recipe, 🎯 goal — openspec unify-loop-types —
+// and 🗒️ queue — openspec queue-based-loop). All built.
 //
 // Pure static reference content: no backend calls, nothing here can act — which
 // is also why the console renders this tab even while the operator gate is
@@ -18,8 +18,8 @@ export default function AutopilotOverviewView() {
       <p className="autopilot__summary">
         <b>Autopilot is the dashboard for anything that prompts your agents
         automatically.</b> This page is its map: what exists today, honestly
-        stated, and the three modes it runs on — one already built, two we mean
-        to build — so autopilot becomes something we actually use every day.
+        stated, and the three modes it runs on — all built now — so autopilot
+        becomes something we actually use every day.
       </p>
 
       <section className="ca-sec">
@@ -46,11 +46,13 @@ export default function AutopilotOverviewView() {
             an offline word-overlap stub is its fallback).
           </li>
           <li>
-            <b>Loops (Agents · Recipes)</b> — the deterministic loop engine,
-            two kinds. A <b>📋 recipe loop</b> resends one stored ritual
-            prompt each turn until the agent&apos;s own <b>LOOP_DONE</b>;
+            <b>Loops (Agents · Queue · Recipes)</b> — the deterministic loop
+            engine, three kinds. A <b>📋 recipe loop</b> resends one stored
+            ritual prompt each turn until the agent&apos;s own <b>LOOP_DONE</b>;
             armed from named <b>recipes</b> (seeded: &quot;Drive the OpenSpec
             change&quot;, &quot;Finish and ship the change&quot;). A
+            <b> 🗒️ queue loop</b> drains a dock tab&apos;s prompt stash step
+            by step with a <b>STEP_VERIFIED</b> check between items. A
             <b> 🎯 goal loop</b> takes your free-text goal and, on the
             agent&apos;s done-claim, sends a <b>verification turn</b> — only
             <code> GOAL_VERIFIED</code> stops it as done. Both escalate on
@@ -92,10 +94,10 @@ export default function AutopilotOverviewView() {
         <p className="ca-sec__p">
           Autopilot keeps one identity — the home of automatic prompting — and
           instead of more disconnected machinery it settles on three
-          first-class modes shaped around how we actually drive agents. The
-          suggestion loop and both loop-engine kinds (📋 recipe, 🎯 goal)
-          exist today; the queue-based loop is still to build, and the loop
-          engine is the seed it grows from.
+          first-class modes shaped around how we actually drive agents. All of
+          them exist today: the suggestion loop and the loop engine&apos;s three
+          kinds — 📋 recipe, 🎯 goal, and the 🗒️ queue loop that drains an
+          agent&apos;s stashed prompts.
         </p>
         <div className="ov-features">
           <article className="ov-card">
@@ -163,22 +165,23 @@ export default function AutopilotOverviewView() {
           </article>
           <article className="ov-card">
             <h4 className="ov-card__name">🗒️ Queue-based loop</h4>
-            <p className="ov-card__tag">Line up the prompts you&apos;d send by hand anyway.</p>
+            <p className="ov-card__tag">Built — line up the prompts you&apos;d send by hand anyway.</p>
             <ul>
               <li>
-                You build a <b>queue of prompts</b> for an agent — the ritual
-                you&apos;d otherwise babysit turn by turn (continue → play it
-                back → verify → deploy → …).
+                The queue IS the agent&apos;s <b>prompt stash</b> — the strip
+                under the dock&apos;s chat box. Stash prompts, reorder them,
+                add more mid-run; the loop always unloads the top item next.
               </li>
               <li>
                 When the agent&apos;s turn ends, the <b>next prompt is
-                auto-sent</b>; the queue drains one prompt per turn.
+                auto-sent</b>; an item leaves the stash only when its send
+                actually fires, so disarming mid-way loses nothing.
               </li>
               <li>
-                Optionally a <b>verification step</b> runs between prompts: did
-                the previous prompt actually produce what we expected? If not,
-                the queue stops and escalates instead of blindly sending the
-                next prompt into a broken state.
+                A <b>verification turn</b> runs between steps (on by default):
+                the agent must confirm <code>STEP_VERIFIED</code>, otherwise
+                the queue stops and escalates instead of sending the next
+                prompt into a broken state.
               </li>
             </ul>
           </article>

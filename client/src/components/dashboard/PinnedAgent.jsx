@@ -364,6 +364,8 @@ export default function PinnedAgent({
         <DockLoopControl
           repoId={tab.repoId}
           sessionId={chat.sessionId || tab.sessionId || null}
+          tabId={tab.id}
+          stash={tab.stash || []}
           loop={loop}
           recipes={loopRecipes}
           onChanged={onLoopChanged}
@@ -666,6 +668,7 @@ export default function PinnedAgent({
             stashTabId={tab.id}
             chatMaximized={maximized}
             toggleChatMaximized={toggleChatMaximized}
+            queueLoop={canLoop ? loop : undefined}
           />
         </div>
         {/* Divider (openspec split-divider-drag): a separator BETWEEN the two
