@@ -162,7 +162,7 @@
 <body>
 <div class="wrap">
   <header>
-    <div><span class="tag">queue-based-loop</span><span class="tag">final design</span><span class="tag">2026-07-30</span></div>
+    <div><span class="tag">queue-based-loop</span><span class="tag">built 2026-07-31</span></div>
     <h1>The stash IS the queue — verified by default</h1>
     <p class="sub">The third promised autopilot mode is a <b>wire between two things that already exist</b>: the per-tab
     <b>prompt stash</b> (the ideas you flag while the agent is busy) and the <b>loop engine</b>. Arming a 🗒️ queue loop means:
@@ -174,7 +174,8 @@
   <section>
     <h2><span class="n">≡</span> The design in six properties</h2>
     <p class="lead">Decided in <code>openspec/changes/queue-based-loop</code> — the live-stash model merged with the loop
-    engine's existing machinery.</p>
+    engine's existing machinery. Implemented: <code>QueueLoop.cs</code> + engine consume-on-land, the dock control's
+    Queue type, and the console's Loops → Queue tab.</p>
     <div class="chips" id="chips"></div>
   </section>
 

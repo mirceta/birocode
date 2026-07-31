@@ -5,38 +5,38 @@
 - [x] 1.1 `DockRegistry.ReorderStash(tabId, orderedIds)` under the registry lock
       (missing ids ignored, last-write-wins) + `POST /api/dock/{id}/stash/reorder`
 - [x] 1.2 Stash strip UI: reorder affordance (drag or up/down) + i18n/CSS
-- [ ] 1.3 Playwright: reorder persists across reload; builds green
+- [x] 1.3 Playwright: reorder persists across reload; builds green
 
 ## 2. Slice 2 backend — queue kind on the live stash
 
-- [ ] 2.1 `LoopConfigStore`: `KindQueue` constant; additive nullable fields
+- [x] 2.1 `LoopConfigStore`: `KindQueue` constant; additive nullable fields
       `QueueTabId` / `VerifyEnabled` / `LastStepText` / `QueueSent` (+ verify
       phase) normalized on read; `QueueVerifyTemplate` constant;
       `StartQueue(...)` mirroring `StartGoal` (verify default ON, session pin,
       non-empty-stash guard)
-- [ ] 2.2 `QueueLoop.cs`: `DrivenLoop` implementation — verify-owed first;
+- [x] 2.2 `QueueLoop.cs`: `DrivenLoop` implementation — verify-owed first;
       stash empty → `Stop("done","drained")`; else propose head item with the
       consume-on-land marker; `LOOP_DONE` in step replies ignored; bound tab
       gone → `error`
-- [ ] 2.3 Engine (`AutopilotService`): apply consume-on-land at the
+- [x] 2.3 Engine (`AutopilotService`): apply consume-on-land at the
       landed-proposal hook (drive send AND suggest pend-consumed), stamp
       `LastStepText` + enter verify phase on land, register the kind
-- [ ] 2.4 Verification: compose verify prompt at send time from template +
+- [x] 2.4 Verification: compose verify prompt at send time from template +
       `LastStepText`; `STEP_VERIFIED` final-line check advances,
       anything else → `Stop("escalate","step-unverified")` quoting a snippet
-- [ ] 2.5 API (`AutopilotController`): queue arm endpoint
+- [x] 2.5 API (`AutopilotController`): queue arm endpoint
       `{ tabId, mode, verifyEnabled?, maxIterations?, sessionId? }`; ungated
       projection gains `queueRemaining`/`queueSent`/phase counts; item texts +
       template only in the gated detail
 
 ## 3. Slice 2 frontend — surfaces
 
-- [ ] 3.1 `DockLoopControl`: 🗒️ Queue in the type picker — settings (mode, cap
+- [x] 3.1 `DockLoopControl`: 🗒️ Queue in the type picker — settings (mode, cap
       with 2×-per-item hint, verify toggle default on), next-up preview +
       remaining count, arm/disarm wiring
-- [ ] 3.2 Autopilot console Loops → **Queue tab**: per-agent queue status
+- [x] 3.2 Autopilot console Loops → **Queue tab**: per-agent queue status
       (remaining / sent / phase), settings, arm/disarm
-- [ ] 3.3 Dock badge + popover: remaining/sent progress + verify-phase readout;
+- [x] 3.3 Dock badge + popover: remaining/sent progress + verify-phase readout;
       i18n + CSS
 
 ## 4. Verify
