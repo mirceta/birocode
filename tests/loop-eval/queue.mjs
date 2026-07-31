@@ -6,7 +6,11 @@
 // through all six in order (step → STEP_VERIFIED verify → next), resolve
 // done · drained with queueSent == 6, and every artifact must exist and match.
 //
-//   node tests/loop-eval/queue.mjs [--json out.json]
+//   node tests/loop-eval/queue.mjs [--json out.json] [--live]
+//
+// --live (add-loop-eval-live-mode): same scenario against the running :5099
+// harness, watchable in the real UI. Needs LOOPEVAL_LIVE_PW + gate/kill
+// switch already on. Default stays the fully-automatic isolated instance.
 //
 // Spends real Claude turns (typically 12: 6 steps + 6 verifies) and real
 // minutes. Never CI.
@@ -42,8 +46,10 @@ try {
 
   await L.boot(ctx);
   await L.login();
-  const repoId = await L.registerRepo(ctx.fixtureRepo, 'loopeval-queue');
-  const tabId = await L.createTabWithStash(repoId, 'loopeval-queue', EXPECTED.map((e) => e.prompt));
+  if (!(await L.livePreflight(V))) throw new L.Abort('live preflight failed');
+  const repoName = L.repoDisplayName('loopeval-queue');
+  const repoId = await L.registerRepo(ctx.fixtureRepo, repoName);
+  const tabId = await L.createTabWithStash(repoId, repoName, EXPECTED.map((e) => e.prompt));
 
   const seed = await L.seedTurn(repoId);
   if (!V.assert('CLI probe: seeded chat turn completed', seed.ok, JSON.stringify(seed.run || {})))
@@ -56,6 +62,7 @@ try {
   });
   if (!V.assert('queue loop armed', arm.status === 200, `http ${arm.status} ${JSON.stringify(arm.json || {}).slice(0, 300)}`))
     throw new L.Abort('arm failed');
+  L.announceWatch(repoName);
 
   const { loop, timedOut } = await L.watchLoop(repoId, { deadlineMs: DEADLINE });
   V.assert(`loop resolved before the ${DEADLINE / 60000}-minute deadline`, !timedOut,
@@ -66,14 +73,10 @@ try {
   V.assert('all six prompts were sent (queueSent == 6)',
     loop?.queueSent === 6, `queueSent=${loop?.queueSent} remaining=${loop?.queueRemaining}`);
 
-  // Sent order: QueueSentTexts is the only place the full prompt texts land in
-  // loops.json. Parse it rather than substring-match the raw file — the store is
-  // written by System.Text.Json, which escapes backticks/quotes (`, ").
-  let sentTexts = [];
-  try {
-    const loops = JSON.parse(L.readLoopsJson(ctx)).Loops || {};
-    sentTexts = Object.values(loops).find((l) => l.Kind === 'queue')?.QueueSentTexts || [];
-  } catch { /* leave empty — the assert below fails visibly */ }
+  // Sent order: QueueSentTexts is the only place the full prompt texts land.
+  // The lib reads it per mode (isolated: parse loops.json — System.Text.Json
+  // escapes backticks/quotes, never substring-match; live: the debug bundle).
+  const sentTexts = await L.queueSentTexts(ctx, repoId);
   V.assert('sent texts appear in arm order',
     sentTexts.length === EXPECTED.length && EXPECTED.every((e, i) => sentTexts[i] === e.prompt),
     JSON.stringify(sentTexts).slice(0, 300));
@@ -88,8 +91,8 @@ try {
 } catch (e) {
   if (!(e instanceof L.Abort)) V.assert('scenario ran to completion', false, e?.stack || String(e));
 } finally {
-  L.captureDiagnostics(ctx, V);
+  await L.captureDiagnostics(ctx, V).catch(() => {});
   await L.down(ctx).catch(() => {});
 }
 
-process.exit(L.finish(V, jsonOut));
+process.exitCode = L.finish(V, jsonOut);

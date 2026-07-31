@@ -1,7 +1,8 @@
 import '../../pages/autopilot.css';
 
 // The documentation subtabs of the 🧪 Tests root tab (openspec:
-// add-autopilot-tests-tab, updated by add-loop-eval-suite) — the stated map of
+// add-autopilot-tests-tab, updated by add-loop-eval-suite and
+// add-loop-eval-live-mode) — the stated map of
 // what automated test coverage the loop engine has, so the inventory lives in
 // the app instead of chat history. Three sections: the unit-test layer, the
 // end-to-end eval layer, and the honest coverage gap + the plan to close it.
@@ -104,14 +105,34 @@ export default function TestInventoryView({ section }) {
           </ul>
         </section>
         <section className="ca-sec">
-          <h3 className="ca-sec__h">How it runs — and what it costs</h3>
+          <h3 className="ca-sec__h">Two run modes — automatic gate, or watch it live</h3>
           <ul className="ov-list">
             <li>
-              <b>Fully isolated:</b> binaries copied outside the repo tree, own port
-              (:5210), fresh data dir with the gate + kill switch seeded before boot —
-              never against live. Everything after boot goes through the shipped API,
-              exactly as an operator would.
+              <b>Isolated (default):</b> binaries copied outside the repo tree, own
+              port (:5210), fresh data dir with the gate + kill switch seeded before
+              boot — never against live. Fully automatic: the mode an agent uses as a
+              before-shipping gate.
             </li>
+            <li>
+              <b>Live (<code>--live</code>):</b> the same scenarios against THIS
+              harness (:5099), so the Operator can watch the run in the real UI —
+              the <code>loopeval-*-live</code> repo card appears, its agent dock
+              shows the real turns, and this console&apos;s loop card ticks through the
+              phases. Prerequisites: gate ON (host GUI), kill switch ON (this
+              console), <code>LOOPEVAL_LIVE_PW</code> set to the live operator
+              password — the suite fails fast with instructions rather than ever
+              enabling anything itself. Cleans up after itself
+              (<code>LOOPEVAL_KEEP=1</code> keeps the aftermath for inspection).
+            </li>
+            <li>
+              In both modes everything goes through the shipped API, exactly as an
+              operator would — no engine bypass, no special endpoints.
+            </li>
+          </ul>
+        </section>
+        <section className="ca-sec">
+          <h3 className="ca-sec__h">What it costs</h3>
+          <ul className="ov-list">
             <li>
               <b>It spends real agent turns and real minutes</b> (~15–20 turns,
               ~30–45 min for <code>run-all.mjs</code>), so it is a before-shipping

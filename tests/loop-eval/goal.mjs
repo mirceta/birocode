@@ -5,7 +5,11 @@
 // goal-check.mjs fails; the loop must implement it, self-declare LOOP_DONE,
 // survive the verification turn (GOAL_VERIFIED), and leave the check passing.
 //
-//   node tests/loop-eval/goal.mjs [--json out.json]
+//   node tests/loop-eval/goal.mjs [--json out.json] [--live]
+//
+// --live (add-loop-eval-live-mode): same scenario against the running :5099
+// harness, watchable in the real UI. Needs LOOPEVAL_LIVE_PW + gate/kill
+// switch already on. Default stays the fully-automatic isolated instance.
 //
 // Spends real Claude turns (typically 2-4) and real minutes. Never CI.
 
@@ -36,7 +40,9 @@ try {
 
   await L.boot(ctx);
   await L.login();
-  const repoId = await L.registerRepo(ctx.fixtureRepo, 'loopeval-goal');
+  if (!(await L.livePreflight(V))) throw new L.Abort('live preflight failed');
+  const repoName = L.repoDisplayName('loopeval-goal');
+  const repoId = await L.registerRepo(ctx.fixtureRepo, repoName);
 
   const seed = await L.seedTurn(repoId);
   if (!V.assert('CLI probe: seeded chat turn completed', seed.ok, JSON.stringify(seed.run || {})))
@@ -46,6 +52,7 @@ try {
     { repoId, action: 'start', kind: 'goal', mode: 'drive', maxIterations: MAX_ITERATIONS, goal: GOAL });
   if (!V.assert('goal loop armed', arm.status === 200, `http ${arm.status} ${JSON.stringify(arm.json || {}).slice(0, 300)}`))
     throw new L.Abort('arm failed');
+  L.announceWatch(repoName);
 
   const { loop, timedOut } = await L.watchLoop(repoId, { deadlineMs: DEADLINE });
   V.assert(`loop resolved before the ${DEADLINE / 60000}-minute deadline`, !timedOut,
@@ -60,15 +67,15 @@ try {
   const post = L.runNode('goal-check.mjs', ctx.fixtureRepo);
   V.assert('goal check now exits 0 (feature really implemented)', post.status === 0, post.out);
 
-  const audit = L.readAudit(ctx);
+  const audit = await L.readAudit(ctx, repoId);
   V.assert('every send was loop-attributed in the audit log',
     audit.length > 0 && audit.every((e) => e.Outcome === 'loop'),
     audit.map((e) => e.Outcome).join(','));
 } catch (e) {
   if (!(e instanceof L.Abort)) V.assert('scenario ran to completion', false, e?.stack || String(e));
 } finally {
-  L.captureDiagnostics(ctx, V);
+  await L.captureDiagnostics(ctx, V).catch(() => {});
   await L.down(ctx).catch(() => {});
 }
 
-process.exit(L.finish(V, jsonOut));
+process.exitCode = L.finish(V, jsonOut);
