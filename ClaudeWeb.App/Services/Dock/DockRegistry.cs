@@ -247,6 +247,21 @@ public class DockRegistry
         }
     }
 
+    /// <summary>
+    /// Read-only snapshot of a tab's stash (openspec queue-based-loop, D2): the
+    /// queue engine reads the bound tab's LIVE stash each tick — the head item is
+    /// the next unload. Null when the tab is unknown (the queue kind resolves
+    /// <c>error · stash-tab-gone</c> on that).
+    /// </summary>
+    public IReadOnlyList<StashItem>? GetStash(string tabId)
+    {
+        lock (_gate)
+        {
+            var tab = _tabs.FirstOrDefault(t => string.Equals(t.Id, tabId, StringComparison.Ordinal));
+            return tab?.Stash.Select(CloneStash).ToList();
+        }
+    }
+
     /// <summary>Removes a stashed idea. False if the tab or item is unknown.</summary>
     public bool RemoveStash(string tabId, string stashId)
     {

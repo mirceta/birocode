@@ -1,6 +1,7 @@
 using ClaudeWeb.Services;
 using ClaudeWeb.Services.Autopilot;
 using ClaudeWeb.Services.Chat;
+using ClaudeWeb.Services.Dock;
 using ClaudeWeb.Services.Logging;
 using ClaudeWeb.Services.Repositories;
 using Microsoft.AspNetCore.Http;
@@ -41,13 +42,14 @@ public class AutopilotController : ControllerBase
     private readonly AutopilotAuditLog _audit;
     private readonly SystemTestsService _systests;
     private readonly RepositoryRegistry _repos;
+    private readonly DockRegistry _dock;
     private readonly Logger _logger;
 
     public AutopilotController(
         AutopilotDiscoveryService discovery, AutopilotService engine,
         AutopilotConfigStore config, LoopConfigStore loops, LoopRecipeStore recipes,
         AutopilotGate operatorGate, AutopilotAuditLog audit,
-        SystemTestsService systests, RepositoryRegistry repos, Logger logger)
+        SystemTestsService systests, RepositoryRegistry repos, DockRegistry dock, Logger logger)
     {
         _discovery = discovery;
         _engine = engine;
@@ -58,6 +60,7 @@ public class AutopilotController : ControllerBase
         _audit = audit;
         _systests = systests;
         _repos = repos;
+        _dock = dock;
         _logger = logger;
     }
 
@@ -133,7 +136,11 @@ public class AutopilotController : ControllerBase
     public sealed record LoopRequest(
         string? RepoId, string? Action, string? Kind, string? Mode, string? Prompt,
         string? Goal, string? Sentinel, int? MaxIterations, string? RecipeId,
-        string? SessionId);
+        string? SessionId,
+        // Queue kind (openspec: queue-based-loop, D8): the dock tab whose live
+        // stash IS the queue, and the between-step verification opt-out
+        // (null = on, the default posture).
+        string? TabId = null, bool? VerifyEnabled = null);
 
     /// <summary>The loop control (openspec: unify-loop-types, revision 2): one
     /// endpoint arms / edits / disarms an agent's ONE loop instance of any kind.
@@ -177,6 +184,23 @@ public class AutopilotController : ControllerBase
                     if (string.IsNullOrWhiteSpace(req.Goal))
                         return BadRequest(new { error = "a goal loop needs a goal" });
                     _loops.StartGoal(req.RepoId, req.Goal.Trim(), req.MaxIterations, req.Mode, pin);
+                    break;
+                }
+                if (string.Equals(req.Kind, LoopConfigStore.KindQueue, StringComparison.OrdinalIgnoreCase))
+                {
+                    // Queue arm (openspec: queue-based-loop, D8): binds the loop to
+                    // a dock tab's LIVE stash. Arming requires the stash to be
+                    // non-empty — an empty queue would resolve done on the first
+                    // tick, so the arm is almost certainly a mistake.
+                    if (string.IsNullOrWhiteSpace(req.TabId))
+                        return BadRequest(new { error = "a queue loop needs the tabId whose stash it drains" });
+                    var stash = _dock.GetStash(req.TabId.Trim());
+                    if (stash is null)
+                        return NotFound(new { error = $"unknown dock tab \"{req.TabId}\"" });
+                    if (stash.Count == 0)
+                        return BadRequest(new { error = "the stash is empty — queue a prompt before arming" });
+                    _loops.StartQueue(req.RepoId, req.TabId.Trim(), req.VerifyEnabled,
+                        req.MaxIterations, req.Mode, pin);
                     break;
                 }
                 if (!string.IsNullOrWhiteSpace(req.RecipeId))
@@ -290,6 +314,18 @@ public class AutopilotController : ControllerBase
                     // with the gate closed the engine is idle and pends nothing, so the
                     // closed-gate disclosure surface is unchanged.
                     pendingPrompt = gateOpen ? l.PendingPrompt : null,
+                    // Queue kind (openspec: queue-based-loop, D7): COUNTS and the
+                    // settings booleans are status words like looping n/cap — the
+                    // item texts, the last step text, and the verify template stay
+                    // in the gated detail. Remaining is the bound tab's live stash
+                    // length (null when the tab is gone — the engine will error the
+                    // loop on its next tick).
+                    queueTabId = l.Kind == LoopConfigStore.KindQueue ? l.QueueTabId : null,
+                    queueRemaining = l.Kind == LoopConfigStore.KindQueue && l.QueueTabId != null
+                        ? _dock.GetStash(l.QueueTabId)?.Count
+                        : null,
+                    queueSent = l.Kind == LoopConfigStore.KindQueue ? (int?)l.QueueSent : null,
+                    verifyEnabled = l.Kind == LoopConfigStore.KindQueue ? (bool?)l.VerifyEnabled : null,
                 };
             }),
             recipes = _recipes.List().Select(r => new
@@ -330,7 +366,7 @@ public class AutopilotController : ControllerBase
             generatedAt = DateTimeOffset.UtcNow.ToString("O"),
             agentHint = "Debug bundle for one Claude Web autopilot loop. The engine ticks every "
                 + $"{engine.TickSeconds:0}s (ClaudeWeb.App/Services/Autopilot/AutopilotService.cs, Tick/Execute); "
-                + "kind semantics live in SuggestionLoop/RecipeLoop/GoalLoop.cs, the store in LoopConfigStore.cs, "
+                + "kind semantics live in SuggestionLoop/RecipeLoop/GoalLoop/QueueLoop.cs, the store in LoopConfigStore.cs, "
                 + "the API in Controllers/AutopilotController.cs. engine.* is in-memory truth at generation time "
                 + "(guards explain why a tick held); the paths under files.* are on the harness host and hold the "
                 + "durable record. A loop only acts when: gateOpen && killSwitchEnabled && loop.active && !engine.busy "
@@ -368,6 +404,16 @@ public class AutopilotController : ControllerBase
                     goal = Text(loop.Goal),
                     verifyPrompt = Text(loop.VerifyPrompt),
                     pendingPrompt = Text(loop.PendingPrompt),
+                    // Queue kind (openspec: queue-based-loop, D7): the last unloaded
+                    // step's text and the verify template are prompt text — gated
+                    // like the fields above. The binding + counts are status words.
+                    queueTabId = loop.QueueTabId,
+                    queueVerifyEnabled = loop.Kind == LoopConfigStore.KindQueue ? (bool?)loop.VerifyEnabled : null,
+                    queueSent = loop.Kind == LoopConfigStore.KindQueue ? (int?)loop.QueueSent : null,
+                    lastStepText = Text(loop.LastStepText),
+                    queueVerifyTemplate = loop.Kind == LoopConfigStore.KindQueue
+                        ? Text(LoopConfigStore.QueueVerifyTemplate)
+                        : null,
                 },
             engine = new
             {
@@ -448,6 +494,10 @@ public class AutopilotController : ControllerBase
                 work = LoopConfigStore.GoalWorkTemplate,
                 verify = LoopConfigStore.GoalVerifyTemplate,
             },
+            // Queue kind (openspec: queue-based-loop, D4): the between-step
+            // verification template, composed at send time with the landed
+            // step's text — inspectable here like the goal templates.
+            queueVerifyTemplate = LoopConfigStore.QueueVerifyTemplate,
         });
     }
 

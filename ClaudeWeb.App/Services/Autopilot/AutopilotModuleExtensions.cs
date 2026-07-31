@@ -25,6 +25,7 @@ public static class AutopilotModuleExtensions
         services.AddSingleton<ILoop, SuggestionLoop>();
         services.AddSingleton<ILoop, RecipeLoop>();
         services.AddSingleton<ILoop, GoalLoop>();
+        services.AddSingleton<ILoop, QueueLoop>();
         services.AddSingleton<SystemTestsService>();
         services.AddSingleton<AutopilotService>();
         services.AddHostedService(sp => sp.GetRequiredService<AutopilotService>());

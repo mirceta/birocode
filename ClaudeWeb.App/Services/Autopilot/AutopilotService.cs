@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using ClaudeWeb.Services.Chat;
+using ClaudeWeb.Services.Dock;
 using ClaudeWeb.Services.Logging;
 using ClaudeWeb.Services.Prompts;
 using ClaudeWeb.Services.Repositories;
@@ -12,7 +13,7 @@ namespace ClaudeWeb.Services.Autopilot;
 /// A hosted <see cref="BackgroundService"/> that, every ~10s, looks at each agent
 /// (repo) with an ACTIVE loop instance that is idle, reads its last assistant
 /// message, and asks the instance's <see cref="ILoop"/> implementation (💡
-/// suggestion / 📋 recipe / 🎯 goal) for exactly one decision — hold, stop, or
+/// suggestion / 📋 recipe / 🎯 goal / 🗒️ queue) for exactly one decision — hold, stop, or
 /// propose-a-prompt. The engine owns only MECHANICS, applied uniformly to every
 /// kind: idle detection, per-message dedup, the cap check before any drive-mode
 /// send, sending, pending-prompt recording, intercept/log/audit records.
@@ -52,6 +53,7 @@ public class AutopilotService : BackgroundService
     private readonly AutopilotDiscoveryService _discovery;
     private readonly PromptsService _prompts;
     private readonly AutopilotAuditLog _audit;
+    private readonly DockRegistry _dock;
     private readonly Logger _logger;
 
     private readonly ConcurrentDictionary<string, AgentState> _states = new();
@@ -74,6 +76,13 @@ public class AutopilotService : BackgroundService
     // this is what "the loop advances when the reply changes" means, and it keeps a
     // goal loop's phase from oscillating while its verification prompt sits unsent.
     private readonly ConcurrentDictionary<string, string> _suggestWait = new();
+    // Queue kind, SUGGEST mode (openspec: queue-based-loop, D2): the stash item a
+    // pending queue proposal was read from. Consume-on-land for a pend means "when
+    // the pend's wait breaks" — the human sent it from the composer and the agent's
+    // reply moved — so the ref rides here until that tick. In-memory like the
+    // guards: a restart or re-arm forgets it and the item simply stays in the
+    // stash (lossless, re-proposed from the head).
+    private readonly ConcurrentDictionary<string, (StashRef Ref, string StepText)> _pendingConsume = new();
     // The ArmedAt stamp last seen per repo — a change means a re-arm, which
     // resets both guards above (see Tick).
     private readonly ConcurrentDictionary<string, long> _armGen = new();
@@ -94,7 +103,8 @@ public class AutopilotService : BackgroundService
         CliRunnerService cli, AutopilotConfigStore config, LoopConfigStore loops,
         AutopilotGate operatorGate, PromptClassifier brain, CliPromptClassifier cliBrain,
         AutopilotDiscoveryService discovery,
-        PromptsService prompts, AutopilotAuditLog audit, IEnumerable<ILoop> kinds, Logger logger)
+        PromptsService prompts, AutopilotAuditLog audit, DockRegistry dock,
+        IEnumerable<ILoop> kinds, Logger logger)
     {
         _repos = repos;
         _sessions = sessions;
@@ -108,6 +118,7 @@ public class AutopilotService : BackgroundService
         _discovery = discovery;
         _prompts = prompts;
         _audit = audit;
+        _dock = dock;
         _logger = logger;
         _kinds = kinds.ToDictionary(k => k.Kind);
 
@@ -406,6 +417,9 @@ public class AutopilotService : BackgroundService
                 _suggestWait.TryRemove(repo.Id, out _);
                 _driveNoReply.TryRemove(repo.Id, out _);
                 _driveNoReplyMisses.TryRemove(repo.Id, out _);
+                // A stale pend must never consume into the NEW arming's queue —
+                // the un-sent item is still in the stash, so nothing is lost.
+                _pendingConsume.TryRemove(repo.Id, out _);
             }
 
             // Driven kinds need a session to resume into; wait for the agent to speak.
@@ -460,6 +474,19 @@ public class AutopilotService : BackgroundService
             if (loop.Mode == LoopConfigStore.ModeSuggest
                 && _suggestWait.TryGetValue(repo.Id, out var sw) && sw == snippet) continue;
 
+            // Queue kind, suggest mode (openspec: queue-based-loop, D2): reaching
+            // here past the guard means the pend's wait broke — the human sent it
+            // from the composer and the agent's reply moved. That IS the pend
+            // being consumed: the item leaves the stash and the step is stamped
+            // (entering verify-owed) BEFORE deciding on the new reply.
+            if (loop.Mode == LoopConfigStore.ModeSuggest
+                && _pendingConsume.TryRemove(repo.Id, out var pc))
+            {
+                _dock.RemoveStash(pc.Ref.TabId, pc.Ref.ItemId);
+                loop = _loops.RecordQueueStep(repo.Id, pc.StepText) ?? loop;
+                _logger.Info($"[LOOP] {repo.Name}: queue step consumed on reply (suggest mode)");
+            }
+
             // The CLI brain runs OFF the tick path (fix-suggestion-loop-inert,
             // D5): the first tick that sees a new trailing message starts one
             // background classification and holds; a later tick consumes the
@@ -509,7 +536,13 @@ public class AutopilotService : BackgroundService
                 loop,
                 preArm ? null : lastAssistant,
                 !preArm && run?.Status == "error",
-                cfg.DenyList, cfg.Threshold, routines, cliVerdict));
+                cfg.DenyList, cfg.Threshold, routines, cliVerdict,
+                // Queue kind (openspec: queue-based-loop, D2): the bound tab's LIVE
+                // stash, read this tick — null when the tab no longer exists (the
+                // kind resolves error). Other kinds never look.
+                loop.Kind == LoopConfigStore.KindQueue
+                    ? _dock.GetStash(loop.QueueTabId ?? "")
+                    : null));
 
             Execute(repo, loop, decision, sessionId, snippet, intercept, now);
         }
@@ -557,6 +590,11 @@ public class AutopilotService : BackgroundService
                     // until the agent's reply changes.
                     _loops.SetPending(repo.Id, propose.Prompt);
                     if (propose.EnterPhase != null) _loops.SetPhase(repo.Id, propose.EnterPhase);
+                    // Queue kind: remember which stash item this pend was read
+                    // from — consumed only when the wait breaks (see Tick), never
+                    // at decide time (D2).
+                    if (propose.ConsumeStash is { } pendRef)
+                        _pendingConsume[repo.Id] = (pendRef, propose.Prompt);
                     _suggestWait[repo.Id] = snippet;
                     Set(repo.Id, new AgentState(repo.Id, repo.Name, isSuggestionKind, "suggestion",
                         propose.Prompt, propose.Confidence, "pending — pre-filled for you to send", snippet, now));
@@ -580,9 +618,19 @@ public class AutopilotService : BackgroundService
                 if (string.IsNullOrWhiteSpace(sessionId)) return;
                 if (SendPrompt(repo, sessionId!, loop, propose.Prompt, propose.Confidence, snippet, intercept, now))
                 {
+                    // Consume-on-land (queue kind, D2/D3): the head item leaves the
+                    // stash only now that its send actually fired, and the step is
+                    // stamped — RecordQueueStep sets the phase itself (verify-owed,
+                    // or straight back to work when verification is opted out), so
+                    // the proposal's EnterPhase is superseded for this case.
+                    if (propose.ConsumeStash is { } sref)
+                    {
+                        _dock.RemoveStash(sref.TabId, sref.ItemId);
+                        _loops.RecordQueueStep(repo.Id, propose.Prompt);
+                    }
                     // Flip the phase only after the send actually fired — a failed
                     // slot claim leaves the loop as-is so the next tick retries.
-                    if (propose.EnterPhase != null) _loops.SetPhase(repo.Id, propose.EnterPhase);
+                    else if (propose.EnterPhase != null) _loops.SetPhase(repo.Id, propose.EnterPhase);
                     Set(repo.Id, new AgentState(repo.Id, repo.Name, isSuggestionKind, "sent",
                         Snippet(propose.Prompt), propose.Confidence,
                         isSuggestionKind ? $"auto-sent \"{propose.Prompt}\"" : $"{loop.Kind} loop sent",
