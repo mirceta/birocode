@@ -10,6 +10,8 @@
   "common.back": "Back",
   "staleBanner.message": "A new version of Claude Web is available.",
   "staleBanner.reload": "Reload",
+  "flags.title": "Agent flags — complaints and ambiguities from loop runs",
+  "flags.dismiss": "Dismiss flag",
   "save.idle": "Save",
   "save.saving": "Saving...",
   "save.modalTitle": "Save your work",

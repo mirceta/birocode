@@ -57,6 +57,7 @@ public class AutopilotService : BackgroundService
     private readonly AutopilotAuditLog _audit;
     private readonly DockRegistry _dock;
     private readonly BriefingRulesStore _briefing;
+    private readonly FlagsStore _flags;
     private readonly Logger _logger;
 
     private readonly ConcurrentDictionary<string, AgentState> _states = new();
@@ -93,6 +94,11 @@ public class AutopilotService : BackgroundService
     // The ArmedAt stamp last seen per repo — a change means a re-arm, which
     // resets both guards above (see Tick).
     private readonly ConcurrentDictionary<string, long> _armGen = new();
+    // The reply timestamp whose FLAG: lines were last lifted per repo, so a reply
+    // that gets re-seen across ticks (e.g. while a suggest-mode loop waits) is
+    // mined for flags exactly once. Keyed by timestamp, not arm generation: a
+    // re-arm over the same trailing reply must not re-record its flags.
+    private readonly ConcurrentDictionary<string, DateTime> _lastFlagMined = new();
     private readonly object _logGate = new();
     private readonly LinkedList<LogEntry> _log = new();
     // The live "Intercepted" feed: one entry per NEW agent message the engine grabs
@@ -111,7 +117,7 @@ public class AutopilotService : BackgroundService
         AutopilotGate operatorGate, PromptClassifier brain, CliPromptClassifier cliBrain,
         AutopilotDiscoveryService discovery,
         PromptsService prompts, AutopilotAuditLog audit, DockRegistry dock,
-        BriefingRulesStore briefing, IEnumerable<ILoop> kinds, Logger logger)
+        BriefingRulesStore briefing, FlagsStore flags, IEnumerable<ILoop> kinds, Logger logger)
     {
         _repos = repos;
         _sessions = sessions;
@@ -120,6 +126,7 @@ public class AutopilotService : BackgroundService
         _config = config;
         _loops = loops;
         _briefing = briefing;
+        _flags = flags;
         _operatorGate = operatorGate;
         _brain = brain;
         _cliBrain = cliBrain;
@@ -577,6 +584,24 @@ public class AutopilotService : BackgroundService
             // send whose reply never landed both decide as if unanswered — the
             // kind (re)proposes its phase's prompt and judges nothing.
             var noReply = preArm || replyMissing;
+            // Non-blocking FLAG: capture (docs/loop-driven-agent-convention.md):
+            // lift the fresh reply's "FLAG: <sentence>" lines into the ledger
+            // BEFORE the kind judges it, so a reply that also stops the loop
+            // (sentinel, NEEDS_HUMAN, deny-list) still gets its flags kept. Never
+            // feeds the decision ladder; pre-arm history is never mined (those
+            // flags belong to the human's previous conversation, if anything).
+            if (!isSuggestionKind && !noReply && !string.IsNullOrWhiteSpace(lastAssistant)
+                && lastAssistantAt is { } minedAt
+                && (!_lastFlagMined.TryGetValue(repo.Id, out var mined) || mined != minedAt))
+            {
+                _lastFlagMined[repo.Id] = minedAt;
+                var flagLines = FlagsStore.ExtractFlagLines(lastAssistant!);
+                if (flagLines.Count > 0)
+                {
+                    var kept = _flags.Record(repo.Id, repo.Name, loop.Kind, loop.IterationsDone, flagLines);
+                    _logger.Info($"[FLAGS] {repo.Name}: {flagLines.Count} FLAG line(s) in the reply, {kept} new");
+                }
+            }
             var decision = impl.Decide(new LoopContext(
                 loop,
                 noReply ? null : lastAssistant,

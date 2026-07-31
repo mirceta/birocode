@@ -117,6 +117,15 @@ public class LoopConfigStore
         "- Only if a decision genuinely requires the human — irreversible, destructive, "
         + "or a preference only they can give — stop and end your reply with the final "
         + "line: NEEDS_HUMAN: <one short question>";
+    // The non-blocking counterpart to the escalation line (docs/
+    // loop-driven-agent-convention.md, "Non-blocking flags"): compiled-in like the
+    // marker lines above because the engine parses FLAG: lines (FlagsStore), so
+    // the taught spelling must never drift under a UI edit.
+    public const string BriefingFlagLine =
+        "- If anything this turn was a complaint, a workaround, or an ambiguity you "
+        + "resolved by guessing, also record each as its own line starting with: "
+        + "FLAG: <one short sentence> — it never stops the loop; the harness collects "
+        + "these for the human to review later.";
     public const string BriefingContractQueueItem =
         "Below is one item from a stored queue; a separate verification turn follows "
         + "automatically, so print no completion marker.";
@@ -153,6 +162,7 @@ public class LoopConfigStore
         var lines = new List<string> { BriefingHeader, BriefingIntro };
         lines.AddRange(enabledRules.Select(r => "- " + r));
         lines.Add(BriefingEscalationLine);
+        lines.Add(BriefingFlagLine);
         lines.Add(kind == KindQueue
             ? BriefingContractQueueItem
             : string.Format(BriefingContractSentinelTemplate,

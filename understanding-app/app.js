@@ -16,6 +16,12 @@ const ESCALATION = [
   "  or a preference only they can give — stop and end your reply with the final",
   "  line: NEEDS_HUMAN: <one short question>"
 ].join("\n");
+const FLAG_LINE = [
+  "- If anything this turn was a complaint, a workaround, or an ambiguity you",
+  "  resolved by guessing, also record each as its own line starting with:",
+  "  FLAG: <one short sentence> — it never stops the loop; the harness collects",
+  "  these for the human to review later."
+].join("\n");
 const VERIFY_NOTE = [
   HEADER,
   "This verification prompt was sent by an automated loop; nobody is reading in",
@@ -51,7 +57,7 @@ function briefingFor(kind) {
   if (spec.phase === "verify") return VERIFY_NOTE;
   const bullets = RULES.filter(r => r.enabled).map(r => "- " + r.text);
   const contract = spec.contract || CONTRACT_SENTINEL(spec.sentinel);
-  return [HEADER, INTRO, ...bullets, ESCALATION, contract, SEP].join("\n");
+  return [HEADER, INTRO, ...bullets, ESCALATION, FLAG_LINE, contract, SEP].join("\n");
 }
 
 /* escape + lightweight syntax highlight for a prompt block */
@@ -60,6 +66,7 @@ function hlBriefing(text){
   let h = esc(text)
     .replace(/(\[Autopilot loop briefing\])/g,'<span class="k-title">$1</span>')
     .replace(/(NEEDS_HUMAN: &lt;one short question&gt;)/g,'<span class="k-marker">$1</span>')
+    .replace(/(FLAG: &lt;one short sentence&gt;)/g,'<span class="k-marker">$1</span>')
     .replace(/(LOOP_DONE|GOAL_VERIFIED|STEP_VERIFIED)/g,'<span class="k-marker">$1</span>')
     .replace(/(--- The prompt follows\. ---)/g,'<span class="k-sep">$1</span>')
     .replace(/(Below is one item from a stored queue[\s\S]*?marker\.|When the whole job below[\s\S]*?final line: )/g,
@@ -196,7 +203,7 @@ function renderText(){
   document.getElementById("workTpl").innerHTML =
     hlBriefing([HEADER, INTRO].join("\n"))
     + '\n<span class="k-rules-slot">{enabled rules from briefing.json — the two seeded draft-v1 bullets, plus yours}</span>\n'
-    + hlBriefing([ESCALATION, "{contract line}", SEP].join("\n"));
+    + hlBriefing([ESCALATION, FLAG_LINE, "{contract line}", SEP].join("\n"));
   document.getElementById("verifyTpl").innerHTML = hlBriefing(VERIFY_NOTE);
 }
 renderText();

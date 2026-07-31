@@ -1,0 +1,86 @@
+/* Agent-flags footer: slim strip pinned to the bottom of the frame, styled like
+   the stale-version banner but rose-tinted — these are open complaints, not
+   chrome. Fixed like .bottom-nav (which sits at bottom:0, z-index 20): while
+   the nav is visible the --above-nav modifier stacks the strip directly on top
+   of it, otherwise the strip takes the bottom edge itself. The list scrolls
+   horizontally on a phone instead of stacking. */
+.flags-footer {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: var(--max-width);
+  z-index: 21;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 0.85rem;
+  background: #fdf0f0;
+  border-top: 1px solid #d98a8a;
+  color: #7a2626;
+  font-size: 0.85rem;
+}
+
+.flags-footer--above-nav {
+  bottom: var(--nav-height);
+}
+
+/* The multi-pane desktop frame drops the phone-column cap — track the nav. */
+.app-frame--multi .flags-footer {
+  max-width: none;
+}
+
+.flags-footer__badge {
+  flex: none;
+  font-weight: 700;
+}
+
+.flags-footer__list {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.flags-footer__item {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 26rem;
+  padding: 0.15rem 0.5rem;
+  background: #fff;
+  border: 1px solid #e5b8b8;
+  border-radius: 999px;
+}
+
+.flags-footer__repo {
+  flex: none;
+  font-weight: 600;
+  color: #a04141;
+}
+
+.flags-footer__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flags-footer__dismiss {
+  flex: none;
+  border: none;
+  background: transparent;
+  color: #a04141;
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.1rem;
+}
+
+.flags-footer__dismiss:hover {
+  color: #6e1f1f;
+}

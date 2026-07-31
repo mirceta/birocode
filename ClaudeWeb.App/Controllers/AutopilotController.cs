@@ -594,6 +594,7 @@ public class AutopilotController : ControllerBase
             header = LoopConfigStore.BriefingHeader,
             intro = LoopConfigStore.BriefingIntro,
             escalationLine = LoopConfigStore.BriefingEscalationLine,
+            flagLine = LoopConfigStore.BriefingFlagLine,
             contractQueueItem = LoopConfigStore.BriefingContractQueueItem,
             contractSentinelTemplate = LoopConfigStore.BriefingContractSentinelTemplate,
             separator = LoopConfigStore.BriefingSeparator,

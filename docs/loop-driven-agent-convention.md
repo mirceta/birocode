@@ -18,8 +18,9 @@ you, so the only way to end the loop cleanly is to emit the markers below exactl
 You do not need to have read this file to know that: **every driven send now tells you
 the situation in its own text** (openspec: loop-agent-briefing). Work prompts arrive
 wrapped in an `[Autopilot loop briefing]` prefix stating that an automated loop sent
-them, the behavioral posture below, the escalation line, and the applicable marker
-contract, followed by `--- The prompt follows. ---` and the stored text. Verification
+them, the behavioral posture below, the escalation line, the non-blocking `FLAG:`
+line, and the applicable marker contract, followed by `--- The prompt follows. ---`
+and the stored text. Verification
 prompts carry a short honesty-first note instead. The briefing is this document's
 distilled form; the two are kept in sync in the same commit whenever either changes.
 
@@ -60,6 +61,29 @@ Loops come in three kinds; the prompt you receive tells you which you are in:
 
 If neither marker appears, the loop assumes there is more work and resends its prompt.
 Just keep making real progress each turn; don't emit filler.
+
+## Non-blocking flags — `FLAG:`
+
+Complaints and ambiguities have their own channel, separate from the two markers above
+because it never affects the loop. If anything in a turn was a **complaint**, a
+**workaround**, or an **ambiguity you resolved by guessing**, also record each one as
+its own line, anywhere in your reply:
+
+```
+FLAG: <one short sentence>
+```
+
+Matching is **line-start** (case-insensitive; one line per issue) — a mid-sentence
+"FLAG:" does nothing. Unlike `NEEDS_HUMAN:` this neither stops nor escalates
+anything: you proceed with your sensible default, and the harness lifts every
+`FLAG:` line into a persistent ledger shown in the web app's **footer** until the
+human dismisses it — so a gripe nobody watched live is not forgotten. Make each
+flag self-contained, like the `NEEDS_HUMAN:` question: it is read without your
+conversation context, possibly days later.
+
+The division of labor: `NEEDS_HUMAN:` is for decisions that **block** you;
+`FLAG:` is for "I proceeded, but note this." A flag in the same reply as a
+sentinel or an escalation still gets collected.
 
 ## How to behave
 
