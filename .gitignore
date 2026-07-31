@@ -32,3 +32,4 @@ client/dist.lastgood/
 .preview-test/
 
 client/dist-preview/
+.loop-evals/

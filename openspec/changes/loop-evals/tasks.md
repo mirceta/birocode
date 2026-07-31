@@ -9,16 +9,16 @@
 ## 2. Runner
 
 - [x] 2.1 Scaffold `tests/loop-evals/LoopEvals/` console project referencing `ClaudeWeb.App` (DiscoveryEval precedent)
-- [ ] 2.2 Compose the production loop services in-process (`AutopilotModuleExtensions`) against a scratch repo; wire the queue-based loop, seeded from `plan.md` per the manifest's seed hints
-- [ ] 2.3 Turn cap + wall-clock timeout; commit scratch tree per completed agent turn to a `run/<n>` branch (spec: runaway cut-off; runs isolated)
-- [ ] 2.4 N-runs mode: repeat (example, config) N times into separate scratch clones
+- [x] 2.2 Compose the production loop services in-process (`AutopilotModuleExtensions`) against a scratch repo; wire the queue-based loop, seeded from `plan.md` per the manifest's seed hints
+- [x] 2.3 Turn cap + wall-clock timeout; commit scratch tree per completed agent turn to a `run/<n>` branch (spec: runaway cut-off; runs isolated)
+- [x] 2.4 N-runs mode: repeat (example, config) N times into separate scratch clones
 
 ## 3. Scorer + report
 
-- [ ] 3.1 Acceptance-check executor: run manifest checks in the final working copy → verdict with failing check named
-- [ ] 3.2 Diff evidence: final tree vs `eval/final` (files added/removed/changed)
-- [ ] 3.3 Trajectory compare: turn counts, per-turn files-touched overlap vs golden, first-divergence turn
-- [ ] 3.4 Report output: JSON + console table per run, aggregate (pass rate, worst case, turn spread) for N runs
+- [x] 3.1 Acceptance-check executor: run manifest checks in the final working copy → verdict with failing check named
+- [x] 3.2 Diff evidence: final tree vs `eval/final` (files added/removed/changed)
+- [x] 3.3 Trajectory compare: turn counts, per-turn files-touched overlap vs golden, first-divergence turn
+- [x] 3.4 Report output: JSON + console table per run, aggregate (pass rate, worst case, turn spread) for N runs
 
 ## 4. Curation (operator-facing UI over repo copy + stored conversation)
 

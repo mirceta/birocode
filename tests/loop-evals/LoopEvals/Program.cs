@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ClaudeWeb.LoopEvals;
 
 // LoopEvals — offline, developer-facing eval harness for autopilot loops.
@@ -95,11 +96,54 @@ static int Validate(List<string> a)
     }
 }
 
-static Task<int> RunEval(List<string> a)
+static async Task<int> RunEval(List<string> a)
 {
-    _ = a;
-    Console.Error.WriteLine("run mode is not implemented yet (loop-evals tasks §2–3)");
-    return Task.FromResult(2);
+    var exampleDir = RequireExampleDir(a);
+    var runs = Math.Max(1, int.TryParse(Opt(a, "--runs"), out var n) ? n : 1);
+    var turnCap = Math.Clamp(int.TryParse(Opt(a, "--turn-cap"), out var tc) ? tc : 12, 1, 100);
+    var timeout = TimeSpan.FromMinutes(Math.Max(1, int.TryParse(Opt(a, "--timeout-min"), out var tm) ? tm : 30));
+    var broken = a.Contains("--broken");
+    var jsonOut = Opt(a, "--json");
+    var outRoot = Opt(a, "--out")
+        ?? Path.Combine(RepoRoot(), ".loop-evals", DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+
+    var example = GoldenExample.Load(exampleDir);
+    var settings = new RunSettings(turnCap, timeout, broken);
+    var config = $"queue drive, cap {turnCap}, verify on{(broken ? ", BROKEN seed" : "")}";
+    Console.WriteLine($"example  {example.Manifest.Id}: {example.Manifest.Description}");
+    Console.WriteLine($"config   {config}; {runs} run(s), timeout {timeout.TotalMinutes:0}min");
+    Console.WriteLine($"out      {outRoot}");
+
+    // The isolated harness datadir — MUST be set before any app service resolves
+    // AppPaths.DataDir (read once per process).
+    Directory.CreateDirectory(outRoot);
+    Environment.SetEnvironmentVariable("CLAUDEWEB_DATADIR", Path.Combine(outRoot, "datadir"));
+
+    var reports = new List<RunReport>();
+    await using (var host = await EvalHost.StartAsync(Path.Combine(outRoot, "datadir")))
+    {
+        var runner = new EvalRunner(host);
+        for (var i = 1; i <= runs; i++)
+        {
+            Console.WriteLine($"--- run {i}/{runs} ---");
+            var runDir = Path.Combine(outRoot, $"run-{i}");
+            var outcome = await runner.RunOnceAsync(example, i, runDir, settings);
+            var report = Scorer.Score(example, outcome);
+            reports.Add(report);
+            Console.WriteLine(Scorer.Render(report));
+        }
+    }
+
+    var aggregate = new EvalAggregate(example.Manifest.Id, config, reports);
+    Console.WriteLine();
+    Console.WriteLine(Scorer.RenderAggregate(aggregate));
+
+    var jsonPath = jsonOut ?? Path.Combine(outRoot, "report.json");
+    File.WriteAllText(jsonPath, JsonSerializer.Serialize(aggregate,
+        new JsonSerializerOptions { WriteIndented = true }));
+    Console.WriteLine($"report   {jsonPath}");
+
+    return aggregate.RunsPassed == aggregate.RunsTotal ? 0 : 1;
 }
 
 static string Trunc(string s, int n)
