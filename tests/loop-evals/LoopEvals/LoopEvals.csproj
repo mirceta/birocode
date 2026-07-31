@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- net8.0-windows because we reference ClaudeWeb.App (WinForms) to reuse the
+         REAL loop engine (AutopilotService + QueueLoop) — the whole point of the
+         eval (loop-evals design D4, DiscoveryEval precedent). -->
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>ClaudeWeb.LoopEvals</RootNamespace>
+    <AssemblyName>LoopEvals</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\ClaudeWeb.App\ClaudeWeb.App.csproj" />
+  </ItemGroup>
+
+</Project>

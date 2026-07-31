@@ -2,13 +2,13 @@
 
 ## 1. Bundle format + first example
 
-- [ ] 1.1 Define `manifest.json` schema (id, description, loop seed hints, turn→SHA map, acceptance checks) and document the bundle layout in `tests/loop-evals/README.md`
-- [ ] 1.2 Hand-author a small synthetic golden example under `tests/loop-evals/examples/` (tiny repo, short plan, 3–5 golden turns, acceptance checks) — built as a real git history, shipped as `repo.bundle`
-- [ ] 1.3 Bundle loader: parse manifest + transcript, clone `repo.bundle` to scratch, verify turn SHAs exist (spec: bundle is self-contained; transcript joins to repo states)
+- [x] 1.1 Define `manifest.json` schema (id, description, loop seed hints, turn→SHA map, acceptance checks) and document the bundle layout in `tests/loop-evals/README.md`
+- [x] 1.2 Hand-author a small synthetic golden example under `tests/loop-evals/examples/` (tiny repo, short plan, 3–5 golden turns, acceptance checks) — built as a real git history, shipped as `repo.bundle`
+- [x] 1.3 Bundle loader: parse manifest + transcript, clone `repo.bundle` to scratch, verify turn SHAs exist (spec: bundle is self-contained; transcript joins to repo states)
 
 ## 2. Runner
 
-- [ ] 2.1 Scaffold `tests/loop-evals/LoopEvals/` console project referencing `ClaudeWeb.App` (DiscoveryEval precedent)
+- [x] 2.1 Scaffold `tests/loop-evals/LoopEvals/` console project referencing `ClaudeWeb.App` (DiscoveryEval precedent)
 - [ ] 2.2 Compose the production loop services in-process (`AutopilotModuleExtensions`) against a scratch repo; wire the queue-based loop, seeded from `plan.md` per the manifest's seed hints
 - [ ] 2.3 Turn cap + wall-clock timeout; commit scratch tree per completed agent turn to a `run/<n>` branch (spec: runaway cut-off; runs isolated)
 - [ ] 2.4 N-runs mode: repeat (example, config) N times into separate scratch clones
