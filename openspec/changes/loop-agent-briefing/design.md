@@ -83,7 +83,8 @@ the escalation path not the default) plus one contract line selected by kind+pha
 - queue work item: "this is one item of a stored queue; a separate verification turn
   follows; no done-marker is needed for this item."
 - queue verify / goal verify: the verify templates already state their marker; the
-  briefing contributes only the situational core (no duplicate marker line).
+  briefing contributes only a short honesty-first situational note (no posture
+  pressure, no duplicate marker line — see D2a).
 - goal work: sentinel line (`LOOP_DONE` final-line contract).
 - recipe: sentinel line using the loop's configured `Sentinel` (recipes may override
   the default).
@@ -92,6 +93,58 @@ the escalation path not the default) plus one contract line selected by kind+pha
 `briefing + "\n\n" + storedText`. The existing goal/queue-verify templates are
 reworded in the same change to drop lines the briefing now covers (no duplicated
 posture text), keeping their marker-specific instructions.
+
+### D2a — The briefing text itself is the heart of this change (draft v1)
+
+The plumbing above is deliberately small; what makes or breaks the feature is the
+prompt. Draft v1, to live as consts in `LoopConfigStore` beside the other templates
+and be tuned from real runs:
+
+**Work-phase core** (queue item / goal work / recipe):
+
+```
+[Autopilot loop briefing]
+This prompt was sent by an automated loop. It was not typed live by a human, and
+nobody is reading your reply in real time — a reply that only asks or plans goes
+nowhere.
+- Do the work in this turn. Do not stop at a plan, a list of options, or a
+  clarifying question.
+- Answer your own questions and follow your own advice when you are confident.
+  Choose sensible defaults for open details and state briefly which you chose.
+- Only if a decision genuinely requires the human — irreversible, destructive,
+  or a preference only they can give — stop and end your reply with the final
+  line: NEEDS_HUMAN: <one short question>
+{contract line}
+--- The prompt follows. ---
+```
+
+Contract lines: queue item — "Below is one item from a stored queue; a separate
+verification turn follows automatically, so print no completion marker."; goal
+work / recipe — "When the whole job below is genuinely complete — not before —
+end your reply with the exact final line: {sentinel}".
+
+**Verify-phase note** (queue step-verify / goal verify) — intentionally NOT the
+work core; a verification turn must feel no "act, don't ask" pressure:
+
+```
+[Autopilot loop briefing]
+This verification prompt was sent by an automated loop; nobody is reading in
+real time. Judge honestly — a false confirmation silently corrupts the run,
+while an honest refusal merely stops the loop for a human to look at.
+```
+
+Crafting constraints that bound future tuning:
+
+- **Short**: the work core stays under ~120 words so it frames the stored prompt
+  without diluting it; it is a fixed per-send token cost.
+- **Prefix, not suffix**: situational framing must land before the task text; the
+  `--- The prompt follows. ---` separator keeps the operator's text visually and
+  semantically distinct from the harness's.
+- **Exact-final-line phrasing** for `NEEDS_HUMAN:` and the sentinel, matching the
+  final-line anchoring the engine already parses (fix-loop-conversation-identity) —
+  the briefing must never teach a marker format the parser would miss.
+- **One voice with the convention doc**: the briefing is the doc's distilled form;
+  any tuning edits both in the same commit (D4).
 
 Alternative rejected: folding the posture into each arm-time template — leaves recipe
 and queue items unbriefed (they have no template) and re-scatters the text the
@@ -137,9 +190,9 @@ fixed prefix.
 ## Risks / Trade-offs
 
 - [Agents rubber-stamp `STEP_VERIFIED` because the briefing says "act, don't ask"] →
-  the briefing's verify-phase form contains no "act" pressure (situational core only),
-  and the verify templates keep demanding honest refusal; e2e asserts an unaccomplished
-  step still escalates.
+  D2a splits the text: verify sends get the honesty-first note, never the work core,
+  and the verify templates keep demanding honest refusal; e2e asserts an
+  unaccomplished step still escalates.
 - [Truncated surfaces show briefing noise] → D3: raw text + flag recorded, composed
   text never stored per-send.
 - [Double instruction for repos whose CLAUDE.md already points at the convention doc]
@@ -162,8 +215,8 @@ rendered as before. Rollback = redeploy previous build (dead-man switch as usual
 
 ## Open Questions
 
-- Exact briefing wording — drafted in `LoopConfigStore` consts, tuned from real runs
-  like the goal/queue templates before it (explicitly marked as draft wording).
+- Tuning of the D2a draft wording from real runs (the draft ships as v1; the crafting
+  constraints in D2a bound what tuning may change).
 - Whether the chat bubble affordance ships in this change or the flag alone suffices
   initially (flag is required; the affordance is small and should ride along unless it
   drags).

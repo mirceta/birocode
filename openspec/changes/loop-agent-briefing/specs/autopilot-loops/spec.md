@@ -15,8 +15,8 @@ to open questions, and that `NEEDS_HUMAN:` is reserved for decisions only
 the human can make. Work-phase briefings SHALL include the kind-appropriate
 marker line (the loop's configured sentinel for recipe and goal work sends;
 the no-marker-needed note for queue items); verification-phase briefings
-SHALL contribute only the situational core, leaving the marker instruction
-to the verification template. Suggest-mode pending prompts SHALL NOT be
+SHALL carry only a short honesty-first situational note — no act-don't-ask
+posture — leaving the marker instruction to the verification template. Suggest-mode pending prompts SHALL NOT be
 briefed.
 
 #### Scenario: Queue item is sent briefed

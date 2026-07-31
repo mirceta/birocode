@@ -2,11 +2,12 @@
 
 ## 1. Backend: briefing composition at the send choke point
 
-- [ ] 1.1 `LoopConfigStore`: briefing template consts (situational core + per-kind/phase
-      contract lines, draft-wording note) + `ComposeBriefedPrompt(kind, phase, sentinel,
-      storedText)`; rework `GoalWorkTemplate`/`GoalVerifyTemplate`/`QueueVerifyTemplate`
-      to drop lines the briefing now covers; delete the stale "byte-identical text"
-      class-summary wording (D2, D4).
+- [ ] 1.1 `LoopConfigStore`: briefing template consts — D2a draft v1 verbatim (work-phase
+      core + per-kind contract lines; separate honesty-first verify note, NO act
+      pressure) + `ComposeBriefedPrompt(kind, phase, sentinel, storedText)`; rework
+      `GoalWorkTemplate`/`GoalVerifyTemplate`/`QueueVerifyTemplate` to drop lines the
+      briefing now covers; delete the stale "byte-identical text" class-summary
+      wording (D2, D2a, D4).
 - [ ] 1.2 `AutopilotService`: wrap the proposed text with the briefing in the drive
       branch only — `SendPrompt` receives the composed text while `RecordQueueStep`,
       consume refs, state snippets, and audit keep the raw stored text; suggest branch
