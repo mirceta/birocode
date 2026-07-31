@@ -539,8 +539,10 @@ export function ChatProvider({ children }) {
       } else if (tab && tab.status === 'running' && !abortRefs.current[key]) {
         // The run finished while no client was attached (page was closed):
         // fix the badge and restore the finished turn from the transcript.
+        // A backend 'stopped' run (operator Stop) badges as idle, the same
+        // state a local Stop leaves behind.
         updateTab(tabId, {
-          status: run ? run.status : 'idle',
+          status: run ? (run.status === 'stopped' ? 'idle' : run.status) : 'idle',
           ...(run?.sessionId ? { sessionId: run.sessionId } : {}),
         });
         if (run?.sessionId) {
@@ -576,7 +578,7 @@ export function ChatProvider({ children }) {
     // Not running: correct a stale 'running' badge, then re-pull the transcript.
     if (tabId && run) {
       updateTab(tabId, {
-        status: run.status || 'idle',
+        status: run.status === 'stopped' ? 'idle' : (run.status || 'idle'),
         ...(run.sessionId ? { sessionId: run.sessionId } : {}),
       });
     }

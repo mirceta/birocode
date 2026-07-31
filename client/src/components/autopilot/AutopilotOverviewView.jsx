@@ -183,6 +183,19 @@ export default function AutopilotOverviewView() {
                 the queue stops and escalates instead of sending the next
                 prompt into a broken state.
               </li>
+              <li>
+                The arm form <b>names its binding</b> (&quot;drives &lt;repo&gt; ·
+                N queued&quot; — the first prompt fires when the agent is next
+                free), and the <b>deny-list is trimmable per arm</b> (whole-word
+                matching; drop <code>push</code> for a commit-and-push repo
+                without touching the global default).
+              </li>
+              <li>
+                A stopped queue with items left offers one-tap <b>Resume</b> —
+                same instance, current head, fresh iteration budget; pressing
+                Stop on the agent&apos;s run records honestly as
+                <b> stopped · by-operator</b>, never as an agent error.
+              </li>
             </ul>
           </article>
         </div>

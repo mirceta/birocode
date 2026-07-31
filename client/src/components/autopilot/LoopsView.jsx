@@ -198,17 +198,26 @@ function LoopRow({ agent, loop, recipes, loopAction }) {
 // stash of the bound dock tab, plus an arm form with a tab picker — a repo can
 // hold several dock tabs and the queue is per-tab. Arming an empty stash is
 // refused server-side; the button stays disabled with the reason instead.
-function QueueRow({ agent, loop, tabs, loopAction }) {
+function QueueRow({ agent, loop, tabs, denyDefault = [], loopAction }) {
   const repoTabs = tabs.filter((tb) => tb.repoId === agent.repoId);
   const [tabId, setTabId] = useState('');
   const [verify, setVerify] = useState(true);
   const [cap, setCap] = useState('');
   const [busy, setBusy] = useState(false);
+  // Per-arm deny-list trim (openspec: advance-queue-loop, D2): terms dropped
+  // for THIS arm only. Nothing dropped → the request omits denyList → the
+  // instance follows the global default.
+  const [denyDropped, setDenyDropped] = useState([]);
 
   const isQueue = loop?.kind === 'queue';
   const active = !!loop?.active && isQueue;
   const chosen = repoTabs.find((tb) => tb.id === tabId) || repoTabs[0] || null;
   const stashLen = chosen?.stash?.length ?? 0;
+  // One-step resume (advance-queue-loop, D3): a stopped queue instance whose
+  // bound tab still holds stash items re-activates in place.
+  const boundTab = isQueue && loop?.queueTabId ? tabs.find((tb) => tb.id === loop.queueTabId) : null;
+  const boundLen = boundTab?.stash?.length ?? 0;
+  const resumable = isQueue && !loop?.active && !!boundTab && boundLen > 0;
 
   const act = async (body) => {
     setBusy(true);
@@ -221,6 +230,9 @@ function QueueRow({ agent, loop, tabs, loopAction }) {
       mode: 'drive', verifyEnabled: verify,
       maxIterations: Number(cap) >= 1 ? Number(cap) : undefined,
       sessionId: chosen.sessionId || undefined,
+      denyList: denyDropped.length > 0
+        ? denyDefault.filter((term) => !denyDropped.includes(term))
+        : undefined,
     });
   };
 
@@ -258,6 +270,14 @@ function QueueRow({ agent, loop, tabs, loopAction }) {
 
       {active ? (
         <div className="lp-live">
+          {/* Binding line (advance-queue-loop, D5): an armed queue keeps naming
+              what it drives on every disclosure surface. */}
+          <span className="ap-muted">
+            Drives <b>{boundTab?.repoName ?? agent.repoName}</b>
+            {loop.denyList != null && (
+              <> · deny-list this arm: {loop.denyList.length > 0 ? loop.denyList.join(', ') : 'none'}</>
+            )}
+          </span>
           <div className="lp-live__meta">
             <span className="lp-stat">
               <span className="lp-stat__k">sent</span>
@@ -292,6 +312,18 @@ function QueueRow({ agent, loop, tabs, loopAction }) {
           {isQueue && loop?.stopDetail && (
             <div className={`lp-reason${loop.stopReason === 'needs-human' ? ' lp-reason--human' : ''}`}>
               {loop.stopDetail}
+            </div>
+          )}
+          {/* One-step Resume (advance-queue-loop, D3): same instance, current
+              stash head, fresh iteration budget, sent-history kept. */}
+          {resumable && (
+            <div className="lp-form__actions">
+              <button
+                className="lp-arm" type="button" disabled={busy}
+                onClick={() => act({ repoId: agent.repoId, action: 'resume' })}
+              >
+                ▶ Resume queue ({boundLen} remaining)
+              </button>
             </div>
           )}
           {sentBlock}
@@ -334,10 +366,46 @@ function QueueRow({ agent, loop, tabs, loopAction }) {
                   </ol>
                 </div>
               )}
+              {/* Binding line (advance-queue-loop, D5): name the target and the
+                  immediate consequence BEFORE the arm click. */}
+              {chosen && (
+                <span className="ap-muted">
+                  Drives <b>{chosen.repoName}</b> · {stashLen} queued — the first prompt fires
+                  as soon as this agent is next free.
+                </span>
+              )}
               <label className="lp-check">
                 <input type="checkbox" checked={verify} onChange={(e) => setVerify(e.target.checked)} />
                 Verify each step (agent must answer <code>STEP_VERIFIED</code>) — ~2 turns per item
               </label>
+              {/* Per-arm deny-list chips (advance-queue-loop, D2): drop a term
+                  for this arm only — e.g. "push" on a commit-and-push repo. */}
+              {denyDefault.length > 0 && (
+                <div className="lp-queue-preview">
+                  <span className="lp-field__k">Deny-list for this arm (click a term to drop it)</span>
+                  <div className="lp-denychips">
+                    {denyDefault.map((term) => {
+                      const dropped = denyDropped.includes(term);
+                      return (
+                        <button
+                          key={term} type="button"
+                          className={`lp-mini${dropped ? '' : ' on'}`}
+                          onClick={() => setDenyDropped((prev) =>
+                            dropped ? prev.filter((x) => x !== term) : [...prev, term])}
+                        >
+                          {term}{dropped ? ' (dropped)' : ' ×'}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {denyDropped.length > 0 && (
+                    <span className="ap-muted">
+                      This arm will NOT escalate on: {denyDropped.join(', ')} — the global
+                      default is unchanged for other arms.
+                    </span>
+                  )}
+                </div>
+              )}
               <div className="lp-form__actions">
                 <button className="lp-arm" type="submit" disabled={busy || !chosen || stashLen === 0}>
                   Arm queue loop
@@ -541,7 +609,10 @@ export default function LoopsView({ section = 'agents', data, loopAction, addRec
       </p>
       <ul className="lp-list">
         {agents.map((a) => (
-          <QueueRow key={a.repoId} agent={a} loop={byRepo[a.repoId]} tabs={tabs} loopAction={loopAction} />
+          <QueueRow
+            key={a.repoId} agent={a} loop={byRepo[a.repoId]} tabs={tabs}
+            denyDefault={data?.denyList ?? []} loopAction={loopAction}
+          />
         ))}
         {agents.length === 0 && <li className="autopilot__empty">No agents yet.</li>}
       </ul>

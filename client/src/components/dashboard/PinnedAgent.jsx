@@ -363,6 +363,7 @@ export default function PinnedAgent({
       {canLoop && (
         <DockLoopControl
           repoId={tab.repoId}
+          repoName={tab.repoName}
           sessionId={chat.sessionId || tab.sessionId || null}
           tabId={tab.id}
           stash={tab.stash || []}
