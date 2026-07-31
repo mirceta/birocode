@@ -98,4 +98,13 @@ public class AppConfig
     /// default.
     /// </summary>
     public long TrafficHighBytesPerSec { get; set; } = 512_000;
+
+    /// <summary>
+    /// Loop-evals curation (openspec loop-evals): where exported golden example
+    /// bundles are written. Empty by default = resolve at runtime to
+    /// <c>%APPDATA%\ClaudeWeb\loop-evals-examples</c> — external to every repo, because
+    /// real-world captures contain full repo history and must not be committed
+    /// (committed examples are synthetic only, under tests/loop-evals/examples).
+    /// </summary>
+    public string LoopEvalsExamplesRoot { get; set; } = "";
 }

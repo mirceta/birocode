@@ -22,10 +22,10 @@
 
 ## 4. Curation (operator-facing UI over repo copy + stored conversation)
 
-- [ ] 4.1 Read-only Operator endpoints: list a repo's stored session conversations with turns; list a repo copy's commit history (subject, SHA, files touched) for association
-- [ ] 4.2 Curation UI in the client (Advanced mode + operator gate, added to the UiModeContext capability map): pick repo copy + conversation, mark turn span, associate turns↔commits side by side, label each in-span turn, author plan + acceptance checks
-- [ ] 4.3 Export endpoint: build the bundle from the associations (`eval/start` before first associated commit, `golden` chain, `eval/final` tip, labeled `conversation.jsonl`, manifest) into the configured examples root
-- [ ] 4.4 C# tests for the exporter (five-commit chain round-trip, carry-forward turn mapping, sources byte-identical after export)
+- [x] 4.1 Read-only Operator endpoints: list a repo's stored session conversations with turns; list a repo copy's commit history (subject, SHA, files touched) for association
+- [x] 4.2 Curation UI in the client (Advanced mode + operator gate, added to the UiModeContext capability map): pick repo copy + conversation, mark turn span, associate turns↔commits side by side, label each in-span turn, author plan + acceptance checks
+- [x] 4.3 Export endpoint: build the bundle from the associations (`eval/start` before first associated commit, `golden` chain, `eval/final` tip, labeled `conversation.jsonl`, manifest) into the configured examples root
+- [x] 4.4 C# tests for the exporter (five-commit chain round-trip, carry-forward turn mapping, sources byte-identical after export)
 
 ## 5. Verify + docs
 

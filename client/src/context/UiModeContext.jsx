@@ -68,6 +68,7 @@ export const FEATURES = {
   dockLoopControls: 'advanced', // loop badge + arm-from-recipe control on dock agent cards (openspec: adopt-autopilot-loops)
   dockAppSplit: 'advanced', // dock split view: opened local app beside the chat instead of over the dock (openspec: dock-app-split-view)
   adminStatus: 'advanced', // always-admin status tile in the header strip: UAC-off state + enabler (openspec: add-always-admin-status)
+  loopEvalsTab: 'advanced', // Operator-facing golden-example curation for loop evals (openspec: loop-evals)
 };
 
 const MODE_KEY = 'claudeweb_ui_mode';

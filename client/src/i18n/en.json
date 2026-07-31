@@ -56,6 +56,7 @@
   "nav.projects": "Projects",
   "nav.guests": "Guests",
   "nav.settings": "Settings",
+  "nav.loopEvals": "Loop Evals",
   "settings.tabOrder": "Tab order",
   "settings.tabOrderHint": "Drag a card or use the arrows — the navigation bar below follows live. Synced across your devices.",
   "settings.claudeSlot": "Claude (Chat / Terminal)",

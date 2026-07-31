@@ -1,0 +1,203 @@
+.le {
+  padding: 12px;
+  overflow-y: auto;
+  height: 100%;
+  box-sizing: border-box;
+  font-size: 13px;
+}
+
+.le__setup {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.le__setup label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 260px;
+  flex: 1;
+  color: var(--text-dim, #999);
+}
+.le__setup select,
+.le__setup input {
+  padding: 6px;
+}
+.le__pathrow {
+  display: flex;
+  gap: 6px;
+}
+.le__pathrow input {
+  flex: 1;
+}
+
+.le__error {
+  margin: 10px 0;
+  padding: 8px;
+  border: 1px solid #a33;
+  color: #e88;
+  border-radius: 4px;
+}
+
+.le__columns {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+  align-items: flex-start;
+}
+.le__col {
+  flex: 1;
+  min-width: 0;
+  max-height: 46vh;
+  overflow-y: auto;
+  border: 1px solid var(--border, #333);
+  border-radius: 6px;
+  padding: 8px;
+}
+.le__col h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+.le__empty {
+  color: var(--text-dim, #888);
+}
+
+.le__turn {
+  border: 1px solid var(--border, #333);
+  border-radius: 4px;
+  padding: 6px;
+  margin-bottom: 6px;
+}
+.le__turn--out {
+  opacity: 0.35;
+}
+.le__turn--pairing {
+  border-color: #6af;
+  box-shadow: 0 0 0 1px #6af;
+}
+.le__turnhead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.le__role {
+  font-weight: 600;
+  color: var(--text-dim, #aaa);
+}
+.le__turnbtns button {
+  margin-left: 4px;
+}
+.le__turnbtns .le__on {
+  outline: 2px solid #6af;
+}
+.le__text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 80px;
+  overflow-y: auto;
+  margin: 4px 0;
+}
+.le__turnmeta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.le__turnmeta input {
+  width: 130px;
+  padding: 3px 5px;
+}
+.le__nosha {
+  color: var(--text-dim, #777);
+  font-style: italic;
+}
+
+.le__commit {
+  border: 1px solid var(--border, #333);
+  border-radius: 4px;
+  padding: 6px;
+  margin-bottom: 6px;
+  cursor: pointer;
+}
+.le__commit:hover {
+  border-color: #6af;
+}
+.le__commit--used {
+  border-color: #4a4;
+}
+.le__sha {
+  font-family: monospace;
+  color: #8c8;
+  margin-right: 8px;
+}
+.le__sha button {
+  margin-left: 4px;
+}
+.le__subject {
+  font-weight: 600;
+}
+.le__owner {
+  float: right;
+  color: #4a4;
+}
+.le__files {
+  color: var(--text-dim, #888);
+  font-size: 11px;
+  margin-top: 3px;
+  word-break: break-all;
+}
+
+.le__author,
+.le__export {
+  margin-top: 14px;
+  border: 1px solid var(--border, #333);
+  border-radius: 6px;
+  padding: 10px;
+}
+.le__author h3,
+.le__export h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+.le__author textarea {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 8px;
+}
+.le__check {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.le__check input:first-child {
+  width: 160px;
+}
+.le__check input:nth-child(2) {
+  flex: 1;
+}
+
+.le__exportrow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.le__ovr {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-dim, #999);
+}
+.le__go {
+  font-weight: 600;
+}
+.le__hint {
+  color: var(--text-dim, #888);
+  margin: 8px 0 0;
+}
+.le__done {
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid #4a4;
+  color: #8c8;
+  border-radius: 4px;
+}
