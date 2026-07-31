@@ -47,24 +47,46 @@ export default function FlagsHistoryView() {
     <>
       <h3 className="rp-section">⚑ Agent flags</h3>
       <p className="autopilot__summary autopilot__summary--sub">
-        Every <code>FLAG:</code> line a driven agent left in a reply — complaints, workarounds,
-        ambiguities it resolved by guessing. Non-blocking by design: a flag never stops or
-        re-drives a loop (that is <code>NEEDS_HUMAN:</code>&apos;s job). Open flags also show in the
-        footer strip and on the agent&apos;s dock card; dismissing moves an entry into the history
-        below, so nothing silently disappears.
+        This is the complaint inbox for agents run by autopilot loops. An agent working
+        under a loop has nobody to ask, so when it hits a doubt it makes a judgment call
+        and keeps going — this page is where it reports those judgment calls, so you can
+        check them later instead of never hearing about them.
       </p>
+      <ol className="fl-how">
+        <li>
+          When a loop drives an agent, the prompt includes one standing rule: <em>&quot;if you
+          had to guess, work around a problem, or something felt wrong — add a line starting
+          with <code>FLAG:</code> to your reply.&quot;</em>
+        </li>
+        <li>
+          The harness scans every reply and lifts those lines into the list below. The loop
+          is never interrupted — a flag is a note, not an alarm. (An agent that genuinely
+          cannot continue writes <code>NEEDS_HUMAN:</code> instead; that one pauses the loop.)
+        </li>
+        <li>
+          You read them whenever you like. Open flags also appear in the footer strip and as
+          a ⚑ badge on that agent&apos;s dock card. Dismissing one (×) moves it into the
+          Dismissed history at the bottom — nothing is deleted.
+        </li>
+      </ol>
       <label className="fl-channel">
         <input type="checkbox" checked={enabled} disabled={!data} onChange={(e) => setEnabled(e.target.checked)} />
         <span>
-          FLAG channel enabled — driven sends teach the marker and replies are collected.
-          {!enabled && ' Currently OFF: sends carry no FLAG line and replies are not mined.'}
+          FLAG channel on — loop prompts include the <code>FLAG:</code> rule and replies are
+          scanned for flags.
+          {!enabled && ' Currently OFF: prompts stop mentioning flags and replies are not scanned; flags already open stay listed until you dismiss them.'}
         </span>
       </label>
 
       <h4 className="fl-subhead">Open{open.length ? ` (${open.length})` : ''}</h4>
       <ul className="lp-list fl-list">
         {open.map((f) => row(f, fmt(f.at)))}
-        {open.length === 0 && <li className="autopilot__empty">No open flags.</li>}
+        {open.length === 0 && (
+          <li className="autopilot__empty">
+            No open flags — no loop-driven agent has raised a concern yet. One appears here
+            the moment a driven reply contains a <code>FLAG:</code> line.
+          </li>
+        )}
       </ul>
 
       <details className="fl-history">

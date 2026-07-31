@@ -680,6 +680,18 @@
 .cm-iters__txt { font-size: 11.5px; color: var(--cm-dim); margin-left: 4px; }
 
 /* --- ⚑ Flags sub-tab (Loops root): the full ledger with dismissed history --- */
+.fl-how {
+  margin: 0 0 14px;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--color-text, #333);
+}
+.fl-how code { font-size: 12px; }
+
 .fl-channel {
   display: flex;
   align-items: flex-start;
