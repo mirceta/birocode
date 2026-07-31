@@ -1,12 +1,38 @@
 # loop-eval — real-agent eval suite for the autopilot loop engine
 
 This suite answers the one question no cheap test can: **does the loop engine
-actually drive a real agent to the goal?** It boots an isolated ClaudeWeb
-instance, registers a committed fixture repo, arms a REAL loop, lets REAL
-Claude turns run, and asserts the outcome mechanically.
+actually drive a real agent to the goal?** It registers a committed fixture
+repo, arms a REAL loop, lets REAL Claude turns run, and asserts the outcome
+mechanically.
 
 It is the tracked, repeatable successor of the one-off rehearsal layer
 (`.claudeweb-preview/rehearsal.mjs`, openspec: advance-queue-loop tick 5.5).
+
+## Two run modes (openspec: add-loop-eval-live-mode)
+
+Same scenarios, same assertions — two places to run them:
+
+| | **Isolated (default)** | **Live (`--live`)** |
+|---|---|---|
+| Target | throwaway instance it boots on :5210 | your RUNNING live harness on :5099 |
+| For | agents / automation — a fully automatic before-shipping gate | the human operator — watch the run happen in the real UI |
+| Gate & kill switch | seeded into the scratch datadir pre-boot | must ALREADY be on; the suite fails fast with instructions, never enables them itself |
+| Auth | its own throwaway password | `LOOPEVAL_LIVE_PW=<live operator password>` (required, never defaulted) |
+| Fixture repo | scratch copy, registered in the scratch store | scratch copy, registered in the LIVE store as `loopeval-goal-live` / `loopeval-queue-live` (advanced visibility — invisible to Basic mode) |
+| Diagnostics | reads the scratch datadir's files | reads `GET /api/autopilot/loops/{repoId}/debug` (never the live datadir) |
+| Teardown | kills the instance, removes the scratch root | stops the loop, closes the dock tab, unregisters the repo, removes the scratch copy — `LOOPEVAL_KEEP=1` keeps it all for inspection and prints the manual steps |
+
+Right after arming, live mode prints a **watch banner**: open the live UI,
+open the fixture repo, and follow the agent dock + the Autopilot console loop
+card while the run executes.
+
+**Live prerequisites**: live harness up on :5099; operator gate ON (host GUI);
+kill switch ON (Autopilot console); `LOOPEVAL_LIVE_PW` set. A leftover
+`loopeval-*-live` repo from a crashed run blocks the preflight — remove its
+card, then rerun.
+
+**Don't run both modes at once** — they share this box's one `claude` CLI and
+would contend for it (and confuse whoever is watching).
 
 ## Cost — read before running
 
@@ -42,6 +68,11 @@ minutes and plan-usage instead: a full `run-all` sweep ≈ 14 real agent turns,
 node tests/loop-eval/goal.mjs   [--json out.json]   # goal loop: implement a feature for real
 node tests/loop-eval/queue.mjs  [--json out.json]   # queue loop: drain 6 prompts correctly
 node tests/loop-eval/run-all.mjs [--json out.json]  # both, combined verdict
+
+# live mode — watch it in the real UI (set LOOPEVAL_LIVE_PW first):
+node tests/loop-eval/goal.mjs  --live
+node tests/loop-eval/queue.mjs --live
+node tests/loop-eval/run-all.mjs --live
 ```
 
 Exit code 0 only if every assertion passed. Progress prints one status line
@@ -52,10 +83,14 @@ Environment knobs:
 | Var | Default | Meaning |
 |-----|---------|---------|
 | `LOOPEVAL_PORT` | `5210` | isolated instance port |
-| `LOOPEVAL_ROOT` | `%TMP%/cw-loopeval` | scratch root (bin copy, datadir, fixture repo) |
-| `LOOPEVAL_KEEP` | off | `1` = leave the instance + scratch up after a run, for debugging |
-| `LOOPEVAL_SKIP_BUILD` | off | `1` = reuse the existing `.claudeweb-preview/bin` build |
+| `LOOPEVAL_ROOT` | `%TMP%/cw-loopeval` | isolated scratch root (bin copy, datadir, fixture repo) |
+| `LOOPEVAL_KEEP` | off | `1` = leave everything up after a run (isolated: instance + scratch; live: repo card, dock tab, scratch) |
+| `LOOPEVAL_SKIP_BUILD` | off | `1` = reuse the existing `.claudeweb-preview/bin` build (isolated only) |
 | `LOOPEVAL_GOAL_MINUTES` / `LOOPEVAL_QUEUE_MINUTES` | 15 / 25 | scenario deadlines |
+| `LOOPEVAL_LIVE` | off | `1` = live mode (same as `--live`) |
+| `LOOPEVAL_LIVE_PORT` | `5099` | live harness port |
+| `LOOPEVAL_LIVE_PW` | — | live operator password — REQUIRED in live mode, never defaulted or read off disk. Set it per-invocation to keep it out of files: `LOOPEVAL_LIVE_PW=... node ...` |
+| `LOOPEVAL_LIVE_ROOT` | `%TMP%/cw-loopeval-live` | live-mode fixture scratch dir |
 
 ## What each scenario proves
 
@@ -75,7 +110,19 @@ absent on the fresh fixture) and run a **CLI probe** (one cheap seeded chat
 turn) — fixture drift or a broken `claude` CLI fails fast, before the loop
 spends tokens.
 
-## How isolation works
+## How live mode works
+
+Live mode (`--live`) points the same scenario code at the running :5099
+harness. Nothing is booted, seeded, or killed; the live data dir is never
+written (loop internals are read over the shipped
+`/api/autopilot/loops/{repoId}/debug` bundle). The fixture is still a scratch
+copy under `%TMP%/cw-loopeval-live` — the suite registers it in the live
+store (registry entry only), runs, then unregisters it. The autopilot gate
+stays host-only here too: live mode CHECKS `gateOpen` and
+`killSwitchEnabled` and tells the operator what to click when they're off —
+there is no enable path, by design.
+
+## How isolation works (default mode)
 
 Same pattern as `tests/chat-systest/hub/instance.mjs`: build to
 `.claudeweb-preview/bin`, copy the binaries OUTSIDE the repo tree (no `.sln`
@@ -100,6 +147,11 @@ operator + phone user would (`/api/repos`, `/api/dock`, `/api/chat`,
 - **CLI probe fails** — the `claude` CLI can't complete a turn on this box;
   fix that first (run `claude -p "say hi"` by hand).
 - **A scenario fails** — the summary JSON's `diagnostics` carries the
-  instance's log tail and the final `loops.json`; the failed assertion names
-  the exact expectation. Re-run with `LOOPEVAL_KEEP=1` to poke at the scratch
-  root and datadir afterwards.
+  instance's log tail and the final `loops.json` (live mode: the repo's debug
+  bundle); the failed assertion names the exact expectation. Re-run with
+  `LOOPEVAL_KEEP=1` to poke at the scratch root and datadir afterwards.
+- **Live preflight fails** — the verdict says exactly what to do: gate →
+  host GUI toggle, kill switch → Autopilot console, leftover
+  `loopeval-*-live` repo → remove its card (or `DELETE /api/repos/{id}`).
+- **Live login fails** — `LOOPEVAL_LIVE_PW` missing or wrong; it must be the
+  live operator password (the one the web UI asks for).

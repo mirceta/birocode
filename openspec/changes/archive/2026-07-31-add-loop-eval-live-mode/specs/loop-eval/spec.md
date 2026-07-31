@@ -1,16 +1,7 @@
-# Loop eval
+# Loop eval — delta for add-loop-eval-live-mode
 
-## Purpose
+## MODIFIED Requirements
 
-Gives the autopilot loop engine's most important property — a real agent, driven by the
-real engine, actually reaches the goal — a repeatable, committed test. Unit tests cover
-only the pure decision ladder and browser tests only the UI; this capability is the
-end-to-end layer: an on-demand eval suite at `tests/loop-eval/` that boots an isolated
-harness instance, runs scripted goal-loop and queue-loop scenarios against committed
-fixture repositories with real agent turns, and scores the outcomes into machine-readable
-verdicts. Runs spend real Claude tokens and minutes, so the suite is a before-shipping
-gate launched from the CLI — never CI.
-## Requirements
 ### Requirement: On-demand real-agent eval scenarios for the loop engine
 
 The repo SHALL provide a committed, on-demand eval suite (`tests/loop-eval/`) that
@@ -63,6 +54,8 @@ never run in CI.
   registration — and the isolated instance is killed in all outcomes, with a timeout
   reported as a failed verdict rather than a hang
 
+## ADDED Requirements
+
 ### Requirement: Live-harness run mode for human observation
 
 The suite SHALL support an opt-in live mode (`--live` flag or `LOOPEVAL_LIVE=1`)
@@ -103,4 +96,3 @@ immediately after arming.
   with `LOOPEVAL_KEEP=1` it instead leaves everything for inspection and prints the
   manual cleanup steps, and a cleanup failure is warned with the leftover named,
   never masking the scenario verdict
-

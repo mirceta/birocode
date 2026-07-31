@@ -3,17 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>advance-queue-loop — why the queue died on item 1</title>
+<title>loop-eval — one suite, two run modes</title>
 <style>
   :root {
     --bg: #10141a; --panel: #1a2028; --panel2: #222a35; --ink: #dce3ec;
     --dim: #8b97a6; --line: #2e3947; --ok: #4fc38a; --bad: #e06c6c;
-    --warn: #e0b56c; --acc: #6ca8e0; --radius: 10px;
+    --warn: #e0b56c; --acc: #6ca8e0; --live: #c98fe0; --radius: 10px;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink);
          font: 15px/1.55 "Segoe UI", system-ui, sans-serif; padding: 24px 16px 64px; }
-  main { max-width: 880px; margin: 0 auto; }
+  main { max-width: 940px; margin: 0 auto; }
   h1 { font-size: 22px; margin: 0 0 4px; }
   .sub { color: var(--dim); margin: 0 0 20px; }
   .tabs { display: flex; gap: 8px; margin: 0 0 18px; flex-wrap: wrap; }
@@ -26,126 +26,241 @@
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
           padding: 14px 16px; margin-bottom: 12px; }
   .card h3 { margin: 0 0 6px; font-size: 15px; }
-  .card p { margin: 6px 0; color: var(--dim); }
-  .card p b, .card p code { color: var(--ink); }
-  code { background: var(--panel2); border-radius: 4px; padding: 1px 6px; font-size: 13px; }
-  .flow { display: flex; align-items: stretch; gap: 0; flex-wrap: wrap; margin: 14px 0; }
+  .card p, .card li { margin: 6px 0; color: var(--dim); }
+  .card b, .card code { color: var(--ink); }
+  code { background: var(--panel2); padding: 1px 6px; border-radius: 4px; font-size: 13px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 720px) { .cols { grid-template-columns: 1fr; } }
+  .mode { border-top: 3px solid var(--acc); }
+  .mode.live { border-top-color: var(--live); }
+  .badge { display: inline-block; font-size: 12px; border-radius: 999px; padding: 1px 10px;
+           border: 1px solid var(--line); color: var(--dim); margin-left: 6px; }
+  .badge.auto { color: var(--acc); border-color: var(--acc); }
+  .badge.human { color: var(--live); border-color: var(--live); }
+  .flow { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
   .step { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
-          padding: 10px 12px; min-width: 130px; flex: 1; text-align: center; position: relative; }
-  .step small { display: block; color: var(--dim); margin-top: 3px; }
-  .arrow { align-self: center; padding: 0 8px; color: var(--dim); font-size: 18px; }
-  .tl { border-left: 3px solid var(--line); margin-left: 8px; padding-left: 18px; }
-  .ev { position: relative; margin-bottom: 16px; cursor: pointer; }
-  .ev::before { content: ""; position: absolute; left: -25.5px; top: 6px; width: 12px; height: 12px;
-    border-radius: 50%; background: var(--dim); border: 2px solid var(--bg); }
-  .ev.bad::before { background: var(--bad); } .ev.ok::before { background: var(--ok); }
-  .ev.warn::before { background: var(--warn); }
-  .ev time { color: var(--dim); font-size: 13px; margin-right: 8px; font-variant-numeric: tabular-nums; }
-  .ev .what { font-weight: 600; }
-  .ev .detail { display: none; margin-top: 6px; background: var(--panel); border: 1px solid var(--line);
-    border-radius: 8px; padding: 10px 12px; color: var(--dim); font-size: 14px; }
-  .ev.open .detail { display: block; }
-  .pill { font-size: 12px; border-radius: 999px; padding: 2px 10px; margin-left: 8px; vertical-align: 1px; }
-  .pill.bad { background: #3a2323; color: var(--bad); } .pill.ok { background: #1f3a2c; color: var(--ok); }
-  .pill.warn { background: #3a3323; color: var(--warn); }
-  .fix { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  @media (max-width: 700px) { .fix { grid-template-columns: 1fr; } }
-  .fix .card { margin: 0; }
-  .was { color: var(--bad); } .now { color: var(--ok); }
-  .hint { color: var(--dim); font-size: 13px; margin-top: -8px; margin-bottom: 14px; }
+          padding: 8px 12px; cursor: pointer; transition: border-color .15s; }
+  .step:hover { border-color: var(--acc); }
+  .step.liveonly:hover { border-color: var(--live); }
+  .step .t { font-weight: 600; font-size: 14px; }
+  .step .d { display: none; color: var(--dim); font-size: 13.5px; margin-top: 4px; }
+  .step.open .d { display: block; }
+  .step .who { float: right; font-size: 12px; color: var(--dim); }
+  .arrow { text-align: center; color: var(--dim); font-size: 13px; line-height: 1; }
+  .shared { background: linear-gradient(180deg, var(--panel), var(--panel2));
+            border: 1px dashed var(--acc); }
+  .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); }
+  .legend { font-size: 13px; color: var(--dim); margin: 4px 0 14px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); }
+  td:first-child { color: var(--dim); white-space: nowrap; }
+  .sim { margin-top: 10px; }
+  .sim button { background: var(--panel2); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 14px; cursor: pointer; font: inherit; }
+  .sim button:disabled { opacity: .4; cursor: default; }
+  .simlog { margin-top: 10px; background: #0c1015; border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 12px; font-family: Consolas, monospace; font-size: 13px; min-height: 120px;
+    white-space: pre-wrap; }
+  .hint { font-size: 13px; color: var(--dim); font-style: italic; }
 </style>
 </head>
 <body>
 <main>
-  <h1>🗒️ advance-queue-loop</h1>
-  <p class="sub">Why the queue loop's first real drive (busi-dec, 2026-07-31) died on item 1 — twice — and the four fixes implemented by <code>openspec/changes/advance-queue-loop</code>.</p>
+  <h1>loop-eval — one suite, two run modes</h1>
+  <p class="sub">openspec: <code>add-loop-eval-live-mode</code> · the same real-agent scenarios, runnable as an
+  automatic gate (isolated) <i>or</i> where you can watch them (live)</p>
 
-  <div class="tabs" id="tabs">
-    <button data-t="how" class="on">How the queue drives</button>
-    <button data-t="tl">What happened (timeline)</button>
-    <button data-t="fix">The four fixes</button>
+  <div class="tabs">
+    <button data-tab="overview" class="on">Overview</button>
+    <button data-tab="pipelines">The two pipelines</button>
+    <button data-tab="boundary">The gate boundary</button>
+    <button data-tab="timeline">Live run, step by step</button>
   </div>
 
-  <section id="how" class="on">
+  <section id="overview" class="on">
     <div class="card">
-      <h3>The stash IS the queue</h3>
-      <p>The operator stashes prompts on a dock tab; arming the 🗒️ kind binds the agent's loop slot to that <b>live</b> stash. No snapshot, no cursor — reorder, add, remove while armed.</p>
+      <h3>Why two modes?</h3>
+      <p>The suite proves the one thing no cheap test can: <b>the loop engine drives a real
+      agent to a real goal</b>. That proof serves two different customers:</p>
+      <ul>
+        <li><b>An agent</b> needs it <i>fully automatic</i> — boot, run, assert, tear down,
+        exit code. That's the <b>isolated mode</b> (default): a throwaway harness on
+        <code>:5210</code> that no human ever sees.</li>
+        <li><b>The human operator</b> needs to <i>see it with their own eyes</i> — a repo card
+        appearing, the agent dock filling with real turns, the Autopilot console's loop card
+        ticking <code>work → verify → done</code>. That's the <b>live mode</b>
+        (<code>--live</code>): the same scenarios pointed at the running <code>:5099</code>
+        harness.</li>
+      </ul>
+      <p>Same scenario files, same assertions, same deadlines — <b>only the world differs</b>.
+      The mode split lives entirely in <code>tests/loop-eval/lib.mjs</code>.</p>
     </div>
-    <div class="flow">
-      <div class="step">agent idle<small>engine tick</small></div><div class="arrow">→</div>
-      <div class="step">safety ladder<small>error · NEEDS_HUMAN · deny-list</small></div><div class="arrow">→</div>
-      <div class="step">unload HEAD<small>consume on land</small></div><div class="arrow">→</div>
-      <div class="step">verify turn<small>STEP_VERIFIED?</small></div><div class="arrow">→</div>
-      <div class="step">next item…<small>empty = done · drained</small></div>
-    </div>
-    <div class="card">
-      <h3>Any stop is lossless</h3>
-      <p>Unsent items never leave the stash — escalate, cap, error, disarm all keep the remainder. <b>But today, recovery from a stop was entirely manual.</b> That gap is half of this change.</p>
+    <div class="cols">
+      <div class="card mode">
+        <h3>Isolated <span class="badge auto">for agents</span></h3>
+        <p><code>node tests/loop-eval/goal.mjs</code></p>
+        <p>Boots its own ClaudeWeb copy on :5210, seeds gate + kill switch into a scratch
+        datadir <i>before boot</i>, runs, kills everything. Live harness never touched.</p>
+      </div>
+      <div class="card mode live">
+        <h3>Live <span class="badge human">for you</span></h3>
+        <p><code>LOOPEVAL_LIVE_PW=… node tests/loop-eval/goal.mjs --live</code></p>
+        <p>Targets the harness you're using right now. Registers
+        <code>loopeval-goal-live</code>, prints a watch banner, runs where you can see it,
+        cleans up after itself (<code>LOOPEVAL_KEEP=1</code> to keep the aftermath).</p>
+      </div>
     </div>
   </section>
 
-  <section id="tl">
-    <p class="hint">Click an event for the evidence.</p>
-    <div class="tl" id="events"></div>
+  <section id="pipelines">
+    <p class="legend">Click any step to expand it. Blue = isolated-only, purple = live-only,
+    dashed = the shared core both modes run identically.</p>
+    <div class="cols">
+      <div class="card mode">
+        <h3>Isolated pipeline (:5210)</h3>
+        <div class="flow" id="flow-iso"></div>
+      </div>
+      <div class="card mode live">
+        <h3>Live pipeline (:5099)</h3>
+        <div class="flow" id="flow-live"></div>
+      </div>
+    </div>
+    <div class="card shared">
+      <h3>Shared core — identical in both modes</h3>
+      <div class="flow" id="flow-shared"></div>
+    </div>
   </section>
 
-  <section id="fix">
-    <div class="fix">
-      <div class="card">
-        <h3>1 · Operator stop ≠ agent error</h3>
-        <p><span class="was">Was:</span> a rescue Stop finalized the run as <code>error</code>, so the loop reported <code>error · the agent's run errored</code>.</p>
-        <p><span class="now">Now:</span> runs get a third status <code>stopped</code>; the loop resolves <code>stopped · by-operator</code>. Honest record, remainder kept.</p>
-      </div>
-      <div class="card">
-        <h3>2 · Deny-list that fits honest repos</h3>
-        <p><span class="was">Was:</span> whole-reply substring — "pushed" hit the term <code>push</code>, so a commit-and-push repo could never pass item 1.</p>
-        <p><span class="now">Now:</span> whole-word matching, plus a per-arm trim (drop <code>push</code>/<code>merge</code> for this arm only; global default untouched, disclosed in the gated detail).</p>
-      </div>
-      <div class="card">
-        <h3>3 · One-step Resume</h3>
-        <p><span class="was">Was:</span> 7 items stranded behind a dead <code>escalate / verify-owed</code> instance; only path back was the full arm form.</p>
-        <p><span class="now">Now:</span> a gated <b>Resume</b> re-activates the same instance from the current head — fresh iteration budget, sent-history kept, audit logged. Every activation resets phase, so stale <code>verify-owed</code> never leaks.</p>
-      </div>
-      <div class="card">
-        <h3>4 · The binding is unmistakable</h3>
-        <p><span class="was">Was:</span> nothing made "this queue drives <i>that</i> repo/tab" conspicuous — the first arm drove the harness itself.</p>
-        <p><span class="now">Now:</span> arm surfaces state <b>drives &lt;repo&gt; · tab · N queued</b> and that the head fires when the agent is next free; armed surfaces repeat it.</p>
+  <section id="boundary">
+    <div class="card">
+      <h3>The autopilot gate is host-only. Both modes respect that — differently.</h3>
+      <p>There is <b>no enable endpoint, ever</b> (<code>AutopilotGate.cs</code>). So how does a
+      test suite arm loops at all?</p>
+      <table>
+        <tr><th></th><th>Isolated</th><th>Live</th></tr>
+        <tr>
+          <td>Gate + kill switch</td>
+          <td>Writes <code>autopilot-gate.json</code> + <code>autopilot.json</code> into the
+          <b>scratch</b> datadir <i>before boot</i> — a host-side file write, the same trust
+          level as the operator clicking the host GUI.</td>
+          <td><b>Checks, never sets.</b> <code>gateOpen</code> off
+          <code>/api/autopilot/loops</code>, <code>killSwitchEnabled</code> off the debug
+          bundle. Off → <span class="bad">fail fast</span> with the exact thing to click.</td>
+        </tr>
+        <tr>
+          <td>Password</td>
+          <td>Invents a throwaway one for its own instance.</td>
+          <td><code>LOOPEVAL_LIVE_PW</code> — you hand it over explicitly. Never defaulted,
+          never read from the live secret store.</td>
+        </tr>
+        <tr>
+          <td>Loop internals for asserts</td>
+          <td>Reads scratch <code>loops.json</code> / <code>autopilot-audit.jsonl</code>
+          directly.</td>
+          <td>Reads <code>GET /api/autopilot/loops/{repoId}/debug</code> — the shipped debug
+          bundle. The live datadir is <b>never written and never parsed</b>.</td>
+        </tr>
+        <tr>
+          <td>Residue</td>
+          <td>Whole scratch root deleted; instance killed.</td>
+          <td>Stops loop → closes dock tab → unregisters repo (registry entry only) → removes
+          scratch copy. Next run's preflight catches any leak (<code>loopeval-*-live</code>
+          name check).</td>
+        </tr>
+      </table>
+    </div>
+  </section>
+
+  <section id="timeline">
+    <div class="card">
+      <h3>Simulate a live goal run</h3>
+      <p class="hint">Step through what you'd actually see — in the shell and in the UI.</p>
+      <div class="sim">
+        <button id="sim-next">Next step ▸</button>
+        <button id="sim-reset">reset</button>
+        <div class="simlog" id="simlog">press “Next step” —</div>
       </div>
     </div>
   </section>
 </main>
+
 <script>
-  const EVENTS = [
-    { t: "16:33", cls: "ok",   what: "8 expense prompts stashed", pill: "setup",
-      d: "One per building expense (ogrevanje, RTV, elektrika ×2, voda, NUSZ, hišnik…), all following one 'verify in the management system' template. One (NUSZ) was already done before it was stashed — a stale duplicate the queue would re-verify." },
-    { t: "16:41", cls: "bad",  what: "Arm #1 — wrong tab", pill: "failure A",
-      d: "The queue bound to the harness's own tab (mid self-dev deploy), not busi-dec. The head item fired straight into the harness agent's conversation, which started answering a busi-dec question inside Claude Web's own repo." },
-    { t: "16:42", cls: "bad",  what: "Rescue Stop → recorded as agent error", pill: "failure A",
-      d: "The operator stopped the run; RunSessionService only knows running|done|error, so the cancel finalized as error and the loop logged 'error · the agent's run errored'. A user action, misreported as an agent failure." },
-    { t: "16:43", cls: "ok",   what: "Arm #2 — correct tab, step runs perfectly", pill: "1 iteration",
-      d: "Iteration 1/10 sent the ogrevanje item to busi-dec; 4 turns, commit 8f02afb landed ('gas facts recorded on the expense row')." },
-    { t: "16:44", cls: "bad",  what: "Deny-list kills it on the word 'push'", pill: "failure B",
-      d: "busi-dec's convention is commit-and-push every change, so the reply honestly said 'pushed'. The whole-reply substring match on the default deny term 'push' escalated the queue before the verification turn ever ran. Structurally, this repo could never pass item 1." },
-    { t: "16:45", cls: "warn", what: "7 items stranded, loop dead", pill: "failure C",
-      d: "Instance frozen at escalate / verify-owed. Losslessness held (nothing was lost), but there is no one-step resume — the operator would have to re-arm through the full form." },
-    { t: "16:46", cls: "warn", what: "Operator finishes the job by hand", pill: "workaround",
-      d: "The same session was driven manually (~$11.5 across runs, commits 659796e + four more) — queue-shaped work completed outside the queue. The queue's value was exactly zero on its first real outing." },
-  ];
-  const box = document.getElementById("events");
-  for (const e of EVENTS) {
-    const div = document.createElement("div");
-    div.className = "ev " + e.cls;
-    div.innerHTML = `<time>${e.t}</time><span class="what">${e.what}</span>` +
-      `<span class="pill ${e.cls}">${e.pill}</span><div class="detail">${e.d}</div>`;
-    div.addEventListener("click", () => div.classList.toggle("open"));
-    box.appendChild(div);
-  }
-  const tabs = document.getElementById("tabs");
-  tabs.addEventListener("click", (ev) => {
-    const b = ev.target.closest("button"); if (!b) return;
-    for (const x of tabs.querySelectorAll("button")) x.classList.toggle("on", x === b);
-    for (const s of document.querySelectorAll("section")) s.classList.toggle("on", s.id === b.dataset.t);
+  // tabs
+  document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+    document.querySelectorAll('.tabs button').forEach(x => x.classList.remove('on'));
+    document.querySelectorAll('section').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    document.getElementById(b.dataset.tab).classList.add('on');
   });
+
+  // pipeline steps
+  const ISO = [
+    ['dotnet build → .claudeweb-preview/bin', 'script', 'Built once, copied OUTSIDE the repo tree so the instance cannot auto-pin this repo (no .sln above it).'],
+    ['seed gate + kill switch into scratch datadir', 'script', 'autopilot-gate.json {enabled:true} + autopilot.json — written BEFORE boot. Same trust boundary as the operator’s GUI click, because the datadir is disposable.'],
+    ['boot ClaudeWeb on :5210', 'script', 'Own port, own datadir, own throwaway password. Health-polled up to 60s.'],
+    ['…shared core runs…', '', 'See the shared box below.'],
+    ['taskkill + delete scratch root', 'script', 'Always — pass, fail, or timeout. A timeout is a FAILED VERDICT, never a hang.'],
+  ];
+  const LIVE = [
+    ['health-check the RUNNING :5099 harness', 'script', 'Nothing is booted. If live is down, the run refuses immediately.'],
+    ['login with LOOPEVAL_LIVE_PW', 'you + script', 'You supply the real operator password explicitly. Missing → abort before any network call.'],
+    ['preflight: gate? kill switch? leftovers?', 'script', 'gateOpen via /api/autopilot/loops, killSwitchEnabled via the debug bundle, leftover loopeval-*-live repos via /api/repos. Any “no” → a failed verdict naming exactly what to click. The suite NEVER enables anything.'],
+    ['…shared core runs — watch it in the UI…', 'you', 'Repo card appears, agent dock streams the turns, Autopilot console shows the loop card. The script prints a WATCH banner with the URL right after arming.'],
+    ['cleanup: stop loop, close tab, unregister repo', 'script', 'Registry entry only — nothing on disk outside its own scratch copy. LOOPEVAL_KEEP=1 keeps it all and prints the manual steps instead.'],
+  ];
+  const SHARED = [
+    ['materialize fixture repo (scratch copy + git init)', 'lib.mjs', 'Committed template → temp copy → initial commit, so agent commits never dirty the template. Goal: a todo CLI with a missing `done` command. Queue: six prompts, each mapped to an expected artifact.'],
+    ['precondition asserts (fixture drift guard)', 'lib.mjs', 'goal-check must FAIL / artifacts must be ABSENT on the fresh fixture — otherwise the scenario proves nothing and aborts before spending tokens.'],
+    ['register repo (advanced visibility) + seed one chat turn', 'shipped API', 'POST /api/repos, then a cheap “reply ready” turn: it pins a session for the arm AND doubles as the CLI probe — a broken claude CLI fails here, not mid-loop.'],
+    ['arm the REAL loop in drive mode', 'shipped API', 'POST /api/autopilot/loop — goal kind (free-text goal, cap 6) or queue kind (bound to the dock tab’s live stash, verify on).'],
+    ['poll every 5s until resolution', 'lib.mjs', 'One status line per tick (status/phase/sent/iterations). Deadline: 15 min (goal) / 25 min (queue) — identical in both modes; live is never slowed down “for watchability”.'],
+    ['assert outcomes mechanically', 'scenario', 'goal: done·verified + goal-check exits 0 + every send loop-attributed. queue: done·drained + queueSent==6 + sent order == arm order + every artifact matches its regex.'],
+  ];
+  function fill(id, steps, liveonly) {
+    const el = document.getElementById(id);
+    steps.forEach(([t, who, d], i) => {
+      if (i) { const a = document.createElement('div'); a.className = 'arrow'; a.textContent = '↓'; el.appendChild(a); }
+      const s = document.createElement('div');
+      s.className = 'step' + (liveonly ? ' liveonly' : '');
+      s.innerHTML = '<span class="who">' + who + '</span><div class="t">' + t + '</div><div class="d">' + d + '</div>';
+      s.onclick = () => s.classList.toggle('open');
+      el.appendChild(s);
+    });
+  }
+  fill('flow-iso', ISO, false);
+  fill('flow-live', LIVE, true);
+  fill('flow-shared', SHARED, false);
+
+  // live-run simulator
+  const SIM = [
+    ['shell', '$ LOOPEVAL_LIVE_PW=****** node tests/loop-eval/goal.mjs --live'],
+    ['shell', 'live mode — no build, targeting the running live harness\nlive mode — provisioning fixture scratch %TMP%\\cw-loopeval-live (live instance untouched)'],
+    ['shell', 'ok   - precondition: goal-check FAILS on the untouched fixture'],
+    ['shell', 'ok   - live preflight: operator gate is open\nok   - live preflight: autopilot kill switch is on\nok   - live preflight: no leftover loopeval-*-live repo'],
+    ['UI',    '👀 a new repo card appears: “loopeval-goal-live” (Advanced mode only)'],
+    ['shell', 'fixture repo registered: r-3f81…\nseeding a conversation (CLI probe)…\nok   - CLI probe: seeded chat turn completed'],
+    ['shell', 'ok   - goal loop armed\n┌──────────────────────────────\n│ WATCH IT LIVE: http://localhost:5099\n│   → open the repo "loopeval-goal-live"\n│   → agent dock / Autopilot console\n└──────────────────────────────'],
+    ['UI',    '👀 agent dock: a real turn streams in — the agent reads CLAUDE.md, implements `done`, commits\n👀 Autopilot console: loop card shows work · looping 1/6'],
+    ['UI',    '👀 the agent replies LOOP_DONE → engine flips to the VERIFY phase and sends the verification prompt'],
+    ['UI',    '👀 verification turn replies GOAL_VERIFIED → loop card: done · verified'],
+    ['shell', 'ok   - loop ended done · verified (LOOP_DONE → verify → GOAL_VERIFIED)\nok   - goal check now exits 0 (feature really implemented)\nok   - every send was loop-attributed in the audit log'],
+    ['shell', 'live teardown: unregistering the fixture from the live harness\nPASS: goal (8 assertions)   exit 0'],
+    ['UI',    '👀 the repo card is gone again — nothing left behind. (LOOPEVAL_KEEP=1 would have kept it for you to poke at.)'],
+  ];
+  let simAt = 0;
+  const log = document.getElementById('simlog');
+  document.getElementById('sim-next').onclick = () => {
+    if (simAt >= SIM.length) return;
+    const [where, text] = SIM[simAt++];
+    log.textContent += (log.textContent.endsWith('—') ? '\n' : '\n\n') + '[' + where + ']  ' + text;
+    log.scrollTop = log.scrollHeight;
+    if (simAt >= SIM.length) document.getElementById('sim-next').disabled = true;
+  };
+  document.getElementById('sim-reset').onclick = () => {
+    simAt = 0; log.textContent = 'press “Next step” —';
+    document.getElementById('sim-next').disabled = false;
+  };
 </script>
 </body>
 </html>
