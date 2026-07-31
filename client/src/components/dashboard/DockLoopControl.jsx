@@ -97,7 +97,8 @@ export default function DockLoopControl({ repoId, sessionId, tabId, stash = [], 
   useEffect(() => { setOpen(false); setPicked(null); setPickedMode(null); }, [armedKind]);
 
   // Prompt inspection needs the gated detail; fetch once per popover open so
-  // the previews are byte-identical to what the engine will send. The same
+  // the previews show the exact composition the engine will send — briefing
+  // frame + rules + stored text (openspec loop-agent-briefing). The same
   // fetch seeds the parameter fields from the PERSISTED loop record (openspec:
   // fix-loop-arm-freshness) — a resolved or restart-survived loop reopens with
   // the goal/cap/mode it was armed with, not blanks. Untouched fields only:

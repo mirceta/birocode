@@ -13,10 +13,13 @@
     <h1>Brief the driven agent on its situation, <em>every send</em></h1>
     <p class="lede">
       Autopilot loops send stored prompt text verbatim, so the driven agent has no idea it is
-      inside a loop. This change prefixes a short, fixed <b>briefing</b> onto every driven send —
-      composed at the engine's one send choke point. This app explains <b>why</b>, the exact
-      <b>briefing text</b> (decision&nbsp;D2a), <b>where</b> it composes, and how the operator
-      surfaces stay honest.
+      inside a loop. This change prefixes a <b>briefing</b> onto every driven send — a fixed
+      frame around an <b>operator-editable rules list</b>, composed at the engine's one send
+      choke point. The rules live in a global, revisioned store and are edited from a
+      <b>Briefing section beside the loop section on every dock card</b> — so a rule idea is
+      captured the moment it occurs (park it disabled, enable it later), no deploy needed.
+      This app explains <b>why</b>, the <b>composition</b> (D2a/D2b), <b>where</b> it composes,
+      and how the operator surfaces stay honest.
     </p>
   </div>
 </header>
@@ -63,11 +66,24 @@
 
   <!-- ============ TAB 2: COMPOSE ============ -->
   <section class="tab" id="tab-compose">
-    <h2>Compose a briefed send</h2>
+    <h2>Compose a briefed send — and edit the rules that feed it</h2>
     <p class="sub">
-      Pick what the loop is sending. <code>ComposeBriefedPrompt(kind, phase, sentinel, storedText)</code>
-      returns <code>briefing + "\n\n" + storedText</code>. Watch the correct core and contract line snap in.
+      Pick what the loop is sending. <code>ComposeBriefedPrompt(kind, phase, sentinel, storedText, rules)</code>
+      renders the fixed frame around your <b>enabled rules</b>, then the stored text. The rules
+      editor below mirrors the dock's Briefing section: check = composed into every driven work
+      send, uncheck = parked idea, every edit bumps the revision each send stamps. Verify sends
+      never receive rules — structurally.
     </p>
+
+    <div class="rules-box">
+      <div class="col-h">Briefing rules <span class="tag tag-op">operator-edited · global · briefing.json</span>
+        <span class="pill" id="rulesRev"></span><span class="pill" id="rulesCount"></span></div>
+      <ul class="rules-list" id="rulesList"></ul>
+      <div class="rule-addrow">
+        <input id="ruleAdd" type="text" placeholder="New rule or idea… (uncheck after adding to just park it)" />
+        <button id="ruleAddBtn">Add</button>
+      </div>
+    </div>
 
     <div class="picker" id="picker">
       <button data-k="queue-item" class="active">Queue item <small>work</small></button>
@@ -81,7 +97,7 @@
 
     <div class="compose-grid">
       <div class="col">
-        <div class="col-h">Fixed briefing template <span class="tag tag-harness">harness-authored</span></div>
+        <div class="col-h">Briefing = fixed frame + enabled rules <span class="tag tag-harness">frame: harness</span> <span class="tag tag-op">rules: operator</span></div>
         <pre class="prompt" id="composeBriefing"></pre>
       </div>
       <div class="col">
@@ -101,30 +117,35 @@
 
   <!-- ============ TAB 3: THE TEXT ============ -->
   <section class="tab" id="tab-text">
-    <h2>The briefing text is the heart of the change (D2a, draft v1)</h2>
+    <h2>The briefing text is the heart of the change (D2a draft v1 + D2b rules)</h2>
     <p class="sub">
       The plumbing is deliberately small; the prompt wording makes or breaks it. Two deliberately
-      <em>different</em> templates — because a verification turn must feel <b>no</b> "act, don't ask" pressure.
+      <em>different</em> compositions — because a verification turn must feel <b>no</b> "act, don't ask"
+      pressure — and a deliberate frame/rules split: the parser-coupled marker lines and the verify
+      note are <b>compiled in</b>, the behavioral bullets are <b>yours to grow</b>.
     </p>
 
     <div class="two-tpl">
       <div class="tpl work">
-        <div class="tpl-h">Work-phase core <small>queue item · goal work · recipe</small></div>
+        <div class="tpl-h">Work-phase composition <small>queue item · goal work · recipe</small></div>
         <pre class="prompt annotated" id="workTpl"></pre>
+        <p class="mini">The <code>NEEDS_HUMAN:</code> bullet is part of the <b>fixed frame</b>, not a rule —
+        it teaches the exact final-line marker the engine parses, so it can never be edited away.</p>
       </div>
       <div class="tpl verify">
-        <div class="tpl-h">Verify-phase note <small>queue step-verify · goal verify</small></div>
+        <div class="tpl-h">Verify-phase note <small>queue step-verify · goal verify · fixed, no rules slot</small></div>
         <pre class="prompt annotated" id="verifyTpl"></pre>
-        <p class="mini">No posture pressure, no duplicate marker line — the verify templates already state their marker.</p>
+        <p class="mini">No posture pressure, no rules, no duplicate marker line — an operator edit
+        structurally cannot push "act, don't ask" into a verification turn.</p>
       </div>
     </div>
 
     <h3>Crafting constraints that bound future tuning</h3>
     <div class="cards">
-      <div class="card"><b>Short</b><p>Work core stays under ~120 words so it frames the stored prompt without diluting it. Fixed per-send token cost.</p></div>
+      <div class="card"><b>Short</b><p>The composition should stay around ~120 words. Rule count is operator-controlled now, so the editors show the composed preview with a soft too-long hint instead of hard-limiting.</p></div>
       <div class="card"><b>Prefix, not suffix</b><p>Framing lands <em>before</em> the task; the <code>--- The prompt follows. ---</code> separator keeps the operator's text distinct.</p></div>
-      <div class="card"><b>Exact final-line phrasing</b><p><code>NEEDS_HUMAN:</code> and the sentinel match the engine's final-line parser. The briefing must never teach a marker the parser would miss.</p></div>
-      <div class="card"><b>One voice with the doc</b><p>The briefing is the distilled form of <code>docs/loop-driven-agent-convention.md</code>; tuning edits both in the same commit (D4).</p></div>
+      <div class="card"><b>Exact final-line phrasing</b><p><code>NEEDS_HUMAN:</code> and the sentinel match the engine's final-line parser — and live in the fixed frame so no edit can teach a marker the parser would miss.</p></div>
+      <div class="card"><b>One voice with the doc</b><p>The briefing is the distilled form of <code>docs/loop-driven-agent-convention.md</code>; frame tuning edits both in the same commit (D4). Rules tune live in the dock.</p></div>
     </div>
   </section>
 
@@ -176,12 +197,14 @@
 
   <!-- ============ TAB 5: HONEST ============ -->
   <section class="tab" id="tab-honest">
-    <h2>Record raw + a flag; disclose the template once (D3)</h2>
+    <h2>Record raw + a flag + the rules revision; disclose the composition live (D3)</h2>
     <p class="sub">
-      What was actually sent is <code>briefing + stored</code>, and it must stay reconstructable. But if we
-      stored the composed text verbatim, every truncated surface would render the identical briefing prefix
-      as noise. So: record the raw text + a <span class="flag">briefed</span> flag, and disclose the fixed
-      template <em>once</em>.
+      What was actually sent is <code>briefing + stored</code>, and it must stay reconstructable — even
+      though the rules list mutates. But if we stored the composed text verbatim, every truncated surface
+      would render the identical briefing prefix as noise. So: record the raw text + a
+      <span class="flag">briefed</span> flag + the <b>rules revision</b> the send composed with;
+      <code>briefing.json</code> keeps every revision, so frame (git) + rules-at-rev (store) + raw text
+      (record) reconstruct any past send exactly.
     </p>
 
     <div class="honest-grid">
@@ -196,14 +219,14 @@
       </div>
 
       <div class="hcard keep">
-        <div class="hh">✓ Chosen — raw + flag, template disclosed once</div>
+        <div class="hh">✓ Chosen — raw + flag + rev, composition disclosed live</div>
         <div class="rows">
-          <div class="row"><span class="lbl">audit</span><code>Add a null check…</code> <span class="flag">briefed</span></div>
-          <div class="row"><span class="lbl">history</span><code>Add a null check…</code> <span class="flag">briefed</span></div>
-          <div class="row"><span class="lbl">chat bubble</span><code>Add a null check…</code> <span class="chip">sent with autopilot briefing ▸</span></div>
-          <div class="row"><span class="lbl">loop detail</span><code class="tpl-ref">fixed briefing template (disclosed once)</code></div>
+          <div class="row"><span class="lbl">audit</span><code>Add a null check…</code> <span class="flag">briefed · rev 3</span></div>
+          <div class="row"><span class="lbl">history</span><code>Add a null check…</code> <span class="flag">briefed · rev 3</span></div>
+          <div class="row"><span class="lbl">chat bubble</span><code>Add a null check…</code> <span class="chip">📝 autopilot briefing attached</span></div>
+          <div class="row"><span class="lbl">dock Briefing + arm preview</span><code class="tpl-ref">live composition: frame + enabled rules</code></div>
         </div>
-        <p class="mini"><b>sent text = disclosed template + recorded raw text</b>, deterministically. The honesty contract of the proposal.</p>
+        <p class="mini"><b>sent text = frame + rules-at-recorded-rev + recorded raw text</b>, deterministically. The honesty contract of the proposal, revision-proofed against later edits.</p>
       </div>
     </div>
 
@@ -217,7 +240,7 @@
         <div class="arrow">→</div>
         <div class="now">
           <div class="wl">now</div>
-          <p>Every send is a <b>deterministic composition of operator-inspectable parts</b> (fixed briefing + stored text) — previewable before arming, disclosed as sent.</p>
+          <p>Every send is a <b>deterministic composition of operator-inspectable parts</b> (fixed frame + rules at a recorded revision + stored text) — previewable before arming, disclosed as sent, reconstructable forever.</p>
         </div>
       </div>
       <p class="mini">The stale wording must not survive anywhere — a grep across <code>docs/</code>, <code>understanding-app/</code>, and code comments is a task, not a hope.</p>
@@ -229,9 +252,10 @@
 <footer class="wrap">
   <p>
     Source of truth: <code>openspec/changes/loop-agent-briefing/{proposal,design}.md</code> ·
-    <code>docs/loop-driven-agent-convention.md</code>. Draft&nbsp;v1 briefing text ships as
-    consts in <code>LoopConfigStore</code>, tuned from real runs. This app rolls latest — it is
-    overwritten whenever the explanation changes.
+    <code>docs/loop-driven-agent-convention.md</code>. The fixed frame ships as consts in
+    <code>LoopConfigStore</code>; the draft&nbsp;v1 rules seed <code>BriefingRulesStore</code>
+    (<code>briefing.json</code>) and are tuned live from the dock's Briefing section. This app
+    rolls latest — it is overwritten whenever the explanation changes.
   </p>
 </footer>
 

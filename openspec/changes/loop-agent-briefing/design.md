@@ -109,9 +109,12 @@ The contract line is selected by kind+phase:
 
 `ComposeBriefedPrompt(kind, phase, sentinel, storedText)` renders
 `frame(enabled rules) + "\n\n" + storedText` from the CURRENT store state — an
-edit applies from the very next send. The existing goal/queue-verify templates are
-reworded in the same change to drop lines the briefing now covers (no duplicated
-posture text), keeping their marker-specific instructions.
+edit applies from the very next send. The existing goal/recipe templates keep their
+own marker/escalation sentences UNCHANGED (implementation refinement): suggest-mode
+pends deliver stored text raw, and a mid-run mode flip must not strand an untaught
+agent, so stored prompts stay self-sufficient — a drive send repeats the marker line,
+the same instruction twice, harmless (the double-instruction risk below already
+covers this shape).
 
 ### D2a — The briefing text itself is the heart of this change (draft v1)
 

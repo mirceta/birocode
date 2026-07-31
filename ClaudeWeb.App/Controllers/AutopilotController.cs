@@ -490,9 +490,10 @@ public class AutopilotController : ControllerBase
 
     /// <summary>The prompt-level counterpart (openspec: unify-loop-types, design D5),
     /// OPERATOR-GATED like every prompt disclosure: full loop records (stored work +
-    /// verification prompts, goal text, phase), full recipe bodies, and the goal-loop
-    /// composition templates — so the dock can preview byte-identical what the engine
-    /// will send before and after arming.</summary>
+    /// verification prompts, goal text, phase), full recipe bodies, the goal-loop
+    /// composition templates, and the briefing (openspec: loop-agent-briefing) — so
+    /// the dock can preview the exact composition the engine will send (briefing
+    /// frame + rules + stored text) before and after arming.</summary>
     [HttpGet("loops/detail")]
     public IActionResult LoopsDetail()
     {

@@ -15,6 +15,14 @@ condition fires. There is no human reading your replies between iterations. The 
 stop detection is **deterministic string matching on your last message** — no LLM judges
 you, so the only way to end the loop cleanly is to emit the markers below exactly.
 
+You do not need to have read this file to know that: **every driven send now tells you
+the situation in its own text** (openspec: loop-agent-briefing). Work prompts arrive
+wrapped in an `[Autopilot loop briefing]` prefix stating that an automated loop sent
+them, the behavioral posture below, the escalation line, and the applicable marker
+contract, followed by `--- The prompt follows. ---` and the stored text. Verification
+prompts carry a short honesty-first note instead. The briefing is this document's
+distilled form; the two are kept in sync in the same commit whenever either changes.
+
 Loops come in three kinds; the prompt you receive tells you which you are in:
 
 - **📋 Recipe loop** — the prompt is a stored ritual (e.g. "drive the current OpenSpec
@@ -52,6 +60,30 @@ Loops come in three kinds; the prompt you receive tells you which you are in:
 
 If neither marker appears, the loop assumes there is more work and resends its prompt.
 Just keep making real progress each turn; don't emit filler.
+
+## How to behave
+
+Nobody reads your replies in real time, so a reply that only asks or plans goes
+nowhere. In every **work** turn:
+
+- **Act.** Do the work the prompt asks for in this turn. Do not stop at a plan, a list
+  of options, or a clarifying question — there is no one to answer it.
+- **Answer your own questions.** When you would ask a clarifying question and you are
+  confident of the answer, answer it yourself and follow your own advice.
+- **Sensible defaults.** For open details, choose a sensible default and state briefly
+  which you chose, so the human can review the choice later.
+- **When you would explain, do.** "Here's what I'd do" is a work item, not a reply.
+- **`NEEDS_HUMAN:` is the escalation path, not the default.** Reserve it for decisions
+  that genuinely require the human — irreversible, destructive, or a preference only
+  they can give.
+
+**Verification** turns are the deliberate exception: they carry no act-pressure. Judge
+honestly — a false confirmation silently corrupts the run, while an honest refusal
+merely stops the loop for a human to look at.
+
+The work-phase posture bullets above are seeded into the harness's **editable briefing
+rules** (the dock's Briefing section): the operator can tune, add, or park rules at any
+time, and the current set is composed into every driven work send.
 
 ## The goal loop's verification turn — a third marker
 
@@ -108,11 +140,16 @@ detail that the user reviews afterward.
   dashboard. It discloses status and recipe names only — no prompts, no config, no way to
   act.
 - Resends carry a hard iteration cap and are recorded in an append-only audit log.
-- The prompt you receive is **exactly** the stored text the user can inspect — the recipe
-  text in the editor, a goal loop's work/verification prompts composed once at arm time,
-  or a queue item's text as it sits in the stash strip above the composer. The one
-  send-time composition is the queue's step-verification prompt: a fixed, inspectable
-  template plus the item text just sent — both operator-visible. Nothing else is
-  injected at send time.
+- Every prompt you receive is a **deterministic composition of operator-inspectable
+  parts** (openspec: loop-agent-briefing): the fixed briefing frame (compiled into the
+  harness), the operator's briefing rules at a **recorded revision** (edited in the
+  dock's Briefing section; the store keeps every revision), and the stored text the
+  user can inspect — the recipe text in the editor, a goal loop's work/verification
+  prompts composed once at arm time, or a queue item's text as it sits in the stash
+  strip above the composer. The queue's step-verification prompt composes the fixed,
+  inspectable verification template with the item text just sent. Every surface that
+  records a send keeps the raw stored text plus a briefed flag and the rules revision,
+  so what was actually sent stays reconstructable forever; the arm preview and the
+  Briefing section show the exact composition before anything fires.
 - Arming is **exclusive per agent**: a loop and the suggestion-based autopilot are never
   armed on the same repo at once.

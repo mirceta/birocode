@@ -354,8 +354,10 @@ function QueueRow({ agent, loop, tabs, loopAction }) {
   );
 }
 
-// One recipe card: display or inline-edit. The prompt is fully visible — what is
-// shown here is byte-identical to what an armed loop sends (nothing injected).
+// One recipe card: display or inline-edit. The prompt is fully visible — an armed
+// drive-mode loop sends exactly this text wrapped in the situational briefing
+// (openspec loop-agent-briefing), whose composition is previewed in the dock's
+// Briefing section and the arm preview; a suggest-mode pend delivers it raw.
 function RecipeCard({ recipe, saveRecipe, removeRecipe }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(null);

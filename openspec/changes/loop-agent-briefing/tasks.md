@@ -10,8 +10,8 @@
 - [ ] 1.2 `LoopConfigStore`: fixed-frame consts (header, situational statement,
       `NEEDS_HUMAN:` escalation line, per-kind contract lines, separator) + fixed
       verify note + `ComposeBriefedPrompt(kind, phase, sentinel, storedText, rules)`;
-      rework `GoalWorkTemplate`/`GoalVerifyTemplate`/`QueueVerifyTemplate` to drop
-      lines the briefing now covers; delete the stale "byte-identical text"
+      goal/recipe templates stay marker-complete (suggest-mode delivers them raw —
+      D2 refinement); delete the stale "byte-identical text"
       class-summary wording (D2, D2a, D4).
 - [ ] 1.3 `AutopilotService`: wrap the proposed text with the briefing in the drive
       branch only — `SendPrompt` receives the composed text while `RecordQueueStep`,
