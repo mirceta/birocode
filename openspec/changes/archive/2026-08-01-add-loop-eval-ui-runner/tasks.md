@@ -73,7 +73,9 @@
       instructions render when the kill switch is off; Start → confirm → 409
       path exercised against a stub run
       (.claudeweb-preview/playwright/verify-loopeval-ui.mjs — 15/15 checks)
-- [ ] 4.5 End-to-end acceptance on live (operator-run): click Start on goal in
+- [x] 4.5 End-to-end acceptance on live (operator-run): click Start on goal in
       the live Tests tab, watch dock + loop card, verdict renders; confirm
       fixture cleanup (no `loopeval-*-live` card left)
+      (2026-08-01: deployed via swap.ps1, user verified on live and said
+      "keep it" — rollback disarmed)
 - [x] 4.6 `openspec validate --strict` green
