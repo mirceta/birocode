@@ -41,7 +41,12 @@ export const CFG = {
   // :5099 harness, watchable by the operator. Off = today's isolated mode.
   live: process.argv.includes('--live') || process.env.LOOPEVAL_LIVE === '1',
   livePort: Number(process.env.LOOPEVAL_LIVE_PORT || 5099),
-  livePw: process.env.LOOPEVAL_LIVE_PW || '',              // REQUIRED in live mode — never defaulted
+  livePw: process.env.LOOPEVAL_LIVE_PW || '',              // terminal runs — never defaulted
+  // Harness-minted one-shot session token (openspec: add-loop-eval-ui-runner).
+  // Set ONLY by the harness's own eval-runner service when it spawns this suite
+  // from the Tests tab — not for manual use. Installed directly as the session
+  // cookie (no login call); revoked by the harness when the run ends.
+  liveToken: process.env.LOOPEVAL_LIVE_TOKEN || '',
   liveRoot: process.env.LOOPEVAL_LIVE_ROOT || join(os.tmpdir(), 'cw-loopeval-live'),
   port: Number(process.env.LOOPEVAL_PORT || 5210),
   pw: process.env.LOOPEVAL_PW || 'loopeval-pw-4471',
@@ -55,9 +60,17 @@ export const base = () => `http://localhost:${CFG.live ? CFG.livePort : CFG.port
  *  collision preflight) can always tell them apart from real projects. */
 export const repoDisplayName = (baseName) => CFG.live ? `${baseName}-live` : baseName;
 
-function requireLivePw() {
-  if (CFG.live && !CFG.livePw) {
-    throw new Error('live mode needs LOOPEVAL_LIVE_PW=<the live operator password> — refusing to touch the network without it');
+/** Live auth comes from EXACTLY ONE explicit source — password (terminal runs)
+ *  or harness-minted token (Tests-tab runs). Never defaulted, never read off
+ *  disk, and never a silent fallback from one to the other: with neither (or
+ *  both) set we refuse before any network call. */
+function requireLiveCredential() {
+  if (!CFG.live) return;
+  if (CFG.livePw && CFG.liveToken) {
+    throw new Error('live mode: both LOOPEVAL_LIVE_PW and LOOPEVAL_LIVE_TOKEN are set — set exactly ONE (password for terminal runs, token only when the harness spawns the run), refusing to guess');
+  }
+  if (!CFG.livePw && !CFG.liveToken) {
+    throw new Error('live mode needs a credential: LOOPEVAL_LIVE_PW=<the live operator password> (terminal runs) or LOOPEVAL_LIVE_TOKEN (set by the harness UI runner — not for manual use) — refusing to touch the network without one');
   }
 }
 export const minutes = (n) => n * 60_000;
@@ -160,7 +173,7 @@ function materializeFixture(root, fixtureName) {
  */
 export async function provision(fixtureName) {
   if (CFG.live) {
-    requireLivePw();
+    requireLiveCredential();
     if (!(await health()))
       throw new Error(`no live harness answers on ${base()} — start it (or set LOOPEVAL_LIVE_PORT) first`);
     const ROOT = CFG.liveRoot;
@@ -205,6 +218,7 @@ export async function boot(ctx) {
 }
 
 let cookie = '';
+let cookiePinned = false; // token path: never let a Set-Cookie clobber the installed token
 export async function api(method, path, body, extraHeaders = {}, timeoutMs = 0) {
   const ctl = new AbortController();
   const timer = timeoutMs ? setTimeout(() => ctl.abort(), timeoutMs) : null;
@@ -216,7 +230,7 @@ export async function api(method, path, body, extraHeaders = {}, timeoutMs = 0) 
       signal: ctl.signal,
     });
     const setc = r.headers.get('set-cookie');
-    if (setc) cookie = setc.split(';')[0];
+    if (setc && !cookiePinned) cookie = setc.split(';')[0];
     let json = null;
     try { json = await r.json(); } catch { /* SSE or empty body */ }
     return { status: r.status, json };
@@ -224,7 +238,21 @@ export async function api(method, path, body, extraHeaders = {}, timeoutMs = 0) 
 }
 
 export async function login() {
-  requireLivePw();
+  requireLiveCredential();
+  if (CFG.live && CFG.liveToken) {
+    // Harness-minted token: install it as the session cookie, no login call.
+    // Probe with the cheapest authorized GET so a revoked/stale token fails
+    // RIGHT HERE with a verdict naming the credential (mirrors the
+    // wrong-password copy below) instead of a confusing mid-scenario 401.
+    cookie = `claudeweb_session=${CFG.liveToken}`;
+    cookiePinned = true;
+    const probe = await api('GET', '/api/repos');
+    if (probe.status === 401) {
+      throw new Error('live token rejected: http 401 — is LOOPEVAL_LIVE_TOKEN a session freshly minted by the live harness? It is revoked the moment its run ends; rerun from the Tests tab, never reuse one');
+    }
+    if (probe.status !== 200) throw new Error(`live token probe failed: http ${probe.status}`);
+    return;
+  }
   const r = await api('POST', '/api/auth/login', { password: CFG.live ? CFG.livePw : CFG.pw });
   if (r.status !== 200) {
     throw new Error(CFG.live

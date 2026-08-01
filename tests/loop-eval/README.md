@@ -17,7 +17,7 @@ Same scenarios, same assertions — two places to run them:
 | Target | throwaway instance it boots on :5210 | your RUNNING live harness on :5099 |
 | For | agents / automation — a fully automatic before-shipping gate | the human operator — watch the run happen in the real UI |
 | Gate & kill switch | seeded into the scratch datadir pre-boot | must ALREADY be on; the suite fails fast with instructions, never enables them itself |
-| Auth | its own throwaway password | `LOOPEVAL_LIVE_PW=<live operator password>` (required, never defaulted) |
+| Auth | its own throwaway password | exactly ONE of `LOOPEVAL_LIVE_PW=<live operator password>` (terminal runs) or `LOOPEVAL_LIVE_TOKEN` (harness-minted, Tests-tab runs only) — required, never defaulted, no fallback between them |
 | Fixture repo | scratch copy, registered in the scratch store | scratch copy, registered in the LIVE store as `loopeval-goal-live` / `loopeval-queue-live` (advanced visibility — invisible to Basic mode) |
 | Diagnostics | reads the scratch datadir's files | reads `GET /api/autopilot/loops/{repoId}/debug` (never the live datadir) |
 | Teardown | kills the instance, removes the scratch root | stops the loop, closes the dock tab, unregisters the repo, removes the scratch copy — `LOOPEVAL_KEEP=1` keeps it all for inspection and prints the manual steps |
@@ -33,6 +33,13 @@ card, then rerun.
 
 **Don't run both modes at once** — they share this box's one `claude` CLI and
 would contend for it (and confuse whoever is watching).
+
+**Or skip the terminal entirely** (openspec: add-loop-eval-ui-runner): the
+Autopilot console's **Tests tab → E2E eval section** has a Start button per
+scenario. The harness spawns these same scripts in `--live` mode against
+itself, authenticated with a one-shot session token it mints for the child
+process (`LOOPEVAL_LIVE_TOKEN`) — no password typing, same preflights, same
+assertions, run status and verdict streamed back into the tab.
 
 ## Cost — read before running
 
@@ -89,7 +96,8 @@ Environment knobs:
 | `LOOPEVAL_GOAL_MINUTES` / `LOOPEVAL_QUEUE_MINUTES` | 15 / 25 | scenario deadlines |
 | `LOOPEVAL_LIVE` | off | `1` = live mode (same as `--live`) |
 | `LOOPEVAL_LIVE_PORT` | `5099` | live harness port |
-| `LOOPEVAL_LIVE_PW` | — | live operator password — REQUIRED in live mode, never defaulted or read off disk. Set it per-invocation to keep it out of files: `LOOPEVAL_LIVE_PW=... node ...` |
+| `LOOPEVAL_LIVE_PW` | — | live operator password — required in live mode (unless the harness set `LOOPEVAL_LIVE_TOKEN`), never defaulted or read off disk. Set it per-invocation to keep it out of files: `LOOPEVAL_LIVE_PW=... node ...` |
+| `LOOPEVAL_LIVE_TOKEN` | — | one-shot session token, **set by the harness UI runner — not for manual use**. Installed directly as the session cookie (no login call); revoked by the harness when the run ends. Mutually exclusive with `LOOPEVAL_LIVE_PW` — setting both is an error, there is no fallback |
 | `LOOPEVAL_LIVE_ROOT` | `%TMP%/cw-loopeval-live` | live-mode fixture scratch dir |
 
 ## What each scenario proves
