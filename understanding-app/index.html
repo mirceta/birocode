@@ -3,264 +3,291 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>loop-eval — one suite, two run modes</title>
+<title>loop-eval vs loop-evals — two takes on evaluating the loop</title>
 <style>
   :root {
-    --bg: #10141a; --panel: #1a2028; --panel2: #222a35; --ink: #dce3ec;
-    --dim: #8b97a6; --line: #2e3947; --ok: #4fc38a; --bad: #e06c6c;
-    --warn: #e0b56c; --acc: #6ca8e0; --live: #c98fe0; --radius: 10px;
+    --bg:#0f131a; --panel:#181e27; --panel2:#212a36; --ink:#dce3ec; --dim:#8b97a6;
+    --line:#2c3644; --ok:#4fc38a; --bad:#e06c6c; --warn:#e0b56c;
+    /* main = blue, ours = violet, hybrid = teal */
+    --a:#5b9be0; --b:#b48ce6; --c:#4fbfad; --star:#f2c14e; --radius:12px;
   }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink);
-         font: 15px/1.55 "Segoe UI", system-ui, sans-serif; padding: 24px 16px 64px; }
-  main { max-width: 940px; margin: 0 auto; }
-  h1 { font-size: 22px; margin: 0 0 4px; }
-  .sub { color: var(--dim); margin: 0 0 20px; }
-  .tabs { display: flex; gap: 8px; margin: 0 0 18px; flex-wrap: wrap; }
-  .tabs button { background: var(--panel); color: var(--dim); border: 1px solid var(--line);
-    border-radius: 999px; padding: 7px 16px; cursor: pointer; font: inherit; font-size: 14px; }
-  .tabs button.on { background: var(--acc); color: #0c1116; border-color: var(--acc); font-weight: 600; }
-  section { display: none; }
-  section.on { display: block; animation: fade .18s ease; }
-  @keyframes fade { from { opacity: 0; transform: translateY(4px);} to { opacity: 1; } }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
-          padding: 14px 16px; margin-bottom: 12px; }
-  .card h3 { margin: 0 0 6px; font-size: 15px; }
-  .card p, .card li { margin: 6px 0; color: var(--dim); }
-  .card b, .card code { color: var(--ink); }
-  code { background: var(--panel2); padding: 1px 6px; border-radius: 4px; font-size: 13px; }
-  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  @media (max-width: 720px) { .cols { grid-template-columns: 1fr; } }
-  .mode { border-top: 3px solid var(--acc); }
-  .mode.live { border-top-color: var(--live); }
-  .badge { display: inline-block; font-size: 12px; border-radius: 999px; padding: 1px 10px;
-           border: 1px solid var(--line); color: var(--dim); margin-left: 6px; }
-  .badge.auto { color: var(--acc); border-color: var(--acc); }
-  .badge.human { color: var(--live); border-color: var(--live); }
-  .flow { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
-  .step { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
-          padding: 8px 12px; cursor: pointer; transition: border-color .15s; }
-  .step:hover { border-color: var(--acc); }
-  .step.liveonly:hover { border-color: var(--live); }
-  .step .t { font-weight: 600; font-size: 14px; }
-  .step .d { display: none; color: var(--dim); font-size: 13.5px; margin-top: 4px; }
-  .step.open .d { display: block; }
-  .step .who { float: right; font-size: 12px; color: var(--dim); }
-  .arrow { text-align: center; color: var(--dim); font-size: 13px; line-height: 1; }
-  .shared { background: linear-gradient(180deg, var(--panel), var(--panel2));
-            border: 1px dashed var(--acc); }
-  .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); }
-  .legend { font-size: 13px; color: var(--dim); margin: 4px 0 14px; }
-  table { border-collapse: collapse; width: 100%; font-size: 14px; }
-  th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
-  th { background: var(--panel2); }
-  td:first-child { color: var(--dim); white-space: nowrap; }
-  .sim { margin-top: 10px; }
-  .sim button { background: var(--panel2); color: var(--ink); border: 1px solid var(--line);
-    border-radius: 8px; padding: 8px 14px; cursor: pointer; font: inherit; }
-  .sim button:disabled { opacity: .4; cursor: default; }
-  .simlog { margin-top: 10px; background: #0c1015; border: 1px solid var(--line); border-radius: 8px;
-    padding: 10px 12px; font-family: Consolas, monospace; font-size: 13px; min-height: 120px;
-    white-space: pre-wrap; }
-  .hint { font-size: 13px; color: var(--dim); font-style: italic; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.55 "Segoe UI", system-ui, sans-serif; padding:26px 16px 72px; }
+  main { max-width:1000px; margin:0 auto; }
+  h1 { font-size:23px; margin:0 0 4px; letter-spacing:.2px; }
+  .sub { color:var(--dim); margin:0 0 6px; }
+  .note { color:var(--dim); font-size:12.5px; margin:0 0 20px; }
+  .tabs { display:flex; gap:8px; margin:0 0 20px; flex-wrap:wrap; }
+  .tabs button { background:var(--panel); color:var(--dim); border:1px solid var(--line);
+    border-radius:999px; padding:8px 16px; cursor:pointer; font:inherit; font-size:14px; transition:.15s; }
+  .tabs button:hover { color:var(--ink); }
+  .tabs button.on { background:var(--ink); color:#0c1116; border-color:var(--ink); font-weight:600; }
+  section { display:none; }
+  section.on { display:block; animation:fade .2s ease; }
+  @keyframes fade { from{opacity:0;transform:translateY(5px);} to{opacity:1;} }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+    padding:16px 18px; margin-bottom:14px; }
+  .card h3 { margin:0 0 8px; font-size:16px; }
+  .card p, .card li { color:var(--dim); margin:6px 0; }
+  .card b, .card code, strong { color:var(--ink); }
+  code { background:var(--panel2); padding:1px 6px; border-radius:5px; font-size:13px; }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:760px){ .cols{grid-template-columns:1fr;} }
+  .tA { border-top:3px solid var(--a); }
+  .tB { border-top:3px solid var(--b); }
+  .tC { border-top:3px solid var(--c); }
+  .tag { display:inline-block; font-size:11.5px; border-radius:999px; padding:2px 10px;
+    border:1px solid var(--line); color:var(--dim); margin-left:6px; vertical-align:middle; }
+  .tag.A { color:var(--a); border-color:var(--a); }
+  .tag.B { color:var(--b); border-color:var(--b); }
+  .tag.ship { color:var(--ok); border-color:var(--ok); }
+  .tag.wip { color:var(--warn); border-color:var(--warn); }
+  .flow { display:flex; flex-direction:column; gap:6px; margin-top:8px; }
+  .step { background:var(--panel2); border:1px solid var(--line); border-radius:9px; padding:9px 12px; }
+  .step .t { font-weight:600; font-size:14px; }
+  .step .d { color:var(--dim); font-size:13px; margin-top:3px; }
+  .arrow { text-align:center; color:var(--dim); font-size:12px; }
+  /* scorecard */
+  .legend { font-size:12.5px; color:var(--dim); margin:2px 0 14px; }
+  .swatch { display:inline-block; width:11px; height:11px; border-radius:3px; margin:0 4px 0 12px; vertical-align:middle; }
+  table.score { border-collapse:collapse; width:100%; font-size:14px; }
+  table.score th, table.score td { border:1px solid var(--line); padding:9px 11px; text-align:left; vertical-align:middle; }
+  table.score th { background:var(--panel2); font-size:13px; }
+  table.score th.col { text-align:center; }
+  table.score td.dim { color:var(--ink); cursor:pointer; }
+  table.score td.dim .hint { color:var(--dim); font-size:12px; font-weight:400; display:block; }
+  table.score td.val { text-align:center; white-space:nowrap; }
+  .stars { letter-spacing:1px; font-size:15px; }
+  .stars .f { color:var(--star); } .stars .e { color:#3a4453; }
+  tr.expl td { background:var(--panel2); color:var(--dim); font-size:13px; }
+  tr.expl { display:none; } tr.expl.show { display:table-row; }
+  tr.total td { background:var(--panel2); font-weight:600; color:var(--ink); }
+  .barwrap { display:flex; align-items:center; gap:10px; margin:8px 0; }
+  .barwrap .lbl { width:150px; font-size:13px; color:var(--dim); }
+  .bar { height:22px; border-radius:6px; min-width:2px; transition:width .6s cubic-bezier(.2,.7,.2,1); }
+  .bar.A{background:var(--a);} .bar.B{background:var(--b);} .bar.C{background:var(--c);}
+  .barwrap .num { font-size:13px; color:var(--ink); font-weight:600; width:34px; }
+  .verdict { border-left:3px solid var(--c); padding:2px 0 2px 14px; margin:10px 0; }
+  ul.tight { margin:6px 0; padding-left:20px; } ul.tight li{ margin:4px 0; }
+  .pill { display:inline-block; font-size:12px; padding:2px 9px; border-radius:6px; border:1px solid var(--line); margin:2px 4px 2px 0; color:var(--dim); }
+  .win { color:var(--ok); font-weight:600; }
 </style>
 </head>
 <body>
 <main>
-  <h1>loop-eval — one suite, two run modes</h1>
-  <p class="sub">openspec: <code>add-loop-eval-live-mode</code> · the same real-agent scenarios, runnable as an
-  automatic gate (isolated) <i>or</i> where you can watch them (live)</p>
+  <h1>Two takes on evaluating the loop <span class="tag A">loop-eval</span> <span class="tag B">loop-evals</span></h1>
+  <p class="sub">The <code>autopilot-loops</code> engine drives an agent through long tasks a human used to babysit.
+  How do we know a loop is any <em>good</em>? Two answers landed at once — almost the same name, different philosophies.</p>
+  <p class="note">Built as the Understanding app for the <code>feat/loop-evals</code> branch after merging <code>main</code>. Both capabilities now live side by side in the tree.</p>
 
   <div class="tabs">
-    <button data-tab="overview" class="on">Overview</button>
-    <button data-tab="pipelines">The two pipelines</button>
-    <button data-tab="boundary">The gate boundary</button>
-    <button data-tab="timeline">Live run, step by step</button>
+    <button class="on" data-t="two">The two approaches</button>
+    <button data-t="flow">How each runs</button>
+    <button data-t="score">Scorecard ★</button>
+    <button data-t="hybrid">Hybrid &amp; verdict</button>
   </div>
 
-  <section id="overview" class="on">
+  <!-- ============ TWO APPROACHES ============ -->
+  <section class="on" id="two">
+    <div class="cols">
+      <div class="card tA">
+        <h3>loop-eval <span class="tag A">main</span> <span class="tag ship">shipped</span></h3>
+        <p><b>An end-to-end acceptance gate.</b> A committed suite that boots the real harness and drives a loop
+        through the <b>real shipped HTTP surface</b>, then checks: did the canned job get done?</p>
+        <ul class="tight">
+          <li><b>Ground truth:</b> hand-authored synthetic fixtures — a mini repo template plus a
+            <code>goal-check.mjs</code> script, or an <code>expected.json</code> of prompt→path→regex triples.</li>
+          <li><b>Runs via:</b> external Node scripts → login, register repo, seed chat, arm loop, poll.
+            Isolated throwaway instance, or <code>--live</code> against your running harness.</li>
+          <li><b>Scores:</b> a <b>binary</b> hard-assertion ladder (loop status + ground-truth check + bookkeeping). One run.</li>
+          <li><b>You watch it:</b> Tests-tab SSE runner, dock binding, <code>--describe</code> manifests.</li>
+        </ul>
+        <p><b>Answers:</b> <i>"Can the loop still finish a canned job, end to end?"</i></p>
+      </div>
+
+      <div class="card tB">
+        <h3>loop-evals <span class="tag B">ours</span> <span class="tag wip">on branch</span></h3>
+        <p><b>A golden-trajectory measurement instrument.</b> Capture one <b>real human-babysat</b> task, then replay
+        a loop from the same start and measure how close it drove to the human's path.</p>
+        <ul class="tight">
+          <li><b>Ground truth:</b> <b>captured</b> from a real session — start state + plan + full transcript +
+            the repo state <b>after every turn</b>, packaged as a <code>git bundle</code>.</li>
+          <li><b>Authored via:</b> a retroactive <b>curation UI</b> — pick a past session, set the turn span,
+            join turns to commits, label each turn, write the plan + acceptance checks, export.</li>
+          <li><b>Runs via:</b> an <b>in-process</b> runner hosting the real loop services from the start state.</li>
+          <li><b>Scores:</b> acceptance <b>verdict + trajectory</b> (per-turn overlap with the human) + <b>N-run reliability</b>.</li>
+        </ul>
+        <p><b>Answers:</b> <i>"How close to a human did the loop actually drive — and how reliably?"</i></p>
+      </div>
+    </div>
     <div class="card">
-      <h3>Why two modes?</h3>
-      <p>The suite proves the one thing no cheap test can: <b>the loop engine drives a real
-      agent to a real goal</b>. That proof serves two different customers:</p>
-      <ul>
-        <li><b>An agent</b> needs it <i>fully automatic</i> — boot, run, assert, tear down,
-        exit code. That's the <b>isolated mode</b> (default): a throwaway harness on
-        <code>:5210</code> that no human ever sees.</li>
-        <li><b>The human operator</b> needs to <i>see it with their own eyes</i> — a repo card
-        appearing, the agent dock filling with real turns, the Autopilot console's loop card
-        ticking <code>work → verify → done</code>. That's the <b>live mode</b>
-        (<code>--live</code>): the same scenarios pointed at the running <code>:5099</code>
-        harness.</li>
+      <h3>Not duplicates — different rungs of the same ladder</h3>
+      <p>They share the goal (measure the loop) but differ on <b>ground truth</b> (synthetic vs captured-from-real),
+      <b>scoring</b> (binary vs trajectory + reliability), and <b>run path</b> (real HTTP surface vs in-process).
+      <code>loop-eval</code> is the cheap, fast <b>before-ship regression gate</b>; <code>loop-evals</code> is the deeper
+      <b>tuning / benchmarking instrument</b>. Keeping both is the point of the merge.</p>
+    </div>
+  </section>
+
+  <!-- ============ FLOW ============ -->
+  <section id="flow">
+    <div class="cols">
+      <div class="card tA">
+        <h3>loop-eval — a run <span class="tag A">main</span></h3>
+        <div class="flow">
+          <div class="step"><div class="t">1 · Author fixture (by hand)</div><div class="d">A tiny synthetic repo template + a ground-truth check (<code>goal-check.mjs</code> / <code>expected.json</code>). Committed.</div></div>
+          <div class="arrow">↓</div>
+          <div class="step"><div class="t">2 · Boot a target</div><div class="d">Isolated throwaway instance (gate + kill-switch seeded to files before boot), or <code>--live</code> your harness.</div></div>
+          <div class="arrow">↓</div>
+          <div class="step"><div class="t">3 · Drive the shipped surface</div><div class="d">Node script: login → register repo → seed chat → arm loop → poll. No engine bypass.</div></div>
+          <div class="arrow">↓</div>
+          <div class="step"><div class="t">4 · Assert &amp; verdict</div><div class="d">Binary ladder: loop status <code>done·verified/drained</code> + ground-truth check passes + iterations ≤ cap. Exit code + JSON.</div></div>
+        </div>
+      </div>
+      <div class="card tB">
+        <h3>loop-evals — a run <span class="tag B">ours</span></h3>
+        <div class="flow">
+          <div class="step"><div class="t">1 · Capture golden example</div><div class="d">Curation UI over a real session: span → turn↔commit → labels → plan + checks → <code>repo.bundle</code>.</div></div>
+          <div class="arrow">↓</div>
+          <div class="step"><div class="t">2 · Restore start state</div><div class="d">Clone <code>repo.bundle</code> at <code>eval/start</code> into scratch space.</div></div>
+          <div class="arrow">↓</div>
+          <div class="step"><div class="t">3 · Replay the loop in-process</div><div class="d">Host the real loop services on the scratch repo, seed from <code>plan.md</code>, commit each turn to <code>run/n</code>.</div></div>
+          <div class="arrow">↓</div>
+          <div class="step"><div class="t">4 · Score: verdict + trajectory + N</div><div class="d">Acceptance checks pass? + per-turn overlap vs the golden branch + pass-rate/spread across N runs.</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SCORECARD ============ -->
+  <section id="score">
+    <div class="card">
+      <h3>Scorecard — ⭐⭐⭐⭐⭐ = most favorable on that row</h3>
+      <p class="legend">More stars is always better: highest fidelity, <i>easiest</i>, <i>safest</i>, <i>cheapest</i>, <i>lowest</i> burden.
+        <span class="swatch" style="background:var(--a)"></span>loop-eval (main)
+        <span class="swatch" style="background:var(--b)"></span>loop-evals (ours)
+        <span class="swatch" style="background:var(--c)"></span>Hybrid
+        &nbsp;·&nbsp; click a row for the reasoning.</p>
+      <table class="score" id="scoretable"></table>
+    </div>
+    <div class="card">
+      <h3>Overall (mean of 10 rows)</h3>
+      <div id="bars"></div>
+      <p class="legend">Close on purpose — different jobs. <code>loop-eval</code> leads today on maturity, safety &amp; observability;
+      <code>loop-evals</code> leads on fidelity &amp; scoring depth; Hybrid keeps both but isn't built.</p>
+    </div>
+  </section>
+
+  <!-- ============ HYBRID ============ -->
+  <section id="hybrid">
+    <div class="card tC">
+      <h3>The Hybrid — converge, don't compete</h3>
+      <p>Reuse each side's strength as a separate layer:</p>
+      <ul class="tight">
+        <li><b>Execution + observability layer</b> ← from <code>loop-eval</code>: the proven E2E driver, the isolated-instance
+          harness, and the watchable Tests-tab / dock skin.</li>
+        <li><b>Ground-truth + scoring layer</b> ← from <code>loop-evals</code>: captured golden examples and the
+          trajectory + reliability scorer.</li>
       </ul>
-      <p>Same scenario files, same assertions, same deadlines — <b>only the world differs</b>.
-      The mode split lives entirely in <code>tests/loop-eval/lib.mjs</code>.</p>
+      <p>Result: main's low-risk run path and operator UX, raised to a real-human fidelity ceiling.</p>
     </div>
-    <div class="cols">
-      <div class="card mode">
-        <h3>Isolated <span class="badge auto">for agents</span></h3>
-        <p><code>node tests/loop-eval/goal.mjs</code></p>
-        <p>Boots its own ClaudeWeb copy on :5210, seeds gate + kill switch into a scratch
-        datadir <i>before boot</i>, runs, kills everything. Live harness never touched.</p>
-      </div>
-      <div class="card mode live">
-        <h3>Live <span class="badge human">for you</span></h3>
-        <p><code>LOOPEVAL_LIVE_PW=… node tests/loop-eval/goal.mjs --live</code></p>
-        <p>Targets the harness you're using right now. Registers
-        <code>loopeval-goal-live</code>, prints a watch banner, runs where you can see it,
-        cleans up after itself (<code>LOOPEVAL_KEEP=1</code> to keep the aftermath).</p>
-      </div>
-    </div>
-  </section>
-
-  <section id="pipelines">
-    <p class="legend">Click any step to expand it. Blue = isolated-only, purple = live-only,
-    dashed = the shared core both modes run identically.</p>
-    <div class="cols">
-      <div class="card mode">
-        <h3>Isolated pipeline (:5210)</h3>
-        <div class="flow" id="flow-iso"></div>
-      </div>
-      <div class="card mode live">
-        <h3>Live pipeline (:5099)</h3>
-        <div class="flow" id="flow-live"></div>
-      </div>
-    </div>
-    <div class="card shared">
-      <h3>Shared core — identical in both modes</h3>
-      <div class="flow" id="flow-shared"></div>
-    </div>
-  </section>
-
-  <section id="boundary">
     <div class="card">
-      <h3>The autopilot gate is host-only. Both modes respect that — differently.</h3>
-      <p>There is <b>no enable endpoint, ever</b> (<code>AutopilotGate.cs</code>). So how does a
-      test suite arm loops at all?</p>
-      <table>
-        <tr><th></th><th>Isolated</th><th>Live</th></tr>
-        <tr>
-          <td>Gate + kill switch</td>
-          <td>Writes <code>autopilot-gate.json</code> + <code>autopilot.json</code> into the
-          <b>scratch</b> datadir <i>before boot</i> — a host-side file write, the same trust
-          level as the operator clicking the host GUI.</td>
-          <td><b>Checks, never sets.</b> <code>gateOpen</code> off
-          <code>/api/autopilot/loops</code>, <code>killSwitchEnabled</code> off the debug
-          bundle. Off → <span class="bad">fail fast</span> with the exact thing to click.</td>
-        </tr>
-        <tr>
-          <td>Password</td>
-          <td>Invents a throwaway one for its own instance.</td>
-          <td><code>LOOPEVAL_LIVE_PW</code> — you hand it over explicitly. Never defaulted,
-          never read from the live secret store.</td>
-        </tr>
-        <tr>
-          <td>Loop internals for asserts</td>
-          <td>Reads scratch <code>loops.json</code> / <code>autopilot-audit.jsonl</code>
-          directly.</td>
-          <td>Reads <code>GET /api/autopilot/loops/{repoId}/debug</code> — the shipped debug
-          bundle. The live datadir is <b>never written and never parsed</b>.</td>
-        </tr>
-        <tr>
-          <td>Residue</td>
-          <td>Whole scratch root deleted; instance killed.</td>
-          <td>Stops loop → closes dock tab → unregisters repo (registry entry only) → removes
-          scratch copy. Next run's preflight catches any leak (<code>loopeval-*-live</code>
-          name check).</td>
-        </tr>
-      </table>
+      <h3>Where each wins</h3>
+      <p><span class="win">loop-eval →</span> <span class="pill">maturity</span><span class="pill">dev risk</span><span class="pill">run-path realism</span><span class="pill">observability</span><span class="pill">run cost</span></p>
+      <p><span class="win">loop-evals →</span> <span class="pill">ground-truth fidelity</span><span class="pill">scoring depth</span><span class="pill">authoring cost</span></p>
     </div>
-  </section>
-
-  <section id="timeline">
     <div class="card">
-      <h3>Simulate a live goal run</h3>
-      <p class="hint">Step through what you'd actually see — in the shell and in the UI.</p>
-      <div class="sim">
-        <button id="sim-next">Next step ▸</button>
-        <button id="sim-reset">reset</button>
-        <div class="simlog" id="simlog">press “Next step” —</div>
+      <h3>Recommendation</h3>
+      <div class="verdict">
+        <p><b>Keep both; aim at the Hybrid.</b> Ship <code>loop-eval</code> as the cheap before-ship regression gate now;
+        keep growing <code>loop-evals</code> as the tuning instrument. The one piece of debt to settle first is the
+        <b>singular/plural naming collision</b> — decide a single umbrella name before either grows further.</p>
       </div>
     </div>
   </section>
 </main>
 
 <script>
-  // tabs
-  document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
-    document.querySelectorAll('.tabs button').forEach(x => x.classList.remove('on'));
-    document.querySelectorAll('section').forEach(x => x.classList.remove('on'));
+// ---- data ----
+var COLS = ["loop-eval (main)","loop-evals (ours)","Hybrid"];
+var ROWS = [
+  ["Ground-truth fidelity","how real is what we score against",2,5,5,
+    "main: synthetic hand-made mini-products, no real trajectory. ours: captured from a real human-babysat session, state after every turn. Hybrid inherits ours."],
+  ["Scoring depth","binary vs trajectory + reliability",3,5,5,
+    "main: one binary run (status + ground-truth check + bookkeeping). ours: acceptance verdict + per-turn trajectory overlap + N-run reliability."],
+  ["Run-path realism","drives the real shipped surface",5,3,5,
+    "main: drives the actual HTTP operator surface (login→arm→poll), even against the live harness. ours: in-process hosting exercises the real engine but bypasses HTTP."],
+  ["Dev difficulty","easiest to build",3,2,2,
+    "main: Node scripts + a thin C# spawn/watch wrapper over existing endpoints. ours: curation UX + git-bundle format + in-process hosting of a 15-dep service + trajectory scorer."],
+  ["Dev risk","lowest chance of not panning out",5,3,3,
+    "main: already shipped and green, no new engine seam. ours: in-process hosting may need a new engine seam; trajectory metric + capture fidelity still unproven."],
+  ["Authoring cost / new eval","cheapest to add one",3,4,4,
+    "main: hand-craft a bespoke synthetic fixture + check each time. ours: reuse real work — curate an existing good session rather than invent a task."],
+  ["Maintenance burden","lowest drift over time",3,3,3,
+    "main: fixtures + --describe/EXPECTED_OUTCOME must be kept in sync by hand. ours: versioned bundles pinned to a start state, but larger artifacts tied to real history."],
+  ["Observability","watchable while it runs",5,2,5,
+    "main: Tests-tab SSE runner, dock binding, live-mode in the real UI, --describe manifests. ours: in-process console run + report, not watchable live. Hybrid inherits main's skin."],
+  ["Maturity","how shipped it is today",5,3,1,
+    "main: shipped & archived on main, both suites green. ours: on branch, preview-verified, one synthetic example, not on live. Hybrid: not built."],
+  ["Run-cost efficiency","fewer tokens/minutes per run",4,3,3,
+    "main: fixtures kept tiny so agent turns are short. ours & Hybrid: replay longer real tasks → more tokens."]
+];
+
+function stars(n){
+  var s='<span class="stars">';
+  for(var i=1;i<=5;i++) s += i<=n ? '<span class="f">★</span>' : '<span class="e">★</span>';
+  return s+'</span>';
+}
+
+// ---- build table ----
+var t = document.getElementById('scoretable');
+var head = '<tr><th>Dimension</th><th class="col" style="color:var(--a)">main</th><th class="col" style="color:var(--b)">ours</th><th class="col" style="color:var(--c)">hybrid</th></tr>';
+var body='';
+var sums=[0,0,0];
+ROWS.forEach(function(r,idx){
+  sums[0]+=r[2]; sums[1]+=r[3]; sums[2]+=r[4];
+  body += '<tr data-row="'+idx+'"><td class="dim">'+r[0]+'<span class="hint">'+r[1]+'</span></td>'+
+    '<td class="val">'+stars(r[2])+'</td><td class="val">'+stars(r[3])+'</td><td class="val">'+stars(r[4])+'</td></tr>';
+  body += '<tr class="expl" id="expl'+idx+'"><td colspan="4">'+r[5]+'</td></tr>';
+});
+var means=sums.map(function(s){return (s/ROWS.length).toFixed(1);});
+body += '<tr class="total"><td>Overall (mean)</td><td class="val">'+means[0]+'</td><td class="val">'+means[1]+'</td><td class="val">'+means[2]+'</td></tr>';
+t.innerHTML = head+body;
+
+// row expand
+t.addEventListener('click', function(e){
+  var tr = e.target.closest('tr[data-row]');
+  if(!tr) return;
+  document.getElementById('expl'+tr.getAttribute('data-row')).classList.toggle('show');
+});
+
+// ---- bars ----
+var bars = document.getElementById('bars');
+var bd = [["A",COLS[0],means[0]],["B",COLS[1],means[1]],["C",COLS[2],means[2]]];
+bars.innerHTML = bd.map(function(b){
+  return '<div class="barwrap"><span class="lbl">'+b[1]+'</span>'+
+    '<div class="bar '+b[0]+'" data-w="'+(b[2]/5*100)+'" style="width:0%"></div>'+
+    '<span class="num">'+b[2]+'</span></div>';
+}).join('');
+
+// ---- tabs ----
+var btns = document.querySelectorAll('.tabs button');
+btns.forEach(function(b){
+  b.addEventListener('click', function(){
+    btns.forEach(function(x){x.classList.remove('on');});
     b.classList.add('on');
-    document.getElementById(b.dataset.tab).classList.add('on');
+    document.querySelectorAll('section').forEach(function(s){s.classList.remove('on');});
+    var sec = document.getElementById(b.getAttribute('data-t'));
+    sec.classList.add('on');
+    if(b.getAttribute('data-t')==='score') animateBars();
   });
-
-  // pipeline steps
-  const ISO = [
-    ['dotnet build → .claudeweb-preview/bin', 'script', 'Built once, copied OUTSIDE the repo tree so the instance cannot auto-pin this repo (no .sln above it).'],
-    ['seed gate + kill switch into scratch datadir', 'script', 'autopilot-gate.json {enabled:true} + autopilot.json — written BEFORE boot. Same trust boundary as the operator’s GUI click, because the datadir is disposable.'],
-    ['boot ClaudeWeb on :5210', 'script', 'Own port, own datadir, own throwaway password. Health-polled up to 60s.'],
-    ['…shared core runs…', '', 'See the shared box below.'],
-    ['taskkill + delete scratch root', 'script', 'Always — pass, fail, or timeout. A timeout is a FAILED VERDICT, never a hang.'],
-  ];
-  const LIVE = [
-    ['health-check the RUNNING :5099 harness', 'script', 'Nothing is booted. If live is down, the run refuses immediately.'],
-    ['login with LOOPEVAL_LIVE_PW', 'you + script', 'You supply the real operator password explicitly. Missing → abort before any network call.'],
-    ['preflight: gate? kill switch? leftovers?', 'script', 'gateOpen via /api/autopilot/loops, killSwitchEnabled via the debug bundle, leftover loopeval-*-live repos via /api/repos. Any “no” → a failed verdict naming exactly what to click. The suite NEVER enables anything.'],
-    ['…shared core runs — watch it in the UI…', 'you', 'Repo card appears, agent dock streams the turns, Autopilot console shows the loop card. The script prints a WATCH banner with the URL right after arming.'],
-    ['cleanup: stop loop, close tab, unregister repo', 'script', 'Registry entry only — nothing on disk outside its own scratch copy. LOOPEVAL_KEEP=1 keeps it all and prints the manual steps instead.'],
-  ];
-  const SHARED = [
-    ['materialize fixture repo (scratch copy + git init)', 'lib.mjs', 'Committed template → temp copy → initial commit, so agent commits never dirty the template. Goal: a todo CLI with a missing `done` command. Queue: six prompts, each mapped to an expected artifact.'],
-    ['precondition asserts (fixture drift guard)', 'lib.mjs', 'goal-check must FAIL / artifacts must be ABSENT on the fresh fixture — otherwise the scenario proves nothing and aborts before spending tokens.'],
-    ['register repo (advanced visibility) + seed one chat turn', 'shipped API', 'POST /api/repos, then a cheap “reply ready” turn: it pins a session for the arm AND doubles as the CLI probe — a broken claude CLI fails here, not mid-loop.'],
-    ['arm the REAL loop in drive mode', 'shipped API', 'POST /api/autopilot/loop — goal kind (free-text goal, cap 6) or queue kind (bound to the dock tab’s live stash, verify on).'],
-    ['poll every 5s until resolution', 'lib.mjs', 'One status line per tick (status/phase/sent/iterations). Deadline: 15 min (goal) / 25 min (queue) — identical in both modes; live is never slowed down “for watchability”.'],
-    ['assert outcomes mechanically', 'scenario', 'goal: done·verified + goal-check exits 0 + every send loop-attributed. queue: done·drained + queueSent==6 + sent order == arm order + every artifact matches its regex.'],
-  ];
-  function fill(id, steps, liveonly) {
-    const el = document.getElementById(id);
-    steps.forEach(([t, who, d], i) => {
-      if (i) { const a = document.createElement('div'); a.className = 'arrow'; a.textContent = '↓'; el.appendChild(a); }
-      const s = document.createElement('div');
-      s.className = 'step' + (liveonly ? ' liveonly' : '');
-      s.innerHTML = '<span class="who">' + who + '</span><div class="t">' + t + '</div><div class="d">' + d + '</div>';
-      s.onclick = () => s.classList.toggle('open');
-      el.appendChild(s);
-    });
-  }
-  fill('flow-iso', ISO, false);
-  fill('flow-live', LIVE, true);
-  fill('flow-shared', SHARED, false);
-
-  // live-run simulator
-  const SIM = [
-    ['shell', '$ LOOPEVAL_LIVE_PW=****** node tests/loop-eval/goal.mjs --live'],
-    ['shell', 'live mode — no build, targeting the running live harness\nlive mode — provisioning fixture scratch %TMP%\\cw-loopeval-live (live instance untouched)'],
-    ['shell', 'ok   - precondition: goal-check FAILS on the untouched fixture'],
-    ['shell', 'ok   - live preflight: operator gate is open\nok   - live preflight: autopilot kill switch is on\nok   - live preflight: no leftover loopeval-*-live repo'],
-    ['UI',    '👀 a new repo card appears: “loopeval-goal-live” (Advanced mode only)'],
-    ['shell', 'fixture repo registered: r-3f81…\nseeding a conversation (CLI probe)…\nok   - CLI probe: seeded chat turn completed'],
-    ['shell', 'ok   - goal loop armed\n┌──────────────────────────────\n│ WATCH IT LIVE: http://localhost:5099\n│   → open the repo "loopeval-goal-live"\n│   → agent dock / Autopilot console\n└──────────────────────────────'],
-    ['UI',    '👀 agent dock: a real turn streams in — the agent reads CLAUDE.md, implements `done`, commits\n👀 Autopilot console: loop card shows work · looping 1/6'],
-    ['UI',    '👀 the agent replies LOOP_DONE → engine flips to the VERIFY phase and sends the verification prompt'],
-    ['UI',    '👀 verification turn replies GOAL_VERIFIED → loop card: done · verified'],
-    ['shell', 'ok   - loop ended done · verified (LOOP_DONE → verify → GOAL_VERIFIED)\nok   - goal check now exits 0 (feature really implemented)\nok   - every send was loop-attributed in the audit log'],
-    ['shell', 'live teardown: unregistering the fixture from the live harness\nPASS: goal (8 assertions)   exit 0'],
-    ['UI',    '👀 the repo card is gone again — nothing left behind. (LOOPEVAL_KEEP=1 would have kept it for you to poke at.)'],
-  ];
-  let simAt = 0;
-  const log = document.getElementById('simlog');
-  document.getElementById('sim-next').onclick = () => {
-    if (simAt >= SIM.length) return;
-    const [where, text] = SIM[simAt++];
-    log.textContent += (log.textContent.endsWith('—') ? '\n' : '\n\n') + '[' + where + ']  ' + text;
-    log.scrollTop = log.scrollHeight;
-    if (simAt >= SIM.length) document.getElementById('sim-next').disabled = true;
-  };
-  document.getElementById('sim-reset').onclick = () => {
-    simAt = 0; log.textContent = 'press “Next step” —';
-    document.getElementById('sim-next').disabled = false;
-  };
+});
+function animateBars(){
+  setTimeout(function(){
+    document.querySelectorAll('.bar').forEach(function(el){ el.style.width = el.getAttribute('data-w')+'%'; });
+  }, 60);
+}
 </script>
 </body>
 </html>

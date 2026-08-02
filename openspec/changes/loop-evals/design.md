@@ -196,3 +196,82 @@ an objective verdict without a second model in the loop.
   **curated from a real babysat session** via the D3 UI — the small synthetic example
   in tasks §1 remains only as the cheap fixture that unblocks runner/scorer
   development before the first real curation.)
+
+## Comparison to `loop-eval` (singular) — the approach shipped on `main`
+
+While this change (`loop-evals`, plural) was in flight, a **separate, independently
+shipped** capability landed on `main`: `loop-eval` (singular). They were built in
+parallel with almost the same name; the merge keeps both side by side (distinct
+namespaces `LoopEvals` vs `LoopEval`, distinct modules, distinct controllers). They
+are not duplicates — they answer **different questions** and are worth comparing
+before we decide how they should coexist.
+
+### The two approaches in one line each
+
+- **`loop-eval` (main) — an end-to-end acceptance gate.** Hand-authored synthetic
+  fixture repos (`tests/loop-eval/fixtures/<s>/repo-template/` + a `goal-check.mjs`
+  script or an `expected.json` of prompt→path→regex triples). External Node scripts
+  drive the loop through the **real shipped HTTP operator surface** (login → register
+  repo → seed chat → arm loop → poll), either against a throwaway isolated instance
+  or, with `--live`, the operator's running harness. Scoring is a **binary
+  hard-assertion ladder** (final loop status + the fixture's ground-truth check +
+  engine bookkeeping), one run per scenario. Richly **watchable** (Tests-tab SSE
+  runner, dock binding, `--describe` manifests). **Already shipped and green.**
+
+- **`loop-evals` (ours) — a golden-trajectory measurement instrument.** Ground truth
+  is **captured from a real human-babysat session**: start state + plan + full
+  transcript + the repo state after every turn, packaged as a `git bundle` via a
+  retroactive **curation UI** (span selection, turn↔commit association, per-turn
+  labels). An **in-process** runner replays the real loop from the start state; the
+  scorer reports an acceptance **verdict + trajectory** (per-turn overlap with the
+  human's path) + **N-run reliability**. Built on this branch, preview-verified,
+  **not yet on live**.
+
+### Rating table
+
+Convention: **⭐⭐⭐⭐⭐ = most favorable** on that row (highest fidelity, *easiest*,
+*safest*, *lowest* burden, etc.). "Hybrid" = keep main's E2E run/observability skin
+and feed it our captured golden examples + trajectory/reliability scorer.
+
+| Dimension | `loop-eval` (main) | `loop-evals` (ours) | Hybrid |
+|---|:---:|:---:|:---:|
+| **Ground-truth fidelity** — how real is what we score against | ⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+| **Scoring depth** — binary vs trajectory + reliability | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+| **Run-path realism** — drives the real shipped surface | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+| **Dev difficulty** — *easiest to build* | ⭐⭐⭐ | ⭐⭐ | ⭐⭐ |
+| **Dev risk** — *lowest chance of not panning out* | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐ |
+| **Authoring cost / new eval** — *cheapest to add one* | ⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ |
+| **Maintenance burden** — *lowest drift over time* | ⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐ |
+| **Observability** — watchable while it runs | ⭐⭐⭐⭐⭐ | ⭐⭐ | ⭐⭐⭐⭐⭐ |
+| **Maturity** — *how shipped it is today* | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐ |
+| **Run-cost efficiency** — *fewer tokens/minutes per run* | ⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐ |
+| **Overall (mean)** | **3.8** | **3.3** | **3.6** |
+
+### Reading the scores
+
+- **`loop-eval` wins on maturity, safety, run-path realism, and observability** — it
+  is a real, shipped, watchable end-to-end gate that touches only surfaces the product
+  already exposes, so there was little to invent and little to break. Its ceiling is
+  **what** it measures: synthetic tasks with binary "did the artifact appear" checks
+  answer *"can the loop still finish a canned job?"*, not *"how close to a human did it
+  drive?"*.
+- **`loop-evals` wins on fidelity and scoring depth** — it measures the loop against
+  *real work a human actually babysat*, turn by turn, and reports reliability across
+  runs. That is the harder, riskier build (curation UX, git-bundle format, in-process
+  hosting of a 15-dependency service that "may need a new engine seam") and it is not
+  yet on live.
+- **The scores are close on purpose** — these are not competing implementations of the
+  same thing; they sit at **different points on the same ladder**. `loop-eval` is the
+  cheap, fast, before-ship **regression gate**; `loop-evals` is the deeper **tuning /
+  benchmarking instrument** you reach for when you want to know whether a loop change
+  made trajectories *more human-like*, not just *still passing*.
+
+### Recommendation
+
+Keep both, and pursue the **Hybrid** as the eventual convergence: reuse `loop-eval`'s
+proven E2E driver, isolated-instance harness, and watchable Tests-tab/dock skin as the
+**execution + observability layer**, and plug in `loop-evals`' captured golden examples
+and trajectory/reliability scorer as the **ground-truth + scoring layer**. That keeps
+main's low-risk run path and operator UX while raising the fidelity ceiling to real
+human trajectories. Near-term, the only naming debt to settle is the singular/plural
+collision — see the merge notes.
