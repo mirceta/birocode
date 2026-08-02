@@ -1454,31 +1454,28 @@
   border-color: var(--color-accent);
 }
 
-/* The common suggest/drive mode toggle — same pill language as the type picker. */
-.phone__loop-modes {
-  display: flex;
-  gap: 6px;
-}
-
-.phone__loop-mode {
-  flex: 1 1 0;
-  padding: 3px 6px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-surface);
-  color: var(--color-text-soft);
+/* The common suggest/drive mode as ONE header-row checkbox (openspec:
+   dock-loop-controls-declutter): rides the loop row's right edge next to the
+   ⟳ summary button, visible collapsed and expanded. */
+.phone__loop-drive {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-soft);
   cursor: pointer;
   white-space: nowrap;
 }
 
-.phone__loop-mode--on {
-  color: var(--color-text);
-  border-color: var(--color-ok, #16a34a);
-  font-weight: 700;
+.phone__loop-drive input {
+  margin: 0;
+  accent-color: var(--color-ok, #16a34a);
+  cursor: pointer;
 }
 
-.phone__loop-mode:disabled {
+.phone__loop-drive input:disabled {
   opacity: 0.6;
   cursor: default;
 }

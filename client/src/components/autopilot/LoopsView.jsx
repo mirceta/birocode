@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useDock } from '../../context/DockContext';
+import { useT } from '../../i18n/LanguageContext';
 import '../../pages/autopilot.css';
 
 // The "Loops" sub-tab of the AutopilotConsole (plans/autopilot-loop-mode.md +
@@ -46,7 +47,8 @@ const STOP_REASON = {
 };
 
 // Loop kind → marker, matching the dock control and the console's nav emoji.
-const KIND_EMOJI = { recipe: '📋', goal: '🎯', queue: '🗒️' };
+// 'suggestion' is here for the reference block only — no LoopRow renders it.
+const KIND_EMOJI = { suggestion: '💡', recipe: '📋', goal: '🎯', queue: '🗒️' };
 
 function LoopRow({ agent, loop, recipes, loopAction }) {
   const active = loop?.active;
@@ -510,6 +512,7 @@ function RecipeCard({ recipe, saveRecipe, removeRecipe }) {
 // Goal-based loop root shows 'agents' and 'recipes' as separate subtabs, both
 // over this one component so the shared intro and subcomponents stay in one place.
 export default function LoopsView({ section = 'agents', data, loopAction, addRecipe, saveRecipe, removeRecipe }) {
+  const { t } = useT();
   const agents = data?.agents ?? [];
   const loops = data?.loops ?? [];
   const recipes = data?.recipes ?? [];
@@ -545,6 +548,30 @@ export default function LoopsView({ section = 'agents', data, loopAction, addRec
         send is audited. The contract a driven agent follows lives in
         <code> docs/loop-driven-agent-convention.md</code>.
       </p>
+
+      {/* Relocated dock reference copy (openspec: dock-loop-controls-declutter,
+          D4): the kind + mode explanations the dock popover no longer carries.
+          Static render, no backend call — reuses the dashboard.loop* i18n keys
+          so en/tr stay in lockstep with the dock's own labels. */}
+      <section className="lp-ref">
+        <h3 className="lp-ref__title">What a loop is</h3>
+        <dl className="lp-ref__list">
+          {['suggestion', 'recipe', 'goal', 'queue'].map((k) => (
+            <div key={k} className="lp-ref__row">
+              <dt className="lp-ref__k">{KIND_EMOJI[k]} {t(`dashboard.loopType.${k}`)}</dt>
+              <dd className="lp-ref__v">{t(`dashboard.loopDesc.${k}`)}</dd>
+            </div>
+          ))}
+        </dl>
+        <dl className="lp-ref__list lp-ref__list--modes">
+          {['suggest', 'drive'].map((m) => (
+            <div key={m} className="lp-ref__row">
+              <dt className="lp-ref__k">{t(`dashboard.loopMode.${m}`)}</dt>
+              <dd className="lp-ref__v">{t(`dashboard.loopModeHint.${m}`)}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
 
       {/* --- Recipes: the named templates the dock's one-tap control arms from --- */}
       {section === 'recipes' && (<>
