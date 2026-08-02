@@ -1,21 +1,46 @@
 // Run the whole loop-eval suite: goal then queue (sequential — they share the
-// isolated port). Combined summary + exit code 0 only if both pass.
+// isolated port, or in --live mode the one live harness + claude CLI).
+// Combined summary + exit code 0 only if both pass.
 //
-//   node tests/loop-eval/run-all.mjs [--json out.json]
+//   node tests/loop-eval/run-all.mjs [--json out.json] [--live]
 //
+// --live (add-loop-eval-live-mode) is passed through to both scenarios.
 // Spends real Claude turns (~15-20 total) and ~30-45 minutes. Never CI.
 
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DESCRIBE_VERSION } from './lib.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const jsonOut = (() => { const i = process.argv.indexOf('--json'); return i >= 0 ? process.argv[i + 1] : null; })();
+const live = process.argv.includes('--live');
+
+// --describe (openspec: loop-eval-scenario-transparency): compose the child
+// scenarios' own manifests — never restate them — then exit with no run.
+if (process.argv.includes('--describe')) {
+  const composes = ['goal', 'queue'].map((name) => {
+    const r = spawnSync(process.execPath, [join(HERE, `${name}.mjs`), '--describe'], { encoding: 'utf8', timeout: 10_000 });
+    if (r.status !== 0) {
+      console.error(`${name}.mjs --describe failed:\n${r.stderr || r.stdout || r.error}`);
+      process.exit(1);
+    }
+    return JSON.parse(r.stdout);
+  });
+  console.log(JSON.stringify({
+    describeVersion: DESCRIBE_VERSION,
+    id: 'run-all',
+    title: 'Full sweep — goal then queue, combined verdict',
+    composes,
+  }, null, 2));
+  process.exit(0);
+}
 
 function runScenario(script, out) {
   return new Promise((res) => {
-    const p = spawn(process.execPath, [join(HERE, script), '--json', out], { stdio: 'inherit' });
+    const args = [join(HERE, script), '--json', out, ...(live ? ['--live'] : [])];
+    const p = spawn(process.execPath, args, { stdio: 'inherit' });
     p.on('close', (code) => res(code ?? 1));
   });
 }

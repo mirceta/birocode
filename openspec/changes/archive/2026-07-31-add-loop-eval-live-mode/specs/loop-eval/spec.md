@@ -1,16 +1,7 @@
-# Loop eval
+# Loop eval — delta for add-loop-eval-live-mode
 
-## Purpose
+## MODIFIED Requirements
 
-Gives the autopilot loop engine's most important property — a real agent, driven by the
-real engine, actually reaches the goal — a repeatable, committed test. Unit tests cover
-only the pure decision ladder and browser tests only the UI; this capability is the
-end-to-end layer: an on-demand eval suite at `tests/loop-eval/` that boots an isolated
-harness instance, runs scripted goal-loop and queue-loop scenarios against committed
-fixture repositories with real agent turns, and scores the outcomes into machine-readable
-verdicts. Runs spend real Claude tokens and minutes, so the suite is a before-shipping
-gate launched from the CLI — never CI.
-## Requirements
 ### Requirement: On-demand real-agent eval scenarios for the loop engine
 
 The repo SHALL provide a committed, on-demand eval suite (`tests/loop-eval/`) that
@@ -63,6 +54,8 @@ never run in CI.
   registration — and the isolated instance is killed in all outcomes, with a timeout
   reported as a failed verdict rather than a hang
 
+## ADDED Requirements
+
 ### Requirement: Live-harness run mode for human observation
 
 The suite SHALL support an opt-in live mode (`--live` flag or `LOOPEVAL_LIVE=1`)
@@ -71,23 +64,18 @@ is observable in the real UI (fixture repo card, agent dock turns, Autopilot con
 loop card) while it happens. In live mode the suite SHALL NOT build, boot, seed, or
 kill any harness instance and SHALL NOT write to the live data directory or mutate
 global autopilot configuration; loop internals needed for assertions SHALL be read
-through the shipped per-loop debug bundle endpoint. Live authentication SHALL come
-from exactly one of two explicit sources: the operator-supplied live password
-(`LOOPEVAL_LIVE_PW`, used to log in) or a harness-minted one-shot session token
-(`LOOPEVAL_LIVE_TOKEN`, installed directly as the session credential when the
-harness itself spawns the run) — the suite SHALL NOT default either value, read
-them from the live secret store or any file, or fall back from one to the other
-implicitly; with neither set, live mode SHALL refuse to touch the network. The
-fixture repository SHALL be a scratch copy outside the repo tree, registered under
-a distinctive `loopeval-*-live` name with advanced visibility, and the suite SHALL
-announce where to watch the run immediately after arming.
+through the shipped per-loop debug bundle endpoint. The live password SHALL be
+supplied explicitly by the operator (environment variable) — the suite SHALL NOT
+default it or read it from the live secret store. The fixture repository SHALL be a
+scratch copy outside the repo tree, registered under a distinctive `loopeval-*-live`
+name with advanced visibility, and the suite SHALL announce where to watch the run
+immediately after arming.
 
 #### Scenario: Live preflights fail fast with operator instructions
 
 - **WHEN** a live-mode scenario starts and the live harness is unreachable, the
-  credential is missing or wrong (password or token), the operator gate is closed,
-  the kill switch is off, or a `loopeval-*-live` repository from a previous run
-  still exists
+  password is missing or wrong, the operator gate is closed, the kill switch is off,
+  or a `loopeval-*-live` repository from a previous run still exists
 - **THEN** the scenario stops with a failed verdict naming the unmet precondition
   and, for gate/kill-switch, tells the operator exactly where in the host GUI or
   Autopilot console to enable it — the suite never enables either itself
@@ -108,12 +96,3 @@ announce where to watch the run immediately after arming.
   with `LOOPEVAL_KEEP=1` it instead leaves everything for inspection and prints the
   manual cleanup steps, and a cleanup failure is warned with the leftover named,
   never masking the scenario verdict
-
-#### Scenario: Token-authenticated run skips login
-
-- **WHEN** a live-mode scenario runs with `LOOPEVAL_LIVE_TOKEN` set
-- **THEN** the suite installs the token as its session credential without calling
-  the login endpoint, all subsequent API calls authorize through it, and an invalid
-  or revoked token fails the preflight with a verdict naming the credential — the
-  suite never retries with a password it does not have
-

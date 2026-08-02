@@ -1,16 +1,27 @@
-// Shared harness for the loop-eval suite (openspec: add-loop-eval-suite).
+// Shared harness for the loop-eval suite (openspec: add-loop-eval-suite,
+// live mode: add-loop-eval-live-mode).
 //
-// Boots an ISOLATED ClaudeWeb instance the same way tests/chat-systest/hub/
-// instance.mjs does — binaries copied OUTSIDE the repo tree (so
-// Program.FindRepoRoot finds no .sln and does not auto-pin this repo), fresh
-// CLAUDEWEB_DATADIR, own port — then drives the REAL loop engine with REAL
-// agent turns through the shipped operator surface only: login, /api/repos,
-// /api/dock, /api/chat, /api/autopilot/loop, /api/autopilot/loops.
+// TWO RUN MODES, same scenarios and assertions:
+//
+// ISOLATED (default) — boots an ISOLATED ClaudeWeb instance the same way
+// tests/chat-systest/hub/instance.mjs does — binaries copied OUTSIDE the repo
+// tree (so Program.FindRepoRoot finds no .sln and does not auto-pin this
+// repo), fresh CLAUDEWEB_DATADIR, own port — then drives the REAL loop engine
+// with REAL agent turns through the shipped operator surface only: login,
+// /api/repos, /api/dock, /api/chat, /api/autopilot/loop, /api/autopilot/loops.
+//
+// LIVE (--live or LOOPEVAL_LIVE=1) — targets the OPERATOR'S RUNNING live
+// harness (:5099) instead, so a human can watch the run in the real UI: the
+// fixture repo card, its agent dock turns, the Autopilot console loop card.
+// Live mode never boots/seeds/kills anything and never writes the live data
+// dir; loop internals come from GET /api/autopilot/loops/{repoId}/debug.
 //
 // The autopilot gate is host-only by design (AutopilotGate.cs — no enable
-// endpoint, ever). The eval respects that boundary: it seeds
-// autopilot-gate.json + autopilot.json into the isolated data dir BEFORE
-// boot, which is the same trust level as the operator clicking the host GUI.
+// endpoint, ever). Each mode respects that boundary its own way: isolated
+// seeds autopilot-gate.json + autopilot.json into the isolated data dir
+// BEFORE boot (same trust level as the operator clicking the host GUI);
+// live FAILS FAST with instructions when the gate or kill switch is off —
+// it never enables either itself.
 //
 // Scenarios (goal.mjs, queue.mjs) import this and emit @@LOOPEVAL@@ {json}
 // verdict lines; exit code 0 only when every assertion passed. Runs spend
@@ -26,13 +37,42 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 export const REPO = resolve(HERE, '..', '..');            // tests/loop-eval → repo root
 
 export const CFG = {
+  // Live mode (add-loop-eval-live-mode): same scenarios against the running
+  // :5099 harness, watchable by the operator. Off = today's isolated mode.
+  live: process.argv.includes('--live') || process.env.LOOPEVAL_LIVE === '1',
+  livePort: Number(process.env.LOOPEVAL_LIVE_PORT || 5099),
+  livePw: process.env.LOOPEVAL_LIVE_PW || '',              // terminal runs — never defaulted
+  // Harness-minted one-shot session token (openspec: add-loop-eval-ui-runner).
+  // Set ONLY by the harness's own eval-runner service when it spawns this suite
+  // from the Tests tab — not for manual use. Installed directly as the session
+  // cookie (no login call); revoked by the harness when the run ends.
+  liveToken: process.env.LOOPEVAL_LIVE_TOKEN || '',
+  liveRoot: process.env.LOOPEVAL_LIVE_ROOT || join(os.tmpdir(), 'cw-loopeval-live'),
   port: Number(process.env.LOOPEVAL_PORT || 5210),
   pw: process.env.LOOPEVAL_PW || 'loopeval-pw-4471',
   root: process.env.LOOPEVAL_ROOT || join(os.tmpdir(), 'cw-loopeval'),
-  keep: process.env.LOOPEVAL_KEEP === '1',                 // skip teardown for debugging
+  keep: process.env.LOOPEVAL_KEEP === '1',                 // skip teardown for debugging / inspection
   skipBuild: process.env.LOOPEVAL_SKIP_BUILD === '1',
 };
-export const base = () => `http://localhost:${CFG.port}`;
+export const base = () => `http://localhost:${CFG.live ? CFG.livePort : CFG.port}`;
+
+/** Live fixture repos carry a distinctive suffix so a human (and the
+ *  collision preflight) can always tell them apart from real projects. */
+export const repoDisplayName = (baseName) => CFG.live ? `${baseName}-live` : baseName;
+
+/** Live auth comes from EXACTLY ONE explicit source — password (terminal runs)
+ *  or harness-minted token (Tests-tab runs). Never defaulted, never read off
+ *  disk, and never a silent fallback from one to the other: with neither (or
+ *  both) set we refuse before any network call. */
+function requireLiveCredential() {
+  if (!CFG.live) return;
+  if (CFG.livePw && CFG.liveToken) {
+    throw new Error('live mode: both LOOPEVAL_LIVE_PW and LOOPEVAL_LIVE_TOKEN are set — set exactly ONE (password for terminal runs, token only when the harness spawns the run), refusing to guess');
+  }
+  if (!CFG.livePw && !CFG.liveToken) {
+    throw new Error('live mode needs a credential: LOOPEVAL_LIVE_PW=<the live operator password> (terminal runs) or LOOPEVAL_LIVE_TOKEN (set by the harness UI runner — not for manual use) — refusing to touch the network without one');
+  }
+}
 export const minutes = (n) => n * 60_000;
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -66,13 +106,45 @@ export function argValue(flag) {
   return i >= 0 ? process.argv[i + 1] : null;
 }
 
-/** Print + optionally write the summary; return the process exit code. */
+// ------------------------------------------------------------ describe mode
+// (openspec: loop-eval-scenario-transparency) `--describe` prints a JSON
+// manifest built from the SAME constants the run uses, then exits — no build,
+// no provisioning, no network, no tokens. The harness relays it to the Tests
+// tab so the operator can read what a scenario arms, acts on, and must prove
+// before ever clicking Start. Scenarios must check `describing` FIRST.
+
+export const DESCRIBE_VERSION = 1;
+export const describing = process.argv.includes('--describe');
+
+export function describeAndExit(manifest) {
+  console.log(JSON.stringify({ describeVersion: DESCRIBE_VERSION, ...manifest }, null, 2));
+  process.exit(0);
+}
+
+/** The committed-template facts every manifest states about its fixture:
+ *  name, repo-relative path, and the file list read straight off disk. */
+export function fixtureFacts(name) {
+  const dir = join(HERE, 'fixtures', name, 'repo-template');
+  const files = readdirSync(dir, { recursive: true })
+    .map((p) => String(p).replaceAll('\\', '/'))
+    .filter((p) => statSync(join(dir, p)).isFile())
+    .sort();
+  return { name, templatePath: `tests/loop-eval/fixtures/${name}/repo-template`, files };
+}
+
+/** Print + optionally write the summary; return the process exit code.
+ *  Assign it to process.exitCode (do NOT process.exit()): with a live harness
+ *  still up, undici keep-alive sockets can be mid-close and an abrupt exit
+ *  trips a libuv assertion on Windows (exit 127 instead of the verdict code).
+ *  The unref'd timer hard-exits any straggling handle with the right code. */
 export function finish(verdicts, jsonOut, extra = {}) {
   const s = verdicts.summary(extra);
   console.log(`@@LOOPEVAL@@ ${JSON.stringify({ scenario: s.scenario, summary: true, pass: s.pass, failed: s.asserts.filter((a) => !a.ok).map((a) => a.name) })}`);
   if (jsonOut) { writeFileSync(jsonOut, JSON.stringify(s, null, 2)); say(`summary written → ${jsonOut}`); }
   say(s.pass ? `PASS: ${s.scenario} (${s.asserts.length} assertions)` : `FAIL: ${s.scenario}`);
-  return s.pass ? 0 : 1;
+  const code = s.pass ? 0 : 1;
+  setTimeout(() => process.exit(code), 8000).unref();
+  return code;
 }
 
 // ------------------------------------------------------- instance lifecycle
@@ -92,6 +164,7 @@ function runToCompletion(cmd, args, cwd = REPO) {
 }
 
 export async function buildOnce() {
+  if (CFG.live) { say('live mode — no build, targeting the running live harness'); return; }
   const bin = join(REPO, '.claudeweb-preview', 'bin');
   if (CFG.skipBuild && existsSync(join(bin, process.platform === 'win32' ? 'ClaudeWeb.exe' : 'ClaudeWeb'))) {
     say('LOOPEVAL_SKIP_BUILD=1 — reusing existing .claudeweb-preview/bin'); return;
@@ -104,13 +177,38 @@ export async function health(url = base()) {
   catch { return false; }
 }
 
+/** Copy → git init → initial commit, so agent commits never dirty the template. */
+function materializeFixture(root, fixtureName) {
+  const fixtureRepo = join(root, 'fixture-repo');
+  cpSync(join(HERE, 'fixtures', fixtureName, 'repo-template'), fixtureRepo, { recursive: true });
+  const git = (...a) => spawnSync('git', ['-C', fixtureRepo, '-c', 'user.email=loopeval@local', '-c', 'user.name=loopeval', ...a], { stdio: 'ignore' });
+  git('init', '-q'); git('add', '-A'); git('commit', '-qm', 'fixture: initial state');
+  return fixtureRepo;
+}
+
 /**
- * Provision the scratch root: bin copy outside the repo, fresh datadir with
- * the gate + kill switch pre-seeded, and the scenario's fixture repo
- * materialized from its committed template (copy → git init → initial commit,
- * so agent commits never dirty the template).
+ * Provision for the selected mode.
+ *
+ * ISOLATED: scratch root with a bin copy outside the repo, fresh datadir with
+ * the gate + kill switch pre-seeded, and the fixture repo materialized from
+ * its committed template.
+ *
+ * LIVE: the live harness must ALREADY answer (we never boot it); only the
+ * fixture repo is materialized, into its own scratch root. No gate seeding,
+ * no datadir, no binaries — the live instance and store are the operator's.
  */
 export async function provision(fixtureName) {
+  if (CFG.live) {
+    requireLiveCredential();
+    if (!(await health()))
+      throw new Error(`no live harness answers on ${base()} — start it (or set LOOPEVAL_LIVE_PORT) first`);
+    const ROOT = CFG.liveRoot;
+    say(`live mode — provisioning fixture scratch ${ROOT} (live instance untouched)`);
+    if (existsSync(ROOT)) say('note: replacing a previous run\'s scratch fixture (a LOOPEVAL_KEEP leftover repo card would now point at the new copy — the preflight will insist you remove it first)');
+    rmSync(ROOT, { recursive: true, force: true });
+    mkdirSync(ROOT, { recursive: true });
+    return { root: ROOT, datadir: null, fixtureRepo: materializeFixture(ROOT, fixtureName), pid: null, live: true };
+  }
   if (await health()) throw new Error(`something already answers on ${base()} — stop it (or set LOOPEVAL_PORT) first`);
   const ROOT = CFG.root;
   say(`provisioning scratch root ${ROOT}`);
@@ -128,15 +226,11 @@ export async function provision(fixtureName) {
     DenyList: ['reset --hard', 'force-push'], Brain: 'cli', BrainModel: 'haiku',
   }, null, 2));
 
-  const fixtureRepo = join(ROOT, 'fixture-repo');
-  cpSync(join(HERE, 'fixtures', fixtureName, 'repo-template'), fixtureRepo, { recursive: true });
-  const git = (...a) => spawnSync('git', ['-C', fixtureRepo, '-c', 'user.email=loopeval@local', '-c', 'user.name=loopeval', ...a], { stdio: 'ignore' });
-  git('init', '-q'); git('add', '-A'); git('commit', '-qm', 'fixture: initial state');
-
-  return { root: ROOT, datadir, fixtureRepo, pid: null };
+  return { root: ROOT, datadir, fixtureRepo: materializeFixture(ROOT, fixtureName), pid: null, live: false };
 }
 
 export async function boot(ctx) {
+  if (CFG.live) { say('live mode — no boot, the live harness is already running'); return; }
   say(`launching ClaudeWeb on ${base()} (isolated datadir)`);
   const exe = join(ctx.root, 'bin', process.platform === 'win32' ? 'ClaudeWeb.exe' : 'ClaudeWeb');
   const child = spawn(exe, [], {
@@ -150,6 +244,7 @@ export async function boot(ctx) {
 }
 
 let cookie = '';
+let cookiePinned = false; // token path: never let a Set-Cookie clobber the installed token
 export async function api(method, path, body, extraHeaders = {}, timeoutMs = 0) {
   const ctl = new AbortController();
   const timer = timeoutMs ? setTimeout(() => ctl.abort(), timeoutMs) : null;
@@ -161,7 +256,7 @@ export async function api(method, path, body, extraHeaders = {}, timeoutMs = 0) 
       signal: ctl.signal,
     });
     const setc = r.headers.get('set-cookie');
-    if (setc) cookie = setc.split(';')[0];
+    if (setc && !cookiePinned) cookie = setc.split(';')[0];
     let json = null;
     try { json = await r.json(); } catch { /* SSE or empty body */ }
     return { status: r.status, json };
@@ -169,21 +264,117 @@ export async function api(method, path, body, extraHeaders = {}, timeoutMs = 0) 
 }
 
 export async function login() {
-  const r = await api('POST', '/api/auth/login', { password: CFG.pw });
-  if (r.status !== 200) throw new Error(`login failed: http ${r.status}`);
+  requireLiveCredential();
+  if (CFG.live && CFG.liveToken) {
+    // Harness-minted token: install it as the session cookie, no login call.
+    // Probe with the cheapest authorized GET so a revoked/stale token fails
+    // RIGHT HERE with a verdict naming the credential (mirrors the
+    // wrong-password copy below) instead of a confusing mid-scenario 401.
+    cookie = `claudeweb_session=${CFG.liveToken}`;
+    cookiePinned = true;
+    const probe = await api('GET', '/api/repos');
+    if (probe.status === 401) {
+      throw new Error('live token rejected: http 401 — is LOOPEVAL_LIVE_TOKEN a session freshly minted by the live harness? It is revoked the moment its run ends; rerun from the Tests tab, never reuse one');
+    }
+    if (probe.status !== 200) throw new Error(`live token probe failed: http ${probe.status}`);
+    return;
+  }
+  const r = await api('POST', '/api/auth/login', { password: CFG.live ? CFG.livePw : CFG.pw });
+  if (r.status !== 200) {
+    throw new Error(CFG.live
+      ? `live login failed: http ${r.status} — is LOOPEVAL_LIVE_PW the live operator password?`
+      : `login failed: http ${r.status}`);
+  }
+}
+
+// Live-mode bookkeeping: what THIS run created on the live harness, so
+// teardown removes exactly that and nothing else.
+let liveRepoId = null;
+let liveTabId = null;
+
+/**
+ * Live preflight (design D2) — one verdict per unmet operator precondition,
+ * each naming exactly what to click. In isolated mode this is a silent no-op
+ * (the gate/kill switch were seeded before boot), keeping verdict counts and
+ * assertion text identical to today's runs. NEVER enables anything itself:
+ * the gate is host-only by design (AutopilotGate.cs) and stays that way.
+ */
+export async function livePreflight(verdicts) {
+  if (!CFG.live) return true;
+  const loops = await api('GET', '/api/autopilot/loops');
+  const gateOk = verdicts.assert('live preflight: operator gate is open',
+    loops.json?.gateOpen === true,
+    'enable Autopilot in the HOST GUI (operator gate toggle on the harness window), then rerun');
+
+  // killSwitchEnabled rides the (session-auth, ungated) debug bundle; the
+  // repoId only scopes the bundle's loop slice, so a placeholder id is fine
+  // this early — the global flag is what we need.
+  const dbg = await api('GET', '/api/autopilot/loops/loopeval-preflight/debug');
+  const killOk = verdicts.assert('live preflight: autopilot kill switch is on',
+    dbg.json?.killSwitchEnabled === true,
+    'turn the kill switch ON in the Autopilot console (Enabled toggle), then rerun');
+
+  const repos = await api('GET', '/api/repos');
+  const leftovers = (Array.isArray(repos.json) ? repos.json : [])
+    .filter((r) => /^loopeval-.*-live$/.test(r.name || ''));
+  const cleanOk = verdicts.assert('live preflight: no leftover loopeval-*-live repo',
+    leftovers.length === 0,
+    leftovers.map((r) => `${r.name} (${r.id})`).join(', ')
+      + ' — a previous live run leaked; remove it via the repo card or DELETE /api/repos/{id}, then rerun');
+
+  return gateOk && killOk && cleanOk;
 }
 
 export async function registerRepo(path, name) {
   const r = await api('POST', '/api/repos', { Folder: path, Name: name, Visibility: 'advanced' });
   if (!r.json?.id) throw new Error(`repo registration failed: http ${r.status} ${JSON.stringify(r.json)}`);
   say(`fixture repo registered: ${r.json.id}`);
+  if (CFG.live) liveRepoId = r.json.id;
   return r.json.id;
 }
 
-export async function createTabWithStash(repoId, repoName, prompts) {
+/** Live mode's reason to exist: tell the human where to watch, right when
+ *  there is something to watch. Silent in isolated mode. */
+export function announceWatch(repoName) {
+  if (!CFG.live) return;
+  say('');
+  say('┌──────────────────────────────────────────────────────────────');
+  say(`│ WATCH IT LIVE: ${base()}`);
+  say(`│   → its agent dock is in the DOCKS strip — open the "${repoName}" agent`);
+  say('│     (already bound to the driven conversation: seed turn, then loop turns)');
+  say(`│   → the repo card "${repoName}" is under advanced visibility`);
+  say('│   → Autopilot console shows the loop card ticking through phases');
+  say('└──────────────────────────────────────────────────────────────');
+  say('');
+}
+
+/** Open a dock tab for the fixture repo (openspec: loop-eval-watchable-dock).
+ *  Every scenario creates one — mode-blind — so the driven conversation is
+ *  always visible in the dashboard's DOCKS strip, not just on the repo card. */
+export async function createTab(repoId, repoName) {
   const t = await api('POST', '/api/dock', { repoId, repoName });
   const tabId = t.json?.id;
   if (!tabId) throw new Error(`dock tab creation failed: http ${t.status} ${JSON.stringify(t.json)}`);
+  if (CFG.live) liveTabId = tabId;
+  say(`dock tab ${tabId} opened for ${repoName}`);
+  return tabId;
+}
+
+/** Bind the tab to the conversation the loop will drive (the seed turn's
+ *  session), so opening the dock shows the seeded turn immediately instead of
+ *  an empty chat. A missing session id downgrades to a warning — the binding
+ *  is an upgrade, never a new hard dependency (design D2): run discovery
+ *  still attaches the dock on the loop's first send. */
+export async function bindTabSession(tabId, sessionId) {
+  if (!sessionId) { say('warn: no seed session id — dock tab left unbound (run discovery will attach it on the first loop send)'); return false; }
+  const r = await api('PATCH', `/api/dock/${tabId}`, { sessionId });
+  if (r.status !== 200) { say(`warn: dock tab ${tabId} not bound to session (http ${r.status}) — continuing unbound`); return false; }
+  say(`dock tab ${tabId} bound to session ${sessionId}`);
+  return true;
+}
+
+export async function createTabWithStash(repoId, repoName, prompts) {
+  const tabId = await createTab(repoId, repoName);
   for (const text of prompts) {
     const s = await api('POST', `/api/dock/${tabId}/stash`, { text });
     if (s.status !== 200) throw new Error(`stash failed: http ${s.status} ${JSON.stringify(s.json)}`);
@@ -247,7 +438,24 @@ export function runNode(script, cwd, args = []) {
   return { status: r.status, out: ((r.stdout || '') + (r.stderr || '')).trim() };
 }
 
-export function readAudit(ctx) {
+/** The per-repo debug bundle — live mode's one window into loop internals
+ *  (openspec: add-loop-debug-handoff). Read-only toward the live datadir. */
+async function debugBundle(repoId) {
+  const r = await api('GET', `/api/autopilot/loops/${repoId}/debug`);
+  return r.json || null;
+}
+
+/**
+ * The repo's autopilot audit entries, normalized to the isolated-mode shape
+ * ({Outcome}) so scenario asserts are mode-blind. Isolated reads the scratch
+ * datadir's JSONL; live reads the debug bundle's per-repo slice (server-side
+ * filtered — other repos on the live box never leak into an assert).
+ */
+export async function readAudit(ctx, repoId = liveRepoId) {
+  if (CFG.live) {
+    const b = repoId ? await debugBundle(repoId) : null;
+    return (b?.audit || []).map((a) => ({ Outcome: a.outcome, At: a.at, Confidence: a.confidence }));
+  }
   try {
     return readFileSync(join(ctx.datadir, 'autopilot-audit.jsonl'), 'utf8')
       .split(/\r?\n/).filter(Boolean).map((l) => JSON.parse(l));
@@ -258,9 +466,32 @@ export function readLoopsJson(ctx) {
   try { return readFileSync(join(ctx.datadir, 'loops.json'), 'utf8'); } catch { return ''; }
 }
 
-/** Capture the instance's log tail + final loops.json BEFORE teardown removes them. */
-export function captureDiagnostics(ctx, verdicts) {
+/**
+ * The queue loop's sent-history in arm order. Isolated: parse the scratch
+ * store's loops.json (System.Text.Json escapes backticks/quotes — parse,
+ * never substring-match). Live: the same field off the debug bundle.
+ */
+export async function queueSentTexts(ctx, repoId) {
+  if (CFG.live) {
+    const b = await debugBundle(repoId);
+    const texts = b?.loop?.queueSentTexts;
+    return Array.isArray(texts) ? texts : [];
+  }
+  try {
+    const loops = JSON.parse(readLoopsJson(ctx)).Loops || {};
+    return Object.values(loops).find((l) => l.Kind === 'queue')?.QueueSentTexts || [];
+  } catch { return []; }
+}
+
+/** Capture failure evidence BEFORE teardown removes it: isolated = the
+ *  instance's log tail + final loops.json; live = the repo's debug bundle. */
+export async function captureDiagnostics(ctx, verdicts) {
   if (!ctx) return;
+  if (CFG.live) {
+    const b = liveRepoId ? await debugBundle(liveRepoId).catch(() => null) : null;
+    verdicts.diagnostics = { debugBundle: JSON.stringify(b || {}).slice(0, 8000) };
+    return;
+  }
   let logTail = '';
   try {
     const logs = join(ctx.root, 'bin', 'logs');
@@ -271,8 +502,38 @@ export function captureDiagnostics(ctx, verdicts) {
   verdicts.diagnostics = { logTail, loopsJson: readLoopsJson(ctx).slice(0, 8000) };
 }
 
+/** Live teardown (design D5): remove exactly what this run created on the
+ *  live harness — loop, dock tab, registry entry, scratch dir — or, with
+ *  LOOPEVAL_KEEP=1, leave it all for UI inspection and print the manual
+ *  steps. Failures warn and name the leftover; the verdict is never masked. */
+async function downLive(ctx) {
+  if (CFG.keep) {
+    say('LOOPEVAL_KEEP=1 — leaving the live fixture in place for inspection. Manual cleanup:');
+    if (liveRepoId) say(`  1. stop the loop + remove the repo card in the UI (or DELETE /api/repos/${liveRepoId})`);
+    if (liveTabId) say(`  2. close its dock tab (or DELETE /api/dock/${liveTabId})`);
+    say(`  3. delete the scratch copy ${ctx.root}`);
+    return;
+  }
+  say('live teardown: unregistering the fixture from the live harness');
+  if (liveRepoId) {
+    const stop = await api('POST', '/api/autopilot/loop', { repoId: liveRepoId, action: 'stop' }).catch(() => null);
+    if (!stop || stop.status !== 200) say(`warn: loop stop returned http ${stop?.status ?? 'error'} (fine if it already resolved)`);
+  }
+  if (liveTabId) {
+    const t = await api('DELETE', `/api/dock/${liveTabId}`).catch(() => null);
+    if (!t || t.status !== 200) say(`warn: dock tab ${liveTabId} not removed (http ${t?.status ?? 'error'}) — close it in the UI`);
+  }
+  if (liveRepoId) {
+    const r = await api('DELETE', `/api/repos/${liveRepoId}`).catch(() => null);
+    if (!r || r.status !== 200) say(`warn: repo ${liveRepoId} not unregistered (http ${r?.status ?? 'error'}) — remove its card in the UI`);
+  }
+  try { rmSync(ctx.root, { recursive: true, force: true, maxRetries: 3, retryDelay: 300 }); }
+  catch { say(`warn: could not remove ${ctx.root} — left on disk, safe to delete later`); }
+}
+
 export async function down(ctx) {
   if (!ctx) return;
+  if (CFG.live) { await downLive(ctx); return; }
   if (CFG.keep) { say(`LOOPEVAL_KEEP=1 — leaving instance up (pid ${ctx.pid}, root ${ctx.root})`); return; }
   say(`tearing down (pid ${ctx.pid})`);
   if (ctx.pid) {
