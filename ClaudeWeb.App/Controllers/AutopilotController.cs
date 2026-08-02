@@ -512,6 +512,12 @@ public class AutopilotController : ControllerBase
                 confidence = a.Confidence,
                 prompt = Text(a.Prompt),
                 answeredMessage = Text(a.AnsweredMessage),
+                // Briefed + rules revision (openspec: loop-agent-briefing, D3):
+                // status words, not prompt text, so they ride ungated — they make
+                // a send attributable to the exact rules it was composed with
+                // (the loop-eval briefing scenario asserts on them in live mode).
+                briefed = a.Briefed,
+                briefingRev = a.BriefingRev,
             }),
             files = new
             {

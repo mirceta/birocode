@@ -59,3 +59,24 @@
       affordance.
 - [x] 4.3 `openspec validate loop-agent-briefing --strict` green + builds green; commit
       on `feat/loop-agent-briefing`.
+
+## 5. Real-agent eval: prove a rule steers the agent (loop-eval delta)
+
+- [x] 5.1 Fixture `tests/loop-eval/fixtures/briefing/repo-template/`: one-file task
+      (GREETING.md + `task-check.mjs` ground truth) + `LOOPEVAL-BRIEFING-FIXTURE.txt`
+      scope marker; the ack side effect (`BRIEFING-ACK.md`) is mentioned NOWHERE in
+      the fixture, goal, or check — only the injected rule can produce it.
+- [x] 5.2 `lib.mjs`: `briefingAddRule`/`briefingRemoveInjectedRule` via the shipped
+      GET/PUT `/api/autopilot/briefing` (teardown removes exactly the injected rule
+      by id; KEEP prints the manual step); `readAudit` carries `Briefed`/`BriefingRev`
+      in both modes.
+- [x] 5.3 `briefing.mjs` scenario + `--describe` manifest: preconditions (drift + ack
+      absent + CLI probe), mechanical composition assert off the PUT's `workPreview`,
+      real goal loop, then done·verified + task-check green + ack marker + audit
+      briefed-at-recorded-rev; rule removal in `finally`.
+- [x] 5.4 Harness: debug bundle's audit slice exposes `briefed`+`briefingRev`
+      (ungated status words — live-mode attribution); `LoopEvalRunnerService.Scenarios`
+      gains the briefing row (Tests tab lists it via the existing manifest cache);
+      TestInventoryView E2E copy updated; `run-all.mjs` + README include the scenario.
+- [x] 5.5 Verify: builds + unit tests green, every `--describe` exits 0 fast, and one
+      real isolated `briefing.mjs` run PASSES end-to-end.

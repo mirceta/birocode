@@ -18,7 +18,7 @@ Same scenarios, same assertions — two places to run them:
 | For | agents / automation — a fully automatic before-shipping gate | the human operator — watch the run happen in the real UI |
 | Gate & kill switch | seeded into the scratch datadir pre-boot | must ALREADY be on; the suite fails fast with instructions, never enables them itself |
 | Auth | its own throwaway password | exactly ONE of `LOOPEVAL_LIVE_PW=<live operator password>` (terminal runs) or `LOOPEVAL_LIVE_TOKEN` (harness-minted, Tests-tab runs only) — required, never defaulted, no fallback between them |
-| Fixture repo | scratch copy, registered in the scratch store | scratch copy, registered in the LIVE store as `loopeval-goal-live` / `loopeval-queue-live` (advanced visibility — invisible to Basic mode) |
+| Fixture repo | scratch copy, registered in the scratch store | scratch copy, registered in the LIVE store as `loopeval-goal-live` / `loopeval-queue-live` / `loopeval-briefing-live` (advanced visibility — invisible to Basic mode) |
 | Diagnostics | reads the scratch datadir's files | reads `GET /api/autopilot/loops/{repoId}/debug` (never the live datadir) |
 | Teardown | kills the instance, removes the scratch root | stops the loop, closes the dock tab, unregisters the repo, removes the scratch copy — `LOOPEVAL_KEEP=1` keeps it all for inspection and prints the manual steps |
 
@@ -36,8 +36,8 @@ would contend for it (and confuse whoever is watching).
 
 **Or skip the terminal entirely** (openspec: add-loop-eval-ui-runner): the
 Autopilot console's **Tests tab → E2E eval section** has a Start button for
-each atomic scenario (goal, queue — `run-all.mjs` stays terminal-only, openspec:
-loop-eval-tests-tab-declutter). The harness spawns these same scripts in `--live` mode against
+each atomic scenario (goal, queue, briefing — `run-all.mjs` stays terminal-only,
+openspec: loop-eval-tests-tab-declutter). The harness spawns these same scripts in `--live` mode against
 itself, authenticated with a one-shot session token it mints for the child
 process (`LOOPEVAL_LIVE_TOKEN`) — no password typing, same preflights, same
 assertions, run status and verdict streamed back into the tab.
@@ -50,6 +50,7 @@ Runs spend **real Claude tokens and real minutes**. This is deliberate
 - **never CI** — on-demand only, as a before-shipping gate for engine changes
 - goal scenario: typically 2–4 agent turns, ~5–15 min
 - queue scenario: typically 12 agent turns (6 steps + 6 verifies), ~15–25 min
+- briefing scenario: typically 2–4 agent turns, ~5–15 min
 
 ### Measured runs (2026-07-31, first green sweep)
 
@@ -73,14 +74,16 @@ minutes and plan-usage instead: a full `run-all` sweep ≈ 14 real agent turns,
 ## Running
 
 ```
-node tests/loop-eval/goal.mjs   [--json out.json]   # goal loop: implement a feature for real
-node tests/loop-eval/queue.mjs  [--json out.json]   # queue loop: drain 6 prompts correctly
-node tests/loop-eval/run-all.mjs [--json out.json]  # both, combined verdict
+node tests/loop-eval/goal.mjs     [--json out.json]  # goal loop: implement a feature for real
+node tests/loop-eval/queue.mjs    [--json out.json]  # queue loop: drain 6 prompts correctly
+node tests/loop-eval/briefing.mjs [--json out.json]  # briefing rule: steer a real driven agent
+node tests/loop-eval/run-all.mjs  [--json out.json]  # all of them, combined verdict
 
 # live mode — watch it in the real UI (set LOOPEVAL_LIVE_PW first):
-node tests/loop-eval/goal.mjs  --live
-node tests/loop-eval/queue.mjs --live
-node tests/loop-eval/run-all.mjs --live
+node tests/loop-eval/goal.mjs     --live
+node tests/loop-eval/queue.mjs    --live
+node tests/loop-eval/briefing.mjs --live
+node tests/loop-eval/run-all.mjs  --live
 ```
 
 Exit code 0 only if every assertion passed. Progress prints one status line
@@ -96,10 +99,10 @@ provisioning, no network, no token spend**. The harness's Tests tab serves
 this to the operator. `run-all.mjs --describe` composes the two child
 manifests.
 
-When touching a scenario, keep it honest: run all three `--describe`s (each
-must exit 0 in well under a second and parse as JSON), and if you changed the
-assertion ladder, update the adjacent `EXPECTED_OUTCOME` list in the same
-commit.
+When touching a scenario, keep it honest: run every `--describe` (goal, queue,
+briefing, run-all — each must exit 0 in well under a second and parse as JSON),
+and if you changed the assertion ladder, update the adjacent `EXPECTED_OUTCOME`
+list in the same commit.
 
 Environment knobs:
 
@@ -109,7 +112,7 @@ Environment knobs:
 | `LOOPEVAL_ROOT` | `%TMP%/cw-loopeval` | isolated scratch root (bin copy, datadir, fixture repo) |
 | `LOOPEVAL_KEEP` | off | `1` = leave everything up after a run (isolated: instance + scratch; live: repo card, dock tab, scratch) |
 | `LOOPEVAL_SKIP_BUILD` | off | `1` = reuse the existing `.claudeweb-preview/bin` build (isolated only) |
-| `LOOPEVAL_GOAL_MINUTES` / `LOOPEVAL_QUEUE_MINUTES` | 15 / 25 | scenario deadlines |
+| `LOOPEVAL_GOAL_MINUTES` / `LOOPEVAL_QUEUE_MINUTES` / `LOOPEVAL_BRIEFING_MINUTES` | 15 / 25 / 15 | scenario deadlines |
 | `LOOPEVAL_LIVE` | off | `1` = live mode (same as `--live`) |
 | `LOOPEVAL_LIVE_PORT` | `5099` | live harness port |
 | `LOOPEVAL_LIVE_PW` | — | live operator password — required in live mode (unless the harness set `LOOPEVAL_LIVE_TOKEN`), never defaulted or read off disk. Set it per-invocation to keep it out of files: `LOOPEVAL_LIVE_PW=... node ...` |
@@ -129,10 +132,25 @@ loop-attributed in the audit log.
 Passes only if the loop resolves `done · drained` with `queueSent == 6`, the
 sent texts appear in arm order, and every artifact exists and matches.
 
-Both scenarios first assert their **precondition** (goal check fails / artifacts
-absent on the fresh fixture) and run a **CLI probe** (one cheap seeded chat
-turn) — fixture drift or a broken `claude` CLI fails fast, before the loop
-spends tokens.
+**briefing.mjs** — fixture `fixtures/briefing/repo-template/`: a one-file task
+repo (create `GREETING.md`; `task-check.mjs` is the goal's ground truth). The
+scenario injects ONE briefing rule through the shipped
+`PUT /api/autopilot/briefing` editor surface instructing a side effect the
+goal, fixture, and check never mention (`BRIEFING-ACK.md` with an exact first
+line), then arms a real goal loop. Passes only if the loop resolves
+`done · verified`, the task check exits 0, **the ack marker exists** (its only
+possible source is the rule — the proof the rule steered the agent), and every
+send is audit-stamped `briefed` at the recorded rules revision. The briefing
+store is GLOBAL: the rule's own text scopes it to repositories containing
+`LOOPEVAL-BRIEFING-FIXTURE.txt`, and teardown removes exactly the injected
+rule by id (never a snapshot restore), so a live box's operator edits — and
+its other agents — are left alone. `LOOPEVAL_KEEP=1` leaves the rule in place
+and prints the manual removal step.
+
+Every scenario first asserts its **precondition** (goal/task check fails /
+artifacts absent on the fresh fixture) and runs a **CLI probe** (one cheap
+seeded chat turn) — fixture drift or a broken `claude` CLI fails fast, before
+the loop spends tokens.
 
 ## How live mode works
 

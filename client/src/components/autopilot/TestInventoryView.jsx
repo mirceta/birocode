@@ -517,11 +517,13 @@ export default function TestInventoryView({ section }) {
           <i> &quot;does the loop actually drive an agent to the goal?&quot;</i>
         </p>
         <section className="ca-sec">
-          <h3 className="ca-sec__h">The two scenarios</h3>
+          <h3 className="ca-sec__h">The scenarios</h3>
           <p className="ca-sec__p">
-            A <b>goal loop</b> that must implement a real missing feature, and a
+            A <b>goal loop</b> that must implement a real missing feature, a
             <b> queue loop</b> that must drain six prompts into six checkable
-            artifacts. Each scenario row on the <b>E2E eval</b> subtab carries its
+            artifacts, and a <b>briefing rule</b> that must visibly steer a real
+            driven agent (the rule instructs a side effect the task itself never
+            asks for). Each scenario row on the <b>E2E eval</b> subtab carries its
             full self-description — expand <i>&quot;what does this test?&quot;</i> to
             read the exact loop parameters it arms, the committed fixture repo it
             acts on, and the assertion contract it must satisfy. That text comes
@@ -574,16 +576,16 @@ export default function TestInventoryView({ section }) {
           <h3 className="ca-sec__h">What it costs</h3>
           <ul className="ov-list">
             <li>
-              <b>It spends real agent turns and real minutes</b> (~15–20 turns,
-              ~30–45 min for the full sweep), so it is a before-shipping
+              <b>It spends real agent turns and real minutes</b> (~16–24 turns,
+              ~35–60 min for the full sweep), so it is a before-shipping
               gate for loop changes, <b>never CI</b>. Preconditions (fixture drift,
               CLI probe) fail fast before tokens are spent.
             </li>
             <li>
               <b>The full sweep is a terminal thing:</b> <code>run-all.mjs</code> runs
-              goal then queue for one combined verdict — the before-shipping gate an
-              agent runs from a terminal. It is deliberately not a row on the E2E
-              eval subtab; there you run the two scenarios themselves.
+              every atomic scenario in sequence for one combined verdict — the
+              before-shipping gate an agent runs from a terminal. It is deliberately
+              not a row on the E2E eval subtab; there you run the scenarios themselves.
             </li>
             <li>
               <b>Lineage:</b> it is the tracked successor of the one-off rehearsal
