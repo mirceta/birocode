@@ -312,6 +312,8 @@
   "dashboard.loopModeAria": "Döngü modu",
   "dashboard.loopModeHint.suggest": "Döngünün sıradaki istemi yalnızca sohbet kutusuna yazılır — siz gönderirsiniz.",
   "dashboard.loopModeHint.drive": "Döngü sıradaki istemi ajana kendisi gönderir (sınırlı, denetim kayıtlı).",
+  "dashboard.loopDriveCheck": "Sür",
+  "dashboard.loopMoreInfo": "Her döngü türünün ve modun anlamı: Otopilot konsolu → Döngüler.",
   "dashboard.loopPendingLabel": "Sıradaki istem, sizi bekliyor",
   "dashboard.loopPendingConfidence": "· %{pct} emin",
   "dashboard.loopDecision.off": "motor boşta",

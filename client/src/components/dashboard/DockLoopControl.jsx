@@ -8,11 +8,14 @@ import { useT } from '../../i18n/LanguageContext';
 // runs in one of two MODES: "suggest" (its decided next prompt only pre-fills the
 // chat composer, as a pending suggestion) or "drive" (it actually sends, capped).
 //
-// The collapsed header names the instance's type + armed state + mode; expanding
-// shows the type picker, the selected type's parameters, the common mode toggle,
-// prompt inspection, the pending suggestion (with a put-in-textbox action via
-// onUsePending), and Arm / one Disarm. Arming any type replaces the slot
-// server-side (exclusive by construction), stated up front before the click.
+// The collapsed header names the instance's type + armed state + mode, and holds
+// the one Drive checkbox (openspec: dock-loop-controls-declutter) — the common
+// mode axis, flippable without opening the popover. Expanding shows controls
+// only: the type picker, the selected type's parameters, prompt inspection, the
+// pending suggestion (with a put-in-textbox action via onUsePending), and Arm /
+// one Disarm — kind/mode explanations live in the Autopilot console's Loops tab.
+// Arming any type replaces the slot server-side (exclusive by construction),
+// stated up front before the click.
 //
 // Two disclosure tiers feed it: badge/status data (kind, mode, phase, counts, and
 // — only while the gate is open — the pending prompt) comes from the read-only,
@@ -266,7 +269,37 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
             {loop.stopDetail}
           </span>
         )}
+        {/* The suggest/drive mode as ONE header-row checkbox (openspec:
+            dock-loop-controls-declutter, D1/D2): visible collapsed and
+            expanded, so the mode is glanceable and flippable without opening
+            the popover. Checked = drive. Same two paths as the old radiogroup:
+            flip the live armed instance in place, else seed the next arm. */}
+        <label className="phone__loop-drive" title={t(`dashboard.loopModeHint.${mode}`)}>
+          <input
+            type="checkbox"
+            checked={mode === 'drive'}
+            disabled={busy}
+            aria-label={t('dashboard.loopModeAria')}
+            onChange={(e) => {
+              const m = e.target.checked ? 'drive' : 'suggest';
+              if (armedKind === selected) setLiveMode(m); else setPickedMode(m);
+            }}
+          />
+          {t('dashboard.loopDriveCheck')}
+        </label>
       </div>
+      {/* Gate/error feedback lives OUTSIDE the popover subtree (D3): a
+          collapsed-row checkbox flip that 403s must not fail mutely. */}
+      {gateHint && (
+        <div className="phone__loop-msg phone__loop-msg--gate" role="status">
+          {t('dashboard.loopGateClosed')}
+        </div>
+      )}
+      {err && (
+        <div className="phone__loop-msg phone__loop-msg--err" role="status">
+          {t('dashboard.loopError', { error: err })}
+        </div>
+      )}
       {open && (
         <div className="phone__loop-pop">
           {/* Armed header: the one instance's live status + the single Disarm */}
@@ -359,27 +392,6 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
               </button>
             ))}
           </div>
-          <p className="phone__loop-sect-desc">{t(`dashboard.loopDesc.${selected}`)}</p>
-
-          {/* The common mode axis: suggest (pre-fill only) vs drive (send). Flips
-              the live instance in place; otherwise it's part of the arm request. */}
-          <div className="phone__loop-modes" role="radiogroup" aria-label={t('dashboard.loopModeAria')}>
-            {['suggest', 'drive'].map((m) => (
-              <button
-                key={m}
-                type="button"
-                role="radio"
-                aria-checked={mode === m}
-                disabled={busy}
-                className={`phone__loop-mode${mode === m ? ' phone__loop-mode--on' : ''}`}
-                onClick={() => (armedKind === selected ? setLiveMode(m) : setPickedMode(m))}
-              >
-                {modeName(m)}
-              </button>
-            ))}
-          </div>
-          <p className="phone__loop-sect-desc">{t(`dashboard.loopModeHint.${mode}`)}</p>
-
           {/* Parameters for the selected type (arming only — an armed instance
               keeps its own stored copies) */}
           {selected === 'recipe' && armedKind !== 'recipe' && (
@@ -568,16 +580,10 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
             />
           )}
 
-          {gateHint && (
-            <div className="phone__loop-msg phone__loop-msg--gate" role="status">
-              {t('dashboard.loopGateClosed')}
-            </div>
-          )}
-          {err && (
-            <div className="phone__loop-msg phone__loop-msg--err" role="status">
-              {t('dashboard.loopError', { error: err })}
-            </div>
-          )}
+          {/* The one pointer to the relocated reference copy (openspec:
+              dock-loop-controls-declutter, D4) — the popover itself is
+              controls-only, prose lives in the console. */}
+          <p className="phone__loop-sect-desc">{t('dashboard.loopMoreInfo')}</p>
         </div>
       )}
     </div>
