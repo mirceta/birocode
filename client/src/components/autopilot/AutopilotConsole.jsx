@@ -16,8 +16,8 @@ import '../../pages/autopilot.css';
 // three-mode plan), the Suggestion-based loop (Control, Prompt library, Live
 // feed, History), the Loops root (📋 recipe + 🎯 goal: Agents, Recipes), the cross-loop-type
 // Audit trail, the 🧪 Tests coverage map (openspec add-autopilot-tests-tab:
-// unit / runnable browser / rehearsal / the engine-seam plan — System tests
-// live here now), and Reference (the two explainers), all over
+// unit / runnable browser / rehearsal / how-E2E-works / the engine-seam plan —
+// System tests live here now), and Reference (the two explainers), all over
 // /api/autopilot. The Overview is pure reference and is
 // the one tab the operator gate never hides. This is the SINGLE implementation rendered by BOTH the routed
 // Autopilot tab (pages/Autopilot.jsx, the mobile-first view) and the dashboard
@@ -286,6 +286,7 @@ export default function AutopilotConsole({ embedded = false }) {
             ['unit', 'Unit tests'],
             ['browser', 'Browser (System tests)'],
             ['rehearsal', 'E2E eval'],
+            ['evalhow', 'How E2E works'],
             ['plan', 'Plan: engine seam'],
           ]}
         />

@@ -24,6 +24,44 @@ const GOAL =
 const MAX_ITERATIONS = 6;
 const DEADLINE = L.minutes(Number(process.env.LOOPEVAL_GOAL_MINUTES || 15));
 
+// The assertion contract, human-readable — kept adjacent to the constants
+// above so a change to the ladder below is reviewed next to this list
+// (openspec: loop-eval-scenario-transparency, design D2).
+const EXPECTED_OUTCOME = [
+  'preconditions: goal-check FAILS on the untouched fixture (drift guard) and a seeded chat turn completes (CLI probe) — else abort before spending tokens',
+  'loop resolves before the deadline',
+  'loop ends done · verified (LOOP_DONE → verify → GOAL_VERIFIED)',
+  `iterations stay within the cap (≤ ${MAX_ITERATIONS})`,
+  'goal-check.mjs exits 0 afterwards — the feature is genuinely implemented',
+  'every send is loop-attributed in the audit log',
+];
+
+// --describe: manifest from the same constants the run below uses, then exit —
+// before any build, provisioning, network call, or token spend.
+if (L.describing) {
+  L.describeAndExit({
+    id: 'goal',
+    title: 'Goal loop — implement a feature for real',
+    loop: {
+      kind: 'goal',
+      mode: 'drive',
+      maxIterations: MAX_ITERATIONS,
+      deadlineMinutes: DEADLINE / 60_000,
+      deadlineEnv: 'LOOPEVAL_GOAL_MINUTES',
+      goal: GOAL,
+      prompts: null,
+      denyList: null,
+      verifyEnabled: null,
+    },
+    fixture: {
+      ...L.fixtureFacts('goal'),
+      summary: 'todo CLI whose `done` command is deliberately missing; goal-check.mjs fails until the loop implements it',
+      workingCopy: 'template copied to a scratch dir, git-inited with an initial commit, registered as a repo card ("loopeval-goal", live mode: "loopeval-goal-live"), torn down after the run',
+    },
+    expected: EXPECTED_OUTCOME,
+  });
+}
+
 const V = new L.Verdicts('goal');
 const jsonOut = L.argValue('--json');
 let ctx = null;
@@ -48,8 +86,16 @@ try {
   if (!V.assert('CLI probe: seeded chat turn completed', seed.ok, JSON.stringify(seed.run || {})))
     throw new L.Abort('claude CLI is not working on this box — aborting before arming');
 
+  // Watchable dock (openspec: loop-eval-watchable-dock): open a dock tab for
+  // the fixture and bind it to the seed session, then arm pinned to that SAME
+  // session — tab, pin, and seed are provably one conversation, so the DOCKS
+  // strip shows the loop's turns from the first send. Mode-blind (design D4).
+  const tabId = await L.createTab(repoId, repoName);
+  await L.bindTabSession(tabId, seed.run?.sessionId);
+
   const arm = await L.api('POST', '/api/autopilot/loop',
-    { repoId, action: 'start', kind: 'goal', mode: 'drive', maxIterations: MAX_ITERATIONS, goal: GOAL });
+    { repoId, action: 'start', kind: 'goal', mode: 'drive', maxIterations: MAX_ITERATIONS, goal: GOAL,
+      sessionId: seed.run?.sessionId || undefined });
   if (!V.assert('goal loop armed', arm.status === 200, `http ${arm.status} ${JSON.stringify(arm.json || {}).slice(0, 300)}`))
     throw new L.Abort('arm failed');
   L.announceWatch(repoName);

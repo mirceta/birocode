@@ -99,6 +99,11 @@ An agent being **driven by an autopilot loop** follows its own agent-agnostic co
 whole job is genuinely done, or `NEEDS_HUMAN: <question>` when blocked on the human —
 same rule, change the convention **there**.
 
+A **verification that outlives the session** (long browser E2E, live eval runs)
+follows `docs/detached-verification-convention.md`: launch it detached with a
+log-file + terminal-marker contract, never as a session child or behind an
+in-session watcher alone — same rule, change the convention **there**.
+
 ## Build / run the harness normally
 
 ```

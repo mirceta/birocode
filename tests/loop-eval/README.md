@@ -35,8 +35,9 @@ card, then rerun.
 would contend for it (and confuse whoever is watching).
 
 **Or skip the terminal entirely** (openspec: add-loop-eval-ui-runner): the
-Autopilot console's **Tests tab → E2E eval section** has a Start button per
-scenario. The harness spawns these same scripts in `--live` mode against
+Autopilot console's **Tests tab → E2E eval section** has a Start button for
+each atomic scenario (goal, queue — `run-all.mjs` stays terminal-only, openspec:
+loop-eval-tests-tab-declutter). The harness spawns these same scripts in `--live` mode against
 itself, authenticated with a one-shot session token it mints for the child
 process (`LOOPEVAL_LIVE_TOKEN`) — no password typing, same preflights, same
 assertions, run status and verdict streamed back into the tab.
@@ -84,6 +85,21 @@ node tests/loop-eval/run-all.mjs --live
 
 Exit code 0 only if every assertion passed. Progress prints one status line
 per 5s poll; machine-readable verdicts are `@@LOOPEVAL@@ {json}` lines.
+
+### `--describe` — self-description, no run
+
+Every scenario also answers `--describe` (openspec:
+loop-eval-scenario-transparency): it prints a JSON manifest — the loop
+parameters it would arm, the fixture it acts on, the expected-outcome list —
+built from the same constants the run uses, then exits 0 with **no build, no
+provisioning, no network, no token spend**. The harness's Tests tab serves
+this to the operator. `run-all.mjs --describe` composes the two child
+manifests.
+
+When touching a scenario, keep it honest: run all three `--describe`s (each
+must exit 0 in well under a second and parse as JSON), and if you changed the
+assertion ladder, update the adjacent `EXPECTED_OUTCOME` list in the same
+commit.
 
 Environment knobs:
 
