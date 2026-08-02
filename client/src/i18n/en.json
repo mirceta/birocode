@@ -312,6 +312,8 @@
   "dashboard.loopModeAria": "Loop mode",
   "dashboard.loopModeHint.suggest": "The loop's next prompt only pre-fills the chat box — you send it.",
   "dashboard.loopModeHint.drive": "The loop actually sends its next prompt to the agent (capped, audited).",
+  "dashboard.loopDriveCheck": "Drive",
+  "dashboard.loopMoreInfo": "What each loop kind and mode means: Autopilot console → Loops.",
   "dashboard.loopPendingLabel": "Next prompt, waiting for you",
   "dashboard.loopPendingConfidence": "· {pct}% sure",
   "dashboard.loopDecision.off": "engine idle",
