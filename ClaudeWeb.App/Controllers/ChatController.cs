@@ -179,7 +179,7 @@ public class ChatController : ControllerBase
             return NotFound(new { error = "No running turn for this repository." });
 
         _logger.Info($"[CHAT] Stop requested for {laneName} run in \"{repo!.Name}\"");
-        session.Cts.Cancel();
+        session.RequestStop();
         return Ok(new { stopped = true });
     }
 

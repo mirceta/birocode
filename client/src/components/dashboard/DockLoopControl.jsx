@@ -54,7 +54,7 @@ async function copyToClipboard(text) {
   }
 }
 
-export default function DockLoopControl({ repoId, sessionId, tabId, stash = [], loop, recipes = [], onChanged, onUsePending }) {
+export default function DockLoopControl({ repoId, repoName, sessionId, tabId, stash = [], loop, recipes = [], onChanged, onUsePending }) {
   const { t } = useT();
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState(null);
@@ -66,6 +66,12 @@ export default function DockLoopControl({ repoId, sessionId, tabId, stash = [], 
   // posture); a persisted opt-out re-hydrates via the gated detail.
   const [verifyPick, setVerifyPick] = useState(null);
   const [verifySeed, setVerifySeed] = useState(null);
+  // Per-arm deny-list (openspec: advance-queue-loop, D2): the global default
+  // terms arrive with the gated detail; the operator may drop terms for THIS
+  // arm only. denyDefault = the server's list; denyDropped = terms removed here.
+  // Nothing dropped → the arm request omits denyList → global default applies.
+  const [denyDefault, setDenyDefault] = useState([]);
+  const [denyDropped, setDenyDropped] = useState([]);
   const [inspect, setInspect] = useState(false);
   // Gated prompt-level detail: null = not fetched, 'gate-closed' = 403,
   // otherwise { loops, recipes, goalTemplates }.
@@ -109,7 +115,15 @@ export default function DockLoopControl({ repoId, sessionId, tabId, stash = [], 
       .then((d) => {
         if (!alive) return;
         setDetail(d);
+        const defaults = Array.isArray(d?.denyList) ? d.denyList : [];
+        setDenyDefault(defaults);
         const mine = d?.loops?.find((l) => l.repoId === repoId);
+        // Re-hydrate a persisted per-arm trim (only when the user hasn't
+        // touched the chips yet this open): dropped = default minus stored.
+        if (mine?.denyList != null) {
+          setDenyDropped((prev) => (prev.length > 0 ? prev
+            : defaults.filter((term) => !mine.denyList.includes(term))));
+        }
         if (!mine) return;
         if (mine.goal) setGoal((g) => g || mine.goal);
         if (mine.maxIterations > 0) setCap((c) => (c === '' ? String(mine.maxIterations) : c));
@@ -151,6 +165,10 @@ export default function DockLoopControl({ repoId, sessionId, tabId, stash = [], 
   // Effective verify setting for the queue kind: the user's explicit pick, else
   // the persisted value a re-arm hydrated, else the default ON.
   const verifyOn = verifyPick ?? verifySeed ?? true;
+  // The arm's effective deny-list: the default minus the dropped chips. Sent
+  // only when something was dropped — untouched arms keep following the
+  // global default (null on the instance).
+  const denyEffective = denyDefault.filter((term) => !denyDropped.includes(term));
   const arm = () => {
     if (selected === 'suggestion') {
       return act('/autopilot/loop', { repoId, action: 'start', kind: 'suggestion', mode });
@@ -162,6 +180,7 @@ export default function DockLoopControl({ repoId, sessionId, tabId, stash = [], 
         verifyEnabled: verifyOn,
         maxIterations: capNum >= 1 ? capNum : undefined,
         sessionId: sessionId || undefined,
+        denyList: denyDropped.length > 0 ? denyEffective : undefined,
       });
     }
     if (selected === 'recipe') {
@@ -182,6 +201,13 @@ export default function DockLoopControl({ repoId, sessionId, tabId, stash = [], 
 
   // One Disarm for whatever is armed — the agent has one loop slot.
   const disarm = () => act('/autopilot/loop', { repoId, action: 'disarm' });
+
+  // One-step resume (openspec: advance-queue-loop, D3): a stopped queue
+  // instance with items still stashed re-activates in place — sent-history
+  // kept, fresh iteration budget, drives from the current head. Eligibility
+  // comes from the ungated projection; the action itself is gated.
+  const resumable = loop?.kind === 'queue' && !loop.active && (loop.queueRemaining ?? 0) > 0;
+  const resume = () => act('/autopilot/loop', { repoId, action: 'resume' });
 
   // Copy-for-debugging (openspec: add-loop-debug-handoff): fetch the server's
   // debug bundle and put a paste-ready block on the clipboard, so the user can
@@ -214,9 +240,13 @@ export default function DockLoopControl({ repoId, sessionId, tabId, stash = [], 
   const queueText = loop?.kind === 'queue'
     ? ` · ${t('dashboard.loopQueueProgress', { sent: loop.queueSent ?? 0, left: loop.queueRemaining ?? 0 })}`
     : '';
+  // Binding line (openspec: advance-queue-loop, D5): an armed queue names the
+  // repo it drives on every disclosure surface, so a wrong-tab arm is visible
+  // before its first send lands.
+  const bindText = repoName ? ` · ${t('dashboard.loopQueueBind', { repo: repoName })}` : '';
   const summary = loop
     ? (armed
-      ? `${EMOJI[loop.kind]} ${kindName(loop.kind)} · ${t('dashboard.loopArmedWord')} · ${modeName(loop.mode)}${loop.kind === 'suggestion' ? '' : ` · ${capText}`}${queueText}${verifying ? ` · ${t('dashboard.loopVerifying')}` : ''}`
+      ? `${EMOJI[loop.kind]} ${kindName(loop.kind)} · ${t('dashboard.loopArmedWord')} · ${modeName(loop.mode)}${loop.kind === 'suggestion' ? '' : ` · ${capText}`}${queueText}${loop.kind === 'queue' ? bindText : ''}${verifying ? ` · ${t('dashboard.loopVerifying')}` : ''}`
       : `${EMOJI[loop.kind]} ${kindName(loop.kind)} · ${t(`dashboard.loopStatus.${loop.status}`) || loop.status}${loop.kind === 'queue' ? queueText : ''}`)
     : t('dashboard.loopNone');
 
@@ -248,10 +278,25 @@ export default function DockLoopControl({ repoId, sessionId, tabId, stash = [], 
               <span className="phone__loop-armed-v">
                 {loop.kind === 'suggestion'
                   ? modeName(loop.mode)
-                  : `${modeName(loop.mode)} · ${capText}${queueText} · ${verifying ? t('dashboard.loopVerifying') : t(`dashboard.loopStatus.${loop.status}`) || loop.status}`}
+                  : `${modeName(loop.mode)} · ${capText}${queueText}${loop.kind === 'queue' ? bindText : ''} · ${verifying ? t('dashboard.loopVerifying') : t(`dashboard.loopStatus.${loop.status}`) || loop.status}`}
               </span>
               <button type="button" className="phone__loop-stop" onClick={disarm} disabled={busy}>
                 ■ {t('dashboard.loopDisarm')}
+              </button>
+            </div>
+          )}
+
+          {/* One-step Resume (openspec: advance-queue-loop, D3): a stopped
+              queue with remainder re-activates in place — same instance, same
+              sent-history, fresh iteration budget, drives from the current
+              stash head. Gated action: 403 renders the gate hint like Arm. */}
+          {resumable && (
+            <div className="phone__loop-resume">
+              <span className="phone__loop-resume-k">
+                {t('dashboard.loopResumeLabel', { n: loop.queueRemaining ?? 0 })}
+              </span>
+              <button type="button" className="phone__loop-arm" onClick={resume} disabled={busy}>
+                ▶ {t('dashboard.loopResume')}
               </button>
             </div>
           )}
@@ -375,6 +420,13 @@ export default function DockLoopControl({ repoId, sessionId, tabId, stash = [], 
               <div className="phone__loop-msg">{t('dashboard.loopQueueEmpty')}</div>
             ) : (
               <div className="phone__loop-queue">
+                {/* Binding line (openspec: advance-queue-loop, D5): name the
+                    drive target and the immediate consequence BEFORE the arm
+                    click — the wrong-tab arm of 2026-07-31 had nothing here. */}
+                <div className="phone__loop-bind">
+                  {t('dashboard.loopQueueBindLine', { repo: repoName || repoId, n: stash.length })}
+                </div>
+                <p className="phone__loop-sect-desc">{t('dashboard.loopQueueFiresNote')}</p>
                 {/* Full unload-order preview (openspec: queue-loop-visibility,
                     D4): every stash item, numbered top-down — the live stash
                     prop, so reordering the strip reorders this list. */}
@@ -400,6 +452,40 @@ export default function DockLoopControl({ repoId, sessionId, tabId, stash = [], 
                 <p className="phone__loop-sect-desc">
                   {t(verifyOn ? 'dashboard.loopQueueVerifyHint' : 'dashboard.loopQueueVerifyOffHint')}
                 </p>
+                {/* Per-arm deny-list (openspec: advance-queue-loop, D2): the
+                    global default terms as removable chips. Dropping a term
+                    ("push" on a commit-and-push repo) applies to THIS arm only;
+                    the global default is untouched. Chips need the gated
+                    detail — gate closed shows the hint instead. */}
+                {denyDefault.length > 0 ? (
+                  <>
+                    <div className="phone__loop-inspect-k">{t('dashboard.loopDenyLabel')}</div>
+                    <div className="phone__loop-denychips">
+                      {denyDefault.map((term) => {
+                        const dropped = denyDropped.includes(term);
+                        return (
+                          <button
+                            key={term}
+                            type="button"
+                            className={`phone__loop-denychip${dropped ? ' phone__loop-denychip--off' : ''}`}
+                            title={t(dropped ? 'dashboard.loopDenyRestore' : 'dashboard.loopDenyDrop')}
+                            onClick={() => setDenyDropped((prev) =>
+                              dropped ? prev.filter((x) => x !== term) : [...prev, term])}
+                          >
+                            {term}{dropped ? '' : ' ×'}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {denyDropped.length > 0 && (
+                      <p className="phone__loop-sect-desc">
+                        {t('dashboard.loopDenyTrimmed', { terms: denyDropped.join(', ') })}
+                      </p>
+                    )}
+                  </>
+                ) : (detail === 'gate-closed' && (
+                  <p className="phone__loop-sect-desc">{t('dashboard.loopDenyGateClosed')}</p>
+                ))}
               </div>
             )
           )}
@@ -509,6 +595,16 @@ export default function DockLoopControl({ repoId, sessionId, tabId, stash = [], 
       const mine = detail.loops?.find((l) => l.repoId === repoId);
       return (
         <div className="phone__loop-inspect">
+          {/* Per-arm deny-list disclosure (advance-queue-loop, D2): only shown
+              when this instance carries a trim — null means the global default. */}
+          {mine?.denyList != null && (
+            <>
+              <div className="phone__loop-inspect-k">{t('dashboard.loopDenyEffectiveLabel')}</div>
+              <pre className="phone__loop-inspect-pre">
+                {mine.denyList.length > 0 ? mine.denyList.join(', ') : t('dashboard.loopDenyNone')}
+              </pre>
+            </>
+          )}
           <div className="phone__loop-inspect-k">{t('dashboard.loopQueueVerifyTplLabel')}</div>
           <pre className="phone__loop-inspect-pre">{detail.queueVerifyTemplate || '—'}</pre>
           {mine?.lastStepText && (

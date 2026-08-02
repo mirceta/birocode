@@ -423,6 +423,8 @@
 /* Queue visibility (openspec queue-loop-visibility): the numbered unload-order
    preview in the arm form and the "sent ✓" history rows on queue cards. */
 .lp-queue-preview, .lp-queue-sent { display: flex; flex-direction: column; gap: 4px; flex: 1 1 100%; }
+/* Per-arm deny-list chips (openspec advance-queue-loop, D2). */
+.lp-denychips { display: flex; flex-wrap: wrap; gap: 4px; }
 .lp-queue-list, .lp-queue-sentlist {
   margin: 0; padding: 6px 10px 6px 28px;
   background: var(--color-bg, #f0ece4); border-radius: 8px;
@@ -606,6 +608,78 @@
 .cm-ctl button { font: inherit; font-size: 12.5px; cursor: pointer; border-radius: 7px; padding: 6px 11px; border: 1px solid var(--cm-line); background: #161b22; color: var(--cm-ink); }
 .cm-ctl button:hover:not(:disabled) { filter: brightness(1.25); }
 .cm-ctl button:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ---- Tests tab: E2E eval runner (openspec add-loop-eval-ui-runner) ----
+   Scenario rows + cost confirm, precondition banner, live run panel with
+   SSE tail + per-assertion verdicts. Reuses the st- and ap- palette above. */
+.le-runner { margin-bottom: 14px; }
+.le-problems { margin: 6px 0 0; padding-left: 18px; font-size: 12.5px; }
+.le-problems li { margin: 3px 0; }
+.le-error { color: #b3261e; font-size: 13px; margin: 6px 0; }
+.le-rows { list-style: none; margin: 10px 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.le-row {
+  border: 1px solid var(--color-border); border-radius: 10px;
+  background: var(--color-surface); padding: 10px 12px;
+}
+.le-row__top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.le-row__main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+
+/* Scenario self-description disclosure (openspec: loop-eval-scenario-transparency) */
+.le-man__toggle {
+  align-self: flex-start; margin-top: 2px; padding: 0; border: none; background: none;
+  color: var(--color-accent, #7a5c3e); font-size: 12px; cursor: pointer;
+}
+.le-man__toggle:hover { text-decoration: underline; }
+.le-man { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--color-border); }
+.le-man__block { margin: 8px 0; }
+.le-man__h {
+  margin: 0 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--color-text-muted, #6b7787);
+}
+.le-man__params { margin: 0; padding-left: 18px; font-size: 12.5px; }
+.le-man__params li { margin: 3px 0; overflow-wrap: anywhere; }
+.le-man__params code { background: var(--color-bg, #f0ece4); padding: 1px 6px; border-radius: 5px; }
+.le-man__deny { margin-right: 6px; }
+.le-man__life { color: var(--color-text-muted, #6b7787); }
+.le-man__goal { margin: 6px 0 0 18px; font-size: 12.5px; }
+.le-man__goal summary { cursor: pointer; color: var(--color-accent, #7a5c3e); }
+.le-man__goal blockquote {
+  margin: 6px 0 0; padding: 8px 10px; border-left: 3px solid var(--color-border);
+  background: var(--color-bg, #f0ece4); border-radius: 0 8px 8px 0; overflow-wrap: anywhere;
+}
+.le-man__prompts { margin-top: 6px; border-collapse: collapse; font-size: 12px; }
+.le-man__prompts th {
+  text-align: left; font-size: 11px; text-transform: uppercase;
+  color: var(--color-text-muted, #6b7787); padding: 4px 10px 4px 0;
+}
+.le-man__prompts td { padding: 5px 10px 5px 0; border-top: 1px solid var(--color-border); vertical-align: top; }
+.le-man__prompts code { background: var(--color-bg, #f0ece4); padding: 1px 6px; border-radius: 5px; }
+.le-man__expected { margin-top: 0; }
+.le-asserts.le-man__expected li { flex-wrap: nowrap; } /* keep the ○ beside its text; wrap inside the span */
+.le-man__expected .le-assert__mark { color: var(--color-text-muted, #6b7787); }
+.le-man__expected .le-assert__name { color: var(--color-text-muted, #6b7787); }
+.le-cost { font-size: 12px; color: var(--color-text-muted, #6b7787); }
+.le-cost code { background: var(--color-bg, #f0ece4); padding: 1px 6px; border-radius: 5px; }
+.le-confirm { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
+.le-run { border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); padding: 12px; margin-top: 10px; }
+.le-run__head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; }
+.le-run__head .ap-muted { font-size: 12px; }
+.le-stop { margin-left: auto; }
+.le-watch { font-size: 12.5px; margin: 8px 0 0; }
+.le-asserts { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; }
+.le-asserts li {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  padding: 5px 4px; border-bottom: 1px solid var(--color-border); font-size: 12.5px;
+}
+.le-assert__mark { font-weight: 700; flex: none; }
+.le-asserts .is-ok .le-assert__mark { color: #1a7f37; }
+.le-asserts .is-bad .le-assert__mark { color: #b3261e; }
+.le-assert__scen { font-size: 11px; text-transform: uppercase; color: var(--color-text-muted, #6b7787); flex: none; }
+.le-assert__detail { color: #b3261e; font-size: 12px; overflow-wrap: anywhere; }
+.le-verdict { font-weight: 700; font-size: 13px; margin: 10px 0 0; }
+.le-verdict.is-ok { color: #1a7f37; }
+.le-verdict.is-bad { color: #b3261e; }
+.le-tail { margin-top: 10px; max-height: 320px; overflow-y: auto; }
 .cm-gate { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--cm-dim); }
 .cm-switch { position: relative; width: 38px; height: 21px; border-radius: 999px; background: #30363d; cursor: pointer; transition: .2s; border: 1px solid var(--cm-line); padding: 0; }
 .cm-switch.on { background: #1f6f37; }

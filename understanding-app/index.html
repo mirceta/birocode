@@ -1,300 +1,266 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Loop evals — golden human runs as ground truth for autopilot loops</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>loop-eval — one suite, two run modes</title>
 <style>
-  :root{
-    --bg:#0d1117; --panel:#161b22; --panel2:#1c232c; --line:#30363d;
-    --ink:#e6edf3; --muted:#8b949e; --dim:#6e7681;
-    --accent:#58a6ff; --green:#3fb950; --amber:#d29922; --purple:#bc8cff; --red:#f85149; --pink:#f778ba;
-    --mono:'SF Mono',ui-monospace,'Cascadia Code',Consolas,monospace;
-    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  :root {
+    --bg: #10141a; --panel: #1a2028; --panel2: #222a35; --ink: #dce3ec;
+    --dim: #8b97a6; --line: #2e3947; --ok: #4fc38a; --bad: #e06c6c;
+    --warn: #e0b56c; --acc: #6ca8e0; --live: #c98fe0; --radius: 10px;
   }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5}
-  a{color:var(--accent)}
-  code{font-family:var(--mono);font-size:.92em;background:#0b0f14;border:1px solid var(--line);border-radius:5px;padding:.5px 5px}
-  .wrap{max-width:1120px;margin:0 auto;padding:28px 20px 90px}
-  header h1{font-size:24px;margin:0 0 8px;letter-spacing:-.01em}
-  header p.sub{color:var(--muted);margin:0;font-size:14.5px;max-width:860px}
-  .tag{display:inline-block;font-family:var(--mono);font-size:11px;padding:2px 8px;border:1px solid var(--line);
-    border-radius:999px;color:var(--muted);margin-right:6px;background:var(--panel)}
-  section{margin-top:40px}
-  h2{font-size:17px;margin:0 0 6px;display:flex;align-items:center;gap:10px}
-  h2 .n{font-family:var(--mono);font-size:13px;color:var(--bg);background:var(--accent);
-    width:24px;height:24px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-weight:700}
-  .lead{color:var(--muted);font-size:13.5px;margin:0 0 16px;max-width:880px}
-  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
-
-  /* pipeline */
-  .pipe{display:flex;gap:8px;flex-wrap:wrap;align-items:stretch}
-  .stage{flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;
-    padding:10px 12px;cursor:pointer;transition:border-color .15s}
-  .stage:hover{border-color:var(--accent)}
-  .stage.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
-  .stage b{display:block;font-size:13px}
-  .stage span{font-size:11.5px;color:var(--muted)}
-  .stage .who{font-family:var(--mono);font-size:10px;color:var(--dim);display:block;margin-top:6px}
-  .arrow{align-self:center;color:var(--dim);font-size:16px}
-  #pipeDetail{margin-top:12px;padding:12px;background:#0b0f14;border:1px solid var(--line);border-radius:8px;
-    font-size:13px;color:var(--ink);min-height:64px}
-  #pipeDetail b{color:var(--accent)}
-
-  /* bundle refs diagram + turn mapper */
-  .refrow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:var(--mono);font-size:12px;margin:14px 0}
-  .commit{width:34px;height:34px;border-radius:50%;border:2px solid var(--dim);display:inline-flex;
-    align-items:center;justify-content:center;background:var(--panel2);font-size:11px}
-  .commit.gold{border-color:var(--amber)}
-  .commit.lit{box-shadow:0 0 0 3px rgba(210,153,34,.35)}
-  .refname{font-size:10.5px;color:var(--muted);text-align:center}
-  .edge{color:var(--dim)}
-  .tagref{color:var(--green)} .branchref{color:var(--amber)}
-  .turns{display:flex;flex-direction:column;gap:6px;margin-top:10px}
-  .turn{display:flex;gap:10px;align-items:center;padding:7px 10px;border:1px solid var(--line);border-radius:7px;
-    background:var(--panel2);cursor:pointer;font-size:12.5px}
-  .turn:hover{border-color:var(--accent)}
-  .turn.sel{border-color:var(--amber);box-shadow:0 0 0 1px var(--amber)}
-  .turn .role{font-family:var(--mono);font-size:10.5px;color:var(--dim);width:74px;flex:none}
-  .turn .lbl{font-family:var(--mono);font-size:10px;color:var(--purple);width:96px;flex:none}
-  .turn .st{margin-left:auto;font-family:var(--mono);font-size:10.5px;flex:none}
-  .turn .st.own{color:var(--amber)} .turn .st.carry{color:var(--dim);font-style:italic}
-  .mapnote{margin-top:10px;font-size:12.5px;color:var(--muted)}
-
-  /* curation steps */
-  ol.cur{margin:0;padding-left:20px;font-size:13.5px}
-  ol.cur li{margin-bottom:8px}
-  ol.cur b{color:var(--ink)}
-  .rule{border-left:3px solid var(--amber);padding:6px 12px;margin-top:12px;font-size:12.5px;color:var(--muted);background:var(--panel2);border-radius:0 7px 7px 0}
-  .rule b{color:var(--amber)}
-  .rule.green{border-color:var(--green)} .rule.green b{color:var(--green)}
-
-  /* report tabs */
-  .tabs{display:flex;gap:8px;margin-bottom:10px}
-  .tabs button{background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:7px;
-    padding:6px 14px;cursor:pointer;font-size:12.5px;font-family:var(--mono)}
-  .tabs button.on{border-color:var(--accent);color:var(--accent)}
-  pre.report{margin:0;background:#0b0f14;border:1px solid var(--line);border-radius:8px;padding:14px;
-    font-family:var(--mono);font-size:12px;line-height:1.55;overflow-x:auto;white-space:pre}
-  pre.report .ok{color:var(--green)} pre.report .bad{color:var(--red)} pre.report .dim{color:var(--dim)}
-  .verdictline{margin-top:10px;font-size:13px;color:var(--muted)}
-  .verdictline b.g{color:var(--green)} .verdictline b.r{color:var(--red)}
-
-  table{border-collapse:collapse;width:100%;font-size:12.5px;margin-top:8px}
-  th,td{border:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top}
-  th{background:var(--panel2);font-size:11.5px;color:var(--muted)}
-  td code{white-space:nowrap}
-  .foot{margin-top:46px;color:var(--dim);font-size:12px;border-top:1px solid var(--line);padding-top:14px}
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.55 "Segoe UI", system-ui, sans-serif; padding: 24px 16px 64px; }
+  main { max-width: 940px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--dim); margin: 0 0 20px; }
+  .tabs { display: flex; gap: 8px; margin: 0 0 18px; flex-wrap: wrap; }
+  .tabs button { background: var(--panel); color: var(--dim); border: 1px solid var(--line);
+    border-radius: 999px; padding: 7px 16px; cursor: pointer; font: inherit; font-size: 14px; }
+  .tabs button.on { background: var(--acc); color: #0c1116; border-color: var(--acc); font-weight: 600; }
+  section { display: none; }
+  section.on { display: block; animation: fade .18s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px);} to { opacity: 1; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+          padding: 14px 16px; margin-bottom: 12px; }
+  .card h3 { margin: 0 0 6px; font-size: 15px; }
+  .card p, .card li { margin: 6px 0; color: var(--dim); }
+  .card b, .card code { color: var(--ink); }
+  code { background: var(--panel2); padding: 1px 6px; border-radius: 4px; font-size: 13px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 720px) { .cols { grid-template-columns: 1fr; } }
+  .mode { border-top: 3px solid var(--acc); }
+  .mode.live { border-top-color: var(--live); }
+  .badge { display: inline-block; font-size: 12px; border-radius: 999px; padding: 1px 10px;
+           border: 1px solid var(--line); color: var(--dim); margin-left: 6px; }
+  .badge.auto { color: var(--acc); border-color: var(--acc); }
+  .badge.human { color: var(--live); border-color: var(--live); }
+  .flow { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+  .step { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
+          padding: 8px 12px; cursor: pointer; transition: border-color .15s; }
+  .step:hover { border-color: var(--acc); }
+  .step.liveonly:hover { border-color: var(--live); }
+  .step .t { font-weight: 600; font-size: 14px; }
+  .step .d { display: none; color: var(--dim); font-size: 13.5px; margin-top: 4px; }
+  .step.open .d { display: block; }
+  .step .who { float: right; font-size: 12px; color: var(--dim); }
+  .arrow { text-align: center; color: var(--dim); font-size: 13px; line-height: 1; }
+  .shared { background: linear-gradient(180deg, var(--panel), var(--panel2));
+            border: 1px dashed var(--acc); }
+  .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); }
+  .legend { font-size: 13px; color: var(--dim); margin: 4px 0 14px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); }
+  td:first-child { color: var(--dim); white-space: nowrap; }
+  .sim { margin-top: 10px; }
+  .sim button { background: var(--panel2); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 14px; cursor: pointer; font: inherit; }
+  .sim button:disabled { opacity: .4; cursor: default; }
+  .simlog { margin-top: 10px; background: #0c1015; border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 12px; font-family: Consolas, monospace; font-size: 13px; min-height: 120px;
+    white-space: pre-wrap; }
+  .hint { font-size: 13px; color: var(--dim); font-style: italic; }
 </style>
 </head>
 <body>
-<div class="wrap">
-<header>
-  <span class="tag">openspec: loop-evals</span><span class="tag">tests/loop-evals/</span>
-  <span class="tag">tab: Loop Evals (Advanced)</span>
-  <h1>Loop evals — golden human runs as ground truth for autopilot loops</h1>
-  <p class="sub">Is a change to a loop recipe better or worse at driving a long task? Instead of a static
-  expected-answer file, the ground truth is a <b>recorded human-babysat run</b>: start state, plan, the finished
-  conversation, and the repo state after every turn — packaged as a git history. The runner replays the
-  <b>production loop engine</b> from the same start and the scorer compares outcomes and trajectories.</p>
-</header>
+<main>
+  <h1>loop-eval — one suite, two run modes</h1>
+  <p class="sub">openspec: <code>add-loop-eval-live-mode</code> · the same real-agent scenarios, runnable as an
+  automatic gate (isolated) <i>or</i> where you can watch them (live)</p>
 
-<section>
-  <h2><span class="n">1</span>The pipeline — click a stage</h2>
-  <p class="lead">Five stages, two of them human-facing (babysit, curate) and three mechanical (validate, run, score).</p>
-  <div class="panel">
-    <div class="pipe" id="pipe"></div>
-    <div id="pipeDetail"></div>
+  <div class="tabs">
+    <button data-tab="overview" class="on">Overview</button>
+    <button data-tab="pipelines">The two pipelines</button>
+    <button data-tab="boundary">The gate boundary</button>
+    <button data-tab="timeline">Live run, step by step</button>
   </div>
-</section>
 
-<section>
-  <h2><span class="n">2</span>The bundle — a git history with three refs</h2>
-  <p class="lead">A golden example is a directory: <code>manifest.json</code> + <code>plan.md</code> +
-  <code>conversation.jsonl</code> + <code>repo.bundle</code>. The repo states live in the bundle as ordinary
-  commits. Click a transcript turn to see which repo state it maps to — turns without their own commit
-  <b>carry the previous state forward</b>.</p>
-  <div class="panel">
-    <div class="refrow" id="refrow"></div>
-    <div class="turns" id="turnlist"></div>
-    <div class="mapnote" id="mapnote">Click a turn. <span style="color:var(--amber)">Amber</span> = the turn's own commit;
-      <i>carry</i> = no commit was made after this turn, so its state is the previous one.</div>
-  </div>
-</section>
-
-<section>
-  <h2><span class="n">3</span>Capture = retroactive curation (Loop Evals tab)</h2>
-  <p class="lead">You only know a babysat session was golden when it's over. So capture is after-the-fact curation
-  over two things that already exist: a <b>copy of the repo</b> (with its <code>.git</code>) and the session's
-  <b>stored conversation</b>. Operator-facing, Advanced mode, <code>api/loop-evals/*</code>.</p>
-  <div class="panel">
-    <ol class="cur">
-      <li><b>Select sources</b> — pick the repo (its stored conversations) and type the repo copy's path (its commit history, listed with files touched).</li>
-      <li><b>Set the span</b> — mark first/last relevant turn with <code>[</code> <code>]</code>; everything outside is excluded.</li>
-      <li><b>Associate turns ↔ commits</b> — select a turn (<code>⇄</code>), click a commit. One commit per turn; association is partial by nature.</li>
-      <li><b>Label each turn</b> — <code>instruct</code>, <code>course-correct</code>, <code>approve</code>, <code>verify-ask</code>, <code>unblock</code>, or free text. Labels ride in the transcript (reporting, not scoring).</li>
-      <li><b>Author &amp; export</b> — write <code>plan.md</code> and the acceptance checks, then export the bundle into the examples root.</li>
-    </ol>
-    <div class="rule"><b>Contiguity rule:</b> the associated commits must form an unbroken parent chain — the exported
-    <code>golden</code> branch is <i>exactly those commits in order</i>. Skipping a commit in between is rejected:
-    associate every commit in the stretch, or none of them.</div>
-    <div class="rule green"><b>Sources stay byte-identical:</b> refs are cut in a throwaway clone, never in the repo copy;
-    the stored conversation is only read. Export writes one place: the examples root
-    (default <code>%APPDATA%\ClaudeWeb\loop-evals-examples</code> — external, because a bundle carries full repo history;
-    committed examples under <code>tests/loop-evals/examples/</code> must be synthetic).</div>
-  </div>
-</section>
-
-<section>
-  <h2><span class="n">4</span>The runner — the real engine, isolated</h2>
-  <p class="lead"><code>LoopEvals run --example &lt;id&gt;</code> hosts the production modules
-  (<code>AddChatModule / AddDockModule / AddPromptsModule / AddAutopilotModule</code>) in-process against a scratch
-  <code>CLAUDEWEB_DATADIR</code> — the same <code>AutopilotService</code> tick, recipes, and Claude CLI turns the
-  harness runs, so changing shipped loop logic changes eval results.</p>
-  <div class="panel">
-    <table>
-      <tr><th>Step</th><th>What happens</th><th>Why</th></tr>
-      <tr><td><code>clone + strip</code></td><td>Clone <code>repo.bundle</code> at <code>eval/start</code> onto a <code>run/&lt;n&gt;</code> branch; delete the <code>golden</code> branch, both <code>eval/*</code> tags, and the origin remote.</td><td>Anti-cheat: the driven agent can never peek at the answer.</td></tr>
-      <tr><td><code>primer turn</code></td><td>One minimal real CLI turn ("reply READY") mints a session id.</td><td>A driven loop resumes a pinned session; a fresh clone has none.</td></tr>
-      <tr><td><code>seed queue</code></td><td><code>plan.md</code> becomes the dock stash per the manifest's seed hints (whole plan, or pre-split items).</td><td>The stash IS the queue-loop's queue.</td></tr>
-      <tr><td><code>arm + drive</code></td><td><code>StartQueue(..., mode: drive, verify: on, maxIterations: cap)</code>; every completed agent turn is committed to <code>run/&lt;n&gt;</code>.</td><td>Run trajectory gets the same shape as the golden branch.</td></tr>
-      <tr><td><code>cut-off</code></td><td>Engine turn cap + runner wall-clock timeout.</td><td>A runaway loop ends, scored as not-done with the reason stated.</td></tr>
-    </table>
-  </div>
-</section>
-
-<section>
-  <h2><span class="n">5</span>The scorer — verdict, evidence, trajectory. Real output:</h2>
-  <p class="lead">Acceptance checks are the <b>verdict</b> (never byte-identity); the diff vs <code>eval/final</code> is
-  <b>evidence</b> so a hollow pass stays visible; the trajectory compares state-changing turns positionally against the
-  golden chain. These are the two real runs of <code>hello-notes</code> — same engine, one with the queue seeded from the
-  plan, one deliberately mis-seeded (<code>--broken</code>):</p>
-  <div class="panel">
-    <div class="tabs">
-      <button id="tabGood" class="on">good config</button>
-      <button id="tabBroken">--broken config</button>
+  <section id="overview" class="on">
+    <div class="card">
+      <h3>Why two modes?</h3>
+      <p>The suite proves the one thing no cheap test can: <b>the loop engine drives a real
+      agent to a real goal</b>. That proof serves two different customers:</p>
+      <ul>
+        <li><b>An agent</b> needs it <i>fully automatic</i> — boot, run, assert, tear down,
+        exit code. That's the <b>isolated mode</b> (default): a throwaway harness on
+        <code>:5210</code> that no human ever sees.</li>
+        <li><b>The human operator</b> needs to <i>see it with their own eyes</i> — a repo card
+        appearing, the agent dock filling with real turns, the Autopilot console's loop card
+        ticking <code>work → verify → done</code>. That's the <b>live mode</b>
+        (<code>--live</code>): the same scenarios pointed at the running <code>:5099</code>
+        harness.</li>
+      </ul>
+      <p>Same scenario files, same assertions, same deadlines — <b>only the world differs</b>.
+      The mode split lives entirely in <code>tests/loop-eval/lib.mjs</code>.</p>
     </div>
-    <pre class="report" id="report"></pre>
-    <div class="verdictline" id="verdictline"></div>
-  </div>
-</section>
+    <div class="cols">
+      <div class="card mode">
+        <h3>Isolated <span class="badge auto">for agents</span></h3>
+        <p><code>node tests/loop-eval/goal.mjs</code></p>
+        <p>Boots its own ClaudeWeb copy on :5210, seeds gate + kill switch into a scratch
+        datadir <i>before boot</i>, runs, kills everything. Live harness never touched.</p>
+      </div>
+      <div class="card mode live">
+        <h3>Live <span class="badge human">for you</span></h3>
+        <p><code>LOOPEVAL_LIVE_PW=… node tests/loop-eval/goal.mjs --live</code></p>
+        <p>Targets the harness you're using right now. Registers
+        <code>loopeval-goal-live</code>, prints a watch banner, runs where you can see it,
+        cleans up after itself (<code>LOOPEVAL_KEEP=1</code> to keep the aftermath).</p>
+      </div>
+    </div>
+  </section>
 
-<section>
-  <h2><span class="n">6</span>Reliability — N runs, not one</h2>
-  <p class="lead">Loops are non-deterministic, so one pass proves little. <code>--runs N</code> repeats the same
-  (example, config) into separate scratch clones and aggregates: pass rate, worst case, turn spread. A loop that
-  passes 3/5 is a different animal from one that passes 5/5 — the report keeps them distinguishable.
-  Every run costs real agent tokens; the runner is on-demand, developer-facing, never a service.</p>
-</section>
+  <section id="pipelines">
+    <p class="legend">Click any step to expand it. Blue = isolated-only, purple = live-only,
+    dashed = the shared core both modes run identically.</p>
+    <div class="cols">
+      <div class="card mode">
+        <h3>Isolated pipeline (:5210)</h3>
+        <div class="flow" id="flow-iso"></div>
+      </div>
+      <div class="card mode live">
+        <h3>Live pipeline (:5099)</h3>
+        <div class="flow" id="flow-live"></div>
+      </div>
+    </div>
+    <div class="card shared">
+      <h3>Shared core — identical in both modes</h3>
+      <div class="flow" id="flow-shared"></div>
+    </div>
+  </section>
 
-<div class="foot">
-  Rolling-latest Understanding app · overwrites <code>understanding-app/index.html</code> · served no-store by the harness<br/>
-  Sources: <code>openspec/changes/loop-evals/</code> (proposal · design D1–D5 · delta spec) ·
-  <code>tests/loop-evals/</code> (README, LoopEvals console: Bundle/EvalRunner/Scoring) ·
-  <code>ClaudeWeb.App/Services/LoopEvals/</code> + <code>LoopEvalsController</code> (curation API) ·
-  <code>client/src/pages/LoopEvals.jsx</code> (curation UI, Advanced mode).
-</div>
-</div>
+  <section id="boundary">
+    <div class="card">
+      <h3>The autopilot gate is host-only. Both modes respect that — differently.</h3>
+      <p>There is <b>no enable endpoint, ever</b> (<code>AutopilotGate.cs</code>). So how does a
+      test suite arm loops at all?</p>
+      <table>
+        <tr><th></th><th>Isolated</th><th>Live</th></tr>
+        <tr>
+          <td>Gate + kill switch</td>
+          <td>Writes <code>autopilot-gate.json</code> + <code>autopilot.json</code> into the
+          <b>scratch</b> datadir <i>before boot</i> — a host-side file write, the same trust
+          level as the operator clicking the host GUI.</td>
+          <td><b>Checks, never sets.</b> <code>gateOpen</code> off
+          <code>/api/autopilot/loops</code>, <code>killSwitchEnabled</code> off the debug
+          bundle. Off → <span class="bad">fail fast</span> with the exact thing to click.</td>
+        </tr>
+        <tr>
+          <td>Password</td>
+          <td>Invents a throwaway one for its own instance.</td>
+          <td><code>LOOPEVAL_LIVE_PW</code> — you hand it over explicitly. Never defaulted,
+          never read from the live secret store.</td>
+        </tr>
+        <tr>
+          <td>Loop internals for asserts</td>
+          <td>Reads scratch <code>loops.json</code> / <code>autopilot-audit.jsonl</code>
+          directly.</td>
+          <td>Reads <code>GET /api/autopilot/loops/{repoId}/debug</code> — the shipped debug
+          bundle. The live datadir is <b>never written and never parsed</b>.</td>
+        </tr>
+        <tr>
+          <td>Residue</td>
+          <td>Whole scratch root deleted; instance killed.</td>
+          <td>Stops loop → closes dock tab → unregisters repo (registry entry only) → removes
+          scratch copy. Next run's preflight catches any leak (<code>loopeval-*-live</code>
+          name check).</td>
+        </tr>
+      </table>
+    </div>
+  </section>
+
+  <section id="timeline">
+    <div class="card">
+      <h3>Simulate a live goal run</h3>
+      <p class="hint">Step through what you'd actually see — in the shell and in the UI.</p>
+      <div class="sim">
+        <button id="sim-next">Next step ▸</button>
+        <button id="sim-reset">reset</button>
+        <div class="simlog" id="simlog">press “Next step” —</div>
+      </div>
+    </div>
+  </section>
+</main>
 
 <script>
-// --- 1. pipeline ------------------------------------------------------------
-const STAGES = [
-  { k:'babysit', t:'Babysit a session', s:'human drives the agent turn by turn, committing per step', who:'human + harness',
-    d:'<b>Where ground truth is born.</b> A long task done the slow way: the human instructs, corrects, approves; the agent works; commits land per completed step. Nothing eval-specific happens here — you only know afterwards that this session was golden. Commit-per-turn discipline is what makes the later association sharp.' },
-  { k:'curate', t:'Curate & export', s:'Loop Evals tab: span, associate, label, author, export', who:'Operator UI',
-    d:'<b>Retroactive curation</b> over a repo copy + the stored conversation (both read-only). Mark the turn span, pair turns with commits (partial, carry-forward allowed, contiguity enforced), label intents, author plan.md + acceptance checks. Export cuts eval/start · golden · eval/final in a throwaway clone and writes the bundle to the examples root.' },
-  { k:'validate', t:'Validate bundle', s:'LoopEvals validate — offline, no agent calls', who:'dev console',
-    d:'<b>Cheap sanity gate.</b> Loads the bundle, clones repo.bundle to scratch, verifies the ref contract (eval/final = tip of golden; manifest chain = eval/start..eval/final exactly) and that every transcript turn joins to a real repo state.' },
-  { k:'run', t:'Run the loop', s:'production engine drives real agent turns from eval/start', who:'dev console + tokens',
-    d:'<b>The replay.</b> Scratch clone at eval/start with golden refs stripped (no peeking), primer turn mints a session, plan.md seeds the queue, the REAL queue loop drives in drive-mode under a turn cap + wall-clock timeout. Each completed agent turn is committed to run/&lt;n&gt; — same shape as golden.' },
-  { k:'score', t:'Score & aggregate', s:'checks verdict · diff evidence · trajectory · N-run stats', who:'dev console',
-    d:'<b>The answer.</b> Acceptance checks give pass/fail (with the failing check named); diff vs eval/final sits beside it as evidence; the trajectory shows per-turn files-touched overlap and the first divergence. --runs N aggregates pass rate, worst case, turn spread.' },
-];
-const pipe = document.getElementById('pipe'), pd = document.getElementById('pipeDetail');
-STAGES.forEach((st, i) => {
-  if (i) { const a = document.createElement('div'); a.className = 'arrow'; a.textContent = '→'; pipe.appendChild(a); }
-  const el = document.createElement('div');
-  el.className = 'stage'; el.id = 'st-' + st.k;
-  el.innerHTML = `<b>${st.t}</b><span>${st.s}</span><span class="who">${st.who}</span>`;
-  el.onclick = () => { document.querySelectorAll('.stage').forEach(x => x.classList.remove('on')); el.classList.add('on'); pd.innerHTML = st.d; };
-  pipe.appendChild(el);
-});
-document.getElementById('st-curate').click();
+  // tabs
+  document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+    document.querySelectorAll('.tabs button').forEach(x => x.classList.remove('on'));
+    document.querySelectorAll('section').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    document.getElementById(b.dataset.tab).classList.add('on');
+  });
 
-// --- 2. refs + turn mapper (the real hello-notes example) --------------------
-const CHAIN = [
-  { sha:'8221ee0c', ref:'eval/start', tag:true },
-  { sha:'78ee2e0a', gold:true },
-  { sha:'8fccb7d2', gold:true },
-  { sha:'21f1b5b2', gold:true, ref:'eval/final · golden', tag:true },
-];
-const TURNS = [
-  { i:0, role:'user',      lbl:'instruct',       txt:'Create notes/alpha.md with an H1 title Alpha…', state:0, own:false },
-  { i:1, role:'assistant', lbl:'',               txt:'Added notes/alpha.md with the Alpha title.',    state:1, own:true  },
-  { i:2, role:'user',      lbl:'instruct',       txt:'Good. Now notes/beta.md the same way, titled Beta.', state:1, own:false },
-  { i:3, role:'assistant', lbl:'',               txt:'Added notes/beta.md titled Beta.',              state:2, own:true  },
-  { i:4, role:'user',      lbl:'course-correct', txt:'We also need an index.md linking both notes.',  state:2, own:false },
-  { i:5, role:'assistant', lbl:'',               txt:'Added index.md linking alpha and beta.',        state:3, own:true  },
-];
-const refrow = document.getElementById('refrow'), turnlist = document.getElementById('turnlist'), mapnote = document.getElementById('mapnote');
-CHAIN.forEach((c, i) => {
-  if (i) { const e = document.createElement('span'); e.className = 'edge'; e.textContent = '──▶'; refrow.appendChild(e); }
-  const box = document.createElement('span'); box.style.textAlign = 'center';
-  box.innerHTML = `<span class="commit ${c.gold ? 'gold' : ''}" id="c${i}">${c.sha.slice(0, 4)}</span>` +
-    (c.ref ? `<div class="refname ${c.tag ? 'tagref' : 'branchref'}">${c.ref}</div>` : '<div class="refname">&nbsp;</div>');
-  refrow.appendChild(box);
-});
-TURNS.forEach(t => {
-  const el = document.createElement('div');
-  el.className = 'turn';
-  el.innerHTML = `<span class="role">${t.i} · ${t.role}</span><span class="lbl">${t.lbl}</span>` +
-    `<span>${t.txt}</span><span class="st ${t.own ? 'own' : 'carry'}">${t.own ? 'commit ' + CHAIN[t.state].sha.slice(0, 8) : 'carry'}</span>`;
-  el.onclick = () => {
-    document.querySelectorAll('.turn').forEach(x => x.classList.remove('sel')); el.classList.add('sel');
-    CHAIN.forEach((_, i) => document.getElementById('c' + i).classList.toggle('lit', i === t.state));
-    mapnote.innerHTML = t.own
-      ? `Turn ${t.i} made commit <code>${CHAIN[t.state].sha}</code> — its repo state is its own commit.`
-      : `Turn ${t.i} made <b>no commit</b> — its state <i>carries forward</i> to <code>${CHAIN[t.state].sha}</code>` +
-        (t.state === 0 ? ' (the eval/start state itself).' : ' (the previous turn\'s commit).');
+  // pipeline steps
+  const ISO = [
+    ['dotnet build → .claudeweb-preview/bin', 'script', 'Built once, copied OUTSIDE the repo tree so the instance cannot auto-pin this repo (no .sln above it).'],
+    ['seed gate + kill switch into scratch datadir', 'script', 'autopilot-gate.json {enabled:true} + autopilot.json — written BEFORE boot. Same trust boundary as the operator’s GUI click, because the datadir is disposable.'],
+    ['boot ClaudeWeb on :5210', 'script', 'Own port, own datadir, own throwaway password. Health-polled up to 60s.'],
+    ['…shared core runs…', '', 'See the shared box below.'],
+    ['taskkill + delete scratch root', 'script', 'Always — pass, fail, or timeout. A timeout is a FAILED VERDICT, never a hang.'],
+  ];
+  const LIVE = [
+    ['health-check the RUNNING :5099 harness', 'script', 'Nothing is booted. If live is down, the run refuses immediately.'],
+    ['login with LOOPEVAL_LIVE_PW', 'you + script', 'You supply the real operator password explicitly. Missing → abort before any network call.'],
+    ['preflight: gate? kill switch? leftovers?', 'script', 'gateOpen via /api/autopilot/loops, killSwitchEnabled via the debug bundle, leftover loopeval-*-live repos via /api/repos. Any “no” → a failed verdict naming exactly what to click. The suite NEVER enables anything.'],
+    ['…shared core runs — watch it in the UI…', 'you', 'Repo card appears, agent dock streams the turns, Autopilot console shows the loop card. The script prints a WATCH banner with the URL right after arming.'],
+    ['cleanup: stop loop, close tab, unregister repo', 'script', 'Registry entry only — nothing on disk outside its own scratch copy. LOOPEVAL_KEEP=1 keeps it all and prints the manual steps instead.'],
+  ];
+  const SHARED = [
+    ['materialize fixture repo (scratch copy + git init)', 'lib.mjs', 'Committed template → temp copy → initial commit, so agent commits never dirty the template. Goal: a todo CLI with a missing `done` command. Queue: six prompts, each mapped to an expected artifact.'],
+    ['precondition asserts (fixture drift guard)', 'lib.mjs', 'goal-check must FAIL / artifacts must be ABSENT on the fresh fixture — otherwise the scenario proves nothing and aborts before spending tokens.'],
+    ['register repo (advanced visibility) + seed one chat turn', 'shipped API', 'POST /api/repos, then a cheap “reply ready” turn: it pins a session for the arm AND doubles as the CLI probe — a broken claude CLI fails here, not mid-loop.'],
+    ['arm the REAL loop in drive mode', 'shipped API', 'POST /api/autopilot/loop — goal kind (free-text goal, cap 6) or queue kind (bound to the dock tab’s live stash, verify on).'],
+    ['poll every 5s until resolution', 'lib.mjs', 'One status line per tick (status/phase/sent/iterations). Deadline: 15 min (goal) / 25 min (queue) — identical in both modes; live is never slowed down “for watchability”.'],
+    ['assert outcomes mechanically', 'scenario', 'goal: done·verified + goal-check exits 0 + every send loop-attributed. queue: done·drained + queueSent==6 + sent order == arm order + every artifact matches its regex.'],
+  ];
+  function fill(id, steps, liveonly) {
+    const el = document.getElementById(id);
+    steps.forEach(([t, who, d], i) => {
+      if (i) { const a = document.createElement('div'); a.className = 'arrow'; a.textContent = '↓'; el.appendChild(a); }
+      const s = document.createElement('div');
+      s.className = 'step' + (liveonly ? ' liveonly' : '');
+      s.innerHTML = '<span class="who">' + who + '</span><div class="t">' + t + '</div><div class="d">' + d + '</div>';
+      s.onclick = () => s.classList.toggle('open');
+      el.appendChild(s);
+    });
+  }
+  fill('flow-iso', ISO, false);
+  fill('flow-live', LIVE, true);
+  fill('flow-shared', SHARED, false);
+
+  // live-run simulator
+  const SIM = [
+    ['shell', '$ LOOPEVAL_LIVE_PW=****** node tests/loop-eval/goal.mjs --live'],
+    ['shell', 'live mode — no build, targeting the running live harness\nlive mode — provisioning fixture scratch %TMP%\\cw-loopeval-live (live instance untouched)'],
+    ['shell', 'ok   - precondition: goal-check FAILS on the untouched fixture'],
+    ['shell', 'ok   - live preflight: operator gate is open\nok   - live preflight: autopilot kill switch is on\nok   - live preflight: no leftover loopeval-*-live repo'],
+    ['UI',    '👀 a new repo card appears: “loopeval-goal-live” (Advanced mode only)'],
+    ['shell', 'fixture repo registered: r-3f81…\nseeding a conversation (CLI probe)…\nok   - CLI probe: seeded chat turn completed'],
+    ['shell', 'ok   - goal loop armed\n┌──────────────────────────────\n│ WATCH IT LIVE: http://localhost:5099\n│   → open the repo "loopeval-goal-live"\n│   → agent dock / Autopilot console\n└──────────────────────────────'],
+    ['UI',    '👀 agent dock: a real turn streams in — the agent reads CLAUDE.md, implements `done`, commits\n👀 Autopilot console: loop card shows work · looping 1/6'],
+    ['UI',    '👀 the agent replies LOOP_DONE → engine flips to the VERIFY phase and sends the verification prompt'],
+    ['UI',    '👀 verification turn replies GOAL_VERIFIED → loop card: done · verified'],
+    ['shell', 'ok   - loop ended done · verified (LOOP_DONE → verify → GOAL_VERIFIED)\nok   - goal check now exits 0 (feature really implemented)\nok   - every send was loop-attributed in the audit log'],
+    ['shell', 'live teardown: unregistering the fixture from the live harness\nPASS: goal (8 assertions)   exit 0'],
+    ['UI',    '👀 the repo card is gone again — nothing left behind. (LOOPEVAL_KEEP=1 would have kept it for you to poke at.)'],
+  ];
+  let simAt = 0;
+  const log = document.getElementById('simlog');
+  document.getElementById('sim-next').onclick = () => {
+    if (simAt >= SIM.length) return;
+    const [where, text] = SIM[simAt++];
+    log.textContent += (log.textContent.endsWith('—') ? '\n' : '\n\n') + '[' + where + ']  ' + text;
+    log.scrollTop = log.scrollHeight;
+    if (simAt >= SIM.length) document.getElementById('sim-next').disabled = true;
   };
-  turnlist.appendChild(el);
-});
-
-// --- 5. real reports ---------------------------------------------------------
-const GOOD = `example  hello-notes: build a two-note collection with an index (golden: 3 commits)
-config   queue drive, cap 8, verify on; 1 run(s)
-
-run 1  <span class="ok">PASS</span>       status done (drained)  turns 2 (1 changed state; golden 3)  33s
-        diff vs eval/final: +0 added, -0 missing, ~2 changed
-        turn 0: overlap 0.33  run[index.md, notes/alpha.md, notes/beta.md] golden[notes/alpha.md]
-        turn 1: overlap 0.00  run[] golden[notes/beta.md]
-        turn 2: overlap 0.00  run[] golden[index.md]
-        <span class="dim">first divergence at state-change 1</span>
-
-pass rate <span class="ok">1/1 (100%)</span>  worst: passed  turns min/mean/max: 2/2.0/2`;
-const BROKEN = `example  hello-notes: build a two-note collection with an index (golden: 3 commits)
-config   queue drive, cap 8, verify on, <span class="bad">BROKEN seed</span>; 1 run(s)
-
-run 1  <span class="bad">FAIL (alpha-note)</span>  status done (drained)  turns 2 (0 changed state; golden 3)  33s
-        diff vs eval/final: +0 added, <span class="bad">-3 missing</span>, ~0 changed
-        turn 0: overlap 0.00  run[] golden[notes/alpha.md]
-        turn 1: overlap 0.00  run[] golden[notes/beta.md]
-        turn 2: overlap 0.00  run[] golden[index.md]
-        <span class="bad">first divergence at state-change 0</span>
-
-pass rate <span class="bad">0/1 (0%)</span>  worst: done  turns min/mean/max: 2/2.0/2`;
-const rep = document.getElementById('report'), vl = document.getElementById('verdictline');
-const tg = document.getElementById('tabGood'), tb = document.getElementById('tabBroken');
-function show(good) {
-  tg.classList.toggle('on', good); tb.classList.toggle('on', !good);
-  rep.innerHTML = good ? GOOD : BROKEN;
-  vl.innerHTML = good
-    ? 'The agent did the whole task in <b class="g">one</b> state-changing turn (golden took 3) and every check passed — a valid pass with a different trajectory. The ~2 changed files are content differences the checks deliberately tolerate.'
-    : 'Mis-seed the queue and the same engine drains without touching a file: the <b class="r">named failing check</b>, the missing files, and divergence-at-0 all point at the seed. A worse config scores worse — the eval discriminates.';
-}
-tg.onclick = () => show(true); tb.onclick = () => show(false);
-show(true);
+  document.getElementById('sim-reset').onclick = () => {
+    simAt = 0; log.textContent = 'press “Next step” —';
+    document.getElementById('sim-next').disabled = false;
+  };
 </script>
 </body>
 </html>

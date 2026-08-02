@@ -103,12 +103,13 @@ public class LoopConfigStore
     /// the host exactly which file holds the durable loop state.</summary>
     public string FilePath => _path;
 
-    public LoopConfigStore(Logger logger)
+    public LoopConfigStore(Logger logger, string? dirOverride = null)
     {
         _logger = logger;
         // AppPaths (not %APPDATA% directly) so an isolated CLAUDEWEB_DATADIR
-        // instance keeps its own loops instead of sharing the operator's live ones.
-        var dir = AppPaths.DataDir;
+        // instance keeps its own loops instead of sharing the operator's live
+        // ones. dirOverride is test-only (same pattern as LocalAppDiscoveryCache).
+        var dir = dirOverride ?? AppPaths.DataDir;
         Directory.CreateDirectory(dir);
         _path = Path.Combine(dir, "loops.json");
         Load();
@@ -173,6 +174,12 @@ public class LoopConfigStore
         public bool? VerifyEnabled { get; set; }
         public string? LastStepText { get; set; }
         public int? QueueSent { get; set; }
+        // Per-arm effective deny-list (openspec: advance-queue-loop, D2). Null =
+        // use the global default from autopilot.json; a non-null list (possibly
+        // empty — the operator may trim every term) replaces it for THIS instance
+        // only. The risk decision belongs to the arm, not permanently to the repo:
+        // the next arm starts from the untouched default again. Additive nullable.
+        public List<string>? DenyList { get; set; }
         // Queue kind, sent-history (openspec: queue-loop-visibility, D3): the texts of
         // the steps that actually landed this arm, newest last, bounded at
         // QueueSentTextsCap (drop-oldest). Prompt-bearing — disclosed only via the
@@ -199,7 +206,9 @@ public class LoopConfigStore
         string? Goal, string? VerifyPrompt, string? Phase, string? PendingPrompt, long ArmedAt,
         string? SessionId,
         string? QueueTabId, bool VerifyEnabled, string? LastStepText, int QueueSent,
-        IReadOnlyList<string> QueueSentTexts);
+        IReadOnlyList<string> QueueSentTexts,
+        // Per-arm deny-list (advance-queue-loop, D2): null = global default applies.
+        IReadOnlyList<string>? DenyList = null);
 
     public IReadOnlyList<LoopState> All()
     {
@@ -288,7 +297,8 @@ public class LoopConfigStore
     /// against arming over an empty stash. Mirrors <see cref="StartGoal"/>: counters
     /// reset, ArmedAt stamped, session pinned.</summary>
     public LoopState StartQueue(string repoId, string tabId, bool? verifyEnabled,
-        int? maxIterations, string? mode = null, string? sessionId = null)
+        int? maxIterations, string? mode = null, string? sessionId = null,
+        List<string>? denyList = null)
     {
         lock (_gate)
         {
@@ -300,6 +310,7 @@ public class LoopConfigStore
                 QueueTabId = tabId,
                 VerifyEnabled = verifyEnabled ?? true,
                 QueueSent = 0,
+                DenyList = CleanDenyList(denyList),
                 Phase = PhaseWork,
                 Sentinel = DefaultSentinel,
                 MaxIterations = Math.Clamp(maxIterations ?? DefaultMaxIterations, 1, 100),
@@ -435,6 +446,16 @@ public class LoopConfigStore
 
     private static string? Clean(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
+    // Per-arm deny-list normalization (advance-queue-loop, D2): null stays null
+    // ("use the global default"); a provided list is trimmed and de-duplicated but
+    // an EMPTY result is kept — it is the operator's explicit "no deny terms this
+    // arm", distinct from null.
+    private static List<string>? CleanDenyList(List<string>? terms) =>
+        terms?.Select(t => t?.Trim() ?? "")
+              .Where(t => t.Length > 0)
+              .Distinct(StringComparer.OrdinalIgnoreCase)
+              .ToList();
+
     private static string CleanMode(string? mode, string defaultMode = ModeDrive) =>
         string.Equals(mode, ModeSuggest, StringComparison.OrdinalIgnoreCase) ? ModeSuggest
         : string.Equals(mode, ModeDrive, StringComparison.OrdinalIgnoreCase) ? ModeDrive
@@ -457,6 +478,36 @@ public class LoopConfigStore
 
     /// <summary>Stops a loop by the user's hand (the Stop button).</summary>
     public LoopState? Stop(string repoId) => Resolve(repoId, "stopped", "user", "stopped by the user");
+
+    /// <summary>Re-activates a stopped QUEUE instance in place (openspec:
+    /// advance-queue-loop, D3): same record — the sent-history and per-arm settings
+    /// (verify, deny-list, cap, binding) survive — but a FRESH activation: new
+    /// ArmedAt generation (the engine clears its dedup guards on the change),
+    /// iteration budget restarted, stop reason cleared, and phase reset to work
+    /// (D4 — a dead drive's verify-owed never carries a verification obligation
+    /// into the resumed drive). Eligibility (inactive + queue kind + bound tab
+    /// alive + stash non-empty) is the CONTROLLER's check; this is the mutation.</summary>
+    public LoopState? Resume(string repoId)
+    {
+        lock (_gate)
+        {
+            if (!_data.Loops.TryGetValue(repoId, out var e) || e.Kind != KindQueue || e.Active)
+                return null;
+            e.Active = true;
+            e.Status = "looping";
+            e.StopReason = null;
+            e.StopDetail = null;
+            e.PendingPrompt = null;
+            e.Phase = PhaseWork;
+            e.LastStepText = null;
+            e.ArmedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            e.IterationsDone = 0;
+            e.LastSentAt = 0;
+            Save();
+            _logger.Info($"[LOOP] {repoId}: queue loop resumed on tab {e.QueueTabId} ({e.QueueSent ?? 0} sent so far this instance)");
+            return ToState(repoId, e);
+        }
+    }
 
     /// <summary>Engine: terminal/stop outcome (done | escalate | capped | error | stopped),
     /// plus WHY it stopped (reason = the condition that fired, detail = its specifics).
@@ -508,7 +559,8 @@ public class LoopConfigStore
             e.Goal, e.VerifyPrompt, e.Phase, e.PendingPrompt, e.ArmedAt,
             e.SessionId,
             e.QueueTabId, e.VerifyEnabled != false, e.LastStepText, e.QueueSent ?? 0,
-            e.QueueSentTexts?.ToList() ?? (IReadOnlyList<string>)Array.Empty<string>());
+            e.QueueSentTexts?.ToList() ?? (IReadOnlyList<string>)Array.Empty<string>(),
+            e.DenyList?.ToList());
 
     private void Load()
     {

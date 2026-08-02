@@ -140,11 +140,15 @@ public class AutopilotController : ControllerBase
         // Queue kind (openspec: queue-based-loop, D8): the dock tab whose live
         // stash IS the queue, and the between-step verification opt-out
         // (null = on, the default posture).
-        string? TabId = null, bool? VerifyEnabled = null);
+        string? TabId = null, bool? VerifyEnabled = null,
+        // Per-arm deny-list (openspec: advance-queue-loop, D2): the effective
+        // list for THIS arm. Null = global default; an empty list is the
+        // operator's explicit "no deny terms this arm".
+        List<string>? DenyList = null);
 
     /// <summary>The loop control (openspec: unify-loop-types, revision 2): one
     /// endpoint arms / edits / disarms an agent's ONE loop instance of any kind.
-    /// <c>action</c> = start | mode | update | stop | disarm. A start's <c>kind</c>
+    /// <c>action</c> = start | mode | update | stop | disarm | resume. A start's <c>kind</c>
     /// picks the implementation — "suggestion" (no params), "goal" (free-text
     /// <c>goal</c>), else recipe (a <c>recipeId</c> whose stored prompt/sentinel/cap
     /// the server fills byte-identical, or a raw <c>prompt</c>). Every start accepts
@@ -200,7 +204,7 @@ public class AutopilotController : ControllerBase
                     if (stash.Count == 0)
                         return BadRequest(new { error = "the stash is empty — queue a prompt before arming" });
                     _loops.StartQueue(req.RepoId, req.TabId.Trim(), req.VerifyEnabled,
-                        req.MaxIterations, req.Mode, pin);
+                        req.MaxIterations, req.Mode, pin, req.DenyList);
                     break;
                 }
                 if (!string.IsNullOrWhiteSpace(req.RecipeId))
@@ -230,6 +234,31 @@ public class AutopilotController : ControllerBase
                 // One slot per agent → one clear, whatever the kind (revision 2, D8).
                 _loops.Stop(req.RepoId);
                 break;
+            case "resume":
+            {
+                // One-step resume of a stopped QUEUE instance (openspec:
+                // advance-queue-loop, D3): the same record re-activates and drives
+                // the remainder from the current stash head. Eligibility is checked
+                // here — inactive queue instance, bound tab alive, stash non-empty —
+                // and the store mutation resets phase + iteration budget (D4).
+                var cur = _loops.Get(req.RepoId);
+                if (cur is null || cur.Kind != LoopConfigStore.KindQueue)
+                    return NotFound(new { error = "no queue loop instance on this agent" });
+                if (cur.Active)
+                    return BadRequest(new { error = "the queue loop is already running" });
+                var remaining = cur.QueueTabId is null ? null : _dock.GetStash(cur.QueueTabId);
+                if (remaining is null)
+                    return NotFound(new { error = $"the bound dock tab \"{cur.QueueTabId}\" no longer exists — arm a fresh queue instead" });
+                if (remaining.Count == 0)
+                    return BadRequest(new { error = "the stash is empty — nothing to resume" });
+                if (_loops.Resume(req.RepoId) is null)
+                    return NotFound(new { error = "no queue loop instance on this agent" });
+                var repoName = _repos.GetAll().FirstOrDefault(r => r.Id == req.RepoId)?.Name ?? req.RepoId;
+                _audit.Record(new AutopilotAuditLog.Entry(
+                    DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), req.RepoId, repoName,
+                    "", 1.0, $"{remaining.Count} item(s) remaining in the stash", "resume"));
+                break;
+            }
             default:
                 return BadRequest(new { error = $"unknown action \"{req.Action}\"" });
         }
@@ -408,6 +437,10 @@ public class AutopilotController : ControllerBase
                     // step's text and the verify template are prompt text — gated
                     // like the fields above. The binding + counts are status words.
                     queueTabId = loop.QueueTabId,
+                    // Per-arm deny-list (advance-queue-loop, D2): null = the global
+                    // default applies. Terms follow the gate like the global list.
+                    denyList = loop.DenyList is null ? null
+                        : (gateOpen ? (object)loop.DenyList : redactedMarker),
                     queueVerifyEnabled = loop.Kind == LoopConfigStore.KindQueue ? (bool?)loop.VerifyEnabled : null,
                     queueSent = loop.Kind == LoopConfigStore.KindQueue ? (int?)loop.QueueSent : null,
                     lastStepText = Text(loop.LastStepText),
@@ -495,6 +528,10 @@ public class AutopilotController : ControllerBase
         {
             loops = _loops.All(),
             recipes = _recipes.List(),
+            // The global default deny-list (advance-queue-loop, D2): the arm forms
+            // render it as removable chips to compose a per-arm effective list.
+            // Gated like every config disclosure.
+            denyList = _config.Get().DenyList,
             goalTemplates = new
             {
                 work = LoopConfigStore.GoalWorkTemplate,

@@ -15,6 +15,7 @@ using ClaudeWeb.Services.Git;
 using ClaudeWeb.Services.IpFilter;
 using ClaudeWeb.Services.Logging;
 using ClaudeWeb.Services.LoopEvals;
+using ClaudeWeb.Services.LoopEval;
 using ClaudeWeb.Services.Monitoring;
 using ClaudeWeb.Services.Notes;
 using ClaudeWeb.Services.Pins;
@@ -184,6 +185,7 @@ public class EmbeddedApi
             builder.Services.AddStatusMonitorModule(); // third-monitor wallboard board endpoint (openspec status-monitor-dashboard)
             builder.Services.AddTrafficModule(); // HTTP throughput counters (openspec traffic-monitor)
             builder.Services.AddLoopEvalsModule(); // golden-example curation + bundle export (openspec loop-evals)
+            builder.Services.AddLoopEvalModule(); // Tests-tab E2E eval runner (openspec add-loop-eval-ui-runner)
             // === END MODULE SERVICE REGISTRATION ===
 
             _app = builder.Build();

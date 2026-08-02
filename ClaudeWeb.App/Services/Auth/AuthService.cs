@@ -51,6 +51,10 @@ public class AuthService
         public string TokenHash { get; set; } = "";
         public DateTime CreatedUtc { get; set; }
         public DateTime LastSeenUtc { get; set; }
+        // Internal-service sessions (e.g. the loop-eval runner) carry a tag so
+        // they can be revoked as a group; browser logins stay untagged (null —
+        // absent in pre-existing sessions.json files, which round-trip fine).
+        public string? Tag { get; set; }
     }
 
     private sealed class FailState
@@ -66,10 +70,12 @@ public class AuthService
 
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
 
-    public AuthService(AppConfig config, Logger logger)
+    // dataDirOverride is TEST-ONLY (same pattern as LoopConfigStore): unit tests
+    // point at a temp dir so they never touch the operator's real APPDATA store.
+    public AuthService(AppConfig config, Logger logger, string? dataDirOverride = null)
     {
         _logger = logger;
-        var dir = AppPaths.DataDir;
+        var dir = dataDirOverride ?? AppPaths.DataDir;
         _authPath = Path.Combine(dir, "auth.json");
         _sessionsPath = Path.Combine(dir, "sessions.json");
         LoadOrSeed(config);
@@ -120,21 +126,23 @@ public class AuthService
 
     // --- sessions ---------------------------------------------------------------
 
-    /// <summary>Creates a session and returns the raw token (only ever held by the client).</summary>
-    public string CreateSession()
+    /// <summary>Creates a session and returns the raw token (only ever held by the client).
+    /// A non-null <paramref name="tag"/> marks an internal-service session (e.g.
+    /// "loopeval-runner") revocable as a group via <see cref="RevokeSessionsByTag"/>.</summary>
+    public string CreateSession(string? tag = null)
     {
         var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(TokenBytes)).ToLowerInvariant();
         var now = DateTime.UtcNow;
         lock (_gate)
         {
             Prune();
-            _sessions.Add(new SessionRecord { TokenHash = Sha256(token), CreatedUtc = now, LastSeenUtc = now });
+            _sessions.Add(new SessionRecord { TokenHash = Sha256(token), CreatedUtc = now, LastSeenUtc = now, Tag = tag });
             // Cap runaway growth (oldest first).
             if (_sessions.Count > MaxSessions)
                 _sessions = _sessions.OrderByDescending(s => s.LastSeenUtc).Take(MaxSessions).ToList();
             SaveSessions();
         }
-        _logger.Info("[AUTH] Session created");
+        _logger.Info(tag is null ? "[AUTH] Session created" : $"[AUTH] Session created (tag: {tag})");
         return token;
     }
 
@@ -171,6 +179,23 @@ public class AuthService
                 SaveSessions();
         }
         _logger.Info("[AUTH] Session revoked");
+    }
+
+    /// <summary>Revokes every session carrying the given tag (openspec:
+    /// add-loop-eval-ui-runner — the runner's stale-session sweep at start and
+    /// end-of-run revocation both land here). Untagged browser sessions are
+    /// never touched. Returns how many were removed.</summary>
+    public int RevokeSessionsByTag(string tag)
+    {
+        if (string.IsNullOrEmpty(tag)) return 0;
+        int removed;
+        lock (_gate)
+        {
+            removed = _sessions.RemoveAll(s => s.Tag == tag);
+            if (removed > 0) SaveSessions();
+        }
+        if (removed > 0) _logger.Info($"[AUTH] Revoked {removed} session(s) tagged '{tag}'");
+        return removed;
     }
 
     // --- brute-force throttle ----------------------------------------------------

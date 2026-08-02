@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiGet, apiPost, apiGetBlob } from '../../api/client';
 import '../../pages/autopilot.css';
 
-// The "System Tests" sub-tab of the AutopilotConsole (understanding.md: real-runner).
+// The "Browser (System tests)" sub-tab of the console's 🧪 Tests root tab
+// (understanding.md: real-runner; moved from Reference by openspec
+// add-autopilot-tests-tab).
 // One inner sub-tab per loop-mode test I've made; each Run shells out (server-side)
 // to the fixed Node/Playwright script and streams the result back here.
 //

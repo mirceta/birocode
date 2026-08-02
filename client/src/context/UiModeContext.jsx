@@ -69,6 +69,7 @@ export const FEATURES = {
   dockAppSplit: 'advanced', // dock split view: opened local app beside the chat instead of over the dock (openspec: dock-app-split-view)
   adminStatus: 'advanced', // always-admin status tile in the header strip: UAC-off state + enabler (openspec: add-always-admin-status)
   loopEvalsTab: 'advanced', // Operator-facing golden-example curation for loop evals (openspec: loop-evals)
+  loopEvalRunner: 'advanced', // Tests tab E2E eval section: start/watch/stop live-mode loop-eval runs (openspec: add-loop-eval-ui-runner)
 };
 
 const MODE_KEY = 'claudeweb_ui_mode';
