@@ -42,6 +42,16 @@ repo state after every turn.
 
 ## Decisions
 
+> **Revision (rework onto `loop-eval`).** After `main` shipped the `loop-eval` suite (an
+> end-to-end, watchable, Tests-tab eval runner), the execution/scoring decisions below
+> (**D4 in-process runner**, and D5's per-turn `run/<n>` commit mechanic) are
+> **superseded by [D6](#d6)**: the golden replay is now a *scenario of the `loop-eval`
+> suite* driving the shipped HTTP surface, not a standalone in-process console. D1–D3
+> (the bundle format and curation) and D5's *scoring intent* (acceptance verdict +
+> trajectory evidence + N-run reliability) are unchanged — only *how* the run is driven
+> and where trajectory data comes from changed. See the comparison table at the end of
+> this doc for why.
+
 ### D1 — A golden example's repo states are a git history, shipped as a `git bundle`
 
 The per-turn states are exactly what git is for. An example's repository is a real git
@@ -164,6 +174,50 @@ table, like `Scoring.cs` in discovery-eval):
 An LLM-judge comparison of loop-final vs golden-final ("same intent achieved?") is a
 possible later refinement, deliberately **not** in this change: acceptance checks give
 an objective verdict without a second model in the loop.
+
+<a id="d6"></a>
+### D6 — The golden replay is a scenario of the `loop-eval` suite (supersedes D4)
+
+The standalone in-process console runner (D4) worked but sat *outside* the product: it
+booted its own DI host, could only be run from a terminal, and produced a console report
+no one could watch. Meanwhile `main` shipped `loop-eval` — a suite that already boots an
+isolated harness (or targets the live one), drives loops **only through the shipped
+operator surface**, and is **startable and watchable from the Tests-tab eval runner**
+with a bound dock tab. Rather than keep a parallel, weaker execution path, the golden
+replay becomes a **third scenario** in that suite (`tests/loop-eval/golden.mjs`).
+
+What this buys, for one small script + a few shared helpers:
+
+- **Three run modes for free** — automatic isolated test, `--live` against the running
+  harness, and startable from the Tests-tab runner (SSE state machine + results) — because
+  the scenario conforms to the suite's existing contract (`@@LOOPEVAL@@` verdicts,
+  `--describe` manifest, `loopeval-*-live` repo naming, dock create+bind).
+- **Real run path** — the loop is armed and polled over HTTP exactly as an operator would,
+  not hosted in-process, so the eval also exercises the wiring the product ships.
+- **Watchable** — a human sees the driven conversation in the dock and the loop card tick,
+  which was the whole reason for the rework.
+
+Two mechanics changed as a consequence:
+
+1. **Materialization.** `materializeGolden` clones `repo.bundle` at `eval/start` and
+   **strips the answer** (deletes the `golden` branch, `eval/*` tags, and origin) so the
+   agent can't diff to the goal. The bundle file stays on disk; the scorer fetches the
+   golden chain back from it under a private `refs/goldeneval/*` namespace at scoring time.
+2. **Trajectory source.** D4 committed the scratch tree after every turn via an in-process
+   hook. Over the HTTP surface there is no such hook — but the queue loop already commits
+   per step, so the run's *own* git history is the trajectory. `compareTrajectory` diffs
+   `startSha..work` (the run) against `startSha..golden` (fetched from the bundle) by
+   positional files-touched Jaccard overlap, reported as **evidence only** (never a
+   pass/fail assert — a correct run may validly diverge).
+
+Reliability (D5) stays, but as `--runs N` **isolated-only**: several materialize→arm→score
+cycles against one booted instance, aggregated to a pass-rate + iteration spread. Live
+mode is deliberately a single watchable run and refuses `N>1`.
+
+*Trade-off:* trajectory fidelity now depends on the loop's own commit cadence rather than
+a forced per-turn snapshot. For the queue loop (commits per tick) this is fine; if a
+future loop kind commits coarsely, a per-turn snapshot hook could be reintroduced as a
+`loop-eval` delta.
 
 ## Risks / Trade-offs
 

@@ -32,3 +32,18 @@
 - [x] 5.1 End-to-end: run the synthetic example through the runner + scorer; confirm a deliberately-broken loop config scores worse than a good one
 - [x] 5.2 External examples root honored (config outside repo); committed-example-must-be-synthetic note in README
 - [x] 5.3 `openspec validate loop-evals --strict` passes; update Understanding app for the eval flow
+
+## 6. Rework: golden replay as a `loop-eval` scenario (supersedes the in-process runner)
+
+Rationale: fit the golden-example eval into the shipped `loop-eval` suite so it runs as an
+automatic isolated test, live, and watchable from the Tests-tab runner — instead of an
+offline console tool. The format + curation layer (§1, §3.1, §4) is kept as-is; the
+execution + scoring layer (§2, §3.2–3.4) is replaced.
+
+- [x] 6.1 Shared helpers in `tests/loop-eval/lib.mjs`: `provisionFromBundle`, `materializeGolden` (clone bundle at `eval/start`, strip golden refs), `runChecks` (acceptance verdict), `compareTrajectory` (run commits vs golden fetched from the bundle)
+- [x] 6.2 `tests/loop-eval/golden.mjs` scenario: `--describe`, drift guard, register → dock stash from `plan.md` → chat seed → arm queue loop → watch → acceptance verdict, trajectory as evidence, dock binding + watch banner
+- [x] 6.3 Register in the runner catalog (`LoopEvalRunnerService.Scenarios`) and both `run-all.mjs` arrays; client Tests-tab list is dynamic (no change)
+- [x] 6.4 Reliability: `--runs N` isolated-only sweep with pass-rate + iteration spread; live mode refuses N>1 (single watchable run)
+- [x] 6.5 Remove the standalone console project `tests/loop-evals/LoopEvals/` and its `ClaudeWeb.sln` entries; keep the `BundleExporter` tests (app-side)
+- [ ] 6.6 Verify: solution builds; `golden.mjs --describe` + `run-all.mjs --describe` compose; git plumbing (materialize/strip/trajectory) validated offline against the committed bundle; a real isolated run passes (spends tokens — run on demand)
+- [ ] 6.7 Update `tests/loop-evals/README.md` run section and the Understanding app for the scenario-based flow; `openspec validate loop-evals --strict` passes

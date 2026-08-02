@@ -71,30 +71,62 @@ stored session.
 - **WHEN** a curation session is performed and exported
 - **THEN** the source repository copy's branches and the stored session conversation are byte-identical to before curation began
 
-### Requirement: Runner replays the real loop from the start state
+### Requirement: Runner replays the real loop through the shipped operator surface
 
-The eval runner SHALL clone a golden example's `repo.bundle` at `eval/start` into a
-scratch working copy and drive the production loop engine (the same loop implementations
-and composition the harness runs) against it, seeded from the example's `plan.md`
-according to the selected loop kind and configuration. The runner SHALL enforce a hard
-turn cap and wall-clock timeout, and SHALL commit the scratch tree after each
-loop-driven agent turn to a per-run branch so the run's trajectory has the same shape as
-the golden branch. The example's own repository SHALL never be mutated by a run.
+The golden replay SHALL be a scenario of the on-demand loop-eval suite
+(`tests/loop-eval/golden.mjs`, built on `loop-eval`'s shared driver) that clones a golden
+example's `repo.bundle` at `eval/start` into a scratch working copy **with the golden
+answer stripped** (the `golden` branch, `eval/*` tags, and origin removed so the driven
+agent cannot read the answer), and drives the production loop engine **only through the
+shipped operator surface** the loop-eval suite uses (login, repo registration, dock
+stash, chat seed, loop arm/poll) — no engine bypass and no in-process host. The queue
+loop SHALL be seeded from the example's `plan.md` per the manifest's seed hints (a single
+plan-sized item by default, or a pre-split item list). The scenario SHALL enforce a hard
+iteration cap and wall-clock deadline. The example's own repository and bundle SHALL
+never be mutated by a run; the loop's own per-step commits in the scratch copy form the
+run trajectory compared against the golden branch.
 
 #### Scenario: Score reflects the shipped loop engine
 
-- **WHEN** the runner evaluates a loop configuration against an example
-- **THEN** the production loop engine drives the turns, so a change to the shipped loop logic or recipe changes eval results
+- **WHEN** the scenario evaluates a loop configuration against an example
+- **THEN** the production loop engine drives the turns through the real HTTP surface, so a change to the shipped loop logic or recipe changes eval results
+
+#### Scenario: The driven agent cannot read the golden answer
+
+- **WHEN** the scratch working copy is materialized from `repo.bundle`
+- **THEN** the working copy is checked out at `eval/start` and the `golden` branch, `eval/start`/`eval/final` tags, and the bundle remote are absent from it, so the agent has no in-repo reference to the desired final state
 
 #### Scenario: Runaway loop is cut off
 
-- **WHEN** a loop exceeds the configured turn cap or timeout without passing acceptance checks
-- **THEN** the run ends, is scored as not done with the cap/timeout as the stated reason, and its partial trajectory is still recorded
+- **WHEN** a loop exceeds the configured iteration cap or deadline without passing acceptance checks
+- **THEN** the run ends, is scored as not done with the cap/deadline as the stated reason, and its partial result is still recorded
 
 #### Scenario: Runs are isolated
 
 - **WHEN** two runs of the same example execute
 - **THEN** each uses its own scratch clone, and the golden bundle's contents are unchanged afterward
+
+### Requirement: The golden replay runs in both modes and is watchable
+
+The golden scenario SHALL conform to the loop-eval suite's scenario contract so it runs
+in both of that suite's modes — the default isolated instance (automatic) and opt-in
+live mode against the operator's running harness — and is startable and observable from
+the harness Tests-tab eval runner without any per-scenario UI wiring. It SHALL emit
+per-assertion `@@LOOPEVAL@@` verdict lines and answer `--describe` with a manifest built
+from the example (so the runner lists it, streams its state machine, and renders its
+results), and SHALL open and bind a dock tab to the driven conversation so a human can
+watch the run. Live mode SHALL run a single watchable run and SHALL announce where to
+watch (repo card, dock tab, Autopilot loop card).
+
+#### Scenario: Listed and startable in the Tests tab
+
+- **WHEN** the operator opens the eval runner in the Tests tab
+- **THEN** the golden scenario appears as a startable row with its cost copy and its `--describe` manifest, and starting it streams the run's state (preflight → armed → running → passed/failed)
+
+#### Scenario: Live run is watchable
+
+- **WHEN** the golden scenario is run in live mode against the running harness
+- **THEN** it registers a `loopeval-golden-live` repo card, binds a dock tab to the driven conversation, announces where to watch, and applies the same assertions and deadline as the isolated mode
 
 ### Requirement: Score a loop run against the golden run
 
@@ -113,20 +145,25 @@ touched, identifying where the run first diverged or stalled.
 #### Scenario: Trajectory shows the divergence point
 
 - **WHEN** a run stalls rewriting the same file while the golden run had moved on
-- **THEN** the per-turn comparison shows the turn at which the run's touched files stopped overlapping the golden turns
+- **THEN** the per-turn comparison shows the position at which the run's touched files stopped overlapping the golden turns, reported as evidence without changing the acceptance verdict
 
 ### Requirement: Reliability is measured across repeated runs
 
-The runner SHALL support executing the same (example, loop configuration) pair N times
-(N configurable, N greater than 1 permitted) and SHALL report per-run results together
-with an aggregate: at minimum the pass rate, the worst-case outcome, and the spread of
-turn counts, so an occasionally-successful loop is distinguished from a reliably
-successful one.
+The scenario SHALL support executing the same (example, loop configuration) pair N times
+(`--runs N` / `LOOPEVAL_GOLDEN_RUNS`, isolated mode only — live mode watches a single
+run) against one booted instance, and SHALL report per-run results together with an
+aggregate: at minimum the pass rate and the spread of iteration counts, so an
+occasionally-successful loop is distinguished from a reliably successful one.
 
 #### Scenario: Flaky loop is visible in the aggregate
 
-- **WHEN** a loop passes an example on three of five runs
+- **WHEN** a loop passes an example on three of five isolated runs
 - **THEN** the report shows a 3/5 pass rate with per-run outcomes, not a single passing result
+
+#### Scenario: Live mode is a single watchable run
+
+- **WHEN** the scenario is started in live mode with a runs count greater than one
+- **THEN** it refuses before touching the network, directing the operator to drop the runs count for live mode (reliability sweeps are an isolated-mode concern)
 
 ### Requirement: Offline, developer-facing harness
 

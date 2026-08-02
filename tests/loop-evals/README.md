@@ -1,12 +1,16 @@
 # Loop Evals — golden human-driven runs as the objective function for loop tuning
 
 This harness scores an autopilot loop configuration against a **golden example**: a
-recorded human-babysat run of a long task. It follows the `tests/discovery-eval/`
-posture — an offline, developer-facing console tool run on demand, exercising the
-*real* production loop services.
+recorded human-babysat run of a long task. This directory holds the **golden-example
+format** (the `git bundle` + manifest below) and the **committed synthetic examples**.
+The eval itself is a scenario of the shipped `loop-eval` suite —
+**`tests/loop-eval/golden.mjs`** — so it runs on demand as an automatic isolated test,
+`--live` against the running harness, and startable+watchable from the **Tests-tab eval
+runner**, exercising the *real* production loop through the shipped operator surface.
 
 The OpenSpec capability is `loop-evals` (see `openspec/changes/loop-evals/` while
-in flight, `openspec/specs/loop-evals/` once archived).
+in flight, `openspec/specs/loop-evals/` once archived). The earlier standalone in-process
+console runner was superseded by the scenario (design D6) and removed.
 
 ## Golden example bundle layout
 
@@ -112,34 +116,48 @@ between them.
   **synthetic** — a whole-repo bundle contains the full history from `eval/start`
   forward, so real repos may carry secrets or private code.
 - **Real captures** go to an external examples root outside this repository,
-  configured via `--examples-root <dir>` (or the `LOOPEVALS_EXAMPLES_ROOT`
-  environment variable). Examples there are discovered and evaluated exactly like
-  committed ones.
+  configured via the `LOOPEVAL_GOLDEN_EXAMPLES_ROOT` environment variable. Examples
+  there are discovered and evaluated exactly like committed ones.
 
 ## Running
 
+The eval is the `golden` scenario of the `loop-eval` suite. It spends **real Claude
+tokens and minutes** — on demand only, never CI.
+
 ```
-dotnet run --project tests/loop-evals/LoopEvals -- --example hello-notes [options]
+# Automatic isolated run (boots a throwaway harness, tears it down):
+node tests/loop-eval/golden.mjs [--json out.json] [--runs N]
 
-  --examples-root <dir>   examples directory (default: tests/loop-evals/examples)
-  --runs <N>              repeat the (example, config) pair N times (default 1)
-  --turn-cap <N>          hard cap on loop-driven agent turns (default 12)
-  --timeout-min <N>       wall-clock timeout per run in minutes (default 30)
-  --out <dir>             where run reports land (default: .loop-evals/ scratch)
+# Watchable run against the running live harness (needs LOOPEVAL_LIVE_PW + gate/kill
+# switch on) — see tests/loop-eval for the live-mode contract:
+node tests/loop-eval/golden.mjs --live
+
+# Or start it from the harness Tests tab → E2E eval → "Golden-example replay".
 ```
 
-Each run clones `repo.bundle` at `eval/start` into its own scratch working copy,
-drives the production queue loop seeded from `plan.md`, commits the scratch tree
-after every completed agent turn to a `run/<n>` branch, then scores:
+Environment:
 
-1. **Outcome** — acceptance checks in the final working copy (the verdict), plus
-   the diff of loop-final vs `eval/final` as evidence.
-2. **Trajectory** — turn counts and per-turn files-touched overlap vs the golden
-   commit chain; first divergence point.
-3. **Reliability** — with `--runs N`: pass rate, worst case, turn-count spread.
+```
+LOOPEVAL_GOLDEN_EXAMPLE        example id (default: hello-notes)
+LOOPEVAL_GOLDEN_EXAMPLES_ROOT  examples directory (default: tests/loop-evals/examples)
+LOOPEVAL_GOLDEN_RUNS  / --runs reliability sweep count, ISOLATED only (default 1)
+LOOPEVAL_GOLDEN_MAXITER        hard loop iteration cap (default 18)
+LOOPEVAL_GOLDEN_MINUTES        wall-clock deadline per run in minutes (default 30)
+```
 
-Reports are written as JSON per run plus an aggregate, and printed as a console
-table. The example's own bundle is never mutated by a run.
+Each run clones `repo.bundle` at `eval/start` into a scratch working copy **with the
+golden answer stripped**, registers it, seeds the real queue loop from `plan.md`
+through the shipped surface, watches it drive real agent turns, then scores:
+
+1. **Verdict** — every manifest acceptance check passes in the loop's final working
+   copy (mechanical; byte-identity with `eval/final` is never required).
+2. **Trajectory (evidence, never the verdict)** — the loop's own per-step commits vs
+   the golden chain (fetched back from the bundle): turn counts, per-position
+   files-touched overlap, first divergence.
+3. **Reliability** — with `--runs N` (isolated): pass rate + iteration spread.
+
+Verdicts stream as `@@LOOPEVAL@@` lines (and to the Tests-tab runner); the full
+summary is written with `--json`. The example's own bundle is never mutated by a run.
 
 ## Authoring an example
 
