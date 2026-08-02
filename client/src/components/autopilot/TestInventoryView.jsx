@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { apiGet, apiPost, apiDelete, apiStreamGet } from '../../api/client';
+import { useDock } from '../../context/DockContext';
 import { useFeature } from '../../context/UiModeContext';
 import '../../pages/autopilot.css';
 
@@ -54,8 +56,24 @@ function LoopEvalRunner() {
   const alive = useRef(false);
   const tailRef = useRef(null);
   const lastState = useRef('');
+  const { tabs, setActiveTab } = useDock();
+  const navigate = useNavigate();
 
   const active = !!run && !TERMINAL.includes(run.state);
+
+  // The fixture's dock tab (openspec: loop-eval-watchable-dock). The suite
+  // creates + binds it after seeding; the synced dock list is where the
+  // browser already learns about it — no run-snapshot plumbing needed. Live
+  // preflight guarantees at most one loopeval-*-live repo exists during a run.
+  const watchTab = active
+    ? tabs.find((t) => /^loopeval-.*-live$/.test(t.repoName || ''))
+    : null;
+
+  const watchDock = useCallback(() => {
+    if (!watchTab) return;
+    setActiveTab(watchTab.id);
+    navigate('/studio');
+  }, [watchTab, setActiveTab, navigate]);
 
   const loadPre = useCallback(async () => {
     try {
@@ -236,12 +254,21 @@ function LoopEvalRunner() {
             {active && <button className="ap-mini le-stop" onClick={stop}>■ Stop run</button>}
           </div>
 
-          {active && (
+          {active && (watchTab ? (
             <p className="autopilot__summary le-watch">
-              Watch it live: open the <code>loopeval-*-live</code> repo (advanced visibility)
-              — its agent dock shows the turns; the loop card is on this console&apos;s Loops tab.
+              <button className="lp-arm st-run-btn" onClick={watchDock}>
+                ▶ Watch its agent dock
+              </button>
+              <span> — <b>{watchTab.repoName}</b> is live in the DOCKS strip, bound to the
+              driven conversation; the loop card is on this console&apos;s Loops tab.</span>
             </p>
-          )}
+          ) : (
+            <p className="autopilot__summary le-watch">
+              Its agent dock appears here once the run seeds its conversation
+              (during preflight there is nothing to watch yet); the loop card is on this
+              console&apos;s Loops tab.
+            </p>
+          ))}
 
           {run.error && <p className="le-error">{run.error}</p>}
           {run.leftoverRepos?.length > 0 && (

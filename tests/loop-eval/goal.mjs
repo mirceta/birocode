@@ -48,8 +48,16 @@ try {
   if (!V.assert('CLI probe: seeded chat turn completed', seed.ok, JSON.stringify(seed.run || {})))
     throw new L.Abort('claude CLI is not working on this box — aborting before arming');
 
+  // Watchable dock (openspec: loop-eval-watchable-dock): open a dock tab for
+  // the fixture and bind it to the seed session, then arm pinned to that SAME
+  // session — tab, pin, and seed are provably one conversation, so the DOCKS
+  // strip shows the loop's turns from the first send. Mode-blind (design D4).
+  const tabId = await L.createTab(repoId, repoName);
+  await L.bindTabSession(tabId, seed.run?.sessionId);
+
   const arm = await L.api('POST', '/api/autopilot/loop',
-    { repoId, action: 'start', kind: 'goal', mode: 'drive', maxIterations: MAX_ITERATIONS, goal: GOAL });
+    { repoId, action: 'start', kind: 'goal', mode: 'drive', maxIterations: MAX_ITERATIONS, goal: GOAL,
+      sessionId: seed.run?.sessionId || undefined });
   if (!V.assert('goal loop armed', arm.status === 200, `http ${arm.status} ${JSON.stringify(arm.json || {}).slice(0, 300)}`))
     throw new L.Abort('arm failed');
   L.announceWatch(repoName);

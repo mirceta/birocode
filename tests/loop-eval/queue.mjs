@@ -55,10 +55,16 @@ try {
   if (!V.assert('CLI probe: seeded chat turn completed', seed.ok, JSON.stringify(seed.run || {})))
     throw new L.Abort('claude CLI is not working on this box — aborting before arming');
 
+  // Watchable dock (openspec: loop-eval-watchable-dock): bind the stash tab to
+  // the seed session and arm pinned to that SAME session, so opening the dock
+  // shows the seeded conversation immediately, then every drained prompt.
+  await L.bindTabSession(tabId, seed.run?.sessionId);
+
   const arm = await L.api('POST', '/api/autopilot/loop', {
     repoId, action: 'start', kind: 'queue', tabId, mode: 'drive',
     verifyEnabled: true, maxIterations: MAX_ITERATIONS,
     denyList: ['reset --hard', 'force-push'],
+    sessionId: seed.run?.sessionId || undefined,
   });
   if (!V.assert('queue loop armed', arm.status === 200, `http ${arm.status} ${JSON.stringify(arm.json || {}).slice(0, 300)}`))
     throw new L.Abort('arm failed');

@@ -314,18 +314,41 @@ export function announceWatch(repoName) {
   say('');
   say('┌──────────────────────────────────────────────────────────────');
   say(`│ WATCH IT LIVE: ${base()}`);
-  say(`│   → open the repo "${repoName}" (advanced visibility)`);
-  say('│   → its agent dock shows the real turns as they run');
+  say(`│   → its agent dock is in the DOCKS strip — open the "${repoName}" agent`);
+  say('│     (already bound to the driven conversation: seed turn, then loop turns)');
+  say(`│   → the repo card "${repoName}" is under advanced visibility`);
   say('│   → Autopilot console shows the loop card ticking through phases');
   say('└──────────────────────────────────────────────────────────────');
   say('');
 }
 
-export async function createTabWithStash(repoId, repoName, prompts) {
+/** Open a dock tab for the fixture repo (openspec: loop-eval-watchable-dock).
+ *  Every scenario creates one — mode-blind — so the driven conversation is
+ *  always visible in the dashboard's DOCKS strip, not just on the repo card. */
+export async function createTab(repoId, repoName) {
   const t = await api('POST', '/api/dock', { repoId, repoName });
   const tabId = t.json?.id;
   if (!tabId) throw new Error(`dock tab creation failed: http ${t.status} ${JSON.stringify(t.json)}`);
   if (CFG.live) liveTabId = tabId;
+  say(`dock tab ${tabId} opened for ${repoName}`);
+  return tabId;
+}
+
+/** Bind the tab to the conversation the loop will drive (the seed turn's
+ *  session), so opening the dock shows the seeded turn immediately instead of
+ *  an empty chat. A missing session id downgrades to a warning — the binding
+ *  is an upgrade, never a new hard dependency (design D2): run discovery
+ *  still attaches the dock on the loop's first send. */
+export async function bindTabSession(tabId, sessionId) {
+  if (!sessionId) { say('warn: no seed session id — dock tab left unbound (run discovery will attach it on the first loop send)'); return false; }
+  const r = await api('PATCH', `/api/dock/${tabId}`, { sessionId });
+  if (r.status !== 200) { say(`warn: dock tab ${tabId} not bound to session (http ${r.status}) — continuing unbound`); return false; }
+  say(`dock tab ${tabId} bound to session ${sessionId}`);
+  return true;
+}
+
+export async function createTabWithStash(repoId, repoName, prompts) {
+  const tabId = await createTab(repoId, repoName);
   for (const text of prompts) {
     const s = await api('POST', `/api/dock/${tabId}/stash`, { text });
     if (s.status !== 200) throw new Error(`stash failed: http ${s.status} ${JSON.stringify(s.json)}`);
