@@ -658,9 +658,6 @@
 .le-asserts.le-man__expected li { flex-wrap: nowrap; } /* keep the ○ beside its text; wrap inside the span */
 .le-man__expected .le-assert__mark { color: var(--color-text-muted, #6b7787); }
 .le-man__expected .le-assert__name { color: var(--color-text-muted, #6b7787); }
-.le-man__note { font-size: 12.5px; margin: 6px 0; }
-.le-man__child { margin: 8px 0 8px 10px; padding-left: 12px; border-left: 2px solid var(--color-border); }
-.le-man__childh { margin: 0; font-size: 12.5px; }
 .le-cost { font-size: 12px; color: var(--color-text-muted, #6b7787); }
 .le-cost code { background: var(--color-bg, #f0ece4); padding: 1px 6px; border-radius: 5px; }
 .le-confirm { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }

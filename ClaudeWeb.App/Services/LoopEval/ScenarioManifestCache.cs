@@ -12,9 +12,10 @@ namespace ClaudeWeb.Services.LoopEval;
 /// contract — and relays the parsed JSON to the Tests tab.
 ///
 /// One cache generation for the whole set, keyed on the max mtime across all
-/// scenario scripts: run-all's manifest composes the others, so per-file
-/// invalidation would under-invalidate. A failed describe degrades to an
-/// error note on that scenario — transparency never blocks running.
+/// scenario scripts: a composed manifest (the suite's run-all contract) would
+/// make per-file invalidation under-invalidate, so the whole set refreshes
+/// together. A failed describe degrades to an error note on that scenario —
+/// transparency never blocks running.
 /// </summary>
 public sealed class ScenarioManifestCache
 {

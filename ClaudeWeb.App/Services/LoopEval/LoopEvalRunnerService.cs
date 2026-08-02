@@ -40,14 +40,15 @@ public sealed class LoopEvalRunnerService : IDisposable
     /// show before starting (runs spend real agent turns and real minutes).</summary>
     public sealed record ScenarioDef(string Id, string Script, string Title, string Turns, string Minutes, int TimeoutMinutes);
 
+    // Only the atomic scenarios are startable from the UI (openspec:
+    // loop-eval-tests-tab-declutter) — the combined run-all.mjs sweep stays a
+    // terminal/agent entry point of the committed suite, never a runner row.
     public static readonly IReadOnlyList<ScenarioDef> Scenarios = new[]
     {
         new ScenarioDef("goal", "goal.mjs", "Goal loop — implement a feature for real",
             "~2–4 real agent turns", "~2–15 min", 25),
         new ScenarioDef("queue", "queue.mjs", "Queue loop — drain 6 prompts correctly",
             "~12 real agent turns", "~10–25 min", 35),
-        new ScenarioDef("run-all", "run-all.mjs", "Full sweep — goal then queue, combined verdict",
-            "~14–16 real agent turns", "~15–40 min", 65),
     };
 
     private const string SuiteDir = "tests/loop-eval";

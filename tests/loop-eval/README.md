@@ -35,8 +35,9 @@ card, then rerun.
 would contend for it (and confuse whoever is watching).
 
 **Or skip the terminal entirely** (openspec: add-loop-eval-ui-runner): the
-Autopilot console's **Tests tab → E2E eval section** has a Start button per
-scenario. The harness spawns these same scripts in `--live` mode against
+Autopilot console's **Tests tab → E2E eval section** has a Start button for
+each atomic scenario (goal, queue — `run-all.mjs` stays terminal-only, openspec:
+loop-eval-tests-tab-declutter). The harness spawns these same scripts in `--live` mode against
 itself, authenticated with a one-shot session token it mints for the child
 process (`LOOPEVAL_LIVE_TOKEN`) — no password typing, same preflights, same
 assertions, run status and verdict streamed back into the tab.

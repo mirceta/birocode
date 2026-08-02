@@ -7,12 +7,14 @@ import '../../pages/autopilot.css';
 
 // The documentation subtabs of the 🧪 Tests root tab (openspec:
 // add-autopilot-tests-tab, updated by add-loop-eval-suite,
-// add-loop-eval-live-mode and add-loop-eval-ui-runner) — the stated map of
-// what automated test coverage the loop engine has, so the inventory lives in
-// the app instead of chat history. Three sections: the unit-test layer, the
-// end-to-end eval layer, and the honest coverage gap + the plan to close it.
-// The fourth subtab (runnable browser tests) is the existing SystemTestsView,
-// rendered by the console.
+// add-loop-eval-live-mode, add-loop-eval-ui-runner and
+// loop-eval-tests-tab-declutter) — the stated map of what automated test
+// coverage the loop engine has, so the inventory lives in the app instead of
+// chat history. Four sections: the unit-test layer, the E2E eval runner
+// (tests only — rows + run state), the E2E mechanics explainer ("How E2E
+// works"), and the honest coverage gap + the plan to close it. The remaining
+// subtab (runnable browser tests) is the existing SystemTestsView, rendered
+// by the console.
 //
 // Mostly static reference content citing the real files it describes — except
 // the E2E eval section below, which since add-loop-eval-ui-runner can also
@@ -142,19 +144,6 @@ function ScenarioManifest({ manifest, manifestError }) {
     );
   }
   if (!manifest) return <p className="ap-muted">No self-description available.</p>;
-  if (Array.isArray(manifest.composes)) {
-    return (
-      <>
-        <p className="ap-muted le-man__note">Runs these scenarios in sequence — pass only if every one passes:</p>
-        {manifest.composes.map((m, i) => (
-          <div key={m.id || i} className="le-man__child">
-            <h4 className="le-man__childh">{m.title || m.id}</h4>
-            <ScenarioManifest manifest={m} />
-          </div>
-        ))}
-      </>
-    );
-  }
   return (
     <>
       <ManifestArms loop={manifest.loop} />
@@ -314,16 +303,7 @@ function LoopEvalRunner() {
 
   return (
     <section className="ca-sec le-runner">
-      <h3 className="ca-sec__h">Run it from here — start a live-mode eval</h3>
-      <p className="ca-sec__p">
-        Start spawns the committed suite&apos;s own script (<code>--live</code>) against
-        <b> this running harness</b> — same preflights, same assertions, watched the same
-        way: the <code>loopeval-*-live</code> repo card appears, its agent dock shows the
-        real turns, the Loops tab shows the loop card. <b>Runs spend real agent turns and
-        real minutes</b> on this box&apos;s one <code>claude</code> CLI, so it&apos;s one
-        run at a time. The harness authenticates the run with a one-shot session token it
-        mints and revokes itself — no password is read, stored, or passed.
-      </p>
+      <h3 className="ca-sec__h">Start a live-mode eval</h3>
 
       {problems.length > 0 && (
         <div className="st-prereq" role="note">
@@ -509,7 +489,24 @@ export default function TestInventoryView({ section }) {
     );
   }
 
+  // The runner subtab is tests only (openspec: loop-eval-tests-tab-declutter):
+  // precondition banner, the two scenario rows, the run panel — every paragraph
+  // of mechanics lives on the "How E2E works" subtab instead.
   if (section === 'rehearsal') {
+    return (
+      <div className="ca ov">
+        <LoopEvalRunner />
+        <p className="ca-sec__foot">
+          What these runs actually spawn, the two run modes, and what they cost —
+          see the <b>How E2E works</b> subtab.
+        </p>
+      </div>
+    );
+  }
+
+  // The mechanics of the E2E layer, split out of the runner subtab (openspec:
+  // loop-eval-tests-tab-declutter) so the startable rows stand alone.
+  if (section === 'evalhow') {
     return (
       <div className="ca ov">
         <p className="autopilot__summary">
@@ -519,19 +516,30 @@ export default function TestInventoryView({ section }) {
           asserts the outcomes mechanically — the one layer that can answer
           <i> &quot;does the loop actually drive an agent to the goal?&quot;</i>
         </p>
-        <LoopEvalRunner />
         <section className="ca-sec">
           <h3 className="ca-sec__h">The two scenarios</h3>
           <p className="ca-sec__p">
             A <b>goal loop</b> that must implement a real missing feature, and a
             <b> queue loop</b> that must drain six prompts into six checkable
-            artifacts. Each scenario row above carries its full self-description —
-            expand <i>&quot;what does this test?&quot;</i> to read the exact loop
-            parameters it arms, the committed fixture repo it acts on, and the
-            assertion contract it must satisfy. That text comes from the scenario
-            script&apos;s own <code>--describe</code> output (openspec:
-            loop-eval-scenario-transparency), so it can&apos;t drift from what a run
-            actually does.
+            artifacts. Each scenario row on the <b>E2E eval</b> subtab carries its
+            full self-description — expand <i>&quot;what does this test?&quot;</i> to
+            read the exact loop parameters it arms, the committed fixture repo it
+            acts on, and the assertion contract it must satisfy. That text comes
+            from the scenario script&apos;s own <code>--describe</code> output
+            (openspec: loop-eval-scenario-transparency), so it can&apos;t drift from
+            what a run actually does.
+          </p>
+        </section>
+        <section className="ca-sec">
+          <h3 className="ca-sec__h">What Start actually does</h3>
+          <p className="ca-sec__p">
+            Start spawns the committed suite&apos;s own script (<code>--live</code>) against
+            <b> this running harness</b> — same preflights, same assertions, watched the same
+            way: the <code>loopeval-*-live</code> repo card appears, its agent dock shows the
+            real turns, the Loops tab shows the loop card. <b>Runs spend real agent turns and
+            real minutes</b> on this box&apos;s one <code>claude</code> CLI, so it&apos;s one
+            run at a time. The harness authenticates the run with a one-shot session token it
+            mints and revokes itself — no password is read, stored, or passed.
           </p>
         </section>
         <section className="ca-sec">
@@ -550,8 +558,8 @@ export default function TestInventoryView({ section }) {
               shows the real turns, and this console&apos;s loop card ticks through the
               phases. Prerequisites: gate ON (host GUI), kill switch ON (this
               console) — the suite fails fast with instructions rather than ever
-              enabling anything itself. Start it with the buttons above (the harness
-              mints the run&apos;s credential itself) or from a terminal with
+              enabling anything itself. Start it from the <b>E2E eval</b> subtab (the
+              harness mints the run&apos;s credential itself) or from a terminal with
               <code> LOOPEVAL_LIVE_PW</code> set to the live operator password.
               Cleans up after itself (<code>LOOPEVAL_KEEP=1</code> keeps the
               aftermath for inspection).
@@ -567,9 +575,15 @@ export default function TestInventoryView({ section }) {
           <ul className="ov-list">
             <li>
               <b>It spends real agent turns and real minutes</b> (~15–20 turns,
-              ~30–45 min for <code>run-all.mjs</code>), so it is a before-shipping
+              ~30–45 min for the full sweep), so it is a before-shipping
               gate for loop changes, <b>never CI</b>. Preconditions (fixture drift,
               CLI probe) fail fast before tokens are spent.
+            </li>
+            <li>
+              <b>The full sweep is a terminal thing:</b> <code>run-all.mjs</code> runs
+              goal then queue for one combined verdict — the before-shipping gate an
+              agent runs from a terminal. It is deliberately not a row on the E2E
+              eval subtab; there you run the two scenarios themselves.
             </li>
             <li>
               <b>Lineage:</b> it is the tracked successor of the one-off rehearsal
