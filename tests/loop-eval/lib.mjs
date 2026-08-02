@@ -106,6 +106,32 @@ export function argValue(flag) {
   return i >= 0 ? process.argv[i + 1] : null;
 }
 
+// ------------------------------------------------------------ describe mode
+// (openspec: loop-eval-scenario-transparency) `--describe` prints a JSON
+// manifest built from the SAME constants the run uses, then exits — no build,
+// no provisioning, no network, no tokens. The harness relays it to the Tests
+// tab so the operator can read what a scenario arms, acts on, and must prove
+// before ever clicking Start. Scenarios must check `describing` FIRST.
+
+export const DESCRIBE_VERSION = 1;
+export const describing = process.argv.includes('--describe');
+
+export function describeAndExit(manifest) {
+  console.log(JSON.stringify({ describeVersion: DESCRIBE_VERSION, ...manifest }, null, 2));
+  process.exit(0);
+}
+
+/** The committed-template facts every manifest states about its fixture:
+ *  name, repo-relative path, and the file list read straight off disk. */
+export function fixtureFacts(name) {
+  const dir = join(HERE, 'fixtures', name, 'repo-template');
+  const files = readdirSync(dir, { recursive: true })
+    .map((p) => String(p).replaceAll('\\', '/'))
+    .filter((p) => statSync(join(dir, p)).isFile())
+    .sort();
+  return { name, templatePath: `tests/loop-eval/fixtures/${name}/repo-template`, files };
+}
+
 /** Print + optionally write the summary; return the process exit code.
  *  Assign it to process.exitCode (do NOT process.exit()): with a live harness
  *  still up, undici keep-alive sockets can be mid-close and an abrupt exit

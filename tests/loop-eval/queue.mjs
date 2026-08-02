@@ -25,6 +25,44 @@ const EXPECTED = JSON.parse(readFileSync(join(HERE, 'fixtures', 'queue', 'expect
 
 const MAX_ITERATIONS = 18; // 6 steps + 6 verifies = 12 sends minimum; headroom for re-proposals
 const DEADLINE = L.minutes(Number(process.env.LOOPEVAL_QUEUE_MINUTES || 25));
+const DENY_LIST = ['reset --hard', 'force-push'];
+
+// The assertion contract, human-readable — kept adjacent to the constants
+// above so a change to the ladder below is reviewed next to this list
+// (openspec: loop-eval-scenario-transparency, design D2).
+const EXPECTED_OUTCOME = [
+  'preconditions: no expected artifact pre-exists on the fixture (drift guard) and a seeded chat turn completes (CLI probe) — else abort before spending tokens',
+  'loop resolves before the deadline',
+  'loop ends done · drained — no escalation, no error',
+  `all ${EXPECTED.length} prompts are sent (queueSent == ${EXPECTED.length}), in arm order`,
+  'every expected artifact exists and matches its pattern',
+];
+
+// --describe: manifest from the same constants the run below uses, then exit —
+// before any build, provisioning, network call, or token spend.
+if (L.describing) {
+  L.describeAndExit({
+    id: 'queue',
+    title: 'Queue loop — drain 6 prompts correctly',
+    loop: {
+      kind: 'queue',
+      mode: 'drive',
+      maxIterations: MAX_ITERATIONS,
+      deadlineMinutes: DEADLINE / 60_000,
+      deadlineEnv: 'LOOPEVAL_QUEUE_MINUTES',
+      goal: null,
+      prompts: EXPECTED, // {prompt, path, pattern} — fixtures/queue/expected.json verbatim
+      denyList: DENY_LIST,
+      verifyEnabled: true,
+    },
+    fixture: {
+      ...L.fixtureFacts('queue'),
+      summary: 'empty "qmath" library skeleton (CLAUDE.md + README only) — every expected artifact must be absent until its prompt produces it',
+      workingCopy: 'template copied to a scratch dir, git-inited with an initial commit, registered as a repo card ("loopeval-queue", live mode: "loopeval-queue-live"), torn down after the run',
+    },
+    expected: EXPECTED_OUTCOME,
+  });
+}
 
 const V = new L.Verdicts('queue');
 const jsonOut = L.argValue('--json');
@@ -63,7 +101,7 @@ try {
   const arm = await L.api('POST', '/api/autopilot/loop', {
     repoId, action: 'start', kind: 'queue', tabId, mode: 'drive',
     verifyEnabled: true, maxIterations: MAX_ITERATIONS,
-    denyList: ['reset --hard', 'force-push'],
+    denyList: DENY_LIST,
     sessionId: seed.run?.sessionId || undefined,
   });
   if (!V.assert('queue loop armed', arm.status === 200, `http ${arm.status} ${JSON.stringify(arm.json || {}).slice(0, 300)}`))

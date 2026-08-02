@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using ClaudeWeb.Models;
 using ClaudeWeb.Services.Auth;
@@ -59,6 +60,7 @@ public sealed class LoopEvalRunnerService : IDisposable
     private readonly AppConfig _appConfig;
     private readonly Logger _logger;
     private readonly object _gate = new();
+    private readonly ScenarioManifestCache _manifests = new();
     private LoopEvalRun? _run;
     private Process? _proc;
 
@@ -93,6 +95,14 @@ public sealed class LoopEvalRunnerService : IDisposable
     private List<string> LeftoverRepoNames() =>
         _repos.GetAll().Select(r => r.Name ?? "").Where(n => LeftoverName.IsMatch(n)).ToList();
 
+    /// <summary>The manifest's own title, when it has one — the served title
+    /// prefers the suite's self-description over the ScenarioDef fallback.</summary>
+    private static string? TitleOf(JsonElement? manifest) =>
+        manifest is { ValueKind: JsonValueKind.Object } m
+        && m.TryGetProperty("title", out var t) && t.ValueKind == JsonValueKind.String
+            ? t.GetString()
+            : null;
+
     /// <summary>Read-only precondition report for the Tests tab (design D4):
     /// what is unmet and where the operator enables/cleans it. Never mutates.</summary>
     public object Preflight()
@@ -102,6 +112,15 @@ public sealed class LoopEvalRunnerService : IDisposable
         var suitePresent = suitePath is not null && File.Exists(Path.Combine(suitePath, "run-all.mjs"));
         LoopEvalRun? run;
         lock (_gate) run = _run;
+
+        // Scenario self-descriptions (openspec: loop-eval-scenario-transparency):
+        // the suite's own --describe output, cached per script mtime — the
+        // harness never maintains its own copy of scenario knowledge. On a
+        // describe failure the scenario still lists (manifestError instead).
+        var manifests = suitePresent
+            ? _manifests.Get(suitePath!, Scenarios.Select(s => (s.Id, s.Script)).ToList())
+            : null;
+
         return new
         {
             gateOpen = _operatorGate.Enabled,
@@ -110,13 +129,19 @@ public sealed class LoopEvalRunnerService : IDisposable
             suitePath = suitePath ?? $"<self repo not registered>/{SuiteDir}",
             leftoverRepos = LeftoverRepos(),
             activeScenario = run is { IsTerminal: false } ? run.Scenario : null,
-            scenarios = Scenarios.Select(s => new
+            scenarios = Scenarios.Select(s =>
             {
-                id = s.Id,
-                title = s.Title,
-                turns = s.Turns,
-                minutes = s.Minutes,
-                script = $"{SuiteDir}/{s.Script}",
+                var m = manifests is not null && manifests.TryGetValue(s.Id, out var e) ? e : null;
+                return new
+                {
+                    id = s.Id,
+                    title = TitleOf(m?.Manifest) ?? s.Title,
+                    turns = s.Turns,
+                    minutes = s.Minutes,
+                    script = $"{SuiteDir}/{s.Script}",
+                    manifest = m?.Manifest,
+                    manifestError = m?.Error,
+                };
             }),
         };
     }

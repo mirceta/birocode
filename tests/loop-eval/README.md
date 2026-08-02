@@ -85,6 +85,21 @@ node tests/loop-eval/run-all.mjs --live
 Exit code 0 only if every assertion passed. Progress prints one status line
 per 5s poll; machine-readable verdicts are `@@LOOPEVAL@@ {json}` lines.
 
+### `--describe` — self-description, no run
+
+Every scenario also answers `--describe` (openspec:
+loop-eval-scenario-transparency): it prints a JSON manifest — the loop
+parameters it would arm, the fixture it acts on, the expected-outcome list —
+built from the same constants the run uses, then exits 0 with **no build, no
+provisioning, no network, no token spend**. The harness's Tests tab serves
+this to the operator. `run-all.mjs --describe` composes the two child
+manifests.
+
+When touching a scenario, keep it honest: run all three `--describe`s (each
+must exit 0 in well under a second and parse as JSON), and if you changed the
+assertion ladder, update the adjacent `EXPECTED_OUTCOME` list in the same
+commit.
+
 Environment knobs:
 
 | Var | Default | Meaning |
