@@ -72,3 +72,30 @@ SHALL NOT alter engine or UI behavior.
 
 - **WHEN** the operator picks the top-ranked worth-adopting entry
 - **THEN** its map entry sketches where it would land in the harness (engine, dock, console, briefing, or eval) in enough detail to start a follow-up change proposal without re-reading the sources
+
+### Requirement: The autopilot console has a read-only Research sub-tab rendering the dossier
+
+The autopilot console's Reference root tab SHALL include a **Research**
+sub-tab that renders the committed dossier from `docs/research/agent-loops/`
+— at minimum the adoption map and the technique catalog, with the per-source
+documents reachable from within the view. The view SHALL render the committed
+markdown files (via the shared markdown renderer and the existing file-read
+endpoint), not a hand-maintained copy, so refreshing the dossier on disk
+updates the tab with no UI change. The sub-tab SHALL be read-only and SHALL
+render without the operator gate, like the console's other reference views.
+It SHALL NOT alter loop behavior or call any loop-mutating endpoint.
+
+#### Scenario: The dossier is readable in the console
+
+- **WHEN** the End User opens the autopilot console's Reference root and picks the Research sub-tab
+- **THEN** the adoption map and technique catalog render as formatted markdown, and each source document can be opened from within the view
+
+#### Scenario: Refreshing the dossier needs no UI work
+
+- **WHEN** a committed dossier file under `docs/research/agent-loops/` is updated on disk
+- **THEN** the Research sub-tab shows the updated content on next load, with no frontend change or rebuild of hand-written view content
+
+#### Scenario: The viewer works without the operator gate
+
+- **WHEN** `/api/autopilot` is operator-gated (403) but the console is open
+- **THEN** the Research sub-tab still renders the dossier, because it reads repo files rather than gated loop state

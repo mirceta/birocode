@@ -30,11 +30,18 @@ what works for others rather than only from our own intuition.
   already-have (and where), worth-adopting (with a sketch of how it would land
   in our engine/UI), or not-applicable (with the reason). The worth-adopting
   entries are ranked and become the seed list for follow-up OpenSpec changes.
-- **No engine/UI behavior changes in this change.** Concrete integrations are
-  deliberately out of scope here; each worth-adopting technique graduates into
-  its own follow-up change (proposal → specify → implement) so adoption
-  decisions stay reviewable one at a time. An Understanding app accompanies the
-  dossier per repo convention.
+- **A durable home in the UI: a read-only Research sub-tab** under the
+  autopilot console's existing Reference root tab, rendering the committed
+  dossier (adoption map + technique catalog + sources) via the shared markdown
+  renderer and the existing `GET /files/read` endpoint. The Understanding app
+  (repo convention) remains the rolling-latest interactive companion; the
+  sub-tab is the permanent one — refreshing the committed dossier updates it
+  with no UI work.
+- **No loop-behavior changes in this change.** The Research sub-tab is a
+  read-only viewer for this change's own deliverable; nothing about how loops
+  run, suggest, drive, or verify changes here. Each worth-adopting technique
+  graduates into its own follow-up change (proposal → specify → implement) so
+  adoption decisions stay reviewable one at a time.
 
 ## Capabilities
 
@@ -44,7 +51,8 @@ what works for others rather than only from our own intuition.
   its adoption map — what it must contain, how sources are cited and
   credibility-rated, how techniques are confronted with the existing
   `autopilot-loops` baseline, and how worth-adopting items feed follow-up
-  changes.
+  changes — plus its permanent read-only viewer, the Research sub-tab in the
+  autopilot console.
 
 ### Modified Capabilities
 
@@ -60,6 +68,11 @@ what works for others rather than only from our own intuition.
   and adoption map (repo convention for non-trivial explanations).
 - Reads the `autopilot-loops` baseline spec (`openspec/specs/autopilot-loops/`)
   for the confrontation step; does not modify it.
-- No harness code, API, or UI changes; no deploy needed for this change.
+- Frontend only, small: a Research sub-tab under the autopilot console's
+  Reference root (`client/src/components/autopilot/` + one render line in
+  `AutopilotConsole.jsx`), reusing `shared/Markdown` and `GET /files/read`. No
+  backend, API, or loop-engine changes; no new UiMode capability (the autopilot
+  tab is already advanced-only). Deploy is optional — the dossier is readable
+  on disk either way.
 - Follow-up OpenSpec changes (one per adopted technique) are the intended
   output pipeline; they are not part of this change.

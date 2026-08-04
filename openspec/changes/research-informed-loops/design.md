@@ -32,11 +32,15 @@ baseline — the seed list for follow-up changes.
   with worth-adopting entries ranked and actionable as follow-up change seeds.
 - Ship an Understanding app view of the catalog + adoption map (repo
   convention).
+- Give the dossier a permanent, in-product home: a read-only Research sub-tab
+  under the autopilot console's Reference root that renders the committed
+  markdown.
 
 **Non-Goals:**
 
-- No engine, API, or UI behavior changes — each adopted technique becomes its
-  own follow-up OpenSpec change.
+- No loop-engine, API, or loop-behavior changes — each adopted technique
+  becomes its own follow-up OpenSpec change. The only UI addition is the
+  read-only Research viewer for this change's own deliverable.
 - No attempt at exhaustive coverage of the whole internet; the bar is "the
   well-respected practitioners, covered honestly", not completeness.
 - No paywalled/private material; publicly reachable sources only.
@@ -86,7 +90,21 @@ one-at-a-time review by the user; bundling research and engine changes into
 one mega-change would make both unreviewable. This is also why the delta spec
 has no Modified Capabilities.
 
-**6. Research execution may fan out, synthesis may not.**
+**6. The Research sub-tab renders committed files, not hand-written JSX.**
+It lands as a sub-tab under the console's existing Reference root
+(`AutopilotConsole.jsx` root `reference`), rendered outside the operator gate
+like Overview, using `shared/Markdown` + `GET /files/read?path=…` (the
+`UnderstandingPanel`/`ArchPlanSection` pattern) over `docs/research/agent-loops/`.
+Rationale: the dossier is rolling-latest by design — a file-backed viewer stays
+current for free, where hand-written JSX (the existing architecture-view
+counter-pattern) would drift from the committed research. The Understanding app
+stays the interactive companion but is overwritten by the next explanation; the
+sub-tab is the durable home. No new UiMode capability: the autopilot tab is
+already advanced-only. Alternative (separate follow-up change just for the
+viewer) rejected: heavyweight for a read-only delivery surface of this change's
+own artifact.
+
+**7. Research execution may fan out, synthesis may not.**
 The sweep can use parallel sub-searches per practitioner/theme, but the
 technique catalog and adoption map are written in one sitting from the
 committed source documents, so cross-source dedup and rating consistency have

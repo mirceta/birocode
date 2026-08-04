@@ -34,12 +34,25 @@
       worth-adopting (landing-site sketch + rank), or not-applicable (reason);
       exhaustive and single-bucketed
 
-## 4. Understanding app + wrap-up
+## 4. Research sub-tab (autopilot console)
 
-- [ ] 4.1 Understanding app: interactive view of the technique catalog and
+- [ ] 4.1 `ResearchView.jsx` under `client/src/components/autopilot/` — loads
+      `docs/research/agent-loops/` files via `GET /files/read?path=…`, renders
+      with `shared/Markdown`; adoption map default, technique catalog + source
+      docs pickable within the view; graceful empty state if files are missing
+- [ ] 4.2 Wire into `AutopilotConsole.jsx`: `research` sub-tab under the
+      `reference` root, rendered outside the operator gate (Overview pattern);
+      any needed styles in `autopilot.css`
+- [ ] 4.3 Build frontend and verify with Playwright on an isolated port:
+      sub-tab renders the committed adoption map, source doc opens, and the
+      view still renders when `/api/autopilot` is gated
+
+## 5. Understanding app + wrap-up
+
+- [ ] 5.1 Understanding app: interactive view of the technique catalog and
       adoption map (rolling-latest `understanding-app/index.html`, build-less,
       relative URLs)
-- [ ] 4.2 Verify: every dossier claim spot-checks to a live citation; adoption
+- [ ] 5.2 Verify: every dossier claim spot-checks to a live citation; adoption
       map covers 100% of the catalog; `openspec validate --all --strict` passes
-- [ ] 4.3 Commit on `feat/loop-research-adoption` and present the ranked
+- [ ] 5.3 Commit on `feat/loop-research-adoption` and present the ranked
       worth-adopting list to the user as the follow-up-change menu
