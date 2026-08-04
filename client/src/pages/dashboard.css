@@ -2585,3 +2585,199 @@
   font-size: 11px;
   word-break: break-word;
 }
+
+/* ---- The loop parameter panel AS the state machine (openspec:
+   loop-state-param-panel) — section cards named after states, the badge box,
+   transition lines, and the armed header's live state strip. ---- */
+
+.phone__loop-sm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.phone__loop-smsect {
+  border: 1px solid var(--color-border);
+  border-left-width: 3px;
+  border-radius: 8px;
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.phone__loop-smsect--loopwide { border-left-color: #9aa5b3; }
+.phone__loop-smsect--work { border-left-color: var(--color-accent); }
+.phone__loop-smsect--verify { border-left-color: #41506b; }
+
+/* The armed instance's current state carries the "now" ring. */
+.phone__loop-smsect--now {
+  border-color: #1a7f37;
+  box-shadow: 0 0 0 1px #1a7f37;
+}
+
+/* Queue with verification off: the state exists but is skipped — shown, dimmed. */
+.phone__loop-smsect--dim { opacity: 0.55; }
+
+.phone__loop-smsect-h {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.phone__loop-smsect-name {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.phone__loop-smsect-name--loopwide { color: var(--color-text-soft); }
+.phone__loop-smsect-name--work { color: var(--color-accent); }
+.phone__loop-smsect-name--verify { color: #41506b; }
+
+.phone__loop-smsect-desc {
+  font-size: 11px;
+  color: var(--color-text-soft);
+}
+
+.phone__loop-smsect-now {
+  margin-left: auto;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #1a7f37;
+  background: #d8f3df;
+  border-radius: 999px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+
+.phone__loop-smsect-b {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* The expected sentinel as a first-class control — dashed to read as "the
+   contract with the agent", amber like the escalate palette. */
+.phone__loop-smbadge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  border: 1px dashed #b85c00;
+  border-radius: 7px;
+  background: #fff7ef;
+  padding: 6px 9px;
+}
+
+.phone__loop-smbadge-k {
+  font-size: 11px;
+  font-weight: 600;
+  color: #b85c00;
+  white-space: nowrap;
+}
+
+.phone__loop-smbadge-token {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #7a3d00;
+  background: #ffe0c2;
+  border-radius: 5px;
+  padding: 1px 8px;
+}
+
+.phone__loop-smbadge-exit {
+  font-size: 11.5px;
+  color: var(--color-text);
+}
+
+.phone__loop-smtrans {
+  font-size: 11.5px;
+  color: var(--color-text);
+  background: var(--color-bg);
+  border-radius: 7px;
+  padding: 5px 9px;
+  line-height: 1.5;
+}
+
+.phone__loop-smtrans-ref {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.phone__loop-smtrans-ref--work { color: var(--color-accent); }
+.phone__loop-smtrans-ref--verify { color: #41506b; }
+.phone__loop-smtrans-ref--ok { color: #1a7f37; }
+.phone__loop-smtrans-ref--esc { color: #b85c00; }
+
+/* Template boxes can be long — cap them; they scroll. */
+.phone__loop-smpre {
+  max-height: 140px;
+  overflow: auto;
+}
+
+.phone__loop-cap--sm { align-self: flex-start; }
+
+/* Armed header now stacks its status row above the live state strip. */
+.phone__loop-armed {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.phone__loop-armed-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.phone__loop-smstrip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.phone__loop-smstrip-arr {
+  font-size: 10px;
+  color: var(--color-text-soft);
+}
+
+.phone__loop-smstrip-chip {
+  font-size: 10.5px;
+  color: var(--color-text-soft);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  background: var(--color-surface);
+  white-space: nowrap;
+}
+
+.phone__loop-smstrip-chip--on {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.phone__loop-smstrip-chip--ok {
+  background: #d8f3df;
+  border-color: #d8f3df;
+  color: #1a7f37;
+  font-weight: 600;
+}
+
+.phone__loop-smstrip-chip--esc {
+  background: #ffe0c2;
+  border-color: #ffe0c2;
+  color: #b85c00;
+  font-weight: 600;
+}
