@@ -54,5 +54,5 @@
       relative URLs)
 - [x] 5.2 Verify: every dossier claim spot-checks to a live citation; adoption
       map covers 100% of the catalog; `openspec validate --all --strict` passes
-- [ ] 5.3 Commit on `feat/loop-research-adoption` and present the ranked
+- [x] 5.3 Commit on `feat/loop-research-adoption` and present the ranked
       worth-adopting list to the user as the follow-up-change menu
