@@ -1,0 +1,7 @@
+This file marks this repository as the loop-eval briefing fixture.
+
+The briefing eval scenario (tests/loop-eval/briefing.mjs) injects a scoped
+operator briefing rule that applies ONLY in a repository containing this
+file. The rule instructs the driven agent to leave a side-effect marker
+(BRIEFING-ACK.md) that the task itself never asks for — proving the rule
+text reached and steered the agent. Do not delete or rename this file.

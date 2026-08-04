@@ -17,6 +17,8 @@ import WaitingBadge from './WaitingBadge';
 import WaitingOnField from './WaitingOnField';
 import DependsOnPicker from './DependsOnPicker';
 import DockLoopControl from './DockLoopControl';
+import BriefingRules from './BriefingRules';
+import DockFlags from './DockFlags';
 import useLocalAppDiscovery from './useLocalAppDiscovery';
 import DiscoverAppsPanel from './DiscoverAppsPanel';
 
@@ -355,6 +357,10 @@ export default function PinnedAgent({
           className="phone__waiting-on"
         />
       )}
+      {/* This agent's open FLAG: entries (⚑ n + inline dismiss) — attributable
+          on the card itself, not only via the repo name in the global footer.
+          Renders nothing while the repo is flag-free. */}
+      <DockFlags repoId={tab.repoId} />
       {/* Autopilot loop badge + start/stop control (openspec adopt-autopilot-loops):
           header-area furniture like the waiting field. Badge state arrives via the
           Dashboard's poll of the read-only /autopilot/loops projection, so a
@@ -373,6 +379,10 @@ export default function PinnedAgent({
           onUsePending={(text) => chat.setDraft(text)}
         />
       )}
+      {/* The GLOBAL briefing rules, always in reach beside the loop section
+          (openspec loop-agent-briefing, D5): capture a rule idea the moment it
+          occurs; enabled rules frame every agent's driven sends. */}
+      {canLoop && <BriefingRules />}
       {onSetDependsOn && dependsCandidates.length > 0 && (
         <DependsOnPicker
           value={dependsOn}

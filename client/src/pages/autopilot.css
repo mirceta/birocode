@@ -765,3 +765,76 @@
 .cm-iters__dot { width: 12px; height: 12px; border-radius: 50%; border: 1.6px solid var(--cm-line); background: #0b0f16; transition: .2s; }
 .cm-iters__dot.on { background: var(--cm-loop); border-color: var(--cm-loop); }
 .cm-iters__txt { font-size: 11.5px; color: var(--cm-dim); margin-left: 4px; }
+
+/* --- ⚑ Flags sub-tab (Loops root): the full ledger with dismissed history --- */
+.fl-how {
+  margin: 0 0 14px;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--color-text, #333);
+}
+.fl-how code { font-size: 12px; }
+
+.fl-channel {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--color-text, #333);
+}
+
+.fl-subhead {
+  margin: 12px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.fl-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fl-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 9px;
+  background: #fdf0f0;
+  border: 1px solid #e5b8b8;
+  border-radius: 7px;
+  font-size: 13px;
+  color: #7a2626;
+}
+
+.fl-history .fl-row {
+  background: var(--color-surface-2, #f5f5f5);
+  border-color: var(--color-border, #ddd);
+  color: var(--color-text-soft, #666);
+}
+
+.fl-repo { flex: none; font-weight: 600; color: #a04141; }
+.fl-history .fl-repo { color: inherit; }
+.fl-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.fl-meta { flex: none; font-size: 11px; color: var(--color-text-soft, #888); white-space: nowrap; }
+
+.fl-dismiss {
+  flex: none;
+  border: none;
+  background: transparent;
+  color: #a04141;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.fl-dismiss:hover { color: #6e1f1f; }
+
+.fl-history { margin-top: 14px; }
+.fl-history > summary { cursor: pointer; font-size: 13px; font-weight: 600; }

@@ -1971,3 +1971,16 @@ details.step > summary::-webkit-details-marker {
   font-size: 14px;
   text-align: center;
 }
+
+/* Briefed loop send (openspec loop-agent-briefing): a small honest tag on the
+   synthetic user bubble — the agent received this text wrapped in the autopilot
+   briefing; the bubble shows the stored text, not the repeated prefix. */
+.msg__briefed {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--color-text-soft);
+  opacity: 0.85;
+  margin-bottom: 2px;
+}

@@ -4,6 +4,7 @@ import ErrorBanner from '../shared/ErrorBanner';
 import AutopilotOverviewView from './AutopilotOverviewView';
 import AgentsView from './AgentsView';
 import LoopsView from './LoopsView';
+import FlagsHistoryView from './FlagsHistoryView';
 import SystemTestsView from './SystemTestsView';
 import TestInventoryView from './TestInventoryView';
 import ChatArchitectureView from './ChatArchitectureView';
@@ -275,7 +276,7 @@ export default function AutopilotConsole({ embedded = false }) {
         <SubTabs
           active={sub.goal}
           onPick={(k) => pickSub('goal', k)}
-          items={[['agents', 'Agents'], ['queue', 'Queue'], ['recipes', 'Recipes']]}
+          items={[['agents', 'Agents'], ['queue', 'Queue'], ['recipes', 'Recipes'], ['flags', '⚑ Flags']]}
         />
       )}
       {root === 'tests' && (
@@ -325,7 +326,9 @@ export default function AutopilotConsole({ embedded = false }) {
       <>
       {root === 'suggestion' && sub.suggestion === 'control' && <AgentsView data={data} mutate={mutate} />}
 
-      {root === 'goal' && (
+      {root === 'goal' && sub.goal === 'flags' && <FlagsHistoryView />}
+
+      {root === 'goal' && sub.goal !== 'flags' && (
         <LoopsView
           section={sub.goal}
           data={data}

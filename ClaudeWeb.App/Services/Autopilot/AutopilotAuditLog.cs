@@ -33,9 +33,15 @@ public sealed class AutopilotAuditLog
     /// add-loop-debug-handoff).</summary>
     public string FilePath => _path;
 
+    // Briefed + BriefingRev (openspec: loop-agent-briefing, D3): Prompt stays the
+    // RAW stored text; when Briefed, what was actually sent is the deterministic
+    // composition of the briefing frame + the BriefingRulesStore rules at
+    // BriefingRev + Prompt. Additive with defaults — old .jsonl lines load as
+    // unbriefed.
     public sealed record Entry(
         long At, string RepoId, string RepoName, string Prompt,
-        double Confidence, string AnsweredMessage, string Outcome);
+        double Confidence, string AnsweredMessage, string Outcome,
+        bool Briefed = false, int BriefingRev = 0);
 
     /// <summary>Appends one auto-send record. Best-effort: a write failure is
     /// logged but never throws into the engine tick.</summary>
