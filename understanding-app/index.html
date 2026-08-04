@@ -3,264 +3,317 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>loop-eval — one suite, two run modes</title>
+<title>My understanding: the loop parameter panel IS the state machine</title>
 <style>
   :root {
-    --bg: #10141a; --panel: #1a2028; --panel2: #222a35; --ink: #dce3ec;
-    --dim: #8b97a6; --line: #2e3947; --ok: #4fc38a; --bad: #e06c6c;
-    --warn: #e0b56c; --acc: #6ca8e0; --live: #c98fe0; --radius: 10px;
+    --bg: #10141a; --panel: #1a2028; --panel2: #222a35; --panel3: #2a3442;
+    --ink: #dce3ec; --dim: #8b97a6; --line: #2e3947;
+    --ok: #4fc38a; --bad: #e06c6c; --warn: #e0b56c; --acc: #6ca8e0; --purple: #b48ce0;
+    --radius: 10px;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink);
          font: 15px/1.55 "Segoe UI", system-ui, sans-serif; padding: 24px 16px 64px; }
-  main { max-width: 940px; margin: 0 auto; }
-  h1 { font-size: 22px; margin: 0 0 4px; }
-  .sub { color: var(--dim); margin: 0 0 20px; }
-  .tabs { display: flex; gap: 8px; margin: 0 0 18px; flex-wrap: wrap; }
-  .tabs button { background: var(--panel); color: var(--dim); border: 1px solid var(--line);
-    border-radius: 999px; padding: 7px 16px; cursor: pointer; font: inherit; font-size: 14px; }
-  .tabs button.on { background: var(--acc); color: #0c1116; border-color: var(--acc); font-weight: 600; }
-  section { display: none; }
-  section.on { display: block; animation: fade .18s ease; }
-  @keyframes fade { from { opacity: 0; transform: translateY(4px);} to { opacity: 1; } }
+  main { max-width: 960px; margin: 0 auto; }
+  h1 { font-size: 21px; margin: 0 0 4px; }
+  h2 { font-size: 17px; margin: 28px 0 10px; }
+  .sub { color: var(--dim); margin: 0 0 18px; }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
-          padding: 14px 16px; margin-bottom: 12px; }
-  .card h3 { margin: 0 0 6px; font-size: 15px; }
+          padding: 14px 16px; margin-bottom: 14px; }
   .card p, .card li { margin: 6px 0; color: var(--dim); }
   .card b, .card code { color: var(--ink); }
-  code { background: var(--panel2); padding: 1px 6px; border-radius: 4px; font-size: 13px; }
-  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  @media (max-width: 720px) { .cols { grid-template-columns: 1fr; } }
-  .mode { border-top: 3px solid var(--acc); }
-  .mode.live { border-top-color: var(--live); }
-  .badge { display: inline-block; font-size: 12px; border-radius: 999px; padding: 1px 10px;
-           border: 1px solid var(--line); color: var(--dim); margin-left: 6px; }
-  .badge.auto { color: var(--acc); border-color: var(--acc); }
-  .badge.human { color: var(--live); border-color: var(--live); }
-  .flow { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
-  .step { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
-          padding: 8px 12px; cursor: pointer; transition: border-color .15s; }
-  .step:hover { border-color: var(--acc); }
-  .step.liveonly:hover { border-color: var(--live); }
-  .step .t { font-weight: 600; font-size: 14px; }
-  .step .d { display: none; color: var(--dim); font-size: 13.5px; margin-top: 4px; }
-  .step.open .d { display: block; }
-  .step .who { float: right; font-size: 12px; color: var(--dim); }
-  .arrow { text-align: center; color: var(--dim); font-size: 13px; line-height: 1; }
-  .shared { background: linear-gradient(180deg, var(--panel), var(--panel2));
-            border: 1px dashed var(--acc); }
-  .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); }
-  .legend { font-size: 13px; color: var(--dim); margin: 4px 0 14px; }
-  table { border-collapse: collapse; width: 100%; font-size: 14px; }
-  th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
-  th { background: var(--panel2); }
-  td:first-child { color: var(--dim); white-space: nowrap; }
-  .sim { margin-top: 10px; }
-  .sim button { background: var(--panel2); color: var(--ink); border: 1px solid var(--line);
-    border-radius: 8px; padding: 8px 14px; cursor: pointer; font: inherit; }
-  .sim button:disabled { opacity: .4; cursor: default; }
-  .simlog { margin-top: 10px; background: #0c1015; border: 1px solid var(--line); border-radius: 8px;
-    padding: 10px 12px; font-family: Consolas, monospace; font-size: 13px; min-height: 120px;
-    white-space: pre-wrap; }
-  .hint { font-size: 13px; color: var(--dim); font-style: italic; }
+  code { background: var(--panel2); padding: 1px 6px; border-radius: 5px; font-size: 13px; }
+  .miss { border-left: 3px solid var(--bad); }
+  .qcard { border-left: 3px solid var(--warn); }
+  .qcard li { margin: 10px 0; }
+
+  .ba { display: grid; grid-template-columns: 1fr 1.4fr; gap: 12px; align-items: start; }
+  @media (max-width: 720px) { .ba { grid-template-columns: 1fr; } }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .06em;
+         text-transform: uppercase; padding: 2px 8px; border-radius: 999px; margin-bottom: 10px; }
+  .tag.before { background: #3a2b2b; color: var(--bad); }
+  .tag.after { background: #24382e; color: var(--ok); }
+
+  /* ---- replica of TODAY's flat pane ---- */
+  .old { font-size: 13px; }
+  .old .toggle { color: var(--acc); margin-bottom: 8px; }
+  .old .k { color: var(--dim); font-size: 12px; margin: 10px 0 3px; }
+  .old pre { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px;
+             padding: 8px; margin: 0; font-size: 12px; white-space: pre-wrap; color: var(--ink); }
+
+  /* ---- the AFTER mockup: state-sectioned parameter panel ---- */
+  .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+  .tabs button { background: var(--panel2); border: 1px solid var(--line); color: var(--dim);
+    border-radius: 8px; padding: 7px 14px; cursor: pointer; font: inherit; font-size: 14px; }
+  .tabs button.on { background: var(--acc); border-color: var(--acc); color: #0c1116; font-weight: 600; }
+  .simbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;
+            font-size: 13px; color: var(--dim); }
+  .simbar select { background: var(--panel2); color: var(--ink); border: 1px solid var(--line);
+                   border-radius: 6px; padding: 4px 8px; font: inherit; font-size: 13px; }
+
+  .mock { background: #151a21; border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  .sect { border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+          margin-bottom: 12px; overflow: hidden; transition: box-shadow .3s, border-color .3s; }
+  .sect.state-work  { border-left: 4px solid var(--acc); }
+  .sect.state-verify{ border-left: 4px solid var(--purple); }
+  .sect.state-loopwide { border-left: 4px solid var(--dim); }
+  .sect.now { border-color: var(--ok); box-shadow: 0 0 0 1px var(--ok); }
+  .sect-h { display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+            background: var(--panel2); }
+  .sect-h .sname { font-family: Consolas, monospace; font-size: 13px; font-weight: 700;
+                   letter-spacing: .04em; }
+  .state-work  .sname { color: var(--acc); }
+  .state-verify .sname { color: var(--purple); }
+  .state-loopwide .sname { color: var(--dim); }
+  .sect-h .sdesc { color: var(--dim); font-size: 12px; }
+  .nowpill { margin-left: auto; font-size: 11px; font-weight: 700; color: #0c1116;
+             background: var(--ok); border-radius: 999px; padding: 1px 8px; display: none; }
+  .sect.now .nowpill { display: inline-block; }
+  .sect-b { padding: 10px 12px 12px; }
+
+  .param { margin: 10px 0; }
+  .param .plabel { font-size: 12px; color: var(--dim); margin-bottom: 4px; }
+  .param textarea, .param .pre { width: 100%; background: var(--panel2); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; font: 12px/1.5 Consolas, monospace;
+    white-space: pre-wrap; resize: vertical; }
+  .prow { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; font-size: 13px; }
+  .prow label { display: flex; gap: 6px; align-items: center; color: var(--ink); }
+  .prow input[type=number] { width: 60px; background: var(--panel2); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; font: inherit; }
+
+  .badgebox { display: flex; align-items: center; gap: 10px; margin: 12px 0 6px;
+              background: var(--panel3); border: 1px dashed var(--warn); border-radius: 8px;
+              padding: 8px 10px; }
+  .badgebox .blabel { font-size: 12px; color: var(--warn); white-space: nowrap; }
+  .badge { font-family: Consolas, monospace; font-size: 13px; font-weight: 700; color: #0c1116;
+           background: var(--warn); border-radius: 6px; padding: 2px 10px; }
+  .trans { margin: 4px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--panel2);
+           font-size: 13px; color: var(--ink); }
+  .trans .arr { color: var(--ok); font-weight: 700; }
+  .trans .sref { font-family: Consolas, monospace; font-size: 12px; font-weight: 700; }
+  .trans .sref.work { color: var(--acc); }
+  .trans .sref.verify { color: var(--purple); }
+  .trans .sref.term-ok { color: var(--ok); }
+  .trans .sref.term-bad { color: var(--bad); }
+  .trans + .trans { margin-top: 6px; }
+  .flag { display: inline-block; font-size: 11px; background: #3a332b; color: var(--warn);
+          border-radius: 5px; padding: 1px 7px; margin-left: 6px; vertical-align: middle; }
+  .hidden { display: none; }
 </style>
 </head>
 <body>
 <main>
-  <h1>loop-eval — one suite, two run modes</h1>
-  <p class="sub">openspec: <code>add-loop-eval-live-mode</code> · the same real-agent scenarios, runnable as an
-  automatic gate (isolated) <i>or</i> where you can watch them (live)</p>
+  <h1>The loop parameter panel <i>is</i> the state machine</h1>
+  <p class="sub">My understanding of what you asked for — confirmed, and <b>now built</b> on branch <code>feat/loop-state-params</code> (OpenSpec change <code>loop-state-param-panel</code>). The mockup below is what the dock's loop panel now actually shows: open an agent dock's loop popover and pick 🎯 or 📦.</p>
 
-  <div class="tabs">
-    <button data-tab="overview" class="on">Overview</button>
-    <button data-tab="pipelines">The two pipelines</button>
-    <button data-tab="boundary">The gate boundary</button>
-    <button data-tab="timeline">Live run, step by step</button>
+  <div class="card miss">
+    <p><b>What I got wrong last time:</b> I only built the <i>viewer</i> — a chip strip and a reference
+       diagram — and left the dock's loop parameter subsection as-is: a "Show prompts" toggle hiding a flat
+       dump of text boxes. <b>The actual ask:</b> that parameter subsection itself should be restructured
+       <i>as</i> the state machine — sections named after the states, each holding that state's parameters,
+       the badge we expect the agent to emit there, and an explicit statement of what the loop system does
+       when that badge appears. The little live state readout on the dock header was useful and can stay,
+       but it's the side dish.</p>
   </div>
 
-  <section id="overview" class="on">
+  <h2>Before → after, side by side</h2>
+  <div class="ba">
+    <div class="card old">
+      <span class="tag before">Today (queue loop)</span>
+      <div class="toggle">Show prompts ▾</div>
+      <div class="k">Verification prompt template ({0} = the step just sent)</div>
+      <pre>The step below was just sent…
+Reply STEP_VERIFIED if …</pre>
+      <div class="k">Last step sent (what verification checks)</div>
+      <pre>Implement the /health endpoint…</pre>
+      <p style="margin-top:10px">Flat list. Which state uses which template? What does STEP_VERIFIED
+         <i>do</i>? Where does the badge even come from? Unknowable from here — the dynamics live only in C#.</p>
+    </div>
     <div class="card">
-      <h3>Why two modes?</h3>
-      <p>The suite proves the one thing no cheap test can: <b>the loop engine drives a real
-      agent to a real goal</b>. That proof serves two different customers:</p>
-      <ul>
-        <li><b>An agent</b> needs it <i>fully automatic</i> — boot, run, assert, tear down,
-        exit code. That's the <b>isolated mode</b> (default): a throwaway harness on
-        <code>:5210</code> that no human ever sees.</li>
-        <li><b>The human operator</b> needs to <i>see it with their own eyes</i> — a repo card
-        appearing, the agent dock filling with real turns, the Autopilot console's loop card
-        ticking <code>work → verify → done</code>. That's the <b>live mode</b>
-        (<code>--live</code>): the same scenarios pointed at the running <code>:5099</code>
-        harness.</li>
-      </ul>
-      <p>Same scenario files, same assertions, same deadlines — <b>only the world differs</b>.
-      The mode split lives entirely in <code>tests/loop-eval/lib.mjs</code>.</p>
+      <span class="tag after">What you want</span>
+      <p style="margin:0 0 4px">Same pane, restructured. Every parameter lives inside the <b>state that uses
+         it</b>. Each state section reads as: <i>parameters → badge we expect → what emitting it does</i>.
+         The transition dynamics become knowable from the settings themselves. Full mockup below ↓</p>
+      <p>Also: prompts stop being a hidden "inspection" afterthought — they're ordinary <b>parameters of the
+         loop</b>, shown with the rest.</p>
     </div>
-    <div class="cols">
-      <div class="card mode">
-        <h3>Isolated <span class="badge auto">for agents</span></h3>
-        <p><code>node tests/loop-eval/goal.mjs</code></p>
-        <p>Boots its own ClaudeWeb copy on :5210, seeds gate + kill switch into a scratch
-        datadir <i>before boot</i>, runs, kills everything. Live harness never touched.</p>
-      </div>
-      <div class="card mode live">
-        <h3>Live <span class="badge human">for you</span></h3>
-        <p><code>LOOPEVAL_LIVE_PW=… node tests/loop-eval/goal.mjs --live</code></p>
-        <p>Targets the harness you're using right now. Registers
-        <code>loopeval-goal-live</code>, prints a watch banner, runs where you can see it,
-        cleans up after itself (<code>LOOPEVAL_KEEP=1</code> to keep the aftermath).</p>
-      </div>
-    </div>
-  </section>
+  </div>
 
-  <section id="pipelines">
-    <p class="legend">Click any step to expand it. Blue = isolated-only, purple = live-only,
-    dashed = the shared core both modes run identically.</p>
-    <div class="cols">
-      <div class="card mode">
-        <h3>Isolated pipeline (:5210)</h3>
-        <div class="flow" id="flow-iso"></div>
-      </div>
-      <div class="card mode live">
-        <h3>Live pipeline (:5099)</h3>
-        <div class="flow" id="flow-live"></div>
-      </div>
+  <h2>The mockup — dock → Loops → parameter subsection</h2>
+  <div class="simbar">
+    <div class="tabs">
+      <button id="tabQueue" class="on">📦 Queue loop</button>
+      <button id="tabGoal">🎯 Goal loop</button>
     </div>
-    <div class="card shared">
-      <h3>Shared core — identical in both modes</h3>
-      <div class="flow" id="flow-shared"></div>
-    </div>
-  </section>
+    <span>·</span>
+    <label>Simulate a running loop — current state:
+      <select id="simState">
+        <option value="">(not armed)</option>
+        <option value="work">WORKING_STATE</option>
+        <option value="verify">VERIFICATION_STATE</option>
+      </select>
+    </label>
+  </div>
 
-  <section id="boundary">
-    <div class="card">
-      <h3>The autopilot gate is host-only. Both modes respect that — differently.</h3>
-      <p>There is <b>no enable endpoint, ever</b> (<code>AutopilotGate.cs</code>). So how does a
-      test suite arm loops at all?</p>
-      <table>
-        <tr><th></th><th>Isolated</th><th>Live</th></tr>
-        <tr>
-          <td>Gate + kill switch</td>
-          <td>Writes <code>autopilot-gate.json</code> + <code>autopilot.json</code> into the
-          <b>scratch</b> datadir <i>before boot</i> — a host-side file write, the same trust
-          level as the operator clicking the host GUI.</td>
-          <td><b>Checks, never sets.</b> <code>gateOpen</code> off
-          <code>/api/autopilot/loops</code>, <code>killSwitchEnabled</code> off the debug
-          bundle. Off → <span class="bad">fail fast</span> with the exact thing to click.</td>
-        </tr>
-        <tr>
-          <td>Password</td>
-          <td>Invents a throwaway one for its own instance.</td>
-          <td><code>LOOPEVAL_LIVE_PW</code> — you hand it over explicitly. Never defaulted,
-          never read from the live secret store.</td>
-        </tr>
-        <tr>
-          <td>Loop internals for asserts</td>
-          <td>Reads scratch <code>loops.json</code> / <code>autopilot-audit.jsonl</code>
-          directly.</td>
-          <td>Reads <code>GET /api/autopilot/loops/{repoId}/debug</code> — the shipped debug
-          bundle. The live datadir is <b>never written and never parsed</b>.</td>
-        </tr>
-        <tr>
-          <td>Residue</td>
-          <td>Whole scratch root deleted; instance killed.</td>
-          <td>Stops loop → closes dock tab → unregisters repo (registry entry only) → removes
-          scratch copy. Next run's preflight catches any leak (<code>loopeval-*-live</code>
-          name check).</td>
-        </tr>
-      </table>
-    </div>
-  </section>
+  <!-- ================= QUEUE LOOP ================= -->
+  <div class="mock" id="mockQueue">
 
-  <section id="timeline">
-    <div class="card">
-      <h3>Simulate a live goal run</h3>
-      <p class="hint">Step through what you'd actually see — in the shell and in the UI.</p>
-      <div class="sim">
-        <button id="sim-next">Next step ▸</button>
-        <button id="sim-reset">reset</button>
-        <div class="simlog" id="simlog">press “Next step” —</div>
+    <div class="sect state-loopwide">
+      <div class="sect-h"><span class="sname">LOOP-WIDE</span>
+        <span class="sdesc">parameters that don't belong to any one state</span></div>
+      <div class="sect-b">
+        <div class="prow">
+          <label><input type="checkbox" checked> Verify each step</label>
+          <label>Turn cap <input type="number" value="12"></label>
+          <span style="color:var(--dim)">Deny list: <code>rm -rf</code>, <code>git push</code></span>
+        </div>
       </div>
     </div>
-  </section>
-</main>
+
+    <div class="sect state-work" data-state="work">
+      <div class="sect-h"><span class="sname">WORKING_STATE</span>
+        <span class="sdesc">the loop sends the next queued step and waits for the turn to finish</span>
+        <span class="nowpill">● now</span></div>
+      <div class="sect-b">
+        <div class="param">
+          <div class="plabel">What gets sent in this state — the queue itself (order = unload order, from the stash strip)</div>
+          <div class="pre">1. Implement the /health endpoint…
+2. Add the smoke test for it…
+3. Wire it into the dashboard…</div>
+        </div>
+        <div class="badgebox">
+          <span class="blabel">exit trigger:</span>
+          <span style="font-size:13px">the step's turn finishes — <b>no badge in this state</b></span>
+          <span class="flag">⚠ differs from your example — see open question 1</span>
+        </div>
+        <div class="trans">when the step's turn finishes <span class="arr">→</span> transition into
+          <span class="sref verify">VERIFICATION_STATE</span> (verification on)
+          &nbsp;·&nbsp; with verification off: <span class="arr">→</span> stay in
+          <span class="sref work">WORKING_STATE</span>, next step unloads unchecked</div>
+      </div>
+    </div>
+
+    <div class="sect state-verify" data-state="verify">
+      <div class="sect-h"><span class="sname">VERIFICATION_STATE</span>
+        <span class="sdesc">the loop challenges the agent to prove the step it just did</span>
+        <span class="nowpill">● now</span></div>
+      <div class="sect-b">
+        <div class="param">
+          <div class="plabel">Verification prompt template ({0} = the step just sent) — sent on entering this state</div>
+          <textarea rows="3">The step below was just sent to you and your reply above is the result.
+Step: {0}
+Check your own work honestly. If the step is truly complete, reply STEP_VERIFIED…</textarea>
+        </div>
+        <div class="badgebox">
+          <span class="blabel">agent emits badge:</span>
+          <span class="badge">STEP_VERIFIED</span>
+        </div>
+        <div class="trans">when <b>STEP_VERIFIED</b> is emitted and steps remain
+          <span class="arr">→</span> transition into <span class="sref work">WORKING_STATE</span> (next step unloads)</div>
+        <div class="trans">when <b>STEP_VERIFIED</b> is emitted and the queue is empty
+          <span class="arr">→</span> <span class="sref term-ok">DONE · DRAINED</span> (loop ends)</div>
+        <div class="trans">any other reply
+          <span class="arr">→</span> <span class="sref term-bad">ESCALATE · STEP-UNVERIFIED</span> (loop stops, flags the human)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= GOAL LOOP ================= -->
+  <div class="mock hidden" id="mockGoal">
+
+    <div class="sect state-loopwide">
+      <div class="sect-h"><span class="sname">LOOP-WIDE</span>
+        <span class="sdesc">parameters that don't belong to any one state</span></div>
+      <div class="sect-b">
+        <div class="prow">
+          <label>Turn cap <input type="number" value="10"></label>
+          <span style="color:var(--dim)">Goal: <code>make the smoke tests pass</code></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sect state-work" data-state="work">
+      <div class="sect-h"><span class="sname">WORKING_STATE</span>
+        <span class="sdesc">the loop drives the agent toward the goal, turn after turn</span>
+        <span class="nowpill">● now</span></div>
+      <div class="sect-b">
+        <div class="param">
+          <div class="plabel">Work prompt template ({0} = your goal) — re-sent every turn in this state</div>
+          <textarea rows="2">You are being driven by a goal loop. The goal: {0}
+Keep working. When the whole goal is genuinely done, end your final line with LOOP_DONE.</textarea>
+        </div>
+        <div class="badgebox">
+          <span class="blabel">agent emits badge:</span>
+          <span class="badge">LOOP_DONE</span>
+        </div>
+        <div class="trans">when <b>LOOP_DONE</b> is emitted (final line)
+          <span class="arr">→</span> transition into <span class="sref verify">VERIFICATION_STATE</span></div>
+        <div class="trans">no badge in the reply <span class="arr">→</span> stay in
+          <span class="sref work">WORKING_STATE</span>, work prompt re-sent</div>
+      </div>
+    </div>
+
+    <div class="sect state-verify" data-state="verify">
+      <div class="sect-h"><span class="sname">VERIFICATION_STATE</span>
+        <span class="sdesc">the loop refuses to trust the done-claim and demands proof</span>
+        <span class="nowpill">● now</span></div>
+      <div class="sect-b">
+        <div class="param">
+          <div class="plabel">Verification prompt template ({0} = your goal) — sent on entering this state</div>
+          <textarea rows="2">You claimed the goal is done: {0}
+Verify honestly. Only if it truly holds, end with GOAL_VERIFIED; otherwise list the gaps.</textarea>
+        </div>
+        <div class="badgebox">
+          <span class="blabel">agent emits badge:</span>
+          <span class="badge">GOAL_VERIFIED</span>
+        </div>
+        <div class="trans">when <b>GOAL_VERIFIED</b> is emitted
+          <span class="arr">→</span> <span class="sref term-ok">DONE · VERIFIED</span> (loop ends)</div>
+        <div class="trans">any other reply (gaps found)
+          <span class="arr">→</span> transition back into <span class="sref work">WORKING_STATE</span></div>
+      </div>
+    </div>
+  </div>
+
+  <h2>Decisions baked into the build (say the word to change any)</h2>
+  <div class="card qcard">
+    <ol>
+      <li><b>Code-accurate grouping.</b> Your example put the verification machinery in WORKING_STATE; the
+          engine sends the verification prompt on <i>entering</i> VERIFICATION_STATE and
+          <code>STEP_VERIFIED</code> is the reply that <i>exits</i> it — so that's where they live. The
+          queue's WORKING_STATE shows an explicit <b>badge-less exit trigger</b> ("the step's turn
+          finishes") instead of pretending there's a badge.</li>
+      <li><b>Shown as parameters, read-only for now.</b> Badges and templates are compile-time constants in
+          the backend engine — making them editable is a real backend feature. This release renders them as
+          first-class parameter controls; editability is a clean follow-up change.</li>
+      <li><b>LOOP-WIDE on top</b> holds goal text, turn cap, queue binding, the verification toggle, and
+          deny-list chips.</li>
+      <li><b>verify-owed</b> owns no parameters → no section; it's the transition arrow, but it stays a
+          distinct chip in the armed header strip and lights VERIFICATION_STATE while active.</li>
+      <li><b>Scope: dock popover only.</b> The console Loops tab is untouched.</li>
+      <li><b>Both live readouts kept:</b> the compact strip in the armed header and the current state's
+          section lighting up with a "● now" pill (verification off dims VERIFICATION_STATE — the machine
+          honestly shows that state is skipped).</li>
+    </ol>
+  </div>
 
 <script>
-  // tabs
-  document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
-    document.querySelectorAll('.tabs button').forEach(x => x.classList.remove('on'));
-    document.querySelectorAll('section').forEach(x => x.classList.remove('on'));
-    b.classList.add('on');
-    document.getElementById(b.dataset.tab).classList.add('on');
-  });
-
-  // pipeline steps
-  const ISO = [
-    ['dotnet build → .claudeweb-preview/bin', 'script', 'Built once, copied OUTSIDE the repo tree so the instance cannot auto-pin this repo (no .sln above it).'],
-    ['seed gate + kill switch into scratch datadir', 'script', 'autopilot-gate.json {enabled:true} + autopilot.json — written BEFORE boot. Same trust boundary as the operator’s GUI click, because the datadir is disposable.'],
-    ['boot ClaudeWeb on :5210', 'script', 'Own port, own datadir, own throwaway password. Health-polled up to 60s.'],
-    ['…shared core runs…', '', 'See the shared box below.'],
-    ['taskkill + delete scratch root', 'script', 'Always — pass, fail, or timeout. A timeout is a FAILED VERDICT, never a hang.'],
-  ];
-  const LIVE = [
-    ['health-check the RUNNING :5099 harness', 'script', 'Nothing is booted. If live is down, the run refuses immediately.'],
-    ['login with LOOPEVAL_LIVE_PW', 'you + script', 'You supply the real operator password explicitly. Missing → abort before any network call.'],
-    ['preflight: gate? kill switch? leftovers?', 'script', 'gateOpen via /api/autopilot/loops, killSwitchEnabled via the debug bundle, leftover loopeval-*-live repos via /api/repos. Any “no” → a failed verdict naming exactly what to click. The suite NEVER enables anything.'],
-    ['…shared core runs — watch it in the UI…', 'you', 'Repo card appears, agent dock streams the turns, Autopilot console shows the loop card. The script prints a WATCH banner with the URL right after arming.'],
-    ['cleanup: stop loop, close tab, unregister repo', 'script', 'Registry entry only — nothing on disk outside its own scratch copy. LOOPEVAL_KEEP=1 keeps it all and prints the manual steps instead.'],
-  ];
-  const SHARED = [
-    ['materialize fixture repo (scratch copy + git init)', 'lib.mjs', 'Committed template → temp copy → initial commit, so agent commits never dirty the template. Goal: a todo CLI with a missing `done` command. Queue: six prompts, each mapped to an expected artifact.'],
-    ['precondition asserts (fixture drift guard)', 'lib.mjs', 'goal-check must FAIL / artifacts must be ABSENT on the fresh fixture — otherwise the scenario proves nothing and aborts before spending tokens.'],
-    ['register repo (advanced visibility) + seed one chat turn', 'shipped API', 'POST /api/repos, then a cheap “reply ready” turn: it pins a session for the arm AND doubles as the CLI probe — a broken claude CLI fails here, not mid-loop.'],
-    ['arm the REAL loop in drive mode', 'shipped API', 'POST /api/autopilot/loop — goal kind (free-text goal, cap 6) or queue kind (bound to the dock tab’s live stash, verify on).'],
-    ['poll every 5s until resolution', 'lib.mjs', 'One status line per tick (status/phase/sent/iterations). Deadline: 15 min (goal) / 25 min (queue) — identical in both modes; live is never slowed down “for watchability”.'],
-    ['assert outcomes mechanically', 'scenario', 'goal: done·verified + goal-check exits 0 + every send loop-attributed. queue: done·drained + queueSent==6 + sent order == arm order + every artifact matches its regex.'],
-  ];
-  function fill(id, steps, liveonly) {
-    const el = document.getElementById(id);
-    steps.forEach(([t, who, d], i) => {
-      if (i) { const a = document.createElement('div'); a.className = 'arrow'; a.textContent = '↓'; el.appendChild(a); }
-      const s = document.createElement('div');
-      s.className = 'step' + (liveonly ? ' liveonly' : '');
-      s.innerHTML = '<span class="who">' + who + '</span><div class="t">' + t + '</div><div class="d">' + d + '</div>';
-      s.onclick = () => s.classList.toggle('open');
-      el.appendChild(s);
-    });
+  const tabQ = document.getElementById('tabQueue'), tabG = document.getElementById('tabGoal');
+  const mockQ = document.getElementById('mockQueue'), mockG = document.getElementById('mockGoal');
+  const sim = document.getElementById('simState');
+  function show(which) {
+    tabQ.classList.toggle('on', which === 'q'); tabG.classList.toggle('on', which === 'g');
+    mockQ.classList.toggle('hidden', which !== 'q'); mockG.classList.toggle('hidden', which !== 'g');
+    applySim();
   }
-  fill('flow-iso', ISO, false);
-  fill('flow-live', LIVE, true);
-  fill('flow-shared', SHARED, false);
-
-  // live-run simulator
-  const SIM = [
-    ['shell', '$ LOOPEVAL_LIVE_PW=****** node tests/loop-eval/goal.mjs --live'],
-    ['shell', 'live mode — no build, targeting the running live harness\nlive mode — provisioning fixture scratch %TMP%\\cw-loopeval-live (live instance untouched)'],
-    ['shell', 'ok   - precondition: goal-check FAILS on the untouched fixture'],
-    ['shell', 'ok   - live preflight: operator gate is open\nok   - live preflight: autopilot kill switch is on\nok   - live preflight: no leftover loopeval-*-live repo'],
-    ['UI',    '👀 a new repo card appears: “loopeval-goal-live” (Advanced mode only)'],
-    ['shell', 'fixture repo registered: r-3f81…\nseeding a conversation (CLI probe)…\nok   - CLI probe: seeded chat turn completed'],
-    ['shell', 'ok   - goal loop armed\n┌──────────────────────────────\n│ WATCH IT LIVE: http://localhost:5099\n│   → open the repo "loopeval-goal-live"\n│   → agent dock / Autopilot console\n└──────────────────────────────'],
-    ['UI',    '👀 agent dock: a real turn streams in — the agent reads CLAUDE.md, implements `done`, commits\n👀 Autopilot console: loop card shows work · looping 1/6'],
-    ['UI',    '👀 the agent replies LOOP_DONE → engine flips to the VERIFY phase and sends the verification prompt'],
-    ['UI',    '👀 verification turn replies GOAL_VERIFIED → loop card: done · verified'],
-    ['shell', 'ok   - loop ended done · verified (LOOP_DONE → verify → GOAL_VERIFIED)\nok   - goal check now exits 0 (feature really implemented)\nok   - every send was loop-attributed in the audit log'],
-    ['shell', 'live teardown: unregistering the fixture from the live harness\nPASS: goal (8 assertions)   exit 0'],
-    ['UI',    '👀 the repo card is gone again — nothing left behind. (LOOPEVAL_KEEP=1 would have kept it for you to poke at.)'],
-  ];
-  let simAt = 0;
-  const log = document.getElementById('simlog');
-  document.getElementById('sim-next').onclick = () => {
-    if (simAt >= SIM.length) return;
-    const [where, text] = SIM[simAt++];
-    log.textContent += (log.textContent.endsWith('—') ? '\n' : '\n\n') + '[' + where + ']  ' + text;
-    log.scrollTop = log.scrollHeight;
-    if (simAt >= SIM.length) document.getElementById('sim-next').disabled = true;
-  };
-  document.getElementById('sim-reset').onclick = () => {
-    simAt = 0; log.textContent = 'press “Next step” —';
-    document.getElementById('sim-next').disabled = false;
-  };
+  function applySim() {
+    document.querySelectorAll('.sect[data-state]').forEach(s =>
+      s.classList.toggle('now', s.dataset.state === sim.value));
+  }
+  tabQ.onclick = () => show('q');
+  tabG.onclick = () => show('g');
+  sim.onchange = applySim;
 </script>
+</main>
 </body>
 </html>
