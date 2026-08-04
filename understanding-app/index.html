@@ -1,264 +1,319 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>loop-agent-briefing — Understanding app</title>
-<link rel="stylesheet" href="./app.css" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My understanding: the loop parameter panel IS the state machine</title>
+<style>
+  :root {
+    --bg: #10141a; --panel: #1a2028; --panel2: #222a35; --panel3: #2a3442;
+    --ink: #dce3ec; --dim: #8b97a6; --line: #2e3947;
+    --ok: #4fc38a; --bad: #e06c6c; --warn: #e0b56c; --acc: #6ca8e0; --purple: #b48ce0;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.55 "Segoe UI", system-ui, sans-serif; padding: 24px 16px 64px; }
+  main { max-width: 960px; margin: 0 auto; }
+  h1 { font-size: 21px; margin: 0 0 4px; }
+  h2 { font-size: 17px; margin: 28px 0 10px; }
+  .sub { color: var(--dim); margin: 0 0 18px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+          padding: 14px 16px; margin-bottom: 14px; }
+  .card p, .card li { margin: 6px 0; color: var(--dim); }
+  .card b, .card code { color: var(--ink); }
+  code { background: var(--panel2); padding: 1px 6px; border-radius: 5px; font-size: 13px; }
+  .miss { border-left: 3px solid var(--bad); }
+  .qcard { border-left: 3px solid var(--warn); }
+  .qcard li { margin: 10px 0; }
+
+  .ba { display: grid; grid-template-columns: 1fr 1.4fr; gap: 12px; align-items: start; }
+  @media (max-width: 720px) { .ba { grid-template-columns: 1fr; } }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .06em;
+         text-transform: uppercase; padding: 2px 8px; border-radius: 999px; margin-bottom: 10px; }
+  .tag.before { background: #3a2b2b; color: var(--bad); }
+  .tag.after { background: #24382e; color: var(--ok); }
+
+  /* ---- replica of TODAY's flat pane ---- */
+  .old { font-size: 13px; }
+  .old .toggle { color: var(--acc); margin-bottom: 8px; }
+  .old .k { color: var(--dim); font-size: 12px; margin: 10px 0 3px; }
+  .old pre { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px;
+             padding: 8px; margin: 0; font-size: 12px; white-space: pre-wrap; color: var(--ink); }
+
+  /* ---- the AFTER mockup: state-sectioned parameter panel ---- */
+  .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+  .tabs button { background: var(--panel2); border: 1px solid var(--line); color: var(--dim);
+    border-radius: 8px; padding: 7px 14px; cursor: pointer; font: inherit; font-size: 14px; }
+  .tabs button.on { background: var(--acc); border-color: var(--acc); color: #0c1116; font-weight: 600; }
+  .simbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;
+            font-size: 13px; color: var(--dim); }
+  .simbar select { background: var(--panel2); color: var(--ink); border: 1px solid var(--line);
+                   border-radius: 6px; padding: 4px 8px; font: inherit; font-size: 13px; }
+
+  .mock { background: #151a21; border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  .sect { border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+          margin-bottom: 12px; overflow: hidden; transition: box-shadow .3s, border-color .3s; }
+  .sect.state-work  { border-left: 4px solid var(--acc); }
+  .sect.state-verify{ border-left: 4px solid var(--purple); }
+  .sect.state-loopwide { border-left: 4px solid var(--dim); }
+  .sect.now { border-color: var(--ok); box-shadow: 0 0 0 1px var(--ok); }
+  .sect-h { display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+            background: var(--panel2); }
+  .sect-h .sname { font-family: Consolas, monospace; font-size: 13px; font-weight: 700;
+                   letter-spacing: .04em; }
+  .state-work  .sname { color: var(--acc); }
+  .state-verify .sname { color: var(--purple); }
+  .state-loopwide .sname { color: var(--dim); }
+  .sect-h .sdesc { color: var(--dim); font-size: 12px; }
+  .nowpill { margin-left: auto; font-size: 11px; font-weight: 700; color: #0c1116;
+             background: var(--ok); border-radius: 999px; padding: 1px 8px; display: none; }
+  .sect.now .nowpill { display: inline-block; }
+  .sect-b { padding: 10px 12px 12px; }
+
+  .param { margin: 10px 0; }
+  .param .plabel { font-size: 12px; color: var(--dim); margin-bottom: 4px; }
+  .param textarea, .param .pre { width: 100%; background: var(--panel2); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; font: 12px/1.5 Consolas, monospace;
+    white-space: pre-wrap; resize: vertical; }
+  .prow { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; font-size: 13px; }
+  .prow label { display: flex; gap: 6px; align-items: center; color: var(--ink); }
+  .prow input[type=number] { width: 60px; background: var(--panel2); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; font: inherit; }
+
+  .badgebox { display: flex; align-items: center; gap: 10px; margin: 12px 0 6px;
+              background: var(--panel3); border: 1px dashed var(--warn); border-radius: 8px;
+              padding: 8px 10px; }
+  .badgebox .blabel { font-size: 12px; color: var(--warn); white-space: nowrap; }
+  .badge { font-family: Consolas, monospace; font-size: 13px; font-weight: 700; color: #0c1116;
+           background: var(--warn); border-radius: 6px; padding: 2px 10px; }
+  .trans { margin: 4px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--panel2);
+           font-size: 13px; color: var(--ink); }
+  .trans .arr { color: var(--ok); font-weight: 700; }
+  .trans .sref { font-family: Consolas, monospace; font-size: 12px; font-weight: 700; }
+  .trans .sref.work { color: var(--acc); }
+  .trans .sref.verify { color: var(--purple); }
+  .trans .sref.term-ok { color: var(--ok); }
+  .trans .sref.term-bad { color: var(--bad); }
+  .trans + .trans { margin-top: 6px; }
+  .flag { display: inline-block; font-size: 11px; background: #3a332b; color: var(--warn);
+          border-radius: 5px; padding: 1px 7px; margin-left: 6px; vertical-align: middle; }
+  .hidden { display: none; }
+</style>
 </head>
 <body>
-<header class="top">
-  <div class="wrap">
-    <div class="eyebrow">OpenSpec change · PR #31 · branch <code>feat/loop-agent-briefing</code></div>
-    <h1>Brief the driven agent on its situation, <em>every send</em></h1>
-    <p class="lede">
-      Autopilot loops send stored prompt text verbatim, so the driven agent has no idea it is
-      inside a loop. This change prefixes a <b>briefing</b> onto every driven send — a fixed
-      frame around an <b>operator-editable rules list</b>, composed at the engine's one send
-      choke point. The rules live in a global, revisioned store and are edited from a
-      <b>Briefing section beside the loop section on every dock card</b> — so a rule idea is
-      captured the moment it occurs (park it disabled, enable it later), no deploy needed.
-      This app explains <b>why</b>, the <b>composition</b> (D2a/D2b), <b>where</b> it composes,
-      and how the operator surfaces stay honest.
-    </p>
+<main>
+  <h1>The loop parameter panel <i>is</i> the state machine</h1>
+  <p class="sub">My understanding of what you asked for — confirmed, and <b>now built</b> on branch <code>feat/loop-state-params</code> (OpenSpec change <code>loop-state-param-panel</code>). The mockup below is what the dock's loop panel now actually shows: open an agent dock's loop popover and pick 🎯 or 📦.</p>
+
+  <div class="card miss">
+    <p><b>What I got wrong last time:</b> I only built the <i>viewer</i> — a chip strip and a reference
+       diagram — and left the dock's loop parameter subsection as-is: a "Show prompts" toggle hiding a flat
+       dump of text boxes. <b>The actual ask:</b> that parameter subsection itself should be restructured
+       <i>as</i> the state machine — sections named after the states, each holding that state's parameters,
+       the badge we expect the agent to emit there, and an explicit statement of what the loop system does
+       when that badge appears. The little live state readout on the dock header was useful and can stay,
+       but it's the side dish.</p>
   </div>
-</header>
 
-<nav class="tabs wrap" id="tabs">
-  <button data-tab="why" class="active">1 · The problem</button>
-  <button data-tab="compose">2 · Compose a send</button>
-  <button data-tab="text">3 · The briefing text (D2a)</button>
-  <button data-tab="chokepoint">4 · Where it composes (D1)</button>
-  <button data-tab="honest">5 · Staying honest (D3)</button>
-</nav>
-
-<main class="wrap">
-
-  <!-- ============ TAB 1: WHY ============ -->
-  <section class="tab active" id="tab-why">
-    <h2>An agent that doesn't know it's in a loop acts like a human is watching</h2>
-    <p class="sub">
-      Toggle the briefing and replay the same terse queue item. Same prompt, two very different turns.
-    </p>
-
-    <div class="toggle-row">
-      <span class="toggle-label">Autopilot briefing</span>
-      <button id="briefToggle" class="switch off" aria-pressed="false">
-        <span class="knob"></span><span class="state">OFF</span>
-      </button>
-      <span class="hint" id="toggleHint">Bare stored text — the pre-change behaviour</span>
+  <h2>Before → after, side by side</h2>
+  <div class="ba">
+    <div class="card old">
+      <span class="tag before">Today (queue loop)</span>
+      <div class="toggle">Show prompts ▾</div>
+      <div class="k">Verification prompt template ({0} = the step just sent)</div>
+      <pre>The step below was just sent…
+Reply STEP_VERIFIED if …</pre>
+      <div class="k">Last step sent (what verification checks)</div>
+      <pre>Implement the /health endpoint…</pre>
+      <p style="margin-top:10px">Flat list. Which state uses which template? What does STEP_VERIFIED
+         <i>do</i>? Where does the badge even come from? Unknowable from here — the dynamics live only in C#.</p>
     </div>
-
-    <div class="convo">
-      <div class="msg send">
-        <div class="who">autopilot → agent</div>
-        <div class="bubble" id="whyPrompt"></div>
-      </div>
-      <div class="msg reply" id="whyReplyWrap">
-        <div class="who">agent → nobody (no human is reading)</div>
-        <div class="bubble" id="whyReply"></div>
-        <div class="outcome" id="whyOutcome"></div>
-      </div>
+    <div class="card">
+      <span class="tag after">What you want</span>
+      <p style="margin:0 0 4px">Same pane, restructured. Every parameter lives inside the <b>state that uses
+         it</b>. Each state section reads as: <i>parameters → badge we expect → what emitting it does</i>.
+         The transition dynamics become knowable from the settings themselves. Full mockup below ↓</p>
+      <p>Also: prompts stop being a hidden "inspection" afterthought — they're ordinary <b>parameters of the
+         loop</b>, shown with the rest.</p>
     </div>
+  </div>
 
-    <div class="chain" id="whyChain"></div>
-  </section>
-
-  <!-- ============ TAB 2: COMPOSE ============ -->
-  <section class="tab" id="tab-compose">
-    <h2>Compose a briefed send — and edit the rules that feed it</h2>
-    <p class="sub">
-      Pick what the loop is sending. <code>ComposeBriefedPrompt(kind, phase, sentinel, storedText, rules)</code>
-      renders the fixed frame around your <b>enabled rules</b>, then the stored text. The rules
-      editor below mirrors the dock's Briefing section: check = composed into every driven work
-      send, uncheck = parked idea, every edit bumps the revision each send stamps. Verify sends
-      never receive rules — structurally.
-    </p>
-
-    <div class="rules-box">
-      <div class="col-h">Briefing rules <span class="tag tag-op">operator-edited · global · briefing.json</span>
-        <span class="pill" id="rulesRev"></span><span class="pill" id="rulesCount"></span></div>
-      <ul class="rules-list" id="rulesList"></ul>
-      <div class="rule-addrow">
-        <input id="ruleAdd" type="text" placeholder="New rule or idea… (uncheck after adding to just park it)" />
-        <button id="ruleAddBtn">Add</button>
-      </div>
+  <h2>The mockup — dock → Loops → parameter subsection</h2>
+  <div class="simbar">
+    <div class="tabs">
+      <button id="tabQueue" class="on">📦 Queue loop</button>
+      <button id="tabGoal">🎯 Goal loop</button>
     </div>
+    <span>·</span>
+    <label>Simulate a running loop — current state:
+      <select id="simState">
+        <option value="">(not armed)</option>
+        <option value="work">WORKING_STATE</option>
+        <option value="verify">VERIFICATION_STATE</option>
+      </select>
+    </label>
+  </div>
 
-    <div class="picker" id="picker">
-      <button data-k="queue-item" class="active">Queue item <small>work</small></button>
-      <button data-k="queue-verify">Queue step-verify <small>verify</small></button>
-      <button data-k="goal-work">Goal work <small>work</small></button>
-      <button data-k="goal-verify">Goal verify <small>verify</small></button>
-      <button data-k="recipe">Recipe <small>work</small></button>
-    </div>
+  <!-- ================= QUEUE LOOP ================= -->
+  <div class="mock" id="mockQueue">
 
-    <div class="badges" id="composeBadges"></div>
-
-    <div class="compose-grid">
-      <div class="col">
-        <div class="col-h">Briefing = fixed frame + enabled rules <span class="tag tag-harness">frame: harness</span> <span class="tag tag-op">rules: operator</span></div>
-        <pre class="prompt" id="composeBriefing"></pre>
-      </div>
-      <div class="col">
-        <div class="col-h">Stored text <span class="tag tag-op">operator-authored</span></div>
-        <pre class="prompt op" id="composeStored"></pre>
-        <label class="edit-line">edit stored text:
-          <input id="storedInput" type="text" value="Add a null check to the queue drain" />
-        </label>
-      </div>
-    </div>
-
-    <div class="composed-out">
-      <div class="col-h">= what actually reaches the CLI <span class="tag tag-sent">sent</span></div>
-      <pre class="prompt sent" id="composeSent"></pre>
-    </div>
-  </section>
-
-  <!-- ============ TAB 3: THE TEXT ============ -->
-  <section class="tab" id="tab-text">
-    <h2>The briefing text is the heart of the change (D2a draft v1 + D2b rules)</h2>
-    <p class="sub">
-      The plumbing is deliberately small; the prompt wording makes or breaks it. Two deliberately
-      <em>different</em> compositions — because a verification turn must feel <b>no</b> "act, don't ask"
-      pressure — and a deliberate frame/rules split: the parser-coupled marker lines and the verify
-      note are <b>compiled in</b>, the behavioral bullets are <b>yours to grow</b>.
-    </p>
-
-    <div class="two-tpl">
-      <div class="tpl work">
-        <div class="tpl-h">Work-phase composition <small>queue item · goal work · recipe</small></div>
-        <pre class="prompt annotated" id="workTpl"></pre>
-        <p class="mini">The <code>NEEDS_HUMAN:</code> bullet is part of the <b>fixed frame</b>, not a rule —
-        it teaches the exact final-line marker the engine parses, so it can never be edited away.</p>
-      </div>
-      <div class="tpl verify">
-        <div class="tpl-h">Verify-phase note <small>queue step-verify · goal verify · fixed, no rules slot</small></div>
-        <pre class="prompt annotated" id="verifyTpl"></pre>
-        <p class="mini">No posture pressure, no rules, no duplicate marker line — an operator edit
-        structurally cannot push "act, don't ask" into a verification turn.</p>
-      </div>
-    </div>
-
-    <h3>Crafting constraints that bound future tuning</h3>
-    <div class="cards">
-      <div class="card"><b>Short</b><p>The composition should stay around ~120 words. Rule count is operator-controlled now, so the editors show the composed preview with a soft too-long hint instead of hard-limiting.</p></div>
-      <div class="card"><b>Prefix, not suffix</b><p>Framing lands <em>before</em> the task; the <code>--- The prompt follows. ---</code> separator keeps the operator's text distinct.</p></div>
-      <div class="card"><b>Exact final-line phrasing</b><p><code>NEEDS_HUMAN:</code> and the sentinel match the engine's final-line parser — and live in the fixed frame so no edit can teach a marker the parser would miss.</p></div>
-      <div class="card"><b>One voice with the doc</b><p>The briefing is the distilled form of <code>docs/loop-driven-agent-convention.md</code>; frame tuning edits both in the same commit (D4). Rules tune live in the dock.</p></div>
-    </div>
-  </section>
-
-  <!-- ============ TAB 4: CHOKEPOINT ============ -->
-  <section class="tab" id="tab-chokepoint">
-    <h2>Compose at the engine's one send choke point (D1)</h2>
-    <p class="sub">
-      The briefing wraps in <code>AutopilotService</code>'s drive branch — <b>not</b> in each kind's
-      <code>DecideCore</code>. One choke point covers all four send shapes; <code>propose.Prompt</code>
-      stays the raw stored text everywhere the engine stamps or records it.
-    </p>
-
-    <div class="flow">
-      <div class="lane">
-        <div class="lane-h">Kinds — <code>DecideCore</code> returns raw stored text</div>
-        <div class="nodes">
-          <div class="node kind">QueueLoop<small>stash head · verify template</small></div>
-          <div class="node kind">GoalLoop<small>work / verify prompt</small></div>
-          <div class="node kind">RecipeLoop<small>recipe text</small></div>
+    <div class="sect state-loopwide">
+      <div class="sect-h"><span class="sname">LOOP-WIDE</span>
+        <span class="sdesc">parameters that don't belong to any one state</span></div>
+      <div class="sect-b">
+        <div class="prow">
+          <label><input type="checkbox" checked> Verify each step</label>
+          <label>Turn cap <input type="number" value="12"></label>
+          <span style="color:var(--dim)">Deny list: <code>rm -rf</code>, <code>git push</code></span>
         </div>
       </div>
+    </div>
 
-      <div class="funnel-arrows">
-        <span>↓ Propose(raw)</span><span>↓ Propose(raw)</span><span>↓ Propose(raw)</span>
-      </div>
-
-      <div class="choke">
-        <div class="choke-h">AutopilotService · <code>case LoopDecision.Propose</code> → <code>SendPrompt</code></div>
-        <div class="choke-steps">
-          <div class="step brief">➊ <b>ComposeBriefedPrompt</b><small>briefing + "\n\n" + raw</small></div>
-          <div class="step">➋ audit / sent-history<small>records <b>raw</b> + <span class="flag">briefed</span> flag</small></div>
-          <div class="step">➌ synthetic <code>user</code> event<small>raw text, <span class="flag">briefed:true</span></small></div>
-          <div class="step run">➍ run CLI<small>with <b>composed</b> text</small></div>
+    <div class="sect state-work" data-state="work">
+      <div class="sect-h"><span class="sname">WORKING_STATE</span>
+        <span class="sdesc">the loop sends the next queued step and waits for the turn to finish</span>
+        <span class="nowpill">● now</span></div>
+      <div class="sect-b">
+        <div class="param">
+          <div class="plabel">What gets sent in this state — the queue itself (order = unload order, from the stash strip)</div>
+          <div class="pre">1. Implement the /health endpoint…
+2. Add the smoke test for it…
+3. Wire it into the dashboard…</div>
         </div>
-      </div>
-
-      <div class="excluded">
-        <div class="node suggest">SuggestionLoop → <code>SetPending</code></div>
-        <div class="exc-note">branches off <em>before</em> the send path — a human sends it from the composer, so it is structurally excluded. No briefing.</div>
+        <div class="badgebox">
+          <span class="blabel">exit trigger:</span>
+          <span style="font-size:13px">the step's turn finishes — <b>no badge in this state</b></span>
+          <span class="flag">⚠ differs from your example — see open question 1</span>
+        </div>
+        <div class="trans">when the step's turn finishes <span class="arr">→</span> transition into
+          <span class="sref verify">VERIFICATION_STATE</span> (verification on)
+          &nbsp;·&nbsp; with verification off: <span class="arr">→</span> stay in
+          <span class="sref work">WORKING_STATE</span>, next step unloads unchecked</div>
       </div>
     </div>
 
-    <div class="callout">
-      <b>Why not compose in each kind?</b> <code>RecordQueueStep</code> must stamp the <em>raw</em> item —
-      the verify template quotes it back, and quoting a briefed composition would nest briefings. The stash
-      consume ref, the pending-consume map, and state snippets all keep meaning "the operator's text".
-    </div>
-  </section>
-
-  <!-- ============ TAB 5: HONEST ============ -->
-  <section class="tab" id="tab-honest">
-    <h2>Record raw + a flag + the rules revision; disclose the composition live (D3)</h2>
-    <p class="sub">
-      What was actually sent is <code>briefing + stored</code>, and it must stay reconstructable — even
-      though the rules list mutates. But if we stored the composed text verbatim, every truncated surface
-      would render the identical briefing prefix as noise. So: record the raw text + a
-      <span class="flag">briefed</span> flag + the <b>rules revision</b> the send composed with;
-      <code>briefing.json</code> keeps every revision, so frame (git) + rules-at-rev (store) + raw text
-      (record) reconstruct any past send exactly.
-    </p>
-
-    <div class="honest-grid">
-      <div class="hcard reject">
-        <div class="hh">✗ Rejected — store composed text everywhere</div>
-        <div class="rows">
-          <div class="row"><span class="lbl">audit</span><code class="dim">[brief…] Add a null check…</code></div>
-          <div class="row"><span class="lbl">history</span><code class="dim">[brief…] Add a null check…</code></div>
-          <div class="row"><span class="lbl">chat bubble</span><code class="dim">[brief…] Add a null check…</code></div>
+    <div class="sect state-verify" data-state="verify">
+      <div class="sect-h"><span class="sname">VERIFICATION_STATE</span>
+        <span class="sdesc">the loop challenges the agent to prove the step it just did</span>
+        <span class="nowpill">● now</span></div>
+      <div class="sect-b">
+        <div class="param">
+          <div class="plabel">Verification prompt template ({0} = the step just sent) — sent on entering this state</div>
+          <textarea rows="3">The step below was just sent to you and your reply above is the result.
+Step: {0}
+Check your own work honestly. If the step is truly complete, reply STEP_VERIFIED…</textarea>
         </div>
-        <p class="mini">Every truncated view becomes identical briefing noise; <code>loops.json</code> bloats with N copies of the same fixed prefix.</p>
+        <div class="badgebox">
+          <span class="blabel">agent emits badge:</span>
+          <span class="badge">STEP_VERIFIED</span>
+        </div>
+        <div class="trans">when <b>STEP_VERIFIED</b> is emitted and steps remain
+          <span class="arr">→</span> transition into <span class="sref work">WORKING_STATE</span> (next step unloads)</div>
+        <div class="trans">when <b>STEP_VERIFIED</b> is emitted and the queue is empty
+          <span class="arr">→</span> <span class="sref term-ok">DONE · DRAINED</span> (loop ends)</div>
+        <div class="trans">any other reply
+          <span class="arr">→</span> <span class="sref term-bad">ESCALATE · STEP-UNVERIFIED</span> (loop stops, flags the human)</div>
       </div>
+    </div>
+  </div>
 
-      <div class="hcard keep">
-        <div class="hh">✓ Chosen — raw + flag + rev, composition disclosed live</div>
-        <div class="rows">
-          <div class="row"><span class="lbl">audit</span><code>Add a null check…</code> <span class="flag">briefed · rev 3</span></div>
-          <div class="row"><span class="lbl">history</span><code>Add a null check…</code> <span class="flag">briefed · rev 3</span></div>
-          <div class="row"><span class="lbl">chat bubble</span><code>Add a null check…</code> <span class="chip">📝 autopilot briefing attached</span></div>
-          <div class="row"><span class="lbl">dock Briefing + arm preview</span><code class="tpl-ref">live composition: frame + enabled rules</code></div>
+  <!-- ================= GOAL LOOP ================= -->
+  <div class="mock hidden" id="mockGoal">
+
+    <div class="sect state-loopwide">
+      <div class="sect-h"><span class="sname">LOOP-WIDE</span>
+        <span class="sdesc">parameters that don't belong to any one state</span></div>
+      <div class="sect-b">
+        <div class="prow">
+          <label>Turn cap <input type="number" value="10"></label>
+          <span style="color:var(--dim)">Goal: <code>make the smoke tests pass</code></span>
         </div>
-        <p class="mini"><b>sent text = frame + rules-at-recorded-rev + recorded raw text</b>, deterministically. The honesty contract of the proposal, revision-proofed against later edits.</p>
       </div>
     </div>
 
-    <div class="amend">
-      <div class="amend-h">Convention amended — deliberately, explicitly</div>
-      <div class="amend-cols">
-        <div class="was">
-          <div class="wl">was (unify-loop-types)</div>
-          <p>"Driven kinds only ever send <b>stored, byte-identical text</b> — nothing is injected at send time."</p>
+    <div class="sect state-work" data-state="work">
+      <div class="sect-h"><span class="sname">WORKING_STATE</span>
+        <span class="sdesc">the loop drives the agent toward the goal, turn after turn</span>
+        <span class="nowpill">● now</span></div>
+      <div class="sect-b">
+        <div class="param">
+          <div class="plabel">Work prompt template ({0} = your goal) — re-sent every turn in this state</div>
+          <textarea rows="2">You are being driven by a goal loop. The goal: {0}
+Keep working. When the whole goal is genuinely done, end your final line with LOOP_DONE.</textarea>
         </div>
-        <div class="arrow">→</div>
-        <div class="now">
-          <div class="wl">now</div>
-          <p>Every send is a <b>deterministic composition of operator-inspectable parts</b> (fixed frame + rules at a recorded revision + stored text) — previewable before arming, disclosed as sent, reconstructable forever.</p>
+        <div class="badgebox">
+          <span class="blabel">agent emits badge:</span>
+          <span class="badge">LOOP_DONE</span>
         </div>
+        <div class="trans">when <b>LOOP_DONE</b> is emitted (final line)
+          <span class="arr">→</span> transition into <span class="sref verify">VERIFICATION_STATE</span></div>
+        <div class="trans">no badge in the reply <span class="arr">→</span> stay in
+          <span class="sref work">WORKING_STATE</span>, work prompt re-sent</div>
       </div>
-      <p class="mini">The stale wording must not survive anywhere — a grep across <code>docs/</code>, <code>understanding-app/</code>, and code comments is a task, not a hope.</p>
     </div>
-  </section>
 
+    <div class="sect state-verify" data-state="verify">
+      <div class="sect-h"><span class="sname">VERIFICATION_STATE</span>
+        <span class="sdesc">the loop refuses to trust the done-claim and demands proof</span>
+        <span class="nowpill">● now</span></div>
+      <div class="sect-b">
+        <div class="param">
+          <div class="plabel">Verification prompt template ({0} = your goal) — sent on entering this state</div>
+          <textarea rows="2">You claimed the goal is done: {0}
+Verify honestly. Only if it truly holds, end with GOAL_VERIFIED; otherwise list the gaps.</textarea>
+        </div>
+        <div class="badgebox">
+          <span class="blabel">agent emits badge:</span>
+          <span class="badge">GOAL_VERIFIED</span>
+        </div>
+        <div class="trans">when <b>GOAL_VERIFIED</b> is emitted
+          <span class="arr">→</span> <span class="sref term-ok">DONE · VERIFIED</span> (loop ends)</div>
+        <div class="trans">any other reply (gaps found)
+          <span class="arr">→</span> transition back into <span class="sref work">WORKING_STATE</span></div>
+      </div>
+    </div>
+  </div>
+
+  <h2>Decisions baked into the build (say the word to change any)</h2>
+  <div class="card qcard">
+    <ol>
+      <li><b>Code-accurate grouping.</b> Your example put the verification machinery in WORKING_STATE; the
+          engine sends the verification prompt on <i>entering</i> VERIFICATION_STATE and
+          <code>STEP_VERIFIED</code> is the reply that <i>exits</i> it — so that's where they live. The
+          queue's WORKING_STATE shows an explicit <b>badge-less exit trigger</b> ("the step's turn
+          finishes") instead of pretending there's a badge.</li>
+      <li><b>Shown as parameters, read-only for now.</b> Badges and templates are compile-time constants in
+          the backend engine — making them editable is a real backend feature. This release renders them as
+          first-class parameter controls; editability is a clean follow-up change.</li>
+      <li><b>LOOP-WIDE on top</b> holds goal text, turn cap, queue binding, the verification toggle, and
+          deny-list chips.</li>
+      <li><b>verify-owed</b> owns no parameters → no section; it's the transition arrow, but it stays a
+          distinct chip in the armed header strip and lights VERIFICATION_STATE while active.</li>
+      <li><b>Scope: dock popover only.</b> The console Loops tab is untouched.</li>
+      <li><b>Both live readouts kept:</b> the compact strip in the armed header and the current state's
+          section lighting up with a "● now" pill (verification off dims VERIFICATION_STATE — the machine
+          honestly shows that state is skipped).</li>
+    </ol>
+  </div>
+
+<script>
+  const tabQ = document.getElementById('tabQueue'), tabG = document.getElementById('tabGoal');
+  const mockQ = document.getElementById('mockQueue'), mockG = document.getElementById('mockGoal');
+  const sim = document.getElementById('simState');
+  function show(which) {
+    tabQ.classList.toggle('on', which === 'q'); tabG.classList.toggle('on', which === 'g');
+    mockQ.classList.toggle('hidden', which !== 'q'); mockG.classList.toggle('hidden', which !== 'g');
+    applySim();
+  }
+  function applySim() {
+    document.querySelectorAll('.sect[data-state]').forEach(s =>
+      s.classList.toggle('now', s.dataset.state === sim.value));
+  }
+  tabQ.onclick = () => show('q');
+  tabG.onclick = () => show('g');
+  sim.onchange = applySim;
+</script>
 </main>
-
-<footer class="wrap">
-  <p>
-    Source of truth: <code>openspec/changes/loop-agent-briefing/{proposal,design}.md</code> ·
-    <code>docs/loop-driven-agent-convention.md</code>. The fixed frame ships as consts in
-    <code>LoopConfigStore</code>; the draft&nbsp;v1 rules seed <code>BriefingRulesStore</code>
-    (<code>briefing.json</code>) and are tuned live from the dock's Briefing section. This app
-    rolls latest — it is overwritten whenever the explanation changes.
-  </p>
-</footer>
-
-<script src="./app.js"></script>
 </body>
 </html>
