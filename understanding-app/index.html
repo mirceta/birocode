@@ -1,319 +1,42 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>My understanding: the loop parameter panel IS the state machine</title>
-<style>
-  :root {
-    --bg: #10141a; --panel: #1a2028; --panel2: #222a35; --panel3: #2a3442;
-    --ink: #dce3ec; --dim: #8b97a6; --line: #2e3947;
-    --ok: #4fc38a; --bad: #e06c6c; --warn: #e0b56c; --acc: #6ca8e0; --purple: #b48ce0;
-    --radius: 10px;
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink);
-         font: 15px/1.55 "Segoe UI", system-ui, sans-serif; padding: 24px 16px 64px; }
-  main { max-width: 960px; margin: 0 auto; }
-  h1 { font-size: 21px; margin: 0 0 4px; }
-  h2 { font-size: 17px; margin: 28px 0 10px; }
-  .sub { color: var(--dim); margin: 0 0 18px; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
-          padding: 14px 16px; margin-bottom: 14px; }
-  .card p, .card li { margin: 6px 0; color: var(--dim); }
-  .card b, .card code { color: var(--ink); }
-  code { background: var(--panel2); padding: 1px 6px; border-radius: 5px; font-size: 13px; }
-  .miss { border-left: 3px solid var(--bad); }
-  .qcard { border-left: 3px solid var(--warn); }
-  .qcard li { margin: 10px 0; }
-
-  .ba { display: grid; grid-template-columns: 1fr 1.4fr; gap: 12px; align-items: start; }
-  @media (max-width: 720px) { .ba { grid-template-columns: 1fr; } }
-  .tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .06em;
-         text-transform: uppercase; padding: 2px 8px; border-radius: 999px; margin-bottom: 10px; }
-  .tag.before { background: #3a2b2b; color: var(--bad); }
-  .tag.after { background: #24382e; color: var(--ok); }
-
-  /* ---- replica of TODAY's flat pane ---- */
-  .old { font-size: 13px; }
-  .old .toggle { color: var(--acc); margin-bottom: 8px; }
-  .old .k { color: var(--dim); font-size: 12px; margin: 10px 0 3px; }
-  .old pre { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px;
-             padding: 8px; margin: 0; font-size: 12px; white-space: pre-wrap; color: var(--ink); }
-
-  /* ---- the AFTER mockup: state-sectioned parameter panel ---- */
-  .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
-  .tabs button { background: var(--panel2); border: 1px solid var(--line); color: var(--dim);
-    border-radius: 8px; padding: 7px 14px; cursor: pointer; font: inherit; font-size: 14px; }
-  .tabs button.on { background: var(--acc); border-color: var(--acc); color: #0c1116; font-weight: 600; }
-  .simbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;
-            font-size: 13px; color: var(--dim); }
-  .simbar select { background: var(--panel2); color: var(--ink); border: 1px solid var(--line);
-                   border-radius: 6px; padding: 4px 8px; font: inherit; font-size: 13px; }
-
-  .mock { background: #151a21; border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
-  .sect { border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
-          margin-bottom: 12px; overflow: hidden; transition: box-shadow .3s, border-color .3s; }
-  .sect.state-work  { border-left: 4px solid var(--acc); }
-  .sect.state-verify{ border-left: 4px solid var(--purple); }
-  .sect.state-loopwide { border-left: 4px solid var(--dim); }
-  .sect.now { border-color: var(--ok); box-shadow: 0 0 0 1px var(--ok); }
-  .sect-h { display: flex; align-items: center; gap: 10px; padding: 9px 12px;
-            background: var(--panel2); }
-  .sect-h .sname { font-family: Consolas, monospace; font-size: 13px; font-weight: 700;
-                   letter-spacing: .04em; }
-  .state-work  .sname { color: var(--acc); }
-  .state-verify .sname { color: var(--purple); }
-  .state-loopwide .sname { color: var(--dim); }
-  .sect-h .sdesc { color: var(--dim); font-size: 12px; }
-  .nowpill { margin-left: auto; font-size: 11px; font-weight: 700; color: #0c1116;
-             background: var(--ok); border-radius: 999px; padding: 1px 8px; display: none; }
-  .sect.now .nowpill { display: inline-block; }
-  .sect-b { padding: 10px 12px 12px; }
-
-  .param { margin: 10px 0; }
-  .param .plabel { font-size: 12px; color: var(--dim); margin-bottom: 4px; }
-  .param textarea, .param .pre { width: 100%; background: var(--panel2); color: var(--ink);
-    border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; font: 12px/1.5 Consolas, monospace;
-    white-space: pre-wrap; resize: vertical; }
-  .prow { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; font-size: 13px; }
-  .prow label { display: flex; gap: 6px; align-items: center; color: var(--ink); }
-  .prow input[type=number] { width: 60px; background: var(--panel2); color: var(--ink);
-    border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; font: inherit; }
-
-  .badgebox { display: flex; align-items: center; gap: 10px; margin: 12px 0 6px;
-              background: var(--panel3); border: 1px dashed var(--warn); border-radius: 8px;
-              padding: 8px 10px; }
-  .badgebox .blabel { font-size: 12px; color: var(--warn); white-space: nowrap; }
-  .badge { font-family: Consolas, monospace; font-size: 13px; font-weight: 700; color: #0c1116;
-           background: var(--warn); border-radius: 6px; padding: 2px 10px; }
-  .trans { margin: 4px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--panel2);
-           font-size: 13px; color: var(--ink); }
-  .trans .arr { color: var(--ok); font-weight: 700; }
-  .trans .sref { font-family: Consolas, monospace; font-size: 12px; font-weight: 700; }
-  .trans .sref.work { color: var(--acc); }
-  .trans .sref.verify { color: var(--purple); }
-  .trans .sref.term-ok { color: var(--ok); }
-  .trans .sref.term-bad { color: var(--bad); }
-  .trans + .trans { margin-top: 6px; }
-  .flag { display: inline-block; font-size: 11px; background: #3a332b; color: var(--warn);
-          border-radius: 5px; padding: 1px 7px; margin-left: 6px; vertical-align: middle; }
-  .hidden { display: none; }
-</style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Research-informed loops — technique catalog × our framework</title>
+<link rel="stylesheet" href="./app.css">
 </head>
 <body>
-<main>
-  <h1>The loop parameter panel <i>is</i> the state machine</h1>
-  <p class="sub">My understanding of what you asked for — confirmed, and <b>now built</b> on branch <code>feat/loop-state-params</code> (OpenSpec change <code>loop-state-param-panel</code>). The mockup below is what the dock's loop panel now actually shows: open an agent dock's loop popover and pick 🎯 or 📦.</p>
+<header class="hd">
+  <h1>Agent-loop research → adoption map</h1>
+  <p class="hd__sub">
+    37 techniques mined live (2026-08-04) from 14 source-cited documents —
+    Anthropic engineering, Boris Cherny, Peter Steinberger, Geoffrey Huntley,
+    Simon Willison, Armin Ronacher, Thorsten Ball — confronted with our
+    autopilot loop framework. Dossier: <code>docs/research/agent-loops/</code>
+    (also in the autopilot console → Reference → 📚 Research).
+  </p>
+  <div class="hd__stats" id="stats"></div>
+</header>
 
-  <div class="card miss">
-    <p><b>What I got wrong last time:</b> I only built the <i>viewer</i> — a chip strip and a reference
-       diagram — and left the dock's loop parameter subsection as-is: a "Show prompts" toggle hiding a flat
-       dump of text boxes. <b>The actual ask:</b> that parameter subsection itself should be restructured
-       <i>as</i> the state machine — sections named after the states, each holding that state's parameters,
-       the badge we expect the agent to emit there, and an explicit statement of what the loop system does
-       when that badge appears. The little live state readout on the dock header was useful and can stay,
-       but it's the side dish.</p>
-  </div>
+<nav class="filters">
+  <div class="filters__group" id="bucketFilters"></div>
+  <div class="filters__group" id="evidenceFilters"></div>
+  <input id="search" type="search" placeholder="filter techniques…" aria-label="Filter techniques">
+</nav>
 
-  <h2>Before → after, side by side</h2>
-  <div class="ba">
-    <div class="card old">
-      <span class="tag before">Today (queue loop)</span>
-      <div class="toggle">Show prompts ▾</div>
-      <div class="k">Verification prompt template ({0} = the step just sent)</div>
-      <pre>The step below was just sent…
-Reply STEP_VERIFIED if …</pre>
-      <div class="k">Last step sent (what verification checks)</div>
-      <pre>Implement the /health endpoint…</pre>
-      <p style="margin-top:10px">Flat list. Which state uses which template? What does STEP_VERIFIED
-         <i>do</i>? Where does the badge even come from? Unknowable from here — the dynamics live only in C#.</p>
-    </div>
-    <div class="card">
-      <span class="tag after">What you want</span>
-      <p style="margin:0 0 4px">Same pane, restructured. Every parameter lives inside the <b>state that uses
-         it</b>. Each state section reads as: <i>parameters → badge we expect → what emitting it does</i>.
-         The transition dynamics become knowable from the settings themselves. Full mockup below ↓</p>
-      <p>Also: prompts stop being a hidden "inspection" afterthought — they're ordinary <b>parameters of the
-         loop</b>, shown with the rest.</p>
-    </div>
-  </div>
+<section id="ranked" class="ranked">
+  <h2>The worth-adopting ladder <span class="ranked__hint">(each rank seeds one follow-up OpenSpec change — click to inspect)</span></h2>
+  <ol id="ladder" class="ladder"></ol>
+</section>
 
-  <h2>The mockup — dock → Loops → parameter subsection</h2>
-  <div class="simbar">
-    <div class="tabs">
-      <button id="tabQueue" class="on">📦 Queue loop</button>
-      <button id="tabGoal">🎯 Goal loop</button>
-    </div>
-    <span>·</span>
-    <label>Simulate a running loop — current state:
-      <select id="simState">
-        <option value="">(not armed)</option>
-        <option value="work">WORKING_STATE</option>
-        <option value="verify">VERIFICATION_STATE</option>
-      </select>
-    </label>
-  </div>
+<main class="grid" id="grid"></main>
 
-  <!-- ================= QUEUE LOOP ================= -->
-  <div class="mock" id="mockQueue">
+<aside id="detail" class="detail" hidden>
+  <button class="detail__close" id="detailClose" aria-label="Close">✕</button>
+  <div id="detailBody"></div>
+</aside>
 
-    <div class="sect state-loopwide">
-      <div class="sect-h"><span class="sname">LOOP-WIDE</span>
-        <span class="sdesc">parameters that don't belong to any one state</span></div>
-      <div class="sect-b">
-        <div class="prow">
-          <label><input type="checkbox" checked> Verify each step</label>
-          <label>Turn cap <input type="number" value="12"></label>
-          <span style="color:var(--dim)">Deny list: <code>rm -rf</code>, <code>git push</code></span>
-        </div>
-      </div>
-    </div>
-
-    <div class="sect state-work" data-state="work">
-      <div class="sect-h"><span class="sname">WORKING_STATE</span>
-        <span class="sdesc">the loop sends the next queued step and waits for the turn to finish</span>
-        <span class="nowpill">● now</span></div>
-      <div class="sect-b">
-        <div class="param">
-          <div class="plabel">What gets sent in this state — the queue itself (order = unload order, from the stash strip)</div>
-          <div class="pre">1. Implement the /health endpoint…
-2. Add the smoke test for it…
-3. Wire it into the dashboard…</div>
-        </div>
-        <div class="badgebox">
-          <span class="blabel">exit trigger:</span>
-          <span style="font-size:13px">the step's turn finishes — <b>no badge in this state</b></span>
-          <span class="flag">⚠ differs from your example — see open question 1</span>
-        </div>
-        <div class="trans">when the step's turn finishes <span class="arr">→</span> transition into
-          <span class="sref verify">VERIFICATION_STATE</span> (verification on)
-          &nbsp;·&nbsp; with verification off: <span class="arr">→</span> stay in
-          <span class="sref work">WORKING_STATE</span>, next step unloads unchecked</div>
-      </div>
-    </div>
-
-    <div class="sect state-verify" data-state="verify">
-      <div class="sect-h"><span class="sname">VERIFICATION_STATE</span>
-        <span class="sdesc">the loop challenges the agent to prove the step it just did</span>
-        <span class="nowpill">● now</span></div>
-      <div class="sect-b">
-        <div class="param">
-          <div class="plabel">Verification prompt template ({0} = the step just sent) — sent on entering this state</div>
-          <textarea rows="3">The step below was just sent to you and your reply above is the result.
-Step: {0}
-Check your own work honestly. If the step is truly complete, reply STEP_VERIFIED…</textarea>
-        </div>
-        <div class="badgebox">
-          <span class="blabel">agent emits badge:</span>
-          <span class="badge">STEP_VERIFIED</span>
-        </div>
-        <div class="trans">when <b>STEP_VERIFIED</b> is emitted and steps remain
-          <span class="arr">→</span> transition into <span class="sref work">WORKING_STATE</span> (next step unloads)</div>
-        <div class="trans">when <b>STEP_VERIFIED</b> is emitted and the queue is empty
-          <span class="arr">→</span> <span class="sref term-ok">DONE · DRAINED</span> (loop ends)</div>
-        <div class="trans">any other reply
-          <span class="arr">→</span> <span class="sref term-bad">ESCALATE · STEP-UNVERIFIED</span> (loop stops, flags the human)</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ================= GOAL LOOP ================= -->
-  <div class="mock hidden" id="mockGoal">
-
-    <div class="sect state-loopwide">
-      <div class="sect-h"><span class="sname">LOOP-WIDE</span>
-        <span class="sdesc">parameters that don't belong to any one state</span></div>
-      <div class="sect-b">
-        <div class="prow">
-          <label>Turn cap <input type="number" value="10"></label>
-          <span style="color:var(--dim)">Goal: <code>make the smoke tests pass</code></span>
-        </div>
-      </div>
-    </div>
-
-    <div class="sect state-work" data-state="work">
-      <div class="sect-h"><span class="sname">WORKING_STATE</span>
-        <span class="sdesc">the loop drives the agent toward the goal, turn after turn</span>
-        <span class="nowpill">● now</span></div>
-      <div class="sect-b">
-        <div class="param">
-          <div class="plabel">Work prompt template ({0} = your goal) — re-sent every turn in this state</div>
-          <textarea rows="2">You are being driven by a goal loop. The goal: {0}
-Keep working. When the whole goal is genuinely done, end your final line with LOOP_DONE.</textarea>
-        </div>
-        <div class="badgebox">
-          <span class="blabel">agent emits badge:</span>
-          <span class="badge">LOOP_DONE</span>
-        </div>
-        <div class="trans">when <b>LOOP_DONE</b> is emitted (final line)
-          <span class="arr">→</span> transition into <span class="sref verify">VERIFICATION_STATE</span></div>
-        <div class="trans">no badge in the reply <span class="arr">→</span> stay in
-          <span class="sref work">WORKING_STATE</span>, work prompt re-sent</div>
-      </div>
-    </div>
-
-    <div class="sect state-verify" data-state="verify">
-      <div class="sect-h"><span class="sname">VERIFICATION_STATE</span>
-        <span class="sdesc">the loop refuses to trust the done-claim and demands proof</span>
-        <span class="nowpill">● now</span></div>
-      <div class="sect-b">
-        <div class="param">
-          <div class="plabel">Verification prompt template ({0} = your goal) — sent on entering this state</div>
-          <textarea rows="2">You claimed the goal is done: {0}
-Verify honestly. Only if it truly holds, end with GOAL_VERIFIED; otherwise list the gaps.</textarea>
-        </div>
-        <div class="badgebox">
-          <span class="blabel">agent emits badge:</span>
-          <span class="badge">GOAL_VERIFIED</span>
-        </div>
-        <div class="trans">when <b>GOAL_VERIFIED</b> is emitted
-          <span class="arr">→</span> <span class="sref term-ok">DONE · VERIFIED</span> (loop ends)</div>
-        <div class="trans">any other reply (gaps found)
-          <span class="arr">→</span> transition back into <span class="sref work">WORKING_STATE</span></div>
-      </div>
-    </div>
-  </div>
-
-  <h2>Decisions baked into the build (say the word to change any)</h2>
-  <div class="card qcard">
-    <ol>
-      <li><b>Code-accurate grouping.</b> Your example put the verification machinery in WORKING_STATE; the
-          engine sends the verification prompt on <i>entering</i> VERIFICATION_STATE and
-          <code>STEP_VERIFIED</code> is the reply that <i>exits</i> it — so that's where they live. The
-          queue's WORKING_STATE shows an explicit <b>badge-less exit trigger</b> ("the step's turn
-          finishes") instead of pretending there's a badge.</li>
-      <li><b>Shown as parameters, read-only for now.</b> Badges and templates are compile-time constants in
-          the backend engine — making them editable is a real backend feature. This release renders them as
-          first-class parameter controls; editability is a clean follow-up change.</li>
-      <li><b>LOOP-WIDE on top</b> holds goal text, turn cap, queue binding, the verification toggle, and
-          deny-list chips.</li>
-      <li><b>verify-owed</b> owns no parameters → no section; it's the transition arrow, but it stays a
-          distinct chip in the armed header strip and lights VERIFICATION_STATE while active.</li>
-      <li><b>Scope: dock popover only.</b> The console Loops tab is untouched.</li>
-      <li><b>Both live readouts kept:</b> the compact strip in the armed header and the current state's
-          section lighting up with a "● now" pill (verification off dims VERIFICATION_STATE — the machine
-          honestly shows that state is skipped).</li>
-    </ol>
-  </div>
-
-<script>
-  const tabQ = document.getElementById('tabQueue'), tabG = document.getElementById('tabGoal');
-  const mockQ = document.getElementById('mockQueue'), mockG = document.getElementById('mockGoal');
-  const sim = document.getElementById('simState');
-  function show(which) {
-    tabQ.classList.toggle('on', which === 'q'); tabG.classList.toggle('on', which === 'g');
-    mockQ.classList.toggle('hidden', which !== 'q'); mockG.classList.toggle('hidden', which !== 'g');
-    applySim();
-  }
-  function applySim() {
-    document.querySelectorAll('.sect[data-state]').forEach(s =>
-      s.classList.toggle('now', s.dataset.state === sim.value));
-  }
-  tabQ.onclick = () => show('q');
-  tabG.onclick = () => show('g');
-  sim.onchange = applySim;
-</script>
-</main>
+<script src="./app.js"></script>
 </body>
 </html>

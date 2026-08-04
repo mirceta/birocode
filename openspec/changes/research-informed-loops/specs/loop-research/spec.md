@@ -82,7 +82,7 @@ documents reachable from within the view. The view SHALL render the committed
 markdown files (via the shared markdown renderer and the existing file-read
 endpoint), not a hand-maintained copy, so refreshing the dossier on disk
 updates the tab with no UI change. The sub-tab SHALL be read-only and SHALL
-render without the operator gate, like the console's other reference views.
+render without the operator gate, like the console's Overview tab.
 It SHALL NOT alter loop behavior or call any loop-mutating endpoint.
 
 #### Scenario: The dossier is readable in the console

@@ -838,3 +838,27 @@
 
 .fl-history { margin-top: 14px; }
 .fl-history > summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+
+/* Reference → Research: the committed agent-loop research dossier
+   (openspec research-informed-loops). Doc picker pills + a doc-width body. */
+.ap-research { display: flex; flex-direction: column; gap: 10px; }
+.ap-research__picker { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.ap-research__picker button {
+  border: 1px solid var(--color-border, #ddd); background: var(--color-surface, #fff);
+  color: var(--color-text-muted, #666); font: inherit; font-size: 12.5px;
+  padding: 4px 10px; cursor: pointer; border-radius: 999px;
+}
+.ap-research__picker button.on {
+  color: var(--color-text, inherit); font-weight: 600;
+  border-color: var(--color-accent, #c0392b);
+}
+.ap-research__divider { font-size: 11px; color: var(--color-text-soft, #888); margin-left: 6px; }
+.ap-research__empty {
+  border: 1px dashed var(--color-border, #ccc); border-radius: 12px;
+  padding: 14px 16px; font-size: 13px; color: var(--color-text-muted, #666);
+}
+.ap-research__doc {
+  border: 1px solid var(--color-border, #ddd); border-radius: 12px;
+  background: var(--color-surface, #fff); padding: 4px 18px;
+  max-width: 900px; overflow-x: auto;
+}
