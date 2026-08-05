@@ -871,6 +871,8 @@
   "console.hint": "Harness'in bu depo icin yaptiklari — kesif, calistirma ve kontrol, gerceklestikce",
   "console.empty": "Henuz olay yok. Bu depodaki Kesif, Calistir ve Kontrol burada gorunecek.",
   "console.error": "Olay gunlugune ulasilamadi — yeniden deneniyor…",
+  "openspec.tab": "🛰️ OpenSpec",
+  "openspec.hint": "Bu deponun OpenSpec durumu — devam eden, tamamlanan ve taban — salt okunur",
   "files.opening": "Dosya aciliyor...",
   "files.loadingList": "Dosyalarin yukleniyor...",
   "files.loadingFolder": "Yukleniyor...",
