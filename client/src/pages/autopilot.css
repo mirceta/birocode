@@ -838,3 +838,117 @@
 
 .fl-history { margin-top: 14px; }
 .fl-history > summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+
+/* Reference → Research: the committed agent-loop research dossier
+   (openspec research-informed-loops). Doc picker pills + a doc-width body. */
+.ap-research { display: flex; flex-direction: column; gap: 10px; }
+.ap-research__picker { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.ap-research__picker button {
+  border: 1px solid var(--color-border, #ddd); background: var(--color-surface, #fff);
+  color: var(--color-text-muted, #666); font: inherit; font-size: 12.5px;
+  padding: 4px 10px; cursor: pointer; border-radius: 999px;
+}
+.ap-research__picker button.on {
+  color: var(--color-text, inherit); font-weight: 600;
+  border-color: var(--color-accent, #c0392b);
+}
+.ap-research__divider { font-size: 11px; color: var(--color-text-soft, #888); margin-left: 6px; }
+.ap-research__empty {
+  border: 1px dashed var(--color-border, #ccc); border-radius: 12px;
+  padding: 14px 16px; font-size: 13px; color: var(--color-text-muted, #666);
+}
+.ap-research__doc {
+  border: 1px solid var(--color-border, #ddd); border-radius: 12px;
+  background: var(--color-surface, #fff); padding: 4px 18px;
+  max-width: 900px; overflow-x: auto;
+}
+
+/* Explorer: the interactive technique catalog (same shape as the
+   understanding-app companion) rendered from techniques.json. */
+.ap-research__explorer { display: flex; flex-direction: column; gap: 14px; }
+.ap-research__stats { display: flex; gap: 8px; flex-wrap: wrap; }
+.ap-rstat {
+  border: 1px solid var(--color-border, #ddd); background: var(--color-surface, #fff);
+  border-radius: 999px; padding: 3px 12px; font-size: 12.5px;
+  color: var(--color-text-muted, #666);
+}
+.ap-rstat b { color: var(--color-text, inherit); }
+.ap-research__filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.ap-research__fgroup { display: flex; gap: 4px; flex-wrap: wrap; }
+.ap-research__fgroup button {
+  border: 1px solid var(--color-border, #ddd); background: var(--color-surface, #fff);
+  color: var(--color-text-muted, #666); font: inherit; font-size: 12.5px;
+  padding: 4px 11px; border-radius: 999px; cursor: pointer;
+}
+.ap-research__fgroup button.on {
+  color: var(--color-text, inherit); font-weight: 600;
+  border-color: var(--color-accent, #c0392b); background: var(--color-surface-2, #f5f5f5);
+}
+.ap-research__search {
+  border: 1px solid var(--color-border, #ddd); background: var(--color-surface, #fff);
+  color: var(--color-text, inherit); border-radius: 999px; padding: 5px 14px;
+  font: inherit; font-size: 13px; min-width: 200px;
+}
+.ap-research__ranked {
+  border: 1px solid var(--color-border, #ddd); border-radius: 12px;
+  background: var(--color-surface, #fff); padding: 12px 16px;
+}
+.ap-research__ranked h3 { margin: 0 0 8px; font-size: 15px; }
+.ap-research__hint { color: var(--color-text-muted, #888); font-weight: 400; font-size: 12.5px; }
+.ap-research__ladder { margin: 0; padding-left: 24px; }
+.ap-research__ladder li { margin: 5px 0; cursor: pointer; font-size: 13.5px; }
+.ap-research__lname { color: var(--color-accent, #c0392b); font-weight: 600; }
+.ap-research__ladder li:hover .ap-research__lname { text-decoration: underline; }
+.ap-research__lgap { color: var(--color-text-muted, #888); font-size: 13px; }
+.ap-research__grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px;
+}
+.ap-research__card {
+  border: 1px solid var(--color-border, #ddd); border-radius: 12px;
+  background: var(--color-surface, #fff); padding: 10px 12px; cursor: pointer;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.ap-research__card:hover { border-color: var(--color-accent, #c0392b); }
+.ap-research__cardid { color: var(--color-text-muted, #888); font-size: 11.5px; }
+.ap-research__cardname { font-weight: 600; font-size: 14px; }
+.ap-research__badges { display: flex; gap: 5px; flex-wrap: wrap; margin-top: auto; }
+.ap-rbadge {
+  font-size: 11px; padding: 1px 8px; border-radius: 999px;
+  border: 1px solid var(--color-border, #ccc); color: var(--color-text-muted, #888);
+}
+.ap-rbadge--adopt { color: #b47d15; border-color: #b47d15; }
+.ap-rbadge--have { color: #2f8f63; border-color: #2f8f63; }
+.ap-rbadge--na { color: var(--color-text-muted, #888); }
+.ap-rbadge--demonstrated { color: #3e78ad; border-color: #3e78ad; }
+.ap-rbadge--recommended { color: #8a5fc0; border-color: #8a5fc0; }
+.ap-rbadge--secondhand { color: var(--color-text-muted, #888); }
+.ap-rbadge--rank { color: #fff; background: #b47d15; border-color: #b47d15; font-weight: 700; }
+.ap-research__detail {
+  position: fixed; top: 0; right: 0; bottom: 0; width: min(560px, 94vw); z-index: 60;
+  background: var(--color-surface, #fff); border-left: 1px solid var(--color-border, #ddd);
+  padding: 22px 24px; overflow-y: auto; box-shadow: -12px 0 40px rgba(0, 0, 0, 0.35);
+}
+.ap-research__close {
+  position: absolute; top: 10px; right: 12px; background: none; border: none;
+  color: var(--color-text-muted, #888); font-size: 17px; cursor: pointer;
+}
+.ap-research__detail h3 { margin: 6px 0 8px; font-size: 17px; }
+.ap-research__gist { color: var(--color-text-muted, #666); font-size: 13.5px; margin: 10px 0 0; }
+.ap-research__sect { margin-top: 14px; }
+.ap-research__sect h4 {
+  margin: 0 0 4px; font-size: 12px; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--color-text-muted, #888);
+}
+.ap-research__srcs { display: flex; gap: 5px; flex-wrap: wrap; }
+.ap-research__srcs button {
+  border: 1px solid var(--color-border, #ddd); background: var(--color-surface-2, #f5f5f5);
+  color: var(--color-text, inherit); border-radius: 6px; padding: 2px 8px;
+  font: inherit; font-size: 12px; cursor: pointer;
+}
+.ap-research__srcs button:hover { border-color: var(--color-accent, #c0392b); }
+.ap-research__verdict {
+  border-left: 3px solid var(--color-border, #ccc); background: var(--color-surface-2, #f7f7f7);
+  padding: 8px 12px; border-radius: 0 8px 8px 0; font-size: 13.5px;
+}
+.ap-research__verdict--adopt { border-left-color: #b47d15; }
+.ap-research__verdict--have { border-left-color: #2f8f63; }
