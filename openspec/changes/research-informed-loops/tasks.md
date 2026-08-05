@@ -47,6 +47,21 @@
       sub-tab renders the committed adoption map, source doc opens, and the
       view still renders when `/api/autopilot` is gated
 
+## 4b. Interactive explorer (user feedback: match the understanding app)
+
+- [x] 4b.1 `docs/research/agent-loops/techniques.json` — the structured
+      technique catalog (id/name/section/evidence/bucket/rank/gist/sources/
+      verdict) committed as part of the dossier, single source the console
+      explorer fetches live
+- [x] 4b.2 Rework `ResearchView.jsx`: interactive explorer as the default view
+      (stats strip, bucket + evidence filter pills, search, ranked
+      worth-adopting ladder, technique card grid, slide-in detail panel with
+      source pills that open the source docs); prose documents stay pickable
+      behind the Documents pills; explorer-specific empty state when
+      `techniques.json` is missing
+- [x] 4b.3 Explorer styles in `autopilot.css` on the console theme variables
+      (light/dark), Playwright re-verify on an isolated port
+
 ## 5. Understanding app + wrap-up
 
 - [x] 5.1 Understanding app: interactive view of the technique catalog and

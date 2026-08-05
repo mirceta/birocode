@@ -76,19 +76,25 @@ SHALL NOT alter engine or UI behavior.
 ### Requirement: The autopilot console has a read-only Research sub-tab rendering the dossier
 
 The autopilot console's Reference root tab SHALL include a **Research**
-sub-tab that renders the committed dossier from `docs/research/agent-loops/`
-— at minimum the adoption map and the technique catalog, with the per-source
-documents reachable from within the view. The view SHALL render the committed
-markdown files (via the shared markdown renderer and the existing file-read
-endpoint), not a hand-maintained copy, so refreshing the dossier on disk
-updates the tab with no UI change. The sub-tab SHALL be read-only and SHALL
-render without the operator gate, like the console's Overview tab.
-It SHALL NOT alter loop behavior or call any loop-mutating endpoint.
+sub-tab whose default view is an **interactive technique explorer** over the
+committed dossier at `docs/research/agent-loops/`: bucket totals, filter
+pills (adoption bucket, evidence strength), free-text search, the ranked
+worth-adopting ladder, a technique card grid, and a per-technique detail
+panel showing gist, sources, and the adoption verdict. The explorer SHALL be
+driven by the committed structured catalog
+(`docs/research/agent-loops/techniques.json`) fetched through the existing
+file-read endpoint — never a hand-maintained frontend copy — so refreshing
+the dossier on disk updates the tab with no UI change. The prose documents
+(adoption map, technique catalog, per-source documents) SHALL remain
+readable from within the view via the shared markdown renderer. The sub-tab
+SHALL be read-only and SHALL render without the operator gate, like the
+console's Overview tab. It SHALL NOT alter loop behavior or call any
+loop-mutating endpoint.
 
-#### Scenario: The dossier is readable in the console
+#### Scenario: The dossier is explorable in the console
 
 - **WHEN** the End User opens the autopilot console's Reference root and picks the Research sub-tab
-- **THEN** the adoption map and technique catalog render as formatted markdown, and each source document can be opened from within the view
+- **THEN** the technique explorer renders with filterable technique cards and the ranked worth-adopting ladder, a technique opens into a detail panel citing its sources and verdict, and each prose document (adoption map, catalog, sources) can still be opened as formatted markdown from within the view
 
 #### Scenario: Refreshing the dossier needs no UI work
 
