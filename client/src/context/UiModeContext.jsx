@@ -52,6 +52,7 @@ export const FEATURES = {
   deploysTab: 'advanced', // deploy status + rollback control (plans/deployments-tab.md)
   toolCallHistory: 'advanced', // Tool calls drawer: consolidated tool-call list for the active conversation (openspec: add-tool-call-history)
   promptExpand: 'advanced', // composer button that opens the current draft in a large editor popup (openspec: add-prompt-expand-popup)
+  footerClauses: 'advanced', // composer button + popup: standing instructions appended to every send while active (openspec: prompt-footer-clauses)
   localAppDiscovery: 'advanced', // Discover local apps in each agent dock: Discover + panel-opener buttons and the findings panel overlay (openspec: discover-local-apps, discover-apps-panel)
   understandingAgent: 'advanced', // "Ask for understanding" button in each agent dock: fork the conversation → build the Understanding app (openspec: add-ask-for-understanding)
   cockpitTab: 'advanced', // read-only OpenSpec Cockpit tab, scoped to the selected repo (openspec: openspec-cockpit-in-harness)

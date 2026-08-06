@@ -6,8 +6,10 @@ import { usePrompts } from '../../context/PromptsContext';
 import { usePromptPlans } from '../../context/PromptPlansContext';
 import { usePromptNotes } from '../../context/PromptNotesContext';
 import { useT } from '../../i18n/LanguageContext';
+import { useFooterClauses } from '../../context/FooterClausesContext';
 import PromptManager from './PromptManager';
 import PromptExpandModal from './PromptExpandModal';
+import FooterClausesModal from './FooterClausesModal';
 
 // Controlled composer. The draft text lives in ChatContext (so it persists
 // across tab navigation and can be appended to by other tabs), and is passed
@@ -55,6 +57,14 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
   // close. Available on the main composer and the dashboard docks.
   const promptExpandEnabled = useFeature('promptExpand');
   const [expandOpen, setExpandOpen] = useState(false);
+  // Footer CLAUSES (openspec prompt-footer-clauses): standing instructions the
+  // send path appends to every prompt while active. The composer button shows an
+  // accent + count badge whenever any clause is active — sends are being amended,
+  // and that must never be a surprise.
+  const footerClausesEnabled = useFeature('footerClauses');
+  const { clauses: footerClauses } = useFooterClauses();
+  const activeClauseCount = footerClauses.filter((c) => c.active).length;
+  const [clausesOpen, setClausesOpen] = useState(false);
   const { prompts, addPrompt, updatePrompt, deletePrompt } = usePrompts();
   // Prompt PLANS (plans/prompt-plans.md): named, ordered prompt-step sequences,
   // shown as a second tab in the SAME ⚙ modal. "Use" on a step composes its
@@ -209,6 +219,9 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
           onClose={() => setMgrOpen(false)}
         />
       )}
+      {footerClausesEnabled && clausesOpen && (
+        <FooterClausesModal onClose={() => setClausesOpen(false)} />
+      )}
       {promptExpandEnabled && expandOpen && (
         <PromptExpandModal
           value={value}
@@ -330,6 +343,27 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
           className="chat-input__file-hidden"
           onChange={handleFileChange}
         />
+        {footerClausesEnabled && (
+          <button
+            type="button"
+            className={`chat-input__clauses${activeClauseCount > 0 ? ' chat-input__clauses--on' : ''}`}
+            onClick={() => setClausesOpen((o) => !o)}
+            aria-label={t('footerClauses.buttonAria')}
+            title={
+              activeClauseCount > 0
+                ? t('footerClauses.buttonActiveTitle', { count: activeClauseCount })
+                : t('footerClauses.buttonTitle')
+            }
+            aria-expanded={clausesOpen}
+          >
+            &#9745;
+            {activeClauseCount > 0 && (
+              <span className="chat-input__clauses-badge" aria-hidden="true">
+                {activeClauseCount}
+              </span>
+            )}
+          </button>
+        )}
         {customPromptsEnabled && (
           <button
             type="button"
