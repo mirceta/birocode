@@ -16,6 +16,7 @@ import { DockProvider, useDock } from '../context/DockContext';
 import { LocalAppFramesProvider } from '../context/LocalAppFramesContext';
 import LocalAppFrameHost from '../components/app/LocalAppFrameHost';
 import { PromptsProvider } from '../context/PromptsContext';
+import { FooterClausesProvider } from '../context/FooterClausesContext';
 import { PromptPlansProvider } from '../context/PromptPlansContext';
 import { PromptNotesProvider } from '../context/PromptNotesContext';
 import { UiModeProvider, useFeature } from '../context/UiModeContext';
@@ -191,6 +192,9 @@ export default function Layout() {
           <DockProvider>
             <LocalAppFramesProvider>
               <SaveProvider>
+                {/* Above ChatProvider: sendTo reads active clauses at send time
+                    (openspec prompt-footer-clauses). */}
+                <FooterClausesProvider>
                 <ChatProvider>
                   <FlagsProvider>
                     <PromptsProvider>
@@ -202,6 +206,7 @@ export default function Layout() {
                     </PromptsProvider>
                   </FlagsProvider>
                 </ChatProvider>
+                </FooterClausesProvider>
               </SaveProvider>
             </LocalAppFramesProvider>
           </DockProvider>

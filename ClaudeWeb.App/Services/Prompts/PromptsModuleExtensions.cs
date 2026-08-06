@@ -8,6 +8,7 @@ public static class PromptsModuleExtensions
     public static IServiceCollection AddPromptsModule(this IServiceCollection services)
     {
         services.AddSingleton<PromptsService>();
+        services.AddSingleton<FooterClausesService>(); // openspec prompt-footer-clauses
         return services;
     }
 }
