@@ -889,6 +889,8 @@
   "console.hint": "What the harness is doing for this repo — discovery, run, and check, as they happen",
   "console.empty": "No events yet. Discovery, Run, and Check on this repo will appear here.",
   "console.error": "Couldn't reach the event log — retrying…",
+  "openspec.tab": "🛰️ OpenSpec",
+  "openspec.hint": "This repo's OpenSpec state — in-flight, shipped, and baseline — read-only",
   "files.opening": "Opening file...",
   "files.loadingList": "Loading your files...",
   "files.loadingFolder": "Loading...",

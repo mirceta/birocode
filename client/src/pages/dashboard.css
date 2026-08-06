@@ -2340,6 +2340,18 @@
   min-height: 0;
 }
 
+/* OpenSpec lane (openspec add-dock-openspec-lane): the Cockpit's .ck root is a
+   plain block sized to its content, so inside the dock's flex column it must be
+   made a scroll container itself — same treatment as .files-page / .evc above —
+   or long content overflows the dock cell with no way to scroll. Scoped to
+   `.phone__main >` so the routed Studio Cockpit tab (page-level scroll) is
+   unaffected. */
+.phone__main > .ck {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 /* Embedded chat overrides: the standalone Chat page fills the viewport and
    pins its composer to the bottom of the screen (above the nav). Inside a
    phone it must instead fill its frame and keep the composer in-flow, so

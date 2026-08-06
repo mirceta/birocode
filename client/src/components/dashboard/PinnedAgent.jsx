@@ -10,6 +10,7 @@ import { deriveGitActions, pullMainPath } from '../git/gitActions';
 import ProductFrame from '../app/ProductFrame';
 import FilesBrowser from '../files/FilesBrowser';
 import EventConsole from './EventConsole';
+import Cockpit from '../../pages/Cockpit';
 import CopyPath from './CopyPath';
 import ImportantStar from './ImportantStar';
 import WideToggle from './WideToggle';
@@ -129,6 +130,13 @@ export default function PinnedAgent({
   const consoleOn = useFeature('eventConsole');
   const [showConsole, setShowConsole] = useState(false);
 
+  // OpenSpec lane (openspec add-dock-openspec-lane): a sibling overlay screen that
+  // shows the read-only OpenSpec Cockpit scoped to THIS agent's repo. Like Files /
+  // Console, picking it shows <Cockpit> over the chat (composer stays below);
+  // picking a lane / app swaps back. Gated on the openspecDock feature (Advanced).
+  const openspecOn = useFeature('openspecDock');
+  const [showOpenspec, setShowOpenspec] = useState(false);
+
   // Loop badge + control (openspec adopt-autopilot-loops), Advanced-gated.
   const canLoop = useFeature('dockLoopControls');
 
@@ -143,7 +151,7 @@ export default function PinnedAgent({
   const toggleChatMaximized = () => setChatMaximized((v) => !v);
   // Split counts as "chat showing": the left pane holds the full chat, so the
   // composer-only collapse and the chrome-hiding below only apply to cover mode.
-  const chatShowing = !showFiles && !showConsole && (!openApp || split);
+  const chatShowing = !showFiles && !showConsole && !showOpenspec && (!openApp || split);
   const maximized = chatMaximized && chatShowing;
   // Any alternate view open? (openspec local-app-overlay-keep-composer) The view
   // no longer REPLACES the chat in phone__screen — it renders above one shared
@@ -395,11 +403,12 @@ export default function PinnedAgent({
         <button
           type="button"
           role="tab"
-          aria-selected={!isAsk && !showFiles && !showConsole}
-          className={`phone__lane${!isAsk && !showFiles && !showConsole ? ' phone__lane--on' : ''}`}
+          aria-selected={!isAsk && !showFiles && !showConsole && !showOpenspec}
+          className={`phone__lane${!isAsk && !showFiles && !showConsole && !showOpenspec ? ' phone__lane--on' : ''}`}
           onClick={() => {
             setShowFiles(false);
             setShowConsole(false);
+            setShowOpenspec(false);
             setLaneView('builder');
           }}
         >
@@ -408,12 +417,13 @@ export default function PinnedAgent({
         <button
           type="button"
           role="tab"
-          aria-selected={isAsk && !showFiles && !showConsole}
-          className={`phone__lane${isAsk && !showFiles && !showConsole ? ' phone__lane--on' : ''}`}
+          aria-selected={isAsk && !showFiles && !showConsole && !showOpenspec}
+          className={`phone__lane${isAsk && !showFiles && !showConsole && !showOpenspec ? ' phone__lane--on' : ''}`}
           title={t('chat.askHint')}
           onClick={() => {
             setShowFiles(false);
             setShowConsole(false);
+            setShowOpenspec(false);
             setLaneView('ask');
           }}
         >
@@ -429,6 +439,7 @@ export default function PinnedAgent({
             onClick={() => {
               setOpenAppId(null);
               setShowConsole(false);
+              setShowOpenspec(false);
               setShowFiles(true);
             }}
           >
@@ -445,10 +456,30 @@ export default function PinnedAgent({
             onClick={() => {
               setOpenAppId(null);
               setShowFiles(false);
+              setShowOpenspec(false);
               setShowConsole(true);
             }}
           >
             {t('console.tab')}
+          </button>
+        )}
+        {/* OpenSpec lane (openspec add-dock-openspec-lane): the read-only Cockpit
+            scoped to THIS dock's repo, over the chat like Files/Console. */}
+        {openspecOn && (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={showOpenspec}
+            className={`phone__lane${showOpenspec ? ' phone__lane--on' : ''}`}
+            title={t('openspec.hint')}
+            onClick={() => {
+              setOpenAppId(null);
+              setShowFiles(false);
+              setShowConsole(false);
+              setShowOpenspec(true);
+            }}
+          >
+            {t('openspec.tab')}
           </button>
         )}
       </div>
@@ -468,6 +499,7 @@ export default function PinnedAgent({
               onClick={() => {
                 setShowFiles(false);
                 setShowConsole(false);
+                setShowOpenspec(false);
                 setOpenAppId((cur) => (cur === a.id ? null : a.id));
               }}
               title={`:${a.port}${a.kind === 'harness' ? ' · harness' : ''}`}
@@ -495,7 +527,7 @@ export default function PinnedAgent({
           affordances — run a scan, open the panel. Findings, cache state, and all
           per-row actions live in the DiscoverAppsPanel overlay below. Chat-context
           furniture like the git block; hidden while Files / a local app is open. */}
-      {canDiscover && !showFiles && (!openApp || split) && !showConsole && (
+      {canDiscover && !showFiles && (!openApp || split) && !showConsole && !showOpenspec && (
         <div className="phone__discover">
           <div className="phone__discover-buttons">
             <button
@@ -523,7 +555,7 @@ export default function PinnedAgent({
           Sibling of Discover; reuses the .phone__discover furniture styling. Hidden
           while Files / a local app / the Console is open; disabled until the builder
           lane has a conversation. */}
-      {canUnderstand && !showFiles && (!openApp || split) && !showConsole && (
+      {canUnderstand && !showFiles && (!openApp || split) && !showConsole && !showOpenspec && (
         <div className="phone__discover phone__understanding">
           <div className="phone__understanding-row">
             <button
@@ -566,7 +598,7 @@ export default function PinnedAgent({
           a local app is open so that surface gets the full dock height (not just
           the strip below git) — plans/agent-dock-files-tab.md (Files) and
           plans/dock-local-app-full-height.md (local app). */}
-      {git && !showFiles && (!openApp || split) && !showConsole && (
+      {git && !showFiles && (!openApp || split) && !showConsole && !showOpenspec && (
         <div className="phone__git">
           <div className="phone__git-top">
             <GitStatusSummary status={git} compact />
@@ -658,6 +690,8 @@ export default function PinnedAgent({
         >
           {showConsole ? (
             <EventConsole repoId={tab.repoId} />
+          ) : showOpenspec ? (
+            <Cockpit repoId={tab.repoId} repoName={tab.repoName} />
           ) : showFiles ? (
             <FilesBrowser repoId={tab.repoId} />
           ) : openApp && !split ? (
