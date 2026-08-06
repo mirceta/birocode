@@ -317,3 +317,125 @@ panes remain usable, and SHALL be per-dock and session-ephemeral.
 - **THEN** the split ratio starts back at 50/50 (no server or cross-device
   persistence)
 
+### Requirement: Alternate dock views keep the chat composer visible
+
+The system SHALL keep the chat composer (the prompt text box and its Send/Stop control)
+visible and usable at the bottom of the dock screen whenever the operator opens any of the
+agent dock's alternate views — a local app from the app switcher, the Event Console, or the
+Files browser — rendering that view over the dock screen's chat area (the chat bar and the
+message list). The composer SHALL behave exactly as it does when the chat is fully shown: typing,
+sending, stopping, and prompt queueing all work, and an in-flight agent turn keeps streaming in
+the background while the alternate view is open. Sending a prompt SHALL NOT close the alternate
+view. Closing the alternate view SHALL restore the full chat view (bar, message list, composer)
+without losing chat state.
+
+#### Scenario: Opening a local app leaves the composer
+
+- **WHEN** the operator opens a local app from the dock's app switcher
+- **THEN** the app frame covers the chat bar and message list, and the chat composer remains visible and focusable below the app frame
+
+#### Scenario: Opening the Event Console leaves the composer
+
+- **WHEN** the operator opens the dock's Event Console view
+- **THEN** the console covers the chat bar and message list, and the chat composer remains visible and focusable below it
+
+#### Scenario: Opening the Files browser leaves the composer
+
+- **WHEN** the operator opens the dock's Files view
+- **THEN** the files browser covers the chat bar and message list, and the chat composer remains visible and focusable below it
+
+#### Scenario: Sending a prompt while an alternate view is open
+
+- **WHEN** the operator types a prompt in the composer and presses Send while a local app, the Event Console, or the Files view is open in the dock
+- **THEN** the prompt is sent to the agent exactly as from the normal chat view, and the alternate view stays open
+
+#### Scenario: Closing the alternate view restores the full chat
+
+- **WHEN** the operator closes the open alternate view (toggles it off)
+- **THEN** the dock shows the full chat again — bar, message list, and composer — with its state preserved (including any turn that streamed while the view was open)
+
+### Requirement: Composer-under-view applies only to the agent dock
+
+The system SHALL apply the composer-visible behavior only within the agent dock. The standalone
+Local tab SHALL keep its existing full-area behavior, and each dock view SHALL remain behind
+the same UI-mode gate that governs it today.
+
+#### Scenario: The Local tab is unchanged
+
+- **WHEN** the operator opens a local app from the standalone Local tab
+- **THEN** the app fills the tab's body as it does today
+
+### Requirement: Copy loop context for debugging
+
+The dock loop popover SHALL offer a copy-for-debugging action that fetches
+the agent's loop debug bundle and places a paste-ready block — a one-line
+human header plus the bundle as fenced JSON — on the clipboard, confirming
+success inline. The action SHALL be available regardless of loop state
+(none, armed, or terminal). Where the asynchronous clipboard API is
+unavailable (non-secure context), the control SHALL fall back to a
+synchronous copy, and if that also fails it SHALL present the block in an
+inline read-only text area for manual copying instead of failing silently.
+
+#### Scenario: Copy on a stopped loop
+
+- **WHEN** the user opens the loop popover of an agent whose loop stopped unexpectedly and taps the copy action
+- **THEN** the clipboard holds the header plus the bundle JSON and the control confirms the copy
+
+#### Scenario: Clipboard unavailable
+
+- **WHEN** both clipboard mechanisms fail in the user's browser context
+- **THEN** the popover shows the same block in a read-only text area selected for manual copy
+
+### Requirement: Dock loop control is grouped by loop type
+
+The system SHALL present the dock card's loop popover as two labeled sections
+matching the autopilot console's loop-type grouping — a suggestion-based loop
+section and a goal-based loop section — each carrying a one-line description of
+what that loop type does. The recipe picker SHALL sit inside the goal-based
+section under a visible recipes label, so a recipe name is never shown without
+its loop type. The queue-based loop SHALL NOT appear on the dock while it does
+not exist.
+
+#### Scenario: A recipe name is always framed by its loop type
+
+- **WHEN** the user opens the dock card's loop popover
+- **THEN** "Drive the feature" appears inside the goal-based loop section under a recipes label, with the section's one-line description visible
+
+#### Scenario: No queue-based section
+
+- **WHEN** the user opens the dock card's loop popover
+- **THEN** no queue-based loop section is shown
+
+### Requirement: The suggestion loop is armable from the dock card
+
+The system SHALL let the user arm and disarm this agent for the
+suggestion-based loop from the dock card's popover, acting through the existing
+operator-gated autopilot config action, and SHALL show the agent's current
+suggestion state (not armed, armed suggest-only, or armed with auto-advance).
+When the operator gate is closed, attempting to arm SHALL show the existing
+explicit gate-closed hint rather than failing silently.
+
+#### Scenario: Arm suggestions where the work is
+
+- **WHEN** the user opens the dock card's loop popover and arms the suggestion-based loop
+- **THEN** that repo becomes suggestion-armed without navigating to the Autopilot console, and the popover reflects the armed state
+
+#### Scenario: Gate closed teaches instead of failing mutely
+
+- **WHEN** the user toggles suggestion arming from the dock while the operator gate is closed
+- **THEN** the card shows the explicit gate-closed hint naming the host-side action needed
+
+### Requirement: The dock loop badge is typed by loop type
+
+The system SHALL type the dock card's loop indicators by loop type: the
+goal-based loop badge carries the goal-loop marker (with iteration progress
+while active and the terminal states as before), and a distinct
+suggestion-loop marker SHALL show while the repo is suggestion-armed, drawn
+from the read-only projection so it stays honest while the operator gate is
+closed.
+
+#### Scenario: Both loop types visible at a glance
+
+- **WHEN** a dock card's repo is suggestion-armed and also has a goal loop on iteration 3 of 10
+- **THEN** the card shows the suggestion marker and a goal-typed badge conveying 3/10
+
