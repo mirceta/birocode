@@ -41,6 +41,7 @@ export const FEATURES = {
   dualChat: 'advanced', // Project | Claude Web chat switcher (plans/dual-chat.md)
   localAppTab: 'basic', // direct-iframe Local tab, per-project port (plans/local-app-tab.md) — promoted to basic 2026-06-27 (view-only in Basic; authoring stays Advanced)
   ideasTab: 'advanced', // per-project notes (plans/ideas-tab.md)
+  ideasSync: 'advanced', // shared ideas board via Apps Script web app (openspec: ideas-drive-sync)
   autopilotTab: 'advanced', // loop-autopilot: discover recurring routine prompts (plans/loop-autopilot.md)
   taskGraph: 'advanced', // task dependency graph dashboard section (plans/task-dependency-graph.md)
   filesDock: 'advanced', // Files browse/view tab INSIDE each agent dock, scoped to that agent's repo (plans/agent-dock-files-tab.md)

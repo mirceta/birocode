@@ -79,6 +79,13 @@ public class PasswordAuthMiddleware
         var isGet = HttpMethods.IsGet(context.Request.Method);
         if (isGet && path.Equals("/api/health", StringComparison.OrdinalIgnoreCase))
             return false;
+        // Shared ideas hub (openspec ideas-harness-hub): the 256-bit token in the
+        // path IS the credential (checked constant-time in NotesController), same
+        // trust model as the Apps Script /exec URL. Segment matching means
+        // /api/notes/hub-info stays gated.
+        if ((isGet || HttpMethods.IsPost(context.Request.Method)) &&
+            path.StartsWithSegments("/api/notes/hub", StringComparison.OrdinalIgnoreCase))
+            return false;
         if (isGet && path.Equals("/api/auth/check", StringComparison.OrdinalIgnoreCase))
             return false;
         if (HttpMethods.IsPost(context.Request.Method) &&

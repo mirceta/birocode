@@ -19,12 +19,19 @@ public class NotesService
 {
     public const int MaxTextLength = 20_000;
     public const int MaxProjectLength = 200;
+    public const int TombstoneRetentionDays = 30;
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
 
     private readonly Logger _logger;
     private readonly string _path;
     private readonly object _gate = new();
     private List<Note> _ideas = new();
+    private List<Tombstone> _tombstones = new();
+
+    /// <summary>Raised after every successful LOCAL mutation (add/update/delete).
+    /// NOT raised by MergeFrom — the sync layer must not re-trigger itself when
+    /// applying remote state.</summary>
+    public event Action? Changed;
 
     public NotesService(Logger logger)
     {
@@ -43,11 +50,25 @@ public class NotesService
     // default (null / 0 / false), so no migration is needed.
     public sealed record Note(string Id, string Text, string? Project, long CreatedAt, long UpdatedAt, int Priority, bool Active);
 
+    /// <summary>A recorded deletion, kept so a delete on one harness doesn't
+    /// resurrect from another during sync (openspec ideas-drive-sync). Pruned
+    /// after <see cref="TombstoneRetentionDays"/>.</summary>
+    public sealed record Tombstone(string Id, long DeletedAt);
+
+    /// <summary>Point-in-time copy of the whole board for the sync layer.</summary>
+    public sealed record BoardSnapshot(List<Note> Ideas, List<Tombstone> Tombstones);
+
+    /// <summary>What MergeFrom did: whether the local board changed, and whether
+    /// the merged board holds anything the remote side was missing (push needed).</summary>
+    public sealed record MergeOutcome(bool LocalChanged, bool RemoteStale);
+
     // On-disk model. `Ideas` is the current shape; `Notes` is the legacy
-    // per-repo map, read once for migration.
+    // per-repo map, read once for migration. `Tombstones` is optional — files
+    // written before sync existed simply deserialize it as null.
     private sealed class Store
     {
         public List<Note>? Ideas { get; set; }
+        public List<Tombstone>? Tombstones { get; set; }
         public Dictionary<string, List<Note>>? Notes { get; set; }
     }
 
@@ -69,6 +90,7 @@ public class NotesService
             Save();
         }
         _logger.Info($"[NOTES] Added idea {note.Id}");
+        RaiseChanged();
         return note;
     }
 
@@ -77,27 +99,100 @@ public class NotesService
     {
         var clean = Clean(text);
         if (clean is null) return null;
+        Note updated;
         lock (_gate)
         {
             var i = _ideas.FindIndex(n => n.Id == id);
             if (i < 0) return null;
-            var updated = _ideas[i] with { Text = clean, Project = CleanProject(project), UpdatedAt = now, Priority = ClampPriority(priority), Active = active };
+            updated = _ideas[i] with { Text = clean, Project = CleanProject(project), UpdatedAt = now, Priority = ClampPriority(priority), Active = active };
             _ideas[i] = updated;
             Save();
-            _logger.Info($"[NOTES] Updated idea {id}");
-            return updated;
         }
+        _logger.Info($"[NOTES] Updated idea {id}");
+        RaiseChanged();
+        return updated;
     }
 
-    /// <summary>Removes an idea. False if the id is unknown.</summary>
-    public bool Delete(string id)
+    /// <summary>Removes an idea, recording a tombstone so sync peers don't
+    /// resurrect it. False if the id is unknown.</summary>
+    public bool Delete(string id, long now)
+    {
+        bool removed;
+        lock (_gate)
+        {
+            removed = _ideas.RemoveAll(n => n.Id == id) > 0;
+            if (removed)
+            {
+                _tombstones.RemoveAll(t => t.Id == id);
+                _tombstones.Add(new Tombstone(id, now));
+                Save();
+            }
+        }
+        if (removed) { _logger.Info($"[NOTES] Deleted idea {id}"); RaiseChanged(); }
+        return removed;
+    }
+
+    /// <summary>Copy of the whole board (ideas + tombstones) for the sync layer.</summary>
+    public BoardSnapshot Snapshot()
+    {
+        lock (_gate) return new BoardSnapshot(new List<Note>(_ideas), new List<Tombstone>(_tombstones));
+    }
+
+    /// <summary>
+    /// Merges a remote board into the local one (openspec ideas-drive-sync):
+    /// per-note by Id with newest-UpdatedAt-wins (local wins ties), tombstones
+    /// union with newest-DeletedAt-wins; a tombstone at or after a note's
+    /// UpdatedAt suppresses the note, a later edit revives it. Deterministic and
+    /// commutative, so both pull-merge and push-merge use it. Saves when local
+    /// state changed. Does NOT raise Changed (see the event's doc).
+    /// </summary>
+    public MergeOutcome MergeFrom(List<Note> remoteIdeas, List<Tombstone> remoteTombstones)
     {
         lock (_gate)
         {
-            var removed = _ideas.RemoveAll(n => n.Id == id) > 0;
-            if (removed) { Save(); _logger.Info($"[NOTES] Deleted idea {id}"); }
-            return removed;
+            // Tombstones: union by Id, newest DeletedAt wins.
+            var tombs = new Dictionary<string, long>();
+            foreach (var t in _tombstones) tombs[t.Id] = Math.Max(t.DeletedAt, tombs.GetValueOrDefault(t.Id));
+            foreach (var t in remoteTombstones) tombs[t.Id] = Math.Max(t.DeletedAt, tombs.GetValueOrDefault(t.Id));
+
+            // Notes: keep local order; per-Id newer UpdatedAt wins (local on tie);
+            // remote-only notes append in CreatedAt order; then tombstone filter.
+            var remoteById = new Dictionary<string, Note>();
+            foreach (var r in remoteIdeas) remoteById[r.Id] = r;
+            var localIds = new HashSet<string>(_ideas.Select(n => n.Id));
+            var merged = _ideas
+                .Select(n => remoteById.TryGetValue(n.Id, out var r) && r.UpdatedAt > n.UpdatedAt ? r : n)
+                .Concat(remoteIdeas.Where(r => !localIds.Contains(r.Id)).OrderBy(r => r.CreatedAt))
+                .Where(n => !(tombs.TryGetValue(n.Id, out var dead) && dead >= n.UpdatedAt))
+                .ToList();
+            var mergedTombs = tombs.Select(kv => new Tombstone(kv.Key, kv.Value)).OrderBy(t => t.Id).ToList();
+
+            var localChanged = !merged.SequenceEqual(_ideas);
+            var tombsChanged = !mergedTombs.SequenceEqual(_tombstones.OrderBy(t => t.Id));
+
+            // Push needed when the merged board holds anything the remote side
+            // lacked. Canonical (Id-sorted) comparison; a false positive only
+            // costs one redundant push.
+            var remoteStale =
+                !merged.OrderBy(n => n.Id).SequenceEqual(
+                    remoteIdeas.Where(n => !(tombs.TryGetValue(n.Id, out var dead) && dead >= n.UpdatedAt)).OrderBy(n => n.Id)) ||
+                !mergedTombs.SequenceEqual(remoteTombstones.OrderBy(t => t.Id));
+
+            if (localChanged || tombsChanged)
+            {
+                _ideas = merged;
+                _tombstones = mergedTombs;
+                Save();
+                _logger.Info($"[NOTES] Merged remote board ({_ideas.Count} idea(s), {_tombstones.Count} tombstone(s))");
+            }
+            return new MergeOutcome(localChanged, remoteStale);
         }
+    }
+
+    private void RaiseChanged()
+    {
+        try { Changed?.Invoke(); }
+        catch (Exception ex) { _logger.Error($"[NOTES] Changed handler failed: {ex.Message}"); }
     }
 
     private static string? Clean(string? text)
@@ -127,6 +222,7 @@ public class NotesService
             var store = JsonSerializer.Deserialize<Store>(File.ReadAllText(_path));
             if (store is null) return;
 
+            _tombstones = store.Tombstones ?? new List<Tombstone>();
             if (store.Ideas != null)
             {
                 _ideas = store.Ideas;
@@ -156,8 +252,10 @@ public class NotesService
     {
         try
         {
+            var cutoff = DateTimeOffset.UtcNow.AddDays(-TombstoneRetentionDays).ToUnixTimeMilliseconds();
+            _tombstones.RemoveAll(t => t.DeletedAt < cutoff);
             var tmp = _path + ".tmp";
-            File.WriteAllText(tmp, JsonSerializer.Serialize(new Store { Ideas = _ideas }, JsonOpts));
+            File.WriteAllText(tmp, JsonSerializer.Serialize(new Store { Ideas = _ideas, Tombstones = _tombstones }, JsonOpts));
             File.Move(tmp, _path, overwrite: true);
         }
         catch (Exception ex)
