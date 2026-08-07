@@ -10,16 +10,20 @@ withholds the per-arm trim that queue arms already have.
 
 ## What Changes
 
-- Show the same per-arm deny-list chips in the **goal** arm section of the dock loop
-  control that the queue arm already has: the global default terms, droppable per-arm
-  before arming, restoring the same "untouched = follow the global default" semantics.
-- Send the trimmed list on the goal arm request (the shared `LoopRequest.DenyList` field
-  already exists) and persist it on the goal instance, exactly as queue arms do.
-- Show the armed goal instance's **effective** deny-list in the gated loop detail, as the
-  queue instance already does (the projection already emits `loop.denyList` for any kind).
-- Backend: thread the request's `DenyList` through `StartGoal` (today only `StartQueue`
-  accepts it) — a parameter addition, no new endpoint and no engine change (the engine
-  already honors a per-instance list for every kind).
+- **Hoist the per-arm deny-list chips out of the queue-only section** into a shared spot
+  at the **top of the expanded Loops section**, shown whenever the section is open —
+  because the deny-list applies to every driven loop kind and the dock has one loop slot.
+  The chips keep their semantics: global default terms, droppable for this arm,
+  untouched = follow the global default.
+- The trimmed list rides on **every driven arm request** — queue (as today), **goal**, and
+  **recipe** — via the existing `LoopRequest.DenyList` field, and persists on the instance.
+- While a loop is armed, the same shared spot shows the armed instance's **effective**
+  deny-list (gated, as today's queue display is).
+- Backend: thread `DenyList` through `StartGoal` and `StartRecipe` (today only
+  `StartQueue` accepts it) — parameter additions only; no new endpoint, no engine change
+  (the engine already honors a per-instance list for every kind).
+- Suggestion-mode arms are untouched (they don't drive sends; the classifier keeps using
+  the global default).
 
 ## Capabilities
 
@@ -28,19 +32,20 @@ withholds the per-arm trim that queue arms already have.
 
 ### Modified Capabilities
 - `autopilot-loops`: the per-arm deny-list adjustability requirement extends from queue
-  arms to goal arms — same trim semantics, same gated disclosure of the effective list.
+  arms to **all driven arms** (goal and recipe included), presented **once,
+  kind-independently** at the top of the dock's loop controls rather than inside one
+  kind's section — same trim semantics, same gated disclosure of the effective list.
 
 ## Impact
 
-- **Frontend:** `client/src/components/dashboard/DockLoopControl.jsx` — render the
-  existing deny-chip block (today inside the queue-only section) in the goal arm section
-  too, and include `denyList` in the goal `act('/autopilot/loop', …)` payload when terms
-  were dropped; the chip state/hydration logic is already kind-agnostic.
-- **Backend:** `ClaudeWeb.App/Services/Autopilot/LoopConfigStore.cs` — `StartGoal` gains a
-  `denyList` parameter (mirroring `StartQueue`); `AutopilotController.cs` passes
-  `req.DenyList` at the goal start call site. Engine untouched — `AutopilotService` already
-  reads `loop.DenyList ?? cfg.DenyList` for all kinds.
-- **Out of scope (deliberate):** the **recipe** arm has the same asymmetry; left out to
-  keep this change minimal per the user's ask. If wanted, it is the same three edits again.
-- **No migration:** existing armed goal loops have `DenyList = null` and keep following the
-  global default, byte-for-byte today's behavior.
+- **Frontend:** `client/src/components/dashboard/DockLoopControl.jsx` — move the existing
+  deny-chip block (today inside the queue-only section) to a single shared render site at
+  the top of the expanded loop section; include `denyList` in the queue, goal, and recipe
+  `act('/autopilot/loop', …)` payloads when terms were dropped. The chip state/hydration
+  logic is already kind-agnostic and lifted to the control's top level.
+- **Backend:** `ClaudeWeb.App/Services/Autopilot/LoopConfigStore.cs` — `StartGoal` and
+  `StartRecipe` gain a `denyList` parameter (mirroring `StartQueue`);
+  `AutopilotController.cs` passes `req.DenyList` at those call sites. Engine untouched —
+  `AutopilotService` already reads `loop.DenyList ?? cfg.DenyList` for all kinds.
+- **No migration:** existing armed loops have `DenyList = null` (or their queue trim) and
+  keep behaving byte-for-byte as today.
