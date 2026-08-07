@@ -57,6 +57,7 @@ public class AutopilotService : BackgroundService
     private readonly AutopilotAuditLog _audit;
     private readonly DockRegistry _dock;
     private readonly BriefingRulesStore _briefing;
+    private readonly FooterClausesService _footerClauses;
     private readonly FlagsStore _flags;
     private readonly Logger _logger;
 
@@ -117,7 +118,8 @@ public class AutopilotService : BackgroundService
         AutopilotGate operatorGate, PromptClassifier brain, CliPromptClassifier cliBrain,
         AutopilotDiscoveryService discovery,
         PromptsService prompts, AutopilotAuditLog audit, DockRegistry dock,
-        BriefingRulesStore briefing, FlagsStore flags, IEnumerable<ILoop> kinds, Logger logger)
+        BriefingRulesStore briefing, FlagsStore flags, FooterClausesService footerClauses,
+        IEnumerable<ILoop> kinds, Logger logger)
     {
         _repos = repos;
         _sessions = sessions;
@@ -127,6 +129,7 @@ public class AutopilotService : BackgroundService
         _loops = loops;
         _briefing = briefing;
         _flags = flags;
+        _footerClauses = footerClauses;
         _operatorGate = operatorGate;
         _brain = brain;
         _cliBrain = cliBrain;
@@ -707,9 +710,17 @@ public class AutopilotService : BackgroundService
                 {
                     var (rev, rules) = _briefing.EnabledTexts();
                     briefingRev = rev;
+                    // Per-arm footer-clauses opt-in (openspec: expose-goal-loop-denylist):
+                    // active clauses read LIVE at send time (composer semantics — a
+                    // mid-loop toggle affects the next send). ComposeBriefedPrompt owns
+                    // the phase rule: verification sends never carry them.
+                    IReadOnlyList<string>? clauses = null;
+                    if (loop.IncludeFooterClauses)
+                        clauses = _footerClauses.List()
+                            .Where(c => c.Active).Select(c => c.Text).ToList();
                     briefed = LoopConfigStore.ComposeBriefedPrompt(
                         loop.Kind, propose.EnterPhase, loop.Sentinel, propose.Prompt, rules,
-                        _flags.Enabled);
+                        _flags.Enabled, clauses);
                 }
                 if (SendPrompt(repo, sessionId!, loop, propose.Prompt, briefed, briefingRev,
                         propose.Confidence, snippet, intercept, now))

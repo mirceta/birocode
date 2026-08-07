@@ -134,6 +134,10 @@ public class LoopConfigStore
         "When the whole job below is genuinely complete — not before — end your reply "
         + "with the exact final line: {0}";
     public const string BriefingSeparator = "--- The prompt follows. ---";
+    // The composer's footer-clauses delimiter (openspec expose-goal-loop-denylist):
+    // MUST match client/src/components/chat/footerClauses.js FOOTER_DELIMITER so an
+    // agent sees one spelling whether the clauses rode a composer send or a loop send.
+    public const string FooterClausesDelimiter = "--- standing instructions ---";
     public const string BriefingVerifyNote =
         BriefingHeader + "\n"
         + "This verification prompt was sent by an automated loop; nobody is reading "
@@ -159,8 +163,12 @@ public class LoopConfigStore
     /// way — the switch only includes or omits it.</summary>
     public static string ComposeBriefedPrompt(
         string kind, string? phase, string? sentinel, string storedText,
-        IReadOnlyList<string> enabledRules, bool flagLineEnabled = true)
+        IReadOnlyList<string> enabledRules, bool flagLineEnabled = true,
+        IReadOnlyList<string>? footerClauses = null)
     {
+        // Verification sends never carry footer clauses (openspec
+        // expose-goal-loop-denylist): the judge must not inherit work-posture
+        // instructions — the same reason the briefing rules stay out of this branch.
         if (phase == PhaseVerify)
             return BriefingVerifyNote + "\n\n" + storedText;
         var lines = new List<string> { BriefingHeader, BriefingIntro };
@@ -172,7 +180,13 @@ public class LoopConfigStore
             : string.Format(BriefingContractSentinelTemplate,
                 string.IsNullOrWhiteSpace(sentinel) ? DefaultSentinel : sentinel));
         lines.Add(BriefingSeparator);
-        return string.Join("\n", lines) + "\n\n" + storedText;
+        var composed = string.Join("\n", lines) + "\n\n" + storedText;
+        // Opted-in work sends append the active footer clauses AFTER the stored
+        // prompt — the composer's footer position and delimiter, so the agent sees
+        // the identical shape either way.
+        if (footerClauses is { Count: > 0 })
+            composed += "\n\n" + FooterClausesDelimiter + "\n" + string.Join("\n\n", footerClauses);
+        return composed;
     }
 
     private readonly Logger _logger;
@@ -262,6 +276,11 @@ public class LoopConfigStore
         // only. The risk decision belongs to the arm, not permanently to the repo:
         // the next arm starts from the untouched default again. Additive nullable.
         public List<string>? DenyList { get; set; }
+        // Per-arm opt-in to append the chat footer clauses to work-phase driven
+        // sends (openspec: expose-goal-loop-denylist). Null/false = off, today's
+        // behavior; the clauses themselves are read live at send time from
+        // FooterClausesService, never copied here. Additive nullable.
+        public bool? IncludeFooterClauses { get; set; }
         // Queue kind, sent-history (openspec: queue-loop-visibility, D3): the texts of
         // the steps that actually landed this arm, newest last, bounded at
         // QueueSentTextsCap (drop-oldest). Prompt-bearing — disclosed only via the
@@ -295,7 +314,9 @@ public class LoopConfigStore
         string? QueueTabId, bool VerifyEnabled, string? LastStepText, int QueueSent,
         IReadOnlyList<string> QueueSentTexts, IReadOnlyList<int> QueueSentRevs,
         // Per-arm deny-list (advance-queue-loop, D2): null = global default applies.
-        IReadOnlyList<string>? DenyList = null);
+        IReadOnlyList<string>? DenyList = null,
+        // Per-arm footer-clauses opt-in (expose-goal-loop-denylist): false = off.
+        bool IncludeFooterClauses = false);
 
     public IReadOnlyList<LoopState> All()
     {
@@ -316,7 +337,8 @@ public class LoopConfigStore
     /// When armed from a recipe, the recipe's id/name are stamped on for display.
     /// Replaces this agent's one loop slot — XOR by construction (revision 2, D8).</summary>
     public LoopState Start(string repoId, string prompt, string? sentinel, int? maxIterations,
-        string? recipeId = null, string? recipeName = null, string? mode = null, string? sessionId = null)
+        string? recipeId = null, string? recipeName = null, string? mode = null, string? sessionId = null,
+        List<string>? denyList = null, bool? includeFooterClauses = null)
     {
         lock (_gate)
         {
@@ -326,6 +348,8 @@ public class LoopConfigStore
                 Kind = KindRecipe,
                 Mode = CleanMode(mode),
                 Prompt = prompt,
+                DenyList = CleanDenyList(denyList),
+                IncludeFooterClauses = includeFooterClauses == true ? true : null,
                 Sentinel = string.IsNullOrWhiteSpace(sentinel) ? DefaultSentinel : sentinel.Trim(),
                 MaxIterations = Math.Clamp(maxIterations ?? DefaultMaxIterations, 1, 100),
                 Active = true,
@@ -348,7 +372,7 @@ public class LoopConfigStore
     /// work + verification prompts from the templates ONCE, stores them verbatim, and
     /// starts in the work phase. The engine only ever sends the stored text.</summary>
     public LoopState StartGoal(string repoId, string goal, int? maxIterations, string? mode = null,
-        string? sessionId = null)
+        string? sessionId = null, List<string>? denyList = null, bool? includeFooterClauses = null)
     {
         lock (_gate)
         {
@@ -358,6 +382,8 @@ public class LoopConfigStore
                 Kind = KindGoal,
                 Mode = CleanMode(mode),
                 Goal = goal,
+                DenyList = CleanDenyList(denyList),
+                IncludeFooterClauses = includeFooterClauses == true ? true : null,
                 Prompt = ComposeGoalWorkPrompt(goal),
                 VerifyPrompt = ComposeGoalVerifyPrompt(goal),
                 Phase = PhaseWork,
@@ -385,7 +411,7 @@ public class LoopConfigStore
     /// reset, ArmedAt stamped, session pinned.</summary>
     public LoopState StartQueue(string repoId, string tabId, bool? verifyEnabled,
         int? maxIterations, string? mode = null, string? sessionId = null,
-        List<string>? denyList = null)
+        List<string>? denyList = null, bool? includeFooterClauses = null)
     {
         lock (_gate)
         {
@@ -398,6 +424,7 @@ public class LoopConfigStore
                 VerifyEnabled = verifyEnabled ?? true,
                 QueueSent = 0,
                 DenyList = CleanDenyList(denyList),
+                IncludeFooterClauses = includeFooterClauses == true ? true : null,
                 Phase = PhaseWork,
                 Sentinel = DefaultSentinel,
                 MaxIterations = Math.Clamp(maxIterations ?? DefaultMaxIterations, 1, 100),
@@ -654,7 +681,8 @@ public class LoopConfigStore
             e.QueueTabId, e.VerifyEnabled != false, e.LastStepText, e.QueueSent ?? 0,
             e.QueueSentTexts?.ToList() ?? (IReadOnlyList<string>)Array.Empty<string>(),
             e.QueueSentRevs?.ToList() ?? (IReadOnlyList<int>)Array.Empty<int>(),
-            e.DenyList?.ToList());
+            e.DenyList?.ToList(),
+            e.IncludeFooterClauses == true);
 
     private void Load()
     {

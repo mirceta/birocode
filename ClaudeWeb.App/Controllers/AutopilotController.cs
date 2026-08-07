@@ -154,7 +154,11 @@ public class AutopilotController : ControllerBase
         // Per-arm deny-list (openspec: advance-queue-loop, D2): the effective
         // list for THIS arm. Null = global default; an empty list is the
         // operator's explicit "no deny terms this arm".
-        List<string>? DenyList = null);
+        List<string>? DenyList = null,
+        // Per-arm footer-clauses opt-in (openspec: expose-goal-loop-denylist):
+        // when true, work-phase driven sends append the chat footer clauses.
+        // Null/false = off, today's behavior.
+        bool? IncludeFooterClauses = null);
 
     /// <summary>The loop control (openspec: unify-loop-types, revision 2): one
     /// endpoint arms / edits / disarms an agent's ONE loop instance of any kind.
@@ -197,7 +201,8 @@ public class AutopilotController : ControllerBase
                 {
                     if (string.IsNullOrWhiteSpace(req.Goal))
                         return BadRequest(new { error = "a goal loop needs a goal" });
-                    _loops.StartGoal(req.RepoId, req.Goal.Trim(), req.MaxIterations, req.Mode, pin);
+                    _loops.StartGoal(req.RepoId, req.Goal.Trim(), req.MaxIterations, req.Mode, pin,
+                        req.DenyList, req.IncludeFooterClauses);
                     break;
                 }
                 if (string.Equals(req.Kind, LoopConfigStore.KindQueue, StringComparison.OrdinalIgnoreCase))
@@ -214,7 +219,7 @@ public class AutopilotController : ControllerBase
                     if (stash.Count == 0)
                         return BadRequest(new { error = "the stash is empty — queue a prompt before arming" });
                     _loops.StartQueue(req.RepoId, req.TabId.Trim(), req.VerifyEnabled,
-                        req.MaxIterations, req.Mode, pin, req.DenyList);
+                        req.MaxIterations, req.Mode, pin, req.DenyList, req.IncludeFooterClauses);
                     break;
                 }
                 if (!string.IsNullOrWhiteSpace(req.RecipeId))
@@ -222,7 +227,8 @@ public class AutopilotController : ControllerBase
                     if (_recipes.Get(req.RecipeId) is not { } recipe)
                         return NotFound(new { error = $"unknown recipe \"{req.RecipeId}\"" });
                     _loops.Start(req.RepoId, recipe.Prompt, recipe.Sentinel,
-                        req.MaxIterations ?? recipe.MaxIterations, recipe.Id, recipe.Name, req.Mode, pin);
+                        req.MaxIterations ?? recipe.MaxIterations, recipe.Id, recipe.Name, req.Mode, pin,
+                        req.DenyList, req.IncludeFooterClauses);
                     break;
                 }
                 if (string.IsNullOrWhiteSpace(req.Prompt))
@@ -451,6 +457,10 @@ public class AutopilotController : ControllerBase
                     // default applies. Terms follow the gate like the global list.
                     denyList = loop.DenyList is null ? null
                         : (gateOpen ? (object)loop.DenyList : redactedMarker),
+                    // Footer-clauses opt-in (expose-goal-loop-denylist): a status
+                    // boolean like queueVerifyEnabled — the clause TEXTS live in the
+                    // footer-clauses store, not here, so nothing to gate.
+                    includeFooterClauses = loop.IncludeFooterClauses,
                     queueVerifyEnabled = loop.Kind == LoopConfigStore.KindQueue ? (bool?)loop.VerifyEnabled : null,
                     queueSent = loop.Kind == LoopConfigStore.KindQueue ? (int?)loop.QueueSent : null,
                     lastStepText = Text(loop.LastStepText),
