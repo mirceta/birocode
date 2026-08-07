@@ -72,6 +72,11 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
   // posture); a persisted opt-out re-hydrates via the gated detail.
   const [verifyPick, setVerifyPick] = useState(null);
   const [verifySeed, setVerifySeed] = useState(null);
+  // Per-arm footer-clauses opt-in (openspec: expose-goal-loop-denylist): same
+  // pick/seed shape as the verify toggle — null = untouched (defaults OFF, the
+  // behavior-preserving posture); a persisted opt-in re-hydrates via the detail.
+  const [footerPick, setFooterPick] = useState(null);
+  const [footerSeed, setFooterSeed] = useState(null);
   // Per-arm deny-list (openspec: advance-queue-loop, D2): the global default
   // terms arrive with the gated detail; the operator may drop terms for THIS
   // arm only. denyDefault = the server's list; denyDropped = terms removed here.
@@ -136,6 +141,7 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
         if (mine.maxIterations > 0) setCap((c) => (c === '' ? String(mine.maxIterations) : c));
         if (!mine.active && mine.mode) setPickedMode((m) => m ?? mine.mode);
         if (mine.kind === 'queue' && typeof mine.verifyEnabled === 'boolean') setVerifySeed(mine.verifyEnabled);
+        if (typeof mine.includeFooterClauses === 'boolean') setFooterSeed(mine.includeFooterClauses);
       })
       .catch((e) => { if (alive) setDetail(e?.status === 403 ? 'gate-closed' : null); });
     return () => { alive = false; };
@@ -176,6 +182,10 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
   // only when something was dropped — untouched arms keep following the
   // global default (null on the instance).
   const denyEffective = denyDefault.filter((term) => !denyDropped.includes(term));
+  // Footer-clauses opt-in for the next arm: explicit pick, else the persisted
+  // value a re-arm hydrated, else the default OFF (loop sends stay briefing-only
+  // until the operator opts in — openspec expose-goal-loop-denylist).
+  const footerOn = footerPick ?? footerSeed ?? false;
   const arm = () => {
     if (selected === 'suggestion') {
       return act('/autopilot/loop', { repoId, action: 'start', kind: 'suggestion', mode });
@@ -188,6 +198,7 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
         maxIterations: capNum >= 1 ? capNum : undefined,
         sessionId: sessionId || undefined,
         denyList: denyDropped.length > 0 ? denyEffective : undefined,
+        includeFooterClauses: footerOn || undefined,
       });
     }
     if (selected === 'recipe') {
@@ -196,6 +207,8 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
         repoId, action: 'start', recipeId: chosenRecipe.id, mode,
         maxIterations: capNum >= 1 ? capNum : undefined,
         sessionId: sessionId || undefined,
+        denyList: denyDropped.length > 0 ? denyEffective : undefined,
+        includeFooterClauses: footerOn || undefined,
       });
     }
     if (!goal.trim()) return undefined;
@@ -203,6 +216,8 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
       repoId, action: 'start', kind: 'goal', goal: goal.trim(), mode,
       maxIterations: capNum >= 1 ? capNum : undefined,
       sessionId: sessionId || undefined,
+      denyList: denyDropped.length > 0 ? denyEffective : undefined,
+      includeFooterClauses: footerOn || undefined,
     });
   };
 
@@ -409,6 +424,14 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
               </button>
             ))}
           </div>
+          {/* Shared, kind-independent arm settings (openspec:
+              expose-goal-loop-denylist): deny-list trim + footer-clauses opt-in
+              apply to WHICHEVER driven kind gets armed (one loop slot per
+              agent), so they live here above the kind sections — parking them
+              inside one kind's section read as kind-specific and misled the
+              operator about goal/recipe enforcement. */}
+          {selected !== 'suggestion' && renderSharedControls()}
+
           {/* Parameters for the selected type (arming only — an armed instance
               keeps its own stored copies) */}
           {selected === 'recipe' && armedKind !== 'recipe' && (
@@ -588,6 +611,68 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
   // template, as a labeled parameter), the badge the agent is expected to emit
   // (or the stated badge-less exit trigger), and explicit transition lines —
   // so the machine's dynamics are knowable from the settings themselves.
+  // The shared block above the kind sections (openspec: expose-goal-loop-denylist):
+  // per-arm deny-list chips + the footer-clauses opt-in, once, for every driven
+  // kind. Arming = editable; viewing the armed kind = the instance's stored
+  // values, read-only (effective deny-list under the same gate as before).
+  function renderSharedControls() {
+    const arming = armedKind !== selected;
+    const gated = detail === 'gate-closed';
+    const mine = !gated && detail ? detail.loops?.find((l) => l.repoId === repoId) : null;
+    const footerEff = arming ? footerOn : (mine?.includeFooterClauses ?? false);
+    return (
+      <div className="phone__loop-shared">
+        <div className="phone__loop-shared-h">{t('dashboard.loopSharedTitle')}</div>
+        {arming ? (denyDefault.length > 0 ? (
+          <>
+            <div className="phone__loop-inspect-k">{t('dashboard.loopDenyLabel')}</div>
+            <div className="phone__loop-denychips">
+              {denyDefault.map((term) => {
+                const dropped = denyDropped.includes(term);
+                return (
+                  <button
+                    key={term}
+                    type="button"
+                    className={`phone__loop-denychip${dropped ? ' phone__loop-denychip--off' : ''}`}
+                    title={t(dropped ? 'dashboard.loopDenyRestore' : 'dashboard.loopDenyDrop')}
+                    onClick={() => setDenyDropped((prev) =>
+                      dropped ? prev.filter((x) => x !== term) : [...prev, term])}
+                  >
+                    {term}{dropped ? '' : ' ×'}
+                  </button>
+                );
+              })}
+            </div>
+            {denyDropped.length > 0 && (
+              <p className="phone__loop-sect-desc">
+                {t('dashboard.loopDenyTrimmed', { terms: denyDropped.join(', ') })}
+              </p>
+            )}
+          </>
+        ) : (gated && (
+          <p className="phone__loop-sect-desc">{t('dashboard.loopDenyGateClosed')}</p>
+        ))) : (mine?.denyList != null && (
+          <>
+            <div className="phone__loop-inspect-k">{t('dashboard.loopDenyEffectiveLabel')}</div>
+            <pre className="phone__loop-inspect-pre">
+              {mine.denyList.length > 0 ? mine.denyList.join(', ') : t('dashboard.loopDenyNone')}
+            </pre>
+          </>
+        ))}
+        <label className="phone__loop-verifytoggle">
+          <input
+            type="checkbox"
+            checked={footerEff}
+            disabled={!arming}
+            onChange={(e) => setFooterPick(e.target.checked)}
+          />
+          {t('dashboard.loopFooterClauses')}
+        </label>
+        <p className="phone__loop-sect-desc">{t('dashboard.loopFooterClausesHint')}</p>
+      </div>
+    );
+  }
+
   // Renders in BOTH views: arming (editable loop-wide controls, template
   // previews from the gated detail) and armed (the instance's stored copies,
   // read-only, with the live phase lighting its section).
@@ -658,44 +743,10 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
               <p className="phone__loop-sect-desc">
                 {t(verifyEff ? 'dashboard.loopQueueVerifyHint' : 'dashboard.loopQueueVerifyOffHint')}
               </p>
-              {/* Per-arm deny-list (openspec: advance-queue-loop, D2): chips
-                  while arming; the armed instance shows its effective list. */}
-              {arming ? (denyDefault.length > 0 ? (
-                <>
-                  <div className="phone__loop-inspect-k">{t('dashboard.loopDenyLabel')}</div>
-                  <div className="phone__loop-denychips">
-                    {denyDefault.map((term) => {
-                      const dropped = denyDropped.includes(term);
-                      return (
-                        <button
-                          key={term}
-                          type="button"
-                          className={`phone__loop-denychip${dropped ? ' phone__loop-denychip--off' : ''}`}
-                          title={t(dropped ? 'dashboard.loopDenyRestore' : 'dashboard.loopDenyDrop')}
-                          onClick={() => setDenyDropped((prev) =>
-                            dropped ? prev.filter((x) => x !== term) : [...prev, term])}
-                        >
-                          {term}{dropped ? '' : ' ×'}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {denyDropped.length > 0 && (
-                    <p className="phone__loop-sect-desc">
-                      {t('dashboard.loopDenyTrimmed', { terms: denyDropped.join(', ') })}
-                    </p>
-                  )}
-                </>
-              ) : (gated && (
-                <p className="phone__loop-sect-desc">{t('dashboard.loopDenyGateClosed')}</p>
-              ))) : (mine?.denyList != null && (
-                <>
-                  <div className="phone__loop-inspect-k">{t('dashboard.loopDenyEffectiveLabel')}</div>
-                  <pre className="phone__loop-inspect-pre">
-                    {mine.denyList.length > 0 ? mine.denyList.join(', ') : t('dashboard.loopDenyNone')}
-                  </pre>
-                </>
-              ))}
+              {/* The per-arm deny-list chips moved to the SHARED block above the
+                  kind sections (openspec: expose-goal-loop-denylist) — they were
+                  never queue-specific, and rendering them here misled the
+                  operator into thinking goal/recipe loops skip the deny-list. */}
             </>
           )}
           {arming && (
