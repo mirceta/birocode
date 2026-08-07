@@ -33,9 +33,19 @@
   browsing origin
 - [x] 3.3 `openspec validate ideas-harness-hub --strict`
 
-## 4. Docs + wrap-up
+## 4. IP-gate exemption (added after ship: the guest-list wall blocked remote syncers)
 
-- [x] 4.1 README: rewrite "Sharing the Ideas board between machines" to lead with
+- [x] 4.1 `IpFilterMiddleware`: serve `GET`/`POST` `/api/notes/hub/{token}`
+  (segment-matched, `hub-info` stays gated) to any IP — the single deliberate
+  exception to the no-exemptions rule; update the middleware + controller doc
+  comments and the access-control delta spec
+- [x] 4.2 E2e: instance with an EMPTY guest allowlist — `/api/health` and
+  `/api/notes/hub-info` answer 403, hub GET/POST complete the contract, wrong
+  token still gets only the error envelope
+
+## 5. Docs + wrap-up
+
+- [x] 5.1 README: rewrite "Sharing the Ideas board between machines" to lead with
   the hub path (toggle + paste); Apps Script demoted to fallback; note the
   bearer-URL trust model
-- [x] 4.2 Understanding app honesty pass + commit on `feat/ideas-drive-sync`
+- [x] 5.2 Understanding app honesty pass + commit on `feat/ideas-drive-sync`

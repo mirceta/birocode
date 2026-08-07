@@ -129,8 +129,9 @@ it — no external service needed (openspec `ideas-harness-hub`):
 2. On every other harness: **☁ Set up sync** → paste that URL, tick **Sync on**,
    Save. The status chip shows synced / offline / error.
 
-The hub URL embeds a random token and is exempt from the login gate — the token
-**is** the credential. Treat it like a password: anyone holding it can read and
+The hub URL embeds a random token and is exempt from both the login gate and the
+IP guest allowlist — the token **is** the credential, and syncing machines need
+no Operator IP approval. Treat it like a password: anyone holding it can read and
 write the board (and nothing else). Boxes work offline and converge when they
 return (per-idea last-write-wins, deletes carried by tombstones); concurrent
 writes are serialized by a rev counter with compare-and-swap.

@@ -31,14 +31,21 @@ polling harnesses converge. The revision SHALL persist across hub restarts.
 ### Requirement: Hub access token
 The hub URL SHALL embed a generated unguessable token (at least 256 bits of
 randomness) that acts as the sole credential for the hub path: the path is exempt
-from session authentication, requests with a wrong token are rejected via
-constant-time comparison with an `{ok:false, error}` body, and the token appears
-in no log output. The token SHALL be stable across enable/disable cycles and
-restarts.
+from BOTH session authentication AND the IP allowlist gate (so a remote harness
+syncs without the Operator approving its IP), requests with a wrong token are
+rejected via constant-time comparison with an `{ok:false, error}` body, and the
+token appears in no log output. The token SHALL be stable across enable/disable
+cycles and restarts.
 
 #### Scenario: Wrong token
 - **WHEN** a request arrives at the hub path with an incorrect token
 - **THEN** it is rejected with an error envelope and no board data
+
+#### Scenario: Unapproved IP syncs via the hub URL
+- **WHEN** a harness whose IP is not on the hub's guest allowlist calls the hub
+  path with the correct token
+- **THEN** the contract exchange succeeds — no Operator IP approval is needed for
+  the hub path, and every other path from that IP is still rejected by the IP gate
 
 #### Scenario: Session auth still gates everything else
 - **WHEN** a request without a session or password header hits any other `/api`

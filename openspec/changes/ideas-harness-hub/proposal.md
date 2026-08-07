@@ -27,8 +27,10 @@ human-deployed scripts.
   hub-vs-local split-brain.
 - Access is a **bearer-capability URL**, same trust model as the Apps Script
   `/exec` link: `/api/notes/hub/{token}` with a generated 256-bit token. The token
-  path is exempt from session auth (the token IS the auth); everything else about
-  the API stays gated.
+  path is exempt from session auth AND from the IP allowlist gate (the token IS
+  the auth — remote harnesses sync from IPs the Operator never sees, and requiring
+  guest approval per syncing machine defeats the paste-and-go setup); everything
+  else about the API stays gated, including `/api/notes/hub-info`.
 - The Ideas sync bar gains a **"Host on this harness"** section: enable toggle +
   the ready-to-paste URL (built client-side from `window.location.origin`, so the
   public hostname needs no configuration) + copy button.
@@ -44,6 +46,9 @@ human-deployed scripts.
   token-gated), local-board backing with revision bumps on local edits, the
   host-on-this-harness UI, and sync-URL scheme normalization. (Delta against the
   in-flight `ideas-drive-sync` spec, same capability.)
+- `access-control`: the strict IP gate's "no exemptions" rule gains its single
+  deliberate exception — the hub token path is served to any IP; the token is the
+  credential. Everything else about the gate is unchanged.
 
 ## Impact
 

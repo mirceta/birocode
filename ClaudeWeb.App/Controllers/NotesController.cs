@@ -21,7 +21,8 @@ namespace ClaudeWeb.Controllers;
 ///   GET    /api/notes/hub-info     -- { enabled, token }        (session-gated)
 ///   POST   /api/notes/hub-info     -- { enabled } toggle        (session-gated)
 ///   GET    /api/notes/hub/{token}  -- shared-store contract     (token IS the auth;
-///   POST   /api/notes/hub/{token}     path exempt in PasswordAuthMiddleware)
+///   POST   /api/notes/hub/{token}     path exempt in PasswordAuthMiddleware AND
+///                                     IpFilterMiddleware -- open to any IP)
 /// Hub responses are always HTTP 200 with errors in the body — the same
 /// Apps-Script-shaped envelope the remote IdeasSyncClient already parses.
 /// `project` is an optional free-text label (plans/ideas-filter-project.md);
