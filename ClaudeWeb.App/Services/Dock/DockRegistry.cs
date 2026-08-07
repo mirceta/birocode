@@ -71,6 +71,19 @@ public class DockTab
     public bool Wide { get; set; } = false;
 
     /// <summary>
+    /// "Unseen result" latch (openspec dock-busy-indicator, unseen-result
+    /// amendment): set when a builder run on this tab's repo reaches a genuine
+    /// terminal status ("done"/"error") while the tab is hidden from the
+    /// dashboard (<see cref="Dashboard"/> == false), cleared whenever the tab is
+    /// shown again — by any route that flips <see cref="Dashboard"/> on. The
+    /// dock toolbar renders it as an exclamation dot, so a finish that happened
+    /// while the dock was off-grid isn't silently read as "idle". Server-owned:
+    /// set by <see cref="DockUnseenResultTrigger"/>, cleared in
+    /// <see cref="DockRegistry.Update"/>; clients only ever read it.
+    /// </summary>
+    public bool UnseenResult { get; set; } = false;
+
+    /// <summary>
     /// Stashed prompt ideas jotted down while the agent runs
     /// (plans/prompt-stash.md). Shared across devices like the rest of the tab.
     /// </summary>
@@ -178,7 +191,14 @@ public class DockRegistry
             if (repoName != null) tab.RepoName = repoName;
             // Empty string clears the mark; null leaves it untouched.
             if (color != null) tab.Color = color.Length == 0 ? null : color;
-            if (dashboard != null) tab.Dashboard = dashboard.Value;
+            if (dashboard != null)
+            {
+                tab.Dashboard = dashboard.Value;
+                // Showing the dock IS the act of looking at its result: clear the
+                // unseen-result latch on any route that turns visibility on (the
+                // dashboard strip tab and the Agents-page toggle both land here).
+                if (dashboard.Value) tab.UnseenResult = false;
+            }
             if (important != null) tab.Important = important.Value;
             if (waiting != null) tab.Waiting = waiting.Value;
             // Empty string clears the name; null leaves it untouched.
@@ -188,6 +208,31 @@ public class DockRegistry
             if (wide != null) tab.Wide = wide.Value;
             Save();
             return Clone(tab);
+        }
+    }
+
+    /// <summary>
+    /// Latches the "unseen result" flag on every HIDDEN tab of a repo (openspec
+    /// dock-busy-indicator, unseen-result amendment). Called by
+    /// <see cref="DockUnseenResultTrigger"/> when a run completes; tabs shown on
+    /// the dashboard are skipped — the operator watches those land on the grid.
+    /// Returns how many tabs were newly latched.
+    /// </summary>
+    public int MarkUnseenForRepo(string repoId)
+    {
+        if (string.IsNullOrWhiteSpace(repoId)) return 0;
+        lock (_gate)
+        {
+            var latched = 0;
+            foreach (var tab in _tabs)
+                if (!tab.Dashboard && !tab.UnseenResult
+                    && string.Equals(tab.RepoId, repoId, StringComparison.Ordinal))
+                {
+                    tab.UnseenResult = true;
+                    latched++;
+                }
+            if (latched > 0) Save();
+            return latched;
         }
     }
 
@@ -433,6 +478,7 @@ public class DockRegistry
         WaitingOn = t.WaitingOn,
         DependsOn = t.DependsOn,
         Wide = t.Wide,
+        UnseenResult = t.UnseenResult,
         Stash = t.Stash.Select(CloneStash).ToList(),
     };
 
