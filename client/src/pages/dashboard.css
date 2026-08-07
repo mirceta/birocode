@@ -2161,21 +2161,23 @@
   }
 }
 
+/* Work indicator mirrors the send button: accent at rest, near-black while busy
+   (openspec: dock-busy-indicator). */
 .phone__dot {
-  width: 9px;
-  height: 9px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  background: #aaa;
+  background: var(--color-accent);
   flex-shrink: 0;
 }
 
 .phone--running .phone__dot {
-  background: #22c55e;
+  background: var(--color-text);
   animation: dash-pulse 1.2s ease-in-out infinite;
 }
 
 .phone--done .phone__dot {
-  background: #3b82f6;
+  background: var(--color-accent);
 }
 
 .phone--error .phone__dot {
