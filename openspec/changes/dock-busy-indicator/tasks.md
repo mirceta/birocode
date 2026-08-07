@@ -14,3 +14,12 @@
 ## 3. Bookkeeping
 
 - [x] 3.1 `openspec validate dock-busy-indicator --strict` passes
+
+## 4. Amendment — dock toolbar dots mirror the busy state (full roster)
+
+- [x] 4.1 In `Dashboard.jsx`, extend the live-status poll to the FULL dock roster (`dockTabs`, not just grid-visible `tabs`): status for every dock from the already-fetched `/runs` snapshot; keep the per-session transcript fetch (activity/recency) limited to grid-visible docks
+- [x] 4.2 Pass the live map to `DockToolbar`; in `DockToolbar.jsx` derive `running` per tab (same `live[id].status || tab.status` rule as the grid) and, when running, drop the assigned-color inline style and add a `dash__docktab-dot--running` modifier
+- [x] 4.3 In `dashboard.css`, style `.dash__docktab-dot--running` near-black (`var(--color-text)`) with the same `dash-pulse` reinforcement as the header indicator
+- [x] 4.4 `npm --prefix client run build` passes
+- [x] 4.5 Browser-check on an isolated :5200 preview: verified with Playwright (`.preview-test/dock-toolbar-busy-check.mjs` — ALL PASS) through the REAL wiring (route-intercepted `/api/runs` → poll → toolbar): at rest all 14 roster dots keep their assigned colors (or the neutral default); with runs reporting `running` every dot turns near-black rgb(43,43,41) with dash-pulse — including a dock hidden from the grid mid-test — and reverts to the assigned colors when runs go idle again; a visible dock's header indicator went black through the same poll (end-to-end this time, not class-forced)
+- [x] 4.6 `openspec validate dock-busy-indicator --strict` passes with the amended delta

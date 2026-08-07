@@ -92,6 +92,14 @@
   background: #aaa;
 }
 
+/* A prompt is running on this dock's agent: the dot goes near-black, same busy
+   language as the dock header indicator (openspec: dock-busy-indicator). The
+   markup drops the assigned-color inline style while running. */
+.dash__docktab-dot--running {
+  background: var(--color-text);
+  animation: dash-pulse 1.2s ease-in-out infinite;
+}
+
 .dash__docktab-name {
   overflow: hidden;
   text-overflow: ellipsis;

@@ -19,6 +19,12 @@ which agents are actively processing and which are idle.
   rather than folding into the orange/black scheme.
 - No backend or data-model change — the indicator renders from the same `status` prop the
   dock already receives.
+- **Amendment (2026-08-07):** the dock toolbar — the horizontal strip in the dashboard
+  header listing every dock, hidden ones included — mirrors the same signal on its per-tab
+  dots: each dot keeps the dock's assigned color at rest and turns near-black
+  (`--color-text`) while a prompt is running on that agent. Since the strip covers the full
+  roster, the live-status poll extends to hidden docks (status only — no per-session
+  transcript fetch for hidden docks), so the operator can see a hidden agent is busy.
 
 ## Capabilities
 
@@ -33,6 +39,9 @@ None.
   while the agent is processing, red on error). The baseline spec has no requirement for
   the header status dot today, so this is an addition, not a modification of an existing
   requirement.
+- `agent-dock`: ADDED requirement (amendment) — the dock toolbar strip's per-tab dots keep
+  the dock's assigned color at rest and turn near-black while that agent is running,
+  including for docks hidden from the grid.
 
 ## Impact
 
