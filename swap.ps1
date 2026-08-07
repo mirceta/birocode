@@ -172,7 +172,12 @@ Start-Sleep -Seconds $StartDelaySeconds
 $healthy = $false
 for ($i = 0; $i -lt 20; $i++) {
   try {
-    $r = Invoke-WebRequest -Uri ("http://localhost:$Port/api/auth/check") -UseBasicParsing -TimeoutSec 5
+    # 127.0.0.1, NOT localhost: the harness binds 0.0.0.0 (IPv4-only), and
+    # Invoke-WebRequest tries ::1 first. Normally the refused IPv6 attempt
+    # falls back instantly, but when the ::1 SYN is silently dropped it eats
+    # the whole TimeoutSec — 20 straight false failures rolled back a HEALTHY
+    # deploy on 2026-08-07. Probe the address family the app actually binds.
+    $r = Invoke-WebRequest -Uri ("http://127.0.0.1:$Port/api/auth/check") -UseBasicParsing -TimeoutSec 5
     Say "health: $($r.StatusCode) on :$Port"
     $healthy = $true
     break
