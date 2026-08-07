@@ -23,3 +23,15 @@
 - [x] 4.4 `npm --prefix client run build` passes
 - [x] 4.5 Browser-check on an isolated :5200 preview: verified with Playwright (`.preview-test/dock-toolbar-busy-check.mjs` — ALL PASS) through the REAL wiring (route-intercepted `/api/runs` → poll → toolbar): at rest all 14 roster dots keep their assigned colors (or the neutral default); with runs reporting `running` every dot turns near-black rgb(43,43,41) with dash-pulse — including a dock hidden from the grid mid-test — and reverts to the assigned colors when runs go idle again; a visible dock's header indicator went black through the same poll (end-to-end this time, not class-forced)
 - [x] 4.6 `openspec validate dock-busy-indicator --strict` passes with the amended delta
+
+## 5. Unseen-result amendment — exclamation latch for hidden-dock finishes
+
+- [x] 5.1 `DockTab.UnseenResult` (server-persisted, server-owned) in `DockRegistry.cs`: field + Clone + `MarkUnseenForRepo(repoId)` (latches hidden tabs only) + clear-on-show in `Update` when a PATCH turns `dashboard` on
+- [x] 5.2 New `DockUnseenResultTrigger` hosted service subscribing to `RunSessionService.RunCompleted` (builder lane, `done`/`error` only — `stopped` excluded), registered in `DockModuleExtensions`; DTO gains `unseenResult` in `DockController`
+- [x] 5.3 `DockToolbar.jsx`: derive `unseen = hidden && !running && tab.unseenResult`; render the dot as a near-black `!` badge with an explanatory title/aria label (`dashboard.dockToolbarUnseen`, en + tr); running outranks; the roster's existing 10s `DockContext` refresh delivers flag changes — no new polling
+- [x] 5.4 `dashboard.css`: `.dash__docktab-dot--unseen` — static near-black badge with white `!`, slightly larger than the rest dot, no pulse (distinct from running)
+- [x] 5.5 `npm --prefix client run build` passes and the backend builds (isolated self-dev dir)
+- [x] 5.6 Browser-check on an isolated :5200 preview per `docs/claude-web/browser-testing.md` — both halves ALL PASS:
+  - Server E2E (`.preview-test/dock-unseen-server-check.mjs`): a genuine builder-lane run (POST `/api/chat` with a bogus `--model`, so the CLI errors instantly at zero cost) fires `RunCompleted` → the HIDDEN scratch tab latches `unseenResult: true` on `/api/dock` while every other tab stays unlatched; PATCHing the tab visible clears the latch.
+  - Browser (`.preview-test/dock-unseen-toolbar-check.mjs`): route-driven matrix — hidden+latched renders the 14px near-black `!` badge, running outranks it (black dash-pulse, no `!`), a visible latched tab never shows `!`; then the REAL path — the genuinely latched tab renders `!` from live `/api/dock` data, clicking it shows the dock on the grid and clears the latch server-side (screenshots `30`–`33` in `.preview-test/out-dock-busy/`). Note: the isolated preview serves `bin/client/dist`, which had gone stale — re-mirrored before the passing run.
+- [x] 5.7 `openspec validate dock-busy-indicator --strict` passes with the amended delta

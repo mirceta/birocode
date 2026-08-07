@@ -25,6 +25,19 @@ which agents are actively processing and which are idle.
   (`--color-text`) while a prompt is running on that agent. Since the strip covers the full
   roster, the live-status poll extends to hidden docks (status only — no per-session
   transcript fetch for hidden docks), so the operator can see a hidden agent is busy.
+- **Unseen-result amendment (2026-08-07):** when a run finishes (`done`/`error`) while its
+  dock is HIDDEN from the grid, the toolbar dot does not fall back to the assigned color —
+  it becomes an **exclamation point** that persists until the dock is shown again, at which
+  point it clears back to the assigned color. Without this, a hidden dock's finish reads as
+  "idle" and the fact that the operator was waiting on that agent is silently lost. The
+  latch is an acknowledgement flag about the *operator* ("you haven't looked yet"), not an
+  agent status: running outranks it visually, and it can never appear on a grid-visible
+  dock (showing is what clears it). It is **server-persisted** on the dock tab
+  (`unseenResult`): set at the `RunCompleted` choke point (builder lane, `done`/`error` —
+  `stopped` excluded as a deliberate operator action), cleared whenever a PATCH turns
+  `dashboard` on (strip tab and Agents-page ▦ both route through it). Server-side
+  persistence is the point: the finish is latched even when no browser has the dashboard
+  open at completion time, and it survives reloads.
 
 ## Capabilities
 
@@ -42,6 +55,9 @@ None.
 - `agent-dock`: ADDED requirement (amendment) — the dock toolbar strip's per-tab dots keep
   the dock's assigned color at rest and turn near-black while that agent is running,
   including for docks hidden from the grid.
+- `agent-dock`: ADDED requirement (unseen-result amendment) — a run finishing while its
+  dock is hidden latches a server-persisted unseen-result flag; the toolbar dot renders it
+  as an exclamation point until the dock is shown again.
 
 ## Impact
 
@@ -53,3 +69,11 @@ None.
   `client/src/styles/global.css`; no new tokens, i18n keys, endpoints, or dependencies.
 - Note: the dock header is also being touched by the in-flight `add-dock-openspec-lane`
   change — coordinate merge order if both land near-simultaneously.
+- Unseen-result amendment: `ClaudeWeb.App/Services/Dock/DockRegistry.cs` (new
+  `UnseenResult` field + `MarkUnseenForRepo` + clear-on-show in `Update`), new
+  `ClaudeWeb.App/Services/Dock/DockUnseenResultTrigger.cs` (hosted service on
+  `RunSessionService.RunCompleted`, same pattern as `AutoUnderstandingTrigger`),
+  `DockModuleExtensions.cs` (registration), `DockController.cs` (DTO),
+  `client/src/components/dashboard/DockToolbar.jsx`, `client/src/pages/dashboard.css`,
+  one new i18n key (`dashboard.dockToolbarUnseen`, en + tr). The first backend/data-model
+  touch of this change — "No backend change" above no longer holds for this amendment.

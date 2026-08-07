@@ -51,6 +51,10 @@ public class DockController : ControllerBase
         waitingOn = t.WaitingOn,
         dependsOn = t.DependsOn,
         wide = t.Wide,
+        // Server-owned unseen-result latch (openspec dock-busy-indicator,
+        // unseen-result amendment): read-only for clients — set at turn end by
+        // DockUnseenResultTrigger, cleared when a PATCH turns `dashboard` on.
+        unseenResult = t.UnseenResult,
         stash = t.Stash.Select(StashDto),
     };
 

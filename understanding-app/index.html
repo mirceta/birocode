@@ -1,41 +1,172 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Research-informed loops — technique catalog × our framework</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Understanding — unseen-result exclamation on dock toolbar dots</title>
 <link rel="stylesheet" href="./app.css">
 </head>
 <body>
-<header class="hd">
-  <h1>Agent-loop research → adoption map</h1>
-  <p class="hd__sub">
-    37 techniques mined live (2026-08-04) from 14 source-cited documents —
-    Anthropic engineering, Boris Cherny, Peter Steinberger, Geoffrey Huntley,
-    Simon Willison, Armin Ronacher, Thorsten Ball — confronted with our
-    autopilot loop framework. Dossier: <code>docs/research/agent-loops/</code>
-    (also in the autopilot console → Reference → 📚 Research).
-  </p>
-  <div class="hd__stats" id="stats"></div>
+<header class="hdr">
+  <h1>Dock toolbar dot: the <span class="bang-inline">!</span> unseen-result latch</h1>
+  <p class="hdr__sub">My understanding of what you asked for — the problem, the fix, every state the
+  (agent × dashboard) pair can be in, and the questions I'd want answered before proposing it.</p>
 </header>
 
-<nav class="filters">
-  <div class="filters__group" id="bucketFilters"></div>
-  <div class="filters__group" id="evidenceFilters"></div>
-  <input id="search" type="search" placeholder="filter techniques…" aria-label="Filter techniques">
+<nav class="tabs" id="tabs">
+  <button class="tab tab--on" data-view="ask">1 · The problem you described</button>
+  <button class="tab" data-view="sim">2 · Live state-machine simulator</button>
+  <button class="tab" data-view="matrix">3 · All conditions, exhaustively</button>
+  <button class="tab" data-view="questions">4 · Open questions</button>
 </nav>
 
-<section id="ranked" class="ranked">
-  <h2>The worth-adopting ladder <span class="ranked__hint">(each rank seeds one follow-up OpenSpec change — click to inspect)</span></h2>
-  <ol id="ladder" class="ladder"></ol>
+<!-- ============ VIEW 1: THE ASK ============ -->
+<section class="view view--on" id="view-ask">
+  <div class="card">
+    <h2>The information-loss hole (today's behavior)</h2>
+    <p>You hide an agent's dock from the grid while it is executing. The strip dot correctly goes
+    <b>black</b>. Then the agent finishes — and the dot reverts to the agent's color, which reads as
+    <b>idle</b>. The fact that you were <i>waiting on that agent</i> is gone: nothing tells you there
+    is a finished turn you haven't looked at, so there's no urgency to re-show the dock.</p>
+    <div class="story" id="story-before">
+      <div class="story__strip">
+        <span class="mocktab"><span class="mockdot" id="sb-dot"></span><span>web-flow-autodev</span></span>
+      </div>
+      <div class="story__caption" id="sb-cap">…</div>
+      <div class="story__steps" id="sb-steps"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>The fix you're asking for</h2>
+    <p>When a run <b>finishes while the dock is hidden</b>, the dot does <u>not</u> go back to the
+    agent's color — it turns into an <b>exclamation point</b>: “this agent finished and you haven't
+    seen the result.” It stays an exclamation until you <b>show the dock again</b> (click the tab),
+    at which point it returns to the agent's color, because now the grid card itself carries the
+    result.</p>
+    <div class="story" id="story-after">
+      <div class="story__strip">
+        <span class="mocktab"><span class="mockdot" id="sa-dot"></span><span>web-flow-autodev</span></span>
+      </div>
+      <div class="story__caption" id="sa-cap">…</div>
+      <div class="story__steps" id="sa-steps"></div>
+    </div>
+    <p class="note">Key reading: the exclamation is an <b>acknowledgement latch</b>, not a status.
+    Running / idle / error describe the <i>agent</i>; the exclamation describes <i>you</i> — “you
+    have not looked yet.” It can only exist on a <b>hidden</b> dock; showing the dock is the act of
+    looking, which clears it.</p>
+  </div>
 </section>
 
-<main class="grid" id="grid"></main>
+<!-- ============ VIEW 2: SIMULATOR ============ -->
+<section class="view" id="view-sim">
+  <div class="card">
+    <h2>Drive the machine yourself</h2>
+    <p>Fire events with the buttons; the diagram, the mock DOCKS strip, and the mock grid all update.
+    The five reachable states are the whole world — note there is <b>no</b> “Shown + exclamation”
+    state: showing clears the latch in the same instant, so it can never be observed.</p>
+    <div class="sim">
+      <div class="sim__left">
+        <svg id="diagram" viewBox="0 0 760 520" role="img" aria-label="State diagram"></svg>
+      </div>
+      <div class="sim__right">
+        <div class="sim__panel">
+          <h3>Events</h3>
+          <div class="sim__btns">
+            <button class="btn" id="ev-start">▶ Prompt starts</button>
+            <button class="btn" id="ev-done">✓ Run finishes (done)</button>
+            <button class="btn" id="ev-error">✕ Run finishes (error)</button>
+            <button class="btn" id="ev-hide">▦ Hide dock</button>
+            <button class="btn" id="ev-show">▦ Show dock</button>
+            <button class="btn btn--ghost" id="ev-reset">reset</button>
+          </div>
+        </div>
+        <div class="sim__panel">
+          <h3>What the UI shows now</h3>
+          <div class="story__strip">
+            <span class="mocktab" id="sim-tab"><span class="mockdot" id="sim-dot"></span><span>web-flow-autodev</span></span>
+          </div>
+          <div class="mockgrid" id="sim-grid"></div>
+          <div class="sim__statename" id="sim-state"></div>
+        </div>
+        <div class="sim__panel">
+          <h3>Event log</h3>
+          <ol class="sim__log" id="sim-log"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
 
-<aside id="detail" class="detail" hidden>
-  <button class="detail__close" id="detailClose" aria-label="Close">✕</button>
-  <div id="detailBody"></div>
-</aside>
+<!-- ============ VIEW 3: MATRIX ============ -->
+<section class="view" id="view-matrix">
+  <div class="card">
+    <h2>Every (visibility × activity) condition and what the strip dot shows</h2>
+    <table class="mx">
+      <thead><tr><th>#</th><th>Dock on grid?</th><th>Agent</th><th>Strip dot</th><th>Why / what happens next</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Shown</td><td>Resting (idle, or a finish you've already had on screen)</td>
+            <td><span class="mockdot mockdot--color"></span> agent color</td>
+            <td>Nothing pending. The grid card is visible, so the header indicator carries any detail.</td></tr>
+        <tr><td>2</td><td>Shown</td><td>Running</td>
+            <td><span class="mockdot mockdot--busy"></span> black, pulsing</td>
+            <td>Already shipped. Mirrors the send/stop button.</td></tr>
+        <tr class="mx--hl"><td>3</td><td>Shown</td><td>Finishes <i>while shown</i></td>
+            <td><span class="mockdot mockdot--color"></span> back to agent color</td>
+            <td><b>No exclamation.</b> You can see the result on the grid the moment it lands — the
+            header dot goes orange (or red on error) right in front of you. No latch needed.</td></tr>
+        <tr><td>4</td><td>Hidden</td><td>Resting</td>
+            <td><span class="mockdot mockdot--color"></span> agent color</td>
+            <td>Hidden and quiet — same as today.</td></tr>
+        <tr><td>5</td><td>Hidden</td><td>Running</td>
+            <td><span class="mockdot mockdot--busy"></span> black, pulsing</td>
+            <td>Already shipped this session (the full-roster poll). Also covers: shown-and-running,
+            then you hide it mid-run — hiding doesn't change the dot.</td></tr>
+        <tr class="mx--hl"><td>6</td><td>Hidden</td><td>Finishes <i>while hidden</i></td>
+            <td><span class="mockbang">!</span> exclamation</td>
+            <td><b>The new state.</b> Latched at the moment of the running→finished transition while
+            hidden. Persists — through idleness — until the dock is shown again.</td></tr>
+        <tr><td>7</td><td>Hidden, exclamation showing</td><td>New prompt starts (loop / Agents page / another device)</td>
+            <td><span class="mockdot mockdot--busy"></span> black, pulsing</td>
+            <td>Running outranks the latch visually. When this run finishes (still hidden) the
+            exclamation returns — you now have ≥1 unseen results either way.</td></tr>
+        <tr><td>8</td><td>Hidden → <b>Shown</b> (click the tab / ▦)</td><td>any</td>
+            <td><span class="mockdot mockdot--color"></span> agent color (or black if still running)</td>
+            <td>Showing = looking. Latch cleared. If it's mid-run when you show it, you get the black
+            dot, and case 3 applies when it finishes.</td></tr>
+      </tbody>
+    </table>
+    <p class="note">Display priority on the strip dot, top wins:
+    <b>running (black pulse)</b> → <b>hidden &amp; unseen finish (exclamation)</b> → <b>agent color</b>.
+    The grid header indicator is untouched by this feature — hidden docks have no header.</p>
+  </div>
+</section>
+
+<!-- ============ VIEW 4: OPEN QUESTIONS ============ -->
+<section class="view" id="view-questions">
+  <div class="card">
+    <h2>Questions before I propose it</h2>
+    <ol class="qs">
+      <li><b>Error while hidden — same exclamation?</b> A hidden run can finish in <i>error</i>, not
+      just done. I'd show the exclamation in both cases (both are “unseen outcomes”), but style it
+      <b>red for error</b> vs near-black for done, so the strip also tells you <i>what kind</i> of
+      result awaits. OK, or one uniform exclamation?</li>
+      <li><b>What counts as “showing”?</b> I'd clear the latch whenever the dock becomes visible on
+      the dashboard grid — whether via the strip tab, or the ▦ toggle on the Agents page. Not clear
+      it on merely opening the chat elsewhere. Agree?</li>
+      <li><b>Should the latch survive a page reload / phone re-visit?</b> If we detect only the
+      running→finished <i>transition</i> in the browser, a finish that happens while nobody has the
+      dashboard open (very much your use case — you're away) or a reload afterwards would lose the
+      exclamation. To be robust I'd persist it server-side on the dock (a small “unseen result”
+      flag set when a run ends, cleared when the dock is shown), rather than frontend-only. This is
+      the main reason the feature is “more complicated,” as you suspected.</li>
+      <li><b>Clicking the exclamation tab</b> keeps the normal toggle behavior (it shows the dock,
+      which clears the latch) — no separate “dismiss without looking” affordance. Right?</li>
+      <li><b>Docks that are shown but scrolled out of view</b> still count as “shown” (case 3, no
+      exclamation) — visibility means “on the grid,” not “within the viewport.” Confirm?</li>
+    </ol>
+  </div>
+</section>
 
 <script src="./app.js"></script>
 </body>

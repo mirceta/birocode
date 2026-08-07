@@ -100,6 +100,23 @@
   animation: dash-pulse 1.2s ease-in-out infinite;
 }
 
+/* Unseen-result latch (openspec dock-busy-indicator, unseen-result amendment):
+   the agent finished a turn while this dock was hidden from the grid. The dot
+   grows into a near-black exclamation badge — static, unlike the running pulse
+   — and stays until the dock is shown again (which clears the latch). */
+.dash__docktab-dot--unseen {
+  width: 14px;
+  height: 14px;
+  background: var(--color-text);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+}
+
 .dash__docktab-name {
   overflow: hidden;
   text-overflow: ellipsis;
