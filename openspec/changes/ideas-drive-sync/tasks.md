@@ -54,5 +54,5 @@
   pass — reflect what was built, not the options pitch)
 - [x] 5.2 README note: the one-time Apps Script deploy (paste `.gs`, deploy as web
   app, copy URL) for the operator
-- [ ] 5.3 Commit on a feature branch; real-endpoint manual smoke deferred until the
+- [x] 5.3 Commit on a feature branch; real-endpoint manual smoke deferred until the
   user deploys the script and provides the URL
