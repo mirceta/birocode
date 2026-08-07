@@ -83,7 +83,9 @@ if (Test-Path $exe) {
   Start-Sleep -Seconds $StartDelaySeconds
   for ($i = 0; $i -lt 20; $i++) {
     try {
-      $r = Invoke-WebRequest -Uri ("http://localhost:$Port/api/auth/check") -UseBasicParsing -TimeoutSec 5
+      # 127.0.0.1, NOT localhost — same reason as swap.ps1's probe: the app
+      # binds IPv4-only and a dropped ::1 attempt burns the whole timeout.
+      $r = Invoke-WebRequest -Uri ("http://127.0.0.1:$Port/api/auth/check") -UseBasicParsing -TimeoutSec 5
       Say "health: $($r.StatusCode) on :$Port (last-good restored)"
       break
     } catch {
