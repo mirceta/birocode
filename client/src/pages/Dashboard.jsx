@@ -568,6 +568,10 @@ export default function Dashboard({ onClose }) {
   const [gitBusy, setGitBusy] = useState({});
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
+  // Full roster for the poll (openspec dock-busy-indicator amendment): the dock
+  // toolbar shows busy state for hidden docks too, so status covers everyone.
+  const rosterRef = useRef(dockTabs);
+  rosterRef.current = dockTabs;
 
   // How many docks are starred important — drives the "show only important"
   // filter's empty state and the filtered grid's column count.
@@ -814,7 +818,13 @@ export default function Dashboard({ onClose }) {
         } catch {
           /* keep the last good liveness; try again next tick */
         }
-        const current = tabsRef.current;
+        // Poll the FULL roster (openspec dock-busy-indicator amendment) so the
+        // dock toolbar can show busy state for docks hidden from the grid; the
+        // per-session transcript fetch (activity/recency) stays limited to
+        // grid-visible docks — hidden docks only need `status`, which comes
+        // free from the one /runs snapshot.
+        const current = rosterRef.current;
+        const visible = new Set(tabsRef.current.map((tab) => tab.id));
         const pairs = await Promise.all(
           current.map(async (tab) => {
             const run = runs[tab.repoId];
@@ -823,7 +833,7 @@ export default function Dashboard({ onClose }) {
             const sessionId = run?.sessionId || tab.sessionId;
             let activity = '';
             let at = 0;
-            if (sessionId) {
+            if (sessionId && visible.has(tab.id)) {
               try {
                 const messages = await apiGet(`/sessions/${sessionId}/messages`, {
                   repoId: tab.repoId,
@@ -902,7 +912,7 @@ export default function Dashboard({ onClose }) {
             leads the shared header bar, listing the full roster so hidden docks
             stay reachable. Gated on the roster, not the visible `tabs`, so it
             still shows (all-inactive) when every dock is hidden. */}
-        <DockToolbar tabs={rosterTabs} onToggle={toggleDashboard} />
+        <DockToolbar tabs={rosterTabs} live={live} onToggle={toggleDashboard} />
         {/* Panel rail (openspec dashboard-focus-docks): summon/dismiss the aux
             panels. One chip per panel, pressed while its panel is visible;
             feature-gated chips render only when their feature is on. */}
