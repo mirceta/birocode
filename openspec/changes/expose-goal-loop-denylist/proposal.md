@@ -24,6 +24,14 @@ withholds the per-arm trim that queue arms already have.
   (the engine already honors a per-instance list for every kind).
 - Suggestion-mode arms are untouched (they don't drive sends; the classifier keeps using
   the global default).
+- **Footer clauses join the loop, opt-in per arm:** the same shared block gains a
+  checkbox — "include footer clauses" (default **off**) — stored on the armed instance.
+  When on, every **work-phase** driven send (queue item, goal work, recipe send) gets the
+  currently **active** footer clauses appended after the stored prompt as a delimited
+  footer, read live at send time exactly like composer sends; verification sends never
+  carry them (matching the briefing-rules precedent). This amends the
+  `prompt-footer-clauses` capability, whose baseline currently declares loop-engine sends
+  out of scope.
 
 ## Capabilities
 
@@ -35,6 +43,11 @@ withholds the per-arm trim that queue arms already have.
   arms to **all driven arms** (goal and recipe included), presented **once,
   kind-independently** at the top of the dock's loop controls rather than inside one
   kind's section — same trim semantics, same gated disclosure of the effective list.
+  Plus a new requirement: a per-arm **include-footer-clauses** opt-in in the same shared
+  block, appending the active clauses to work-phase driven sends.
+- `prompt-footer-clauses`: the "active clauses ride along" requirement's scope statement
+  changes — loop-engine sends are no longer categorically out of scope; they carry the
+  footer when (and only when) the armed instance opted in.
 
 ## Impact
 
@@ -47,5 +60,9 @@ withholds the per-arm trim that queue arms already have.
   `StartRecipe` gain a `denyList` parameter (mirroring `StartQueue`);
   `AutopilotController.cs` passes `req.DenyList` at those call sites. Engine untouched —
   `AutopilotService` already reads `loop.DenyList ?? cfg.DenyList` for all kinds.
+- **Footer-clauses plumbing:** `LoopRequest` gains `IncludeFooterClauses` (bool?); the
+  loop instance persists it; the engine (`AutopilotService`) reads the active clauses from
+  `FooterClausesService` at send time and passes them into the send composition —
+  work-phase sends only. `FooterClausesController`/service themselves are unchanged.
 - **No migration:** existing armed loops have `DenyList = null` (or their queue trim) and
-  keep behaving byte-for-byte as today.
+  no footer-clauses flag (= off), so they keep behaving byte-for-byte as today.

@@ -57,6 +57,22 @@ that ignored the visible trim would recreate the original misleading-UI sin.
 through the same `CleanDenyList` as queue; the controller passes `req.DenyList` at both
 call sites. Suggestion start untouched.
 
+**4. Footer clauses: per-arm flag, engine-side append, work sends only.**
+`LoopRequest` gains `IncludeFooterClauses` (bool?, null = off); all three driven start
+paths persist it on the instance. At send time the **engine** (`AutopilotService`) —
+not `LoopConfigStore` — reads `FooterClausesService.List()` and passes the active texts
+into the send composition, appended after the stored prompt as a delimited footer (the
+composer's footer format). Reasons: the store stays free of a cross-module service
+dependency (`FooterClausesService` lives in the Prompts module), and send-time reads give
+live-toggle semantics identical to composer sends. Verification sends never get clauses —
+same precedent as briefing rules, and for the same reason (the judge should not inherit
+work-posture instructions). Default **off**: today's explicit spec boundary ("loop sends
+are out of scope") becomes an opt-in, so nothing changes until an operator asks for it.
+- *Alternative — always-on for loop sends:* rejected; it would silently change every
+  armed loop's prompts on deploy and contradict the footer-clauses spec's opt-in spirit.
+- *Alternative — reuse a briefing rule instead:* rejected; the operator explicitly wants
+  the same clause list shared between chat and loops, not a second copy to maintain.
+
 ## Risks / Trade-offs
 
 - **[Queue regression] The chips leave the queue section** → the shared spot must show the
@@ -68,6 +84,12 @@ call sites. Suggestion start untouched.
 - **[Discoverability] Chips above the kind sections could read as global-list editing** →
   label the block explicitly as "this arm" scoped (i18n hint), distinct from the global
   editor in the Autopilot console.
+- **[Prompt-size creep] Active clauses + briefing + stored prompt can get long** → clauses
+  are already capped (20k/clause) and the footer only rides work sends; acceptable, but
+  the browser check should eyeball one composed send in the gated detail.
+- **[Spec coherence] The footer-clauses baseline says loop sends are out of scope** → this
+  change MODIFIES that requirement in the same change, so the two capabilities never
+  contradict each other in the baseline.
 
 ## Migration Plan
 

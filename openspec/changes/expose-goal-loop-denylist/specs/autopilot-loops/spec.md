@@ -46,3 +46,37 @@ Suggestion-mode arms are unaffected and keep the global default.
 
 - **WHEN** any driven loop armed with a trimmed deny-list is inspected in the dock's expanded loop section
 - **THEN** the shared deny spot shows that instance's effective list under the existing prompt-detail gate, and an untouched arm shows it follows the global default
+
+## ADDED Requirements
+
+### Requirement: Per-arm opt-in appends footer clauses to driven work sends
+
+The shared block at the top of the dock's expanded loop section SHALL offer an
+**include-footer-clauses** checkbox, default **off**, stored on the armed instance
+like the per-arm deny-list. When the armed instance has it on, every **work-phase**
+driven send (queue item, goal work send, recipe send) SHALL have the footer-clauses
+store's currently **active** clauses appended after the stored prompt as a clearly
+delimited footer — the clause set read live at send time, matching composer-send
+semantics. Verification sends SHALL never carry footer clauses, and an instance with
+the option off (or with no active clauses) SHALL send exactly as today. Suggestion-mode
+pends SHALL NOT be affected.
+
+#### Scenario: Opted-in goal send carries the active clauses
+
+- **WHEN** a goal loop armed with include-footer-clauses on sends a work prompt while two clauses are active
+- **THEN** the sent text is the briefed prompt followed by a delimited footer containing both clauses, in list order
+
+#### Scenario: Clause toggles apply mid-loop
+
+- **WHEN** the operator deactivates a clause while an opted-in loop is armed
+- **THEN** the next work send omits that clause without re-arming
+
+#### Scenario: Default off preserves today's sends
+
+- **WHEN** a loop is armed without touching the checkbox
+- **THEN** its driven sends carry no footer clauses, byte-for-byte as before this change
+
+#### Scenario: Verification turns stay clause-free
+
+- **WHEN** an opted-in loop sends a verification prompt while clauses are active
+- **THEN** the verification send carries no footer clauses
