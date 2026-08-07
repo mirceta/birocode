@@ -442,6 +442,23 @@
   font-size: 11px;
   color: var(--color-text-muted, #888);
 }
+.ideas-sync__hub {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--color-border);
+}
+.ideas-sync__hub-url-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ideas-sync__hub-url-row .ideas-sync__url {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+}
 .ideas-sync__error {
   margin: 0;
   font-size: 11px;

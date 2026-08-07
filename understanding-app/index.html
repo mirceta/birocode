@@ -69,8 +69,10 @@
 </head>
 <body>
 <h1>Ideas sync — how the shared board works</h1>
-<div class="sub">Shipped (openspec <code>ideas-drive-sync</code>): every harness's Ideas tab can replicate through one
-Google Apps Script web app. Click boxes for detail; the Simulator tab lets you step the protocol.</div>
+<div class="sub">Shipped (openspec <code>ideas-drive-sync</code> + <code>ideas-harness-hub</code>): every harness's Ideas tab
+can replicate through one shared store — normally a <b>hub hosted by one of the harnesses itself</b>, or a Google Apps
+Script web app as fallback. Both speak the identical envelope contract, so the sync layer can't tell them apart.
+Click boxes for detail; the Simulator tab lets you step the protocol.</div>
 
 <div class="tabs">
   <button data-v="arch" class="on">Architecture</button>
@@ -83,7 +85,7 @@ Google Apps Script web app. Click boxes for detail; the Simulator tab lets you s
 <section class="view on" id="v-arch">
   <div class="diagram">
     <div class="col">
-      <div class="node" data-d="Unchanged: the Ideas UI and /api/notes CRUD work exactly as before. The only addition is a small sync bar (Advanced mode): paste the web-app URL, flip sync on, watch the status chip (synced / syncing / offline / error). Component: client/src/components/ideas/IdeasSyncBar.jsx.">
+      <div class="node" data-d="Unchanged: the Ideas UI and /api/notes CRUD work exactly as before. The only addition is a small sync bar (Advanced mode): paste a hub or web-app URL, flip sync on, watch the status chip (synced / syncing / offline / error) — plus a 'Host the shared board on this harness' toggle that turns this box into the hub and shows the URL to copy. Component: client/src/components/ideas/IdeasSyncBar.jsx.">
         <h3>📱 Ideas tab + sync bar</h3><div class="k">IdeasPanel.jsx · chip polls /api/notes/sync/status</div>
       </div>
       <div class="arrow">⬍ <b>/api/notes</b> + <b>/api/notes/sync/config|status</b></div>
@@ -96,8 +98,8 @@ Google Apps Script web app. Click boxes for detail; the Simulator tab lets you s
       </div>
     </div>
     <div class="col">
-      <div class="node web" data-d="docs/ideas-sync-appscript.gs, deployed once by the operator as a web app ('execute as me', 'anyone has access'). doGet returns {ok, rev, store}; doPost runs under LockService, accepts only if baseRev matches the current rev (then rev++), else returns {ok:false, conflict:true, rev, store}. Data lives in claude-web-ideas.json on the operator's Google Drive.">
-        <h3>☁ Apps Script web app</h3><div class="k">claude-web-ideas.json on Drive · rev counter + LockService CAS</div>
+      <div class="node web" data-d="Primary backend: one harness ticks 'Host the shared board on this harness' and becomes the hub. IdeasHubService serves GET/POST /api/notes/hub/{token} — same envelope as the Apps Script: GET → {ok, rev, store}; POST accepts only if baseRev matches the current rev under a lock (then rev++, MergeFrom into the hub's own board), else {ok:false, conflict:true, rev, store}. The route is exempt from the login gate — the 32-byte random token in the URL IS the credential (checked constant-time; wrong token → {ok:false} with no detail). Hub-local edits bump rev too, so other boxes pull them. State in %APPDATA%\ClaudeWeb\ideas-hub.json. Fallback backend: docs/ideas-sync-appscript.gs deployed as a Google web app — LockService CAS, board in claude-web-ideas.json on the operator's Drive.">
+        <h3>☁ Shared store (hub / Apps Script)</h3><div class="k">hub: /api/notes/hub/{token} on a host harness · fallback: Drive + LockService CAS</div>
       </div>
       <div class="arrow">⬍ same URL</div>
       <div class="node" data-d="Every other harness runs the identical sync layer against the same pasted URL. There is no primary: any box can be off for a week and converges when it returns. The URL is a bearer capability — anyone holding it can read/write the board — so the harness never logs it and only returns it over the authenticated config API.">
@@ -111,7 +113,7 @@ Google Apps Script web app. Click boxes for detail; the Simulator tab lets you s
 <section class="view" id="v-proto">
   <h2>Pull (every PollSeconds, default 30)</h2>
   <ol>
-    <li><code>GET ?fn=get</code> → <code>{ok, rev, store}</code> (served via the Apps Script 302-redirect shape; the client just follows it)</li>
+    <li><code>GET</code> the endpoint → <code>{ok, rev, store}</code> (the hub answers directly; the Apps Script fallback serves via a 302-redirect shape the client just follows)</li>
     <li>If <code>rev</code> moved since last seen → <code>MergeFrom(store)</code>: union by note Id, newest <code>UpdatedAt</code> wins, tombstones suppress/revive</li>
     <li>If the merge finds local content the remote lacks (e.g. edits made offline) → mark dirty, push soon</li>
   </ol>
@@ -154,20 +156,32 @@ Google Apps Script web app. Click boxes for detail; the Simulator tab lets you s
 <section class="view" id="v-fail">
   <table>
     <tr><th>Scenario</th><th>What happens</th><th>Proven by</th></tr>
-    <tr><td>Box offline while others edit</td><td>Its board keeps working locally; on return the first poll merges everything it missed.</td><td rowspan="5">All rows are covered by the isolated two-harness e2e
-      <code>.claudeweb-preview/playwright/verify-ideas-sync.mjs</code>, which runs against a local stub of the
-      web-app contract (302 shape, CAS, fault injection) — no test talks to real Google.</td></tr>
+    <tr><td>Box offline while others edit</td><td>Its board keeps working locally; on return the first poll merges everything it missed.</td><td rowspan="5">All rows are covered twice: by <code>.claudeweb-preview/playwright/verify-ideas-sync.mjs</code>
+      (two harnesses against a local stub of the web-app contract — 302 shape, CAS, fault injection; no test talks to
+      real Google) and by <code>verify-ideas-hub.mjs</code> (two real harnesses, one hosting the hub — plus wrong-token,
+      disabled-hub, forced-conflict and self-pointing cases).</td></tr>
     <tr><td>Edit made while offline</td><td>Status shows <b>offline</b> + dirty; the edit queues and lands when the endpoint returns.</td></tr>
     <tr><td>Same idea edited on two boxes</td><td>Newest <code>UpdatedAt</code> wins on every box (last-write-wins per note).</td></tr>
     <tr><td>Delete vs a box that was away</td><td>A tombstone (30-day retention) rides the shared store, so the returning box deletes its copy instead of resurrecting it.</td></tr>
     <tr><td>Two pushes race</td><td>The loser gets <code>conflict:true</code> + the winner's store, re-merges, retries — both writes land.</td></tr>
     <tr><td>Endpoint misdeployed / Google interstitial</td><td>Non-JSON body → status <b>error</b> with a hint to check the deployment settings; local behavior unaffected.</td><td>IdeasSyncClient.Parse</td></tr>
     <tr><td>Sync URL leaking</td><td>The URL is a bearer capability: never logged (messages pass Sanitize), returned only via the authenticated config API.</td><td>e2e asserts lastError never contains the URL</td></tr>
+    <tr><td>Wrong token / hub disabled</td><td>The hub answers <code>200 {ok:false, error}</code> with no detail (constant-time token compare); the caller shows <b>error</b>, local board unaffected.</td><td>verify-ideas-hub.mjs</td></tr>
+    <tr><td>Hub URL pasted into the hosting harness itself</td><td>Harmless no-op: the box merges with its own board through its own endpoint.</td><td>verify-ideas-hub.mjs</td></tr>
   </table>
 </section>
 
 <section class="view" id="v-setup">
-  <h2>One-time, by the operator (~3 minutes)</h2>
+  <h2>Normal path — host on a harness (~1 minute)</h2>
+  <ol>
+    <li>On the harness that should host the board: Ideas tab → <b>☁ Set up sync</b> → tick <b>Host the shared board on this harness</b> → <b>Copy</b> the generated hub URL</li>
+    <li>On every other harness: <b>☁ Set up sync</b> → paste that URL, tick <b>Sync on</b>, Save</li>
+  </ol>
+  <ul>
+    <li>The URL embeds a random token and bypasses the login gate — treat it like a password; it grants read/write to the board and nothing else. Untick the host toggle to revoke it (a re-enable keeps the same token).</li>
+    <li>The host's own board <b>is</b> the shared board (its <code>notes.json</code>); hub state (token, rev) lives in <code>%APPDATA%\ClaudeWeb\ideas-hub.json</code>. Gated endpoints: <code>GET/POST /api/notes/hub-info</code>.</li>
+  </ul>
+  <h2>Fallback — Apps Script on Google Drive (~3 minutes)</h2>
   <ol>
     <li>Open <a href="https://script.google.com" style="color:var(--accent)">script.google.com</a> → New project, paste the contents of <code>docs/ideas-sync-appscript.gs</code></li>
     <li>Deploy → New deployment → type <b>Web app</b> → execute as <b>Me</b>, access <b>Anyone</b> → copy the <code>…/exec</code> URL</li>
@@ -176,7 +190,7 @@ Google Apps Script web app. Click boxes for detail; the Simulator tab lets you s
   <ul>
     <li>To update the script later, edit the <b>existing</b> deployment (Deploy → Manage deployments → ✏) — a NEW deployment gets a new URL and every harness would need re-pasting.</li>
     <li>The store is <code>claude-web-ideas.json</code> in the operator's Drive, created empty on first use — inspectable and restorable by hand.</li>
-    <li>Config lives per-box in <code>%APPDATA%\ClaudeWeb\ideas-sync.json</code>; the endpoints are <code>GET/PUT /api/notes/sync/config</code> and <code>GET /api/notes/sync/status</code>.</li>
+    <li>Either way, per-box sync config lives in <code>%APPDATA%\ClaudeWeb\ideas-sync.json</code>; the endpoints are <code>GET/PUT /api/notes/sync/config</code> and <code>GET /api/notes/sync/status</code>.</li>
   </ul>
 </section>
 

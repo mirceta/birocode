@@ -168,7 +168,9 @@ try {
       (await chip.textContent()).length > 0)
     await chip.click()
     await page.locator('.ideas-sync__url').fill(SYNC_URL)
-    await page.locator('.ideas-sync__enable input').check()
+    // Scoped: the hub section (ideas-harness-hub) added a second
+    // .ideas-sync__enable checkbox to the form.
+    await page.locator('.ideas-sync__form-row .ideas-sync__enable input').check()
     await page.locator('.ideas-sync__form .idea__btn--primary').click()
     // The form collapses back to the chip, which should reach "Synced".
     await page.waitForFunction(() => {

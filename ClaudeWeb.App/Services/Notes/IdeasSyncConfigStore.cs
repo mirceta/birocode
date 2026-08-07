@@ -45,6 +45,12 @@ public class IdeasSyncConfigStore
     public IdeasSyncConfig Update(bool enabled, string? syncUrl, int pollSeconds)
     {
         var url = string.IsNullOrWhiteSpace(syncUrl) ? null : syncUrl.Trim();
+        // Scheme-less pastes ("next5.example/api/notes/hub/…") mean https
+        // (openspec ideas-harness-hub).
+        if (url is not null &&
+            !url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+            !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            url = "https://" + url;
         var next = new IdeasSyncConfig(
             enabled && url is not null,
             url,

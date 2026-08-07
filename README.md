@@ -121,21 +121,29 @@ The monitoring GUI opens and Kestrel listens on the configured port
 ## Sharing the Ideas board between machines (optional)
 
 Each harness keeps its ideas in its own local `notes.json`. To share one board
-across machines, deploy the committed Apps Script once and paste its URL into
-every harness (openspec `ideas-drive-sync`):
+across machines, pick one harness to **host** the board and point the others at
+it — no external service needed (openspec `ideas-harness-hub`):
 
-1. Open [script.google.com](https://script.google.com) → New project → paste the
-   contents of `docs/ideas-sync-appscript.gs`.
-2. Deploy → New deployment → type **Web app** → execute as **Me**, who has
-   access: **Anyone** → copy the `…/exec` URL.
-3. On each harness: Ideas tab → **☁ Set up sync** → paste the URL, tick
-   **Sync on**, Save. The status chip shows synced / offline / error.
+1. On the hosting harness: Ideas tab → **☁ Set up sync** → tick **Host the
+   shared board on this harness** → **Copy** the generated hub URL.
+2. On every other harness: **☁ Set up sync** → paste that URL, tick **Sync on**,
+   Save. The status chip shows synced / offline / error.
 
-The shared board lives in `claude-web-ideas.json` on your Google Drive. Boxes
-work offline and converge when they return (per-idea last-write-wins, deletes
-carried by tombstones). To change the script later, edit the **existing**
-deployment in place — a new deployment would mint a new URL. Treat the URL as a
-secret: anyone holding it can read and write the board.
+The hub URL embeds a random token and is exempt from the login gate — the token
+**is** the credential. Treat it like a password: anyone holding it can read and
+write the board (and nothing else). Boxes work offline and converge when they
+return (per-idea last-write-wins, deletes carried by tombstones); concurrent
+writes are serialized by a rev counter with compare-and-swap.
+
+**Fallback — no always-on harness reachable from the others:** deploy the
+committed Apps Script instead (openspec `ideas-drive-sync`). Open
+[script.google.com](https://script.google.com) → New project → paste
+`docs/ideas-sync-appscript.gs` → Deploy → New deployment → type **Web app** →
+execute as **Me**, access **Anyone** → paste the `…/exec` URL into each
+harness's sync box. The board then lives in `claude-web-ideas.json` on your
+Google Drive. To change the script later, edit the **existing** deployment in
+place — a new deployment would mint a new URL. The same secret-URL trust model
+applies.
 
 ## Security: the trust boundary is the harness's OS account
 

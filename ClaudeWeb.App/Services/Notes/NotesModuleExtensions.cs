@@ -14,6 +14,10 @@ public static class NotesModuleExtensions
         services.AddSingleton<IdeasSyncClient>();
         services.AddSingleton<IdeasSyncService>();
         services.AddHostedService(sp => sp.GetRequiredService<IdeasSyncService>());
+        // Harness-as-hub (openspec ideas-harness-hub): hosted only to construct
+        // eagerly so the local-edit rev bump is live from startup.
+        services.AddSingleton<IdeasHubService>();
+        services.AddHostedService(sp => sp.GetRequiredService<IdeasHubService>());
         return services;
     }
 }
