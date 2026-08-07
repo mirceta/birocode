@@ -373,3 +373,77 @@
   border-color: #15a05a;
   color: #fff;
 }
+
+/* Shared-board sync bar (openspec ideas-drive-sync): a small chip above the
+   composer; the config form expands under it on click. */
+.ideas-sync {
+  margin-bottom: 8px;
+}
+.ideas-sync__row {
+  display: flex;
+  justify-content: flex-end;
+}
+.ideas-sync__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted, #888);
+  cursor: pointer;
+}
+.ideas-sync__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-border);
+}
+.ideas-sync__chip--synced .ideas-sync__dot {
+  background: #15a05a;
+}
+.ideas-sync__chip--syncing .ideas-sync__dot {
+  background: #d99a06;
+}
+.ideas-sync__chip--offline .ideas-sync__dot,
+.ideas-sync__chip--error .ideas-sync__dot {
+  background: #d64545;
+}
+.ideas-sync__chip--setup .ideas-sync__dot {
+  display: none;
+}
+.ideas-sync__form {
+  margin-top: 6px;
+  padding: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius, 10px);
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ideas-sync__form-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ideas-sync__enable {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text);
+  margin-right: auto;
+}
+.ideas-sync__hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--color-text-muted, #888);
+}
+.ideas-sync__error {
+  margin: 0;
+  font-size: 11px;
+  color: #d64545;
+}

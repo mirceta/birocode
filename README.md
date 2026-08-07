@@ -118,6 +118,25 @@ The monitoring GUI opens and Kestrel listens on the configured port
   it can be overridden per-instance with a `CLAUDEWEB_`-prefixed env var
   (`CLAUDEWEB_TRAFFICHIGHBYTESPERSEC`).
 
+## Sharing the Ideas board between machines (optional)
+
+Each harness keeps its ideas in its own local `notes.json`. To share one board
+across machines, deploy the committed Apps Script once and paste its URL into
+every harness (openspec `ideas-drive-sync`):
+
+1. Open [script.google.com](https://script.google.com) → New project → paste the
+   contents of `docs/ideas-sync-appscript.gs`.
+2. Deploy → New deployment → type **Web app** → execute as **Me**, who has
+   access: **Anyone** → copy the `…/exec` URL.
+3. On each harness: Ideas tab → **☁ Set up sync** → paste the URL, tick
+   **Sync on**, Save. The status chip shows synced / offline / error.
+
+The shared board lives in `claude-web-ideas.json` on your Google Drive. Boxes
+work offline and converge when they return (per-idea last-write-wins, deletes
+carried by tombstones). To change the script later, edit the **existing**
+deployment in place — a new deployment would mint a new URL. Treat the URL as a
+secret: anyone holding it can read and write the board.
+
 ## Security: the trust boundary is the harness's OS account
 
 Authorization is the two gates only -- the IP/device-cookie gate and the password

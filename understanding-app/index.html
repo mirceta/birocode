@@ -1,42 +1,279 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Research-informed loops — technique catalog × our framework</title>
-<link rel="stylesheet" href="./app.css">
+<title>Ideas sync — how the shared board works</title>
+<style>
+  :root {
+    --bg: #0f1420; --panel: #171e2e; --panel2: #1d2740; --line: #2c3a5c;
+    --text: #dbe4f8; --dim: #8fa0c5; --accent: #5aa9ff; --good: #4fd1a5;
+    --warn: #f0b45a; --bad: #ef7b7b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 "Segoe UI", system-ui, sans-serif; padding: 1rem; }
+  h1 { font-size: 1.25rem; margin: .2rem 0 .2rem; }
+  h2 { font-size: 1rem; margin: 1rem 0 .4rem; }
+  .sub { color: var(--dim); margin-bottom: 1rem; }
+  .tabs { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1rem; }
+  .tabs button { background: var(--panel); color: var(--text); border: 1px solid var(--line);
+    border-radius: 8px; padding: .45rem .8rem; cursor: pointer; font-size: .9rem; }
+  .tabs button.on { background: var(--accent); border-color: var(--accent); color: #0b1020; font-weight: 600; }
+  .view { display: none; } .view.on { display: block; }
+
+  .diagram { display: flex; flex-wrap: wrap; gap: 1rem; align-items: stretch; margin: 1rem 0; }
+  .col { flex: 1 1 220px; display: flex; flex-direction: column; gap: .6rem; }
+  .node { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+          padding: .6rem .8rem; cursor: pointer; transition: border-color .15s, background .15s; }
+  .node:hover, .node.hl { border-color: var(--accent); background: var(--panel2); }
+  .node h3 { margin: 0 0 .2rem; font-size: .95rem; }
+  .node .k { color: var(--dim); font-size: .8rem; }
+  .node.store { border-style: dashed; }
+  .node.web { border-color: #7a5aff88; }
+  .arrow { text-align: center; color: var(--dim); font-size: .85rem; }
+  .arrow b { color: var(--accent); }
+
+  .detail { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px;
+            padding: .8rem 1rem; min-height: 3.2rem; margin-top: .4rem; }
+  .detail .k { color: var(--dim); font-size: .8rem; }
+
+  table { border-collapse: collapse; width: 100%; margin-top: 1rem; font-size: .88rem; }
+  th, td { border: 1px solid var(--line); padding: .45rem .6rem; text-align: left; vertical-align: top; }
+  th { background: var(--panel); }
+  .good { color: var(--good); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+  code { background: #0b1020; border: 1px solid var(--line); border-radius: 5px; padding: .05rem .35rem; font-size: .85em; }
+  ol li, ul li { margin: .3rem 0; }
+
+  /* simulator */
+  .sim { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 1rem; }
+  .box { flex: 1 1 240px; background: var(--panel); border: 1px solid var(--line);
+         border-radius: 10px; padding: .7rem .9rem; }
+  .box h3 { margin: 0 0 .4rem; font-size: .95rem; }
+  .box.offline { border-color: var(--bad); opacity: .8; }
+  .box .rev { color: var(--dim); font-size: .8rem; margin-bottom: .4rem; }
+  .board { min-height: 3.5rem; display: flex; flex-direction: column; gap: .25rem; }
+  .card { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px;
+          padding: .2rem .5rem; font-size: .85rem; }
+  .card.dead { text-decoration: line-through; color: var(--dim); border-style: dashed; }
+  .dirty { color: var(--warn); font-size: .8rem; }
+  .synced { color: var(--good); font-size: .8rem; }
+  .simbtns { display: flex; flex-wrap: wrap; gap: .4rem; margin: .6rem 0; }
+  .simbtns button { background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 7px; padding: .35rem .7rem; cursor: pointer; font-size: .85rem; }
+  .simbtns button:hover { border-color: var(--accent); }
+  .simlog { background: #0b1020; border: 1px solid var(--line); border-radius: 8px;
+            padding: .5rem .8rem; font-size: .8rem; max-height: 9rem; overflow: auto; color: var(--dim); }
+  .simlog .hot { color: var(--text); }
+</style>
 </head>
 <body>
-<header class="hd">
-  <h1>Agent-loop research → adoption map</h1>
-  <p class="hd__sub">
-    37 techniques mined live (2026-08-04) from 14 source-cited documents —
-    Anthropic engineering, Boris Cherny, Peter Steinberger, Geoffrey Huntley,
-    Simon Willison, Armin Ronacher, Thorsten Ball — confronted with our
-    autopilot loop framework. Dossier: <code>docs/research/agent-loops/</code>
-    (also in the autopilot console → Reference → 📚 Research).
-  </p>
-  <div class="hd__stats" id="stats"></div>
-</header>
+<h1>Ideas sync — how the shared board works</h1>
+<div class="sub">Shipped (openspec <code>ideas-drive-sync</code>): every harness's Ideas tab can replicate through one
+Google Apps Script web app. Click boxes for detail; the Simulator tab lets you step the protocol.</div>
 
-<nav class="filters">
-  <div class="filters__group" id="bucketFilters"></div>
-  <div class="filters__group" id="evidenceFilters"></div>
-  <input id="search" type="search" placeholder="filter techniques…" aria-label="Filter techniques">
-</nav>
+<div class="tabs">
+  <button data-v="arch" class="on">Architecture</button>
+  <button data-v="proto">Sync protocol</button>
+  <button data-v="sim">Simulator</button>
+  <button data-v="fail">Failure modes</button>
+  <button data-v="setup">One-time setup</button>
+</div>
 
-<section id="ranked" class="ranked">
-  <h2>The worth-adopting ladder <span class="ranked__hint">(each rank seeds one follow-up OpenSpec change — click to inspect)</span></h2>
-  <ol id="ladder" class="ladder"></ol>
+<section class="view on" id="v-arch">
+  <div class="diagram">
+    <div class="col">
+      <div class="node" data-d="Unchanged: the Ideas UI and /api/notes CRUD work exactly as before. The only addition is a small sync bar (Advanced mode): paste the web-app URL, flip sync on, watch the status chip (synced / syncing / offline / error). Component: client/src/components/ideas/IdeasSyncBar.jsx.">
+        <h3>📱 Ideas tab + sync bar</h3><div class="k">IdeasPanel.jsx · chip polls /api/notes/sync/status</div>
+      </div>
+      <div class="arrow">⬍ <b>/api/notes</b> + <b>/api/notes/sync/config|status</b></div>
+      <div class="node" data-d="NotesService stays the single local truth (notes.json, atomic writes). New for sync: a Changed event, Snapshot(), and MergeFrom(remote) — per-Id newest-UpdatedAt-wins with tombstones so deletes don't resurrect. MergeFrom deliberately does NOT raise Changed, so a pull can never re-trigger a push loop.">
+        <h3>🏠 Harness A — NotesService</h3><div class="k">notes.json + tombstones · merge lives here</div>
+      </div>
+      <div class="arrow">⬇ Changed event ⬍ MergeFrom</div>
+      <div class="node" data-d="IdeasSyncService (BackgroundService): polls the endpoint every PollSeconds (rev compare → pull-merge), and on any local change schedules a debounced (~2s) push. A push is always pull → merge → CAS-post, so it can never clobber another box's write. Config in ideas-sync.json; disabled = ZERO outbound calls.">
+        <h3>🔁 IdeasSyncService</h3><div class="k">poll-pull + debounced CAS push · IdeasSyncClient (plain HttpClient)</div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="node web" data-d="docs/ideas-sync-appscript.gs, deployed once by the operator as a web app ('execute as me', 'anyone has access'). doGet returns {ok, rev, store}; doPost runs under LockService, accepts only if baseRev matches the current rev (then rev++), else returns {ok:false, conflict:true, rev, store}. Data lives in claude-web-ideas.json on the operator's Google Drive.">
+        <h3>☁ Apps Script web app</h3><div class="k">claude-web-ideas.json on Drive · rev counter + LockService CAS</div>
+      </div>
+      <div class="arrow">⬍ same URL</div>
+      <div class="node" data-d="Every other harness runs the identical sync layer against the same pasted URL. There is no primary: any box can be off for a week and converges when it returns. The URL is a bearer capability — anyone holding it can read/write the board — so the harness never logs it and only returns it over the authenticated config API.">
+        <h3>🖥 Harness B..n</h3><div class="k">same sync layer, same URL — no primary</div>
+      </div>
+      <div class="detail" id="d-arch"><span class="k">Click a box…</span></div>
+    </div>
+  </div>
 </section>
 
-<main class="grid" id="grid"></main>
+<section class="view" id="v-proto">
+  <h2>Pull (every PollSeconds, default 30)</h2>
+  <ol>
+    <li><code>GET ?fn=get</code> → <code>{ok, rev, store}</code> (served via the Apps Script 302-redirect shape; the client just follows it)</li>
+    <li>If <code>rev</code> moved since last seen → <code>MergeFrom(store)</code>: union by note Id, newest <code>UpdatedAt</code> wins, tombstones suppress/revive</li>
+    <li>If the merge finds local content the remote lacks (e.g. edits made offline) → mark dirty, push soon</li>
+  </ol>
+  <h2>Push (debounced ~2s after any local add/edit/delete)</h2>
+  <ol>
+    <li>Pull + merge first — a push always uploads the <b>merged</b> board</li>
+    <li><code>POST {baseRev, store}</code> — the script accepts only if <code>baseRev</code> equals its current rev, then bumps rev</li>
+    <li>On <code>{conflict:true}</code> (someone wrote in between): re-merge against the returned store, retry — up to 3 attempts</li>
+    <li>On failure (offline, error): stay dirty; the retry rides the poll cadence until it lands</li>
+  </ol>
+  <table>
+    <tr><th>State chip</th><th>Meaning</th></tr>
+    <tr><td class="good">synced</td><td>last exchange succeeded; board matches the shared rev</td></tr>
+    <tr><td class="warn">syncing</td><td>an exchange is in flight</td></tr>
+    <tr><td class="bad">offline</td><td>endpoint unreachable (network-shaped failure) — edits queue locally</td></tr>
+    <tr><td class="bad">error</td><td>endpoint answered but wrongly (bad deployment, non-JSON, rejected push)</td></tr>
+    <tr><td>disabled</td><td>no URL / toggle off — the service makes zero outbound calls</td></tr>
+  </table>
+</section>
 
-<aside id="detail" class="detail" hidden>
-  <button class="detail__close" id="detailClose" aria-label="Close">✕</button>
-  <div id="detailBody"></div>
-</aside>
+<section class="view" id="v-sim">
+  <div class="sub">A faithful miniature of the protocol: two harnesses + the shared store. Buttons drive local edits;
+  <b>tick</b> advances both boxes one sync cycle (pull-merge, then push if dirty — CAS included).</div>
+  <div class="simbtns">
+    <button id="s-addA">Add idea on A</button>
+    <button id="s-addB">Add idea on B</button>
+    <button id="s-delA">Delete A's newest</button>
+    <button id="s-offB">Toggle B offline</button>
+    <button id="s-tick">⏭ tick (one sync cycle)</button>
+    <button id="s-reset">reset</button>
+  </div>
+  <div class="sim">
+    <div class="box" id="boxA"><h3>🏠 Harness A</h3><div class="rev" id="revA"></div><div class="board" id="brdA"></div></div>
+    <div class="box" id="boxS"><h3>☁ Shared store</h3><div class="rev" id="revS"></div><div class="board" id="brdS"></div></div>
+    <div class="box" id="boxB"><h3>🖥 Harness B</h3><div class="rev" id="revB"></div><div class="board" id="brdB"></div></div>
+  </div>
+  <div class="simlog" id="simlog"></div>
+</section>
 
-<script src="./app.js"></script>
+<section class="view" id="v-fail">
+  <table>
+    <tr><th>Scenario</th><th>What happens</th><th>Proven by</th></tr>
+    <tr><td>Box offline while others edit</td><td>Its board keeps working locally; on return the first poll merges everything it missed.</td><td rowspan="5">All rows are covered by the isolated two-harness e2e
+      <code>.claudeweb-preview/playwright/verify-ideas-sync.mjs</code>, which runs against a local stub of the
+      web-app contract (302 shape, CAS, fault injection) — no test talks to real Google.</td></tr>
+    <tr><td>Edit made while offline</td><td>Status shows <b>offline</b> + dirty; the edit queues and lands when the endpoint returns.</td></tr>
+    <tr><td>Same idea edited on two boxes</td><td>Newest <code>UpdatedAt</code> wins on every box (last-write-wins per note).</td></tr>
+    <tr><td>Delete vs a box that was away</td><td>A tombstone (30-day retention) rides the shared store, so the returning box deletes its copy instead of resurrecting it.</td></tr>
+    <tr><td>Two pushes race</td><td>The loser gets <code>conflict:true</code> + the winner's store, re-merges, retries — both writes land.</td></tr>
+    <tr><td>Endpoint misdeployed / Google interstitial</td><td>Non-JSON body → status <b>error</b> with a hint to check the deployment settings; local behavior unaffected.</td><td>IdeasSyncClient.Parse</td></tr>
+    <tr><td>Sync URL leaking</td><td>The URL is a bearer capability: never logged (messages pass Sanitize), returned only via the authenticated config API.</td><td>e2e asserts lastError never contains the URL</td></tr>
+  </table>
+</section>
+
+<section class="view" id="v-setup">
+  <h2>One-time, by the operator (~3 minutes)</h2>
+  <ol>
+    <li>Open <a href="https://script.google.com" style="color:var(--accent)">script.google.com</a> → New project, paste the contents of <code>docs/ideas-sync-appscript.gs</code></li>
+    <li>Deploy → New deployment → type <b>Web app</b> → execute as <b>Me</b>, access <b>Anyone</b> → copy the <code>…/exec</code> URL</li>
+    <li>On each harness: Ideas tab → <b>☁ Set up sync</b> → paste the URL, tick <b>Sync on</b>, Save</li>
+  </ol>
+  <ul>
+    <li>To update the script later, edit the <b>existing</b> deployment (Deploy → Manage deployments → ✏) — a NEW deployment gets a new URL and every harness would need re-pasting.</li>
+    <li>The store is <code>claude-web-ideas.json</code> in the operator's Drive, created empty on first use — inspectable and restorable by hand.</li>
+    <li>Config lives per-box in <code>%APPDATA%\ClaudeWeb\ideas-sync.json</code>; the endpoints are <code>GET/PUT /api/notes/sync/config</code> and <code>GET /api/notes/sync/status</code>.</li>
+  </ul>
+</section>
+
+<script>
+  const tabs = document.querySelectorAll('.tabs button');
+  tabs.forEach(b => b.addEventListener('click', () => {
+    tabs.forEach(x => x.classList.remove('on'));
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('on'));
+    b.classList.add('on');
+    document.getElementById('v-' + b.dataset.v).classList.add('on');
+  }));
+  document.querySelectorAll('.view').forEach(view => {
+    const detail = view.querySelector('.detail');
+    view.querySelectorAll('.node[data-d]').forEach(n => n.addEventListener('click', () => {
+      view.querySelectorAll('.node').forEach(x => x.classList.remove('hl'));
+      n.classList.add('hl');
+      if (detail) detail.textContent = n.dataset.d;
+    }));
+  });
+
+  // ---- simulator: a miniature of NotesService.MergeFrom + IdeasSyncService --
+  let S, seq, clock;
+  function reset() {
+    S = {
+      store: { rev: 0, ideas: [], tombs: [] },
+      A: { ideas: [], tombs: [], seenRev: 0, dirty: false, offline: false },
+      B: { ideas: [], tombs: [], seenRev: 0, dirty: false, offline: false },
+    };
+    seq = 1; clock = 1;
+    document.getElementById('simlog').innerHTML = '';
+    slog('reset — empty boards, rev 0');
+    render();
+  }
+  const slog = (msg, hot) => {
+    const el = document.getElementById('simlog');
+    el.innerHTML += `<div${hot ? ' class="hot"' : ''}>${msg}</div>`;
+    el.scrollTop = el.scrollHeight;
+  };
+  function merge(box, remote) {
+    // per-Id, newest UpdatedAt wins, tombstones suppress
+    const tombs = new Map();
+    [...box.tombs, ...remote.tombs].forEach(t => {
+      const cur = tombs.get(t.id); if (!cur || t.at > cur.at) tombs.set(t.id, t);
+    });
+    const all = new Map();
+    [...remote.ideas, ...box.ideas].forEach(n => {
+      const cur = all.get(n.id); if (!cur || n.at > cur.at) all.set(n.id, n);
+    });
+    const ideas = [...all.values()].filter(n => { const t = tombs.get(n.id); return !t || t.at < n.at; })
+      .sort((a, b) => a.id - b.id);
+    const remoteStale = ideas.length !== remote.ideas.length || box.tombs.some(t => !remote.tombs.find(r => r.id === t.id))
+      || ideas.some(n => { const r = remote.ideas.find(x => x.id === n.id); return !r || r.at !== n.at; });
+    box.ideas = ideas; box.tombs = [...tombs.values()];
+    return remoteStale;
+  }
+  function cycle(name) {
+    const box = S[name];
+    if (box.offline) { if (box.dirty) slog(`${name}: offline — edit stays queued (dirty)`); return; }
+    // pull-merge
+    const stale = merge(box, { ideas: [...S.store.ideas], tombs: [...S.store.tombs] });
+    if (S.store.rev !== box.seenRev) slog(`${name}: pulled rev ${S.store.rev}, merged`);
+    box.seenRev = S.store.rev;
+    if (stale) box.dirty = true;
+    // CAS push
+    if (box.dirty) {
+      if (box.seenRev === S.store.rev) {
+        S.store.ideas = [...box.ideas]; S.store.tombs = [...box.tombs];
+        S.store.rev++; box.seenRev = S.store.rev; box.dirty = false;
+        slog(`${name}: CAS push accepted → rev ${S.store.rev}`, true);
+      } else {
+        slog(`${name}: CAS conflict (baseRev ${box.seenRev} ≠ rev ${S.store.rev}) — will re-merge next tick`, true);
+      }
+    }
+  }
+  function render() {
+    const paint = (id, list, revTxt, box) => {
+      document.getElementById(id).innerHTML = list.map(n => `<div class="card">💡 ${n.text}</div>`).join('') || '<span class="k" style="color:var(--dim);font-size:.8rem">empty</span>';
+      document.getElementById(revTxt.id).innerHTML = revTxt.txt;
+      if (box) document.getElementById(box.id).classList.toggle('offline', box.off);
+    };
+    paint('brdA', S.A.ideas, { id: 'revA', txt: `seen rev ${S.A.seenRev} · ${S.A.offline ? '<span class="dirty">OFFLINE</span>' : S.A.dirty ? '<span class="dirty">dirty — push pending</span>' : '<span class="synced">synced</span>'}` }, { id: 'boxA', off: S.A.offline });
+    paint('brdS', S.store.ideas, { id: 'revS', txt: `rev ${S.store.rev} · tombstones ${S.store.tombs.length}` });
+    paint('brdB', S.B.ideas, { id: 'revB', txt: `seen rev ${S.B.seenRev} · ${S.B.offline ? '<span class="dirty">OFFLINE</span>' : S.B.dirty ? '<span class="dirty">dirty — push pending</span>' : '<span class="synced">synced</span>'}` }, { id: 'boxB', off: S.B.offline });
+  }
+  const on = (id, f) => document.getElementById(id).addEventListener('click', () => { f(); render(); });
+  on('s-addA', () => { S.A.ideas.push({ id: seq++, text: `idea #${seq - 1} (A)`, at: clock++ }); S.A.dirty = true; slog('A: local add → dirty, push debounce armed'); });
+  on('s-addB', () => { S.B.ideas.push({ id: seq++, text: `idea #${seq - 1} (B)`, at: clock++ }); S.B.dirty = true; slog('B: local add → dirty, push debounce armed'); });
+  on('s-delA', () => {
+    const n = S.A.ideas[S.A.ideas.length - 1];
+    if (!n) { slog('A: nothing to delete'); return; }
+    S.A.ideas.pop(); S.A.tombs.push({ id: n.id, at: clock++ }); S.A.dirty = true;
+    slog(`A: deleted "${n.text}" → tombstone recorded`);
+  });
+  on('s-offB', () => { S.B.offline = !S.B.offline; slog(`B is now ${S.B.offline ? 'OFFLINE' : 'back online'}`, true); });
+  on('s-tick', () => { cycle('A'); cycle('B'); });
+  on('s-reset', reset);
+  reset();
+</script>
 </body>
 </html>

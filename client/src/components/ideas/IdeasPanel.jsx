@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiGet, apiPost, apiPatch, apiDelete } from '../../api/client';
 import ErrorBanner from '../shared/ErrorBanner';
 import ArchPlanSection from './ArchPlanSection';
+import IdeasSyncBar from './IdeasSyncBar';
 import TaskGraphPanel from '../taskgraph/TaskGraphPanel';
 import { useFeature } from '../../context/UiModeContext';
 import { useT } from '../../i18n/LanguageContext';
@@ -69,6 +70,8 @@ export default function IdeasPanel() {
   const { t } = useT();
   // The task graph now lives here as a third tab (plans/ideas-taskgraph-merge.md).
   const graphOn = useFeature('taskGraph');
+  // Shared-board sync bar (openspec ideas-drive-sync), Advanced-only.
+  const syncOn = useFeature('ideasSync');
 
   const [tab, setTab] = useState(() => {
     const stored = localStorage.getItem(TAB_KEY);
@@ -361,6 +364,7 @@ export default function IdeasPanel() {
         </div>
       ) : (
         <div className="ideas__tabpanel">
+      {syncOn && <IdeasSyncBar onSynced={load} />}
       <div className="ideas__compose">
         <textarea
           ref={draftRef}
