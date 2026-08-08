@@ -2730,6 +2730,81 @@
   white-space: nowrap;
 }
 
+/* Durable queue audit (openspec queue-loop-prompt-transparency, D5): the
+   across-arms send list; a row expands to the exact sent text. */
+.phone__loop-qa-toggle {
+  display: block;
+  margin-top: 8px;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-soft);
+  cursor: pointer;
+}
+
+.phone__loop-qa-list {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.phone__loop-qa-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.phone__loop-qa-phase {
+  flex: none;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-text-soft);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 0 5px;
+}
+
+.phone__loop-qa-when {
+  flex: none;
+  font-size: 10px;
+  color: var(--color-text-soft);
+  white-space: nowrap;
+}
+
+.phone__loop-qa-raw {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.phone__loop-qa-sent {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  max-height: 260px;
+  overflow: auto;
+}
+
 /* Fixed-frame FLAG: channel row in the briefing editor: visually a rule
    (checkbox + text) but set apart — server-worded, switchable, not editable. */
 .phone__brief-rule--fixed {

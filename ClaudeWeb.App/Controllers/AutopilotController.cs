@@ -577,6 +577,37 @@ public class AutopilotController : ControllerBase
         });
     }
 
+    /// <summary>Durable queue audit (openspec: queue-loop-prompt-transparency, D5):
+    /// the repo's queue-kind sends from the append-only ledger, newest first,
+    /// bounded — the across-arms answer to "which prompts did the queue loop
+    /// send?", surviving re-arms unlike the per-arm sent-history. OPERATOR-GATED
+    /// like loops/detail: rows carry the full raw text AND the exact composed
+    /// sent text. Ledger lines from before kind attribution (Kind == "") are
+    /// excluded rather than misattributed — the raw ledger remains their home.</summary>
+    [HttpGet("loops/queue-audit")]
+    public IActionResult QueueAudit([FromQuery] string? repoId)
+    {
+        _logger.CountRequest();
+        if (GateClosed() is { } closed) return closed;
+        if (string.IsNullOrWhiteSpace(repoId))
+            return BadRequest(new { error = "missing repoId" });
+        // The ledger grows one line per send; scan a generous newest-first window,
+        // then bound what one view returns.
+        var entries = _audit.Recent(5000)
+            .Where(a => a.RepoId == repoId && a.Kind == LoopConfigStore.KindQueue)
+            .Take(200)
+            .Select(a => new
+            {
+                at = a.At,
+                phase = a.Phase,
+                prompt = a.Prompt,
+                // null SentText = sent exactly as the raw prompt (unbriefed).
+                sentText = a.SentText ?? a.Prompt,
+                briefingRev = a.BriefingRev,
+            });
+        return Ok(new { entries });
+    }
+
     // --- Briefing rules (openspec: loop-agent-briefing) ---------------------
     // The dock's always-visible Briefing section reads and edits the GLOBAL rules
     // list here. Deliberately session-auth only, NOT operator-gated (D2b — see the

@@ -346,7 +346,7 @@ export default function Chat({
             return (
               <div key={key} className="turn">
                 {m.role === 'assistant' && m.steps?.length > 0 && <ActivitySteps steps={m.steps} />}
-                {(m.text || m.role === 'user') && <MessageBubble role={m.role} text={m.text} briefed={!!m.briefed} />}
+                {(m.text || m.role === 'user') && <MessageBubble role={m.role} text={m.text} />}
               </div>
             );
           })}
