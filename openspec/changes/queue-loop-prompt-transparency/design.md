@@ -27,12 +27,31 @@ Two problems, reported from real use:
    raw-plus-tag bubble is the odd one out; D3's "no per-send noise in chat" is
    already only half true.
 
+**Amendment 2 — queue audit.** The operator also asked for "an audit log of
+which prompts were sent through the queue loop". The durable ledger exists
+(`AutopilotAuditLog`, `%APPDATA%\ClaudeWeb\autopilot-audit.jsonl`, append-only,
+one line per auto-send — plans/loop-autopilot-safety.md fence #3), and two
+views slice it (dashboard Autopilot panel: per-repo last 10; console state:
+recent 50). But it cannot answer the question as asked:
+
+1. Entries carry no loop **kind** — a queue send, a goal send, a recipe send,
+   and a suggestion auto-send all record outcome `"loop"`/`"sent"` with no way
+   to filter to the queue.
+2. Entries hold the RAW stored text; the exact composed prompt is only
+   *reconstructable* (frame + rules-at-rev + text), never *readable*.
+3. The only queue-specific list is the per-arm `QueueSentTexts` (cap 20,
+   structurally reset on every re-arm — openspec queue-loop-visibility D3 said
+   "the full trail stays in the audit log", which is true but unreadable).
+
 ## Goals / Non-Goals
 
 **Goals:**
 
 - The chat shows, byte for byte, the text every driven loop send handed to the
   CLI — live (synthetic user event) and reloaded (transcript) render the same.
+- The durable audit can answer "which prompts did the queue loop send, and
+  what exactly did the agent receive?" — per repo, across arms, behind the
+  operator gate.
 - Remove the "📝 autopilot briefing attached" affordance; nothing in the chat
   claims to summarize a hidden composition anymore.
 - Keep the non-chat D3 surfaces exactly as they are: audit log, queue
@@ -97,6 +116,49 @@ class summary in `LoopConfigStore` / comments referencing D3's chat behavior
 are updated in the same pass (the honesty-pass rule from loop-agent-briefing:
 stale wording is a task, not a hope).
 
+### D4 — Audit entries gain kind, phase, and the exact sent text (additive)
+
+`AutopilotAuditLog.Entry` gains three fields, all additive with defaults so
+old `.jsonl` lines deserialize unchanged:
+
+- `Kind` (`""` on old lines) — the loop kind (`queue`/`goal`/`recipe`/
+  `suggestion`) stamped at `SendPrompt` from `loop.Kind`.
+- `Phase` (`""`) — `work` or `verify`, from the proposal's `EnterPhase`
+  bookkeeping, so a queue item and its step-verify send are distinguishable.
+- `SentText` (`null`) — the exact composed text, recorded ONLY when it differs
+  from `Prompt` (i.e. briefed sends); `null` means "sent exactly as `Prompt`".
+  This keeps unbriefed lines byte-identical in cost and makes the semantics
+  explicit rather than duplicating the raw text.
+
+The raw `Prompt` stays first-class: every truncated projection (dashboard
+slice, console list) keeps rendering it, so D3-of-loop-agent-briefing's
+no-noise argument still holds for lists. The revision-based reconstruction
+path stays valid for pre-amendment lines.
+
+Alternative rejected: a separate queue-only ledger file — a second
+append-only file duplicating what the existing fence-#3 ledger already
+witnesses; one durable record with attribution beats two half-records.
+
+### D5 — A gated Queue audit view on the dock loop card
+
+New endpoint `GET /api/autopilot/loops/queue-audit?repoId=` — operator-gated
+like `loops/detail` (it is a prompt disclosure: full raw text + full sent
+composition). It filters the ledger to this repo's queue-kind entries, newest
+first, bounded (e.g. last 200), each row: timestamp, phase, raw text, and the
+exact sent text (`SentText ?? Prompt`).
+
+UI: the dock loop card's queue section (where the per-arm sent-history
+already renders, `DockLoopControl.jsx`) gains a "Queue audit" affordance that
+opens the durable list — rows collapsed to the raw text with a phase badge,
+expandable to the full sent text. It states plainly that this list is durable
+across arms, unlike the per-arm list above it. Rides the existing loop-controls
+capability (the dock loop section is already Advanced-gated); no new
+UiModeContext entry.
+
+Alternative rejected: an Autopilot-console-only view — same reasoning as
+loop-agent-briefing D5: the dock card is where the operator already inspects
+the queue; the console remains the place for the raw cross-repo ledger.
+
 ## Risks / Trade-offs
 
 - [Chat gets noisier — every queue item bubble now starts with the same ~120-word
@@ -115,6 +177,17 @@ stale wording is a task, not a hope).
 - [i18n key removal breaks a stale reference] → grep for both keys after removal;
   the client build fails loudly on nothing here (lookups are dynamic), so the
   grep IS the check.
+- [`SentText` bloats the ledger] → one composed prompt (~stored text + ~120-word
+  wrapper) per briefed send, on a file that grows one line per send; accepted —
+  and only the diff-from-raw case is stored (D4).
+- [Full prompt text leaks to an ungated surface via the new endpoint] → the
+  endpoint reuses the exact `GateClosed()` fence of `loops/detail`; the ungated
+  projections keep receiving the raw `Prompt` through the existing `Text()`
+  gate helper, unchanged.
+- [Old audit lines render confusingly in the Queue audit view (no kind)] →
+  pre-amendment lines have `Kind == ""` and are simply excluded from the
+  queue-filtered view; the raw ledger remains their home. Stated in the view's
+  empty-state copy.
 
 ## Migration Plan
 

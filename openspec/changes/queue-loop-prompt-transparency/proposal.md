@@ -29,6 +29,14 @@ record of the conversation, so it must show the conversation verbatim.
 - Suggest mode is untouched (its pending prompt is raw by construction), and the
   suggestion kind's routine auto-sends remain unbriefed, so their bubbles already
   equal the sent text.
+- **Queue audit (second amendment):** the durable audit ledger
+  (`autopilot-audit.jsonl`) becomes a usable answer to "which prompts did the
+  queue loop send?": entries gain the loop **kind** and **phase** (work/verify)
+  so queue sends are distinguishable from goal/recipe/suggestion sends, and the
+  **exact composed text** when it differs from the raw stored text. A gated
+  **Queue audit** view on the dock loop card lists this repo's queue sends
+  across arms (durable — unlike the per-arm sent-history, it survives re-arm),
+  each expandable to the exact sent text.
 
 ## Capabilities
 
@@ -41,7 +49,9 @@ record of the conversation, so it must show the conversation verbatim.
 - `autopilot-loops`: the requirement "Briefed sends stay honestly disclosed
   without per-send noise" changes — the synthetic user event / chat bubble moves
   from raw-text-plus-affordance to the exact sent composition; audit and
-  sent-history disclosure rules stay as they are.
+  sent-history *list* projections stay raw. A new requirement makes queue-loop
+  sends durably auditable: kind/phase-attributed audit entries carrying the
+  exact sent text, browsable per repo behind the operator gate.
 
 ## Impact
 
@@ -57,3 +67,9 @@ record of the conversation, so it must show the conversation verbatim.
   text with the briefed tag must be updated to expect the full composition.
 - Replayed history: old runs' recorded user events carry raw text + flag; the
   client must keep rendering those sanely (backwards compatibility).
+- `ClaudeWeb.App/Services/Autopilot/AutopilotAuditLog.cs` — `Entry` gains
+  `Kind`, `Phase`, `SentText` (additive with defaults; old lines load unchanged).
+- `ClaudeWeb.App/Controllers/AutopilotController.cs` — new operator-gated
+  queue-audit endpoint (per repo, from the durable ledger).
+- `client/src/components/dashboard/DockLoopControl.jsx` + i18n — the Queue
+  audit view beside the existing per-arm sent-history.
