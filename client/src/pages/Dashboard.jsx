@@ -716,7 +716,10 @@ export default function Dashboard({ onClose }) {
             recency={recency}
             contentZoom={contentZoom}
             repoPath={repoPath(tab.repoId)}
-            localApps={repos.find((r) => r.id === tab.repoId)?.localApps || []}
+            // No `|| []`: undefined = repos not loaded yet, which PinnedAgent's
+            // vanished-app guard (openspec persist-dock-split-view) must not
+            // mistake for "this repo has no apps".
+            localApps={repos.find((r) => r.id === tab.repoId)?.localApps}
             git={gitInfo[tab.repoId]}
             gitRefreshing={!!gitBusy[tab.repoId]}
             onRefreshGit={() => refreshGit(tab.repoId)}
