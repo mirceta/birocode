@@ -48,5 +48,8 @@
 ## 4. Ship
 
 - [x] 4.1 `openspec validate loop-eval-watchable-dock --strict` passes
-- [ ] 4.2 Feature branch, deploy to live via `swap.ps1`, operator verifies the
-      user story in production, keep on their "keep it", then archive + merge
+- [x] 4.2 Feature branch, deploy to live via `swap.ps1`, operator verifies the
+      user story in production, keep on their "keep it", then archive + merge —
+      shipped inside main @ 43e8e88 (merged via the ideas-drive-sync PR cycle),
+      deployed to live :5099 2026-08-09 and kept on the operator's "keep it";
+      the in-production user story was browser-verified in 3.3 before merge
