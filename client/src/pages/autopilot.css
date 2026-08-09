@@ -952,3 +952,36 @@
 }
 .ap-research__verdict--adopt { border-left-color: #b47d15; }
 .ap-research__verdict--have { border-left-color: #2f8f63; }
+
+/* --- 📝 Drafts root (openspec add-loop-drafts): fill-the-loop draft editor --- */
+
+.ld-typerow { display: flex; gap: 6px; flex-wrap: wrap; margin: 2px 0 8px; }
+.ld-type {
+  border: 1px solid var(--color-border); background: var(--color-surface);
+  color: var(--color-text-muted, #888); font: inherit; font-size: 13px;
+  padding: 6px 12px; border-radius: 999px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.ld-type.on {
+  color: var(--color-text, inherit); font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--color-border, #ddd);
+}
+.ld-type__dot { color: var(--color-accent, #2bb24c); font-size: 9px; line-height: 1; }
+
+.ld-editor {
+  width: 100%; min-height: 46vh; box-sizing: border-box; resize: vertical;
+  border: 1px solid var(--color-border); border-radius: 12px;
+  background: var(--color-surface); color: var(--color-text, inherit);
+  font: inherit; font-size: 13.5px; line-height: 1.5; padding: 12px 14px;
+}
+
+.ld-actions { display: flex; align-items: center; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+.ld-save, .ld-reload {
+  border: 1px solid var(--color-border); background: var(--color-surface);
+  color: var(--color-text, inherit); font: inherit; font-size: 13px;
+  border-radius: 8px; padding: 7px 14px; cursor: pointer;
+}
+.ld-save { font-weight: 600; }
+.ld-save:disabled, .ld-reload:disabled { opacity: 0.5; cursor: default; }
+.ld-stamp { color: var(--color-text-muted, #888); font-size: 12.5px; }
+.ld-error { color: var(--color-accent, #c0392b); font-size: 13px; margin: 4px 0; }

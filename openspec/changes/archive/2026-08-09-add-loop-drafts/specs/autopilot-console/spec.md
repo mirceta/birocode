@@ -1,8 +1,5 @@
-# autopilot-console Specification
+## MODIFIED Requirements
 
-## Purpose
-TBD - created by archiving change restructure-autopilot-tabs. Update Purpose after archive.
-## Requirements
 ### Requirement: The console groups its surfaces by loop type in a two-level hierarchy
 
 The Autopilot console SHALL present its surfaces as a two-level navigation: a root
@@ -46,17 +43,6 @@ subtab.
 - **WHEN** the End User selects the Reference root tab
 - **THEN** a subtab row appears with How autopilot works, How chat works, and Research
 
-### Requirement: Badge counts live on the tab that owns the data
-
-The navigation SHALL surface the live counters on the entries that own them: the
-active-loop count on the Goal-based loop root tab, the routine-prompt count on the
-Prompt library subtab, and the audit-entry count on the Audit root tab.
-
-#### Scenario: Active loops badge the Goal-based loop root
-
-- **WHEN** at least one goal-based loop is active
-- **THEN** the Goal-based loop root tab shows the active-loop count without the user opening it
-
 ### Requirement: The operator gate fences everything except the Overview
 
 When the operator-side autopilot gate is off, the console SHALL render the
@@ -77,27 +63,3 @@ itself — the user can still see what exists.
 
 - **WHEN** the operator gate is off and the End User opens Drafts → a repo → freestyle
 - **THEN** the draft editor renders and Save works — no gate-off notice
-
-### Requirement: One console implementation renders identically in both hosts
-
-The two-level hierarchy SHALL be rendered by the single console implementation
-used by both the routed Autopilot tab and the dashboard dock's autopilot panel,
-so the grouping can never drift between hosts.
-
-#### Scenario: Dock shows the same hierarchy
-
-- **WHEN** the End User opens the autopilot panel from the dashboard dock
-- **THEN** the same five root tabs and the same subtab rows appear as on the routed Autopilot tab
-
-### Requirement: The audit trail distinguishes the loop type of each send
-
-The Audit view SHALL show, for every recorded autopilot send, which driver issued
-it — a suggestion-engine auto-advance send or a goal-based loop resend — using the
-recorded outcome of the entry, so the one cross-loop-type record stays attributable
-per loop type.
-
-#### Scenario: Loop resend is marked as such
-
-- **WHEN** a goal-based loop resend has been recorded and the End User opens the Audit tab
-- **THEN** that entry is visibly marked as a loop send, distinct from suggestion-engine sends
-

@@ -43,6 +43,7 @@ export const FEATURES = {
   ideasTab: 'advanced', // per-project notes (plans/ideas-tab.md)
   ideasSync: 'advanced', // shared ideas board via Apps Script web app (openspec: ideas-drive-sync)
   autopilotTab: 'advanced', // loop-autopilot: discover recurring routine prompts (plans/loop-autopilot.md)
+  loopDrafts: 'advanced', // 📝 Drafts root in the Autopilot console: per-repo fill-the-loop drafts (openspec: add-loop-drafts)
   taskGraph: 'advanced', // task dependency graph dashboard section (plans/task-dependency-graph.md)
   filesDock: 'advanced', // Files browse/view tab INSIDE each agent dock, scoped to that agent's repo (plans/agent-dock-files-tab.md)
   eventConsole: 'advanced', // Console lane in each agent dock: per-repo log of harness-owned background ops (openspec: agent-dock-event-console)
