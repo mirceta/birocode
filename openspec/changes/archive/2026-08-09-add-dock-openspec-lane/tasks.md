@@ -17,6 +17,6 @@
 ## 4. Verify
 
 - [x] 4.1 `npm --prefix client run build` is clean
-- [ ] 4.2 Browser check (headless Playwright per the browser-testing doc): the OpenSpec lane appears in Advanced mode, selecting it shows the Cockpit over the chat with the composer below, and the lanes are mutually exclusive (selecting another lane swaps away)
-- [ ] 4.3 Two docks bound to different repos each show their own repo's OpenSpec state, and changing the global repo selector does not alter either dock's OpenSpec lane
-- [ ] 4.4 The lane is absent in Basic mode with the flag off
+- [x] 4.2 Browser check (headless Playwright per the browser-testing doc): the OpenSpec lane appears in Advanced mode, selecting it shows the Cockpit over the chat with the composer below, and the lanes are mutually exclusive (selecting another lane swaps away) — `.claudeweb-preview/playwright/verify-dock-openspec-lane.mjs`, 15/15 checks on an isolated instance built from main
+- [x] 4.3 Two docks bound to different repos each show their own repo's OpenSpec state, and changing the global repo selector does not alter either dock's OpenSpec lane — same run: dock A (openspec/ present) renders the ready Cockpit named oslane-a while dock B renders the not-ready panel named oslane-b, global selection on a third repo; switching the Projects-tab selector to oslane-b leaves dock A scoped to oslane-a
+- [x] 4.4 The lane is absent in Basic mode with the flag off — same run: zero OpenSpec lanes render in Basic (the agent-dock surface itself is Advanced-gated, so the lane is doubly gated)
