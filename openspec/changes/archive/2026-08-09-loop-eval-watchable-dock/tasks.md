@@ -48,7 +48,7 @@
 ## 4. Ship
 
 - [x] 4.1 `openspec validate loop-eval-watchable-dock --strict` passes
-- [ ] 4.2 Feature branch, deploy to live via `swap.ps1`, operator verifies the
+- [x] 4.2 Feature branch, deploy to live via `swap.ps1`, operator verifies the
       user story in production, keep on their "keep it", then archive + merge
 
 ## 5. Kept test agent + FINISH AGENT (operator decision 2026-08-09)
@@ -63,5 +63,6 @@
       after the verdict); kept-agent banner with FINISH AGENT button; leftover
       fixture blocks Start via the banner, not the problems list; explainer +
       lib.mjs keep/preflight copy point at FINISH AGENT
-- [ ] 5.4 Verify: builds green, C# tests pass, deploy to live, operator sees
+- [x] 5.4 Verify: builds green, C# tests pass, deploy to live, operator sees
       the dock survive a finished run and FINISH AGENT tear it down
+      (deployed 2026-08-09 03:24, kept; operator confirmed "it works")
