@@ -15,25 +15,22 @@ import { useT } from '../../i18n/LanguageContext';
 // close -> review -> send flow matches every other prompt-entry path. Close via
 // the Done button, a backdrop click, or Esc.
 //
-// Saved prompts (openspec expand-popup-prompt-list): below the editor sits the
-// user's custom prompt library — the SAME global backend-synced store the ⚙
-// manager edits (prompts/onAddPrompt come from PromptsContext via ChatInput).
-// Insert APPENDS a prompt's text to the draft (blank-line separated, no send,
-// popup stays open), and a minimal create form saves a new prompt into the
-// store so it shows up everywhere. The fixed catalog stays ⚙-only, and
-// template `{{param}}` bodies insert verbatim — this popup IS an editor, so
-// placeholders are filled by editing. The whole section rides the
-// customPrompts capability (promptsEnabled).
-export default function PromptExpandModal({ value, onChange, onClose, promptsEnabled = false, prompts = [], onAddPrompt }) {
+// Queued prompts (openspec expand-popup-prompt-list, amended): below the editor
+// sits the surface's QUEUE STASH — the cached prompts on the composer strip,
+// the same items an armed 🗒️ queue loop unloads in order (stash/onAddStash come
+// from ChatInput's queueTabId resolution, so a dock lists its OWN tab's queue).
+// Entries are numbered in strip order; Insert APPENDS an item's text to the
+// draft (blank-line separated, no send, popup stays open) and never consumes
+// the item — the strip keeps remove/reorder/send. A minimal form queues a new
+// item into the same stash. The custom-prompts library stays ⚙-only. The whole
+// section rides the promptStash capability (stashEnabled).
+export default function PromptExpandModal({ value, onChange, onClose, stashEnabled = false, stash = [], onAddStash }) {
   const { t } = useT();
   const textareaRef = useRef(null);
 
-  // Create-form state. Deliberately minimal (label + text, default emoji) —
-  // emoji choice and editing stay in the ⚙ manager.
-  const [newLabel, setNewLabel] = useState('');
+  // Add-to-queue form state. Deliberately minimal (text only) — queued items
+  // have no label/emoji, and remove/reorder stay on the composer strip.
   const [newText, setNewText] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
 
   // Focus the editor on open and close on Esc.
   useEffect(() => {
@@ -53,26 +50,18 @@ export default function PromptExpandModal({ value, onChange, onClose, promptsEna
     textareaRef.current?.focus();
   }
 
-  async function saveNew(e) {
+  function queueNew(e) {
     e.preventDefault();
-    if (!newText.trim() || busy || !onAddPrompt) return;
-    setBusy(true);
-    setError('');
-    try {
-      await onAddPrompt('💡', newLabel.trim(), newText.trim());
-      setNewLabel('');
-      setNewText('');
-    } catch {
-      setError(t('prompts.saveError'));
-    } finally {
-      setBusy(false);
-    }
+    const text = newText.trim();
+    if (!text || !onAddStash) return;
+    onAddStash(text);
+    setNewText('');
   }
 
   return createPortal(
     <div className="prompt-expand-backdrop" onClick={onClose}>
       <div
-        className={`prompt-expand${promptsEnabled ? ' prompt-expand--lib' : ''}`}
+        className={`prompt-expand${stashEnabled ? ' prompt-expand--lib' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-label={t('chat.expandTitle')}
@@ -97,22 +86,21 @@ export default function PromptExpandModal({ value, onChange, onClose, promptsEna
           placeholder={t('chat.inputPlaceholder')}
           aria-label={t('chat.expandAria')}
         />
-        {promptsEnabled && (
+        {stashEnabled && (
           <div className="prompt-expand__library" aria-label={t('chat.expandPromptsTitle')}>
             <div className="prompt-expand__lib-title">{t('chat.expandPromptsTitle')}</div>
-            {prompts.length > 0 ? (
+            {stash.length > 0 ? (
               <ul className="prompt-expand__lib-list">
-                {prompts.map((p) => (
-                  <li key={p.id} className="prompt-expand__lib-item">
-                    <span className="prompt-expand__lib-emoji" aria-hidden="true">{p.emoji}</span>
-                    <span className="prompt-expand__lib-body" title={p.text}>
-                      {p.label && <span className="prompt-expand__lib-label">{p.label}</span>}
-                      <span className="prompt-expand__lib-text">{p.text}</span>
+                {stash.map((item, idx) => (
+                  <li key={item.id} className="prompt-expand__lib-item">
+                    <span className="prompt-expand__lib-num" aria-hidden="true">{idx + 1}</span>
+                    <span className="prompt-expand__lib-body" title={item.text}>
+                      <span className="prompt-expand__lib-text">{item.text}</span>
                     </span>
                     <button
                       type="button"
                       className="prompt-expand__lib-insert"
-                      onClick={() => insert(p.text)}
+                      onClick={() => insert(item.text)}
                     >
                       {t('chat.expandInsert')}
                     </button>
@@ -122,24 +110,8 @@ export default function PromptExpandModal({ value, onChange, onClose, promptsEna
             ) : (
               <p className="prompt-expand__lib-empty">{t('chat.expandPromptsEmpty')}</p>
             )}
-            <form className="prompt-expand__new" onSubmit={saveNew}>
+            <form className="prompt-expand__new" onSubmit={queueNew}>
               <span className="prompt-expand__new-hint">{t('chat.expandNewHint')}</span>
-              <div className="prompt-expand__new-row">
-                <input
-                  className="prompt-expand__new-label"
-                  type="text"
-                  placeholder={t('prompts.labelPlaceholder')}
-                  value={newLabel}
-                  onChange={(e) => setNewLabel(e.target.value)}
-                />
-                <button
-                  type="submit"
-                  className="prompt-expand__new-save"
-                  disabled={busy || !newText.trim()}
-                >
-                  {t('chat.expandSavePrompt')}
-                </button>
-              </div>
               <textarea
                 className="prompt-expand__new-text"
                 rows={2}
@@ -147,7 +119,15 @@ export default function PromptExpandModal({ value, onChange, onClose, promptsEna
                 value={newText}
                 onChange={(e) => setNewText(e.target.value)}
               />
-              {error && <p className="prompt-expand__new-error" role="alert">{error}</p>}
+              <div className="prompt-expand__new-row">
+                <button
+                  type="submit"
+                  className="prompt-expand__new-save"
+                  disabled={!newText.trim()}
+                >
+                  {t('chat.expandSavePrompt')}
+                </button>
+              </div>
             </form>
           </div>
         )}

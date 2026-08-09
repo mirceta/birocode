@@ -1,70 +1,6 @@
 # Chat
 
-## Purpose
-
-Lets the End User run Claude Code over the opened Repo from the phone-accessible web
-UI — send a prompt, stream the reply, and continue the session. This is the Harness's
-core job.
-## Requirements
-### Requirement: Send a prompt and stream the reply
-
-The system SHALL accept a chat prompt for the opened Repo and stream the assistant's
-response back over Server-Sent Events as it is produced.
-
-#### Scenario: Basic turn
-
-- **WHEN** the End User submits a prompt to an idle session
-- **THEN** the Harness runs the Claude CLI in the Repo and streams the reply over SSE until the turn completes
-
-### Requirement: Resume a session
-
-The system SHALL let a subsequent prompt continue the same Claude session so earlier
-context is retained.
-
-#### Scenario: Follow-up turn
-
-- **WHEN** the End User submits a second prompt that depends on earlier context
-- **THEN** the Harness resumes the existing session and the reply reflects the prior turns
-
-### Requirement: Stop a running turn
-
-The system SHALL let the End User stop a turn that is still in progress.
-
-#### Scenario: Interrupt
-
-- **WHEN** the End User stops a turn that is still streaming
-- **THEN** the Harness terminates the run and the session returns to idle, ready for the next prompt
-
-### Requirement: A run session retains the turn's streamed reply text
-
-A run session SHALL accumulate the visible reply text of its turn (the streamed
-token events) and the time the last of it arrived, and SHALL expose both to
-backend consumers for the lifetime of the session object — surviving the run's
-completion until the next run replaces the session. This is a read surface
-only: it SHALL NOT alter the event stream clients consume.
-
-#### Scenario: Completed run still serves its reply text
-
-- **WHEN** a builder-lane run completes after streaming reply text
-- **THEN** the session object reports that text and its arrival time until a new run for the repo begins
-
-### Requirement: Server-initiated prompts render in the live conversation
-
-The chat surface SHALL render a Harness-initiated prompt (an autopilot loop
-send) as a user message in the live conversation, without a page refresh —
-both for a client already attached to the run and for one that attaches later
-through the reconcile poll's replay. Prompts typed by the End User SHALL NOT
-be rendered twice as a result.
-
-#### Scenario: Watching a driven conversation
-
-- **WHEN** an armed loop sends a prompt to the conversation the End User has open
-- **THEN** the prompt appears as a user bubble above the streaming reply within one reconcile poll, with no refresh
-
-#### Scenario: Composer sends unaffected
-
-- **WHEN** the End User sends a prompt from the composer
-- **THEN** exactly one user bubble renders for it, as before
+## MODIFIED Requirements
 
 ### Requirement: Expand the prompt draft in a large editor popup
 
@@ -120,4 +56,3 @@ custom-prompts library and fixed catalog SHALL NOT be listed in the popup.
 
 - **WHEN** the prompt-stash capability is disabled for the device
 - **THEN** the popup shows only the draft editor — no queued-prompts list and no add-to-queue form
-
