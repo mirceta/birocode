@@ -56,11 +56,13 @@ import { useT } from '../../i18n/LanguageContext';
 // clicking an unseen tab under `running` shows the dock, which clears the
 // server latch — the tab STAYS rendered (now grid-visible, see below).
 //
-// Grid-visible exemption (openspec dock-strip-filter-merge): a tab whose dock
-// currently renders in the grid (dashboard !== false) matches EVERY filter
-// state — branch and status alike — so the strip is always a superset of
-// what's on screen and filters only ever narrow hidden docks' tabs. The +N
-// excluded count therefore only ever counts hidden docks.
+// Two exemptions (openspec dock-strip-filter-merge, extended by openspec
+// dock-strip-important-exemption): a tab whose dock currently renders in the
+// grid (dashboard !== false) OR whose server-persisted `important` flag is
+// set matches EVERY filter state — branch and status alike — so the strip is
+// always a superset of what's on screen plus every ★-starred dock, and
+// filters only ever narrow hidden, non-important docks' tabs. The +N
+// excluded count therefore only ever counts hidden, non-important docks.
 const mainlike = (branch) => branch === 'main' || branch === 'master';
 
 export default function DockToolbar({ tabs, live, git, onToggle, onReorder }) {
@@ -80,9 +82,11 @@ export default function DockToolbar({ tabs, live, git, onToggle, onReorder }) {
   const isUnseen = (tab) => tab.dashboard === false && !isRunning(tab) && !!tab.unseenResult;
   const matchesFilter = (tab) => {
     if (filter === 'all') return true;
-    // Grid-visible docks are exempt from every filter: the strip must stay a
-    // superset of what the grid shows, so filters only narrow HIDDEN docks.
+    // Grid-visible and important docks are exempt from every filter: the
+    // strip must stay a superset of what the grid shows plus every starred
+    // dock, so filters only narrow hidden, non-important docks.
     if (tab.dashboard !== false) return true;
+    if (tab.important) return true;
     if (filter === 'running') return isRunning(tab) || isUnseen(tab);
     const branch = branchOf(tab);
     if (!branch) return false; // unclassifiable: only the All state shows it
