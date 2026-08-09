@@ -66,7 +66,7 @@ public class TaskGraphController : ControllerBase
     public IActionResult DeleteNode(string id)
     {
         _logger.CountRequest();
-        var dropped = _graph.DeleteNode(id);
+        var dropped = _graph.DeleteNode(id, Now());
         if (dropped < 0) return NotFound(new { error = "Unknown node id." });
         return Ok(new { id, removedEdges = dropped });
     }
@@ -75,7 +75,7 @@ public class TaskGraphController : ControllerBase
     public IActionResult UpdateScratch([FromBody] ScratchRequest? request)
     {
         _logger.CountRequest();
-        return Ok(new { scratch = _graph.SetScratch(request?.Text) });
+        return Ok(new { scratch = _graph.SetScratch(request?.Text, Now()) });
     }
 
     [HttpPost("edges")]
@@ -99,7 +99,7 @@ public class TaskGraphController : ControllerBase
     public IActionResult DeleteEdge(string id)
     {
         _logger.CountRequest();
-        if (!_graph.DeleteEdge(id)) return NotFound(new { error = "Unknown edge id." });
+        if (!_graph.DeleteEdge(id, Now())) return NotFound(new { error = "Unknown edge id." });
         return Ok(new { id });
     }
 
@@ -124,7 +124,7 @@ public class TaskGraphController : ControllerBase
     public IActionResult DeleteMachine(string id)
     {
         _logger.CountRequest();
-        var detached = _graph.DeleteMachine(id);
+        var detached = _graph.DeleteMachine(id, Now());
         if (detached < 0) return NotFound(new { error = "Unknown machine id." });
         return Ok(new { id, detachedNodes = detached });
     }

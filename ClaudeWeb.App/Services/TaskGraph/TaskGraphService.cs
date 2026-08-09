@@ -14,12 +14,21 @@ namespace ClaudeWeb.Services.TaskGraph;
 /// no incoming edges; the first things to do are nodes with no (incomplete) outgoing
 /// edges. The frontend derives "actionable now" / "why" from this; the backend only
 /// stores the DAG and refuses cycles, self-loops, and duplicate edges.
+///
+/// Sync (openspec sync-task-graph): the graph replicates over the shared board
+/// channel beside the ideas board, mirroring <see cref="Notes.NotesService"/> —
+/// a Changed event on local mutations, Snapshot for the push, and a deterministic
+/// commutative MergeFrom with per-element tombstones. Nodes and machines merge
+/// LWW by UpdatedAt; edges are immutable so they merge as presence-union minus
+/// tombstoned ids followed by a canonical validity rebuild; the scratchpad is
+/// LWW by ScratchUpdatedAt.
 /// </summary>
 public class TaskGraphService
 {
     public const int MaxTitleLength = 2_000;
     public const int MaxNoteLength = 20_000;
     public const int MaxMachineNameLength = 200;
+    public const int TombstoneRetentionDays = 30;
     // Default box size when a machine is created without explicit dimensions.
     public const double DefaultMachineW = 360;
     public const double DefaultMachineH = 240;
@@ -33,6 +42,11 @@ public class TaskGraphService
     private readonly string _path;
     private readonly object _gate = new();
     private Board _board = new();
+
+    /// <summary>Raised after every successful LOCAL mutation (add/update/delete/
+    /// scratch). NOT raised by MergeFrom — the sync layer must not re-trigger
+    /// itself when applying remote state.</summary>
+    public event Action? Changed;
 
     public TaskGraphService(Logger logger)
     {
@@ -61,12 +75,32 @@ public class TaskGraphService
     public sealed record Machine(
         string Id, string Name, double X, double Y, double W, double H, long CreatedAt, long UpdatedAt);
 
+    /// <summary>A recorded deletion (node, edge, or machine — ids are GUIDs, one
+    /// namespace), kept so a delete on one harness doesn't resurrect from another
+    /// during sync (openspec sync-task-graph). Pruned after
+    /// <see cref="TombstoneRetentionDays"/>.</summary>
+    public sealed record GraphTombstone(string Id, long DeletedAt);
+
+    /// <summary>Point-in-time copy of the whole graph for the sync layer. Lists
+    /// are nullable because the record also rides the sync wire, where an older
+    /// peer's store may omit any of them.</summary>
+    public sealed record GraphSnapshot(
+        List<Node>? Nodes, List<Edge>? Edges, List<Machine>? Machines,
+        string? Scratch, long ScratchUpdatedAt, List<GraphTombstone>? Tombstones);
+
+    /// <summary>What MergeFrom did: whether the local graph changed, and whether
+    /// the merged graph holds anything the remote side was missing (push needed).</summary>
+    public sealed record MergeOutcome(bool LocalChanged, bool RemoteStale);
+
     public sealed class Board
     {
         public List<Node> Nodes { get; set; } = new();
         public List<Edge> Edges { get; set; } = new();
         public List<Machine> Machines { get; set; } = new();
         public string Scratch { get; set; } = "";
+        // When the scratchpad last changed — 0 on boards that predate sync.
+        public long ScratchUpdatedAt { get; set; }
+        public List<GraphTombstone> Tombstones { get; set; } = new();
     }
 
     public Board Get()
@@ -81,15 +115,20 @@ public class TaskGraphService
     }
 
     // Replaces the whole scratchpad text (length-capped). Returns what was stored.
-    public string SetScratch(string? text)
+    // A no-op write (same text) neither saves nor stamps, so idle PATCHes don't
+    // churn the sync channel.
+    public string SetScratch(string? text, long now)
     {
         var t = text ?? "";
         if (t.Length > MaxScratchLength) t = t[..MaxScratchLength];
         lock (_gate)
         {
+            if (t == _board.Scratch) return t;
             _board.Scratch = t;
+            _board.ScratchUpdatedAt = now;
             Save();
         }
+        RaiseChanged();
         return t;
     }
 
@@ -106,6 +145,7 @@ public class TaskGraphService
             Save();
         }
         _logger.Info($"[TASKGRAPH] Added node {node.Id}");
+        RaiseChanged();
         return node;
     }
 
@@ -113,6 +153,13 @@ public class TaskGraphService
     // `repoId` of empty string clears the link. Returns null if the id is unknown
     // (or a supplied title is blank / status invalid).
     public Node? UpdateNode(string id, string? title, string? note, string? repoId, string? machineId, string? status, double? x, double? y, long now)
+    {
+        Node? updated = UpdateNodeCore(id, title, note, repoId, machineId, status, x, y, now);
+        if (updated is not null) RaiseChanged();
+        return updated;
+    }
+
+    private Node? UpdateNodeCore(string id, string? title, string? note, string? repoId, string? machineId, string? status, double? x, double? y, long now)
     {
         lock (_gate)
         {
@@ -154,18 +201,25 @@ public class TaskGraphService
         }
     }
 
-    // Removes a node and any edges touching it. Returns the count of edges dropped,
-    // or -1 if the node id was unknown.
-    public int DeleteNode(string id)
+    // Removes a node and any edges touching it, tombstoning the node AND those
+    // edges so neither resurrects from a sync peer. Returns the count of edges
+    // dropped, or -1 if the node id was unknown.
+    public int DeleteNode(string id, long now)
     {
+        int dropped;
         lock (_gate)
         {
             if (_board.Nodes.RemoveAll(n => n.Id == id) == 0) return -1;
-            var dropped = _board.Edges.RemoveAll(e => e.Source == id || e.Target == id);
+            var deadEdges = _board.Edges.Where(e => e.Source == id || e.Target == id).ToList();
+            _board.Edges.RemoveAll(e => e.Source == id || e.Target == id);
+            AddTombstone(id, now);
+            foreach (var e in deadEdges) AddTombstone(e.Id, now);
             Save();
-            _logger.Info($"[TASKGRAPH] Deleted node {id} (+{dropped} edge(s))");
-            return dropped;
+            dropped = deadEdges.Count;
         }
+        _logger.Info($"[TASKGRAPH] Deleted node {id} (+{dropped} edge(s))");
+        RaiseChanged();
+        return dropped;
     }
 
     // --- machine boxes (plans/taskgraph-machine-groups.md) ---
@@ -185,12 +239,20 @@ public class TaskGraphService
             Save();
         }
         _logger.Info($"[TASKGRAPH] Added machine {machine.Id}");
+        RaiseChanged();
         return machine;
     }
 
     // Partial update of a box: only non-null fields apply. A supplied blank name
     // is rejected (returns null). Returns null if the id is unknown.
     public Machine? UpdateMachine(string id, string? name, double? x, double? y, double? w, double? h, long now)
+    {
+        Machine? updated = UpdateMachineCore(id, name, x, y, w, h, now);
+        if (updated is not null) RaiseChanged();
+        return updated;
+    }
+
+    private Machine? UpdateMachineCore(string id, string? name, double? x, double? y, double? w, double? h, long now)
     {
         lock (_gate)
         {
@@ -225,29 +287,33 @@ public class TaskGraphService
     // null) — a box is an organizing overlay, not an owner of the work. A member
     // node's stored {X,Y} is relative to its box, so on detach we translate it
     // back to absolute canvas coords (add the box's origin) — otherwise the node
-    // would jump to near (0,0) on the next reload. Returns the count of nodes
-    // detached, or -1 if the machine id was unknown.
-    public int DeleteMachine(string id)
+    // would jump to near (0,0) on the next reload. The box is tombstoned and the
+    // detached nodes are stamped so the detachment wins over stale sync copies.
+    // Returns the count of nodes detached, or -1 if the machine id was unknown.
+    public int DeleteMachine(string id, long now)
     {
+        int detached;
         lock (_gate)
         {
             var m = _board.Machines.FirstOrDefault(x => x.Id == id);
             if (m is null) return -1;
             _board.Machines.RemoveAll(x => x.Id == id);
-            var detached = 0;
+            AddTombstone(id, now);
+            detached = 0;
             for (var i = 0; i < _board.Nodes.Count; i++)
             {
                 if (_board.Nodes[i].MachineId == id)
                 {
                     var n = _board.Nodes[i];
-                    _board.Nodes[i] = n with { MachineId = null, X = n.X + m.X, Y = n.Y + m.Y };
+                    _board.Nodes[i] = n with { MachineId = null, X = n.X + m.X, Y = n.Y + m.Y, UpdatedAt = now };
                     detached++;
                 }
             }
             Save();
-            _logger.Info($"[TASKGRAPH] Deleted machine {id} (detached {detached} node(s))");
-            return detached;
         }
+        _logger.Info($"[TASKGRAPH] Deleted machine {id} (detached {detached} node(s))");
+        RaiseChanged();
+        return detached;
     }
 
     public enum EdgeError { None, MissingNode, SelfLoop, Duplicate, Cycle }
@@ -258,6 +324,7 @@ public class TaskGraphService
     {
         var s = (source ?? "").Trim();
         var t = (target ?? "").Trim();
+        Edge edge;
         lock (_gate)
         {
             if (s.Length == 0 || t.Length == 0
@@ -268,27 +335,201 @@ public class TaskGraphService
             // A cycle would form if Target already depends (transitively) on Source.
             if (DependsOn(t, s)) return (null, EdgeError.Cycle);
 
-            var edge = new Edge(Guid.NewGuid().ToString("N"), s, t);
+            edge = new Edge(Guid.NewGuid().ToString("N"), s, t);
             _board.Edges.Add(edge);
             Save();
-            _logger.Info($"[TASKGRAPH] Added edge {s} -> {t}");
-            return (edge, EdgeError.None);
+        }
+        _logger.Info($"[TASKGRAPH] Added edge {s} -> {t}");
+        RaiseChanged();
+        return (edge, EdgeError.None);
+    }
+
+    // Removes an edge and tombstones it. A tombstoned edge id is dead forever —
+    // re-adding the same dependency mints a new id, so no revival rule exists.
+    public bool DeleteEdge(string id, long now)
+    {
+        bool removed;
+        lock (_gate)
+        {
+            removed = _board.Edges.RemoveAll(e => e.Id == id) > 0;
+            if (removed)
+            {
+                AddTombstone(id, now);
+                Save();
+            }
+        }
+        if (removed) { _logger.Info($"[TASKGRAPH] Deleted edge {id}"); RaiseChanged(); }
+        return removed;
+    }
+
+    // --- sync layer (openspec sync-task-graph) ---
+
+    /// <summary>Copy of the whole graph (elements + scratch + tombstones) for the
+    /// sync layer.</summary>
+    public GraphSnapshot Snapshot()
+    {
+        lock (_gate) return new GraphSnapshot(
+            new List<Node>(_board.Nodes), new List<Edge>(_board.Edges),
+            new List<Machine>(_board.Machines), _board.Scratch,
+            _board.ScratchUpdatedAt, new List<GraphTombstone>(_board.Tombstones));
+    }
+
+    /// <summary>
+    /// Merges a remote graph into the local one (openspec sync-task-graph).
+    /// Nodes and machines merge per id with newest-UpdatedAt-wins (local wins
+    /// ties), tombstones union with newest-DeletedAt-wins; a tombstone at or
+    /// after an element's UpdatedAt suppresses it, a later edit revives it.
+    /// Edges (immutable) merge as the union minus tombstoned ids, then a
+    /// canonical validity rebuild in id order drops edges referencing missing
+    /// nodes, self-loops, duplicate pairs, and cycle-formers — deterministic on
+    /// identical input, so every peer converges on the same edge set. Scratch is
+    /// LWW by ScratchUpdatedAt; an exact tie with differing text joins both
+    /// sides in ordinal order (and bumps the stamp so peers adopt the join via
+    /// plain LWW instead of re-joining forever). A null remote (older peer's
+    /// store without a graph section) merges as empty — pure union, nothing
+    /// local is lost. Deterministic and commutative, used by both pull-merge and
+    /// push-merge. Saves when local state changed. Does NOT raise Changed.
+    /// </summary>
+    public MergeOutcome MergeFrom(GraphSnapshot? remote)
+    {
+        var r = remote ?? new GraphSnapshot(null, null, null, null, 0, null);
+        var rNodes = r.Nodes ?? new List<Node>();
+        var rEdges = r.Edges ?? new List<Edge>();
+        var rMachines = r.Machines ?? new List<Machine>();
+        var rTombstones = r.Tombstones ?? new List<GraphTombstone>();
+        var rScratch = r.Scratch ?? "";
+        lock (_gate)
+        {
+            // Tombstones: union by id, newest DeletedAt wins.
+            var tombs = new Dictionary<string, long>();
+            foreach (var t in _board.Tombstones) tombs[t.Id] = Math.Max(t.DeletedAt, tombs.GetValueOrDefault(t.Id));
+            foreach (var t in rTombstones) tombs[t.Id] = Math.Max(t.DeletedAt, tombs.GetValueOrDefault(t.Id));
+
+            var mergedNodes = MergeById(_board.Nodes, rNodes, n => n.Id, n => n.UpdatedAt, n => n.CreatedAt, tombs);
+            var mergedMachines = MergeById(_board.Machines, rMachines, m => m.Id, m => m.UpdatedAt, m => m.CreatedAt, tombs);
+
+            // A node whose box didn't survive the merge is detached in place —
+            // a dangling MachineId must never reach the frontend.
+            var machineIds = new HashSet<string>(mergedMachines.Select(m => m.Id));
+            for (var i = 0; i < mergedNodes.Count; i++)
+                if (mergedNodes[i].MachineId is { } mid && !machineIds.Contains(mid))
+                    mergedNodes[i] = mergedNodes[i] with { MachineId = null };
+
+            // Edges: union minus tombstoned ids, canonical validity rebuild.
+            var nodeIds = new HashSet<string>(mergedNodes.Select(n => n.Id));
+            var union = new Dictionary<string, Edge>();
+            foreach (var e in _board.Edges) union[e.Id] = e;
+            foreach (var e in rEdges) union.TryAdd(e.Id, e);
+            var mergedEdges = new List<Edge>();
+            var pairs = new HashSet<(string, string)>();
+            foreach (var e in union.Values.OrderBy(e => e.Id, StringComparer.Ordinal))
+            {
+                if (tombs.ContainsKey(e.Id)) continue;
+                if (!nodeIds.Contains(e.Source) || !nodeIds.Contains(e.Target)) continue;
+                if (e.Source == e.Target) continue;
+                if (!pairs.Add((e.Source, e.Target))) continue;
+                if (Reaches(mergedEdges, e.Target, e.Source)) continue; // would close a cycle
+                mergedEdges.Add(e);
+            }
+
+            // Scratch: LWW by stamp; exact tie with differing text joins both.
+            var scratch = _board.Scratch;
+            var scratchAt = _board.ScratchUpdatedAt;
+            if (r.ScratchUpdatedAt > scratchAt)
+            {
+                scratch = rScratch;
+                scratchAt = r.ScratchUpdatedAt;
+            }
+            else if (r.ScratchUpdatedAt == scratchAt && rScratch != scratch)
+            {
+                if (string.IsNullOrWhiteSpace(scratch)) scratch = rScratch;
+                else if (!string.IsNullOrWhiteSpace(rScratch))
+                {
+                    var (first, second) = string.CompareOrdinal(scratch, rScratch) <= 0
+                        ? (scratch, rScratch) : (rScratch, scratch);
+                    scratch = first + "\n\n---\n\n" + second;
+                }
+                scratchAt++;
+            }
+
+            var mergedTombs = tombs.Select(kv => new GraphTombstone(kv.Key, kv.Value))
+                .OrderBy(t => t.Id, StringComparer.Ordinal).ToList();
+
+            var localChanged =
+                !mergedNodes.SequenceEqual(_board.Nodes) ||
+                !mergedEdges.SequenceEqual(_board.Edges) ||
+                !mergedMachines.SequenceEqual(_board.Machines) ||
+                scratch != _board.Scratch || scratchAt != _board.ScratchUpdatedAt;
+            var tombsChanged = !mergedTombs.SequenceEqual(_board.Tombstones.OrderBy(t => t.Id, StringComparer.Ordinal));
+
+            // Push needed when the merged graph holds anything the remote side
+            // lacked (including a validity correction of the remote edge set).
+            // Canonical comparison; a false positive only costs a redundant push.
+            var remoteStale =
+                !Canonical(mergedNodes, n => n.Id).SequenceEqual(Canonical(
+                    rNodes.Where(n => !(tombs.TryGetValue(n.Id, out var dead) && dead >= n.UpdatedAt)), n => n.Id)) ||
+                !Canonical(mergedMachines, m => m.Id).SequenceEqual(Canonical(
+                    rMachines.Where(m => !(tombs.TryGetValue(m.Id, out var dead) && dead >= m.UpdatedAt)), m => m.Id)) ||
+                !Canonical(mergedEdges, e => e.Id).SequenceEqual(Canonical(
+                    rEdges.Where(e => !tombs.ContainsKey(e.Id)), e => e.Id)) ||
+                scratch != rScratch || scratchAt != r.ScratchUpdatedAt ||
+                !mergedTombs.SequenceEqual(rTombstones.OrderBy(t => t.Id, StringComparer.Ordinal));
+
+            if (localChanged || tombsChanged)
+            {
+                _board.Nodes = mergedNodes;
+                _board.Edges = mergedEdges;
+                _board.Machines = mergedMachines;
+                _board.Scratch = scratch;
+                _board.ScratchUpdatedAt = scratchAt;
+                _board.Tombstones = mergedTombs;
+                Save();
+                _logger.Info($"[TASKGRAPH] Merged remote graph ({mergedNodes.Count} node(s), {mergedEdges.Count} edge(s), {mergedMachines.Count} machine(s), {mergedTombs.Count} tombstone(s))");
+            }
+            return new MergeOutcome(localChanged, remoteStale);
         }
     }
 
-    public bool DeleteEdge(string id)
+    // Per-id LWW merge shared by nodes and machines: local order kept, per-id
+    // newer UpdatedAt wins (local on tie), remote-only elements append in
+    // CreatedAt order, then the tombstone filter.
+    private static List<T> MergeById<T>(
+        List<T> local, List<T> remote,
+        Func<T, string> id, Func<T, long> updatedAt, Func<T, long> createdAt,
+        Dictionary<string, long> tombs)
     {
-        lock (_gate)
-        {
-            var removed = _board.Edges.RemoveAll(e => e.Id == id) > 0;
-            if (removed) { Save(); _logger.Info($"[TASKGRAPH] Deleted edge {id}"); }
-            return removed;
-        }
+        var remoteById = new Dictionary<string, T>();
+        foreach (var r in remote) remoteById[id(r)] = r;
+        var localIds = new HashSet<string>(local.Select(id));
+        return local
+            .Select(n => remoteById.TryGetValue(id(n), out var r) && updatedAt(r) > updatedAt(n) ? r : n)
+            .Concat(remote.Where(r => !localIds.Contains(id(r))).OrderBy(createdAt))
+            .Where(n => !(tombs.TryGetValue(id(n), out var dead) && dead >= updatedAt(n)))
+            .ToList();
+    }
+
+    private static IEnumerable<T> Canonical<T>(IEnumerable<T> items, Func<T, string> id)
+        => items.OrderBy(id, StringComparer.Ordinal);
+
+    // Caller holds _gate. Deletion marker for any element id (GUIDs — one
+    // namespace across nodes, edges, and machines).
+    private void AddTombstone(string id, long now)
+    {
+        _board.Tombstones.RemoveAll(t => t.Id == id);
+        _board.Tombstones.Add(new GraphTombstone(id, now));
+    }
+
+    private void RaiseChanged()
+    {
+        try { Changed?.Invoke(); }
+        catch (Exception ex) { _logger.Error($"[TASKGRAPH] Changed handler failed: {ex.Message}"); }
     }
 
     // Does `from` reach `to` by following dependency edges (Source->Target)?
     // Caller holds _gate.
-    private bool DependsOn(string from, string to)
+    private bool DependsOn(string from, string to) => Reaches(_board.Edges, from, to);
+
+    private static bool Reaches(List<Edge> edges, string from, string to)
     {
         var seen = new HashSet<string>();
         var stack = new Stack<string>();
@@ -298,7 +539,7 @@ public class TaskGraphService
             var cur = stack.Pop();
             if (cur == to) return true;
             if (!seen.Add(cur)) continue;
-            foreach (var e in _board.Edges)
+            foreach (var e in edges)
                 if (e.Source == cur) stack.Push(e.Target);
         }
         return false;
@@ -323,7 +564,17 @@ public class TaskGraphService
         {
             if (!File.Exists(_path)) return;
             var board = JsonSerializer.Deserialize<Board>(File.ReadAllText(_path));
-            if (board is not null) _board = board;
+            if (board is not null)
+            {
+                // Legacy files (pre-sync) lack the sync fields; explicit nulls
+                // normalize to empties so the merge layer never sees null.
+                board.Nodes ??= new List<Node>();
+                board.Edges ??= new List<Edge>();
+                board.Machines ??= new List<Machine>();
+                board.Scratch ??= "";
+                board.Tombstones ??= new List<GraphTombstone>();
+                _board = board;
+            }
         }
         catch (Exception ex)
         {
@@ -336,6 +587,8 @@ public class TaskGraphService
     {
         try
         {
+            var cutoff = DateTimeOffset.UtcNow.AddDays(-TombstoneRetentionDays).ToUnixTimeMilliseconds();
+            _board.Tombstones.RemoveAll(t => t.DeletedAt < cutoff);
             var tmp = _path + ".tmp";
             File.WriteAllText(tmp, JsonSerializer.Serialize(_board, JsonOpts));
             File.Move(tmp, _path, overwrite: true);

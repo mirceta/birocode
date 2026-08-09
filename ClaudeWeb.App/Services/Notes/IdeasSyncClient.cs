@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using ClaudeWeb.Services.TaskGraph;
 
 namespace ClaudeWeb.Services.Notes;
 
@@ -23,8 +24,13 @@ public class IdeasSyncClient
     private static readonly JsonSerializerOptions InOpts = new() { PropertyNameCaseInsensitive = true };
     private static readonly JsonSerializerOptions OutOpts = new();
 
-    /// <summary>The shared board payload, PascalCase like the local notes.json.</summary>
-    public sealed record SharedStore(List<NotesService.Note>? Ideas, List<NotesService.Tombstone>? Tombstones);
+    /// <summary>The shared board payload, PascalCase like the local notes.json.
+    /// Graph is the task graph section (openspec sync-task-graph) — null when the
+    /// store was last written by a harness that predates it.</summary>
+    public sealed record SharedStore(
+        List<NotesService.Note>? Ideas,
+        List<NotesService.Tombstone>? Tombstones,
+        TaskGraphService.GraphSnapshot? Graph = null);
 
     /// <summary>One endpoint exchange. Ok=false + Conflict=true means the CAS
     /// baseRev was stale — Store carries the current remote board to re-merge.</summary>
