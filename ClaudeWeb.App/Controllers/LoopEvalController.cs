@@ -11,11 +11,12 @@ namespace ClaudeWeb.Controllers;
 /// Start/watch/stop live-mode loop-eval runs from the Tests tab (openspec:
 /// add-loop-eval-ui-runner).
 ///
-///   GET    /api/loopeval/preflight     — read-only precondition report + scenario catalog
-///   POST   /api/loopeval/runs          — start a scenario ({scenario}); 409 while one is active
-///   GET    /api/loopeval/runs/current  — current (or last) run snapshot
-///   DELETE /api/loopeval/runs/current  — stop: kill the run's whole process tree
-///   GET    /api/loopeval/runs/stream   — SSE: fresh snapshot on every state/tail/verdict change
+///   GET    /api/loopeval/preflight      — read-only precondition report + scenario catalog
+///   POST   /api/loopeval/runs           — start a scenario ({scenario}); 409 while one is active
+///   GET    /api/loopeval/runs/current   — current (or last) run snapshot
+///   DELETE /api/loopeval/runs/current   — stop: kill the run's whole process tree
+///   GET    /api/loopeval/runs/stream    — SSE: fresh snapshot on every state/tail/verdict change
+///   POST   /api/loopeval/fixture/finish — FINISH AGENT: deferred teardown of the kept fixture
 ///
 /// Behind the normal session auth like every /api route, and deliberately NOT
 /// fenced by the autopilot operator gate: the preflight must be readable while
@@ -65,6 +66,18 @@ public class LoopEvalController : ControllerBase
     {
         _logger.CountRequest();
         var (status, body) = _runner.Stop();
+        return StatusCode(status, body);
+    }
+
+    /// <summary>FINISH AGENT: tear down the kept fixture (stop loop, close dock
+    /// tab, unregister repo card, delete the scratch copy) once the operator is
+    /// done watching. The dock stays visible after a run's verdict until this
+    /// is called (openspec: loop-eval-watchable-dock).</summary>
+    [HttpPost("fixture/finish")]
+    public IActionResult FinishFixture()
+    {
+        _logger.CountRequest();
+        var (status, body) = _runner.FinishFixture();
         return StatusCode(status, body);
     }
 
