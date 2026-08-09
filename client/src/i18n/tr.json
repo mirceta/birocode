@@ -516,7 +516,7 @@
   "dashboard.dockFilterMain": "main",
   "dashboard.dockFilterFeature": "main disi",
   "dashboard.dockFilterRunning": "calisiyor",
-  "dashboard.dockFilterUnseen": "gorulmemis",
+  "dashboard.dockFilterRunningTitle": "calisiyor veya gorulmemis sonuc",
   "dashboard.dockFilterHidden": "{count} tanesi filtreyle gizli",
   "dashboard.allHidden": "Tum dock'lar gizli. Birini gostermek icin yukaridaki Dock'lar cubugunu kullanin.",
   "dashboard.markWide": "Iki yatay alana genislet",

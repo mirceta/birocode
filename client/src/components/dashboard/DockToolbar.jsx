@@ -46,21 +46,28 @@ import { useT } from '../../i18n/LanguageContext';
 // invisible neighbors would be ambiguous; the selection reapplies on exit.
 // Like reorder state, the selection is view-local and resets on unmount/reload.
 //
-// Status states (openspec dock-strip-status-filters): the same control also
-// offers `running` and `unseen`, classifying each tab by what its DOT
-// currently shows — the isRunning/isUnseen helpers below are the single
-// source for both the dot and the filter, so they can never disagree. Status
-// is live by nature: the /runs poll and roster refresh re-bucket tabs on the
-// next tick, and clicking an unseen tab under `unseen` shows the dock, which
-// clears the server latch — the tab then leaves the view (intended triage
-// flow, not a glitch).
+// Status state (openspec dock-strip-status-filters, merged by openspec
+// dock-strip-filter-merge): the same control also offers `running`, a single
+// "needs attention" view matching tabs whose DOT currently shows the running
+// state OR the `!` unseen marker — the isRunning/isUnseen helpers below are
+// the single source for both the dot and the filter, so they can never
+// disagree. There is no separate `unseen` state. Status is live by nature:
+// the /runs poll and roster refresh re-bucket tabs on the next tick, and
+// clicking an unseen tab under `running` shows the dock, which clears the
+// server latch — the tab STAYS rendered (now grid-visible, see below).
+//
+// Grid-visible exemption (openspec dock-strip-filter-merge): a tab whose dock
+// currently renders in the grid (dashboard !== false) matches EVERY filter
+// state — branch and status alike — so the strip is always a superset of
+// what's on screen and filters only ever narrow hidden docks' tabs. The +N
+// excluded count therefore only ever counts hidden docks.
 const mainlike = (branch) => branch === 'main' || branch === 'master';
 
 export default function DockToolbar({ tabs, live, git, onToggle, onReorder }) {
   const { t } = useT();
   const [reordering, setReordering] = useState(false);
   const [pickedId, setPickedId] = useState(null);
-  const [filter, setFilter] = useState('all'); // 'all' | 'main' | 'feature' | 'running' | 'unseen'
+  const [filter, setFilter] = useState('all'); // 'all' | 'main' | 'feature' | 'running'
   if (!tabs.length) return null;
 
   const branchOf = (tab) => {
@@ -73,8 +80,10 @@ export default function DockToolbar({ tabs, live, git, onToggle, onReorder }) {
   const isUnseen = (tab) => tab.dashboard === false && !isRunning(tab) && !!tab.unseenResult;
   const matchesFilter = (tab) => {
     if (filter === 'all') return true;
-    if (filter === 'running') return isRunning(tab);
-    if (filter === 'unseen') return isUnseen(tab);
+    // Grid-visible docks are exempt from every filter: the strip must stay a
+    // superset of what the grid shows, so filters only narrow HIDDEN docks.
+    if (tab.dashboard !== false) return true;
+    if (filter === 'running') return isRunning(tab) || isUnseen(tab);
     const branch = branchOf(tab);
     if (!branch) return false; // unclassifiable: only the All state shows it
     return filter === 'main' ? mainlike(branch) : !mainlike(branch);
@@ -138,19 +147,21 @@ export default function DockToolbar({ tabs, live, git, onToggle, onReorder }) {
           .join(', ')}
       >
         {[
-          ['all', 'dashboard.dockFilterAll', null],
-          ['main', 'dashboard.dockFilterMain', '⎇'],
-          ['feature', 'dashboard.dockFilterFeature', '⎇'],
-          ['running', 'dashboard.dockFilterRunning', '●'],
-          ['unseen', 'dashboard.dockFilterUnseen', '!'],
-        ].map(([state, key, glyph]) => (
+          ['all', 'dashboard.dockFilterAll', null, null],
+          ['main', 'dashboard.dockFilterMain', '⎇', null],
+          ['feature', 'dashboard.dockFilterFeature', '⎇', null],
+          // The visible label stays short ("running"); the title/aria-label
+          // spells out that the state also matches unseen `!` results.
+          ['running', 'dashboard.dockFilterRunning', '●', 'dashboard.dockFilterRunningTitle'],
+        ].map(([state, key, glyph, titleKey]) => (
           <button
             key={state}
             type="button"
             className={`dash__dockfilter-btn${filter === state ? ' dash__dockfilter-btn--on' : ''}`}
             aria-pressed={filter === state}
             disabled={reordering}
-            title={t(key)}
+            title={t(titleKey || key)}
+            aria-label={t(titleKey || key)}
             onClick={() => setFilter(state)}
           >
             {glyph && <span aria-hidden="true">{glyph} </span>}
