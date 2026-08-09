@@ -24,7 +24,9 @@ namespace ClaudeWeb.Controllers;
 ///   POST   /api/notes/hub/{token}     path exempt in PasswordAuthMiddleware AND
 ///                                     IpFilterMiddleware -- open to any IP)
 /// Hub responses are always HTTP 200 with errors in the body — the same
-/// Apps-Script-shaped envelope the remote IdeasSyncClient already parses.
+/// Apps-Script-shaped envelope the remote IdeasSyncClient already parses. The
+/// shared store carries the task graph section beside the ideas board
+/// (openspec sync-task-graph); one sync channel replicates both.
 /// `project` is an optional free-text label (plans/ideas-filter-project.md);
 /// `priority` is 0 = none, 1–5 = increasing (plans/idea-priority.md);
 /// `active` pins the idea into the Active section (plans/ideas-active-section.md).
@@ -108,7 +110,11 @@ public class NotesController : ControllerBase
             return BadRequest(new { error = urlError });
         var before = _syncConfig.Current;
         var cfg = _syncConfig.Update(request.Enabled, request.SyncUrl, request.PollSeconds);
-        _sync.Nudge(targetChanged: !string.Equals(before.SyncUrl, cfg.SyncUrl, StringComparison.Ordinal));
+        // First contact with a store (URL moved, or sync flipped on) seeds it
+        // with the local board (openspec adopt-preexisting-ideas-on-join).
+        _sync.Nudge(
+            targetChanged: !string.Equals(before.SyncUrl, cfg.SyncUrl, StringComparison.Ordinal),
+            becameEnabled: cfg.Enabled && !before.Enabled);
         return Ok(new { enabled = cfg.Enabled, syncUrl = cfg.SyncUrl, pollSeconds = cfg.PollSeconds });
     }
 
@@ -158,7 +164,7 @@ public class NotesController : ControllerBase
             return Ok(ToWire(new IdeasHubService.HubEnvelope(false, false, 0, null, "Unknown hub URL or hub hosting is disabled.")));
         if (request is null)
             return Ok(ToWire(new IdeasHubService.HubEnvelope(false, false, 0, null, "A JSON body with baseRev and store is required.")));
-        var env = _hub.Post(request.BaseRev, request.Store?.Ideas ?? new(), request.Store?.Tombstones ?? new());
+        var env = _hub.Post(request.BaseRev, request.Store);
         return Ok(ToWire(env));
     }
 
@@ -167,7 +173,7 @@ public class NotesController : ControllerBase
         ok = env.Ok,
         conflict = env.Conflict,
         rev = env.Rev,
-        store = env.Store is null ? null : new { ideas = env.Store.Ideas, tombstones = env.Store.Tombstones },
+        store = env.Store is null ? null : new { ideas = env.Store.Ideas, tombstones = env.Store.Tombstones, graph = env.Store.Graph },
         error = env.Error,
     };
 
