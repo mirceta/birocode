@@ -1,20 +1,15 @@
-## 1. Queued-prompt indicator on strip tabs
+## 1. Branch filter on the strip
 
-- [ ] 1.1 In `DockToolbar.jsx`, derive `queued = (tab.stash?.length || 0) > 0` per tab (same field the grid cell's `dash-cell--queued` border reads)
-- [ ] 1.2 Add a `dash__docktab-dot--queued` modifier rendering a near-black ring (with a 1px light halo gap) around the dot, composing with the at-rest color, `--running`, and `--unseen` states in `dashboard.css`
-- [ ] 1.3 Add the queued fragment to the tab's composed aria-label/title (new i18n key `dashboard.dockToolbarQueued` in `en.json` + `tr.json`)
-- [ ] 1.4 Verify the roster tabs passed to the toolbar carry `stash` for hidden docks too (DockContext syncs the full roster); if a mapping strips it, thread the field through
+- [ ] 1.1 In `DockToolbar.jsx`, add view-local filter state (`'all' | 'main' | 'feature'`, default `'all'`) alongside the reorder-mode state
+- [ ] 1.2 Derive each tab's classification from the existing `git` map: normalize `'unknown'` → no branch, `mainlike = branch === 'main' || branch === 'master'`; filter the rendered tabs (`'main'` → mainlike only, `'feature'` → known non-mainlike only, `'all'` → everything)
+- [ ] 1.3 Render a three-button segmented control next to the ⇄ toggle (`All` / `⎇ main` / `⎇ ≠main`) with `aria-pressed` on the active segment and i18n labels (`dashboard.dockFilterAll`, `dashboard.dockFilterMain`, `dashboard.dockFilterFeature` in `en.json` + `tr.json`)
+- [ ] 1.4 Render the `+N` hidden-tab count chip when a non-All state excludes tabs (i18n `dashboard.dockFilterHidden`), also folded into the filter group's accessible label; no chip when nothing is excluded
+- [ ] 1.5 Suspend the filter in reorder mode: full roster renders, segmented control disabled, selection retained and reapplied on exit
+- [ ] 1.6 Style the segmented control + count chip in `dashboard.css` to match the reorder toggle's visual weight
 
-## 2. Bulk show/hide controls
+## 2. Verify
 
-- [ ] 2.1 Add show-all / hide-all buttons beside the ⇄ reorder toggle in `DockToolbar.jsx`, with i18n aria-labels/titles (`dashboard.dockShowAll`, `dashboard.dockHideAll` in `en.json` + `tr.json`)
-- [ ] 2.2 Disable each button when it is a no-op (all docks already shown / already hidden) and while reorder mode is active
-- [ ] 2.3 Add an `onToggleAll(visible)` prop; in `Dashboard.jsx` implement it by iterating the existing per-dock visibility update path over docks whose `dashboard` state differs from the target
-- [ ] 2.4 Style the buttons in `dashboard.css` to match the reorder toggle's visual weight
-
-## 3. Verify
-
-- [ ] 3.1 `npm --prefix client run build` passes
-- [ ] 3.2 Browser-verify per `docs/claude-web/browser-testing.md`: queued ring appears on a hidden dock's tab when a prompt is stashed and disappears when the stash empties; ring composes with running (black pulsing) and unseen (!) states
-- [ ] 3.3 Browser-verify bulk controls: hide-all empties the grid recoverably (empty-state hint, strip intact), show-all restores every tile, Agents-page toggles agree, both disabled at their no-op extreme and in reorder mode
-- [ ] 3.4 `openspec validate dock-strip-amendments --strict` passes
+- [ ] 2.1 `npm --prefix client run build` passes
+- [ ] 2.2 Browser-verify per `docs/claude-web/browser-testing.md`: with repos on `main` and on a feature branch, each filter state renders exactly the matching tabs; unknown-branch tab shows only in All; `+N` chip counts the excluded tabs; grid tiles and Agents-page visibility toggles never change while switching states
+- [ ] 2.3 Browser-verify ephemerality + reorder: reload resets to All; entering ⇄ shows the full roster with the filter control disabled, exiting reapplies the prior state
+- [ ] 2.4 `openspec validate dock-strip-amendments --strict` passes

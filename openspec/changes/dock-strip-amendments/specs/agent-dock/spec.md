@@ -1,61 +1,77 @@
 ## ADDED Requirements
 
-### Requirement: Dock toolbar tabs mark queued prompts
+### Requirement: Dock toolbar branch filter
 
-The dashboard's dock toolbar SHALL mark a dock's tab when that dock's agent has one or more
-queued prompts (a non-empty per-agent prompt stash), extending the queued-prompt signal —
-today carried only by dock-tile borders — to the strip. The marker SHALL use the queued
-signal's existing near-black visual language, rendered as a ring around the tab's status
-dot so it composes with, rather than replaces, the dot's other states: the assigned color
-at rest, the near-black running presentation, and the unseen-result exclamation. The marker
-SHALL appear on hidden docks' tabs too, so the operator can tell prompts are waiting on an
-agent whose tile is not rendered. When the queue empties, the marker SHALL disappear
-without a page reload. The tab's accessible label SHALL convey the queued state so the
-ring never carries the meaning alone.
+The dashboard's dock toolbar SHALL offer a three-state branch filter over its tabs:
+**All** (every roster dock's tab renders, the default), **on main** (only tabs whose
+repo's current branch is `main` or `master`), and **not on main** (only tabs whose repo's
+branch is known and is neither `main` nor `master`). Classification SHALL reuse the same
+per-repo branch the strip's branch row already reads (the dashboard's git status map),
+with no additional git polling; docks sharing a repo classify identically. A tab whose
+branch is unknown (fetch pending, repo unreadable, or branch reported `unknown`) SHALL
+render only in **All**. The filter SHALL affect only which tabs the strip renders: it
+SHALL NOT change the dashboard grid, any dock's persisted dashboard-visibility state, the
+roster order, or the Agents page. Tabs rendered under a filtered view SHALL keep their
+full existing behavior (click-to-toggle visibility, dot states, star, branch row). The
+filter control SHALL convey the active state accessibly, and when the git map refreshes
+and a repo's branch changes, the filtered strip SHALL update without a page reload.
 
-#### Scenario: Hidden dock with queued prompts is visible in the strip
+#### Scenario: Only mainline agents
 
-- **WHEN** a dock is hidden from the dashboard grid and its agent has one or more queued prompts
-- **THEN** the dock's toolbar tab shows the queued ring around its dot, and the tab's accessible label includes the queued state
+- **WHEN** the operator selects the **on main** filter state
+- **THEN** the strip renders only tabs whose repo's branch is `main` or `master`, and the dashboard grid keeps rendering exactly the docks it rendered before
 
-#### Scenario: Queued ring composes with the dot's other states
+#### Scenario: Only feature-branch agents
 
-- **WHEN** a dock's agent has queued prompts while the dot is showing its at-rest assigned color, the near-black running state, or the unseen-result exclamation
-- **THEN** the queued ring renders around the dot in every case, hiding neither the dot state nor the exclamation
+- **WHEN** the operator selects the **not on main** filter state
+- **THEN** the strip renders only tabs whose repo's branch is known and is neither `main` nor `master`
 
-#### Scenario: The queue empties
+#### Scenario: Unknown branch shows only in All
 
-- **WHEN** the last queued prompt for an agent is sent or removed
-- **THEN** its toolbar tab's queued ring disappears without a page reload
+- **WHEN** a dock's repo has no known branch and the filter is in a non-All state
+- **THEN** that dock's tab is not rendered in the strip, and selecting **All** renders it again
 
-### Requirement: Dock toolbar bulk show/hide controls
+#### Scenario: Branch change re-buckets a tab live
 
-The dock toolbar SHALL offer two bulk visibility controls beside the reorder toggle: a
-**show all** control that renders every roster dock in the dashboard grid, and a **hide
-all** control that hides every roster dock (leaving the existing recoverable empty grid
-with the strip still listing all tabs). Both SHALL act through the same per-dock
-dashboard-visibility state and update path the individual tabs use, so the strip, the
-grid, and the Agents-page visibility controls stay consistent, and SHALL NOT close, stop,
-or delete any dock. A bulk control SHALL be disabled when it would change nothing (all
-docks already shown, or already hidden) and while reorder mode is active. Both controls
-SHALL carry accessible labels.
+- **WHEN** a filtered view is active and the dashboard's git status refresh reports a repo moved between a mainline and a non-mainline branch
+- **THEN** the affected tabs enter or leave the filtered strip accordingly, without a page reload
 
-#### Scenario: Show all restores the full wall
+#### Scenario: Filtering never touches grid visibility
 
-- **WHEN** some docks are hidden from the grid and the operator activates the show-all control
-- **THEN** every roster dock renders in the grid, all tabs show as active, and the Agents-page visibility toggles agree
+- **WHEN** the operator switches between filter states while some docks are hidden from the grid
+- **THEN** every dock's `dashboard` visibility state is unchanged, and the Agents-page toggles agree with the state from before the filtering
 
-#### Scenario: Hide all empties the grid recoverably
+### Requirement: The strip conveys that a branch filter is active
 
-- **WHEN** the operator activates the hide-all control
-- **THEN** every dock's tile is removed from the grid, the empty-state hint shows, all tabs remain in the strip as inactive, and no dock is closed or deleted
+The dock toolbar SHALL show how many tabs are filtered out (a hidden-tab count) whenever
+a non-All filter state is selected and it excludes at least one tab, so a roster dock
+never silently disappears from the strip. The count SHALL be exposed accessibly alongside
+the filter control's own state.
 
-#### Scenario: No-op bulk controls are disabled
+#### Scenario: Hidden-tab count shows
 
-- **WHEN** every roster dock is already visible in the grid
-- **THEN** the show-all control is disabled (and correspondingly hide-all is disabled when every dock is already hidden)
+- **WHEN** the **on main** state is selected and three roster docks are on feature branches or have unknown branches
+- **THEN** the strip shows that three tabs are filtered out, and the control's accessible label reflects the active filter
 
-#### Scenario: Reorder mode suspends bulk controls
+#### Scenario: Nothing filtered, no count
 
-- **WHEN** the strip's reorder mode is active
-- **THEN** both bulk controls are disabled, and they become usable again when the mode is exited
+- **WHEN** the selected filter state excludes no tabs (or **All** is selected)
+- **THEN** no hidden-tab count is shown
+
+### Requirement: The branch filter is ephemeral and yields to reorder mode
+
+The branch filter selection SHALL be device-local, view-local, and ephemeral: it SHALL
+reset to **All** when the web UI is reloaded and SHALL NOT be persisted server-side or
+shared across devices. While the strip's reorder mode is active, the filter SHALL be
+suspended — the full roster renders (so every position is reachable) and the filter
+control is disabled — and the previous selection SHALL reapply when reorder mode exits.
+
+#### Scenario: Reload resets to All
+
+- **WHEN** the operator selects a non-All filter state and reloads the web UI
+- **THEN** the strip comes back unfiltered with the control on **All**
+
+#### Scenario: Reorder mode shows the full roster
+
+- **WHEN** a non-All filter state is active and the operator enters reorder mode
+- **THEN** every roster tab renders for reordering and the filter control is disabled; exiting reorder mode reapplies the previous filter state

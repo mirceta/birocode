@@ -3,12 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>dock-strip-amendments — proposal</title>
+<title>dock-strip-amendments — branch filter proposal</title>
 <style>
   :root {
     --bg: #f7f5f0; --card: #ffffff; --ink: #1f1d1a; --muted: #6f6a60;
     --accent: #d97a2b; --line: #e4dfd5; --black: #23211d; --gold: #d4a017;
-    --green: #4a7c59; --red: #b0413e;
   }
   * { box-sizing: border-box; }
   body { margin: 0; font: 15px/1.55 "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--ink); }
@@ -20,113 +19,117 @@
   section { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-top: 18px; }
   section h2 { margin: 0 0 6px; font-size: 17px; }
   section > p { color: var(--muted); margin: 0 0 14px; }
-  /* --- mock strip --- */
   .strip { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: #f1ede4; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
   .strip .lbl { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-right: 2px; }
-  .ctl { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 4px 9px; font-size: 14px; cursor: pointer; }
+  .ctl { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 4px 9px; font-size: 13px; cursor: pointer; font-family: inherit; }
   .ctl:disabled { opacity: .35; cursor: default; }
-  .ctl.on { background: var(--black); color: #fff; }
-  .tab { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: #fff; border-radius: 9px; padding: 6px 10px; cursor: pointer; opacity: .45; }
+  .ctl.on { background: var(--black); color: #fff; border-color: var(--black); }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg .ctl { border: 0; border-radius: 0; }
+  .seg .ctl + .ctl { border-left: 1px solid var(--line); }
+  .chip { font-size: 12px; color: var(--muted); background: #fff; border: 1px dashed var(--line); border-radius: 999px; padding: 2px 9px; }
+  .tab { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: #fff; border-radius: 9px; padding: 6px 10px; cursor: pointer; opacity: .45; font-family: inherit; }
   .tab.on { opacity: 1; border-color: #c9c2b2; }
   .tab .txt { display: flex; flex-direction: column; line-height: 1.15; text-align: left; }
   .tab .nm { font-size: 13px; font-weight: 600; }
   .tab .br { font-size: 11px; color: var(--muted); }
   .tab .star { color: var(--gold); font-size: 13px; }
-  .dot { width: 13px; height: 13px; border-radius: 50%; flex: none; display: grid; place-items: center; font: 700 10px/1 sans-serif; color: #fff; }
+  .dot { width: 13px; height: 13px; border-radius: 50%; flex: none; }
   .dot.running { background: var(--black); animation: pulse 1.2s infinite; }
-  .dot.unseen { background: var(--black); }
-  /* NEW: queued ring — near-black ring + 1px halo gap, composes with any dot state */
-  .dot.queued { box-shadow: 0 0 0 1.5px #fff, 0 0 0 4px var(--black); }
   @keyframes pulse { 50% { opacity: .55; } }
   .cap { font-size: 12.5px; color: var(--muted); margin-top: 10px; }
   .new { outline: 2px dashed var(--accent); outline-offset: 3px; border-radius: 10px; position: relative; }
   .newtag { position: absolute; top: -11px; left: 8px; background: var(--accent); color: #fff; font-size: 10px; border-radius: 999px; padding: 1px 8px; letter-spacing: .04em; }
-  /* legend grid */
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
-  .cell { border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: flex; gap: 10px; align-items: center; }
-  .cell b { font-size: 13px; display: block; }
-  .cell small { color: var(--muted); font-size: 12px; }
-  /* flow */
-  .flow { display: flex; gap: 10px; flex-wrap: wrap; align-items: stretch; }
-  .step { flex: 1 1 200px; border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: #fbfaf7; }
-  .step b { display: block; font-size: 13px; margin-bottom: 4px; }
-  .step small { color: var(--muted); }
-  .arrow { align-self: center; color: var(--muted); font-size: 18px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .cell { border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  .cell b { font-size: 13.5px; display: block; margin-bottom: 3px; }
+  .cell small { color: var(--muted); font-size: 12.5px; }
   .note { border-left: 3px solid var(--accent); padding: 8px 12px; background: #fdf6ee; border-radius: 0 8px 8px 0; font-size: 13.5px; margin-top: 14px; }
-  button.tab, button.ctl { font-family: inherit; }
+  code { background: #f1ede4; border-radius: 4px; padding: 0 4px; font-size: 13px; }
 </style>
 </head>
 <body>
 <header>
-  <h1>Dock strip amendments <span class="badge">OpenSpec: dock-strip-amendments — proposed</span></h1>
-  <p>Two additions to the dashboard's horizontal agent strip: a <b>queued-prompt ring</b> on tab dots (finally visible for hidden docks) and <b>show-all / hide-all</b> bulk visibility controls. Frontend-only.</p>
+  <h1>Strip branch filter <span class="badge">OpenSpec: dock-strip-amendments — proposed</span></h1>
+  <p>One amendment to the dashboard's horizontal agent strip: a three-state <b>branch filter</b> — show all agents, only those on <code>main</code>/<code>master</code>, or only those that aren't. Frontend-only, view-only, ephemeral.</p>
 </header>
 <main>
 
   <section>
-    <h2>Interactive mock — the strip after this change</h2>
-    <p>Click tabs to hide/show (as today). The two ▣/▢ buttons and the ringed dots are the new parts. Try “hide all”, then watch the queued ring still tell you agent <i>birocode</i> has work waiting.</p>
+    <h2>Interactive mock — try the filter</h2>
+    <p>The segmented control is the new part. Switch states and watch the strip narrow; note the <b>+N chip</b> when tabs are filtered out, and that dimmed-vs-bright (grid hidden/shown) never changes — the filter never touches visibility state. The ⇄ reorder toggle suspends the filter.</p>
     <div class="strip" id="strip">
       <span class="lbl">Docks</span>
-      <button class="ctl" title="Reorder (existing)">⇄</button>
-      <span class="new" style="display:inline-flex;gap:8px;padding:2px;">
+      <button class="ctl" id="reorder" title="Reorder (existing)">⇄</button>
+      <span class="new" style="display:inline-flex;padding:2px;">
         <span class="newtag">NEW</span>
-        <button class="ctl" id="showAll" title="Show all docks">▣</button>
-        <button class="ctl" id="hideAll" title="Hide all docks">▢</button>
+        <span class="seg" id="seg"></span>
       </span>
     </div>
-    <div class="cap" id="gridCap"></div>
+    <div class="cap" id="cap"></div>
   </section>
 
   <section>
-    <h2>Dot states — the ring composes, it never replaces</h2>
-    <p>The queued signal is today a thick black border on dock <i>tiles</i> only — a hidden dock's queue is invisible. The ring extends it to the strip using the same near-black language.</p>
+    <h2>The three states</h2>
     <div class="grid">
-      <div class="cell"><span class="dot" style="background:#7c9a5a"></span><span><b>At rest</b><small>dock's assigned color (existing)</small></span></div>
-      <div class="cell"><span class="dot running"></span><span><b>Running</b><small>near-black, pulsing (existing)</small></span></div>
-      <div class="cell"><span class="dot unseen">!</span><span><b>Unseen result</b><small>finished while hidden (existing)</small></span></div>
-      <div class="cell"><span class="dot queued" style="background:#7c9a5a"></span><span><b>Queued + at rest</b><small>NEW ring around the color</small></span></div>
-      <div class="cell"><span class="dot queued running"></span><span><b>Queued + running</b><small>ring around the pulse</small></span></div>
-      <div class="cell"><span class="dot queued unseen">!</span><span><b>Queued + unseen</b><small>ring around the exclamation</small></span></div>
+      <div class="cell"><b>All (default)</b><small>Every roster tab renders — today's strip, untouched.</small></div>
+      <div class="cell"><b>⎇ main</b><small>Only tabs whose repo's current branch is <code>main</code> or <code>master</code>.</small></div>
+      <div class="cell"><b>⎇ ≠main</b><small>Only tabs whose branch is <i>known</i> and is neither. Unknown-branch tabs (fetch pending, repo unreadable) show only in All — the filter never guesses.</small></div>
     </div>
-    <div class="note">Ring spec: near-black (<code>--color-text</code>) with a 1px light halo gap so it reads over any assigned color. Queued state is also spoken in the tab's aria-label.</div>
+    <div class="note">Filtered tabs keep full behavior (click still hides/shows the dock in the grid; dots, star, branch row unchanged). The selection is device-local and resets to All on reload — like reorder mode, it's strip view state, not roster state.</div>
   </section>
 
   <section>
-    <h2>Where the data comes from</h2>
-    <p>No backend change: the roster tabs already carry the per-agent prompt stash.</p>
-    <div class="flow">
-      <div class="step"><b>DockContext roster</b><small><code>tab.stash</code> synced for every dock, hidden ones included</small></div>
-      <div class="arrow">→</div>
-      <div class="step"><b>Grid cell (today)</b><small><code>tab.stash?.length</code> → <code>dash-cell--queued</code> black tile border</small></div>
-      <div class="arrow">→</div>
-      <div class="step"><b>DockToolbar (new)</b><small>same field → <code>dash__docktab-dot--queued</code> ring</small></div>
+    <h2>What it reuses (no new data, no backend)</h2>
+    <div class="grid">
+      <div class="cell"><b>Branch source</b><small>The per-repo <code>git</code> map the strip's branch row already reads (<code>git[tab.repoId].branch</code>). No new polling; a git refresh re-buckets tabs live.</small></div>
+      <div class="cell"><b>Never loses an agent</b><small>A non-All state that excludes tabs shows a <code>+N</code> hidden count, spoken in the control's accessible label too.</small></div>
+      <div class="cell"><b>Reorder mode wins</b><small>⇄ shows the full roster (every position reachable) and disables the filter; the selection reapplies on exit.</small></div>
     </div>
-    <div class="note">Bulk show/hide likewise adds no state: <code>onToggleAll(visible)</code> iterates the existing per-dock <code>dashboard</code> update path — the same one single tab clicks and the Agents-page ▦ toggle use, so all surfaces stay in sync. Disabled when a no-op or while reorder mode owns the strip's clicks.</div>
   </section>
 
 </main>
 <script>
   const docks = [
-    { id: 'a', name: 'birocode',  branch: 'feat/dock-strip-amendments', color: '#7c9a5a', on: true,  queued: true,  star: true,  state: 'rest' },
-    { id: 'b', name: 'homepage',  branch: 'main',                        color: '#5a7c9a', on: true,  queued: false, star: false, state: 'running' },
-    { id: 'c', name: 'events',    branch: 'main',                        color: '#9a5a7c', on: false, queued: true,  star: false, state: 'rest' },
-    { id: 'd', name: 'sandbox',   branch: '',                            color: '#b08a4f', on: false, queued: false, star: false, state: 'unseen' },
+    { name: 'birocode', branch: 'feat/dock-strip-amendments', color: '#7c9a5a', on: true,  star: true,  running: false },
+    { name: 'homepage', branch: 'main',                        color: '#5a7c9a', on: true,  star: false, running: true  },
+    { name: 'events',   branch: 'master',                      color: '#9a5a7c', on: false, star: false, running: false },
+    { name: 'agentlab', branch: 'feat/loop-tests',             color: '#4f7c8a', on: true,  star: false, running: false },
+    { name: 'sandbox',  branch: '',                            color: '#b08a4f', on: false, star: false, running: false },
   ];
+  const STATES = [
+    { id: 'all',     label: 'All' },
+    { id: 'main',    label: '⎇ main' },
+    { id: 'feature', label: '⎇ ≠main' },
+  ];
+  let filter = 'all', reordering = false;
   const strip = document.getElementById('strip');
-  const cap = document.getElementById('gridCap');
-  const showAll = document.getElementById('showAll');
-  const hideAll = document.getElementById('hideAll');
+  const seg = document.getElementById('seg');
+  const cap = document.getElementById('cap');
+  const reorderBtn = document.getElementById('reorder');
+  const mainlike = b => b === 'main' || b === 'master';
+  const matches = d => filter === 'all' || (filter === 'main' ? mainlike(d.branch) : d.branch && !mainlike(d.branch));
   function render() {
-    strip.querySelectorAll('.tab').forEach(el => el.remove());
-    docks.forEach(d => {
+    seg.innerHTML = '';
+    STATES.forEach(s => {
+      const b = document.createElement('button');
+      b.className = 'ctl' + (filter === s.id ? ' on' : '');
+      b.textContent = s.label;
+      b.disabled = reordering;
+      b.onclick = () => { filter = s.id; render(); };
+      seg.appendChild(b);
+    });
+    reorderBtn.className = 'ctl' + (reordering ? ' on' : '');
+    strip.querySelectorAll('.tab, .chip').forEach(el => el.remove());
+    const effective = reordering ? 'all' : filter;
+    const shown = docks.filter(d => reordering || matches(d));
+    shown.forEach(d => {
       const b = document.createElement('button');
       b.className = 'tab' + (d.on ? ' on' : '');
-      b.title = (d.on ? 'Hide ' : 'Show ') + d.name + (d.queued ? ', prompts queued' : '');
+      b.title = (d.on ? 'Hide ' : 'Show ') + d.name;
       const dot = document.createElement('span');
-      dot.className = 'dot' + (d.state === 'running' ? ' running' : d.state === 'unseen' && !d.on ? ' unseen' : '') + (d.queued ? ' queued' : '');
-      if (d.state === 'rest' || d.on) dot.style.background = d.state === 'running' ? '' : d.color;
-      dot.textContent = (d.state === 'unseen' && !d.on) ? '!' : '';
+      dot.className = 'dot' + (d.running ? ' running' : '');
+      if (!d.running) dot.style.background = d.color;
       const txt = document.createElement('span'); txt.className = 'txt';
       const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = d.name;
       txt.appendChild(nm);
@@ -136,15 +139,20 @@
       b.onclick = () => { d.on = !d.on; render(); };
       strip.appendChild(b);
     });
-    const shown = docks.filter(d => d.on).length;
-    showAll.disabled = shown === docks.length;
-    hideAll.disabled = shown === 0;
-    cap.textContent = shown === 0
-      ? 'Grid: empty (recoverable) — every tab still listed above; note the queued rings on hidden docks.'
-      : 'Grid: ' + shown + ' of ' + docks.length + ' dock tiles rendered. Dimmed tabs = hidden from the grid.';
+    const hidden = docks.length - shown.length;
+    if (hidden > 0) {
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.textContent = '+' + hidden + ' filtered';
+      strip.appendChild(chip);
+    }
+    cap.textContent = reordering
+      ? 'Reorder mode: full roster shown, filter suspended (selection kept: ' + filter + ').'
+      : effective === 'all'
+        ? 'Unfiltered — all ' + docks.length + ' tabs. “sandbox” has no known branch, so it only ever shows here.'
+        : shown.length + ' of ' + docks.length + ' tabs match “' + STATES.find(s => s.id === effective).label + '”. Grid visibility (dim vs bright) is untouched.';
   }
-  showAll.onclick = () => { docks.forEach(d => d.on = true); render(); };
-  hideAll.onclick = () => { docks.forEach(d => d.on = false); render(); };
+  reorderBtn.onclick = () => { reordering = !reordering; render(); };
   render();
 </script>
 </body>
