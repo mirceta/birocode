@@ -906,4 +906,3 @@ misattributed.
 
 - **WHEN** the Queue audit view renders over a ledger containing entries recorded before kind attribution existed
 - **THEN** those entries do not appear in the queue-filtered list, and the raw ledger remains the place to read them
-
