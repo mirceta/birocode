@@ -41,7 +41,9 @@ public class IdeasSyncClient
 
     public virtual async Task<EndpointResult> GetAsync(string url, CancellationToken ct)
     {
-        var body = await Http.GetStringAsync(WithQuery(url, "fn=get"), ct);
+        using var resp = await Http.GetAsync(WithQuery(url, "fn=get"), ct);
+        if (HttpFailure(resp) is { } failed) return failed;
+        var body = await resp.Content.ReadAsStringAsync(ct);
         return Parse(body);
     }
 
@@ -50,8 +52,33 @@ public class IdeasSyncClient
         var payload = JsonSerializer.Serialize(new { baseRev, store }, OutOpts);
         using var content = new StringContent(payload, Encoding.UTF8, "application/json");
         using var resp = await Http.PostAsync(url, content, ct);
+        if (HttpFailure(resp) is { } failed) return failed;
         var body = await resp.Content.ReadAsStringAsync(ct);
         return Parse(body);
+    }
+
+    // Guided errors for HTTP failure statuses (openspec fix-ideas-sync-url-guidance):
+    // both contract implementations answer 200 with errors in the body, so a
+    // failure STATUS means the URL points somewhere else entirely — say so
+    // instead of surfacing a raw HttpRequestException. Never embeds the URL.
+    private static EndpointResult? HttpFailure(HttpResponseMessage resp)
+    {
+        if (resp.IsSuccessStatusCode) return null;
+        var code = (int)resp.StatusCode;
+        var error = code switch
+        {
+            401 or 403 =>
+                $"The endpoint refused access (HTTP {code}). The shared-board hub " +
+                "path is open without login — this URL points at a gated page " +
+                "instead (e.g. the harness home page). Paste the FULL hub URL: " +
+                "https://<harness>/api/notes/hub/<token>.",
+            404 =>
+                "Nothing answers at this URL (HTTP 404) — it is not a shared-board " +
+                "endpoint. Paste the full hub URL (…/api/notes/hub/<token>) or an " +
+                "Apps Script …/exec URL.",
+            _ => $"The endpoint answered HTTP {code} instead of the shared-board contract.",
+        };
+        return new EndpointResult(false, false, 0, null, error);
     }
 
     private static string WithQuery(string url, string query)
