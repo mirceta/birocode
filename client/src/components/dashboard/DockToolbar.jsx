@@ -34,32 +34,47 @@ import { useT } from '../../i18n/LanguageContext';
 // roster order, which the strip AND the grid render in. Mode + pick state
 // are view-local and reset on unmount.
 //
-// Branch filter (openspec dock-strip-amendments): a three-state segmented
-// control (All / on main / not on main) narrows which tabs RENDER, classifying
+// Strip filter (openspec dock-strip-amendments): a segmented control narrows
+// which tabs RENDER. The branch states (All / on main / not on main) classify
 // each tab from the same per-repo `git` map the branch row reads. View-only:
 // it never touches any dock's persisted `dashboard` visibility, and a rendered
 // tab's click keeps its normal meaning. Unknown-branch tabs match neither
-// filtered state and render only under All. A non-All state that excludes
-// tabs shows a +N chip (and speaks the count via the group label) so agents
-// never vanish silently. Reorder mode suspends the filter — the full roster
-// renders and the control disables — because placing relative to invisible
-// neighbors would be ambiguous; the selection reapplies on exit. Like reorder
-// state, the selection is view-local and resets on unmount/reload.
+// branch-filtered state and render only under All. A non-All state that
+// excludes tabs shows a +N chip (and speaks the count via the group label) so
+// agents never vanish silently. Reorder mode suspends the filter — the full
+// roster renders and the control disables — because placing relative to
+// invisible neighbors would be ambiguous; the selection reapplies on exit.
+// Like reorder state, the selection is view-local and resets on unmount/reload.
+//
+// Status states (openspec dock-strip-status-filters): the same control also
+// offers `running` and `unseen`, classifying each tab by what its DOT
+// currently shows — the isRunning/isUnseen helpers below are the single
+// source for both the dot and the filter, so they can never disagree. Status
+// is live by nature: the /runs poll and roster refresh re-bucket tabs on the
+// next tick, and clicking an unseen tab under `unseen` shows the dock, which
+// clears the server latch — the tab then leaves the view (intended triage
+// flow, not a glitch).
 const mainlike = (branch) => branch === 'main' || branch === 'master';
 
 export default function DockToolbar({ tabs, live, git, onToggle, onReorder }) {
   const { t } = useT();
   const [reordering, setReordering] = useState(false);
   const [pickedId, setPickedId] = useState(null);
-  const [filter, setFilter] = useState('all'); // 'all' | 'main' | 'feature'
+  const [filter, setFilter] = useState('all'); // 'all' | 'main' | 'feature' | 'running' | 'unseen'
   if (!tabs.length) return null;
 
   const branchOf = (tab) => {
     const raw = git?.[tab.repoId]?.branch;
     return raw && raw !== 'unknown' ? raw : null;
   };
+  // Dot classification, shared by the dot render AND the status filter states
+  // so the filter matches exactly what the operator sees on the dot.
+  const isRunning = (tab) => (live?.[tab.id]?.status || tab.status) === 'running';
+  const isUnseen = (tab) => tab.dashboard === false && !isRunning(tab) && !!tab.unseenResult;
   const matchesFilter = (tab) => {
     if (filter === 'all') return true;
+    if (filter === 'running') return isRunning(tab);
+    if (filter === 'unseen') return isUnseen(tab);
     const branch = branchOf(tab);
     if (!branch) return false; // unclassifiable: only the All state shows it
     return filter === 'main' ? mainlike(branch) : !mainlike(branch);
@@ -123,10 +138,12 @@ export default function DockToolbar({ tabs, live, git, onToggle, onReorder }) {
           .join(', ')}
       >
         {[
-          ['all', 'dashboard.dockFilterAll'],
-          ['main', 'dashboard.dockFilterMain'],
-          ['feature', 'dashboard.dockFilterFeature'],
-        ].map(([state, key]) => (
+          ['all', 'dashboard.dockFilterAll', null],
+          ['main', 'dashboard.dockFilterMain', '⎇'],
+          ['feature', 'dashboard.dockFilterFeature', '⎇'],
+          ['running', 'dashboard.dockFilterRunning', '●'],
+          ['unseen', 'dashboard.dockFilterUnseen', '!'],
+        ].map(([state, key, glyph]) => (
           <button
             key={state}
             type="button"
@@ -136,15 +153,15 @@ export default function DockToolbar({ tabs, live, git, onToggle, onReorder }) {
             title={t(key)}
             onClick={() => setFilter(state)}
           >
-            {state !== 'all' && <span aria-hidden="true">⎇ </span>}
+            {glyph && <span aria-hidden="true">{glyph} </span>}
             {t(key)}
           </button>
         ))}
       </span>
       {visibleTabs.map((tab) => {
         const active = tab.dashboard !== false;
-        const running = (live?.[tab.id]?.status || tab.status) === 'running';
-        const unseen = !active && !running && !!tab.unseenResult;
+        const running = isRunning(tab);
+        const unseen = isUnseen(tab);
         const branch = branchOf(tab);
         const picked = reordering && pickedId === tab.id;
         const base = reordering
