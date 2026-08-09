@@ -1,0 +1,22 @@
+{
+  "id": "hello-notes",
+  "description": "Synthetic: build a two-note collection with an index, the way a babysat session did it in three commits.",
+  "loop": {
+    "kind": "queue",
+    "seed": { "mode": "plan", "items": [] }
+  },
+  "turns": [
+    { "index": 0, "commitSha": null },
+    { "index": 1, "commitSha": "78ee2e0ae619652001d525353ea48e68ec1ff879" },
+    { "index": 2, "commitSha": null },
+    { "index": 3, "commitSha": "8fccb7d2475ac58758df67c06a5106abedc6e1a4" },
+    { "index": 4, "commitSha": null },
+    { "index": 5, "commitSha": "21f1b5b2393fe46a40aa1c613f925ea3e363e5bd" }
+  ],
+  "checks": [
+    { "name": "alpha-note", "command": "findstr /C:\"# Alpha\" notes\\alpha.md" },
+    { "name": "beta-note", "command": "findstr /C:\"# Beta\" notes\\beta.md" },
+    { "name": "index-links-alpha", "command": "findstr /C:\"notes/alpha.md\" index.md" },
+    { "name": "index-links-beta", "command": "findstr /C:\"notes/beta.md\" index.md" }
+  ]
+}

@@ -229,6 +229,149 @@ export async function provision(fixtureName) {
   return { root: ROOT, datadir, fixtureRepo: materializeFixture(ROOT, fixtureName), pid: null, live: false };
 }
 
+// ------------------------------------------------------- golden examples
+// (openspec: loop-evals) A "golden example" is a captured human-babysat task
+// packaged as a git bundle (tag eval/start, branch golden, tag eval/final)
+// plus manifest.json (acceptance checks + queue seed hints), plan.md, and a
+// labeled conversation.jsonl. The golden.mjs scenario replays the real loop
+// from eval/start and scores the outcome against the checks (verdict) and the
+// golden trajectory (evidence). Authored by the curation UI (api/loop-evals).
+
+/** Where committed / external golden examples live. Defaults to the committed
+ *  tests/loop-evals/examples; override for large real-world captures. */
+export function goldenExampleDir(exampleId) {
+  const root = process.env.LOOPEVAL_GOLDEN_EXAMPLES_ROOT
+    || join(REPO, 'tests', 'loop-evals', 'examples');
+  return join(root, exampleId);
+}
+
+/** Read an example's manifest + plan text off disk — no network, no clone, so
+ *  --describe and the drift guard can use it before spending anything. */
+export function readGoldenManifest(exampleId) {
+  const dir = goldenExampleDir(exampleId);
+  const manifestPath = join(dir, 'manifest.json');
+  if (!existsSync(manifestPath)) throw new Error(`golden example not found: ${manifestPath}`);
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  const planPath = join(dir, 'plan.md');
+  return { dir, manifest, bundle: join(dir, 'repo.bundle'),
+    planText: existsSync(planPath) ? readFileSync(planPath, 'utf8') : '' };
+}
+
+/**
+ * Clone a golden example's repo.bundle at eval/start into a fresh working copy
+ * on a `work` branch, with the golden answer STRIPPED (golden branch + eval/*
+ * tags + origin removed) so the driven agent can't peek. Returns
+ * { fixtureRepo, startSha }: startSha bounds the run's own commit chain and is
+ * the shared ancestor the trajectory scorer diffs against. The bundle file is
+ * left intact on disk — compareTrajectory fetches the golden chain back from
+ * it under a private namespace at scoring time.
+ */
+export function materializeGolden(root, bundlePath, subdir = 'fixture-repo') {
+  if (!existsSync(bundlePath)) throw new Error(`golden example has no repo.bundle: ${bundlePath}`);
+  const fixtureRepo = join(root, subdir);
+  const clone = spawnSync('git', ['clone', '-q', bundlePath, fixtureRepo], { encoding: 'utf8' });
+  if (clone.status !== 0) throw new Error(`git clone of bundle failed: ${clone.stderr || clone.stdout}`);
+  const git = (...a) => spawnSync('git', ['-C', fixtureRepo, ...a], { encoding: 'utf8' });
+  const startSha = (git('rev-parse', 'refs/tags/eval/start').stdout || '').trim();
+  if (!/^[0-9a-f]{40}$/.test(startSha)) throw new Error('bundle is missing the eval/start tag');
+  git('checkout', '-q', '-B', 'work', startSha);      // working tree = start state
+  git('branch', '-D', 'golden');                       // strip the answer (ignore if not local)
+  git('tag', '-d', 'eval/start'); git('tag', '-d', 'eval/final');
+  git('remote', 'remove', 'origin');
+  return { fixtureRepo, startSha };
+}
+
+/** Run a manifest's acceptance checks in the given working copy, in order.
+ *  Each `{ name, command }` runs through the platform shell; ok = exit 0. This
+ *  is the golden scenario's PRIMARY verdict (mechanical, not byte-identity). */
+export function runChecks(fixtureRepo, checks) {
+  return (checks || []).map((c) => {
+    const r = spawnSync(c.command, { cwd: fixtureRepo, shell: true, encoding: 'utf8', timeout: 120_000 });
+    const ok = r.status === 0;
+    return { name: c.name, ok,
+      detail: ok ? '' : `exit ${r.status}: ${((r.stdout || '') + (r.stderr || '')).trim().slice(0, 200)}` };
+  });
+}
+
+function commitChain(fixtureRepo, range) {
+  const out = spawnSync('git', ['-C', fixtureRepo, 'log', '--reverse', '--format=@@%H', '--name-only', range],
+    { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }).stdout || '';
+  const commits = []; let cur = null;
+  for (const line of out.split(/\r?\n/)) {
+    if (line.startsWith('@@')) { cur = { sha: line.slice(2), files: new Set() }; commits.push(cur); }
+    else if (line.trim() && cur) cur.files.add(line.trim());
+  }
+  return commits;
+}
+function jaccard(a, b) {
+  let inter = 0; for (const x of a) if (b.has(x)) inter++;
+  const union = a.size + b.size - inter;
+  return union === 0 ? 1 : inter / union;
+}
+
+/**
+ * Trajectory EVIDENCE (never a verdict — a correct run may validly diverge):
+ * positional files-touched Jaccard overlap of the run's own commit chain
+ * (startSha..work) vs the golden chain (startSha..golden, fetched back from the
+ * bundle). Reports turn counts, per-position overlap, and the first position
+ * where the run touched a wholly different fileset (firstDivergence).
+ */
+export function compareTrajectory(fixtureRepo, startSha, bundlePath) {
+  const f = spawnSync('git', ['-C', fixtureRepo, 'fetch', '-q', bundlePath,
+    '+refs/heads/golden:refs/goldeneval/golden', '+refs/tags/eval/final:refs/goldeneval/final'],
+    { encoding: 'utf8' });
+  if (f.status !== 0) throw new Error(`fetch golden failed: ${f.stderr || f.stdout}`);
+  const run = commitChain(fixtureRepo, `${startSha}..work`);
+  const golden = commitChain(fixtureRepo, `${startSha}..refs/goldeneval/golden`);
+  const n = Math.min(run.length, golden.length);
+  const overlaps = []; let firstDivergence = -1;
+  for (let i = 0; i < n; i++) {
+    const o = jaccard(run[i].files, golden[i].files);
+    overlaps.push(Number(o.toFixed(2)));
+    if (firstDivergence < 0 && o === 0) firstDivergence = i;
+  }
+  if (firstDivergence < 0 && run.length !== golden.length) firstDivergence = n;
+  const meanOverlap = overlaps.length ? overlaps.reduce((a, b) => a + b, 0) / overlaps.length : 0;
+  return { runTurns: run.length, goldenTurns: golden.length, overlaps, firstDivergence, meanOverlap };
+}
+
+/**
+ * Provision for a golden-example run — the instance scaffolding of provision()
+ * (isolated: scratch bin + datadir with gate/kill-switch seeded; live: verify
+ * the live harness answers), MINUS fixture materialization: the caller
+ * materializes one or more working copies from the bundle via materializeGolden
+ * (a reliability sweep makes several against one booted instance). Carries the
+ * resolved example (dir, bundle, manifest, planText) on the returned ctx.
+ */
+export async function provisionFromBundle(exampleId) {
+  const { dir, manifest, bundle, planText } = readGoldenManifest(exampleId);
+  const common = { exampleId, exampleDir: dir, bundle, manifest, planText };
+  if (CFG.live) {
+    requireLiveCredential();
+    if (!(await health()))
+      throw new Error(`no live harness answers on ${base()} — start it (or set LOOPEVAL_LIVE_PORT) first`);
+    const ROOT = CFG.liveRoot;
+    say(`live mode — provisioning golden scratch ${ROOT} (live instance untouched)`);
+    if (existsSync(ROOT)) say('note: replacing a previous run\'s scratch fixture (a LOOPEVAL_KEEP leftover repo card would now point at the new copy — the preflight will insist you remove it first)');
+    rmSync(ROOT, { recursive: true, force: true });
+    mkdirSync(ROOT, { recursive: true });
+    return { root: ROOT, datadir: null, pid: null, live: true, ...common };
+  }
+  if (await health()) throw new Error(`something already answers on ${base()} — stop it (or set LOOPEVAL_PORT) first`);
+  const ROOT = CFG.root;
+  say(`provisioning scratch root ${ROOT}`);
+  rmSync(ROOT, { recursive: true, force: true });
+  const datadir = join(ROOT, 'datadir');
+  mkdirSync(datadir, { recursive: true });
+  cpSync(join(REPO, '.claudeweb-preview', 'bin'), join(ROOT, 'bin'), { recursive: true });
+  writeFileSync(join(datadir, 'autopilot-gate.json'), JSON.stringify({ enabled: true }));
+  writeFileSync(join(datadir, 'autopilot.json'), JSON.stringify({
+    Enabled: true, AutoAdvance: true, Threshold: 0.85, ArmedRepoIds: [],
+    DenyList: ['reset --hard', 'force-push'], Brain: 'cli', BrainModel: 'haiku',
+  }, null, 2));
+  return { root: ROOT, datadir, pid: null, live: false, ...common };
+}
+
 export async function boot(ctx) {
   if (CFG.live) { say('live mode — no boot, the live harness is already running'); return; }
   say(`launching ClaudeWeb on ${base()} (isolated datadir)`);
@@ -320,7 +463,8 @@ export async function livePreflight(verdicts) {
   const cleanOk = verdicts.assert('live preflight: no leftover loopeval-*-live repo',
     leftovers.length === 0,
     leftovers.map((r) => `${r.name} (${r.id})`).join(', ')
-      + ' — a previous live run leaked; remove it via the repo card or DELETE /api/repos/{id}, then rerun');
+      + ' — the previous run\'s fixture is still up; click FINISH AGENT on the Tests tab'
+      + ' (or DELETE /api/repos/{id}), then rerun');
 
   return gateOk && killOk && cleanOk;
 }
@@ -565,7 +709,9 @@ export async function captureDiagnostics(ctx, verdicts) {
  *  steps. Failures warn and name the leftover; the verdict is never masked. */
 async function downLive(ctx) {
   if (CFG.keep) {
-    say('LOOPEVAL_KEEP=1 — leaving the live fixture in place for inspection. Manual cleanup:');
+    say('LOOPEVAL_KEEP=1 — leaving the live fixture in place: its agent dock stays watchable.');
+    say('Finish it with the FINISH AGENT button on the Tests tab (it stops the loop, closes the');
+    say('dock tab, unregisters the repo card, and deletes the scratch copy). Manual fallback:');
     if (liveRepoId) say(`  1. stop the loop + remove the repo card in the UI (or DELETE /api/repos/${liveRepoId})`);
     if (liveTabId) say(`  2. close its dock tab (or DELETE /api/dock/${liveTabId})`);
     say(`  3. delete the scratch copy ${ctx.root}`);

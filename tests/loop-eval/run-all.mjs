@@ -1,11 +1,11 @@
-// Run the whole loop-eval suite: goal, queue, then briefing (sequential —
-// they share the isolated port, or in --live mode the one live harness +
-// claude CLI). Combined summary + exit code 0 only if all pass.
+// Run the whole loop-eval suite: goal, queue, briefing, then golden
+// (sequential — they share the isolated port, or in --live mode the one live
+// harness + claude CLI). Combined summary + exit code 0 only if all pass.
 //
 //   node tests/loop-eval/run-all.mjs [--json out.json] [--live]
 //
 // --live (add-loop-eval-live-mode) is passed through to every scenario.
-// Spends real Claude turns (~16-24 total) and ~35-60 minutes. Never CI.
+// Spends real Claude turns (~22-34 total) and ~45-90 minutes. Never CI.
 
 import { spawn, spawnSync } from 'node:child_process';
 import { writeFileSync, readFileSync, rmSync } from 'node:fs';
@@ -20,7 +20,7 @@ const live = process.argv.includes('--live');
 // --describe (openspec: loop-eval-scenario-transparency): compose the child
 // scenarios' own manifests — never restate them — then exit with no run.
 if (process.argv.includes('--describe')) {
-  const composes = ['goal', 'queue', 'briefing'].map((name) => {
+  const composes = ['goal', 'queue', 'briefing', 'golden'].map((name) => {
     const r = spawnSync(process.execPath, [join(HERE, `${name}.mjs`), '--describe'], { encoding: 'utf8', timeout: 10_000 });
     if (r.status !== 0) {
       console.error(`${name}.mjs --describe failed:\n${r.stderr || r.stdout || r.error}`);
@@ -31,7 +31,7 @@ if (process.argv.includes('--describe')) {
   console.log(JSON.stringify({
     describeVersion: DESCRIBE_VERSION,
     id: 'run-all',
-    title: 'Full sweep — goal, queue, then briefing, combined verdict',
+    title: 'Full sweep — goal, queue, briefing, then golden; combined verdict',
     composes,
   }, null, 2));
   process.exit(0);
@@ -46,7 +46,7 @@ function runScenario(script, out) {
 }
 
 const results = [];
-for (const name of ['goal', 'queue', 'briefing']) {
+for (const name of ['goal', 'queue', 'briefing', 'golden']) {
   const out = join(HERE, `.out-${name}.json`);
   console.log(`\n=== loop-eval: ${name} scenario ===\n`);
   const code = await runScenario(`${name}.mjs`, out);

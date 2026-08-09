@@ -21,6 +21,7 @@ import Terminal from './pages/Terminal';
 import Projects from './pages/Projects';
 import Guests from './pages/Guests';
 import Settings from './pages/Settings';
+import LoopEvals from './pages/LoopEvals';
 
 // Two layers:
 //   /        -- public landing: just the running product, no login, no chrome.
@@ -63,6 +64,7 @@ export default function App() {
             <Route path="projects" element={<Projects />} />
             <Route path="guests" element={<Guests />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="loopevals" element={<LoopEvals />} />
           </Route>
         ) : (
           <Route path="/studio/*" element={<PasswordGate onUnlock={() => setAuth('in')} />} />
