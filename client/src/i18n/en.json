@@ -828,7 +828,7 @@
   "ideas.syncEnable": "Sync on",
   "ideas.syncSaving": "Saving...",
   "ideas.syncSaveError": "Couldn't save the sync settings. Please try again.",
-  "ideas.syncHint": "Easiest setup: enable hosting on ONE harness below and paste its URL into the others — no Google account needed. (A Google Apps Script endpoint still works too: docs/ideas-sync-appscript.gs.) Everyone with the URL shares one board.",
+  "ideas.syncHint": "Easiest setup: enable hosting on ONE harness below and paste its FULL board URL (…/api/notes/hub/<token>) into the others — no Google account needed. A bare harness address won't work: it points at the gated home page. (A Google Apps Script …/exec endpoint still works too: docs/ideas-sync-appscript.gs.) Everyone with the URL shares one board.",
   "ideas.hubEnable": "Host the shared board on this harness",
   "ideas.hubCopy": "Copy",
   "ideas.hubCopied": "Copied ✓",

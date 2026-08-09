@@ -101,6 +101,11 @@ public class NotesController : ControllerBase
         if (request is null) return BadRequest(new { error = "Config body is required." });
         if (request.Enabled && string.IsNullOrWhiteSpace(request.SyncUrl))
             return BadRequest(new { error = "A sync URL is required to enable sync." });
+        // Shape guard (openspec fix-ideas-sync-url-guidance): a URL without a
+        // path (site root) can never speak the shared-store contract — reject
+        // at save with guidance instead of letting sync fail with a bare 403.
+        if (!IdeasSyncConfigStore.TryNormalizeUrl(request.SyncUrl, out _, out var urlError))
+            return BadRequest(new { error = urlError });
         var before = _syncConfig.Current;
         var cfg = _syncConfig.Update(request.Enabled, request.SyncUrl, request.PollSeconds);
         _sync.Nudge(targetChanged: !string.Equals(before.SyncUrl, cfg.SyncUrl, StringComparison.Ordinal));
