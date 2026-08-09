@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using ClaudeWeb.Services.Logging;
+using ClaudeWeb.Services.TaskGraph;
 using Microsoft.Extensions.Hosting;
 
 namespace ClaudeWeb.Services.Notes;
@@ -14,6 +15,11 @@ namespace ClaudeWeb.Services.Notes;
 /// /api/notes/hub/{token}. The backing store is this harness's own ideas board —
 /// a remote POST lands through NotesService.MergeFrom (never a blind overwrite),
 /// and a hub-local edit bumps the revision via the Changed event.
+///
+/// The served store carries the task graph section beside the ideas board
+/// (openspec sync-task-graph): a POSTed graph lands through
+/// TaskGraphService.MergeFrom, and a hub-local graph edit bumps the revision
+/// exactly like a notes edit.
 ///
 /// The token is a bearer capability, exactly like the Apps Script /exec URL:
 /// 256 random bits, compared in constant time, exempt from session auth
@@ -32,23 +38,26 @@ public class IdeasHubService : IHostedService
 
     /// <summary>One contract exchange, pre-serialization. Store is null on ok
     /// POSTs (the Apps Script answers rev-only there too).</summary>
-    public sealed record HubEnvelope(bool Ok, bool Conflict, long Rev, NotesService.BoardSnapshot? Store, string? Error);
+    public sealed record HubEnvelope(bool Ok, bool Conflict, long Rev, IdeasSyncClient.SharedStore? Store, string? Error);
 
     private readonly NotesService _notes;
+    private readonly TaskGraphService _graph;
     private readonly Logger _logger;
     private readonly string _path;
     private readonly object _gate = new();
     private HubState _state = new(false, null, 0);
 
-    public IdeasHubService(NotesService notes, Logger logger)
+    public IdeasHubService(NotesService notes, TaskGraphService graph, Logger logger)
     {
         _notes = notes;
+        _graph = graph;
         _logger = logger;
         var dir = AppPaths.DataDir;
         Directory.CreateDirectory(dir);
         _path = Path.Combine(dir, "ideas-hub.json");
         Load();
         _notes.Changed += OnLocalChange;
+        _graph.Changed += OnLocalChange;
     }
 
     public HubState Current
@@ -89,23 +98,31 @@ public class IdeasHubService : IHostedService
         lock (_gate)
         {
             if (!_state.Enabled) return Disabled();
-            return new HubEnvelope(true, false, _state.Rev, _notes.Snapshot(), null);
+            return new HubEnvelope(true, false, _state.Rev, CombinedStore(), null);
         }
     }
 
-    public HubEnvelope Post(long baseRev, List<NotesService.Note> ideas, List<NotesService.Tombstone> tombstones)
+    public HubEnvelope Post(long baseRev, IdeasSyncClient.SharedStore? store)
     {
         lock (_gate)
         {
             if (!_state.Enabled) return Disabled();
             if (baseRev != _state.Rev)
-                return new HubEnvelope(false, true, _state.Rev, _notes.Snapshot(), null);
+                return new HubEnvelope(false, true, _state.Rev, CombinedStore(), null);
             // MergeFrom does not raise Changed, so the rev moves exactly once here.
-            _notes.MergeFrom(ideas, tombstones);
+            _notes.MergeFrom(store?.Ideas ?? new(), store?.Tombstones ?? new());
+            _graph.MergeFrom(store?.Graph);
             _state = _state with { Rev = _state.Rev + 1 };
             Save();
             return new HubEnvelope(true, false, _state.Rev, null, null);
         }
+    }
+
+    // Caller holds _gate. Both boards in the wire shape the sync client parses.
+    private IdeasSyncClient.SharedStore CombinedStore()
+    {
+        var notes = _notes.Snapshot();
+        return new IdeasSyncClient.SharedStore(notes.Ideas, notes.Tombstones, _graph.Snapshot());
     }
 
     private static HubEnvelope Disabled()
