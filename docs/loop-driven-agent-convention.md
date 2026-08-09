@@ -190,9 +190,13 @@ iteration budget and no leftover verification obligation from the interrupted st
   user can inspect — the recipe text in the editor, a goal loop's work/verification
   prompts composed once at arm time, or a queue item's text as it sits in the stash
   strip above the composer. The queue's step-verification prompt composes the fixed,
-  inspectable verification template with the item text just sent. Every surface that
-  records a send keeps the raw stored text plus a briefed flag and the rules revision,
-  so what was actually sent stays reconstructable forever; the arm preview and the
-  Briefing section show the exact composition before anything fires.
+  inspectable verification template with the item text just sent. The chat renders
+  every driven send verbatim — the exact composed text you received — and the durable
+  audit stamps each send's loop kind, phase, and exact sent text (openspec:
+  queue-loop-prompt-transparency); truncated list surfaces (audit slices, the queue's
+  per-arm sent-history) keep the raw stored text plus a briefed flag and the rules
+  revision, so what was actually sent is both readable and reconstructable forever.
+  The arm preview and the Briefing section show the exact composition before anything
+  fires.
 - Arming is **exclusive per agent**: a loop and the suggestion-based autopilot are never
   armed on the same repo at once.

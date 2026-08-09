@@ -93,6 +93,13 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
   // Copy-for-debugging: idle | busy | copied | manual (clipboard failed — show
   // the text for hand-copying) | error (fetch failed).
   const [dbg, setDbg] = useState({ phase: 'idle', text: '' });
+  // Durable queue audit (openspec queue-loop-prompt-transparency, D5): the
+  // repo's queue sends across arms, from the GATED queue-audit endpoint —
+  // fetched on first expand per popover open. null = not fetched;
+  // 'gate-closed' | 'error' render hints; otherwise the rows array.
+  const [qaOpen, setQaOpen] = useState(false);
+  const [qaRows, setQaRows] = useState(null);
+  const [qaExpanded, setQaExpanded] = useState(() => new Set());
 
   const armed = !!loop?.active;
   const armedKind = armed ? loop.kind : null;
@@ -121,6 +128,11 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
   // the goal/cap/mode it was armed with, not blanks. Untouched fields only:
   // anything the user already typed wins.
   useEffect(() => {
+    // Fresh queue-audit view per popover open/close — stale rows would hide
+    // sends that landed since the last look.
+    setQaOpen(false);
+    setQaRows(null);
+    setQaExpanded(new Set());
     if (!open) return undefined;
     let alive = true;
     apiGet('/autopilot/loops/detail')
@@ -146,6 +158,33 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
       .catch((e) => { if (alive) setDetail(e?.status === 403 ? 'gate-closed' : null); });
     return () => { alive = false; };
   }, [open, repoId]);
+
+  // Toggle the Queue audit list; the gated fetch fires on the first expand of
+  // this popover open (a 403 teaches gate-closed in place, like the detail).
+  const toggleQueueAudit = async () => {
+    const next = !qaOpen;
+    setQaOpen(next);
+    if (!next || qaRows !== null) return;
+    try {
+      const d = await apiGet(`/autopilot/loops/queue-audit?repoId=${encodeURIComponent(repoId)}`);
+      setQaRows(Array.isArray(d?.entries) ? d.entries : []);
+    } catch (e) {
+      setQaRows(e?.status === 403 ? 'gate-closed' : 'error');
+    }
+  };
+
+  const toggleQaRow = (i) => setQaExpanded((prev) => {
+    const next = new Set(prev);
+    if (next.has(i)) next.delete(i); else next.add(i);
+    return next;
+  });
+
+  const fmtQaWhen = (ms) => {
+    const d = new Date(ms);
+    return Number.isNaN(d.getTime())
+      ? ''
+      : d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
 
   const act = async (path, body, keepOpen = false) => {
     setBusy(true);
@@ -826,6 +865,56 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
                       </li>
                     ))}
                   </ol>
+                </>
+              )}
+              {/* Durable queue audit (openspec queue-loop-prompt-transparency,
+                  D5): every queue send for this repo from the append-only
+                  ledger — survives re-arms, unlike the per-arm list above; a
+                  row expands to the EXACT text the agent received. Gated. */}
+              {!arming && (
+                <>
+                  <button
+                    type="button"
+                    className="phone__loop-qa-toggle"
+                    onClick={toggleQueueAudit}
+                  >
+                    {qaOpen ? '▾' : '▸'} {t('dashboard.loopQueueAudit')}
+                  </button>
+                  {qaOpen && (
+                    <div className="phone__loop-qa">
+                      <p className="phone__loop-sect-desc">{t('dashboard.loopQueueAuditHint')}</p>
+                      {qaRows === null ? (
+                        <div className="phone__loop-msg">{t('dashboard.loopQueueAuditLoading')}</div>
+                      ) : qaRows === 'gate-closed' ? (
+                        <div className="phone__loop-msg phone__loop-msg--gate">{t('dashboard.loopGateClosed')}</div>
+                      ) : qaRows === 'error' ? (
+                        <div className="phone__loop-msg">{t('dashboard.loopQueueAuditError')}</div>
+                      ) : qaRows.length === 0 ? (
+                        <div className="phone__loop-msg">{t('dashboard.loopQueueAuditEmpty')}</div>
+                      ) : (
+                        <ol className="phone__loop-qa-list">
+                          {qaRows.map((r, i) => (
+                            <li key={i} className="phone__loop-qa-row">
+                              <button
+                                type="button"
+                                className="phone__loop-qa-head"
+                                onClick={() => toggleQaRow(i)}
+                              >
+                                <span className={`phone__loop-qa-phase phone__loop-qa-phase--${r.phase}`}>
+                                  {t(`dashboard.loopQueueAuditPhase.${r.phase}`)}
+                                </span>
+                                <span className="phone__loop-qa-when">{fmtQaWhen(r.at)}</span>
+                                <span className="phone__loop-qa-raw">{r.prompt}</span>
+                              </button>
+                              {qaExpanded.has(i) && (
+                                <pre className="phone__loop-qa-sent">{r.sentText}</pre>
+                              )}
+                            </li>
+                          ))}
+                        </ol>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
             </>

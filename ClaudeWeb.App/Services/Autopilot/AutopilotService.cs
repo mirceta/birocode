@@ -722,8 +722,14 @@ public class AutopilotService : BackgroundService
                         loop.Kind, propose.EnterPhase, loop.Sentinel, propose.Prompt, rules,
                         _flags.Enabled, clauses);
                 }
+                // Audit attribution (openspec: queue-loop-prompt-transparency, D4):
+                // the send's phase — the verification turn is the only non-work send.
+                var sendPhase = loop.Kind == LoopConfigStore.KindSuggestion
+                    ? ""
+                    : (propose.EnterPhase == LoopConfigStore.PhaseVerify
+                        ? LoopConfigStore.PhaseVerify : LoopConfigStore.PhaseWork);
                 if (SendPrompt(repo, sessionId!, loop, propose.Prompt, briefed, briefingRev,
-                        propose.Confidence, snippet, intercept, now))
+                        sendPhase, propose.Confidence, snippet, intercept, now))
                 {
                     // Consume-on-land (queue kind, D2/D3): the head item leaves the
                     // stash only now that its send actually fired, and the step is
@@ -766,7 +772,7 @@ public class AutopilotService : BackgroundService
     private bool SendPrompt(
         RepositoryRegistry.RepositoryInfo repo, string sessionId,
         LoopConfigStore.LoopState loop, string prompt, string? briefedPrompt, int briefingRev,
-        double confidence, string snippet,
+        string phase, double confidence, string snippet,
         InterceptEvent? intercept, long now)
     {
         // Atomically claim the builder slot. If a turn is already running for this
@@ -779,16 +785,21 @@ public class AutopilotService : BackgroundService
         var isSuggestionKind = loop.Kind == LoopConfigStore.KindSuggestion;
         var path = repo.Path;
         // What the CLI receives vs what the records carry (openspec:
-        // loop-agent-briefing, D3): the agent gets the briefed composition; audit,
-        // sent-history, and the chat's synthetic user bubble keep the RAW stored
-        // text plus the briefed flag + rules revision, so truncated surfaces stay
-        // readable and the exact sent text stays reconstructable.
+        // loop-agent-briefing D3, amended by queue-loop-prompt-transparency):
+        // the agent gets the briefed composition. Truncated LIST projections
+        // (audit slices, sent-history, state snippets) keep the RAW stored text
+        // plus the briefed flag + rules revision; the durable audit entry also
+        // stamps the loop kind, the send's phase, and — when it differs from the
+        // raw text — the exact composed SentText, so "what was sent" is readable,
+        // not just reconstructable. The chat's synthetic user bubble (below) now
+        // carries the exact sent text.
         var sendText = briefedPrompt ?? prompt;
         var briefed = briefedPrompt != null;
 
         _audit.Record(new AutopilotAuditLog.Entry(
             now, repo.Id, repo.Name, prompt, confidence, snippet,
-            isSuggestionKind ? "sent" : "loop", briefed, briefingRev));
+            isSuggestionKind ? "sent" : "loop", briefed, briefingRev,
+            loop.Kind, phase, briefed ? sendText : null));
         _logger.Info(isSuggestionKind
             ? $"[AUTOPILOT] auto-sent \"{prompt}\" to \"{repo.Name}\" (conf {confidence:0.00})"
             : $"[LOOP] resent to \"{repo.Name}\" (iteration {iter}{(loop.MaxIterations > 0 ? $"/{loop.MaxIterations}" : "")})");
@@ -803,8 +814,11 @@ public class AutopilotService : BackgroundService
                 // prompt bubble. Publish the prompt into the run's seq buffer
                 // ahead of the CLI's events: attached clients render it live and
                 // late attachers get it in the ?after=N replay (openspec
-                // fix-loop-prompt-render).
-                await session.EmitAsync(new { type = "user", text = prompt, actor = "loop", briefed, briefingRev });
+                // fix-loop-prompt-render). The text is the EXACT composition the
+                // CLI receives (openspec: queue-loop-prompt-transparency, D1) —
+                // the chat is the verbatim record of the conversation, and this
+                // keeps the live bubble byte-identical to the transcript reload.
+                await session.EmitAsync(new { type = "user", text = sendText, actor = "loop" });
                 await _cli.RunAsync(
                     sendText, sessionId, workingDirectory: path,
                     emit: session.EmitAsync, ct: session.Cts.Token);

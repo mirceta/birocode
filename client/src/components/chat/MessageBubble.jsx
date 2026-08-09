@@ -1,6 +1,5 @@
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { useT } from '../../i18n/LanguageContext';
 
 // Turn bare URLs in plain text into clickable links that open in a new tab
 // (so the user never loses her chat) -- the way they behave in user messages,
@@ -22,22 +21,15 @@ function linkify(text) {
 
 // A single chat message. User messages are right-aligned plain text (with bare
 // URLs linkified); assistant messages are left-aligned and rendered as markdown
-// so headers, lists, bold, code blocks, and links display properly. `briefed`
-// marks an autopilot-loop send whose text was wrapped with the situational
-// briefing at send time (openspec loop-agent-briefing) — the bubble shows the
-// stored text plus this honest tag instead of the repeated prefix; the full
-// composition is readable in the dock's Briefing preview.
-export default function MessageBubble({ role, text, briefed = false }) {
-  const { t } = useT();
+// so headers, lists, bold, code blocks, and links display properly. An
+// autopilot-loop send's text is the exact composition the agent received
+// (openspec queue-loop-prompt-transparency) — rendered verbatim like any other
+// user message, no affordance standing in for hidden text.
+export default function MessageBubble({ role, text }) {
   const isUser = role === 'user';
   return (
     <div className={`msg msg--${isUser ? 'user' : 'assistant'}`}>
       <div className="msg__bubble">
-        {isUser && briefed && (
-          <span className="msg__briefed" title={t('chat.briefedTitle')}>
-            📝 {t('chat.briefedTag')}
-          </span>
-        )}
         {isUser ? (
           <span className="msg__text">{linkify(text)}</span>
         ) : (

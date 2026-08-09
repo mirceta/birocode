@@ -238,7 +238,7 @@ export function ChatProvider({ children }) {
   // one (already-attached client), append it plus a fresh assistant bubble for
   // the reply that follows.
   const addServerPrompt = useCallback(
-    (key, text, briefed = false) =>
+    (key, text) =>
       updateConvo(key, (c) => {
         const msgs = c.messages.slice();
         const last = msgs[msgs.length - 1];
@@ -246,9 +246,9 @@ export function ChatProvider({ children }) {
           last && last.role === 'assistant' && last.text === '' &&
           (!last.steps || last.steps.length === 0)
         ) {
-          msgs.splice(msgs.length - 1, 0, { role: 'user', text, briefed });
+          msgs.splice(msgs.length - 1, 0, { role: 'user', text });
         } else {
-          msgs.push({ role: 'user', text, briefed }, { role: 'assistant', text: '', steps: [] });
+          msgs.push({ role: 'user', text }, { role: 'assistant', text: '', steps: [] });
         }
         return { ...c, messages: msgs, streaming: true };
       }),
@@ -311,10 +311,10 @@ export function ChatProvider({ children }) {
         case 'user':
           // Autopilot loop prompt (openspec fix-loop-prompt-render). Composer
           // sends never receive this event, so no duplicate bubbles. The text is
-          // the RAW stored prompt; `briefed` says the engine wrapped it with the
-          // autopilot briefing at send time (openspec loop-agent-briefing) — the
-          // bubble shows an affordance instead of the repeated prefix.
-          if (evt.text) addServerPrompt(key, evt.text, !!evt.briefed);
+          // the EXACT composition the CLI received (openspec
+          // queue-loop-prompt-transparency) — the chat renders it verbatim, the
+          // same way the transcript reload does.
+          if (evt.text) addServerPrompt(key, evt.text);
           break;
         case 'thinking':
           addThinking(key, evt.text);
