@@ -28,13 +28,15 @@ anywhere automatically — watching is one click, never a focus steal.
   seeded conversation and every loop-driven turn stream in as the run
   progresses to the verdict
 
-#### Scenario: Watch control appears with the dock tab and goes away with it
+#### Scenario: Watch control appears with the dock tab and outlives the verdict
 
 - **WHEN** a run is active but the fixture's dock tab has not yet been created
-  (preflight/seed), or the run has finished and cleanup removed the tab
-- **THEN** the E2E section shows the passive where-to-watch hint (active run)
-  or no watch affordance at all (finished run) — the watch control renders
-  only while a `loopeval-*-live` dock tab actually exists
+  (preflight/seed)
+- **THEN** the E2E section shows the passive where-to-watch hint; the watch
+  control renders whenever a `loopeval-*-live` dock tab actually exists —
+  including after the run reached its verdict, because UI-started runs keep
+  the fixture up until the operator finishes it (see the kept-agent
+  requirement below)
 
 #### Scenario: Suite missing from the opened checkout
 
@@ -42,3 +44,36 @@ anywhere automatically — watching is one click, never a focus steal.
   contain the committed eval suite
 - **THEN** the request fails with an error naming the expected suite path, and
   nothing is spawned
+
+## ADDED Requirements
+
+### Requirement: The finished test agent stays watchable until FINISH AGENT
+
+A UI-started live run SHALL NOT remove its fixture (repo card, dock tab, driven
+conversation) when the run reaches its verdict: the harness starts the suite
+with its keep switch (`LOOPEVAL_KEEP=1`) so the suite skips live teardown, and
+the operator keeps watching the agent dock after the test is finished. The
+harness SHALL stop any loop still armed on the fixture the moment the run ends,
+so a kept fixture never keeps spending agent turns. The E2E eval section SHALL
+render a FINISH AGENT control whenever a `loopeval-*-live` fixture is
+registered and no run is active; invoking it SHALL perform exactly the
+deferred teardown the suite would have done — stop the loop, close the dock
+tab, unregister the repo card, delete the scratch copy — and until it is
+invoked the next Start SHALL stay blocked with copy pointing at FINISH AGENT
+(a kept agent is the normal post-run state, not an error).
+
+#### Scenario: Dock survives the verdict
+
+- **WHEN** a UI-started run reaches passed/failed/error/stopped while the
+  operator is watching the fixture's agent dock
+- **THEN** the dock tab, repo card, and conversation remain exactly where they
+  are (only the loop is stopped), and the Tests tab notes the test agent is
+  kept for inspection
+
+#### Scenario: Operator finishes the agent
+
+- **WHEN** the operator clicks FINISH AGENT after a finished run
+- **THEN** the harness stops the fixture's loop, closes its dock tab,
+  unregisters its repo card, and deletes its scratch copy; the watch
+  affordance disappears, the kept-agent banner clears, and starting the next
+  eval becomes possible again

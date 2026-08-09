@@ -41,12 +41,27 @@
       `.claudeweb-preview/playwright/verify-loopeval-dock.mjs`, 12/12 checks;
       the only console noise is the pre-existing missing understanding.md /
       plan.md 400 probe on the bare fixture repo, allowlisted by exact URL)
-- [x] 3.4 After the run finishes, the dock tab is cleaned up and the watch
-      affordance is gone; `LOOPEVAL_KEEP=1` path still names the tab in its
-      manual-cleanup steps (lib.mjs downLive)
+- [x] 3.4 ~~After the run finishes, the dock tab is cleaned up and the watch
+      affordance is gone~~ SUPERSEDED by §5 (operator decision 2026-08-09): the
+      dock must SURVIVE the verdict; teardown is deferred to FINISH AGENT
 
 ## 4. Ship
 
 - [x] 4.1 `openspec validate loop-eval-watchable-dock --strict` passes
 - [ ] 4.2 Feature branch, deploy to live via `swap.ps1`, operator verifies the
       user story in production, keep on their "keep it", then archive + merge
+
+## 5. Kept test agent + FINISH AGENT (operator decision 2026-08-09)
+
+- [x] 5.1 Runner sets `LOOPEVAL_KEEP=1` on UI-started runs (suite skips live
+      teardown); waiter stops any loop still armed on a `loopeval-*-live`
+      fixture the moment the run ends, so a kept fixture never spends turns
+- [x] 5.2 `POST /api/loopeval/fixture/finish` (FinishFixture): stop loop, close
+      dock tab(s), unregister repo card, delete scratch copy; 409 while a run
+      is active, 404 with nothing to finish; clears the run's leftover banner
+- [x] 5.3 Tests tab: watch control no longer gated on `active` (dock stays
+      after the verdict); kept-agent banner with FINISH AGENT button; leftover
+      fixture blocks Start via the banner, not the problems list; explainer +
+      lib.mjs keep/preflight copy point at FINISH AGENT
+- [ ] 5.4 Verify: builds green, C# tests pass, deploy to live, operator sees
+      the dock survive a finished run and FINISH AGENT tear it down

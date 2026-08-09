@@ -178,9 +178,10 @@ function LoopEvalRunner() {
   // creates + binds it after seeding; the synced dock list is where the
   // browser already learns about it — no run-snapshot plumbing needed. Live
   // preflight guarantees at most one loopeval-*-live repo exists during a run.
-  const watchTab = active
-    ? tabs.find((t) => /^loopeval-.*-live$/.test(t.repoName || ''))
-    : null;
+  // NOT gated on `active`: the fixture is deliberately KEPT after the verdict
+  // (the runner sets LOOPEVAL_KEEP) so the dock stays watchable until the
+  // operator clicks FINISH AGENT.
+  const watchTab = tabs.find((t) => /^loopeval-.*-live$/.test(t.repoName || ''));
 
   const watchDock = useCallback(() => {
     if (!watchTab) return;
@@ -279,6 +280,19 @@ function LoopEvalRunner() {
     }
   }, []);
 
+  // FINISH AGENT: the deferred teardown of the kept fixture — stops its loop,
+  // closes its dock tab, removes its repo card, deletes the scratch copy.
+  const finishAgent = useCallback(async () => {
+    try {
+      const r = await apiPost('/loopeval/fixture/finish', {});
+      if (r.run) setRun(r.run);
+      setError((r.warnings || []).join(' · '));
+      loadPre();
+    } catch (e) {
+      setError(apiErrorText(e));
+    }
+  }, [loadPre]);
+
   if (!enabled) return null;
 
   // Unmet preconditions → actionable instructions (design D4: shown here,
@@ -294,11 +308,12 @@ function LoopEvalRunner() {
     if (!pre.killSwitchEnabled) {
       problems.push('Autopilot kill switch is OFF — turn Enabled ON in this console (Suggestion-based loop → Control), then come back here.');
     }
-    for (const r of pre.leftoverRepos || []) {
-      problems.push(`Leftover fixture repo "${r.name}" from a previous run — remove its repo card (or DELETE /api/repos/${r.id}), then re-check.`);
-    }
   }
-  const blocked = !pre || problems.length > 0;
+  // A kept fixture is the NORMAL state after a finished run (its dock stays
+  // watchable on purpose) — not a problem, but it does block the next Start
+  // until FINISH AGENT tears it down.
+  const kept = pre?.leftoverRepos || [];
+  const blocked = !pre || problems.length > 0 || kept.length > 0;
   const st = RUN_STATUS[run?.state] ?? RUN_STATUS.preflight;
 
   return (
@@ -315,6 +330,18 @@ function LoopEvalRunner() {
       )}
       {!pre && <p className="autopilot__summary">Checking preconditions…</p>}
       {error && <p className="le-error">{error}</p>}
+
+      {kept.length > 0 && (
+        <div className="st-prereq le-kept" role="note">
+          <strong>Test agent still up:</strong> {kept.map((r) => r.name).join(', ')} — its dock
+          stays watchable until you finish it. Finishing stops its loop, closes its dock tab,
+          removes its repo card, and deletes the scratch copy; the next eval can then start.
+          {' '}
+          <button className="lp-arm st-run-btn le-finish" onClick={finishAgent}>
+            ■ FINISH AGENT
+          </button>
+        </div>
+      )}
 
       <ul className="le-rows">
         {(pre?.scenarios || []).map((s) => (
@@ -340,7 +367,9 @@ function LoopEvalRunner() {
                 <button
                   className="lp-arm st-run-btn"
                   disabled={blocked || active}
-                  title={active ? 'a run is already active' : undefined}
+                  title={active ? 'a run is already active'
+                    : kept.length > 0 ? 'finish the previous test agent first (FINISH AGENT above)'
+                      : undefined}
                   onClick={() => { setError(''); setConfirming(s.id); }}
                 >
                   ▶ Start…
@@ -371,27 +400,33 @@ function LoopEvalRunner() {
             {active && <button className="ap-mini le-stop" onClick={stop}>■ Stop run</button>}
           </div>
 
-          {active && (watchTab ? (
+          {watchTab ? (
             <p className="autopilot__summary le-watch">
               <button className="lp-arm st-run-btn" onClick={watchDock}>
                 ▶ Watch its agent dock
               </button>
-              <span> — <b>{watchTab.repoName}</b> is live in the DOCKS strip, bound to the
-              driven conversation; the loop card is on this console&apos;s Loops tab.</span>
+              {active ? (
+                <span> — <b>{watchTab.repoName}</b> is live in the DOCKS strip, bound to the
+                driven conversation; the loop card is on this console&apos;s Loops tab.</span>
+              ) : (
+                <span> — the run is over, but <b>{watchTab.repoName}</b> stays in the DOCKS
+                strip so you can inspect what the agent did. It goes away only when you
+                click FINISH AGENT.</span>
+              )}
             </p>
-          ) : (
+          ) : active && (
             <p className="autopilot__summary le-watch">
               Its agent dock appears here once the run seeds its conversation
               (during preflight there is nothing to watch yet); the loop card is on this
               console&apos;s Loops tab.
             </p>
-          ))}
+          )}
 
           {run.error && <p className="le-error">{run.error}</p>}
           {run.leftoverRepos?.length > 0 && (
-            <p className="le-error">
-              Leftover fixture repo(s) after this run: {run.leftoverRepos.join(', ')} — remove
-              the card(s) before the next run.
+            <p className="autopilot__summary">
+              Its test agent ({run.leftoverRepos.join(', ')}) is kept alive for inspection —
+              use <b>FINISH AGENT</b> (above the scenario list) when you&apos;re done watching.
             </p>
           )}
 
@@ -563,8 +598,11 @@ export default function TestInventoryView({ section }) {
               enabling anything itself. Start it from the <b>E2E eval</b> subtab (the
               harness mints the run&apos;s credential itself) or from a terminal with
               <code> LOOPEVAL_LIVE_PW</code> set to the live operator password.
-              Cleans up after itself (<code>LOOPEVAL_KEEP=1</code> keeps the
-              aftermath for inspection).
+              UI-started runs <b>keep the test agent up after the verdict</b> (its
+              dock stays watchable; the loop itself is stopped) until you click
+              <b> FINISH AGENT</b>, which does the full teardown. Terminal runs
+              clean up after themselves (<code>LOOPEVAL_KEEP=1</code> opts into the
+              same keep-for-inspection behavior).
             </li>
             <li>
               In both modes everything goes through the shipped API, exactly as an

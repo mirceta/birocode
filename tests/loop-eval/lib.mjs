@@ -463,7 +463,8 @@ export async function livePreflight(verdicts) {
   const cleanOk = verdicts.assert('live preflight: no leftover loopeval-*-live repo',
     leftovers.length === 0,
     leftovers.map((r) => `${r.name} (${r.id})`).join(', ')
-      + ' — a previous live run leaked; remove it via the repo card or DELETE /api/repos/{id}, then rerun');
+      + ' — the previous run\'s fixture is still up; click FINISH AGENT on the Tests tab'
+      + ' (or DELETE /api/repos/{id}), then rerun');
 
   return gateOk && killOk && cleanOk;
 }
@@ -708,7 +709,9 @@ export async function captureDiagnostics(ctx, verdicts) {
  *  steps. Failures warn and name the leftover; the verdict is never masked. */
 async function downLive(ctx) {
   if (CFG.keep) {
-    say('LOOPEVAL_KEEP=1 — leaving the live fixture in place for inspection. Manual cleanup:');
+    say('LOOPEVAL_KEEP=1 — leaving the live fixture in place: its agent dock stays watchable.');
+    say('Finish it with the FINISH AGENT button on the Tests tab (it stops the loop, closes the');
+    say('dock tab, unregisters the repo card, and deletes the scratch copy). Manual fallback:');
     if (liveRepoId) say(`  1. stop the loop + remove the repo card in the UI (or DELETE /api/repos/${liveRepoId})`);
     if (liveTabId) say(`  2. close its dock tab (or DELETE /api/dock/${liveTabId})`);
     say(`  3. delete the scratch copy ${ctx.root}`);
