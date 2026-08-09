@@ -516,7 +516,7 @@
   "dashboard.dockFilterMain": "main",
   "dashboard.dockFilterFeature": "not main",
   "dashboard.dockFilterRunning": "running",
-  "dashboard.dockFilterUnseen": "unseen",
+  "dashboard.dockFilterRunningTitle": "running or unseen result",
   "dashboard.dockFilterHidden": "{count} hidden by filter",
   "dashboard.allHidden": "Every dock is hidden. Use the Docks toolbar above to show one.",
   "dashboard.markWide": "Enlarge to two horizontal spaces",
