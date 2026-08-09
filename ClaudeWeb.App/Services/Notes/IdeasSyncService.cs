@@ -53,13 +53,24 @@ public class IdeasSyncService : BackgroundService
     }
 
     /// <summary>Called by the config endpoint after an update: poll right away,
-    /// and forget the seen rev when the target changed (new URL = new store).</summary>
-    public void Nudge(bool targetChanged)
+    /// and forget the seen rev when the target changed (new URL = new store).
+    /// First contact with a store (sync just enabled, or the URL moved to a
+    /// different store) seeds it: the board is marked dirty with the push due
+    /// immediately, so the FIRST exchange is the pull-merge-CAS-push that
+    /// uploads every pre-existing local idea (openspec
+    /// adopt-preexisting-ideas-on-join) — not a plain poll relying on the
+    /// RemoteStale heuristic to schedule one later.</summary>
+    public void Nudge(bool targetChanged, bool becameEnabled)
     {
         lock (_gate)
         {
             _nextPollUtc = DateTime.MinValue;
             if (targetChanged) _lastSeenRev = -1;
+            if (targetChanged || becameEnabled)
+            {
+                _dirty = true;
+                _pushDueUtc = DateTime.UtcNow;
+            }
         }
     }
 

@@ -108,7 +108,11 @@ public class NotesController : ControllerBase
             return BadRequest(new { error = urlError });
         var before = _syncConfig.Current;
         var cfg = _syncConfig.Update(request.Enabled, request.SyncUrl, request.PollSeconds);
-        _sync.Nudge(targetChanged: !string.Equals(before.SyncUrl, cfg.SyncUrl, StringComparison.Ordinal));
+        // First contact with a store (URL moved, or sync flipped on) seeds it
+        // with the local board (openspec adopt-preexisting-ideas-on-join).
+        _sync.Nudge(
+            targetChanged: !string.Equals(before.SyncUrl, cfg.SyncUrl, StringComparison.Ordinal),
+            becameEnabled: cfg.Enabled && !before.Enabled);
         return Ok(new { enabled = cfg.Enabled, syncUrl = cfg.SyncUrl, pollSeconds = cfg.PollSeconds });
     }
 
