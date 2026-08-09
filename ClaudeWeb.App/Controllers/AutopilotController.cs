@@ -32,7 +32,11 @@ namespace ClaudeWeb.Controllers;
 /// (openspec: loop-agent-briefing, D2b): the briefing rules are operator-authored
 /// harness text — never repo or prompt content — and capturing a rule idea from the
 /// dock must work whenever the dock is visible; the sends that consume the rules
-/// stay gate-fenced like every action here.
+/// stay gate-fenced like every action here. Loop DRAFTS
+/// (<c>/api/autopilot/drafts</c>, openspec: add-loop-drafts) follow the same D2b
+/// stance: pure idea capture with no send path, session-auth only, never gated —
+/// pasted agents and the Drafts tab must be able to fill the loop while the gate
+/// is closed.
 /// </summary>
 [ApiController]
 [Route("api/autopilot")]
@@ -44,6 +48,7 @@ public class AutopilotController : ControllerBase
     private readonly LoopConfigStore _loops;
     private readonly LoopRecipeStore _recipes;
     private readonly BriefingRulesStore _briefing;
+    private readonly LoopDraftsStore _drafts;
     private readonly FlagsStore _flags;
     private readonly AutopilotGate _operatorGate;
     private readonly AutopilotAuditLog _audit;
@@ -55,7 +60,7 @@ public class AutopilotController : ControllerBase
     public AutopilotController(
         AutopilotDiscoveryService discovery, AutopilotService engine,
         AutopilotConfigStore config, LoopConfigStore loops, LoopRecipeStore recipes,
-        BriefingRulesStore briefing, FlagsStore flags, AutopilotGate operatorGate,
+        BriefingRulesStore briefing, LoopDraftsStore drafts, FlagsStore flags, AutopilotGate operatorGate,
         AutopilotAuditLog audit,
         SystemTestsService systests, RepositoryRegistry repos, DockRegistry dock, Logger logger)
     {
@@ -65,6 +70,7 @@ public class AutopilotController : ControllerBase
         _loops = loops;
         _recipes = recipes;
         _briefing = briefing;
+        _drafts = drafts;
         _flags = flags;
         _operatorGate = operatorGate;
         _audit = audit;
@@ -662,6 +668,59 @@ public class AutopilotController : ControllerBase
             snap.Rules.Where(r => r.Enabled).Select(r => r.Text).ToList(),
             _flags.Enabled).TrimEnd(),
     };
+
+    // --- Loop drafts (openspec: add-loop-drafts) ----------------------------
+    // "Fill the loop": per-repo, per-type scratch text the operator and pasted
+    // agents build up before it becomes real loop parameters. Session-auth only,
+    // NOT operator-gated (same D2b stance as briefing — idea capture, no send
+    // path). Repo ids join against the registry so only registered repos are
+    // ever addressable or listed; orphan blobs for unregistered repos stay in
+    // the store but never surface here.
+
+    public sealed record DraftPutReq(string? Text);
+
+    /// <summary>Per-repo, per-type summary — the Drafts tab's subtab list and
+    /// badge source. Registered repos only, every type present.</summary>
+    [HttpGet("drafts")]
+    public IActionResult Drafts()
+    {
+        _logger.CountRequest();
+        var repos = _repos.GetAll()
+            .Select(r => new { id = r.Id, name = r.Name, types = _drafts.Summary(r.Id) });
+        return Ok(new { repos });
+    }
+
+    [HttpGet("drafts/{repoId}/{type}")]
+    public IActionResult GetDraft(string repoId, string type)
+    {
+        _logger.CountRequest();
+        if (DraftAddressInvalid(repoId, type) is { } bad) return bad;
+        var draft = _drafts.Get(repoId, type);
+        return Ok(new { repoId, type, text = draft.Text, savedAt = draft.SavedAt });
+    }
+
+    /// <summary>Replaces the whole draft (the editor and agents always PUT the
+    /// full text) and returns the fresh stamp.</summary>
+    [HttpPut("drafts/{repoId}/{type}")]
+    public IActionResult PutDraft(string repoId, string type, [FromBody] DraftPutReq req)
+    {
+        _logger.CountRequest();
+        if (DraftAddressInvalid(repoId, type) is { } bad) return bad;
+        if (req?.Text is null) return BadRequest(new { error = "missing text" });
+        if (req.Text.Length > LoopDraftsStore.MaxDraftLength)
+            return BadRequest(new { error = $"draft exceeds {LoopDraftsStore.MaxDraftLength} chars" });
+        var draft = _drafts.Put(repoId, type, req.Text);
+        return Ok(new { repoId, type, text = draft.Text, savedAt = draft.SavedAt });
+    }
+
+    private IActionResult? DraftAddressInvalid(string repoId, string type)
+    {
+        if (_repos.TryGet(repoId) is null)
+            return BadRequest(new { error = $"unknown repo '{repoId}' — GET /api/repos lists registered ids" });
+        if (!LoopDraftsStore.IsType(type))
+            return BadRequest(new { error = $"unknown draft type '{type}' — one of: {string.Join(", ", LoopDraftsStore.Types)}" });
+        return null;
+    }
 
     // --- Loop recipes (openspec: loop-recipes) ------------------------------
     // CRUD for the named loop templates. Gated like every other action surface.

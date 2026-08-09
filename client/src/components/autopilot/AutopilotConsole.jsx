@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiGet, apiPost, apiPatch, apiDelete } from '../../api/client';
+import { useFeature } from '../../context/UiModeContext';
 import ErrorBanner from '../shared/ErrorBanner';
 import AutopilotOverviewView from './AutopilotOverviewView';
 import AgentsView from './AgentsView';
@@ -10,6 +11,7 @@ import TestInventoryView from './TestInventoryView';
 import ChatArchitectureView from './ChatArchitectureView';
 import AutopilotArchitectureView from './AutopilotArchitectureView';
 import ResearchView from './ResearchView';
+import LoopDraftsView from './LoopDraftsView';
 import '../../pages/autopilot.css';
 
 // The full Autopilot console (plans/autopilot-to-harness.md): the complete
@@ -20,9 +22,11 @@ import '../../pages/autopilot.css';
 // Audit trail, the 🧪 Tests coverage map (openspec add-autopilot-tests-tab:
 // unit / runnable browser / rehearsal / how-E2E-works / the engine-seam plan —
 // System tests live here now), and Reference (the two explainers plus the
-// agent-loop Research dossier, openspec research-informed-loops), all over
-// /api/autopilot. The Overview and the Research dossier are pure reference and
-// are the surfaces the operator gate never hides. This is the SINGLE implementation rendered by BOTH the routed
+// agent-loop Research dossier, openspec research-informed-loops), and the
+// 📝 Drafts root (openspec add-loop-drafts: per-repo fill-the-loop drafts), all
+// over /api/autopilot. The Overview, the Research dossier, and Drafts are the
+// surfaces the operator gate never hides (Drafts is idea capture with no send
+// path, same stance as the briefing editor). This is the SINGLE implementation rendered by BOTH the routed
 // Autopilot tab (pages/Autopilot.jsx, the mobile-first view) and the dashboard
 // dock (components/dashboard/AutopilotPanel.jsx, viewable anywhere) — they are
 // the same console, never two drifting copies.
@@ -58,7 +62,7 @@ export default function AutopilotConsole({ embedded = false }) {
   // reopens where you left it. The 🗒️ queue-based loop lives as a subtab of the
   // Loops root (openspec: queue-based-loop).
   const [root, setRoot] = useState('overview');
-  const [sub, setSub] = useState({ suggestion: 'control', goal: 'agents', tests: 'unit', reference: 'autoarch' });
+  const [sub, setSub] = useState({ suggestion: 'control', goal: 'agents', tests: 'unit', reference: 'autoarch', drafts: '' });
   const pickSub = useCallback((r, key) => setSub((s) => ({ ...s, [r]: key })), []);
   const [data, setData] = useState(null); // { enabled, threshold, denyList, agents, log }
   const [discover, setDiscover] = useState(null);
@@ -70,6 +74,9 @@ export default function AutopilotConsole({ embedded = false }) {
   const [gated, setGated] = useState(false); // operator gate is off (HTTP 403)
   const [open, setOpen] = useState({});
   const timer = useRef(null);
+  // Drafts is its own capability-map entry (openspec add-loop-drafts) so it stays
+  // advanced-only even if the console itself is ever promoted to basic.
+  const draftsVisible = useFeature('loopDrafts');
 
   const load = useCallback(async () => {
     try {
@@ -260,6 +267,9 @@ export default function AutopilotConsole({ embedded = false }) {
         </button>
         <button className={root === 'tests' ? 'on' : ''} onClick={() => setRoot('tests')}>🧪 Tests</button>
         <button className={root === 'reference' ? 'on' : ''} onClick={() => setRoot('reference')}>Reference</button>
+        {draftsVisible && (
+          <button className={root === 'drafts' ? 'on' : ''} onClick={() => setRoot('drafts')}>📝 Drafts</button>
+        )}
       </nav>
 
       {root === 'suggestion' && (
@@ -312,9 +322,16 @@ export default function AutopilotConsole({ embedded = false }) {
           so it stays visible like the Overview (openspec research-informed-loops). */}
       {root === 'reference' && sub.reference === 'research' && <ResearchView />}
 
+      {/* Drafts is idea capture with no send path — ungated like the Overview and
+          Research (openspec add-loop-drafts); its repo subtab row is dynamic, so
+          the view owns it. */}
+      {root === 'drafts' && draftsVisible && (
+        <LoopDraftsView activeRepo={sub.drafts} onPickRepo={(k) => pickSub('drafts', k)} />
+      )}
+
       {/* The gate fences every operational surface; the Overview and the
           Research dossier above are reference content and stay visible either way. */}
-      {!(root === 'overview' || (root === 'reference' && sub.reference === 'research')) && (gated ? (
+      {!(root === 'overview' || root === 'drafts' || (root === 'reference' && sub.reference === 'research')) && (gated ? (
         <div className="ap-gateoff" role="status">
           <h3 className="ap-gateoff__title">Autopilot is turned off by the operator</h3>
           <p>
