@@ -23,11 +23,16 @@ namespace ClaudeWeb.Controllers;
 /// (that lives only in the WinForms host), so a steered web client or
 /// prompt-injected brain can never grant autopilot the authority to act.
 ///
-/// ONE deliberate exception (openspec: adopt-autopilot-loops, design §5):
-/// <c>GET /api/autopilot/loops</c> is session-auth only, NOT operator-gated, so the
-/// dashboard can still show a loop's terminal state (done/escalated/capped + why)
-/// after the operator closes the gate. It discloses loop STATUS, recipe NAMES, and
-/// suggestion-arming STATUS only — no prompts, no config, no action surface.
+/// TWO deliberate exceptions to the gate:
+/// <c>GET /api/autopilot/loops</c> (openspec: adopt-autopilot-loops, design §5) is
+/// session-auth only, NOT operator-gated, so the dashboard can still show a loop's
+/// terminal state (done/escalated/capped + why) after the operator closes the gate.
+/// It discloses loop STATUS, recipe NAMES, and suggestion-arming STATUS only — no
+/// prompts, no config, no action surface. And <c>GET/PUT /api/autopilot/briefing</c>
+/// (openspec: loop-agent-briefing, D2b): the briefing rules are operator-authored
+/// harness text — never repo or prompt content — and capturing a rule idea from the
+/// dock must work whenever the dock is visible; the sends that consume the rules
+/// stay gate-fenced like every action here.
 /// </summary>
 [ApiController]
 [Route("api/autopilot")]
@@ -38,6 +43,8 @@ public class AutopilotController : ControllerBase
     private readonly AutopilotConfigStore _config;
     private readonly LoopConfigStore _loops;
     private readonly LoopRecipeStore _recipes;
+    private readonly BriefingRulesStore _briefing;
+    private readonly FlagsStore _flags;
     private readonly AutopilotGate _operatorGate;
     private readonly AutopilotAuditLog _audit;
     private readonly SystemTestsService _systests;
@@ -48,7 +55,8 @@ public class AutopilotController : ControllerBase
     public AutopilotController(
         AutopilotDiscoveryService discovery, AutopilotService engine,
         AutopilotConfigStore config, LoopConfigStore loops, LoopRecipeStore recipes,
-        AutopilotGate operatorGate, AutopilotAuditLog audit,
+        BriefingRulesStore briefing, FlagsStore flags, AutopilotGate operatorGate,
+        AutopilotAuditLog audit,
         SystemTestsService systests, RepositoryRegistry repos, DockRegistry dock, Logger logger)
     {
         _discovery = discovery;
@@ -56,6 +64,8 @@ public class AutopilotController : ControllerBase
         _config = config;
         _loops = loops;
         _recipes = recipes;
+        _briefing = briefing;
+        _flags = flags;
         _operatorGate = operatorGate;
         _audit = audit;
         _systests = systests;
@@ -144,7 +154,11 @@ public class AutopilotController : ControllerBase
         // Per-arm deny-list (openspec: advance-queue-loop, D2): the effective
         // list for THIS arm. Null = global default; an empty list is the
         // operator's explicit "no deny terms this arm".
-        List<string>? DenyList = null);
+        List<string>? DenyList = null,
+        // Per-arm footer-clauses opt-in (openspec: expose-goal-loop-denylist):
+        // when true, work-phase driven sends append the chat footer clauses.
+        // Null/false = off, today's behavior.
+        bool? IncludeFooterClauses = null);
 
     /// <summary>The loop control (openspec: unify-loop-types, revision 2): one
     /// endpoint arms / edits / disarms an agent's ONE loop instance of any kind.
@@ -187,7 +201,8 @@ public class AutopilotController : ControllerBase
                 {
                     if (string.IsNullOrWhiteSpace(req.Goal))
                         return BadRequest(new { error = "a goal loop needs a goal" });
-                    _loops.StartGoal(req.RepoId, req.Goal.Trim(), req.MaxIterations, req.Mode, pin);
+                    _loops.StartGoal(req.RepoId, req.Goal.Trim(), req.MaxIterations, req.Mode, pin,
+                        req.DenyList, req.IncludeFooterClauses);
                     break;
                 }
                 if (string.Equals(req.Kind, LoopConfigStore.KindQueue, StringComparison.OrdinalIgnoreCase))
@@ -204,7 +219,7 @@ public class AutopilotController : ControllerBase
                     if (stash.Count == 0)
                         return BadRequest(new { error = "the stash is empty — queue a prompt before arming" });
                     _loops.StartQueue(req.RepoId, req.TabId.Trim(), req.VerifyEnabled,
-                        req.MaxIterations, req.Mode, pin, req.DenyList);
+                        req.MaxIterations, req.Mode, pin, req.DenyList, req.IncludeFooterClauses);
                     break;
                 }
                 if (!string.IsNullOrWhiteSpace(req.RecipeId))
@@ -212,7 +227,8 @@ public class AutopilotController : ControllerBase
                     if (_recipes.Get(req.RecipeId) is not { } recipe)
                         return NotFound(new { error = $"unknown recipe \"{req.RecipeId}\"" });
                     _loops.Start(req.RepoId, recipe.Prompt, recipe.Sentinel,
-                        req.MaxIterations ?? recipe.MaxIterations, recipe.Id, recipe.Name, req.Mode, pin);
+                        req.MaxIterations ?? recipe.MaxIterations, recipe.Id, recipe.Name, req.Mode, pin,
+                        req.DenyList, req.IncludeFooterClauses);
                     break;
                 }
                 if (string.IsNullOrWhiteSpace(req.Prompt))
@@ -441,6 +457,10 @@ public class AutopilotController : ControllerBase
                     // default applies. Terms follow the gate like the global list.
                     denyList = loop.DenyList is null ? null
                         : (gateOpen ? (object)loop.DenyList : redactedMarker),
+                    // Footer-clauses opt-in (expose-goal-loop-denylist): a status
+                    // boolean like queueVerifyEnabled — the clause TEXTS live in the
+                    // footer-clauses store, not here, so nothing to gate.
+                    includeFooterClauses = loop.IncludeFooterClauses,
                     queueVerifyEnabled = loop.Kind == LoopConfigStore.KindQueue ? (bool?)loop.VerifyEnabled : null,
                     queueSent = loop.Kind == LoopConfigStore.KindQueue ? (int?)loop.QueueSent : null,
                     lastStepText = Text(loop.LastStepText),
@@ -502,6 +522,12 @@ public class AutopilotController : ControllerBase
                 confidence = a.Confidence,
                 prompt = Text(a.Prompt),
                 answeredMessage = Text(a.AnsweredMessage),
+                // Briefed + rules revision (openspec: loop-agent-briefing, D3):
+                // status words, not prompt text, so they ride ungated — they make
+                // a send attributable to the exact rules it was composed with
+                // (the loop-eval briefing scenario asserts on them in live mode).
+                briefed = a.Briefed,
+                briefingRev = a.BriefingRev,
             }),
             files = new
             {
@@ -516,9 +542,10 @@ public class AutopilotController : ControllerBase
 
     /// <summary>The prompt-level counterpart (openspec: unify-loop-types, design D5),
     /// OPERATOR-GATED like every prompt disclosure: full loop records (stored work +
-    /// verification prompts, goal text, phase), full recipe bodies, and the goal-loop
-    /// composition templates — so the dock can preview byte-identical what the engine
-    /// will send before and after arming.</summary>
+    /// verification prompts, goal text, phase), full recipe bodies, the goal-loop
+    /// composition templates, and the briefing (openspec: loop-agent-briefing) — so
+    /// the dock can preview the exact composition the engine will send (briefing
+    /// frame + rules + stored text) before and after arming.</summary>
     [HttpGet("loops/detail")]
     public IActionResult LoopsDetail()
     {
@@ -541,8 +568,100 @@ public class AutopilotController : ControllerBase
             // verification template, composed at send time with the landed
             // step's text — inspectable here like the goal templates.
             queueVerifyTemplate = LoopConfigStore.QueueVerifyTemplate,
+            // The situational briefing every driven send is wrapped with
+            // (openspec: loop-agent-briefing, D3) — frame + current rules +
+            // composed work-phase preview, so the arm preview shows the exact
+            // composition. Same payload as GET /briefing, disclosed here too so
+            // one detail fetch reconstructs any send.
+            briefing = BriefingPayload(_briefing.Current()),
         });
     }
+
+    /// <summary>Durable queue audit (openspec: queue-loop-prompt-transparency, D5):
+    /// the repo's queue-kind sends from the append-only ledger, newest first,
+    /// bounded — the across-arms answer to "which prompts did the queue loop
+    /// send?", surviving re-arms unlike the per-arm sent-history. OPERATOR-GATED
+    /// like loops/detail: rows carry the full raw text AND the exact composed
+    /// sent text. Ledger lines from before kind attribution (Kind == "") are
+    /// excluded rather than misattributed — the raw ledger remains their home.</summary>
+    [HttpGet("loops/queue-audit")]
+    public IActionResult QueueAudit([FromQuery] string? repoId)
+    {
+        _logger.CountRequest();
+        if (GateClosed() is { } closed) return closed;
+        if (string.IsNullOrWhiteSpace(repoId))
+            return BadRequest(new { error = "missing repoId" });
+        // The ledger grows one line per send; scan a generous newest-first window,
+        // then bound what one view returns.
+        var entries = _audit.Recent(5000)
+            .Where(a => a.RepoId == repoId && a.Kind == LoopConfigStore.KindQueue)
+            .Take(200)
+            .Select(a => new
+            {
+                at = a.At,
+                phase = a.Phase,
+                prompt = a.Prompt,
+                // null SentText = sent exactly as the raw prompt (unbriefed).
+                sentText = a.SentText ?? a.Prompt,
+                briefingRev = a.BriefingRev,
+            });
+        return Ok(new { entries });
+    }
+
+    // --- Briefing rules (openspec: loop-agent-briefing) ---------------------
+    // The dock's always-visible Briefing section reads and edits the GLOBAL rules
+    // list here. Deliberately session-auth only, NOT operator-gated (D2b — see the
+    // class summary): harness-authored text, and idea capture must work whenever
+    // the dock is visible. Composition into actual sends stays gate-fenced.
+
+    public sealed record BriefingRuleReq(string? Id, string? Text, bool Enabled);
+    public sealed record BriefingPutReq(List<BriefingRuleReq>? Rules);
+
+    [HttpGet("briefing")]
+    public IActionResult Briefing()
+    {
+        _logger.CountRequest();
+        return Ok(BriefingPayload(_briefing.Current()));
+    }
+
+    /// <summary>Replaces the whole rules list (the editor always PUTs the full
+    /// set); the store archives the outgoing state and bumps the revision.</summary>
+    [HttpPut("briefing")]
+    public IActionResult PutBriefing([FromBody] BriefingPutReq req)
+    {
+        _logger.CountRequest();
+        if (req?.Rules is null) return BadRequest(new { error = "missing rules" });
+        var snap = _briefing.Replace(req.Rules.Select(r => (r.Id, r.Text, r.Enabled)));
+        return Ok(BriefingPayload(snap));
+    }
+
+    private object BriefingPayload(BriefingRulesStore.Snapshot snap) => new
+    {
+        rev = snap.Rev,
+        rules = snap.Rules.Select(r => new { id = r.Id, text = r.Text, enabled = r.Enabled }),
+        // The FLAG: channel switch (FlagsStore, toggled via POST /api/flags/enabled)
+        // — disclosed here so the editor's fixed-frame row and both composed
+        // previews (workPreview below, the dock's client-side mirror) stay honest
+        // about whether driven sends currently teach the marker.
+        flagsEnabled = _flags.Enabled,
+        frame = new
+        {
+            header = LoopConfigStore.BriefingHeader,
+            intro = LoopConfigStore.BriefingIntro,
+            escalationLine = LoopConfigStore.BriefingEscalationLine,
+            flagLine = LoopConfigStore.BriefingFlagLine,
+            contractQueueItem = LoopConfigStore.BriefingContractQueueItem,
+            contractSentinelTemplate = LoopConfigStore.BriefingContractSentinelTemplate,
+            separator = LoopConfigStore.BriefingSeparator,
+            verifyNote = LoopConfigStore.BriefingVerifyNote,
+        },
+        // The composed work-phase briefing exactly as a goal/recipe send carries
+        // it (default sentinel, empty stored text) — the editor's live preview.
+        workPreview = LoopConfigStore.ComposeBriefedPrompt(
+            LoopConfigStore.KindRecipe, null, LoopConfigStore.DefaultSentinel, "",
+            snap.Rules.Where(r => r.Enabled).Select(r => r.Text).ToList(),
+            _flags.Enabled).TrimEnd(),
+    };
 
     // --- Loop recipes (openspec: loop-recipes) ------------------------------
     // CRUD for the named loop templates. Gated like every other action surface.

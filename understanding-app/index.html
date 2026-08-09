@@ -1,201 +1,293 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>loop-eval + golden — one watchable eval suite, three scenarios</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ideas sync — how the shared board works</title>
 <style>
   :root {
-    --bg:#0f131a; --panel:#181e27; --panel2:#212a36; --ink:#dce3ec; --dim:#8b97a6;
-    --line:#2c3644; --ok:#4fc38a; --bad:#e06c6c; --warn:#e0b56c;
-    --goal:#5b9be0; --queue:#4fbfad; --golden:#f2c14e; --acc:#b48ce6; --radius:12px;
+    --bg: #0f1420; --panel: #171e2e; --panel2: #1d2740; --line: #2c3a5c;
+    --text: #dbe4f8; --dim: #8fa0c5; --accent: #5aa9ff; --good: #4fd1a5;
+    --warn: #f0b45a; --bad: #ef7b7b;
   }
-  * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--ink);
-    font:15px/1.55 "Segoe UI", system-ui, sans-serif; padding:26px 16px 72px; }
-  main { max-width:1000px; margin:0 auto; }
-  h1 { font-size:23px; margin:0 0 4px; }
-  .sub { color:var(--dim); margin:0 0 6px; }
-  .note { color:var(--dim); font-size:12.5px; margin:0 0 20px; }
-  .tabs { display:flex; gap:8px; margin:0 0 20px; flex-wrap:wrap; }
-  .tabs button { background:var(--panel); color:var(--dim); border:1px solid var(--line);
-    border-radius:999px; padding:8px 16px; cursor:pointer; font:inherit; font-size:14px; transition:.15s; }
-  .tabs button:hover { color:var(--ink); }
-  .tabs button.on { background:var(--ink); color:#0c1116; border-color:var(--ink); font-weight:600; }
-  section { display:none; } section.on { display:block; animation:fade .2s ease; }
-  @keyframes fade { from{opacity:0;transform:translateY(5px);} to{opacity:1;} }
-  .card { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
-    padding:16px 18px; margin-bottom:14px; }
-  .card h3 { margin:0 0 8px; font-size:16px; }
-  .card p, .card li { color:var(--dim); margin:6px 0; }
-  .card b, .card code, strong { color:var(--ink); }
-  code { background:var(--panel2); padding:1px 6px; border-radius:5px; font-size:13px; }
-  ul.tight { margin:6px 0; padding-left:20px; } ul.tight li{ margin:4px 0; }
-  .cols3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
-  .cols2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
-  @media (max-width:820px){ .cols3{grid-template-columns:1fr;} .cols2{grid-template-columns:1fr;} }
-  .scn { border-top:3px solid var(--line); }
-  .scn.goal{border-top-color:var(--goal);} .scn.queue{border-top-color:var(--queue);} .scn.golden{border-top-color:var(--golden);}
-  .tag { display:inline-block; font-size:11px; border-radius:999px; padding:2px 9px; border:1px solid var(--line); color:var(--dim); margin-left:6px; vertical-align:middle; }
-  .tag.new{color:var(--golden);border-color:var(--golden);} .tag.ship{color:var(--ok);border-color:var(--ok);}
-  .modes { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
-  .chip { font-size:12px; padding:3px 10px; border-radius:7px; border:1px solid var(--line); color:var(--dim); background:var(--panel2); }
-  .chip.on { color:var(--ink); border-color:var(--acc); }
-  .flow { display:flex; flex-direction:column; gap:6px; margin-top:8px; }
-  .step { background:var(--panel2); border:1px solid var(--line); border-radius:9px; padding:9px 12px; cursor:pointer; }
-  .step:hover { border-color:var(--golden); }
-  .step .t { font-weight:600; font-size:14px; }
-  .step .d { display:none; color:var(--dim); font-size:13px; margin-top:4px; }
-  .step.open .d { display:block; }
-  .step .k { float:right; font-size:11px; color:var(--dim); }
-  .arrow { text-align:center; color:var(--dim); font-size:12px; }
-  .kr { display:grid; grid-template-columns:90px 1fr; gap:10px; align-items:start; margin:8px 0; }
-  .kr .lab { font-weight:600; font-size:13px; text-align:right; padding-top:2px; }
-  .keep .lab{color:var(--ok);} .rep .lab{color:var(--bad);} .new .lab{color:var(--golden);}
-  .kr .body { color:var(--dim); font-size:13.5px; }
-  table { border-collapse:collapse; width:100%; font-size:13.5px; }
-  th,td { border:1px solid var(--line); padding:8px 10px; text-align:left; vertical-align:top; }
-  th { background:var(--panel2); } td:first-child{ color:var(--ink); }
-  .v { text-align:center; } .yes{color:var(--ok);} .no{color:var(--dim);}
-  .lead { border-left:3px solid var(--golden); padding-left:14px; margin:10px 0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 "Segoe UI", system-ui, sans-serif; padding: 1rem; }
+  h1 { font-size: 1.25rem; margin: .2rem 0 .2rem; }
+  h2 { font-size: 1rem; margin: 1rem 0 .4rem; }
+  .sub { color: var(--dim); margin-bottom: 1rem; }
+  .tabs { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1rem; }
+  .tabs button { background: var(--panel); color: var(--text); border: 1px solid var(--line);
+    border-radius: 8px; padding: .45rem .8rem; cursor: pointer; font-size: .9rem; }
+  .tabs button.on { background: var(--accent); border-color: var(--accent); color: #0b1020; font-weight: 600; }
+  .view { display: none; } .view.on { display: block; }
+
+  .diagram { display: flex; flex-wrap: wrap; gap: 1rem; align-items: stretch; margin: 1rem 0; }
+  .col { flex: 1 1 220px; display: flex; flex-direction: column; gap: .6rem; }
+  .node { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+          padding: .6rem .8rem; cursor: pointer; transition: border-color .15s, background .15s; }
+  .node:hover, .node.hl { border-color: var(--accent); background: var(--panel2); }
+  .node h3 { margin: 0 0 .2rem; font-size: .95rem; }
+  .node .k { color: var(--dim); font-size: .8rem; }
+  .node.store { border-style: dashed; }
+  .node.web { border-color: #7a5aff88; }
+  .arrow { text-align: center; color: var(--dim); font-size: .85rem; }
+  .arrow b { color: var(--accent); }
+
+  .detail { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px;
+            padding: .8rem 1rem; min-height: 3.2rem; margin-top: .4rem; }
+  .detail .k { color: var(--dim); font-size: .8rem; }
+
+  table { border-collapse: collapse; width: 100%; margin-top: 1rem; font-size: .88rem; }
+  th, td { border: 1px solid var(--line); padding: .45rem .6rem; text-align: left; vertical-align: top; }
+  th { background: var(--panel); }
+  .good { color: var(--good); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+  code { background: #0b1020; border: 1px solid var(--line); border-radius: 5px; padding: .05rem .35rem; font-size: .85em; }
+  ol li, ul li { margin: .3rem 0; }
+
+  /* simulator */
+  .sim { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 1rem; }
+  .box { flex: 1 1 240px; background: var(--panel); border: 1px solid var(--line);
+         border-radius: 10px; padding: .7rem .9rem; }
+  .box h3 { margin: 0 0 .4rem; font-size: .95rem; }
+  .box.offline { border-color: var(--bad); opacity: .8; }
+  .box .rev { color: var(--dim); font-size: .8rem; margin-bottom: .4rem; }
+  .board { min-height: 3.5rem; display: flex; flex-direction: column; gap: .25rem; }
+  .card { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px;
+          padding: .2rem .5rem; font-size: .85rem; }
+  .card.dead { text-decoration: line-through; color: var(--dim); border-style: dashed; }
+  .dirty { color: var(--warn); font-size: .8rem; }
+  .synced { color: var(--good); font-size: .8rem; }
+  .simbtns { display: flex; flex-wrap: wrap; gap: .4rem; margin: .6rem 0; }
+  .simbtns button { background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 7px; padding: .35rem .7rem; cursor: pointer; font-size: .85rem; }
+  .simbtns button:hover { border-color: var(--accent); }
+  .simlog { background: #0b1020; border: 1px solid var(--line); border-radius: 8px;
+            padding: .5rem .8rem; font-size: .8rem; max-height: 9rem; overflow: auto; color: var(--dim); }
+  .simlog .hot { color: var(--text); }
 </style>
 </head>
 <body>
-<main>
-  <h1>One watchable eval suite, three scenarios <span class="tag ship">built</span></h1>
-  <p class="sub">We folded our golden-example eval into <code>main</code>'s shipped <code>loop-eval</code> suite.
-  It's now the <b>third scenario</b> — <code>golden</code> — beside <code>goal</code> and <code>queue</code>:
-  runnable as an automatic test, live, and <b>watchable from the Tests tab</b>.</p>
-  <p class="note">Understanding app for <code>feat/loop-evals</code> after the rework (OpenSpec design D6). Supersedes the earlier "two competing approaches" version.</p>
+<h1>Ideas sync — how the shared board works</h1>
+<div class="sub">Shipped (openspec <code>ideas-drive-sync</code> + <code>ideas-harness-hub</code>): every harness's Ideas tab
+can replicate through one shared store — normally a <b>hub hosted by one of the harnesses itself</b>, or a Google Apps
+Script web app as fallback. Both speak the identical envelope contract, so the sync layer can't tell them apart.
+Click boxes for detail; the Simulator tab lets you step the protocol.</div>
 
-  <div class="tabs">
-    <button class="on" data-t="suite">The suite</button>
-    <button data-t="golden">The golden scenario</button>
-    <button data-t="rework">What changed</button>
-    <button data-t="score">Did it work?</button>
+<div class="tabs">
+  <button data-v="arch" class="on">Architecture</button>
+  <button data-v="proto">Sync protocol</button>
+  <button data-v="sim">Simulator</button>
+  <button data-v="fail">Failure modes</button>
+  <button data-v="setup">One-time setup</button>
+</div>
+
+<section class="view on" id="v-arch">
+  <div class="diagram">
+    <div class="col">
+      <div class="node" data-d="Unchanged: the Ideas UI and /api/notes CRUD work exactly as before. The only addition is a small sync bar (Advanced mode): paste a hub or web-app URL, flip sync on, watch the status chip (synced / syncing / offline / error) — plus a 'Host the shared board on this harness' toggle that turns this box into the hub and shows the URL to copy. Component: client/src/components/ideas/IdeasSyncBar.jsx.">
+        <h3>📱 Ideas tab + sync bar</h3><div class="k">IdeasPanel.jsx · chip polls /api/notes/sync/status</div>
+      </div>
+      <div class="arrow">⬍ <b>/api/notes</b> + <b>/api/notes/sync/config|status</b></div>
+      <div class="node" data-d="NotesService stays the single local truth (notes.json, atomic writes). New for sync: a Changed event, Snapshot(), and MergeFrom(remote) — per-Id newest-UpdatedAt-wins with tombstones so deletes don't resurrect. MergeFrom deliberately does NOT raise Changed, so a pull can never re-trigger a push loop.">
+        <h3>🏠 Harness A — NotesService</h3><div class="k">notes.json + tombstones · merge lives here</div>
+      </div>
+      <div class="arrow">⬇ Changed event ⬍ MergeFrom</div>
+      <div class="node" data-d="IdeasSyncService (BackgroundService): polls the endpoint every PollSeconds (rev compare → pull-merge), and on any local change schedules a debounced (~2s) push. A push is always pull → merge → CAS-post, so it can never clobber another box's write. Config in ideas-sync.json; disabled = ZERO outbound calls.">
+        <h3>🔁 IdeasSyncService</h3><div class="k">poll-pull + debounced CAS push · IdeasSyncClient (plain HttpClient)</div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="node web" data-d="Primary backend: one harness ticks 'Host the shared board on this harness' and becomes the hub. IdeasHubService serves GET/POST /api/notes/hub/{token} — same envelope as the Apps Script: GET → {ok, rev, store}; POST accepts only if baseRev matches the current rev under a lock (then rev++, MergeFrom into the hub's own board), else {ok:false, conflict:true, rev, store}. The route is exempt from the login gate — the 32-byte random token in the URL IS the credential (checked constant-time; wrong token → {ok:false} with no detail). Hub-local edits bump rev too, so other boxes pull them. State in %APPDATA%\ClaudeWeb\ideas-hub.json. Fallback backend: docs/ideas-sync-appscript.gs deployed as a Google web app — LockService CAS, board in claude-web-ideas.json on the operator's Drive.">
+        <h3>☁ Shared store (hub / Apps Script)</h3><div class="k">hub: /api/notes/hub/{token} on a host harness · fallback: Drive + LockService CAS</div>
+      </div>
+      <div class="arrow">⬍ same URL</div>
+      <div class="node" data-d="Every other harness runs the identical sync layer against the same pasted URL. There is no primary: any box can be off for a week and converges when it returns. The URL is a bearer capability — anyone holding it can read/write the board — so the harness never logs it and only returns it over the authenticated config API.">
+        <h3>🖥 Harness B..n</h3><div class="k">same sync layer, same URL — no primary</div>
+      </div>
+      <div class="detail" id="d-arch"><span class="k">Click a box…</span></div>
+    </div>
   </div>
+</section>
 
-  <!-- ===== SUITE ===== -->
-  <section class="on" id="suite">
-    <div class="cols3">
-      <div class="card scn goal">
-        <h3>goal <span class="tag ship">shipped</span></h3>
-        <p>Implement a deliberately-missing feature until a hand-written <code>goal-check.mjs</code> exits 0.</p>
-        <p><b>Ground truth:</b> synthetic fixture + check script.</p>
-        <p><b>Score:</b> binary.</p>
-      </div>
-      <div class="card scn queue">
-        <h3>queue <span class="tag ship">shipped</span></h3>
-        <p>Drain 6 stashed prompts; each must produce its expected artifact (<code>expected.json</code>).</p>
-        <p><b>Ground truth:</b> synthetic fixture + path/regex triples.</p>
-        <p><b>Score:</b> binary.</p>
-      </div>
-      <div class="card scn golden">
-        <h3>golden <span class="tag new">new</span></h3>
-        <p>Replay a <b>captured human-babysat</b> task from its git bundle; the loop must reach a state where every acceptance check passes.</p>
-        <p><b>Ground truth:</b> a real session, captured via the curation UI.</p>
-        <p><b>Score:</b> verdict + <b>trajectory</b> + <b>reliability</b>.</p>
-      </div>
-    </div>
-    <div class="card">
-      <h3>All three share one contract — so all three run the same three ways</h3>
-      <div class="modes">
-        <span class="chip on">automatic isolated test</span>
-        <span class="chip on">— live against the running harness</span>
-        <span class="chip on">— startable + watchable in the Tests-tab runner</span>
-      </div>
-      <p style="margin-top:12px">Because a scenario just emits <code>@@LOOPEVAL@@</code> verdict lines, answers <code>--describe</code>, and binds a dock tab,
-      the C# runner lists it, streams its state (preflight → armed → running → passed/failed), and a human watches the driven
-      conversation live. <code>golden</code> conforms to that contract, so it inherited all of it. The only registration needed:
-      one line in <code>LoopEvalRunnerService.Scenarios[]</code> (the client list is dynamic).</p>
-    </div>
-  </section>
+<section class="view" id="v-proto">
+  <h2>Pull (every PollSeconds, default 30)</h2>
+  <ol>
+    <li><code>GET</code> the endpoint → <code>{ok, rev, store}</code> (the hub answers directly; the Apps Script fallback serves via a 302-redirect shape the client just follows)</li>
+    <li>If <code>rev</code> moved since last seen → <code>MergeFrom(store)</code>: union by note Id, newest <code>UpdatedAt</code> wins, tombstones suppress/revive</li>
+    <li>If the merge finds local content the remote lacks (e.g. edits made offline) → mark dirty, push soon</li>
+  </ol>
+  <h2>Push (debounced ~2s after any local add/edit/delete)</h2>
+  <ol>
+    <li>Pull + merge first — a push always uploads the <b>merged</b> board</li>
+    <li><code>POST {baseRev, store}</code> — the script accepts only if <code>baseRev</code> equals its current rev, then bumps rev</li>
+    <li>On <code>{conflict:true}</code> (someone wrote in between): re-merge against the returned store, retry — up to 3 attempts</li>
+    <li>On failure (offline, error): stay dirty; the retry rides the poll cadence until it lands</li>
+  </ol>
+  <table>
+    <tr><th>State chip</th><th>Meaning</th></tr>
+    <tr><td class="good">synced</td><td>last exchange succeeded; board matches the shared rev</td></tr>
+    <tr><td class="warn">syncing</td><td>an exchange is in flight</td></tr>
+    <tr><td class="bad">offline</td><td>endpoint unreachable (network-shaped failure) — edits queue locally</td></tr>
+    <tr><td class="bad">error</td><td>endpoint answered but wrongly (bad deployment, non-JSON, rejected push)</td></tr>
+    <tr><td>disabled</td><td>no URL / toggle off — the service makes zero outbound calls</td></tr>
+  </table>
+</section>
 
-  <!-- ===== GOLDEN FLOW ===== -->
-  <section id="golden">
-    <div class="card">
-      <h3>What <code>golden</code> adds that <code>goal</code>/<code>queue</code> can't</h3>
-      <p class="lead"><code>goal</code> and <code>queue</code> ask <i>"can the loop finish a canned synthetic job?"</i>
-      <code>golden</code> asks <i>"how close to a real human did the loop drive on real captured work — and how reliably?"</i></p>
-      <ul class="tight">
-        <li><b>Real ground truth</b> — the fixture is a git bundle captured from an actual babysat session (start state · plan · per-turn commits · labeled transcript), authored in the curation UI.</li>
-        <li><b>Trajectory evidence</b> — the loop's own per-step commits are compared to the golden commit chain (files-touched overlap, first divergence). Reported, never a pass/fail — a correct run may validly diverge.</li>
-        <li><b>Reliability</b> — <code>--runs N</code> (isolated) reports pass-rate + iteration spread across repeats.</li>
-      </ul>
-    </div>
-    <div class="card">
-      <h3>A run, step by step <span class="tag">click a step</span></h3>
-      <div class="flow" id="steps">
-        <div class="step"><span class="k">bundle</span><div class="t">1 · Materialize from the bundle</div><div class="d">Clone <code>repo.bundle</code> at <code>eval/start</code> onto a fresh <code>work</code> branch, then <b>strip the answer</b> — delete the <code>golden</code> branch, <code>eval/*</code> tags, and origin — so the agent can't diff to the goal.</div></div>
-        <div class="arrow">↓</div>
-        <div class="step"><span class="k">drift guard</span><div class="t">2 · Prove the checks don't already pass</div><div class="d">Run the manifest's acceptance checks at <code>eval/start</code>; if they already pass, the example proves nothing → abort before spending tokens.</div></div>
-        <div class="arrow">↓</div>
-        <div class="step"><span class="k">HTTP surface</span><div class="t">3 · Seed the queue loop from plan.md</div><div class="d">Register the repo, stash <code>plan.md</code> as the queue (one plan-sized item, or a pre-split list), seed a chat turn, bind a dock tab, and arm the real queue loop — all through the shipped operator surface, exactly as an operator would.</div></div>
-        <div class="arrow">↓</div>
-        <div class="step"><span class="k">watch</span><div class="t">4 · Watch it drive</div><div class="d">Poll the loop to resolution under an iteration cap + deadline. In live mode a human watches the dock conversation and the Autopilot loop card tick.</div></div>
-        <div class="arrow">↓</div>
-        <div class="step"><span class="k">verdict</span><div class="t">5 · Score</div><div class="d"><b>Verdict:</b> every acceptance check passes in the final tree. <b>Evidence:</b> trajectory vs the golden chain (fetched back from the bundle). <b>Aggregate:</b> pass-rate across <code>--runs N</code>.</div></div>
-      </div>
-    </div>
-  </section>
+<section class="view" id="v-sim">
+  <div class="sub">A faithful miniature of the protocol: two harnesses + the shared store. Buttons drive local edits;
+  <b>tick</b> advances both boxes one sync cycle (pull-merge, then push if dirty — CAS included).</div>
+  <div class="simbtns">
+    <button id="s-addA">Add idea on A</button>
+    <button id="s-addB">Add idea on B</button>
+    <button id="s-delA">Delete A's newest</button>
+    <button id="s-offB">Toggle B offline</button>
+    <button id="s-tick">⏭ tick (one sync cycle)</button>
+    <button id="s-reset">reset</button>
+  </div>
+  <div class="sim">
+    <div class="box" id="boxA"><h3>🏠 Harness A</h3><div class="rev" id="revA"></div><div class="board" id="brdA"></div></div>
+    <div class="box" id="boxS"><h3>☁ Shared store</h3><div class="rev" id="revS"></div><div class="board" id="brdS"></div></div>
+    <div class="box" id="boxB"><h3>🖥 Harness B</h3><div class="rev" id="revB"></div><div class="board" id="brdB"></div></div>
+  </div>
+  <div class="simlog" id="simlog"></div>
+</section>
 
-  <!-- ===== REWORK ===== -->
-  <section id="rework">
-    <div class="card">
-      <h3>The rework: keep the ground truth, replace the runner</h3>
-      <p>Our original work had a great authoring layer but a weak execution layer (an offline in-process console).
-      The rework keeps the former and rebuilds the latter on <code>loop-eval</code>.</p>
-      <div class="kr keep"><div class="lab">KEEP</div><div class="body">Golden-example <b>bundle format</b> (manifest · plan · conversation · <code>repo.bundle</code>) and the <b>curation UI + endpoints</b> (<code>api/loop-evals</code>) that capture a real session. This is the unique asset <code>loop-eval</code> had nothing like.</div></div>
-      <div class="kr rep"><div class="lab">REPLACE</div><div class="body">The standalone in-process console runner (<code>tests/loop-evals/LoopEvals/</code>) — deleted. It booted its own host, ran only from a terminal, and no one could watch it.</div></div>
-      <div class="kr new"><div class="lab">NEW</div><div class="body"><code>tests/loop-eval/golden.mjs</code> + a few shared helpers in <code>lib.mjs</code> (clone-and-strip, acceptance-check runner, trajectory diff, bundle provisioning), and one catalog line so the Tests-tab runner lists it.</div></div>
-    </div>
-    <div class="card">
-      <h3>Two mechanics changed as a result</h3>
-      <ul class="tight">
-        <li><b>Materialization</b> — from copying a synthetic <code>repo-template</code> to cloning a real bundle at <code>eval/start</code> with the answer stripped.</li>
-        <li><b>Trajectory source</b> — the old runner committed after each turn via an in-process hook; over HTTP there's no hook, so the loop's <b>own per-step commits</b> are the trajectory, diffed against the golden chain fetched from the bundle.</li>
-      </ul>
-      <p>Reliability stayed, but as an <b>isolated-only</b> <code>--runs N</code> sweep; live mode is one watchable run.</p>
-    </div>
-  </section>
+<section class="view" id="v-fail">
+  <table>
+    <tr><th>Scenario</th><th>What happens</th><th>Proven by</th></tr>
+    <tr><td>Box offline while others edit</td><td>Its board keeps working locally; on return the first poll merges everything it missed.</td><td rowspan="5">All rows are covered twice: by <code>.claudeweb-preview/playwright/verify-ideas-sync.mjs</code>
+      (two harnesses against a local stub of the web-app contract — 302 shape, CAS, fault injection; no test talks to
+      real Google) and by <code>verify-ideas-hub.mjs</code> (two real harnesses, one hosting the hub — plus wrong-token,
+      disabled-hub, forced-conflict and self-pointing cases).</td></tr>
+    <tr><td>Edit made while offline</td><td>Status shows <b>offline</b> + dirty; the edit queues and lands when the endpoint returns.</td></tr>
+    <tr><td>Same idea edited on two boxes</td><td>Newest <code>UpdatedAt</code> wins on every box (last-write-wins per note).</td></tr>
+    <tr><td>Delete vs a box that was away</td><td>A tombstone (30-day retention) rides the shared store, so the returning box deletes its copy instead of resurrecting it.</td></tr>
+    <tr><td>Two pushes race</td><td>The loser gets <code>conflict:true</code> + the winner's store, re-merges, retries — both writes land.</td></tr>
+    <tr><td>Endpoint misdeployed / Google interstitial</td><td>Non-JSON body → status <b>error</b> with a hint to check the deployment settings; local behavior unaffected.</td><td>IdeasSyncClient.Parse</td></tr>
+    <tr><td>Sync URL leaking</td><td>The URL is a bearer capability: never logged (messages pass Sanitize), returned only via the authenticated config API.</td><td>e2e asserts lastError never contains the URL</td></tr>
+    <tr><td>Wrong token / hub disabled</td><td>The hub answers <code>200 {ok:false, error}</code> with no detail (constant-time token compare); the caller shows <b>error</b>, local board unaffected.</td><td>verify-ideas-hub.mjs</td></tr>
+    <tr><td>Hub URL pasted into the hosting harness itself</td><td>Harmless no-op: the box merges with its own board through its own endpoint.</td><td>verify-ideas-hub.mjs</td></tr>
+  </table>
+</section>
 
-  <!-- ===== SCORE ===== -->
-  <section id="score">
-    <div class="card">
-      <h3>The hybrid we recommended — now realized</h3>
-      <p>The earlier analysis rated a "Hybrid" (main's watchable E2E skin × our captured ground truth + trajectory scoring) as the best target. That's exactly what shipped.</p>
-      <table>
-        <tr><th>Property</th><th class="v">goal / queue</th><th class="v">golden</th></tr>
-        <tr><td>Runs as automatic isolated test</td><td class="v yes">✓</td><td class="v yes">✓</td></tr>
-        <tr><td>Runs live against the harness</td><td class="v yes">✓</td><td class="v yes">✓</td></tr>
-        <tr><td>Watchable in the Tests-tab runner</td><td class="v yes">✓</td><td class="v yes">✓</td></tr>
-        <tr><td>Ground truth captured from real work</td><td class="v no">—</td><td class="v yes">✓</td></tr>
-        <tr><td>Trajectory evidence vs a human</td><td class="v no">—</td><td class="v yes">✓</td></tr>
-        <tr><td>N-run reliability</td><td class="v no">—</td><td class="v yes">✓</td></tr>
-      </table>
-    </div>
-    <div class="card">
-      <h3>Verified so far</h3>
-      <ul class="tight">
-        <li class="yes">Solution builds after removing the console project (0 errors).</li>
-        <li class="yes"><code>golden.mjs --describe</code> and <code>run-all.mjs --describe</code> compose the manifest (no tokens).</li>
-        <li class="yes">Git plumbing proven offline on the real <code>hello-notes</code> bundle: refs stripped to <code>work</code>, drift guard fails at start, checks pass after a simulated perfect run, trajectory <code>[1,1,1]</code>.</li>
-        <li class="yes"><code>openspec validate loop-evals --strict</code> passes.</li>
-        <li class="warn">A full isolated run spends real tokens — run on demand to confirm end to end.</li>
-      </ul>
-    </div>
-  </section>
-</main>
+<section class="view" id="v-setup">
+  <h2>Normal path — host on a harness (~1 minute)</h2>
+  <ol>
+    <li>On the harness that should host the board: Ideas tab → <b>☁ Set up sync</b> → tick <b>Host the shared board on this harness</b> → <b>Copy</b> the generated hub URL</li>
+    <li>On every other harness: <b>☁ Set up sync</b> → paste that URL, tick <b>Sync on</b>, Save</li>
+  </ol>
+  <ul>
+    <li>The URL embeds a random token and bypasses the login gate — treat it like a password; it grants read/write to the board and nothing else. Untick the host toggle to revoke it (a re-enable keeps the same token).</li>
+    <li>The host's own board <b>is</b> the shared board (its <code>notes.json</code>); hub state (token, rev) lives in <code>%APPDATA%\ClaudeWeb\ideas-hub.json</code>. Gated endpoints: <code>GET/POST /api/notes/hub-info</code>.</li>
+  </ul>
+  <h2>Fallback — Apps Script on Google Drive (~3 minutes)</h2>
+  <ol>
+    <li>Open <a href="https://script.google.com" style="color:var(--accent)">script.google.com</a> → New project, paste the contents of <code>docs/ideas-sync-appscript.gs</code></li>
+    <li>Deploy → New deployment → type <b>Web app</b> → execute as <b>Me</b>, access <b>Anyone</b> → copy the <code>…/exec</code> URL</li>
+    <li>On each harness: Ideas tab → <b>☁ Set up sync</b> → paste the URL, tick <b>Sync on</b>, Save</li>
+  </ol>
+  <ul>
+    <li>To update the script later, edit the <b>existing</b> deployment (Deploy → Manage deployments → ✏) — a NEW deployment gets a new URL and every harness would need re-pasting.</li>
+    <li>The store is <code>claude-web-ideas.json</code> in the operator's Drive, created empty on first use — inspectable and restorable by hand.</li>
+    <li>Either way, per-box sync config lives in <code>%APPDATA%\ClaudeWeb\ideas-sync.json</code>; the endpoints are <code>GET/PUT /api/notes/sync/config</code> and <code>GET /api/notes/sync/status</code>.</li>
+  </ul>
+</section>
+
 <script>
-  var btns = document.querySelectorAll('.tabs button');
-  btns.forEach(function(b){ b.addEventListener('click', function(){
-    btns.forEach(function(x){x.classList.remove('on');}); b.classList.add('on');
-    document.querySelectorAll('section').forEach(function(s){s.classList.remove('on');});
-    document.getElementById(b.getAttribute('data-t')).classList.add('on');
-  });});
-  document.getElementById('steps').addEventListener('click', function(e){
-    var s = e.target.closest('.step'); if (s) s.classList.toggle('open');
+  const tabs = document.querySelectorAll('.tabs button');
+  tabs.forEach(b => b.addEventListener('click', () => {
+    tabs.forEach(x => x.classList.remove('on'));
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('on'));
+    b.classList.add('on');
+    document.getElementById('v-' + b.dataset.v).classList.add('on');
+  }));
+  document.querySelectorAll('.view').forEach(view => {
+    const detail = view.querySelector('.detail');
+    view.querySelectorAll('.node[data-d]').forEach(n => n.addEventListener('click', () => {
+      view.querySelectorAll('.node').forEach(x => x.classList.remove('hl'));
+      n.classList.add('hl');
+      if (detail) detail.textContent = n.dataset.d;
+    }));
   });
+
+  // ---- simulator: a miniature of NotesService.MergeFrom + IdeasSyncService --
+  let S, seq, clock;
+  function reset() {
+    S = {
+      store: { rev: 0, ideas: [], tombs: [] },
+      A: { ideas: [], tombs: [], seenRev: 0, dirty: false, offline: false },
+      B: { ideas: [], tombs: [], seenRev: 0, dirty: false, offline: false },
+    };
+    seq = 1; clock = 1;
+    document.getElementById('simlog').innerHTML = '';
+    slog('reset — empty boards, rev 0');
+    render();
+  }
+  const slog = (msg, hot) => {
+    const el = document.getElementById('simlog');
+    el.innerHTML += `<div${hot ? ' class="hot"' : ''}>${msg}</div>`;
+    el.scrollTop = el.scrollHeight;
+  };
+  function merge(box, remote) {
+    // per-Id, newest UpdatedAt wins, tombstones suppress
+    const tombs = new Map();
+    [...box.tombs, ...remote.tombs].forEach(t => {
+      const cur = tombs.get(t.id); if (!cur || t.at > cur.at) tombs.set(t.id, t);
+    });
+    const all = new Map();
+    [...remote.ideas, ...box.ideas].forEach(n => {
+      const cur = all.get(n.id); if (!cur || n.at > cur.at) all.set(n.id, n);
+    });
+    const ideas = [...all.values()].filter(n => { const t = tombs.get(n.id); return !t || t.at < n.at; })
+      .sort((a, b) => a.id - b.id);
+    const remoteStale = ideas.length !== remote.ideas.length || box.tombs.some(t => !remote.tombs.find(r => r.id === t.id))
+      || ideas.some(n => { const r = remote.ideas.find(x => x.id === n.id); return !r || r.at !== n.at; });
+    box.ideas = ideas; box.tombs = [...tombs.values()];
+    return remoteStale;
+  }
+  function cycle(name) {
+    const box = S[name];
+    if (box.offline) { if (box.dirty) slog(`${name}: offline — edit stays queued (dirty)`); return; }
+    // pull-merge
+    const stale = merge(box, { ideas: [...S.store.ideas], tombs: [...S.store.tombs] });
+    if (S.store.rev !== box.seenRev) slog(`${name}: pulled rev ${S.store.rev}, merged`);
+    box.seenRev = S.store.rev;
+    if (stale) box.dirty = true;
+    // CAS push
+    if (box.dirty) {
+      if (box.seenRev === S.store.rev) {
+        S.store.ideas = [...box.ideas]; S.store.tombs = [...box.tombs];
+        S.store.rev++; box.seenRev = S.store.rev; box.dirty = false;
+        slog(`${name}: CAS push accepted → rev ${S.store.rev}`, true);
+      } else {
+        slog(`${name}: CAS conflict (baseRev ${box.seenRev} ≠ rev ${S.store.rev}) — will re-merge next tick`, true);
+      }
+    }
+  }
+  function render() {
+    const paint = (id, list, revTxt, box) => {
+      document.getElementById(id).innerHTML = list.map(n => `<div class="card">💡 ${n.text}</div>`).join('') || '<span class="k" style="color:var(--dim);font-size:.8rem">empty</span>';
+      document.getElementById(revTxt.id).innerHTML = revTxt.txt;
+      if (box) document.getElementById(box.id).classList.toggle('offline', box.off);
+    };
+    paint('brdA', S.A.ideas, { id: 'revA', txt: `seen rev ${S.A.seenRev} · ${S.A.offline ? '<span class="dirty">OFFLINE</span>' : S.A.dirty ? '<span class="dirty">dirty — push pending</span>' : '<span class="synced">synced</span>'}` }, { id: 'boxA', off: S.A.offline });
+    paint('brdS', S.store.ideas, { id: 'revS', txt: `rev ${S.store.rev} · tombstones ${S.store.tombs.length}` });
+    paint('brdB', S.B.ideas, { id: 'revB', txt: `seen rev ${S.B.seenRev} · ${S.B.offline ? '<span class="dirty">OFFLINE</span>' : S.B.dirty ? '<span class="dirty">dirty — push pending</span>' : '<span class="synced">synced</span>'}` }, { id: 'boxB', off: S.B.offline });
+  }
+  const on = (id, f) => document.getElementById(id).addEventListener('click', () => { f(); render(); });
+  on('s-addA', () => { S.A.ideas.push({ id: seq++, text: `idea #${seq - 1} (A)`, at: clock++ }); S.A.dirty = true; slog('A: local add → dirty, push debounce armed'); });
+  on('s-addB', () => { S.B.ideas.push({ id: seq++, text: `idea #${seq - 1} (B)`, at: clock++ }); S.B.dirty = true; slog('B: local add → dirty, push debounce armed'); });
+  on('s-delA', () => {
+    const n = S.A.ideas[S.A.ideas.length - 1];
+    if (!n) { slog('A: nothing to delete'); return; }
+    S.A.ideas.pop(); S.A.tombs.push({ id: n.id, at: clock++ }); S.A.dirty = true;
+    slog(`A: deleted "${n.text}" → tombstone recorded`);
+  });
+  on('s-offB', () => { S.B.offline = !S.B.offline; slog(`B is now ${S.B.offline ? 'OFFLINE' : 'back online'}`, true); });
+  on('s-tick', () => { cycle('A'); cycle('B'); });
+  on('s-reset', reset);
+  reset();
 </script>
 </body>
 </html>

@@ -92,10 +92,98 @@
   background: #aaa;
 }
 
+/* A prompt is running on this dock's agent: the dot goes near-black, same busy
+   language as the dock header indicator (openspec: dock-busy-indicator). The
+   markup drops the assigned-color inline style while running. */
+.dash__docktab-dot--running {
+  background: var(--color-text);
+  animation: dash-pulse 1.2s ease-in-out infinite;
+}
+
+/* Unseen-result latch (openspec dock-busy-indicator, unseen-result amendment):
+   the agent finished a turn while this dock was hidden from the grid. The dot
+   grows into a near-black exclamation badge — static, unlike the running pulse
+   — and stays until the dock is shown again (which clears the latch). */
+.dash__docktab-dot--unseen {
+  width: 14px;
+  height: 14px;
+  background: var(--color-text);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+/* Name (+ optional branch) stacked as one text block (openspec
+   dock-toolbar-star-and-branch). With no branch row the block is just the
+   name, so those tabs keep today's single-line height; the dot and star sit
+   vertically centered against the block via the tab's align-items. */
+.dash__docktab-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .dash__docktab-name {
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Second row: the repo's git branch — small, muted and tight so the strip
+   stays compact, ellipsized so long branch names can't stretch the tab. */
+.dash__docktab-branch {
+  max-width: 100%;
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--color-text-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Display-only "important" star on the tab's right side — same red as the
+   .important-star--on toggles elsewhere, but NOT a control here (the whole
+   tab is one button whose click stays hide/show). Reads on both the active
+   and inactive tab backgrounds, which share --color-surface. */
+.dash__docktab-star {
+  flex: 0 0 auto;
+  color: #ef4444;
+  font-size: 12px;
+  line-height: 1;
+}
+
+/* Reorder-mode toggle (openspec dock-toolbar-star-and-branch): while pressed,
+   tab clicks pick-and-place instead of hide/show. */
+.dash__dockreorder {
+  flex: 0 0 auto;
+  padding: 3px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-soft);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dash__dockreorder:hover,
+.dash__dockreorder--on {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* The picked-up tab awaiting its drop target. */
+.dash__docktab--picked {
+  outline: 2px dashed var(--color-accent);
+  outline-offset: 1px;
+  opacity: 1;
 }
 
 .dash__close {
@@ -1454,31 +1542,28 @@
   border-color: var(--color-accent);
 }
 
-/* The common suggest/drive mode toggle — same pill language as the type picker. */
-.phone__loop-modes {
-  display: flex;
-  gap: 6px;
-}
-
-.phone__loop-mode {
-  flex: 1 1 0;
-  padding: 3px 6px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-surface);
-  color: var(--color-text-soft);
+/* The common suggest/drive mode as ONE header-row checkbox (openspec:
+   dock-loop-controls-declutter): rides the loop row's right edge next to the
+   ⟳ summary button, visible collapsed and expanded. */
+.phone__loop-drive {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-soft);
   cursor: pointer;
   white-space: nowrap;
 }
 
-.phone__loop-mode--on {
-  color: var(--color-text);
-  border-color: var(--color-ok, #16a34a);
-  font-weight: 700;
+.phone__loop-drive input {
+  margin: 0;
+  accent-color: var(--color-ok, #16a34a);
+  cursor: pointer;
 }
 
-.phone__loop-mode:disabled {
+.phone__loop-drive input:disabled {
   opacity: 0.6;
   cursor: default;
 }
@@ -2164,21 +2249,23 @@
   }
 }
 
+/* Work indicator mirrors the send button: accent at rest, near-black while busy
+   (openspec: dock-busy-indicator). */
 .phone__dot {
-  width: 9px;
-  height: 9px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  background: #aaa;
+  background: var(--color-accent);
   flex-shrink: 0;
 }
 
 .phone--running .phone__dot {
-  background: #22c55e;
+  background: var(--color-text);
   animation: dash-pulse 1.2s ease-in-out infinite;
 }
 
 .phone--done .phone__dot {
-  background: #3b82f6;
+  background: var(--color-accent);
 }
 
 .phone--error .phone__dot {
@@ -2341,6 +2428,18 @@
 .phone__main > .files-ide {
   flex: 1 1 auto;
   min-height: 0;
+}
+
+/* OpenSpec lane (openspec add-dock-openspec-lane): the Cockpit's .ck root is a
+   plain block sized to its content, so inside the dock's flex column it must be
+   made a scroll container itself — same treatment as .files-page / .evc above —
+   or long content overflows the dock cell with no way to scroll. Scoped to
+   `.phone__main >` so the routed Studio Cockpit tab (page-level scroll) is
+   unaffected. */
+.phone__main > .ck {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* Embedded chat overrides: the standalone Chat page fills the viewport and
@@ -2587,4 +2686,471 @@
   color: var(--color-text-soft);
   font-size: 11px;
   word-break: break-word;
+}
+
+/* Briefing rules editor beside the loop section (openspec loop-agent-briefing,
+   D5) — same pill/pop visual language as the loop control above it. */
+.phone__brief-btn {
+  margin-left: auto;
+}
+
+.phone__brief-pop {
+  gap: 6px;
+}
+
+.phone__brief-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.phone__brief-rule {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.phone__brief-rule--off .phone__brief-text {
+  color: var(--color-text-soft);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+}
+
+.phone__brief-text {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-text);
+  font: inherit;
+  cursor: text;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.phone__brief-edit {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 12px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-accent);
+  border-radius: 6px;
+  padding: 3px 6px;
+  resize: vertical;
+}
+
+.phone__brief-del {
+  background: none;
+  border: none;
+  color: var(--color-text-soft);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+}
+
+.phone__brief-del:hover {
+  color: var(--color-danger, #e5534b);
+}
+
+.phone__brief-addrow {
+  display: flex;
+  gap: 6px;
+}
+
+.phone__brief-add {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
+.phone__brief-long {
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-warn, #d29922);
+}
+
+/* Sent-history briefed mark (D3): raw item text + honest "sent briefed" badge. */
+.phone__loop-sent-briefed {
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-text-soft);
+  white-space: nowrap;
+}
+
+/* Durable queue audit (openspec queue-loop-prompt-transparency, D5): the
+   across-arms send list; a row expands to the exact sent text. */
+.phone__loop-qa-toggle {
+  display: block;
+  margin-top: 8px;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-soft);
+  cursor: pointer;
+}
+
+.phone__loop-qa-list {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.phone__loop-qa-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.phone__loop-qa-phase {
+  flex: none;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-text-soft);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 0 5px;
+}
+
+.phone__loop-qa-when {
+  flex: none;
+  font-size: 10px;
+  color: var(--color-text-soft);
+  white-space: nowrap;
+}
+
+.phone__loop-qa-raw {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.phone__loop-qa-sent {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+/* Fixed-frame FLAG: channel row in the briefing editor: visually a rule
+   (checkbox + text) but set apart — server-worded, switchable, not editable. */
+.phone__brief-rule--fixed {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--color-border);
+}
+
+.phone__brief-fixedtext {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--color-text-soft);
+}
+
+.phone__brief-rule--off .phone__brief-fixedtext {
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+}
+
+/* Per-dock agent-flags badge: same row/popover furniture as the loop controls,
+   rose-tinted like the footer strip — open complaints, not chrome. */
+.phone__flags-btn {
+  color: #a04141;
+  border-color: #d98a8a;
+}
+
+.phone__flags-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.phone__flags-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 12px;
+  padding: 3px 6px;
+  background: #fdf0f0;
+  border: 1px solid #e5b8b8;
+  border-radius: 6px;
+  color: #7a2626;
+}
+
+.phone__flags-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.phone__flags-dismiss {
+  flex: none;
+  border: none;
+  background: transparent;
+  color: #a04141;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.phone__flags-dismiss:hover {
+  color: #6e1f1f;
+}
+
+/* ---- The loop parameter panel AS the state machine (openspec:
+   loop-state-param-panel) — section cards named after states, the badge box,
+   transition lines, and the armed header's live state strip. ---- */
+
+.phone__loop-sm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Shared kind-independent arm settings (openspec expose-goal-loop-denylist):
+   deny-list trim + footer-clauses opt-in, once, above the kind sections. Same
+   box language as .phone__loop-smsect with a neutral accent — it belongs to
+   every kind, not one. */
+.phone__loop-shared {
+  border: 1px dashed var(--color-border);
+  border-left: 3px solid #9aa5b3;
+  border-radius: 8px;
+  background: var(--color-surface);
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+
+.phone__loop-shared-h {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-dim);
+  margin-bottom: 6px;
+}
+
+.phone__loop-smsect {
+  border: 1px solid var(--color-border);
+  border-left-width: 3px;
+  border-radius: 8px;
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.phone__loop-smsect--loopwide { border-left-color: #9aa5b3; }
+.phone__loop-smsect--work { border-left-color: var(--color-accent); }
+.phone__loop-smsect--verify { border-left-color: #41506b; }
+
+/* The armed instance's current state carries the "now" ring. */
+.phone__loop-smsect--now {
+  border-color: #1a7f37;
+  box-shadow: 0 0 0 1px #1a7f37;
+}
+
+/* Queue with verification off: the state exists but is skipped — shown, dimmed. */
+.phone__loop-smsect--dim { opacity: 0.55; }
+
+.phone__loop-smsect-h {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.phone__loop-smsect-name {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.phone__loop-smsect-name--loopwide { color: var(--color-text-soft); }
+.phone__loop-smsect-name--work { color: var(--color-accent); }
+.phone__loop-smsect-name--verify { color: #41506b; }
+
+.phone__loop-smsect-desc {
+  font-size: 11px;
+  color: var(--color-text-soft);
+}
+
+.phone__loop-smsect-now {
+  margin-left: auto;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #1a7f37;
+  background: #d8f3df;
+  border-radius: 999px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+
+.phone__loop-smsect-b {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* The expected sentinel as a first-class control — dashed to read as "the
+   contract with the agent", amber like the escalate palette. */
+.phone__loop-smbadge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  border: 1px dashed #b85c00;
+  border-radius: 7px;
+  background: #fff7ef;
+  padding: 6px 9px;
+}
+
+.phone__loop-smbadge-k {
+  font-size: 11px;
+  font-weight: 600;
+  color: #b85c00;
+  white-space: nowrap;
+}
+
+.phone__loop-smbadge-token {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #7a3d00;
+  background: #ffe0c2;
+  border-radius: 5px;
+  padding: 1px 8px;
+}
+
+.phone__loop-smbadge-exit {
+  font-size: 11.5px;
+  color: var(--color-text);
+}
+
+.phone__loop-smtrans {
+  font-size: 11.5px;
+  color: var(--color-text);
+  background: var(--color-bg);
+  border-radius: 7px;
+  padding: 5px 9px;
+  line-height: 1.5;
+}
+
+.phone__loop-smtrans-ref {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.phone__loop-smtrans-ref--work { color: var(--color-accent); }
+.phone__loop-smtrans-ref--verify { color: #41506b; }
+.phone__loop-smtrans-ref--ok { color: #1a7f37; }
+.phone__loop-smtrans-ref--esc { color: #b85c00; }
+
+/* Template boxes can be long — cap them; they scroll. */
+.phone__loop-smpre {
+  max-height: 140px;
+  overflow: auto;
+}
+
+.phone__loop-cap--sm { align-self: flex-start; }
+
+/* Armed header now stacks its status row above the live state strip. */
+.phone__loop-armed {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.phone__loop-armed-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.phone__loop-smstrip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.phone__loop-smstrip-arr {
+  font-size: 10px;
+  color: var(--color-text-soft);
+}
+
+.phone__loop-smstrip-chip {
+  font-size: 10.5px;
+  color: var(--color-text-soft);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  background: var(--color-surface);
+  white-space: nowrap;
+}
+
+.phone__loop-smstrip-chip--on {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.phone__loop-smstrip-chip--ok {
+  background: #d8f3df;
+  border-color: #d8f3df;
+  color: #1a7f37;
+  font-weight: 600;
+}
+
+.phone__loop-smstrip-chip--esc {
+  background: #ffe0c2;
+  border-color: #ffe0c2;
+  color: #b85c00;
+  font-weight: 600;
 }

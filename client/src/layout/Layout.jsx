@@ -7,6 +7,8 @@ import LanguageToggle from '../components/shared/LanguageToggle';
 import ModeToggle from '../components/shared/ModeToggle';
 import ProjectChip from '../components/shared/ProjectChip';
 import StaleVersionBanner from '../components/shared/StaleVersionBanner';
+import FlagsFooter from '../components/shared/FlagsFooter';
+import { FlagsProvider } from '../context/FlagsContext';
 import { SaveProvider } from '../components/history/SaveHandler';
 import { ChatProvider } from '../context/ChatContext';
 import { RepoProvider, useRepo } from '../context/RepoContext';
@@ -14,6 +16,7 @@ import { DockProvider, useDock } from '../context/DockContext';
 import { LocalAppFramesProvider } from '../context/LocalAppFramesContext';
 import LocalAppFrameHost from '../components/app/LocalAppFrameHost';
 import { PromptsProvider } from '../context/PromptsContext';
+import { FooterClausesProvider } from '../context/FooterClausesContext';
 import { PromptPlansProvider } from '../context/PromptPlansContext';
 import { PromptNotesProvider } from '../context/PromptNotesContext';
 import { UiModeProvider, useFeature } from '../context/UiModeContext';
@@ -166,6 +169,11 @@ function StudioShell() {
         )}
 
         {!dashOpen && <BottomNav />}
+        {/* Agent-flags footer: rendered even while the dashboard overlay is
+            open — an open complaint stays visible on every screen until
+            dismissed (that is its whole point). Stacks above the fixed nav
+            whenever the nav is showing. */}
+        <FlagsFooter aboveNav={!dashOpen} />
         <BuildStamp />
       </div>
       {/* Keep-alive home of every embedded local-app iframe (openspec
@@ -184,15 +192,21 @@ export default function Layout() {
           <DockProvider>
             <LocalAppFramesProvider>
               <SaveProvider>
+                {/* Above ChatProvider: sendTo reads active clauses at send time
+                    (openspec prompt-footer-clauses). */}
+                <FooterClausesProvider>
                 <ChatProvider>
-                  <PromptsProvider>
-                    <PromptPlansProvider>
-                      <PromptNotesProvider>
-                        <StudioShell />
-                      </PromptNotesProvider>
-                    </PromptPlansProvider>
-                  </PromptsProvider>
+                  <FlagsProvider>
+                    <PromptsProvider>
+                      <PromptPlansProvider>
+                        <PromptNotesProvider>
+                          <StudioShell />
+                        </PromptNotesProvider>
+                      </PromptPlansProvider>
+                    </PromptsProvider>
+                  </FlagsProvider>
                 </ChatProvider>
+                </FooterClausesProvider>
               </SaveProvider>
             </LocalAppFramesProvider>
           </DockProvider>

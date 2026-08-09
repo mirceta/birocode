@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { apiGet, apiPost } from '../../api/client';
 import { useT } from '../../i18n/LanguageContext';
+import { SM, PHASE_KEY, PHASE_SECTION } from './loopMachines';
+import LoopStateStrip from './LoopStateStrip';
+import { StateSection, BadgeBox, TransitionLine, ParamBox } from './DockLoopSections';
 
 // THE loop section on the agent dock card (openspec: unify-loop-types, revision 2).
 // One mental model, spoken plainly by the UI: this agent has (at most) ONE loop
@@ -8,11 +11,14 @@ import { useT } from '../../i18n/LanguageContext';
 // runs in one of two MODES: "suggest" (its decided next prompt only pre-fills the
 // chat composer, as a pending suggestion) or "drive" (it actually sends, capped).
 //
-// The collapsed header names the instance's type + armed state + mode; expanding
-// shows the type picker, the selected type's parameters, the common mode toggle,
-// prompt inspection, the pending suggestion (with a put-in-textbox action via
-// onUsePending), and Arm / one Disarm. Arming any type replaces the slot
-// server-side (exclusive by construction), stated up front before the click.
+// The collapsed header names the instance's type + armed state + mode, and holds
+// the one Drive checkbox (openspec: dock-loop-controls-declutter) — the common
+// mode axis, flippable without opening the popover. Expanding shows controls
+// only: the type picker, the selected type's parameters, prompt inspection, the
+// pending suggestion (with a put-in-textbox action via onUsePending), and Arm /
+// one Disarm — kind/mode explanations live in the Autopilot console's Loops tab.
+// Arming any type replaces the slot server-side (exclusive by construction),
+// stated up front before the click.
 //
 // Two disclosure tiers feed it: badge/status data (kind, mode, phase, counts, and
 // — only while the gate is open — the pending prompt) comes from the read-only,
@@ -66,6 +72,11 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
   // posture); a persisted opt-out re-hydrates via the gated detail.
   const [verifyPick, setVerifyPick] = useState(null);
   const [verifySeed, setVerifySeed] = useState(null);
+  // Per-arm footer-clauses opt-in (openspec: expose-goal-loop-denylist): same
+  // pick/seed shape as the verify toggle — null = untouched (defaults OFF, the
+  // behavior-preserving posture); a persisted opt-in re-hydrates via the detail.
+  const [footerPick, setFooterPick] = useState(null);
+  const [footerSeed, setFooterSeed] = useState(null);
   // Per-arm deny-list (openspec: advance-queue-loop, D2): the global default
   // terms arrive with the gated detail; the operator may drop terms for THIS
   // arm only. denyDefault = the server's list; denyDropped = terms removed here.
@@ -82,6 +93,13 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
   // Copy-for-debugging: idle | busy | copied | manual (clipboard failed — show
   // the text for hand-copying) | error (fetch failed).
   const [dbg, setDbg] = useState({ phase: 'idle', text: '' });
+  // Durable queue audit (openspec queue-loop-prompt-transparency, D5): the
+  // repo's queue sends across arms, from the GATED queue-audit endpoint —
+  // fetched on first expand per popover open. null = not fetched;
+  // 'gate-closed' | 'error' render hints; otherwise the rows array.
+  const [qaOpen, setQaOpen] = useState(false);
+  const [qaRows, setQaRows] = useState(null);
+  const [qaExpanded, setQaExpanded] = useState(() => new Set());
 
   const armed = !!loop?.active;
   const armedKind = armed ? loop.kind : null;
@@ -103,12 +121,18 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
   useEffect(() => { setOpen(false); setPicked(null); setPickedMode(null); }, [armedKind]);
 
   // Prompt inspection needs the gated detail; fetch once per popover open so
-  // the previews are byte-identical to what the engine will send. The same
+  // the previews show the exact composition the engine will send — briefing
+  // frame + rules + stored text (openspec loop-agent-briefing). The same
   // fetch seeds the parameter fields from the PERSISTED loop record (openspec:
   // fix-loop-arm-freshness) — a resolved or restart-survived loop reopens with
   // the goal/cap/mode it was armed with, not blanks. Untouched fields only:
   // anything the user already typed wins.
   useEffect(() => {
+    // Fresh queue-audit view per popover open/close — stale rows would hide
+    // sends that landed since the last look.
+    setQaOpen(false);
+    setQaRows(null);
+    setQaExpanded(new Set());
     if (!open) return undefined;
     let alive = true;
     apiGet('/autopilot/loops/detail')
@@ -129,10 +153,38 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
         if (mine.maxIterations > 0) setCap((c) => (c === '' ? String(mine.maxIterations) : c));
         if (!mine.active && mine.mode) setPickedMode((m) => m ?? mine.mode);
         if (mine.kind === 'queue' && typeof mine.verifyEnabled === 'boolean') setVerifySeed(mine.verifyEnabled);
+        if (typeof mine.includeFooterClauses === 'boolean') setFooterSeed(mine.includeFooterClauses);
       })
       .catch((e) => { if (alive) setDetail(e?.status === 403 ? 'gate-closed' : null); });
     return () => { alive = false; };
   }, [open, repoId]);
+
+  // Toggle the Queue audit list; the gated fetch fires on the first expand of
+  // this popover open (a 403 teaches gate-closed in place, like the detail).
+  const toggleQueueAudit = async () => {
+    const next = !qaOpen;
+    setQaOpen(next);
+    if (!next || qaRows !== null) return;
+    try {
+      const d = await apiGet(`/autopilot/loops/queue-audit?repoId=${encodeURIComponent(repoId)}`);
+      setQaRows(Array.isArray(d?.entries) ? d.entries : []);
+    } catch (e) {
+      setQaRows(e?.status === 403 ? 'gate-closed' : 'error');
+    }
+  };
+
+  const toggleQaRow = (i) => setQaExpanded((prev) => {
+    const next = new Set(prev);
+    if (next.has(i)) next.delete(i); else next.add(i);
+    return next;
+  });
+
+  const fmtQaWhen = (ms) => {
+    const d = new Date(ms);
+    return Number.isNaN(d.getTime())
+      ? ''
+      : d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
 
   const act = async (path, body, keepOpen = false) => {
     setBusy(true);
@@ -169,6 +221,10 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
   // only when something was dropped — untouched arms keep following the
   // global default (null on the instance).
   const denyEffective = denyDefault.filter((term) => !denyDropped.includes(term));
+  // Footer-clauses opt-in for the next arm: explicit pick, else the persisted
+  // value a re-arm hydrated, else the default OFF (loop sends stay briefing-only
+  // until the operator opts in — openspec expose-goal-loop-denylist).
+  const footerOn = footerPick ?? footerSeed ?? false;
   const arm = () => {
     if (selected === 'suggestion') {
       return act('/autopilot/loop', { repoId, action: 'start', kind: 'suggestion', mode });
@@ -181,6 +237,7 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
         maxIterations: capNum >= 1 ? capNum : undefined,
         sessionId: sessionId || undefined,
         denyList: denyDropped.length > 0 ? denyEffective : undefined,
+        includeFooterClauses: footerOn || undefined,
       });
     }
     if (selected === 'recipe') {
@@ -189,6 +246,8 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
         repoId, action: 'start', recipeId: chosenRecipe.id, mode,
         maxIterations: capNum >= 1 ? capNum : undefined,
         sessionId: sessionId || undefined,
+        denyList: denyDropped.length > 0 ? denyEffective : undefined,
+        includeFooterClauses: footerOn || undefined,
       });
     }
     if (!goal.trim()) return undefined;
@@ -196,6 +255,8 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
       repoId, action: 'start', kind: 'goal', goal: goal.trim(), mode,
       maxIterations: capNum >= 1 ? capNum : undefined,
       sessionId: sessionId || undefined,
+      denyList: denyDropped.length > 0 ? denyEffective : undefined,
+      includeFooterClauses: footerOn || undefined,
     });
   };
 
@@ -232,7 +293,14 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
   const setLiveMode = (m) => act('/autopilot/loop', { repoId, action: 'mode', mode: m }, true);
 
   // ---- collapsed header: type · armed · mode at a glance ----
-  const verifying = (loop?.kind === 'goal' || loop?.kind === 'queue') && loop?.phase === 'verify';
+  // Phase-accurate summary word (openspec: loop-state-param-panel, 3.2): still
+  // one word to respect the dock declutter, but it names the machine's ACTUAL
+  // state — verify-owed distinct from verify, work silent (as before), an
+  // unknown phase shown raw rather than blank.
+  const phased = loop?.kind === 'goal' || loop?.kind === 'queue';
+  const phaseWord = armed && phased && loop.phase && loop.phase !== 'work'
+    ? (PHASE_KEY[loop.phase] ? t(PHASE_KEY[loop.phase]) : loop.phase)
+    : '';
   const capText = loop?.maxIterations > 0 ? `${loop.iterationsDone}/${loop.maxIterations}` : `${loop?.iterationsDone ?? 0}`;
   // Queue progress (openspec: queue-based-loop): sent / remaining from the
   // ungated projection — remaining is the bound tab's LIVE stash length, so
@@ -246,7 +314,7 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
   const bindText = repoName ? ` · ${t('dashboard.loopQueueBind', { repo: repoName })}` : '';
   const summary = loop
     ? (armed
-      ? `${EMOJI[loop.kind]} ${kindName(loop.kind)} · ${t('dashboard.loopArmedWord')} · ${modeName(loop.mode)}${loop.kind === 'suggestion' ? '' : ` · ${capText}`}${queueText}${loop.kind === 'queue' ? bindText : ''}${verifying ? ` · ${t('dashboard.loopVerifying')}` : ''}`
+      ? `${EMOJI[loop.kind]} ${kindName(loop.kind)} · ${t('dashboard.loopArmedWord')} · ${modeName(loop.mode)}${loop.kind === 'suggestion' ? '' : ` · ${capText}`}${queueText}${loop.kind === 'queue' ? bindText : ''}${phaseWord ? ` · ${phaseWord}` : ''}`
       : `${EMOJI[loop.kind]} ${kindName(loop.kind)} · ${t(`dashboard.loopStatus.${loop.status}`) || loop.status}${loop.kind === 'queue' ? queueText : ''}`)
     : t('dashboard.loopNone');
 
@@ -266,23 +334,59 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
             {loop.stopDetail}
           </span>
         )}
+        {/* The suggest/drive mode as ONE header-row checkbox (openspec:
+            dock-loop-controls-declutter, D1/D2): visible collapsed and
+            expanded, so the mode is glanceable and flippable without opening
+            the popover. Checked = drive. Same two paths as the old radiogroup:
+            flip the live armed instance in place, else seed the next arm. */}
+        <label className="phone__loop-drive" title={t(`dashboard.loopModeHint.${mode}`)}>
+          <input
+            type="checkbox"
+            checked={mode === 'drive'}
+            disabled={busy}
+            aria-label={t('dashboard.loopModeAria')}
+            onChange={(e) => {
+              const m = e.target.checked ? 'drive' : 'suggest';
+              if (armedKind === selected) setLiveMode(m); else setPickedMode(m);
+            }}
+          />
+          {t('dashboard.loopDriveCheck')}
+        </label>
       </div>
+      {/* Gate/error feedback lives OUTSIDE the popover subtree (D3): a
+          collapsed-row checkbox flip that 403s must not fail mutely. */}
+      {gateHint && (
+        <div className="phone__loop-msg phone__loop-msg--gate" role="status">
+          {t('dashboard.loopGateClosed')}
+        </div>
+      )}
+      {err && (
+        <div className="phone__loop-msg phone__loop-msg--err" role="status">
+          {t('dashboard.loopError', { error: err })}
+        </div>
+      )}
       {open && (
         <div className="phone__loop-pop">
           {/* Armed header: the one instance's live status + the single Disarm */}
           {armed && (
             <div className="phone__loop-armed">
-              <span className="phone__loop-armed-k">
-                {EMOJI[armedKind]} {t('dashboard.loopArmedAs', { mode: kindName(armedKind) })}
-              </span>
-              <span className="phone__loop-armed-v">
-                {loop.kind === 'suggestion'
-                  ? modeName(loop.mode)
-                  : `${modeName(loop.mode)} · ${capText}${queueText}${loop.kind === 'queue' ? bindText : ''} · ${verifying ? t('dashboard.loopVerifying') : t(`dashboard.loopStatus.${loop.status}`) || loop.status}`}
-              </span>
-              <button type="button" className="phone__loop-stop" onClick={disarm} disabled={busy}>
-                ■ {t('dashboard.loopDisarm')}
-              </button>
+              <div className="phone__loop-armed-row">
+                <span className="phone__loop-armed-k">
+                  {EMOJI[armedKind]} {t('dashboard.loopArmedAs', { mode: kindName(armedKind) })}
+                </span>
+                <span className="phone__loop-armed-v">
+                  {loop.kind === 'suggestion'
+                    ? modeName(loop.mode)
+                    : `${modeName(loop.mode)} · ${capText}${queueText}${loop.kind === 'queue' ? bindText : ''} · ${t(`dashboard.loopStatus.${loop.status}`) || loop.status}`}
+                </span>
+                <button type="button" className="phone__loop-stop" onClick={disarm} disabled={busy}>
+                  ■ {t('dashboard.loopDisarm')}
+                </button>
+              </div>
+              {/* The machine, lit (openspec: loop-state-param-panel, 3.2):
+                  phased kinds show every live phase chip with the current one
+                  highlighted — verify-owed distinct from verify. */}
+              {phased && <LoopStateStrip loop={loop} />}
             </div>
           )}
 
@@ -359,26 +463,13 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
               </button>
             ))}
           </div>
-          <p className="phone__loop-sect-desc">{t(`dashboard.loopDesc.${selected}`)}</p>
-
-          {/* The common mode axis: suggest (pre-fill only) vs drive (send). Flips
-              the live instance in place; otherwise it's part of the arm request. */}
-          <div className="phone__loop-modes" role="radiogroup" aria-label={t('dashboard.loopModeAria')}>
-            {['suggest', 'drive'].map((m) => (
-              <button
-                key={m}
-                type="button"
-                role="radio"
-                aria-checked={mode === m}
-                disabled={busy}
-                className={`phone__loop-mode${mode === m ? ' phone__loop-mode--on' : ''}`}
-                onClick={() => (armedKind === selected ? setLiveMode(m) : setPickedMode(m))}
-              >
-                {modeName(m)}
-              </button>
-            ))}
-          </div>
-          <p className="phone__loop-sect-desc">{t(`dashboard.loopModeHint.${mode}`)}</p>
+          {/* Shared, kind-independent arm settings (openspec:
+              expose-goal-loop-denylist): deny-list trim + footer-clauses opt-in
+              apply to WHICHEVER driven kind gets armed (one loop slot per
+              agent), so they live here above the kind sections — parking them
+              inside one kind's section read as kind-specific and misled the
+              operator about goal/recipe enforcement. */}
+          {selected !== 'suggestion' && renderSharedControls()}
 
           {/* Parameters for the selected type (arming only — an armed instance
               keeps its own stored copies) */}
@@ -402,96 +493,14 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
               </div>
             )
           )}
-          {selected === 'goal' && armedKind !== 'goal' && (
-            <textarea
-              className="phone__loop-goal"
-              rows={3}
-              value={goal}
-              placeholder={t('dashboard.loopGoalPlaceholder')}
-              onChange={(e) => setGoal(e.target.value)}
-            />
-          )}
-          {/* Queue parameters: the queue ITSELF is the stash strip below the
-              composer — here only the next-up preview, the live count, and the
-              per-step verification toggle (default on). Arming an empty queue
-              is refused server-side too; the hint teaches instead of failing. */}
-          {selected === 'queue' && armedKind !== 'queue' && (
-            stash.length === 0 ? (
-              <div className="phone__loop-msg">{t('dashboard.loopQueueEmpty')}</div>
-            ) : (
-              <div className="phone__loop-queue">
-                {/* Binding line (openspec: advance-queue-loop, D5): name the
-                    drive target and the immediate consequence BEFORE the arm
-                    click — the wrong-tab arm of 2026-07-31 had nothing here. */}
-                <div className="phone__loop-bind">
-                  {t('dashboard.loopQueueBindLine', { repo: repoName || repoId, n: stash.length })}
-                </div>
-                <p className="phone__loop-sect-desc">{t('dashboard.loopQueueFiresNote')}</p>
-                {/* Full unload-order preview (openspec: queue-loop-visibility,
-                    D4): every stash item, numbered top-down — the live stash
-                    prop, so reordering the strip reorders this list. */}
-                <div className="phone__loop-inspect-k">
-                  {t('dashboard.loopQueueOrder')}
-                  <span className="phone__loop-queue-count">
-                    {t('dashboard.loopQueueCount', { n: stash.length })}
-                  </span>
-                </div>
-                <ol className="phone__loop-queue-list">
-                  {stash.map((s) => (
-                    <li key={s.id} className="phone__loop-queue-item">{s.text}</li>
-                  ))}
-                </ol>
-                <label className="phone__loop-verifytoggle">
-                  <input
-                    type="checkbox"
-                    checked={verifyOn}
-                    onChange={(e) => setVerifyPick(e.target.checked)}
-                  />
-                  {t('dashboard.loopQueueVerify')}
-                </label>
-                <p className="phone__loop-sect-desc">
-                  {t(verifyOn ? 'dashboard.loopQueueVerifyHint' : 'dashboard.loopQueueVerifyOffHint')}
-                </p>
-                {/* Per-arm deny-list (openspec: advance-queue-loop, D2): the
-                    global default terms as removable chips. Dropping a term
-                    ("push" on a commit-and-push repo) applies to THIS arm only;
-                    the global default is untouched. Chips need the gated
-                    detail — gate closed shows the hint instead. */}
-                {denyDefault.length > 0 ? (
-                  <>
-                    <div className="phone__loop-inspect-k">{t('dashboard.loopDenyLabel')}</div>
-                    <div className="phone__loop-denychips">
-                      {denyDefault.map((term) => {
-                        const dropped = denyDropped.includes(term);
-                        return (
-                          <button
-                            key={term}
-                            type="button"
-                            className={`phone__loop-denychip${dropped ? ' phone__loop-denychip--off' : ''}`}
-                            title={t(dropped ? 'dashboard.loopDenyRestore' : 'dashboard.loopDenyDrop')}
-                            onClick={() => setDenyDropped((prev) =>
-                              dropped ? prev.filter((x) => x !== term) : [...prev, term])}
-                          >
-                            {term}{dropped ? '' : ' ×'}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {denyDropped.length > 0 && (
-                      <p className="phone__loop-sect-desc">
-                        {t('dashboard.loopDenyTrimmed', { terms: denyDropped.join(', ') })}
-                      </p>
-                    )}
-                  </>
-                ) : (detail === 'gate-closed' && (
-                  <p className="phone__loop-sect-desc">{t('dashboard.loopDenyGateClosed')}</p>
-                ))}
-              </div>
-            )
-          )}
+          {/* Phased kinds: the parameter panel IS the state machine (openspec:
+              loop-state-param-panel, D2/D3) — LOOP-WIDE, then one section per
+              parameter-bearing state, in both arming and armed views. */}
+          {(selected === 'goal' || selected === 'queue') && renderStateSections()}
 
-          {/* Prompt inspection (gated detail) */}
-          {selected !== 'suggestion' && (
+          {/* Prompt inspection (gated detail) — recipe only; the phased kinds
+              show their prompts as parameters inside the state sections. */}
+          {selected === 'recipe' && (
             <button
               type="button"
               className="phone__loop-inspect-toggle"
@@ -500,13 +509,15 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
               {inspect ? t('dashboard.loopInspectHide') : t('dashboard.loopInspectShow')}
             </button>
           )}
-          {selected !== 'suggestion' && inspect && renderInspection()}
+          {selected === 'recipe' && inspect && renderInspection()}
 
           {/* Arm row (hidden when the selected type IS the armed one — the
               header's Disarm is the action there) */}
           {armedKind !== selected && (
             <div className="phone__loop-armrow">
-              {(selected === 'recipe' || selected === 'goal' || selected === 'queue') && (
+              {/* Phased kinds carry the cap in their LOOP-WIDE section (design
+                  D2); only the recipe keeps it on the arm row. */}
+              {selected === 'recipe' && (
                 <label className="phone__loop-cap">
                   {t('dashboard.loopCap')}
                   <input
@@ -514,11 +525,7 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
                     min={1}
                     max={100}
                     value={cap}
-                    // Queue placeholder = 2× the queued items: with verification
-                    // on, every item costs a step turn PLUS a verify turn.
-                    placeholder={selected === 'queue'
-                      ? String(Math.max(stash.length * 2, 2))
-                      : selected === 'recipe' && chosenRecipe ? String(chosenRecipe.maxIterations) : '10'}
+                    placeholder={chosenRecipe ? String(chosenRecipe.maxIterations) : '10'}
                     onChange={(e) => setCap(e.target.value)}
                   />
                 </label>
@@ -568,99 +575,383 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
             />
           )}
 
-          {gateHint && (
-            <div className="phone__loop-msg phone__loop-msg--gate" role="status">
-              {t('dashboard.loopGateClosed')}
-            </div>
-          )}
-          {err && (
-            <div className="phone__loop-msg phone__loop-msg--err" role="status">
-              {t('dashboard.loopError', { error: err })}
-            </div>
-          )}
+          {/* The one pointer to the relocated reference copy (openspec:
+              dock-loop-controls-declutter, D4) — the popover itself is
+              controls-only, prose lives in the console. */}
+          <p className="phone__loop-sect-desc">{t('dashboard.loopMoreInfo')}</p>
         </div>
       )}
     </div>
   );
 
-  // ---- inspection pane content for the selected type ----
+  // Client-side mirror of the server's ComposeBriefedPrompt work-phase frame
+  // (openspec loop-agent-briefing): same parts, same order, from the detail
+  // payload — so the arm preview shows the exact prefix every driven work send
+  // will carry. Verify sends carry frame.verifyNote instead.
+  function composeBriefing(kind, sentinel) {
+    const b = detail?.briefing;
+    if (!b?.frame) return null;
+    return [
+      b.frame.header,
+      b.frame.intro,
+      ...(b.rules || []).filter((r) => r.enabled).map((r) => `- ${r.text}`),
+      b.frame.escalationLine,
+      // The FLAG: teaching line rides along only while the channel is on
+      // (POST /api/flags/enabled) — same condition the server composes with.
+      ...(b.flagsEnabled !== false && b.frame.flagLine ? [b.frame.flagLine] : []),
+      kind === 'queue'
+        ? b.frame.contractQueueItem
+        : b.frame.contractSentinelTemplate.replace('{0}', sentinel || 'LOOP_DONE'),
+      b.frame.separator,
+    ].join('\n');
+  }
+
+  function briefingBlock(kind, sentinel, withVerifyNote) {
+    const text = composeBriefing(kind, sentinel);
+    if (!text) return null;
+    return (
+      <>
+        <div className="phone__loop-inspect-k">{t('dashboard.loopBriefingLabel')}</div>
+        <pre className="phone__loop-inspect-pre">{text}</pre>
+        {withVerifyNote && (
+          <>
+            <div className="phone__loop-inspect-k">{t('dashboard.loopBriefingVerifyLabel')}</div>
+            <pre className="phone__loop-inspect-pre">{detail.briefing.frame.verifyNote}</pre>
+          </>
+        )}
+      </>
+    );
+  }
+
+  // ---- inspection pane content — recipe only (the phased kinds render their
+  // prompts as parameters inside the state sections) ----
   function renderInspection() {
     if (detail === 'gate-closed' || detail === null) {
       return <div className="phone__loop-msg phone__loop-msg--gate">{t('dashboard.loopGateClosed')}</div>;
     }
-    if (selected === 'queue') {
-      // Queue inspection: the verification template the engine composes from
-      // (prompt text — gated detail only) and, once a step has landed, the
-      // last unloaded step it would verify against.
-      const mine = detail.loops?.find((l) => l.repoId === repoId);
-      return (
-        <div className="phone__loop-inspect">
-          {/* Per-arm deny-list disclosure (advance-queue-loop, D2): only shown
-              when this instance carries a trim — null means the global default. */}
-          {mine?.denyList != null && (
-            <>
-              <div className="phone__loop-inspect-k">{t('dashboard.loopDenyEffectiveLabel')}</div>
-              <pre className="phone__loop-inspect-pre">
-                {mine.denyList.length > 0 ? mine.denyList.join(', ') : t('dashboard.loopDenyNone')}
-              </pre>
-            </>
-          )}
-          <div className="phone__loop-inspect-k">{t('dashboard.loopQueueVerifyTplLabel')}</div>
-          <pre className="phone__loop-inspect-pre">{detail.queueVerifyTemplate || '—'}</pre>
-          {mine?.lastStepText && (
-            <>
-              <div className="phone__loop-inspect-k">{t('dashboard.loopQueueLastStepLabel')}</div>
-              <pre className="phone__loop-inspect-pre">{mine.lastStepText}</pre>
-            </>
-          )}
-          {/* Sent-history (openspec: queue-loop-visibility, D3): the step texts
-              that actually landed this arm, oldest first — labeled honestly as
-              the last N when the bound has dropped older ones. */}
-          {mine?.queueSentTexts?.length > 0 && (
-            <>
-              <div className="phone__loop-inspect-k">
-                {t('dashboard.loopQueueSentLabel')}
-                {(mine.queueSent ?? 0) > mine.queueSentTexts.length && (
-                  <span className="phone__loop-queue-count">
-                    {t('dashboard.loopQueueSentPartial', { n: mine.queueSentTexts.length })}
-                  </span>
-                )}
-              </div>
-              <ol className="phone__loop-sent-list">
-                {mine.queueSentTexts.map((s, i) => (
-                  <li key={i} className="phone__loop-sent-row">{s}</li>
-                ))}
-              </ol>
-            </>
-          )}
-        </div>
-      );
-    }
-    if (selected === 'recipe') {
-      const armedRecipeLoop = armedKind === 'recipe'
-        ? detail.loops?.find((l) => l.repoId === repoId) : null;
-      const text = armedRecipeLoop?.prompt
-        ?? detail.recipes?.find((r) => r.id === chosenRecipe?.id)?.prompt;
-      return (
-        <div className="phone__loop-inspect">
-          <div className="phone__loop-inspect-k">{t('dashboard.loopPromptLabel')}</div>
-          <pre className="phone__loop-inspect-pre">{text || '—'}</pre>
-        </div>
-      );
-    }
-    // goal: the armed loop's STORED prompts if one is armed, else a live
-    // preview composed from the server's templates and the typed goal.
-    const armedGoalLoop = armedKind === 'goal'
+    const armedRecipeLoop = armedKind === 'recipe'
       ? detail.loops?.find((l) => l.repoId === repoId) : null;
-    const g = armedGoalLoop?.goal ?? (goal.trim() || t('dashboard.loopGoalPlaceholderShort'));
-    const work = armedGoalLoop?.prompt ?? detail.goalTemplates?.work?.replace('{0}', g);
-    const verify = armedGoalLoop?.verifyPrompt ?? detail.goalTemplates?.verify?.replace('{0}', g);
+    const text = armedRecipeLoop?.prompt
+      ?? detail.recipes?.find((r) => r.id === chosenRecipe?.id)?.prompt;
     return (
       <div className="phone__loop-inspect">
-        <div className="phone__loop-inspect-k">{t('dashboard.loopWorkPromptLabel')}</div>
-        <pre className="phone__loop-inspect-pre">{work || '—'}</pre>
-        <div className="phone__loop-inspect-k">{t('dashboard.loopVerifyPromptLabel')}</div>
-        <pre className="phone__loop-inspect-pre">{verify || '—'}</pre>
+        {briefingBlock('recipe', armedRecipeLoop?.sentinel
+          ?? detail.recipes?.find((r) => r.id === chosenRecipe?.id)?.sentinel, false)}
+        <div className="phone__loop-inspect-k">{t('dashboard.loopPromptLabel')}</div>
+        <pre className="phone__loop-inspect-pre">{text || '—'}</pre>
+      </div>
+    );
+  }
+
+  // ---- the parameter panel AS the state machine (openspec:
+  // loop-state-param-panel, D2/D3) ----
+  // LOOP-WIDE holds the parameters belonging to no single state, then one
+  // section per parameter-bearing state carries: what that state sends (the
+  // template, as a labeled parameter), the badge the agent is expected to emit
+  // (or the stated badge-less exit trigger), and explicit transition lines —
+  // so the machine's dynamics are knowable from the settings themselves.
+  // The shared block above the kind sections (openspec: expose-goal-loop-denylist):
+  // per-arm deny-list chips + the footer-clauses opt-in, once, for every driven
+  // kind. Arming = editable; viewing the armed kind = the instance's stored
+  // values, read-only (effective deny-list under the same gate as before).
+  function renderSharedControls() {
+    const arming = armedKind !== selected;
+    const gated = detail === 'gate-closed';
+    const mine = !gated && detail ? detail.loops?.find((l) => l.repoId === repoId) : null;
+    const footerEff = arming ? footerOn : (mine?.includeFooterClauses ?? false);
+    return (
+      <div className="phone__loop-shared">
+        <div className="phone__loop-shared-h">{t('dashboard.loopSharedTitle')}</div>
+        {arming ? (denyDefault.length > 0 ? (
+          <>
+            <div className="phone__loop-inspect-k">{t('dashboard.loopDenyLabel')}</div>
+            <div className="phone__loop-denychips">
+              {denyDefault.map((term) => {
+                const dropped = denyDropped.includes(term);
+                return (
+                  <button
+                    key={term}
+                    type="button"
+                    className={`phone__loop-denychip${dropped ? ' phone__loop-denychip--off' : ''}`}
+                    title={t(dropped ? 'dashboard.loopDenyRestore' : 'dashboard.loopDenyDrop')}
+                    onClick={() => setDenyDropped((prev) =>
+                      dropped ? prev.filter((x) => x !== term) : [...prev, term])}
+                  >
+                    {term}{dropped ? '' : ' ×'}
+                  </button>
+                );
+              })}
+            </div>
+            {denyDropped.length > 0 && (
+              <p className="phone__loop-sect-desc">
+                {t('dashboard.loopDenyTrimmed', { terms: denyDropped.join(', ') })}
+              </p>
+            )}
+          </>
+        ) : (gated && (
+          <p className="phone__loop-sect-desc">{t('dashboard.loopDenyGateClosed')}</p>
+        ))) : (mine?.denyList != null && (
+          <>
+            <div className="phone__loop-inspect-k">{t('dashboard.loopDenyEffectiveLabel')}</div>
+            <pre className="phone__loop-inspect-pre">
+              {mine.denyList.length > 0 ? mine.denyList.join(', ') : t('dashboard.loopDenyNone')}
+            </pre>
+          </>
+        ))}
+        <label className="phone__loop-verifytoggle">
+          <input
+            type="checkbox"
+            checked={footerEff}
+            disabled={!arming}
+            onChange={(e) => setFooterPick(e.target.checked)}
+          />
+          {t('dashboard.loopFooterClauses')}
+        </label>
+        <p className="phone__loop-sect-desc">{t('dashboard.loopFooterClausesHint')}</p>
+      </div>
+    );
+  }
+
+  // Renders in BOTH views: arming (editable loop-wide controls, template
+  // previews from the gated detail) and armed (the instance's stored copies,
+  // read-only, with the live phase lighting its section).
+  function renderStateSections() {
+    const kind = selected;
+    const machine = SM[kind];
+    const arming = armedKind !== kind;
+    const gated = detail === 'gate-closed';
+    const mine = !gated && detail ? detail.loops?.find((l) => l.repoId === repoId) : null;
+    // Only the armed, still-active instance lights a section; verify-owed
+    // lights the verification section it is about to enter (design D6).
+    const nowSection = !arming && armed ? (PHASE_SECTION[loop.phase || 'work'] ?? null) : null;
+
+    // Template previews are byte-identical to what the engine sends: stored
+    // copies once armed, else composed from the server's templates.
+    const goalText = arming
+      ? (goal.trim() || t('dashboard.loopGoalPlaceholderShort'))
+      : (mine?.goal ?? loop?.goal ?? '');
+    const workText = kind === 'goal'
+      ? ((!arming ? mine?.prompt : null) ?? detail?.goalTemplates?.work?.replace('{0}', goalText))
+      : null;
+    const verifyText = kind === 'goal'
+      ? ((!arming ? mine?.verifyPrompt : null) ?? detail?.goalTemplates?.verify?.replace('{0}', goalText))
+      : detail?.queueVerifyTemplate;
+    // Queue verification effectively on? The arming toggle, else the armed
+    // instance's stored setting. Off dims the verification section — the
+    // machine honestly shows that state is skipped.
+    const verifyEff = kind === 'queue'
+      ? (arming ? verifyOn : (mine?.verifyEnabled ?? loop?.verifyEnabled ?? true))
+      : true;
+
+    return (
+      <div className="phone__loop-sm">
+        <StateSection id="loopwide" descKey="dashboard.loopSm.loopwideDesc">
+          {kind === 'goal' && (arming ? (
+            <textarea
+              className="phone__loop-goal"
+              rows={3}
+              value={goal}
+              placeholder={t('dashboard.loopGoalPlaceholder')}
+              onChange={(e) => setGoal(e.target.value)}
+            />
+          ) : (
+            <ParamBox
+              labelKey="dashboard.loopSm.goalK"
+              text={mine?.goal ?? loop?.goal}
+              gated={gated && !loop?.goal}
+            />
+          ))}
+          {kind === 'queue' && (
+            <>
+              {/* Binding line (openspec: advance-queue-loop, D5): name the
+                  drive target and the immediate consequence BEFORE the arm
+                  click — the wrong-tab arm of 2026-07-31 had nothing here. */}
+              <div className="phone__loop-bind">
+                {t('dashboard.loopQueueBindLine', { repo: repoName || repoId, n: stash.length })}
+              </div>
+              {arming && <p className="phone__loop-sect-desc">{t('dashboard.loopQueueFiresNote')}</p>}
+              <label className="phone__loop-verifytoggle">
+                <input
+                  type="checkbox"
+                  checked={verifyEff}
+                  disabled={!arming}
+                  onChange={(e) => setVerifyPick(e.target.checked)}
+                />
+                {t('dashboard.loopQueueVerify')}
+              </label>
+              <p className="phone__loop-sect-desc">
+                {t(verifyEff ? 'dashboard.loopQueueVerifyHint' : 'dashboard.loopQueueVerifyOffHint')}
+              </p>
+              {/* The per-arm deny-list chips moved to the SHARED block above the
+                  kind sections (openspec: expose-goal-loop-denylist) — they were
+                  never queue-specific, and rendering them here misled the
+                  operator into thinking goal/recipe loops skip the deny-list. */}
+            </>
+          )}
+          {arming && (
+            <label className="phone__loop-cap phone__loop-cap--sm">
+              {t('dashboard.loopCap')}
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={cap}
+                // Queue placeholder = 2× the queued items: with verification
+                // on, every item costs a step turn PLUS a verify turn.
+                placeholder={kind === 'queue' ? String(Math.max(stash.length * 2, 2)) : '10'}
+                onChange={(e) => setCap(e.target.value)}
+              />
+            </label>
+          )}
+        </StateSection>
+
+        <StateSection
+          id="work"
+          descKey={machine.sections[0].descKey}
+          now={nowSection === 'work'}
+        >
+          {/* Briefing frame (openspec loop-agent-briefing): the prefix every
+              driven work send carries — shown first because that is literally
+              the order of the composed send. */}
+          {briefingBlock(kind, mine?.sentinel ?? loop?.sentinel, false)}
+          {kind === 'goal' && (
+            <ParamBox labelKey="dashboard.loopSm.goal.workTpl" text={workText} gated={gated} />
+          )}
+          {kind === 'queue' && (
+            <>
+              {/* The queue IS this state's parameter: the live stash, in
+                  unload order — reordering the strip reorders this list. */}
+              <div className="phone__loop-inspect-k">
+                {t('dashboard.loopQueueOrder')}
+                <span className="phone__loop-queue-count">
+                  {t('dashboard.loopQueueCount', { n: stash.length })}
+                </span>
+              </div>
+              {stash.length === 0 ? (
+                <div className="phone__loop-msg">{t('dashboard.loopQueueEmpty')}</div>
+              ) : (
+                <ol className="phone__loop-queue-list">
+                  {stash.map((s) => (
+                    <li key={s.id} className="phone__loop-queue-item">{s.text}</li>
+                  ))}
+                </ol>
+              )}
+              {!arming && mine?.queueSentTexts?.length > 0 && (
+                <>
+                  <div className="phone__loop-inspect-k">
+                    {t('dashboard.loopQueueSentLabel')}
+                    {(mine.queueSent ?? 0) > mine.queueSentTexts.length && (
+                      <span className="phone__loop-queue-count">
+                        {t('dashboard.loopQueueSentPartial', { n: mine.queueSentTexts.length })}
+                      </span>
+                    )}
+                  </div>
+                  <ol className="phone__loop-sent-list">
+                    {/* Briefed mark (openspec loop-agent-briefing, D3): the raw
+                        item text is what's shown; the badge says it was sent
+                        wrapped in the briefing at rules revision N. Rev 0 =
+                        sent raw (suggest-mode consume or pre-feature row). */}
+                    {mine.queueSentTexts.map((s, i) => (
+                      <li key={i} className="phone__loop-sent-row">
+                        {s}
+                        {(mine.queueSentRevs?.[i] ?? 0) > 0 && (
+                          <span
+                            className="phone__loop-sent-briefed"
+                            title={t('dashboard.loopSentBriefedTitle', { rev: mine.queueSentRevs[i] })}
+                          >
+                            📝{t('dashboard.loopSentBriefed')}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ol>
+                </>
+              )}
+              {/* Durable queue audit (openspec queue-loop-prompt-transparency,
+                  D5): every queue send for this repo from the append-only
+                  ledger — survives re-arms, unlike the per-arm list above; a
+                  row expands to the EXACT text the agent received. Gated. */}
+              {!arming && (
+                <>
+                  <button
+                    type="button"
+                    className="phone__loop-qa-toggle"
+                    onClick={toggleQueueAudit}
+                  >
+                    {qaOpen ? '▾' : '▸'} {t('dashboard.loopQueueAudit')}
+                  </button>
+                  {qaOpen && (
+                    <div className="phone__loop-qa">
+                      <p className="phone__loop-sect-desc">{t('dashboard.loopQueueAuditHint')}</p>
+                      {qaRows === null ? (
+                        <div className="phone__loop-msg">{t('dashboard.loopQueueAuditLoading')}</div>
+                      ) : qaRows === 'gate-closed' ? (
+                        <div className="phone__loop-msg phone__loop-msg--gate">{t('dashboard.loopGateClosed')}</div>
+                      ) : qaRows === 'error' ? (
+                        <div className="phone__loop-msg">{t('dashboard.loopQueueAuditError')}</div>
+                      ) : qaRows.length === 0 ? (
+                        <div className="phone__loop-msg">{t('dashboard.loopQueueAuditEmpty')}</div>
+                      ) : (
+                        <ol className="phone__loop-qa-list">
+                          {qaRows.map((r, i) => (
+                            <li key={i} className="phone__loop-qa-row">
+                              <button
+                                type="button"
+                                className="phone__loop-qa-head"
+                                onClick={() => toggleQaRow(i)}
+                              >
+                                <span className={`phone__loop-qa-phase phone__loop-qa-phase--${r.phase}`}>
+                                  {t(`dashboard.loopQueueAuditPhase.${r.phase}`)}
+                                </span>
+                                <span className="phone__loop-qa-when">{fmtQaWhen(r.at)}</span>
+                                <span className="phone__loop-qa-raw">{r.prompt}</span>
+                              </button>
+                              {qaExpanded.has(i) && (
+                                <pre className="phone__loop-qa-sent">{r.sentText}</pre>
+                              )}
+                            </li>
+                          ))}
+                        </ol>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          )}
+          <BadgeBox badge={machine.badges.work} exitKey={machine.exitKey} />
+          {machine.transitions.work.map((tr) => (
+            <TransitionLine key={tr.preKey} preKey={tr.preKey} to={tr.to} postKey={tr.postKey} />
+          ))}
+        </StateSection>
+
+        <StateSection
+          id="verify"
+          descKey={machine.sections[1].descKey}
+          now={nowSection === 'verify'}
+          dim={!verifyEff}
+        >
+          {/* Verify sends carry the briefing's one-line verify note instead of
+              the full work frame (openspec loop-agent-briefing). */}
+          {detail?.briefing?.frame?.verifyNote && (
+            <>
+              <div className="phone__loop-inspect-k">{t('dashboard.loopBriefingVerifyLabel')}</div>
+              <pre className="phone__loop-inspect-pre">{detail.briefing.frame.verifyNote}</pre>
+            </>
+          )}
+          <ParamBox
+            labelKey={kind === 'goal' ? 'dashboard.loopSm.goal.verifyTpl' : 'dashboard.loopSm.queue.verifyTpl'}
+            text={verifyText}
+            gated={gated}
+          />
+          {kind === 'queue' && !arming && mine?.lastStepText && (
+            <ParamBox labelKey="dashboard.loopQueueLastStepLabel" text={mine.lastStepText} />
+          )}
+          <BadgeBox badge={machine.badges.verify} />
+          {machine.transitions.verify.map((tr) => (
+            <TransitionLine key={tr.preKey} preKey={tr.preKey} to={tr.to} postKey={tr.postKey} />
+          ))}
+        </StateSection>
       </div>
     );
   }

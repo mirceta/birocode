@@ -13,9 +13,12 @@ namespace ClaudeWeb.Services.Autopilot;
 /// agent's composer via <c>PendingPrompt</c>) or drive (the engine sends it, capped
 /// and audited). A recipe loop resends ONE fixed stored prompt; a goal loop stores
 /// prompts composed ONCE at arm time (work + verification); a suggestion instance
-/// stores no prompt (its next prompt comes from the classifier per turn). Driven
-/// kinds only ever send STORED, byte-identical text — nothing is composed at send
-/// time, so prompt inspection is honest. Legacy suggestion arming (autopilot.json
+/// stores no prompt (its next prompt comes from the classifier per turn). Every
+/// driven send is a DETERMINISTIC COMPOSITION of operator-inspectable parts
+/// (openspec: loop-agent-briefing): the fixed briefing frame below + the
+/// <see cref="BriefingRulesStore"/> rules at a recorded revision + the stored text
+/// — previewable before arming and reconstructable per send, so prompt inspection
+/// stays honest. Legacy suggestion arming (autopilot.json
 /// ArmedRepoIds + global AutoAdvance) is drained into instances once at startup.
 ///
 /// Stored at <c>%APPDATA%\ClaudeWeb\loops.json</c> with the same atomic temp+rename
@@ -92,6 +95,99 @@ public class LoopConfigStore
         + "or blocker plainly and do NOT write STEP_VERIFIED.";
 
     public static string ComposeQueueVerifyPrompt(string stepText) => string.Format(QueueVerifyTemplate, stepText);
+
+    // ----- The situational briefing (openspec: loop-agent-briefing, D2/D2a) -----
+    // Composed at SEND time by the engine around every driven WORK send; verify
+    // sends get only the honesty note (no act-pressure, no rules — structurally: the
+    // note is one const with no rules slot). The FRAME here is deliberately
+    // compiled-in: the NEEDS_HUMAN/sentinel lines teach the exact final-line markers
+    // the engine parses, so they must never drift under a UI edit. The bullet RULES
+    // between intro and escalation line come from BriefingRulesStore
+    // (operator-editable, revisioned). The goal/recipe templates above deliberately
+    // KEEP their own marker sentences: suggest-mode pends deliver stored text raw
+    // (and a mid-run mode flip must not strand an untaught agent), so stored prompts
+    // stay self-sufficient and a drive send repeats the marker line — the same
+    // instruction twice, harmless.
+    public const string BriefingHeader = "[Autopilot loop briefing]";
+    public const string BriefingIntro =
+        "This prompt was sent by an automated loop. It was not typed live by a human, "
+        + "and nobody is reading your reply in real time — a reply that only asks or "
+        + "plans goes nowhere.";
+    public const string BriefingEscalationLine =
+        "- Only if a decision genuinely requires the human — irreversible, destructive, "
+        + "or a preference only they can give — stop and end your reply with the final "
+        + "line: NEEDS_HUMAN: <one short question>";
+    // The non-blocking counterpart to the escalation line (docs/
+    // loop-driven-agent-convention.md, "Non-blocking flags"): compiled-in like the
+    // marker lines above because the engine parses FLAG: lines (FlagsStore), so
+    // the taught spelling must never drift under a UI edit.
+    public const string BriefingFlagLine =
+        "- If anything this turn was a complaint, a workaround, or an ambiguity you "
+        + "resolved by guessing, also record each as its own line starting with: "
+        + "FLAG: <one short sentence> — it never stops the loop; the harness collects "
+        + "these for the human to review later.";
+    public const string BriefingContractQueueItem =
+        "Below is one item from a stored queue; a separate verification turn follows "
+        + "automatically, so print no completion marker.";
+    // {0} is the loop's configured sentinel (recipes may override the default).
+    public const string BriefingContractSentinelTemplate =
+        "When the whole job below is genuinely complete — not before — end your reply "
+        + "with the exact final line: {0}";
+    public const string BriefingSeparator = "--- The prompt follows. ---";
+    // The composer's footer-clauses delimiter (openspec expose-goal-loop-denylist):
+    // MUST match client/src/components/chat/footerClauses.js FOOTER_DELIMITER so an
+    // agent sees one spelling whether the clauses rode a composer send or a loop send.
+    public const string FooterClausesDelimiter = "--- standing instructions ---";
+    public const string BriefingVerifyNote =
+        BriefingHeader + "\n"
+        + "This verification prompt was sent by an automated loop; nobody is reading "
+        + "in real time. Judge honestly — a false confirmation silently corrupts the "
+        + "run, while an honest refusal merely stops the loop for a human to look at.";
+
+    /// <summary>The draft-v1 rules <see cref="BriefingRulesStore"/> seeds on first
+    /// run (design D2a) — editable thereafter; this list is never re-applied.</summary>
+    public static readonly IReadOnlyList<string> SeedBriefingRules = new[]
+    {
+        "Do the work in this turn. Do not stop at a plan, a list of options, or a "
+        + "clarifying question.",
+        "Answer your own questions and follow your own advice when you are confident. "
+        + "Choose sensible defaults for open details and state briefly which you chose.",
+    };
+
+    /// <summary>The send-time composition (D2): the fixed frame around the enabled
+    /// rules, then the stored text. <paramref name="phase"/> is the send's own phase
+    /// (the proposal's EnterPhase) — verify sends get the honesty note only.
+    /// <paramref name="flagLineEnabled"/> is the FLAG: channel switch (FlagsStore):
+    /// off drops the teaching line, so an agent is never taught a marker the
+    /// harness has stopped collecting. The line's WORDING stays compiled-in either
+    /// way — the switch only includes or omits it.</summary>
+    public static string ComposeBriefedPrompt(
+        string kind, string? phase, string? sentinel, string storedText,
+        IReadOnlyList<string> enabledRules, bool flagLineEnabled = true,
+        IReadOnlyList<string>? footerClauses = null)
+    {
+        // Verification sends never carry footer clauses (openspec
+        // expose-goal-loop-denylist): the judge must not inherit work-posture
+        // instructions — the same reason the briefing rules stay out of this branch.
+        if (phase == PhaseVerify)
+            return BriefingVerifyNote + "\n\n" + storedText;
+        var lines = new List<string> { BriefingHeader, BriefingIntro };
+        lines.AddRange(enabledRules.Select(r => "- " + r));
+        lines.Add(BriefingEscalationLine);
+        if (flagLineEnabled) lines.Add(BriefingFlagLine);
+        lines.Add(kind == KindQueue
+            ? BriefingContractQueueItem
+            : string.Format(BriefingContractSentinelTemplate,
+                string.IsNullOrWhiteSpace(sentinel) ? DefaultSentinel : sentinel));
+        lines.Add(BriefingSeparator);
+        var composed = string.Join("\n", lines) + "\n\n" + storedText;
+        // Opted-in work sends append the active footer clauses AFTER the stored
+        // prompt — the composer's footer position and delimiter, so the agent sees
+        // the identical shape either way.
+        if (footerClauses is { Count: > 0 })
+            composed += "\n\n" + FooterClausesDelimiter + "\n" + string.Join("\n\n", footerClauses);
+        return composed;
+    }
 
     private readonly Logger _logger;
     private readonly string _path;
@@ -180,6 +276,11 @@ public class LoopConfigStore
         // only. The risk decision belongs to the arm, not permanently to the repo:
         // the next arm starts from the untouched default again. Additive nullable.
         public List<string>? DenyList { get; set; }
+        // Per-arm opt-in to append the chat footer clauses to work-phase driven
+        // sends (openspec: expose-goal-loop-denylist). Null/false = off, today's
+        // behavior; the clauses themselves are read live at send time from
+        // FooterClausesService, never copied here. Additive nullable.
+        public bool? IncludeFooterClauses { get; set; }
         // Queue kind, sent-history (openspec: queue-loop-visibility, D3): the texts of
         // the steps that actually landed this arm, newest last, bounded at
         // QueueSentTextsCap (drop-oldest). Prompt-bearing — disclosed only via the
@@ -187,6 +288,11 @@ public class LoopConfigStore
         // old entries loads as empty; a new arm creates a fresh Entry, so the history
         // resets structurally.
         public List<string>? QueueSentTexts { get; set; }
+        // Parallel to QueueSentTexts (openspec: loop-agent-briefing, D3): the
+        // briefing rules revision each landed step was composed with — 0 for a
+        // suggest-mode (human-sent, unbriefed) step. Additive: null on old entries
+        // loads as empty and projections pad missing indexes with 0.
+        public List<int>? QueueSentRevs { get; set; }
     }
 
     private sealed class Data
@@ -206,9 +312,11 @@ public class LoopConfigStore
         string? Goal, string? VerifyPrompt, string? Phase, string? PendingPrompt, long ArmedAt,
         string? SessionId,
         string? QueueTabId, bool VerifyEnabled, string? LastStepText, int QueueSent,
-        IReadOnlyList<string> QueueSentTexts,
+        IReadOnlyList<string> QueueSentTexts, IReadOnlyList<int> QueueSentRevs,
         // Per-arm deny-list (advance-queue-loop, D2): null = global default applies.
-        IReadOnlyList<string>? DenyList = null);
+        IReadOnlyList<string>? DenyList = null,
+        // Per-arm footer-clauses opt-in (expose-goal-loop-denylist): false = off.
+        bool IncludeFooterClauses = false);
 
     public IReadOnlyList<LoopState> All()
     {
@@ -229,7 +337,8 @@ public class LoopConfigStore
     /// When armed from a recipe, the recipe's id/name are stamped on for display.
     /// Replaces this agent's one loop slot — XOR by construction (revision 2, D8).</summary>
     public LoopState Start(string repoId, string prompt, string? sentinel, int? maxIterations,
-        string? recipeId = null, string? recipeName = null, string? mode = null, string? sessionId = null)
+        string? recipeId = null, string? recipeName = null, string? mode = null, string? sessionId = null,
+        List<string>? denyList = null, bool? includeFooterClauses = null)
     {
         lock (_gate)
         {
@@ -239,6 +348,8 @@ public class LoopConfigStore
                 Kind = KindRecipe,
                 Mode = CleanMode(mode),
                 Prompt = prompt,
+                DenyList = CleanDenyList(denyList),
+                IncludeFooterClauses = includeFooterClauses == true ? true : null,
                 Sentinel = string.IsNullOrWhiteSpace(sentinel) ? DefaultSentinel : sentinel.Trim(),
                 MaxIterations = Math.Clamp(maxIterations ?? DefaultMaxIterations, 1, 100),
                 Active = true,
@@ -261,7 +372,7 @@ public class LoopConfigStore
     /// work + verification prompts from the templates ONCE, stores them verbatim, and
     /// starts in the work phase. The engine only ever sends the stored text.</summary>
     public LoopState StartGoal(string repoId, string goal, int? maxIterations, string? mode = null,
-        string? sessionId = null)
+        string? sessionId = null, List<string>? denyList = null, bool? includeFooterClauses = null)
     {
         lock (_gate)
         {
@@ -271,6 +382,8 @@ public class LoopConfigStore
                 Kind = KindGoal,
                 Mode = CleanMode(mode),
                 Goal = goal,
+                DenyList = CleanDenyList(denyList),
+                IncludeFooterClauses = includeFooterClauses == true ? true : null,
                 Prompt = ComposeGoalWorkPrompt(goal),
                 VerifyPrompt = ComposeGoalVerifyPrompt(goal),
                 Phase = PhaseWork,
@@ -298,7 +411,7 @@ public class LoopConfigStore
     /// reset, ArmedAt stamped, session pinned.</summary>
     public LoopState StartQueue(string repoId, string tabId, bool? verifyEnabled,
         int? maxIterations, string? mode = null, string? sessionId = null,
-        List<string>? denyList = null)
+        List<string>? denyList = null, bool? includeFooterClauses = null)
     {
         lock (_gate)
         {
@@ -311,6 +424,7 @@ public class LoopConfigStore
                 VerifyEnabled = verifyEnabled ?? true,
                 QueueSent = 0,
                 DenyList = CleanDenyList(denyList),
+                IncludeFooterClauses = includeFooterClauses == true ? true : null,
                 Phase = PhaseWork,
                 Sentinel = DefaultSentinel,
                 MaxIterations = Math.Clamp(maxIterations ?? DefaultMaxIterations, 1, 100),
@@ -332,7 +446,7 @@ public class LoopConfigStore
     /// LANDED — stamp its text (so a restart mid-step verifies the right thing), count
     /// it, and owe a verification turn (or go straight back to work when verification
     /// is opted out).</summary>
-    public LoopState? RecordQueueStep(string repoId, string stepText)
+    public LoopState? RecordQueueStep(string repoId, string stepText, int briefingRev = 0)
     {
         lock (_gate)
         {
@@ -340,7 +454,13 @@ public class LoopConfigStore
             e.LastStepText = stepText;
             e.QueueSent = (e.QueueSent ?? 0) + 1;
             (e.QueueSentTexts ??= new()).Add(stepText);
+            // Keep the revs list index-aligned even on entries that predate it:
+            // pad to the texts' length with 0 ("not briefed / unknown") first.
+            e.QueueSentRevs ??= new();
+            while (e.QueueSentRevs.Count < e.QueueSentTexts.Count - 1) e.QueueSentRevs.Add(0);
+            e.QueueSentRevs.Add(briefingRev);
             while (e.QueueSentTexts.Count > QueueSentTextsCap) e.QueueSentTexts.RemoveAt(0);
+            while (e.QueueSentRevs.Count > e.QueueSentTexts.Count) e.QueueSentRevs.RemoveAt(0);
             e.Phase = e.VerifyEnabled != false ? PhaseVerifyOwed : PhaseWork;
             Save();
             return ToState(repoId, e);
@@ -560,7 +680,9 @@ public class LoopConfigStore
             e.SessionId,
             e.QueueTabId, e.VerifyEnabled != false, e.LastStepText, e.QueueSent ?? 0,
             e.QueueSentTexts?.ToList() ?? (IReadOnlyList<string>)Array.Empty<string>(),
-            e.DenyList?.ToList());
+            e.QueueSentRevs?.ToList() ?? (IReadOnlyList<int>)Array.Empty<int>(),
+            e.DenyList?.ToList(),
+            e.IncludeFooterClauses == true);
 
     private void Load()
     {

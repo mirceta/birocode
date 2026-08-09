@@ -198,8 +198,14 @@ function Readiness({ ready, repoName }) {
   );
 }
 
-export default function Cockpit() {
+// Optional repoId/repoName props (openspec add-dock-openspec-lane): when supplied
+// (the agent-dock OpenSpec lane), every fetch is scoped to THAT repo via an
+// explicit X-Repo-Id override, independent of the global repo selector. When
+// omitted (the routed Studio tab) it behaves exactly as before — no override, so
+// the api client's global repo id is used.
+export default function Cockpit({ repoId: repoIdProp, repoName: repoNameProp } = {}) {
   const { currentRepoId, current } = useRepo();
+  const scope = repoIdProp ? { repoId: repoIdProp } : undefined;
   const [state, setState] = useState({ loading: true });
   const [sel, setSel] = useState(null);     // { kind:'change'|'archived'|'spec', id }
   const [detail, setDetail] = useState(null);
@@ -209,12 +215,13 @@ export default function Cockpit() {
     setSel(null);
     setDetail(null);
     try {
-      const data = await apiGet('/openspec/cockpit');
+      const data = await apiGet('/openspec/cockpit', scope);
       setState({ loading: false, data });
     } catch (e) {
       setState({ loading: false, error: e?.message || String(e) });
     }
-  }, [currentRepoId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repoIdProp, currentRepoId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -225,11 +232,12 @@ export default function Cockpit() {
     const path = sel.kind === 'archived'
       ? `/openspec/archived?id=${encodeURIComponent(sel.id)}`
       : `/openspec/show?id=${encodeURIComponent(sel.id)}`;
-    apiGet(path)
+    apiGet(path, scope)
       .then((d) => { if (!cancelled) setDetail({ loading: false, data: d, id: sel.id }); })
       .catch((e) => { if (!cancelled) setDetail({ loading: false, error: e?.message || String(e), id: sel.id }); });
     return () => { cancelled = true; };
-  }, [sel]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sel, repoIdProp]);
 
   const data = state.data;
   const crossLink = useMemo(() => {
@@ -244,7 +252,7 @@ export default function Cockpit() {
   if (state.error) return <div className="ck"><div className="ck__empty ck__empty--err">{state.error}</div></div>;
 
   const ready = data.ready || {};
-  const repoName = data.repoName || current?.name;
+  const repoName = data.repoName || repoNameProp || current?.name;
   if (!ready.openspecOnPath || !ready.openspecDirPresent) {
     return (
       <div className="ck">

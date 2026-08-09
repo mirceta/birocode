@@ -49,6 +49,8 @@ public sealed class LoopEvalRunnerService : IDisposable
             "~2–4 real agent turns", "~2–15 min", 25),
         new ScenarioDef("queue", "queue.mjs", "Queue loop — drain 6 prompts correctly",
             "~12 real agent turns", "~10–25 min", 35),
+        new ScenarioDef("briefing", "briefing.mjs", "Briefing rule — steer a real driven agent",
+            "~2–4 real agent turns", "~2–15 min", 25),
         new ScenarioDef("golden", "golden.mjs", "Golden-example replay — captured session",
             "~4–12 real agent turns", "~10–30 min", 40),
     };

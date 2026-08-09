@@ -18,8 +18,12 @@ namespace ClaudeWeb.Services.Autopilot;
 ///
 /// The looped-agent output contract (sentinel + <c>NEEDS_HUMAN:</c> — see
 /// docs/loop-driven-agent-convention.md) is part of each seed's VISIBLE prompt text.
-/// Nothing is injected at send time: what the recipe editor shows is exactly what the
-/// agent receives.
+/// A drive-mode send wraps the recipe text with the situational briefing (openspec:
+/// loop-agent-briefing) — a deterministic, operator-inspectable composition previewed
+/// in the dock; the recipe editor shows the stored text that composition carries.
+/// The seeds' own contract paragraph deliberately stays: suggest-mode pends deliver
+/// the stored text raw, so it must remain self-sufficient (the drive-mode repeat of
+/// the marker line is harmless).
 /// </summary>
 public class LoopRecipeStore
 {

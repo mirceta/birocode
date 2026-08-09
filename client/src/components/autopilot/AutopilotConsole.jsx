@@ -4,10 +4,12 @@ import ErrorBanner from '../shared/ErrorBanner';
 import AutopilotOverviewView from './AutopilotOverviewView';
 import AgentsView from './AgentsView';
 import LoopsView from './LoopsView';
+import FlagsHistoryView from './FlagsHistoryView';
 import SystemTestsView from './SystemTestsView';
 import TestInventoryView from './TestInventoryView';
 import ChatArchitectureView from './ChatArchitectureView';
 import AutopilotArchitectureView from './AutopilotArchitectureView';
+import ResearchView from './ResearchView';
 import '../../pages/autopilot.css';
 
 // The full Autopilot console (plans/autopilot-to-harness.md): the complete
@@ -17,9 +19,10 @@ import '../../pages/autopilot.css';
 // feed, History), the Loops root (📋 recipe + 🎯 goal: Agents, Recipes), the cross-loop-type
 // Audit trail, the 🧪 Tests coverage map (openspec add-autopilot-tests-tab:
 // unit / runnable browser / rehearsal / how-E2E-works / the engine-seam plan —
-// System tests live here now), and Reference (the two explainers), all over
-// /api/autopilot. The Overview is pure reference and is
-// the one tab the operator gate never hides. This is the SINGLE implementation rendered by BOTH the routed
+// System tests live here now), and Reference (the two explainers plus the
+// agent-loop Research dossier, openspec research-informed-loops), all over
+// /api/autopilot. The Overview and the Research dossier are pure reference and
+// are the surfaces the operator gate never hides. This is the SINGLE implementation rendered by BOTH the routed
 // Autopilot tab (pages/Autopilot.jsx, the mobile-first view) and the dashboard
 // dock (components/dashboard/AutopilotPanel.jsx, viewable anywhere) — they are
 // the same console, never two drifting copies.
@@ -275,7 +278,7 @@ export default function AutopilotConsole({ embedded = false }) {
         <SubTabs
           active={sub.goal}
           onPick={(k) => pickSub('goal', k)}
-          items={[['agents', 'Agents'], ['queue', 'Queue'], ['recipes', 'Recipes']]}
+          items={[['agents', 'Agents'], ['queue', 'Queue'], ['recipes', 'Recipes'], ['flags', '⚑ Flags']]}
         />
       )}
       {root === 'tests' && (
@@ -298,15 +301,20 @@ export default function AutopilotConsole({ embedded = false }) {
           items={[
             ['autoarch', 'How autopilot works'],
             ['chatarch', 'How chat works'],
+            ['research', '📚 Research'],
           ]}
         />
       )}
 
       {root === 'overview' && <AutopilotOverviewView />}
 
-      {/* The gate fences every operational surface; the Overview above is pure
-          reference content and stays visible either way. */}
-      {root !== 'overview' && (gated ? (
+      {/* The research dossier reads committed repo files, not gated loop state,
+          so it stays visible like the Overview (openspec research-informed-loops). */}
+      {root === 'reference' && sub.reference === 'research' && <ResearchView />}
+
+      {/* The gate fences every operational surface; the Overview and the
+          Research dossier above are reference content and stay visible either way. */}
+      {!(root === 'overview' || (root === 'reference' && sub.reference === 'research')) && (gated ? (
         <div className="ap-gateoff" role="status">
           <h3 className="ap-gateoff__title">Autopilot is turned off by the operator</h3>
           <p>
@@ -325,7 +333,9 @@ export default function AutopilotConsole({ embedded = false }) {
       <>
       {root === 'suggestion' && sub.suggestion === 'control' && <AgentsView data={data} mutate={mutate} />}
 
-      {root === 'goal' && (
+      {root === 'goal' && sub.goal === 'flags' && <FlagsHistoryView />}
+
+      {root === 'goal' && sub.goal !== 'flags' && (
         <LoopsView
           section={sub.goal}
           data={data}

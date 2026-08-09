@@ -56,6 +56,9 @@ public class AutopilotService : BackgroundService
     private readonly PromptsService _prompts;
     private readonly AutopilotAuditLog _audit;
     private readonly DockRegistry _dock;
+    private readonly BriefingRulesStore _briefing;
+    private readonly FooterClausesService _footerClauses;
+    private readonly FlagsStore _flags;
     private readonly Logger _logger;
 
     private readonly ConcurrentDictionary<string, AgentState> _states = new();
@@ -92,6 +95,11 @@ public class AutopilotService : BackgroundService
     // The ArmedAt stamp last seen per repo — a change means a re-arm, which
     // resets both guards above (see Tick).
     private readonly ConcurrentDictionary<string, long> _armGen = new();
+    // The reply timestamp whose FLAG: lines were last lifted per repo, so a reply
+    // that gets re-seen across ticks (e.g. while a suggest-mode loop waits) is
+    // mined for flags exactly once. Keyed by timestamp, not arm generation: a
+    // re-arm over the same trailing reply must not re-record its flags.
+    private readonly ConcurrentDictionary<string, DateTime> _lastFlagMined = new();
     private readonly object _logGate = new();
     private readonly LinkedList<LogEntry> _log = new();
     // The live "Intercepted" feed: one entry per NEW agent message the engine grabs
@@ -110,6 +118,7 @@ public class AutopilotService : BackgroundService
         AutopilotGate operatorGate, PromptClassifier brain, CliPromptClassifier cliBrain,
         AutopilotDiscoveryService discovery,
         PromptsService prompts, AutopilotAuditLog audit, DockRegistry dock,
+        BriefingRulesStore briefing, FlagsStore flags, FooterClausesService footerClauses,
         IEnumerable<ILoop> kinds, Logger logger)
     {
         _repos = repos;
@@ -118,6 +127,9 @@ public class AutopilotService : BackgroundService
         _cli = cli;
         _config = config;
         _loops = loops;
+        _briefing = briefing;
+        _flags = flags;
+        _footerClauses = footerClauses;
         _operatorGate = operatorGate;
         _brain = brain;
         _cliBrain = cliBrain;
@@ -575,6 +587,27 @@ public class AutopilotService : BackgroundService
             // send whose reply never landed both decide as if unanswered — the
             // kind (re)proposes its phase's prompt and judges nothing.
             var noReply = preArm || replyMissing;
+            // Non-blocking FLAG: capture (docs/loop-driven-agent-convention.md):
+            // lift the fresh reply's "FLAG: <sentence>" lines into the ledger
+            // BEFORE the kind judges it, so a reply that also stops the loop
+            // (sentinel, NEEDS_HUMAN, deny-list) still gets its flags kept. Never
+            // feeds the decision ladder; pre-arm history is never mined (those
+            // flags belong to the human's previous conversation, if anything).
+            // The channel switch (FlagsStore.Enabled) fences capture and the
+            // briefing's teaching line together — off means off end to end.
+            if (_flags.Enabled
+                && !isSuggestionKind && !noReply && !string.IsNullOrWhiteSpace(lastAssistant)
+                && lastAssistantAt is { } minedAt
+                && (!_lastFlagMined.TryGetValue(repo.Id, out var mined) || mined != minedAt))
+            {
+                _lastFlagMined[repo.Id] = minedAt;
+                var flagLines = FlagsStore.ExtractFlagLines(lastAssistant!);
+                if (flagLines.Count > 0)
+                {
+                    var kept = _flags.Record(repo.Id, repo.Name, loop.Kind, loop.IterationsDone, flagLines);
+                    _logger.Info($"[FLAGS] {repo.Name}: {flagLines.Count} FLAG line(s) in the reply, {kept} new");
+                }
+            }
             var decision = impl.Decide(new LoopContext(
                 loop,
                 noReply ? null : lastAssistant,
@@ -663,7 +696,40 @@ public class AutopilotService : BackgroundService
                     return;
                 }
                 if (string.IsNullOrWhiteSpace(sessionId)) return;
-                if (SendPrompt(repo, sessionId!, loop, propose.Prompt, propose.Confidence, snippet, intercept, now))
+                // The situational briefing (openspec: loop-agent-briefing, D1/D2):
+                // composed HERE, at the one drive choke point, so every driven kind
+                // is covered and the suggest branch above stays structurally raw.
+                // propose.Prompt remains the RAW stored text everywhere below —
+                // consume refs, RecordQueueStep, audit, state snippets — only the
+                // text handed to the CLI is the composition. The suggestion kind's
+                // auto-sends are routine prompts, not loop-driven work; they stay
+                // unbriefed.
+                string? briefed = null;
+                var briefingRev = 0;
+                if (loop.Kind != LoopConfigStore.KindSuggestion)
+                {
+                    var (rev, rules) = _briefing.EnabledTexts();
+                    briefingRev = rev;
+                    // Per-arm footer-clauses opt-in (openspec: expose-goal-loop-denylist):
+                    // active clauses read LIVE at send time (composer semantics — a
+                    // mid-loop toggle affects the next send). ComposeBriefedPrompt owns
+                    // the phase rule: verification sends never carry them.
+                    IReadOnlyList<string>? clauses = null;
+                    if (loop.IncludeFooterClauses)
+                        clauses = _footerClauses.List()
+                            .Where(c => c.Active).Select(c => c.Text).ToList();
+                    briefed = LoopConfigStore.ComposeBriefedPrompt(
+                        loop.Kind, propose.EnterPhase, loop.Sentinel, propose.Prompt, rules,
+                        _flags.Enabled, clauses);
+                }
+                // Audit attribution (openspec: queue-loop-prompt-transparency, D4):
+                // the send's phase — the verification turn is the only non-work send.
+                var sendPhase = loop.Kind == LoopConfigStore.KindSuggestion
+                    ? ""
+                    : (propose.EnterPhase == LoopConfigStore.PhaseVerify
+                        ? LoopConfigStore.PhaseVerify : LoopConfigStore.PhaseWork);
+                if (SendPrompt(repo, sessionId!, loop, propose.Prompt, briefed, briefingRev,
+                        sendPhase, propose.Confidence, snippet, intercept, now))
                 {
                     // Consume-on-land (queue kind, D2/D3): the head item leaves the
                     // stash only now that its send actually fired, and the step is
@@ -673,7 +739,7 @@ public class AutopilotService : BackgroundService
                     if (propose.ConsumeStash is { } sref)
                     {
                         _dock.RemoveStash(sref.TabId, sref.ItemId);
-                        _loops.RecordQueueStep(repo.Id, propose.Prompt);
+                        _loops.RecordQueueStep(repo.Id, propose.Prompt, briefingRev);
                     }
                     // Flip the phase only after the send actually fired — a failed
                     // slot claim leaves the loop as-is so the next tick retries.
@@ -705,7 +771,8 @@ public class AutopilotService : BackgroundService
     /// </summary>
     private bool SendPrompt(
         RepositoryRegistry.RepositoryInfo repo, string sessionId,
-        LoopConfigStore.LoopState loop, string prompt, double confidence, string snippet,
+        LoopConfigStore.LoopState loop, string prompt, string? briefedPrompt, int briefingRev,
+        string phase, double confidence, string snippet,
         InterceptEvent? intercept, long now)
     {
         // Atomically claim the builder slot. If a turn is already running for this
@@ -717,10 +784,22 @@ public class AutopilotService : BackgroundService
         var iter = state?.IterationsDone ?? loop.IterationsDone + 1;
         var isSuggestionKind = loop.Kind == LoopConfigStore.KindSuggestion;
         var path = repo.Path;
+        // What the CLI receives vs what the records carry (openspec:
+        // loop-agent-briefing D3, amended by queue-loop-prompt-transparency):
+        // the agent gets the briefed composition. Truncated LIST projections
+        // (audit slices, sent-history, state snippets) keep the RAW stored text
+        // plus the briefed flag + rules revision; the durable audit entry also
+        // stamps the loop kind, the send's phase, and — when it differs from the
+        // raw text — the exact composed SentText, so "what was sent" is readable,
+        // not just reconstructable. The chat's synthetic user bubble (below) now
+        // carries the exact sent text.
+        var sendText = briefedPrompt ?? prompt;
+        var briefed = briefedPrompt != null;
 
         _audit.Record(new AutopilotAuditLog.Entry(
             now, repo.Id, repo.Name, prompt, confidence, snippet,
-            isSuggestionKind ? "sent" : "loop"));
+            isSuggestionKind ? "sent" : "loop", briefed, briefingRev,
+            loop.Kind, phase, briefed ? sendText : null));
         _logger.Info(isSuggestionKind
             ? $"[AUTOPILOT] auto-sent \"{prompt}\" to \"{repo.Name}\" (conf {confidence:0.00})"
             : $"[LOOP] resent to \"{repo.Name}\" (iteration {iter}{(loop.MaxIterations > 0 ? $"/{loop.MaxIterations}" : "")})");
@@ -735,10 +814,13 @@ public class AutopilotService : BackgroundService
                 // prompt bubble. Publish the prompt into the run's seq buffer
                 // ahead of the CLI's events: attached clients render it live and
                 // late attachers get it in the ?after=N replay (openspec
-                // fix-loop-prompt-render).
-                await session.EmitAsync(new { type = "user", text = prompt, actor = "loop" });
+                // fix-loop-prompt-render). The text is the EXACT composition the
+                // CLI receives (openspec: queue-loop-prompt-transparency, D1) —
+                // the chat is the verbatim record of the conversation, and this
+                // keeps the live bubble byte-identical to the transcript reload.
+                await session.EmitAsync(new { type = "user", text = sendText, actor = "loop" });
                 await _cli.RunAsync(
-                    prompt, sessionId, workingDirectory: path,
+                    sendText, sessionId, workingDirectory: path,
                     emit: session.EmitAsync, ct: session.Cts.Token);
             }
             catch (Exception ex)

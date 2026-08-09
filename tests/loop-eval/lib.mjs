@@ -526,6 +526,57 @@ export async function createTabWithStash(repoId, repoName, prompts) {
   return tabId;
 }
 
+// ------------------------------------------------------- briefing rules
+// (briefing scenario) The GLOBAL operator briefing store, reached through the
+// shipped GET/PUT /api/autopilot/briefing surface only. The scenario injects
+// ONE self-scoped rule and teardown removes exactly that rule BY ID — never a
+// blind restore of a snapshot — so an operator's concurrent edits on a live
+// box survive the run untouched.
+
+let injectedRuleId = null;
+
+export async function briefingGet() {
+  const r = await api('GET', '/api/autopilot/briefing');
+  if (r.status !== 200 || !r.json) throw new Error(`briefing GET failed: http ${r.status}`);
+  return r.json;
+}
+
+/** Append one enabled rule to the current list via the editor's own
+ *  replace-the-whole-set PUT; returns { id, rev, payload } of the new state. */
+export async function briefingAddRule(text) {
+  const cur = await briefingGet();
+  const rules = (cur.rules || []).map((x) => ({ id: x.id, text: x.text, enabled: x.enabled }));
+  rules.push({ id: null, text, enabled: true });
+  const r = await api('PUT', '/api/autopilot/briefing', { rules });
+  if (r.status !== 200 || !r.json) throw new Error(`briefing PUT failed: http ${r.status} ${JSON.stringify(r.json || {}).slice(0, 300)}`);
+  const added = (r.json.rules || []).find((x) => x.text === text);
+  if (!added?.id) throw new Error('briefing PUT accepted but the injected rule is missing from the returned snapshot');
+  injectedRuleId = added.id;
+  say(`briefing rule injected (id ${added.id}, rev ${r.json.rev})`);
+  return { id: added.id, rev: r.json.rev, payload: r.json };
+}
+
+/** Remove exactly the rule this run injected (no-op when none). KEEP leaves it
+ *  in place and prints the manual step, like the rest of the KEEP contract. */
+export async function briefingRemoveInjectedRule() {
+  if (!injectedRuleId) return;
+  if (CFG.keep) {
+    say(`LOOPEVAL_KEEP=1 — injected briefing rule left in place (id ${injectedRuleId}); remove it via the dock's Briefing section (or PUT /api/autopilot/briefing without it)`);
+    return;
+  }
+  try {
+    const cur = await briefingGet();
+    const rules = (cur.rules || []).filter((x) => x.id !== injectedRuleId)
+      .map((x) => ({ id: x.id, text: x.text, enabled: x.enabled }));
+    const r = await api('PUT', '/api/autopilot/briefing', { rules });
+    if (r.status !== 200) throw new Error(`http ${r.status}`);
+    say(`injected briefing rule removed (rev ${r.json?.rev})`);
+    injectedRuleId = null;
+  } catch (e) {
+    say(`warn: injected briefing rule ${injectedRuleId} not removed (${e?.message}) — remove it in the dock's Briefing section`);
+  }
+}
+
 // ------------------------------------------------------- engine driving
 
 export async function runState(repoId) {
@@ -597,7 +648,13 @@ async function debugBundle(repoId) {
 export async function readAudit(ctx, repoId = liveRepoId) {
   if (CFG.live) {
     const b = repoId ? await debugBundle(repoId) : null;
-    return (b?.audit || []).map((a) => ({ Outcome: a.outcome, At: a.at, Confidence: a.confidence }));
+    // briefed/briefingRev (openspec: loop-agent-briefing): stamped on every
+    // audit entry; a live harness built before the stamps rode the bundle
+    // yields undefined here, which the briefing scenario names in its verdict.
+    return (b?.audit || []).map((a) => ({
+      Outcome: a.outcome, At: a.at, Confidence: a.confidence,
+      Briefed: a.briefed === true, BriefingRev: a.briefingRev ?? 0,
+    }));
   }
   try {
     return readFileSync(join(ctx.datadir, 'autopilot-audit.jsonl'), 'utf8')

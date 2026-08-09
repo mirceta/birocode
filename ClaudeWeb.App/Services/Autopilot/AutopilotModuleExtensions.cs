@@ -19,6 +19,8 @@ public static class AutopilotModuleExtensions
         services.AddSingleton<AutopilotConfigStore>();
         services.AddSingleton<LoopConfigStore>();
         services.AddSingleton<LoopRecipeStore>();
+        services.AddSingleton<BriefingRulesStore>();
+        services.AddSingleton<FlagsStore>();
         services.AddSingleton<AutopilotAuditLog>();
         services.AddSingleton<PromptClassifier>();
         services.AddSingleton<CliPromptClassifier>();

@@ -21,7 +21,10 @@ function linkify(text) {
 
 // A single chat message. User messages are right-aligned plain text (with bare
 // URLs linkified); assistant messages are left-aligned and rendered as markdown
-// so headers, lists, bold, code blocks, and links display properly.
+// so headers, lists, bold, code blocks, and links display properly. An
+// autopilot-loop send's text is the exact composition the agent received
+// (openspec queue-loop-prompt-transparency) — rendered verbatim like any other
+// user message, no affordance standing in for hidden text.
 export default function MessageBubble({ role, text }) {
   const isUser = role === 'user';
   return (

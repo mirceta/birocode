@@ -3,7 +3,9 @@ import { apiGet, apiPost, apiStream, apiStreamGet, apiUpload } from '../api/clie
 import { createSseParser } from '../components/chat/sseParser';
 import { getModel, setModel as persistModel } from '../components/chat/ModelSelector';
 import { useDock } from './DockContext';
+import { useFooterClauses } from './FooterClausesContext';
 import { useRepo } from './RepoContext';
+import { appendFooterClauses } from '../components/chat/footerClauses';
 import { useFeature, useUiMode } from './UiModeContext';
 import { useT } from '../i18n/LanguageContext';
 
@@ -72,6 +74,9 @@ export function ChatProvider({ children }) {
   const { tabs, activeTab, activeTabId, updateTab, loaded: dockLoaded, chatView, setChatView } = useDock();
   const dualChat = useFeature('dualChat');
   const { isAdvanced } = useUiMode();
+  // Footer clauses (openspec prompt-footer-clauses): read at send time so every
+  // composer send — typed or approved queue chip — carries the active clauses.
+  const { clauses: footerClauses } = useFooterClauses();
   // The harness's own repo — the backend pins it and flags it isSelf.
   const selfRepoId = repos.find((r) => r.isSelf)?.id || null;
   const greeting = () => ({ role: 'assistant', text: t('chat.greeting') });
@@ -305,7 +310,10 @@ export function ChatProvider({ children }) {
           break;
         case 'user':
           // Autopilot loop prompt (openspec fix-loop-prompt-render). Composer
-          // sends never receive this event, so no duplicate bubbles.
+          // sends never receive this event, so no duplicate bubbles. The text is
+          // the EXACT composition the CLI received (openspec
+          // queue-loop-prompt-transparency) — the chat renders it verbatim, the
+          // same way the transcript reload does.
           if (evt.text) addServerPrompt(key, evt.text);
           break;
         case 'thinking':
@@ -353,6 +361,11 @@ export function ChatProvider({ children }) {
         return;
       }
     }
+
+    // Active footer clauses ride along on every composer send — after the
+    // attachment suffix, so the footer stays the last thing the agent reads.
+    // No active clauses -> fullText untouched (openspec prompt-footer-clauses).
+    fullText = appendFooterClauses(fullText, footerClauses);
 
     updateConvo(key, (c) => ({
       ...c,

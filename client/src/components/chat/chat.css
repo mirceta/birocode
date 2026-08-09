@@ -905,6 +905,101 @@ details.step > summary::-webkit-details-marker {
   border-color: var(--color-accent);
 }
 
+/* Footer-clauses button (openspec prompt-footer-clauses) — same round chip as
+   the ⚙/⛶ siblings, plus an accent + count badge while clauses are ACTIVE so
+   the operator can't forget every send is being amended. */
+.chat-input__clauses {
+  position: relative;
+  min-width: var(--touch);
+  min-height: var(--touch);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 18px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.chat-input__clauses:hover {
+  border-color: var(--color-accent);
+}
+
+.chat-input__clauses--on {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.chat-input__clauses-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+/* Footer-clauses popup list — lives in the prompt-mgr modal shell. */
+.footer-clauses__list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.footer-clauses__item {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.footer-clauses__item--active {
+  border-color: var(--color-accent);
+}
+
+.footer-clauses__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.footer-clauses__check {
+  margin-top: 3px;
+  flex: 0 0 auto;
+  accent-color: var(--color-accent);
+  width: 16px;
+  height: 16px;
+}
+
+.footer-clauses__text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 13px;
+}
+
+.footer-clauses__actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  justify-content: flex-end;
+}
+
+.footer-clauses__edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 /* Prompt-expand popup — a CENTERED MODAL portaled to <body> (see
    PromptExpandModal.jsx), same stacking-context-proof contract as the prompt
    manager. The card and its textarea are sized with viewport-relative units so

@@ -140,8 +140,9 @@ export default function AutopilotOverviewView() {
             <ul>
               <li>
                 You state a <b>free-text goal</b> in the dock card&apos;s loop
-                control; the composed work and verification prompts are
-                inspectable byte-identical before arming.
+                control; the composed work and verification prompts — and the
+                briefing prefix every driven send is wrapped with — are
+                inspectable exactly as sent, before arming.
               </li>
               <li>
                 The driven agent receives, with the goal, the
