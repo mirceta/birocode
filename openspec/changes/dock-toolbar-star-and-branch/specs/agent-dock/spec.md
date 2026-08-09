@@ -64,3 +64,66 @@ label SHALL include the branch when one is shown.
 
 - **WHEN** a tab shows a branch row
 - **THEN** the tab's accessible label (aria-label/title) includes the branch name
+
+### Requirement: The dock roster order is operator-controlled and shared by strip and grid
+
+The system SHALL treat the persisted dock roster's list order as the single
+display order for agents: the dock toolbar SHALL render its tabs in exactly
+that order, and the dashboard grid SHALL render the grid-visible docks in
+that same relative order (the existing dependent-"together" grouping MAY
+still place a dependent dock beneath its primary). The former automatic
+ordering — important docks pinned first, remaining docks sorted by recency —
+SHALL no longer apply; the `important` flag and recency SHALL keep their
+other surfaces (star, borders, "show only important" filter) without moving
+agents. The roster order SHALL be persisted server-side with the roster
+itself, so it survives reloads and is shared across devices; newly opened
+docks SHALL append at the end of the order.
+
+#### Scenario: Strip order is grid order
+
+- **WHEN** the Dashboard is open and the roster order places dock A before dock B, both grid-visible and neither in a dependent group
+- **THEN** the strip shows A's tab before B's tab and the grid renders A's panel before B's panel
+
+#### Scenario: Importance no longer repositions a dock
+
+- **WHEN** the operator toggles a dock's `important` flag
+- **THEN** the dock's position in the strip and the grid is unchanged (only star/border/filter surfaces react)
+
+#### Scenario: Order survives reload and is shared across devices
+
+- **WHEN** the operator reorders the roster and later reloads the Dashboard, or opens it signed in from another device
+- **THEN** the strip and grid render the persisted order, not creation or recency order
+
+### Requirement: The dock toolbar provides a click-based reorder mode
+
+The dock toolbar SHALL provide a reorder mode, entered and exited via a
+dedicated toggle control on the strip. While the mode is active, clicking a
+tab SHALL pick it up (visibly marked), clicking a different tab SHALL move
+the picked tab to the clicked tab's position — before it when moving toward
+the front, after it when moving toward the back, so both ends of the order
+are reachable — and clicking the picked tab again SHALL cancel the pick.
+While the mode is active, tab clicks SHALL NOT toggle dock visibility;
+exiting the mode SHALL restore the tabs' normal hide/show click. A completed
+move SHALL update the strip and grid immediately and persist the new roster
+order to the server. The toggle control and the picked state SHALL have
+accessible labels.
+
+#### Scenario: Reorder with two taps
+
+- **WHEN** reorder mode is on and the operator taps dock B's tab and then dock A's tab (A ahead of B in the order)
+- **THEN** B moves to A's position ahead of A, the strip and grid re-render in the new order immediately, and the order is persisted
+
+#### Scenario: Both ends are reachable
+
+- **WHEN** reorder mode is on and the operator taps the picked tab's target as the first tab, or as the last tab
+- **THEN** the picked dock can land at the very front (before the first) or the very back (after the last) of the order
+
+#### Scenario: Reorder mode suspends hide/show
+
+- **WHEN** reorder mode is on and the operator taps any tab
+- **THEN** no dock's grid visibility changes; after the mode is toggled off, tapping a tab hides/shows its dock as before
+
+#### Scenario: Cancelling a pick
+
+- **WHEN** reorder mode is on and the operator taps a tab and then taps the same tab again
+- **THEN** the pick is cancelled and the order is unchanged
