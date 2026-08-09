@@ -1,293 +1,159 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ideas sync — how the shared board works</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>dock-strip-amendments — branch filter proposal</title>
 <style>
   :root {
-    --bg: #0f1420; --panel: #171e2e; --panel2: #1d2740; --line: #2c3a5c;
-    --text: #dbe4f8; --dim: #8fa0c5; --accent: #5aa9ff; --good: #4fd1a5;
-    --warn: #f0b45a; --bad: #ef7b7b;
+    --bg: #f7f5f0; --card: #ffffff; --ink: #1f1d1a; --muted: #6f6a60;
+    --accent: #d97a2b; --line: #e4dfd5; --black: #23211d; --gold: #d4a017;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text);
-         font: 15px/1.5 "Segoe UI", system-ui, sans-serif; padding: 1rem; }
-  h1 { font-size: 1.25rem; margin: .2rem 0 .2rem; }
-  h2 { font-size: 1rem; margin: 1rem 0 .4rem; }
-  .sub { color: var(--dim); margin-bottom: 1rem; }
-  .tabs { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1rem; }
-  .tabs button { background: var(--panel); color: var(--text); border: 1px solid var(--line);
-    border-radius: 8px; padding: .45rem .8rem; cursor: pointer; font-size: .9rem; }
-  .tabs button.on { background: var(--accent); border-color: var(--accent); color: #0b1020; font-weight: 600; }
-  .view { display: none; } .view.on { display: block; }
-
-  .diagram { display: flex; flex-wrap: wrap; gap: 1rem; align-items: stretch; margin: 1rem 0; }
-  .col { flex: 1 1 220px; display: flex; flex-direction: column; gap: .6rem; }
-  .node { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-          padding: .6rem .8rem; cursor: pointer; transition: border-color .15s, background .15s; }
-  .node:hover, .node.hl { border-color: var(--accent); background: var(--panel2); }
-  .node h3 { margin: 0 0 .2rem; font-size: .95rem; }
-  .node .k { color: var(--dim); font-size: .8rem; }
-  .node.store { border-style: dashed; }
-  .node.web { border-color: #7a5aff88; }
-  .arrow { text-align: center; color: var(--dim); font-size: .85rem; }
-  .arrow b { color: var(--accent); }
-
-  .detail { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px;
-            padding: .8rem 1rem; min-height: 3.2rem; margin-top: .4rem; }
-  .detail .k { color: var(--dim); font-size: .8rem; }
-
-  table { border-collapse: collapse; width: 100%; margin-top: 1rem; font-size: .88rem; }
-  th, td { border: 1px solid var(--line); padding: .45rem .6rem; text-align: left; vertical-align: top; }
-  th { background: var(--panel); }
-  .good { color: var(--good); } .warn { color: var(--warn); } .bad { color: var(--bad); }
-  code { background: #0b1020; border: 1px solid var(--line); border-radius: 5px; padding: .05rem .35rem; font-size: .85em; }
-  ol li, ul li { margin: .3rem 0; }
-
-  /* simulator */
-  .sim { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 1rem; }
-  .box { flex: 1 1 240px; background: var(--panel); border: 1px solid var(--line);
-         border-radius: 10px; padding: .7rem .9rem; }
-  .box h3 { margin: 0 0 .4rem; font-size: .95rem; }
-  .box.offline { border-color: var(--bad); opacity: .8; }
-  .box .rev { color: var(--dim); font-size: .8rem; margin-bottom: .4rem; }
-  .board { min-height: 3.5rem; display: flex; flex-direction: column; gap: .25rem; }
-  .card { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px;
-          padding: .2rem .5rem; font-size: .85rem; }
-  .card.dead { text-decoration: line-through; color: var(--dim); border-style: dashed; }
-  .dirty { color: var(--warn); font-size: .8rem; }
-  .synced { color: var(--good); font-size: .8rem; }
-  .simbtns { display: flex; flex-wrap: wrap; gap: .4rem; margin: .6rem 0; }
-  .simbtns button { background: var(--panel2); color: var(--text); border: 1px solid var(--line);
-    border-radius: 7px; padding: .35rem .7rem; cursor: pointer; font-size: .85rem; }
-  .simbtns button:hover { border-color: var(--accent); }
-  .simlog { background: #0b1020; border: 1px solid var(--line); border-radius: 8px;
-            padding: .5rem .8rem; font-size: .8rem; max-height: 9rem; overflow: auto; color: var(--dim); }
-  .simlog .hot { color: var(--text); }
+  body { margin: 0; font: 15px/1.55 "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--ink); }
+  header { padding: 28px 24px 10px; max-width: 980px; margin: 0 auto; }
+  header h1 { margin: 0 0 4px; font-size: 24px; }
+  header p { margin: 0; color: var(--muted); }
+  .badge { display: inline-block; background: var(--accent); color: #fff; border-radius: 999px; padding: 2px 10px; font-size: 12px; margin-left: 8px; vertical-align: middle; }
+  main { max-width: 980px; margin: 0 auto; padding: 12px 24px 60px; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-top: 18px; }
+  section h2 { margin: 0 0 6px; font-size: 17px; }
+  section > p { color: var(--muted); margin: 0 0 14px; }
+  .strip { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: #f1ede4; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .strip .lbl { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-right: 2px; }
+  .ctl { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 4px 9px; font-size: 13px; cursor: pointer; font-family: inherit; }
+  .ctl:disabled { opacity: .35; cursor: default; }
+  .ctl.on { background: var(--black); color: #fff; border-color: var(--black); }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg .ctl { border: 0; border-radius: 0; }
+  .seg .ctl + .ctl { border-left: 1px solid var(--line); }
+  .chip { font-size: 12px; color: var(--muted); background: #fff; border: 1px dashed var(--line); border-radius: 999px; padding: 2px 9px; }
+  .tab { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: #fff; border-radius: 9px; padding: 6px 10px; cursor: pointer; opacity: .45; font-family: inherit; }
+  .tab.on { opacity: 1; border-color: #c9c2b2; }
+  .tab .txt { display: flex; flex-direction: column; line-height: 1.15; text-align: left; }
+  .tab .nm { font-size: 13px; font-weight: 600; }
+  .tab .br { font-size: 11px; color: var(--muted); }
+  .tab .star { color: var(--gold); font-size: 13px; }
+  .dot { width: 13px; height: 13px; border-radius: 50%; flex: none; }
+  .dot.running { background: var(--black); animation: pulse 1.2s infinite; }
+  @keyframes pulse { 50% { opacity: .55; } }
+  .cap { font-size: 12.5px; color: var(--muted); margin-top: 10px; }
+  .new { outline: 2px dashed var(--accent); outline-offset: 3px; border-radius: 10px; position: relative; }
+  .newtag { position: absolute; top: -11px; left: 8px; background: var(--accent); color: #fff; font-size: 10px; border-radius: 999px; padding: 1px 8px; letter-spacing: .04em; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .cell { border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  .cell b { font-size: 13.5px; display: block; margin-bottom: 3px; }
+  .cell small { color: var(--muted); font-size: 12.5px; }
+  .note { border-left: 3px solid var(--accent); padding: 8px 12px; background: #fdf6ee; border-radius: 0 8px 8px 0; font-size: 13.5px; margin-top: 14px; }
+  code { background: #f1ede4; border-radius: 4px; padding: 0 4px; font-size: 13px; }
 </style>
 </head>
 <body>
-<h1>Ideas sync — how the shared board works</h1>
-<div class="sub">Shipped (openspec <code>ideas-drive-sync</code> + <code>ideas-harness-hub</code>): every harness's Ideas tab
-can replicate through one shared store — normally a <b>hub hosted by one of the harnesses itself</b>, or a Google Apps
-Script web app as fallback. Both speak the identical envelope contract, so the sync layer can't tell them apart.
-Click boxes for detail; the Simulator tab lets you step the protocol.</div>
+<header>
+  <h1>Strip branch filter <span class="badge">OpenSpec: dock-strip-amendments — proposed</span></h1>
+  <p>One amendment to the dashboard's horizontal agent strip: a three-state <b>branch filter</b> — show all agents, only those on <code>main</code>/<code>master</code>, or only those that aren't. Frontend-only, view-only, ephemeral.</p>
+</header>
+<main>
 
-<div class="tabs">
-  <button data-v="arch" class="on">Architecture</button>
-  <button data-v="proto">Sync protocol</button>
-  <button data-v="sim">Simulator</button>
-  <button data-v="fail">Failure modes</button>
-  <button data-v="setup">One-time setup</button>
-</div>
-
-<section class="view on" id="v-arch">
-  <div class="diagram">
-    <div class="col">
-      <div class="node" data-d="Unchanged: the Ideas UI and /api/notes CRUD work exactly as before. The only addition is a small sync bar (Advanced mode): paste a hub or web-app URL, flip sync on, watch the status chip (synced / syncing / offline / error) — plus a 'Host the shared board on this harness' toggle that turns this box into the hub and shows the URL to copy. Component: client/src/components/ideas/IdeasSyncBar.jsx.">
-        <h3>📱 Ideas tab + sync bar</h3><div class="k">IdeasPanel.jsx · chip polls /api/notes/sync/status</div>
-      </div>
-      <div class="arrow">⬍ <b>/api/notes</b> + <b>/api/notes/sync/config|status</b></div>
-      <div class="node" data-d="NotesService stays the single local truth (notes.json, atomic writes). New for sync: a Changed event, Snapshot(), and MergeFrom(remote) — per-Id newest-UpdatedAt-wins with tombstones so deletes don't resurrect. MergeFrom deliberately does NOT raise Changed, so a pull can never re-trigger a push loop.">
-        <h3>🏠 Harness A — NotesService</h3><div class="k">notes.json + tombstones · merge lives here</div>
-      </div>
-      <div class="arrow">⬇ Changed event ⬍ MergeFrom</div>
-      <div class="node" data-d="IdeasSyncService (BackgroundService): polls the endpoint every PollSeconds (rev compare → pull-merge), and on any local change schedules a debounced (~2s) push. A push is always pull → merge → CAS-post, so it can never clobber another box's write. Config in ideas-sync.json; disabled = ZERO outbound calls.">
-        <h3>🔁 IdeasSyncService</h3><div class="k">poll-pull + debounced CAS push · IdeasSyncClient (plain HttpClient)</div>
-      </div>
+  <section>
+    <h2>Interactive mock — try the filter</h2>
+    <p>The segmented control is the new part. Switch states and watch the strip narrow; note the <b>+N chip</b> when tabs are filtered out, and that dimmed-vs-bright (grid hidden/shown) never changes — the filter never touches visibility state. The ⇄ reorder toggle suspends the filter.</p>
+    <div class="strip" id="strip">
+      <span class="lbl">Docks</span>
+      <button class="ctl" id="reorder" title="Reorder (existing)">⇄</button>
+      <span class="new" style="display:inline-flex;padding:2px;">
+        <span class="newtag">NEW</span>
+        <span class="seg" id="seg"></span>
+      </span>
     </div>
-    <div class="col">
-      <div class="node web" data-d="Primary backend: one harness ticks 'Host the shared board on this harness' and becomes the hub. IdeasHubService serves GET/POST /api/notes/hub/{token} — same envelope as the Apps Script: GET → {ok, rev, store}; POST accepts only if baseRev matches the current rev under a lock (then rev++, MergeFrom into the hub's own board), else {ok:false, conflict:true, rev, store}. The route is exempt from the login gate — the 32-byte random token in the URL IS the credential (checked constant-time; wrong token → {ok:false} with no detail). Hub-local edits bump rev too, so other boxes pull them. State in %APPDATA%\ClaudeWeb\ideas-hub.json. Fallback backend: docs/ideas-sync-appscript.gs deployed as a Google web app — LockService CAS, board in claude-web-ideas.json on the operator's Drive.">
-        <h3>☁ Shared store (hub / Apps Script)</h3><div class="k">hub: /api/notes/hub/{token} on a host harness · fallback: Drive + LockService CAS</div>
-      </div>
-      <div class="arrow">⬍ same URL</div>
-      <div class="node" data-d="Every other harness runs the identical sync layer against the same pasted URL. There is no primary: any box can be off for a week and converges when it returns. The URL is a bearer capability — anyone holding it can read/write the board — so the harness never logs it and only returns it over the authenticated config API.">
-        <h3>🖥 Harness B..n</h3><div class="k">same sync layer, same URL — no primary</div>
-      </div>
-      <div class="detail" id="d-arch"><span class="k">Click a box…</span></div>
+    <div class="cap" id="cap"></div>
+  </section>
+
+  <section>
+    <h2>The three states</h2>
+    <div class="grid">
+      <div class="cell"><b>All (default)</b><small>Every roster tab renders — today's strip, untouched.</small></div>
+      <div class="cell"><b>⎇ main</b><small>Only tabs whose repo's current branch is <code>main</code> or <code>master</code>.</small></div>
+      <div class="cell"><b>⎇ ≠main</b><small>Only tabs whose branch is <i>known</i> and is neither. Unknown-branch tabs (fetch pending, repo unreadable) show only in All — the filter never guesses.</small></div>
     </div>
-  </div>
-</section>
+    <div class="note">Filtered tabs keep full behavior (click still hides/shows the dock in the grid; dots, star, branch row unchanged). The selection is device-local and resets to All on reload — like reorder mode, it's strip view state, not roster state.</div>
+  </section>
 
-<section class="view" id="v-proto">
-  <h2>Pull (every PollSeconds, default 30)</h2>
-  <ol>
-    <li><code>GET</code> the endpoint → <code>{ok, rev, store}</code> (the hub answers directly; the Apps Script fallback serves via a 302-redirect shape the client just follows)</li>
-    <li>If <code>rev</code> moved since last seen → <code>MergeFrom(store)</code>: union by note Id, newest <code>UpdatedAt</code> wins, tombstones suppress/revive</li>
-    <li>If the merge finds local content the remote lacks (e.g. edits made offline) → mark dirty, push soon</li>
-  </ol>
-  <h2>Push (debounced ~2s after any local add/edit/delete)</h2>
-  <ol>
-    <li>Pull + merge first — a push always uploads the <b>merged</b> board</li>
-    <li><code>POST {baseRev, store}</code> — the script accepts only if <code>baseRev</code> equals its current rev, then bumps rev</li>
-    <li>On <code>{conflict:true}</code> (someone wrote in between): re-merge against the returned store, retry — up to 3 attempts</li>
-    <li>On failure (offline, error): stay dirty; the retry rides the poll cadence until it lands</li>
-  </ol>
-  <table>
-    <tr><th>State chip</th><th>Meaning</th></tr>
-    <tr><td class="good">synced</td><td>last exchange succeeded; board matches the shared rev</td></tr>
-    <tr><td class="warn">syncing</td><td>an exchange is in flight</td></tr>
-    <tr><td class="bad">offline</td><td>endpoint unreachable (network-shaped failure) — edits queue locally</td></tr>
-    <tr><td class="bad">error</td><td>endpoint answered but wrongly (bad deployment, non-JSON, rejected push)</td></tr>
-    <tr><td>disabled</td><td>no URL / toggle off — the service makes zero outbound calls</td></tr>
-  </table>
-</section>
+  <section>
+    <h2>What it reuses (no new data, no backend)</h2>
+    <div class="grid">
+      <div class="cell"><b>Branch source</b><small>The per-repo <code>git</code> map the strip's branch row already reads (<code>git[tab.repoId].branch</code>). No new polling; a git refresh re-buckets tabs live.</small></div>
+      <div class="cell"><b>Never loses an agent</b><small>A non-All state that excludes tabs shows a <code>+N</code> hidden count, spoken in the control's accessible label too.</small></div>
+      <div class="cell"><b>Reorder mode wins</b><small>⇄ shows the full roster (every position reachable) and disables the filter; the selection reapplies on exit.</small></div>
+    </div>
+  </section>
 
-<section class="view" id="v-sim">
-  <div class="sub">A faithful miniature of the protocol: two harnesses + the shared store. Buttons drive local edits;
-  <b>tick</b> advances both boxes one sync cycle (pull-merge, then push if dirty — CAS included).</div>
-  <div class="simbtns">
-    <button id="s-addA">Add idea on A</button>
-    <button id="s-addB">Add idea on B</button>
-    <button id="s-delA">Delete A's newest</button>
-    <button id="s-offB">Toggle B offline</button>
-    <button id="s-tick">⏭ tick (one sync cycle)</button>
-    <button id="s-reset">reset</button>
-  </div>
-  <div class="sim">
-    <div class="box" id="boxA"><h3>🏠 Harness A</h3><div class="rev" id="revA"></div><div class="board" id="brdA"></div></div>
-    <div class="box" id="boxS"><h3>☁ Shared store</h3><div class="rev" id="revS"></div><div class="board" id="brdS"></div></div>
-    <div class="box" id="boxB"><h3>🖥 Harness B</h3><div class="rev" id="revB"></div><div class="board" id="brdB"></div></div>
-  </div>
-  <div class="simlog" id="simlog"></div>
-</section>
-
-<section class="view" id="v-fail">
-  <table>
-    <tr><th>Scenario</th><th>What happens</th><th>Proven by</th></tr>
-    <tr><td>Box offline while others edit</td><td>Its board keeps working locally; on return the first poll merges everything it missed.</td><td rowspan="5">All rows are covered twice: by <code>.claudeweb-preview/playwright/verify-ideas-sync.mjs</code>
-      (two harnesses against a local stub of the web-app contract — 302 shape, CAS, fault injection; no test talks to
-      real Google) and by <code>verify-ideas-hub.mjs</code> (two real harnesses, one hosting the hub — plus wrong-token,
-      disabled-hub, forced-conflict and self-pointing cases).</td></tr>
-    <tr><td>Edit made while offline</td><td>Status shows <b>offline</b> + dirty; the edit queues and lands when the endpoint returns.</td></tr>
-    <tr><td>Same idea edited on two boxes</td><td>Newest <code>UpdatedAt</code> wins on every box (last-write-wins per note).</td></tr>
-    <tr><td>Delete vs a box that was away</td><td>A tombstone (30-day retention) rides the shared store, so the returning box deletes its copy instead of resurrecting it.</td></tr>
-    <tr><td>Two pushes race</td><td>The loser gets <code>conflict:true</code> + the winner's store, re-merges, retries — both writes land.</td></tr>
-    <tr><td>Endpoint misdeployed / Google interstitial</td><td>Non-JSON body → status <b>error</b> with a hint to check the deployment settings; local behavior unaffected.</td><td>IdeasSyncClient.Parse</td></tr>
-    <tr><td>Sync URL leaking</td><td>The URL is a bearer capability: never logged (messages pass Sanitize), returned only via the authenticated config API.</td><td>e2e asserts lastError never contains the URL</td></tr>
-    <tr><td>Wrong token / hub disabled</td><td>The hub answers <code>200 {ok:false, error}</code> with no detail (constant-time token compare); the caller shows <b>error</b>, local board unaffected.</td><td>verify-ideas-hub.mjs</td></tr>
-    <tr><td>Hub URL pasted into the hosting harness itself</td><td>Harmless no-op: the box merges with its own board through its own endpoint.</td><td>verify-ideas-hub.mjs</td></tr>
-  </table>
-</section>
-
-<section class="view" id="v-setup">
-  <h2>Normal path — host on a harness (~1 minute)</h2>
-  <ol>
-    <li>On the harness that should host the board: Ideas tab → <b>☁ Set up sync</b> → tick <b>Host the shared board on this harness</b> → <b>Copy</b> the generated hub URL</li>
-    <li>On every other harness: <b>☁ Set up sync</b> → paste that URL, tick <b>Sync on</b>, Save</li>
-  </ol>
-  <ul>
-    <li>The URL embeds a random token and bypasses the login gate — treat it like a password; it grants read/write to the board and nothing else. Untick the host toggle to revoke it (a re-enable keeps the same token).</li>
-    <li>The host's own board <b>is</b> the shared board (its <code>notes.json</code>); hub state (token, rev) lives in <code>%APPDATA%\ClaudeWeb\ideas-hub.json</code>. Gated endpoints: <code>GET/POST /api/notes/hub-info</code>.</li>
-  </ul>
-  <h2>Fallback — Apps Script on Google Drive (~3 minutes)</h2>
-  <ol>
-    <li>Open <a href="https://script.google.com" style="color:var(--accent)">script.google.com</a> → New project, paste the contents of <code>docs/ideas-sync-appscript.gs</code></li>
-    <li>Deploy → New deployment → type <b>Web app</b> → execute as <b>Me</b>, access <b>Anyone</b> → copy the <code>…/exec</code> URL</li>
-    <li>On each harness: Ideas tab → <b>☁ Set up sync</b> → paste the URL, tick <b>Sync on</b>, Save</li>
-  </ol>
-  <ul>
-    <li>To update the script later, edit the <b>existing</b> deployment (Deploy → Manage deployments → ✏) — a NEW deployment gets a new URL and every harness would need re-pasting.</li>
-    <li>The store is <code>claude-web-ideas.json</code> in the operator's Drive, created empty on first use — inspectable and restorable by hand.</li>
-    <li>Either way, per-box sync config lives in <code>%APPDATA%\ClaudeWeb\ideas-sync.json</code>; the endpoints are <code>GET/PUT /api/notes/sync/config</code> and <code>GET /api/notes/sync/status</code>.</li>
-  </ul>
-</section>
-
+</main>
 <script>
-  const tabs = document.querySelectorAll('.tabs button');
-  tabs.forEach(b => b.addEventListener('click', () => {
-    tabs.forEach(x => x.classList.remove('on'));
-    document.querySelectorAll('.view').forEach(v => v.classList.remove('on'));
-    b.classList.add('on');
-    document.getElementById('v-' + b.dataset.v).classList.add('on');
-  }));
-  document.querySelectorAll('.view').forEach(view => {
-    const detail = view.querySelector('.detail');
-    view.querySelectorAll('.node[data-d]').forEach(n => n.addEventListener('click', () => {
-      view.querySelectorAll('.node').forEach(x => x.classList.remove('hl'));
-      n.classList.add('hl');
-      if (detail) detail.textContent = n.dataset.d;
-    }));
-  });
-
-  // ---- simulator: a miniature of NotesService.MergeFrom + IdeasSyncService --
-  let S, seq, clock;
-  function reset() {
-    S = {
-      store: { rev: 0, ideas: [], tombs: [] },
-      A: { ideas: [], tombs: [], seenRev: 0, dirty: false, offline: false },
-      B: { ideas: [], tombs: [], seenRev: 0, dirty: false, offline: false },
-    };
-    seq = 1; clock = 1;
-    document.getElementById('simlog').innerHTML = '';
-    slog('reset — empty boards, rev 0');
-    render();
-  }
-  const slog = (msg, hot) => {
-    const el = document.getElementById('simlog');
-    el.innerHTML += `<div${hot ? ' class="hot"' : ''}>${msg}</div>`;
-    el.scrollTop = el.scrollHeight;
-  };
-  function merge(box, remote) {
-    // per-Id, newest UpdatedAt wins, tombstones suppress
-    const tombs = new Map();
-    [...box.tombs, ...remote.tombs].forEach(t => {
-      const cur = tombs.get(t.id); if (!cur || t.at > cur.at) tombs.set(t.id, t);
-    });
-    const all = new Map();
-    [...remote.ideas, ...box.ideas].forEach(n => {
-      const cur = all.get(n.id); if (!cur || n.at > cur.at) all.set(n.id, n);
-    });
-    const ideas = [...all.values()].filter(n => { const t = tombs.get(n.id); return !t || t.at < n.at; })
-      .sort((a, b) => a.id - b.id);
-    const remoteStale = ideas.length !== remote.ideas.length || box.tombs.some(t => !remote.tombs.find(r => r.id === t.id))
-      || ideas.some(n => { const r = remote.ideas.find(x => x.id === n.id); return !r || r.at !== n.at; });
-    box.ideas = ideas; box.tombs = [...tombs.values()];
-    return remoteStale;
-  }
-  function cycle(name) {
-    const box = S[name];
-    if (box.offline) { if (box.dirty) slog(`${name}: offline — edit stays queued (dirty)`); return; }
-    // pull-merge
-    const stale = merge(box, { ideas: [...S.store.ideas], tombs: [...S.store.tombs] });
-    if (S.store.rev !== box.seenRev) slog(`${name}: pulled rev ${S.store.rev}, merged`);
-    box.seenRev = S.store.rev;
-    if (stale) box.dirty = true;
-    // CAS push
-    if (box.dirty) {
-      if (box.seenRev === S.store.rev) {
-        S.store.ideas = [...box.ideas]; S.store.tombs = [...box.tombs];
-        S.store.rev++; box.seenRev = S.store.rev; box.dirty = false;
-        slog(`${name}: CAS push accepted → rev ${S.store.rev}`, true);
-      } else {
-        slog(`${name}: CAS conflict (baseRev ${box.seenRev} ≠ rev ${S.store.rev}) — will re-merge next tick`, true);
-      }
-    }
-  }
+  const docks = [
+    { name: 'birocode', branch: 'feat/dock-strip-amendments', color: '#7c9a5a', on: true,  star: true,  running: false },
+    { name: 'homepage', branch: 'main',                        color: '#5a7c9a', on: true,  star: false, running: true  },
+    { name: 'events',   branch: 'master',                      color: '#9a5a7c', on: false, star: false, running: false },
+    { name: 'agentlab', branch: 'feat/loop-tests',             color: '#4f7c8a', on: true,  star: false, running: false },
+    { name: 'sandbox',  branch: '',                            color: '#b08a4f', on: false, star: false, running: false },
+  ];
+  const STATES = [
+    { id: 'all',     label: 'All' },
+    { id: 'main',    label: '⎇ main' },
+    { id: 'feature', label: '⎇ ≠main' },
+  ];
+  let filter = 'all', reordering = false;
+  const strip = document.getElementById('strip');
+  const seg = document.getElementById('seg');
+  const cap = document.getElementById('cap');
+  const reorderBtn = document.getElementById('reorder');
+  const mainlike = b => b === 'main' || b === 'master';
+  const matches = d => filter === 'all' || (filter === 'main' ? mainlike(d.branch) : d.branch && !mainlike(d.branch));
   function render() {
-    const paint = (id, list, revTxt, box) => {
-      document.getElementById(id).innerHTML = list.map(n => `<div class="card">💡 ${n.text}</div>`).join('') || '<span class="k" style="color:var(--dim);font-size:.8rem">empty</span>';
-      document.getElementById(revTxt.id).innerHTML = revTxt.txt;
-      if (box) document.getElementById(box.id).classList.toggle('offline', box.off);
-    };
-    paint('brdA', S.A.ideas, { id: 'revA', txt: `seen rev ${S.A.seenRev} · ${S.A.offline ? '<span class="dirty">OFFLINE</span>' : S.A.dirty ? '<span class="dirty">dirty — push pending</span>' : '<span class="synced">synced</span>'}` }, { id: 'boxA', off: S.A.offline });
-    paint('brdS', S.store.ideas, { id: 'revS', txt: `rev ${S.store.rev} · tombstones ${S.store.tombs.length}` });
-    paint('brdB', S.B.ideas, { id: 'revB', txt: `seen rev ${S.B.seenRev} · ${S.B.offline ? '<span class="dirty">OFFLINE</span>' : S.B.dirty ? '<span class="dirty">dirty — push pending</span>' : '<span class="synced">synced</span>'}` }, { id: 'boxB', off: S.B.offline });
+    seg.innerHTML = '';
+    STATES.forEach(s => {
+      const b = document.createElement('button');
+      b.className = 'ctl' + (filter === s.id ? ' on' : '');
+      b.textContent = s.label;
+      b.disabled = reordering;
+      b.onclick = () => { filter = s.id; render(); };
+      seg.appendChild(b);
+    });
+    reorderBtn.className = 'ctl' + (reordering ? ' on' : '');
+    strip.querySelectorAll('.tab, .chip').forEach(el => el.remove());
+    const effective = reordering ? 'all' : filter;
+    const shown = docks.filter(d => reordering || matches(d));
+    shown.forEach(d => {
+      const b = document.createElement('button');
+      b.className = 'tab' + (d.on ? ' on' : '');
+      b.title = (d.on ? 'Hide ' : 'Show ') + d.name;
+      const dot = document.createElement('span');
+      dot.className = 'dot' + (d.running ? ' running' : '');
+      if (!d.running) dot.style.background = d.color;
+      const txt = document.createElement('span'); txt.className = 'txt';
+      const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = d.name;
+      txt.appendChild(nm);
+      if (d.branch) { const br = document.createElement('span'); br.className = 'br'; br.textContent = '⎇ ' + d.branch; txt.appendChild(br); }
+      b.appendChild(dot); b.appendChild(txt);
+      if (d.star) { const st = document.createElement('span'); st.className = 'star'; st.textContent = '★'; b.appendChild(st); }
+      b.onclick = () => { d.on = !d.on; render(); };
+      strip.appendChild(b);
+    });
+    const hidden = docks.length - shown.length;
+    if (hidden > 0) {
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.textContent = '+' + hidden + ' filtered';
+      strip.appendChild(chip);
+    }
+    cap.textContent = reordering
+      ? 'Reorder mode: full roster shown, filter suspended (selection kept: ' + filter + ').'
+      : effective === 'all'
+        ? 'Unfiltered — all ' + docks.length + ' tabs. “sandbox” has no known branch, so it only ever shows here.'
+        : shown.length + ' of ' + docks.length + ' tabs match “' + STATES.find(s => s.id === effective).label + '”. Grid visibility (dim vs bright) is untouched.';
   }
-  const on = (id, f) => document.getElementById(id).addEventListener('click', () => { f(); render(); });
-  on('s-addA', () => { S.A.ideas.push({ id: seq++, text: `idea #${seq - 1} (A)`, at: clock++ }); S.A.dirty = true; slog('A: local add → dirty, push debounce armed'); });
-  on('s-addB', () => { S.B.ideas.push({ id: seq++, text: `idea #${seq - 1} (B)`, at: clock++ }); S.B.dirty = true; slog('B: local add → dirty, push debounce armed'); });
-  on('s-delA', () => {
-    const n = S.A.ideas[S.A.ideas.length - 1];
-    if (!n) { slog('A: nothing to delete'); return; }
-    S.A.ideas.pop(); S.A.tombs.push({ id: n.id, at: clock++ }); S.A.dirty = true;
-    slog(`A: deleted "${n.text}" → tombstone recorded`);
-  });
-  on('s-offB', () => { S.B.offline = !S.B.offline; slog(`B is now ${S.B.offline ? 'OFFLINE' : 'back online'}`, true); });
-  on('s-tick', () => { cycle('A'); cycle('B'); });
-  on('s-reset', reset);
-  reset();
+  reorderBtn.onclick = () => { reordering = !reordering; render(); };
+  render();
 </script>
 </body>
 </html>

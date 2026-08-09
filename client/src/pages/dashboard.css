@@ -179,6 +179,61 @@
   color: var(--color-accent);
 }
 
+/* Branch filter (openspec dock-strip-amendments): three-state segmented
+   control next to the reorder toggle — same pill weight, segments joined into
+   one capsule. Disabled while reorder mode owns the strip. */
+.dash__dockfilter {
+  flex: 0 0 auto;
+  display: inline-flex;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.dash__dockfilter-btn {
+  padding: 3px 8px;
+  border: none;
+  background: var(--color-surface);
+  color: var(--color-text-soft);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dash__dockfilter-btn + .dash__dockfilter-btn {
+  border-left: 1px solid var(--color-border);
+}
+
+/* Hover tint only on INACTIVE segments: on the active one accent-on-accent
+   would erase the label (and the pointer is parked there right after the
+   click that activated it). */
+.dash__dockfilter-btn:hover:not(:disabled):not(.dash__dockfilter-btn--on) {
+  color: var(--color-accent);
+}
+
+.dash__dockfilter-btn--on {
+  background: var(--color-accent);
+  color: var(--color-surface);
+}
+
+.dash__dockfilter-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Non-interactive hidden-tab count at the strip's end while a non-All state
+   excludes tabs; the count is also spoken via the filter group's label. */
+.dash__dockfilter-count {
+  flex: 0 0 auto;
+  padding: 3px 8px;
+  border: 1px dashed var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text-soft);
+  font-size: 11px;
+  line-height: 1;
+}
+
 /* The picked-up tab awaiting its drop target. */
 .dash__docktab--picked {
   outline: 2px dashed var(--color-accent);
