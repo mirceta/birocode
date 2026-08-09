@@ -54,7 +54,9 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
   // Prompt EXPAND (openspec: add-prompt-expand-popup): a composer button that
   // opens the current draft in a large editor popup. The popup edits the SAME
   // draft (value/onChange), so it's just a bigger view — nothing to merge on
-  // close. Available on the main composer and the dashboard docks.
+  // close. Available on the main composer and the dashboard docks. It also
+  // lists the saved custom prompts with insert + create (openspec
+  // expand-popup-prompt-list), riding the same customPrompts gate as the ⚙.
   const promptExpandEnabled = useFeature('promptExpand');
   const [expandOpen, setExpandOpen] = useState(false);
   // Footer CLAUSES (openspec prompt-footer-clauses): standing instructions the
@@ -226,6 +228,9 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
         <PromptExpandModal
           value={value}
           onChange={onChange}
+          promptsEnabled={customPromptsEnabled}
+          prompts={prompts}
+          onAddPrompt={addPrompt}
           onClose={() => {
             setExpandOpen(false);
             requestAnimationFrame(() => textareaRef.current?.focus());
