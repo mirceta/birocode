@@ -23,6 +23,34 @@ import DockFlags from './DockFlags';
 import useLocalAppDiscovery from './useLocalAppDiscovery';
 import DiscoverAppsPanel from './DiscoverAppsPanel';
 
+// Per-dock local-app view memory (openspec persist-dock-split-view): which app
+// is open, split on/off, and the divider ratio survive the dock being hidden
+// and re-shown (hiding unmounts the dock by design) and page reloads. Device-
+// local like the dock-hidden set itself — never backend state, never cross-
+// device (the ratio is viewport-specific).
+const dockViewKey = (dockId) => `claudeweb_dock_appview:${dockId}`;
+
+function readDockAppView(dockId) {
+  try {
+    const v = JSON.parse(localStorage.getItem(dockViewKey(dockId)));
+    return {
+      appId: typeof v?.appId === 'string' ? v.appId : null,
+      split: !!v?.split,
+      ratio: Number.isFinite(v?.ratio) ? Math.min(80, Math.max(20, v.ratio)) : 50,
+    };
+  } catch {
+    return { appId: null, split: false, ratio: 50 };
+  }
+}
+
+function writeDockAppView(dockId, view) {
+  try {
+    localStorage.setItem(dockViewKey(dockId), JSON.stringify(view));
+  } catch {
+    // Storage full or blocked — the view simply stays session-local.
+  }
+}
+
 // One "phone" in the Agent Dashboard's wall of phones (plans/agent-dashboard.md):
 // a single agent's live Chat view, pinned to that agent's repo regardless of
 // which dock tab is active. useChatFor drives one background conversation by
@@ -76,26 +104,51 @@ export default function PinnedAgent({
   // light (a frame only mounts once an app is picked). Gated like the Local tab.
   const canLocalApp = useFeature('localAppTab');
   const apps = canLocalApp ? (localApps || []) : [];
-  const [openAppId, setOpenAppId] = useState(null);
+  // View memory (openspec persist-dock-split-view): read once per mount; the
+  // remembered app restores optimistically — openApp stays null (chat shows)
+  // until the async apps list actually contains it.
+  const [initialView] = useState(() => readDockAppView(tab.id));
+  const [openAppId, setOpenAppId] = useState(initialView.appId);
   const openApp = apps.find((a) => a.id === openAppId) || null;
 
-  // Split view (openspec dock-app-split-view): per-dock, ephemeral choice to show
-  // the opened app BESIDE the chat instead of over it — left pane is the dock
+  // Split view (openspec dock-app-split-view): per-dock choice to show the
+  // opened app BESIDE the chat instead of over it — left pane is the dock
   // exactly as with no app open, right pane is the app frame. Effective only
   // while an app is open, so closing the app / switching to Files or Console
-  // needs no extra bookkeeping. Advanced-gated toggle; Basic always gets cover.
+  // needs no extra bookkeeping. Advanced-gated toggle; Basic always gets cover
+  // (without erasing the remembered choice — persist-dock-split-view).
   const canSplit = useFeature('dockAppSplit');
-  const [splitApp, setSplitApp] = useState(false);
+  const [splitApp, setSplitApp] = useState(initialView.split);
   const split = !!(canSplit && splitApp && openApp);
 
   // Draggable divider (openspec split-divider-drag): percent of the row given to
-  // the chat pane. Dock-local and session-ephemeral like splitApp itself, so it
-  // survives split off/on while the dock stays mounted. Ratio math is done in
+  // the chat pane. Dock-local and device-persistent like splitApp itself, so it
+  // survives split off/on, hide/re-show, and reload. Ratio math is done in
   // visual coordinates (clientX vs the row's rect), where the contentZoom on the
   // row cancels out — but the CSS min-width floors are LAYOUT px, so they are
   // scaled by the zoom before converting to a percent of the visual width.
-  const [splitRatio, setSplitRatio] = useState(50);
+  const [splitRatio, setSplitRatio] = useState(initialView.ratio);
   const [dividerDrag, setDividerDrag] = useState(false);
+
+  // Write-through (openspec persist-dock-split-view): every committed view
+  // change lands in storage — app open/close (incl. the Files/Console/OpenSpec
+  // paths that close it), split toggle, ratio commit. Skipped mid-drag so the
+  // ratio writes once on release, not per pointer-move; an explicit close
+  // writes appId:null, so hide/re-show is the only path that restores.
+  useEffect(() => {
+    if (dividerDrag) return;
+    writeDockAppView(tab.id, { appId: openAppId, split: splitApp, ratio: splitRatio });
+  }, [tab.id, openAppId, splitApp, splitRatio, dividerDrag]);
+
+  // Guarded rehydration (openspec persist-dock-split-view): once the repo's
+  // app list has actually loaded (undefined = still unknown — Dashboard passes
+  // the fetched array through untouched), a remembered app that is absent has
+  // vanished: fall back to chat and drop the stale memory via the write-through
+  // above. Skipped in Basic mode (gate rules degrade, they don't erase).
+  useEffect(() => {
+    if (!openAppId || !canLocalApp || !Array.isArray(localApps)) return;
+    if (!localApps.some((a) => a.id === openAppId)) setOpenAppId(null);
+  }, [openAppId, canLocalApp, localApps]);
   const screenRef = useRef(null);
   const moveDivider = useCallback(
     (clientX) => {

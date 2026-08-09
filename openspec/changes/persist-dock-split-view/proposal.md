@@ -49,14 +49,15 @@ lose the cheap pointer to it.
 
 ## Impact
 
-- **Frontend only**: `client/src/components/dashboard/PinnedAgent.jsx` (lift
-  `openAppId` / `splitApp` / `splitRatio` into persisted per-dock storage +
-  rehydrate on mount, guarded against a vanished app). Possibly a small shared
-  helper for the device-local per-dock storage key.
-- **Interacts with** (no changes expected): `local-app-frame-persistence` — the
-  kept-alive frame is what makes restore instant; `dock-grid-layout` /
-  dock-hidden set in `Dashboard.jsx` — the hide/re-show path being fixed;
-  UI-mode gate `dockAppSplit` in `UiModeContext.jsx`.
+- **Frontend only**: `client/src/components/dashboard/PinnedAgent.jsx` (storage
+  helpers + lift `openAppId` / `splitApp` / `splitRatio` into persisted per-dock
+  storage + rehydrate on mount, guarded against a vanished app), plus one line in
+  `Dashboard.jsx`: the `localApps` prop is passed without the `|| []` fallback so
+  `undefined` = "repos not loaded yet" — the loaded-signal the vanished-app guard
+  needs (an empty array before load must not read as "this repo has no apps").
+- **Interacts with** (no changes needed): `local-app-frame-persistence` — the
+  kept-alive frame is what makes restore instant; the dock-hidden toggle path
+  itself; UI-mode gate `dockAppSplit` in `UiModeContext.jsx`.
 - **No backend, no API, no i18n changes** (no new visible affordances — the
   existing buttons just come back pre-set).
 - **Tests**: a Playwright verify script (hide dock → re-show → app + split +
