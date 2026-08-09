@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useT } from '../../i18n/LanguageContext';
 
 // Dashboard dock toolbar (openspec add-dashboard-dock-toolbar): a horizontal,
@@ -15,31 +16,116 @@ import { useT } from '../../i18n/LanguageContext';
 // exclamation point until the dock is shown again, so the finish isn't
 // silently read as "idle". Running outranks the exclamation; an active
 // (grid-visible) tab never shows one — showing is what clears the latch.
-export default function DockToolbar({ tabs, live, onToggle }) {
+//
+// Two display-only indicators per tab (openspec dock-toolbar-star-and-branch):
+// a ★ on the right when the dock's server-persisted `important` flag is set
+// (same visual language as the panel/grid star controls, but NOT a toggle
+// here), and a second row under the name showing the repo's git branch from
+// the dashboard's per-repo `git` map — omitted entirely when no branch is
+// known. Both are also spoken via the tab's composed aria-label/title.
+//
+// Reorder mode (same openspec change): the ⇄ toggle next to the strip label
+// makes tab clicks MODE-DEPENDENT. Off (default), a click hides/shows the
+// dock as ever. On, clicks pick-and-place instead: the first tap picks a tab
+// up, a tap on another tab moves the picked tab to that tab's position
+// (before it moving front-ward, after it moving back-ward — so both ends are
+// reachable), a tap on the picked tab cancels. A completed move calls
+// `onReorder` with the FULL new id order; the parent persists it as the
+// roster order, which the strip AND the grid render in. Mode + pick state
+// are view-local and reset on unmount.
+export default function DockToolbar({ tabs, live, git, onToggle, onReorder }) {
   const { t } = useT();
+  const [reordering, setReordering] = useState(false);
+  const [pickedId, setPickedId] = useState(null);
   if (!tabs.length) return null;
+
+  const toggleReordering = () => {
+    setReordering((r) => !r);
+    setPickedId(null); // leaving (or re-entering) the mode clears any pick
+  };
+
+  const handleTabClick = (tab, active) => {
+    if (!reordering) {
+      onToggle(tab.id, active);
+      return;
+    }
+    // Reorder mode owns the click: pick, cancel, or place — never hide/show.
+    if (!pickedId) {
+      setPickedId(tab.id);
+      return;
+    }
+    if (pickedId === tab.id) {
+      setPickedId(null);
+      return;
+    }
+    const ids = tabs.map((x) => x.id);
+    const from = ids.indexOf(pickedId);
+    const to = ids.indexOf(tab.id);
+    setPickedId(null);
+    if (from < 0 || to < 0) return; // picked tab closed meanwhile
+    ids.splice(from, 1);
+    // Insert at the target's ORIGINAL index: moving front-ward lands before
+    // the target, moving back-ward lands after it (the removal shifted the
+    // target left by one) — so the very front and very back are reachable.
+    ids.splice(to, 0, pickedId);
+    onReorder(ids);
+  };
+
   return (
     <div className="dash__docktoolbar" role="tablist" aria-label={t('dashboard.dockToolbar')}>
       <span className="dash__docktoolbar-label">{t('dashboard.dockToolbar')}</span>
+      <button
+        type="button"
+        className={`dash__dockreorder${reordering ? ' dash__dockreorder--on' : ''}`}
+        aria-pressed={reordering}
+        aria-label={t('dashboard.dockReorder')}
+        title={t('dashboard.dockReorder')}
+        onClick={toggleReordering}
+      >
+        ⇄
+      </button>
       {tabs.map((tab) => {
         const active = tab.dashboard !== false;
         const running = (live?.[tab.id]?.status || tab.status) === 'running';
         const unseen = !active && !running && !!tab.unseenResult;
-        const label = unseen
-          ? t('dashboard.dockToolbarUnseen', { name: tab.repoName })
-          : t(active ? 'dashboard.dockToolbarHide' : 'dashboard.dockToolbarShow', {
-              name: tab.repoName,
-            });
+        const rawBranch = git?.[tab.repoId]?.branch;
+        const branch = rawBranch && rawBranch !== 'unknown' ? rawBranch : null;
+        const picked = reordering && pickedId === tab.id;
+        const base = reordering
+          ? t(
+              picked
+                ? 'dashboard.dockReorderCancel'
+                : pickedId
+                  ? 'dashboard.dockReorderPlace'
+                  : 'dashboard.dockReorderPick',
+              { name: tab.repoName },
+            )
+          : unseen
+            ? t('dashboard.dockToolbarUnseen', { name: tab.repoName })
+            : t(active ? 'dashboard.dockToolbarHide' : 'dashboard.dockToolbarShow', {
+                name: tab.repoName,
+              });
+        // Glyphs never carry the meaning alone: the star and branch row are
+        // also spoken as label fragments.
+        const label = [
+          base,
+          tab.important ? t('dashboard.dockToolbarImportant') : null,
+          branch ? t('dashboard.dockToolbarBranch', { branch }) : null,
+        ]
+          .filter(Boolean)
+          .join(', ');
         return (
           <button
             key={tab.id}
             type="button"
             role="tab"
-            className={`dash__docktab${active ? ' dash__docktab--on' : ''}`}
+            className={`dash__docktab${active ? ' dash__docktab--on' : ''}${
+              picked ? ' dash__docktab--picked' : ''
+            }`}
             aria-pressed={active}
             aria-label={label}
             title={label}
-            onClick={() => onToggle(tab.id, active)}
+            onClick={() => handleTabClick(tab, active)}
           >
             <span
               className={`dash__docktab-dot${running ? ' dash__docktab-dot--running' : ''}${
@@ -50,7 +136,19 @@ export default function DockToolbar({ tabs, live, onToggle }) {
             >
               {unseen ? '!' : ''}
             </span>
-            <span className="dash__docktab-name">{tab.repoName}</span>
+            <span className="dash__docktab-text">
+              <span className="dash__docktab-name">{tab.repoName}</span>
+              {branch && (
+                <span className="dash__docktab-branch">
+                  <span aria-hidden="true">⎇</span> {branch}
+                </span>
+              )}
+            </span>
+            {tab.important && (
+              <span className="dash__docktab-star" aria-hidden="true">
+                ★
+              </span>
+            )}
           </button>
         );
       })}

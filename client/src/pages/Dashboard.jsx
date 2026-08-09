@@ -248,7 +248,7 @@ function recencyTier(at, now) {
 // (setActiveTab + /studio), then closes the overlay.
 export default function Dashboard({ onClose }) {
   const { t } = useT();
-  const { tabs: dockTabs, activeTabId, setActiveTab, updateTab, repos } = useDock();
+  const { tabs: dockTabs, activeTabId, setActiveTab, updateTab, reorderTabs, repos } = useDock();
   // Only agents toggled "show on dashboard" in the Agents tab (default on).
   const tabs = useMemo(() => dockTabs.filter((tab) => tab.dashboard !== false), [dockTabs]);
   // repoId -> filesystem path, for the path line on each dock.
@@ -589,32 +589,21 @@ export default function Dashboard({ onClose }) {
   // re-renders via setLive, so the borders age without a separate timer.
   const now = Date.now();
 
-  // Order (plans/important-agents.md): agents flagged "important" are pinned at
-  // the FRONT in their stable dock order — the recency "rearrangement" rule does
-  // NOT apply to them, so they never shuffle amongst themselves. The unimportant
-  // agents follow, still ordered by "hotness" — most recently used first
-  // (live[id].at), refreshed by the same poll. So marking an agent important
-  // parks it at the head of the pack; the churn stays below it.
-  const orderedTabs = useMemo(() => {
-    const important = tabs.filter((t) => t.important);
-    const rest = tabs
-      .filter((t) => !t.important)
-      .sort((a, b) => (live[b.id]?.at || 0) - (live[a.id]?.at || 0));
-    return [...important, ...rest];
-  }, [tabs, live]);
+  // Order (openspec dock-toolbar-star-and-branch): the persisted roster order
+  // IS the display order, curated by the operator from the toolbar's reorder
+  // mode. This supersedes the plans/important-agents.md auto-ordering
+  // (important-first pinning + recency shuffle) — `important` keeps its star,
+  // border and "show only important" filter, recency keeps its border tier;
+  // neither moves agents anymore. The dependent-"together" grouping below
+  // still pulls a dependent under its primary.
+  const orderedTabs = tabs;
 
   // The dock toolbar (openspec add-dashboard-dock-toolbar) lists the FULL,
   // UNFILTERED roster — including docks hidden from the grid — so a hidden dock
-  // stays one click away from being re-shown. Ordered the same important-first-
-  // then-recency way as the grid's orderedTabs so the row reads as "the same
-  // docks", just including the hidden ones (which carry no live recency).
-  const rosterTabs = useMemo(() => {
-    const important = dockTabs.filter((t) => t.important);
-    const rest = dockTabs
-      .filter((t) => !t.important)
-      .sort((a, b) => (live[b.id]?.at || 0) - (live[a.id]?.at || 0));
-    return [...important, ...rest];
-  }, [dockTabs, live]);
+  // stays one click away from being re-shown. Same roster order as the grid's
+  // orderedTabs, so the strip reads as "the same docks", just including the
+  // hidden ones.
+  const rosterTabs = dockTabs;
 
   // Toggle whether a dock renders in the grid, from the toolbar: flip its
   // existing `dashboard` field (optimistic + PATCH via updateTab). The grid
@@ -863,8 +852,10 @@ export default function Dashboard({ onClose }) {
 
   // Git status per agent repo, mirroring the Agents tab (plans/agents-git-sync.md):
   // one best-effort GET /api/git/status per unique repoId, keyed by repoId.
-  // Non-git repos report "unknown" and simply show no git lines.
-  const repoIds = [...new Set(tabs.map((tab) => tab.repoId))].join(',');
+  // Non-git repos report "unknown" and simply show no git lines. Covers the
+  // FULL roster (openspec dock-toolbar-star-and-branch): the dock toolbar
+  // shows each tab's branch for hidden docks too.
+  const repoIds = [...new Set(dockTabs.map((tab) => tab.repoId))].join(',');
   const loadGit = useCallback(() => {
     if (!repoIds) return;
     repoIds.split(',').forEach(async (repoId) => {
@@ -912,7 +903,13 @@ export default function Dashboard({ onClose }) {
             leads the shared header bar, listing the full roster so hidden docks
             stay reachable. Gated on the roster, not the visible `tabs`, so it
             still shows (all-inactive) when every dock is hidden. */}
-        <DockToolbar tabs={rosterTabs} live={live} onToggle={toggleDashboard} />
+        <DockToolbar
+          tabs={rosterTabs}
+          live={live}
+          git={gitInfo}
+          onToggle={toggleDashboard}
+          onReorder={reorderTabs}
+        />
         {/* Panel rail (openspec dashboard-focus-docks): summon/dismiss the aux
             panels. One chip per panel, pressed while its panel is visible;
             feature-gated chips render only when their feature is on. */}

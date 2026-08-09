@@ -294,6 +294,26 @@ export function DockProvider({ children }) {
     });
   }, [trackStash]);
 
+  // Reorder the ROSTER itself to the given full id order (openspec
+  // dock-toolbar-star-and-branch): the persisted list order is the display
+  // order the dashboard strip and grid render in. Optimistic local reorder
+  // with the backend's merge rule (listed ids first, unlisted tabs keep their
+  // relative order at the end), POSTed behind the same pending-mutation guard
+  // as the stash mutations so a reconcile can't snap the order back before
+  // the request lands. Last-write-wins between devices.
+  const reorderTabs = useCallback((orderedIds) => {
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) return;
+    setTabs((prev) => {
+      const byId = new Map(prev.map((t) => [t.id, t]));
+      const next = orderedIds.map((id) => byId.get(id)).filter(Boolean);
+      for (const t of prev) if (!orderedIds.includes(t.id)) next.push(t);
+      return next;
+    });
+    trackStash(apiPost('/dock/reorder', { ids: orderedIds })).catch(() => {
+      /* transient; the next refresh re-syncs */
+    });
+  }, [trackStash]);
+
   const updateTab = useCallback((id, patch) => {
     setTabs((prev) =>
       prev.map((t) => (t.id === id ? { ...t, ...patch } : t)),
@@ -319,6 +339,7 @@ export function DockProvider({ children }) {
     closeTab,
     setActiveTab,
     updateTab,
+    reorderTabs,
     addStash,
     removeStash,
     reorderStash,
