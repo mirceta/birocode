@@ -212,6 +212,35 @@ public class DockRegistry
     }
 
     /// <summary>
+    /// Reorders the roster to the given full id order (openspec
+    /// dock-toolbar-star-and-branch): the persisted list order is the display
+    /// order the dashboard strip and grid render in. Listed ids take the given
+    /// order; unknown ids are ignored; tabs not named in the request (e.g.
+    /// opened from another device mid-reorder) keep their relative order,
+    /// appended at the end — so no tab is ever dropped. Last-write-wins under
+    /// the registry lock, like <see cref="ReorderStash"/>. Returns the
+    /// reordered copies, or null on a null/empty request (no-op).
+    /// </summary>
+    public IReadOnlyList<DockTab>? Reorder(IReadOnlyList<string> orderedIds)
+    {
+        if (orderedIds is null || orderedIds.Count == 0) return null;
+        lock (_gate)
+        {
+            var byId = _tabs.ToDictionary(t => t.Id, StringComparer.Ordinal);
+            var reordered = new List<DockTab>(_tabs.Count);
+            foreach (var id in orderedIds)
+                if (id != null && byId.Remove(id, out var tab))
+                    reordered.Add(tab);
+            // Anything the request didn't name stays, in its existing order.
+            reordered.AddRange(_tabs.Where(t => byId.ContainsKey(t.Id)));
+            _tabs.Clear();
+            _tabs.AddRange(reordered);
+            Save();
+            return _tabs.Select(Clone).ToList();
+        }
+    }
+
+    /// <summary>
     /// Latches the "unseen result" flag on every HIDDEN tab of a repo (openspec
     /// dock-busy-indicator, unseen-result amendment). Called by
     /// <see cref="DockUnseenResultTrigger"/> when a run completes; tabs shown on

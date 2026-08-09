@@ -10,6 +10,7 @@ namespace ClaudeWeb.Controllers;
 ///   GET    /api/dock      -- [{ id, repoId, repoName, sessionId, status, createdAt, color, dashboard, important, waiting, waitingOn, dependsOn, wide, stash }]
 ///   POST   /api/dock      -- open a tab  { repoId, repoName, sessionId?, status?, createdAt?, color? }
 ///   PATCH  /api/dock/{id} -- partial update { sessionId?, status?, repoName?, color?, dashboard?, important?, waiting?, waitingOn?, dependsOn?, wide? }
+///   POST   /api/dock/reorder -- reorder the roster { ids: [full ordered id list] }
 ///   DELETE /api/dock/{id} -- close a tab
 ///   POST   /api/dock/{id}/stash           -- stash a prompt idea { text, id?, createdAt? }
 ///   POST   /api/dock/{id}/stash/reorder   -- reorder the stash { ids: [full ordered id list] }
@@ -26,6 +27,7 @@ public class DockController : ControllerBase
     public record PatchRequest(string? SessionId, string? Status, string? RepoName, string? Color, bool? Dashboard, bool? Important, bool? Waiting, string? WaitingOn, string? DependsOn, bool? Wide);
     public record StashRequest(string? Id, string? Text, long? CreatedAt);
     public record StashReorderRequest(List<string>? Ids);
+    public record ReorderRequest(List<string>? Ids);
 
     private readonly DockRegistry _dock;
     private readonly Logger _logger;
@@ -83,6 +85,23 @@ public class DockController : ControllerBase
         _logger.CountRequest();
         var tab = _dock.Update(id, req.SessionId, req.Status, req.RepoName, req.Color, req.Dashboard, req.Important, req.Waiting, req.WaitingOn, req.DependsOn, req.Wide);
         return tab is null ? NotFound(new { error = "unknown tab" }) : Ok(ToDto(tab));
+    }
+
+    // Reorder the roster (openspec dock-toolbar-star-and-branch): the client
+    // sends the full ordered id list; the persisted list order IS the display
+    // order the dashboard strip and grid render in. Unknown ids are ignored,
+    // unlisted tabs keep their relative order at the end, last-write-wins —
+    // same contract as the per-tab stash reorder. Returns the resulting roster.
+    [HttpPost("reorder")]
+    public IActionResult Reorder([FromBody] ReorderRequest req)
+    {
+        _logger.CountRequest();
+        if (req?.Ids is null || req.Ids.Count == 0)
+            return BadRequest(new { error = "ids is required" });
+        var roster = _dock.Reorder(req.Ids);
+        return roster is null
+            ? BadRequest(new { error = "ids is required" })
+            : Ok(roster.Select(ToDto));
     }
 
     [HttpDelete("{id}")]
