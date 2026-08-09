@@ -33,11 +33,39 @@ import { useT } from '../../i18n/LanguageContext';
 // `onReorder` with the FULL new id order; the parent persists it as the
 // roster order, which the strip AND the grid render in. Mode + pick state
 // are view-local and reset on unmount.
+//
+// Branch filter (openspec dock-strip-amendments): a three-state segmented
+// control (All / on main / not on main) narrows which tabs RENDER, classifying
+// each tab from the same per-repo `git` map the branch row reads. View-only:
+// it never touches any dock's persisted `dashboard` visibility, and a rendered
+// tab's click keeps its normal meaning. Unknown-branch tabs match neither
+// filtered state and render only under All. A non-All state that excludes
+// tabs shows a +N chip (and speaks the count via the group label) so agents
+// never vanish silently. Reorder mode suspends the filter — the full roster
+// renders and the control disables — because placing relative to invisible
+// neighbors would be ambiguous; the selection reapplies on exit. Like reorder
+// state, the selection is view-local and resets on unmount/reload.
+const mainlike = (branch) => branch === 'main' || branch === 'master';
+
 export default function DockToolbar({ tabs, live, git, onToggle, onReorder }) {
   const { t } = useT();
   const [reordering, setReordering] = useState(false);
   const [pickedId, setPickedId] = useState(null);
+  const [filter, setFilter] = useState('all'); // 'all' | 'main' | 'feature'
   if (!tabs.length) return null;
+
+  const branchOf = (tab) => {
+    const raw = git?.[tab.repoId]?.branch;
+    return raw && raw !== 'unknown' ? raw : null;
+  };
+  const matchesFilter = (tab) => {
+    if (filter === 'all') return true;
+    const branch = branchOf(tab);
+    if (!branch) return false; // unclassifiable: only the All state shows it
+    return filter === 'main' ? mainlike(branch) : !mainlike(branch);
+  };
+  const visibleTabs = reordering ? tabs : tabs.filter(matchesFilter);
+  const hiddenCount = tabs.length - visibleTabs.length;
 
   const toggleReordering = () => {
     setReordering((r) => !r);
@@ -84,12 +112,40 @@ export default function DockToolbar({ tabs, live, git, onToggle, onReorder }) {
       >
         ⇄
       </button>
-      {tabs.map((tab) => {
+      <span
+        className="dash__dockfilter"
+        role="group"
+        aria-label={[
+          t('dashboard.dockFilter'),
+          hiddenCount > 0 ? t('dashboard.dockFilterHidden', { count: hiddenCount }) : null,
+        ]
+          .filter(Boolean)
+          .join(', ')}
+      >
+        {[
+          ['all', 'dashboard.dockFilterAll'],
+          ['main', 'dashboard.dockFilterMain'],
+          ['feature', 'dashboard.dockFilterFeature'],
+        ].map(([state, key]) => (
+          <button
+            key={state}
+            type="button"
+            className={`dash__dockfilter-btn${filter === state ? ' dash__dockfilter-btn--on' : ''}`}
+            aria-pressed={filter === state}
+            disabled={reordering}
+            title={t(key)}
+            onClick={() => setFilter(state)}
+          >
+            {state !== 'all' && <span aria-hidden="true">⎇ </span>}
+            {t(key)}
+          </button>
+        ))}
+      </span>
+      {visibleTabs.map((tab) => {
         const active = tab.dashboard !== false;
         const running = (live?.[tab.id]?.status || tab.status) === 'running';
         const unseen = !active && !running && !!tab.unseenResult;
-        const rawBranch = git?.[tab.repoId]?.branch;
-        const branch = rawBranch && rawBranch !== 'unknown' ? rawBranch : null;
+        const branch = branchOf(tab);
         const picked = reordering && pickedId === tab.id;
         const base = reordering
           ? t(
@@ -152,6 +208,15 @@ export default function DockToolbar({ tabs, live, git, onToggle, onReorder }) {
           </button>
         );
       })}
+      {hiddenCount > 0 && (
+        <span
+          className="dash__dockfilter-count"
+          title={t('dashboard.dockFilterHidden', { count: hiddenCount })}
+          aria-hidden="true"
+        >
+          +{hiddenCount}
+        </span>
+      )}
     </div>
   );
 }
