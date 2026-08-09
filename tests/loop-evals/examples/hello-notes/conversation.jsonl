@@ -1,0 +1,6 @@
+{"index":0,"role":"user","text":"Create notes/alpha.md with an H1 title Alpha and one line of content.","label":"instruct","commitSha":null}
+{"index":1,"role":"assistant","text":"Added notes/alpha.md with the Alpha title and a content line.","label":null,"commitSha":"78ee2e0ae619652001d525353ea48e68ec1ff879"}
+{"index":2,"role":"user","text":"Good. Now notes/beta.md the same way, titled Beta.","label":"instruct","commitSha":null}
+{"index":3,"role":"assistant","text":"Added notes/beta.md titled Beta.","label":null,"commitSha":"8fccb7d2475ac58758df67c06a5106abedc6e1a4"}
+{"index":4,"role":"user","text":"We also need an index.md at the root that links to both notes.","label":"course-correct","commitSha":null}
+{"index":5,"role":"assistant","text":"Added index.md linking alpha and beta.","label":null,"commitSha":"21f1b5b2393fe46a40aa1c613f925ea3e363e5bd"}
