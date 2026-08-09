@@ -55,8 +55,10 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
   // opens the current draft in a large editor popup. The popup edits the SAME
   // draft (value/onChange), so it's just a bigger view — nothing to merge on
   // close. Available on the main composer and the dashboard docks. It also
-  // lists the saved custom prompts with insert + create (openspec
-  // expand-popup-prompt-list), riding the same customPrompts gate as the ⚙.
+  // lists this surface's QUEUED prompts — the stash the strip shows and an
+  // armed queue loop unloads — with insert + add-to-queue (openspec
+  // expand-popup-prompt-list, amended), riding the same promptStash gate as
+  // the strip.
   const promptExpandEnabled = useFeature('promptExpand');
   const [expandOpen, setExpandOpen] = useState(false);
   // Footer CLAUSES (openspec prompt-footer-clauses): standing instructions the
@@ -228,9 +230,9 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
         <PromptExpandModal
           value={value}
           onChange={onChange}
-          promptsEnabled={customPromptsEnabled}
-          prompts={prompts}
-          onAddPrompt={addPrompt}
+          stashEnabled={stashEnabled}
+          stash={stash}
+          onAddStash={(text) => addStash(queueTabId, text)}
           onClose={() => {
             setExpandOpen(false);
             requestAnimationFrame(() => textareaRef.current?.focus());
