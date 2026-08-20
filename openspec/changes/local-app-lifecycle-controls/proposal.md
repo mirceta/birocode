@@ -43,6 +43,12 @@ cached app, phone-first, without host access.
   enabled from live running state + known commands; running rebuild shows
   in-flight state and its outcome. Advanced-mode affordances, same as the rest
   of the panel.
+- **Activity section in the panel**: a live feed inside the Local Apps panel
+  showing what each clicked action is actually doing — the phase-by-phase
+  events the lifecycle actions emit (started → done/error, with detail like
+  the resolved PID or a build's exit code), sourced from the same repo event
+  log the Event Console reads, updating while the panel is open so a click on
+  Run or Restart is immediately, visibly doing something.
 
 ## Capabilities
 

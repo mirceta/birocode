@@ -397,9 +397,19 @@ each action's own requirement: Run and Restart need a known start command, Stop
 needs the app to be running, Rebuild needs a known build command; unavailable
 actions SHALL be absent or disabled rather than failing on click. A rebuild in
 flight SHALL be visible on its row, and its outcome (success, or failure with the
-captured output) SHALL be observable from the panel. For each presented finding
-the panel SHALL show when that finding was last discovered (its per-finding
-discovery time), so the operator can judge staleness row by row. The panel SHALL
+captured output) SHALL be observable from the panel. The panel SHALL include an
+**activity section**: a live, newest-first feed of this repository's local-app
+action events — run, stop, restart, rebuild, backfill, check, and cache edits —
+sourced from the same repository event log the Event Console reads, showing each
+action's phases (started → done or error) with their detail (such as the
+resolved PID a stop is about to kill, or a build's exit code). While the panel
+is open the activity section SHALL update without reopening the panel, so
+triggering any per-row action produces visible activity within the panel's
+normal refresh cadence; because the log is server-side, activity from before
+the panel was opened (or from another device) SHALL also be visible. For each
+presented finding the panel SHALL show when that finding was last discovered
+(its per-finding discovery time), so the operator can judge staleness row by
+row. The panel SHALL
 offer the load-from-cache action; when the repository has no cache, the panel
 SHALL say so explicitly and direct the operator to run discovery. Opening the
 panel SHALL NOT run the discovery agent, SHALL NOT modify the repository, and
@@ -420,6 +430,21 @@ affordance.
 
 - **WHEN** a rebuild is running or has finished for a row's app
 - **THEN** the row shows the rebuild as in flight while it runs, and its success or failure (with captured output available) once it completes
+
+#### Scenario: A click is visibly doing something
+
+- **WHEN** the operator clicks Run, Stop, Restart, or Rebuild on a row while the panel is open
+- **THEN** the action's phase events (started, then done or error with detail) appear in the panel's activity section within the panel's normal refresh cadence, without reopening the panel
+
+#### Scenario: A failed action explains itself in place
+
+- **WHEN** an action fails (for example a stop with nothing listening, or a build that exits non-zero)
+- **THEN** the activity section shows that action's error event with its detail, alongside the row-level error state
+
+#### Scenario: Earlier activity is not lost
+
+- **WHEN** the operator opens the panel after actions ran earlier (or were triggered from another device)
+- **THEN** the activity section shows that recent activity from the server-side event log, not just events observed while this panel instance was open
 
 #### Scenario: Panel reflects a running scan
 

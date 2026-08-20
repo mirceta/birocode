@@ -53,6 +53,11 @@
 - [ ] 3.3 "Find build commands" panel action (Advanced): visible job in-flight
       state + outcome, disabled with a nothing-to-do hint when no finding
       lacks a build command.
+- [ ] 3.4 Activity section in the panel (design D8): newest-first feed of the
+      repo event log filtered to local-app kinds (run/stop/restart/rebuild/
+      backfill/check/cache), phase + detail per entry, watermark fetch on the
+      panel's existing poll cadence; shows pre-open/server-side history too;
+      i18n + CSS.
 
 ## 4. Verify
 
@@ -70,6 +75,8 @@
 - [ ] 4.2 Playwright verify script on the isolated instance: rows gate the
       three actions on running/startCommand/buildCommand; Stop flips the
       running dot; rebuild shows in-flight then outcome with output; export
-      JSON round-trips `buildCommand` through import.
+      JSON round-trips `buildCommand` through import; clicking Run/Stop makes
+      the action's started→done (or error) events appear in the panel's
+      activity section without reopening, and reopening still shows them.
 - [ ] 4.3 `openspec validate local-app-lifecycle-controls --strict` passes;
       honesty pass on proposal/design/spec wording vs what was actually built.

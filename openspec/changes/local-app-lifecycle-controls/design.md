@@ -136,11 +136,30 @@ asking" property of the panel.
 
 ### D7 — Event Console tells the truth at each boundary
 
-Stop/restart/rebuild emit `RepoEventLog` events exactly like run/check today:
-stop emits resolved PID before the kill and the outcome after; restart emits its
-three phases; rebuild emits started/succeeded/failed with exit code. The
-existing truthfulness rule holds: for restart's launch phase the terminal event
-is "launch issued", liveness remains the port's story.
+Stop/restart/rebuild/backfill emit `RepoEventLog` events exactly like run/check
+today: stop emits resolved PID before the kill and the outcome after; restart
+emits its three phases; rebuild emits started/succeeded/failed with exit code.
+The existing truthfulness rule holds: for restart's launch phase the terminal
+event is "launch issued", liveness remains the port's story.
+
+### D8 — The panel's activity section is a filtered view of the repo event log
+
+The operator's "did my click actually do anything?" feedback lives *inside* the
+panel: an activity section rendering the same `RepoEventLog` feed the dock's
+Event Console lane reads (`GET /api/repos/{repoId}/events?after=N`), filtered
+to the local-app kinds (`run`, `stop`, `restart`, `rebuild`, `backfill`,
+`check`, `cache`), newest first, with the phase (`started`/`done`/`error`) and
+detail shown per entry. The panel already polls status ~5 s while open; the
+activity fetch rides the same cadence with a sequence watermark, so a clicked
+action's `started` event appears within one tick. No new backend: D7's
+emissions are the single source of truth, which also gives history for free —
+the log is server-side, so activity from before the panel opened, or from
+another device, shows too.
+
+*Alternative considered:* per-action response detail rendered into transient
+panel toasts. Rejected: toasts vanish, can't show phases that land after the
+HTTP response (rebuild completion, restart's wait/launch), and would duplicate
+what the event log already records.
 
 ## Risks / Trade-offs
 

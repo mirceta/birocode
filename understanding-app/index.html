@@ -86,6 +86,11 @@ three per-row actions on top of it, and one targeted agent ask to upgrade caches
     A second structured prompt through the same ClaudeMonitor gateway enumerates the cached
     findings missing a build command and asks <i>only</i> for their build commands — no
     rediscovery, merge touches only <code>buildCommand</code> by port.</div>
+  <div class="card"><h3>5 · You can SEE it happen: activity section in the panel</h3>
+    Every action already emits phase events into the repo event log. The panel gains a
+    newest-first activity feed of exactly those events — click Run/Restart and watch
+    <i>started → done/error</i> (with PID, exit code…) appear in place. Server-side log,
+    so history from before you opened the panel shows too.</div>
 </div>
 `],
 ["prompt","1 · Prompt + schema",`
@@ -138,6 +143,19 @@ attributes on the typed report drive BOTH the prompt's required-output section a
     <li>Rebuild state rides <b>inside the existing status/cache poll</b> per row — no new polling loop.</li>
   </ul></div>
 `],
+["activity","6 · Activity feed",`
+<h2>Seeing that a click actually does something</h2>
+<p class="lead">Design D8: the panel's activity section is a <b>filtered view of the repo event log</b> —
+the same feed the dock's Event Console lane reads (<span class="mono">GET /api/repos/&lt;repo&gt;/events?after=N</span>),
+narrowed to the local-app kinds: <code>run</code>, <code>stop</code>, <code>restart</code>,
+<code>rebuild</code>, <code>backfill</code>, <code>check</code>, <code>cache</code>.</p>
+<div class="flow" id="f-activity"></div>
+<div class="card"><h3>Why the event log and not toasts</h3>
+  Toasts vanish and can only show what the HTTP response knew. The log captures phases that land
+  <i>after</i> the response — a rebuild finishing, restart's wait-for-port and launch — and being
+  server-side it shows activity from before the panel opened or from another device. One source of
+  truth (D7's emissions), zero new backend.</div>
+`],
 ["backfill","5 · Backfill old caches",`
 <h2>Upgrading existing caches: a targeted ask, not a full re-scan</h2>
 <p class="lead">Live repos already hold populated caches with no <code>buildCommand</code>.
@@ -176,6 +194,11 @@ const FLOWS = {
  ["Start-or-join a backend-owned job","LocalAppBuildJobs keyed (repo, port), own cancellation token — patterned on the discovery jobs. Browser refresh/disconnect never cancels the build."],
  ["Run buildCommand in the app's folder","stdout+stderr redirected into a bounded ~8 KB tail; exit code and timing recorded."],
  ["Outcome lands on the row","running → succeeded / failed with exit code + expandable output, embedded in the panel's existing ~5 s status poll. Events: started / succeeded / failed."]],
+"f-activity":[
+ ["You click Run / Stop / Restart / Rebuild","The endpoint emits a 'started' event into the RepoEventLog at the action boundary — e.g. stop logs the resolved PID it is about to kill."],
+ ["Panel poll picks it up within a tick","The panel already polls status ~5 s while open; the activity fetch rides the same cadence with a sequence watermark (?after=N), so the started event appears in the section almost immediately."],
+ ["Late phases land as they happen","done / error events — 'launch issued', restart's port-free wait, a rebuild's exit code — arrive on later ticks, so long actions stay visibly alive instead of silent."],
+ ["History is free","The log is server-side: reopen the panel (or open it on your phone after clicking on the desktop) and the recent activity is still there, newest first."]],
 "f-backfill":[
  ["Operator clicks 'Find build commands'","Panel action (Advanced). If no cache, or nothing is missing a build command → explicit nothing-to-do, the agent is never called.",],
  ["Prompt enumerates the gap","The cached findings LACKING a buildCommand (name, folder, port, startCommand) go into the prompt: 'for each of these folders, what command builds its servable artifacts?' — no rediscovery."],
