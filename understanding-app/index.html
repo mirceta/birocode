@@ -140,7 +140,7 @@ attributes on the typed report drive BOTH the prompt's required-output section a
     <li>Rebuild does <b>not</b> stop or start the server — "rebuild &amp; restart" stays two explicit clicks (chaining deferred).</li>
     <li>Output tail bounded (~8&nbsp;KB), truncation marked — success with truncated output is still honest.</li>
     <li>Start-or-join per (repo, port): a second click joins the running build, never doubles it.</li>
-    <li>Rebuild state rides <b>inside the existing status/cache poll</b> per row — no new polling loop.</li>
+    <li>Rebuild state rides <b>inside the status/cache snapshot</b> per row; the panel refreshes it at the dock cadence (~5&nbsp;s) while open.</li>
   </ul></div>
 `],
 ["activity","6 · Activity feed",`
