@@ -119,6 +119,54 @@ the new build is the operator's separate action.
 - **WHEN** a rebuild is requested for a port whose rebuild job is still running
 - **THEN** the system joins or reports the in-flight job instead of starting a second concurrent build
 
+### Requirement: Backfill build commands for cached findings
+
+The system SHALL let the operator backfill build commands into a repository's
+existing discovery cache without a full re-discovery, so caches written before
+`buildCommand` existed become rebuild-capable. The backfill SHALL send a
+targeted agent ask through the same structured-output mechanism as discovery
+(typed report → rendered schema → the reused agent gateway → JSON extraction →
+validating parse → bounded retry): the prompt SHALL enumerate the cached
+findings that lack a build command (their name, folder, port, and start
+command) and ask the agent to inspect those folders only and return, per port,
+the command that builds that app's servable artifacts — an empty value meaning
+the app is build-less or the command could not be determined. The validating
+parse SHALL reject a reply that reports a port outside the enumerated set. The
+backfill SHALL run under the same read-only agent policy as discovery, and as a
+backend-owned job that survives client disconnect. A successful backfill SHALL
+merge into the cache by port, updating only each matched finding's
+`buildCommand` (an empty returned value is recorded as empty) and leaving
+every other field and every unmatched finding untouched. When the repository
+has no cache, or no cached finding lacks a build command, the action SHALL
+report an explicit nothing-to-do outcome rather than running the agent. The
+affordance SHALL live in the Discover Local Apps panel as an Advanced-mode
+action that reflects the job in flight and its outcome.
+
+#### Scenario: Old cache becomes rebuild-capable
+
+- **WHEN** the operator runs the backfill for a repository whose cache predates `buildCommand` and the agent determines build commands for some findings
+- **THEN** those findings' `buildCommand` values are merged into the cache by port, Rebuild becomes available for them, and their name/folder/evidence/startCommand and discovery times are unchanged
+
+#### Scenario: Build-less apps are recorded honestly
+
+- **WHEN** the agent reports an empty build command for an enumerated finding
+- **THEN** the cache records it as empty, Rebuild stays unavailable for that row, and the backfill still completes successfully
+
+#### Scenario: Only enumerated ports are accepted
+
+- **WHEN** the agent's reply includes a port that was not in the enumerated set
+- **THEN** the validating parse rejects the reply and the bounded retry feeds the error back, rather than merging an un-requested port
+
+#### Scenario: Nothing to backfill is an explicit no-op
+
+- **WHEN** the operator runs the backfill for a repository with no cache, or whose cached findings all have build commands
+- **THEN** the system reports there is nothing to backfill and does not run the agent
+
+#### Scenario: Backfill is read-only and disconnect-proof
+
+- **WHEN** a backfill runs and the operator refreshes or closes the page mid-run
+- **THEN** the agent job continues to completion under the read-only policy, no repository file is changed, and the merged result is observable when the panel loads again
+
 ## MODIFIED Requirements
 
 ### Requirement: Return a typed, validated, source-audited result
@@ -217,7 +265,7 @@ Run-by-port resolution) SHALL be the merged set, not the raw single-scan result.
 #### Scenario: Pre-buildCommand cache files still load
 
 - **WHEN** a cache file written before `buildCommand` existed is loaded
-- **THEN** it loads successfully and each finding's build command defaults to empty, so Rebuild is simply unavailable for those rows until a rescan or import supplies one
+- **THEN** it loads successfully and each finding's build command defaults to empty, so Rebuild is simply unavailable for those rows until a rescan, an import, or the build-command backfill supplies one
 
 ### Requirement: Load discovered apps from the cache without running an agent
 

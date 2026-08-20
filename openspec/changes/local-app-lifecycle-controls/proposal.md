@@ -30,6 +30,15 @@ cached app, phone-first, without host access.
   cached build command in the app's folder as a harness-owned, disconnect-proof
   job (like discovery jobs) with captured output and exit code surfaced in the
   panel; Rebuild is unavailable when no build command is known.
+- **Build-command backfill for existing caches**: repositories already have
+  populated caches whose findings predate `buildCommand`. A new targeted agent
+  ask — sent through the same `ClaudeMonitor` structured-output mechanism as
+  discovery — takes the cached findings that lack a build command (name, folder,
+  port, start command) and asks the agent to inspect *those folders only* and
+  return each one's build command (empty = build-less). The result merges into
+  the cache by port, touching only `buildCommand`; a full re-discovery also now
+  extracts build commands, so backfill is the cheap targeted path, not the only
+  one.
 - **Panel UI**: per-row Stop / Restart / Rebuild join Register / Run / Check,
   enabled from live running state + known commands; running rebuild shows
   in-flight state and its outcome. Advanced-mode affordances, same as the rest
@@ -46,9 +55,10 @@ _None — this grows the existing discovery/run surface._
 - `discover-local-apps`: the typed report/cache/import/export contracts gain the
   optional `buildCommand` field; new requirements for stopping a cached app by
   port (live port→process resolution, harness self-protection), restarting
-  (stop→wait-free→start), and rebuilding (tracked build job with captured
-  outcome); the panel requirement's per-row affordances extend from
-  register/Run/Check to include Stop / Restart / Rebuild.
+  (stop→wait-free→start), rebuilding (tracked build job with captured
+  outcome), and backfilling build commands into an existing cache via a
+  targeted read-only agent ask; the panel requirement's per-row affordances
+  extend from register/Run/Check to include Stop / Restart / Rebuild.
 
 ## Impact
 

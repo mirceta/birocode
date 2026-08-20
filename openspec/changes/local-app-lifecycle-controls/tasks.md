@@ -30,6 +30,17 @@
       exitCode, tail, finishedAt) embedded in `JobBody`/`CacheBody` so the
       panel's existing poll carries it; started/succeeded/failed events.
 
+- [ ] 2.6 `LocalAppBuildCommandAsk` backfill (design D6): typed
+      `{port, buildCommand}` report + prompt enumerating the cached findings
+      missing a build command, sent through the same `ClaudeMonitor` gateway /
+      read-only policy / extract-parse-retry machinery as discovery; parse
+      rejects ports outside the enumerated set.
+- [ ] 2.7 Backfill endpoint + job: `POST /backfill-build-commands` runs the ask
+      as a disconnect-proof start-or-join job; merge updates ONLY
+      `buildCommand` on matching ports (other fields + discovery times
+      untouched); explicit nothing-to-do outcome (no agent call) when no cache
+      or nothing missing; events for started/merged/failed.
+
 ## 3. Panel UI
 
 - [ ] 3.1 Local Apps panel rows: Stop / Restart / Rebuild actions beside
@@ -39,6 +50,9 @@
 - [ ] 3.2 Rebuild state on the row: in-flight indicator while `running`,
       success/failure badge with expandable captured output after; i18n keys
       (en/tr) + CSS for the new actions and states.
+- [ ] 3.3 "Find build commands" panel action (Advanced): visible job in-flight
+      state + outcome, disabled with a nothing-to-do hint when no finding
+      lacks a build command.
 
 ## 4. Verify
 
@@ -48,6 +62,11 @@
       explicitly rejected; restart cycles the process (new PID, port live);
       rebuild captures output + exit code for a passing AND a failing build,
       survives client disconnect, and start-or-joins concurrent requests.
+- [ ] 4.1b Backfill e2e (stub or real gateway): pre-buildCommand cache file →
+      backfill fills only missing `buildCommand`s by port (other fields +
+      times byte-identical), empty answers recorded as empty, out-of-set port
+      rejected by the parse, nothing-to-do short-circuits without an agent
+      call.
 - [ ] 4.2 Playwright verify script on the isolated instance: rows gate the
       three actions on running/startCommand/buildCommand; Stop flips the
       running dot; rebuild shows in-flight then outcome with output; export

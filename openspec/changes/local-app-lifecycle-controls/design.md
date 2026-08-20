@@ -105,7 +105,36 @@ stop fails or the bound expires. Not running → plain launch. A bounded ~10 s
 request is acceptable for a human-clicked action; a job would add reattach
 machinery for no benefit.
 
-### D6 — Event Console tells the truth at each boundary
+### D6 — Existing caches upgrade via a targeted backfill ask, not only rescan
+
+Live repos already hold populated caches with no `buildCommand`. Two upgrade
+paths, one cheap and one thorough:
+
+- **Backfill (new)**: a second structured ask, `LocalAppBuildCommandAsk`,
+  patterned on `LocalAppDiscoveryAsk` and sent through the same
+  `ClaudeMonitor.Client` gateway with the same read-only tool policy and the
+  same typed-report machinery (`[JsonPropertyName]`/`[Description]` →
+  `OutputFormatRenderer` → extract → validating parse → bounded retry). The
+  prompt *enumerates* the cached findings missing a build command (name,
+  folder, port, startCommand) and asks only: "for each of these folders, what
+  command builds its servable artifacts?" — no rediscovery, so it's fast and
+  can't hallucinate new apps. The typed report is a list of `{port,
+  buildCommand}`; the parse rejects any port outside the enumerated set.
+  Merge updates only `buildCommand` on matching ports — never name, folder,
+  evidence, startCommand, or per-finding discovery times. Runs as a
+  backend-owned job (reusing the discovery-jobs pattern) with a panel action
+  that's a no-op (no agent call) when nothing is missing.
+- **Rescan**: ordinary re-discovery now extracts `buildCommand` too, and the
+  union-by-port merge replaces matched findings wholesale — so a rescan also
+  upgrades the cache, just at full-scan cost.
+
+*Alternative considered:* silently piggy-backing backfill onto the next
+discovery run. Rejected: discovery is an explicit, expensive operator action;
+upgrading a big existing cache shouldn't require re-scanning the whole repo,
+and an explicit affordance keeps the "no agent runs without the operator
+asking" property of the panel.
+
+### D7 — Event Console tells the truth at each boundary
 
 Stop/restart/rebuild emit `RepoEventLog` events exactly like run/check today:
 stop emits resolved PID before the kill and the outcome after; restart emits its
