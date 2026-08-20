@@ -37,6 +37,18 @@ export default function useLocalAppDiscovery({ repoId, enabled }) {
   const [deleting, setDeleting] = useState(null); // port currently being deleted
   const [deleteErr, setDeleteErr] = useState(null); // { port, text } | null
 
+  // Lifecycle actions (openspec local-app-lifecycle-controls): stop / restart /
+  // rebuild by port, plus the build-command backfill. Commands are resolved
+  // server-side from the cached findings — only the port travels.
+  const [stopping, setStopping] = useState(null); // port currently being stopped
+  const [stopErr, setStopErr] = useState(null); // { port, text } | null
+  const [restarting, setRestarting] = useState(null); // port currently being restarted
+  const [restartErr, setRestartErr] = useState(null); // { port, text } | null
+  const [rebuilding, setRebuilding] = useState(null); // port whose rebuild POST is in flight
+  const [rebuildErr, setRebuildErr] = useState(null); // { port, text } | null
+  const [backfilling, setBackfilling] = useState(false); // backfill POST in flight
+  const [backfillNote, setBackfillNote] = useState(null); // 'no-cache' | 'none-missing' | error text
+
   // Import of another agent's findings (openspec import-discovery-findings).
   const [importing, setImporting] = useState(false);
   const [importErr, setImportErr] = useState(null); // text | null
@@ -139,6 +151,79 @@ export default function useLocalAppDiscovery({ repoId, enabled }) {
     }
   }, [fetchStatus]);
 
+  // Passive re-read of the current snapshot (running dots, rebuild states) — the
+  // panel drives this on its own cadence while it is open, so rebuild completion
+  // and externally started/stopped apps show up without a user click. No probe:
+  // never floods the event log.
+  const refreshStatus = useCallback(async () => {
+    if (discovery?.status === 'running' || !discovery?.apps) return;
+    await fetchStatus(false);
+  }, [discovery?.status, !!discovery?.apps, fetchStatus]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Stop a running cached app: the server resolves the port's live owner
+  // (PID) and kills the process tree, guarded repo-scoped + never-the-harness.
+  const stopApp = async (app) => {
+    setStopping(app.port);
+    setStopErr(null);
+    try {
+      await apiPost('/local-apps/stop', { port: app.port }, { repoId });
+      setTimeout(() => { checkRunning(); }, 800);
+    } catch (err) {
+      setStopErr({ port: app.port, text: parseErr(err) });
+    } finally {
+      setStopping(null);
+    }
+  };
+
+  // Restart = server-side stop → wait-for-port-free → detached launch. The call
+  // is synchronous up to ~10s, then we re-check so the dot reflects the relaunch.
+  const restartApp = async (app) => {
+    setRestarting(app.port);
+    setRestartErr(null);
+    try {
+      await apiPost('/local-apps/restart', { port: app.port }, { repoId });
+      setTimeout(() => { checkRunning(); }, 1500);
+    } catch (err) {
+      setRestartErr({ port: app.port, text: parseErr(err) });
+    } finally {
+      setRestarting(null);
+    }
+  };
+
+  // Rebuild = start-or-join a backend-owned build job; progress/outcome ride the
+  // per-row `rebuild` state in the status snapshot, so we just nudge a refresh —
+  // the panel's open-cadence poll carries the rest until the job lands.
+  const rebuildApp = async (app) => {
+    setRebuilding(app.port);
+    setRebuildErr(null);
+    try {
+      await apiPost('/local-apps/rebuild', { port: app.port }, { repoId });
+      setTimeout(() => { fetchStatus(false); }, 500);
+    } catch (err) {
+      setRebuildErr({ port: app.port, text: parseErr(err) });
+    } finally {
+      setRebuilding(null);
+    }
+  };
+
+  // Build-command backfill (openspec local-app-lifecycle-controls, D6): targeted
+  // agent ask for the cached findings missing a buildCommand. Nothing-to-do
+  // outcomes come back synchronously (no agent call); a started job's state rides
+  // `backfill` in the status snapshot.
+  const backfillBuildCommands = async () => {
+    setBackfilling(true);
+    setBackfillNote(null);
+    try {
+      const r = await apiPost('/local-apps/backfill-build-commands', {}, { repoId });
+      if (r.status === 'nothing-to-do') setBackfillNote(r.reason);
+      else setTimeout(() => { fetchStatus(false); }, 500);
+    } catch (err) {
+      setBackfillNote(parseErr(err));
+    } finally {
+      setBackfilling(false);
+    }
+  };
+
   // Start a discovered app, then re-check its running state after a short grace so
   // the row's dot flips on once the server is listening. The server resolves the
   // command from its own scan result by port — we only send the port.
@@ -212,11 +297,24 @@ export default function useLocalAppDiscovery({ repoId, enabled }) {
     discovering,
     discover,
     loadCache,
+    refreshStatus,
     checkRunning,
     checking,
     runApp,
     running,
     runErr,
+    stopApp,
+    stopping,
+    stopErr,
+    restartApp,
+    restarting,
+    restartErr,
+    rebuildApp,
+    rebuilding,
+    rebuildErr,
+    backfillBuildCommands,
+    backfilling,
+    backfillNote,
     registerApp,
     registering,
     registerErr,

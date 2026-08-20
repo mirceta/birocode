@@ -824,6 +824,7 @@ export default function PinnedAgent({
         <DiscoverAppsPanel
           disc={disc}
           localApps={localApps}
+          repoId={tab.repoId}
           onClose={() => setShowDiscoverPanel(false)}
         />
       )}

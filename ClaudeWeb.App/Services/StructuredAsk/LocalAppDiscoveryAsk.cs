@@ -71,6 +71,10 @@ For each app you find, report:
     PowerShell server, or the documented start command if one is given. Report just
     the command (no `cd` prefix). Use an empty string ONLY if you genuinely cannot
     determine how to start it.
+  - buildCommand: the command that BUILDS the app's servable artifacts, meant to be
+    run from its folder -- e.g. `npm run build` when a package.json build script
+    produces what the server serves. Many local apps are build-less static folders:
+    for those (or if you cannot determine it) use an empty string. Do NOT guess.
 
 If the repository has no such directory, return an empty ""apps"" array. Do not invent
 entries.

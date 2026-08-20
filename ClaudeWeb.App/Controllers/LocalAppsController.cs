@@ -30,6 +30,17 @@ namespace ClaudeWeb.Controllers;
 ///   POST /api/local-apps/run             -- start one discovered app (by port) using
 ///                                           the command the scan extracted, launched
 ///                                           detached in the app's folder
+///   POST /api/local-apps/stop            -- stop a running cached app: port -> owning
+///                                           PID resolved LIVE + taskkill /T, guarded
+///                                           (repo-scoped finding, never the harness)
+///   POST /api/local-apps/restart         -- stop-if-running -> bounded wait for the
+///                                           port to free -> detached launch
+///   POST /api/local-apps/rebuild         -- start-or-join a disconnect-proof build
+///                                           job running the cached buildCommand
+///   POST /api/local-apps/backfill-build-commands
+///                                        -- targeted agent ask filling buildCommand
+///                                           into cached findings that lack one
+///   (openspec change local-app-lifecycle-controls)
 ///
 /// The two GETs return { repoId, repoName, status: running|done|error|idle, apps?,
 /// error?, startedAt?, finishedAt? }. On a completed scan the body still carries
@@ -45,16 +56,20 @@ public class LocalAppsController : ControllerBase
     private readonly LocalAppDiscoveryJobs _jobs;
     private readonly LocalAppDiscoveryCache _cache;
     private readonly LocalAppRunner _runner;
+    private readonly LocalAppBuildJobs _builds;
+    private readonly LocalAppBackfillJobs _backfills;
     private readonly RepoEventLog _events;
     private readonly AuditService _audit;
     private readonly Logger _logger;
 
-    public LocalAppsController(RepositoryResolver repos, LocalAppDiscoveryJobs jobs, LocalAppDiscoveryCache cache, LocalAppRunner runner, RepoEventLog events, AuditService audit, Logger logger)
+    public LocalAppsController(RepositoryResolver repos, LocalAppDiscoveryJobs jobs, LocalAppDiscoveryCache cache, LocalAppRunner runner, LocalAppBuildJobs builds, LocalAppBackfillJobs backfills, RepoEventLog events, AuditService audit, Logger logger)
     {
         _repos = repos;
         _jobs = jobs;
         _cache = cache;
         _runner = runner;
+        _builds = builds;
+        _backfills = backfills;
         _events = events;
         _audit = audit;
         _logger = logger;
@@ -214,19 +229,55 @@ public class LocalAppsController : ControllerBase
         repoId,
         repoName,
         status = "done",
-        apps = cached.Report.Apps.Select(a => new
+        apps = cached.Report.Apps.Select(a => Row(repoId, a,
+            cached.DiscoveredAtByPort!.TryGetValue(a.Port, out var t) ? t : cached.CachedAt)),
+        fromCache = true,
+        cachedAt = cached.CachedAt,
+        backfill = BackfillBody(repoId),
+    };
+
+    // One app row as the panel sees it (openspec local-app-lifecycle-controls):
+    // the finding's contract fields (now incl. buildCommand), the LIVE running
+    // flag, per-row age, and the row's most recent rebuild-job state — embedded
+    // here so the panel's existing status poll carries rebuild progress with no
+    // extra endpoint (design D4).
+    private object Row(string repoId, LocalAppFinding a, DateTimeOffset? discoveredAt)
+    {
+        var build = _builds.Get(repoId, a.Port);
+        return new
         {
             name = a.Name,
             port = a.Port,
             folder = a.Folder,
             evidence = a.Evidence,
             startCommand = a.StartCommand,
+            buildCommand = a.BuildCommand,
             running = _runner.IsListening(a.Port),
-            discoveredAt = cached.DiscoveredAtByPort!.TryGetValue(a.Port, out var t) ? t : cached.CachedAt,
-        }),
-        fromCache = true,
-        cachedAt = cached.CachedAt,
-    };
+            discoveredAt,
+            rebuild = build is null ? null : RebuildBody(build),
+        };
+    }
+
+    // The repo's most recent backfill-job state, for the panel's "Find build
+    // commands" affordance (null = never ran since harness start).
+    private object? BackfillBody(string repoId)
+    {
+        var job = _backfills.Get(repoId);
+        return job is null ? null : new
+        {
+            status = job.Status switch
+            {
+                BackfillStatus.Done => "done",
+                BackfillStatus.Error => "error",
+                _ => "running",
+            },
+            asked = job.Asked,
+            filled = job.Filled,
+            error = job.Error,
+            startedAt = job.StartedAt,
+            finishedAt = job.FinishedAt,
+        };
+    }
 
     // Emit a check boundary event: we probe each discovered app's port (in-process
     // listener snapshot) and report which are live. Best-effort; a check with no
@@ -299,6 +350,220 @@ public class LocalAppsController : ControllerBase
         }
     }
 
+    // Stop a running cached app by port (openspec local-app-lifecycle-controls).
+    // No PID is retained from launches, so the owner is resolved LIVE from the
+    // port's listener at stop time — which also makes hand-started apps stoppable.
+    // Guards: the port must be a cached/discovered finding of THIS repo (checked
+    // before anything is touched), and the resolved PID must not be the harness
+    // itself or an ancestor (self-dev: a scan of the harness repo can cache the
+    // harness's own port — the kill structurally cannot land on us).
+    [HttpPost("stop")]
+    public IActionResult Stop([FromBody] RunRequest body)
+    {
+        _logger.CountRequest();
+
+        var repo = _repos.Current();
+        if (repo is null)
+            return NotFound(new { error = "No repository selected." });
+
+        var app = ResolveApp(repo.Id, body.Port);
+        if (app is null)
+            return BadRequest(new { error = $"No discovered app on port {body.Port} for this repository." });
+
+        var (ok, error) = StopCore(repo.Id, app, op: "stop");
+        return ok
+            ? Ok(new { ok = true, port = app.Port, name = app.Name })
+            : BadRequest(new { error });
+    }
+
+    // Restart = stop-if-running (same guards) → bounded wait for the port to
+    // actually free → detached launch of the cached startCommand. Fails WITHOUT
+    // launching when the stop fails or the port stays busy; not running → plain
+    // start. Synchronous within the request (~10 s bound) — a human-clicked
+    // action, no job machinery (design D5).
+    [HttpPost("restart")]
+    public IActionResult Restart([FromBody] RunRequest body)
+    {
+        _logger.CountRequest();
+
+        var repo = _repos.Current();
+        if (repo is null)
+            return NotFound(new { error = "No repository selected." });
+        if (string.IsNullOrWhiteSpace(repo.Path) || !Directory.Exists(repo.Path))
+            return BadRequest(new { error = $"Repository working directory not found: '{repo.Path}'." });
+
+        var app = ResolveApp(repo.Id, body.Port);
+        if (app is null)
+            return BadRequest(new { error = $"No discovered app on port {body.Port} for this repository." });
+        if (string.IsNullOrWhiteSpace(app.StartCommand))
+            return BadRequest(new { error = $"Discovered app '{app.Name}' has no known start command." });
+
+        var folder = Path.GetFullPath(Path.Combine(repo.Path, app.Folder));
+        var repoRoot = Path.GetFullPath(repo.Path);
+        if (!folder.StartsWith(repoRoot, StringComparison.OrdinalIgnoreCase) || !Directory.Exists(folder))
+            return BadRequest(new { error = $"App folder not found in repository: '{app.Folder}'." });
+
+        if (_runner.IsListening(app.Port))
+        {
+            var (stopped, stopError) = StopCore(repo.Id, app, op: "restart");
+            if (!stopped)
+                return BadRequest(new { error = $"Restart aborted at the stop phase: {stopError}" });
+            if (!_runner.WaitForPortFree(app.Port, TimeSpan.FromSeconds(10)))
+            {
+                _events.Emit(repo.Id, "restart", "error", $"Restart · {app.Name}",
+                    $"port :{app.Port} did not free within 10s — not launching a second instance");
+                return BadRequest(new { error = $"Port {app.Port} did not free up within 10 seconds; not launching." });
+            }
+        }
+        else
+        {
+            _events.Emit(repo.Id, "restart", "started", $"Restart · {app.Name}",
+                "not running — going straight to launch");
+        }
+
+        try
+        {
+            var proc = _runner.Launch(app.StartCommand, folder);
+            _events.Emit(repo.Id, "restart", "done", $"Restart · {app.Name}",
+                $"launch issued (pid {proc.Id}) — port liveness is read separately");
+            return Ok(new { ok = true, port = app.Port, name = app.Name, command = app.StartCommand, pid = proc.Id });
+        }
+        catch (Exception ex)
+        {
+            _events.Emit(repo.Id, "restart", "error", $"Restart · {app.Name}", ex.Message);
+            return BadRequest(new { error = $"Failed to relaunch '{app.Name}': {ex.Message}" });
+        }
+    }
+
+    // Rebuild = start-or-join a disconnect-proof build job running the cached
+    // buildCommand in the app's folder (openspec local-app-lifecycle-controls,
+    // D4). Deliberately does NOT stop or start the server — restarting into the
+    // new build is the operator's separate click. The row's rebuild state rides
+    // the normal status projections; this returns the same shape immediately.
+    [HttpPost("rebuild")]
+    public IActionResult Rebuild([FromBody] RunRequest body)
+    {
+        _logger.CountRequest();
+
+        var repo = _repos.Current();
+        if (repo is null)
+            return NotFound(new { error = "No repository selected." });
+        if (string.IsNullOrWhiteSpace(repo.Path) || !Directory.Exists(repo.Path))
+            return BadRequest(new { error = $"Repository working directory not found: '{repo.Path}'." });
+
+        var app = ResolveApp(repo.Id, body.Port);
+        if (app is null)
+            return BadRequest(new { error = $"No discovered app on port {body.Port} for this repository." });
+        if (string.IsNullOrWhiteSpace(app.BuildCommand))
+            return BadRequest(new { error = $"Discovered app '{app.Name}' has no known build command." });
+
+        var folder = Path.GetFullPath(Path.Combine(repo.Path, app.Folder));
+        var repoRoot = Path.GetFullPath(repo.Path);
+        if (!folder.StartsWith(repoRoot, StringComparison.OrdinalIgnoreCase) || !Directory.Exists(folder))
+            return BadRequest(new { error = $"App folder not found in repository: '{app.Folder}'." });
+
+        var job = _builds.StartOrJoin(repo.Id, app.Port, app.Name, app.BuildCommand, folder);
+        return Ok(new { ok = true, port = app.Port, name = app.Name, rebuild = RebuildBody(job) });
+    }
+
+    // Backfill build commands into an EXISTING cache without a rescan (openspec
+    // local-app-lifecycle-controls, D6): enumerate the cached findings missing a
+    // buildCommand and send the targeted ask as a disconnect-proof job. The
+    // nothing-to-do outcomes (no cache / nothing missing) short-circuit HERE, so
+    // the agent is never invoked for them.
+    [HttpPost("backfill-build-commands")]
+    public IActionResult BackfillBuildCommands()
+    {
+        _logger.CountRequest();
+
+        var repo = _repos.Current();
+        if (repo is null)
+            return NotFound(new { error = "No repository selected." });
+        if (string.IsNullOrWhiteSpace(repo.Path) || !Directory.Exists(repo.Path))
+            return BadRequest(new { error = $"Repository working directory not found: '{repo.Path}'." });
+
+        var cached = _cache.Load(repo.Id);
+        if (cached is null)
+            return Ok(new { status = "nothing-to-do", reason = "no-cache" });
+
+        var missing = cached.Report.Apps.Where(a => string.IsNullOrWhiteSpace(a.BuildCommand)).ToList();
+        if (missing.Count == 0)
+            return Ok(new { status = "nothing-to-do", reason = "none-missing" });
+
+        _backfills.StartOrJoin(repo.Id, repo.Path, missing);
+        return Ok(new { status = "started", backfill = BackfillBody(repo.Id) });
+    }
+
+    // Resolve a cached/discovered finding for this repo by port — same trust model
+    // as Run (the command/folder come from the repo's own discovery result, never
+    // off the wire). Falls back to the on-disk cache (seeding the in-memory job,
+    // as GET /cache does) so lifecycle actions work right after a harness restart.
+    private LocalAppFinding? ResolveApp(string repoId, int port)
+    {
+        var job = _jobs.Get(repoId);
+        if (job is null || job.Status != DiscoveryStatus.Done || job.Result is null)
+        {
+            var cached = _cache.Load(repoId);
+            if (cached is null) return null;
+            job = _jobs.SeedFromCache(repoId, cached);
+        }
+        return job.Result?.Apps.FirstOrDefault(a => a.Port == port);
+    }
+
+    // The stop primitive shared by Stop and Restart's stop phase: resolve the
+    // port's live owner, run the guards, kill the tree. `op` names the emitting
+    // action so the activity feed attributes phases to what the operator clicked.
+    private (bool Ok, string? Error) StopCore(string repoId, LocalAppFinding app, string op)
+    {
+        string Fail(string error)
+        {
+            _events.Emit(repoId, op, "error", $"{Cap(op)} · {app.Name}", error);
+            return error;
+        }
+
+        if (!_runner.IsListening(app.Port))
+            return (false, Fail($"Nothing is listening on port {app.Port}."));
+
+        var pid = _runner.ResolveListenerPid(app.Port);
+        if (pid is null)
+            return (false, Fail($"Could not resolve the process listening on port {app.Port}."));
+
+        // The structural self-guard (design D2): PIDs are ground truth, ports are
+        // config. Protects THIS process and whatever hosts it; another harness
+        // instance (an isolated test copy) is a legitimate, stoppable product.
+        if (_runner.ProtectedPids().Contains(pid.Value))
+            return (false, Fail($"Refusing to stop PID {pid} on :{app.Port} — that is the harness itself (or its host process)."));
+
+        _events.Emit(repoId, op, "started", $"{Cap(op)} · {app.Name}",
+            $"stopping PID {pid} on :{app.Port} (process tree)…");
+        var (ok, detail) = _runner.KillTree(pid.Value);
+        if (!ok)
+            return (false, Fail($"taskkill failed for PID {pid}: {detail}"));
+
+        if (op == "stop")
+            _events.Emit(repoId, op, "done", $"Stop · {app.Name}",
+                $"PID {pid} terminated — port liveness is read separately");
+        return (true, null);
+    }
+
+    private static string Cap(string op) => char.ToUpperInvariant(op[0]) + op[1..];
+
+    // Rebuild-job state as the panel consumes it (shared by the Rebuild response
+    // and the per-row projection in Row()).
+    private object RebuildBody(BuildJob build) => new
+    {
+        status = build.Status switch
+        {
+            BuildStatus.Succeeded => "succeeded",
+            BuildStatus.Failed => "failed",
+            _ => "running",
+        },
+        exitCode = build.ExitCode,
+        output = build.Output,
+        startedAt = build.StartedAt,
+        finishedAt = build.FinishedAt,
+    };
+
     public sealed class RunRequest
     {
         public int Port { get; set; }
@@ -328,21 +593,13 @@ public class LocalAppsController : ControllerBase
             repoName,
             status,
             apps = job.Status == DiscoveryStatus.Done
-                ? job.Result!.Apps.Select(a => new
-                {
-                    name = a.Name,
-                    port = a.Port,
-                    folder = a.Folder,
-                    evidence = a.Evidence,
-                    startCommand = a.StartCommand,
-                    running = _runner.IsListening(a.Port),
-                    // Per-row age (openspec discover-apps-panel, D4): under the union
-                    // cache a done result mixes scans; falls back to the job's finish
-                    // time for results that never carried per-port times.
-                    discoveredAt = job.DiscoveredAt is not null && job.DiscoveredAt.TryGetValue(a.Port, out var t)
+                // Per-row age (openspec discover-apps-panel, D4): under the union
+                // cache a done result mixes scans; falls back to the job's finish
+                // time for results that never carried per-port times.
+                ? job.Result!.Apps.Select(a => Row(repoId, a,
+                    job.DiscoveredAt is not null && job.DiscoveredAt.TryGetValue(a.Port, out var t)
                         ? t
-                        : job.FinishedAt,
-                })
+                        : job.FinishedAt))
                 : null,
             error = job.Status == DiscoveryStatus.Error ? job.Error : null,
             startedAt = job.StartedAt,
@@ -350,6 +607,7 @@ public class LocalAppsController : ControllerBase
             // The cache's latest-scan time (openspec discover-apps-panel): truthful
             // even for a cache-seeded job, whose finishedAt is only the seed time.
             cachedAt = job.CachedAt,
+            backfill = BackfillBody(repoId),
         };
     }
 }
