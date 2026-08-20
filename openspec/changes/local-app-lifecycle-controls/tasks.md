@@ -61,23 +61,24 @@
 
 ## 4. Verify
 
-- [ ] 4.1 Backend e2e on an isolated harness (side port, own data dir, fixture
+- [x] 4.1 Backend e2e on an isolated harness (side port, own data dir, fixture
       repo with a real tiny servable app): stop kills a listener started
       outside the harness; stop on dead port / un-cached port / self-PID all
       explicitly rejected; restart cycles the process (new PID, port live);
       rebuild captures output + exit code for a passing AND a failing build,
       survives client disconnect, and start-or-joins concurrent requests.
-- [ ] 4.1b Backfill e2e (stub or real gateway): pre-buildCommand cache file â†’
+- [x] 4.1b Backfill e2e (stub or real gateway): pre-buildCommand cache file â†’
       backfill fills only missing `buildCommand`s by port (other fields +
       times byte-identical), empty answers recorded as empty, out-of-set port
       rejected by the parse, nothing-to-do short-circuits without an agent
       call.
-- [ ] 4.2 Playwright verify script on the isolated instance: rows gate the
+- [x] 4.2 Playwright verify script on the isolated instance: rows gate the
       three actions on running/startCommand/buildCommand; Stop flips the
       running dot; rebuild shows in-flight then outcome with output; export
       JSON round-trips `buildCommand` through import; clicking Run/Stop makes
       the action's startedâ†’done (or error) events appear in the panel's
       activity section without reopening, and reopening still shows them.
-- [ ] 4.3 `openspec validate local-app-lifecycle-controls --strict` passes;
+- [x] 4.3 `openspec validate local-app-lifecycle-controls --strict` passes;
       honesty pass on proposal/design/spec wording vs what was actually built.
+
 

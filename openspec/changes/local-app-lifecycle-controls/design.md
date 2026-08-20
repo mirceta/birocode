@@ -149,9 +149,11 @@ panel: an activity section rendering the same `RepoEventLog` feed the dock's
 Event Console lane reads (`GET /api/repos/{repoId}/events?after=N`), filtered
 to the local-app kinds (`run`, `stop`, `restart`, `rebuild`, `backfill`,
 `check`, `cache`), newest first, with the phase (`started`/`done`/`error`) and
-detail shown per entry. The panel already polls status ~5 s while open; the
-activity fetch rides the same cadence with a sequence watermark, so a clicked
-action's `started` event appears within one tick. No new backend: D7's
+detail shown per entry. The panel gains an open-panel status refresh at the
+dock cadence (~5 s — previously the hook polled only during a running scan),
+which also keeps running dots and rebuild states live; the activity fetch rides
+the same cadence with a sequence watermark, so a clicked action's `started`
+event appears within one tick. No new backend: D7's
 emissions are the single source of truth, which also gives history for free —
 the log is server-side, so activity from before the panel opened, or from
 another device, shows too.

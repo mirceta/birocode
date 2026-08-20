@@ -33,6 +33,7 @@ public class LocalAppBuildJobs
 
     private readonly RepoEventLog _events;
     private readonly ConcurrentDictionary<(string RepoId, int Port), BuildJob> _jobs = new();
+    private readonly object _gate = new();
 
     public LocalAppBuildJobs(RepoEventLog events) => _events = events;
 
@@ -40,15 +41,21 @@ public class LocalAppBuildJobs
     /// Join the (repo, port)'s rebuild if one is running, otherwise start a new one.
     /// The command/folder are resolved by the CALLER from the repo's discovery result
     /// (never off the wire) — this registry only owns the job lifecycle.
+    /// Serialized under a lock, NOT AddOrUpdate: the dictionary's factories can run
+    /// more than once under contention, and <see cref="StartNew"/> has a side effect
+    /// (it launches the build) — two concurrent clicks would each run a build while
+    /// only one job stayed visible. The e2e's concurrent-rebuild check caught this.
     /// </summary>
     public BuildJob StartOrJoin(string repoId, int port, string appName, string buildCommand, string folder)
     {
-        return _jobs.AddOrUpdate(
-            (repoId, port),
-            _ => StartNew(repoId, port, appName, buildCommand, folder),
-            (_, existing) => existing.Status == BuildStatus.Running
-                ? existing
-                : StartNew(repoId, port, appName, buildCommand, folder));
+        lock (_gate)
+        {
+            if (_jobs.TryGetValue((repoId, port), out var existing) && existing.Status == BuildStatus.Running)
+                return existing;
+            var job = StartNew(repoId, port, appName, buildCommand, folder);
+            _jobs[(repoId, port)] = job;
+            return job;
+        }
     }
 
     /// <summary>The most recent rebuild job for the (repo, port), or null.</summary>
@@ -109,7 +116,10 @@ public class LocalAppBuildJobs
         };
         psi.ArgumentList.Add("-NoProfile");
         psi.ArgumentList.Add("-Command");
-        psi.ArgumentList.Add(buildCommand);
+        // `; exit $LASTEXITCODE` propagates the native build's real exit code —
+        // bare powershell -Command reports a generic 1 for any failing command,
+        // which would launder e.g. exit 3 into 1 in the job's outcome.
+        psi.ArgumentList.Add(buildCommand + "; exit $LASTEXITCODE");
 
         using var proc = Process.Start(psi)
             ?? throw new InvalidOperationException("Process.Start returned null");

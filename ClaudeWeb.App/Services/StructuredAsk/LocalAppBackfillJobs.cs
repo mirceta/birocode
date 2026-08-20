@@ -24,6 +24,7 @@ public class LocalAppBackfillJobs
     private readonly LocalAppDiscoveryJobs _discoveryJobs;
     private readonly RepoEventLog _events;
     private readonly ConcurrentDictionary<string, BackfillJob> _jobs = new();
+    private readonly object _gate = new();
 
     public LocalAppBackfillJobs(
         LocalAppBuildCommandAsk ask, LocalAppDiscoveryCache cache,
@@ -42,12 +43,17 @@ public class LocalAppBackfillJobs
     /// </summary>
     public BackfillJob StartOrJoin(string repoId, string workingDirectory, IReadOnlyList<LocalAppFinding> missing)
     {
-        return _jobs.AddOrUpdate(
-            repoId,
-            _ => StartNew(repoId, workingDirectory, missing),
-            (_, existing) => existing.Status == BackfillStatus.Running
-                ? existing
-                : StartNew(repoId, workingDirectory, missing));
+        // Lock, not AddOrUpdate: the factories can run more than once under
+        // contention and StartNew launches a real agent ask (same race the
+        // rebuild registry fixed — see LocalAppBuildJobs.StartOrJoin).
+        lock (_gate)
+        {
+            if (_jobs.TryGetValue(repoId, out var existing) && existing.Status == BackfillStatus.Running)
+                return existing;
+            var job = StartNew(repoId, workingDirectory, missing);
+            _jobs[repoId] = job;
+            return job;
+        }
     }
 
     /// <summary>The most recent backfill job for the repo, or null.</summary>
