@@ -108,7 +108,9 @@ public class SessionService
     /// Reads the full human-visible transcript for one session (user prompts and
     /// assistant text replies, in order). Tool-use steps, model "thinking", and
     /// IDE/system-reminder injections are skipped so it reads like the live chat.
-    /// Returns an empty list if the transcript is missing or unreadable.
+    /// A malformed line (e.g. crash-padding NULs) is skipped, never fatal — one bad
+    /// line must not freeze the rendered conversation at that point.
+    /// Returns an empty list if the transcript is missing.
     /// </summary>
     public List<ChatMessage> GetMessages(string workingDir, string sessionId)
     {
@@ -131,27 +133,34 @@ public class SessionService
             {
                 if (string.IsNullOrWhiteSpace(line)) continue;
 
-                using var doc = JsonDocument.Parse(line);
-                var root = doc.RootElement;
+                // Trim('\0') salvages a line merged with crash-padding NULs (a killed
+                // writer leaves a zero-filled run; the next real line can share it).
+                JsonDocument doc;
+                try { doc = JsonDocument.Parse(line.Trim('\0')); }
+                catch { continue; } // skip a malformed transcript line, keep going
+                using (doc)
+                {
+                    var root = doc.RootElement;
 
-                if (!root.TryGetProperty("type", out var typeProp)) continue;
-                var type = typeProp.GetString();
-                if (type != "user" && type != "assistant") continue;
-                if (!root.TryGetProperty("message", out var msg)) continue;
+                    if (!root.TryGetProperty("type", out var typeProp)) continue;
+                    var type = typeProp.GetString();
+                    if (type != "user" && type != "assistant") continue;
+                    if (!root.TryGetProperty("message", out var msg)) continue;
 
-                var text = ExtractVisibleText(msg);
-                if (string.IsNullOrWhiteSpace(text)) continue;
+                    var text = ExtractVisibleText(msg);
+                    if (string.IsNullOrWhiteSpace(text)) continue;
 
-                DateTime? ts = null;
-                if (root.TryGetProperty("timestamp", out var tsProp) &&
-                    DateTime.TryParse(tsProp.GetString(), out var parsed))
-                    ts = parsed;
+                    DateTime? ts = null;
+                    if (root.TryGetProperty("timestamp", out var tsProp) &&
+                        DateTime.TryParse(tsProp.GetString(), out var parsed))
+                        ts = parsed;
 
-                var synthetic = msg.TryGetProperty("model", out var modelProp)
-                    && modelProp.ValueKind == JsonValueKind.String
-                    && modelProp.GetString() == "<synthetic>";
+                    var synthetic = msg.TryGetProperty("model", out var modelProp)
+                        && modelProp.ValueKind == JsonValueKind.String
+                        && modelProp.GetString() == "<synthetic>";
 
-                messages.Add(new ChatMessage(type == "user" ? "user" : "assistant", text!.Trim(), ts, synthetic));
+                    messages.Add(new ChatMessage(type == "user" ? "user" : "assistant", text!.Trim(), ts, synthetic));
+                }
             }
         }
         catch (Exception ex)
@@ -198,7 +207,7 @@ public class SessionService
                 if (string.IsNullOrWhiteSpace(line)) continue;
 
                 JsonDocument doc;
-                try { doc = JsonDocument.Parse(line); }
+                try { doc = JsonDocument.Parse(line.Trim('\0')); }
                 catch { continue; } // skip a malformed transcript line, keep going
                 using (doc)
                 {
@@ -358,29 +367,34 @@ public class SessionService
             {
                 if (string.IsNullOrWhiteSpace(line)) continue;
 
-                using var doc = JsonDocument.Parse(line);
-                var root = doc.RootElement;
-
-                if (!root.TryGetProperty("type", out var typeProp)) continue;
-                var type = typeProp.GetString();
-
-                // sessionId appears on the transcript lines (camelCase in JSONL).
-                if (sessionId == null && root.TryGetProperty("sessionId", out var sidProp))
-                    sessionId = sidProp.GetString();
-
-                if (root.TryGetProperty("timestamp", out var tsProp) &&
-                    DateTime.TryParse(tsProp.GetString(), out var ts))
-                    lastTimestamp = ts;
-
-                switch (type)
+                JsonDocument doc;
+                try { doc = JsonDocument.Parse(line.Trim('\0')); }
+                catch { continue; } // skip a malformed transcript line, keep going
+                using (doc)
                 {
-                    case "user":
-                        userTurns++;
-                        firstPrompt ??= ExtractFirstPrompt(root);
-                        break;
-                    case "assistant":
-                        assistantTurns++;
-                        break;
+                    var root = doc.RootElement;
+
+                    if (!root.TryGetProperty("type", out var typeProp)) continue;
+                    var type = typeProp.GetString();
+
+                    // sessionId appears on the transcript lines (camelCase in JSONL).
+                    if (sessionId == null && root.TryGetProperty("sessionId", out var sidProp))
+                        sessionId = sidProp.GetString();
+
+                    if (root.TryGetProperty("timestamp", out var tsProp) &&
+                        DateTime.TryParse(tsProp.GetString(), out var ts))
+                        lastTimestamp = ts;
+
+                    switch (type)
+                    {
+                        case "user":
+                            userTurns++;
+                            firstPrompt ??= ExtractFirstPrompt(root);
+                            break;
+                        case "assistant":
+                            assistantTurns++;
+                            break;
+                    }
                 }
             }
 
