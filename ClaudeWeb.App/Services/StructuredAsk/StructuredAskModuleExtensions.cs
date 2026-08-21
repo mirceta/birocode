@@ -26,6 +26,12 @@ public static class StructuredAskModuleExtensions
         // Live half of discovery (openspec change discover-local-apps-run-controls):
         // port-liveness check + detached launch of a discovered app's scanned command.
         services.AddSingleton<LocalAppRunner>();
+        // Lifecycle controls (openspec change local-app-lifecycle-controls):
+        // per-(repo,port) rebuild jobs, the targeted build-command backfill ask,
+        // and its per-repo job registry — all disconnect-proof singletons.
+        services.AddSingleton<LocalAppBuildJobs>();
+        services.AddSingleton<LocalAppBuildCommandAsk>();
+        services.AddSingleton<LocalAppBackfillJobs>();
         return services;
     }
 }

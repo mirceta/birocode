@@ -110,6 +110,31 @@ public class LocalAppDiscoveryCache
         return (CacheDeleteOutcome.Deleted, record);
     }
 
+    /// <summary>
+    /// Surgical merge for the build-command backfill (openspec
+    /// local-app-lifecycle-controls, D6): set ONLY <c>buildCommand</c> on the cached
+    /// findings whose port matches — every other field, each finding's discovery
+    /// time, and <see cref="CachedDiscovery.CachedAt"/> stay untouched (the backfill
+    /// did not re-discover anything). Unknown ports are ignored (the ask's parse
+    /// already rejects them; a race with a concurrent delete just no-ops). NOT
+    /// best-effort: persisting the answers is the whole point of the backfill, so a
+    /// write failure throws and fails the job. Returns the updated record, or null
+    /// when the repo has no cache.
+    /// </summary>
+    public CachedDiscovery? UpdateBuildCommands(string repoId, IReadOnlyDictionary<int, string> buildCommandsByPort)
+    {
+        var record = Load(repoId);
+        if (record is null) return null;
+
+        foreach (var app in record.Report.Apps)
+            if (buildCommandsByPort.TryGetValue(app.Port, out var cmd))
+                app.BuildCommand = cmd;
+
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(PathFor(repoId), JsonSerializer.Serialize(record, JsonOpts));
+        return record;
+    }
+
     // The union itself. First occurrence wins within one scan (duplicate ports in a
     // single report would be an agent mistake; we keep the list stable). New-scan
     // findings come first in the merged list, retained older ones after.

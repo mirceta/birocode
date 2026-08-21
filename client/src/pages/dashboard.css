@@ -2056,6 +2056,7 @@
 .phone__discover-list li {
   display: flex;
   align-items: baseline;
+  flex-wrap: wrap; /* lets the expandable build-output pre drop to its own line */
   gap: 6px;
   font-size: 11.5px;
 }
@@ -2160,6 +2161,131 @@
 .phone__discover-del:disabled {
   cursor: default;
   opacity: 0.35;
+}
+
+/* Lifecycle actions (openspec local-app-lifecycle-controls): Stop / Restart /
+   Rebuild share the Run/Register pill look; each carries a signal colour. */
+.phone__discover-stop,
+.phone__discover-restart,
+.phone__discover-rebuild {
+  flex: 0 0 auto;
+  padding: 1px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.phone__discover-stop { color: #dc2626; border-color: rgba(220, 38, 38, 0.4); }
+.phone__discover-restart { color: var(--color-text-soft); }
+.phone__discover-rebuild { color: #d97706; border-color: rgba(217, 119, 6, 0.4); }
+
+.phone__discover-stop:hover:not(:disabled),
+.phone__discover-restart:hover:not(:disabled),
+.phone__discover-rebuild:hover:not(:disabled) {
+  color: var(--color-text);
+  border-color: var(--color-accent);
+}
+
+.phone__discover-stop:disabled,
+.phone__discover-restart:disabled,
+.phone__discover-rebuild:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+/* Per-row rebuild state chip: click toggles the captured output. */
+.phone__discover-buildchip {
+  flex: 0 0 auto;
+  padding: 0 7px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  font-size: 10px;
+  line-height: 1.6;
+  cursor: pointer;
+  color: var(--color-text-soft);
+}
+
+.phone__discover-buildchip--succeeded { color: #16a34a; border-color: rgba(22, 163, 74, 0.4); }
+.phone__discover-buildchip--failed { color: #dc2626; border-color: rgba(220, 38, 38, 0.4); }
+
+/* Captured build output (bounded ~8 KB tail, truncation marked server-side). */
+.phone__discover-buildout {
+  flex-basis: 100%;
+  margin: 2px 0 4px;
+  padding: 6px 8px;
+  max-height: 180px;
+  overflow: auto;
+  background: var(--color-surface-2, rgba(0, 0, 0, 0.2));
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 10px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Activity section (openspec local-app-lifecycle-controls, D8): the in-panel
+   feed of the repo event log filtered to local-app actions, newest first. */
+.phone__discover-activity {
+  margin-top: 10px;
+  border-top: 1px solid var(--color-border);
+  padding-top: 6px;
+}
+
+.phone__discover-activity-title {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-soft);
+  margin-bottom: 4px;
+}
+
+.phone__discover-activity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.phone__discover-activity-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--color-text-soft);
+}
+
+.phone__discover-activity-time {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+
+.phone__discover-activity-phase { flex: 0 0 auto; }
+.phone__discover-activity-item--done .phone__discover-activity-phase { color: #16a34a; }
+.phone__discover-activity-item--error .phone__discover-activity-phase { color: #dc2626; }
+.phone__discover-activity-item--error .phone__discover-activity-detail { color: #dc2626; }
+
+.phone__discover-activity-label {
+  flex: 0 0 auto;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.phone__discover-activity-detail {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* Per-row last-discovered age (openspec discover-apps-panel): under the union

@@ -86,4 +86,11 @@ public class LocalAppFinding
     [JsonPropertyName("startCommand")]
     [Description("Command that launches this app, run from its folder, e.g. node serve.mjs or powershell -File serve.ps1. Empty string if it cannot be determined.")]
     public string StartCommand { get; set; } = "";
+
+    // Optional like StartCommand: "" = build-less or undeterminable, never a parse
+    // failure — so pre-buildCommand cache files and import payloads load unchanged
+    // (openspec local-app-lifecycle-controls, D3).
+    [JsonPropertyName("buildCommand")]
+    [Description("Command that builds this app's servable artifacts, run from its folder, e.g. npm run build. Empty string if the app needs no build step or it cannot be determined.")]
+    public string BuildCommand { get; set; } = "";
 }
