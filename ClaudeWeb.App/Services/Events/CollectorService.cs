@@ -47,6 +47,11 @@ public class CollectorService
     private readonly List<CollectorEvent> _events = new();
     private int _seq;
 
+    // Serializes self ingestion (openspec repo-sounds-and-latency): the publish-triggered
+    // path and the periodic poll both run IngestSelf, and watermark-read → append →
+    // watermark-write must be one critical section or the same events double-append.
+    private readonly object _selfIngestLock = new();
+
     public CollectorService(HarnessEventFeed selfFeed, IDataProtectionProvider dp, Logger logger, HostEventSound hostSound)
     {
         _selfFeed = selfFeed;
@@ -57,6 +62,14 @@ public class CollectorService
         _storePath = System.IO.Path.Combine(AppPaths.DataDir, "collector-sources.json");
         Load();
         EnsureSelf();
+        // Ingest self the moment an event is published, so the host cue fires within
+        // ~1s of the event instead of on the next poll tick (and never behind a slow
+        // remote source). Fire-and-forget: the publisher must never wait on audio or IO.
+        _selfFeed.Published += () => _ = Task.Run(() =>
+        {
+            try { IngestSelf(); }
+            catch (Exception ex) { _logger.Error($"[COLLECTOR] publish-triggered self ingest failed: {ex.Message}"); }
+        });
     }
 
     // ---- types -------------------------------------------------------------
@@ -209,28 +222,42 @@ public class CollectorService
         List<Source> active;
         lock (_lock) active = _sources.Where(s => s.Active).ToList();
 
-        foreach (var s in active)
+        // Self first and in-process — never behind a remote's HTTP timeout. Remote
+        // sources then poll CONCURRENTLY (openspec repo-sounds-and-latency): a dead
+        // source burns its own 6s timeout without serializing the others.
+        try { IngestSelf(); }
+        catch (Exception ex)
         {
-            if (ct.IsCancellationRequested) break;
-            try
-            {
-                if (s.Kind == "self") PollSelf(s);
-                else await PollRemoteAsync(s, ct);
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
+            var self = active.FirstOrDefault(s => s.Kind == "self");
+            if (self is not null) SetState(self, alive: self.Alive, status: "error", detail: ex.Message);
+        }
+
+        await Task.WhenAll(active.Where(s => s.Kind != "self").Select(async s =>
+        {
+            try { await PollRemoteAsync(s, ct); }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
             catch (Exception ex)
             {
                 SetState(s, alive: s.Alive, status: "error", detail: ex.Message);
             }
-        }
+        }));
     }
 
-    private void PollSelf(Source s)
+    // Pull everything past the self watermark into the aggregate. Called from the poll
+    // pass AND from the feed's publish hook; _selfIngestLock makes watermark-read →
+    // append → watermark-write atomic across the two, so events never double-append.
+    private void IngestSelf()
     {
-        var (events, last) = _selfFeed.Read(s.Watermark);
-        foreach (var e in events)
-            Append(s, e.At, e.Type, e.Source, e.Data);
-        SetState(s, alive: true, status: "active", detail: null, watermark: last);
+        lock (_selfIngestLock)
+        {
+            Source? s;
+            lock (_lock) s = _sources.FirstOrDefault(x => x.Kind == "self" && x.Active);
+            if (s is null) return;
+            var (events, last) = _selfFeed.Read(s.Watermark);
+            foreach (var e in events)
+                Append(s, e.At, e.Type, e.Source, e.Data);
+            SetState(s, alive: true, status: "active", detail: null, watermark: last);
+        }
     }
 
     // Real pull: GET the source feed from its watermark, append new events, classify status.
@@ -366,10 +393,31 @@ public class CollectorService
             if (_events.Count > Cap) _events.RemoveRange(0, TrimChunk);
         }
         // Best-effort host cue (debounced, non-blocking; no-op unless the operator enabled it).
-        // Pass the source label and event type so the cue is event-determined — voice can say
-        // "agent {label} started" vs "has finished", beep picks a per-type sound. Outside the
-        // lock so audio scheduling never holds up polling.
-        _hostSound.Notify(s.Label, type);
+        // Pass the source label, event type AND the producer repo so the cue is both event- and
+        // repo-determined (openspec repo-sounds-and-latency) — voice can say "agent {label}
+        // started", beep picks a per-type sound, and a repo-scoped rule file wins for its repo.
+        // Outside the lock so audio scheduling never holds up polling.
+        _hostSound.Notify(s.Label, type, RepoNameOf(source));
+    }
+
+    // The producer repo from the envelope's source — `{ repoId, repoName }` by contract.
+    // Self events carry an anonymous object (read via reflection), remote events a
+    // JsonElement. Best-effort: anything unexpected just means no repo scope for the cue.
+    internal static string? RepoNameOf(object? source)
+    {
+        try
+        {
+            if (source is JsonElement je)
+                return je.ValueKind == JsonValueKind.Object &&
+                       je.TryGetProperty("repoName", out var n) && n.ValueKind == JsonValueKind.String
+                    ? n.GetString()
+                    : null;
+            if (source is null) return null;
+            var prop = source.GetType().GetProperty("repoName") ?? source.GetType().GetProperty("RepoName");
+            var v = prop?.GetValue(source) as string;
+            return string.IsNullOrWhiteSpace(v) ? null : v;
+        }
+        catch { return null; }
     }
 
     // Unified state update: status + scrubbed detail + alive + lastPolled, optional watermark.

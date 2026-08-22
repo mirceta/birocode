@@ -1,233 +1,202 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>local-app-lifecycle-controls — how the plan handles it</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Understanding — repo sounds & cue latency</title>
 <style>
   :root{
-    --bg:#0f1420; --panel:#161d2e; --panel2:#1c2540; --line:#2a3550;
-    --txt:#dbe4f5; --dim:#8494b3; --acc:#5aa9ff; --ok:#4ecf8a; --warn:#f2b544;
-    --bad:#f0647a; --mono:Consolas,Menlo,monospace;
+    --bg:#f0efec; --panel:#fcfcfb; --panel2:#f4f3f0; --edge:#e1e0d9;
+    --ink:#0b0b0b; --dim:#52514e; --muted:#898781; --accent:#2a78d6; --accent-deep:#256abf;
+    --good:#0ca30c; --good-text:#006300; --bad:#d03b3b; --warn:#fab219;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.55 "Segoe UI",system-ui,sans-serif;padding:0 0 60px}
-  header{padding:26px 28px 10px}
-  header h1{margin:0;font-size:21px}
-  header p{margin:6px 0 0;color:var(--dim);max-width:860px}
-  nav{display:flex;flex-wrap:wrap;gap:8px;padding:14px 28px 4px;position:sticky;top:0;background:var(--bg);z-index:5;border-bottom:1px solid var(--line)}
-  nav button{background:var(--panel);border:1px solid var(--line);color:var(--txt);padding:8px 14px;border-radius:8px;cursor:pointer;font-size:14px}
-  nav button.on{background:var(--acc);color:#08101f;border-color:var(--acc);font-weight:600}
-  main{padding:20px 28px;max-width:1060px}
-  section{display:none}
-  section.on{display:block}
-  h2{font-size:17px;margin:8px 0 4px}
-  .lead{color:var(--dim);margin:0 0 16px;max-width:860px}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:0 0 14px}
-  .card h3{margin:0 0 8px;font-size:15px}
-  code,.mono{font-family:var(--mono);font-size:13px}
-  code{background:var(--panel2);padding:1px 6px;border-radius:5px}
-  pre{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow:auto;font-family:var(--mono);font-size:13px;line-height:1.5;margin:10px 0}
-  .add{color:var(--ok)} .dim{color:var(--dim)} .warnc{color:var(--warn)} .badc{color:var(--bad)}
-  .flow{display:flex;flex-direction:column;gap:0;margin:14px 0}
-  .step{display:flex;gap:14px;align-items:stretch;cursor:pointer}
-  .step .rail{display:flex;flex-direction:column;align-items:center;width:34px;flex:none}
-  .step .dot{width:30px;height:30px;border-radius:50%;background:var(--panel2);border:2px solid var(--line);
-    display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:var(--dim);flex:none}
-  .step .bar{flex:1;width:2px;background:var(--line);min-height:12px}
-  .step:last-child .bar{display:none}
-  .step .body{padding:2px 0 18px;flex:1}
-  .step .body b{display:block;margin-bottom:2px}
-  .step .body .det{color:var(--dim);display:none;max-width:760px}
-  .step.hl .dot{background:var(--acc);border-color:var(--acc);color:#08101f}
-  .step.hl .body .det{display:block}
-  .step.stop .dot{background:var(--bad);border-color:var(--bad);color:#08101f}
-  .hint{color:var(--dim);font-size:13px;margin:2px 0 10px}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  @media(max-width:800px){.grid2{grid-template-columns:1fr}}
-  .tag{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:1px 8px;font-size:12px;color:var(--dim);margin-right:6px}
-  .tag.okt{color:var(--ok);border-color:var(--ok)}
-  .tag.badt{color:var(--bad);border-color:var(--bad)}
-  table{border-collapse:collapse;width:100%;font-size:14px}
-  td,th{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
-  th{background:var(--panel2)}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,Segoe UI,Roboto,sans-serif;padding:22px 26px 80px}
+  h1{font-size:20px;margin:0 0 4px} .sub{color:var(--dim);font-size:13px;margin-bottom:18px}
+  h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:26px 0 10px}
+  .card{background:var(--panel);border:1px solid var(--edge);border-radius:12px;padding:16px 18px;box-shadow:0 1px 2px rgba(11,11,11,.05);margin-bottom:14px;max-width:980px}
+  .tag{font-family:var(--mono);font-size:12px;background:var(--panel2);border:1px solid var(--edge);border-radius:5px;padding:1px 6px}
+  button{background:var(--panel);border:1px solid var(--edge);border-radius:7px;padding:6px 12px;cursor:pointer;font-size:13px}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent-deep);color:#fff;border:none;font-weight:600}
+
+  /* timeline */
+  .lane{margin:12px 0}
+  .lane .ttl{font-size:13px;font-weight:600;margin-bottom:4px}
+  .bar{position:relative;height:34px;background:var(--panel2);border:1px solid var(--edge);border-radius:8px;overflow:hidden}
+  .seg{position:absolute;top:0;bottom:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;color:#fff;white-space:nowrap;overflow:hidden}
+  .seg.wait{background:#c3c2b7;color:#3c3b38}
+  .seg.dead{background:var(--bad)}
+  .seg.selfok{background:var(--good)}
+  .cursor{position:absolute;top:-6px;bottom:-6px;width:2px;background:var(--accent-deep);display:none}
+  .axis{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:3px}
+  .bell{position:absolute;top:-2px;font-size:16px;transform:translateX(-50%)}
+  .note{color:var(--dim);font-size:13px;margin-top:8px}
+  .stat{font-family:var(--mono);font-size:13px;color:var(--good-text);font-weight:600}
+  .statbad{font-family:var(--mono);font-size:13px;color:var(--bad);font-weight:600}
+
+  /* precedence demo */
+  .grid{display:grid;grid-template-columns:auto 1fr;gap:10px 16px;align-items:center;margin:10px 0}
+  select,label{font-size:14px}
+  select{padding:6px 10px;border:1px solid var(--edge);border-radius:7px;background:#fff}
+  .layers{display:flex;flex-direction:column;gap:6px;margin-top:12px}
+  .layer{display:flex;gap:12px;align-items:center;border:1px solid var(--edge);border-left-width:4px;border-radius:8px;padding:8px 12px;background:var(--panel2);opacity:.55}
+  .layer .n{font-family:var(--mono);font-size:12px;color:var(--muted);width:16px}
+  .layer .what{flex:1}
+  .layer .st{font-family:var(--mono);font-size:12px;color:var(--muted)}
+  .layer.present{opacity:.9}
+  .layer.win{opacity:1;border-color:var(--good);background:rgba(12,163,12,.07)}
+  .layer.win .st{color:var(--good-text);font-weight:700}
+  .layer.skipna .st{color:var(--muted)}
+  .chk{display:flex;gap:16px;flex-wrap:wrap;margin:8px 0}
+  .chk label{display:flex;gap:6px;align-items:center;font-size:13.5px}
+  .verdict{margin-top:12px;font-size:14.5px;border:1px solid var(--good);background:rgba(12,163,12,.06);border-radius:8px;padding:9px 13px}
+  .flow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:13.5px;margin:8px 0}
+  .box{border:1px solid var(--edge);border-radius:8px;background:var(--panel2);padding:6px 11px;font-family:var(--mono);font-size:12.5px}
+  .box.hot{border-color:var(--accent);background:rgba(42,120,214,.08)}
+  .arr{color:var(--muted)}
 </style>
 </head>
 <body>
-<header>
-  <h1>local-app-lifecycle-controls — Stop · Restart · Rebuild · Backfill</h1>
-  <p>How the OpenSpec change extends the dock's Local Apps panel beyond register + run.
-     Click any numbered step to expand it. Everything here mirrors
-     <span class="mono">openspec/changes/local-app-lifecycle-controls/</span>.</p>
-</header>
-<nav id="nav"></nav>
-<main id="main"></main>
+<h1>Repo sounds &amp; cue latency</h1>
+<div class="sub">openspec change <span class="tag">repo-sounds-and-latency</span> — why cues took 5–10s (or never came), what changed, and how a cue is now picked per repository.</div>
+
+<div class="card">
+  <h2 style="margin-top:0">1 · Why the sound was late — and the fix</h2>
+  <div class="flow">
+    <span class="box">click dock chat</span><span class="arr">→</span>
+    <span class="box">POST /api/events/chat-focus</span><span class="arr">→</span>
+    <span class="box">HarnessEventFeed.Publish</span><span class="arr">→</span>
+    <span class="box hot">collector ingest</span><span class="arr">→</span>
+    <span class="box">🔊 host cue</span>
+  </div>
+  <p class="note">The cue only fires at <b>collector ingest</b>. Before: one sequential poll pass every 2.5s, and the dead
+  "monster" source burned its full 6s HTTP timeout <i>before</i> the in-process self source was even read. After: publishing
+  triggers self ingest <b>immediately</b>, and remote sources poll in parallel — a dead remote delays only itself.</p>
+
+  <div class="lane">
+    <div class="ttl">Before <span class="statbad" id="beforeStat"></span></div>
+    <div class="bar" id="beforeBar"></div>
+    <div class="axis"><span>0s</span><span>2s</span><span>4s</span><span>6s</span><span>8s</span><span>10s</span></div>
+  </div>
+  <div class="lane">
+    <div class="ttl">After <span class="stat" id="afterStat"></span></div>
+    <div class="bar" id="afterBar"></div>
+    <div class="axis"><span>0s</span><span>2s</span><span>4s</span><span>6s</span><span>8s</span><span>10s</span></div>
+  </div>
+  <button class="primary" id="play">▶ Replay the event</button>
+  <p class="note">Also fixed for "sometimes no sound at all": the composer's chat-focus damping dropped from one event per
+  <b>10s</b> to per <b>3s</b>, and because events no longer arrive in one late batch, the host's 400ms debounce rarely
+  swallows them anymore. (Measured on an isolated instance with a dead source registered: publish → ingest in
+  <b>≈0.7s</b>, vs ≈5–10s before.)</p>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0">2 · Which sound plays? (host and device use the same precedence)</h2>
+  <p class="note">Set up which rules exist, then pick the incoming event — the winning layer lights up.</p>
+  <div class="grid">
+    <label>Event type</label>
+    <select id="evType">
+      <option value="turn.ended">turn.ended</option>
+      <option value="turn.start">turn.start</option>
+      <option value="chat.focus">chat.focus</option>
+      <option value="deploy.done">deploy.done (unknown type)</option>
+    </select>
+    <label>From repo</label>
+    <select id="evRepo">
+      <option value="birocode">birocode</option>
+      <option value="otherrepo">otherrepo (no rules)</option>
+    </select>
+  </div>
+  <div class="chk">
+    <label><input type="checkbox" id="rT" checked /> birocode · rule for the type</label>
+    <label><input type="checkbox" id="rD" checked /> birocode · <i>_default</i> (whole-repo sound)</label>
+    <label><input type="checkbox" id="gT" checked /> global · rule for the type</label>
+    <label><input type="checkbox" id="gD" /> global · <i>_default</i></label>
+  </div>
+  <div class="layers" id="layers"></div>
+  <div class="verdict" id="verdict"></div>
+  <p class="note">The one asymmetry, on purpose: a <b>repo</b> <i>_default</i> covers <b>every</b> event from that repo
+  (that's the "give this repo its own voice" feature), while the <b>global</b> <i>_default</i> keeps its old meaning —
+  unknown types only. Device cues in the events-app resolve the same way, with the browser synth as the built-in layer.</p>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0">3 · Where things live</h2>
+  <div class="flow"><span class="box">host rules</span><span class="arr">→</span><span>server-side files under <span class="tag">collector-host-cues/</span> (global) and <span class="tag">collector-host-cues/repos/&lt;key&gt;/</span> (per repo, with a <span class="tag">.repo</span> sidecar naming it)</span></div>
+  <div class="flow"><span class="box">device rules</span><span class="arr">→</span><span>browser IndexedDB; repo-scoped records use a composite <span class="tag">repo␀type</span> key, old plain-type records stay the global layer</span></div>
+  <div class="flow"><span class="box">API</span><span class="arr">→</span><span><span class="tag">/api/collector/sound/rules/&lt;slot&gt;?repo=R</span> — omit <span class="tag">?repo=</span> and everything behaves exactly as before this change</span></div>
+</div>
 
 <script>
-const TABS = [
-["overview","Overview",`
-<h2>Four mechanisms, one pipeline</h2>
-<p class="lead">The discovery pipeline already flows prompt → typed report → cache → panel.
-This change adds one field (<code>buildCommand</code>) flowing through that same pipeline,
-three per-row actions on top of it, and one targeted agent ask to upgrade caches that predate the field.</p>
-<div class="grid2">
-  <div class="card"><h3>1 · Prompt JSON gains <code>buildCommand</code></h3>
-    The discovery prompt's "Output format" is <b>rendered by reflection</b> from the typed
-    report (<span class="mono">OutputFormatRenderer</span>). Adding the attributed field to
-    <span class="mono">LocalAppFinding</span> updates the prompt schema and the parser in one place — they cannot drift.</div>
-  <div class="card"><h3>2 · Stop resolves the process from the port, live</h3>
-    No PID is ever retained (launches are detached fire-and-forget). Stop asks the OS
-    <i>who owns this listener right now</i> → kills that process tree. Guards keep it repo-scoped
-    and make killing the harness itself structurally impossible.</div>
-  <div class="card"><h3>3 · Cache format extends, no migration</h3>
-    Cached findings carry <code>buildCommand</code>; old cache files, imports and exports
-    stay valid — a missing field parses to <code>""</code> (= unknown), Rebuild simply stays disabled for that row.</div>
-  <div class="card"><h3>4 · Existing caches upgrade via a backfill ask</h3>
-    A second structured prompt through the same ClaudeMonitor gateway enumerates the cached
-    findings missing a build command and asks <i>only</i> for their build commands — no
-    rediscovery, merge touches only <code>buildCommand</code> by port.</div>
-  <div class="card"><h3>5 · You can SEE it happen: activity section in the panel</h3>
-    Every action already emits phase events into the repo event log. The panel gains a
-    newest-first activity feed of exactly those events — click Run/Restart and watch
-    <i>started → done/error</i> (with PID, exit code…) appear in place. Server-side log,
-    so history from before you opened the panel shows too.</div>
-</div>
-`],
-["prompt","1 · Prompt + schema",`
-<h2>The discovery JSON contract, before → after</h2>
-<p class="lead">One source of truth: <span class="mono">[JsonPropertyName]</span> + <span class="mono">[Description]</span>
-attributes on the typed report drive BOTH the prompt's required-output section and the validating parse.</p>
-<pre>{
-  "apps": [{
-    "name":         "homepage",
-    "port":         5305,
-    "folder":       "homepage",
-    "evidence":     "homepage/serve.mjs:22",
-    "startCommand": "node serve.mjs",
-<span class="add">    "buildCommand": "npm run build"   // NEW — optional; "" = build-less or unknown</span>
-  }]
-}</pre>
-<div class="card"><h3>Rules</h3>
-  <ul>
-    <li><code>buildCommand</code> mirrors <code>startCommand</code> exactly: optional, empty never fails the parse.</li>
-    <li>Prompt text needs <b>no hand edit</b> — the rendered schema picks the field up from the attribute (spec req. "The required-output schema is derived from the typed report").</li>
-    <li>Import/export contract now includes the field; a payload without it is still valid.</li>
-  </ul></div>
-`],
-["stop","2 · Stop",`
-<h2>Stop: port → owning PID → kill tree (resolved at click time)</h2>
-<p class="hint">Click a step to expand. Red steps are the guard gates that abort the kill.</p>
-<div class="flow" id="f-stop"></div>
-<div class="card"><h3>Why not remember the PID from Run?</h3>
-  Launch is deliberately detached with no PID retained — liveness is read off the port, which also
-  covers apps the operator started <b>by hand</b> on the host. So stop must resolve ownership live:
-  that makes hand-started apps stoppable too, and is why the kill needs guards instead of trust.</div>
-`],
-["restart","3 · Restart",`
-<h2>Restart: stop → wait for the port to actually free → launch</h2>
-<p class="hint">Synchronous in the request (~10&nbsp;s bound) — a human-clicked action, no job machinery.</p>
-<div class="flow" id="f-restart"></div>
-<div class="card"><h3>Edge behavior</h3>
-  <span class="tag okt">not running</span> skips straight to launch (plain start) ·
-  <span class="tag badt">stop fails</span> abort, nothing launched ·
-  <span class="tag badt">port never frees</span> abort after ~10&nbsp;s, never a second instance on a busy port.</div>
-`],
-["rebuild","4 · Rebuild",`
-<h2>Rebuild: a disconnect-proof build job with a captured, honest outcome</h2>
-<div class="flow" id="f-rebuild"></div>
-<div class="card"><h3>Deliberate limits</h3>
-  <ul>
-    <li>Rebuild does <b>not</b> stop or start the server — "rebuild &amp; restart" stays two explicit clicks (chaining deferred).</li>
-    <li>Output tail bounded (~8&nbsp;KB), truncation marked — success with truncated output is still honest.</li>
-    <li>Start-or-join per (repo, port): a second click joins the running build, never doubles it.</li>
-    <li>Rebuild state rides <b>inside the status/cache snapshot</b> per row; the panel refreshes it at the dock cadence (~5&nbsp;s) while open.</li>
-  </ul></div>
-`],
-["activity","6 · Activity feed",`
-<h2>Seeing that a click actually does something</h2>
-<p class="lead">Design D8: the panel's activity section is a <b>filtered view of the repo event log</b> —
-the same feed the dock's Event Console lane reads (<span class="mono">GET /api/repos/&lt;repo&gt;/events?after=N</span>),
-narrowed to the local-app kinds: <code>run</code>, <code>stop</code>, <code>restart</code>,
-<code>rebuild</code>, <code>backfill</code>, <code>check</code>, <code>cache</code>.</p>
-<div class="flow" id="f-activity"></div>
-<div class="card"><h3>Why the event log and not toasts</h3>
-  Toasts vanish and can only show what the HTTP response knew. The log captures phases that land
-  <i>after</i> the response — a rebuild finishing, restart's wait-for-port and launch — and being
-  server-side it shows activity from before the panel opened or from another device. One source of
-  truth (D7's emissions), zero new backend.</div>
-`],
-["backfill","5 · Backfill old caches",`
-<h2>Upgrading existing caches: a targeted ask, not a full re-scan</h2>
-<p class="lead">Live repos already hold populated caches with no <code>buildCommand</code>.
-The backfill is a second structured-output prompt through the SAME ClaudeMonitor gateway,
-read-only policy, extract → validating parse → bounded retry machinery as discovery.</p>
-<div class="flow" id="f-backfill"></div>
-<div class="grid2">
-  <div class="card"><h3>What the merge may touch</h3>
-    <table><tr><th>Field</th><th>Backfill merge</th></tr>
-      <tr><td class="mono">buildCommand</td><td class="add">updated (empty recorded as empty)</td></tr>
-      <tr><td class="mono">name / folder / evidence / startCommand</td><td class="dim">never touched</td></tr>
-      <tr><td class="mono">discoveredAt (per finding)</td><td class="dim">never touched</td></tr>
-      <tr><td>unmatched ports</td><td class="dim">never touched</td></tr></table></div>
-  <div class="card"><h3>Two upgrade paths</h3>
-    <b>Backfill</b> — cheap, targeted: agent inspects only the enumerated folders, cannot
-    hallucinate new apps (parse rejects any port outside the enumerated set).<br><br>
-    <b>Rescan</b> — ordinary re-discovery now extracts <code>buildCommand</code> too and its
-    union-by-port merge replaces matched findings wholesale — full-scan cost.</div>
-</div>
-`]];
-
-const FLOWS = {
-"f-stop":[
- ["Operator clicks Stop on a row","POST /api/local-apps/stop {port} — only the port travels; everything else is resolved server-side."],
- ["Guard: port must be a cached finding of THIS repo","Same trust model as Run: a port that matches no cached/discovered finding for the caller's repository is rejected before any process is touched — even if something is listening.",1],
- ["Resolve owner from the OS","Get-NetTCPConnection -State Listen -LocalPort <p> → OwningProcess. Ground truth at click time (IPv4 + IPv6 loopback), works for apps started outside the harness."],
- ["Guard: never the harness itself","Refuse if the resolved PID is Environment.ProcessId or on the current process's parent chain. Self-Development scans the harness repo, so a cached finding CAN claim the harness's port — the kill structurally cannot land on it. (PID comparison, not a port deny-list: ports are config, PIDs are ground truth.)",1],
- ["Kill the process tree","taskkill /PID <pid> /T /F — the listener and its children die together. Resolved PID is written to the Event Console before the kill, outcome after."],
- ["Cache untouched, row ready to start again","Stopping removes nothing from the cache and modifies no repo file; the running dot flips on the next liveness read."]],
-"f-restart":[
- ["Stop phase (if running)","Identical resolution + guards as Stop. If it fails → explicit error, nothing is launched."],
- ["Wait for the port to free","Poll IsListening every 250 ms, ~10 s bound. TIME_WAIT holds no *listener*, so port-free detection is reliable. Bound expires → explicit error, no launch."],
- ["Launch the cached startCommand","Same detached launch as Run, command resolved from the cache — never off the wire. Terminal event stays honest: 'launch issued'; liveness remains the port's story."]],
-"f-rebuild":[
- ["Operator clicks Rebuild","POST /api/local-apps/rebuild {port} — explicit error if the finding has no known buildCommand (button is disabled anyway)."],
- ["Start-or-join a backend-owned job","LocalAppBuildJobs keyed (repo, port), own cancellation token — patterned on the discovery jobs. Browser refresh/disconnect never cancels the build."],
- ["Run buildCommand in the app's folder","stdout+stderr redirected into a bounded ~8 KB tail; exit code and timing recorded."],
- ["Outcome lands on the row","running → succeeded / failed with exit code + expandable output, embedded in the panel's existing ~5 s status poll. Events: started / succeeded / failed."]],
-"f-activity":[
- ["You click Run / Stop / Restart / Rebuild","The endpoint emits a 'started' event into the RepoEventLog at the action boundary — e.g. stop logs the resolved PID it is about to kill."],
- ["Panel poll picks it up within a tick","The panel already polls status ~5 s while open; the activity fetch rides the same cadence with a sequence watermark (?after=N), so the started event appears in the section almost immediately."],
- ["Late phases land as they happen","done / error events — 'launch issued', restart's port-free wait, a rebuild's exit code — arrive on later ticks, so long actions stay visibly alive instead of silent."],
- ["History is free","The log is server-side: reopen the panel (or open it on your phone after clicking on the desktop) and the recent activity is still there, newest first."]],
-"f-backfill":[
- ["Operator clicks 'Find build commands'","Panel action (Advanced). If no cache, or nothing is missing a build command → explicit nothing-to-do, the agent is never called.",],
- ["Prompt enumerates the gap","The cached findings LACKING a buildCommand (name, folder, port, startCommand) go into the prompt: 'for each of these folders, what command builds its servable artifacts?' — no rediscovery."],
- ["Same gateway, same machinery","Typed {port, buildCommand} report → rendered schema → ClaudeMonitor.Client → JSON extraction → validating parse → bounded retry. Read-only tool policy; disconnect-proof job."],
- ["Parse rejects out-of-set ports","A reply reporting a port that was not enumerated fails the parse and is fed back for correction — the backfill cannot invent apps."],
- ["Surgical merge by port","Only buildCommand on matching findings is written; empty answers recorded as empty (build-less, Rebuild stays off). Everything else in the cache is byte-identical."]]
+// ── 1 · latency timeline ────────────────────────────────────────────────────
+// Both lanes model the same incident: chat.focus published at t≈0.4s while the
+// dead remote source is registered. Widths are % of a 10s window.
+const P = s => (s/10*100) + "%";
+function seg(cls, from, to, label){ return `<div class="seg ${cls}" style="left:${P(from)};width:${P(to-from)}">${label}</div>`; }
+const beforeBar = document.getElementById("beforeBar");
+const afterBar = document.getElementById("afterBar");
+// Before: pass starts at 0 with the dead remote (6s timeout), self only after it;
+// the event published at 0.4s waits for self's turn at ~6s → cue ≈5.6s late (and
+// up to ~8.5s when the event just misses a pass).
+beforeBar.innerHTML =
+  seg("dead", 0, 6, "dead remote — 6s timeout blocks the pass") +
+  seg("selfok", 6, 6.4, "self") +
+  `<div class="bell" style="left:${P(6.2)}">🔔</div>` +
+  seg("wait", 6.4, 8.9, "idle 2.5s") +
+  seg("dead", 8.9, 10, "dead remote…") +
+  `<div class="cursor" id="cur1"></div>`;
+// After: publish at 0.4s triggers self ingest instantly; the dead remote times out
+// in parallel and hurts nobody.
+afterBar.innerHTML =
+  seg("dead", 0, 6, "dead remote — times out in parallel, delays only itself") +
+  seg("selfok", 0.4, 0.75, "self") +
+  `<div class="bell" style="left:${P(0.55)}">🔔</div>` +
+  `<div class="cursor" id="cur2"></div>`;
+document.getElementById("beforeStat").textContent = "🔔 ≈5.6–8.5s after the click";
+document.getElementById("afterStat").textContent = "🔔 <1s after the click";
+document.getElementById("play").onclick = () => {
+  for (const id of ["cur1","cur2"]){
+    const c = document.getElementById(id);
+    c.style.display = "block"; c.style.transition = "none"; c.style.left = P(0.4);
+    void c.offsetWidth;                       // reflow so the transition restarts
+    c.style.transition = "left 5s linear"; c.style.left = P(10);
+  }
 };
 
-const nav=document.getElementById("nav"),main=document.getElementById("main");
-TABS.forEach(([id,label,html],i)=>{
-  const b=document.createElement("button");b.textContent=label;b.dataset.t=id;
-  b.onclick=()=>show(id);nav.appendChild(b);
-  const s=document.createElement("section");s.id="s-"+id;s.innerHTML=html;main.appendChild(s);
-});
-Object.entries(FLOWS).forEach(([fid,steps])=>{
-  const host=document.getElementById(fid);if(!host)return;
-  steps.forEach(([title,det,guard],i)=>{
-    const d=document.createElement("div");d.className="step"+(guard?" stop":"");
-    d.innerHTML=`<div class="rail"><div class="dot">${i+1}</div><div class="bar"></div></div>
-      <div class="body"><b>${title}</b><div class="det">${det||""}</div></div>`;
-    d.onclick=()=>d.classList.toggle("hl");
-    host.appendChild(d);
+// ── 2 · precedence demo ─────────────────────────────────────────────────────
+const KNOWN = ["turn.start","turn.ended","chat.focus"];
+const els = { evType: evType, evRepo: evRepo, rT: rT, rD: rD, gT: gT, gD: gD };
+function render(){
+  const type = els.evType.value, repo = els.evRepo.value;
+  const isBiro = repo === "birocode";
+  const layers = [
+    { id:"rT", name:`repo rule — birocode · ${type}`,    present: els.rT.checked, applies: isBiro },
+    { id:"rD", name:"repo rule — birocode · _default (any event from birocode)", present: els.rD.checked, applies: isBiro },
+    { id:"gT", name:`global rule — ${type}`,             present: els.gT.checked, applies: true },
+    { id:"gD", name:"global rule — _default (unknown types only)", present: els.gD.checked, applies: !KNOWN.includes(type) },
+    { id:"bi", name:"built-in cue (beep/voice per type · browser synth)", present: true, applies: true },
+  ];
+  let winner = null;
+  const host = document.getElementById("layers");
+  host.innerHTML = "";
+  layers.forEach((l, i) => {
+    let st;
+    if (!l.applies) st = l.present ? "n/a for this event" : "—";
+    else if (!l.present) st = "no rule";
+    else if (!winner){ winner = l; st = "✔ PLAYS"; }
+    else st = "shadowed";
+    const div = document.createElement("div");
+    div.className = "layer" + (l.present && l.applies ? " present" : "") + (winner === l ? " win" : "");
+    div.innerHTML = `<span class="n">${i+1}</span><span class="what">${l.name}</span><span class="st">${st}</span>`;
+    host.appendChild(div);
   });
-});
-function show(id){
-  nav.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.t===id));
-  main.querySelectorAll("section").forEach(s=>s.classList.toggle("on",s.id==="s-"+id));
+  document.getElementById("verdict").innerHTML =
+    `A <span class="tag">${type}</span> event from <span class="tag">${repo}</span> plays: <b>${winner.name}</b>`;
 }
-show("overview");
+for (const k in els) els[k].addEventListener("change", render);
+render();
 </script>
 </body>
 </html>
