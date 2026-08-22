@@ -75,7 +75,8 @@ public class CliRunnerService
         bool readOnly = false,
         Audit.AuditContext? audit = null,
         string? repoId = null,
-        string? repoName = null)
+        string? repoName = null,
+        bool browser = false)
     {
         var resuming = !string.IsNullOrWhiteSpace(sessionId);
 
@@ -83,7 +84,7 @@ public class CliRunnerService
         // immediately. Updated in place as events translate; finalized below.
         var record = _callLog.StartCall(
             prompt: message,
-            commandLine: BuildDisplayCommand(message, sessionId),
+            commandLine: BuildDisplayCommand(message, sessionId, browser),
             workingDirectory: workingDirectory,
             resuming: resuming,
             sessionId: resuming ? sessionId! : "");
@@ -101,12 +102,12 @@ public class CliRunnerService
         _feed.Publish(
             "turn.start",
             source: new { repoId = repoId ?? "", repoName = repoName ?? "" },
-            data: new { turnId, sessionId = resuming ? sessionId : null, resuming, readOnly });
+            data: new { turnId, sessionId = resuming ? sessionId : null, resuming, readOnly, browser });
 
         Process? process = null;
         try
         {
-            var psi = CreateProcessInfo(message, sessionId, workingDirectory, model, readOnly);
+            var psi = CreateProcessInfo(message, sessionId, workingDirectory, model, readOnly, browser);
             _logger.Info(resuming
                 ? $"[CLI] Resuming session {Short(sessionId!)} in {workingDirectory}"
                 : $"[CLI] Starting new session in {workingDirectory}");
@@ -229,7 +230,7 @@ public class CliRunnerService
     /// prompt is truncated here for display; the full prompt lives on
     /// <see cref="CallRecord.Prompt"/>.
     /// </summary>
-    private static string BuildDisplayCommand(string message, string? sessionId)
+    private static string BuildDisplayCommand(string message, string? sessionId, bool browser = false)
     {
         var promptDisplay = message.Replace("\r", " ").Replace("\n", " ");
         if (promptDisplay.Length > 80) promptDisplay = promptDisplay[..80] + "...";
@@ -246,6 +247,7 @@ public class CliRunnerService
         parts.Add("stream-json");
         parts.Add("--include-partial-messages");
         parts.Add("--verbose");
+        if (browser) parts.Add("--chrome");
         return string.Join(" ", parts);
     }
 
@@ -682,7 +684,7 @@ public class CliRunnerService
         return cmdFallback ?? "claude.cmd";
     }
 
-    private static ProcessStartInfo CreateProcessInfo(string message, string? sessionId, string? workingDirectory, string? model = null, bool readOnly = false)
+    private static ProcessStartInfo CreateProcessInfo(string message, string? sessionId, string? workingDirectory, string? model = null, bool readOnly = false, bool browser = false)
     {
         var psi = new ProcessStartInfo
         {
@@ -713,6 +715,14 @@ public class CliRunnerService
             psi.ArgumentList.Add("--model");
             psi.ArgumentList.Add(model);
         }
+
+        // Claude-in-Chrome browser mode (openspec claude-in-chrome): surfaces the
+        // extension as the claude-in-chrome MCP server inside this run. Builder
+        // lane only (the controller normalizes), and the caller holds the global
+        // ChromeGateService single-holder gate for the run's lifetime. Requires
+        // subscription auth — which the ANTHROPIC_API_KEY strip below already
+        // guarantees — and the extension's native-messaging host on this machine.
+        if (browser) psi.ArgumentList.Add("--chrome");
 
         // Permission scope. Two lanes only (the per-project preset system was removed —
         // openspec add-resilient-auth — so a user past both gates is fully trusted,

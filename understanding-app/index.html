@@ -1,233 +1,133 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>local-app-lifecycle-controls — how the plan handles it</title>
-<style>
-  :root{
-    --bg:#0f1420; --panel:#161d2e; --panel2:#1c2540; --line:#2a3550;
-    --txt:#dbe4f5; --dim:#8494b3; --acc:#5aa9ff; --ok:#4ecf8a; --warn:#f2b544;
-    --bad:#f0647a; --mono:Consolas,Menlo,monospace;
-  }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.55 "Segoe UI",system-ui,sans-serif;padding:0 0 60px}
-  header{padding:26px 28px 10px}
-  header h1{margin:0;font-size:21px}
-  header p{margin:6px 0 0;color:var(--dim);max-width:860px}
-  nav{display:flex;flex-wrap:wrap;gap:8px;padding:14px 28px 4px;position:sticky;top:0;background:var(--bg);z-index:5;border-bottom:1px solid var(--line)}
-  nav button{background:var(--panel);border:1px solid var(--line);color:var(--txt);padding:8px 14px;border-radius:8px;cursor:pointer;font-size:14px}
-  nav button.on{background:var(--acc);color:#08101f;border-color:var(--acc);font-weight:600}
-  main{padding:20px 28px;max-width:1060px}
-  section{display:none}
-  section.on{display:block}
-  h2{font-size:17px;margin:8px 0 4px}
-  .lead{color:var(--dim);margin:0 0 16px;max-width:860px}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:0 0 14px}
-  .card h3{margin:0 0 8px;font-size:15px}
-  code,.mono{font-family:var(--mono);font-size:13px}
-  code{background:var(--panel2);padding:1px 6px;border-radius:5px}
-  pre{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow:auto;font-family:var(--mono);font-size:13px;line-height:1.5;margin:10px 0}
-  .add{color:var(--ok)} .dim{color:var(--dim)} .warnc{color:var(--warn)} .badc{color:var(--bad)}
-  .flow{display:flex;flex-direction:column;gap:0;margin:14px 0}
-  .step{display:flex;gap:14px;align-items:stretch;cursor:pointer}
-  .step .rail{display:flex;flex-direction:column;align-items:center;width:34px;flex:none}
-  .step .dot{width:30px;height:30px;border-radius:50%;background:var(--panel2);border:2px solid var(--line);
-    display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:var(--dim);flex:none}
-  .step .bar{flex:1;width:2px;background:var(--line);min-height:12px}
-  .step:last-child .bar{display:none}
-  .step .body{padding:2px 0 18px;flex:1}
-  .step .body b{display:block;margin-bottom:2px}
-  .step .body .det{color:var(--dim);display:none;max-width:760px}
-  .step.hl .dot{background:var(--acc);border-color:var(--acc);color:#08101f}
-  .step.hl .body .det{display:block}
-  .step.stop .dot{background:var(--bad);border-color:var(--bad);color:#08101f}
-  .hint{color:var(--dim);font-size:13px;margin:2px 0 10px}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  @media(max-width:800px){.grid2{grid-template-columns:1fr}}
-  .tag{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:1px 8px;font-size:12px;color:var(--dim);margin-right:6px}
-  .tag.okt{color:var(--ok);border-color:var(--ok)}
-  .tag.badt{color:var(--bad);border-color:var(--bad)}
-  table{border-collapse:collapse;width:100%;font-size:14px}
-  td,th{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
-  th{background:var(--panel2)}
-</style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>claude-in-chrome — the user story</title>
+<link rel="stylesheet" href="./style.css">
 </head>
 <body>
 <header>
-  <h1>local-app-lifecycle-controls — Stop · Restart · Rebuild · Backfill</h1>
-  <p>How the OpenSpec change extends the dock's Local Apps panel beyond register + run.
-     Click any numbered step to expand it. Everything here mirrors
-     <span class="mono">openspec/changes/local-app-lifecycle-controls/</span>.</p>
+  <h1>Browser mode — the user story</h1>
+  <p class="sub">"Check my Gmail" from your phone, executed in <em>your</em> Chrome on the host PC.
+     Step through a real day with the feature turned on.</p>
+  <nav id="tabs">
+    <button data-view="story" class="active">1 · The story, step by step</button>
+    <button data-view="mental" >2 · "Is it just a tool?"</button>
+    <button data-view="caveats">3 · The three catches</button>
+  </nav>
 </header>
-<nav id="nav"></nav>
-<main id="main"></main>
 
-<script>
-const TABS = [
-["overview","Overview",`
-<h2>Four mechanisms, one pipeline</h2>
-<p class="lead">The discovery pipeline already flows prompt → typed report → cache → panel.
-This change adds one field (<code>buildCommand</code>) flowing through that same pipeline,
-three per-row actions on top of it, and one targeted agent ask to upgrade caches that predate the field.</p>
-<div class="grid2">
-  <div class="card"><h3>1 · Prompt JSON gains <code>buildCommand</code></h3>
-    The discovery prompt's "Output format" is <b>rendered by reflection</b> from the typed
-    report (<span class="mono">OutputFormatRenderer</span>). Adding the attributed field to
-    <span class="mono">LocalAppFinding</span> updates the prompt schema and the parser in one place — they cannot drift.</div>
-  <div class="card"><h3>2 · Stop resolves the process from the port, live</h3>
-    No PID is ever retained (launches are detached fire-and-forget). Stop asks the OS
-    <i>who owns this listener right now</i> → kills that process tree. Guards keep it repo-scoped
-    and make killing the harness itself structurally impossible.</div>
-  <div class="card"><h3>3 · Cache format extends, no migration</h3>
-    Cached findings carry <code>buildCommand</code>; old cache files, imports and exports
-    stay valid — a missing field parses to <code>""</code> (= unknown), Rebuild simply stays disabled for that row.</div>
-  <div class="card"><h3>4 · Existing caches upgrade via a backfill ask</h3>
-    A second structured prompt through the same ClaudeMonitor gateway enumerates the cached
-    findings missing a build command and asks <i>only</i> for their build commands — no
-    rediscovery, merge touches only <code>buildCommand</code> by port.</div>
-  <div class="card"><h3>5 · You can SEE it happen: activity section in the panel</h3>
-    Every action already emits phase events into the repo event log. The panel gains a
-    newest-first activity feed of exactly those events — click Run/Restart and watch
-    <i>started → done/error</i> (with PID, exit code…) appear in place. Server-side log,
-    so history from before you opened the panel shows too.</div>
-</div>
-`],
-["prompt","1 · Prompt + schema",`
-<h2>The discovery JSON contract, before → after</h2>
-<p class="lead">One source of truth: <span class="mono">[JsonPropertyName]</span> + <span class="mono">[Description]</span>
-attributes on the typed report drive BOTH the prompt's required-output section and the validating parse.</p>
-<pre>{
-  "apps": [{
-    "name":         "homepage",
-    "port":         5305,
-    "folder":       "homepage",
-    "evidence":     "homepage/serve.mjs:22",
-    "startCommand": "node serve.mjs",
-<span class="add">    "buildCommand": "npm run build"   // NEW — optional; "" = build-less or unknown</span>
-  }]
-}</pre>
-<div class="card"><h3>Rules</h3>
-  <ul>
-    <li><code>buildCommand</code> mirrors <code>startCommand</code> exactly: optional, empty never fails the parse.</li>
-    <li>Prompt text needs <b>no hand edit</b> — the rendered schema picks the field up from the attribute (spec req. "The required-output schema is derived from the typed report").</li>
-    <li>Import/export contract now includes the field; a payload without it is still valid.</li>
-  </ul></div>
-`],
-["stop","2 · Stop",`
-<h2>Stop: port → owning PID → kill tree (resolved at click time)</h2>
-<p class="hint">Click a step to expand. Red steps are the guard gates that abort the kill.</p>
-<div class="flow" id="f-stop"></div>
-<div class="card"><h3>Why not remember the PID from Run?</h3>
-  Launch is deliberately detached with no PID retained — liveness is read off the port, which also
-  covers apps the operator started <b>by hand</b> on the host. So stop must resolve ownership live:
-  that makes hand-started apps stoppable too, and is why the kill needs guards instead of trust.</div>
-`],
-["restart","3 · Restart",`
-<h2>Restart: stop → wait for the port to actually free → launch</h2>
-<p class="hint">Synchronous in the request (~10&nbsp;s bound) — a human-clicked action, no job machinery.</p>
-<div class="flow" id="f-restart"></div>
-<div class="card"><h3>Edge behavior</h3>
-  <span class="tag okt">not running</span> skips straight to launch (plain start) ·
-  <span class="tag badt">stop fails</span> abort, nothing launched ·
-  <span class="tag badt">port never frees</span> abort after ~10&nbsp;s, never a second instance on a busy port.</div>
-`],
-["rebuild","4 · Rebuild",`
-<h2>Rebuild: a disconnect-proof build job with a captured, honest outcome</h2>
-<div class="flow" id="f-rebuild"></div>
-<div class="card"><h3>Deliberate limits</h3>
-  <ul>
-    <li>Rebuild does <b>not</b> stop or start the server — "rebuild &amp; restart" stays two explicit clicks (chaining deferred).</li>
-    <li>Output tail bounded (~8&nbsp;KB), truncation marked — success with truncated output is still honest.</li>
-    <li>Start-or-join per (repo, port): a second click joins the running build, never doubles it.</li>
-    <li>Rebuild state rides <b>inside the status/cache snapshot</b> per row; the panel refreshes it at the dock cadence (~5&nbsp;s) while open.</li>
-  </ul></div>
-`],
-["activity","6 · Activity feed",`
-<h2>Seeing that a click actually does something</h2>
-<p class="lead">Design D8: the panel's activity section is a <b>filtered view of the repo event log</b> —
-the same feed the dock's Event Console lane reads (<span class="mono">GET /api/repos/&lt;repo&gt;/events?after=N</span>),
-narrowed to the local-app kinds: <code>run</code>, <code>stop</code>, <code>restart</code>,
-<code>rebuild</code>, <code>backfill</code>, <code>check</code>, <code>cache</code>.</p>
-<div class="flow" id="f-activity"></div>
-<div class="card"><h3>Why the event log and not toasts</h3>
-  Toasts vanish and can only show what the HTTP response knew. The log captures phases that land
-  <i>after</i> the response — a rebuild finishing, restart's wait-for-port and launch — and being
-  server-side it shows activity from before the panel opened or from another device. One source of
-  truth (D7's emissions), zero new backend.</div>
-`],
-["backfill","5 · Backfill old caches",`
-<h2>Upgrading existing caches: a targeted ask, not a full re-scan</h2>
-<p class="lead">Live repos already hold populated caches with no <code>buildCommand</code>.
-The backfill is a second structured-output prompt through the SAME ClaudeMonitor gateway,
-read-only policy, extract → validating parse → bounded retry machinery as discovery.</p>
-<div class="flow" id="f-backfill"></div>
-<div class="grid2">
-  <div class="card"><h3>What the merge may touch</h3>
-    <table><tr><th>Field</th><th>Backfill merge</th></tr>
-      <tr><td class="mono">buildCommand</td><td class="add">updated (empty recorded as empty)</td></tr>
-      <tr><td class="mono">name / folder / evidence / startCommand</td><td class="dim">never touched</td></tr>
-      <tr><td class="mono">discoveredAt (per finding)</td><td class="dim">never touched</td></tr>
-      <tr><td>unmatched ports</td><td class="dim">never touched</td></tr></table></div>
-  <div class="card"><h3>Two upgrade paths</h3>
-    <b>Backfill</b> — cheap, targeted: agent inspects only the enumerated folders, cannot
-    hallucinate new apps (parse rejects any port outside the enumerated set).<br><br>
-    <b>Rescan</b> — ordinary re-discovery now extracts <code>buildCommand</code> too and its
-    union-by-port merge replaces matched findings wholesale — full-scan cost.</div>
-</div>
-`]];
+<main>
 
-const FLOWS = {
-"f-stop":[
- ["Operator clicks Stop on a row","POST /api/local-apps/stop {port} — only the port travels; everything else is resolved server-side."],
- ["Guard: port must be a cached finding of THIS repo","Same trust model as Run: a port that matches no cached/discovered finding for the caller's repository is rejected before any process is touched — even if something is listening.",1],
- ["Resolve owner from the OS","Get-NetTCPConnection -State Listen -LocalPort <p> → OwningProcess. Ground truth at click time (IPv4 + IPv6 loopback), works for apps started outside the harness."],
- ["Guard: never the harness itself","Refuse if the resolved PID is Environment.ProcessId or on the current process's parent chain. Self-Development scans the harness repo, so a cached finding CAN claim the harness's port — the kill structurally cannot land on it. (PID comparison, not a port deny-list: ports are config, PIDs are ground truth.)",1],
- ["Kill the process tree","taskkill /PID <pid> /T /F — the listener and its children die together. Resolved PID is written to the Event Console before the kill, outcome after."],
- ["Cache untouched, row ready to start again","Stopping removes nothing from the cache and modifies no repo file; the running dot flips on the next liveness read."]],
-"f-restart":[
- ["Stop phase (if running)","Identical resolution + guards as Stop. If it fails → explicit error, nothing is launched."],
- ["Wait for the port to free","Poll IsListening every 250 ms, ~10 s bound. TIME_WAIT holds no *listener*, so port-free detection is reliable. Bound expires → explicit error, no launch."],
- ["Launch the cached startCommand","Same detached launch as Run, command resolved from the cache — never off the wire. Terminal event stays honest: 'launch issued'; liveness remains the port's story."]],
-"f-rebuild":[
- ["Operator clicks Rebuild","POST /api/local-apps/rebuild {port} — explicit error if the finding has no known buildCommand (button is disabled anyway)."],
- ["Start-or-join a backend-owned job","LocalAppBuildJobs keyed (repo, port), own cancellation token — patterned on the discovery jobs. Browser refresh/disconnect never cancels the build."],
- ["Run buildCommand in the app's folder","stdout+stderr redirected into a bounded ~8 KB tail; exit code and timing recorded."],
- ["Outcome lands on the row","running → succeeded / failed with exit code + expandable output, embedded in the panel's existing ~5 s status poll. Events: started / succeeded / failed."]],
-"f-activity":[
- ["You click Run / Stop / Restart / Rebuild","The endpoint emits a 'started' event into the RepoEventLog at the action boundary — e.g. stop logs the resolved PID it is about to kill."],
- ["Panel poll picks it up within a tick","The panel already polls status ~5 s while open; the activity fetch rides the same cadence with a sequence watermark (?after=N), so the started event appears in the section almost immediately."],
- ["Late phases land as they happen","done / error events — 'launch issued', restart's port-free wait, a rebuild's exit code — arrive on later ticks, so long actions stay visibly alive instead of silent."],
- ["History is free","The log is server-side: reopen the panel (or open it on your phone after clicking on the desktop) and the recent activity is still there, newest first."]],
-"f-backfill":[
- ["Operator clicks 'Find build commands'","Panel action (Advanced). If no cache, or nothing is missing a build command → explicit nothing-to-do, the agent is never called.",],
- ["Prompt enumerates the gap","The cached findings LACKING a buildCommand (name, folder, port, startCommand) go into the prompt: 'for each of these folders, what command builds its servable artifacts?' — no rediscovery."],
- ["Same gateway, same machinery","Typed {port, buildCommand} report → rendered schema → ClaudeMonitor.Client → JSON extraction → validating parse → bounded retry. Read-only tool policy; disconnect-proof job."],
- ["Parse rejects out-of-set ports","A reply reporting a port that was not enumerated fails the parse and is fed back for correction — the backfill cannot invent apps."],
- ["Surgical merge by port","Only buildCommand on matching findings is written; empty answers recorded as empty (build-less, Rebuild stays off). Everything else in the cache is byte-identical."]]
-};
+<!-- ============ VIEW 1: STORY ============ -->
+<section id="view-story" class="view active">
+  <div class="stage">
+    <!-- phone pane -->
+    <div class="device phone">
+      <div class="device-label">📱 Your phone — Claude Web chat</div>
+      <div class="screen" id="phone-screen"></div>
+    </div>
+    <!-- arrow / harness pane -->
+    <div class="pipe">
+      <div class="pipe-label" id="pipe-label">Harness :5099</div>
+      <div class="pipe-arrow" id="pipe-arrow">·</div>
+      <div class="pipe-cmd" id="pipe-cmd"></div>
+    </div>
+    <!-- desktop pane -->
+    <div class="device desktop">
+      <div class="device-label">🖥️ Host PC — your Chrome</div>
+      <div class="screen" id="chrome-screen"></div>
+    </div>
+  </div>
 
-const nav=document.getElementById("nav"),main=document.getElementById("main");
-TABS.forEach(([id,label,html],i)=>{
-  const b=document.createElement("button");b.textContent=label;b.dataset.t=id;
-  b.onclick=()=>show(id);nav.appendChild(b);
-  const s=document.createElement("section");s.id="s-"+id;s.innerHTML=html;main.appendChild(s);
-});
-Object.entries(FLOWS).forEach(([fid,steps])=>{
-  const host=document.getElementById(fid);if(!host)return;
-  steps.forEach(([title,det,guard],i)=>{
-    const d=document.createElement("div");d.className="step"+(guard?" stop":"");
-    d.innerHTML=`<div class="rail"><div class="dot">${i+1}</div><div class="bar"></div></div>
-      <div class="body"><b>${title}</b><div class="det">${det||""}</div></div>`;
-    d.onclick=()=>d.classList.toggle("hl");
-    host.appendChild(d);
-  });
-});
-function show(id){
-  nav.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.t===id));
-  main.querySelectorAll("section").forEach(s=>s.classList.toggle("on",s.id==="s-"+id));
-}
-show("overview");
-</script>
+  <div class="narration">
+    <div class="step-dots" id="dots"></div>
+    <h2 id="step-title"></h2>
+    <p id="step-text"></p>
+    <div class="controls">
+      <button id="prev">← Back</button>
+      <span id="step-count"></span>
+      <button id="next">Next →</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ VIEW 2: MENTAL MODEL ============ -->
+<section id="view-mental" class="view">
+  <h2>Yes — it's "just another toolset". But it's tools, not a skill.</h2>
+  <div class="compare">
+    <div class="card">
+      <h3>A skill</h3>
+      <p><strong>Instructions</strong> loaded into the agent's context. It changes <em>how</em> the
+         agent works, not <em>what it can touch</em>. No new powers.</p>
+    </div>
+    <div class="card highlight">
+      <h3>Browser mode (this feature)</h3>
+      <p>An <strong>MCP toolset</strong> (<code>mcp__claude-in-chrome__*</code>) injected into the
+         session because the harness added <code>--chrome</code> to the spawn. The agent gets
+         genuinely new abilities: open tabs, read pages, click, type — in your real profile.</p>
+    </div>
+    <div class="card">
+      <h3>How you'd use it</h3>
+      <p>Exactly like you guessed: <strong>you tell it explicitly.</strong> Toggle browser mode on
+         for the session, then say what you want in plain language — "check my Gmail",
+         "open the CRM and pull the open deals". No selectors, no scripts: the agent finds
+         "the search box" semantically.</p>
+    </div>
+  </div>
+  <div class="callout ok">
+    <strong>The key property:</strong> it is <em>your</em> Chrome profile — cookies, SSO, MFA,
+    password manager already live. Gmail doesn't see a bot logging in; it sees your existing
+    session opening a tab. That's why "check my emails" just works with zero setup.
+  </div>
+  <div class="callout">
+    <strong>Same agent, both hands:</strong> one session can edit repo code <em>and</em> drive the
+    browser — build a change, open localhost, read the console, fix, re-verify. It's not a separate
+    "browser agent"; it's your normal chat session with one more toolset.
+  </div>
+</section>
+
+<!-- ============ VIEW 3: CAVEATS ============ -->
+<section id="view-caveats" class="view">
+  <h2>The three catches to keep in mind</h2>
+  <div class="caveat">
+    <div class="num">1</div>
+    <div>
+      <h3>It acts <em>as you</em></h3>
+      <p>Anything your logged-in self can do, the agent can do — including sending mail, not just
+         reading it. That's why the proposal makes browser mode <strong>per-session opt-in</strong>
+         behind the auth gates, never a default, and never available in the read-only "ask" lane.</p>
+    </div>
+  </div>
+  <div class="caveat">
+    <div class="num">2</div>
+    <div>
+      <h3>One browser session at a time</h3>
+      <p>The extension's native-messaging pipe has a single holder. Two chat sessions both in
+         browser mode would collide — so the harness serializes them: one runs, the other waits or
+         is refused with a clear message.</p>
+    </div>
+  </div>
+  <div class="caveat">
+    <div class="num">3</div>
+    <div>
+      <h3>You're on the phone; the browser is at home</h3>
+      <p>Login walls and CAPTCHAs normally pause for "the human at the browser" — but that human is
+         you, away from the PC. Your existing sessions usually mean no login is needed, but when one
+         is, the run can stall until someone is at the host. The status surface will say so instead
+         of hanging silently. Also: the agent's tabs live in a visibly colored <strong>tab
+         group</strong>; drag a tab into it to hand the agent a page, drag it out to take it away.</p>
+    </div>
+  </div>
+  <div class="callout warn">
+    <strong>Still open (design phase):</strong> our harness spawns a fresh <code>claude -p
+    --resume</code> per message. Whether the resumed run re-attaches to the same tab group or opens
+    a new window every turn is the load-bearing unknown to verify first.
+  </div>
+</section>
+
+</main>
+<script src="./app.js"></script>
 </body>
 </html>

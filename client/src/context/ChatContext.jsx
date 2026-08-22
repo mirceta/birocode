@@ -99,6 +99,18 @@ export function ChatProvider({ children }) {
   const [model, setModelState] = useState(getModel);
   const changeModel = useCallback((id) => { persistModel(id); setModelState(id); }, []);
 
+  // Browser mode (openspec claude-in-chrome): device-local toggle, like the
+  // model choice. While on, builder-lane sends carry `browser: true` so the
+  // spawned CLI gets --chrome (the ask lane never does — server also enforces).
+  const BROWSER_KEY = 'claude-web.browser-mode';
+  const [browserOn, setBrowserOnState] = useState(() => localStorage.getItem(BROWSER_KEY) === '1');
+  const browserRef = useRef(browserOn);
+  const setBrowserOn = useCallback((on) => {
+    browserRef.current = on;
+    setBrowserOnState(on);
+    localStorage.setItem(BROWSER_KEY, on ? '1' : '0');
+  }, []);
+
   const [pickerOpen, setPickerOpen] = useState(false);
   const [sessions, setSessions] = useState([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
@@ -387,6 +399,9 @@ export function ChatProvider({ children }) {
       const currentConvo = convos[key];
       if (currentConvo?.sessionId) body.sessionId = currentConvo.sessionId;
       if (lane && lane !== 'builder') body.lane = lane;
+      // Browser mode rides every builder send while the toggle is on; the
+      // server coerces it off for the ask lane anyway (defense in depth).
+      if (browserRef.current && lane !== 'ask') body.browser = true;
       await apiStream('/chat', body, parse, { signal: controller.signal, repoId });
     } catch (err) {
       if (err.name === 'AbortError') {
@@ -402,8 +417,18 @@ export function ChatProvider({ children }) {
       } else {
         // Real HTTP error from the backend. 409 = the repo's single run slot
         // is taken — with dual chat two conversations can share a repo, so
-        // say which problem this is instead of a generic failure.
-        const msg = err.status === 409 ? t('chat.busyError') : t('chat.sendError');
+        // say which problem this is instead of a generic failure. The browser
+        // gate's 409 carries code "browser-busy" + the holder repo
+        // (openspec claude-in-chrome) — name the culprit.
+        let msg = err.status === 409 ? t('chat.busyError') : t('chat.sendError');
+        if (err.status === 409) {
+          try {
+            const parsed = JSON.parse(err.message);
+            if (parsed?.code === 'browser-busy') {
+              msg = t('chat.browserBusy').replace('{repo}', parsed.repo || '?');
+            }
+          } catch { /* not our structured 409 — keep the generic text */ }
+        }
         updateConvo(key, { error: msg });
         if (tabId) updateTab(tabId, { status: 'error' });
       }
@@ -781,6 +806,10 @@ export function ChatProvider({ children }) {
     sessionsError,
     model,
     changeModel,
+    // Browser mode (openspec claude-in-chrome): device-local toggle; builder
+    // sends carry the flag while on.
+    browserOn,
+    setBrowserOn,
     send,
     stop,
     startNewConversation,

@@ -10,6 +10,7 @@ import OperatorMessagesPanel from '../components/chat/OperatorMessagesPanel';
 import ErrorBanner from '../components/shared/ErrorBanner';
 import ClaudeViewToggle from '../components/shared/ClaudeViewToggle';
 import ModelSelector from '../components/chat/ModelSelector';
+import { apiGet } from '../api/client';
 import { useChat } from '../context/ChatContext';
 import { useDock } from '../context/DockContext';
 import { useFeature } from '../context/UiModeContext';
@@ -71,6 +72,8 @@ export default function Chat({
     sessionsError,
     model,
     changeModel,
+    browserOn,
+    setBrowserOn,
     contextTokens,
     send,
     stop,
@@ -99,11 +102,37 @@ export default function Chat({
 
   const showContextMeter = useFeature('contextMeter');
   const showDualChat = useFeature('dualChat');
+  const showBrowserMode = useFeature('browserMode');
   const showUnderstanding = useFeature('understandingPanel');
   const showToolCalls = useFeature('toolCallHistory');
   const showOperators = useFeature('operatorMessages');
   const [toolsOpen, setToolsOpen] = useState(false);
   const [operatorsOpen, setOperatorsOpen] = useState(false);
+
+  // Browser mode (openspec claude-in-chrome): the 🌐 toggle only appears on the
+  // main chat (builder-lane surfaces; hidden in the read-only Ask view). When
+  // toggled on we fetch /api/chrome/status once so a host that can't do browser
+  // work is explained next to the toggle rather than failing silently.
+  const [chromeStatus, setChromeStatus] = useState(null);
+  const browserVisible = showBrowserMode && !embedded && chatView !== 'ask';
+  useEffect(() => {
+    if (!browserVisible || !browserOn) {
+      setChromeStatus(null);
+      return;
+    }
+    let alive = true;
+    apiGet('/chrome/status')
+      .then((s) => { if (alive) setChromeStatus(s); })
+      .catch(() => { if (alive) setChromeStatus(null); });
+    return () => { alive = false; };
+  }, [browserVisible, browserOn]);
+  const chromeHint = !chromeStatus
+    ? ''
+    : !chromeStatus.available
+      ? (chromeStatus.hostRegistered ? t('chat.browserNoCli') : t('chat.browserNoHost'))
+      : chromeStatus.busy
+        ? t('chat.browserBusy').replace('{repo}', chromeStatus.busyRepo || '?')
+        : '';
 
   // The tool-calls and operator-messages panels both overlay the chat area, so
   // only one can be open at a time — opening either closes the other.
@@ -266,6 +295,23 @@ export default function Chat({
           </span>
         )}
         <ModelSelector value={model} onChange={changeModel} />
+        {browserVisible && (
+          <button
+            type="button"
+            className={`chat__browser${browserOn ? ' chat__browser--on' : ''}`}
+            onClick={() => setBrowserOn(!browserOn)}
+            title={browserOn ? t('chat.browserOnTitle') : t('chat.browserOffTitle')}
+            aria-label={t('chat.browserToggle')}
+            aria-pressed={browserOn}
+          >
+            🌐
+          </button>
+        )}
+        {browserVisible && browserOn && chromeHint && (
+          <span className="chat__browser-hint" title={chromeHint}>
+            ⚠ {chromeHint}
+          </span>
+        )}
         {toggleChatMaximized && (
           <button
             type="button"

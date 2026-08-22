@@ -2032,6 +2032,7 @@ details.step > summary::-webkit-details-marker {
 /* Toolbar toggles — pills in .chat__bar next to the model selector. */
 .chat__tools,
 .chat__operators,
+.chat__browser,
 .chat__maximize {
   flex: 0 0 auto;
   min-height: 28px;
@@ -2055,6 +2056,7 @@ details.step > summary::-webkit-details-marker {
 
 .chat__tools:hover,
 .chat__operators:hover,
+.chat__browser:hover,
 .chat__maximize:hover {
   border-color: var(--color-accent);
   color: var(--color-accent);
@@ -2062,6 +2064,7 @@ details.step > summary::-webkit-details-marker {
 
 .chat__tools:active,
 .chat__operators:active,
+.chat__browser:active,
 .chat__maximize:active {
   transform: scale(0.97);
 }
@@ -2069,6 +2072,7 @@ details.step > summary::-webkit-details-marker {
 /* When the panel is showing, the toggle reads as a pressed/active control. */
 .chat__tools--on,
 .chat__operators--on,
+.chat__browser--on,
 .chat__maximize--on {
   background: var(--color-accent);
   border-color: var(--color-accent);
@@ -2077,8 +2081,28 @@ details.step > summary::-webkit-details-marker {
 
 .chat__tools--on:hover,
 .chat__operators--on:hover,
+.chat__browser--on:hover,
 .chat__maximize--on:hover {
   color: #fff;
+}
+
+/* Icon-only like the maximize pill. */
+.chat__browser {
+  padding: 0 10px;
+  line-height: 1;
+}
+
+/* Inline warning next to the 🌐 toggle when browser mode can't work (host
+   missing / CLI too old) or the single-holder pipe is taken
+   (openspec claude-in-chrome). Ellipsized — full text in the title. */
+.chat__browser-hint {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--color-warning, #b58900);
 }
 
 /* The message area that the overlays cover. It wraps .chat__scroll so an overlay
