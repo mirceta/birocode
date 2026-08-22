@@ -916,6 +916,13 @@ export function useChatFor({ key, repoId, tabId, sessionId, lane = 'builder' }) 
     contextTokens: conv.contextTokens,
     model: ctx.model,
     changeModel: ctx.changeModel,
+    // Browser mode (openspec claude-in-chrome): the toggle is device-global —
+    // a dock flips the same flag the main chat uses, and sendTo() already
+    // attaches it to every builder-lane send. `lane` lets the embedded <Chat>
+    // hide the toggle on the dock's Ask lane.
+    browserOn: ctx.browserOn,
+    setBrowserOn: ctx.setBrowserOn,
+    lane,
     send: (text) => ctx.sendTo(text, target),
     stop: () => ctx.stopTo(target),
     refresh: () => ctx.refreshOne(key, tabId, repoId, sessionId, lane),

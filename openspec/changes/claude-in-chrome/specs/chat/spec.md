@@ -5,9 +5,10 @@
 ### Requirement: Browser mode for a chat turn
 
 The chat UI SHALL offer a per-device browser-mode toggle (Advanced mode, builder lane
-only) that sends the browser flag with each prompt while enabled, and SHALL surface
-the integration's availability so a misconfigured host is explained rather than
-silent.
+only) on every builder-lane chat surface — the main chat page and the embedded
+dashboard-dock chats alike, hidden in the read-only Ask view of each — that sends the
+browser flag with each prompt while enabled, and SHALL surface the integration's
+availability so a misconfigured host is explained rather than silent.
 
 #### Scenario: Toggle rides the send
 

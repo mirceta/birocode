@@ -109,12 +109,15 @@ export default function Chat({
   const [toolsOpen, setToolsOpen] = useState(false);
   const [operatorsOpen, setOperatorsOpen] = useState(false);
 
-  // Browser mode (openspec claude-in-chrome): the 🌐 toggle only appears on the
-  // main chat (builder-lane surfaces; hidden in the read-only Ask view). When
-  // toggled on we fetch /api/chrome/status once so a host that can't do browser
-  // work is explained next to the toggle rather than failing silently.
+  // Browser mode (openspec claude-in-chrome): the 🌐 toggle appears on every
+  // builder-lane chat surface — the main chat AND embedded dashboard docks —
+  // and is hidden only in the read-only Ask view (the dock's Ask lane reports
+  // itself via the facade's `lane`). When toggled on we fetch
+  // /api/chrome/status once so a host that can't do browser work is explained
+  // next to the toggle rather than failing silently.
   const [chromeStatus, setChromeStatus] = useState(null);
-  const browserVisible = showBrowserMode && !embedded && chatView !== 'ask';
+  const browserVisible =
+    showBrowserMode && (embedded ? injected?.lane !== 'ask' : chatView !== 'ask');
   useEffect(() => {
     if (!browserVisible || !browserOn) {
       setChromeStatus(null);

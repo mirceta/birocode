@@ -21,3 +21,7 @@
 - [x] 3.2 Build client + harness (isolated per self-dev rules); fix warnings introduced
 - [x] 3.3 Headless verify: `/api/chrome/status` correct on this box; a chat POST with `browser:true` spawns a command line containing `--chrome` (visible in call log/display command); ask-lane POST with `browser:true` does not
 - [x] 3.4 Second concurrent browser POST returns 409 naming the holder
+
+## 4. Follow-up (dock surface)
+
+- [x] 4.1 Dashboard-dock chats (embedded `<Chat>`) show the same 🌐 toggle: facade exposes `browserOn`/`setBrowserOn`/`lane`, visibility keyed on the dock's lane instead of `!embedded`
