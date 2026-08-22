@@ -30,6 +30,12 @@ public class HarnessEventFeed
     private readonly List<HarnessEvent> _events = new();
     private int _seq;
 
+    /// <summary>Raised after an event is appended (openspec repo-sounds-and-latency),
+    /// so the collector can ingest self events immediately instead of waiting for its
+    /// next poll tick. Fired outside the feed lock; subscriber failures are swallowed —
+    /// the hook can never fail or slow the publishing operation.</summary>
+    public event Action? Published;
+
     /// <summary>
     /// Append one event to the feed under the next harness-wide sequence number.
     /// Best-effort: this is observation, not the operation itself, so it MUST NOT
@@ -57,6 +63,8 @@ public class HarnessEventFeed
         {
             // Never surface a feed failure to the caller (e.g. a chat run).
         }
+        try { Published?.Invoke(); }
+        catch { /* observation hook — same best-effort contract as the append */ }
     }
 
     /// <summary>

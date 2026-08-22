@@ -31,7 +31,9 @@ import FooterClausesModal from './FooterClausesModal';
 // it. Focus is a fidgety gesture, so emission is damped: per composer (repo + dock
 // tab), at most one event per cooldown window. Module-level so remounts don't
 // reset the window. Fire-and-forget — a failed publish must never disturb typing.
-const FOCUS_EVENT_COOLDOWN_MS = 10_000;
+// 3s (down from 10s, openspec repo-sounds-and-latency): now that ingestion is
+// immediate, a deliberate re-click after a few seconds should cue again.
+const FOCUS_EVENT_COOLDOWN_MS = 3_000;
 const lastFocusEmitAt = new Map();
 
 export default function ChatInput({ value, onChange, onSend, onStop, streaming, attachment, onAttach, embedded = false, stashTabId, repoId, queueLoop }) {

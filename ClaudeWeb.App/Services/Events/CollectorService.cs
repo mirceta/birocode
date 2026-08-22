@@ -47,6 +47,11 @@ public class CollectorService
     private readonly List<CollectorEvent> _events = new();
     private int _seq;
 
+    // Serializes self ingestion (openspec repo-sounds-and-latency): the publish-triggered
+    // path and the periodic poll both run IngestSelf, and watermark-read → append →
+    // watermark-write must be one critical section or the same events double-append.
+    private readonly object _selfIngestLock = new();
+
     public CollectorService(HarnessEventFeed selfFeed, IDataProtectionProvider dp, Logger logger, HostEventSound hostSound)
     {
         _selfFeed = selfFeed;
@@ -57,6 +62,14 @@ public class CollectorService
         _storePath = System.IO.Path.Combine(AppPaths.DataDir, "collector-sources.json");
         Load();
         EnsureSelf();
+        // Ingest self the moment an event is published, so the host cue fires within
+        // ~1s of the event instead of on the next poll tick (and never behind a slow
+        // remote source). Fire-and-forget: the publisher must never wait on audio or IO.
+        _selfFeed.Published += () => _ = Task.Run(() =>
+        {
+            try { IngestSelf(); }
+            catch (Exception ex) { _logger.Error($"[COLLECTOR] publish-triggered self ingest failed: {ex.Message}"); }
+        });
     }
 
     // ---- types -------------------------------------------------------------
@@ -209,28 +222,42 @@ public class CollectorService
         List<Source> active;
         lock (_lock) active = _sources.Where(s => s.Active).ToList();
 
-        foreach (var s in active)
+        // Self first and in-process — never behind a remote's HTTP timeout. Remote
+        // sources then poll CONCURRENTLY (openspec repo-sounds-and-latency): a dead
+        // source burns its own 6s timeout without serializing the others.
+        try { IngestSelf(); }
+        catch (Exception ex)
         {
-            if (ct.IsCancellationRequested) break;
-            try
-            {
-                if (s.Kind == "self") PollSelf(s);
-                else await PollRemoteAsync(s, ct);
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
+            var self = active.FirstOrDefault(s => s.Kind == "self");
+            if (self is not null) SetState(self, alive: self.Alive, status: "error", detail: ex.Message);
+        }
+
+        await Task.WhenAll(active.Where(s => s.Kind != "self").Select(async s =>
+        {
+            try { await PollRemoteAsync(s, ct); }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
             catch (Exception ex)
             {
                 SetState(s, alive: s.Alive, status: "error", detail: ex.Message);
             }
-        }
+        }));
     }
 
-    private void PollSelf(Source s)
+    // Pull everything past the self watermark into the aggregate. Called from the poll
+    // pass AND from the feed's publish hook; _selfIngestLock makes watermark-read →
+    // append → watermark-write atomic across the two, so events never double-append.
+    private void IngestSelf()
     {
-        var (events, last) = _selfFeed.Read(s.Watermark);
-        foreach (var e in events)
-            Append(s, e.At, e.Type, e.Source, e.Data);
-        SetState(s, alive: true, status: "active", detail: null, watermark: last);
+        lock (_selfIngestLock)
+        {
+            Source? s;
+            lock (_lock) s = _sources.FirstOrDefault(x => x.Kind == "self" && x.Active);
+            if (s is null) return;
+            var (events, last) = _selfFeed.Read(s.Watermark);
+            foreach (var e in events)
+                Append(s, e.At, e.Type, e.Source, e.Data);
+            SetState(s, alive: true, status: "active", detail: null, watermark: last);
+        }
     }
 
     // Real pull: GET the source feed from its watermark, append new events, classify status.
