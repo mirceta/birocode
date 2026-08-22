@@ -393,10 +393,31 @@ public class CollectorService
             if (_events.Count > Cap) _events.RemoveRange(0, TrimChunk);
         }
         // Best-effort host cue (debounced, non-blocking; no-op unless the operator enabled it).
-        // Pass the source label and event type so the cue is event-determined — voice can say
-        // "agent {label} started" vs "has finished", beep picks a per-type sound. Outside the
-        // lock so audio scheduling never holds up polling.
-        _hostSound.Notify(s.Label, type);
+        // Pass the source label, event type AND the producer repo so the cue is both event- and
+        // repo-determined (openspec repo-sounds-and-latency) — voice can say "agent {label}
+        // started", beep picks a per-type sound, and a repo-scoped rule file wins for its repo.
+        // Outside the lock so audio scheduling never holds up polling.
+        _hostSound.Notify(s.Label, type, RepoNameOf(source));
+    }
+
+    // The producer repo from the envelope's source — `{ repoId, repoName }` by contract.
+    // Self events carry an anonymous object (read via reflection), remote events a
+    // JsonElement. Best-effort: anything unexpected just means no repo scope for the cue.
+    internal static string? RepoNameOf(object? source)
+    {
+        try
+        {
+            if (source is JsonElement je)
+                return je.ValueKind == JsonValueKind.Object &&
+                       je.TryGetProperty("repoName", out var n) && n.ValueKind == JsonValueKind.String
+                    ? n.GetString()
+                    : null;
+            if (source is null) return null;
+            var prop = source.GetType().GetProperty("repoName") ?? source.GetType().GetProperty("RepoName");
+            var v = prop?.GetValue(source) as string;
+            return string.IsNullOrWhiteSpace(v) ? null : v;
+        }
+        catch { return null; }
     }
 
     // Unified state update: status + scrubbed detail + alive + lastPolled, optional watermark.
