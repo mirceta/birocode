@@ -18,7 +18,7 @@ namespace ClaudeWeb.Controllers;
 public class UploadController : ControllerBase
 {
     private const string UploadDir = ".claudeweb-uploads";
-    private const long MaxBytes = 10 * 1024 * 1024; // 10 MB
+    private const long MaxBytes = 100 * 1024 * 1024; // 100 MB
 
     private readonly RepositoryResolver _repos;
     private readonly Logger _logger;
@@ -30,7 +30,7 @@ public class UploadController : ControllerBase
     }
 
     [HttpPost("upload")]
-    [RequestSizeLimit(10 * 1024 * 1024)]
+    [RequestSizeLimit(100 * 1024 * 1024)]
     public async Task<IActionResult> Upload(IFormFile? file)
     {
         if (file is null || file.Length == 0)

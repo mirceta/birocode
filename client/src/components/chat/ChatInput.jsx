@@ -348,7 +348,7 @@ export default function ChatInput({ value, onChange, onSend, onStop, streaming, 
         <input
           ref={fileRef}
           type="file"
-          accept="image/*,application/pdf,.txt,.md,.json,.csv,.xml,.html,.css,.js,.ts,.jsx,.tsx,.py,.cs,.java,.rb,.go,.rs,.c,.cpp,.h"
+          accept="image/*,application/pdf,.zip,.7z,.tar,.gz,.rar,.txt,.md,.json,.csv,.xml,.html,.css,.js,.ts,.jsx,.tsx,.py,.cs,.java,.rb,.go,.rs,.c,.cpp,.h"
           className="chat-input__file-hidden"
           onChange={handleFileChange}
         />
