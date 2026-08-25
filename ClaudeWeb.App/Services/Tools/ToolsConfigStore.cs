@@ -138,10 +138,11 @@ public class ToolsConfigStore
 
     /// <summary>
     /// The effective server entry script: the operator-set host value, else the
-    /// default probe — the sibling birokrat-ai-platform checkout's built
-    /// <c>mcp-server/app/dist/index.js</c> (nested repo folder of the same name),
-    /// probed relative to each registered repo's parent so it works wherever the
-    /// playground lives. Empty string when nothing is found.
+    /// default probe — the <c>birokrat-ai-platform</c> checkout assumed to be a
+    /// SIBLING of each registered repository (machine-independent; no host-specific
+    /// absolute paths). Both checkout layouts are probed: the nested one seen on the
+    /// operator box (repo folder containing a same-named inner folder) and a flat
+    /// clone. Empty string when nothing is found.
     /// </summary>
     public string ResolveServerEntry(IEnumerable<string>? repoPaths = null)
     {
@@ -152,24 +153,25 @@ public class ToolsConfigStore
         }
         foreach (var root in CandidateRoots(repoPaths))
         {
-            var candidate = Path.Combine(root, "birokrat-ai-platform", "birokrat-ai-platform",
+            var nested = Path.Combine(root, "birokrat-ai-platform", "birokrat-ai-platform",
                 "mcp-server", "app", "dist", "index.js");
-            if (File.Exists(candidate)) return candidate;
+            if (File.Exists(nested)) return nested;
+            var flat = Path.Combine(root, "birokrat-ai-platform",
+                "mcp-server", "app", "dist", "index.js");
+            if (File.Exists(flat)) return flat;
         }
         return "";
     }
 
     private static IEnumerable<string> CandidateRoots(IEnumerable<string>? repoPaths)
     {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var p in repoPaths ?? Array.Empty<string>())
         {
             string? parent = null;
             try { parent = Path.GetDirectoryName(Path.GetFullPath(p)); } catch { /* bad path */ }
-            if (!string.IsNullOrEmpty(parent)) yield return parent;
+            if (!string.IsNullOrEmpty(parent) && seen.Add(parent)) yield return parent;
         }
-        // Last-resort well-known location on the operator box.
-        yield return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Desktop", "playground");
     }
 
     /// <summary>

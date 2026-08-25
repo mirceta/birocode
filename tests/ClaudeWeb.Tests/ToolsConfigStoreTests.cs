@@ -124,6 +124,54 @@ public sealed class ToolsConfigStoreTests : IDisposable
         Assert.False(map.RootElement.GetProperty("BETA").TryGetProperty("url", out _));
     }
 
+    // --- machine-independent server resolution (sibling checkout) ------------
+
+    private string MakeRepoWithSibling(string layout)
+    {
+        var repo = Path.Combine(_dir, "some-repo");
+        Directory.CreateDirectory(repo);
+        var entryDir = Path.Combine(_dir, layout, "mcp-server", "app", "dist");
+        Directory.CreateDirectory(entryDir);
+        File.WriteAllText(Path.Combine(entryDir, "index.js"), "// stub");
+        return repo;
+    }
+
+    [Fact]
+    public void Resolves_nested_sibling_checkout_relative_to_repo()
+    {
+        var repo = MakeRepoWithSibling(Path.Combine("birokrat-ai-platform", "birokrat-ai-platform"));
+        var entry = _store.ResolveServerEntry(new[] { repo });
+        Assert.Equal(Path.Combine(_dir, "birokrat-ai-platform", "birokrat-ai-platform",
+            "mcp-server", "app", "dist", "index.js"), entry);
+    }
+
+    [Fact]
+    public void Resolves_flat_sibling_checkout_relative_to_repo()
+    {
+        var repo = MakeRepoWithSibling("birokrat-ai-platform");
+        var entry = _store.ResolveServerEntry(new[] { repo });
+        Assert.Equal(Path.Combine(_dir, "birokrat-ai-platform",
+            "mcp-server", "app", "dist", "index.js"), entry);
+    }
+
+    [Fact]
+    public void No_sibling_resolves_to_empty_never_an_absolute_fallback()
+    {
+        var repo = Path.Combine(_dir, "lonely-repo");
+        Directory.CreateDirectory(repo);
+        Assert.Equal("", _store.ResolveServerEntry(new[] { repo }));
+        Assert.Equal("", _store.ResolveServerEntry());
+    }
+
+    [Fact]
+    public void Host_override_beats_the_sibling_probe()
+    {
+        var repo = MakeRepoWithSibling("birokrat-ai-platform");
+        var overrideEntry = Path.Combine(_dir, "elsewhere", "index.js");
+        _store.SetHost(overrideEntry);
+        Assert.Equal(overrideEntry, _store.ResolveServerEntry(new[] { repo }));
+    }
+
     // --- injection guards ----------------------------------------------------
 
     [Fact]

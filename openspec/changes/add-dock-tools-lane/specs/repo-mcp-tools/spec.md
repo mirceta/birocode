@@ -78,8 +78,13 @@ invocation SHALL be identical to one in a repository with no tool configuration 
 
 The path to the Birokrat MCP server entry script SHALL be a host-level Harness setting
 (one value for the whole host, since the server checkout lives outside the opened
-repositories), with the sibling `birokrat-ai-platform` checkout's built
-`mcp-server/app/dist/index.js` as the default. When the configured entry script does not
+repositories). Its default resolution SHALL be machine-independent: the
+`birokrat-ai-platform` checkout is assumed to be a **sibling of a registered
+repository**, and its built `mcp-server/app/dist/index.js` is probed relative to each
+registered repository's parent directory (both the nested
+`birokrat-ai-platform/birokrat-ai-platform/…` and a flat clone layout) — never via a
+host-specific absolute path. The explicit host-level setting remains as an override for
+non-sibling checkouts. When no entry script resolves or the configured one does not
 exist on disk, enabling the tool SHALL surface an explicit error to the operator rather
 than launching runs with a broken MCP server.
 
@@ -89,3 +94,41 @@ than launching runs with a broken MCP server.
   script does not exist on disk
 - **THEN** the UI shows an explicit error naming the missing path, and chat runs are not
   launched with the broken MCP configuration
+
+#### Scenario: Sibling checkout resolves on any machine
+
+- **WHEN** the Harness runs on a machine where the `birokrat-ai-platform` checkout sits
+  next to a registered repository and no host-level path is set
+- **THEN** the server entry script resolves to that sibling checkout's built
+  `dist/index.js` without any machine-specific configuration
+
+### Requirement: Preflight readiness check
+
+The web UI SHALL offer a preflight action for the Birokrat tool that verifies
+server-side, against the saved configuration, every condition a chat run needs for the
+tool to work on the current machine: the tool is enabled, an API key is stored, the
+`node` runtime actually starts under the Harness's environment, the server entry script
+resolves and exists on disk, and the Birokrat API answers an authenticated request using
+the effective key and base URL (the same auth header the MCP server sends). Each
+condition SHALL be reported individually as pass, fail, or skipped-with-reason, with
+detail text naming the resolved path, version, URL, or HTTP status — so a failing
+condition tells the operator what to fix when moving to a new machine.
+
+#### Scenario: All conditions met
+
+- **WHEN** the operator runs preflight on a machine where every condition holds
+- **THEN** the UI reports the tool ready, with each check green and its detail shown
+
+#### Scenario: Missing sibling checkout is named
+
+- **WHEN** preflight runs on a machine without the `birokrat-ai-platform` sibling
+  checkout and no host-level override
+- **THEN** the server-entry check fails with a detail naming the expected sibling
+  location(s), and the overall result is not-ready
+
+#### Scenario: Bad key or unreachable API
+
+- **WHEN** preflight runs with a stored key the Birokrat API rejects, or a base URL that
+  cannot be reached
+- **THEN** the API check fails with the HTTP status or the connection error, while the
+  local checks still report their own results

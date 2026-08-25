@@ -17,6 +17,7 @@ export default function ToolsPanel({ repoId }) {
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [pf, setPf] = useState(null); // null | {running} | {error} | preflight result
 
   // Draft state, seeded from the loaded view.
   const [enabled, setEnabled] = useState(false);
@@ -78,6 +79,18 @@ export default function ToolsPanel({ repoId }) {
       setError(t('tools.saveError', { error: e.message || String(e) }));
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Preflight (repo-mcp-tools spec): server-side readiness check of the SAVED
+  // config — five pass/fail conditions incl. a live authenticated API probe.
+  const preflight = async () => {
+    setPf({ running: true });
+    try {
+      const data = await apiGet(`/tools/birokrat/preflight?repoId=${encodeURIComponent(repoId)}`, { repoId });
+      setPf(data);
+    } catch (e) {
+      setPf({ error: e.message || String(e) });
     }
   };
 
@@ -216,9 +229,36 @@ export default function ToolsPanel({ repoId }) {
         <button type="button" className="toolsp__save" onClick={save} disabled={saving}>
           {saving ? t('tools.saving') : t('tools.save')}
         </button>
+        <button type="button" className="toolsp__pfbtn" onClick={preflight} disabled={!!pf?.running || saving}>
+          {pf?.running ? t('tools.preflighting') : t('tools.preflight')}
+        </button>
         {saved && <span className="toolsp__ok" role="status">{t('tools.saved')}</span>}
         {error && <span className="toolsp__err" role="alert">{error}</span>}
       </div>
+
+      {pf && !pf.running && (
+        <div className="toolsp__pf" role="status">
+          {pf.error ? (
+            <div className="toolsp__err" role="alert">{t('tools.pfError', { error: pf.error })}</div>
+          ) : (
+            <>
+              <div className={pf.ready ? 'toolsp__ok' : 'toolsp__err'}>
+                {pf.ready ? t('tools.pfReady') : t('tools.pfNotReady')}
+              </div>
+              <div className="toolsp__pf-hint">{t('tools.pfHint')}</div>
+              {(pf.checks || []).map((c) => (
+                <div className="toolsp__pf-row" key={c.id}>
+                  <span className={c.ok ? 'toolsp__ok' : c.skipped ? 'toolsp__pf-skip' : 'toolsp__err'}>
+                    {c.ok ? '✓' : c.skipped ? '○' : '✕'}
+                  </span>
+                  <span className="toolsp__pf-name">{t(`tools.pf.${c.id}`)}</span>
+                  {c.detail && <span className="toolsp__pf-detail">{c.detail}</span>}
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

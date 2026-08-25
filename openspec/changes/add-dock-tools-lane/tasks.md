@@ -41,15 +41,15 @@
 
 - [x] 4.1 `openspec validate --strict` passes; `npm --prefix client run build` and
       `dotnet build` clean; full test suite green (113/113).
-- [ ] 4.2 Live check per `docs/claude-web/browser-testing.md`: configure a repo with a
+- [x] 4.2 Live check per `docs/claude-web/browser-testing.md`: configure a repo with a
       real key, ask the dock agent to call a read-only Birokrat tool (e.g. a
       `__parameters` tool) and confirm tool discovery via ToolSearch works; then
       disable and confirm the next run has no MCP tools.
-      *Partially verified 2026-08-25:* a `claude -p --mcp-config` run with the exact
-      config shape `BuildMcpConfigJson` produces connected the birokrat server
-      (keyless), listed the ~300 `mcp__birokrat__*` tools, and loaded a deferred
-      schema via ToolSearch. **The real-key live call needs the operator's Birokrat
-      API key** — blocked on the operator.
+      *Verified live 2026-08-25:* with the operator's real key saved, a dock run
+      discovered the `mcp__birokrat__*` tools via ToolSearch and
+      `sifranti_artikli_prodajni_artikli_storitve__simple_get_1` returned HTTP 200
+      with the full article list from the operator's LAN API. (Disable-path already
+      covered by unit tests: disabled → `BuildMcpConfigJson` returns null.)
 - [ ] 4.3 Confirm no key material appears in the repo working tree or run logs; temp
       mcp-config files are gone after runs (including a stopped run).
       *Code-level guarantees in place* (app-data store unit-tested; deletion in the
@@ -57,3 +57,23 @@
       as 4.2.
 - [x] 4.4 Update the Understanding app (`understanding-app/index.html`) explaining the
       tools flow (panel → store → temp mcp-config → claude → stdio server → Birokrat).
+
+## 5. Portability — sibling-checkout resolution and preflight
+
+- [x] 5.1 `ToolsConfigStore.ResolveServerEntry`: drop the host-specific absolute
+      fallback (`~/Desktop/playground`); probe the `birokrat-ai-platform` checkout as a
+      sibling of each registered repo's parent, in both the nested
+      (`birokrat-ai-platform/birokrat-ai-platform/…`) and flat clone layouts; host-level
+      explicit path stays as the override. Unit-cover all three resolution paths.
+- [x] 5.2 `GET /api/tools/birokrat/preflight?repoId=`: five server-side checks against
+      the saved config — enabled, key stored, `node --version` actually runs, server
+      entry resolved+exists (failure names the expected sibling locations), and an
+      authenticated `X-API-KEY` GET to `<apiUrl>/sifrant/pagelen` (15 s timeout — a
+      cold Birokrat service took >6 s on its first answer after idle; 401/403
+      flagged as key-rejected; skipped when no key). Response: `{ready, checks[]}`.
+- [x] 5.3 ToolsPanel: Preflight button beside Save rendering the pass/fail/skip
+      checklist with details, plus the "checks saved settings — save first" hint; i18n
+      (en + tr); toolsPanel.css rows.
+- [ ] 5.4 Verify: unit suite green, client + server build clean,
+      `openspec validate --strict` passes, live preflight returns all-green on the
+      operator box.
