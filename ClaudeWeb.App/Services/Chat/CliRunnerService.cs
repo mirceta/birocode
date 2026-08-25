@@ -65,6 +65,11 @@ public class CliRunnerService
     /// <param name="sessionId">When non-empty, resumes that session.</param>
     /// <param name="workingDirectory">The selected repository's folder; the CLI runs here.</param>
     /// <param name="emit">Async sink that buffers/broadcasts one stable SSE event.</param>
+    /// <param name="mcpConfigJson">Optional MCP servers config (openspec
+    /// add-dock-tools-lane): when set, it is written to a per-run temp file and
+    /// passed as <c>--mcp-config</c>, then deleted when the run ends — secrets
+    /// never persist beyond the run and never touch the repo working tree. Null
+    /// keeps the invocation byte-identical to a run with no tools configured.</param>
     public async Task RunAsync(
         string message,
         string? sessionId,
@@ -75,7 +80,8 @@ public class CliRunnerService
         bool readOnly = false,
         Audit.AuditContext? audit = null,
         string? repoId = null,
-        string? repoName = null)
+        string? repoName = null,
+        string? mcpConfigJson = null)
     {
         var resuming = !string.IsNullOrWhiteSpace(sessionId);
 
@@ -104,9 +110,21 @@ public class CliRunnerService
             data: new { turnId, sessionId = resuming ? sessionId : null, resuming, readOnly });
 
         Process? process = null;
+        string? mcpConfigPath = null;
         try
         {
-            var psi = CreateProcessInfo(message, sessionId, workingDirectory, model, readOnly);
+            if (!string.IsNullOrWhiteSpace(mcpConfigJson))
+            {
+                // Secret-bearing, so app-data (not the repo, not shared %TEMP%
+                // naming) and removed in the finally below.
+                var tmpDir = Path.Combine(AppPaths.DataDir, "tmp");
+                Directory.CreateDirectory(tmpDir);
+                mcpConfigPath = Path.Combine(tmpDir, $"mcp-{Guid.NewGuid():N}.json");
+                await File.WriteAllTextAsync(mcpConfigPath, mcpConfigJson, ct);
+                _logger.Info("[CLI] MCP tools config injected for this run");
+            }
+
+            var psi = CreateProcessInfo(message, sessionId, workingDirectory, model, readOnly, mcpConfigPath);
             _logger.Info(resuming
                 ? $"[CLI] Resuming session {Short(sessionId!)} in {workingDirectory}"
                 : $"[CLI] Starting new session in {workingDirectory}");
@@ -181,6 +199,13 @@ public class CliRunnerService
             try { if (process is { HasExited: false }) process.Kill(entireProcessTree: true); }
             catch { /* already gone / race */ }
             process?.Dispose();
+            // The temp mcp-config carries API keys — gone the moment the run is,
+            // success, stop, or crash alike (openspec add-dock-tools-lane).
+            if (mcpConfigPath != null)
+            {
+                try { File.Delete(mcpConfigPath); }
+                catch { /* transient lock; the GUID name never collides */ }
+            }
             // Close the scoreboard run interval (matches the "start" above),
             // carrying this run's cost so the scoreboard can total spend.
             if (!readOnly) _activity.Append("finish", workingDirectory, record.SessionId, record.CostUsd);
@@ -682,7 +707,7 @@ public class CliRunnerService
         return cmdFallback ?? "claude.cmd";
     }
 
-    private static ProcessStartInfo CreateProcessInfo(string message, string? sessionId, string? workingDirectory, string? model = null, bool readOnly = false)
+    private static ProcessStartInfo CreateProcessInfo(string message, string? sessionId, string? workingDirectory, string? model = null, bool readOnly = false, string? mcpConfigPath = null)
     {
         var psi = new ProcessStartInfo
         {
@@ -712,6 +737,14 @@ public class CliRunnerService
         {
             psi.ArgumentList.Add("--model");
             psi.ArgumentList.Add(model);
+        }
+
+        // Per-repo MCP tools (openspec add-dock-tools-lane): the temp file is
+        // written and cleaned up by RunAsync.
+        if (!string.IsNullOrWhiteSpace(mcpConfigPath))
+        {
+            psi.ArgumentList.Add("--mcp-config");
+            psi.ArgumentList.Add(mcpConfigPath);
         }
 
         // Permission scope. Two lanes only (the per-project preset system was removed —

@@ -30,6 +30,7 @@ using ClaudeWeb.Services.StatusMonitor;
 using ClaudeWeb.Services.StructuredAsk;
 using ClaudeWeb.Services.TaskGraph;
 using ClaudeWeb.Services.Terminal;
+using ClaudeWeb.Services.Tools;
 using ClaudeWeb.Services.Traffic;
 using ClaudeWeb.Services.Understanding;
 using Microsoft.AspNetCore.Builder;
@@ -186,6 +187,7 @@ public class EmbeddedApi
             builder.Services.AddTrafficModule(); // HTTP throughput counters (openspec traffic-monitor)
             builder.Services.AddLoopEvalsModule(); // golden-example curation + bundle export (openspec loop-evals)
             builder.Services.AddLoopEvalModule(); // Tests-tab E2E eval runner (openspec add-loop-eval-ui-runner)
+            builder.Services.AddToolsModule(); // per-repo MCP tool registry — dock Tools lane (openspec add-dock-tools-lane)
             // === END MODULE SERVICE REGISTRATION ===
 
             _app = builder.Build();
