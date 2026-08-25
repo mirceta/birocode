@@ -1,202 +1,239 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — repo sounds & cue latency</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Understanding: the dock Tools lane &amp; Birokrat MCP</title>
 <style>
-  :root{
-    --bg:#f0efec; --panel:#fcfcfb; --panel2:#f4f3f0; --edge:#e1e0d9;
-    --ink:#0b0b0b; --dim:#52514e; --muted:#898781; --accent:#2a78d6; --accent-deep:#256abf;
-    --good:#0ca30c; --good-text:#006300; --bad:#d03b3b; --warn:#fab219;
-    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d; --text: #e6edf3;
+    --soft: #8b949e; --accent: #58a6ff; --ok: #3fb950; --warn: #d29922; --bad: #f85149;
   }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,Segoe UI,Roboto,sans-serif;padding:22px 26px 80px}
-  h1{font-size:20px;margin:0 0 4px} .sub{color:var(--dim);font-size:13px;margin-bottom:18px}
-  h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:26px 0 10px}
-  .card{background:var(--panel);border:1px solid var(--edge);border-radius:12px;padding:16px 18px;box-shadow:0 1px 2px rgba(11,11,11,.05);margin-bottom:14px;max-width:980px}
-  .tag{font-family:var(--mono);font-size:12px;background:var(--panel2);border:1px solid var(--edge);border-radius:5px;padding:1px 6px}
-  button{background:var(--panel);border:1px solid var(--edge);border-radius:7px;padding:6px 12px;cursor:pointer;font-size:13px}
-  button:hover{border-color:var(--accent)}
-  button.primary{background:var(--accent-deep);color:#fff;border:none;font-weight:600}
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, sans-serif; }
+  header { padding: 18px 20px 8px; }
+  header h1 { margin: 0 0 4px; font-size: 20px; }
+  header p { margin: 0; color: var(--soft); max-width: 720px; }
+  .tabs { display: flex; gap: 6px; padding: 12px 20px 0; flex-wrap: wrap; }
+  .tabs button {
+    background: var(--panel); color: var(--soft); border: 1px solid var(--border);
+    border-radius: 8px 8px 0 0; padding: 7px 14px; cursor: pointer; font-size: 13px;
+  }
+  .tabs button.on { color: var(--text); border-bottom-color: var(--panel); background: #1c2129; }
+  main { padding: 16px 20px 40px; }
+  .view { display: none; }
+  .view.on { display: block; }
 
-  /* timeline */
-  .lane{margin:12px 0}
-  .lane .ttl{font-size:13px;font-weight:600;margin-bottom:4px}
-  .bar{position:relative;height:34px;background:var(--panel2);border:1px solid var(--edge);border-radius:8px;overflow:hidden}
-  .seg{position:absolute;top:0;bottom:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;color:#fff;white-space:nowrap;overflow:hidden}
-  .seg.wait{background:#c3c2b7;color:#3c3b38}
-  .seg.dead{background:var(--bad)}
-  .seg.selfok{background:var(--good)}
-  .cursor{position:absolute;top:-6px;bottom:-6px;width:2px;background:var(--accent-deep);display:none}
-  .axis{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:3px}
-  .bell{position:absolute;top:-2px;font-size:16px;transform:translateX(-50%)}
-  .note{color:var(--dim);font-size:13px;margin-top:8px}
-  .stat{font-family:var(--mono);font-size:13px;color:var(--good-text);font-weight:600}
-  .statbad{font-family:var(--mono);font-size:13px;color:var(--bad);font-weight:600}
+  /* pipeline */
+  .pipe { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; margin: 14px 0; }
+  .stage {
+    flex: 1 1 150px; min-width: 150px; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px; cursor: pointer; position: relative; transition: border-color .15s;
+  }
+  .stage:hover, .stage.sel { border-color: var(--accent); }
+  .stage .who { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--soft); }
+  .stage .name { font-weight: 700; margin: 2px 0 4px; }
+  .stage .file { font-size: 11px; color: var(--accent); word-break: break-all; }
+  .arrow { align-self: center; color: var(--soft); font-size: 18px; flex: none; }
+  .detail {
+    background: var(--panel); border: 1px solid var(--accent); border-radius: 10px;
+    padding: 12px 14px; margin-top: 10px; min-height: 90px;
+  }
+  .detail h3 { margin: 0 0 6px; font-size: 14px; }
+  .detail p { margin: 0 0 8px; color: var(--text); }
+  .detail code, .flow code, td code { background: #0d1117; border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 12px; }
+  .detail .soft { color: var(--soft); }
+  .dot {
+    position: absolute; top: -5px; left: 10px; width: 10px; height: 10px; border-radius: 50%;
+    background: var(--accent); opacity: 0; transition: opacity .2s;
+  }
+  .pipe.animating .stage .dot { animation: pulse 1.4s ease-in-out; }
+  @keyframes pulse { 0% {opacity:0} 30% {opacity:1} 100% {opacity:0} }
 
-  /* precedence demo */
-  .grid{display:grid;grid-template-columns:auto 1fr;gap:10px 16px;align-items:center;margin:10px 0}
-  select,label{font-size:14px}
-  select{padding:6px 10px;border:1px solid var(--edge);border-radius:7px;background:#fff}
-  .layers{display:flex;flex-direction:column;gap:6px;margin-top:12px}
-  .layer{display:flex;gap:12px;align-items:center;border:1px solid var(--edge);border-left-width:4px;border-radius:8px;padding:8px 12px;background:var(--panel2);opacity:.55}
-  .layer .n{font-family:var(--mono);font-size:12px;color:var(--muted);width:16px}
-  .layer .what{flex:1}
-  .layer .st{font-family:var(--mono);font-size:12px;color:var(--muted)}
-  .layer.present{opacity:.9}
-  .layer.win{opacity:1;border-color:var(--good);background:rgba(12,163,12,.07)}
-  .layer.win .st{color:var(--good-text);font-weight:700}
-  .layer.skipna .st{color:var(--muted)}
-  .chk{display:flex;gap:16px;flex-wrap:wrap;margin:8px 0}
-  .chk label{display:flex;gap:6px;align-items:center;font-size:13.5px}
-  .verdict{margin-top:12px;font-size:14.5px;border:1px solid var(--good);background:rgba(12,163,12,.06);border-radius:8px;padding:9px 13px}
-  .flow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:13.5px;margin:8px 0}
-  .box{border:1px solid var(--edge);border-radius:8px;background:var(--panel2);padding:6px 11px;font-family:var(--mono);font-size:12.5px}
-  .box.hot{border-color:var(--accent);background:rgba(42,120,214,.08)}
-  .arr{color:var(--muted)}
+  /* secret path */
+  .lanes { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+  @media (max-width: 760px) { .lanes { grid-template-columns: 1fr; } }
+  .lane { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+  .lane h3 { margin: 0 0 8px; font-size: 14px; }
+  .lane.good h3 { color: var(--ok); }
+  .lane.bad h3 { color: var(--bad); }
+  .lane ol { margin: 0; padding-left: 18px; }
+  .lane li { margin-bottom: 5px; }
+  .badge { display: inline-block; border: 1px solid var(--border); border-radius: 5px; padding: 0 6px; font-size: 11px; color: var(--soft); }
+  .badge.ok { color: var(--ok); border-color: var(--ok); }
+  .badge.bad { color: var(--bad); border-color: var(--bad); }
+
+  /* env table */
+  table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+  th, td { text-align: left; border: 1px solid var(--border); padding: 6px 9px; font-size: 12.5px; }
+  th { color: var(--soft); background: var(--panel); }
+  .toggle { margin: 12px 0; display: flex; gap: 8px; align-items: center; }
+  .toggle button { background: var(--panel); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 5px 12px; cursor: pointer; }
+  .toggle button.on { border-color: var(--accent); color: var(--accent); }
+  pre {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; overflow-x: auto; font-size: 12px; line-height: 1.45;
+  }
+  .k { color: var(--accent); } .s { color: var(--ok); } .warntxt { color: var(--warn); }
+  .note { border-left: 3px solid var(--warn); padding: 6px 12px; background: var(--panel); border-radius: 0 8px 8px 0; margin: 10px 0; color: var(--soft); }
 </style>
 </head>
 <body>
-<h1>Repo sounds &amp; cue latency</h1>
-<div class="sub">openspec change <span class="tag">repo-sounds-and-latency</span> — why cues took 5–10s (or never came), what changed, and how a cue is now picked per repository.</div>
+<header>
+  <h1>The dock Tools lane → Birokrat MCP server</h1>
+  <p>How a per-repo tool configuration set on a dashboard agent dock becomes ~300 live Birokrat ERP
+     tools inside that repo's Claude runs — and how the API key travels without ever touching the repo.
+     (openspec change: <code>add-dock-tools-lane</code>)</p>
+</header>
 
-<div class="card">
-  <h2 style="margin-top:0">1 · Why the sound was late — and the fix</h2>
-  <div class="flow">
-    <span class="box">click dock chat</span><span class="arr">→</span>
-    <span class="box">POST /api/events/chat-focus</span><span class="arr">→</span>
-    <span class="box">HarnessEventFeed.Publish</span><span class="arr">→</span>
-    <span class="box hot">collector ingest</span><span class="arr">→</span>
-    <span class="box">🔊 host cue</span>
-  </div>
-  <p class="note">The cue only fires at <b>collector ingest</b>. Before: one sequential poll pass every 2.5s, and the dead
-  "monster" source burned its full 6s HTTP timeout <i>before</i> the in-process self source was even read. After: publishing
-  triggers self ingest <b>immediately</b>, and remote sources poll in parallel — a dead remote delays only itself.</p>
-
-  <div class="lane">
-    <div class="ttl">Before <span class="statbad" id="beforeStat"></span></div>
-    <div class="bar" id="beforeBar"></div>
-    <div class="axis"><span>0s</span><span>2s</span><span>4s</span><span>6s</span><span>8s</span><span>10s</span></div>
-  </div>
-  <div class="lane">
-    <div class="ttl">After <span class="stat" id="afterStat"></span></div>
-    <div class="bar" id="afterBar"></div>
-    <div class="axis"><span>0s</span><span>2s</span><span>4s</span><span>6s</span><span>8s</span><span>10s</span></div>
-  </div>
-  <button class="primary" id="play">▶ Replay the event</button>
-  <p class="note">Also fixed for "sometimes no sound at all": the composer's chat-focus damping dropped from one event per
-  <b>10s</b> to per <b>3s</b>, and because events no longer arrive in one late batch, the host's 400ms debounce rarely
-  swallows them anymore. (Measured on an isolated instance with a dead source registered: publish → ingest in
-  <b>≈0.7s</b>, vs ≈5–10s before.)</p>
+<div class="tabs" role="tablist">
+  <button class="on" data-v="flow">The flow</button>
+  <button data-v="secret">Where the secret lives</button>
+  <button data-v="env">Parameters &amp; env</button>
+  <button data-v="gotchas">Gotchas</button>
 </div>
 
-<div class="card">
-  <h2 style="margin-top:0">2 · Which sound plays? (host and device use the same precedence)</h2>
-  <p class="note">Set up which rules exist, then pick the incoming event — the winning layer lights up.</p>
-  <div class="grid">
-    <label>Event type</label>
-    <select id="evType">
-      <option value="turn.ended">turn.ended</option>
-      <option value="turn.start">turn.start</option>
-      <option value="chat.focus">chat.focus</option>
-      <option value="deploy.done">deploy.done (unknown type)</option>
-    </select>
-    <label>From repo</label>
-    <select id="evRepo">
-      <option value="birocode">birocode</option>
-      <option value="otherrepo">otherrepo (no rules)</option>
-    </select>
-  </div>
-  <div class="chk">
-    <label><input type="checkbox" id="rT" checked /> birocode · rule for the type</label>
-    <label><input type="checkbox" id="rD" checked /> birocode · <i>_default</i> (whole-repo sound)</label>
-    <label><input type="checkbox" id="gT" checked /> global · rule for the type</label>
-    <label><input type="checkbox" id="gD" /> global · <i>_default</i></label>
-  </div>
-  <div class="layers" id="layers"></div>
-  <div class="verdict" id="verdict"></div>
-  <p class="note">The one asymmetry, on purpose: a <b>repo</b> <i>_default</i> covers <b>every</b> event from that repo
-  (that's the "give this repo its own voice" feature), while the <b>global</b> <i>_default</i> keeps its old meaning —
-  unknown types only. Device cues in the events-app resolve the same way, with the browser synth as the built-in layer.</p>
-</div>
+<main>
+  <section class="view on flow" id="v-flow">
+    <div class="toggle">
+      <button id="animate">▶ Trace a chat turn</button>
+      <span class="soft" style="color:var(--soft)">…or click any stage for its role.</span>
+    </div>
+    <div class="pipe" id="pipe">
+      <div class="stage" data-d="d0"><span class="dot"></span><div class="who">Operator · phone</div><div class="name">Tools lane</div><div class="file">PinnedAgent.jsx · ToolsPanel.jsx</div></div>
+      <div class="arrow">→</div>
+      <div class="stage" data-d="d1"><span class="dot"></span><div class="who">Harness · API</div><div class="name">ToolsController</div><div class="file">/api/tools · masked reads</div></div>
+      <div class="arrow">→</div>
+      <div class="stage" data-d="d2"><span class="dot"></span><div class="who">Harness · store</div><div class="name">tools.json</div><div class="file">%APPDATA%\ClaudeWeb\</div></div>
+      <div class="arrow">→</div>
+      <div class="stage" data-d="d3"><span class="dot"></span><div class="who">Per chat turn</div><div class="name">--mcp-config</div><div class="file">ChatController → CliRunnerService</div></div>
+      <div class="arrow">→</div>
+      <div class="stage" data-d="d4"><span class="dot"></span><div class="who">Child process</div><div class="name">claude CLI</div><div class="file">builder &amp; ask lanes</div></div>
+      <div class="arrow">→</div>
+      <div class="stage" data-d="d5"><span class="dot"></span><div class="who">stdio child</div><div class="name">birokrat MCP</div><div class="file">mcp-server/app/dist/index.js</div></div>
+      <div class="arrow">→</div>
+      <div class="stage" data-d="d6"><span class="dot"></span><div class="who">Cloud</div><div class="name">Birokrat API</div><div class="file">X-API-KEY per request</div></div>
+    </div>
+    <div class="detail" id="detail">
+      <h3>Click a stage</h3>
+      <p class="soft">Each box is one hop of the configuration (left half) or of a live tool call (right half).</p>
+    </div>
+  </section>
 
-<div class="card">
-  <h2 style="margin-top:0">3 · Where things live</h2>
-  <div class="flow"><span class="box">host rules</span><span class="arr">→</span><span>server-side files under <span class="tag">collector-host-cues/</span> (global) and <span class="tag">collector-host-cues/repos/&lt;key&gt;/</span> (per repo, with a <span class="tag">.repo</span> sidecar naming it)</span></div>
-  <div class="flow"><span class="box">device rules</span><span class="arr">→</span><span>browser IndexedDB; repo-scoped records use a composite <span class="tag">repo␀type</span> key, old plain-type records stay the global layer</span></div>
-  <div class="flow"><span class="box">API</span><span class="arr">→</span><span><span class="tag">/api/collector/sound/rules/&lt;slot&gt;?repo=R</span> — omit <span class="tag">?repo=</span> and everything behaves exactly as before this change</span></div>
-</div>
+  <section class="view" id="v-secret">
+    <p>The sibling platform repo once committed a <b>live API key</b> inside a repo-level
+       <code>.mcp.json</code>. This design makes that mistake structurally impossible here:</p>
+    <div class="lanes">
+      <div class="lane good">
+        <h3>✓ The path the key takes</h3>
+        <ol>
+          <li>Typed once into the Tools lane <span class="badge">masked input</span></li>
+          <li><code>PUT /api/tools/birokrat</code> — the only hop carrying the full key</li>
+          <li>Stored in <code>%APPDATA%\ClaudeWeb\tools.json</code> <span class="badge ok">host-side</span></li>
+          <li>Per run: temp <code>mcp-&lt;guid&gt;.json</code> under app-data <span class="badge ok">deleted in finally</span></li>
+          <li>Read-backs return only <code>apiKeySet</code> + last-4 hint <span class="badge ok">masked</span></li>
+        </ol>
+      </div>
+      <div class="lane bad">
+        <h3>✗ Paths the key never takes</h3>
+        <ol>
+          <li>The repo working tree — no <code>.mcp.json</code> is ever written there <span class="badge bad">committable</span></li>
+          <li>GET responses — a stored key never travels back to a browser</li>
+          <li>Harness logs — only "MCP tools config injected" is logged</li>
+          <li>Files that outlive the run — stop, crash, or success all delete the temp config</li>
+        </ol>
+      </div>
+    </div>
+    <div class="note">Untouched masked field on save = <code>apiKey: null</code> = keep the stored key.
+      The explicit ✕ button sends <code>""</code> = clear. Same per-entry contract inside the company list.</div>
+  </section>
+
+  <section class="view" id="v-env">
+    <p>The MCP server reads everything from env vars. The harness assembles them exactly like the
+       proven reference integration (api-chatbot's <code>server.js</code>):</p>
+    <div class="toggle">
+      <button class="on" id="m-single">Single key</button>
+      <button id="m-multi">Multi-company</button>
+    </div>
+    <pre id="envjson"></pre>
+    <table>
+      <tr><th>Env var</th><th>Meaning</th></tr>
+      <tr><td><code>BIROKRAT_API_KEY</code></td><td>Default company's API key (a Birokrat "company" IS a key + URL pair)</td></tr>
+      <tr><td><code>BIROKRAT_API_URL</code></td><td>Base URL, default <code>https://next.birokrat.si/api/v2/</code></td></tr>
+      <tr><td><code>BIROKRAT_API_KEYS</code></td><td>JSON map name → {apiKey, url?}. When present, every generated tool gains an optional <code>company</code> enum param; the first entry doubles as the default</td></tr>
+    </table>
+    <p style="margin-top:10px">The server entry script path is a <b>host-level</b> setting (one per box,
+       the checkout lives outside any opened repo), defaulting to a probe for the sibling
+       <code>birokrat-ai-platform</code> checkout's built <code>mcp-server/app/dist/index.js</code>.</p>
+  </section>
+
+  <section class="view" id="v-gotchas">
+    <table>
+      <tr><th>Gotcha</th><th>Why it matters</th></tr>
+      <tr><td><b>~300 deferred tools</b></td><td>Claude Code defers the schemas; the agent loads them via <code>ToolSearch</code>. Our lanes don't restrict tools, so this works — but any future allowed-tools tightening must keep ToolSearch. <span class="badge ok">verified live: keyless server start → tools listed → schema loaded</span></td></tr>
+      <tr><td><b>Enabling arms BOTH lanes</b></td><td>Ask runs in plan mode, which blocks harness-side writes — but MCP tools execute server-side and Birokrat has mutating endpoints. The per-repo enable toggle is the explicit opt-in; the panel copy says so.</td></tr>
+      <tr><td><b>Missing server script</b></td><td>Enabled + missing <code>dist/index.js</code> → the panel shows an explicit error naming the path, and <code>BuildMcpConfigJson</code> independently refuses, so runs launch clean rather than with a broken MCP server.</td></tr>
+      <tr><td><b>Slow tool calls are normal</b></td><td>Birokrat answers HTTP 202 while processing (client polls 3s × 10) and rejects concurrent requests per key. A minute-long tool call is expected, not a hang.</td></tr>
+      <tr><td><b>Errors look like successes</b></td><td>Non-OK HTTP comes back as normal tool-result data <code>{error:true, statusCode…}</code>, not an MCP tool_error — read the payload, not just the frame.</td></tr>
+      <tr><td><b>Keyless start succeeds</b></td><td>The server boots with a stderr warning and registers all tools; calls fail at execution time. "Tools visible" ≠ "key configured".</td></tr>
+    </table>
+  </section>
+</main>
 
 <script>
-// ── 1 · latency timeline ────────────────────────────────────────────────────
-// Both lanes model the same incident: chat.focus published at t≈0.4s while the
-// dead remote source is registered. Widths are % of a 10s window.
-const P = s => (s/10*100) + "%";
-function seg(cls, from, to, label){ return `<div class="seg ${cls}" style="left:${P(from)};width:${P(to-from)}">${label}</div>`; }
-const beforeBar = document.getElementById("beforeBar");
-const afterBar = document.getElementById("afterBar");
-// Before: pass starts at 0 with the dead remote (6s timeout), self only after it;
-// the event published at 0.4s waits for self's turn at ~6s → cue ≈5.6s late (and
-// up to ~8.5s when the event just misses a pass).
-beforeBar.innerHTML =
-  seg("dead", 0, 6, "dead remote — 6s timeout blocks the pass") +
-  seg("selfok", 6, 6.4, "self") +
-  `<div class="bell" style="left:${P(6.2)}">🔔</div>` +
-  seg("wait", 6.4, 8.9, "idle 2.5s") +
-  seg("dead", 8.9, 10, "dead remote…") +
-  `<div class="cursor" id="cur1"></div>`;
-// After: publish at 0.4s triggers self ingest instantly; the dead remote times out
-// in parallel and hurts nobody.
-afterBar.innerHTML =
-  seg("dead", 0, 6, "dead remote — times out in parallel, delays only itself") +
-  seg("selfok", 0.4, 0.75, "self") +
-  `<div class="bell" style="left:${P(0.55)}">🔔</div>` +
-  `<div class="cursor" id="cur2"></div>`;
-document.getElementById("beforeStat").textContent = "🔔 ≈5.6–8.5s after the click";
-document.getElementById("afterStat").textContent = "🔔 <1s after the click";
-document.getElementById("play").onclick = () => {
-  for (const id of ["cur1","cur2"]){
-    const c = document.getElementById(id);
-    c.style.display = "block"; c.style.transition = "none"; c.style.left = P(0.4);
-    void c.offsetWidth;                       // reflow so the transition restarts
-    c.style.transition = "left 5s linear"; c.style.left = P(10);
-  }
-};
-
-// ── 2 · precedence demo ─────────────────────────────────────────────────────
-const KNOWN = ["turn.start","turn.ended","chat.focus"];
-const els = { evType: evType, evRepo: evRepo, rT: rT, rD: rD, gT: gT, gD: gD };
-function render(){
-  const type = els.evType.value, repo = els.evRepo.value;
-  const isBiro = repo === "birocode";
-  const layers = [
-    { id:"rT", name:`repo rule — birocode · ${type}`,    present: els.rT.checked, applies: isBiro },
-    { id:"rD", name:"repo rule — birocode · _default (any event from birocode)", present: els.rD.checked, applies: isBiro },
-    { id:"gT", name:`global rule — ${type}`,             present: els.gT.checked, applies: true },
-    { id:"gD", name:"global rule — _default (unknown types only)", present: els.gD.checked, applies: !KNOWN.includes(type) },
-    { id:"bi", name:"built-in cue (beep/voice per type · browser synth)", present: true, applies: true },
-  ];
-  let winner = null;
-  const host = document.getElementById("layers");
-  host.innerHTML = "";
-  layers.forEach((l, i) => {
-    let st;
-    if (!l.applies) st = l.present ? "n/a for this event" : "—";
-    else if (!l.present) st = "no rule";
-    else if (!winner){ winner = l; st = "✔ PLAYS"; }
-    else st = "shadowed";
-    const div = document.createElement("div");
-    div.className = "layer" + (l.present && l.applies ? " present" : "") + (winner === l ? " win" : "");
-    div.innerHTML = `<span class="n">${i+1}</span><span class="what">${l.name}</span><span class="st">${st}</span>`;
-    host.appendChild(div);
+  // Tab switching
+  document.querySelectorAll('.tabs button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('.tabs button').forEach(function (x) { x.classList.remove('on'); });
+      document.querySelectorAll('.view').forEach(function (x) { x.classList.remove('on'); });
+      b.classList.add('on');
+      document.getElementById('v-' + b.dataset.v).classList.add('on');
+    });
   });
-  document.getElementById("verdict").innerHTML =
-    `A <span class="tag">${type}</span> event from <span class="tag">${repo}</span> plays: <b>${winner.name}</b>`;
-}
-for (const k in els) els[k].addEventListener("change", render);
-render();
+
+  // Stage details
+  var DETAILS = {
+    d0: ['Tools lane (agent dock)', 'A sibling of Builder / Ask / Files / Console / OpenSpec in the dock’s lane switcher, Advanced-gated (toolsDock). The panel renders over the chat, composer stays below, and is scoped to THIS dock’s repo — two docks on two repos edit two configs. Fields: enable toggle, API key (masked), base URL, multi-company list, host-wide server path.'],
+    d1: ['ToolsController — /api/tools', 'GET returns the config with keys MASKED (apiKeySet + last-4 hint). PUT /api/tools/birokrat saves; a null key keeps the stored one, "" clears. PUT /api/tools/host sets the server script path. /api/tools/birokrat/check probes script existence + node on PATH — the enable-time error surface.'],
+    d2: ['ToolsConfigStore — tools.json', 'Host-side app-data (%APPDATA%\\ClaudeWeb\\tools.json), same lifecycle pattern as dock.json. Per-repo Birokrat config + one host-level birokratServerEntry. Never inside a repo working tree — that is the whole point.'],
+    d3: ['Injection — per chat turn', 'ChatController resolves BuildMcpConfigJson(repoId) at turn start (both lanes). Non-null → CliRunnerService writes it to app-data tmp\\mcp-<guid>.json, appends --mcp-config <path>, and deletes the file in the run’s finally — stop, crash, or success. Null (disabled / missing script) → the invocation is byte-identical to a repo with no tools.'],
+    d4: ['claude CLI', 'The normal dock run: claude -p … --output-format stream-json, builder with --dangerously-skip-permissions, ask in plan mode. With --mcp-config it spawns the MCP server as a stdio child and exposes its tools as mcp__birokrat__* (deferred — the agent loads schemas via ToolSearch).'],
+    d5: ['birokrat MCP server', 'TypeScript stdio server (Node ≥ 18) generating ~300 tools mechanically from endpoints\\_manifest.json at startup. Reads BIROKRAT_API_KEY / _URL / _KEYS from env. Stdout is JSON-RPC only; diagnostics go to stderr. Keyless start works — calls fail later.'],
+    d6: ['Birokrat API', 'Every request carries X-API-KEY. HTTP 202 = still processing (client polls 3s × 10). One request at a time per key — concurrent builder+ask calls surface as tool-result errors, not crashes. Non-OK HTTP returns as normal result data {error:true,…}.']
+  };
+  var detail = document.getElementById('detail');
+  document.querySelectorAll('.stage').forEach(function (s) {
+    s.addEventListener('click', function () {
+      document.querySelectorAll('.stage').forEach(function (x) { x.classList.remove('sel'); });
+      s.classList.add('sel');
+      var d = DETAILS[s.dataset.d];
+      detail.innerHTML = '<h3>' + d[0] + '</h3><p>' + d[1] + '</p>';
+    });
+  });
+
+  // Trace animation: pulse the dots left to right.
+  document.getElementById('animate').addEventListener('click', function () {
+    var stages = document.querySelectorAll('#pipe .stage');
+    stages.forEach(function (s, i) {
+      var dot = s.querySelector('.dot');
+      dot.style.animation = 'none';
+      void dot.offsetWidth; // restart
+      dot.style.animation = 'pulse 1.2s ease-in-out ' + (i * 0.45) + 's';
+    });
+  });
+
+  // Env examples
+  var SINGLE = '{\n  <span class="k">"mcpServers"</span>: {\n    <span class="k">"birokrat"</span>: {\n      <span class="k">"command"</span>: <span class="s">"node"</span>,\n      <span class="k">"args"</span>: [<span class="s">"…/mcp-server/app/dist/index.js"</span>],\n      <span class="k">"env"</span>: {\n        <span class="k">"BIROKRAT_API_KEY"</span>: <span class="s">"••••"</span>,\n        <span class="k">"BIROKRAT_API_URL"</span>: <span class="s">"https://next.birokrat.si/api/v2/"</span>\n      }\n    }\n  }\n}';
+  var MULTI = '{\n  <span class="k">"env"</span>: {\n    <span class="k">"BIROKRAT_API_KEYS"</span>: <span class="s">"{\\"ACME\\":{\\"apiKey\\":\\"••••\\",\\"url\\":\\"https://acme.birokrat.si/api/v2/\\"},\\"BETA\\":{\\"apiKey\\":\\"••••\\"}}"</span>,\n    <span class="warntxt">// first entry doubles as the default:</span>\n    <span class="k">"BIROKRAT_API_KEY"</span>: <span class="s">"•••• (ACME’s)"</span>,\n    <span class="k">"BIROKRAT_API_URL"</span>: <span class="s">"https://acme.birokrat.si/api/v2/"</span>\n  }\n}\n<span class="warntxt">// every tool gains an optional "company" enum: ACME | BETA</span>';
+  var envjson = document.getElementById('envjson');
+  function mode(single) {
+    envjson.innerHTML = single ? SINGLE : MULTI;
+    document.getElementById('m-single').classList.toggle('on', single);
+    document.getElementById('m-multi').classList.toggle('on', !single);
+  }
+  document.getElementById('m-single').addEventListener('click', function () { mode(true); });
+  document.getElementById('m-multi').addEventListener('click', function () { mode(false); });
+  mode(true);
 </script>
 </body>
 </html>
