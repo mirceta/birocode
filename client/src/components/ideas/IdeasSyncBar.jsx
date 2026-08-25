@@ -107,7 +107,8 @@ export default function IdeasSyncBar({ onSynced }) {
   useEffect(() => {
     if (!config?.enabled) return undefined;
     pollStatus();
-    const id = setInterval(pollStatus, STATUS_POLL_MS);
+    // Hidden tab = no polling (openspec reduce-connection-appetite).
+    const id = setInterval(() => { if (!document.hidden) pollStatus(); }, STATUS_POLL_MS);
     return () => clearInterval(id);
   }, [config?.enabled, pollStatus]);
 

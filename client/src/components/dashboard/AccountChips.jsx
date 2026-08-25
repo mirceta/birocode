@@ -44,7 +44,8 @@ function useAccountProbe(endpoint) {
       }
     };
     load();
-    const timer = setInterval(load, POLL_MS);
+    // Hidden tab = no polling (openspec reduce-connection-appetite).
+    const timer = setInterval(() => { if (!document.hidden) load(); }, POLL_MS);
     return () => {
       alive = false;
       clearInterval(timer);

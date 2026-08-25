@@ -72,7 +72,8 @@ export default function Scoreboard() {
 
   useEffect(() => {
     load(window);
-    const timer = setInterval(() => load(window), POLL_MS);
+    // Hidden tab = no polling (openspec reduce-connection-appetite).
+    const timer = setInterval(() => { if (!document.hidden) load(window); }, POLL_MS);
     return () => clearInterval(timer);
   }, [load, window]);
 
