@@ -77,3 +77,8 @@
 - [ ] 5.4 Verify: unit suite green, client + server build clean,
       `openspec validate --strict` passes, live preflight returns all-green on the
       operator box.
+      *Status 2026-08-25:* suite 117/117, builds clean, validate passes; deployed to
+      live 14:30 (kept). Route verified live (401 behind auth, not 404) and every
+      condition verified individually on this box (node runs, sibling entry resolves,
+      API probe HTTP 200 with the stored key) — awaiting the operator pressing
+      Preflight in the panel for the end-to-end all-green.
