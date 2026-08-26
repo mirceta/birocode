@@ -1,202 +1,133 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — repo sounds & cue latency</title>
-<style>
-  :root{
-    --bg:#f0efec; --panel:#fcfcfb; --panel2:#f4f3f0; --edge:#e1e0d9;
-    --ink:#0b0b0b; --dim:#52514e; --muted:#898781; --accent:#2a78d6; --accent-deep:#256abf;
-    --good:#0ca30c; --good-text:#006300; --bad:#d03b3b; --warn:#fab219;
-    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,Segoe UI,Roboto,sans-serif;padding:22px 26px 80px}
-  h1{font-size:20px;margin:0 0 4px} .sub{color:var(--dim);font-size:13px;margin-bottom:18px}
-  h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:26px 0 10px}
-  .card{background:var(--panel);border:1px solid var(--edge);border-radius:12px;padding:16px 18px;box-shadow:0 1px 2px rgba(11,11,11,.05);margin-bottom:14px;max-width:980px}
-  .tag{font-family:var(--mono);font-size:12px;background:var(--panel2);border:1px solid var(--edge);border-radius:5px;padding:1px 6px}
-  button{background:var(--panel);border:1px solid var(--edge);border-radius:7px;padding:6px 12px;cursor:pointer;font-size:13px}
-  button:hover{border-color:var(--accent)}
-  button.primary{background:var(--accent-deep);color:#fff;border:none;font-weight:600}
-
-  /* timeline */
-  .lane{margin:12px 0}
-  .lane .ttl{font-size:13px;font-weight:600;margin-bottom:4px}
-  .bar{position:relative;height:34px;background:var(--panel2);border:1px solid var(--edge);border-radius:8px;overflow:hidden}
-  .seg{position:absolute;top:0;bottom:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;color:#fff;white-space:nowrap;overflow:hidden}
-  .seg.wait{background:#c3c2b7;color:#3c3b38}
-  .seg.dead{background:var(--bad)}
-  .seg.selfok{background:var(--good)}
-  .cursor{position:absolute;top:-6px;bottom:-6px;width:2px;background:var(--accent-deep);display:none}
-  .axis{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:3px}
-  .bell{position:absolute;top:-2px;font-size:16px;transform:translateX(-50%)}
-  .note{color:var(--dim);font-size:13px;margin-top:8px}
-  .stat{font-family:var(--mono);font-size:13px;color:var(--good-text);font-weight:600}
-  .statbad{font-family:var(--mono);font-size:13px;color:var(--bad);font-weight:600}
-
-  /* precedence demo */
-  .grid{display:grid;grid-template-columns:auto 1fr;gap:10px 16px;align-items:center;margin:10px 0}
-  select,label{font-size:14px}
-  select{padding:6px 10px;border:1px solid var(--edge);border-radius:7px;background:#fff}
-  .layers{display:flex;flex-direction:column;gap:6px;margin-top:12px}
-  .layer{display:flex;gap:12px;align-items:center;border:1px solid var(--edge);border-left-width:4px;border-radius:8px;padding:8px 12px;background:var(--panel2);opacity:.55}
-  .layer .n{font-family:var(--mono);font-size:12px;color:var(--muted);width:16px}
-  .layer .what{flex:1}
-  .layer .st{font-family:var(--mono);font-size:12px;color:var(--muted)}
-  .layer.present{opacity:.9}
-  .layer.win{opacity:1;border-color:var(--good);background:rgba(12,163,12,.07)}
-  .layer.win .st{color:var(--good-text);font-weight:700}
-  .layer.skipna .st{color:var(--muted)}
-  .chk{display:flex;gap:16px;flex-wrap:wrap;margin:8px 0}
-  .chk label{display:flex;gap:6px;align-items:center;font-size:13.5px}
-  .verdict{margin-top:12px;font-size:14.5px;border:1px solid var(--good);background:rgba(12,163,12,.06);border-radius:8px;padding:9px 13px}
-  .flow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:13.5px;margin:8px 0}
-  .box{border:1px solid var(--edge);border-radius:8px;background:var(--panel2);padding:6px 11px;font-family:var(--mono);font-size:12.5px}
-  .box.hot{border-color:var(--accent);background:rgba(42,120,214,.08)}
-  .arr{color:var(--muted)}
-</style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>claude-in-chrome — the user story</title>
+<link rel="stylesheet" href="./style.css">
 </head>
 <body>
-<h1>Repo sounds &amp; cue latency</h1>
-<div class="sub">openspec change <span class="tag">repo-sounds-and-latency</span> — why cues took 5–10s (or never came), what changed, and how a cue is now picked per repository.</div>
+<header>
+  <h1>Browser mode — the user story</h1>
+  <p class="sub">"Check my Gmail" from your phone, executed in <em>your</em> Chrome on the host PC.
+     Step through a real day with the feature turned on.</p>
+  <nav id="tabs">
+    <button data-view="story" class="active">1 · The story, step by step</button>
+    <button data-view="mental" >2 · "Is it just a tool?"</button>
+    <button data-view="caveats">3 · The three catches</button>
+  </nav>
+</header>
 
-<div class="card">
-  <h2 style="margin-top:0">1 · Why the sound was late — and the fix</h2>
-  <div class="flow">
-    <span class="box">click dock chat</span><span class="arr">→</span>
-    <span class="box">POST /api/events/chat-focus</span><span class="arr">→</span>
-    <span class="box">HarnessEventFeed.Publish</span><span class="arr">→</span>
-    <span class="box hot">collector ingest</span><span class="arr">→</span>
-    <span class="box">🔊 host cue</span>
+<main>
+
+<!-- ============ VIEW 1: STORY ============ -->
+<section id="view-story" class="view active">
+  <div class="stage">
+    <!-- phone pane -->
+    <div class="device phone">
+      <div class="device-label">📱 Your phone — Claude Web chat</div>
+      <div class="screen" id="phone-screen"></div>
+    </div>
+    <!-- arrow / harness pane -->
+    <div class="pipe">
+      <div class="pipe-label" id="pipe-label">Harness :5099</div>
+      <div class="pipe-arrow" id="pipe-arrow">·</div>
+      <div class="pipe-cmd" id="pipe-cmd"></div>
+    </div>
+    <!-- desktop pane -->
+    <div class="device desktop">
+      <div class="device-label">🖥️ Host PC — your Chrome</div>
+      <div class="screen" id="chrome-screen"></div>
+    </div>
   </div>
-  <p class="note">The cue only fires at <b>collector ingest</b>. Before: one sequential poll pass every 2.5s, and the dead
-  "monster" source burned its full 6s HTTP timeout <i>before</i> the in-process self source was even read. After: publishing
-  triggers self ingest <b>immediately</b>, and remote sources poll in parallel — a dead remote delays only itself.</p>
 
-  <div class="lane">
-    <div class="ttl">Before <span class="statbad" id="beforeStat"></span></div>
-    <div class="bar" id="beforeBar"></div>
-    <div class="axis"><span>0s</span><span>2s</span><span>4s</span><span>6s</span><span>8s</span><span>10s</span></div>
+  <div class="narration">
+    <div class="step-dots" id="dots"></div>
+    <h2 id="step-title"></h2>
+    <p id="step-text"></p>
+    <div class="controls">
+      <button id="prev">← Back</button>
+      <span id="step-count"></span>
+      <button id="next">Next →</button>
+    </div>
   </div>
-  <div class="lane">
-    <div class="ttl">After <span class="stat" id="afterStat"></span></div>
-    <div class="bar" id="afterBar"></div>
-    <div class="axis"><span>0s</span><span>2s</span><span>4s</span><span>6s</span><span>8s</span><span>10s</span></div>
+</section>
+
+<!-- ============ VIEW 2: MENTAL MODEL ============ -->
+<section id="view-mental" class="view">
+  <h2>Yes — it's "just another toolset". But it's tools, not a skill.</h2>
+  <div class="compare">
+    <div class="card">
+      <h3>A skill</h3>
+      <p><strong>Instructions</strong> loaded into the agent's context. It changes <em>how</em> the
+         agent works, not <em>what it can touch</em>. No new powers.</p>
+    </div>
+    <div class="card highlight">
+      <h3>Browser mode (this feature)</h3>
+      <p>An <strong>MCP toolset</strong> (<code>mcp__claude-in-chrome__*</code>) injected into the
+         session because the harness added <code>--chrome</code> to the spawn. The agent gets
+         genuinely new abilities: open tabs, read pages, click, type — in your real profile.</p>
+    </div>
+    <div class="card">
+      <h3>How you'd use it</h3>
+      <p>Exactly like you guessed: <strong>you tell it explicitly.</strong> Toggle browser mode on
+         for the session, then say what you want in plain language — "check my Gmail",
+         "open the CRM and pull the open deals". No selectors, no scripts: the agent finds
+         "the search box" semantically.</p>
+    </div>
   </div>
-  <button class="primary" id="play">▶ Replay the event</button>
-  <p class="note">Also fixed for "sometimes no sound at all": the composer's chat-focus damping dropped from one event per
-  <b>10s</b> to per <b>3s</b>, and because events no longer arrive in one late batch, the host's 400ms debounce rarely
-  swallows them anymore. (Measured on an isolated instance with a dead source registered: publish → ingest in
-  <b>≈0.7s</b>, vs ≈5–10s before.)</p>
-</div>
-
-<div class="card">
-  <h2 style="margin-top:0">2 · Which sound plays? (host and device use the same precedence)</h2>
-  <p class="note">Set up which rules exist, then pick the incoming event — the winning layer lights up.</p>
-  <div class="grid">
-    <label>Event type</label>
-    <select id="evType">
-      <option value="turn.ended">turn.ended</option>
-      <option value="turn.start">turn.start</option>
-      <option value="chat.focus">chat.focus</option>
-      <option value="deploy.done">deploy.done (unknown type)</option>
-    </select>
-    <label>From repo</label>
-    <select id="evRepo">
-      <option value="birocode">birocode</option>
-      <option value="otherrepo">otherrepo (no rules)</option>
-    </select>
+  <div class="callout ok">
+    <strong>The key property:</strong> it is <em>your</em> Chrome profile — cookies, SSO, MFA,
+    password manager already live. Gmail doesn't see a bot logging in; it sees your existing
+    session opening a tab. That's why "check my emails" just works with zero setup.
   </div>
-  <div class="chk">
-    <label><input type="checkbox" id="rT" checked /> birocode · rule for the type</label>
-    <label><input type="checkbox" id="rD" checked /> birocode · <i>_default</i> (whole-repo sound)</label>
-    <label><input type="checkbox" id="gT" checked /> global · rule for the type</label>
-    <label><input type="checkbox" id="gD" /> global · <i>_default</i></label>
+  <div class="callout">
+    <strong>Same agent, both hands:</strong> one session can edit repo code <em>and</em> drive the
+    browser — build a change, open localhost, read the console, fix, re-verify. It's not a separate
+    "browser agent"; it's your normal chat session with one more toolset.
   </div>
-  <div class="layers" id="layers"></div>
-  <div class="verdict" id="verdict"></div>
-  <p class="note">The one asymmetry, on purpose: a <b>repo</b> <i>_default</i> covers <b>every</b> event from that repo
-  (that's the "give this repo its own voice" feature), while the <b>global</b> <i>_default</i> keeps its old meaning —
-  unknown types only. Device cues in the events-app resolve the same way, with the browser synth as the built-in layer.</p>
-</div>
+</section>
 
-<div class="card">
-  <h2 style="margin-top:0">3 · Where things live</h2>
-  <div class="flow"><span class="box">host rules</span><span class="arr">→</span><span>server-side files under <span class="tag">collector-host-cues/</span> (global) and <span class="tag">collector-host-cues/repos/&lt;key&gt;/</span> (per repo, with a <span class="tag">.repo</span> sidecar naming it)</span></div>
-  <div class="flow"><span class="box">device rules</span><span class="arr">→</span><span>browser IndexedDB; repo-scoped records use a composite <span class="tag">repo␀type</span> key, old plain-type records stay the global layer</span></div>
-  <div class="flow"><span class="box">API</span><span class="arr">→</span><span><span class="tag">/api/collector/sound/rules/&lt;slot&gt;?repo=R</span> — omit <span class="tag">?repo=</span> and everything behaves exactly as before this change</span></div>
-</div>
+<!-- ============ VIEW 3: CAVEATS ============ -->
+<section id="view-caveats" class="view">
+  <h2>The three catches to keep in mind</h2>
+  <div class="caveat">
+    <div class="num">1</div>
+    <div>
+      <h3>It acts <em>as you</em></h3>
+      <p>Anything your logged-in self can do, the agent can do — including sending mail, not just
+         reading it. That's why the proposal makes browser mode <strong>per-session opt-in</strong>
+         behind the auth gates, never a default, and never available in the read-only "ask" lane.</p>
+    </div>
+  </div>
+  <div class="caveat">
+    <div class="num">2</div>
+    <div>
+      <h3>One browser session at a time</h3>
+      <p>The extension's native-messaging pipe has a single holder. Two chat sessions both in
+         browser mode would collide — so the harness serializes them: one runs, the other waits or
+         is refused with a clear message.</p>
+    </div>
+  </div>
+  <div class="caveat">
+    <div class="num">3</div>
+    <div>
+      <h3>You're on the phone; the browser is at home</h3>
+      <p>Login walls and CAPTCHAs normally pause for "the human at the browser" — but that human is
+         you, away from the PC. Your existing sessions usually mean no login is needed, but when one
+         is, the run can stall until someone is at the host. The status surface will say so instead
+         of hanging silently. Also: the agent's tabs live in a visibly colored <strong>tab
+         group</strong>; drag a tab into it to hand the agent a page, drag it out to take it away.</p>
+    </div>
+  </div>
+  <div class="callout warn">
+    <strong>Still open (design phase):</strong> our harness spawns a fresh <code>claude -p
+    --resume</code> per message. Whether the resumed run re-attaches to the same tab group or opens
+    a new window every turn is the load-bearing unknown to verify first.
+  </div>
+</section>
 
-<script>
-// ── 1 · latency timeline ────────────────────────────────────────────────────
-// Both lanes model the same incident: chat.focus published at t≈0.4s while the
-// dead remote source is registered. Widths are % of a 10s window.
-const P = s => (s/10*100) + "%";
-function seg(cls, from, to, label){ return `<div class="seg ${cls}" style="left:${P(from)};width:${P(to-from)}">${label}</div>`; }
-const beforeBar = document.getElementById("beforeBar");
-const afterBar = document.getElementById("afterBar");
-// Before: pass starts at 0 with the dead remote (6s timeout), self only after it;
-// the event published at 0.4s waits for self's turn at ~6s → cue ≈5.6s late (and
-// up to ~8.5s when the event just misses a pass).
-beforeBar.innerHTML =
-  seg("dead", 0, 6, "dead remote — 6s timeout blocks the pass") +
-  seg("selfok", 6, 6.4, "self") +
-  `<div class="bell" style="left:${P(6.2)}">🔔</div>` +
-  seg("wait", 6.4, 8.9, "idle 2.5s") +
-  seg("dead", 8.9, 10, "dead remote…") +
-  `<div class="cursor" id="cur1"></div>`;
-// After: publish at 0.4s triggers self ingest instantly; the dead remote times out
-// in parallel and hurts nobody.
-afterBar.innerHTML =
-  seg("dead", 0, 6, "dead remote — times out in parallel, delays only itself") +
-  seg("selfok", 0.4, 0.75, "self") +
-  `<div class="bell" style="left:${P(0.55)}">🔔</div>` +
-  `<div class="cursor" id="cur2"></div>`;
-document.getElementById("beforeStat").textContent = "🔔 ≈5.6–8.5s after the click";
-document.getElementById("afterStat").textContent = "🔔 <1s after the click";
-document.getElementById("play").onclick = () => {
-  for (const id of ["cur1","cur2"]){
-    const c = document.getElementById(id);
-    c.style.display = "block"; c.style.transition = "none"; c.style.left = P(0.4);
-    void c.offsetWidth;                       // reflow so the transition restarts
-    c.style.transition = "left 5s linear"; c.style.left = P(10);
-  }
-};
-
-// ── 2 · precedence demo ─────────────────────────────────────────────────────
-const KNOWN = ["turn.start","turn.ended","chat.focus"];
-const els = { evType: evType, evRepo: evRepo, rT: rT, rD: rD, gT: gT, gD: gD };
-function render(){
-  const type = els.evType.value, repo = els.evRepo.value;
-  const isBiro = repo === "birocode";
-  const layers = [
-    { id:"rT", name:`repo rule — birocode · ${type}`,    present: els.rT.checked, applies: isBiro },
-    { id:"rD", name:"repo rule — birocode · _default (any event from birocode)", present: els.rD.checked, applies: isBiro },
-    { id:"gT", name:`global rule — ${type}`,             present: els.gT.checked, applies: true },
-    { id:"gD", name:"global rule — _default (unknown types only)", present: els.gD.checked, applies: !KNOWN.includes(type) },
-    { id:"bi", name:"built-in cue (beep/voice per type · browser synth)", present: true, applies: true },
-  ];
-  let winner = null;
-  const host = document.getElementById("layers");
-  host.innerHTML = "";
-  layers.forEach((l, i) => {
-    let st;
-    if (!l.applies) st = l.present ? "n/a for this event" : "—";
-    else if (!l.present) st = "no rule";
-    else if (!winner){ winner = l; st = "✔ PLAYS"; }
-    else st = "shadowed";
-    const div = document.createElement("div");
-    div.className = "layer" + (l.present && l.applies ? " present" : "") + (winner === l ? " win" : "");
-    div.innerHTML = `<span class="n">${i+1}</span><span class="what">${l.name}</span><span class="st">${st}</span>`;
-    host.appendChild(div);
-  });
-  document.getElementById("verdict").innerHTML =
-    `A <span class="tag">${type}</span> event from <span class="tag">${repo}</span> plays: <b>${winner.name}</b>`;
-}
-for (const k in els) els[k].addEventListener("change", render);
-render();
-</script>
+</main>
+<script src="./app.js"></script>
 </body>
 </html>

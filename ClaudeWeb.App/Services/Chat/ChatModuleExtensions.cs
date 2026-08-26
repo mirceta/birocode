@@ -16,6 +16,10 @@ public static class ChatModuleExtensions
         services.AddSingleton<CliRunnerService>();
         services.AddSingleton<RunSessionService>();
         services.AddSingleton<SessionService>();
+        // Claude-in-Chrome: global browser single-holder gate + host readiness
+        // checks (openspec claude-in-chrome). Singleton because the gate IS the
+        // cross-repo serialization.
+        services.AddSingleton<ChromeGateService>();
         return services;
     }
 }
