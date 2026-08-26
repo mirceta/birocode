@@ -77,6 +77,7 @@ export const FEATURES = {
   flagsFooter: 'advanced', // agent-flags footer strip: undismissed FLAG: lines from driven-loop replies (docs/loop-driven-agent-convention.md; no openspec — user opted out 2026-07-31)
   flagsDockBadge: 'advanced', // per-dock ⚑ badge + inline dismiss for that agent's open flags (same opt-out as flagsFooter)
   loopEvalRunner: 'advanced', // Tests tab E2E eval section: start/watch/stop live-mode loop-eval runs (openspec: add-loop-eval-ui-runner)
+  browserMode: 'advanced', // 🌐 chat toolbar toggle: run builder turns with Claude-in-Chrome browser tools (openspec: claude-in-chrome)
 };
 
 const MODE_KEY = 'claudeweb_ui_mode';
