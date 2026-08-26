@@ -33,3 +33,21 @@
       compatibility (hub falls back on 404) sanity-checked against the old build.
 - [x] 4.3 Update the Understanding app's wedge tab: fix directions → implemented
       status.
+
+## 5. Post-review hardening (8-finder adversarial review, 2026-08-26)
+
+- [x] 5.1 Wire identity: client-chosen sub `id` in payload + echoed on every
+      envelope; one wire entry per subscription (no (repo,lane) grouping, no
+      shared-minimum watermark); client dispatch by exact id lookup. Kills the
+      late-attach watermark-poisoning race, ctl end/none mis-settling, replay
+      amplification, and the O(N)-per-token dispatch in one stroke.
+- [x] 5.2 Hub: lane normalized exactly like the server; retry path goes through
+      scheduleReopen (no orphaned debounce timer); MAX_FAILURES and HTTP 400 now
+      set supported=false before settling (no mixed hub/legacy socket stacking);
+      per-sub onEvent isolation (one broken handler can't kill the shared
+      connection).
+- [x] 5.3 ChatContext.attachToRun: re-check the reader guard (and a Stop) after
+      the transcript-load await — the 5 s reconcile could re-enter during the
+      load and register a duplicate, uncancellable hub sub.
+- [x] 5.4 Tests: duplicate-watcher test (two subs on one run, distinct watermarks,
+      each gets its own replay + end); id echoed in all envelope shapes.

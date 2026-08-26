@@ -5,17 +5,23 @@
 ### Server
 
 `GET /api/chat/stream-multi?subs=<urlencoded JSON>` where
-`subs = [{"repoId":"…","lane":"builder","after":123}, …]` (≤ 32 entries).
+`subs = [{"id":1,"repoId":"…","lane":"builder","after":123}, …]` (≤ 32 entries,
+one entry PER SUBSCRIPTION — duplicates of one (repo, lane) are legal and get
+parallel pumps, each with its own watermark).
 
 - Sessions resolve via `RunSessionService.Get(repoId, lane)` — explicit ids, no
   `X-Repo-Id` / global-selection dependency (docks span repos).
 - A new `ChatStreamMultiplexer.Merge(subs, ct)` pumps each session's existing
-  `StreamAsync(after, ct)` into one merged channel. Every item is an envelope:
-  - `{"repoId":r,"lane":l,"evt":<original event JSON>}` — a run event, embedded
-    verbatim (string concat, no re-parse; the inner event keeps its own `seq`).
-  - `{"repoId":r,"lane":l,"ctl":"none"}` — no session for that sub (the multi
-    analogue of the single stream's 404).
-  - `{"repoId":r,"lane":l,"ctl":"end"}` — that sub's replay+live stream completed.
+  `StreamAsync(after, ct)` into one merged channel. Every item is an envelope
+  carrying the client-chosen subscription `id` (the review finding that shaped
+  this: without a wire identity, the client must dispatch by (repo, lane)
+  matching, which leaks events into late-registered subscriptions, poisons
+  their watermarks, and mis-settles them on end/none):
+  - `{"id":n,"repoId":r,"lane":l,"evt":<original event JSON>}` — a run event,
+    embedded verbatim (string concat, no re-parse; the inner event keeps `seq`).
+  - `{"id":n,"repoId":r,"lane":l,"ctl":"none"}` — no session for that sub (the
+    multi analogue of the single stream's 404).
+  - `{"id":n,"repoId":r,"lane":l,"ctl":"end"}` — that sub's stream completed.
 - The response ends when every pump has completed (replay-only subs end
   immediately after replay). The client reopens when its subscription set changes
   or a new run appears — reconcile() already provides that signal.

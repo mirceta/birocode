@@ -516,6 +516,18 @@ export function ChatProvider({ children }) {
     if (fresh && run?.sessionId) {
       await loadTranscript(key, run.sessionId, repoId);
       updateConvo(key, { sessionId: run.sessionId });
+      // Re-check the reader guard AFTER the await: the 5 s reconcile can enter
+      // this function again while the transcript loads (both callers pass the
+      // top guard), and a second streamRun would register a duplicate hub sub
+      // that no abortRefs entry can ever cancel. The window between this check
+      // and streamRun's synchronous abortRefs write contains no awaits, so two
+      // resumers can't slip past each other. A Stop during the load stands
+      // down the same way.
+      if (abortRefs.current[key]) return;
+      if (stopRefs.current[key]) {
+        delete stopRefs.current[key];
+        return;
+      }
     }
 
     updateConvo(key, (c) => {

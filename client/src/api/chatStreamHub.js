@@ -11,12 +11,23 @@ import { createSseParser } from '../components/chat/sseParser';
 // connection (debounced) with each sub's fresh watermark from getAfter().
 // Event replay across reopens is absorbed by ChatContext's seq dedup.
 //
+// Wire identity: every subscription gets a unique id, sent in the payload and
+// echoed by the server on every envelope. Dispatch is an exact id lookup — an
+// envelope can only reach the subscription whose watermark this connection
+// actually carried. That is what makes two watchers of the SAME run safe: each
+// has its own wire entry, its own replay, its own end signal. A sub registered
+// while an older connection is still delivering receives NOTHING from it (its
+// id was never in that payload) — it starts at the debounced reopen, with its
+// watermark intact.
+//
 // hubAttach() resolves its `done` promise with:
 //   'ended'       — that sub's run stream completed (the normal end)
 //   'none'        — the server has no run for that sub (the 404 analogue)
 //   'aborted'     — the caller aborted (stop, tab close, reset)
-//   'unsupported' — multi endpoint missing (old server) or persistently
-//                   failing; the caller falls back to the legacy per-run stream
+//   'unsupported' — multi endpoint missing (old server), rejected (400), or
+//                   persistently failing; the caller falls back to the legacy
+//                   per-run stream, and the hub stays off for this page life
+//                   so mixed hub/legacy operation can't stack connections.
 // The returned handle exposes .abort(), preserving the abortRefs contract in
 // ChatContext (stopTo / resetConversation / tab cleanup all call .abort()).
 
@@ -24,7 +35,7 @@ const REOPEN_DEBOUNCE_MS = 60;
 const RETRY_MS = 2000;
 const MAX_FAILURES = 5;
 
-const subs = new Map(); // unique attach id -> {repoId, lane, getAfter, onEvent, resolve}
+const subs = new Map(); // wire id -> {repoId, lane, getAfter, onEvent, resolve}
 let nextAttachId = 0;
 let controller = null;
 let reopenTimer = null;
@@ -36,38 +47,28 @@ export function hubSupported() {
   return supported;
 }
 
-// Subscriptions are keyed by a UNIQUE attach id, not by (repoId, lane): two
-// conversations may watch the same run (e.g. two dock tabs on one repo), and
-// each must keep receiving events. The wire payload below still carries one
-// entry per distinct (repoId, lane); incoming events fan out to every
-// matching subscription.
 export function hubAttach({ repoId, lane = 'builder', getAfter, onEvent }) {
   const id = ++nextAttachId;
+  // Normalize exactly like the server (ChatController.NormalizeLane), so the
+  // echoed lane can never disagree with what we registered.
+  const normLane = lane === 'ask' ? 'ask' : 'builder';
   let resolveDone;
   const done = new Promise((r) => { resolveDone = r; });
-  const sub = { repoId, lane, getAfter, onEvent, resolve: resolveDone };
+  const sub = { repoId, lane: normLane, getAfter, onEvent, resolve: resolveDone };
   subs.set(id, sub);
   scheduleReopen();
   return {
     done,
     abort() {
-      if (subs.get(id) === sub) {
-        subs.delete(id);
-        scheduleReopen();
-      }
+      if (subs.delete(id)) scheduleReopen();
       sub.resolve('aborted');
     },
   };
 }
 
-function matching(env) {
-  const lane = env.lane || 'builder';
-  return [...subs.entries()].filter(([, s]) => s.repoId === env.repoId && s.lane === lane);
-}
-
-function scheduleReopen() {
+function scheduleReopen(delay = REOPEN_DEBOUNCE_MS) {
   clearTimeout(reopenTimer);
-  reopenTimer = setTimeout(openNow, REOPEN_DEBOUNCE_MS);
+  reopenTimer = setTimeout(openNow, delay);
 }
 
 function settleAll(outcome) {
@@ -80,32 +81,28 @@ async function openNow() {
   if (controller) controller.abort(); // supersede the current connection
   if (subs.size === 0) { controller = null; return; }
 
-  // One wire entry per distinct (repoId, lane); duplicate watchers share it,
-  // replaying from the LOWEST watermark so the most-behind one misses nothing
-  // (per-conversation seq dedup drops the overlap for the others).
-  const groups = new Map();
-  for (const s of subs.values()) {
-    const gk = `${s.repoId}|${s.lane}`;
-    const after = s.getAfter() || 0;
-    const g = groups.get(gk);
-    if (!g) groups.set(gk, { repoId: s.repoId, lane: s.lane, after });
-    else g.after = Math.min(g.after, after);
-  }
-  const payload = [...groups.values()];
+  // One wire entry PER SUBSCRIPTION, each with its own id and watermark —
+  // duplicate watchers of one run simply get parallel replays; no grouping,
+  // no shared-minimum watermark.
+  const payload = [...subs.entries()].map(([id, s]) => ({
+    id, repoId: s.repoId, lane: s.lane, after: s.getAfter() || 0,
+  }));
   const c = new AbortController();
   controller = c;
   const parse = createSseParser((env) => {
-    const hit = matching(env);
-    if (hit.length === 0) return; // late event for subs aborted mid-flight
+    const sub = subs.get(env.id);
+    if (!sub) return; // aborted mid-flight, or an id this hub never issued
     if (env.ctl === 'none' || env.ctl === 'end') {
-      for (const [id, s] of hit) {
-        subs.delete(id);
-        s.resolve(env.ctl === 'end' ? 'ended' : 'none');
-      }
+      subs.delete(env.id);
+      sub.resolve(env.ctl === 'end' ? 'ended' : 'none');
       // No reopen here: other subs keep riding this same connection.
       return;
     }
-    if (env.evt) for (const [, s] of hit) s.onEvent(env.evt);
+    if (env.evt) {
+      // One conversation's broken handler must never kill the shared
+      // connection (or starve other subscriptions) — isolate it.
+      try { sub.onEvent(env.evt); } catch { /* conversation-level failure */ }
+    }
   });
 
   try {
@@ -118,20 +115,23 @@ async function openNow() {
     if (gen === generation && subs.size > 0) scheduleReopen();
   } catch (err) {
     if (err.name === 'AbortError') return; // superseded by a newer openNow
-    if (err.status === 404) {
-      // Old server without the multi endpoint (e.g. right after a rollback):
-      // permanently fall back to the legacy per-run streams.
+    if (err.status === 404 || err.status === 400) {
+      // 404: old server without the endpoint (right after a rollback).
+      // 400: the server rejected our payload — a contract bug; don't loop on it.
       supported = false;
       settleAll('unsupported');
       return;
     }
     failures += 1;
     if (failures >= MAX_FAILURES) {
-      failures = 0;
-      settleAll('unsupported'); // callers use the legacy path for these runs
+      // Persistently failing: hand EVERY conversation to the legacy path and
+      // keep the hub off for the rest of this page's life — a half-evicted
+      // mixed mode would stack legacy sockets under new hub connections.
+      supported = false;
+      settleAll('unsupported');
       return;
     }
-    if (gen === generation && subs.size > 0) reopenTimer = setTimeout(openNow, RETRY_MS);
+    if (gen === generation && subs.size > 0) scheduleReopen(RETRY_MS);
   } finally {
     if (controller === c) controller = null;
   }

@@ -11,15 +11,19 @@ namespace ClaudeWeb.Services.Chat;
 /// the browser's 6-per-origin HTTP/1.1 limit made per-run streams wedge the UI).
 ///
 /// Envelope shapes (one JSON object per item):
-///   {"repoId":r,"lane":l,"evt":&lt;original event JSON, embedded verbatim&gt;}
-///   {"repoId":r,"lane":l,"ctl":"none"}   -- no session for that sub (the 404 analogue)
-///   {"repoId":r,"lane":l,"ctl":"end"}    -- that sub's replay+live stream completed
-/// The merged stream ends when every pump has completed; cancellation tears all
-/// pumps down (subscriber cleanup is StreamAsync's own finally).
+///   {"id":n,"repoId":r,"lane":l,"evt":&lt;original event JSON, embedded verbatim&gt;}
+///   {"id":n,"repoId":r,"lane":l,"ctl":"none"} -- no session for that sub (the 404 analogue)
+///   {"id":n,"repoId":r,"lane":l,"ctl":"end"}  -- that sub's replay+live stream completed
+/// The client-chosen <c>id</c> names the subscription exactly, so two watchers of
+/// the SAME run (each with its own replay watermark) get their own pump and their
+/// own envelopes — the client dispatches by id and can never deliver an event to
+/// a subscription whose watermark this connection never carried. The merged
+/// stream ends when every pump has completed; cancellation tears all pumps down
+/// (subscriber cleanup is StreamAsync's own finally).
 /// </summary>
 public static class ChatStreamMultiplexer
 {
-    public sealed record Sub(string RepoId, string Lane, int After);
+    public sealed record Sub(int Id, string RepoId, string Lane, int After);
 
     public const int MaxSubs = 32;
 
@@ -62,7 +66,7 @@ public static class ChatStreamMultiplexer
     /// its own seq, which is what the client dedups on.</summary>
     private static string Envelope(Sub sub, string? evtJson, string? ctl)
     {
-        var head = $"{{\"repoId\":{JsonSerializer.Serialize(sub.RepoId)},\"lane\":{JsonSerializer.Serialize(sub.Lane)},";
+        var head = $"{{\"id\":{sub.Id},\"repoId\":{JsonSerializer.Serialize(sub.RepoId)},\"lane\":{JsonSerializer.Serialize(sub.Lane)},";
         return ctl is not null
             ? head + $"\"ctl\":{JsonSerializer.Serialize(ctl)}}}"
             : head + "\"evt\":" + evtJson + "}";
