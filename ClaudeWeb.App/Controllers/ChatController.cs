@@ -36,7 +36,9 @@ public class ChatController : ControllerBase
     private readonly RepositoryRegistry _registry;
     private readonly Logger _logger;
 
-    public ChatController(CliRunnerService cli, RunSessionService runs, SessionService sessions, RepositoryResolver repos, AuditService audit, ToolsConfigStore tools, RepositoryRegistry registry, Logger logger)
+    private readonly ChromeGateService _chrome;
+
+    public ChatController(CliRunnerService cli, RunSessionService runs, SessionService sessions, RepositoryResolver repos, AuditService audit, ToolsConfigStore tools, RepositoryRegistry registry, Logger logger, ChromeGateService chrome)
     {
         _cli = cli;
         _runs = runs;
@@ -46,13 +48,15 @@ public class ChatController : ControllerBase
         _tools = tools;
         _registry = registry;
         _logger = logger;
+        _chrome = chrome;
     }
 
     /// <summary>Request body for POST /api/chat. <c>Lane</c> selects the run lane:
     /// <c>builder</c> (default, full capability) or <c>ask</c> (read-only side
     /// conversation that can run concurrently with the builder — see
-    /// plans/repo-ask-chat.md).</summary>
-    public record ChatRequest(string? Message, string? SessionId, string? Model, string? Lane);
+    /// plans/repo-ask-chat.md). <c>Browser</c> requests Claude-in-Chrome browser
+    /// mode for this turn (openspec claude-in-chrome; builder lane only).</summary>
+    public record ChatRequest(string? Message, string? SessionId, string? Model, string? Lane, bool? Browser);
 
     /// <summary>Only two lanes exist; anything unrecognized falls back to the
     /// builder so a stray value can never spawn an unexpected run mode.</summary>
@@ -89,8 +93,28 @@ public class ChatController : ControllerBase
         // lane is rejected, but other repos -- and the repo's OTHER lane (builder
         // vs read-only ask) -- can run concurrently (plans/repo-ask-chat.md).
         var lane = NormalizeLane(request?.Lane);
+
+        // Browser mode (openspec claude-in-chrome): builder lane only — the ask
+        // lane's contract is structurally read-only, and browser tools mutate the
+        // world. The single-holder gate is claimed BEFORE the run slot so a
+        // conflict is a clean 409 with nothing to unwind.
+        var browser = request?.Browser == true && lane == "builder";
+        if (browser && !_chrome.TryAcquire(repo.Name, out var holderRepo))
+        {
+            _logger.Info($"[CHAT] Rejected: browser is held by \"{holderRepo}\" (requested for \"{repo.Name}\").");
+            Response.StatusCode = StatusCodes.Status409Conflict;
+            await Response.WriteAsJsonAsync(new
+            {
+                error = $"The browser is in use by another agent ({holderRepo}).",
+                code = "browser-busy",
+                repo = holderRepo,
+            });
+            return;
+        }
+
         if (!_runs.TryBeginRun(repo.Id, lane, out var session))
         {
+            if (browser) _chrome.Release();
             _logger.Info($"[CHAT] Rejected: a {lane} turn is already running for \"{repo.Name}\".");
             Response.StatusCode = StatusCodes.Status409Conflict;
             await Response.WriteAsJsonAsync(new { error = "Another chat request is already in progress for this project." });
@@ -136,7 +160,8 @@ public class ChatController : ControllerBase
                     audit: auditCtx,
                     repoId: repo.Id,
                     repoName: repo.Name,
-                    mcpConfigJson: mcpConfigJson);
+                    mcpConfigJson: mcpConfigJson,
+                    browser: browser);
             }
             catch (Exception ex)
             {
@@ -144,6 +169,7 @@ public class ChatController : ControllerBase
             }
             finally
             {
+                if (browser) _chrome.Release();
                 session.Complete();
             }
         });
