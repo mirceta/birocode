@@ -24,7 +24,8 @@ const REOPEN_DEBOUNCE_MS = 60;
 const RETRY_MS = 2000;
 const MAX_FAILURES = 5;
 
-const subs = new Map(); // key -> {repoId, lane, getAfter, onEvent, resolve}
+const subs = new Map(); // unique attach id -> {repoId, lane, getAfter, onEvent, resolve}
+let nextAttachId = 0;
 let controller = null;
 let reopenTimer = null;
 let generation = 0;
@@ -35,23 +36,33 @@ export function hubSupported() {
   return supported;
 }
 
+// Subscriptions are keyed by a UNIQUE attach id, not by (repoId, lane): two
+// conversations may watch the same run (e.g. two dock tabs on one repo), and
+// each must keep receiving events. The wire payload below still carries one
+// entry per distinct (repoId, lane); incoming events fan out to every
+// matching subscription.
 export function hubAttach({ repoId, lane = 'builder', getAfter, onEvent }) {
-  const key = `${repoId}|${lane}`;
+  const id = ++nextAttachId;
   let resolveDone;
   const done = new Promise((r) => { resolveDone = r; });
   const sub = { repoId, lane, getAfter, onEvent, resolve: resolveDone };
-  subs.set(key, sub);
+  subs.set(id, sub);
   scheduleReopen();
   return {
     done,
     abort() {
-      if (subs.get(key) === sub) {
-        subs.delete(key);
+      if (subs.get(id) === sub) {
+        subs.delete(id);
         scheduleReopen();
       }
       sub.resolve('aborted');
     },
   };
+}
+
+function matching(env) {
+  const lane = env.lane || 'builder';
+  return [...subs.entries()].filter(([, s]) => s.repoId === env.repoId && s.lane === lane);
 }
 
 function scheduleReopen() {
@@ -69,21 +80,32 @@ async function openNow() {
   if (controller) controller.abort(); // supersede the current connection
   if (subs.size === 0) { controller = null; return; }
 
-  const payload = [...subs.values()].map((s) => ({
-    repoId: s.repoId, lane: s.lane, after: s.getAfter() || 0,
-  }));
+  // One wire entry per distinct (repoId, lane); duplicate watchers share it,
+  // replaying from the LOWEST watermark so the most-behind one misses nothing
+  // (per-conversation seq dedup drops the overlap for the others).
+  const groups = new Map();
+  for (const s of subs.values()) {
+    const gk = `${s.repoId}|${s.lane}`;
+    const after = s.getAfter() || 0;
+    const g = groups.get(gk);
+    if (!g) groups.set(gk, { repoId: s.repoId, lane: s.lane, after });
+    else g.after = Math.min(g.after, after);
+  }
+  const payload = [...groups.values()];
   const c = new AbortController();
   controller = c;
   const parse = createSseParser((env) => {
-    const sub = subs.get(`${env.repoId}|${env.lane || 'builder'}`);
-    if (!sub) return; // late event for a sub aborted mid-flight
+    const hit = matching(env);
+    if (hit.length === 0) return; // late event for subs aborted mid-flight
     if (env.ctl === 'none' || env.ctl === 'end') {
-      subs.delete(`${env.repoId}|${env.lane || 'builder'}`);
-      sub.resolve(env.ctl === 'end' ? 'ended' : 'none');
+      for (const [id, s] of hit) {
+        subs.delete(id);
+        s.resolve(env.ctl === 'end' ? 'ended' : 'none');
+      }
       // No reopen here: other subs keep riding this same connection.
       return;
     }
-    if (env.evt) sub.onEvent(env.evt);
+    if (env.evt) for (const [, s] of hit) s.onEvent(env.evt);
   });
 
   try {
