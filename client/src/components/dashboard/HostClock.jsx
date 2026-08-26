@@ -75,7 +75,8 @@ export default function HostClock() {
       }
     };
     load();
-    const resync = setInterval(load, POLL_MS);
+    // Hidden tab = no polling (openspec reduce-connection-appetite).
+    const resync = setInterval(() => { if (!document.hidden) load(); }, POLL_MS);
     const ticker = setInterval(() => setTick((n) => n + 1), 1000);
     return () => {
       aliveRef.current = false;

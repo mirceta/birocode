@@ -103,7 +103,8 @@ export default function DiscoverAppsPanel({ disc, localApps, repoId, onClose }) 
   // until a snapshot with apps exists (so the idle→auto-loadCache handshake
   // below is never raced) and never emits probe events.
   useEffect(() => {
-    const id = setInterval(() => { refreshStatus(); }, 5000);
+    // Hidden tab = no polling (openspec reduce-connection-appetite).
+    const id = setInterval(() => { if (!document.hidden) refreshStatus(); }, 5000);
     return () => clearInterval(id);
   }, [refreshStatus]);
 
@@ -131,7 +132,8 @@ export default function DiscoverAppsPanel({ disc, localApps, repoId, onClose }) 
       } catch { /* feed is advisory — never break the panel */ }
     };
     pull();
-    const id = setInterval(pull, 5000);
+    // Hidden tab = no polling (openspec reduce-connection-appetite).
+    const id = setInterval(() => { if (!document.hidden) pull(); }, 5000);
     return () => {
       alive = false;
       clearInterval(id);

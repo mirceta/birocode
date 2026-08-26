@@ -58,7 +58,8 @@ export default function EventConsole({ repoId }) {
     setEvents([]);
     setError(false);
     poll();
-    timerRef.current = setInterval(poll, POLL_MS);
+    // Hidden tab = no polling (openspec reduce-connection-appetite).
+    timerRef.current = setInterval(() => { if (!document.hidden) poll(); }, POLL_MS);
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = null;

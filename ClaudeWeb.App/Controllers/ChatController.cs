@@ -202,6 +202,66 @@ public class ChatController : ControllerBase
         await AttachAsync(session, after);
     }
 
+    /// <summary>
+    /// Multiplexed attachment (openspec reduce-connection-appetite): one SSE
+    /// connection carrying the events of every requested (repoId, lane) run,
+    /// each enveloped with its origin. <c>subs</c> is URL-encoded JSON:
+    /// <c>[{"repoId":"…","lane":"builder","after":123}, …]</c> (≤32 entries).
+    /// A sub with no session gets <c>ctl:"none"</c> (the 404 analogue); a sub
+    /// whose stream completes gets <c>ctl:"end"</c>; the response ends when all
+    /// subs have. Repos are addressed explicitly — docks span repos, so this
+    /// endpoint ignores the global selection and the X-Repo-Id header.
+    /// </summary>
+    [HttpGet("chat/stream-multi")]
+    public async Task ChatStreamMulti([FromQuery] string? subs)
+    {
+        _logger.CountRequest();
+
+        List<ChatStreamMultiplexer.Sub>? parsed = null;
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(subs))
+                parsed = System.Text.Json.JsonSerializer.Deserialize<List<ChatStreamMultiplexer.Sub>>(
+                    subs, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (System.Text.Json.JsonException) { /* handled below */ }
+        if (parsed is null || parsed.Count == 0 || parsed.Count > ChatStreamMultiplexer.MaxSubs
+            || parsed.Any(s => string.IsNullOrWhiteSpace(s.RepoId)))
+        {
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            await Response.WriteAsJsonAsync(new { error = $"subs must be 1..{ChatStreamMultiplexer.MaxSubs} entries of {{repoId, lane, after}}." });
+            return;
+        }
+
+        var resolved = parsed
+            .Select(s =>
+            {
+                var sub = s with { Lane = NormalizeLane(s.Lane) };
+                return (Sub: sub, Session: _runs.Get(sub.RepoId, sub.Lane));
+            })
+            .ToList();
+        _logger.Info($"[CHAT] Multi-attach: {resolved.Count} sub(s), {resolved.Count(r => r.Session?.Status == "running")} running");
+
+        Response.StatusCode = StatusCodes.Status200OK;
+        Response.ContentType = "text/event-stream";
+        Response.Headers.CacheControl = "no-cache";
+        Response.Headers.Connection = "keep-alive";
+        try
+        {
+            await foreach (var json in ChatStreamMultiplexer.Merge(resolved, HttpContext.RequestAborted))
+            {
+                var bytes = Encoding.UTF8.GetBytes($"data: {json}\n\n");
+                await Response.Body.WriteAsync(bytes, HttpContext.RequestAborted);
+                await Response.Body.FlushAsync(HttpContext.RequestAborted);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Client detached (screen lock, sub-set change reopen) — runs continue.
+            _logger.Info("[CHAT] Client detached from multi-stream; runs continue.");
+        }
+    }
+
     /// <summary>Explicitly stops the repo's running turn (kills the CLI process
     /// tree). The only way a Run dies early -- disconnects no longer stop it.</summary>
     [HttpPost("chat/stop")]

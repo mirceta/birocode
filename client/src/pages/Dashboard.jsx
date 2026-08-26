@@ -402,7 +402,8 @@ export default function Dashboard({ onClose }) {
   useEffect(() => {
     if (!dockLoopsOn) return undefined;
     loadLoops();
-    const timer = setInterval(loadLoops, POLL_MS);
+    // Hidden tab = no polling (openspec reduce-connection-appetite).
+    const timer = setInterval(() => { if (!document.hidden) loadLoops(); }, POLL_MS);
     return () => clearInterval(timer);
   }, [dockLoopsOn, loadLoops]);
   // Revision 2 (openspec unify-loop-types): ONE unified record per agent — a
@@ -846,7 +847,8 @@ export default function Dashboard({ onClose }) {
     }
 
     poll();
-    const timer = setInterval(poll, POLL_MS);
+    // Hidden tab = no polling (openspec reduce-connection-appetite).
+    const timer = setInterval(() => { if (!document.hidden) poll(); }, POLL_MS);
     return () => {
       cancelled = true;
       clearInterval(timer);
