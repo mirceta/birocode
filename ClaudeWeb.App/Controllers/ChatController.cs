@@ -3,6 +3,7 @@ using ClaudeWeb.Services.Audit;
 using ClaudeWeb.Services.Chat;
 using ClaudeWeb.Services.Logging;
 using ClaudeWeb.Services.Repositories;
+using ClaudeWeb.Services.Tools;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -31,17 +32,21 @@ public class ChatController : ControllerBase
     private readonly SessionService _sessions;
     private readonly RepositoryResolver _repos;
     private readonly AuditService _audit;
+    private readonly ToolsConfigStore _tools;
+    private readonly RepositoryRegistry _registry;
     private readonly Logger _logger;
 
     private readonly ChromeGateService _chrome;
 
-    public ChatController(CliRunnerService cli, RunSessionService runs, SessionService sessions, RepositoryResolver repos, AuditService audit, Logger logger, ChromeGateService chrome)
+    public ChatController(CliRunnerService cli, RunSessionService runs, SessionService sessions, RepositoryResolver repos, AuditService audit, ToolsConfigStore tools, RepositoryRegistry registry, Logger logger, ChromeGateService chrome)
     {
         _cli = cli;
         _runs = runs;
         _sessions = sessions;
         _repos = repos;
         _audit = audit;
+        _tools = tools;
+        _registry = registry;
         _logger = logger;
         _chrome = chrome;
     }
@@ -135,6 +140,11 @@ public class ChatController : ControllerBase
         var auditCtx = new AuditContext { Actor = _audit.ResolveActor(HttpContext), Repo = repo.Name, Lane = lane };
         _audit.LogPrompt(auditCtx.Actor, repo.Name, lane, message);
 
+        // Per-repo MCP tools (openspec add-dock-tools-lane): resolved NOW on the
+        // request thread, injected into both lanes. Null (tool disabled, or its
+        // server entry missing on disk) leaves the CLI invocation untouched.
+        var mcpConfigJson = _tools.BuildMcpConfigJson(repo.Id, _registry.GetAll().Select(r => r.Path));
+
         _ = Task.Run(async () =>
         {
             try
@@ -150,6 +160,7 @@ public class ChatController : ControllerBase
                     audit: auditCtx,
                     repoId: repo.Id,
                     repoName: repo.Name,
+                    mcpConfigJson: mcpConfigJson,
                     browser: browser);
             }
             catch (Exception ex)
