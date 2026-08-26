@@ -56,7 +56,8 @@ export default function AdminStatusTile() {
   useEffect(() => {
     aliveRef.current = true;
     load();
-    const poll = setInterval(load, POLL_MS);
+    // Hidden tab = no polling (openspec reduce-connection-appetite).
+    const poll = setInterval(() => { if (!document.hidden) load(); }, POLL_MS);
     return () => {
       aliveRef.current = false;
       clearInterval(poll);

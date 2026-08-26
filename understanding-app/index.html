@@ -251,18 +251,21 @@ PS&gt; Get-NetTCPConnection -LocalPort 5099 -State Established
 %APPDATA%\ClaudeWeb\tools.json  (13:12:12)
     enabled=True · keyLen=44 · url=http://192.168.0.215:19000/api/v2</div>
 
-  <h2>Fix directions (needs an OpenSpec change)</h2>
+  <h2>The fix — implemented (openspec <code>reduce-connection-appetite</code>)</h2>
   <div class="card fixes">
     <ol>
-      <li><b>Multiplex the streams</b> — one shared event/stream connection for all docks
-          instead of one long-lived stream per running agent. Biggest win; removes the squatters.</li>
-      <li><b>Consolidate + visibility-gate the pollers</b> — 20+ independent 4–5 s intervals
-          collapse into one status poll; hidden lanes/tabs pause theirs.</li>
-      <li><i>(Infra alternative)</i> TLS on :5099 would unlock HTTP/2 multiplexing and make the
-          cap irrelevant — but is a bigger operational change for a LAN harness.</li>
+      <li><b>Streams multiplexed ✓</b> — all conversations now ride ONE shared
+          <code>GET /api/chat/stream-multi</code> connection (events enveloped per run),
+          with automatic fallback to the old per-run streams if the endpoint is missing
+          (rollback safety). N running agents now squat <b>1</b> slot, not N.</li>
+      <li><b>Pollers visibility-gated ✓</b> — every steady-state poller skips its tick while
+          the tab is hidden; a locked phone generates near-zero traffic. (Consolidating them
+          into one status endpoint remains a future change.)</li>
+      <li><i>(Still open, infra)</i> TLS on :5099 would unlock HTTP/2 multiplexing and make the
+          cap irrelevant — a bigger operational change for a LAN harness.</li>
     </ol>
-    <b>Right now, no code change needed to proceed:</b> reload the tab (a reload resets the pool);
-    the panel will show "key set ····&lt;last 4&gt;" — your config is already saved and active.
+    Worst case before: ~4 squatting streams + 21-request bursts vs 6 slots.
+    Now: 1 shared stream + your own send + short-lived polls — saves always find a free slot.
   </div>
   </div><!-- /tabWedge -->
 </div>

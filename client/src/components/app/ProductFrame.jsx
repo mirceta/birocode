@@ -102,7 +102,8 @@ export default function ProductFrame({
   useEffect(() => {
     if (!url) return undefined;
     check();
-    pollRef.current = setInterval(check, 4000);
+    // Hidden tab = no probing (openspec reduce-connection-appetite).
+    pollRef.current = setInterval(() => { if (!document.hidden) check(); }, 4000);
     return () => clearInterval(pollRef.current);
   }, [url, check, reloadKey]);
 

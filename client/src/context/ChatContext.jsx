@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { apiGet, apiPost, apiStream, apiStreamGet, apiUpload } from '../api/client';
+import { hubAttach, hubSupported } from '../api/chatStreamHub';
 import { createSseParser } from '../components/chat/sseParser';
 import { getModel, setModel as persistModel } from '../components/chat/ModelSelector';
 import { useDock } from './DockContext';
@@ -466,9 +467,34 @@ export function ChatProvider({ children }) {
   }
 
   // Attach (or reattach) to the backend run for a repo, resuming after the
-  // last seq we saw. Retries transient failures; gives up on 404 (no run).
-  // Returns true when the stream ended normally or the user stopped it.
+  // last seq we saw. Returns true when the stream ended normally or the user
+  // stopped it; false when there is no run (or reattaching gave up).
+  //
+  // Normal path (openspec reduce-connection-appetite): ride the SHARED
+  // multiplexed connection — all conversations together hold ONE socket
+  // instead of one each (the 6-per-origin browser limit made per-run readers
+  // wedge the UI). The legacy per-run loop below stays as the automatic
+  // fallback when the multi endpoint is unavailable (old server after a
+  // rollback) or persistently failing.
   async function streamRun(key, tabId, repoId, lane = 'builder', attempts = 5) {
+    if (hubSupported()) {
+      const handle = hubAttach({
+        repoId,
+        lane,
+        getAfter: () => seqRefs.current[key] || 0,
+        onEvent: makeEventHandler(key, tabId),
+      });
+      abortRefs.current[key] = handle; // .abort() keeps the existing contract
+      try {
+        const outcome = await handle.done;
+        if (outcome === 'ended' || outcome === 'aborted') return true;
+        if (outcome === 'none') return false;
+        // 'unsupported' -> fall through to the legacy per-run stream.
+      } finally {
+        if (abortRefs.current[key] === handle) delete abortRefs.current[key];
+      }
+      if (stopRefs.current[key]) return true;
+    }
     const laneQs = lane && lane !== 'builder' ? `&lane=${lane}` : '';
     for (let attempt = 0; attempt < attempts; attempt++) {
       if (attempt > 0) await new Promise((r) => setTimeout(r, 2000));
@@ -515,6 +541,18 @@ export function ChatProvider({ children }) {
     if (fresh && run?.sessionId) {
       await loadTranscript(key, run.sessionId, repoId);
       updateConvo(key, { sessionId: run.sessionId });
+      // Re-check the reader guard AFTER the await: the 5 s reconcile can enter
+      // this function again while the transcript loads (both callers pass the
+      // top guard), and a second streamRun would register a duplicate hub sub
+      // that no abortRefs entry can ever cancel. The window between this check
+      // and streamRun's synchronous abortRefs write contains no awaits, so two
+      // resumers can't slip past each other. A Stop during the load stands
+      // down the same way.
+      if (abortRefs.current[key]) return;
+      if (stopRefs.current[key]) {
+        delete stopRefs.current[key];
+        return;
+      }
     }
 
     updateConvo(key, (c) => {
