@@ -55,6 +55,14 @@ public class RepositoryResolver
     public RepositoryConfig? Current()
     {
         var requested = RequestedId();
+        // The arch agent's reserved id (openspec: add-arch-agent) is never a
+        // repo: a request addressed to it must not silently fall back to the
+        // default repo — its surface is /api/arch.
+        if (IsReserved(requested)) return null;
         return _registry.TryGet(requested) ?? _registry.Default();
     }
+
+    /// <summary>Reserved ids that name an agent that is not a repository.</summary>
+    public static bool IsReserved(string? id) =>
+        string.Equals(id, Arch.ArchAgentService.ReservedId, StringComparison.Ordinal);
 }

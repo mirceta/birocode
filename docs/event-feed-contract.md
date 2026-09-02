@@ -72,6 +72,17 @@ time); unmatched starts older than 4 hours are dropped, so a lost `turn.ended`
 cannot pin a ghost agent. A producer that emits only `turn.ended` still gets
 its event log and reachability -- it just shows no running agents.
 
+### Other types Claude Web publishes
+
+- **`chat.focus`** -- someone clicked into a dock's chat box (`source` = the
+  repo). Informational; no pairing.
+- **`arch.wake`** -- the arch agent (openspec `add-arch-agent`) was woken by
+  the feed and sent a wake-up turn. `source` is `{ repoId: "@arch", repoName:
+  "Arch agent" }`; `data` carries `after` and `upTo` (the collector seq range
+  the wake covered), `repoIds` (the managed repos named) and `sessionId`. A
+  consumer that does not know the type falls back to its default cue -- the
+  host sound does exactly that.
+
 Summary lives on the board; **details stay in your app**. The source row shows
 your address, so the operator clicks through to your own UI for the full
 picture.
