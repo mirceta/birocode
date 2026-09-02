@@ -3335,3 +3335,11 @@
   color: #b85c00;
   font-weight: 600;
 }
+
+/* Arch agent pop-up (openspec add-arch-agent): the Arch page fills the frame
+   like the other panels; its own padding is dropped since the frame pads. */
+.dash__popup-body .arch--popup {
+  flex: 1;
+  min-height: 0;
+  padding: 0;
+}
