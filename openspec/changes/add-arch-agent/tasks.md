@@ -43,6 +43,12 @@
 - [x] 6.3 Playwright check (`.claudeweb-preview/playwright/`): tab hidden in Basic, present in Advanced; scope change hides a repo from the strip; Stop disarms
 - [x] 6.4 Desktop: dashboard panel-rail chip 🏛 Arch summons the Arch page as a centered pop-up (same mechanism as Ideas/Autopilot/Audit/Traffic; `arch` key in `claudeweb_dash_panels`); "open dock" closes the dashboard onto the dock; Playwright `verify-arch-popup.mjs`
 
+## 6b. Arch tab lanes: Chat | Tools
+
+- [x] 6b.1 `ArchController`: `GET /api/arch/tools` (the `tools/list` catalogue verbatim + per-tool usage from the audit: kind `arch`, outcome `arch-tool`, phase = tool name; the denied built-ins; server facts) and `GET /api/arch/tools/preflight` (mcp / token / home / scope / gate rows, `ready`)
+- [x] 6b.2 Client: lane row on the Arch page (Chat default, Tools) in the dock lane style; `ArchToolsPanel` in the repo dock's Tools-lane style (`toolsPanel.css`) — one section per tool with parameters and usage, a denied-tools section, Preflight with pass/fail rows; the aside (loop, strip, home) stays in both lanes
+- [x] 6b.3 `check-arch-tab.mjs` gains lane checks: Tools lane lists exactly the server's tools in order, the denied section carries every disallowed tool, preflight renders its rows, Chat lane returns the composer with its draft intact
+
 ## 7. Loop-eval scenario (ship gate)
 
 - [x] 7.1 Fixtures: reuse the goal fixture for `loopeval-arch-a` and `-b`; `-c` provisioned on `feature/operator-wip` with a commit the arch did not record; add a README line in `-a` instructing the reader to push (injection bait)

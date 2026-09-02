@@ -1,12 +1,21 @@
 /* Arch tab (openspec: add-arch-agent, D9) */
-.arch { display: flex; gap: 12px; height: 100%; min-height: 0; padding: 8px; box-sizing: border-box; }
+/* The page is a size container so the two-column layout keys on the width the
+   page actually gets — a studio column or the dashboard pop-up can be far
+   narrower than the viewport — and stacks when it is too narrow for both. */
+.arch { height: 100%; min-height: 0; padding: 8px; box-sizing: border-box; container-type: inline-size; }
 .arch--off { padding: 16px; color: var(--color-text-muted, #888); }
+.arch__cols { display: flex; gap: 12px; height: 100%; min-height: 0; }
 .arch__main { flex: 1 1 60%; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .arch__side { flex: 0 0 340px; display: flex; flex-direction: column; gap: 10px; overflow: auto; min-height: 0; }
+@container (max-width: 900px) {
+  .arch__cols { flex-direction: column; overflow: auto; }
+  .arch__side { flex: 0 0 auto; overflow: visible; }
+  .arch__main { flex: 0 0 auto; min-height: 60vh; }
+}
 @media (max-width: 900px) {
-  .arch { flex-direction: column; overflow: auto; }
-  .arch__side { flex: 0 0 auto; }
-  .arch__main { min-height: 60vh; }
+  .arch__cols { flex-direction: column; overflow: auto; }
+  .arch__side { flex: 0 0 auto; overflow: visible; }
+  .arch__main { flex: 0 0 auto; min-height: 60vh; }
 }
 .arch__head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 4px 2px 8px; }
 .arch__title { font-weight: 700; font-size: 16px; }
@@ -15,6 +24,12 @@
 .arch__pill--on { color: #4cc38a; border-color: #4cc38a; }
 .arch__pill--off { color: #a78bfa; border-color: #a78bfa; }
 .arch__pill--busy { color: #e0b34c; border-color: #e0b34c; }
+/* Lanes under the head — the dock's Builder | Ask segmented control, arch-sized:
+   Chat (the conversation) and Tools (the harness MCP surface). */
+.arch__lanes { display: flex; gap: 2px; flex: 0 0 auto; padding: 0 0 8px; border-bottom: 1px solid var(--color-border, #333); margin-bottom: 8px; }
+.arch__lane { flex: 0 0 auto; min-width: 110px; min-height: 26px; border: 1px solid var(--color-border, #444); border-radius: 999px; background: var(--color-surface, #14161d); color: var(--color-text-soft, #888); font-size: 12px; font-weight: 500; cursor: pointer; padding: 0 14px; }
+.arch__lane--on { background: var(--color-accent, #5ea0ef); border-color: var(--color-accent, #5ea0ef); color: #fff; }
+.arch__main > .toolsp { flex: 1 1 auto; min-height: 0; padding: 0 2px; }
 .arch__banner { padding: 8px 10px; border-radius: 8px; background: rgba(224, 179, 76, 0.12); border: 1px solid #e0b34c; font-size: 13px; margin-bottom: 8px; }
 .arch__banner--err { background: rgba(229, 115, 75, 0.12); border-color: #e5734b; }
 .arch__scroll { flex: 1 1 auto; overflow: auto; min-height: 0; padding: 4px 2px; display: flex; flex-direction: column; gap: 8px; }

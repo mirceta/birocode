@@ -4,6 +4,7 @@ import { apiGet, apiPost } from '../api/client';
 import { useFeature } from '../context/UiModeContext';
 import { useDock } from '../context/DockContext';
 import MessageBubble from '../components/chat/MessageBubble';
+import ArchToolsPanel from '../components/arch/ArchToolsPanel';
 import './arch.css';
 
 // The Arch tab (openspec: add-arch-agent, D9): the arch agent's own surface.
@@ -41,6 +42,10 @@ export default function Arch({ popup = false, onOpenDock = null }) {
   const [scopeDraft, setScopeDraft] = useState([]);
   const [cap, setCap] = useState(6);
   const [mode, setMode] = useState('drive');
+  // Lanes, like a repo dock's Builder | Ask | … row — but the arch agent only
+  // has two that apply: the conversation, and its Tools (the harness MCP
+  // surface). Chat is the default; the lane is view state, not persisted.
+  const [lane, setLane] = useState('chat');
   const [, setTick] = useState(0);
   const scrollRef = useRef(null);
   const alive = useRef(true);
@@ -140,6 +145,7 @@ export default function Arch({ popup = false, onOpenDock = null }) {
 
   return (
     <div className={`arch${popup ? ' arch--popup' : ''}`}>
+      <div className="arch__cols">
       <div className="arch__main">
         <div className="arch__head">
           {!popup && <span className="arch__title">Arch agent</span>}
@@ -155,9 +161,35 @@ export default function Arch({ popup = false, onOpenDock = null }) {
             {sessionId && <span className="arch__dim"> · session {sessionId.slice(0, 8)}</span>}
           </span>
         </div>
+        <div className="arch__lanes" role="tablist" aria-label="Arch lanes">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={lane === 'chat'}
+            className={`arch__lane${lane === 'chat' ? ' arch__lane--on' : ''}`}
+            title="Talk to the arch agent — the only instructions it follows"
+            onClick={() => setLane('chat')}
+          >
+            💬 Chat
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={lane === 'tools'}
+            className={`arch__lane${lane === 'tools' ? ' arch__lane--on' : ''}`}
+            title="The harness tools the arch session gets on every turn"
+            onClick={() => setLane('tools')}
+          >
+            🔌 Tools
+          </button>
+        </div>
         {!state?.gateOpen && <div className="arch__banner">Autopilot is disabled by the operator (host GUI). The arch agent cannot act until the gate is open.</div>}
         {state?.gateOpen && state?.killSwitch === false && <div className="arch__banner">The autopilot kill switch is off: the arch loop is paused.</div>}
         {error && <div className="arch__banner arch__banner--err">{error}</div>}
+        {lane === 'tools' ? (
+          <ArchToolsPanel />
+        ) : (
+        <>
         <div className="arch__scroll" ref={scrollRef}>
           {messages.length === 0 && (
             <div className="arch__empty">
@@ -188,6 +220,8 @@ export default function Arch({ popup = false, onOpenDock = null }) {
             <span className="arch__dim">Ctrl+Enter sends. Messages here are the only instructions it follows.</span>
           </div>
         </div>
+        </>
+        )}
       </div>
 
       <aside className="arch__side">
@@ -277,6 +311,7 @@ export default function Arch({ popup = false, onOpenDock = null }) {
           <div className="arch__dim">Tools denied in its session: {(state?.disallowedTools || []).join(', ')}. It reads repos through the harness only.</div>
         </section>
       </aside>
+      </div>
     </div>
   );
 }

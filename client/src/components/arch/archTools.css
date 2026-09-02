@@ -1,0 +1,29 @@
+/* Arch tab Tools lane (openspec: add-arch-agent): rides on toolsPanel.css for
+   the section / actions / preflight look, adds the catalogue-specific bits. */
+.arch-tools { display: flex; flex-direction: column; gap: 8px; }
+.arch-tools code { font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; }
+
+.arch-tools__stats { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--color-text-soft, #777); margin-bottom: 2px; }
+
+.arch-tools__toolhead { justify-content: space-between; }
+.arch-tools__name { font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
+.arch-tools__usage { font-size: 11.5px; color: var(--color-text-soft, #777); white-space: nowrap; }
+.arch-tools__desc { margin: 0; line-height: 1.4; }
+
+.arch-tools__params { display: flex; flex-direction: column; gap: 3px; border-left: 2px solid var(--color-border); padding-left: 8px; }
+.arch-tools__param { display: grid; grid-template-columns: minmax(60px, auto) auto 1fr; gap: 8px; align-items: baseline; font-size: 12px; }
+.arch-tools__pname { color: var(--color-accent); }
+.arch-tools__ptype { color: var(--color-text-soft, #777); white-space: nowrap; font-size: 11px; }
+.arch-tools__pdesc { color: var(--color-text); }
+.arch-tools__noparams { color: var(--color-text-soft, #777); font-size: 11.5px; font-style: italic; }
+@media (max-width: 640px) {
+  .arch-tools__param { grid-template-columns: 1fr; gap: 1px; }
+}
+
+.arch-tools__last { font-size: 11.5px; color: var(--color-text-soft, #777); }
+.arch-tools__mono { font-family: ui-monospace, Consolas, monospace; }
+.arch-tools__callname { font-size: 11px; color: var(--color-text-soft, #777); }
+
+.arch-tools__tool--denied { border-style: dashed; }
+.arch-tools__chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.arch-tools__chip { font-family: ui-monospace, Consolas, monospace; font-size: 11px; padding: 2px 7px; border-radius: 5px; background: #2e1a17; color: #e5734b; text-decoration: line-through; }
