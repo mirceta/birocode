@@ -53,6 +53,8 @@ Runs spend **real Claude tokens and real minutes**. This is deliberate
 - briefing scenario: typically 2–4 agent turns, ~5–15 min
 - arch scenario: typically 3–6 arch turns + 4–8 repo turns (two levels of
   agents, three fixtures), ~10–30 min
+- fleet scenario: typically 2–3 arch turns on A + 1–2 repo turns on B (two
+  isolated harness instances on this box), ~2–5 min; isolated-only
 
 ### Measured runs (2026-07-31, first green sweep)
 
@@ -61,6 +63,7 @@ Runs spend **real Claude tokens and real minutes**. This is deliberate
 | goal | PASS 8/8 | PASS 8/8 | ~1 min (build cached; add ~1–2 min for a cold `dotnet build`) | 2 (work + verify) |
 | queue | PASS\* 13/13 | PASS 13/13 | ~7–10 min | 12 (6 steps + 6 verifies) |
 | arch (2026-09-02, isolated) | PASS 25/25 | PASS 25/25 | ~2 min | ~2 arch + 2 repo turns (group 1) + ~2 arch + 2 repo turns (group 2); an earlier attempt was 16/16 on group 1 and failed group 2 on two scenario-script races, since fixed |
+| fleet (2026-09-02, isolated, two instances A :5210 + B :5211) | PASS 23/23 | PASS 23/23 | ~1.5 min (build cached) | ~2 arch turns on A + 1 repo turn on B (+ B's seed probe); a first attempt failed only on the arm/preflight scope checks counting local repos only, since fixed |
 
 \* run 1 recorded 12/13 because the *eval harness* substring-searched
 `loops.json` for prompt texts that System.Text.Json stores with unicode
@@ -169,6 +172,24 @@ proves the turn finishes on its own, nothing further is sent, and a human send
 to `a` then succeeds. Teardown disarms the arch loop, restores the previous arch
 scope (unless kept), and removes all three fixtures. Deadline env:
 `LOOPEVAL_ARCH_MINUTES` (default 25).
+
+**fleet.mjs** — the fleet arch agent's ship gate (openspec: add-fleet-arch-agent,
+D7). Boots a SECOND isolated instance, B (`LOOPEVAL_PEER_PORT`, default 5211; its
+bin copy, datadir and goal fixture live under A's scratch root), registers the
+fixture there and seeds a turn (B's CLI probe). Then, in order: B refuses a peer
+send before its operator opts in (`not-accepting`); B sets **accept fleet sends**;
+A subscribes to B as a collector source with B's password and marks it **allow
+sends**; A's Arch state shows B through the peer describe (status `ok`, B's repo
+offered); A's arch is scoped to B's repo ONLY (a `sourceId/repoId` key), armed in
+drive mode, and told to get the goal check green on machine `peer-b`. Assertions:
+the goal check exits 0 on B's repo; B's audit carries the send as kind `arch` with
+phase `fleet:<A's label>` and B's dock transcript shows a user bubble tagged
+`arch@<A's label>`; A's collector carried B's `turn.ended`; an `arch.wake` on A
+followed it and names the fleet key; A's audit holds the fleet send; no deny fence
+fired. Teardown disarms A, kills B, removes the scratch root. Isolated-only: a
+`--live` run is refused — the live fleet test is the Operator's own two-machine
+run after deploying the build to the second box. Deadline env:
+`LOOPEVAL_FLEET_MINUTES` (default 18).
 
 Every scenario first asserts its **precondition** (goal/task check fails /
 artifacts absent on the fresh fixture) and runs a **CLI probe** (one cheap

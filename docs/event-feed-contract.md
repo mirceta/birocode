@@ -93,3 +93,47 @@ On the Claude Web events-app page (Local tab -> Harness Event Feed): enter
 `http://<machine>:<port>` and a label, plus the credential if you gate the
 endpoint. The collector polls server-side and persists the source, so it keeps
 listening across reloads and restarts.
+
+## 5. The fleet peer API — being *commanded*, not just watched
+
+The feed is how a harness is **observed**. The peer API (openspec
+`add-fleet-arch-agent`) is how a **fleet arch agent** on another Claude Web
+harness gives one of your repo agents a task. It is optional, off by default,
+and separate from the feed on purpose: the collector never writes to a source;
+a sibling *fleet client* on the calling harness does, and only for sources its
+operator marked **allow sends**.
+
+```
+GET  /api/arch/peer
+  -> { "protocol": 1, "version": "<build>", "machine": "<label>",
+       "acceptsSends": false, "gateOpen": true,
+       "repos": [ { "repoId", "name", "remoteUrl", "branch", "defaultBranch",
+                    "dirty", "availability", "lastActor", "runningSince",
+                    "exists", "isSelf" } ] }
+
+POST /api/arch/peer/send        { "repoId", "text", "branch"?, "from": "<caller's label>" }
+  -> { "ok", "status", "detail", "data" }
+     status: sent | busy | claimed | denied | not-accepting | unmanaged | error
+
+GET  /api/arch/peer/transcript?repoId=<id>&tail=<n>
+  -> { "ok", "status", "detail", "data": { "messages": [ { role, text, at } ] } }
+```
+
+- Same auth as the feed: the `X-Auth-Password` header. The credential the
+  caller's collector already stores for your feed is what it uses here.
+- **Two opt-ins.** The caller's operator must allow sends *to you* (per source);
+  your operator must set **accept fleet sends** on your Arch tab (and your
+  autopilot gate must be open). Until both hold, `send` answers
+  `not-accepting` and runs nothing.
+- **Your rules apply.** A received task passes *your* deny list, *your*
+  availability rule (a repo on an operator branch is `claimed`) and *your* run
+  slot (`busy` is an answer, never a queue). Nothing is stashed.
+- **Honest provenance.** The task lands in the repo agent's own dock
+  conversation as a user bubble tagged `arch@<from>`, and *you* write the audit
+  row (kind `arch`, phase `fleet:<from>`), so the tag survives a reload without
+  trusting the wire. The caller cannot make a task look human.
+- **Versioning.** `protocol` is the peer contract (1 today); `version` is your
+  build. A harness without this route answers 404, which the caller shows as
+  "no peer API on that build" — the mismatch is visible before anyone upgrades.
+- Every logical outcome is a `200` with a named `status`; HTTP errors mean
+  transport or auth, so the caller can tell "refused" from "dark".

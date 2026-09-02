@@ -62,6 +62,13 @@
 .arch__avail--busy { background: #2e2415; color: #e0b34c; }
 .arch__avail--claimed { background: #2e1a17; color: #e5734b; }
 .arch__avail--dim { background: #25202e; color: #a78bfa; }
+/* Fleet (openspec: add-fleet-arch-agent): a machine chip on remote agents and
+   scope rows; scope groups per machine; the Fleet card with the two opt-ins. */
+.arch__machine { display: inline-block; font-size: 11px; font-family: ui-monospace, Consolas, monospace; padding: 1px 6px; border-radius: 5px; background: #123634; color: #2dd4bf; border: 1px solid #2dd4bf; margin-right: 6px; vertical-align: middle; }
+.arch__scope-group { font-size: 12px; font-weight: 600; color: var(--color-text-muted, #888); margin-top: 6px; }
+.arch__scope-machine { display: flex; flex-direction: column; gap: 4px; }
+.arch__scope-row .arch__avail { margin-left: auto; }
+.arch__fleet .arch__scope-row { margin: 4px 0; }
 /* The live turn (task 6c): the current arch turn streamed onto the page — the
    repo chat's bubbles + activity steps (chat.css) inside the arch scroll. A
    settled turn the transcript does not carry yet is dimmed a notch. */

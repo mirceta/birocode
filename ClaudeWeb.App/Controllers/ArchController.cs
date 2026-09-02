@@ -32,13 +32,18 @@ public class ArchController : ControllerBase
     private readonly RunSessionService _runs;
     private readonly SessionService _sessions;
     private readonly RepositoryRegistry _repos;
+    private readonly Services.Events.CollectorService _collector;
+    private readonly FleetClient _fleet;
     private readonly Logger _logger;
 
     public ArchController(
         ArchAgentService arch, ArchMcpServer mcp, LoopConfigStore loops, AutopilotGate gate,
         AutopilotConfigStore config, AutopilotService engine, AutopilotAuditLog audit,
-        RunSessionService runs, SessionService sessions, RepositoryRegistry repos, Logger logger)
+        RunSessionService runs, SessionService sessions, RepositoryRegistry repos,
+        Services.Events.CollectorService collector, FleetClient fleet, Logger logger)
     {
+        _collector = collector;
+        _fleet = fleet;
         _arch = arch;
         _mcp = mcp;
         _loops = loops;
@@ -87,13 +92,15 @@ public class ArchController : ControllerBase
             },
             engine = engine is null ? null : new { decision = engine.Decision, reason = engine.Reason, at = engine.UpdatedAt },
             managedRepoIds = managed,
+            managedFleet = _arch.ManagedFleet(),
             repos = _repos.GetAll().Select(r => new { id = r.Id, name = r.Name, exists = r.Exists, isSelf = r.IsSelf }),
             agents = _arch.ListAgents().Select(a => new
             {
-                machine = a.Machine, repoId = a.RepoId, name = a.Name, remoteUrl = a.RemoteUrl, branch = a.Branch,
+                machine = a.Machine, sourceId = a.SourceId, key = a.Key, repoId = a.RepoId, name = a.Name, remoteUrl = a.RemoteUrl, branch = a.Branch,
                 defaultBranch = a.DefaultBranch, dirty = a.Dirty, availability = a.Availability, lastActor = a.LastActor,
-                runningSince = a.RunningSince, tabId = a.TabId, exists = a.Exists,
+                runningSince = a.RunningSince, tabId = a.TabId, exists = a.Exists, isLocal = a.IsLocal,
             }),
+            fleet = BuildFleet(),
             home = new
             {
                 path = home, exists = _arch.HomeExists,
@@ -107,6 +114,56 @@ public class ArchController : ControllerBase
             watermark = _arch.Watermark,
             disallowedTools = ArchAgentService.DisallowedTools,
         };
+    }
+
+    /// <summary>The fleet as this harness sees it (openspec add-fleet-arch-agent):
+    /// its own label and receiving-side opt-in, and every subscribed remote source
+    /// with the collector's status, the operator's allow-sends consent, and the
+    /// peer describe (posture + repos) so the scope picker can offer them.</summary>
+    private object BuildFleet()
+    {
+        var sources = _collector.ListSources().Where(s => s.Kind == "remote").Select(s =>
+        {
+            var peer = _fleet.Snapshot(s.Id);
+            return new
+            {
+                id = s.Id, label = s.Label, address = s.Address, active = s.Active, status = s.Status, alive = s.Alive,
+                allowSends = s.AllowSends,
+                peer = new
+                {
+                    status = peer.Status, detail = peer.Detail, at = peer.At,
+                    protocol = peer.Info?.Protocol, version = peer.Info?.Version, machine = peer.Info?.Machine,
+                    acceptsSends = peer.Info?.AcceptsSends ?? false, gateOpen = peer.Info?.GateOpen ?? false,
+                },
+                repos = peer.Repos.Select(r => new
+                {
+                    repoId = r.RepoId, name = r.Name, key = Services.Arch.ArchStateStore.FleetKey(s.Id, r.RepoId), remoteUrl = r.RemoteUrl,
+                    branch = r.Branch, availability = r.Availability, exists = r.Exists, isSelf = r.IsSelf,
+                }),
+            };
+        }).ToList();
+        return new
+        {
+            selfLabel = _arch.SelfLabel,
+            acceptSends = _arch.AcceptFleetSends,
+            version = ArchAgentService.BuildVersion,
+            protocol = Services.Arch.FleetClient.Protocol,
+            sources,
+        };
+    }
+
+    public sealed record FleetRequest(bool? AcceptSends);
+
+    /// <summary>Receiving-side opt-in: let fleet arch agents on other harnesses send
+    /// tasks to this harness's repo agents. Operator-gated like every arch action.</summary>
+    [HttpPost("fleet")]
+    public IActionResult Fleet([FromBody] FleetRequest? req)
+    {
+        _logger.CountRequest();
+        if (GateClosed() is { } closed) return closed;
+        if (req?.AcceptSends is not bool accept) return BadRequest(new { error = "acceptSends (true|false) is required" });
+        _arch.SetAcceptFleetSends(accept);
+        return Ok(BuildState());
     }
 
     // ---- conversation ------------------------------------------------------------
@@ -184,14 +241,17 @@ public class ArchController : ControllerBase
 
     // ---- scope + loop ---------------------------------------------------------------
 
-    public sealed record ScopeRequest(List<string>? RepoIds);
+    /// <summary><c>fleet</c> = managed agents on subscribed harnesses as keys
+    /// <c>sourceId/repoId</c>; omitted = leave the fleet scope as it is (older
+    /// callers), empty list = clear it.</summary>
+    public sealed record ScopeRequest(List<string>? RepoIds, List<string>? Fleet);
 
     [HttpPost("scope")]
     public IActionResult Scope([FromBody] ScopeRequest? req)
     {
         _logger.CountRequest();
         if (GateClosed() is { } closed) return closed;
-        _arch.SetScope(req?.RepoIds ?? new List<string>());
+        _arch.SetScope(req?.RepoIds ?? new List<string>(), req?.Fleet);
         return Ok(BuildState());
     }
 
@@ -209,8 +269,9 @@ public class ArchController : ControllerBase
         {
             case "arm":
             case "start":
-                if (_arch.ManagedRepoIds().Count == 0)
-                    return BadRequest(new { error = "pick at least one managed repo before arming" });
+                // Local repos or agents on subscribed harnesses — either makes a scope (fleet D3).
+                if (_arch.ManagedRepoIds().Count + _arch.ManagedFleet().Count == 0)
+                    return BadRequest(new { error = "pick at least one managed repo (on this or another machine) before arming" });
                 _arch.Arm(req?.Mode, req?.MaxIterations);
                 break;
             case "disarm":
@@ -274,7 +335,7 @@ public class ArchController : ControllerBase
             tools,
             disallowedTools = ArchAgentService.DisallowedTools,
             totalCalls = calls.Count,
-            managedCount = _arch.ManagedRepoIds().Count,
+            managedCount = _arch.ManagedRepoIds().Count + _arch.ManagedFleet().Count,
             home = new { path = _arch.HomePath, exists = _arch.HomeExists },
         });
     }
@@ -313,13 +374,32 @@ public class ArchController : ControllerBase
         Add("home", homeExists, homeExists ? _arch.HomePath : $"{_arch.HomePath} — created on first arm", skipped: !homeExists);
 
         // 4. At least one managed repo, or list_agents/send_task have nothing to act on.
-        var managed = _arch.ManagedRepoIds().Count;
-        Add("scope", managed > 0, managed > 0 ? $"{managed} managed repo(s)" : "no managed repos — pick some in the scope picker");
+        var managedLocal = _arch.ManagedRepoIds().Count;
+        var managedFleet = _arch.ManagedFleet().Count;
+        var managed = managedLocal + managedFleet;
+        Add("scope", managed > 0, managed > 0
+            ? $"{managedLocal} managed repo(s) here{(managedFleet > 0 ? $" + {managedFleet} on other machines" : "")}"
+            : "no managed repos — pick some in the scope picker");
 
         // 5. The autopilot gate and kill switch, which every arch action is behind.
         var gate = _gate.Enabled;
         var kill = _config.Get().Enabled;
         Add("gate", gate && kill, !gate ? "operator gate closed (host GUI)" : !kill ? "autopilot kill switch off" : "gate open, kill switch on");
+
+        // 6. Fleet (openspec add-fleet-arch-agent): one row per subscribed harness
+        //    that is in scope — its peer API must answer for sends to work. A
+        //    subscribed harness NOT in scope is informational (skipped).
+        var inScope = _arch.ManagedFleet().Select(k => Services.Arch.ArchStateStore.ParseFleetKey(k)!.Value.SourceId).ToHashSet(StringComparer.Ordinal);
+        foreach (var s in _collector.ListSources().Where(s => s.Kind == "remote"))
+        {
+            var peer = _fleet.Snapshot(s.Id);
+            var used = inScope.Contains(s.Id);
+            var ok = peer.Reachable && (!used || s.AllowSends);
+            var detail = peer.Reachable
+                ? $"{s.Label}: peer API ok (build {peer.Info?.Version}, accepts sends: {(peer.Info?.AcceptsSends == true ? "yes" : "no")}){(s.AllowSends ? ", sends allowed" : ", sends not allowed here")}"
+                : $"{s.Label}: {peer.Status}{(peer.Detail is null ? "" : " — " + peer.Detail)}";
+            Add("fleet:" + s.Id, ok, detail, skipped: !used && !ok);
+        }
 
         var ready = checks.All(c => c.Ok || c.Skipped);
         return Ok(new { ready, checks = checks.Select(c => new { id = c.Id, ok = c.Ok, skipped = c.Skipped, detail = c.Detail }) });

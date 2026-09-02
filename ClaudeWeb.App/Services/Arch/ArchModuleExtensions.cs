@@ -13,6 +13,7 @@ public static class ArchModuleExtensions
     public static IServiceCollection AddArchModule(this IServiceCollection services)
     {
         services.AddSingleton<ArchStateStore>();
+        services.AddSingleton<FleetClient>();
         services.AddSingleton<ArchAgentService>();
         services.AddSingleton<IArchWakeSource>(sp => sp.GetRequiredService<ArchAgentService>());
         services.AddSingleton<ILoop, ArchLoop>();

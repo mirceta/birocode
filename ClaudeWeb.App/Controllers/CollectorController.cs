@@ -87,6 +87,21 @@ public class CollectorController : ControllerBase
             : NotFound(new { error = "No such source." });
     }
 
+    public sealed record SendsRequest(bool? Allow);
+
+    /// <summary>Operator consent for the FLEET CLIENT to send tasks to this source
+    /// (openspec add-fleet-arch-agent). Mutates only the collector's own source
+    /// record; the collector's polling stays read-only regardless.</summary>
+    [HttpPost("sources/{id}/sends")]
+    public IActionResult Sends(string id, [FromBody] SendsRequest? req)
+    {
+        _logger.CountRequest();
+        if (req?.Allow is not bool allow) return BadRequest(new { error = "allow (true|false) is required" });
+        return _collector.SetAllowSends(id, allow)
+            ? Ok(_collector.ListSources().First(s => s.Id == id))
+            : NotFound(new { error = "No such remote source." });
+    }
+
     [HttpDelete("sources/{id}")]
     public IActionResult Remove(string id)
     {

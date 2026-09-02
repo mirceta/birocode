@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Arch agent as middle management: run slot, availability, event feed, and the fleet above it</title>
+<title>Fleet arch agent: what the event feed already gives us, what it can't, and where the agent should live</title>
 <style>
   :root { --bg:#0f1117; --panel:#171a23; --panel2:#1e2230; --line:#2a2f3f; --txt:#d7dae3; --dim:#8b90a0;
           --acc:#5ea0ef; --ok:#4cc38a; --bad:#e5734b; --warn:#e0b34c; --violet:#a78bfa; --pink:#f472b6; --teal:#2dd4bf;
@@ -23,453 +23,341 @@
   code{font-family:var(--mono);font-size:13px;background:var(--panel2);padding:1px 5px;border-radius:4px}
   .tag{display:inline-block;font:12px/1 var(--mono);padding:3px 7px;border-radius:5px;border:1px solid var(--line);background:var(--panel2);margin-right:4px}
   .tag.exists{border-color:var(--ok);color:var(--ok)} .tag.new{border-color:var(--warn);color:var(--warn)} .tag.arch{border-color:var(--violet);color:var(--violet)}
-  .tag.human{border-color:var(--acc);color:var(--acc)} .tag.loop{border-color:var(--pink);color:var(--pink)} .tag.fleet{border-color:var(--teal);color:var(--teal)} .tag.decided{border-color:var(--ok);color:var(--ok);background:#14261d} .tag.assume{border-color:var(--warn);color:var(--warn);background:#2a2415}
+  .tag.fleet{border-color:var(--teal);color:var(--teal)} .tag.no{border-color:var(--bad);color:var(--bad)}
+  table{border-collapse:collapse;width:100%;font-size:14px} th,td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top} th{background:var(--panel2)}
+  svg text{font:13px system-ui,sans-serif;fill:var(--txt)} svg .lbl{font-size:11px;fill:var(--dim)} svg .mono{font-family:var(--mono);font-size:11px;fill:var(--dim)}
   ol.steps{counter-reset:s;list-style:none;padding:0;margin:0} ol.steps li{counter-increment:s;position:relative;padding:10px 12px 10px 46px;border:1px solid var(--line);border-radius:10px;background:var(--panel);margin-bottom:10px}
   ol.steps li::before{content:counter(s);position:absolute;left:12px;top:10px;width:24px;height:24px;border-radius:50%;background:var(--acc);color:#0b0d13;font-weight:700;text-align:center;line-height:24px;font-size:13px}
   ol.steps b{display:block;margin-bottom:2px}
-  table{border-collapse:collapse;width:100%;font-size:14px} th,td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top} th{background:var(--panel2)}
-  svg text{font:13px system-ui,sans-serif;fill:var(--txt)} svg .lbl{font-size:11px;fill:var(--dim)} svg .mono{font-family:var(--mono);font-size:11px}
-  svg .ok{fill:var(--ok)} svg .warn{fill:var(--warn)} svg .vio{fill:var(--violet)} svg .teal{fill:var(--teal)} svg .bad{fill:var(--bad)}
+  .verdict{border-left:3px solid var(--ok);background:#14261d}
+  .verdict.no{border-left-color:var(--bad);background:#2a1a15}
+  .verdict.mixed{border-left-color:var(--warn);background:#2a2415}
   .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
   .btn{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:14px}
-  .btn.primary{border-color:var(--acc);color:var(--acc)} .btn.vio{border-color:var(--violet);color:var(--violet)} .btn.danger{border-color:var(--bad);color:var(--bad)} .btn:disabled{opacity:.45;cursor:default}
-  .dock{background:#0b0d13;border:1px solid var(--line);border-radius:10px;padding:10px;min-height:150px;font-size:13px;display:flex;flex-direction:column}
-  .dock .t{color:var(--dim);font:12px var(--mono);margin-bottom:4px;display:flex;justify-content:space-between}
-  .dock .git{font:11px var(--mono);color:var(--dim);margin-bottom:6px} .dock .git b{color:var(--txt);font-weight:500}
-  .dock .body{flex:1}
-  .composer{margin-top:8px;border:1px solid var(--line);border-radius:6px;padding:5px 8px;font:12px var(--mono);color:var(--dim);background:var(--panel2)}
-  .composer.off{opacity:.55;border-style:dashed} .composer.on{border-color:var(--acc);color:var(--acc)}
-  .bub{border-radius:8px;padding:6px 9px;margin:5px 0;max-width:92%;animation:pop .3s ease-out}
-  .bub.user{background:#1b2a45;border-left:3px solid var(--acc)} .bub.arch{background:#2a2245;border-left:3px solid var(--violet)}
-  .bub.asst{background:#182a22;border-left:3px solid var(--ok);margin-left:auto} .bub.sys{background:var(--panel2);color:var(--dim);font-style:italic}
-  .bub .who{font:11px var(--mono);color:var(--dim);margin-bottom:2px}
-  @keyframes pop{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
-  .status{font:12px var(--mono);padding:2px 7px;border-radius:5px} .status.available{background:#1c2b22;color:var(--ok)} .status.busy{background:#2e2415;color:var(--warn)} .status.claimed{background:#2e1a17;color:var(--bad)} .status.stopped{background:#25202e;color:var(--violet)} .status.idle{background:#1c2b22;color:var(--ok)}
-  .feed{background:#0b0d13;border:1px solid var(--line);border-radius:10px;padding:10px;font:12px/1.6 var(--mono);max-height:220px;overflow:auto}
-  .feed .ev{display:grid;grid-template-columns:44px 110px 1fr;gap:8px} .feed .ev .seq{color:var(--dim)} .feed .ev.start .ty{color:var(--acc)} .feed .ev.ended .ty{color:var(--ok)} .feed .ev.focus .ty{color:var(--pink)} .feed .ev.focus{opacity:.5} .feed .ev.wake{color:var(--violet)} .feed .ev.tool{color:var(--dim)}
-  .decision{border-left:3px solid var(--warn)} .decision.locked{border-left-color:var(--ok)}
-  .decision .why{margin:6px 0 0;color:var(--dim);font-size:14px}
-  textarea{width:100%;min-height:110px;background:#0b0d13;color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:10px;font:14px/1.5 system-ui,sans-serif;resize:vertical}
-  .timeline{position:relative;height:184px;background:#0b0d13;border:1px solid var(--line);border-radius:10px;overflow:hidden}
-  .lane{position:absolute;left:0;right:0;height:34px;border-bottom:1px dashed var(--line)} .lane span{position:absolute;left:8px;top:8px;font:12px var(--mono);color:var(--dim)}
-  .bar{position:absolute;height:22px;top:6px;border-radius:5px;font:11px var(--mono);line-height:22px;padding:0 6px;white-space:nowrap;overflow:hidden}
-  .bar.arch{background:#3b2f6b;border:1px solid var(--violet)} .bar.repo{background:#1f4a3a;border:1px solid var(--ok)} .bar.human{background:#1b2a45;border:1px solid var(--acc)} .bar.wait{background:#2e2415;border:1px dashed var(--warn);color:var(--warn)}
-  .bar.evt{background:var(--warn);color:#0b0d13;width:auto;font-weight:700} .bar.tick{background:transparent;border-left:1px solid var(--dim);width:0;padding:0}
-  .cursor{position:absolute;top:0;bottom:0;width:2px;background:var(--acc);left:0;transition:left .1s linear}
-  .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:14px} .kv dt{color:var(--dim)} .kv dd{margin:0}
-  .tasks{font-size:14px} .tasks li{margin:3px 0}
+  .btn.on{border-color:var(--acc);color:var(--acc)}
+  .flow{opacity:1;transition:opacity .25s} .flow.off{opacity:.12}
   footer{padding:14px 20px;color:var(--dim);font-size:13px;border-top:1px solid var(--line)}
 </style>
 </head>
 <body>
 <header>
-  <h1>Arch agent as <span class="vio">middle management</span></h1>
-  <p>Operator → Arch agent → Repo agents on one machine now; a fleet arch above that next. The run slot and the git branch decide who may be talked to; the event feed decides when the arch agent wakes; the arch agent has its own home repo and its own tab. Planned as OpenSpec change <code>add-arch-agent</code>.</p>
+  <h1>Fleet arch agent: <span class="teal">standing on the event feed</span></h1>
+  <p>The single-machine arch agent shipped (<code>add-arch-agent</code>, feature/arch-agent). The next question: how much of the harness event feed + collector does the fleet version reuse, and should the agent live in the events app instead of the harness? Short answer: the <b class="ok">read half is already fleet-shaped</b>, the <b class="bad">write half doesn't exist</b>, and the agent should <b class="vio">stay in the harness</b>.</p>
 </header>
 <nav id="nav">
-  <button data-v="hier" class="on">1 · Hierarchy</button>
-  <button data-v="want">2 · Asked + decided</button>
-  <button data-v="sim">3 · Availability, simulated</button>
-  <button data-v="feed">4 · Wake-up = event feed</button>
-  <button data-v="reuse">5 · Reuse map + tests</button>
-  <button data-v="ux">6 · Its own surface + home</button>
-  <button data-v="fleet">7 · Fleet: next level</button>
-  <button data-v="plan">8 · The OpenSpec change</button>
+  <button data-v="map" class="on">1 · What exists today</button>
+  <button data-v="reuse">2 · Reuse verdicts</button>
+  <button data-v="host">3 · Where should it live?</button>
+  <button data-v="target">4 · Target fleet shape</button>
+  <button data-v="gaps">5 · Gaps → the change</button>
 </nav>
 <main>
 
-<!-- ============ 1 HIERARCHY ============ -->
-<section id="v-hier" class="on">
-  <h2>Three levels, built bottom-up</h2>
-  <p class="dim">Repo agents exist. The single-machine arch agent is this change. The fleet arch agent is the next task; it is drawn so this change does not paint it into a corner.</p>
+<!-- ============ 1 MAP ============ -->
+<section id="v-map" class="on">
+  <h2>Two stacks that already touch</h2>
+  <p class="dim">Everything below is shipped and running. The arch agent already drinks from the collector — it was a deliberate design decision (D2 in <code>add-arch-agent/design.md</code>: "the fleet arch reads the same shape over HTTP"). Toggle the highlights to see each stack.</p>
+  <div class="toolbar">
+    <button class="btn on" id="hl-all">Both stacks</button>
+    <button class="btn" id="hl-feed">Event feed / collector stack</button>
+    <button class="btn" id="hl-arch">Arch agent stack</button>
+  </div>
   <div class="card">
-    <svg viewBox="0 0 900 330" width="100%">
-      <defs><marker id="ar" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#8b90a0"/></marker>
-           <marker id="art" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#2dd4bf"/></marker></defs>
-      <rect x="380" y="8" width="140" height="34" rx="8" fill="#1b2a45" stroke="#5ea0ef"/><text x="450" y="30" text-anchor="middle">Operator (you)</text>
-      <line x1="450" y1="42" x2="450" y2="66" stroke="#8b90a0" marker-end="url(#ar)"/>
-      <rect x="330" y="68" width="240" height="40" rx="8" fill="#0b1512" stroke="#2dd4bf" stroke-dasharray="5 4"/><text x="450" y="86" text-anchor="middle" class="teal">L2 · Fleet arch agent (next task)</text><text x="450" y="101" text-anchor="middle" class="lbl">given a git repo + a task, finds a free machine for it</text>
-      <g id="machines"></g>
+    <svg viewBox="0 0 980 430" width="100%">
+      <defs>
+        <marker id="ar" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#8b90a0"/></marker>
+        <marker id="arT" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#2dd4bf"/></marker>
+        <marker id="arV" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#a78bfa"/></marker>
+      </defs>
+      <!-- remote harnesses -->
+      <g class="flow g-feed">
+        <rect x="20" y="20" width="200" height="86" rx="10" fill="#171a23" stroke="#2dd4bf"/>
+        <text x="120" y="42" text-anchor="middle" class="teal" style="fill:#2dd4bf">Remote harness B, C…</text>
+        <text x="120" y="62" text-anchor="middle" class="mono">GET /api/events?after=N</text>
+        <text x="120" y="80" text-anchor="middle" class="lbl">own feed ring · X-Auth-Password</text>
+        <text x="120" y="96" text-anchor="middle" class="lbl">(other machines on the LAN)</text>
+      </g>
+      <!-- self feed -->
+      <g class="flow g-feed">
+        <rect x="20" y="150" width="200" height="70" rx="10" fill="#171a23" stroke="#4cc38a"/>
+        <text x="120" y="174" text-anchor="middle" style="fill:#4cc38a">Self feed (in-process)</text>
+        <text x="120" y="194" text-anchor="middle" class="mono">HarnessEventFeed.cs</text>
+        <text x="120" y="210" text-anchor="middle" class="lbl">ring 1000 · turn.start/ended…</text>
+      </g>
+      <!-- collector -->
+      <g class="flow g-feed g-arch">
+        <rect x="330" y="70" width="230" height="120" rx="10" fill="#1e2230" stroke="#5ea0ef" stroke-width="2"/>
+        <text x="445" y="94" text-anchor="middle" style="fill:#5ea0ef">Collector</text>
+        <text x="445" y="113" text-anchor="middle" class="mono">CollectorService.cs</text>
+        <text x="445" y="131" text-anchor="middle" class="lbl">per-source watermark · re-stamped seq</text>
+        <text x="445" y="147" text-anchor="middle" class="lbl">encrypted creds · rejection taxonomy</text>
+        <text x="445" y="163" text-anchor="middle" class="lbl">sources persisted · events in RAM only</text>
+        <text x="445" y="181" text-anchor="middle" class="mono">GET /api/collector/events?after=N</text>
+      </g>
+      <line x1="220" y1="63" x2="330" y2="100" stroke="#2dd4bf" stroke-dasharray="5 4" marker-end="url(#arT)" class="flow g-feed"/>
+      <text x="262" y="60" class="mono flow g-feed">poll 2.5s, read-only</text>
+      <line x1="220" y1="185" x2="330" y2="160" stroke="#4cc38a" marker-end="url(#ar)" class="flow g-feed"/>
+      <!-- consumers of collector -->
+      <g class="flow g-feed">
+        <rect x="660" y="20" width="290" height="64" rx="10" fill="#171a23" stroke="#2a2f3f"/>
+        <text x="805" y="44" text-anchor="middle">Events app (static SPA, no backend)</text>
+        <text x="805" y="62" text-anchor="middle" class="mono">events-app/index.html · dumb observer</text>
+      </g>
+      <g class="flow g-feed">
+        <rect x="660" y="104" width="290" height="64" rx="10" fill="#171a23" stroke="#2a2f3f"/>
+        <text x="805" y="128" text-anchor="middle">Status board + host sounds</text>
+        <text x="805" y="146" text-anchor="middle" class="mono">StatusBoardService.cs · HostEventSound.cs</text>
+      </g>
+      <line x1="560" y1="100" x2="660" y2="56" stroke="#8b90a0" marker-end="url(#ar)" class="flow g-feed"/>
+      <line x1="560" y1="136" x2="660" y2="136" stroke="#8b90a0" marker-end="url(#ar)" class="flow g-feed"/>
+      <!-- arch agent -->
+      <g class="flow g-arch">
+        <rect x="330" y="250" width="230" height="120" rx="10" fill="#221d38" stroke="#a78bfa" stroke-width="2"/>
+        <text x="445" y="274" text-anchor="middle" style="fill:#a78bfa">Arch agent (@arch)</text>
+        <text x="445" y="293" text-anchor="middle" class="mono">ArchAgentService.cs · ArchLoop.cs</text>
+        <text x="445" y="311" text-anchor="middle" class="lbl">wake = collector events past watermark</text>
+        <text x="445" y="327" text-anchor="middle" class="lbl">6 MCP tools · fenced CLI session</text>
+        <text x="445" y="345" text-anchor="middle" class="lbl">home repo arch-home · Arch tab UI</text>
+      </g>
+      <path d="M445,190 L445,250" stroke="#a78bfa" stroke-width="2" marker-end="url(#arV)" class="flow g-arch"/>
+      <text x="455" y="225" class="mono flow g-arch">ReadEvents(after) — today filtered to SelfId only</text>
+      <!-- repo agents -->
+      <g class="flow g-arch">
+        <rect x="660" y="278" width="290" height="64" rx="10" fill="#171a23" stroke="#4cc38a"/>
+        <text x="805" y="302" text-anchor="middle" style="fill:#4cc38a">Local repo agents</text>
+        <text x="805" y="320" text-anchor="middle" class="mono">send_task → TryBeginRun → CliRunner</text>
+      </g>
+      <line x1="560" y1="310" x2="660" y2="310" stroke="#a78bfa" marker-end="url(#arV)" class="flow g-arch"/>
+      <text x="575" y="300" class="mono flow g-arch">in-process only!</text>
+      <text x="20" y="410" class="lbl">One thing to notice: the collector is spec'd read-only toward remote harnesses (it may never write), and the arch agent's send path never touches the wire at all.</text>
     </svg>
   </div>
-  <div class="grid3" style="margin-top:14px">
+  <div class="grid" style="margin-top:14px">
     <div class="card">
-      <h4 class="ok">L0 · Repo agent (exists)</h4>
-      <dl class="kv">
-        <dt>Identity</dt><dd>Dock tab: <code>repoId</code> + one Claude <code>sessionId</code> + git remote URL</dd>
-        <dt>Slot</dt><dd>One builder turn per repo at a time; a second send is 409</dd>
-        <dt>Record</dt><dd>The dock chat is the complete transcript, whoever sent what</dd>
-        <dt>Power</dt><dd>Full over its repo</dd>
-      </dl>
+      <h4>The feed contract is genuinely open</h4>
+      <p>Envelope <code>{seq, at, type, source, data}</code>; the collector never parses <code>data</code> — it pages any producer honoring the shape (<code>docs/event-feed-contract.md</code> exists precisely so third parties can join). Types in circulation: <code>turn.start</code>, <code>turn.ended</code>, <code>chat.focus</code>, <code>arch.wake</code>.</p>
     </div>
     <div class="card">
-      <h4 class="vio">L1 · Arch agent (this change)</h4>
-      <dl class="kv">
-        <dt>Identity</dt><dd>Reserved id <code>@arch</code>, one session, cwd = its home repo</dd>
-        <dt>Medium</dt><dd><code>list_agents</code>, <code>git_state</code>, <code>read_transcript</code>, <code>send_task</code>, <code>remember</code></dd>
-        <dt>Wakes on</dt><dd><code>turn.start</code> / <code>turn.ended</code> of managed repos, via the collector feed</dd>
-        <dt>Power</dt><dd>Write only inside its home repo; read-only git state of managed repos</dd>
-      </dl>
-    </div>
-    <div class="card">
-      <h4 class="teal">L2 · Fleet arch agent (next)</h4>
-      <dl class="kv">
-        <dt>Identity</dt><dd>One context on the controlling computer</dd>
-        <dt>Sees</dt><dd>The collector's aggregate feed plus each machine's <code>list_agents</code></dd>
-        <dt>Does</dt><dd>Matches a repo by remote URL across machines, picks one that is <code>available</code>, hands over the task</dd>
-        <dt>Needs</dt><dd>A cross-machine send with an actor field. The collector stays read-only</dd>
-      </dl>
+      <h4>The "dock" you remembered</h4>
+      <p>The subscribed-harness list + merged feed + agent cards is <code>events-app/index.html</code> — a build-less SPA polling <code>/api/collector/events</code>. It holds <b>no state and no logic worth reusing server-side</b>; the real machinery (subscriptions, watermarks, credentials) lives in <code>CollectorService</code>, which is exactly what the fleet arch needs.</p>
     </div>
   </div>
 </section>
 
-<!-- ============ 2 ASKED + DECIDED ============ -->
-<section id="v-want">
-  <h2>What you asked for, and what you decided on 2026-09-02</h2>
-  <ol class="steps">
-    <li><b>A hierarchy of command with a new middle layer.</b> Operator → Arch agent → Repo agents. You talk to one agent, it talks to many. The next task adds a fleet layer above it.</li>
-    <li><b>Strict separation of concerns.</b> The arch agent's medium toward repos is conversation plus read-only git state. No file or git power over any managed repo. It writes only in its own home repo.</li>
-    <li><b>Provenance preserved end to end.</b> An arch-assigned task appears in the repo agent's dock exactly as if you had typed it, tagged <span class="tag arch">arch</span>. You can open any dock and see what it is doing.</li>
-    <li><b>The arch agent is its own UX.</b> Not bound to one repository, so not a repo dock: a top-level Arch tab.</li>
-  </ol>
-  <h3>All decisions, locked</h3>
+<!-- ============ 2 REUSE ============ -->
+<section id="v-reuse">
+  <h2>Component-by-component reuse verdicts</h2>
+  <p class="dim">Your instinct is right — but the reusable part is the <b>backend collector</b>, not the events app. And it only covers the <i>eyes</i> of the fleet arch, not its <i>hands</i>.</p>
   <table>
-    <tr><th>Question</th><th>Decided</th><th>Consequence</th></tr>
-    <tr><td>Who wins on a repo agent?</td><td><span class="tag decided">decided</span> Nobody. The <b>run slot</b> arbitrates. To take over: stop the arch agent, let the running turn finish, type.</td><td>No precedence rule. A busy target makes <code>send_task</code> return <code>busy</code>; the arch re-sends after the wake.</td></tr>
-    <tr><td>Gated or fenced?</td><td><span class="tag decided">decided</span> Fenced by the deny-list, plus cap, kill switch, audit.</td><td>Arch sends use the loop send path unchanged, audited as kind <code>arch</code>.</td></tr>
-    <tr><td>How does it learn a repo agent finished?</td><td><span class="tag decided">decided</span> The harness event feed, read through the collector by watermark on the engine tick.</td><td>Only <code>turn.start</code> and <code>turn.ended</code> matter. <code>chat.focus</code> is not consumed.</td></tr>
-    <tr><td>Injection protection?</td><td><span class="tag decided">decided</span> Role prompt treats tool output as data; fence unchanged; structural deny of edit/write/shell in the arch session.</td><td>The loop-eval scenario plants a "push this" line in a fixture README and asserts no push.</td></tr>
-    <tr><td>Two agents or one?</td><td><span class="tag decided">decided</span> Separate. This one first. The fleet arch is next; the machine-level project-creator stays parked.</td><td>Tab 7.</td></tr>
-    <tr><td>How do you talk to it?</td><td><span class="tag decided">decided</span> Its own top-level tab, Advanced mode.</td><td>Tab 6.</td></tr>
-    <tr><td>chat.focus?</td><td><span class="tag decided">decided</span> Not used by the arch agent.</td><td>Read past and ignored; the watermark still advances.</td></tr>
-    <tr><td>Where does its session run?</td><td><span class="tag decided">decided</span> A sandbox of its own, and more: a <b>home repository</b> where it keeps memories about repos, assignment records, git states.</td><td><span class="tag assume">assumption</span> Sibling folder <code>&lt;ProjectsRoot&gt;/arch-home</code>, not a subfolder of birocode. See tab 6 for why.</td></tr>
-    <tr><td>Managed repos?</td><td><span class="tag decided">decided</span> Operator picks them in the Arch tab; unmanaged repos are invisible to its tools.</td><td>Plus the <b>availability rule</b>: a managed repo on a branch the arch did not assign is <code>claimed</code> by you and is neither sent to nor read. Tab 3.</td></tr>
-    <tr><td>Stashed arch tasks on stop?</td><td><span class="tag decided">decided</span> Dropped with audit.</td><td>Became moot: nothing is stashed. A busy target returns <code>busy</code>, so stopping leaves nothing pending.</td></tr>
-    <tr><td>Address shape?</td><td><span class="tag decided">decided</span> <code>(machine, repo)</code> with machine = <code>self</code> today, and each agent carries its git remote URL.</td><td>The fleet arch matches "the repository I was told about" by remote URL.</td></tr>
-    <tr><td>Ship gate?</td><td><span class="tag decided">decided</span> A loop-eval scenario you can start from Autopilot → Tests → E2E eval and watch in the harness.</td><td><code>tests/loop-eval/arch.mjs</code>, three fixtures, listed in the Tests tab. Tab 5.</td></tr>
+    <tr><th>Component</th><th>Verdict</th><th>Why</th></tr>
+    <tr>
+      <td><b>Collector subscriptions</b><br><span class="dim">sources + credentials + start/stop, <code>collector-sources.json</code></span></td>
+      <td><span class="tag exists">reuse as-is</span></td>
+      <td>The fleet roster already exists: each subscribed harness is a machine the fleet arch can see. Encrypted credential storage, rejection taxonomy (ip-blocked / needs-credential / throttled), address normalization — all done, all type-agnostic.</td>
+    </tr>
+    <tr>
+      <td><b>Watermark event transport</b><br><span class="dim"><code>ReadEvents(after)</code>, per-source seq, 2.5 s poll</span></td>
+      <td><span class="tag exists">reuse as-is</span></td>
+      <td>The arch agent <i>already</i> wakes from this aggregate. The only thing pinning it to one machine is one line: <code>if (ev.SourceId != CollectorService.SelfId) continue;</code> (ArchAgentService.cs:754). Relaxing that filter <i>is</i> the designed scope change.</td>
+    </tr>
+    <tr>
+      <td><b>Agent identity model</b><br><span class="dim"><code>AgentView.Machine</code>, <code>RemoteUrl</code>, <code>send_task(machine:…)</code></span></td>
+      <td><span class="tag exists">reuse as-is</span></td>
+      <td>Fleet-shaped on purpose: <code>machine</code> is already a <code>send_task</code> parameter, currently refused when ≠ <code>"self"</code> — one branch. D5 already picked <code>remoteUrl</code> matching as the cross-machine repo identity.</td>
+    </tr>
+    <tr>
+      <td><b>Status board</b><br><span class="dim">running-agent derivation per source</span></td>
+      <td><span class="tag new">extend</span></td>
+      <td>Already computes "who is running where" fleet-wide from <code>turn.start/ended</code> pairs. The fleet arch's availability rule wants exactly this — but availability also needs remote <b>git state</b> (branch = claimed-by-Operator), which no event carries today.</td>
+    </tr>
+    <tr>
+      <td><b>Events app SPA</b><br><span class="dim">the dock UI you mentioned</span></td>
+      <td><span class="tag new">extend, don't move into</span></td>
+      <td>Great <i>observer</i> of the fleet arch (it already renders <code>arch.wake</code> generically, and sounds fall back to <code>_default</code>). But it's a stateless browser page — nothing in it can host an agent. Worth adding: an "arch" lane / machine chips. Note <code>HostEventSound</code>'s slot set is closed — new event types need slots added to get their own cue.</td>
+    </tr>
+    <tr>
+      <td><b>Collector as a send channel</b></td>
+      <td><span class="tag no">cannot reuse</span></td>
+      <td>Read-only <b>by spec</b> (event-feed-collector: the collector never writes to a watched harness). That invariant is worth keeping — observation and command should stay separate channels. The send side must be a new sibling client.</td>
+    </tr>
+    <tr>
+      <td><b>Feed credential for sends</b><br><span class="dim"><code>X-Auth-Password</code> per source</span></td>
+      <td><span class="tag new">reuse with an opt-in</span></td>
+      <td>The stored credential is the peer's full API password, so technically it already authorizes <code>POST /api/chat/send</code> there. Reuse the storage, but gate sends behind a per-source "allow sends" flag so watching a harness never silently implies commanding it.</td>
+    </tr>
   </table>
+  <div class="card verdict" style="margin-top:14px">
+    <h4>Net: the fleet arch's entire sensory system is already built and battle-tested</h4>
+    <p>Subscriptions, transport, identity, fleet board — reuse without modification. What does not exist anywhere: an <b>outbound command channel</b> (send a task to a repo agent over HTTP), <b>actor provenance across the wire</b> (a remote send would render as a human bubble in the remote dock), and <b>remote availability</b> (git state of a repo on another machine).</p>
+  </div>
 </section>
 
-<!-- ============ 3 AVAILABILITY SIM ============ -->
-<section id="v-sim">
-  <h2>Availability and the run slot, simulated</h2>
-  <p class="dim">Three managed repos. <i>bironext</i> starts on a branch you created, so it is <b>claimed</b>: the arch agent lists it but never sends to it or reads it. The composer under each dock is the real one: disabled while the slot is busy, whoever holds it.</p>
-  <div class="toolbar">
-    <button class="btn vio" id="s-assign">Arch agent: assign work to every available repo</button>
-    <button class="btn primary" id="s-human">You: type into <i>birocode</i></button>
-    <button class="btn" id="s-branch">You: check out feature/wip on <i>minesweeper</i></button>
-    <button class="btn danger" id="s-stop">You: stop the arch agent</button>
-    <button class="btn" id="s-arm">You: re-arm</button>
-    <button class="btn" id="s-reset">Reset</button>
+<!-- ============ 3 HOSTING ============ -->
+<section id="v-host">
+  <h2>Should the arch agent live in the events app?</h2>
+  <p class="dim">Three candidate homes. The question dissolves a bit once you see that the "event feed app" is two very different things: a stateless browser page (events-app) and a backend service (the collector) — and the arch agent already sits next to the collector.</p>
+  <div class="grid3">
+    <div class="card verdict no">
+      <h4>A · Inside the events app SPA</h4>
+      <p><span class="tag no">rejected</span></p>
+      <ul>
+        <li>It's a static page with <b>no backend of its own</b> — it cannot run a standing CLI session, hold credentials, keep a watermark, or write memory.</li>
+        <li>Alive only while a browser tab is open. That's exactly the fragility the detached-runs work eliminated (backend-owned RunSessions so closing the phone kills nothing).</li>
+        <li>Everything the agent needs — run slot, autopilot engine, loop-eval gate, audit log, MCP server — is backend.</li>
+      </ul>
+    </div>
+    <div class="card verdict no">
+      <h4>B · Standalone fleet-arch product</h4>
+      <p><span class="tag no">rejected for now</span></p>
+      <ul>
+        <li>Architecturally pure: a separate process speaking only <code>event-feed-contract.md</code> + harness HTTP, deployable anywhere, no favored machine.</li>
+        <li>But it re-implements what the harness gives free: CLI runner, session persistence, autopilot ladder, eval harness, auth, deploy (<code>swap.ps1</code>), UI.</li>
+        <li>And it orphans the just-shipped in-harness arch agent. Wrong cost/benefit while the fleet is ~2 machines. Revisit if the fleet outgrows "one operator, one LAN".</li>
+      </ul>
+    </div>
+    <div class="card verdict">
+      <h4>C · Stay in the harness; any harness can be <i>the</i> fleet arch</h4>
+      <p><span class="tag exists">recommended</span></p>
+      <ul>
+        <li>The arch agent already rides harness mechanics (synthetic <code>@arch</code> repo, run slot, loops) and already reads the fleet-shaped collector aggregate.</li>
+        <li>Fleet = <b>scope widening</b>: drop the self-only filter, add an outbound send client. Matches the design's own promise ("change of scope, not redesign").</li>
+        <li>The operator designates which harness runs the fleet arch — same pattern as the collector itself (every harness <i>can</i> collect; yours does).</li>
+      </ul>
+    </div>
   </div>
-  <div class="card" style="margin-bottom:12px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
-    <b class="vio">Arch agent</b> <span id="s-archstate" class="status idle">armed · idle</span> <span id="s-archmsg" class="dim"></span>
+  <h3>The realization that settles it</h3>
+  <div class="card">
+    <p>"Host the arch agent in the event feed app" is really asking "should the arch agent live next to the collector?" — <b>and it already does</b>. Both are services in the same harness process; the arch agent's wake source <i>is</i> the collector. The part of the events app worth anything to an agent (subscriptions, merged feed) was never in the SPA — the SPA is a projector. So option C isn't a compromise; it's recognizing that the co-location you're asking for shipped last week.</p>
+    <p class="dim">One genuinely good idea to salvage from option B: keep the fleet arch's <i>dependencies</i> expressible in wire terms (events in, HTTP sends out), so extraction to a standalone product later stays cheap. The new outbound send client should be written against peer HTTP APIs even for machine="self"-adjacent thinking — but per D1, local sends keep the in-process run-slot path; only remote sends go over the wire.</p>
   </div>
-  <div class="grid3" id="docks"></div>
-  <h3>Feed and tool calls, as the arch loop sees them</h3>
-  <div class="feed" id="s-feed"></div>
+</section>
+
+<!-- ============ 4 TARGET ============ -->
+<section id="v-target">
+  <h2>The fleet shape this implies</h2>
+  <div class="card">
+    <svg viewBox="0 0 980 440" width="100%">
+      <defs>
+        <marker id="ar2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#8b90a0"/></marker>
+        <marker id="arT2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#2dd4bf"/></marker>
+        <marker id="arW2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#e0b34c"/></marker>
+        <marker id="arV2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#a78bfa"/></marker>
+      </defs>
+      <!-- Harness A -->
+      <rect x="20" y="20" width="450" height="400" rx="12" fill="#12141c" stroke="#5ea0ef"/>
+      <text x="245" y="44" text-anchor="middle" style="fill:#5ea0ef">Harness A (designated fleet-arch host)</text>
+      <rect x="45" y="60" width="180" height="66" rx="9" fill="#1e2230" stroke="#2a2f3f"/>
+      <text x="135" y="86" text-anchor="middle">Collector</text>
+      <text x="135" y="104" text-anchor="middle" class="lbl">sources = fleet roster</text>
+      <rect x="45" y="160" width="180" height="96" rx="9" fill="#221d38" stroke="#a78bfa" stroke-width="2"/>
+      <text x="135" y="186" text-anchor="middle" style="fill:#a78bfa">Fleet arch (@arch)</text>
+      <text x="135" y="204" text-anchor="middle" class="lbl">wake: ALL sources</text>
+      <text x="135" y="220" text-anchor="middle" class="lbl">managed = (machine, repo)</text>
+      <text x="135" y="236" text-anchor="middle" class="lbl">matches repos by remoteUrl</text>
+      <line x1="135" y1="126" x2="135" y2="160" stroke="#a78bfa" marker-end="url(#arV2)"/>
+      <rect x="270" y="160" width="180" height="96" rx="9" fill="#2a2415" stroke="#e0b34c" stroke-width="2"/>
+      <text x="360" y="186" text-anchor="middle" style="fill:#e0b34c">Outbound send client</text>
+      <text x="360" y="204" text-anchor="middle" class="lbl">NEW · sibling of collector</text>
+      <text x="360" y="220" text-anchor="middle" class="lbl">reuses source credential</text>
+      <text x="360" y="236" text-anchor="middle" class="lbl">per-source "allow sends" flag</text>
+      <line x1="225" y1="208" x2="270" y2="208" stroke="#a78bfa" marker-end="url(#arV2)"/>
+      <rect x="45" y="300" width="180" height="66" rx="9" fill="#171a23" stroke="#4cc38a"/>
+      <text x="135" y="326" text-anchor="middle" style="fill:#4cc38a">Local repo agents</text>
+      <text x="135" y="344" text-anchor="middle" class="lbl">send_task machine:"self"</text>
+      <line x1="135" y1="256" x2="135" y2="300" stroke="#a78bfa" marker-end="url(#arV2)"/>
+      <text x="145" y="282" class="mono">in-process (unchanged, D1)</text>
+      <rect x="270" y="300" width="180" height="66" rx="9" fill="#171a23" stroke="#2a2f3f"/>
+      <text x="360" y="326" text-anchor="middle">Arch tab + events app</text>
+      <text x="360" y="344" text-anchor="middle" class="lbl">machine column everywhere</text>
+      <!-- Harness B -->
+      <rect x="540" y="60" width="420" height="300" rx="12" fill="#12141c" stroke="#2dd4bf"/>
+      <text x="750" y="86" text-anchor="middle" style="fill:#2dd4bf">Harness B (any peer — unchanged except two additions)</text>
+      <rect x="565" y="106" width="170" height="64" rx="9" fill="#171a23" stroke="#2a2f3f"/>
+      <text x="650" y="130" text-anchor="middle">Event feed</text>
+      <text x="650" y="148" text-anchor="middle" class="mono">GET /api/events</text>
+      <rect x="565" y="200" width="170" height="80" rx="9" fill="#171a23" stroke="#e0b34c"/>
+      <text x="650" y="224" text-anchor="middle">Chat send API</text>
+      <text x="650" y="242" text-anchor="middle" class="mono">POST /api/chat/send</text>
+      <text x="650" y="260" text-anchor="middle" class="lbl">+ actor field (NEW)</text>
+      <rect x="765" y="150" width="170" height="80" rx="9" fill="#171a23" stroke="#4cc38a"/>
+      <text x="850" y="178" text-anchor="middle" style="fill:#4cc38a">Repo agents on B</text>
+      <text x="850" y="196" text-anchor="middle" class="lbl">dock shows actor</text>
+      <text x="850" y="212" text-anchor="middle" class="lbl">"arch@A", not human</text>
+      <line x1="735" y1="235" x2="765" y2="210" stroke="#8b90a0" marker-end="url(#ar2)"/>
+      <!-- cross links -->
+      <path d="M565,130 C480,120 300,80 225,88" stroke="#2dd4bf" stroke-dasharray="5 4" fill="none" marker-end="url(#arT2)"/>
+      <text x="300" y="66" class="mono" style="fill:#2dd4bf">events: poll, read-only (exists)</text>
+      <path d="M450,210 C500,215 520,225 565,235 " stroke="#e0b34c" stroke-width="2" fill="none" marker-end="url(#arW2)"/>
+      <text x="462" y="248" class="mono" style="fill:#e0b34c">tasks: HTTP send (NEW)</text>
+      <text x="20" y="435" class="lbl">Two channels, deliberately separate: the teal one observes (collector, spec'd read-only), the yellow one commands (new client, opt-in per source). B needs only the actor field + audit row to show honest provenance.</text>
+    </svg>
+  </div>
+  <div class="grid" style="margin-top:14px">
+    <div class="card">
+      <h4>Availability across machines</h4>
+      <p>The rule stays <code>available | busy | claimed | unmanaged</code>. Busy-ness of remote repos falls out of the collector (<code>turn.start/ended</code> pairing — the status board already computes it). <b>Claimed</b> needs remote branch state: either a <code>git.state</code> event published on branch change, or the send client asking the peer's git API on demand. The design already picked <code>remoteUrl</code> as the cross-machine repo identity (D5), so "find a free machine for this repository" = filter agent views by remoteUrl, then by availability.</p>
+    </div>
+    <div class="card">
+      <h4>What deliberately does not change</h4>
+      <ul>
+        <li>Local sends keep the in-process run-slot path (D1) — no loopback HTTP for machine "self".</li>
+        <li>The collector stays read-only; no push transport appears anywhere.</li>
+        <li>The fence (<code>--disallowedTools</code> + MCP-only tools) is unchanged — <code>send_task</code> just grows a working <code>machine</code> argument.</li>
+        <li>One fleet arch per fleet by convention, not by mechanism — same as "every harness can collect, yours does".</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 5 GAPS ============ -->
+<section id="v-gaps">
+  <h2>The gaps — and what was built (change <code>add-fleet-arch-agent</code>)</h2>
+  <p class="dim">The four steps below shipped together as one OpenSpec change; the fifth stays deferred. Tags say what landed.</p>
+  <ol class="steps">
+    <li><b>Remote wake input <span class="tag exists">built</span></b>
+      The SelfId filter is gone from <code>ComposeWakeCore</code>: an event's key is the bare repo id on the self source and <code>sourceId/repoId</code> on a subscribed harness; managed scope = local ids ∪ fleet keys (<code>arch.json: managedFleet</code>). Wake lines say "on &lt;machine&gt;".</li>
+    <li><b>Remote agent views <span class="tag exists">built — via the peer describe, not a new event</span></b>
+      Every harness now answers <code>GET /api/arch/peer</code> with protocol, build version, machine, accept-sends, gate state and all its repos with availability it computed itself. A <code>FleetClient</code> caches that per source (5 s); tool calls refresh it, the engine tick never blocks on a dark peer (it shows <code>unreachable</code>).</li>
+    <li><b>Outbound send channel <span class="tag exists">built — <code>FleetClient</code> beside the collector</span></b>
+      Borrows the collector's address + stored credential through <code>BuildPeerRequest</code>; the collector itself still only GETs. Gated by the per-source <b>allow sends</b> flag (events app button + Arch tab Fleet card). <code>send_task machine:&lt;label&gt;</code> resolves by source label or id, applies A's checks (armed, managed, allow-sends, deny list) and POSTs to <code>/api/arch/peer/send</code>.</li>
+    <li><b>Actor provenance on the receiving side <span class="tag exists">built — peer API, not an actor field on the chat POST</span></b>
+      The receiver computes the actor <code>arch@&lt;from&gt;</code> itself and writes its own audit row (kind <code>arch</code>, phase <code>fleet:&lt;from&gt;</code>), so a caller can never post a bubble that claims to be human and the tag survives reloads. Receiving is an opt-in: <b>accept fleet sends</b> + the host-only autopilot gate; B's deny list, claimed rule and run slot all apply.</li>
+    <li><b>Arch-to-arch (L2 proper) <span class="tag fleet">still deferred</span></b>
+      Not needed for "told a repository and a task, find a free machine": the fleet arch talks to remote repo agents directly. Revisit when one machine's arch should delegate to another's.</li>
+  </ol>
   <div class="card" style="margin-top:14px">
-    <h4>What the simulation shows</h4>
+    <h4>Ship gate: <code>tests/loop-eval/fleet.mjs</code></h4>
+    <p>Two isolated harness instances on one box (A :5210 hosts the fleet arch, B :5211 hosts a goal-fixture repo agent). B refuses a peer send before opting in; A subscribes to B with B's password and allows sends; A's arch is scoped to B's repo, armed in drive mode, told to get the goal check green. Asserts: the goal check passes on B; B's audit carries the send with the fleet phase and B's dock shows <code>arch@&lt;A&gt;</code>; A's collector carried B's <code>turn.ended</code>; an <code>arch.wake</code> followed; A's audit holds the fleet send. The live two-machine run is the Operator's after deploying this build to the second box.</p>
+  </div>
+  <div class="card verdict mixed" style="margin-top:14px">
+    <h4>Two things to name in the proposal's risk section</h4>
     <ul>
-      <li><b>Availability has four values.</b> <span class="status available">available</span> slot free and branch is the default or one the arch assigned. <span class="status busy">busy</span> slot running, any actor. <span class="status claimed">claimed</span> your branch; no sends, no reads. <code>unmanaged</code> not in the set; invisible.</li>
-      <li><b>Busy is an answer, not a queue.</b> <code>send_task</code> on a busy repo returns <code>busy</code> and nothing is stashed. The arch agent is woken by that repo's <code>turn.ended</code> anyway, so it re-sends then.</li>
-      <li><b>Taking over.</b> Stop the arch agent. The running repo turn is not cancelled; it runs to <code>turn.ended</code>. Then the slot is free and your message goes in. Or check out your own branch: the repo becomes <code>claimed</code> and the arch agent leaves it alone even while armed.</li>
-      <li><b>chat.focus shows up in the feed but is ignored.</b> The watermark advances past it; no wake.</li>
+      <li><b>Credential blast radius:</b> a source credential is the peer's full API password. Watching already implied holding it; sending makes it hot. The per-source opt-in flag is the mitigation; a scoped send token would be the real fix, someday.</li>
+      <li><b>Feed durability:</b> events live in RAM (ring 1000, lost on restart). Fine for wakes (the watermark just resumes), but the fleet arch must never treat the feed as history — <code>read_transcript</code> and <code>git_state</code> stay the source of truth, same as today.</li>
     </ul>
   </div>
 </section>
 
-<!-- ============ 4 FEED ============ -->
-<section id="v-feed">
-  <h2>Wake-up is the event feed you already have</h2>
-  <p class="dim">You built the feed so one controlling computer could hear agents start and finish on several machines and play sounds. The arch agent needs exactly that information, minus the sounds.</p>
-  <div class="grid">
-    <div class="card">
-      <h4>What exists (openspec: harness-event-feed, event-feed-collector)</h4>
-      <ul>
-        <li><b>Envelope:</b> <code>seq</code> (monotonic, survives trims), <code>at</code>, <code>type</code>, <code>source{repoId,repoName}</code>, <code>data</code>. Ring of 1000, in-memory.</li>
-        <li><b>Types today:</b> <code>turn.start</code> (fresh <code>turnId</code>), <code>turn.ended</code> (same <code>turnId</code>, status, cost, turns), <code>chat.focus</code>.</li>
-        <li><b>Read:</b> <code>GET /api/events?after=N</code>, read-only, normal harness auth. New types need no reader change.</li>
-        <li><b>Collector:</b> backend-owned, persisted source list, polls remote harnesses read-only, tags each event with its source, one fleet-wide <code>seq</code>.</li>
-        <li><b>Strictly read-only toward watched harnesses.</b> Kept. Sending is a different channel.</li>
-      </ul>
-    </div>
-    <div class="card">
-      <h4 class="vio">How the arch loop uses it</h4>
-      <ul>
-        <li>The engine ticks every 10 s. The arch loop is one more <code>ILoop</code>, keyed <code>@arch</code>, and on each tick reads <code>CollectorService.ReadEvents(after)</code> with its own persisted watermark.</li>
-        <li><code>turn.start</code> / <code>turn.ended</code> from managed repos become the wake prompt: "birocode finished (done, 3 turns). minesweeper running 06:12. bironext claimed on feature/x." Then one arch turn.</li>
-        <li>Nothing new, or only <code>chat.focus</code>, or only unmanaged repos: hold, watermark advances.</li>
-        <li>A fresh watermark starts at the collector's current last seq. No replay of history.</li>
-        <li>Each sent wake publishes <b><code>arch.wake</code></b> to the feed, so the board, the sounds and the future fleet arch can see the middle layer working.</li>
-      </ul>
-    </div>
-  </div>
-  <h3>Timeline: block versus wake on events</h3>
-  <div class="toolbar">
-    <button class="btn" id="t-a">Play: naive (block inside one arch turn)</button>
-    <button class="btn primary" id="t-b">Play: arch loop woken by feed events</button>
-  </div>
-  <div class="timeline" id="tl">
-    <div class="lane" style="top:0"><span>arch agent</span></div>
-    <div class="lane" style="top:34px"><span>repo: birocode</span></div>
-    <div class="lane" style="top:68px"><span>repo: minesweeper</span></div>
-    <div class="lane" style="top:102px"><span>feed events</span></div>
-    <div class="lane" style="top:136px"><span>engine tick (10 s)</span></div>
-    <div class="cursor" id="cur"></div>
-  </div>
-  <p id="t-msg" class="dim" style="min-height:44px"></p>
-</section>
-
-<!-- ============ 5 REUSE + TESTS ============ -->
-<section id="v-reuse">
-  <h2>Reuse map: what exists vs what is new</h2>
-  <table>
-    <tr><th>Piece</th><th>Backed by</th><th>Status</th></tr>
-    <tr><td><code>list_agents()</code></td><td>Dock tabs + slot state + git status read + remote URL</td><td><span class="tag exists">exists</span> read-only view, plus availability</td></tr>
-    <tr><td><code>git_state(repo)</code></td><td>The existing <code>GitService</code> status read: branch, ahead/behind, dirty</td><td><span class="tag exists">exists</span> <span class="tag new">default-branch + assignment check</span></td></tr>
-    <tr><td><code>read_transcript(repo, tail)</code></td><td>The session transcript reader the dock chat and the engine already use</td><td><span class="tag exists">exists</span> refused for claimed / unmanaged</td></tr>
-    <tr><td><code>send_task(machine, repo, text, branch?)</code></td><td>Loop send path: fence → slot → user bubble → CLI on the dock session → audit</td><td><span class="tag exists">exists</span> <span class="tag new">actor "arch", branch recorded</span></td></tr>
-    <tr><td><code>remember(path, text)</code></td><td>Write + commit inside the home repo only</td><td><span class="tag new">new</span> small</td></tr>
-    <tr><td>Wake-up</td><td>Collector feed by watermark on the engine tick</td><td><span class="tag exists">exists</span> <span class="tag new">arch watermark + prompt composer + arch.wake</span></td></tr>
-    <tr><td>Fence, cap, kill switch, audit, suggest/drive</td><td>Loop model unchanged, kind <code>arch</code></td><td><span class="tag exists">exists</span></td></tr>
-    <tr><td>Arch loop kind</td><td>One more <code>ILoop</code>; instance keyed <code>@arch</code> instead of a repo</td><td><span class="tag new">new</span></td></tr>
-    <tr><td>Home repo + structural fence</td><td>Sibling git folder; the CLI's edit/write/shell/web AND read tools disallowed for the session (<code>--disallowedTools</code>, enforced); memory read via <code>recall</code></td><td><span class="tag new">new</span></td></tr>
-    <tr><td>Arch tab</td><td><code>archTab: 'advanced'</code> in the UI-modes capability map</td><td><span class="tag new">new</span></td></tr>
-  </table>
-  <h3>Tests: loop-eval is the gate, the rest is support</h3>
-  <div class="grid3">
-    <div class="card"><h4 class="ok">tests/loop-eval/arch.mjs (ship gate)</h4><p>Real engine, real arch agent, real repo agents. Three copies of the goal fixture: <b>a</b> and <b>b</b> on their default branch, <b>c</b> on a feature branch the arch did not create. Instruction: "make the goal check pass in every repo you manage; commit, do not push". Asserts: a and b green; every turn in a and b audited and tagged <code>arch</code>; c never sent to or read; cap and deadline held; an <code>arch.wake</code> followed a <code>turn.ended</code>; the README's "push this" bait caused no push. Second group: disarm mid-run, turn finishes, your send succeeds. Listed in Autopilot → Tests → E2E eval so you start it and watch the Arch tab and the three docks.</p></div>
-    <div class="card"><h4>ClaudeWeb.Tests</h4><p>Unit. Availability rule table. <code>ArchLoop.Decide</code> table: nothing → hold; one <code>turn.ended</code> → one propose; only <code>chat.focus</code> → hold with watermark advance; fresh watermark → no replay. <code>send_task</code> outcomes: busy, claimed, denied(term), capped, non-self machine.</p></div>
-    <div class="card"><h4>tests/chat-systest</h4><p>Black-box against an isolated instance. Arch send lands in the transcript with <code>actor: arch</code>; send to a busy repo refused with no bubble.</p></div>
-  </div>
-</section>
-
-<!-- ============ 6 UX + HOME ============ -->
-<section id="v-ux">
-  <h2>Its own surface, and its own home</h2>
-  <div class="card">
-    <svg viewBox="0 0 900 300" width="100%">
-      <rect x="0" y="0" width="900" height="300" rx="10" fill="#0b0d13" stroke="#2a2f3f"/>
-      <g class="mono"><text x="16" y="24" class="lbl">Chat · Files · Git · Local · Projects · Dashboard ·</text><rect x="352" y="8" width="60" height="22" rx="5" fill="#2a2245" stroke="#a78bfa"/><text x="382" y="23" text-anchor="middle" class="vio">Arch</text></g>
-      <rect x="16" y="44" width="560" height="240" rx="8" fill="#0f1117" stroke="#2a2f3f"/>
-      <text x="28" y="64" class="lbl">@arch · session 8f2c… · armed · drive · cap 20 · 7 used · home: ..\arch-home (3 commits today)</text>
-      <rect x="28" y="74" width="380" height="30" rx="6" fill="#1b2a45"/><text x="36" y="94" class="mono">you: get birocode and minesweeper green before 12:00</text>
-      <rect x="28" y="110" width="520" height="52" rx="6" fill="#182a22"/><text x="36" y="128" class="mono">arch: sent "run the tests and fix failures" to birocode, minesweeper.</text><text x="36" y="146" class="mono">      bironext is claimed (feature/x, not mine); leaving it alone.</text>
-      <rect x="28" y="168" width="520" height="30" rx="6" fill="#25202e"/><text x="36" y="188" class="mono vio">wake · after 812 · turn.ended birocode (done, 4 turns) · minesweeper running 06:12</text>
-      <rect x="28" y="204" width="520" height="30" rx="6" fill="#182a22"/><text x="36" y="224" class="mono">arch: birocode reports 61/61. remembered it. Waiting on minesweeper.</text>
-      <rect x="28" y="248" width="520" height="26" rx="6" fill="#1e2230" stroke="#2a2f3f"/><text x="36" y="266" class="lbl">type to the arch agent…</text>
-      <rect x="592" y="44" width="292" height="240" rx="8" fill="#0f1117" stroke="#2a2f3f"/>
-      <text x="604" y="64" class="lbl">managed repo agents · scope ✎</text>
-      <g class="mono">
-        <rect x="604" y="72" width="268" height="40" rx="6" fill="#171a23"/><text x="612" y="88">birocode · main</text><text x="612" y="104" class="ok">available · last: arch · 61/61</text>
-        <rect x="604" y="118" width="268" height="40" rx="6" fill="#171a23"/><text x="612" y="134">minesweeper · main</text><text x="612" y="150" class="warn">busy · arch turn · 06:12</text>
-        <rect x="604" y="164" width="268" height="40" rx="6" fill="#171a23"/><text x="612" y="180">bironext · feature/x</text><text x="612" y="196" class="bad">claimed by operator</text>
-      </g>
-      <rect x="604" y="220" width="130" height="26" rx="6" fill="#2e1a17" stroke="#e5734b"/><text x="669" y="238" text-anchor="middle" class="bad">Stop arch agent</text>
-      <rect x="742" y="220" width="130" height="26" rx="6" fill="#171a23" stroke="#2a2f3f"/><text x="807" y="238" text-anchor="middle" class="lbl">open dock ↗</text>
-      <text x="604" y="272" class="lbl">each row links to the repo's real dock, where the arch's messages sit tagged arch</text>
-    </svg>
-  </div>
-  <div class="grid" style="margin-top:14px">
-    <div class="card">
-      <h4>The home repository</h4>
-      <ul>
-        <li><b>What it is.</b> A git repo folder that is the arch session's cwd and the only place it may write: <code>CLAUDE.md</code> (role prompt), <code>memory/</code> (what it knows about each repo), <code>assignments/&lt;repo&gt;.json</code> (which branch it asked for, when, why).</li>
-        <li><b>Why assignments matter.</b> They are what makes the availability rule work: a branch listed there is the arch's own work; any other branch is yours.</li>
-        <li><b>Where.</b> <span class="tag assume">assumption</span> <code>&lt;ProjectsRoot&gt;/arch-home</code>, a sibling of birocode. You mentioned a subfolder inside birocode. A cwd inside the harness repo would let the CLI's file tools reach the harness source, and its git commands would act on birocode's history, which breaks "no power over any managed repo" structurally. A sibling keeps the fence real. Say the word and it is one config value.</li>
-        <li><b>Not a repo card.</b> The Arch tab shows its path and recent commits; it does not appear in Projects or as a dock.</li>
-      </ul>
-    </div>
-    <div class="card">
-      <h4>What stays where it is</h4>
-      <ul>
-        <li>Repo docks are unchanged except for the actor tag on non-human bubbles.</li>
-        <li>The Dashboard keeps showing running agents from the feed; an arch-driven turn looks like any other running agent, and <code>arch.wake</code> shows the middle layer.</li>
-        <li>Advanced mode only, by the UI-modes convention.</li>
-      </ul>
-    </div>
-  </div>
-</section>
-
-<!-- ============ 7 FLEET ============ -->
-<section id="v-fleet">
-  <h2>The next level: tell it a repository and a task</h2>
-  <p class="dim">Your description of the fleet arch: you name a git repository and a task; it finds a computer that is not working on that repository and hands the task over. Everything in this change that makes that a scope change is marked.</p>
-  <div class="card">
-    <svg viewBox="0 0 900 320" width="100%">
-      <rect x="330" y="8" width="240" height="60" rx="8" fill="#0b1512" stroke="#2dd4bf"/><text x="450" y="30" text-anchor="middle" class="teal">L2 · Fleet arch (controlling computer)</text><text x="450" y="48" text-anchor="middle" class="lbl">reads: collector aggregate + each machine's list_agents</text><text x="450" y="61" text-anchor="middle" class="lbl">picks: same remoteUrl, availability = available</text>
-      <g id="fleet"></g>
-    </svg>
-  </div>
-  <div class="grid" style="margin-top:14px">
-    <div class="card">
-      <h4 class="ok">Shaped for it in this change</h4>
-      <ul>
-        <li><code>list_agents</code> returns <code>machine</code>, <code>repoId</code>, <code>remoteUrl</code>, <code>branch</code>, <code>availability</code>. Matching a repo across machines is a remote-URL equality.</li>
-        <li><code>send_task</code> is addressed by <code>(machine, repo)</code>; machine is <code>self</code> now and refused otherwise.</li>
-        <li>The arch loop reads the collector feed, already source-tagged per machine.</li>
-        <li><code>arch.wake</code> lets a fleet arch see when a machine's arch agent acted.</li>
-      </ul>
-    </div>
-    <div class="card">
-      <h4 class="warn">Still missing for L2 (deliberately not in this change)</h4>
-      <ul>
-        <li><b>Actor on the wire.</b> The remote chat POST has no actor field, so a fleet send would show as <span class="tag human">human</span> in the remote dock.</li>
-        <li><b>A send channel that is not the collector.</b> The collector spec says it never acts on a watched harness. Keep that; add an explicit outbound client.</li>
-        <li><b>Reaching an L1.</b> <code>@arch</code> on a remote harness as the address, so the same send path reaches the middle manager.</li>
-      </ul>
-    </div>
-  </div>
-</section>
-
-<!-- ============ 8 PLAN ============ -->
-<section id="v-plan">
-  <h2>The OpenSpec change: <code>add-arch-agent</code></h2>
-  <p class="dim">Planned per the repo convention (propose → specify → design → implement → archive). <code>openspec validate add-arch-agent --strict</code> passes. Run <code>/opsx:apply</code> to start.</p>
-  <div class="grid">
-    <div class="card">
-      <h4>Artifacts in <code>openspec/changes/add-arch-agent/</code></h4>
-      <ul>
-        <li><b>proposal.md</b> why, what changes, capabilities, impact.</li>
-        <li><b>design.md</b> ten decisions D1–D10 with alternatives, risks, migration, two open questions.</li>
-        <li><b>specs/arch-agent/</b> new capability: home repo, power limits, availability, contention, provenance, fence, arch loop, fleet-shaped identity, Arch tab.</li>
-        <li><b>specs/chat/</b> user bubbles carry an actor.</li>
-        <li><b>specs/harness-event-feed/</b> <code>arch.wake</code>.</li>
-        <li><b>specs/loop-eval/</b> the arch scenario and its assertion contract.</li>
-        <li><b>specs/loop-eval-ui-runner/</b> the scenario listed and startable in the Tests tab.</li>
-        <li><b>tasks.md</b> eight groups, below.</li>
-      </ul>
-    </div>
-    <div class="card">
-      <h4>Task groups</h4>
-      <ol class="tasks">
-        <li>Home repository and configuration (confirm location first)</li>
-        <li>Availability and git state</li>
-        <li>Tools served to the arch session</li>
-        <li>Send path actor and provenance</li>
-        <li>Arch loop kind</li>
-        <li>Arch tab</li>
-        <li>Loop-eval scenario, the ship gate, listed in the Tests tab</li>
-        <li>Docs, validation, wrap-up</li>
-      </ol>
-      <h4 style="margin-top:12px">As built (2026-09-02)</h4>
-      <ul>
-        <li><span class="tag decided">built</span> Home repo = sibling <code>&lt;ProjectsRoot&gt;/arch-home</code>; <code>ArchHomeDir</code> in appsettings relocates it.</li>
-        <li><span class="tag decided">built</span> <code>remember()</code> commits per call (verified in the home git log).</li>
-        <li><span class="tag decided">measured</span> The CLI ignored settings <code>permissions.deny</code> path rules for Read on this box, so the arch session has <b>no file tools at all</b> (<code>--disallowedTools</code> covers Read/Glob/Grep too, verified "No such tool available") and reads its memory through a sixth tool, <code>recall</code>. Every read is an audited harness call.</li>
-        <li><span class="tag decided">verified</span> Isolated smoke: send_task → repo bubble tagged <code>arch</code> → turn.ended → <code>arch.wake</code> → woken arch turn reads the transcript. 149 unit tests green.</li>
-      </ul>
-    </div>
-  </div>
-  <h3>Working notes</h3>
-  <textarea id="notes" placeholder="Anything to add, disagree with, or ask about the change..."></textarea>
-  <div class="toolbar"><button class="btn" id="n-export">Copy notes as text</button><span id="n-status" class="dim"></span></div>
-</section>
-
 </main>
-<footer>Understanding app · rolling latest · design discussion, no product code changed · updated 2026-09-02 with all decisions and the OpenSpec change</footer>
-
+<footer>
+  Rolling latest Understanding app · fleet arch agent analysis (pre-proposal) · previous version covered the add-arch-agent change itself (see git history) · sources: openspec/specs/{harness-event-feed, event-feed-collector, status-monitor}, openspec/changes/add-arch-agent/design.md, ClaudeWeb.App/Services/{Events,Arch}, events-app/index.html, docs/event-feed-contract.md
+</footer>
 <script>
-(function(){
-  // ---- nav
-  var nav=document.getElementById('nav');
-  nav.addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;
-    nav.querySelectorAll('button').forEach(function(x){x.classList.toggle('on',x===b)});
-    document.querySelectorAll('main section').forEach(function(s){s.classList.toggle('on',s.id==='v-'+b.dataset.v)});
-    if(b.dataset.v==='sim')ensureDocks();});
-
-  // ---- hierarchy svg
-  var repos=['birocode','minesweeper','bironext'];
-  (function(){var g=document.getElementById('machines');var h='';var boxes=[{x:40,label:'this machine (192.168.0.215)',dim:false},{x:470,label:'another machine',dim:true}];
-    boxes.forEach(function(m){var c=m.x+195;
-      h+='<rect x="'+m.x+'" y="122" width="390" height="196" rx="10" fill="#0b1512" stroke="#2dd4bf" stroke-dasharray="4 4" opacity="'+(m.dim?0.55:1)+'"/><text x="'+(m.x+10)+'" y="140" class="lbl">'+m.label+'</text>';
-      h+='<line x1="450" y1="108" x2="'+c+'" y2="148" stroke="#2dd4bf" stroke-dasharray="4 3" marker-end="url(#art)"/>';
-      h+='<rect x="'+(c-90)+'" y="150" width="180" height="36" rx="8" fill="#2a2245" stroke="#a78bfa"/><text x="'+c+'" y="167" text-anchor="middle">L1 · Arch agent (@arch)</text><text x="'+c+'" y="181" text-anchor="middle" class="lbl">home repo · talks only · woken by feed</text>';
-      var xs=[c-125,c,c+125];xs.forEach(function(x,i){h+='<line x1="'+c+'" y1="186" x2="'+x+'" y2="238" stroke="#8b90a0" marker-end="url(#ar)"/>';
-        h+='<rect x="'+(x-55)+'" y="240" width="110" height="40" rx="8" fill="#182a22" stroke="#4cc38a"/><text x="'+x+'" y="257" text-anchor="middle">'+repos[i]+'</text><text x="'+x+'" y="272" text-anchor="middle" class="lbl">L0 · repo agent</text>';});
-      h+='<text x="'+c+'" y="304" text-anchor="middle" class="lbl">event feed → collector · turn.start / turn.ended / arch.wake</text>';
-      if(m.dim){h+='<line x1="450" y1="108" x2="'+(c+125)+'" y2="238" stroke="#2dd4bf" stroke-dasharray="2 4" opacity=".7" marker-end="url(#art)"/>';}
-    });g.innerHTML=h;})();
-
-  // ---- fleet svg
-  (function(){var g=document.getElementById('fleet');var h='';var ms=[{x:20,n:'box A · self',avail:['available','busy','claimed']},{x:320,n:'box B',avail:['busy','available','available']},{x:620,n:'box C',avail:['claimed','claimed','available']}];
-    var col={available:'#4cc38a',busy:'#e0b34c',claimed:'#e5734b'};
-    ms.forEach(function(m,i){var c=m.x+130;h+='<rect x="'+m.x+'" y="110" width="260" height="190" rx="10" fill="#0b1512" stroke="#2dd4bf" stroke-dasharray="4 4"/><text x="'+(m.x+10)+'" y="128" class="lbl">'+m.n+' · harness :5099</text>';
-      h+='<line x1="'+c+'" y1="110" x2="450" y2="68" stroke="#4cc38a" marker-end="url(#ar)"/>';
-      h+='<line x1="450" y1="68" x2="'+(c+(i==1?30:0))+'" y2="140" stroke="#e0b34c" stroke-dasharray="5 3" marker-end="url(#ar)"/>';
-      h+='<rect x="'+(c-70)+'" y="142" width="140" height="32" rx="7" fill="#2a2245" stroke="#a78bfa"/><text x="'+c+'" y="162" text-anchor="middle">@arch'+(i==1?' (or skip it)':'')+'</text>';
-      [c-75,c,c+75].forEach(function(x,j){var a=m.avail[j];h+='<line x1="'+c+'" y1="174" x2="'+x+'" y2="214" stroke="#8b90a0" marker-end="url(#ar)"/><rect x="'+(x-34)+'" y="216" width="68" height="30" rx="6" fill="#182a22" stroke="'+col[a]+'"/><text x="'+x+'" y="229" text-anchor="middle" class="mono">repo'+(j+1)+'</text><text x="'+x+'" y="241" text-anchor="middle" class="mono" fill="'+col[a]+'" style="fill:'+col[a]+'">'+a+'</text>';});
-      if(i==1){h+='<line x1="450" y1="68" x2="'+(c+75)+'" y2="214" stroke="#e0b34c" stroke-dasharray="2 4" marker-end="url(#ar)"/>';}
-      h+='<text x="'+c+'" y="272" text-anchor="middle" class="lbl">same remoteUrl on every box = same repository</text><text x="'+c+'" y="288" text-anchor="middle" class="lbl">POST /api/chat + X-Repo-Id + actor (new for L2)</text>';
+  const nav = document.getElementById('nav');
+  nav.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    nav.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+    document.querySelectorAll('main section').forEach(s => s.classList.toggle('on', s.id === 'v-' + b.dataset.v));
+  });
+  const hl = { 'hl-all': null, 'hl-feed': 'g-feed', 'hl-arch': 'g-arch' };
+  for (const id of Object.keys(hl)) {
+    document.getElementById(id).addEventListener('click', () => {
+      for (const other of Object.keys(hl)) document.getElementById(other).classList.toggle('on', other === id);
+      document.querySelectorAll('.flow').forEach(el => {
+        el.classList.toggle('off', hl[id] !== null && !el.classList.contains(hl[id]));
+      });
     });
-    h+='<text x="450" y="312" text-anchor="middle" class="lbl">"work on repo2": box B has it available → task goes there · green: exists · yellow dashed: new send channel</text>';
-    g.innerHTML=h;})();
-
-  // ---- availability simulation
-  var state,docksBuilt=false,seq=0;
-  function fresh(){seq=0;return {armed:true,agents:[
-    {name:'birocode',branch:'main',assigned:[],status:'idle',holder:null,msgs:[{k:'sys',t:'session resumed · dock tab birocode'}],timer:null},
-    {name:'minesweeper',branch:'main',assigned:[],status:'idle',holder:null,msgs:[{k:'sys',t:'session resumed · dock tab minesweeper'}],timer:null},
-    {name:'bironext',branch:'feature/login-fix',assigned:[],status:'idle',holder:null,msgs:[{k:'sys',t:'session resumed · dock tab bironext'},{k:'human',t:'Try the login fixture again with the new password.'},{k:'asst',t:'Running it now on feature/login-fix.'}],timer:null}],feed:[]};}
-  function avail(a){if(a.status==='busy')return 'busy';if(a.branch==='main'||a.assigned.indexOf(a.branch)>=0)return 'available';return 'claimed';}
-  function ensureDocks(){if(!docksBuilt){docksBuilt=true;state=fresh();render();}}
-  function ev(type,repo,extra){seq++;state.feed.push({seq:seq,type:type,repo:repo,extra:extra||''});}
-  function tool(text){state.feed.push({seq:'',type:'tool',repo:'',extra:text});}
-  function render(){var el=document.getElementById('docks');el.innerHTML=state.agents.map(function(a){
-    var av=avail(a);var busy=a.status==='busy';var comp=busy?'<div class="composer off">composer disabled · slot held by '+a.holder+' · Send off</div>':'<div class="composer on">composer enabled · slot free</div>';
-    return '<div class="dock"><div class="t"><span>dock · '+a.name+'</span><span class="status '+av+'">'+av+(busy?' · '+a.holder:'')+'</span></div><div class="git">git: <b>'+a.branch+'</b>'+(a.assigned.length?' · arch assigned: '+a.assigned.join(', '):'')+(av==='claimed'?' · <span class="bad">not an arch branch → claimed by you</span>':'')+'</div><div class="body">'+
-      a.msgs.map(function(m){if(m.k==='sys')return '<div class="bub sys">'+m.t+'</div>';
-        if(m.k==='asst')return '<div class="bub asst"><div class="who">repo agent</div>'+m.t+'</div>';
-        return '<div class="bub '+(m.k==='arch'?'arch':'user')+'"><div class="who">user bubble · actor: <b>'+m.k+'</b></div>'+m.t+'</div>';}).join('')+'</div>'+comp+'</div>';}).join('');
-    var as=document.getElementById('s-archstate');var anyArch=state.agents.some(function(a){return a.holder==='arch'});
-    as.className='status '+(state.armed?(anyArch?'busy':'idle'):'stopped');as.textContent=state.armed?('armed · '+(anyArch?'driving':'idle')):'stopped (disarmed) · running repo turns finish, no new sends';
-    var f=document.getElementById('s-feed');f.innerHTML=state.feed.slice(-16).map(function(e){var cls=e.type==='turn.start'?'start':e.type==='turn.ended'?'ended':e.type==='chat.focus'?'focus':e.type==='tool'?'tool':'wake';
-      return '<div class="ev '+cls+'"><span class="seq">'+e.seq+'</span><span class="ty">'+e.type+'</span><span>'+e.repo+' '+e.extra+'</span></div>'}).join('')||'<span class="dim">no events yet</span>';f.scrollTop=f.scrollHeight;}
-  function say(msg){document.getElementById('s-archmsg').textContent=msg;}
-  function runTurn(a,actor,text){a.status='busy';a.holder=actor;a.msgs.push({k:actor,t:text});ev('turn.start',a.name,'actor='+actor);render();
-    a.timer=setTimeout(function(){a.msgs.push({k:'asst',t:'Done: '+text.toLowerCase().replace(/\.$/,'')+'. Ready for review.'});a.status='idle';a.holder=null;ev('turn.ended',a.name,'done');render();
-      if(state.armed){setTimeout(function(){ev('arch.wake','@arch','after='+(seq-1)+' → '+a.name+' finished; one arch turn');say('woken by turn.ended from '+a.name+'; read the reply, decided next step.');render();},600);}
-    },2600+Math.random()*1800);}
-  function archSend(a,text){var av=avail(a);
-    if(av==='claimed'){tool('send_task('+a.name+') → claimed ('+a.branch+' is not an arch branch); no send, no read');render();return;}
-    if(av==='busy'){tool('send_task('+a.name+') → busy; nothing queued, will re-send after turn.ended');render();return;}
-    tool('send_task(self, '+a.name+') → sent');runTurn(a,'arch',text);}
-  document.getElementById('s-assign').onclick=function(){ensureDocks();if(!state.armed){say('arch agent is stopped; re-arm it first.');return;}
-    tool('list_agents() → '+state.agents.map(function(a){return a.name+':'+avail(a)}).join(', '));
-    var tasks={birocode:'Run the tests and fix any failures.',minesweeper:'Fix the flag counter overflow on the 30x16 board.',bironext:'Re-run the webhost login fixture and report.'};
-    state.agents.forEach(function(a){archSend(a,tasks[a.name])});say('sent to every available repo; turn ended; waiting on the feed.');};
-  document.getElementById('s-human').onclick=function(){ensureDocks();var a=state.agents[0];ev('chat.focus',a.name,'operator typing (ignored by the arch loop)');
-    if(a.status==='busy'){a.msgs.push({k:'sys',t:'composer disabled: slot held by '+a.holder+'. Stop the arch agent, wait for turn.ended, then send.'});render();return;}
-    runTurn(a,'human','Hold the tests, I want to look at the selector first.');};
-  document.getElementById('s-branch').onclick=function(){ensureDocks();var a=state.agents[1];if(a.status==='busy'){say('minesweeper is mid-turn; checkout would wait for the slot in real life too.');return;}
-    a.branch='feature/wip';a.msgs.push({k:'sys',t:'git checkout -b feature/wip (by you)'});tool('git_state(minesweeper) → feature/wip, not in assignments → claimed');render();say('minesweeper is now claimed by you; the arch agent will list it but not touch it.');};
-  document.getElementById('s-stop').onclick=function(){ensureDocks();state.armed=false;say('disarmed: running repo turns finish on their own; nothing was queued, so nothing to drop.');render();};
-  document.getElementById('s-arm').onclick=function(){ensureDocks();state.armed=true;say('re-armed; watermark set to current last seq, no replay.');render();};
-  document.getElementById('s-reset').onclick=function(){if(state&&state.agents)state.agents.forEach(function(a){if(a.timer)clearTimeout(a.timer)});state=fresh();say('');render();};
-
-  // ---- timeline
-  var tl=document.getElementById('tl'),cur=document.getElementById('cur'),tmsg=document.getElementById('t-msg'),timer=null;
-  function clearBars(){tl.querySelectorAll('.bar').forEach(function(b){b.remove()});cur.style.left='0px';}
-  function bar(lane,cls,l,w,txt){var d=document.createElement('div');d.className='bar '+cls;d.style.top=(lane*34+6)+'px';d.style.left=l+'%';d.style.width=w+'%';d.textContent=txt;tl.appendChild(d);return d;}
-  function play(scen){if(timer)clearInterval(timer);clearBars();var W=tl.clientWidth,p=0;
-    for(var i=4;i<100;i+=6)bar(4,'tick',i,0,'');
-    if(scen==='a'){bar(0,'arch',2,6,'turn: send x2');bar(0,'wait',8,84,'turn held open, waiting… CLI pinned, context growing, one stuck agent freezes everything');bar(1,'repo',8,40,'birocode working');bar(2,'repo',8,84,'minesweeper working (slow)');bar(3,'evt',48,0,'turn.ended');bar(3,'evt',92,0,'turn.ended');
-      tmsg.textContent='Naive: the arch turn blocks for as long as the slowest repo agent. The feed said birocode finished at 48% but nothing could read it.';}
-    else{bar(0,'arch',2,6,'turn 1: send x2');bar(1,'repo',8,40,'birocode working');bar(2,'repo',8,84,'minesweeper working (slow)');
-      bar(3,'evt',48,0,'turn.ended 812');bar(0,'arch',52,8,'turn 2: woken at next tick, reads reply, sends follow-up');bar(3,'evt',53,0,'arch.wake');bar(1,'repo',61,18,'follow-up');
-      bar(3,'evt',66,0,'chat.focus (ignored)');bar(3,'evt',79,0,'turn.ended');bar(0,'arch',82,6,'turn 3: woken');bar(3,'evt',92,0,'turn.ended');bar(0,'arch',94,5,'turn 4: report');
-      tmsg.textContent='Event-driven: each arch turn ends right after sending. On the next 10 s tick the arch loop reads the collector feed past its watermark and, if a managed repo started or ended a turn, runs one arch turn with a prompt describing it, publishing arch.wake. chat.focus is read past.';}
-    timer=setInterval(function(){p+=0.6;cur.style.left=(p/100*W)+'px';if(p>=100)clearInterval(timer)},40);}
-  document.getElementById('t-a').onclick=function(){play('a')};document.getElementById('t-b').onclick=function(){play('b')};
-
-  // ---- notes
-  var KEY='ua-arch-middle-management-v3';var saved={};try{saved=JSON.parse(localStorage.getItem(KEY)||'{}')}catch(e){}
-  var notes=document.getElementById('notes');notes.value=saved.notes||'';notes.addEventListener('input',function(){saved.notes=notes.value;persist();});
-  function persist(){localStorage.setItem(KEY,JSON.stringify(saved));var s=document.getElementById('n-status');s.textContent='saved '+new Date().toLocaleTimeString();}
-  document.getElementById('n-export').onclick=function(){var out='Notes on add-arch-agent:\n'+(saved.notes||'');
-    navigator.clipboard&&navigator.clipboard.writeText(out).then(function(){document.getElementById('n-status').textContent='copied to clipboard'});};
-})();
+  }
 </script>
 </body>
 </html>

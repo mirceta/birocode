@@ -22,10 +22,29 @@ public class ArchStateStore
     private sealed class Data
     {
         public List<string> ManagedRepoIds { get; set; } = new();
+        // Managed agents on OTHER harnesses (openspec add-fleet-arch-agent, D3):
+        // keys "<collector source id>/<repo id on that harness>".
+        public List<string> ManagedFleet { get; set; } = new();
+        // Whether THIS harness lets a fleet arch on another harness send tasks to
+        // its repo agents (receiving-side opt-in, default off).
+        public bool AcceptFleetSends { get; set; }
         // Collector seq the arch loop has consumed up to. -1 = never set: the
         // next arm starts it at the collector's current last seq (no replay).
         public int Watermark { get; set; } = -1;
         public string? LastSessionId { get; set; }
+    }
+
+    /// <summary>The managed-set key of an agent on a subscribed harness.</summary>
+    public static string FleetKey(string sourceId, string repoId) => sourceId + "/" + repoId;
+
+    /// <summary>Splits a fleet key back into (sourceId, repoId); null when the
+    /// string is not a fleet key (a bare local repo id has no slash).</summary>
+    public static (string SourceId, string RepoId)? ParseFleetKey(string? key)
+    {
+        if (string.IsNullOrWhiteSpace(key)) return null;
+        var idx = key.IndexOf('/');
+        if (idx <= 0 || idx == key.Length - 1) return null;
+        return (key[..idx], key[(idx + 1)..]);
     }
 
     public string FilePath => _path;
@@ -42,6 +61,39 @@ public class ArchStateStore
     public IReadOnlyList<string> ManagedRepoIds
     {
         get { lock (_gate) return _data.ManagedRepoIds.ToList(); }
+    }
+
+    public IReadOnlyList<string> ManagedFleet
+    {
+        get { lock (_gate) return _data.ManagedFleet.ToList(); }
+    }
+
+    public bool AcceptFleetSends
+    {
+        get { lock (_gate) return _data.AcceptFleetSends; }
+    }
+
+    public void SetManagedFleet(IEnumerable<string> keys)
+    {
+        lock (_gate)
+        {
+            _data.ManagedFleet = keys
+                .Where(k => ParseFleetKey(k) is not null)
+                .Select(k => k.Trim())
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            Save();
+        }
+    }
+
+    public void SetAcceptFleetSends(bool accept)
+    {
+        lock (_gate)
+        {
+            if (_data.AcceptFleetSends == accept) return;
+            _data.AcceptFleetSends = accept;
+            Save();
+        }
     }
 
     public int Watermark
@@ -96,6 +148,7 @@ public class ArchStateStore
             var data = JsonSerializer.Deserialize<Data>(File.ReadAllText(_path));
             if (data is null) return;
             data.ManagedRepoIds ??= new();
+            data.ManagedFleet ??= new();
             _data = data;
         }
         catch (Exception ex)

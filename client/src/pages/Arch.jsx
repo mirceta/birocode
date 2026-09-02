@@ -72,6 +72,9 @@ export default function Arch({ popup = false, onOpenDock = null }) {
   const [error, setError] = useState('');
   const [scopeOpen, setScopeOpen] = useState(false);
   const [scopeDraft, setScopeDraft] = useState([]);
+  // Managed agents on OTHER harnesses (openspec: add-fleet-arch-agent), as
+  // keys "sourceId/repoId" — the same shape the server persists.
+  const [fleetDraft, setFleetDraft] = useState([]);
   const [cap, setCap] = useState(6);
   const [mode, setMode] = useState('drive');
   // Lanes, like a repo dock's Builder | Ask | … row — but the arch agent only
@@ -179,14 +182,36 @@ export default function Arch({ popup = false, onOpenDock = null }) {
 
   const saveScope = useCallback(async () => {
     try {
-      const s = await apiPost('/arch/scope', { repoIds: scopeDraft });
+      const s = await apiPost('/arch/scope', { repoIds: scopeDraft, fleet: fleetDraft });
       setState(s);
       setScopeOpen(false);
       setError('');
     } catch (e) {
       setError(e?.message || String(e));
     }
-  }, [scopeDraft]);
+  }, [scopeDraft, fleetDraft]);
+
+  // Receiving-side opt-in: let fleet arch agents elsewhere send to THIS harness.
+  const setAcceptSends = useCallback(async (accept) => {
+    try {
+      const s = await apiPost('/arch/fleet', { acceptSends: accept });
+      setState(s);
+      setError('');
+    } catch (e) {
+      setError(e?.message || String(e));
+    }
+  }, []);
+
+  // Calling-side consent per subscribed harness: the collector's own flag.
+  const setAllowSends = useCallback(async (sourceId, allow) => {
+    try {
+      await apiPost(`/collector/sources/${sourceId}/sends`, { allow });
+      setError('');
+      setTimeout(load, 300);
+    } catch (e) {
+      setError(e?.message || String(e));
+    }
+  }, [load]);
 
   const stopTurn = useCallback(async () => {
     try { await apiPost('/arch/stop-turn', {}); setTimeout(load, 500); } catch (e) { setError(e?.message || String(e)); }
@@ -204,6 +229,18 @@ export default function Arch({ popup = false, onOpenDock = null }) {
   const agents = state?.agents || [];
   const repos = state?.repos || [];
   const managed = new Set(state?.managedRepoIds || []);
+  const managedFleet = new Set(state?.managedFleet || []);
+  const fleet = state?.fleet || { sources: [] };
+  const fleetSources = fleet.sources || [];
+  const peerText = (s) => {
+    const p = s.peer || {};
+    if (p.status === 'ok') return `peer ok · build ${p.version || '?'} · ${p.acceptsSends ? 'accepts sends' : 'does not accept sends'}${p.gateOpen ? '' : ' · gate closed'}`;
+    if (p.status === 'no-peer-api') return 'no peer API on that build — upgrade it';
+    if (p.status === 'unauthorized') return 'peer refused the credential';
+    if (p.status === 'unreachable') return `unreachable${p.detail ? ` · ${p.detail}` : ''}`;
+    if (p.status === 'never') return 'not probed yet';
+    return `${p.status || '?'}${p.detail ? ` · ${p.detail}` : ''}`;
+  };
 
   return (
     <div className={`arch${popup ? ' arch--popup' : ''}`}>
@@ -330,10 +367,11 @@ export default function Arch({ popup = false, onOpenDock = null }) {
         <section className="arch__card">
           <div className="arch__card-head">
             <span>Managed agents ({agents.length})</span>
-            <button type="button" className="arch__btn" onClick={() => { setScopeDraft([...managed]); setScopeOpen((o) => !o); }}>scope ✎</button>
+            <button type="button" className="arch__btn" onClick={() => { setScopeDraft([...managed]); setFleetDraft([...managedFleet]); setScopeOpen((o) => !o); }}>scope ✎</button>
           </div>
           {scopeOpen && (
             <div className="arch__scope">
+              <div className="arch__scope-group">{fleet.selfLabel || 'this machine'} (self)</div>
               {repos.map((r) => (
                 <label key={r.id} className="arch__scope-row">
                   <input
@@ -344,6 +382,28 @@ export default function Arch({ popup = false, onOpenDock = null }) {
                   {r.name}{r.isSelf ? ' (harness)' : ''}{r.exists ? '' : ' — missing'}
                 </label>
               ))}
+              {fleetSources.map((s) => {
+                const offerable = s.peer?.status === 'ok' && s.allowSends;
+                return (
+                  <div key={s.id} className="arch__scope-machine">
+                    <div className="arch__scope-group">
+                      <span className="arch__machine">{s.label}</span>
+                      <span className="arch__dim"> · {offerable ? `${(s.repos || []).length} repo(s)` : !s.allowSends && s.peer?.status === 'ok' ? 'allow sends first (Fleet card)' : peerText(s)}</span>
+                    </div>
+                    {offerable && (s.repos || []).map((r) => (
+                      <label key={r.key} className="arch__scope-row">
+                        <input
+                          type="checkbox"
+                          checked={fleetDraft.includes(r.key)}
+                          onChange={(e) => setFleetDraft((d) => (e.target.checked ? [...d, r.key] : d.filter((x) => x !== r.key)))}
+                        />
+                        {r.name}{r.isSelf ? ' (harness)' : ''}{r.exists ? '' : ' — missing'}
+                        <span className={`arch__avail arch__avail--${AVAIL_CLASS[r.availability] || 'dim'}`}>{r.availability}</span>
+                      </label>
+                    ))}
+                  </div>
+                );
+              })}
               <div className="arch__composer-row">
                 <button type="button" className="arch__btn arch__btn--primary" onClick={saveScope}>Save scope</button>
                 <button type="button" className="arch__btn" onClick={() => setScopeOpen(false)}>Cancel</button>
@@ -352,9 +412,12 @@ export default function Arch({ popup = false, onOpenDock = null }) {
           )}
           {agents.length === 0 && !scopeOpen && <div className="arch__dim">No managed repos. Open the scope picker.</div>}
           {agents.map((a) => (
-            <div key={a.repoId} className="arch__agent">
+            <div key={a.key || a.repoId} className="arch__agent" data-machine={a.machine}>
               <div className="arch__agent-top">
-                <span className="arch__agent-name">{a.name}</span>
+                <span className="arch__agent-name">
+                  {a.isLocal === false && <span className="arch__machine" title={`on machine ${a.machine}`}>{a.machine}</span>}
+                  {a.name}
+                </span>
                 <span className={`arch__avail arch__avail--${AVAIL_CLASS[a.availability] || 'dim'}`}>{a.availability}</span>
               </div>
               <div className="arch__dim arch__mono">
@@ -367,9 +430,41 @@ export default function Arch({ popup = false, onOpenDock = null }) {
               </div>
               {a.tabId
                 ? <button type="button" className="arch__link" onClick={() => openDock(a.tabId)}>open dock ↗</button>
-                : <span className="arch__dim">no dock tab yet</span>}
+                : <span className="arch__dim">{a.isLocal === false ? `dock on ${a.machine}` : 'no dock tab yet'}</span>}
             </div>
           ))}
+        </section>
+
+        <section className="arch__card arch__fleet">
+          <div className="arch__card-head">
+            <span>Fleet</span>
+            <span className="arch__dim arch__mono">{fleet.selfLabel}{fleet.version ? ` · ${fleet.version}` : ''}</span>
+          </div>
+          <label className="arch__scope-row">
+            <input
+              type="checkbox"
+              checked={!!fleet.acceptSends}
+              disabled={!state?.gateOpen}
+              onChange={(e) => setAcceptSends(e.target.checked)}
+            />
+            accept fleet sends (let arch agents on other machines task this harness's repos)
+          </label>
+          {fleetSources.length === 0 && <div className="arch__dim">No subscribed harnesses. Add one in the Harness Event Feed app (Local tab), then allow sends here.</div>}
+          {fleetSources.map((s) => (
+            <div key={s.id} className="arch__agent" data-source={s.id}>
+              <div className="arch__agent-top">
+                <span className="arch__agent-name"><span className="arch__machine">{s.label}</span></span>
+                <span className={`arch__avail arch__avail--${s.peer?.status === 'ok' ? 'ok' : s.peer?.status === 'never' ? 'dim' : 'claimed'}`}>{s.peer?.status || '?'}</span>
+              </div>
+              <div className="arch__dim arch__mono arch__wrap">{s.address}</div>
+              <div className="arch__dim">{peerText(s)}{s.status && s.status !== 'active' ? ` · feed ${s.status}` : ''}</div>
+              <label className="arch__scope-row">
+                <input type="checkbox" checked={!!s.allowSends} onChange={(e) => setAllowSends(s.id, e.target.checked)} />
+                allow sends to {s.label}
+              </label>
+            </div>
+          ))}
+          <div className="arch__dim">Both sides opt in: you allow sends to a machine here; its operator accepts fleet sends there. The collector itself only ever reads.</div>
         </section>
 
         <section className="arch__card">

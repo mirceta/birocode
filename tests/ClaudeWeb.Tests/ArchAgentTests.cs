@@ -285,4 +285,144 @@ public class ArchAgentTests : IDisposable
         Assert.Equal("2 min 03 s", ArchAgentService.Elapsed(0, 123_000));
         Assert.Equal("1 h 4 min", ArchAgentService.Elapsed(0, 64 * 60_000));
     }
+
+    // ---- fleet (openspec: add-fleet-arch-agent, task 5.1) -------------------------------------
+
+    private static ArchAgentService.AgentView RemoteView(string sourceId, string label, string id, string avail = "available") =>
+        new(label, id, "name-" + id, "", "main", "main", false, avail, "none", null, null, true, sourceId);
+
+    [Fact]
+    public void Managed_remote_turn_wakes_and_names_the_machine()
+    {
+        var managed = new HashSet<string>(StringComparer.Ordinal) { "r1", ArchStateStore.FleetKey("src-b", "r9") };
+        var events = new[]
+        {
+            Ev(1, "turn.ended", "r9", 4000, new { turnId = "t1", status = "done", numTurns = 2, costUsd = 0.05 }, source: "src-b"),
+        };
+        var names = new Dictionary<string, string> { ["src-b/r9"] = "name-r9 on box-b" };
+        var draft = ArchAgentService.ComposeWakeCore(events, 0, 1, managed, k => names.TryGetValue(k, out var n) ? n : k,
+            new[] { View("r1"), RemoteView("src-b", "box-b", "r9", "busy") }, 10_000);
+        Assert.NotNull(draft);
+        Assert.Equal(new[] { "src-b/r9" }, draft!.RepoIds);
+        Assert.True(draft.Prompt.Contains("name-r9 on box-b: turn ended · done · 2 turn(s) · $0.05"), draft.Prompt);
+        Assert.True(draft.Prompt.Contains("name-r9 (machine box-b) [main] busy"), draft.Prompt);
+        Assert.True(draft.Prompt.Contains("r1 [main] available"), draft.Prompt);
+    }
+
+    [Fact]
+    public void Unmanaged_remote_turns_do_not_wake_but_managed_local_still_does()
+    {
+        var managed = new HashSet<string>(StringComparer.Ordinal) { "r1", ArchStateStore.FleetKey("src-b", "r9") };
+        var remoteOnly = new[] { Ev(1, "turn.ended", "r1", 1000, source: "src-c"), Ev(2, "turn.ended", "r2", 2000, source: "src-b") };
+        Assert.Null(ArchAgentService.ComposeWakeCore(remoteOnly, 0, 2, managed, k => k, Array.Empty<ArchAgentService.AgentView>(), 5000));
+        // A same-named repo id on ANOTHER source is not the managed local one.
+        var lookalike = new[] { Ev(3, "turn.ended", "r1", 3000, source: "src-b") };
+        Assert.Null(ArchAgentService.ComposeWakeCore(lookalike, 0, 3, managed, k => k, Array.Empty<ArchAgentService.AgentView>(), 5000));
+        var local = new[] { Ev(4, "turn.ended", "r1", 4000) };
+        Assert.NotNull(ArchAgentService.ComposeWakeCore(local, 0, 4, managed, k => k, Array.Empty<ArchAgentService.AgentView>(), 5000));
+    }
+
+    [Fact]
+    public void Event_keys_are_bare_locally_and_prefixed_remotely()
+    {
+        Assert.Equal("r1", ArchAgentService.KeyOf(Ev(1, "turn.ended", "r1", 0)));
+        Assert.Equal("src-b/r1", ArchAgentService.KeyOf(Ev(1, "turn.ended", "r1", 0, source: "src-b")));
+        Assert.Null(ArchAgentService.KeyOf(new CollectorService.CollectorEvent(1, 0, "turn.ended", new { name = "x" }, null, "self", "self")));
+    }
+
+    [Fact]
+    public void Fleet_keys_round_trip_and_reject_bare_ids()
+    {
+        Assert.Equal("src/repo", ArchStateStore.FleetKey("src", "repo"));
+        Assert.Equal(("src", "repo"), ArchStateStore.ParseFleetKey("src/repo")!.Value);
+        Assert.Equal(("src", "a/b"), ArchStateStore.ParseFleetKey("src/a/b")!.Value);
+        Assert.Null(ArchStateStore.ParseFleetKey("repo"));
+        Assert.Null(ArchStateStore.ParseFleetKey("src/"));
+        Assert.Null(ArchStateStore.ParseFleetKey("/repo"));
+        Assert.Null(ArchStateStore.ParseFleetKey(null));
+    }
+
+    private static CollectorService.SourceView Src(string id, string label, string kind = "remote", bool allowSends = false) =>
+        new(id, label, kind == "remote" ? "http://" + label : "", kind, true, "active", 0, null, 0, true, allowSends);
+
+    [Theory]
+    [InlineData(null, true, null)]
+    [InlineData("", true, null)]
+    [InlineData("self", true, null)]
+    [InlineData("SELF", true, null)]
+    [InlineData("BOX-A", true, null)]        // this harness's own label
+    [InlineData("box-a", true, null)]
+    [InlineData("box-b", false, "src-b")]     // a subscribed harness by label, case-insensitive
+    [InlineData("BOX-B", false, "src-b")]
+    [InlineData("src-b", false, "src-b")]     // …or by id
+    public void Machine_resolution_table(string? machine, bool isSelf, string? sourceId)
+    {
+        var sources = new[] { Src("self", "BOX-A", "self"), Src("src-b", "box-b"), Src("src-c", "box-c") };
+        var r = ArchAgentService.ClassifyMachine(machine, "BOX-A", sources);
+        Assert.Null(r.Error);
+        Assert.Equal(isSelf, r.IsSelf);
+        Assert.Equal(sourceId, r.Source?.Id);
+    }
+
+    [Fact]
+    public void Unknown_machine_is_named_with_the_known_ones()
+    {
+        var sources = new[] { Src("self", "BOX-A", "self"), Src("src-b", "box-b") };
+        var r = ArchAgentService.ClassifyMachine("nope", "BOX-A", sources);
+        Assert.False(r.IsSelf);
+        Assert.Null(r.Source);
+        Assert.Contains("unknown machine \"nope\"", r.Error);
+        Assert.Contains("box-b", r.Error);
+    }
+
+    [Fact]
+    public void Machine_labels_from_the_wire_are_sanitized()
+    {
+        Assert.Equal("BOX-A", ArchAgentService.SanitizeMachine(" BOX-A "));
+        Assert.Equal("boxa.local_1", ArchAgentService.SanitizeMachine("box a.local_1!"));
+        Assert.Null(ArchAgentService.SanitizeMachine("   "));
+        Assert.Null(ArchAgentService.SanitizeMachine("!!!"));
+        Assert.Equal(40, ArchAgentService.SanitizeMachine(new string('x', 80))!.Length);
+    }
+
+    [Fact]
+    public void Fleet_sends_are_annotated_with_the_sending_machine()
+    {
+        var entry = new AutopilotAuditLog.Entry(1, "r1", "r1", "Run the tests.", 1, "", "arch", Kind: "arch", Phase: "fleet:BOX-A");
+        Assert.Equal("arch@BOX-A", MessageActors.ActorOf(entry));
+        Assert.Equal("arch", MessageActors.ActorOf(entry with { Phase = "work" }));
+        Assert.Equal("arch", MessageActors.ActorOf(entry with { Phase = "fleet:" }));
+        var messages = new List<ChatMessage> { new("user", "Run the tests."), new("assistant", "Done."), new("user", "thanks") };
+        var annotated = MessageActors.Annotate(messages, new[] { entry }, "r1");
+        Assert.Equal("arch@BOX-A", annotated[0].Actor);
+        Assert.Null(annotated[2].Actor);
+    }
+
+    [Fact]
+    public void State_store_persists_fleet_scope_and_the_accept_flag()
+    {
+        var store = new ArchStateStore(new Logger(), _dir);
+        Assert.Empty(store.ManagedFleet);
+        Assert.False(store.AcceptFleetSends);
+        store.SetManagedFleet(new[] { "src-b/r9", "bare-id", " src-b/r9 ", "src-c/r1" });
+        store.SetAcceptFleetSends(true);
+        var again = new ArchStateStore(new Logger(), _dir);
+        Assert.Equal(new[] { "src-b/r9", "src-c/r1" }, again.ManagedFleet);
+        Assert.True(again.AcceptFleetSends);
+    }
+
+    [Fact]
+    public void Mcp_catalogue_offers_machine_on_every_repo_addressed_tool()
+    {
+        var tools = ArchMcpServer.ToolsList();
+        foreach (var name in new[] { "git_state", "read_transcript", "send_task" })
+        {
+            var tool = tools.First(t => t!["name"]!.GetValue<string>() == name)!;
+            Assert.NotNull(tool["inputSchema"]!["properties"]!["machine"]);
+            var required = tool["inputSchema"]!["required"]!.AsArray().Select(n => n!.GetValue<string>()).ToList();
+            Assert.DoesNotContain("machine", required);
+        }
+        Assert.Contains("fleet", ArchAgentService.RolePrompt(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("<!-- arch-role v2 -->", ArchAgentService.RoleVersionMarker);
+    }
 }

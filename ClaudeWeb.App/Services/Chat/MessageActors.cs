@@ -43,10 +43,24 @@ public static class MessageActors
         return result;
     }
 
+    /// <summary>Audit phase prefix of a task received from a fleet arch on another
+    /// harness (openspec add-fleet-arch-agent, D2): <c>fleet:&lt;machine&gt;</c>.</summary>
+    public const string FleetPhasePrefix = "fleet:";
+
     public static string ActorOf(AutopilotAuditLog.Entry e)
     {
         if (string.Equals(e.RepoId, "@arch", StringComparison.Ordinal)) return "wake";
-        if (string.Equals(e.Kind, "arch", StringComparison.Ordinal)) return "arch";
+        if (string.Equals(e.Kind, "arch", StringComparison.Ordinal))
+        {
+            // A fleet send is tagged with the machine it came from — computed
+            // by the RECEIVER from its own audit row, never taken from the wire.
+            if (e.Phase is { } p && p.StartsWith(FleetPhasePrefix, StringComparison.Ordinal) && p.Length > FleetPhasePrefix.Length)
+                return FleetActor(p[FleetPhasePrefix.Length..]);
+            return "arch";
+        }
         return "loop";
     }
+
+    /// <summary>The actor value of a task from a fleet arch on <paramref name="machine"/>.</summary>
+    public static string FleetActor(string machine) => "arch@" + machine;
 }
