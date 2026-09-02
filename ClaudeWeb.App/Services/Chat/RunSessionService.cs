@@ -237,6 +237,20 @@ public class RunSessionService
     /// </summary>
     public event Action<RunCompletedEvent>? RunCompleted;
 
+    /// <summary>What a just-started run looks like, for <see cref="RunStarted"/>.</summary>
+    public sealed record RunStartedEvent(string RepoId, string Lane, long StartedAtMs);
+
+    /// <summary>
+    /// Mirror of <see cref="RunCompleted"/> for the other end of a run: raised
+    /// exactly once per run, right after <see cref="TryBeginRun"/> claims the
+    /// (repo, lane) slot — the single choke point for "a prompt was sent",
+    /// whatever sent it. Same contract: handlers run synchronously on the
+    /// starting thread with each subscriber isolated, exceptions caught and
+    /// logged, never failing the send. First consumer: the dock module's
+    /// last-prompt stamp (openspec dock-recent-tab-emphasis).
+    /// </summary>
+    public event Action<RunStartedEvent>? RunStarted;
+
     /// <summary>
     /// A run "lane" lets one repo host two independent conversations at once: the
     /// default <c>builder</c> (full-capability, the only writer) and a read-only
@@ -267,7 +281,25 @@ public class RunSessionService
             session = new RunSession(repoId, lane, existing?.LastSeq ?? 0);
             session.Completed = OnSessionCompleted;
             _sessions[key] = session;
-            return true;
+        }
+        // Outside the lock: subscribers may take their own locks (the dock
+        // registry does) and must never hold up other runs' slot claims.
+        RaiseRunStarted(repoId, lane);
+        return true;
+    }
+
+    private void RaiseRunStarted(string repoId, string lane)
+    {
+        var handlers = RunStarted;
+        if (handlers is null) return;
+        var evt = new RunStartedEvent(repoId, lane, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        foreach (var handler in handlers.GetInvocationList().Cast<Action<RunStartedEvent>>())
+        {
+            try { handler(evt); }
+            catch (Exception ex)
+            {
+                _logger.Error($"[CHAT] RunStarted handler failed for \"{repoId}\" ({lane}): {ex.Message}");
+            }
         }
     }
 

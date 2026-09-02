@@ -159,6 +159,39 @@
   line-height: 1;
 }
 
+/* Emphasis (openspec dock-recent-tab-emphasis): a tab whose dot shows the
+   running state or the `!` unseen marker renders ~1.5× a normal tab — type,
+   dot, padding, gap, star, max-width — in EVERY filter state, so the tabs that
+   need attention stand out in a crowded strip. Size only: the markup adds the
+   class from the same isRunning/isUnseen helpers as the dot, and the tab's
+   meaning, click and label are untouched. The strip's align-items keeps the
+   mixed sizes on one row; it already overflow-scrolls, so width is free. */
+.dash__docktab--emphasized {
+  gap: 9px;
+  max-width: 270px;
+  padding: 5px 15px;
+  font-size: 18px;
+}
+
+.dash__docktab--emphasized .dash__docktab-dot {
+  width: 12px;
+  height: 12px;
+}
+
+.dash__docktab--emphasized .dash__docktab-dot--unseen {
+  width: 21px;
+  height: 21px;
+  font-size: 15px;
+}
+
+.dash__docktab--emphasized .dash__docktab-branch {
+  font-size: 15px;
+}
+
+.dash__docktab--emphasized .dash__docktab-star {
+  font-size: 18px;
+}
+
 /* Reorder-mode toggle (openspec dock-toolbar-star-and-branch): while pressed,
    tab clicks pick-and-place instead of hide/show. */
 .dash__dockreorder {

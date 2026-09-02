@@ -63,14 +63,32 @@ import { useT } from '../../i18n/LanguageContext';
 // always a superset of what's on screen plus every ★-starred dock, and
 // filters only ever narrow hidden, non-important docks' tabs. The +N
 // excluded count therefore only ever counts hidden, non-important docks.
+//
+// Recent state + emphasis (openspec dock-recent-tab-emphasis): the control's
+// fifth state, `recent`, keeps only tabs whose agent was sent a prompt in the
+// last RECENT_MS (5 h). Its source is the SERVER-owned `lastPromptAt` on the
+// dock tab (stamped at builder-run start, like `unseenResult` is latched at
+// run end) — not the dashboard's per-transcript `lastUserAt`, which is only
+// fetched for grid-visible docks (openspec reduce-connection-appetite) and so
+// would miss exactly the hidden docks this state exists to find. Membership is
+// evaluated against Date.now() on each render; the 5 s /runs poll and the
+// 10 s roster refresh re-render the strip, so tabs enter on the next refresh
+// and age out without a timer. A tab with no `lastPromptAt` matches only All.
+// Independently of the filter, any tab whose dot shows running or `!` gets
+// the size-only `--emphasized` class (~1.5×) in EVERY state — same helpers as
+// the dot, so emphasis and dot can't disagree; label and click are unchanged.
 const mainlike = (branch) => branch === 'main' || branch === 'master';
+const RECENT_MS = 5 * 60 * 60 * 1000;
 
 export default function DockToolbar({ tabs, live, git, onToggle, onReorder }) {
   const { t } = useT();
   const [reordering, setReordering] = useState(false);
   const [pickedId, setPickedId] = useState(null);
-  const [filter, setFilter] = useState('all'); // 'all' | 'main' | 'feature' | 'running'
+  const [filter, setFilter] = useState('all'); // 'all' | 'main' | 'feature' | 'running' | 'recent'
   if (!tabs.length) return null;
+  // Recency is judged against "now" at render; see the header note on why no
+  // timer is needed.
+  const now = Date.now();
 
   const branchOf = (tab) => {
     const raw = git?.[tab.repoId]?.branch;
@@ -88,6 +106,7 @@ export default function DockToolbar({ tabs, live, git, onToggle, onReorder }) {
     if (tab.dashboard !== false) return true;
     if (tab.important) return true;
     if (filter === 'running') return isRunning(tab) || isUnseen(tab);
+    if (filter === 'recent') return !!tab.lastPromptAt && now - tab.lastPromptAt < RECENT_MS;
     const branch = branchOf(tab);
     if (!branch) return false; // unclassifiable: only the All state shows it
     return filter === 'main' ? mainlike(branch) : !mainlike(branch);
@@ -157,6 +176,9 @@ export default function DockToolbar({ tabs, live, git, onToggle, onReorder }) {
           // The visible label stays short ("running"); the title/aria-label
           // spells out that the state also matches unseen `!` results.
           ['running', 'dashboard.dockFilterRunning', '●', 'dashboard.dockFilterRunningTitle'],
+          // Likewise short on the face ("recent"); the title spells out the
+          // 5-hour window.
+          ['recent', 'dashboard.dockFilterRecent', '◷', 'dashboard.dockFilterRecentTitle'],
         ].map(([state, key, glyph, titleKey]) => (
           <button
             key={state}
@@ -209,7 +231,7 @@ export default function DockToolbar({ tabs, live, git, onToggle, onReorder }) {
             role="tab"
             className={`dash__docktab${active ? ' dash__docktab--on' : ''}${
               picked ? ' dash__docktab--picked' : ''
-            }`}
+            }${running || unseen ? ' dash__docktab--emphasized' : ''}`}
             aria-pressed={active}
             aria-label={label}
             title={label}

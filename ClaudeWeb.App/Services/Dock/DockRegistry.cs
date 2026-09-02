@@ -84,6 +84,19 @@ public class DockTab
     public bool UnseenResult { get; set; } = false;
 
     /// <summary>
+    /// When a prompt was last sent to this tab's agent, Unix ms (openspec
+    /// dock-recent-tab-emphasis): stamped on every tab of a repo when a
+    /// BUILDER-lane run begins there, whatever started it (operator send,
+    /// autopilot auto-send, loop resend). Server-owned like
+    /// <see cref="UnseenResult"/>: set by <see cref="DockUnseenResultTrigger"/>
+    /// via <see cref="DockRegistry.MarkPromptedForRepo"/>, never by a PATCH; the
+    /// dock toolbar's "recent" filter reads it — which is why it lives here
+    /// rather than in a client transcript fetch (hidden docks never fetch
+    /// transcripts, by design). Null = no prompt since the field existed.
+    /// </summary>
+    public long? LastPromptAt { get; set; }
+
+    /// <summary>
     /// Stashed prompt ideas jotted down while the agent runs
     /// (plans/prompt-stash.md). Shared across devices like the rest of the tab.
     /// </summary>
@@ -262,6 +275,30 @@ public class DockRegistry
                 }
             if (latched > 0) Save();
             return latched;
+        }
+    }
+
+    /// <summary>
+    /// Stamps <see cref="DockTab.LastPromptAt"/> on every tab of a repo — visible
+    /// or hidden — when a builder run starts there (openspec
+    /// dock-recent-tab-emphasis). Called by <see cref="DockUnseenResultTrigger"/>.
+    /// Returns how many tabs were stamped; nothing is saved when the repo has no
+    /// tabs.
+    /// </summary>
+    public int MarkPromptedForRepo(string repoId, long atMs)
+    {
+        if (string.IsNullOrWhiteSpace(repoId)) return 0;
+        lock (_gate)
+        {
+            var stamped = 0;
+            foreach (var tab in _tabs)
+                if (string.Equals(tab.RepoId, repoId, StringComparison.Ordinal))
+                {
+                    tab.LastPromptAt = atMs;
+                    stamped++;
+                }
+            if (stamped > 0) Save();
+            return stamped;
         }
     }
 
@@ -508,6 +545,7 @@ public class DockRegistry
         DependsOn = t.DependsOn,
         Wide = t.Wide,
         UnseenResult = t.UnseenResult,
+        LastPromptAt = t.LastPromptAt,
         Stash = t.Stash.Select(CloneStash).ToList(),
     };
 
