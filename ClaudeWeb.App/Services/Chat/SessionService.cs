@@ -23,7 +23,11 @@ public record SessionSummary(
 /// model spoke — <c>message.model == "&lt;synthetic&gt;"</c>, e.g. the "No response
 /// requested." repair a resume writes over a dangling user turn. Not an agent
 /// reply: the autopilot loops skip these (openspec: fix-loop-verify-stale-reply).</para>
-public record ChatMessage(string Role, string Text, DateTime? Timestamp = null, bool Synthetic = false);
+// Actor (openspec: add-arch-agent): who authored a USER message — null for a
+// human, "loop" for an autopilot send, "arch" for an arch-agent send, "wake" for
+// the harness's wake prompt in the arch conversation. Restored on reload from the
+// audit log (MessageActors); the CLI transcript itself carries no such field.
+public record ChatMessage(string Role, string Text, DateTime? Timestamp = null, bool Synthetic = false, string? Actor = null);
 
 /// <summary>
 /// One tool call reconstructed from a transcript, in the same shape the live SSE

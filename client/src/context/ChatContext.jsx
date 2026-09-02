@@ -251,17 +251,20 @@ export function ChatProvider({ children }) {
   // one (already-attached client), append it plus a fresh assistant bubble for
   // the reply that follows.
   const addServerPrompt = useCallback(
-    (key, text) =>
+    (key, text, actor) =>
       updateConvo(key, (c) => {
         const msgs = c.messages.slice();
         const last = msgs[msgs.length - 1];
+        // actor (openspec: add-arch-agent): "loop" | "arch" | "wake" — the
+        // bubble renders the tag so provenance is visible live, not only on reload.
+        const user = actor ? { role: 'user', text, actor } : { role: 'user', text };
         if (
           last && last.role === 'assistant' && last.text === '' &&
           (!last.steps || last.steps.length === 0)
         ) {
-          msgs.splice(msgs.length - 1, 0, { role: 'user', text });
+          msgs.splice(msgs.length - 1, 0, user);
         } else {
-          msgs.push({ role: 'user', text }, { role: 'assistant', text: '', steps: [] });
+          msgs.push(user, { role: 'assistant', text: '', steps: [] });
         }
         return { ...c, messages: msgs, streaming: true };
       }),
@@ -327,7 +330,7 @@ export function ChatProvider({ children }) {
           // the EXACT composition the CLI received (openspec
           // queue-loop-prompt-transparency) — the chat renders it verbatim, the
           // same way the transcript reload does.
-          if (evt.text) addServerPrompt(key, evt.text);
+          if (evt.text) addServerPrompt(key, evt.text, evt.actor);
           break;
         case 'thinking':
           addThinking(key, evt.text);
@@ -776,7 +779,7 @@ export function ChatProvider({ children }) {
     try {
       const data = await apiGet(`/sessions/${id}/messages`, { repoId });
       const loaded = Array.isArray(data)
-        ? data.map((m) => ({ role: m.role, text: m.text }))
+        ? data.map((m) => (m.actor ? { role: m.role, text: m.text, actor: m.actor } : { role: m.role, text: m.text }))
         : [];
       updateConvo(key, {
         messages: loaded.length > 0

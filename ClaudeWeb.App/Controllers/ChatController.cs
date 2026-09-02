@@ -38,7 +38,9 @@ public class ChatController : ControllerBase
 
     private readonly ChromeGateService _chrome;
 
-    public ChatController(CliRunnerService cli, RunSessionService runs, SessionService sessions, RepositoryResolver repos, AuditService audit, ToolsConfigStore tools, RepositoryRegistry registry, Logger logger, ChromeGateService chrome)
+    private readonly Services.Autopilot.AutopilotAuditLog _sendAudit;
+
+    public ChatController(CliRunnerService cli, RunSessionService runs, SessionService sessions, RepositoryResolver repos, AuditService audit, ToolsConfigStore tools, RepositoryRegistry registry, Logger logger, ChromeGateService chrome, Services.Autopilot.AutopilotAuditLog sendAudit)
     {
         _cli = cli;
         _runs = runs;
@@ -49,6 +51,7 @@ public class ChatController : ControllerBase
         _registry = registry;
         _logger = logger;
         _chrome = chrome;
+        _sendAudit = sendAudit;
     }
 
     /// <summary>Request body for POST /api/chat. <c>Lane</c> selects the run lane:
@@ -340,7 +343,9 @@ public class ChatController : ControllerBase
 
         var messages = _sessions.GetMessages(repo.Path, id);
         _logger.Info($"[CHAT] Loaded {messages.Count} message(s) for session {id}");
-        return Ok(messages);
+        // Restore each non-human user message's actor tag from the send audit
+        // (openspec: add-arch-agent) — loop and arch sends stay attributed after a reload.
+        return Ok(MessageActors.Annotate(messages, _sendAudit.Recent(5000), repo.Id));
     }
 
     /// <summary>

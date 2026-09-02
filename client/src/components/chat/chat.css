@@ -354,6 +354,21 @@
   white-space: pre-wrap;
 }
 
+/* Actor tag on non-human user bubbles (openspec: add-arch-agent): loop / arch /
+   wake. Sits above the text inside the bubble so it is visible in every dock. */
+.msg__actor {
+  display: block;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.85;
+  margin-bottom: 3px;
+}
+.msg--actor-arch .msg__bubble { background: #5b45b0; }
+.msg--actor-wake .msg__bubble { background: #3a3550; color: #d7dae3; font-style: italic; }
+.msg--actor-loop .msg__bubble { background: #9a4a7a; }
+
 /* Links the user pasted, shown on the colored user bubble -- keep them
    readable (white + underlined) and wrap long URLs instead of overflowing. */
 .msg__text a {
