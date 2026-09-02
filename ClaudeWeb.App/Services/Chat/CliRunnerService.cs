@@ -82,7 +82,8 @@ public class CliRunnerService
         string? repoId = null,
         string? repoName = null,
         string? mcpConfigJson = null,
-        bool browser = false)
+        bool browser = false,
+        IReadOnlyList<string>? disallowedTools = null)
     {
         var resuming = !string.IsNullOrWhiteSpace(sessionId);
 
@@ -125,7 +126,7 @@ public class CliRunnerService
                 _logger.Info("[CLI] MCP tools config injected for this run");
             }
 
-            var psi = CreateProcessInfo(message, sessionId, workingDirectory, model, readOnly, mcpConfigPath, browser);
+            var psi = CreateProcessInfo(message, sessionId, workingDirectory, model, readOnly, mcpConfigPath, browser, disallowedTools);
             _logger.Info(resuming
                 ? $"[CLI] Resuming session {Short(sessionId!)} in {workingDirectory}"
                 : $"[CLI] Starting new session in {workingDirectory}");
@@ -709,7 +710,7 @@ public class CliRunnerService
         return cmdFallback ?? "claude.cmd";
     }
 
-    private static ProcessStartInfo CreateProcessInfo(string message, string? sessionId, string? workingDirectory, string? model = null, bool readOnly = false, string? mcpConfigPath = null, bool browser = false)
+    private static ProcessStartInfo CreateProcessInfo(string message, string? sessionId, string? workingDirectory, string? model = null, bool readOnly = false, string? mcpConfigPath = null, bool browser = false, IReadOnlyList<string>? disallowedTools = null)
     {
         var psi = new ProcessStartInfo
         {
@@ -779,6 +780,16 @@ public class CliRunnerService
         else
         {
             psi.ArgumentList.Add("--dangerously-skip-permissions");
+        }
+
+        // Structural tool denials (openspec add-arch-agent, D6): the arch agent's
+        // turns never get edit/write/shell tools, whatever the permission mode.
+        // Placed LAST — the flag is variadic and would otherwise swallow the
+        // arguments after it. One comma-joined value keeps it to a single token.
+        if (disallowedTools is { Count: > 0 })
+        {
+            psi.ArgumentList.Add("--disallowedTools");
+            psi.ArgumentList.Add(string.Join(",", disallowedTools));
         }
 
         // Force Max-plan / CLI auth -- never pick up an API key from the env.
