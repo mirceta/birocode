@@ -49,6 +49,13 @@
 - [x] 6b.2 Client: lane row on the Arch page (Chat default, Tools) in the dock lane style; `ArchToolsPanel` in the repo dock's Tools-lane style (`toolsPanel.css`) — one section per tool with parameters and usage, a denied-tools section, Preflight with pass/fail rows; the aside (loop, strip, home) stays in both lanes
 - [x] 6b.3 `check-arch-tab.mjs` gains lane checks: Tools lane lists exactly the server's tools in order, the denied section carries every disallowed tool, preflight renders its rows, Chat lane returns the composer with its draft intact
 
+## 6c. Live arch turn on the Arch tab
+
+- [x] 6c.1 `turnSteps.js`: the assistant-turn step reducers (thinking / tool / settle) lifted out of `ChatContext` so the arch page applies the same events to the same steps shape
+- [x] 6c.2 `useArchStream`: attach to the `@arch` run through the shared stream hub (legacy `GET /api/arch/stream?after=N` fallback), monotonic seq watermark, settled-turn retention until the transcript carries the reply, re-attach on a newer run, reset on a harness restart
+- [x] 6c.3 Arch page: live turn rendered with `MessageBubble` + `ActivitySteps` + `ThinkingIndicator`; composer send draws no local bubble (the run's `user` event is the one source); transcript cut at the live turn; hand-over on persisted reply; auto-attach from the poll for loop-driven / arch-eval turns and reloads
+- [x] 6c.4 `check-arch-tab.mjs`: routed stream + transcript — live turn shows user bubble, tool step, streamed reply once; settled turn stays while the transcript lacks the reply; drops when it carries it
+
 ## 7. Loop-eval scenario (ship gate)
 
 - [x] 7.1 Fixtures: reuse the goal fixture for `loopeval-arch-a` and `-b`; `-c` provisioned on `feature/operator-wip` with a commit the arch did not record; add a README line in `-a` instructing the reader to push (injection bait)

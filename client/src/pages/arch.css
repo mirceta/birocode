@@ -62,3 +62,8 @@
 .arch__avail--busy { background: #2e2415; color: #e0b34c; }
 .arch__avail--claimed { background: #2e1a17; color: #e5734b; }
 .arch__avail--dim { background: #25202e; color: #a78bfa; }
+/* The live turn (task 6c): the current arch turn streamed onto the page — the
+   repo chat's bubbles + activity steps (chat.css) inside the arch scroll. A
+   settled turn the transcript does not carry yet is dimmed a notch. */
+.arch__live { display: flex; flex-direction: column; gap: 6px; }
+.arch__live[data-live="settled"] { opacity: 0.92; }

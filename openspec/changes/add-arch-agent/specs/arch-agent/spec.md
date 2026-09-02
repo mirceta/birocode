@@ -138,7 +138,11 @@ distinguished as system-originated), a managed-agents strip with each repo's
 availability, branch, last actor, elapsed time, and a control that opens the repo's
 real dock, a scope picker for the managed set, and the loop header controls (arm,
 suggest/drive, cap, Stop). Unmanaged repos SHALL be invisible to the arch agent's
-tools.
+tools. The arch agent's CURRENT turn SHALL be shown live in the conversation —
+its user message from the run's own event, its thinking and tool steps, and the
+reply as it streams — with the same components the repo chat uses, and SHALL be
+shown once: the polled transcript is cut at that turn, and the live copy is
+released only when the transcript carries a reply after it.
 
 #### Scenario: Operator manages two of three repos
 - **WHEN** the Operator selects two repos in the scope picker
@@ -147,6 +151,14 @@ tools.
 #### Scenario: Stop is one click
 - **WHEN** the Operator presses Stop in the Arch tab
 - **THEN** the arch loop is disarmed immediately, the strip keeps showing any repo turn still running, and the Basic-mode UI is unaffected
+
+#### Scenario: A running turn is shown live
+- **WHEN** an arch turn is running (composer send, loop wake, or arch-eval) and the Operator opens or reloads the Arch tab
+- **THEN** the page attaches to the `@arch` run, shows the turn's user bubble, thinking and tool steps, and the reply streaming in, and the transcript below it never repeats that turn
+
+#### Scenario: The reply hands over to the transcript
+- **WHEN** the live turn ends and the transcript carries a reply after its user message
+- **THEN** the live copy is dropped and the transcript's reply stands alone; while the transcript has no reply after that message, the live copy stays
 
 ### Requirement: The Arch tab has a Chat lane and a Tools lane
 The Arch tab's main column SHALL offer two lanes in the style of a repo dock's lane

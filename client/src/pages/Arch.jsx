@@ -4,16 +4,48 @@ import { apiGet, apiPost } from '../api/client';
 import { useFeature } from '../context/UiModeContext';
 import { useDock } from '../context/DockContext';
 import MessageBubble from '../components/chat/MessageBubble';
+import ActivitySteps from '../components/chat/ActivitySteps';
+import ThinkingIndicator from '../components/chat/ThinkingIndicator';
 import ArchToolsPanel from '../components/arch/ArchToolsPanel';
+import useArchStream from '../hooks/useArchStream';
+import '../components/chat/chat.css';
 import './arch.css';
 
 // The Arch tab (openspec: add-arch-agent, D9): the arch agent's own surface.
 // Left: its conversation (operator messages, arch replies, harness wake-ups
 // rendered as wake bubbles). Right: the managed-agents strip (availability,
 // branch, last actor, elapsed, open-dock), the scope picker, the loop header
-// (arm / suggest|drive / cap / Stop) and the home repo. Everything reads from
-// GET /api/arch on a short poll — the transcript is the durable record and the
-// CLI writes it as the turn goes, so a poll is enough for a middle manager.
+// (arm / suggest|drive / cap / Stop) and the home repo. State and the settled
+// transcript read from GET /api/arch on a short poll; the CURRENT turn is live
+// (task 6c): useArchStream attaches to the @arch run and the page renders its
+// thinking / tool steps / streamed reply with the repo chat's own components,
+// then hands over to the transcript once it carries the reply.
+
+// The live turn and the polled transcript describe the same conversation, so
+// the page shows each turn once: the transcript is cut at the live turn's own
+// user message (the CLI writes the transcript as the turn goes), and a settled
+// live turn is dropped only once the transcript holds a reply after that
+// message — a reply the CLI never persisted stays on screen until the next
+// turn starts. The running turn is always the transcript's LAST user message,
+// so only that one is compared (a repeated prompt earlier on is not a match).
+function splitLive(messages, turn) {
+  if (!turn) return { visible: messages, persisted: false };
+  let idx = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'user') { idx = i; break; }
+  }
+  const matches = idx !== -1 && !!turn.user && messages[idx].text === turn.user.text;
+  if (!matches) {
+    // No user event in the live turn: the transcript's trailing reply is the
+    // only way to tell it has been persisted.
+    const last = messages[messages.length - 1];
+    const sameReply = !turn.user && !!last && last.role === 'assistant'
+      && !!last.text && last.text.trim() === turn.assistant.text.trim();
+    return { visible: sameReply ? messages.slice(0, -1) : messages, persisted: sameReply };
+  }
+  const persisted = messages.slice(idx + 1).some((m) => m.role === 'assistant' && m.text);
+  return { visible: messages.slice(0, idx), persisted };
+}
 
 const POLL_MS = 3000;
 const AVAIL_CLASS = { available: 'ok', busy: 'busy', claimed: 'claimed', unmanaged: 'dim' };
@@ -67,6 +99,11 @@ export default function Arch({ popup = false, onOpenDock = null }) {
     }
   }, []);
 
+  // The live turn: when its stream ends, re-pull the transcript at once so the
+  // hand-over (settled live turn -> persisted reply) does not wait for the poll.
+  const stream = useArchStream({ onEnded: load });
+  const { turn } = stream;
+
   useEffect(() => {
     if (!enabled) return undefined;
     alive.current = true;
@@ -76,9 +113,32 @@ export default function Arch({ popup = false, onOpenDock = null }) {
     return () => { alive.current = false; clearInterval(t); clearInterval(tick); };
   }, [enabled, load]);
 
+  // Attach whenever the server has a running arch turn with events this page
+  // has not consumed — page load, a reload mid-turn, a loop-driven wake, an
+  // arch-eval send (the run's `user` event puts its seq ahead at once). The
+  // seq test is what makes a stale "running" read during hand-over harmless:
+  // the run this page just finished reading is not ahead of it, so a settled
+  // copy is never replaced by an empty one. A seq that went backwards means
+  // the harness restarted.
+  const run = state?.session?.run;
+  useEffect(() => {
+    if (!run) return;
+    stream.noteServerSeq(run.lastSeq);
+    if (run.status !== 'running' || stream.attached() || !stream.behind(run.lastSeq)) return;
+    stream.attach();
+  }, [run, stream]);
+
+  const { visible, persisted } = splitLive(messages, turn);
+
+  // Hand-over: the transcript now carries the settled turn's reply.
+  useEffect(() => {
+    if (turn && !turn.active && persisted) stream.discard();
+  }, [turn, persisted, stream]);
+
+  const liveLen = turn ? turn.assistant.text.length + turn.assistant.steps.length : 0;
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [messages.length]);
+  }, [messages.length, liveLen]);
 
   // Suggest mode: the engine's pending wake prompt pre-fills the composer.
   const pending = state?.loop?.pendingPrompt || '';
@@ -97,13 +157,15 @@ export default function Arch({ popup = false, onOpenDock = null }) {
     try {
       await apiPost('/arch/send', { text });
       setDraft('');
-      setMessages((m) => [...m, { role: 'user', text, actor: 'human' }]);
       setError('');
+      // The user bubble comes from the run's own `user` event (the harness
+      // emits it for every arch send), never drawn locally — one source.
+      stream.attach();
       setTimeout(load, 800);
     } catch (e) {
       setError(e?.message || String(e));
     }
-  }, [draft, load]);
+  }, [draft, load, stream]);
 
   const loopAction = useCallback(async (body) => {
     try {
@@ -197,12 +259,21 @@ export default function Arch({ popup = false, onOpenDock = null }) {
               <p className="arch__dim">Its home repo: <code>{state?.home?.path}</code>{state?.home?.exists ? '' : ' (created on first arm)'}</p>
             </div>
           )}
-          {messages.map((m, i) => (
+          {visible.map((m, i) => (
             <div key={i} className="turn">
               <MessageBubble role={m.role} text={m.text} actor={m.actor} />
             </div>
           ))}
-          {running && <div className="arch__thinking">arch agent is working…</div>}
+          {turn && (
+            <div className="turn arch__live" data-live={turn.active ? 'on' : 'settled'}>
+              {turn.user && <MessageBubble role="user" text={turn.user.text} actor={turn.user.actor} />}
+              {turn.assistant.steps.length > 0 && <ActivitySteps steps={turn.assistant.steps} />}
+              {turn.assistant.text && <MessageBubble role="assistant" text={turn.assistant.text} />}
+              {turn.active && !turn.assistant.text && turn.assistant.steps.length === 0 && <ThinkingIndicator />}
+              {turn.error && <div className="arch__banner arch__banner--err">{turn.error}</div>}
+            </div>
+          )}
+          {running && !turn && <div className="arch__thinking">arch agent is working…</div>}
         </div>
         <div className="arch__composer">
           <textarea

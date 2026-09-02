@@ -148,7 +148,10 @@ Backed by `ArchController`: `GET /api/arch` (state), `POST /api/arch/send`,
 `POST /api/arch/scope`, `POST /api/arch/loop` (arm/disarm/mode/cap), and the arch
 conversation streams through the existing run-session attach endpoint under the
 reserved repo id `@arch`. *Alternative rejected:* a dock tab — docks are repo-bound
-by construction (files lane, git row, event console).
+by construction (files lane, git row, event console). The current turn is
+live on the page (task 6c): `useArchStream` rides the shared multiplexed stream hub
+under `@arch` and the page renders the turn with the repo chat's components; the
+transcript poll remains the durable record and takes over once it carries the reply.
 
 **D10 — Ship gate is `tests/loop-eval/arch.mjs`.** Live and isolated modes like the
 other scenarios. Fixtures: two copies of the goal fixture (`loopeval-arch-a`,
