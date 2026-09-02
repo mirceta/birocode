@@ -10,7 +10,10 @@
       (grep of `dist/assets` hits "Fable 5.1").
 
 ## 2. Verify & ship
-- [ ] 2.1 Deploy via `swap.ps1`; verify on live :5099 in a real browser that
+- [x] 2.1 Deploy via `swap.ps1`; verify on live :5099 in a real browser that
       the dropdown lists Fable 5.1 and it is the default when no model is
-      saved.
-- [ ] 2.2 Push branch + open PR (main is merge-protected; user merges).
+      saved — deployed 2026-09-02 08:49 (`-NoArm`, autonomous run; health 200,
+      lastgood snapshot taken), verified with
+      `.claudeweb-preview/playwright/check-fable51-live.mjs` (PASS + screenshot).
+- [x] 2.2 Push branch + open PR (main is merge-protected; user merges) —
+      PR #54.
