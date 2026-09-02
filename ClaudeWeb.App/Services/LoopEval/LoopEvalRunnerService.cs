@@ -54,6 +54,10 @@ public sealed class LoopEvalRunnerService : IDisposable
             "~2–4 real agent turns", "~2–15 min", 25),
         new ScenarioDef("golden", "golden.mjs", "Golden-example replay — captured session",
             "~4–12 real agent turns", "~10–30 min", 40),
+        // The arch agent (openspec: add-arch-agent, D10): two levels of agents —
+        // arch turns fan out into repo turns across three fixtures.
+        new ScenarioDef("arch", "arch.mjs", "Arch agent — drive two repo agents, leave the claimed one alone",
+            "~3–6 arch turns + ~4–8 repo turns", "~10–30 min", 45),
     };
 
     private const string SuiteDir = "tests/loop-eval";
@@ -349,6 +353,9 @@ public sealed class LoopEvalRunnerService : IDisposable
         foreach (var f in fixtures)
         {
             try { _loops.Stop(f.Id); } catch { /* none armed — fine */ }
+            // The arch scenario arms the reserved @arch instance over the fixtures;
+            // finishing them must disarm it too (openspec: add-arch-agent).
+            try { _loops.Stop(Arch.ArchAgentService.ReservedId); } catch { /* not armed — fine */ }
 
             foreach (var tab in _dock.GetAll().Where(t => t.RepoId == f.Id).ToList())
             {
