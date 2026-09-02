@@ -545,6 +545,8 @@
   "dashboard.dockFilterFeature": "main disi",
   "dashboard.dockFilterRunning": "calisiyor",
   "dashboard.dockFilterRunningTitle": "calisiyor veya gorulmemis sonuc",
+  "dashboard.dockFilterRecent": "son 5 saat",
+  "dashboard.dockFilterRecentTitle": "son 5 saat icinde istem gonderilen",
   "dashboard.dockFilterHidden": "{count} tanesi filtreyle gizli",
   "dashboard.allHidden": "Tum dock'lar gizli. Birini gostermek icin yukaridaki Dock'lar cubugunu kullanin.",
   "dashboard.markWide": "Iki yatay alana genislet",

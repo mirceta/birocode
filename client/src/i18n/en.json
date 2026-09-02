@@ -545,6 +545,8 @@
   "dashboard.dockFilterFeature": "not main",
   "dashboard.dockFilterRunning": "running",
   "dashboard.dockFilterRunningTitle": "running or unseen result",
+  "dashboard.dockFilterRecent": "recent",
+  "dashboard.dockFilterRecentTitle": "prompted in the last 5 hours",
   "dashboard.dockFilterHidden": "{count} hidden by filter",
   "dashboard.allHidden": "Every dock is hidden. Use the Docks toolbar above to show one.",
   "dashboard.markWide": "Enlarge to two horizontal spaces",
