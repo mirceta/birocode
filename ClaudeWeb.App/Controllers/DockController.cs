@@ -57,6 +57,11 @@ public class DockController : ControllerBase
         // unseen-result amendment): read-only for clients — set at turn end by
         // DockUnseenResultTrigger, cleared when a PATCH turns `dashboard` on.
         unseenResult = t.UnseenResult,
+        // Server-owned too (openspec dock-recent-tab-emphasis): Unix ms of the
+        // last builder-run start on this tab's repo, stamped by
+        // DockUnseenResultTrigger; PatchRequest has no such field, so clients
+        // cannot write it. Null until the first prompt after the field existed.
+        lastPromptAt = t.LastPromptAt,
         stash = t.Stash.Select(StashDto),
     };
 

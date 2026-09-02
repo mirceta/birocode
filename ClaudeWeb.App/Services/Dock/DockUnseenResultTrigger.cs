@@ -42,13 +42,36 @@ public class DockUnseenResultTrigger : IHostedService
     public Task StartAsync(CancellationToken cancellationToken)
     {
         _runs.RunCompleted += OnRunCompleted;
+        _runs.RunStarted += OnRunStarted;
         return Task.CompletedTask;
     }
 
     public Task StopAsync(CancellationToken cancellationToken)
     {
         _runs.RunCompleted -= OnRunCompleted;
+        _runs.RunStarted -= OnRunStarted;
         return Task.CompletedTask;
+    }
+
+    // The other end of the run (openspec dock-recent-tab-emphasis): a builder
+    // run starting IS "a prompt was sent to this agent", so stamp LastPromptAt
+    // on every tab of the repo — hidden ones included, they're the point: the
+    // toolbar's "recent" filter is how the operator finds a hidden agent they
+    // used a few hours ago. Same lane scope and same never-throws rule as the
+    // completion latch above.
+    private void OnRunStarted(RunSessionService.RunStartedEvent e)
+    {
+        try
+        {
+            if (e.Lane != "builder") return;
+            var stamped = _dock.MarkPromptedForRepo(e.RepoId, e.StartedAtMs);
+            if (stamped > 0)
+                _logger.Info($"[DOCK] Last-prompt stamp set on {stamped} tab(s) for repo {e.RepoId}.");
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[DOCK] Last-prompt trigger failed: {ex.Message}");
+        }
     }
 
     private void OnRunCompleted(RunSessionService.RunCompletedEvent e)
