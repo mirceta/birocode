@@ -3,6 +3,7 @@ import { useFeature } from '../../context/UiModeContext';
 const MODEL_KEY = 'claudeweb_model';
 
 const MODELS = [
+  { id: 'claude-fable-5-1', label: 'Fable 5.1' },
   { id: 'claude-fable-5', label: 'Fable 5' },
   { id: 'claude-opus-4-8', label: 'Opus 4.8' },
   { id: 'claude-opus-4-7', label: 'Opus 4.7' },
