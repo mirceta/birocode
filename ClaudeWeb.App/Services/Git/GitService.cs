@@ -120,7 +120,29 @@ public partial class GitService
     /// redirected. Extra <paramref name="literalArgs"/> are passed via the
     /// ArgumentList so values (e.g. commit messages) need no manual quoting/escaping.
     /// </summary>
+    // Bound on concurrent git.exe processes (openspec: reduce-transcript-io, D4):
+    // a burst of pollers (dashboard git rows, arch tick, Git tab) must not fan out
+    // into dozens of simultaneous spawns.
+    private static readonly SemaphoreSlim GitSlots = new(4, 4);
+
+    // Sub-commands that change the repo state the memoized Status describes.
+    private static readonly HashSet<string> MutatingCommands = new(StringComparer.Ordinal)
+    {
+        "add", "commit", "checkout", "switch", "pull", "fetch", "merge", "rebase",
+        "push", "config", "reset", "stash", "restore", "branch", "tag", "cherry-pick", "revert",
+    };
+
     private GitOutput RunGit(string workingDir, string arguments, params string[] literalArgs)
+    {
+        var first = arguments.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
+        if (MutatingCommands.Contains(first)) InvalidateStatus(workingDir);
+
+        GitSlots.Wait();
+        try { return RunGitCore(workingDir, arguments, literalArgs); }
+        finally { GitSlots.Release(); }
+    }
+
+    private GitOutput RunGitCore(string workingDir, string arguments, params string[] literalArgs)
     {
         var psi = new ProcessStartInfo
         {
@@ -256,7 +278,54 @@ public partial class GitService
     /// runs first so ahead/behind reflects the real origin; a failed fetch is
     /// reported via FetchError rather than failing the status call.
     /// </summary>
+    // Memoized status (openspec: reduce-transcript-io, D4): one Status is 9–17
+    // git processes (status, rev-parse ×N, rev-list ×2, config ×4, FETCH_HEAD
+    // stat), and the arch loop, the arch state endpoint, the dashboard git rows
+    // and the Git tab all ask for the same repo within the same few seconds.
+    // A no-fetch call serves the memo for StatusTtl; concurrent callers share one
+    // computation (per-dir lock); a fetch call bypasses and refreshes it; any
+    // mutating git command through this service (see RunGit) invalidates it.
+    private static readonly TimeSpan StatusTtl = TimeSpan.FromSeconds(5);
+    private readonly object _statusGate = new();
+    private readonly Dictionary<string, (StatusResult Result, DateTime AtUtc)> _statusMemo = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, object> _statusLocks = new(StringComparer.OrdinalIgnoreCase);
+
     public StatusResult Status(string workingDir, bool fetch = false)
+    {
+        var key = Path.GetFullPath(string.IsNullOrEmpty(workingDir) ? "." : workingDir);
+        object dirLock;
+        lock (_statusGate)
+        {
+            if (!fetch && _statusMemo.TryGetValue(key, out var hit) && DateTime.UtcNow - hit.AtUtc < StatusTtl)
+                return hit.Result;
+            if (!_statusLocks.TryGetValue(key, out dirLock!)) _statusLocks[key] = dirLock = new object();
+        }
+        lock (dirLock)
+        {
+            lock (_statusGate)
+            {
+                // Another caller may have computed it while we waited.
+                if (!fetch && _statusMemo.TryGetValue(key, out var hit) && DateTime.UtcNow - hit.AtUtc < StatusTtl)
+                    return hit.Result;
+            }
+            var result = ComputeStatus(workingDir, fetch);
+            lock (_statusGate) _statusMemo[key] = (result, DateTime.UtcNow);
+            return result;
+        }
+    }
+
+    /// <summary>Drops the memoized status of a working directory (after a git
+    /// action that changed it). Public so callers that mutate a repo outside this
+    /// service can keep the next Status honest.</summary>
+    public void InvalidateStatus(string workingDir)
+    {
+        string key;
+        try { key = Path.GetFullPath(string.IsNullOrEmpty(workingDir) ? "." : workingDir); }
+        catch { return; }
+        lock (_statusGate) _statusMemo.Remove(key);
+    }
+
+    private StatusResult ComputeStatus(string workingDir, bool fetch)
     {
         var fetched = false;
         string? fetchError = null;

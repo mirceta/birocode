@@ -119,15 +119,57 @@ public class AuditService
         Repo = repo,
     };
 
+    // The day file is held open (shared read) instead of opened and closed per
+    // line — one tool call = one line, and a busy agent emits many per second
+    // (openspec: reduce-transcript-io, D5). Swapped when the day changes;
+    // re-opened after a failed write.
+    private StreamWriter? _writer;
+    private string? _writerPath;
+
     private void Append(AuditEntry entry)
     {
         var line = JsonSerializer.Serialize(entry, JsonOpts);
         var path = Path.Combine(_dir, $"{entry.Ts:yyyy-MM-dd}.jsonl");
         lock (_gate)
         {
-            try { File.AppendAllText(path, line + "\n"); }
-            catch (Exception ex) { _logger.Error($"[AUDIT] Failed to append {path}: {ex.Message}"); }
+            try
+            {
+                if (_writer is null || !string.Equals(_writerPath, path, StringComparison.OrdinalIgnoreCase))
+                    OpenWriter(path);
+                _writer!.WriteLine(line);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"[AUDIT] Failed to append {path}: {ex.Message}");
+                try { OpenWriter(path); _writer!.WriteLine(line); }
+                catch { CloseWriter(); }
+            }
         }
+    }
+
+    private void OpenWriter(string path)
+    {
+        CloseWriter();
+        var fs = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
+        _writer = new StreamWriter(fs, new System.Text.UTF8Encoding(false)) { AutoFlush = true };
+        _writerPath = path;
+    }
+
+    private void CloseWriter()
+    {
+        try { _writer?.Dispose(); } catch { }
+        _writer = null;
+        _writerPath = null;
+    }
+
+    /// <summary>Reads every line of a file that this service may hold open for
+    /// append (a plain File.ReadAllLines would hit a sharing violation).</summary>
+    private static IEnumerable<string> ReadSharedLines(string path)
+    {
+        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(fs);
+        string? line;
+        while ((line = reader.ReadLine()) != null) yield return line;
     }
 
     // --- read-back (desktop Activity tab only) --------------------------------
@@ -154,7 +196,7 @@ public class AuditService
         lock (_gate)
         {
             if (!File.Exists(path)) return result;
-            foreach (var line in File.ReadAllLines(path))
+            foreach (var line in ReadSharedLines(path))
             {
                 if (string.IsNullOrWhiteSpace(line)) continue;
                 try

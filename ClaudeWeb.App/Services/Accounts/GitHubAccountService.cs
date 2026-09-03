@@ -23,7 +23,10 @@ public partial class GitHubAccountService
     private readonly Logger _logger;
 
     private const int TimeoutMs = 5000;
-    private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(5);
+    // 5 min (was 5 s): the chip polls every 5 s, and each probe spawns two gh.exe
+    // processes plus a GitHub API round-trip; Refresh() still forces a probe the
+    // moment a credential changes (openspec: reduce-transcript-io, D4).
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(5);
 
     private readonly object _gate = new();
     private GitHubAccountStatus? _cached;

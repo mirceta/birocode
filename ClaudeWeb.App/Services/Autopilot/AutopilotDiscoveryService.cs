@@ -62,12 +62,24 @@ public class AutopilotDiscoveryService
         int UserMessagesScanned,
         IReadOnlyList<RoutinePrompt> Routines);
 
+    // What one transcript contributes to the mining pass, kept per file and keyed
+    // by the file's (length, last-write time) so a refresh re-parses only the
+    // transcripts that changed (openspec: reduce-transcript-io, D3). A
+    // contribution is one qualifying human-typed message: its group key, the
+    // original text, and the assistant snippet that preceded it (if any).
+    private sealed record Contribution(string Key, string Original, string? Sample);
+    private sealed record Mined(long Length, DateTime LastWriteUtc, int UserMessages, IReadOnlyList<Contribution> Contributions);
+    private readonly object _minedGate = new();
+    private readonly Dictionary<string, Mined> _mined = new(StringComparer.OrdinalIgnoreCase);
+
     public DiscoveryResult Discover()
     {
         // key (normalised text) -> accumulator
         var groups = new Dictionary<string, Group>();
         var sessionsScanned = 0;
         var userMessages = 0;
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var reparsed = 0;
 
         foreach (var repo in _repos.GetAll().Where(r => r.Exists))
         {
@@ -75,43 +87,39 @@ public class AutopilotDiscoveryService
             try { sessions = _sessions.ListSessions(repo.Path); }
             catch (Exception ex) { _logger.Error($"[AUTOPILOT] list sessions failed for {repo.Name}: {ex.Message}"); continue; }
 
+            var dir = SessionService.ProjectsDirectoryFor(repo.Path);
             foreach (var session in sessions.Take(MaxSessionsPerRepo))
             {
-                var msgs = _sessions.GetMessages(repo.Path, session.Id);
-                if (msgs.Count == 0) continue;
+                var path = Path.Combine(dir, session.Id + ".jsonl");
+                seen.Add(path);
+                var mined = MineSession(repo.Path, session.Id, path, ref reparsed);
+                if (mined is null || mined.UserMessages == 0 && mined.Contributions.Count == 0) continue;
                 sessionsScanned++;
+                userMessages += mined.UserMessages;
 
-                string? lastAssistant = null;
-                foreach (var m in msgs)
+                foreach (var c in mined.Contributions)
                 {
-                    if (m.Role == "assistant")
-                    {
-                        lastAssistant = m.Text;
-                        continue;
-                    }
-
-                    // m.Role == "user": a human-typed reply.
-                    userMessages++;
-                    var key = Normalise(m.Text);
-                    // Must be short, not system-noise, and contain a letter (drops bare
-                    // list fragments like "1." that normalise to digits/punctuation).
-                    if (key.Length == 0 || key.Length > MaxRoutineChars
-                        || !key.Any(char.IsLetter) || IsNoise(key)) continue;
-
-                    if (!groups.TryGetValue(key, out var g))
+                    if (!groups.TryGetValue(c.Key, out var g))
                     {
                         g = new Group();
-                        groups[key] = g;
+                        groups[c.Key] = g;
                     }
                     g.Count++;
                     g.SessionIds.Add(session.Id);
                     g.RepoIds.Add(repo.Id);
-                    g.BumpOriginal(m.Text.Trim());
-                    if (lastAssistant != null && g.Samples.Count < MaxSampleContexts)
-                        g.Samples.Add(Snippet(lastAssistant));
+                    g.BumpOriginal(c.Original);
+                    if (c.Sample != null && g.Samples.Count < MaxSampleContexts)
+                        g.Samples.Add(c.Sample);
                 }
             }
         }
+
+        // Forget transcripts that are gone (or fell outside the per-repo cap).
+        lock (_minedGate)
+        {
+            foreach (var stale in _mined.Keys.Where(k => !seen.Contains(k)).ToList()) _mined.Remove(stale);
+        }
+        _logger.Info($"[AUTOPILOT] discovery: re-parsed {reparsed} of {seen.Count} transcripts");
 
         var customKeys = _prompts.List()
             .SelectMany(p => new[] { Normalise(p.Text), Normalise(p.Label) })
@@ -133,6 +141,46 @@ public class AutopilotDiscoveryService
 
         _logger.Info($"[AUTOPILOT] discovery: {routines.Count} routine prompts from {sessionsScanned} sessions, {userMessages} user messages");
         return new DiscoveryResult(sessionsScanned, userMessages, routines);
+    }
+
+    /// <summary>The cached contribution of one transcript, re-mined only when its
+    /// length or last-write time changed. Null when the file is missing.</summary>
+    private Mined? MineSession(string repoPath, string sessionId, string path, ref int reparsed)
+    {
+        var fi = new FileInfo(path);
+        if (!fi.Exists) return null;
+        lock (_minedGate)
+        {
+            if (_mined.TryGetValue(path, out var hit) && hit.Length == fi.Length && hit.LastWriteUtc == fi.LastWriteTimeUtc)
+                return hit;
+        }
+
+        reparsed++;
+        var msgs = _sessions.ReadMessagesUncached(repoPath, sessionId);
+        var contributions = new List<Contribution>();
+        var users = 0;
+        string? lastAssistant = null;
+        foreach (var m in msgs)
+        {
+            if (m.Role == "assistant")
+            {
+                lastAssistant = m.Text;
+                continue;
+            }
+
+            // m.Role == "user": a human-typed reply.
+            users++;
+            var key = Normalise(m.Text);
+            // Must be short, not system-noise, and contain a letter (drops bare
+            // list fragments like "1." that normalise to digits/punctuation).
+            if (key.Length == 0 || key.Length > MaxRoutineChars
+                || !key.Any(char.IsLetter) || IsNoise(key)) continue;
+            contributions.Add(new Contribution(key, m.Text.Trim(), lastAssistant != null ? Snippet(lastAssistant) : null));
+        }
+
+        var mined = new Mined(fi.Length, fi.LastWriteTimeUtc, users, contributions);
+        lock (_minedGate) _mined[path] = mined;
+        return mined;
     }
 
     private sealed class Group

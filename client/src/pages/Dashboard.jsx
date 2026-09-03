@@ -188,44 +188,20 @@ function readMode() {
 // poll the cheap snapshot endpoints on a timer and keep the result LOCAL to
 // this view (no DockContext writes, no per-cell SSE):
 //   GET /api/runs  -> per-repo { status, sessionId } (in-memory snapshot)
-//   GET /api/sessions/{id}/messages (repo-scoped) -> transcript; last line is
-//     the agent's "what's it doing".
+//   GET /api/sessions/activity?ids=repoId:sessionId,... -> per session the
+//     newest assistant line (the agent's "what's it doing", already collapsed
+//     to one line and clipped server-side) and the newest user timestamp.
+//     One batch request per tick instead of one full transcript per dock
+//     (openspec: reduce-transcript-io, D2).
 const POLL_MS = 5000;
-// Enough text to fill the cell's clamped activity area without shipping whole
-// messages into the DOM.
-const ACTIVITY_MAX = 500;
-
-function oneLine(text) {
-  return text.replace(/\s+/g, ' ').trim().slice(0, ACTIVITY_MAX);
-}
-
-// Newest assistant line if any, else the newest message (e.g. a just-sent
-// prompt while the agent is still running). Iterates from the end to avoid
-// copying the whole transcript each poll.
-function latestActivity(messages) {
-  if (!Array.isArray(messages) || messages.length === 0) return '';
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    if (messages[i]?.role === 'assistant' && messages[i]?.text) {
-      return oneLine(messages[i].text);
-    }
-  }
-  const last = messages[messages.length - 1];
-  return last?.text ? oneLine(last.text) : '';
-}
 
 // Timestamp (ms) of the last message *I* sent in this transcript — the basis
 // for the recency border. Iterates from the end and stops at the first user
 // message that carries a timestamp.
-function lastUserAt(messages) {
-  if (!Array.isArray(messages)) return 0;
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const m = messages[i];
-    if (m?.role === 'user' && m?.timestamp) {
-      const t = Date.parse(m.timestamp);
-      if (!Number.isNaN(t)) return t;
-    }
-  }
-  return 0;
+function parseAt(iso) {
+  if (!iso) return 0;
+  const t = Date.parse(iso);
+  return Number.isNaN(t) ? 0 : t;
 }
 
 // Map "how long ago I last wrote" to a border tier (plans/agent-dashboard.md):
@@ -825,28 +801,25 @@ export default function Dashboard({ onClose }) {
         // free from the one /runs snapshot.
         const current = rosterRef.current;
         const visible = new Set(tabsRef.current.map((tab) => tab.id));
-        const pairs = await Promise.all(
-          current.map(async (tab) => {
-            const run = runs[tab.repoId];
-            // 'stopped' (operator Stop) badges as idle — same as a local Stop.
-            const status = (run?.status === 'stopped' ? 'idle' : run?.status) || tab.status;
-            const sessionId = run?.sessionId || tab.sessionId;
-            let activity = '';
-            let at = 0;
-            if (sessionId && visible.has(tab.id)) {
-              try {
-                const messages = await apiGet(`/sessions/${sessionId}/messages`, {
-                  repoId: tab.repoId,
-                });
-                activity = latestActivity(messages);
-                at = lastUserAt(messages);
-              } catch {
-                /* no transcript yet / repo gone — leave activity blank */
-              }
-            }
-            return [tab.id, { status, activity, at }];
-          }),
-        );
+        const sessionOf = (tab) => runs[tab.repoId]?.sessionId || tab.sessionId;
+        const wanted = current
+          .filter((tab) => visible.has(tab.id) && sessionOf(tab))
+          .map((tab) => `${tab.repoId}:${sessionOf(tab)}`);
+        let digest = {};
+        if (wanted.length > 0) {
+          try {
+            digest = (await apiGet(`/sessions/activity?ids=${encodeURIComponent([...new Set(wanted)].join(','))}`)) || {};
+          } catch {
+            /* no transcript yet / repo gone — leave activity blank */
+          }
+        }
+        const pairs = current.map((tab) => {
+          const run = runs[tab.repoId];
+          // 'stopped' (operator Stop) badges as idle — same as a local Stop.
+          const status = (run?.status === 'stopped' ? 'idle' : run?.status) || tab.status;
+          const d = visible.has(tab.id) ? digest[sessionOf(tab)] : null;
+          return [tab.id, { status, activity: d?.activity || '', at: parseAt(d?.lastUserAt) }];
+        });
         if (!cancelled) setLive(Object.fromEntries(pairs));
       } finally {
         busy = false;

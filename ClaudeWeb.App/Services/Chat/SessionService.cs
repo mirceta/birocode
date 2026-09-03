@@ -44,6 +44,36 @@ public record ToolCall(
     DateTime? Timestamp = null);
 
 /// <summary>
+/// One tool call of a conversation at full fidelity, for a history view that a
+/// human reads (openspec: add-arch-tool-history). Unlike <see cref="ToolCall"/>
+/// (a step-shaped row with clipped input/output), this keeps the complete parsed
+/// input, the result text up to a generous budget (flagged when clipped), the
+/// result's own timestamp, and which user turn the call belongs to (1-based;
+/// 0 = before any prompt) with that turn's prompt text so calls can be grouped
+/// under the message that caused them.
+/// </summary>
+public record ToolCallRecord(
+    string Id,
+    string Name,
+    string Summary,
+    System.Text.Json.Nodes.JsonNode? Input,
+    bool? Ok,
+    string Result,
+    bool ResultClipped,
+    int ResultChars,
+    DateTime? At,
+    DateTime? ResultAt,
+    int Turn,
+    string TurnPrompt,
+    DateTime? TurnAt);
+
+/// <summary>The dashboard's per-dock liveness digest of a session (openspec:
+/// reduce-transcript-io, D2): the newest assistant line (whitespace-collapsed,
+/// clipped), the newest user timestamp and the message count — computed from
+/// the cached transcript instead of shipping the whole transcript.</summary>
+public record SessionActivity(string Activity, DateTime? LastUserAt, int Count);
+
+/// <summary>
 /// Lists and parses Claude Code session transcripts (JSONL) for the current
 /// working directory. Claude stores them under
 /// <c>~/.claude/projects/&lt;encoded-cwd&gt;/&lt;session-id&gt;.jsonl</c> where the
@@ -54,15 +84,39 @@ public record ToolCall(
 /// transcript lines. The working directory is supplied per call by the
 /// controller (resolved from the selected repository), so sessions are scoped
 /// to the repo they were created in.
+///
+/// Reads are incremental and cached (openspec: reduce-transcript-io): each
+/// transcript is parsed once and then only its appended tail, so the 5 s
+/// pollers that used to re-read a 250 MB file every tick now cost a stat.
 /// </summary>
 public class SessionService
 {
+    private const int DefaultMaxResultChars = 16000;
+    private const int ActivityMaxChars = 500;
+
     private readonly Logger _logger;
+    private readonly TranscriptCache<MessagesAcc> _messages;
+    private readonly TranscriptCache<ToolCallsAcc> _toolCalls;
+    private readonly TranscriptCache<ToolHistoryAcc> _toolHistory;
+    private readonly TranscriptCache<MetadataAcc> _metadata;
+    private readonly object _summaryGate = new();
+    private readonly Dictionary<string, (long Length, DateTime LastWriteUtc, SessionSummary? Summary)> _summaries =
+        new(StringComparer.OrdinalIgnoreCase);
 
     public SessionService(Logger logger)
     {
         _logger = logger;
+        _messages = new TranscriptCache<MessagesAcc>(() => new MessagesAcc(), (a, r) => a.Feed(r), logger: logger);
+        _toolCalls = new TranscriptCache<ToolCallsAcc>(() => new ToolCallsAcc(), (a, r) => a.Feed(r), logger: logger);
+        _toolHistory = new TranscriptCache<ToolHistoryAcc>(() => new ToolHistoryAcc(DefaultMaxResultChars), (a, r) => a.Feed(r), capacity: 8, logger: logger);
+        _metadata = new TranscriptCache<MetadataAcc>(() => new MetadataAcc(), (a, r) => a.Feed(r), capacity: 1, logger: logger);
     }
+
+    /// <summary>Parse passes (full or delta) the message cache has run — diagnostics/tests.</summary>
+    public long MessageParses => _messages.Parses;
+
+    /// <summary>Transcript bytes the message cache has read from disk — diagnostics/tests.</summary>
+    public long MessageBytesRead => _messages.BytesRead;
 
     /// <summary>
     /// Encodes a working directory the way the Claude CLI does for its project
@@ -84,10 +138,20 @@ public class SessionService
         return Path.Combine(home, ".claude", "projects", EncodeCwd(workingDirectory));
     }
 
+    /// <summary>Absolute transcript path for a session, or null when the id could
+    /// escape the folder (it must be a plain UUID file name).</summary>
+    private static string? TranscriptPath(string workingDir, string sessionId)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId)) return null;
+        if (sessionId.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) return null;
+        return Path.Combine(ProjectsDirectoryFor(workingDir), sessionId + ".jsonl");
+    }
+
     /// <summary>
     /// Lists every session transcript for the current working directory,
     /// newest first. Returns an empty list when the project folder does not
-    /// exist yet (no sessions started here).
+    /// exist yet (no sessions started here). A transcript whose length and
+    /// last-write time are unchanged since the last listing is not re-read.
     /// </summary>
     public List<SessionSummary> ListSessions(string workingDir)
     {
@@ -118,61 +182,74 @@ public class SessionService
     /// </summary>
     public List<ChatMessage> GetMessages(string workingDir, string sessionId)
     {
-        var messages = new List<ChatMessage>();
-        if (string.IsNullOrWhiteSpace(sessionId)) return messages;
-
-        // sessionId is a UUID file name; reject anything that could escape the folder.
-        if (sessionId.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) return messages;
-
-        var path = Path.Combine(ProjectsDirectoryFor(workingDir), sessionId + ".jsonl");
-        if (!File.Exists(path))
-        {
-            _logger.Info($"[CHAT] Transcript not found: {path}");
-            return messages;
-        }
-
+        var path = TranscriptPath(workingDir, sessionId);
+        if (path is null) return [];
         try
         {
-            foreach (var line in File.ReadLines(path))
-            {
-                if (string.IsNullOrWhiteSpace(line)) continue;
-
-                // Trim('\0') salvages a line merged with crash-padding NULs (a killed
-                // writer leaves a zero-filled run; the next real line can share it).
-                JsonDocument doc;
-                try { doc = JsonDocument.Parse(line.Trim('\0')); }
-                catch { continue; } // skip a malformed transcript line, keep going
-                using (doc)
-                {
-                    var root = doc.RootElement;
-
-                    if (!root.TryGetProperty("type", out var typeProp)) continue;
-                    var type = typeProp.GetString();
-                    if (type != "user" && type != "assistant") continue;
-                    if (!root.TryGetProperty("message", out var msg)) continue;
-
-                    var text = ExtractVisibleText(msg);
-                    if (string.IsNullOrWhiteSpace(text)) continue;
-
-                    DateTime? ts = null;
-                    if (root.TryGetProperty("timestamp", out var tsProp) &&
-                        DateTime.TryParse(tsProp.GetString(), out var parsed))
-                        ts = parsed;
-
-                    var synthetic = msg.TryGetProperty("model", out var modelProp)
-                        && modelProp.ValueKind == JsonValueKind.String
-                        && modelProp.GetString() == "<synthetic>";
-
-                    messages.Add(new ChatMessage(type == "user" ? "user" : "assistant", text!.Trim(), ts, synthetic));
-                }
-            }
+            var list = _messages.Read(path, acc => acc.Messages.ToList());
+            if (list is null) _logger.Info($"[CHAT] Transcript not found: {path}");
+            return list ?? [];
         }
         catch (Exception ex)
         {
             _logger.Error($"[CHAT] Failed to read transcript {sessionId}: {ex.Message}");
+            return [];
         }
+    }
 
-        return messages;
+    /// <summary>Same as <see cref="GetMessages"/> but parses the file once from
+    /// the start without entering the cache — for scans over many historical
+    /// transcripts (autopilot mining) that must not evict the hot set.</summary>
+    public List<ChatMessage> ReadMessagesUncached(string workingDir, string sessionId)
+    {
+        var path = TranscriptPath(workingDir, sessionId);
+        if (path is null) return [];
+        try { return _messages.ReadUncached(path)?.Messages ?? []; }
+        catch (Exception ex)
+        {
+            _logger.Error($"[CHAT] Failed to read transcript {sessionId}: {ex.Message}");
+            return [];
+        }
+    }
+
+    /// <summary>The dashboard digest of a session (see <see cref="SessionActivity"/>),
+    /// scanned from the end of the cached transcript under its lock — no copy of
+    /// the message list. Null when the transcript is missing.</summary>
+    public SessionActivity? GetActivity(string workingDir, string sessionId)
+    {
+        var path = TranscriptPath(workingDir, sessionId);
+        if (path is null) return null;
+        try
+        {
+            return _messages.Read(path, acc =>
+            {
+                var msgs = acc.Messages;
+                var activity = "";
+                DateTime? lastUserAt = null;
+                for (var i = msgs.Count - 1; i >= 0; i--)
+                {
+                    var m = msgs[i];
+                    if (activity.Length == 0 && m.Role == "assistant" && m.Text.Length > 0) activity = OneLine(m.Text);
+                    if (lastUserAt is null && m.Role == "user" && m.Timestamp is not null) lastUserAt = m.Timestamp;
+                    if (activity.Length > 0 && lastUserAt is not null) break;
+                }
+                // Newest message of any role when the agent has not spoken yet
+                // (a just-sent prompt) — what the dashboard showed before.
+                if (activity.Length == 0 && msgs.Count > 0) activity = OneLine(msgs[^1].Text);
+                return new SessionActivity(activity, lastUserAt, msgs.Count);
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[CHAT] Failed to read activity for {sessionId}: {ex.Message}");
+            return null;
+        }
+    }
+
+    private static string OneLine(string text)
+    {
+        var s = Regex.Replace(text, @"\s+", " ").Trim();
+        return s.Length > ActivityMaxChars ? s[..ActivityMaxChars] : s;
     }
 
     /// <summary>
@@ -187,109 +264,83 @@ public class SessionService
     /// </summary>
     public List<ToolCall> GetToolCalls(string workingDir, string sessionId)
     {
-        var calls = new List<ToolCall>();
-        if (string.IsNullOrWhiteSpace(sessionId)) return calls;
-
-        // sessionId is a UUID file name; reject anything that could escape the folder.
-        if (sessionId.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) return calls;
-
-        var path = Path.Combine(ProjectsDirectoryFor(workingDir), sessionId + ".jsonl");
-        if (!File.Exists(path))
-        {
-            _logger.Info($"[CHAT] Transcript not found: {path}");
-            return calls;
-        }
-
-        // id -> index into `calls`, so a tool_result can patch its tool_use in place
-        // while preserving the order tool calls first appeared.
-        var byId = new Dictionary<string, int>();
-
+        var path = TranscriptPath(workingDir, sessionId);
+        if (path is null) return [];
         try
         {
-            foreach (var line in File.ReadLines(path))
-            {
-                if (string.IsNullOrWhiteSpace(line)) continue;
-
-                JsonDocument doc;
-                try { doc = JsonDocument.Parse(line.Trim('\0')); }
-                catch { continue; } // skip a malformed transcript line, keep going
-                using (doc)
-                {
-                    var root = doc.RootElement;
-                    if (!root.TryGetProperty("type", out var typeProp)) continue;
-                    var type = typeProp.GetString();
-                    if (type != "user" && type != "assistant") continue;
-                    if (!root.TryGetProperty("message", out var msg) ||
-                        !msg.TryGetProperty("content", out var content) ||
-                        content.ValueKind != JsonValueKind.Array)
-                        continue;
-
-                    DateTime? ts = null;
-                    if (root.TryGetProperty("timestamp", out var tsProp) &&
-                        DateTime.TryParse(tsProp.GetString(), out var parsed))
-                        ts = parsed;
-
-                    foreach (var block in content.EnumerateArray())
-                    {
-                        var bt = block.TryGetProperty("type", out var btp) ? btp.GetString() : "";
-                        if (type == "assistant" && bt == "tool_use")
-                        {
-                            var id = block.TryGetProperty("id", out var ip) ? ip.GetString() ?? "" : "";
-                            if (string.IsNullOrEmpty(id) || byId.ContainsKey(id)) continue;
-                            var name = block.TryGetProperty("name", out var np) ? np.GetString() ?? "tool" : "tool";
-                            string summary = "", detail = "";
-                            if (block.TryGetProperty("input", out var input) && input.ValueKind == JsonValueKind.Object)
-                            {
-                                summary = ToolSummary(name, input);
-                                detail = Truncate(input.GetRawText(), 1200);
-                            }
-                            byId[id] = calls.Count;
-                            calls.Add(new ToolCall(id, name, summary, detail, Ok: null, Preview: "", Timestamp: ts));
-                        }
-                        else if (type == "user" && bt == "tool_result")
-                        {
-                            var id = block.TryGetProperty("tool_use_id", out var ip) ? ip.GetString() ?? "" : "";
-                            if (string.IsNullOrEmpty(id) || !byId.TryGetValue(id, out var idx)) continue;
-                            var ok = !(block.TryGetProperty("is_error", out var ep) && ep.ValueKind == JsonValueKind.True);
-                            var preview = Truncate(ExtractToolResultText(block), 800, maxLines: 15);
-                            calls[idx] = calls[idx] with { Ok = ok, Preview = preview };
-                        }
-                    }
-                }
-            }
+            var list = _toolCalls.Read(path, acc => acc.Calls.ToList());
+            if (list is null) _logger.Info($"[CHAT] Transcript not found: {path}");
+            return list ?? [];
         }
         catch (Exception ex)
         {
             _logger.Error($"[CHAT] Failed to read tool calls for {sessionId}: {ex.Message}");
+            return [];
         }
+    }
 
-        return calls;
+    /// <summary>
+    /// The tool-call history of a session at full fidelity (openspec:
+    /// add-arch-tool-history): every <c>tool_use</c> with its complete input,
+    /// paired with its <c>tool_result</c> (text up to <paramref name="maxResultChars"/>,
+    /// clipped flag when longer), both timestamps, and the user turn it belongs to.
+    /// A turn starts at a user line that carries visible text and no tool_result
+    /// block. Same resilience rules as <see cref="GetToolCalls"/>: a malformed line
+    /// is skipped, a call without a result keeps <c>Ok = null</c>. A non-default
+    /// result budget bypasses the cache.
+    /// </summary>
+    public List<ToolCallRecord> GetToolCallHistory(string workingDir, string sessionId, int maxResultChars = DefaultMaxResultChars)
+    {
+        var path = TranscriptPath(workingDir, sessionId);
+        if (path is null) return [];
+        try
+        {
+            if (maxResultChars != DefaultMaxResultChars)
+            {
+                var once = new TranscriptCache<ToolHistoryAcc>(() => new ToolHistoryAcc(maxResultChars), (a, r) => a.Feed(r), capacity: 1, logger: _logger);
+                return once.ReadUncached(path)?.Calls ?? [];
+            }
+            var list = _toolHistory.Read(path, acc => acc.Calls.ToList());
+            if (list is null) _logger.Info($"[CHAT] Transcript not found: {path}");
+            return list ?? [];
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[CHAT] Failed to read tool history for {sessionId}: {ex.Message}");
+            return [];
+        }
     }
 
     /// <summary>Pulls the text of a tool_result whose content may be a plain string
     /// or an array of typed blocks. Mirrors CliRunnerService.ExtractToolResultText.</summary>
-    private static string ExtractToolResultText(JsonElement block)
+    internal static string ExtractToolResultText(JsonElement block)
     {
         if (!block.TryGetProperty("content", out var content)) return "";
         if (content.ValueKind == JsonValueKind.String) return content.GetString() ?? "";
         if (content.ValueKind == JsonValueKind.Array)
         {
+            // Text blocks carry the answer; anything else (a tool_reference from
+            // ToolSearch, an image, an unknown block) is still shown, in words or
+            // as its raw JSON, so no call ever reads as "empty result" while the
+            // transcript has something.
             var parts = new List<string>();
             foreach (var b in content.EnumerateArray())
             {
-                if (b.TryGetProperty("type", out var t) && t.GetString() == "text" &&
-                    b.TryGetProperty("text", out var tx))
-                    parts.Add(tx.GetString() ?? "");
+                var type = b.TryGetProperty("type", out var t) ? t.GetString() : null;
+                if (type == "text" && b.TryGetProperty("text", out var tx)) parts.Add(tx.GetString() ?? "");
+                else if (type == "tool_reference" && b.TryGetProperty("tool_name", out var tn)) parts.Add("tool: " + (tn.GetString() ?? ""));
+                else if (type == "image") parts.Add("[image]");
+                else parts.Add(b.GetRawText());
             }
             return string.Join("\n", parts);
         }
-        return "";
+        return content.ValueKind == JsonValueKind.Null || content.ValueKind == JsonValueKind.Undefined ? "" : content.GetRawText();
     }
 
     /// <summary>One-line, human-readable summary of a tool call's input. Kept in
     /// sync with CliRunnerService.ToolSummary so the reconstructed history reads
     /// exactly like the live stream.</summary>
-    private static string ToolSummary(string name, JsonElement input)
+    internal static string ToolSummary(string name, JsonElement input)
     {
         string Get(string key) =>
             input.TryGetProperty(key, out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() ?? "" : "";
@@ -309,7 +360,7 @@ public class SessionService
 
     /// <summary>Truncates to a char budget and (optionally) a line budget, adding
     /// an ellipsis when clipped. Mirrors CliRunnerService.Truncate.</summary>
-    private static string Truncate(string? text, int maxChars, int maxLines = 0)
+    internal static string Truncate(string? text, int maxChars, int maxLines = 0)
     {
         if (string.IsNullOrEmpty(text)) return "";
         var s = text;
@@ -328,7 +379,7 @@ public class SessionService
     /// array of typed blocks). Skips thinking / tool_use / tool_result blocks and
     /// IDE/system-reminder injections so only the human-readable reply remains.
     /// </summary>
-    private static string? ExtractVisibleText(JsonElement msg)
+    internal static string? ExtractVisibleText(JsonElement msg)
     {
         if (!msg.TryGetProperty("content", out var content)) return null;
 
@@ -356,66 +407,43 @@ public class SessionService
     /// <summary>
     /// Reads a single JSONL transcript and derives its summary. Returns null
     /// when the file has no resolvable session id (treated as not-a-session).
+    /// Cached by (length, last-write time): an unchanged transcript is not re-read.
     /// </summary>
     private SessionSummary? ExtractMetadata(string jsonlPath)
     {
         try
         {
-            string? sessionId = null;
-            string? firstPrompt = null;
-            DateTime? lastTimestamp = null;
-            int userTurns = 0;
-            int assistantTurns = 0;
-
-            foreach (var line in File.ReadLines(jsonlPath))
+            var fi = new FileInfo(jsonlPath);
+            if (!fi.Exists) return null;
+            lock (_summaryGate)
             {
-                if (string.IsNullOrWhiteSpace(line)) continue;
-
-                JsonDocument doc;
-                try { doc = JsonDocument.Parse(line.Trim('\0')); }
-                catch { continue; } // skip a malformed transcript line, keep going
-                using (doc)
-                {
-                    var root = doc.RootElement;
-
-                    if (!root.TryGetProperty("type", out var typeProp)) continue;
-                    var type = typeProp.GetString();
-
-                    // sessionId appears on the transcript lines (camelCase in JSONL).
-                    if (sessionId == null && root.TryGetProperty("sessionId", out var sidProp))
-                        sessionId = sidProp.GetString();
-
-                    if (root.TryGetProperty("timestamp", out var tsProp) &&
-                        DateTime.TryParse(tsProp.GetString(), out var ts))
-                        lastTimestamp = ts;
-
-                    switch (type)
-                    {
-                        case "user":
-                            userTurns++;
-                            firstPrompt ??= ExtractFirstPrompt(root);
-                            break;
-                        case "assistant":
-                            assistantTurns++;
-                            break;
-                    }
-                }
+                if (_summaries.TryGetValue(jsonlPath, out var hit)
+                    && hit.Length == fi.Length && hit.LastWriteUtc == fi.LastWriteTimeUtc)
+                    return hit.Summary;
             }
 
+            var acc = _metadata.ReadUncached(jsonlPath);
+            if (acc is null) return null;
+
             // Fall back to the filename (the CLI names files after the session id).
-            sessionId ??= Path.GetFileNameWithoutExtension(jsonlPath);
-            if (string.IsNullOrEmpty(sessionId)) return null;
+            var sessionId = acc.SessionId ?? Path.GetFileNameWithoutExtension(jsonlPath);
+            SessionSummary? summary = null;
+            if (!string.IsNullOrEmpty(sessionId))
+            {
+                var title = !string.IsNullOrWhiteSpace(acc.FirstPrompt)
+                    ? Truncate(acc.FirstPrompt!, 60)
+                    : Path.GetFileNameWithoutExtension(jsonlPath);
 
-            var title = !string.IsNullOrWhiteSpace(firstPrompt)
-                ? Truncate(firstPrompt!, 60)
-                : Path.GetFileNameWithoutExtension(jsonlPath);
+                summary = new SessionSummary(
+                    Id: sessionId,
+                    Title: title,
+                    TurnCount: acc.UserTurns + acc.AssistantTurns,
+                    LastModified: acc.LastTimestamp?.ToLocalTime() ?? fi.LastWriteTime,
+                    FirstPrompt: acc.FirstPrompt);
+            }
 
-            return new SessionSummary(
-                Id: sessionId,
-                Title: title,
-                TurnCount: userTurns + assistantTurns,
-                LastModified: lastTimestamp?.ToLocalTime() ?? File.GetLastWriteTime(jsonlPath),
-                FirstPrompt: firstPrompt);
+            lock (_summaryGate) _summaries[jsonlPath] = (fi.Length, fi.LastWriteTimeUtc, summary);
+            return summary;
         }
         catch (Exception ex)
         {
@@ -429,7 +457,7 @@ public class SessionService
     /// Content may be a plain string or an array of typed blocks. IDE context
     /// and system-reminder injections are skipped so the title reads naturally.
     /// </summary>
-    private static string? ExtractFirstPrompt(JsonElement root)
+    internal static string? ExtractFirstPrompt(JsonElement root)
     {
         if (!root.TryGetProperty("message", out var msg) ||
             !msg.TryGetProperty("content", out var content))

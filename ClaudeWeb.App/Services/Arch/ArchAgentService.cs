@@ -1401,14 +1401,29 @@ public class ArchAgentService : IArchWakeSource
         return (lastStart, lastStart is not null && lastTurnId is not null && !ended.Contains(lastTurnId));
     }
 
+    // Memoized per path for a minute (openspec: reduce-transcript-io, D4): the
+    // remote URL is read on every availability check of every managed repo, and
+    // it changes about never.
+    private static readonly TimeSpan RemoteUrlTtl = TimeSpan.FromMinutes(1);
+    private readonly object _remoteUrlGate = new();
+    private readonly Dictionary<string, (string Url, DateTime AtUtc)> _remoteUrls = new(StringComparer.OrdinalIgnoreCase);
+
     private string RemoteUrl(string path)
     {
+        lock (_remoteUrlGate)
+        {
+            if (_remoteUrls.TryGetValue(path, out var hit) && DateTime.UtcNow - hit.AtUtc < RemoteUrlTtl)
+                return hit.Url;
+        }
+        string url;
         try
         {
             var r = ProcessProbe.Run("git", new[] { "-C", path, "config", "--get", "remote.origin.url" }, GitTimeoutMs);
-            return r.ExitCode == 0 && !r.TimedOut ? r.StdOut.Trim() : "";
+            url = r.ExitCode == 0 && !r.TimedOut ? r.StdOut.Trim() : "";
         }
-        catch { return ""; }
+        catch { url = ""; }
+        lock (_remoteUrlGate) _remoteUrls[path] = (url, DateTime.UtcNow);
+        return url;
     }
 
     private static ProcessProbe.Result Git(string cwd, params string[] args)

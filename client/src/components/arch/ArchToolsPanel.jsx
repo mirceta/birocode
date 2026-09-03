@@ -67,7 +67,8 @@ export default function ArchToolsPanel() {
 
   useEffect(() => {
     load();
-    const t = setInterval(load, POLL_MS);
+    // Hidden tab = no polling (openspec reduce-connection-appetite).
+    const t = setInterval(() => { if (!document.hidden) load(); }, POLL_MS);
     return () => clearInterval(t);
   }, [load]);
 

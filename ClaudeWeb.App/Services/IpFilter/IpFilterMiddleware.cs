@@ -9,12 +9,15 @@ namespace ClaudeWeb.Services.IpFilter;
 /// The IP allowlist gate (plans/auth-ip-filter.md). FIRST middleware in the
 /// pipeline — before static files, routing, and password auth — so an
 /// unapproved IP never receives the SPA shell or the login screen, only a
-/// minimal standalone rejection page with its own IP. No exemptions, not
-/// even /api/health: one flow for everybody, localhost included (127.0.0.1
-/// is a seeded, removable guest, not a code branch) — with ONE deliberate
-/// exception: the shared-ideas hub contract path (openspec ideas-harness-hub),
-/// whose embedded 256-bit token is the credential and whose callers are
-/// remote harnesses at IPs the Operator never sees.
+/// minimal standalone rejection page with its own IP. One flow for everybody,
+/// localhost included (127.0.0.1 is a seeded, removable guest, not a code
+/// branch). A request is admitted by exactly one of three credentials, in
+/// this order: an allowlist entry, a configured LAN range (openspec
+/// lan-bypass-ip-gate — resolved IP only, fails closed behind a proxy that
+/// forgot to forward), or a trusted-device cookie. The single path-based
+/// exception is the shared-ideas hub contract path (openspec
+/// ideas-harness-hub), whose embedded 256-bit token is the credential and
+/// whose callers are remote harnesses at IPs the Operator never sees.
 ///
 /// On the allowed path it records last-access and tracks the in-flight
 /// request in the connection registry so allowlist removal aborts it
@@ -40,11 +43,26 @@ public class IpFilterMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
-        var ip = ClientIp.Get(context);
+        var origin = ClientIp.GetOrigin(context);
+        var ip = origin.Ip;
 
         if (_allowlist.IsApproved(ip))
         {
             _allowlist.RecordAccess(ip);
+            await PassAsync(context, ip);
+            return;
+        }
+
+        // Not a guest — admit anyway when the RESOLVED IP sits in a configured
+        // LAN range (openspec lan-bypass-ip-gate). Checked before the device
+        // cookie so a LAN request never slides a token it does not need; never
+        // touches the allowlist (no access record, no attempt). LanBypass.Match
+        // refuses a trusted-proxy peer that sent no X-Forwarded-For, so a proxy
+        // that stops forwarding cannot turn the whole internet into "LAN".
+        var lan = LanBypass.Match(origin);
+        if (lan != null)
+        {
+            _logger.Info($"[IPFILTER] Admitted {ip} via LAN bypass {lan}");
             await PassAsync(context, ip);
             return;
         }
@@ -66,9 +84,9 @@ public class IpFilterMiddleware
         // 256-bit token in the path is the credential (checked constant-time in
         // NotesController; wrong token gets only an error envelope), and remote
         // harnesses sync from addresses the Operator never sees. The single
-        // exception to the no-exemptions rule above. Segment matching keeps
-        // /api/notes/hub-info gated. No connection tracking: registry aborts are
-        // keyed to allowlist removal, which cannot apply here.
+        // path-based exception. Segment matching keeps /api/notes/hub-info
+        // gated. No connection tracking: registry aborts are keyed to allowlist
+        // removal, which cannot apply here.
         if ((HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsPost(context.Request.Method)) &&
             context.Request.Path.StartsWithSegments("/api/notes/hub", StringComparison.OrdinalIgnoreCase))
         {
@@ -78,7 +96,7 @@ public class IpFilterMiddleware
 
         // Otherwise: the same hard 403 + standalone rejection page as before.
         _allowlist.RecordAttempt(ip);
-        _logger.Error($"[IPFILTER] Rejected {ip} — not on the allowlist, no device cookie ({context.Request.Method} {context.Request.Path})");
+        _logger.Error($"[IPFILTER] Rejected {ip} — not on the allowlist, not in a LAN range, no device cookie ({context.Request.Method} {context.Request.Path})");
         await RejectAsync(context, ip);
     }
 

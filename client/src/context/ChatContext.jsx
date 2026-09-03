@@ -727,20 +727,35 @@ export function ChatProvider({ children }) {
     return Array.isArray(data) ? data : [];
   }
 
-  async function loadTranscript(key, id, repoId) {
-    try {
-      const data = await apiGet(`/sessions/${id}/messages`, { repoId });
-      const loaded = Array.isArray(data)
-        ? data.map((m) => (m.actor ? { role: m.role, text: m.text, actor: m.actor } : { role: m.role, text: m.text }))
-        : [];
-      updateConvo(key, {
-        messages: loaded.length > 0
-          ? loaded
-          : [greeting(), { role: 'assistant', text: t('chat.resumed') }],
-      });
-    } catch {
-      updateConvo(key, { error: t('chat.resumeError'), messages: [greeting()] });
-    }
+  // One transcript fetch per (conversation, session) at a time (openspec:
+  // reduce-transcript-io, D2): the 5 s reconcile re-enters attachToRun while a
+  // first load is still streaming a multi-MB transcript, and its `fresh` test
+  // (messages <= 1) stays true until that load lands — without this guard every
+  // tick issued another full GET /sessions/{id}/messages.
+  const transcriptLoads = useRef(new Map());
+  function loadTranscript(key, id, repoId) {
+    const inflight = transcriptLoads.current.get(key);
+    if (inflight && inflight.id === id) return inflight.promise;
+    const entry = { id, promise: null };
+    entry.promise = (async () => {
+      try {
+        const data = await apiGet(`/sessions/${id}/messages`, { repoId });
+        const loaded = Array.isArray(data)
+          ? data.map((m) => (m.actor ? { role: m.role, text: m.text, actor: m.actor } : { role: m.role, text: m.text }))
+          : [];
+        updateConvo(key, {
+          messages: loaded.length > 0
+            ? loaded
+            : [greeting(), { role: 'assistant', text: t('chat.resumed') }],
+        });
+      } catch {
+        updateConvo(key, { error: t('chat.resumeError'), messages: [greeting()] });
+      } finally {
+        if (transcriptLoads.current.get(key) === entry) transcriptLoads.current.delete(key);
+      }
+    })();
+    transcriptLoads.current.set(key, entry);
+    return entry.promise;
   }
 
   async function openPicker() {

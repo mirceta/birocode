@@ -24,9 +24,19 @@ flowchart TD
 
 ## IP allowlist (`IpFilterMiddleware`)
 
-Outermost, **no exemptions**. An unapproved IP gets a standalone rejection
-page — never the SPA or the login screen. New IPs are approved only at the
-host PC (the Guests tab is view/unlist only).
+Outermost. A request is admitted by exactly one of three credentials — an
+approved guest IP, a configured **LAN range** (`AppConfig.LanBypassCidrs`,
+openspec lan-bypass-ip-gate; default none), or a trusted-device cookie — and
+anything else gets a standalone rejection page, never the SPA or the login
+screen. New IPs are approved only at the host PC (the Guests tab is view/unlist
+only); LAN ranges live only in the host's config (the Guests tab shows them).
+
+The LAN test runs on the **resolved** client IP below, never the socket peer,
+and is skipped entirely when the peer is a trusted proxy that forwarded no
+address — so a proxy that stops sending `X-Forwarded-For` cannot turn the
+whole internet into "LAN". A plain localhost request is such a case (loopback
+is always a trusted proxy): the host is admitted by its seeded `127.0.0.1`
+guest, as before.
 
 Behind the off-box proxy, the real client IP is taken from the **last**
 `X-Forwarded-For` hop — trusted *only* because the proxy's LAN IP is listed

@@ -98,6 +98,8 @@
   "guests.confirmRemoveSelf": "\"{name}\" ({ip}) SENIN KENDI IP'in.\n\nKaldirirsan bu baglanti hemen kesilir ve yonetici ana bilgisayardan seni yeniden onaylayana kadar disarida kalirsin. Yine de kaldirilsin mi?",
   "guests.removeError": "Misafir kaldirilamadi. Lutfen tekrar dene.",
   "guests.approveHint": "Yeni IP'ler yalnizca ana bilgisayardaki masaustu uygulamasindan onaylanabilir — buradan asla.",
+  "guests.lanBypass": "Yerel ağ geçişi: {ranges} — bu aralıklardaki cihazlar konuk listesini atlar; parola yine gerekir.",
+  "guests.lanBypassHint": "Ana makinede appsettings.json (LanBypassCidrs) ile ayarlanır. Çözümlenmiş istemci IP'sine göre karar verilir; adres iletmeyen bir vekilin arkasında asla uygulanmaz.",
   "guests.geoPending": "Konum araniyor…",
   "guests.geoLocal": "Yerel ag",
   "guests.geoDatacenter": "veri merkezi / proxy",
