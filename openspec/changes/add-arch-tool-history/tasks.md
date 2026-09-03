@@ -16,3 +16,9 @@
 - [x] 3.1 Unit test: a transcript with two turns, an arch tool call with a JSON envelope result, a built-in call with an error result, a call with no result, a malformed line → records carry full input, result, ok, turn index / prompt, timestamps; clipping flags a long result
 - [x] 3.2 `check-arch-tab.mjs`: History lane against a routed `/api/arch/tool-calls` (two turns, wake + human actors, ok + error + no-result cards), the sentence per tool, expand shows the arguments table and the parsed envelope, filter chip narrows the list, errors-only, and a live running step overlaid from the stream
 - [x] 3.3 `openspec validate add-arch-tool-history --strict` passes
+
+## 4. Follow-up — parameters and response on screen (2026-09-03)
+
+- [x] 4.1 Cards start open: the arguments table and the result are visible without a click; a collapsed card keeps a one-line `in` / `out` brief (arguments as `key: value`, result as the envelope's status + detail or the first line)
+- [x] 4.2 `SessionService.ExtractToolResultText`: non-text result blocks (ToolSearch's `tool_reference`, images, unknown blocks) read as words or raw JSON instead of an empty result — unit test `Non_text_result_blocks_still_read_as_a_result`
+- [x] 4.3 `check-arch-tab.mjs`: every card starts open; collapsing keeps the brief; reopening hides it (17 History checks green)

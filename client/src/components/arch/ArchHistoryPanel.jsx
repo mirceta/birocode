@@ -158,12 +158,42 @@ function Result({ call }) {
   );
 }
 
+// One line each of the arguments and the result, for the card's always-visible
+// brief: `key: value · key: value` and the envelope's status + detail (or the
+// first line of a plain result), so a collapsed card still says what went in
+// and what came back.
+const BRIEF_MAX = 160;
+function clip(s, n = BRIEF_MAX) {
+  const one = str(s).replace(/\s+/g, ' ').trim();
+  return one.length > n ? `${one.slice(0, n - 1)}…` : one;
+}
+export function briefArgs(input) {
+  if (input === null || input === undefined) return '';
+  if (typeof input !== 'object' || Array.isArray(input)) return clip(pretty(input));
+  const keys = Object.keys(input);
+  if (keys.length === 0) return '';
+  return clip(keys.map((k) => `${k}: ${typeof input[k] === 'string' ? input[k] : pretty(input[k])}`).join(' · '));
+}
+export function briefResult(call) {
+  if (call.ok === null || call.ok === undefined) return call.live ? 'running…' : 'no result';
+  const r = parseResult(call.result);
+  if (!r) return 'empty result';
+  if (r.envelope) {
+    const head = str(r.status) || (r.ok ? 'ok' : 'failed');
+    const detail = r.detail ? clip(r.detail) : '';
+    const data = r.data !== undefined && r.data !== null && !detail ? clip(pretty(r.data)) : '';
+    return [head, detail || data].filter(Boolean).join(' — ');
+  }
+  return clip(r.json !== undefined ? pretty(r.json) : r.text);
+}
+
 function CallCard({ call, open }) {
   const [showRaw, setShowRaw] = useState(false);
   const running = call.ok === null || call.ok === undefined;
   const state = running ? (call.live ? 'running' : 'unknown') : call.ok ? 'ok' : 'error';
   const icon = call.server === 'arch' ? (ICONS[call.tool] || '🔌') : '🔧';
   const hasDuration = call.durationMs !== null && call.durationMs !== undefined;
+  const args = briefArgs(call.input);
   return (
     <details className={`arch-hist__call arch-hist__call--${state}`} open={open} data-tool={call.tool} data-state={state} data-id={call.id}>
       <summary className="arch-hist__sum">
@@ -175,6 +205,10 @@ function CallCard({ call, open }) {
             {call.server === 'arch'
               ? <span className="arch-hist__srv">harness tool</span>
               : <span className="arch-hist__srv arch-hist__srv--builtin">built-in</span>}
+          </span>
+          <span className="arch-hist__brief">
+            <span className="arch-hist__brief-row"><span className="arch-hist__brief-k">in</span><span className="arch-hist__brief-v">{args || <i>no arguments</i>}</span></span>
+            <span className="arch-hist__brief-row"><span className="arch-hist__brief-k">out</span><span className="arch-hist__brief-v">{briefResult(call)}</span></span>
           </span>
         </span>
         <span className="arch-hist__right">
@@ -251,7 +285,9 @@ export default function ArchHistoryPanel({ liveTurn = null, sessionId = null }) 
   const [errorsOnly, setErrorsOnly] = useState(false);
   const [query, setQuery] = useState('');
   const [newestFirst, setNewestFirst] = useState(true);
-  const [openAll, setOpenAll] = useState({ v: 0, open: false });
+  // Cards start open: the arguments and the result are the point of the lane,
+  // so they are on screen without a click; "collapse all" folds them to briefs.
+  const [openAll, setOpenAll] = useState({ v: 0, open: true });
 
   const load = useCallback(async () => {
     try {
@@ -328,7 +364,7 @@ export default function ArchHistoryPanel({ liveTurn = null, sessionId = null }) 
       </div>
       <p className="arch-hist__intro">
         Every tool the arch agent called in this conversation, newest {newestFirst ? 'first' : 'last'}, grouped under the message that caused it.
-        Each card says in words what the call did; open it for the exact arguments and the full result.
+        Each card says in words what the call did and shows the exact arguments it was called with and the full result it got back; collapse a card to keep just a one-line brief of each.
         Read from the session transcript on disk, so it survives reloads; a running turn is overlaid live.
       </p>
 

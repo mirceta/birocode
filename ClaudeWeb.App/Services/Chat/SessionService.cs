@@ -412,16 +412,22 @@ public class SessionService
         if (content.ValueKind == JsonValueKind.String) return content.GetString() ?? "";
         if (content.ValueKind == JsonValueKind.Array)
         {
+            // Text blocks carry the answer; anything else (a tool_reference from
+            // ToolSearch, an image, an unknown block) is still shown, in words or
+            // as its raw JSON, so no call ever reads as "empty result" while the
+            // transcript has something.
             var parts = new List<string>();
             foreach (var b in content.EnumerateArray())
             {
-                if (b.TryGetProperty("type", out var t) && t.GetString() == "text" &&
-                    b.TryGetProperty("text", out var tx))
-                    parts.Add(tx.GetString() ?? "");
+                var type = b.TryGetProperty("type", out var t) ? t.GetString() : null;
+                if (type == "text" && b.TryGetProperty("text", out var tx)) parts.Add(tx.GetString() ?? "");
+                else if (type == "tool_reference" && b.TryGetProperty("tool_name", out var tn)) parts.Add("tool: " + (tn.GetString() ?? ""));
+                else if (type == "image") parts.Add("[image]");
+                else parts.Add(b.GetRawText());
             }
             return string.Join("\n", parts);
         }
-        return "";
+        return content.ValueKind == JsonValueKind.Null || content.ValueKind == JsonValueKind.Undefined ? "" : content.GetRawText();
     }
 
     /// <summary>One-line, human-readable summary of a tool call's input. Kept in

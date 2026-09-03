@@ -111,6 +111,23 @@ public sealed class ArchToolHistoryTests : IDisposable
     }
 
     [Fact]
+    public void Non_text_result_blocks_still_read_as_a_result()
+    {
+        // ToolSearch answers with tool_reference blocks, not text; an unknown
+        // block shows as its raw JSON. Neither may read as an empty result.
+        var sid = Guid.NewGuid().ToString();
+        File.WriteAllLines(Path.Combine(_projectsDir, sid + ".jsonl"), new[]
+        {
+            """{"type":"user","timestamp":"2026-09-03T11:00:00Z","message":{"role":"user","content":"go"}}""",
+            """{"type":"assistant","timestamp":"2026-09-03T11:00:01Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"s1","name":"ToolSearch","input":{"query":"select:mcp__arch__list_agents"}}]}}""",
+            """{"type":"user","timestamp":"2026-09-03T11:00:02Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"s1","content":[{"type":"tool_reference","tool_name":"mcp__arch__list_agents"},{"type":"image","source":{}},{"type":"other","x":1}]}]}}""",
+        });
+        var call = Assert.Single(_service.GetToolCallHistory(_workingDir, sid));
+        Assert.True(call.Ok);
+        Assert.Equal("tool: mcp__arch__list_agents\n[image]\n{\"type\":\"other\",\"x\":1}", call.Result);
+    }
+
+    [Fact]
     public void Input_survives_a_json_round_trip()
     {
         var calls = _service.GetToolCallHistory(_workingDir, _sessionId);

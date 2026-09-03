@@ -44,6 +44,14 @@
 .arch-hist__toolname { display: inline-flex; gap: 6px; align-items: center; font-size: 11px; color: var(--color-text-soft, #888); }
 .arch-hist__srv { padding: 0 6px; border-radius: 5px; background: rgba(94, 160, 239, 0.14); color: var(--color-accent, #5ea0ef); font-size: 10.5px; }
 .arch-hist__srv--builtin { background: rgba(255, 255, 255, 0.08); color: var(--color-text-soft, #999); }
+/* Always-visible brief of what went in and what came back; folds away once the
+   card is open and the full tables take over. */
+.arch-hist__brief { display: flex; flex-direction: column; gap: 1px; margin-top: 3px; font-size: 11.5px; min-width: 0; }
+.arch-hist__brief-row { display: grid; grid-template-columns: 26px 1fr; gap: 6px; align-items: baseline; min-width: 0; }
+.arch-hist__brief-k { font-family: ui-monospace, Consolas, monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-text-soft, #777); }
+.arch-hist__brief-v { font-family: ui-monospace, Consolas, monospace; color: var(--color-text-soft, #aaa); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.arch-hist__brief-v i { font-style: italic; color: var(--color-text-soft, #777); }
+.arch-hist__call[open] > .arch-hist__sum .arch-hist__brief { display: none; }
 .arch-hist__right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; white-space: nowrap; }
 .arch-hist__time { font-size: 11px; color: var(--color-text-soft, #888); font-family: ui-monospace, Consolas, monospace; }
 .arch-hist__pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--color-border, #444); color: var(--color-text-soft, #999); }
