@@ -211,9 +211,21 @@ try {
   V.assert('B: peer send before opt-in is refused with not-accepting', early.status === 200 && early.json?.status === 'not-accepting', `http ${early.status} ${JSON.stringify(early.json || {})}`);
   const accept = await peerApi('POST', '/api/arch/fleet', { acceptSends: true });
   V.assert('B: accept fleet sends set', accept.status === 200 && accept.json?.fleet?.acceptSends === true, `http ${accept.status}`);
-  const describe = await peerApi('GET', '/api/arch/peer');
-  V.assert('B: peer describe lists its repo with availability', describe.status === 200 && describe.json?.protocol === 1
-    && (describe.json?.repos || []).some((r) => r.repoId === repoIdB && r.availability === 'available'),
+  // D8: B's OWN arch scope is authoritative. Before B scopes the repo, its describe
+  // says so and a peer send is refused as unmanaged; after, the repo is available.
+  let describe = await peerApi('GET', '/api/arch/peer');
+  V.assert('B: peer describe reports its repo as NOT managed by B\'s arch before B scopes it', describe.status === 200 && describe.json?.protocol === 1
+    && (describe.json?.repos || []).some((r) => r.repoId === repoIdB && r.managed === false && r.availability === 'unmanaged'),
+    `http ${describe.status} ${JSON.stringify(describe.json || {}).slice(0, 300)}`);
+  const unscoped = await peerApi('POST', '/api/arch/peer/send', { repoId: repoIdB, text: 'Reply with the word pong.', from: 'probe' });
+  V.assert('B: peer send to a repo outside B\'s own arch scope is refused with unmanaged', unscoped.status === 200 && unscoped.json?.status === 'unmanaged'
+    && String(unscoped.json?.detail || '').includes('Arch tab'), `http ${unscoped.status} ${JSON.stringify(unscoped.json || {})}`);
+  const bScope = await peerApi('POST', '/api/arch/scope', { repoIds: [repoIdB] });
+  V.assert('B: its own arch scope holds the repo', bScope.status === 200 && (bScope.json?.managedRepoIds || []).includes(repoIdB), `http ${bScope.status} ${JSON.stringify(bScope.json?.managedRepoIds || null)}`);
+  describe = await peerApi('GET', '/api/arch/peer');
+  V.assert('B: peer describe lists its repo as managed and available', describe.status === 200
+    && (describe.json?.managedRepoIds || []).includes(repoIdB)
+    && (describe.json?.repos || []).some((r) => r.repoId === repoIdB && r.managed === true && r.availability === 'available'),
     `http ${describe.status} ${JSON.stringify(describe.json || {}).slice(0, 300)}`);
 
   // A: subscribe to B (feed credential = B's password), then allow sends.
@@ -237,6 +249,11 @@ try {
   const agent = (scope.json?.agents || []).find((a) => a.key === key);
   if (!V.assert(`A: scope holds B's repo as machine ${PEER_LABEL}, available`, scope.status === 200 && agent?.machine === PEER_LABEL && agent?.availability === 'available' && agent?.isLocal === false,
     `http ${scope.status} ${JSON.stringify(scope.json?.agents || [])}`)) throw new L.Abort('scope failed');
+  V.assert(`A: B's repo is sendable (managed by B's own arch, B accepts, sends allowed)`, agent?.managedThere === true && agent?.sendable === true && !agent?.blocked,
+    JSON.stringify({ managedThere: agent?.managedThere, sendable: agent?.sendable, blocked: agent?.blocked }));
+  const srcScoped = (scope.json?.fleet?.sources || []).find((s) => s.id === srcId);
+  V.assert(`A: the Fleet view reports B's own scope (managedThere = 1, the repo marked managed)`, srcScoped?.managedThere === 1
+    && (srcScoped?.repos || []).some((r) => r.repoId === repoIdB && r.managed === true), JSON.stringify(srcScoped?.repos || []).slice(0, 300));
 
   const arm = await L.api('POST', '/api/arch/loop', { action: 'arm', mode: 'drive', maxIterations: MAX_ARCH_ITERATIONS });
   if (!V.assert('A: arch loop armed (drive)', arm.status === 200 && arm.json?.loop?.active === true, `http ${arm.status}`)) throw new L.Abort('arm failed');

@@ -99,6 +99,7 @@ public class ArchController : ControllerBase
                 machine = a.Machine, sourceId = a.SourceId, key = a.Key, repoId = a.RepoId, name = a.Name, remoteUrl = a.RemoteUrl, branch = a.Branch,
                 defaultBranch = a.DefaultBranch, dirty = a.Dirty, availability = a.Availability, lastActor = a.LastActor,
                 runningSince = a.RunningSince, tabId = a.TabId, exists = a.Exists, isLocal = a.IsLocal,
+                managedThere = a.IsLocal || a.ManagedThere, sendable = a.Sendable, blocked = a.Blocked?.Reason,
             }),
             fleet = BuildFleet(),
             home = new
@@ -138,8 +139,11 @@ public class ArchController : ControllerBase
                 repos = peer.Repos.Select(r => new
                 {
                     repoId = r.RepoId, name = r.Name, key = Services.Arch.ArchStateStore.FleetKey(s.Id, r.RepoId), remoteUrl = r.RemoteUrl,
-                    branch = r.Branch, availability = r.Availability, exists = r.Exists, isSelf = r.IsSelf,
+                    branch = r.Branch, availability = r.Managed == true ? r.Availability : ArchAgentService.Unmanaged, exists = r.Exists, isSelf = r.IsSelf,
+                    // The peer's OWN arch scope (D8): null = a build that predates scope reporting.
+                    managed = r.Managed,
                 }),
+                managedThere = peer.Repos.Count(r => r.Managed == true),
             };
         }).ToList();
         return new

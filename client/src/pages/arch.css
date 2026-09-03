@@ -68,6 +68,8 @@
 .arch__scope-group { font-size: 12px; font-weight: 600; color: var(--color-text-muted, #888); margin-top: 6px; }
 .arch__scope-machine { display: flex; flex-direction: column; gap: 4px; }
 .arch__scope-row .arch__avail { margin-left: auto; }
+.arch__scope-row--off { opacity: 0.65; }
+.arch__blocked { color: #b45309; }
 .arch__fleet .arch__scope-row { margin: 4px 0; }
 /* The live turn (task 6c): the current arch turn streamed onto the page — the
    repo chat's bubbles + activity steps (chat.css) inside the arch scroll. A

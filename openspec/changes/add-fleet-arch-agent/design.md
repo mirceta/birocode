@@ -80,6 +80,23 @@ snapshot per source (describe result + timestamp). Tool calls and the Arch tab
 refresh when older than 5 s (blocking, bounded by the 6 s HTTP timeout); wake
 composition uses the cache only, never blocking the engine tick on a dead peer.
 
+**D8 — The peer's own arch scope is authoritative; posture is visible before a
+send.** (Added 2026-09-03 after the first real two-machine run: A's arch sent a
+task to a repo on B that B's own arch did not manage, and had no tool to know.)
+D2's "the remote arch's scope decides" is reversed: B's describe reports `managed`
+per repo and `managedRepoIds`; an unmanaged repo is `unmanaged` to the fleet, and
+B refuses a peer send or transcript read for it with `unmanaged` naming B's Arch
+tab. On A, `FleetSendPosture` (pure) turns the snapshot into a `SendBlock`
+(status + reason) — peer dark / no peer API / sends not allowed / not accepting /
+gate closed / not managed there — checked in `send_task` before any HTTP,
+surfaced per agent in `list_agents` (`managedThere`, `sendable`, `blocked`) and
+in one call by the new `list_machines` tool. The Arch tab's picker shows a
+peer's repo outside its own scope as "not in <peer>'s arch scope" (disabled), and
+the Fleet card says how many repos each peer's arch manages. A peer that omits
+`managed` (older build) is not sendable with an "upgrade it" reason. The role
+prompt (v3) says: never guess a repoId, and when `blocked` names a reason, report
+it — every cause is a person's setting on one side or the other.
+
 **D7 — Ship gate is `tests/loop-eval/fleet.mjs`, isolated only for now.** Two
 instances from the same bin copy, separate ports and data dirs; B registered as a
 source in A with B's password and `allowSends`; B's `acceptFleetSends` set through

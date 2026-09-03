@@ -45,7 +45,7 @@ public class ArchAgentService : IArchWakeSource
     public const string AuditOutcomeSend = "arch";
     public const string AuditOutcomeTool = "arch-tool";
     public const string AuditOutcomeDenied = "arch-denied";
-    public const string RoleVersionMarker = "<!-- arch-role v2 -->";
+    public const string RoleVersionMarker = "<!-- arch-role v3 -->";
 
     /// <summary>Availability values (D4). <see cref="Unreachable"/> is the fleet
     /// addition (openspec add-fleet-arch-agent, D4): a remote agent whose harness
@@ -238,10 +238,20 @@ public class ArchAgentService : IArchWakeSource
         The repos you manage may live on OTHER machines: `list_agents` reports each agent's
         `machine` (`self` for this harness, else the machine's label) and you address a
         target with that same `machine` value in `send_task`, `read_transcript` and
-        `git_state`. A remote machine applies its own rules to your task (it may answer
-        `not-accepting`, `denied`, `claimed`, `busy`); `unreachable` means its harness did
-        not answer — wait, do not retry in a loop. When the Operator names a repository by
-        its git URL, match it by `remoteUrl` across machines and prefer an `available` copy.
+        `git_state`. Use `repoId` exactly as listed — never a repo name, never a guess; if
+        the Operator names a repo you cannot find in `list_agents`, say so instead of sending.
+        Every agent carries `sendable` and `blocked`. A task can reach a remote agent only
+        when that machine answered, your Operator allowed sends to it, its Operator accepts
+        fleet sends with the gate open, AND that machine's OWN arch agent manages the repo
+        (`managedThere`). When `blocked` names a reason, do not send: every cause is a
+        person's setting on one side or the other, so report exactly what is missing and
+        where. `list_machines` shows the whole fleet posture in one call — each machine,
+        what it accepts, which repos its arch manages, which of those are in your scope,
+        and which are sendable right now. A remote machine applies its own rules to your
+        task (it may answer `not-accepting`, `unmanaged`, `denied`, `claimed`, `busy`);
+        `unreachable` means its harness did not answer — wait, do not retry in a loop. When
+        the Operator names a repository by its git URL, match it by `remoteUrl` across
+        machines and prefer an `available` copy.
 
         ## Rules
 
@@ -430,10 +440,59 @@ public class ArchAgentService : IArchWakeSource
     public sealed record AgentView(
         string Machine, string RepoId, string Name, string RemoteUrl, string Branch, string DefaultBranch,
         bool Dirty, string Availability, string LastActor, long? RunningSince, string? TabId, bool Exists,
-        string SourceId = CollectorService.SelfId)
+        string SourceId = CollectorService.SelfId, SendBlock? Blocked = null, bool ManagedThere = true)
     {
         public bool IsLocal => SourceId == CollectorService.SelfId;
         public string Key => IsLocal ? RepoId : ArchStateStore.FleetKey(SourceId, RepoId);
+        /// <summary>Whether a send could go out at all (fleet posture, D8); local
+        /// agents are always sendable here — armed/claimed/busy are runtime answers.</summary>
+        public bool Sendable => Blocked is null;
+    }
+
+    /// <summary>Why a remote agent cannot be sent to right now (openspec
+    /// add-fleet-arch-agent, D8): a named status plus a reason the arch agent can
+    /// hand to the Operator, because every cause is a person's setting somewhere.</summary>
+    public sealed record SendBlock(string Status, string Reason);
+
+    /// <summary>The fleet send posture, pure and unit-testable (D8): a task can reach
+    /// a remote agent only when the peer answered with a peer API, this Operator
+    /// allowed sends to it, its Operator accepts fleet sends with the gate open, and
+    /// ITS OWN arch agent manages the repo. Null means sendable. Checked on the
+    /// caller before any HTTP; the peer enforces the same on arrival.</summary>
+    public static SendBlock? FleetSendPosture(string peerLabel, string peerStatus, string? peerDetail,
+        bool allowSends, bool acceptsSends, bool gateOpen, bool? managedThere)
+    {
+        if (peerStatus == FleetClient.StatusNever)
+            return new SendBlock(Unreachable, $"{peerLabel} has not been probed yet");
+        if (peerStatus != FleetClient.StatusOk)
+            return new SendBlock(peerStatus, $"{peerLabel}: {peerDetail ?? peerStatus}");
+        if (!allowSends)
+            return new SendBlock("error", $"the operator has not allowed sends to {peerLabel} (events app / Arch tab: allow sends)");
+        if (!acceptsSends)
+            return new SendBlock("not-accepting", $"{peerLabel} does not accept fleet sends (its operator has not opted in on its Arch tab)");
+        if (!gateOpen)
+            return new SendBlock("not-accepting", $"{peerLabel}'s autopilot gate is closed by its operator");
+        if (managedThere is null)
+            return new SendBlock(FleetClient.StatusNoPeerApi, $"{peerLabel} runs a build that does not report its arch scope; upgrade it");
+        if (managedThere == false)
+            return new SendBlock(Unmanaged, $"{peerLabel}'s own arch agent does not manage this repo (its operator must add it to the scope on {peerLabel}'s Arch tab)");
+        return null;
+    }
+
+    /// <summary>The posture of one remote agent from the peer snapshot: whether the
+    /// peer's arch manages it (null = the peer does not list it, or its build predates
+    /// scope reporting) and the block, if any.</summary>
+    private (FleetClient.PeerSnapshot Snap, FleetClient.PeerRepo? Repo, SendBlock? Block) RemotePosture(
+        CollectorService.SourceView src, string repoId, bool refresh)
+    {
+        var snap = _fleet.Snapshot(src.Id, refresh: refresh);
+        var r = snap.Repos.FirstOrDefault(x => string.Equals(x.RepoId, repoId, StringComparison.Ordinal));
+        bool? managedThere = r is null ? (snap.Reachable ? false : null) : r.Managed;
+        var block = FleetSendPosture(src.Label, snap.Status, snap.Detail, src.AllowSends,
+            snap.Info?.AcceptsSends ?? false, snap.Info?.GateOpen ?? false, managedThere);
+        if (r is null && snap.Reachable && block?.Status == Unmanaged)
+            block = new SendBlock(Unmanaged, $"{src.Label} has no repo with id {repoId}");
+        return (snap, r, block);
     }
 
     /// <summary>The <c>list_agents</c> view (D5): every managed repo with its git
@@ -448,16 +507,20 @@ public class ArchAgentService : IArchWakeSource
         return views;
     }
 
-    private List<AgentView> LocalAgents(ISet<string> managed)
+    /// <summary>Views of the registered repos in <paramref name="include"/>, classified
+    /// against <paramref name="managed"/> (defaults to the same set: the local
+    /// list_agents case, where only managed repos are listed at all).</summary>
+    private List<AgentView> LocalAgents(ISet<string> include, ISet<string>? managed = null)
     {
+        managed ??= include;
         var (events, _) = _collector.ReadEvents(0);
         var tabs = _dock.GetAll();
         var views = new List<AgentView>();
-        foreach (var repo in _repos.GetAll().Where(r => managed.Contains(r.Id)))
+        foreach (var repo in _repos.GetAll().Where(r => include.Contains(r.Id)))
         {
             var busy = _runs.IsBusy(repo.Id);
             var gs = repo.Exists ? ReadGitState(repo) : new GitState("unknown", "main", 0, 0, false, 0, "", false, "missing");
-            var avail = Classify(true, busy, gs.Branch, gs.DefaultBranch, ReadAssignment(repo.Id).Branches);
+            var avail = Classify(managed.Contains(repo.Id), busy, gs.Branch, gs.DefaultBranch, ReadAssignment(repo.Id).Branches);
             var (lastStartAt, running) = LatestTurnStart(events, repo.Id);
             var lastActor = lastStartAt is null ? "none"
                 : _archSentAt.TryGetValue(repo.Id, out var sentAt) && lastStartAt.Value >= sentAt - 1000 && lastStartAt.Value - sentAt < 15_000
@@ -478,44 +541,61 @@ public class ArchAgentService : IArchWakeSource
         var views = new List<AgentView>();
         foreach (var group in ManagedFleet().Select(k => ArchStateStore.ParseFleetKey(k)!.Value).GroupBy(p => p.SourceId, StringComparer.Ordinal))
         {
-            var snap = _fleet.Snapshot(group.Key, refresh: refreshPeers);
+            var src = _collector.ResolveSource(group.Key);
+            if (src is null) continue;
+            // One describe per source: the first posture call refreshes (when asked),
+            // the rest of the group reads the cache it just filled.
+            var refresh = refreshPeers;
             foreach (var (sourceId, repoId) in group)
             {
-                var r = snap.Repos.FirstOrDefault(x => string.Equals(x.RepoId, repoId, StringComparison.Ordinal));
+                var (snap, r, block) = RemotePosture(src, repoId, refresh);
+                refresh = false;
                 if (r is null)
                 {
                     views.Add(new AgentView(snap.Label, repoId, repoId, "", "unknown", "main", false,
-                        snap.Reachable ? Unmanaged : Unreachable, "none", null, null, false, sourceId));
+                        snap.Reachable ? Unmanaged : Unreachable, "none", null, null, false, sourceId, block, false));
                     continue;
                 }
+                // The peer's own scope decides (D8): a repo its arch does not manage is
+                // `unmanaged` here too, whatever this harness's scope says.
+                var managedThere = r.Managed == true;
                 views.Add(new AgentView(snap.Label, r.RepoId, r.Name, r.RemoteUrl ?? "", r.Branch ?? "unknown", r.DefaultBranch ?? "main",
-                    r.Dirty, r.Availability ?? Unreachable, r.LastActor ?? "none", r.RunningSince, null, r.Exists, sourceId));
+                    r.Dirty, managedThere ? r.Availability ?? Unreachable : Unmanaged, r.LastActor ?? "none", r.RunningSince, null, r.Exists,
+                    sourceId, block, managedThere));
             }
         }
         return views;
     }
 
     /// <summary>Every registered repo of THIS harness as the peer describe reports
-    /// it to a fleet arch elsewhere (openspec add-fleet-arch-agent, D2): classified
-    /// as if managed, because the remote arch's scope — not ours — decides what it
-    /// manages. Its sends still pass this harness's own fence.</summary>
+    /// it to a fleet arch elsewhere (openspec add-fleet-arch-agent, D2 as amended by
+    /// D8): classified against THIS harness's own arch scope, because that scope is
+    /// authoritative — a repo the local arch does not manage is <c>unmanaged</c> to
+    /// the fleet as well, and a fleet send to it is refused here.</summary>
     public IReadOnlyList<AgentView> PeerAgents() =>
-        LocalAgents(_repos.GetAll().Select(r => r.Id).ToHashSet(StringComparer.Ordinal));
+        LocalAgents(_repos.GetAll().Select(r => r.Id).ToHashSet(StringComparer.Ordinal),
+            ManagedRepoIds().ToHashSet(StringComparer.Ordinal));
 
-    public object PeerDescribe() => new
+    public object PeerDescribe()
     {
-        protocol = FleetClient.Protocol,
-        version = BuildVersion,
-        machine = SelfLabel,
-        acceptsSends = AcceptFleetSends,
-        gateOpen = _gate.Enabled,
-        repos = PeerAgents().Select(a => new
+        var managed = ManagedRepoIds();
+        return new
         {
-            repoId = a.RepoId, name = a.Name, remoteUrl = a.RemoteUrl, branch = a.Branch, defaultBranch = a.DefaultBranch,
-            dirty = a.Dirty, availability = a.Availability, lastActor = a.LastActor, runningSince = a.RunningSince,
-            exists = a.Exists, isSelf = _repos.GetAll().FirstOrDefault(r => r.Id == a.RepoId)?.IsSelf ?? false,
-        }).ToList(),
-    };
+            protocol = FleetClient.Protocol,
+            version = BuildVersion,
+            machine = SelfLabel,
+            acceptsSends = AcceptFleetSends,
+            gateOpen = _gate.Enabled,
+            managedRepoIds = managed,
+            repos = PeerAgents().Select(a => new
+            {
+                repoId = a.RepoId, name = a.Name, remoteUrl = a.RemoteUrl, branch = a.Branch, defaultBranch = a.DefaultBranch,
+                dirty = a.Dirty, availability = a.Availability, lastActor = a.LastActor, runningSince = a.RunningSince,
+                exists = a.Exists, isSelf = _repos.GetAll().FirstOrDefault(r => r.Id == a.RepoId)?.IsSelf ?? false,
+                managed = managed.Contains(a.RepoId, StringComparer.Ordinal),
+            }).ToList(),
+        };
+    }
 
     // ---- tools -----------------------------------------------------------------
 
@@ -526,12 +606,61 @@ public class ArchAgentService : IArchWakeSource
         var list = ListAgents();
         AuditTool("list_agents", null, $"{list.Count} managed");
         var remote = list.Count(a => !a.IsLocal);
-        return new ToolOutcome(true, "ok", $"{list.Count} managed agent(s){(remote > 0 ? $", {remote} on other machines" : "")}", list.Select(a => new
+        var blocked = list.Count(a => !a.Sendable);
+        return new ToolOutcome(true, "ok",
+            $"{list.Count} managed agent(s){(remote > 0 ? $", {remote} on other machines" : "")}{(blocked > 0 ? $", {blocked} not sendable (see blocked)" : "")}",
+            list.Select(a => new
+            {
+                machine = a.Machine, sourceId = a.SourceId, repoId = a.RepoId, name = a.Name, remoteUrl = a.RemoteUrl, branch = a.Branch,
+                defaultBranch = a.DefaultBranch, dirty = a.Dirty, availability = a.Availability, lastActor = a.LastActor,
+                runningSince = a.RunningSince, runningFor = a.RunningSince is { } rs ? Elapsed(rs, Now()) : null,
+                managedThere = a.IsLocal ? true : a.ManagedThere, sendable = a.Sendable, blocked = a.Blocked?.Reason,
+            }).ToList());
+    }
+
+    /// <summary>The <c>list_machines</c> tool (openspec add-fleet-arch-agent, D8): the
+    /// whole fleet posture in one call — this harness and every subscribed one, what
+    /// each accepts, which repos ITS arch manages, which of those are in your scope,
+    /// and which are actually sendable right now (with the reason when not).</summary>
+    public ToolOutcome ToolListMachines()
+    {
+        var mine = ManagedRepoIds();
+        var repos = _repos.GetAll();
+        var machines = new List<object>
         {
-            machine = a.Machine, sourceId = a.SourceId, repoId = a.RepoId, name = a.Name, remoteUrl = a.RemoteUrl, branch = a.Branch,
-            defaultBranch = a.DefaultBranch, dirty = a.Dirty, availability = a.Availability, lastActor = a.LastActor,
-            runningSince = a.RunningSince, runningFor = a.RunningSince is { } rs ? Elapsed(rs, Now()) : null,
-        }).ToList());
+            new
+            {
+                machine = Machine, label = SelfLabel, sourceId = CollectorService.SelfId, reachable = true, status = FleetClient.StatusOk, detail = (string?)null,
+                version = BuildVersion, sendsAllowed = true, acceptsSends = AcceptFleetSends, gateOpen = _gate.Enabled,
+                managedThere = mine.Select(id => new { repoId = id, name = repos.FirstOrDefault(r => r.Id == id)?.Name ?? id }).ToList(),
+                inYourScope = mine, sendable = mine, blocked = new List<object>(),
+            },
+        };
+        var fleet = ManagedFleet().Select(k => ArchStateStore.ParseFleetKey(k)!.Value).ToList();
+        foreach (var src in _collector.ListSources().Where(s => s.Kind == "remote"))
+        {
+            var snap = _fleet.Snapshot(src.Id);
+            var scoped = fleet.Where(p => p.SourceId == src.Id).Select(p => p.RepoId).ToList();
+            var managedThere = snap.Repos.Where(r => r.Managed == true).ToList();
+            var sendable = new List<string>();
+            var blockedList = new List<object>();
+            foreach (var repoId in scoped)
+            {
+                var (_, _, block) = RemotePosture(src, repoId, refresh: false);
+                if (block is null) sendable.Add(repoId);
+                else blockedList.Add(new { repoId, status = block.Status, reason = block.Reason });
+            }
+            machines.Add(new
+            {
+                machine = src.Label, label = src.Label, sourceId = src.Id, reachable = snap.Reachable, status = snap.Status, detail = snap.Detail,
+                version = snap.Info?.Version, sendsAllowed = src.AllowSends, acceptsSends = snap.Info?.AcceptsSends ?? false, gateOpen = snap.Info?.GateOpen ?? false,
+                managedThere = managedThere.Select(r => new { repoId = r.RepoId, name = r.Name }).ToList(),
+                inYourScope = scoped, sendable, blocked = blockedList,
+            });
+        }
+        AuditTool("list_machines", null, $"{machines.Count} machine(s)");
+        var remote = machines.Count - 1;
+        return new ToolOutcome(true, "ok", remote == 0 ? "only this machine (no subscribed harnesses)" : $"this machine + {remote} subscribed harness(es)", machines);
     }
 
     public ToolOutcome ToolGitState(string? machine, string? repoId)
@@ -690,6 +819,14 @@ public class ArchAgentService : IArchWakeSource
             return new ToolOutcome(false, "error", $"the operator has not allowed sends to {src.Label} (events app / Arch tab: allow sends); nothing was sent");
         }
         if (DenyFence(loop!, key, name, text) is { } denied) return denied;
+        // Posture before any HTTP (D8): the peer answered, accepts, its gate is open
+        // and ITS arch manages the repo — else a named refusal with the reason.
+        var (_, _, block) = RemotePosture(src, repoId, refresh: true);
+        if (block is not null)
+        {
+            AuditTool("send_task", key, block.Status);
+            return new ToolOutcome(false, block.Status, $"{block.Reason}; nothing was sent");
+        }
 
         var now = Now();
         var sendText = text.Trim();
@@ -723,6 +860,12 @@ public class ArchAgentService : IArchWakeSource
             return new ToolOutcome(false, "not-accepting", $"{SelfLabel}'s autopilot gate is closed by its operator");
         var repo = _repos.GetAll().FirstOrDefault(r => r.Id == repoId);
         if (repo is null) return new ToolOutcome(false, Unmanaged, $"{repoId} is not a repo on {SelfLabel}");
+        // This harness's own arch scope is authoritative for the fleet too (D8).
+        if (!IsManaged(repoId))
+        {
+            _logger.Info($"[ARCH] fleet send from {machine} to \"{repo.Name}\" refused: not in {SelfLabel}'s arch scope");
+            return new ToolOutcome(false, Unmanaged, $"{repo.Name} is not managed by {SelfLabel}'s arch agent (its operator must add it to the scope on {SelfLabel}'s Arch tab); nothing was sent");
+        }
         if (!repo.Exists) return new ToolOutcome(false, "error", $"{repo.Name}'s folder is missing on {SelfLabel}");
 
         var deny = _config.Get().DenyList;
@@ -739,12 +882,12 @@ public class ArchAgentService : IArchWakeSource
         return StartRepoTurn(repo, text, branch, MessageActors.FleetActor(machine), MessageActors.FleetPhasePrefix + machine, null);
     }
 
-    /// <summary>The peer API's transcript read: any registered repo, refused when claimed.</summary>
+    /// <summary>The peer API's transcript read: a repo in THIS harness's arch scope
+    /// (D8), refused when claimed or unmanaged like the local tool.</summary>
     public ToolOutcome PeerReadTranscript(string? repoId, int tail)
     {
         if (string.IsNullOrWhiteSpace(repoId)) return new ToolOutcome(false, "error", "repoId is required");
-        var exists = _repos.GetAll().Any(r => r.Id == repoId);
-        return ReadLocalTranscript(repoId, tail, managed: exists);
+        return ReadLocalTranscript(repoId, tail, managed: IsManaged(repoId));
     }
 
     /// <summary>A machine label as received over the wire: letters, digits, dot,

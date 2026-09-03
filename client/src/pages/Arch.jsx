@@ -391,14 +391,20 @@ export default function Arch({ popup = false, onOpenDock = null }) {
                       <span className="arch__dim"> · {offerable ? `${(s.repos || []).length} repo(s)` : !s.allowSends && s.peer?.status === 'ok' ? 'allow sends first (Fleet card)' : peerText(s)}</span>
                     </div>
                     {offerable && (s.repos || []).map((r) => (
-                      <label key={r.key} className="arch__scope-row">
+                      // The peer's OWN arch scope decides (openspec add-fleet-arch-agent, D8):
+                      // a repo its arch does not manage is shown, named as such, and cannot
+                      // be scoped here — the fix is on that machine's Arch tab.
+                      <label key={r.key} className={`arch__scope-row${r.managed === true ? '' : ' arch__scope-row--off'}`} data-managed-there={String(r.managed)}>
                         <input
                           type="checkbox"
+                          disabled={r.managed !== true}
                           checked={fleetDraft.includes(r.key)}
                           onChange={(e) => setFleetDraft((d) => (e.target.checked ? [...d, r.key] : d.filter((x) => x !== r.key)))}
                         />
                         {r.name}{r.isSelf ? ' (harness)' : ''}{r.exists ? '' : ' — missing'}
-                        <span className={`arch__avail arch__avail--${AVAIL_CLASS[r.availability] || 'dim'}`}>{r.availability}</span>
+                        {r.managed === true
+                          ? <span className={`arch__avail arch__avail--${AVAIL_CLASS[r.availability] || 'dim'}`}>{r.availability}</span>
+                          : <span className="arch__avail arch__avail--dim">{r.managed === false ? `not in ${s.label}'s arch scope` : 'peer build does not report its scope'}</span>}
                       </label>
                     ))}
                   </div>
@@ -423,6 +429,9 @@ export default function Arch({ popup = false, onOpenDock = null }) {
               <div className="arch__dim arch__mono">
                 {a.branch}{a.dirty ? ' · dirty' : ''}{a.branch !== a.defaultBranch ? ` (default ${a.defaultBranch})` : ''}
               </div>
+              {a.isLocal === false && a.sendable === false && a.blocked && (
+                <div className="arch__dim arch__blocked" data-blocked="true">not sendable: {a.blocked}</div>
+              )}
               <div className="arch__dim">
                 last actor {a.lastActor}
                 {a.runningSince ? ` · running ${ago(a.runningSince)}` : ''}
@@ -458,6 +467,12 @@ export default function Arch({ popup = false, onOpenDock = null }) {
               </div>
               <div className="arch__dim arch__mono arch__wrap">{s.address}</div>
               <div className="arch__dim">{peerText(s)}{s.status && s.status !== 'active' ? ` · feed ${s.status}` : ''}</div>
+              {s.peer?.status === 'ok' && (
+                <div className="arch__dim" data-managed-there={s.managedThere ?? 0}>
+                  its arch manages {s.managedThere ?? 0} of {(s.repos || []).length} repo(s)
+                  {(s.managedThere ?? 0) === 0 ? ' — nothing can be sent there until its operator scopes a repo on its Arch tab' : ''}
+                </div>
+              )}
               <label className="arch__scope-row">
                 <input type="checkbox" checked={!!s.allowSends} onChange={(e) => setAllowSends(s.id, e.target.checked)} />
                 allow sends to {s.label}

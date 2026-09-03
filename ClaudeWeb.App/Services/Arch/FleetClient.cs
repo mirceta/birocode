@@ -62,7 +62,10 @@ public class FleetClient
         [property: JsonPropertyName("lastActor")] string? LastActor,
         [property: JsonPropertyName("runningSince")] long? RunningSince,
         [property: JsonPropertyName("exists")] bool Exists,
-        [property: JsonPropertyName("isSelf")] bool IsSelf);
+        [property: JsonPropertyName("isSelf")] bool IsSelf,
+        // Whether the PEER's own arch agent manages this repo (D8). Null = the peer
+        // runs a build that predates scope reporting; treated as not sendable.
+        [property: JsonPropertyName("managed")] bool? Managed = null);
 
     public sealed record PeerInfo(
         [property: JsonPropertyName("protocol")] int Protocol,
@@ -70,7 +73,8 @@ public class FleetClient
         [property: JsonPropertyName("machine")] string? Machine,
         [property: JsonPropertyName("acceptsSends")] bool AcceptsSends,
         [property: JsonPropertyName("gateOpen")] bool GateOpen,
-        [property: JsonPropertyName("repos")] List<PeerRepo>? Repos);
+        [property: JsonPropertyName("repos")] List<PeerRepo>? Repos,
+        [property: JsonPropertyName("managedRepoIds")] List<string>? ManagedRepoIds = null);
 
     /// <summary>What we last learned about a peer: transport status + the describe
     /// when it answered. <see cref="At"/> is when it was taken (unix ms).</summary>

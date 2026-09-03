@@ -89,15 +89,15 @@
 <!-- ============ 1 STATUS ============ -->
 <section id="v-status" class="on">
   <h2>The lifecycle, and where the cursor sits</h2>
-  <p class="dim">Both changes went propose → design → implement on this branch. Everything up to "verified isolated" is done. The cursor is on <b>deploy the branch to both boxes</b>, then the real two-machine test. PR #56 merges only after that test passes. Deploying the branch is allowed: <code>swap.ps1</code>'s guard checks that HEAD contains origin/main, and this branch does (808d9f7).</p>
+  <p class="dim">Both changes went propose → design → implement on this branch and were deployed to both boxes. The first <b>real two-machine run (2026-09-03)</b> proved the transport end to end and exposed one design hole: this box's arch sent a task to a repo on MONSTER that MONSTER's own arch did not manage, and it had no tool to know. That is fixed on the branch as decision <b>D8</b> (the peer's own scope is authoritative, and the posture is visible before a send). The cursor is on <b>redeploy both boxes, then re-run the real test</b>. PR #56 merges only after that passes.</p>
   <div class="tl">
     <div class="step done"><div class="t">Proposed</div><div class="s">2 OpenSpec changes, strict-valid</div></div>
     <div class="step done"><div class="t">Implemented</div><div class="s">backend, MCP, Arch tab, peer API, fleet client</div></div>
-    <div class="step done"><div class="t">Verified isolated</div><div class="s">167 unit · 39 browser · fleet e2e 23/23 ×2 · arch e2e 25/25 ×2</div></div>
-    <div class="step done"><div class="t">Pushed</div><div class="s">1cf1f71 on PR #56</div></div>
-    <div class="step now"><div class="t">Deploy the branch</div><div class="s">this box via swap.ps1 (guard passes), the other computer from a fresh clone</div></div>
-    <div class="step todo"><div class="t">Wire the fleet</div><div class="s">receiver opt-in there, caller opt-in here</div></div>
-    <div class="step todo"><div class="t">Real fleet test</div><div class="s">this box = arch, the other computer = driven peer</div></div>
+    <div class="step done"><div class="t">Deployed to both boxes</div><div class="s">this box (WIN-QVH03HBBI3A) + MONSTER at 192.168.0.143</div></div>
+    <div class="step done"><div class="t">Real fleet test #1</div><div class="s">transport passed; the task hit an unscoped repo on MONSTER</div></div>
+    <div class="step done"><div class="t">D8 implemented + verified isolated</div><div class="s">peer scope authoritative · list_machines · sendable/blocked · 178 unit · fleet e2e 31/31 · Arch tab 41/41</div></div>
+    <div class="step now"><div class="t">Redeploy both boxes</div><div class="s">swap.ps1 here on your "deploy", pull + rebuild on MONSTER</div></div>
+    <div class="step todo"><div class="t">Real fleet test #2</div><div class="s">MONSTER scopes game-arcade on its Arch tab first</div></div>
     <div class="step todo"><div class="t">Merge PR #56</div><div class="s">your click, only after the real test passes</div></div>
     <div class="step todo"><div class="t">Live arch eval · archive</div><div class="s">Tests tab run, then fold both deltas into the baseline</div></div>
   </div>
@@ -206,6 +206,7 @@
       <h3>On B (the other computer)</h3>
       <div class="tog on" data-k="accept"><span>"Accept fleet sends" ticked in B's Arch tab</span><span class="sw"></span></div>
       <div class="tog on" data-k="gate"><span>B's autopilot gate open</span><span class="sw"></span></div>
+      <div class="tog on" data-k="bscope"><span>Target repo is in B's OWN arch scope (B's Arch tab) — D8</span><span class="sw"></span></div>
       <div class="tog" data-k="bdeny"><span>Task text hits B's deny list</span><span class="sw"></span></div>
       <div class="tog" data-k="claimed"><span>Target repo on an Operator feature branch (claimed)</span><span class="sw"></span></div>
       <div class="tog" data-k="busy"><span>Target repo already running a turn</span><span class="sw"></span></div>
@@ -225,12 +226,11 @@
 <section id="v-next">
   <h2>How to continue, in order</h2>
   <div class="steps">
-    <div><b>Deploy the branch here <span class="pill me">me</span></b>Say "deploy". I run the committed <code>swap.ps1</code> detached on <code>feature/arch-agent</code>. Its guard only requires that HEAD contains origin/main, which it does, so no bypass. Then you say "keep it" within 15 minutes or the dead-man's switch rolls live back to the pre-branch build.</div>
-    <div><b>Install the branch on the other computer <span class="pill you">you</span></b>Clone the repo there, check out <code>feature/arch-agent</code>, build the client and run the harness on :5099. No swap.ps1 needed for a first install, there is no live to swap. Until it runs this build, this box's Fleet card shows that peer as "no peer API on that build".</div>
-    <div><b>Open the receiver there <span class="pill you">you</span></b>On the other computer: Arch tab → Fleet card → tick "accept fleet sends". Keep its autopilot gate open. That computer is the driven peer, it never sends.</div>
-    <div><b>Register it on this box <span class="pill you">you</span></b>Events app: add the other harness as a source with its password, press "sends: on" on that source. Arch tab → scope picker → pick its repos → arm. This box is now the fleet arch agent.</div>
-    <div><b>Run the real test together <span class="pill me">me</span> <span class="pill you">you</span></b>Give the arch agent a small task for a repo on the other computer. We check that computer's dock shows <code>arch@&lt;this box&gt;</code>, that its turn runs, and that this box's Arch tab wakes when the turn ends. First run on real network, real passwords, real build gap.</div>
-    <div><b>Fix what the real test finds <span class="pill me">me</span></b>Anything the isolated e2e could not see: LAN reachability, IP gate on the peer, cookie vs header auth across boxes, clock skew in the freshness check. Push fixes to the same branch and redeploy.</div>
+    <div><b>What real run #1 proved and found <span class="pill me">me</span></b>Send over the fleet client → MONSTER ran the turn as <code>arch@WIN-QVH03HBBI3A</code> → its <code>turn.ended</code> came back through this box's collector → arch.wake named the fleet key. But the target (game-arcade) was not in MONSTER's own arch scope, and its resumed session died in one second. The arch had guessed a repoId from a name and had no way to see MONSTER's scope. Fixed as D8 on the branch.</div>
+    <div><b>Redeploy this box <span class="pill me">me</span></b>Say "deploy". I run the committed <code>swap.ps1</code> detached on <code>feature/arch-agent</code>; the guard passes. Then you say "keep it" within 15 minutes or the dead-man's switch rolls live back.</div>
+    <div><b>Redeploy MONSTER <span class="pill you">you</span></b>Pull the branch there, rebuild the client, restart on :5099. Until it runs D8, this box treats every MONSTER repo as not sendable ("peer build does not report its scope").</div>
+    <div><b>Scope the repo on MONSTER <span class="pill you">you</span></b>MONSTER's Arch tab → scope → tick game-arcade (and any other repo you want driven from here). Keep "accept fleet sends" on and the gate open. Then this box's picker shows those repos as scopeable and list_agents shows them sendable.</div>
+    <div><b>Run real test #2 <span class="pill me">me</span></b>Same driver as #1 (<code>.claudeweb-preview/fleet-live-test.mjs</code>). Pass = sendable in list_agents, the send lands, MONSTER's turn runs to a real reply, this box wakes on its turn end.</div>
     <div><b>Merge PR #56 <span class="pill you">you</span></b>Only after the real fleet test passes. The main ruleset blocks every merge the agent account tries, so the button is yours. After the merge, both boxes pull main and redeploy so live matches main.</div>
     <div><b>Live arch eval <span class="pill you">you</span></b>Tests tab → E2E → arch. It registers three fixtures on :5099 and spends turns. I record the measured run in the loop-eval README afterwards.</div>
     <div><b>Close the two open test tasks <span class="pill me">me</span></b>Unit tests for <code>send_task</code> refusals and the chat-systest for the arch bubble. Small, mechanical, can happen while the other computer is being set up.</div>
@@ -260,13 +260,15 @@ const PARTS_A=[
  ['Home repo','<ProjectsRoot>/arch-home, git-inited on first arm. Holds CLAUDE.md (the role prompt), memory/ (what remember() writes and commits), assignments/ (which branch the arch handed each repo). The arch session\'s cwd; Read is fenced to it.'],
  ['ArchLoop (@arch)','A reserved loop kind, one instance. On each tick it reads collector events past its watermark, keeps turn.start / turn.ended from managed repos, composes a wake prompt naming repo, status, cost, elapsed and every managed repo\'s availability, then sends it to the arch session. Suggest mode pre-fills the composer; drive mode sends.'],
  ['Availability rule','available | busy | claimed | unmanaged. Busy = run slot taken. Claimed = the repo sits on a branch the Operator made, not one the arch recorded. Dirty tree on the default branch is still available. The arch never touches claimed repos.'],
- ['MCP tools','list_agents, git_state, read_transcript, send_task, remember. Served to the arch session over the same temp --mcp-config mechanism the CLI runner already uses. Every call lands in the audit under actor arch.'],
+ ['MCP tools','list_agents, list_machines, git_state, read_transcript, send_task, remember, recall. Served to the arch session over the same temp --mcp-config mechanism the CLI runner already uses. Every call lands in the audit under actor arch. list_agents now carries managedThere / sendable / blocked per agent; list_machines is the whole fleet posture in one call.'],
  ['send_task','Deny fence → slot claim → user bubble with actor arch → run on the dock session → audit kind arch. Returns sent | busy | claimed | denied(term) | capped. Records the branch in assignments/.'],
  ['Arch tab','Advanced-mode tab and a dashboard pop-up. Chat lane streams the live arch turn through the shared stream hub. Tools lane lists the catalogue with per-tool usage, the denied built-ins, and a preflight (mcp / token / home / scope / gate).'],
  ['Event feed: arch.wake','Published on each sent wake prompt, so the events app and sounds can react, and so a fleet e2e can prove the wake happened.'],
 ];
 const PARTS_B=[
- ['Peer API','GET /api/arch/peer (protocol, build version, machine label, acceptsSends, gateOpen, every registered repo as an agent view). POST /api/arch/peer/send. GET /api/arch/peer/transcript. Behind the same password middleware as everything else.'],
+ ['Peer API','GET /api/arch/peer (protocol, build version, machine label, acceptsSends, gateOpen, managedRepoIds, every registered repo as an agent view with a managed flag). POST /api/arch/peer/send. GET /api/arch/peer/transcript. Behind the same password middleware as everything else.'],
+ ['D8: the peer\'s own scope is authoritative','New on 2026-09-03. A repo on B is a fleet agent only if B\'s OWN arch manages it (B\'s Arch tab scope). B\'s describe says which; an unmanaged repo is "unmanaged" to the fleet; B refuses a send or transcript read for it with unmanaged, naming B\'s Arch tab. Before D8 the peer reported every repo as if managed and A\'s arch could aim at anything on B.'],
+ ['Send posture (FleetSendPosture)','A pure rule on A: peer answered with a peer API → your operator allowed sends → its operator accepts fleet sends → its gate is open → its arch manages the repo. The first failure is the block: a status word plus a reason that names whose setting is missing. Checked in send_task before any HTTP, shown per agent in list_agents (sendable / blocked), in list_machines, and on the Arch tab (picker + Fleet card).'],
  ['Fleet client','Lives beside the collector. For a source it borrows the address and stored credential the collector already has, caches describe for 5 s, and exposes Send / ReadTranscript with a status vocabulary: ok | unreachable | unauthorized | no-peer-api | error.'],
  ['Opt-in 1: allow sends (caller)','Per source, persisted by the collector, default off. Button in the events app, checkbox in the Arch tab Fleet card. Without it, the source\'s repos never appear in the scope picker and the fleet client refuses to send.'],
  ['Opt-in 2: accept fleet sends (receiver)','Persisted in arch.json. Checkbox in the receiver\'s Arch tab. Without it, the peer send returns not-accepting before any other check.'],
@@ -288,11 +290,11 @@ const STEPS=[
  ['b-feed','','B\'s repo agent finishes a turn. B\'s feed publishes turn.ended.'],
  ['a-coll','w-back','A\'s collector polls B\'s feed and stores the event under source B.'],
  ['a-loop','','A\'s arch loop reads past its watermark, keys the event B/<repo>, finds it in the managed fleet scope, composes a wake prompt naming machine B.'],
- ['a-arch','','A\'s arch session reads the wake, calls list_agents, sees B\'s repo available, decides on a task, calls send_task(machine=B, repo, text).'],
- ['a-audit','','A-side checks: armed, repo managed, source allows sends, deny list. Then A writes its own audit row for the tool call.'],
+ ['a-arch','','A\'s arch session reads the wake, calls list_agents (or list_machines), sees B\'s repo available AND sendable (B\'s own arch manages it, B accepts, sends allowed), decides on a task, calls send_task(machine=B, repoId exactly as listed, text).'],
+ ['a-audit','','A-side checks: armed, repo in A\'s scope, source allows sends, deny list, then the posture from B\'s cached describe (reachable, peer API, accepts, gate open, managed by B\'s arch). Any block returns its status + reason with no HTTP. Then A writes its own audit row for the tool call.'],
  ['a-fc','w-send','Fleet client POSTs to B\'s peer API with B\'s stored password.'],
  ['b-peer','','B receives the send with from=A.'],
- ['b-gates','','B checks in order: accept flag, autopilot gate, deny list, claimed, busy. Any failure returns a status word and nothing is posted.'],
+ ['b-gates','','B checks in order: accept flag, autopilot gate, repo in B\'s OWN arch scope (D8), deny list, claimed, busy. Any failure returns a status word and nothing is posted.'],
  ['b-bubble','','B posts the user bubble tagged arch@A into the repo dock and writes B\'s audit row (kind arch, phase fleet:A).'],
  ['b-run','','B\'s repo agent runs the task. A got "sent" back and will wait for the next turn.ended rather than retry.'],
  ['b-feed','w-back','When the turn ends, B\'s feed publishes turn.ended again, and the cycle repeats from step 2.'],
@@ -312,7 +314,7 @@ document.getElementById('fl-step').addEventListener('click',()=>{if(ftimer){clea
 document.getElementById('fl-reset').addEventListener('click',fReset);
 
 // ---- 4: simulator
-const S={armed:true,managed:true,allow:true,deny:false,reach:true,accept:true,gate:true,bdeny:false,claimed:false,busy:false};
+const S={armed:true,managed:true,allow:true,deny:false,reach:true,accept:true,gate:true,bscope:true,bdeny:false,claimed:false,busy:false};
 document.querySelectorAll('.tog').forEach(t=>t.addEventListener('click',()=>{const k=t.dataset.k;S[k]=!S[k];t.classList.toggle('on',S[k]);sim();}));
 function sim(){
   let r,why,cls='bad';
@@ -323,6 +325,7 @@ function sim(){
   else if(!S.reach){r='unreachable / unauthorized / no-peer-api';why='Fleet client status. Wrong password → unauthorized. Old build on B → no-peer-api. Dark → unreachable. The Fleet card shows which.';}
   else if(!S.accept){r='not-accepting';why='B-side, first check: B has not ticked "accept fleet sends" in its Arch tab.';}
   else if(!S.gate){r='not-accepting';why='B-side: B\'s autopilot gate is closed. Sends are treated like any autopilot action on B.';}
+  else if(!S.bscope){r='unmanaged';why='D8: B\'s OWN arch does not manage that repo. A already sees this in list_agents (managedThere=false, blocked names B\'s Arch tab) and refuses before any HTTP; if something reached B anyway, B refuses it too. The fix is on B\'s Arch tab: scope the repo there. This is exactly what the first real run hit on MONSTER\'s game-arcade.';}
   else if(S.bdeny){r='denied(term)';why='B-side: B\'s deny list fenced it. The receiver\'s rules apply regardless of what A allowed.';}
   else if(S.claimed){r='claimed';why='B-side: the repo is on a branch the Operator made. The arch leaves claimed repos alone; wait for the next turn.ended.';}
   else if(S.busy){r='busy';why='B-side: the run slot is taken. No bubble is posted. A should wait for turn.ended, not retry.';cls='warn';}
@@ -333,12 +336,12 @@ sim();
 
 // ---- 5: checklist
 const LEFT=[
- ['me','Deploy the branch on this box','swap.ps1 detached via powershell.exe on feature/arch-agent. Guard passes (HEAD contains origin/main). Then "keep it" → keep.ps1 within 15 min.'],
- ['you','Install the branch on the other computer','Fresh clone, checkout feature/arch-agent, build client, run harness on :5099. First install, so no swap.ps1.'],
- ['you','Receiver opt-in on the other computer','Arch tab → Fleet card → accept fleet sends. Autopilot gate open. That box is the driven peer.'],
- ['you','Register + caller opt-in on this box','Events app: source registered with the peer password, "sends: on". Arch tab: scope includes its repos, armed. This box is the arch.'],
- ['me','Real two-machine fleet test','A small task to a repo on the other computer. Verify arch@<this box> on its dock, its turn runs, this box wakes on turn end. Real network, real passwords, real build gap.'],
- ['me','Fix what the real test finds, redeploy','LAN reachability, peer IP gate, cross-box auth, clock skew in freshness. Same branch, same PR.'],
+ ['me','Redeploy this box with D8','swap.ps1 detached via powershell.exe on feature/arch-agent (guard passes). Then "keep it" → keep.ps1 within 15 min.'],
+ ['you','Redeploy MONSTER with D8','Pull feature/arch-agent there, rebuild the client, restart the harness on :5099. Until then this box\'s picker says "peer build does not report its scope" for every MONSTER repo.'],
+ ['you','Scope game-arcade on MONSTER\'s Arch tab','D8 makes MONSTER\'s own scope the rule: its arch must manage the repo before this box can send to it. Also make its game-arcade tab work at all (a plain message there errors instantly today).'],
+ ['me','Real two-machine fleet test #2','Driver: .claudeweb-preview/fleet-live-test.mjs. Expect list_agents to show game-arcade sendable, the send to land, MONSTER\'s turn to run, and this box to wake on its turn end.'],
+ ['you','Fix this box\'s clock','It is ~10 min slow (w32tm /resync). Cross-machine timestamps disagree until then.'],
+ ['you','Fix the collector at 192.168.0.3','It polls this box\'s /api/events with a wrong password every few seconds. Correct its stored credential for WIN-QVH03HBBI3A.'],
  ['you','Merge PR #56','Only after the real fleet test passes. Main ruleset makes it your click. Then both boxes pull main and redeploy.'],
  ['you','Live arch loop-eval from the Tests tab','Task 7.4, live half. Registers three fixtures on :5099, spends turns. I record the measured run afterwards.'],
  ['me','Task 3.6: unit tests for send_task refusals','busy → busy with no bubble; deny term → denied naming it; claimed → claimed; unknown machine refused. Behaviour exists and is e2e-covered, unit test is missing.'],

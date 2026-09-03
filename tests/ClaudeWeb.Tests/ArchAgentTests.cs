@@ -256,11 +256,11 @@ public class ArchAgentTests : IDisposable
     // ---- 3.x MCP surface ---------------------------------------------------------------------
 
     [Fact]
-    public void Mcp_tools_list_names_the_six_tools_with_required_args()
+    public void Mcp_tools_list_names_the_seven_tools_with_required_args()
     {
         var tools = ArchMcpServer.ToolsList();
         var names = tools.Select(t => t!["name"]!.GetValue<string>()).ToList();
-        Assert.Equal(new[] { "list_agents", "git_state", "read_transcript", "send_task", "remember", "recall" }, names);
+        Assert.Equal(new[] { "list_agents", "list_machines", "git_state", "read_transcript", "send_task", "remember", "recall" }, names);
         var send = tools.First(t => t!["name"]!.GetValue<string>() == "send_task")!;
         var required = send["inputSchema"]!["required"]!.AsArray().Select(n => n!.GetValue<string>()).ToList();
         Assert.Contains("repoId", required);
@@ -375,6 +375,35 @@ public class ArchAgentTests : IDisposable
         Assert.Contains("box-b", r.Error);
     }
 
+    // The fleet send posture (openspec add-fleet-arch-agent, D8): the peer's OWN
+    // arch scope is authoritative, and every block names a person's setting.
+    [Theory]
+    [InlineData("never", true, true, true, true, "unreachable")]        // not probed yet
+    [InlineData("unreachable", true, true, true, true, "unreachable")]
+    [InlineData("no-peer-api", true, true, true, true, "no-peer-api")]
+    [InlineData("unauthorized", true, true, true, true, "unauthorized")]
+    [InlineData("ok", false, true, true, true, "error")]                // our operator has not allowed sends
+    [InlineData("ok", true, false, true, true, "not-accepting")]        // its operator has not opted in
+    [InlineData("ok", true, true, false, true, "not-accepting")]        // its gate is closed
+    [InlineData("ok", true, true, true, false, "unmanaged")]            // its arch does not manage the repo
+    [InlineData("ok", true, true, true, null, "no-peer-api")]           // a build that predates scope reporting
+    [InlineData("ok", true, true, true, true, null)]                    // sendable
+    public void Fleet_send_posture_table(string peerStatus, bool allowSends, bool acceptsSends, bool gateOpen, bool? managedThere, string? expected)
+    {
+        var block = ArchAgentService.FleetSendPosture("box-b", peerStatus, "detail", allowSends, acceptsSends, gateOpen, managedThere);
+        Assert.Equal(expected, block?.Status);
+        if (block is not null) Assert.Contains("box-b", block.Reason);
+    }
+
+    [Fact]
+    public void Unmanaged_on_the_peer_names_the_peer_operator_as_the_fix()
+    {
+        var block = ArchAgentService.FleetSendPosture("box-b", "ok", null, true, true, true, false);
+        Assert.NotNull(block);
+        Assert.Equal(ArchAgentService.Unmanaged, block!.Status);
+        Assert.Contains("box-b's Arch tab", block.Reason);
+    }
+
     [Fact]
     public void Machine_labels_from_the_wire_are_sanitized()
     {
@@ -422,7 +451,12 @@ public class ArchAgentTests : IDisposable
             var required = tool["inputSchema"]!["required"]!.AsArray().Select(n => n!.GetValue<string>()).ToList();
             Assert.DoesNotContain("machine", required);
         }
-        Assert.Contains("fleet", ArchAgentService.RolePrompt(), StringComparison.OrdinalIgnoreCase);
-        Assert.Equal("<!-- arch-role v2 -->", ArchAgentService.RoleVersionMarker);
+        var prompt = ArchAgentService.RolePrompt();
+        Assert.Contains("fleet", prompt, StringComparison.OrdinalIgnoreCase);
+        // D8: the prompt teaches posture-before-send and never guessing a repoId.
+        Assert.Contains("list_machines", prompt);
+        Assert.Contains("never a guess", prompt);
+        Assert.Contains("managedThere", prompt);
+        Assert.Equal("<!-- arch-role v3 -->", ArchAgentService.RoleVersionMarker);
     }
 }

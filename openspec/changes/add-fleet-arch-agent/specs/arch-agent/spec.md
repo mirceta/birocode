@@ -11,9 +11,47 @@ endpoint returning the last N messages of a repo agent's conversation, refused f
 claimed repo. The peer API SHALL NOT be reachable through the arch agent's
 per-process MCP token.
 
+The receiving harness's OWN arch scope SHALL be authoritative for the fleet: the
+describe SHALL report, per repo, whether that harness's arch agent manages it (and
+the managed repo ids as a list), an unmanaged repo SHALL be reported with
+availability `unmanaged`, and a send or transcript read for a repo outside that
+scope SHALL be refused with status `unmanaged` naming the receiving harness's Arch
+tab as the place to fix it.
+
 #### Scenario: Describe reports the peer's repos and posture
 - **WHEN** a fleet arch on harness A calls harness B's describe with B's credential
-- **THEN** it receives B's protocol and build version, machine name, accept-sends and gate state, and B's registered repos with availability computed by B
+- **THEN** it receives B's protocol and build version, machine name, accept-sends and gate state, B's managed repo ids, and B's registered repos each with availability computed by B and whether B's arch manages it
+
+#### Scenario: Send to a repo outside the peer's own scope
+- **WHEN** harness B accepts fleet sends but its Operator has not put repo R in B's arch scope, and a peer send for R arrives
+- **THEN** B returns `unmanaged`, says R must be scoped on B's Arch tab, emits no bubble, and runs nothing
+
+### Requirement: The fleet send posture is visible before a send
+The arch agent SHALL be able to see, before sending, whether a remote agent can be
+sent to at all. `list_agents` SHALL carry, per agent, whether the owning machine's
+own arch manages it (`managedThere`), `sendable`, and `blocked` (the reason when
+not sendable). A `list_machines` tool SHALL return the fleet posture in one call:
+this harness and every subscribed one with reachability, build version, this
+Operator's allow-sends, the peer's accept-sends and gate state, the repos the peer's
+arch manages, which of those are in this arch's scope, and which are sendable with
+reasons for the rest. A remote send SHALL be refused locally, before any HTTP
+request, with the same named status and reason when the peer is dark, has no peer
+API, sends are not allowed, the peer does not accept, its gate is closed, or its
+arch does not manage the repo. The Arch tab SHALL show the peer's own scope in the
+picker (a repo outside it is named as such and cannot be scoped) and how many repos
+each peer's arch manages.
+
+#### Scenario: Blocked agent is reported, not sent to
+- **WHEN** repo R on harness B is in A's fleet scope but B's arch does not manage R
+- **THEN** A's `list_agents` shows R with `managedThere: false`, `sendable: false` and a `blocked` reason naming B's Arch tab; `send_task` to R returns `unmanaged` with that reason and makes no HTTP request
+
+#### Scenario: Fleet posture in one call
+- **WHEN** the arch agent calls `list_machines` with one subscribed harness B that manages two repos, one of which is in A's scope
+- **THEN** the result lists self and B, B's reachability, version, allow-sends, accept-sends and gate state, both repos under `managedThere`, the scoped one under `inYourScope` and `sendable`
+
+#### Scenario: Peer on a build that predates scope reporting
+- **WHEN** B's describe answers without the `managed` field
+- **THEN** A treats every repo on B as not sendable with a reason that says to upgrade B, and the Arch tab's picker says B's build does not report its scope
 
 #### Scenario: Older peer has no peer API
 - **WHEN** harness B runs a build without the peer API

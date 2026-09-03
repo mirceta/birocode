@@ -107,13 +107,20 @@ operator marked **allow sends**.
 GET  /api/arch/peer
   -> { "protocol": 1, "version": "<build>", "machine": "<label>",
        "acceptsSends": false, "gateOpen": true,
+       "managedRepoIds": [ "<repoId>", … ],          # this harness's OWN arch scope
        "repos": [ { "repoId", "name", "remoteUrl", "branch", "defaultBranch",
                     "dirty", "availability", "lastActor", "runningSince",
-                    "exists", "isSelf" } ] }
+                    "exists", "isSelf", "managed" } ] }
 
 POST /api/arch/peer/send        { "repoId", "text", "branch"?, "from": "<caller's label>" }
   -> { "ok", "status", "detail", "data" }
      status: sent | busy | claimed | denied | not-accepting | unmanaged | error
+
+  `unmanaged` also means "not in this harness's own arch scope": the receiving
+  harness's Arch tab decides which of its repos a fleet arch may task, and the
+  describe carries that (`managed` per repo, `managedRepoIds`). A caller reads it
+  before sending; a peer on an older build omits `managed`, and callers treat
+  that as not sendable ("upgrade it").
 
 GET  /api/arch/peer/transcript?repoId=<id>&tail=<n>
   -> { "ok", "status", "detail", "data": { "messages": [ { role, text, at } ] } }

@@ -29,3 +29,11 @@
 - [x] 5.1 Unit tests: remote managed events wake and name the machine; unmanaged remote events do not; machine resolution table; fleet actor annotation; fleet key parsing
 - [x] 5.2 `tests/loop-eval/fleet.mjs`: two isolated instances on one box; B subscribed in A with sends allowed; B accepts; A's arch drives B's repo to green; asserts B's audit/transcript provenance (`arch@<A>`), A's collector saw B's `turn.ended`, `arch.wake` followed, A's audit carries the fleet send; `--describe` manifest; run isolated until green
 - [x] 5.3 `docs/event-feed-contract.md` gains "The fleet peer API"; `understanding-app/` updated to as-built; `openspec validate add-fleet-arch-agent --strict` passes
+
+## 6. Peer scope is authoritative + send posture (D8, after the first real two-machine run)
+
+- [x] 6.1 Peer describe: `managed` per repo + `managedRepoIds`; unmanaged repos reported `unmanaged`; `PeerSendTask` / `PeerReadTranscript` refuse repos outside this harness's own arch scope with `unmanaged` naming its Arch tab
+- [x] 6.2 `FleetClient.PeerRepo.Managed` (nullable: older peers); `ArchAgentService.FleetSendPosture` (pure) + `RemotePosture`; `send_task` refuses locally before any HTTP; `AgentView` carries `Blocked` / `ManagedThere` / `Sendable`
+- [x] 6.3 Tools: `list_agents` gains `managedThere`, `sendable`, `blocked`; new `list_machines`; MCP descriptions say never guess a repoId; role prompt v3 (fleet section rewritten)
+- [x] 6.4 Arch tab: picker names a peer repo outside the peer's own scope and disables it; Fleet card shows "its arch manages N of M"; remote agent rows show the block reason; `/api/arch` agents carry `sendable` / `blocked` / `managedThere`, fleet sources carry `managed` per repo + `managedThere`
+- [x] 6.5 Tests: posture table (unit); `check-arch-tab.mjs` asserts the disabled unscoped row + the Fleet card count; `fleet.mjs` asserts B's describe before/after B scopes, the `unmanaged` refusal, and A's sendable view; docs contract updated; understanding app updated
