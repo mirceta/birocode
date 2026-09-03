@@ -118,6 +118,8 @@ public class EmbeddedApi
             // Which peers may speak for clients via X-Forwarded-For
             // (plans/auth-ip-filter.md §1). Must happen before any request.
             ClientIp.Configure(_config);
+            // Which resolved client IPs skip the guest list (openspec lan-bypass-ip-gate).
+            LanBypass.Configure(_config, _logger);
             builder.Logging.ClearProviders();
 
             // Shared singletons -- every module can inject these.
@@ -202,8 +204,9 @@ public class EmbeddedApi
 
             // IP allowlist gate — the OUTERMOST check, before even static
             // files: an unapproved IP never receives the SPA shell or the
-            // login screen, only a standalone rejection page. No exemptions
-            // (plans/auth-ip-filter.md).
+            // login screen, only a standalone rejection page. Admission = guest
+            // entry, configured LAN range, or device cookie (plans/auth-ip-filter.md,
+            // openspec lan-bypass-ip-gate); the hub token path is the one exemption.
             _app.UseMiddleware<IpFilterMiddleware>();
 
             // Pipeline order matters. Static files MUST run before routing:

@@ -91,6 +91,18 @@ public class AppConfig
     public string[] TrustedProxyIps { get; set; } = [];
 
     /// <summary>
+    /// LAN bypass of the IP allowlist gate (openspec lan-bypass-ip-gate). CIDR
+    /// ranges (a.b.c.d/n, x::/n, or a bare address = host range) whose RESOLVED
+    /// client IP skips the guest list — the password still applies. Judged on the
+    /// same resolved IP as the allowlist (last trusted X-Forwarded-For hop, else
+    /// the socket peer), and never applied to a trusted-proxy peer that forwarded
+    /// nothing, so a proxy misconfiguration cannot open the gate to the internet.
+    /// Default empty = no bypass (unchanged behaviour). Env override:
+    /// CLAUDEWEB_LANBYPASSCIDRS__0=192.168.0.0/24. Invalid entries are logged and skipped.
+    /// </summary>
+    public string[] LanBypassCidrs { get; set; } = [];
+
+    /// <summary>
     /// Traffic monitor (openspec traffic-monitor): sustained response throughput
     /// (bytes-out/sec averaged over 60s) above this marks the /api/traffic report
     /// "high" — the Dashboard Traffic panel's amber signal. Default 512 KB/s;

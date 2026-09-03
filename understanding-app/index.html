@@ -3,159 +3,185 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Why the box crashes — harness resource investigation (2026-09-03)</title>
+<title>Understanding — LAN bypass for the IP gate</title>
 <style>
-  :root { --bg:#0f1117; --surface:#161922; --border:#2a2f3f; --text:#e6e6e6; --soft:#9aa0ad; --accent:#5ea0ef; --bad:#e5734b; --warn:#e0b458; --good:#4fd18b; }
-  * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.5 system-ui, Segoe UI, sans-serif; }
-  header { padding:18px 22px 10px; border-bottom:1px solid var(--border); }
-  h1 { margin:0 0 4px; font-size:20px; }
-  .sub { color:var(--soft); font-size:13px; }
-  nav { display:flex; gap:6px; padding:10px 22px; flex-wrap:wrap; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--bg); z-index:2; }
-  nav button { font:inherit; font-size:13px; padding:5px 12px; border-radius:999px; border:1px solid var(--border); background:var(--surface); color:var(--soft); cursor:pointer; }
-  nav button.on { border-color:var(--accent); color:var(--accent); background:rgba(94,160,239,.12); }
-  main { padding:18px 22px 40px; max-width:1100px; }
-  section { display:none; }
-  section.on { display:block; }
-  h2 { font-size:16px; margin:0 0 10px; }
-  p { margin:0 0 10px; }
-  .soft { color:var(--soft); }
-  .card { border:1px solid var(--border); border-radius:10px; background:var(--surface); padding:12px 14px; margin:10px 0; }
-  code, .mono { font-family:ui-monospace, Consolas, monospace; font-size:12.5px; }
-  .chain { display:flex; flex-direction:column; gap:0; margin:12px 0; }
-  .step { display:grid; grid-template-columns:34px 1fr; gap:12px; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:var(--surface); cursor:pointer; transition:border-color .15s; }
-  .step:hover, .step.open { border-color:var(--accent); }
-  .step .n { width:28px; height:28px; border-radius:50%; display:grid; place-items:center; font-weight:700; background:rgba(94,160,239,.15); color:var(--accent); }
-  .step.bad .n { background:rgba(229,115,75,.15); color:var(--bad); }
-  .step .t { font-weight:600; }
-  .step .d { color:var(--soft); display:none; margin-top:6px; }
-  .step.open .d { display:block; }
-  .arrow { text-align:center; color:var(--soft); font-size:18px; line-height:1; padding:2px 0; }
-  table { border-collapse:collapse; width:100%; font-size:13px; margin:8px 0; }
-  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:top; }
-  th { color:var(--soft); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.05em; }
-  .bar { height:10px; border-radius:5px; background:rgba(94,160,239,.25); position:relative; overflow:hidden; }
-  .bar > i { position:absolute; left:0; top:0; bottom:0; background:var(--accent); border-radius:5px; }
-  .bar.bad > i { background:var(--bad); }
-  .pill { display:inline-block; padding:1px 8px; border-radius:999px; border:1px solid var(--border); font-size:11.5px; color:var(--soft); margin-right:4px; }
-  .pill.bad { border-color:#8f3b26; color:var(--bad); }
-  .pill.warn { border-color:#8a6d2b; color:var(--warn); }
-  .pill.good { border-color:#2e7d4f; color:var(--good); }
-  .timeline { position:relative; margin:14px 0; padding-left:14px; border-left:2px solid var(--border); }
-  .ev { position:relative; padding:4px 0 10px 14px; }
-  .ev::before { content:""; position:absolute; left:-20px; top:10px; width:10px; height:10px; border-radius:50%; background:var(--accent); }
-  .ev.crash::before { background:var(--bad); box-shadow:0 0 0 4px rgba(229,115,75,.2); }
-  .ev.deploy::before { background:var(--warn); }
-  .ev .when { font-family:ui-monospace, Consolas, monospace; font-size:12px; color:var(--soft); }
-  .opt { border-left:4px solid var(--accent); }
-  .opt h3 { margin:0 0 4px; font-size:14.5px; }
-  .opt .meta { color:var(--soft); font-size:12.5px; margin-bottom:6px; }
-  .sim { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
-  @media (max-width:700px) { .sim { grid-template-columns:1fr; } }
-  .sim label { display:flex; justify-content:space-between; font-size:13px; margin:6px 0 2px; }
-  input[type=range] { width:100%; }
-  .big { font-size:26px; font-weight:700; }
-  .big.bad { color:var(--bad); } .big.good { color:var(--good); }
-  ul { margin:4px 0 8px 18px; padding:0; } li { margin:2px 0; }
+  :root { --bg:#14161a; --card:#1d2027; --ink:#e6e8ec; --mut:#9aa3ad; --ok:#4cc38a; --no:#e5484d; --warn:#f5a524; --line:#2c313a; --acc:#6ea8fe; }
+  * { box-sizing:border-box }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 system-ui, sans-serif }
+  header { padding:20px 24px 8px } h1 { margin:0 0 4px; font-size:22px } .sub { color:var(--mut) }
+  nav { display:flex; gap:8px; padding:8px 24px; flex-wrap:wrap }
+  nav button { background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:6px 12px; cursor:pointer }
+  nav button.on { border-color:var(--acc); color:var(--acc) }
+  main { padding:8px 24px 40px; max-width:1100px }
+  section { display:none } section.on { display:block }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin:12px 0 }
+  code { background:#0f1114; padding:1px 5px; border-radius:4px; font-size:13px }
+  .flow { display:grid; grid-template-columns: 1fr; gap:8px }
+  .step { display:flex; gap:12px; align-items:flex-start; padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:#181b21 }
+  .step .n { width:26px; height:26px; border-radius:50%; background:var(--line); display:grid; place-items:center; font-weight:600; flex:none }
+  .step.hit { border-color:var(--ok); background:#15251d } .step.hit .n { background:var(--ok); color:#000 }
+  .step.miss { opacity:.55 } .step.reject { border-color:var(--no); background:#2a1717 } .step.reject .n { background:var(--no) }
+  .step.new { box-shadow: inset 3px 0 0 var(--warn) }
+  .verdict { font-weight:700; margin-top:8px } .verdict.ok { color:var(--ok) } .verdict.no { color:var(--no) }
+  .sim { display:grid; grid-template-columns: 1fr 1fr; gap:16px } @media (max-width:800px){ .sim { grid-template-columns:1fr } }
+  label { display:block; margin:8px 0 4px; color:var(--mut); font-size:13px }
+  input, select { width:100%; background:#0f1114; color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:6px 8px; font:inherit }
+  .presets button { margin:4px 6px 0 0; font-size:13px; background:#0f1114; border:1px solid var(--line); color:var(--ink); border-radius:6px; padding:4px 8px; cursor:pointer }
+  table { border-collapse:collapse; width:100%; font-size:14px } td, th { border-bottom:1px solid var(--line); padding:6px 8px; text-align:left; vertical-align:top }
+  .ok { color:var(--ok) } .no { color:var(--no) } .warn { color:var(--warn) }
+  .tag { display:inline-block; font-size:11px; padding:1px 6px; border-radius:99px; border:1px solid var(--warn); color:var(--warn); margin-left:6px; vertical-align:middle }
 </style>
 </head>
 <body>
 <header>
-  <h1>Why the box crashes — what the harness does to the disk</h1>
-  <div class="sub">Investigation of 4 hard crashes (2 – 3 Sep 2026) on the Claude Web host. Click a step in the chain to expand it. Use the tabs to move between the evidence, the mechanism, and the fixes.</div>
+  <h1>LAN bypass for the IP gate <span class="tag">openspec lan-bypass-ip-gate</span></h1>
+  <div class="sub">What the gate decides now, why the socket peer is never the input, and why it fails closed behind a forgetful proxy.</div>
 </header>
-<nav id="nav"></nav>
+<nav>
+  <button data-v="why" class="on">Why</button>
+  <button data-v="flow">Decision flow (simulator)</button>
+  <button data-v="cases">Cases table</button>
+  <button data-v="ship">What ships / what to do on MONSTER</button>
+</nav>
 <main>
 
-<section id="crashes" class="on">
-  <h2>1. The crashes are kernel bugchecks, not app crashes</h2>
-  <p>Four "rebooted without cleanly shutting down" events in two days. Three left a bugcheck code; two left a minidump. The two minidumps were parsed by hand (no debugger on the box) and both stacks run through the same driver path.</p>
-  <div class="timeline" id="tl"></div>
+<section id="why" class="on">
   <div class="card">
-    <b>What both minidump stacks contain</b>
-    <div class="mono" style="margin-top:6px">ntoskrnl ← FLTMGR.SYS ← <span style="color:var(--bad)">WdFilter.sys</span> (Windows Defender real-time filter) ← FLTMGR.SYS ← ntoskrnl (file I/O)</div>
-    <p class="soft" style="margin-top:8px">A user-mode app cannot bugcheck Windows by itself. The kernel died inside Defender's file-system filter while it was inspecting file operations. What the harness controls is <i>how much</i> file I/O it pushes through that filter.</p>
-  </div>
-  <div class="card">
-    <b>Aggravating factors on this host (outside the harness)</b>
-    <ul>
-      <li><span class="pill bad">OS</span> Windows Server 2019 build 17763.1518 — last cumulative update installed 2023. The kernel is from 2020.</li>
-      <li><span class="pill warn">Defender</span> platform 4.18.26070.9 (Aug 2026) running on that 2020 kernel. Real-time protection on, only one exclusion (the prg folder). None of the busy directories are excluded.</li>
-      <li><span class="pill warn">Drivers</span> gdrv3.sys (Gigabyte, 2023, a driver with a public history of kernel bugs), IntelHaxm.sys 7.6.5 (2020, abandoned hypervisor driver) and gvm.sys (a second hypervisor driver) loaded side by side, npcap.sys, Intel Arc igdkmdn64.</li>
-      <li><span class="pill good">Hardware</span> 64 GB RAM, 24 cores, Samsung 980 PRO healthy, no WHEA hardware errors, no memory-exhaustion events. This is not a resources-ran-out crash.</li>
-    </ul>
+    <p><b>The tax.</b> The IP gate admits exact IPs only. Every harness in the fleet (this box, MONSTER at <code>192.168.0.143</code>, any future peer) talks to the others from a LAN address, so each pair needed both IPs approved by hand on both sides, and a missed one showed up as a silent <code>403</code>. Same for the Operator's own phone/laptop on Wi-Fi every time DHCP moved it.</p>
+    <p><b>What the gate really buys.</b> It hides the login page from the internet. Everything that passes it still needs the password, and a compromise behind the password is total (the harness runs claude with <code>--dangerously-skip-permissions</code> as Administrator). So keep the gate for the internet door, and stop applying it to addresses that are physically on the Operator's own network.</p>
+    <p><b>The change.</b> A host-side list <code>LanBypassCidrs</code> (e.g. <code>192.168.0.0/24</code>). A request whose <em>resolved</em> client IP falls in a range skips the guest list. Default is empty, so nothing changes until the Operator writes a range down. The web UI can only show it, never edit it (the old asymmetry rule stands).</p>
+    <p><b>Convention changed on purpose.</b> plans/auth-ip-filter.md said "exact IPs only, no CIDR, no exemptions". The Operator was warned and confirmed on 2026-09-03.</p>
   </div>
 </section>
 
-<section id="chain">
-  <h2>2. The mechanism: 249 MB re-read every 5 seconds</h2>
-  <p>Measured on the live harness while idle (no user clicks): <b>498 MB read in 10 s in 127 000 read operations</b> of 4 KB each. Writes: nothing. That is one process — ClaudeWeb.exe — streaming the same file over and over.</p>
-  <div class="chain" id="chain"></div>
-  <div class="card">
-    <b>Numbers from the live log (12:56 → 13:07, 10.5 min)</b>
-    <table>
-      <tr><th>event</th><th>count</th><th>meaning</th></tr>
-      <tr><td>"Loaded 6595 message(s) for session 194f3269"</td><td>105</td><td>one full parse of the 249 MB transcript every 6 s</td></tr>
-      <tr><td>"[GH-ACCT] authenticated as …"</td><td>53</td><td>two gh.exe processes + a GitHub API call every 10 s, for a header chip</td></tr>
-      <tr><td>"401 rejected GET /api/events"</td><td>137</td><td>a stale browser tab polling with a dead cookie (cheap, but noise)</td></tr>
-    </table>
-    <p class="soft">One load: 1.24 s of server time, 249 MB read, 3.4 MB JSON sent to the browser. Per hour: ~150 GB read through Defender's filter, from a file another process (claude.exe) is appending to at the same time.</p>
-  </div>
-</section>
-
-<section id="load">
-  <h2>3. Where the disk and process churn comes from</h2>
-  <p>Ranked by measured or estimated cost. The first two are the ones that scale with transcript size, which is what changed recently: this session's transcript grew to 249 MB.</p>
-  <div id="loadbars"></div>
-  <div class="card">
-    <b>Why it correlates with the crashes</b>
-    <p>Each crash happened minutes after a deploy or during a build-heavy agent turn, while a large session was running and a browser was open. Deploys add a vite build (thousands of small files), a dotnet build, a robocopy mirror of the run dir, and a Playwright Chromium profile, all on top of the 50 MB/s baseline. Every file open, read and close passes through WdFilter. The harness is the single biggest source of that traffic on the box.</p>
-  </div>
-</section>
-
-<section id="fixes">
-  <h2>4. Five highest-leverage optimizations — implemented</h2>
-  <p>All five shipped on branch <code>feature/reduce-transcript-io</code> (OpenSpec change <code>reduce-transcript-io</code>, 192/192 tests) on 3 Sep 2026. Not yet deployed to live: say <b>deploy</b>.</p>
-  <div class="card">
-    <b>A/B measurement</b> — two isolated harness instances (the build running live vs this branch), the real 262 MB transcript bound to a dock, the dashboard overlay open for 20 s in a headless browser, process read counters sampled around the window.
-    <table><tbody id="ab"></tbody></table>
-    <div class="soft">The chat page at idle read 0.4 MB on both builds: the running-run reattach storm needs a live run in the same process, so that half is confirmed after deploy. Script: <code>.claudeweb-preview/playwright/measure-transcript-io.mjs</code>.</div>
-  </div>
-  <div id="opts"></div>
-  <div class="card">
-    <b>Outside the harness (do these too)</b>
-    <ul>
-      <li>Add Defender exclusions for the busy trees: <code>~/.claude/projects</code>, the playground root, <code>.selfdev-build</code>, <code>.claudeweb-preview</code>, <code>%TEMP%\cw-loopeval</code>, and the processes <code>claude.exe</code>, <code>node.exe</code>, <code>dotnet.exe</code>, <code>ClaudeWeb.exe</code>, <code>git.exe</code>.</li>
-      <li>Patch the OS. A 2020 kernel with a 2026 Defender filter is an untested pairing.</li>
-      <li>Remove IntelHaxm (deprecated) and check whether gvm.sys and gdrv3.sys are still needed.</li>
-    </ul>
-  </div>
-</section>
-
-<section id="sim">
-  <h2>5. Simulator: transcript size × polling</h2>
-  <p>Move the sliders to see the read load the current design produces, and what it becomes after fixes 1 and 2.</p>
+<section id="flow">
   <div class="sim">
     <div class="card">
-      <label><span>Transcript size</span><span id="v-size">249 MB</span></label>
-      <input type="range" id="s-size" min="1" max="500" value="249">
-      <label><span>Poll interval</span><span id="v-poll">5 s</span></label>
-      <input type="range" id="s-poll" min="1" max="30" value="5">
-      <label><span>Browser tabs / docks polling it</span><span id="v-tabs">1</span></label>
-      <input type="range" id="s-tabs" min="1" max="16" value="1">
+      <h3 style="margin-top:0">Request</h3>
+      <label>Socket peer (who opened the TCP connection to :5099)</label>
+      <input id="peer" value="192.168.0.143">
+      <label>X-Forwarded-For header (blank = none)</label>
+      <input id="xff" value="">
+      <label>Trusted proxies (config: TrustedProxyIps + loopback always)</label>
+      <input id="proxies" value="192.168.0.122">
+      <label>LanBypassCidrs (config)</label>
+      <input id="cidrs" value="192.168.0.0/24">
+      <label>Approved guests (allowlist)</label>
+      <input id="guests" value="127.0.0.1, 89.212.3.156">
+      <label>Valid device cookie on this request?</label>
+      <select id="cookie"><option value="no">no</option><option value="yes">yes</option></select>
+      <div class="presets">
+        <label>Presets</label>
+        <button data-p="lan">MONSTER hits us directly</button>
+        <button data-p="inet">Internet visitor via IIS (.122)</button>
+        <button data-p="forge">Internet visitor forging a LAN first hop</button>
+        <button data-p="direct-forge">Direct peer forging XFF</button>
+        <button data-p="noxff">IIS forgot to forward (fail closed)</button>
+        <button data-p="local">Operator on localhost</button>
+        <button data-p="lanviaproxy">LAN phone going through IIS</button>
+      </div>
     </div>
     <div class="card">
-      <div class="soft">Today (full re-read per poll)</div>
-      <div class="big bad" id="r-now">—</div>
-      <div class="soft" id="r-now2"></div>
-      <div class="soft" style="margin-top:12px">After fix 1 + 2 (cache keyed on size, tail-parse the delta)</div>
-      <div class="big good" id="r-after">—</div>
-      <div class="soft" id="r-after2"></div>
+      <h3 style="margin-top:0">Gate decision</h3>
+      <div id="resolved" class="sub"></div>
+      <div class="flow" id="steps"></div>
+      <div id="verdict" class="verdict"></div>
     </div>
   </div>
 </section>
 
+<section id="cases">
+  <div class="card">
+    <table>
+      <thead><tr><th>Case</th><th>Peer</th><th>X-Forwarded-For</th><th>Resolved IP</th><th>Before</th><th>After</th></tr></thead>
+      <tbody>
+        <tr><td>MONSTER polls us</td><td>192.168.0.143</td><td>—</td><td>192.168.0.143</td><td class="no">403 unless approved</td><td class="ok">admitted via LAN</td></tr>
+        <tr><td>Operator's phone on Wi-Fi</td><td>192.168.0.57 (DHCP)</td><td>—</td><td>192.168.0.57</td><td class="no">re-approve on each new IP</td><td class="ok">admitted via LAN</td></tr>
+        <tr><td>Internet visitor via IIS</td><td>192.168.0.122</td><td>203.0.113.9</td><td>203.0.113.9</td><td class="no">403 unless approved</td><td class="no">unchanged: 403 unless approved / cookie</td></tr>
+        <tr><td>Internet visitor forging a LAN hop</td><td>192.168.0.122</td><td>192.168.0.5, 203.0.113.9</td><td>203.0.113.9 (last hop)</td><td class="no">403</td><td class="no">403</td></tr>
+        <tr><td>Direct internet peer forging XFF</td><td>203.0.113.9</td><td>192.168.0.5 (ignored)</td><td>203.0.113.9</td><td class="no">403</td><td class="no">403</td></tr>
+        <tr><td>IIS stops forwarding</td><td>192.168.0.122</td><td>—</td><td>192.168.0.122</td><td class="no">403 (unless .122 approved)</td><td class="no warn">fail closed: LAN rule not applied</td></tr>
+        <tr><td>Operator on localhost</td><td>127.0.0.1</td><td>—</td><td>127.0.0.1</td><td class="ok">seeded guest</td><td class="ok">seeded guest (LAN rule not applied to a bare loopback peer)</td></tr>
+        <tr><td>LAN phone through IIS</td><td>192.168.0.122</td><td>192.168.0.77</td><td>192.168.0.77</td><td class="no">403 unless approved</td><td class="ok">admitted via LAN</td></tr>
+      </tbody>
+    </table>
+    <p class="sub">Password layer unchanged in every row: <code>/api/*</code> still needs the session cookie or <code>X-Auth-Password</code>. A LAN admission never mints a trusted-device cookie.</p>
+  </div>
+</section>
+
+<section id="ship">
+  <div class="card">
+    <ul>
+      <li><b>Code:</b> <code>LanBypass.cs</code> (ranges + fail-closed rule), <code>ClientIp.GetOrigin</code> (resolved IP + proxy facts), one new branch in <code>IpFilterMiddleware</code> between allowlist and device cookie, <code>LanBypass.Configure</code> at startup, <code>GET /api/ipfilter</code> reports <code>lanBypass</code> + <code>callerVia</code>, Guests page shows the ranges.</li>
+      <li><b>Tests:</b> <code>LanBypassTests.cs</code> — parsing, direct LAN peer, forged hops, proxy-forwarded internet IP, proxy without XFF (fail closed), loopback without XFF, empty config.</li>
+      <li><b>Config:</b> repo <code>appsettings.json</code> carries <code>"LanBypassCidrs": ["192.168.0.0/24"]</code>. <span class="warn">swap.ps1 preserves live's own appsettings.json</span> — add the key there when deploying, or live keeps the old behaviour.</li>
+      <li><b>MONSTER:</b> needs the same build <em>and</em> the range in its own config before the gate stops biting in both directions. The current 401 storm from MONSTER on <code>/api/events</code> is a different problem (a stale password stored in its collector source for this box).</li>
+      <li><b>Log signature:</b> <code>[IPFILTER] LAN bypass on for 192.168.0.0/24 …</code> at startup; <code>[IPFILTER] Admitted 192.168.0.143 via LAN bypass 192.168.0.0/24</code> per admission.</li>
+    </ul>
+  </div>
+</section>
 </main>
-<script src="./app.js"></script>
+
+<script>
+(function(){
+  // nav
+  document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
+    document.querySelectorAll('main section').forEach(s => s.classList.toggle('on', s.id === b.dataset.v));
+  }));
+
+  const $ = id => document.getElementById(id);
+  const list = s => s.split(',').map(x => x.trim()).filter(Boolean);
+  const norm = ip => { ip = ip.trim(); if (ip === '::1' || /^127\./.test(ip)) return '127.0.0.1'; return ip.replace(/^::ffff:/, ''); };
+  const toN = ip => { const p = ip.split('.').map(Number); return p.length === 4 && p.every(n => n >= 0 && n <= 255) ? ((p[0]<<24)>>>0) + (p[1]<<16) + (p[2]<<8) + p[3] : null; };
+  const inCidr = (ip, cidr) => {
+    const [net, bitsS] = cidr.split('/'); const bits = bitsS === undefined ? 32 : Number(bitsS);
+    const a = toN(ip), n = toN(net); if (a === null || n === null || isNaN(bits) || bits < 0 || bits > 32) return false;
+    if (bits === 0) return true; const mask = (~0 << (32 - bits)) >>> 0; return ((a & mask) >>> 0) === ((n & mask) >>> 0);
+  };
+
+  function decide() {
+    const peer = norm($('peer').value), xff = $('xff').value.trim();
+    const proxies = list($('proxies').value).map(norm), cidrs = list($('cidrs').value), guests = list($('guests').value).map(norm);
+    const cookie = $('cookie').value === 'yes';
+    const trusted = peer === '127.0.0.1' || proxies.includes(peer);
+    let ip = peer, forwarded = false;
+    if (trusted && xff) { const hops = xff.split(','); const last = hops[hops.length - 1].trim(); if (last) { ip = norm(last); forwarded = true; } }
+    $('resolved').innerHTML = `Resolved client IP: <b>${ip}</b> · peer is trusted proxy: <b>${trusted}</b> · forwarded hop used: <b>${forwarded}</b>` +
+      (!trusted && xff ? ' · <span class="warn">X-Forwarded-For ignored (peer is not a trusted proxy)</span>' : '');
+
+    const steps = [
+      { t: `Allowlist: is ${ip} an approved guest?`, hit: guests.includes(ip) },
+      { t: `LAN bypass (new): eligible = not (trusted-proxy peer without a forwarded hop) → ${!(trusted && !forwarded)}; ${ip} in ${cidrs.join(', ') || '(no ranges)'}?`,
+        hit: !(trusted && !forwarded) && cidrs.some(c => inCidr(ip, c)), isNew: true,
+        note: (trusted && !forwarded) ? 'fail closed: the proxy forwarded nothing, so the resolved IP is the proxy itself — never LAN' : null },
+      { t: 'Trusted-device cookie valid?', hit: cookie },
+      { t: 'Path is /api/notes/hub/{token}? (assume no)', hit: false },
+    ];
+    let decided = false, html = '';
+    steps.forEach((s, i) => {
+      const cls = decided ? 'miss' : (s.hit ? 'hit' : '');
+      html += `<div class="step ${cls} ${s.isNew ? 'new' : ''}"><div class="n">${i + 1}</div><div>${s.t}${s.note ? `<div class="warn" style="font-size:13px">${s.note}</div>` : ''}${(!decided && s.hit) ? '<div class="ok">→ admitted here</div>' : ''}</div></div>`;
+      if (s.hit) decided = true;
+    });
+    html += `<div class="step ${decided ? 'miss' : 'reject'}"><div class="n">5</div><div>Otherwise: record attempt, 403 rejection page${decided ? '' : ' <span class="no">→ rejected</span>'}</div></div>`;
+    $('steps').innerHTML = html;
+    $('verdict').className = 'verdict ' + (decided ? 'ok' : 'no');
+    $('verdict').textContent = decided ? 'Passes the IP gate. Password layer still applies to /api/*.' : '403 — not on the guest list.';
+  }
+  ['peer','xff','proxies','cidrs','guests','cookie'].forEach(id => $(id).addEventListener('input', decide));
+  const presets = {
+    lan: { peer: '192.168.0.143', xff: '' },
+    inet: { peer: '192.168.0.122', xff: '203.0.113.9' },
+    forge: { peer: '192.168.0.122', xff: '192.168.0.5, 203.0.113.9' },
+    'direct-forge': { peer: '203.0.113.9', xff: '192.168.0.5' },
+    noxff: { peer: '192.168.0.122', xff: '' },
+    local: { peer: '127.0.0.1', xff: '' },
+    lanviaproxy: { peer: '192.168.0.122', xff: '192.168.0.77' },
+  };
+  document.querySelectorAll('.presets button').forEach(b => b.addEventListener('click', () => { const p = presets[b.dataset.p]; $('peer').value = p.peer; $('xff').value = p.xff; $('cookie').value = 'no'; decide(); }));
+  decide();
+})();
+</script>
 </body>
 </html>

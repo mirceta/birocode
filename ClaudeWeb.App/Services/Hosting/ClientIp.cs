@@ -5,6 +5,15 @@ using Microsoft.AspNetCore.Http;
 namespace ClaudeWeb.Services.Hosting;
 
 /// <summary>
+/// The resolved caller identity: the IP every gate judges, plus the two facts
+/// the LAN bypass needs to fail closed (openspec lan-bypass-ip-gate, D2/D4).
+/// </summary>
+/// <param name="Ip">Canonical client IP — the last trusted X-Forwarded-For hop, else the socket peer.</param>
+/// <param name="PeerIsTrustedProxy">The socket peer was loopback or a configured trusted proxy.</param>
+/// <param name="Forwarded">A non-empty last hop was taken from X-Forwarded-For (so <see cref="Ip"/> is not the peer).</param>
+public sealed record ClientOrigin(string Ip, bool PeerIsTrustedProxy, bool Forwarded);
+
+/// <summary>
 /// The ONE definition of "the caller's IP", shared by the brute-force
 /// throttle, the IP allowlist, and login logging (plans/auth-ip-filter.md §1).
 ///
@@ -33,10 +42,18 @@ public static class ClientIp
             .Select(Normalize)
             .ToHashSet();
 
-    public static string Get(HttpContext context)
+    public static string Get(HttpContext context) => GetOrigin(context).Ip;
+
+    /// <summary>
+    /// The resolved IP plus how it was resolved. <see cref="Get"/> is exactly
+    /// <c>GetOrigin(ctx).Ip</c>, so the allowlist, the throttle and the LAN
+    /// bypass can never disagree about who is calling.
+    /// </summary>
+    public static ClientOrigin GetOrigin(HttpContext context)
     {
         var remote = context.Connection.RemoteIpAddress;
-        if (remote != null && IsTrustedProxy(remote))
+        var trusted = remote != null && IsTrustedProxy(remote);
+        if (trusted)
         {
             var fwd = context.Request.Headers["X-Forwarded-For"].FirstOrDefault();
             if (!string.IsNullOrWhiteSpace(fwd))
@@ -44,10 +61,11 @@ public static class ClientIp
                 var hops = fwd.Split(',');
                 var last = hops[^1].Trim();
                 if (last.Length > 0)
-                    return Normalize(last);
+                    return new ClientOrigin(Normalize(last), PeerIsTrustedProxy: true, Forwarded: true);
             }
         }
-        return remote != null ? Normalize(remote.ToString()) : "unknown";
+        var ip = remote != null ? Normalize(remote.ToString()) : "unknown";
+        return new ClientOrigin(ip, trusted, Forwarded: false);
     }
 
     private static bool IsTrustedProxy(IPAddress remote) =>
