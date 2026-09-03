@@ -114,8 +114,13 @@
 </section>
 
 <section id="fixes">
-  <h2>4. Five highest-leverage optimizations</h2>
-  <p>Ordered by (bytes or processes removed per hour) ÷ (effort). The first three remove more than 95 % of the measured baseline.</p>
+  <h2>4. Five highest-leverage optimizations — implemented</h2>
+  <p>All five shipped on branch <code>feature/reduce-transcript-io</code> (OpenSpec change <code>reduce-transcript-io</code>, 192/192 tests) on 3 Sep 2026. Not yet deployed to live: say <b>deploy</b>.</p>
+  <div class="card">
+    <b>A/B measurement</b> — two isolated harness instances (the build running live vs this branch), the real 262 MB transcript bound to a dock, the dashboard overlay open for 20 s in a headless browser, process read counters sampled around the window.
+    <table><tbody id="ab"></tbody></table>
+    <div class="soft">The chat page at idle read 0.4 MB on both builds: the running-run reattach storm needs a live run in the same process, so that half is confirmed after deploy. Script: <code>.claudeweb-preview/playwright/measure-transcript-io.mjs</code>.</div>
+  </div>
   <div id="opts"></div>
   <div class="card">
     <b>Outside the harness (do these too)</b>

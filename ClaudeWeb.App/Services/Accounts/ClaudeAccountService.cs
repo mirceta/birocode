@@ -25,7 +25,9 @@ public class ClaudeAccountService
 {
     private readonly Logger _logger;
 
-    private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(5);
+    // 1 min (was 5 s): the probe re-reads ~/.claude.json (can be MBs) and the
+    // credentials file on every miss (openspec: reduce-transcript-io, D4).
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(1);
 
     private readonly object _gate = new();
     private ClaudeAccountStatus? _cached;

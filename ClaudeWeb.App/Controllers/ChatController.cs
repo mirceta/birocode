@@ -349,6 +349,39 @@ public class ChatController : ControllerBase
     }
 
     /// <summary>
+    /// The dashboard's per-dock liveness digest in one request (openspec:
+    /// reduce-transcript-io, D2): <c>ids</c> is a comma-separated list of
+    /// <c>repoId:sessionId</c> pairs; the reply maps each session id to
+    /// { activity, lastUserAt, count } computed server-side from the cached
+    /// transcript. Replaces N full-transcript fetches every 5 s. Unknown repos
+    /// and missing transcripts are simply absent from the reply. GET (not POST)
+    /// so read-only guests can use the dashboard.
+    /// </summary>
+    [HttpGet("sessions/activity")]
+    public IActionResult SessionsActivity([FromQuery] string? ids)
+    {
+        _logger.CountRequest();
+        var result = new Dictionary<string, object>(StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(ids)) return Ok(result);
+
+        var repos = _registry.GetAll();
+        foreach (var pair in ids.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Take(64))
+        {
+            var colon = pair.IndexOf(':');
+            if (colon <= 0 || colon == pair.Length - 1) continue;
+            var repoId = pair[..colon];
+            var sessionId = pair[(colon + 1)..];
+            if (result.ContainsKey(sessionId)) continue;
+            var repo = repos.FirstOrDefault(r => string.Equals(r.Id, repoId, StringComparison.Ordinal));
+            if (repo is null) continue;
+            var a = _sessions.GetActivity(repo.Path, sessionId);
+            if (a is null) continue;
+            result[sessionId] = new { activity = a.Activity, lastUserAt = a.LastUserAt, count = a.Count };
+        }
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Returns the tool-call history (tool_use paired with tool_result, in order)
     /// for one session, reconstructed from the JSONL transcript. Unlike the
     /// message transcript above, this keeps the tool blocks — it's the durable

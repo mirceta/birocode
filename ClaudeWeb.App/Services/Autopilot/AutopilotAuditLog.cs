@@ -14,12 +14,19 @@ namespace ClaudeWeb.Services.Autopilot;
 /// This is distinct from <see cref="AutopilotService"/>'s in-memory suggestion log
 /// (which is a live, capped view of verdicts). The audit log is the durable record
 /// of real actions, and only auto-SENDS are written here — suggestions are not.
+///
+/// The entries are also held in memory (openspec: reduce-transcript-io, D5): the file
+/// is loaded once, <see cref="Record"/> writes through to both, and
+/// <see cref="Recent"/> serves from memory. The transcript endpoints ask for the
+/// last 5000 entries on every call to restore message actors, which used to
+/// re-read the whole file each time. Only this process writes the file.
 /// </summary>
 public sealed class AutopilotAuditLog
 {
     private readonly Logger _logger;
     private readonly string _path;
     private readonly object _gate = new();
+    private List<Entry>? _entries; // oldest first; null until first load
 
     public AutopilotAuditLog(Logger logger)
     {
@@ -59,7 +66,12 @@ public sealed class AutopilotAuditLog
         try
         {
             var line = JsonSerializer.Serialize(entry) + "\n";
-            lock (_gate) File.AppendAllText(_path, line);
+            lock (_gate)
+            {
+                EnsureLoaded();
+                File.AppendAllText(_path, line);
+                _entries!.Add(entry);
+            }
         }
         catch (Exception ex)
         {
@@ -68,27 +80,46 @@ public sealed class AutopilotAuditLog
     }
 
     /// <summary>The most recent <paramref name="max"/> entries, newest first, for
-    /// the dashboard. Reads the whole file (it stays small — one line per send).</summary>
+    /// the dashboard and the transcript actor annotation.</summary>
     public IReadOnlyList<Entry> Recent(int max = 50)
     {
         try
         {
-            if (!File.Exists(_path)) return Array.Empty<Entry>();
-            string[] lines;
-            lock (_gate) lines = File.ReadAllLines(_path);
-            return lines
-                .Reverse()
-                .Where(l => !string.IsNullOrWhiteSpace(l))
-                .Take(max)
-                .Select(l => { try { return JsonSerializer.Deserialize<Entry>(l); } catch { return null; } })
-                .Where(e => e is not null)
-                .Select(e => e!)
-                .ToList();
+            lock (_gate)
+            {
+                EnsureLoaded();
+                var all = _entries!;
+                var take = Math.Min(Math.Max(0, max), all.Count);
+                var result = new List<Entry>(take);
+                for (var i = all.Count - 1; i >= all.Count - take; i--) result.Add(all[i]);
+                return result;
+            }
         }
         catch (Exception ex)
         {
             _logger.Error($"[AUTOPILOT] Failed to read audit log {_path}: {ex.Message}");
             return Array.Empty<Entry>();
         }
+    }
+
+    // Caller holds _gate.
+    private void EnsureLoaded()
+    {
+        if (_entries is not null) return;
+        var list = new List<Entry>();
+        if (File.Exists(_path))
+        {
+            foreach (var l in File.ReadLines(_path))
+            {
+                if (string.IsNullOrWhiteSpace(l)) continue;
+                try
+                {
+                    var e = JsonSerializer.Deserialize<Entry>(l);
+                    if (e is not null) list.Add(e);
+                }
+                catch { /* skip a corrupt line */ }
+            }
+        }
+        _entries = list;
     }
 }

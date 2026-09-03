@@ -75,24 +75,36 @@
     lb.appendChild(d);
   }
 
-  // 4. The five optimizations.
+  // 4. The five optimizations — IMPLEMENTED 2026-09-03 on feature/reduce-transcript-io
+  // (openspec change reduce-transcript-io). Each card: what was proposed → what shipped.
   const opts = [
-    ['1. Cache transcripts server-side and parse only the tail', 'Removes ~95 % of the measured disk reads. Effort: small.',
-      'In SessionService keep a per-file cache keyed by (path, length, mtime). On a poll, if the file only grew, seek to the old length and parse the new lines; if it is unchanged, return the cached list. Apply the same to GetToolCallHistory, GetToolCalls and the AutopilotAuditLog.Recent read. One 249 MB parse becomes one 4 KB read per poll.'],
-    ['2. Stop the clients re-downloading whole transcripts', 'Removes the remaining reload storm and 3.4 MB responses per poll. Effort: small.',
-      'ChatContext: mark a conversation as "transcript requested" per sessionId (an in-flight guard) so the 5 s reconcile never re-requests it while a load is pending, and never once it has loaded. Dashboard: replace the per-dock /messages fetch with a summary field on /api/runs (latest activity + last user timestamp), which the backend already knows from the run buffer. Arch page: stop /arch/messages when the Chat lane is hidden, add document.hidden guards to all three Arch pollers.'],
-    ['3. Make autopilot mining incremental and off the transcript path', 'Removes the 750 MB × 2 full-tree parse every 5 minutes. Effort: medium.',
-      'Discover() parses each transcript twice (ListSessions then GetMessages). Reuse the cache from fix 1, skip files whose (length, mtime) has not changed since the last pass, and cap the pass to sessions modified in the last N days. For the 10 s tick, read the last assistant message by seeking backwards from the end of the file instead of parsing the whole thing.'],
-    ['4. Cache git status and throttle process spawning', 'Removes tens of thousands of git.exe and gh.exe launches per hour. Effort: small.',
-      'GitService.Status: memoize per repo path with a 5 s TTL and single-flight (one concurrent status per repo). ArchAgentService.LocalAgents and GET /api/arch share it. Raise the gh account cache from 5 s to 5 min (it is a chip, not a control), and drop the second gh call (auth status) unless the login changed. Add a global semaphore for git.exe so a dashboard refresh cannot fan out to 100 processes.'],
-    ['5. Buffered logging and fewer whole-file rewrites', 'Removes ~30 000 file open/close cycles per hour through Defender and a lock convoy. Effort: small.',
-      'Logger: hold one StreamWriter (AutoFlush or a 250 ms drain) instead of File.AppendAllText per line, and roll the file at midnight. Demote the per-tool-call and per-git-status Info lines to Debug. AuditService: same writer pattern. dock.json / loops.json / devices.json: debounce rewrites (250 ms coalesce) and always write temp + move.'],
+    ['1. Cache transcripts server-side and parse only the tail', 'DONE · TranscriptCache.cs + TranscriptAccumulators.cs · 9 unit tests',
+      'SessionService now reads every transcript through a per-file incremental cache: the file is opened (length and mtime taken through the open handle, because the directory entry lags for a file the CLI holds open), and if nothing changed the cached result is returned; if it grew, only the appended bytes are parsed, whole lines only — a line the CLI is still writing waits for its newline; if it shrank or was rewritten in place (the NUL repair), it starts over. Messages, tool calls, the arch tool-call history and the session list all use it. The autopilot send-audit is held in memory too, so the actor annotation no longer re-reads its file per request.'],
+    ['2. Stop the clients re-downloading whole transcripts', 'DONE · GET /api/sessions/activity · ChatContext in-flight guard · Arch pollers gated',
+      'The dashboard asks for one batch digest per tick (latest assistant line + newest user timestamp + count, computed from the cache) instead of one full transcript per visible dock. ChatContext shares a pending transcript load per conversation, so the 5 s reconcile cannot issue a second GET while the first is still streaming megabytes. The Arch page polls the transcript only on its Chat lane, and all three Arch pollers skip hidden tabs.'],
+    ['3. Make autopilot mining incremental', 'DONE · per-file contribution cache in AutopilotDiscoveryService',
+      'The 5-minute discovery pass keeps what each transcript contributed (its routine-prompt keys and sample snippets) keyed by the file\'s length and mtime, re-parses only files that changed, and drops files that vanished. The session list it starts from is cached the same way. The 10 s tick\'s "last assistant message" read rides the transcript cache from fix 1, which is strictly cheaper than a backwards tail read: a stat when nothing changed, a delta when something did.'],
+    ['4. Cache git status and throttle process spawning', 'DONE · GitService.Status memo 5 s + semaphore(4) · gh cache 5 min',
+      'GitService.Status without fetch serves a 5 s memo per working directory with single-flight (concurrent callers share one computation); any mutating git command through the service invalidates it; a fetch call bypasses and refreshes it. git.exe launches go through a 4-slot semaphore. The arch agent memoizes each repo\'s remote URL for a minute. The GitHub account chip cache went from 5 s to 5 min (Refresh() still forces a probe after a login) and the Claude account probe from 5 s to 1 min.'],
+    ['5. Open log handles instead of open/append/close per line', 'DONE · Logger + AuditService keep the writer · dock/loops rewrites left alone',
+      'The harness logger and the audit service hold one shared-read writer per file and re-open it after a failed write, so a burst of lines is one open, not hundreds of trips through the filter driver. The dock.json / loops.json / devices.json rewrites turned out to be event-driven (per click, per run start), not periodic, so they were measured as not part of the churn and left as they are.'],
   ];
   const op = document.getElementById('opts');
   for (const [h, meta, body] of opts) {
     const d = document.createElement('div'); d.className = 'card opt';
     d.innerHTML = `<h3>${h}</h3><div class="meta">${meta}</div><div>${body}</div>`;
     op.appendChild(d);
+  }
+  // The A/B measurement (task 4.3): two isolated instances, the real 262 MB
+  // transcript bound to a dock, dashboard overlay open for 20 s.
+  const ab = document.getElementById('ab');
+  if (ab) {
+    const rows = [
+      ['Build', 'Bytes read in 20 s', 'Read operations', 'Transcript GETs', 'Batch digest GETs'],
+      ['old (live 12:56 build)', '997 MB', '255,124', '4 (12.9 MB over the wire)', '0'],
+      ['new (this branch)', '0 MB', '0', '0', '4'],
+    ];
+    ab.innerHTML = rows.map((r, i) => `<tr>${r.map((c) => i === 0 ? `<th>${c}</th>` : `<td class="mono">${c}</td>`).join('')}</tr>`).join('');
   }
 
   // 5. Simulator.

@@ -304,7 +304,8 @@ export default function ArchHistoryPanel({ liveTurn = null, sessionId = null }) 
   const liveActive = !!liveTurn?.active;
   useEffect(() => {
     load();
-    const t = setInterval(load, POLL_MS);
+    // Hidden tab = no polling (openspec reduce-connection-appetite).
+    const t = setInterval(() => { if (!document.hidden) load(); }, POLL_MS);
     return () => clearInterval(t);
   }, [load, sessionId, liveActive]);
 

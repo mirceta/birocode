@@ -88,11 +88,18 @@ export default function Arch({ popup = false, onOpenDock = null }) {
   const { setActiveTab } = useDock();
   const navigate = useNavigate();
 
+  // The transcript is polled only while the Chat lane shows it (openspec:
+  // reduce-transcript-io, D2); the other lanes get the session id from the
+  // state reply. laneRef keeps `load` stable across lane switches.
+  const laneRef = useRef(lane);
+  laneRef.current = lane;
   const load = useCallback(async () => {
     try {
       const s = await apiGet('/arch');
       if (!alive.current) return;
       setState(s);
+      if (s?.loop?.sessionId) setSessionId(s.loop.sessionId);
+      if (laneRef.current !== 'chat') { setError(''); return; }
       const m = await apiGet('/arch/messages');
       if (!alive.current) return;
       setSessionId(m.sessionId);
@@ -112,10 +119,15 @@ export default function Arch({ popup = false, onOpenDock = null }) {
     if (!enabled) return undefined;
     alive.current = true;
     load();
-    const t = setInterval(load, POLL_MS);
+    // Hidden tab = no polling (openspec reduce-connection-appetite).
+    const t = setInterval(() => { if (!document.hidden) load(); }, POLL_MS);
     const tick = setInterval(() => setTick((n) => n + 1), 1000);
     return () => { alive.current = false; clearInterval(t); clearInterval(tick); };
   }, [enabled, load]);
+  // Switching back to the Chat lane re-pulls the transcript at once.
+  useEffect(() => {
+    if (enabled && lane === 'chat') load();
+  }, [enabled, lane, load]);
 
   // Attach whenever the server has a running arch turn with events this page
   // has not consumed — page load, a reload mid-turn, a loop-driven wake, an
