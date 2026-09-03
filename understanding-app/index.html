@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Fleet arch agent: what the event feed already gives us, what it can't, and where the agent should live</title>
+<title>Arch agent + fleet: where we are, what is left, how to continue</title>
 <style>
   :root { --bg:#0f1117; --panel:#171a23; --panel2:#1e2230; --line:#2a2f3f; --txt:#d7dae3; --dim:#8b90a0;
           --acc:#5ea0ef; --ok:#4cc38a; --bad:#e5734b; --warn:#e0b34c; --violet:#a78bfa; --pink:#f472b6; --teal:#2dd4bf;
@@ -16,348 +16,345 @@
   main{padding:18px 20px;max-width:1180px} section{display:none} section.on{display:block}
   h2{font-size:17px;margin:0 0 10px} h3{font-size:15px;margin:18px 0 6px;color:var(--acc)}
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px} @media(max-width:760px){.grid{grid-template-columns:1fr}}
-  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px} @media(max-width:900px){.grid3{grid-template-columns:1fr}}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
-  .card h4{margin:0 0 8px;font-size:15px} .card p{margin:6px 0} .card ul{margin:6px 0;padding-left:18px}
-  .dim{color:var(--dim)} .ok{color:var(--ok)} .bad{color:var(--bad)} .warn{color:var(--warn)} .vio{color:var(--violet)} .acc{color:var(--acc)} .pink{color:var(--pink)} .teal{color:var(--teal)}
+  .card h3{margin-top:0}
+  .dim{color:var(--dim)} .mono{font-family:var(--mono);font-size:13px}
   code{font-family:var(--mono);font-size:13px;background:var(--panel2);padding:1px 5px;border-radius:4px}
-  .tag{display:inline-block;font:12px/1 var(--mono);padding:3px 7px;border-radius:5px;border:1px solid var(--line);background:var(--panel2);margin-right:4px}
-  .tag.exists{border-color:var(--ok);color:var(--ok)} .tag.new{border-color:var(--warn);color:var(--warn)} .tag.arch{border-color:var(--violet);color:var(--violet)}
-  .tag.fleet{border-color:var(--teal);color:var(--teal)} .tag.no{border-color:var(--bad);color:var(--bad)}
-  table{border-collapse:collapse;width:100%;font-size:14px} th,td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top} th{background:var(--panel2)}
-  svg text{font:13px system-ui,sans-serif;fill:var(--txt)} svg .lbl{font-size:11px;fill:var(--dim)} svg .mono{font-family:var(--mono);font-size:11px;fill:var(--dim)}
-  ol.steps{counter-reset:s;list-style:none;padding:0;margin:0} ol.steps li{counter-increment:s;position:relative;padding:10px 12px 10px 46px;border:1px solid var(--line);border-radius:10px;background:var(--panel);margin-bottom:10px}
-  ol.steps li::before{content:counter(s);position:absolute;left:12px;top:10px;width:24px;height:24px;border-radius:50%;background:var(--acc);color:#0b0d13;font-weight:700;text-align:center;line-height:24px;font-size:13px}
-  ol.steps b{display:block;margin-bottom:2px}
-  .verdict{border-left:3px solid var(--ok);background:#14261d}
-  .verdict.no{border-left-color:var(--bad);background:#2a1a15}
-  .verdict.mixed{border-left-color:var(--warn);background:#2a2415}
-  .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
-  .btn{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:14px}
-  .btn.on{border-color:var(--acc);color:var(--acc)}
-  .flow{opacity:1;transition:opacity .25s} .flow.off{opacity:.12}
-  footer{padding:14px 20px;color:var(--dim);font-size:13px;border-top:1px solid var(--line)}
+  pre{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;overflow:auto;font-size:13px;line-height:1.5}
+  .pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-left:6px;vertical-align:middle}
+  .pill.ok{color:var(--ok);border-color:var(--ok)} .pill.warn{color:var(--warn);border-color:var(--warn)} .pill.bad{color:var(--bad);border-color:var(--bad)}
+  .pill.you{color:var(--pink);border-color:var(--pink)} .pill.me{color:var(--teal);border-color:var(--teal)} .pill.later{color:var(--dim)}
+  ul{margin:6px 0 6px 18px;padding:0} li{margin:4px 0}
+  .tl{display:flex;gap:0;align-items:stretch;margin:12px 0 4px;overflow:auto}
+  .tl .step{flex:1;min-width:130px;padding:10px 12px;border:1px solid var(--line);background:var(--panel);position:relative;text-align:center}
+  .tl .step:first-child{border-radius:10px 0 0 10px} .tl .step:last-child{border-radius:0 10px 10px 0}
+  .tl .step .t{font-weight:600;font-size:13px} .tl .step .s{font-size:12px;color:var(--dim)}
+  .tl .done{border-color:var(--ok);background:rgba(76,195,138,.08)} .tl .done .t{color:var(--ok)}
+  .tl .now{border-color:var(--warn);background:rgba(224,179,76,.10);box-shadow:0 0 0 1px var(--warn) inset} .tl .now .t{color:var(--warn)}
+  .tl .todo .t{color:var(--dim)}
+  .chk{list-style:none;margin:0;padding:0} .chk li{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border-bottom:1px solid var(--line)}
+  .chk li:last-child{border-bottom:0}
+  .chk .box{width:18px;height:18px;border-radius:4px;border:1px solid var(--dim);flex:none;margin-top:3px;display:grid;place-items:center;font-size:12px}
+  .chk .box.on{background:var(--ok);border-color:var(--ok);color:#06210f}
+  .chk .body{flex:1} .chk .body b{display:block}
+  .filter{display:flex;gap:6px;margin:8px 0 10px;flex-wrap:wrap}
+  .filter button{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:13px}
+  .filter button.on{border-color:var(--acc);color:var(--acc)}
+  .part-list{display:flex;flex-direction:column;gap:6px}
+  .part-list .part{cursor:pointer;border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:var(--panel2);font-size:13px}
+  .part-list .part:hover,.part-list .part.sel{border-color:var(--acc)}
+  .fleet{display:grid;grid-template-columns:1fr 60px 1fr;gap:10px;align-items:stretch;margin:12px 0}
+  .box-h{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--panel)}
+  .box-h h4{margin:0 0 8px;font-size:14px} .box-h .part{border:1px solid var(--line);border-radius:6px;padding:6px 8px;margin:6px 0;font-size:13px;background:var(--panel2);transition:box-shadow .3s,border-color .3s}
+  .box-h .part.hot{border-color:var(--warn);box-shadow:0 0 0 2px rgba(224,179,76,.35)}
+  .box-h .part.hot-ok{border-color:var(--ok);box-shadow:0 0 0 2px rgba(76,195,138,.35)}
+  .wire{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:8px;color:var(--dim);font-size:12px}
+  .wire .arrow{width:100%;height:2px;background:var(--line);transition:background .3s}
+  .wire .arrow.hot{background:var(--warn)}
+  .ctl{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px}
+  .ctl button{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:6px 12px;cursor:pointer}
+  .ctl button:hover{border-color:var(--acc)}
+  .log{font-family:var(--mono);font-size:12px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-height:120px;max-height:220px;overflow:auto;white-space:pre-wrap}
+  .sim{display:grid;grid-template-columns:1fr 1fr;gap:14px} @media(max-width:760px){.sim{grid-template-columns:1fr}}
+  .tog{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid var(--line);border-radius:6px;margin:6px 0;background:var(--panel2);cursor:pointer;user-select:none}
+  .tog .sw{width:38px;height:20px;border-radius:999px;background:#3a3f52;position:relative;flex:none}
+  .tog .sw::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .15s}
+  .tog.on .sw{background:var(--ok)} .tog.on .sw::after{left:20px}
+  .verdict{margin-top:12px;padding:12px;border-radius:8px;border:1px solid var(--line);background:var(--panel2)}
+  .verdict .r{font-family:var(--mono);font-size:16px;font-weight:600}
+  .verdict.ok{border-color:var(--ok)} .verdict.ok .r{color:var(--ok)}
+  .verdict.bad{border-color:var(--bad)} .verdict.bad .r{color:var(--bad)}
+  .verdict.warn{border-color:var(--warn)} .verdict.warn .r{color:var(--warn)}
+  table{border-collapse:collapse;width:100%;font-size:14px} th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top} th{color:var(--dim);font-weight:600}
+  .steps{counter-reset:s} .steps>div{position:relative;padding:10px 12px 10px 44px;border:1px solid var(--line);border-radius:8px;margin:8px 0;background:var(--panel)}
+  .steps>div::before{counter-increment:s;content:counter(s);position:absolute;left:12px;top:10px;width:22px;height:22px;border-radius:50%;background:var(--acc);color:#04101f;font-weight:700;display:grid;place-items:center;font-size:13px}
+  .steps>div b{display:block;margin-bottom:2px}
 </style>
 </head>
 <body>
 <header>
-  <h1>Fleet arch agent: <span class="teal">standing on the event feed</span></h1>
-  <p>The single-machine arch agent shipped (<code>add-arch-agent</code>, feature/arch-agent). The next question: how much of the harness event feed + collector does the fleet version reuse, and should the agent live in the events app instead of the harness? Short answer: the <b class="ok">read half is already fleet-shaped</b>, the <b class="bad">write half doesn't exist</b>, and the agent should <b class="vio">stay in the harness</b>.</p>
+  <h1>Arch agent + fleet: where we are, what is left, how to continue</h1>
+  <p>State as of 2026-09-03, branch <code>feature/arch-agent</code>, PR #56 open and mergeable. Two OpenSpec changes: <code>add-arch-agent</code> and <code>add-fleet-arch-agent</code>.</p>
 </header>
-<nav id="nav">
-  <button data-v="map" class="on">1 · What exists today</button>
-  <button data-v="reuse">2 · Reuse verdicts</button>
-  <button data-v="host">3 · Where should it live?</button>
-  <button data-v="target">4 · Target fleet shape</button>
-  <button data-v="gaps">5 · Gaps → the change</button>
+<nav>
+  <button data-v="v-status" class="on">1 · Where we are</button>
+  <button data-v="v-built">2 · What was built</button>
+  <button data-v="v-fleet">3 · A fleet send, step by step</button>
+  <button data-v="v-sim">4 · Opt-in simulator</button>
+  <button data-v="v-left">5 · What is left</button>
+  <button data-v="v-next">6 · How to continue</button>
 </nav>
 <main>
 
-<!-- ============ 1 MAP ============ -->
-<section id="v-map" class="on">
-  <h2>Two stacks that already touch</h2>
-  <p class="dim">Everything below is shipped and running. The arch agent already drinks from the collector — it was a deliberate design decision (D2 in <code>add-arch-agent/design.md</code>: "the fleet arch reads the same shape over HTTP"). Toggle the highlights to see each stack.</p>
-  <div class="toolbar">
-    <button class="btn on" id="hl-all">Both stacks</button>
-    <button class="btn" id="hl-feed">Event feed / collector stack</button>
-    <button class="btn" id="hl-arch">Arch agent stack</button>
+<!-- ============ 1 STATUS ============ -->
+<section id="v-status" class="on">
+  <h2>The lifecycle, and where the cursor sits</h2>
+  <p class="dim">Both changes went propose → design → implement on this branch. Everything up to "verified isolated" is done. The cursor is on <b>merge + deploy</b>, which is yours, then the real two-machine test, then archive.</p>
+  <div class="tl">
+    <div class="step done"><div class="t">Proposed</div><div class="s">2 OpenSpec changes, strict-valid</div></div>
+    <div class="step done"><div class="t">Implemented</div><div class="s">backend, MCP, Arch tab, peer API, fleet client</div></div>
+    <div class="step done"><div class="t">Verified isolated</div><div class="s">167 unit · 39 browser · fleet e2e 23/23 ×2 · arch e2e 25/25 ×2</div></div>
+    <div class="step done"><div class="t">Pushed</div><div class="s">1cf1f71 on PR #56</div></div>
+    <div class="step now"><div class="t">Merge + deploy</div><div class="s">your click (main ruleset), then swap.ps1 on both boxes</div></div>
+    <div class="step todo"><div class="t">Real fleet test</div><div class="s">this box ↔ the other computer</div></div>
+    <div class="step todo"><div class="t">Live arch eval</div><div class="s">Tests tab, spends turns on :5099</div></div>
+    <div class="step todo"><div class="t">Archive</div><div class="s">fold both deltas into the baseline specs</div></div>
   </div>
-  <div class="card">
-    <svg viewBox="0 0 980 430" width="100%">
-      <defs>
-        <marker id="ar" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#8b90a0"/></marker>
-        <marker id="arT" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#2dd4bf"/></marker>
-        <marker id="arV" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#a78bfa"/></marker>
-      </defs>
-      <!-- remote harnesses -->
-      <g class="flow g-feed">
-        <rect x="20" y="20" width="200" height="86" rx="10" fill="#171a23" stroke="#2dd4bf"/>
-        <text x="120" y="42" text-anchor="middle" class="teal" style="fill:#2dd4bf">Remote harness B, C…</text>
-        <text x="120" y="62" text-anchor="middle" class="mono">GET /api/events?after=N</text>
-        <text x="120" y="80" text-anchor="middle" class="lbl">own feed ring · X-Auth-Password</text>
-        <text x="120" y="96" text-anchor="middle" class="lbl">(other machines on the LAN)</text>
-      </g>
-      <!-- self feed -->
-      <g class="flow g-feed">
-        <rect x="20" y="150" width="200" height="70" rx="10" fill="#171a23" stroke="#4cc38a"/>
-        <text x="120" y="174" text-anchor="middle" style="fill:#4cc38a">Self feed (in-process)</text>
-        <text x="120" y="194" text-anchor="middle" class="mono">HarnessEventFeed.cs</text>
-        <text x="120" y="210" text-anchor="middle" class="lbl">ring 1000 · turn.start/ended…</text>
-      </g>
-      <!-- collector -->
-      <g class="flow g-feed g-arch">
-        <rect x="330" y="70" width="230" height="120" rx="10" fill="#1e2230" stroke="#5ea0ef" stroke-width="2"/>
-        <text x="445" y="94" text-anchor="middle" style="fill:#5ea0ef">Collector</text>
-        <text x="445" y="113" text-anchor="middle" class="mono">CollectorService.cs</text>
-        <text x="445" y="131" text-anchor="middle" class="lbl">per-source watermark · re-stamped seq</text>
-        <text x="445" y="147" text-anchor="middle" class="lbl">encrypted creds · rejection taxonomy</text>
-        <text x="445" y="163" text-anchor="middle" class="lbl">sources persisted · events in RAM only</text>
-        <text x="445" y="181" text-anchor="middle" class="mono">GET /api/collector/events?after=N</text>
-      </g>
-      <line x1="220" y1="63" x2="330" y2="100" stroke="#2dd4bf" stroke-dasharray="5 4" marker-end="url(#arT)" class="flow g-feed"/>
-      <text x="262" y="60" class="mono flow g-feed">poll 2.5s, read-only</text>
-      <line x1="220" y1="185" x2="330" y2="160" stroke="#4cc38a" marker-end="url(#ar)" class="flow g-feed"/>
-      <!-- consumers of collector -->
-      <g class="flow g-feed">
-        <rect x="660" y="20" width="290" height="64" rx="10" fill="#171a23" stroke="#2a2f3f"/>
-        <text x="805" y="44" text-anchor="middle">Events app (static SPA, no backend)</text>
-        <text x="805" y="62" text-anchor="middle" class="mono">events-app/index.html · dumb observer</text>
-      </g>
-      <g class="flow g-feed">
-        <rect x="660" y="104" width="290" height="64" rx="10" fill="#171a23" stroke="#2a2f3f"/>
-        <text x="805" y="128" text-anchor="middle">Status board + host sounds</text>
-        <text x="805" y="146" text-anchor="middle" class="mono">StatusBoardService.cs · HostEventSound.cs</text>
-      </g>
-      <line x1="560" y1="100" x2="660" y2="56" stroke="#8b90a0" marker-end="url(#ar)" class="flow g-feed"/>
-      <line x1="560" y1="136" x2="660" y2="136" stroke="#8b90a0" marker-end="url(#ar)" class="flow g-feed"/>
-      <!-- arch agent -->
-      <g class="flow g-arch">
-        <rect x="330" y="250" width="230" height="120" rx="10" fill="#221d38" stroke="#a78bfa" stroke-width="2"/>
-        <text x="445" y="274" text-anchor="middle" style="fill:#a78bfa">Arch agent (@arch)</text>
-        <text x="445" y="293" text-anchor="middle" class="mono">ArchAgentService.cs · ArchLoop.cs</text>
-        <text x="445" y="311" text-anchor="middle" class="lbl">wake = collector events past watermark</text>
-        <text x="445" y="327" text-anchor="middle" class="lbl">6 MCP tools · fenced CLI session</text>
-        <text x="445" y="345" text-anchor="middle" class="lbl">home repo arch-home · Arch tab UI</text>
-      </g>
-      <path d="M445,190 L445,250" stroke="#a78bfa" stroke-width="2" marker-end="url(#arV)" class="flow g-arch"/>
-      <text x="455" y="225" class="mono flow g-arch">ReadEvents(after) — today filtered to SelfId only</text>
-      <!-- repo agents -->
-      <g class="flow g-arch">
-        <rect x="660" y="278" width="290" height="64" rx="10" fill="#171a23" stroke="#4cc38a"/>
-        <text x="805" y="302" text-anchor="middle" style="fill:#4cc38a">Local repo agents</text>
-        <text x="805" y="320" text-anchor="middle" class="mono">send_task → TryBeginRun → CliRunner</text>
-      </g>
-      <line x1="560" y1="310" x2="660" y2="310" stroke="#a78bfa" marker-end="url(#arV)" class="flow g-arch"/>
-      <text x="575" y="300" class="mono flow g-arch">in-process only!</text>
-      <text x="20" y="410" class="lbl">One thing to notice: the collector is spec'd read-only toward remote harnesses (it may never write), and the arch agent's send path never touches the wire at all.</text>
-    </svg>
-  </div>
-  <div class="grid" style="margin-top:14px">
-    <div class="card">
-      <h4>The feed contract is genuinely open</h4>
-      <p>Envelope <code>{seq, at, type, source, data}</code>; the collector never parses <code>data</code> — it pages any producer honoring the shape (<code>docs/event-feed-contract.md</code> exists precisely so third parties can join). Types in circulation: <code>turn.start</code>, <code>turn.ended</code>, <code>chat.focus</code>, <code>arch.wake</code>.</p>
-    </div>
-    <div class="card">
-      <h4>The "dock" you remembered</h4>
-      <p>The subscribed-harness list + merged feed + agent cards is <code>events-app/index.html</code> — a build-less SPA polling <code>/api/collector/events</code>. It holds <b>no state and no logic worth reusing server-side</b>; the real machinery (subscriptions, watermarks, credentials) lives in <code>CollectorService</code>, which is exactly what the fleet arch needs.</p>
-    </div>
-  </div>
-</section>
 
-<!-- ============ 2 REUSE ============ -->
-<section id="v-reuse">
-  <h2>Component-by-component reuse verdicts</h2>
-  <p class="dim">Your instinct is right — but the reusable part is the <b>backend collector</b>, not the events app. And it only covers the <i>eyes</i> of the fleet arch, not its <i>hands</i>.</p>
+  <div class="grid" style="margin-top:16px">
+    <div class="card">
+      <h3>add-arch-agent <span class="pill ok">implemented</span></h3>
+      <p>An orchestrating agent that lives in its own home repo, is woken by <code>turn.ended</code> events from the repos it manages, and can only act through five MCP tools. It has an Arch tab with Chat and Tools lanes and a live-turn stream.</p>
+      <ul>
+        <li>Tasks: 39 of 41 checked.</li>
+        <li>Open: 3.6 (unit tests for <code>send_task</code> refusals) and 4.3 (chat-systest for the arch send bubble). The behaviour is covered by the e2e scenario, not by a unit test.</li>
+        <li>Open: 7.4's <b>live</b> run from the Tests tab. It registers three fixtures on :5099 and spends turns, so it is yours to start.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>add-fleet-arch-agent <span class="pill ok">implemented</span></h3>
+      <p>The same arch agent, now able to manage repos on other harnesses. Each harness exposes a peer API. The caller's collector already knows the peer's address and password, so a fleet client borrows that. Two opt-ins gate every send.</p>
+      <ul>
+        <li>Tasks: 14 of 14 checked.</li>
+        <li>Verified on two isolated instances on this box. Not yet on two real machines.</li>
+        <li>Deliberately out: arch-to-arch delegation, scoped send tokens.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>What "verified" means here</h3>
   <table>
-    <tr><th>Component</th><th>Verdict</th><th>Why</th></tr>
-    <tr>
-      <td><b>Collector subscriptions</b><br><span class="dim">sources + credentials + start/stop, <code>collector-sources.json</code></span></td>
-      <td><span class="tag exists">reuse as-is</span></td>
-      <td>The fleet roster already exists: each subscribed harness is a machine the fleet arch can see. Encrypted credential storage, rejection taxonomy (ip-blocked / needs-credential / throttled), address normalization — all done, all type-agnostic.</td>
-    </tr>
-    <tr>
-      <td><b>Watermark event transport</b><br><span class="dim"><code>ReadEvents(after)</code>, per-source seq, 2.5 s poll</span></td>
-      <td><span class="tag exists">reuse as-is</span></td>
-      <td>The arch agent <i>already</i> wakes from this aggregate. The only thing pinning it to one machine is one line: <code>if (ev.SourceId != CollectorService.SelfId) continue;</code> (ArchAgentService.cs:754). Relaxing that filter <i>is</i> the designed scope change.</td>
-    </tr>
-    <tr>
-      <td><b>Agent identity model</b><br><span class="dim"><code>AgentView.Machine</code>, <code>RemoteUrl</code>, <code>send_task(machine:…)</code></span></td>
-      <td><span class="tag exists">reuse as-is</span></td>
-      <td>Fleet-shaped on purpose: <code>machine</code> is already a <code>send_task</code> parameter, currently refused when ≠ <code>"self"</code> — one branch. D5 already picked <code>remoteUrl</code> matching as the cross-machine repo identity.</td>
-    </tr>
-    <tr>
-      <td><b>Status board</b><br><span class="dim">running-agent derivation per source</span></td>
-      <td><span class="tag new">extend</span></td>
-      <td>Already computes "who is running where" fleet-wide from <code>turn.start/ended</code> pairs. The fleet arch's availability rule wants exactly this — but availability also needs remote <b>git state</b> (branch = claimed-by-Operator), which no event carries today.</td>
-    </tr>
-    <tr>
-      <td><b>Events app SPA</b><br><span class="dim">the dock UI you mentioned</span></td>
-      <td><span class="tag new">extend, don't move into</span></td>
-      <td>Great <i>observer</i> of the fleet arch (it already renders <code>arch.wake</code> generically, and sounds fall back to <code>_default</code>). But it's a stateless browser page — nothing in it can host an agent. Worth adding: an "arch" lane / machine chips. Note <code>HostEventSound</code>'s slot set is closed — new event types need slots added to get their own cue.</td>
-    </tr>
-    <tr>
-      <td><b>Collector as a send channel</b></td>
-      <td><span class="tag no">cannot reuse</span></td>
-      <td>Read-only <b>by spec</b> (event-feed-collector: the collector never writes to a watched harness). That invariant is worth keeping — observation and command should stay separate channels. The send side must be a new sibling client.</td>
-    </tr>
-    <tr>
-      <td><b>Feed credential for sends</b><br><span class="dim"><code>X-Auth-Password</code> per source</span></td>
-      <td><span class="tag new">reuse with an opt-in</span></td>
-      <td>The stored credential is the peer's full API password, so technically it already authorizes <code>POST /api/chat/send</code> there. Reuse the storage, but gate sends behind a per-source "allow sends" flag so watching a harness never silently implies commanding it.</td>
-    </tr>
+    <tr><th>Check</th><th>Result</th><th>What it proves</th></tr>
+    <tr><td>Unit tests, whole project</td><td>167 pass</td><td>wake filter across machines, key parsing, machine resolution, actor tags, state persistence</td></tr>
+    <tr><td><code>check-arch-tab.mjs</code></td><td>39 pass</td><td>Arch tab lanes, live turn, machine chips, Fleet card with both opt-ins</td></tr>
+    <tr><td><code>tests/loop-eval/arch.mjs</code> isolated</td><td>25/25, twice</td><td>arch drives two repo agents to green, leaves the claimed one alone, ignores injection bait, disarm mid-run is clean</td></tr>
+    <tr><td><code>tests/loop-eval/fleet.mjs</code> isolated</td><td>23/23, twice</td><td>A's arch sends through B's peer API, B's agent goes green, B shows <code>arch@A</code>, B's turn end comes back through A's collector and wakes A's arch</td></tr>
   </table>
-  <div class="card verdict" style="margin-top:14px">
-    <h4>Net: the fleet arch's entire sensory system is already built and battle-tested</h4>
-    <p>Subscriptions, transport, identity, fleet board — reuse without modification. What does not exist anywhere: an <b>outbound command channel</b> (send a task to a repo agent over HTTP), <b>actor provenance across the wire</b> (a remote send would render as a human bubble in the remote dock), and <b>remote availability</b> (git state of a repo on another machine).</p>
-  </div>
 </section>
 
-<!-- ============ 3 HOSTING ============ -->
-<section id="v-host">
-  <h2>Should the arch agent live in the events app?</h2>
-  <p class="dim">Three candidate homes. The question dissolves a bit once you see that the "event feed app" is two very different things: a stateless browser page (events-app) and a backend service (the collector) — and the arch agent already sits next to the collector.</p>
-  <div class="grid3">
-    <div class="card verdict no">
-      <h4>A · Inside the events app SPA</h4>
-      <p><span class="tag no">rejected</span></p>
-      <ul>
-        <li>It's a static page with <b>no backend of its own</b> — it cannot run a standing CLI session, hold credentials, keep a watermark, or write memory.</li>
-        <li>Alive only while a browser tab is open. That's exactly the fragility the detached-runs work eliminated (backend-owned RunSessions so closing the phone kills nothing).</li>
-        <li>Everything the agent needs — run slot, autopilot engine, loop-eval gate, audit log, MCP server — is backend.</li>
-      </ul>
-    </div>
-    <div class="card verdict no">
-      <h4>B · Standalone fleet-arch product</h4>
-      <p><span class="tag no">rejected for now</span></p>
-      <ul>
-        <li>Architecturally pure: a separate process speaking only <code>event-feed-contract.md</code> + harness HTTP, deployable anywhere, no favored machine.</li>
-        <li>But it re-implements what the harness gives free: CLI runner, session persistence, autopilot ladder, eval harness, auth, deploy (<code>swap.ps1</code>), UI.</li>
-        <li>And it orphans the just-shipped in-harness arch agent. Wrong cost/benefit while the fleet is ~2 machines. Revisit if the fleet outgrows "one operator, one LAN".</li>
-      </ul>
-    </div>
-    <div class="card verdict">
-      <h4>C · Stay in the harness; any harness can be <i>the</i> fleet arch</h4>
-      <p><span class="tag exists">recommended</span></p>
-      <ul>
-        <li>The arch agent already rides harness mechanics (synthetic <code>@arch</code> repo, run slot, loops) and already reads the fleet-shaped collector aggregate.</li>
-        <li>Fleet = <b>scope widening</b>: drop the self-only filter, add an outbound send client. Matches the design's own promise ("change of scope, not redesign").</li>
-        <li>The operator designates which harness runs the fleet arch — same pattern as the collector itself (every harness <i>can</i> collect; yours does).</li>
-      </ul>
-    </div>
-  </div>
-  <h3>The realization that settles it</h3>
-  <div class="card">
-    <p>"Host the arch agent in the event feed app" is really asking "should the arch agent live next to the collector?" — <b>and it already does</b>. Both are services in the same harness process; the arch agent's wake source <i>is</i> the collector. The part of the events app worth anything to an agent (subscriptions, merged feed) was never in the SPA — the SPA is a projector. So option C isn't a compromise; it's recognizing that the co-location you're asking for shipped last week.</p>
-    <p class="dim">One genuinely good idea to salvage from option B: keep the fleet arch's <i>dependencies</i> expressible in wire terms (events in, HTTP sends out), so extraction to a standalone product later stays cheap. The new outbound send client should be written against peer HTTP APIs even for machine="self"-adjacent thinking — but per D1, local sends keep the in-process run-slot path; only remote sends go over the wire.</p>
-  </div>
-</section>
-
-<!-- ============ 4 TARGET ============ -->
-<section id="v-target">
-  <h2>The fleet shape this implies</h2>
-  <div class="card">
-    <svg viewBox="0 0 980 440" width="100%">
-      <defs>
-        <marker id="ar2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#8b90a0"/></marker>
-        <marker id="arT2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#2dd4bf"/></marker>
-        <marker id="arW2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#e0b34c"/></marker>
-        <marker id="arV2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#a78bfa"/></marker>
-      </defs>
-      <!-- Harness A -->
-      <rect x="20" y="20" width="450" height="400" rx="12" fill="#12141c" stroke="#5ea0ef"/>
-      <text x="245" y="44" text-anchor="middle" style="fill:#5ea0ef">Harness A (designated fleet-arch host)</text>
-      <rect x="45" y="60" width="180" height="66" rx="9" fill="#1e2230" stroke="#2a2f3f"/>
-      <text x="135" y="86" text-anchor="middle">Collector</text>
-      <text x="135" y="104" text-anchor="middle" class="lbl">sources = fleet roster</text>
-      <rect x="45" y="160" width="180" height="96" rx="9" fill="#221d38" stroke="#a78bfa" stroke-width="2"/>
-      <text x="135" y="186" text-anchor="middle" style="fill:#a78bfa">Fleet arch (@arch)</text>
-      <text x="135" y="204" text-anchor="middle" class="lbl">wake: ALL sources</text>
-      <text x="135" y="220" text-anchor="middle" class="lbl">managed = (machine, repo)</text>
-      <text x="135" y="236" text-anchor="middle" class="lbl">matches repos by remoteUrl</text>
-      <line x1="135" y1="126" x2="135" y2="160" stroke="#a78bfa" marker-end="url(#arV2)"/>
-      <rect x="270" y="160" width="180" height="96" rx="9" fill="#2a2415" stroke="#e0b34c" stroke-width="2"/>
-      <text x="360" y="186" text-anchor="middle" style="fill:#e0b34c">Outbound send client</text>
-      <text x="360" y="204" text-anchor="middle" class="lbl">NEW · sibling of collector</text>
-      <text x="360" y="220" text-anchor="middle" class="lbl">reuses source credential</text>
-      <text x="360" y="236" text-anchor="middle" class="lbl">per-source "allow sends" flag</text>
-      <line x1="225" y1="208" x2="270" y2="208" stroke="#a78bfa" marker-end="url(#arV2)"/>
-      <rect x="45" y="300" width="180" height="66" rx="9" fill="#171a23" stroke="#4cc38a"/>
-      <text x="135" y="326" text-anchor="middle" style="fill:#4cc38a">Local repo agents</text>
-      <text x="135" y="344" text-anchor="middle" class="lbl">send_task machine:"self"</text>
-      <line x1="135" y1="256" x2="135" y2="300" stroke="#a78bfa" marker-end="url(#arV2)"/>
-      <text x="145" y="282" class="mono">in-process (unchanged, D1)</text>
-      <rect x="270" y="300" width="180" height="66" rx="9" fill="#171a23" stroke="#2a2f3f"/>
-      <text x="360" y="326" text-anchor="middle">Arch tab + events app</text>
-      <text x="360" y="344" text-anchor="middle" class="lbl">machine column everywhere</text>
-      <!-- Harness B -->
-      <rect x="540" y="60" width="420" height="300" rx="12" fill="#12141c" stroke="#2dd4bf"/>
-      <text x="750" y="86" text-anchor="middle" style="fill:#2dd4bf">Harness B (any peer — unchanged except two additions)</text>
-      <rect x="565" y="106" width="170" height="64" rx="9" fill="#171a23" stroke="#2a2f3f"/>
-      <text x="650" y="130" text-anchor="middle">Event feed</text>
-      <text x="650" y="148" text-anchor="middle" class="mono">GET /api/events</text>
-      <rect x="565" y="200" width="170" height="80" rx="9" fill="#171a23" stroke="#e0b34c"/>
-      <text x="650" y="224" text-anchor="middle">Chat send API</text>
-      <text x="650" y="242" text-anchor="middle" class="mono">POST /api/chat/send</text>
-      <text x="650" y="260" text-anchor="middle" class="lbl">+ actor field (NEW)</text>
-      <rect x="765" y="150" width="170" height="80" rx="9" fill="#171a23" stroke="#4cc38a"/>
-      <text x="850" y="178" text-anchor="middle" style="fill:#4cc38a">Repo agents on B</text>
-      <text x="850" y="196" text-anchor="middle" class="lbl">dock shows actor</text>
-      <text x="850" y="212" text-anchor="middle" class="lbl">"arch@A", not human</text>
-      <line x1="735" y1="235" x2="765" y2="210" stroke="#8b90a0" marker-end="url(#ar2)"/>
-      <!-- cross links -->
-      <path d="M565,130 C480,120 300,80 225,88" stroke="#2dd4bf" stroke-dasharray="5 4" fill="none" marker-end="url(#arT2)"/>
-      <text x="300" y="66" class="mono" style="fill:#2dd4bf">events: poll, read-only (exists)</text>
-      <path d="M450,210 C500,215 520,225 565,235 " stroke="#e0b34c" stroke-width="2" fill="none" marker-end="url(#arW2)"/>
-      <text x="462" y="248" class="mono" style="fill:#e0b34c">tasks: HTTP send (NEW)</text>
-      <text x="20" y="435" class="lbl">Two channels, deliberately separate: the teal one observes (collector, spec'd read-only), the yellow one commands (new client, opt-in per source). B needs only the actor field + audit row to show honest provenance.</text>
-    </svg>
-  </div>
-  <div class="grid" style="margin-top:14px">
+<!-- ============ 2 BUILT ============ -->
+<section id="v-built">
+  <h2>What was built, in one picture</h2>
+  <p class="dim">Hover or tap a part to read what it is. Left is one harness on its own. Right is what the fleet change added on top.</p>
+  <div class="grid">
     <div class="card">
-      <h4>Availability across machines</h4>
-      <p>The rule stays <code>available | busy | claimed | unmanaged</code>. Busy-ness of remote repos falls out of the collector (<code>turn.start/ended</code> pairing — the status board already computes it). <b>Claimed</b> needs remote branch state: either a <code>git.state</code> event published on branch change, or the send client asking the peer's git API on demand. The design already picked <code>remoteUrl</code> as the cross-machine repo identity (D5), so "find a free machine for this repository" = filter agent views by remoteUrl, then by availability.</p>
+      <h3>One harness (add-arch-agent)</h3>
+      <div class="part-list" id="parts-a"></div>
     </div>
     <div class="card">
-      <h4>What deliberately does not change</h4>
-      <ul>
-        <li>Local sends keep the in-process run-slot path (D1) — no loopback HTTP for machine "self".</li>
-        <li>The collector stays read-only; no push transport appears anywhere.</li>
-        <li>The fence (<code>--disallowedTools</code> + MCP-only tools) is unchanged — <code>send_task</code> just grows a working <code>machine</code> argument.</li>
-        <li>One fleet arch per fleet by convention, not by mechanism — same as "every harness can collect, yours does".</li>
-      </ul>
+      <h3>Across harnesses (add-fleet-arch-agent)</h3>
+      <div class="part-list" id="parts-b"></div>
     </div>
   </div>
+  <div class="card" style="margin-top:14px"><h3 id="pt-title">Pick a part</h3><p id="pt-body" class="dim">Its role, where it lives, and what constrains it.</p></div>
+
+  <h3>The constraints that make it safe to run</h3>
+  <ul>
+    <li><b>Tools are the only medium.</b> The arch session runs with Edit, Write and Bash disallowed and Read fenced to the home repo. It can only observe and send.</li>
+    <li><b>The receiver owns its rules.</b> A fleet send still runs through the receiver's deny list, its claimed rule, its run slot and its autopilot gate. The caller cannot bypass any of it.</li>
+    <li><b>Provenance is stamped by the receiver.</b> The bubble tag <code>arch@&lt;machine&gt;</code> and the audit row are written on the receiving side, so no caller can post as a human.</li>
+    <li><b>The collector stays read-only.</b> Only the fleet client ever POSTs to a peer, and only for a source marked "allow sends".</li>
+    <li><b>No replay.</b> A fresh arch watermark starts at the collector's current sequence, so arming it does not wake it on history.</li>
+  </ul>
 </section>
 
-<!-- ============ 5 GAPS ============ -->
-<section id="v-gaps">
-  <h2>The gaps — and what was built (change <code>add-fleet-arch-agent</code>)</h2>
-  <p class="dim">The four steps below shipped together as one OpenSpec change; the fifth stays deferred. Tags say what landed.</p>
-  <ol class="steps">
-    <li><b>Remote wake input <span class="tag exists">built</span></b>
-      The SelfId filter is gone from <code>ComposeWakeCore</code>: an event's key is the bare repo id on the self source and <code>sourceId/repoId</code> on a subscribed harness; managed scope = local ids ∪ fleet keys (<code>arch.json: managedFleet</code>). Wake lines say "on &lt;machine&gt;".</li>
-    <li><b>Remote agent views <span class="tag exists">built — via the peer describe, not a new event</span></b>
-      Every harness now answers <code>GET /api/arch/peer</code> with protocol, build version, machine, accept-sends, gate state and all its repos with availability it computed itself. A <code>FleetClient</code> caches that per source (5 s); tool calls refresh it, the engine tick never blocks on a dark peer (it shows <code>unreachable</code>).</li>
-    <li><b>Outbound send channel <span class="tag exists">built — <code>FleetClient</code> beside the collector</span></b>
-      Borrows the collector's address + stored credential through <code>BuildPeerRequest</code>; the collector itself still only GETs. Gated by the per-source <b>allow sends</b> flag (events app button + Arch tab Fleet card). <code>send_task machine:&lt;label&gt;</code> resolves by source label or id, applies A's checks (armed, managed, allow-sends, deny list) and POSTs to <code>/api/arch/peer/send</code>.</li>
-    <li><b>Actor provenance on the receiving side <span class="tag exists">built — peer API, not an actor field on the chat POST</span></b>
-      The receiver computes the actor <code>arch@&lt;from&gt;</code> itself and writes its own audit row (kind <code>arch</code>, phase <code>fleet:&lt;from&gt;</code>), so a caller can never post a bubble that claims to be human and the tag survives reloads. Receiving is an opt-in: <b>accept fleet sends</b> + the host-only autopilot gate; B's deny list, claimed rule and run slot all apply.</li>
-    <li><b>Arch-to-arch (L2 proper) <span class="tag fleet">still deferred</span></b>
-      Not needed for "told a repository and a task, find a free machine": the fleet arch talks to remote repo agents directly. Revisit when one machine's arch should delegate to another's.</li>
-  </ol>
-  <div class="card" style="margin-top:14px">
-    <h4>Ship gate: <code>tests/loop-eval/fleet.mjs</code></h4>
-    <p>Two isolated harness instances on one box (A :5210 hosts the fleet arch, B :5211 hosts a goal-fixture repo agent). B refuses a peer send before opting in; A subscribes to B with B's password and allows sends; A's arch is scoped to B's repo, armed in drive mode, told to get the goal check green. Asserts: the goal check passes on B; B's audit carries the send with the fleet phase and B's dock shows <code>arch@&lt;A&gt;</code>; A's collector carried B's <code>turn.ended</code>; an <code>arch.wake</code> followed; A's audit holds the fleet send. The live two-machine run is the Operator's after deploying this build to the second box.</p>
+<!-- ============ 3 FLEET SEND ============ -->
+<section id="v-fleet">
+  <h2>A fleet send, step by step</h2>
+  <p class="dim">This is the exact path the e2e scenario proved. Press "Play" to walk it. Machine A is this box, machine B is the other computer.</p>
+  <div class="ctl"><button id="fl-play">▶ Play</button><button id="fl-step">Step</button><button id="fl-reset">Reset</button></div>
+  <div class="fleet">
+    <div class="box-h">
+      <h4>Machine A (caller)</h4>
+      <div class="part" id="a-coll">Collector: subscribed to B, polling B's feed with B's password</div>
+      <div class="part" id="a-loop">Arch loop: watermark over A's collector events</div>
+      <div class="part" id="a-arch">Arch session: home repo, 5 tools</div>
+      <div class="part" id="a-fc">Fleet client: borrows B's address + credential</div>
+      <div class="part" id="a-audit">A's audit: <span class="mono">arch → send_task(B, repo)</span></div>
+    </div>
+    <div class="wire">
+      <div class="arrow" id="w-send"></div><div>send</div>
+      <div class="arrow" id="w-back"></div><div>feed</div>
+    </div>
+    <div class="box-h">
+      <h4>Machine B (receiver)</h4>
+      <div class="part" id="b-peer">Peer API <span class="mono">/api/arch/peer/send</span></div>
+      <div class="part" id="b-gates">Checks: accept flag → gate → deny → claimed → busy</div>
+      <div class="part" id="b-bubble">Repo dock: user bubble tagged <span class="mono">arch@A</span></div>
+      <div class="part" id="b-run">Repo agent runs the task</div>
+      <div class="part" id="b-feed">B's event feed: <span class="mono">turn.ended</span></div>
+    </div>
   </div>
-  <div class="card verdict mixed" style="margin-top:14px">
-    <h4>Two things to name in the proposal's risk section</h4>
-    <ul>
-      <li><b>Credential blast radius:</b> a source credential is the peer's full API password. Watching already implied holding it; sending makes it hot. The per-source opt-in flag is the mitigation; a scoped send token would be the real fix, someday.</li>
-      <li><b>Feed durability:</b> events live in RAM (ring 1000, lost on restart). Fine for wakes (the watermark just resumes), but the fleet arch must never treat the feed as history — <code>read_transcript</code> and <code>git_state</code> stay the source of truth, same as today.</li>
-    </ul>
+  <div class="log" id="fl-log">Press Play.</div>
+</section>
+
+<!-- ============ 4 SIMULATOR ============ -->
+<section id="v-sim">
+  <h2>Opt-in simulator: why a send succeeds or is refused</h2>
+  <p class="dim">Flip the switches. The verdict is the status word A's arch gets back from <code>send_task</code>, in the order the checks run. This is what you will be configuring on the two real machines.</p>
+  <div class="sim">
+    <div class="card">
+      <h3>On A (this box)</h3>
+      <div class="tog on" data-k="armed"><span>Arch loop armed</span><span class="sw"></span></div>
+      <div class="tog on" data-k="managed"><span>B's repo is in A's managed scope</span><span class="sw"></span></div>
+      <div class="tog on" data-k="allow"><span>Source B marked "allow sends"</span><span class="sw"></span></div>
+      <div class="tog" data-k="deny"><span>Task text hits A's deny list</span><span class="sw"></span></div>
+      <div class="tog on" data-k="reach"><span>B reachable, password valid, same build</span><span class="sw"></span></div>
+    </div>
+    <div class="card">
+      <h3>On B (the other computer)</h3>
+      <div class="tog on" data-k="accept"><span>"Accept fleet sends" ticked in B's Arch tab</span><span class="sw"></span></div>
+      <div class="tog on" data-k="gate"><span>B's autopilot gate open</span><span class="sw"></span></div>
+      <div class="tog" data-k="bdeny"><span>Task text hits B's deny list</span><span class="sw"></span></div>
+      <div class="tog" data-k="claimed"><span>Target repo on an Operator feature branch (claimed)</span><span class="sw"></span></div>
+      <div class="tog" data-k="busy"><span>Target repo already running a turn</span><span class="sw"></span></div>
+    </div>
   </div>
+  <div class="verdict ok" id="sim-v"><div class="r">sent</div><div id="sim-why" class="dim"></div></div>
+</section>
+
+<!-- ============ 5 LEFT ============ -->
+<section id="v-left">
+  <h2>What is left</h2>
+  <div class="filter"><button class="on" data-f="all">all</button><button data-f="you">yours</button><button data-f="me">mine</button><button data-f="later">deferred</button></div>
+  <ul class="chk" id="chk"></ul>
+</section>
+
+<!-- ============ 6 NEXT ============ -->
+<section id="v-next">
+  <h2>How to continue, in order</h2>
+  <div class="steps">
+    <div><b>Merge PR #56 <span class="pill you">you</span></b>The main ruleset blocks every merge the agent account tries, so the merge button is yours. Nothing else on the list can start before it.</div>
+    <div><b>Deploy here <span class="pill me">me</span></b>Say "deploy". I run the committed <code>swap.ps1</code> detached, then you say "keep it" within 15 minutes or the dead-man's switch rolls live back.</div>
+    <div><b>Deploy on the other computer <span class="pill you">you</span></b>Pull main there and run the same <code>swap.ps1</code>. Until it has this build, A's Fleet card will show that peer as "no peer API on that build".</div>
+    <div><b>Open the receiver <span class="pill you">you</span></b>On the other computer: Arch tab → Fleet card → tick "accept fleet sends". Keep its autopilot gate open.</div>
+    <div><b>Point this box at it <span class="pill you">you</span></b>Events app: register the other harness as a source with its password, press "sends: on" on that source. Arch tab → scope picker → pick its repos → arm.</div>
+    <div><b>Run the real test together <span class="pill me">me</span> <span class="pill you">you</span></b>Give the arch agent a small task for a remote repo. We check the remote dock shows <code>arch@&lt;this box&gt;</code>, and that A's Arch tab wakes when the remote turn ends.</div>
+    <div><b>Live arch eval <span class="pill you">you</span></b>Tests tab → E2E → arch. It registers three fixtures on :5099 and spends turns. I record the measured run in the loop-eval README afterwards.</div>
+    <div><b>Close the two open test tasks <span class="pill me">me</span></b>Unit tests for <code>send_task</code> refusals and the chat-systest for the arch bubble. Small, mechanical.</div>
+    <div><b>Archive both changes <span class="pill me">me</span></b><code>openspec archive add-arch-agent</code> and <code>add-fleet-arch-agent</code> fold the deltas into the baseline specs. Say "archive" after the fleet test passes.</div>
+  </div>
+  <h3>Commands you will see me use</h3>
+<pre>pwsh is absent on this box, so the deploy is launched with powershell.exe, detached:
+  cmd /c start "" /b powershell.exe -NoProfile -File .\swap.ps1 &gt; .claudeweb-deploy\swap.log 2&gt;&amp;1
+Disarm the auto-rollback once you say "keep it":
+  powershell.exe -NoProfile -File .\keep.ps1
+Isolated re-verification of the fleet path, any time:
+  node tests/loop-eval/fleet.mjs
+Archive when done:
+  openspec archive add-arch-agent
+  openspec archive add-fleet-arch-agent</pre>
 </section>
 
 </main>
-<footer>
-  Rolling latest Understanding app · fleet arch agent analysis (pre-proposal) · previous version covered the add-arch-agent change itself (see git history) · sources: openspec/specs/{harness-event-feed, event-feed-collector, status-monitor}, openspec/changes/add-arch-agent/design.md, ClaudeWeb.App/Services/{Events,Arch}, events-app/index.html, docs/event-feed-contract.md
-</footer>
 <script>
-  const nav = document.getElementById('nav');
-  nav.addEventListener('click', e => {
-    const b = e.target.closest('button'); if (!b) return;
-    nav.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
-    document.querySelectorAll('main section').forEach(s => s.classList.toggle('on', s.id === 'v-' + b.dataset.v));
+document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));
+  document.querySelectorAll('main section').forEach(s=>s.classList.toggle('on',s.id===b.dataset.v));
+}));
+
+// ---- 2: parts
+const PARTS_A=[
+ ['Home repo','<ProjectsRoot>/arch-home, git-inited on first arm. Holds CLAUDE.md (the role prompt), memory/ (what remember() writes and commits), assignments/ (which branch the arch handed each repo). The arch session\'s cwd; Read is fenced to it.'],
+ ['ArchLoop (@arch)','A reserved loop kind, one instance. On each tick it reads collector events past its watermark, keeps turn.start / turn.ended from managed repos, composes a wake prompt naming repo, status, cost, elapsed and every managed repo\'s availability, then sends it to the arch session. Suggest mode pre-fills the composer; drive mode sends.'],
+ ['Availability rule','available | busy | claimed | unmanaged. Busy = run slot taken. Claimed = the repo sits on a branch the Operator made, not one the arch recorded. Dirty tree on the default branch is still available. The arch never touches claimed repos.'],
+ ['MCP tools','list_agents, git_state, read_transcript, send_task, remember. Served to the arch session over the same temp --mcp-config mechanism the CLI runner already uses. Every call lands in the audit under actor arch.'],
+ ['send_task','Deny fence → slot claim → user bubble with actor arch → run on the dock session → audit kind arch. Returns sent | busy | claimed | denied(term) | capped. Records the branch in assignments/.'],
+ ['Arch tab','Advanced-mode tab and a dashboard pop-up. Chat lane streams the live arch turn through the shared stream hub. Tools lane lists the catalogue with per-tool usage, the denied built-ins, and a preflight (mcp / token / home / scope / gate).'],
+ ['Event feed: arch.wake','Published on each sent wake prompt, so the events app and sounds can react, and so a fleet e2e can prove the wake happened.'],
+];
+const PARTS_B=[
+ ['Peer API','GET /api/arch/peer (protocol, build version, machine label, acceptsSends, gateOpen, every registered repo as an agent view). POST /api/arch/peer/send. GET /api/arch/peer/transcript. Behind the same password middleware as everything else.'],
+ ['Fleet client','Lives beside the collector. For a source it borrows the address and stored credential the collector already has, caches describe for 5 s, and exposes Send / ReadTranscript with a status vocabulary: ok | unreachable | unauthorized | no-peer-api | error.'],
+ ['Opt-in 1: allow sends (caller)','Per source, persisted by the collector, default off. Button in the events app, checkbox in the Arch tab Fleet card. Without it, the source\'s repos never appear in the scope picker and the fleet client refuses to send.'],
+ ['Opt-in 2: accept fleet sends (receiver)','Persisted in arch.json. Checkbox in the receiver\'s Arch tab. Without it, the peer send returns not-accepting before any other check.'],
+ ['Fleet scope keys','Local repos stay bare ids. Remote repos are sourceId/repoId. The wake filter, the scope picker and every tool resolve machines by self / self label / source label / source id.'],
+ ['Receiver-side provenance','The receiver tags the bubble arch@<caller machine> and writes its own audit row (kind arch, phase fleet:<caller>). MessageBubble derives its style from the base actor, so it renders as an arch message with a machine suffix.'],
+ ['Wake across machines','B\'s turn.ended reaches A through A\'s collector, which was already polling B\'s feed. The arch loop keys it as sourceId/repoId, finds it managed, and wakes with the machine named.'],
+];
+function renderParts(el,list){
+  const host=document.getElementById(el);
+  list.forEach(([t,b])=>{const d=document.createElement('div');d.className='part';d.textContent=t;
+    const pick=()=>{document.querySelectorAll('.part-list .part').forEach(x=>x.classList.toggle('sel',x===d));show(t,b);};
+    d.addEventListener('mouseenter',pick);d.addEventListener('click',pick);host.appendChild(d);});
+}
+function show(t,b){document.getElementById('pt-title').textContent=t;const p=document.getElementById('pt-body');p.textContent=b;p.classList.remove('dim');}
+renderParts('parts-a',PARTS_A);renderParts('parts-b',PARTS_B);
+
+// ---- 3: fleet play
+const STEPS=[
+ ['b-feed','','B\'s repo agent finishes a turn. B\'s feed publishes turn.ended.'],
+ ['a-coll','w-back','A\'s collector polls B\'s feed and stores the event under source B.'],
+ ['a-loop','','A\'s arch loop reads past its watermark, keys the event B/<repo>, finds it in the managed fleet scope, composes a wake prompt naming machine B.'],
+ ['a-arch','','A\'s arch session reads the wake, calls list_agents, sees B\'s repo available, decides on a task, calls send_task(machine=B, repo, text).'],
+ ['a-audit','','A-side checks: armed, repo managed, source allows sends, deny list. Then A writes its own audit row for the tool call.'],
+ ['a-fc','w-send','Fleet client POSTs to B\'s peer API with B\'s stored password.'],
+ ['b-peer','','B receives the send with from=A.'],
+ ['b-gates','','B checks in order: accept flag, autopilot gate, deny list, claimed, busy. Any failure returns a status word and nothing is posted.'],
+ ['b-bubble','','B posts the user bubble tagged arch@A into the repo dock and writes B\'s audit row (kind arch, phase fleet:A).'],
+ ['b-run','','B\'s repo agent runs the task. A got "sent" back and will wait for the next turn.ended rather than retry.'],
+ ['b-feed','w-back','When the turn ends, B\'s feed publishes turn.ended again, and the cycle repeats from step 2.'],
+];
+let fi=0,ftimer=null;
+function fReset(){fi=0;clearInterval(ftimer);ftimer=null;document.querySelectorAll('.fleet .part,.wire .arrow').forEach(x=>x.classList.remove('hot','hot-ok'));document.getElementById('fl-log').textContent='Press Play.';}
+function fStep(){
+  if(fi>=STEPS.length){clearInterval(ftimer);ftimer=null;return;}
+  document.querySelectorAll('.fleet .part').forEach(x=>{if(x.classList.contains('hot')){x.classList.remove('hot');x.classList.add('hot-ok');}});
+  document.querySelectorAll('.wire .arrow').forEach(x=>x.classList.remove('hot'));
+  const [p,w,txt]=STEPS[fi];const el=document.getElementById(p);el.classList.remove('hot-ok');el.classList.add('hot');
+  if(w)document.getElementById(w).classList.add('hot');
+  const log=document.getElementById('fl-log');if(fi===0)log.textContent='';log.textContent+=(fi+1)+'. '+txt+'\n';log.scrollTop=log.scrollHeight;fi++;
+}
+document.getElementById('fl-play').addEventListener('click',()=>{fReset();fStep();ftimer=setInterval(fStep,1400);});
+document.getElementById('fl-step').addEventListener('click',()=>{if(ftimer){clearInterval(ftimer);ftimer=null;}fStep();});
+document.getElementById('fl-reset').addEventListener('click',fReset);
+
+// ---- 4: simulator
+const S={armed:true,managed:true,allow:true,deny:false,reach:true,accept:true,gate:true,bdeny:false,claimed:false,busy:false};
+document.querySelectorAll('.tog').forEach(t=>t.addEventListener('click',()=>{const k=t.dataset.k;S[k]=!S[k];t.classList.toggle('on',S[k]);sim();}));
+function sim(){
+  let r,why,cls='bad';
+  if(!S.armed){r='refused';why='A-side: the arch loop is disarmed. send_task is inert until you arm it on the Arch tab.';}
+  else if(!S.managed){r='unmanaged';why='A-side: the target is not in the managed fleet scope. Add it in the scope picker (it only lists sources that allow sends).';}
+  else if(!S.allow){r='refused';why='A-side: source B is not marked "allow sends". The fleet client will not POST to a source without it. Toggle it in the events app or the Fleet card.';}
+  else if(S.deny){r='denied(term)';why='A-side: A\'s own deny list fenced the task text before it left the box.';}
+  else if(!S.reach){r='unreachable / unauthorized / no-peer-api';why='Fleet client status. Wrong password → unauthorized. Old build on B → no-peer-api. Dark → unreachable. The Fleet card shows which.';}
+  else if(!S.accept){r='not-accepting';why='B-side, first check: B has not ticked "accept fleet sends" in its Arch tab.';}
+  else if(!S.gate){r='not-accepting';why='B-side: B\'s autopilot gate is closed. Sends are treated like any autopilot action on B.';}
+  else if(S.bdeny){r='denied(term)';why='B-side: B\'s deny list fenced it. The receiver\'s rules apply regardless of what A allowed.';}
+  else if(S.claimed){r='claimed';why='B-side: the repo is on a branch the Operator made. The arch leaves claimed repos alone; wait for the next turn.ended.';}
+  else if(S.busy){r='busy';why='B-side: the run slot is taken. No bubble is posted. A should wait for turn.ended, not retry.';cls='warn';}
+  else {r='sent';why='Every check passed. B posts the bubble tagged arch@A, writes its audit row, and runs the task. A will hear about the result through its collector.';cls='ok';}
+  const v=document.getElementById('sim-v');v.className='verdict '+cls;v.querySelector('.r').textContent=r;document.getElementById('sim-why').textContent=why;
+}
+sim();
+
+// ---- 5: checklist
+const LEFT=[
+ ['you','Merge PR #56','The main protection ruleset makes this your click. Everything below waits on it.'],
+ ['me','Deploy this box','swap.ps1 detached via powershell.exe, then "keep it" → keep.ps1 within 15 min.'],
+ ['you','Deploy the other computer','Same swap.ps1 from a fresh pull of main. Both peers must run this build.'],
+ ['you','Receiver opt-in on the other computer','Arch tab → Fleet card → accept fleet sends. Autopilot gate open.'],
+ ['you','Caller opt-in on this box','Events app: source registered with password, "sends: on". Arch tab: scope includes its repos, armed.'],
+ ['me','Real two-machine fleet test','A small task to a remote repo. Verify arch@<A> on the remote dock and the wake on A. First run on real network, real passwords, real build gap.'],
+ ['you','Live arch loop-eval from the Tests tab','Task 7.4, live half. Registers three fixtures on :5099, spends turns. I record the measured run afterwards.'],
+ ['me','Task 3.6: unit tests for send_task refusals','busy → busy with no bubble; deny term → denied naming it; claimed → claimed; unknown machine refused. Behaviour exists and is e2e-covered, unit test is missing.'],
+ ['me','Task 4.3: chat-systest for the arch bubble','Arch send lands in the transcript with actor arch; busy send is refused without a bubble.'],
+ ['me','Archive add-arch-agent and add-fleet-arch-agent','openspec archive folds the delta specs into the baseline. After the fleet test passes.'],
+ ['later','Arch-to-arch delegation','A remote @arch address so one arch can hand a goal to another arch instead of driving its repos directly. Deferred by design.'],
+ ['later','Scoped send tokens','Today the feed credential is the peer\'s full password. A per-source send token would narrow what a compromised caller could do. Deferred; the two opt-ins are the consent boundary for now.'],
+ ['later','"Connect two harnesses" how-to for the README','The contract doc has the peer API. A short human-Operator setup walkthrough is still unwritten.'],
+];
+function renderLeft(f){
+  const ul=document.getElementById('chk');ul.innerHTML='';
+  LEFT.filter(x=>f==='all'||x[0]===f).forEach(([who,t,b])=>{
+    const li=document.createElement('li');
+    li.innerHTML='<div class="box"></div><div class="body"><b>'+t+' <span class="pill '+who+'">'+(who==='you'?'yours':who==='me'?'mine':'deferred')+'</span></b><span class="dim">'+b+'</span></div>';
+    ul.appendChild(li);
   });
-  const hl = { 'hl-all': null, 'hl-feed': 'g-feed', 'hl-arch': 'g-arch' };
-  for (const id of Object.keys(hl)) {
-    document.getElementById(id).addEventListener('click', () => {
-      for (const other of Object.keys(hl)) document.getElementById(other).classList.toggle('on', other === id);
-      document.querySelectorAll('.flow').forEach(el => {
-        el.classList.toggle('off', hl[id] !== null && !el.classList.contains(hl[id]));
-      });
-    });
-  }
+}
+renderLeft('all');
+document.querySelectorAll('.filter button').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.filter button').forEach(x=>x.classList.toggle('on',x===b));renderLeft(b.dataset.f);}));
 </script>
 </body>
 </html>
