@@ -115,6 +115,42 @@ export default function Arch({ popup = false, onOpenDock = null }) {
   const stream = useArchStream({ onEnded: load });
   const { turn } = stream;
 
+  // "Copy agent prompt" (openspec arch-context-prompt): hand any repo agent on
+  // this machine a self-contained pointer to THIS conversation, so "look at what
+  // I told the arch agent" needs no tribal knowledge. The transcript file needs
+  // no credentials; the API route is the fallback and never embeds the password.
+  const [copiedCtx, setCopiedCtx] = useState(false);
+  const copyAgentPrompt = useCallback(async () => {
+    const sid = state?.session?.sessionId || sessionId || '(never armed — no session yet)';
+    const path = state?.session?.transcriptPath || '(no transcript yet — the arch agent has not been armed on this box)';
+    const origin = window.location.origin;
+    const text = [
+      'Context: how to read the Arch agent’s conversation on this machine (Claude Web harness).',
+      '',
+      `This harness hosts an orchestrating "arch agent" that supervises the repo agents. When the operator refers to "the arch conversation" or "what I told the arch agent", they mean this session:`,
+      '',
+      `- Arch session id: ${sid}`,
+      `- Transcript on disk (readable directly, no credentials): ${path}`,
+      '  JSONL, one message per line; read the tail for the latest exchanges. User lines carrying an actor tag (arch, wake, loop) are harness-driven, not the human.',
+      `- Same conversation over the harness API (send header X-Auth-Password: <the harness access code — ask the operator, never guess>):`,
+      `  GET ${origin}/api/arch/messages    the conversation`,
+      `  GET ${origin}/api/arch/tool-calls  its tool calls (send_task, read_transcript, …)`,
+      `  GET ${origin}/api/arch             loop / scope / fleet state`,
+      '',
+      'Prefer the transcript file; fall back to the API if the file is missing.',
+    ].join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Clipboard API can be unavailable over plain HTTP on the LAN: legacy path.
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+    }
+    setCopiedCtx(true);
+    setTimeout(() => setCopiedCtx(false), 1500);
+  }, [state, sessionId]);
+
   useEffect(() => {
     if (!enabled) return undefined;
     alive.current = true;
@@ -272,6 +308,14 @@ export default function Arch({ popup = false, onOpenDock = null }) {
             {running && <span className="arch__pill arch__pill--busy">turn running</span>}
             {sessionId && <span className="arch__dim"> · session {sessionId.slice(0, 8)}</span>}
           </span>
+          <button
+            type="button"
+            className="arch__copy-ctx"
+            title="Copy a prompt that tells a repo agent (in any chat on this harness) where this conversation lives and how to read it"
+            onClick={copyAgentPrompt}
+          >
+            {copiedCtx ? '✓ copied' : '⧉ Copy agent prompt'}
+          </button>
         </div>
         <div className="arch__lanes" role="tablist" aria-label="Arch lanes">
           <button

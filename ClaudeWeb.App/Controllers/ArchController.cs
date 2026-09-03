@@ -110,6 +110,12 @@ public class ArchController : ControllerBase
             session = new
             {
                 sessionId = _arch.ResolveArchSessionId(),
+                // Where the arch conversation lives on disk (openspec arch-context-prompt):
+                // lets the Arch tab hand a repo agent a copyable pointer it can read
+                // without credentials.
+                transcriptPath = _arch.ResolveArchSessionId() is { Length: > 0 } sid
+                    ? System.IO.Path.Combine(SessionService.ProjectsDirectoryFor(_arch.HomePath), sid + ".jsonl")
+                    : null,
                 run = run is null ? null : new { status = run.Status, lastSeq = run.LastSeq, sessionId = run.SessionId },
             },
             watermark = _arch.Watermark,

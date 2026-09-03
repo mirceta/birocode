@@ -79,3 +79,17 @@
 
 /* History lane (openspec: add-arch-tool-history): scrolls inside the main column like the Tools lane. */
 .arch__main > .arch-hist { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 0 2px; }
+
+/* Copy-agent-prompt button (openspec arch-context-prompt) */
+.arch__copy-ctx {
+  margin-left: auto;
+  flex: none;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border, #444);
+  background: transparent;
+  color: var(--color-text-muted, #9aa);
+  cursor: pointer;
+}
+.arch__copy-ctx:hover { color: var(--color-text, #ddd); border-color: var(--color-text-muted, #9aa); }
