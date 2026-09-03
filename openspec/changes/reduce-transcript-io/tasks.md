@@ -44,6 +44,10 @@
       new: 0 MB / 0 ops / 4 batch activity GETs. Chat page idle: 0.4 MB on both
       (the running-run reattach path is not reproducible in an isolated instance).
 - [x] 4.4 Understanding app updated: fixes → implemented, with the measurement.
-- [ ] 4.5 Live (after deploy): ClaudeWeb.exe read bytes over 10 s with the chat
+- [x] 4.5 Live (after deploy): ClaudeWeb.exe read bytes over 10 s with the chat
       and dashboard open drops from ~500 MB to single-digit MB; git.exe count in
       an arch tick stays flat.
+      DONE 2026-09-03 16:25 deploy (PID 31320): 0.0 MB / 20 s (1 read op) with the chat
+      + dashboard overlay held open (`hold-dashboard-live.mjs` + Win32_Process
+      ReadTransferCount); 0.4 MB / 20 s while a run streamed; git.exe count 0 during the
+      hold; second discovery pass re-parsed 2 of 26 transcripts in 2 s (was 26/26).
