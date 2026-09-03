@@ -76,3 +76,6 @@
    settled turn the transcript does not carry yet is dimmed a notch. */
 .arch__live { display: flex; flex-direction: column; gap: 6px; }
 .arch__live[data-live="settled"] { opacity: 0.92; }
+
+/* History lane (openspec: add-arch-tool-history): scrolls inside the main column like the Tools lane. */
+.arch__main > .arch-hist { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 0 2px; }

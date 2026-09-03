@@ -1,0 +1,85 @@
+/* Arch tab History lane (openspec: add-arch-tool-history): a timeline of the
+   arch agent's tool calls a human can read — turn groups, one card per call. */
+.arch-hist { display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
+.arch-hist code { font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; }
+.arch-hist__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.arch-hist__head h2 { margin: 0; font-size: 15px; }
+.arch-hist__stats { font-size: 12px; color: var(--color-text-soft, #888); display: inline-flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.arch-hist__stats b { color: var(--color-text, #ddd); }
+.arch-hist__bad { color: #e5734b !important; }
+.arch-hist__intro { margin: 0; color: var(--color-text-soft, #888); line-height: 1.45; font-size: 12.5px; }
+
+.arch-hist__filters { display: flex; flex-direction: column; gap: 6px; }
+.arch-hist__chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.arch-hist__chip { font: inherit; font-size: 11.5px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--color-border, #444); background: var(--color-surface, #14161d); color: var(--color-text-soft, #999); cursor: pointer; }
+.arch-hist__chip--on { border-color: var(--color-accent, #5ea0ef); color: var(--color-accent, #5ea0ef); background: rgba(94, 160, 239, 0.12); }
+.arch-hist__controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.arch-hist__check { font-size: 12px; color: var(--color-text-soft, #999); display: inline-flex; gap: 4px; align-items: center; }
+.arch-hist__search { flex: 1 1 180px; min-width: 140px; font: inherit; font-size: 12px; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--color-border, #444); background: var(--color-bg, #0f1117); color: var(--color-text, #ddd); }
+.arch-hist__btn { font: inherit; font-size: 12px; padding: 3px 9px; border-radius: 8px; border: 1px solid var(--color-border, #444); background: var(--color-surface, #1e2230); color: var(--color-text, #ddd); cursor: pointer; white-space: nowrap; }
+
+.arch-hist__empty { color: var(--color-text-muted, #888); padding: 14px 10px; border: 1px dashed var(--color-border, #444); border-radius: 10px; line-height: 1.45; }
+.arch-hist__err { color: #e5734b; padding: 8px; }
+
+.arch-hist__timeline { display: flex; flex-direction: column; gap: 12px; }
+.arch-hist__turn { border: 1px solid var(--color-border, #333); border-radius: 10px; background: var(--color-surface, #14161d); overflow: hidden; }
+.arch-hist__turnhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 7px 10px; border-bottom: 1px solid var(--color-border, #2a2f3f); background: rgba(255, 255, 255, 0.025); font-size: 12px; }
+.arch-hist__turnno { font-family: ui-monospace, Consolas, monospace; font-weight: 600; color: var(--color-accent, #5ea0ef); min-width: 26px; }
+.arch-hist__actor { padding: 1px 7px; border-radius: 999px; border: 1px solid var(--color-border, #444); color: var(--color-text-soft, #999); white-space: nowrap; }
+.arch-hist__turn[data-actor="wake"] .arch-hist__actor { border-color: #8a6d2b; color: #e0b458; }
+.arch-hist__turn[data-turn="live"] .arch-hist__turnno { color: #4fd18b; }
+.arch-hist__count { color: var(--color-text-soft, #888); white-space: nowrap; }
+.arch-hist__prompt { flex: 1 1 100%; color: var(--color-text, #ccc); font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.arch-hist__calls { display: flex; flex-direction: column; }
+
+.arch-hist__call { border-top: 1px solid var(--color-border, #2a2f3f); }
+.arch-hist__call:first-child { border-top: 0; }
+.arch-hist__sum { list-style: none; cursor: pointer; display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 8px 10px; }
+.arch-hist__sum::-webkit-details-marker { display: none; }
+.arch-hist__sum:hover { background: rgba(255, 255, 255, 0.03); }
+.arch-hist__call[open] > .arch-hist__sum { background: rgba(94, 160, 239, 0.06); }
+.arch-hist__icon { font-size: 18px; width: 24px; text-align: center; }
+.arch-hist__what { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.arch-hist__sentence { color: var(--color-text, #e6e6e6); line-height: 1.35; }
+.arch-hist__toolname { display: inline-flex; gap: 6px; align-items: center; font-size: 11px; color: var(--color-text-soft, #888); }
+.arch-hist__srv { padding: 0 6px; border-radius: 5px; background: rgba(94, 160, 239, 0.14); color: var(--color-accent, #5ea0ef); font-size: 10.5px; }
+.arch-hist__srv--builtin { background: rgba(255, 255, 255, 0.08); color: var(--color-text-soft, #999); }
+.arch-hist__right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; white-space: nowrap; }
+.arch-hist__time { font-size: 11px; color: var(--color-text-soft, #888); font-family: ui-monospace, Consolas, monospace; }
+.arch-hist__pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--color-border, #444); color: var(--color-text-soft, #999); }
+.arch-hist__pill--ok { border-color: #2e7d4f; color: #4fd18b; }
+.arch-hist__pill--error { border-color: #8f3b26; color: #e5734b; }
+.arch-hist__pill--running { border-color: #3c6fb0; color: #7db6f5; }
+.arch-hist__pill--unknown { border-style: dashed; }
+.arch-hist__call--error > .arch-hist__sum { box-shadow: inset 3px 0 0 #e5734b; }
+.arch-hist__call--running > .arch-hist__sum { box-shadow: inset 3px 0 0 #7db6f5; }
+.arch-hist__spin { width: 9px; height: 9px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: arch-hist-spin 0.8s linear infinite; display: inline-block; }
+@keyframes arch-hist-spin { to { transform: rotate(360deg); } }
+
+.arch-hist__body { padding: 4px 12px 12px 44px; display: flex; flex-direction: column; gap: 10px; }
+.arch-hist__section { display: flex; flex-direction: column; gap: 4px; }
+.arch-hist__label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-text-soft, #888); }
+.arch-hist__args { display: flex; flex-direction: column; gap: 4px; border-left: 2px solid var(--color-border, #444); padding-left: 10px; }
+.arch-hist__arg { display: grid; grid-template-columns: minmax(70px, 140px) 1fr; gap: 10px; align-items: start; }
+.arch-hist__key { color: var(--color-accent, #5ea0ef); padding-top: 2px; }
+.arch-hist__val { min-width: 0; }
+.arch-hist__scalar { background: rgba(255, 255, 255, 0.06); padding: 1px 5px; border-radius: 4px; word-break: break-all; }
+.arch-hist__null { color: var(--color-text-soft, #777); }
+.arch-hist__none { color: var(--color-text-soft, #777); font-style: italic; font-size: 12px; }
+.arch-hist__pre { margin: 0; font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; background: var(--color-bg, #0f1117); border: 1px solid var(--color-border, #2a2f3f); border-radius: 6px; padding: 6px 8px; max-height: 320px; overflow: auto; }
+.arch-hist__pre--result { max-height: 420px; }
+.arch-hist__outcome { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.arch-hist__status { font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; padding: 1px 7px; border-radius: 5px; }
+.arch-hist__status--good { background: rgba(79, 209, 139, 0.14); color: #4fd18b; }
+.arch-hist__status--bad { background: rgba(229, 115, 75, 0.14); color: #e5734b; }
+.arch-hist__detail { color: var(--color-text, #ddd); }
+.arch-hist__clipped { font-size: 11px; color: #e0b458; }
+.arch-hist__raw { font-size: 11px; }
+.arch-hist__rawbtn { background: none; border: none; color: var(--color-accent, #5ea0ef); cursor: pointer; padding: 0; font: inherit; font-size: 11px; }
+
+@media (max-width: 640px) {
+  .arch-hist__sum { grid-template-columns: auto 1fr; }
+  .arch-hist__right { grid-column: 2; flex-direction: row; align-items: center; gap: 8px; }
+  .arch-hist__body { padding-left: 12px; }
+  .arch-hist__arg { grid-template-columns: 1fr; gap: 2px; }
+}

@@ -7,6 +7,7 @@ import MessageBubble from '../components/chat/MessageBubble';
 import ActivitySteps from '../components/chat/ActivitySteps';
 import ThinkingIndicator from '../components/chat/ThinkingIndicator';
 import ArchToolsPanel from '../components/arch/ArchToolsPanel';
+import ArchHistoryPanel from '../components/arch/ArchHistoryPanel';
 import useArchStream from '../hooks/useArchStream';
 import '../components/chat/chat.css';
 import './arch.css';
@@ -77,9 +78,9 @@ export default function Arch({ popup = false, onOpenDock = null }) {
   const [fleetDraft, setFleetDraft] = useState([]);
   const [cap, setCap] = useState(6);
   const [mode, setMode] = useState('drive');
-  // Lanes, like a repo dock's Builder | Ask | … row — but the arch agent only
-  // has two that apply: the conversation, and its Tools (the harness MCP
-  // surface). Chat is the default; the lane is view state, not persisted.
+  // Lanes, like a repo dock's Builder | Ask | … row — the arch agent has three:
+  // the conversation, its Tools (the harness MCP surface) and the History of
+  // its tool calls. Chat is the default; the lane is view state, not persisted.
   const [lane, setLane] = useState('chat');
   const [, setTick] = useState(0);
   const scrollRef = useRef(null);
@@ -281,12 +282,24 @@ export default function Arch({ popup = false, onOpenDock = null }) {
           >
             🔌 Tools
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={lane === 'history'}
+            className={`arch__lane${lane === 'history' ? ' arch__lane--on' : ''}`}
+            title="Every tool call of this conversation, with its arguments and result"
+            onClick={() => setLane('history')}
+          >
+            🧾 History
+          </button>
         </div>
         {!state?.gateOpen && <div className="arch__banner">Autopilot is disabled by the operator (host GUI). The arch agent cannot act until the gate is open.</div>}
         {state?.gateOpen && state?.killSwitch === false && <div className="arch__banner">The autopilot kill switch is off: the arch loop is paused.</div>}
         {error && <div className="arch__banner arch__banner--err">{error}</div>}
         {lane === 'tools' ? (
           <ArchToolsPanel />
+        ) : lane === 'history' ? (
+          <ArchHistoryPanel liveTurn={turn} sessionId={sessionId} />
         ) : (
         <>
         <div className="arch__scroll" ref={scrollRef}>

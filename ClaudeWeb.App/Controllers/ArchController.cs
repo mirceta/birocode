@@ -185,6 +185,64 @@ public class ArchController : ControllerBase
         return Ok(new { sessionId = sid, messages = annotated });
     }
 
+    /// <summary>The Arch tab's History lane (openspec: add-arch-tool-history):
+    /// every tool call of the arch conversation at full fidelity — the complete
+    /// arguments, the result text (clipped past a budget, and said so), both
+    /// timestamps, the elapsed time — grouped under the user turn that caused it,
+    /// with that turn's actor (human | wake) restored from the audit exactly like
+    /// the transcript's. Reconstructed from the session transcript on disk, so it
+    /// is complete after a reload; the page overlays the running turn live. A
+    /// harness tool (<c>mcp__arch__x</c>) is reported as server <c>arch</c> with
+    /// its short name; anything else as <c>builtin</c>.</summary>
+    [HttpGet("tool-calls")]
+    public IActionResult ToolCalls([FromQuery] string? sessionId = null)
+    {
+        _logger.CountRequest();
+        var sid = string.IsNullOrWhiteSpace(sessionId) ? _arch.ResolveArchSessionId() : sessionId;
+        if (sid is null) return Ok(new { sessionId = (string?)null, calls = Array.Empty<object>(), turns = Array.Empty<object>() });
+        var records = _sessions.GetToolCallHistory(_arch.HomePath, sid);
+
+        const string prefix = "mcp__arch__";
+        var turnRows = records.GroupBy(r => r.Turn).OrderBy(g => g.Key)
+            .Select(g => (Index: g.Key, Prompt: g.First().TurnPrompt, At: g.First().TurnAt, Calls: g.Count()))
+            .ToList();
+        // Actor per turn: the same audit match the transcript uses (a wake prompt is
+        // an audit row keyed by its exact text; anything else is the human).
+        var prompts = turnRows.Select(t => new ChatMessage("user", t.Prompt)).ToList();
+        var annotated = MessageActors.Annotate(prompts, _audit.Recent(5000), ArchAgentService.ReservedId, ArchAgentService.ActorHuman);
+        var turns = turnRows.Select((t, i) => new
+        {
+            index = t.Index,
+            prompt = t.Prompt.Length > 280 ? t.Prompt[..280] + "…" : t.Prompt,
+            at = t.At,
+            actor = t.Index == 0 ? "none" : annotated[i].Actor ?? ArchAgentService.ActorHuman,
+            calls = t.Calls,
+        }).ToList();
+
+        var calls = records.Select(r =>
+        {
+            var isArch = r.Name.StartsWith(prefix, StringComparison.Ordinal);
+            return new
+            {
+                id = r.Id,
+                name = r.Name,
+                tool = isArch ? r.Name[prefix.Length..] : r.Name,
+                server = isArch ? "arch" : "builtin",
+                summary = r.Summary,
+                input = r.Input,
+                ok = r.Ok,
+                result = r.Result,
+                resultClipped = r.ResultClipped,
+                resultChars = r.ResultChars,
+                at = r.At,
+                resultAt = r.ResultAt,
+                durationMs = r.At is { } a && r.ResultAt is { } b ? (long?)Math.Max(0, (long)(b - a).TotalMilliseconds) : null,
+                turn = r.Turn,
+            };
+        }).ToList();
+        return Ok(new { sessionId = sid, calls, turns });
+    }
+
     public sealed record SendRequest(string? Text);
 
     [HttpPost("send")]

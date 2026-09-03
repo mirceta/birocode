@@ -44,6 +44,30 @@ public record ToolCall(
     DateTime? Timestamp = null);
 
 /// <summary>
+/// One tool call of a conversation at full fidelity, for a history view that a
+/// human reads (openspec: add-arch-tool-history). Unlike <see cref="ToolCall"/>
+/// (a step-shaped row with clipped input/output), this keeps the complete parsed
+/// input, the result text up to a generous budget (flagged when clipped), the
+/// result's own timestamp, and which user turn the call belongs to (1-based;
+/// 0 = before any prompt) with that turn's prompt text so calls can be grouped
+/// under the message that caused them.
+/// </summary>
+public record ToolCallRecord(
+    string Id,
+    string Name,
+    string Summary,
+    System.Text.Json.Nodes.JsonNode? Input,
+    bool? Ok,
+    string Result,
+    bool ResultClipped,
+    int ResultChars,
+    DateTime? At,
+    DateTime? ResultAt,
+    int Turn,
+    string TurnPrompt,
+    DateTime? TurnAt);
+
+/// <summary>
 /// Lists and parses Claude Code session transcripts (JSONL) for the current
 /// working directory. Claude stores them under
 /// <c>~/.claude/projects/&lt;encoded-cwd&gt;/&lt;session-id&gt;.jsonl</c> where the
@@ -261,6 +285,120 @@ public class SessionService
         catch (Exception ex)
         {
             _logger.Error($"[CHAT] Failed to read tool calls for {sessionId}: {ex.Message}");
+        }
+
+        return calls;
+    }
+
+    /// <summary>
+    /// The tool-call history of a session at full fidelity (openspec:
+    /// add-arch-tool-history): every <c>tool_use</c> with its complete input,
+    /// paired with its <c>tool_result</c> (text up to <paramref name="maxResultChars"/>,
+    /// clipped flag when longer), both timestamps, and the user turn it belongs to.
+    /// A turn starts at a user line that carries visible text and no tool_result
+    /// block. Same resilience rules as <see cref="GetToolCalls"/>: a malformed line
+    /// is skipped, a call without a result keeps <c>Ok = null</c>.
+    /// </summary>
+    public List<ToolCallRecord> GetToolCallHistory(string workingDir, string sessionId, int maxResultChars = 16000)
+    {
+        var calls = new List<ToolCallRecord>();
+        if (string.IsNullOrWhiteSpace(sessionId)) return calls;
+        if (sessionId.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) return calls;
+
+        var path = Path.Combine(ProjectsDirectoryFor(workingDir), sessionId + ".jsonl");
+        if (!File.Exists(path))
+        {
+            _logger.Info($"[CHAT] Transcript not found: {path}");
+            return calls;
+        }
+
+        var byId = new Dictionary<string, int>();
+        var turn = 0;
+        var turnPrompt = "";
+        DateTime? turnAt = null;
+
+        try
+        {
+            foreach (var line in File.ReadLines(path))
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+
+                JsonDocument doc;
+                try { doc = JsonDocument.Parse(line.Trim('\0')); }
+                catch { continue; }
+                using (doc)
+                {
+                    var root = doc.RootElement;
+                    if (!root.TryGetProperty("type", out var typeProp)) continue;
+                    var type = typeProp.GetString();
+                    if (type != "user" && type != "assistant") continue;
+                    if (!root.TryGetProperty("message", out var msg) || !msg.TryGetProperty("content", out var content)) continue;
+
+                    DateTime? ts = null;
+                    if (root.TryGetProperty("timestamp", out var tsProp) &&
+                        DateTime.TryParse(tsProp.GetString(), null, System.Globalization.DateTimeStyles.RoundtripKind, out var parsed))
+                        ts = parsed;
+
+                    if (type == "user")
+                    {
+                        var hasResult = content.ValueKind == JsonValueKind.Array && content.EnumerateArray()
+                            .Any(b => b.TryGetProperty("type", out var t) && t.GetString() == "tool_result");
+                        if (!hasResult)
+                        {
+                            var text = ExtractVisibleText(msg);
+                            if (!string.IsNullOrWhiteSpace(text))
+                            {
+                                turn++;
+                                turnPrompt = text!.Trim();
+                                turnAt = ts;
+                            }
+                            continue;
+                        }
+                    }
+                    if (content.ValueKind != JsonValueKind.Array) continue;
+
+                    foreach (var block in content.EnumerateArray())
+                    {
+                        var bt = block.TryGetProperty("type", out var btp) ? btp.GetString() : "";
+                        if (type == "assistant" && bt == "tool_use")
+                        {
+                            var id = block.TryGetProperty("id", out var ip) ? ip.GetString() ?? "" : "";
+                            if (string.IsNullOrEmpty(id) || byId.ContainsKey(id)) continue;
+                            var name = block.TryGetProperty("name", out var np) ? np.GetString() ?? "tool" : "tool";
+                            string summary = "";
+                            System.Text.Json.Nodes.JsonNode? input = null;
+                            if (block.TryGetProperty("input", out var inp))
+                            {
+                                if (inp.ValueKind == JsonValueKind.Object) summary = ToolSummary(name, inp);
+                                try { input = System.Text.Json.Nodes.JsonNode.Parse(inp.GetRawText()); } catch { input = null; }
+                            }
+                            byId[id] = calls.Count;
+                            calls.Add(new ToolCallRecord(id, name, summary, input, Ok: null, Result: "", ResultClipped: false, ResultChars: 0,
+                                At: ts, ResultAt: null, Turn: turn, TurnPrompt: turnPrompt, TurnAt: turnAt));
+                        }
+                        else if (type == "user" && bt == "tool_result")
+                        {
+                            var id = block.TryGetProperty("tool_use_id", out var ip) ? ip.GetString() ?? "" : "";
+                            if (string.IsNullOrEmpty(id) || !byId.TryGetValue(id, out var idx)) continue;
+                            var ok = !(block.TryGetProperty("is_error", out var ep) && ep.ValueKind == JsonValueKind.True);
+                            var full = ExtractToolResultText(block);
+                            var clipped = full.Length > maxResultChars;
+                            calls[idx] = calls[idx] with
+                            {
+                                Ok = ok,
+                                Result = clipped ? full[..maxResultChars] : full,
+                                ResultClipped = clipped,
+                                ResultChars = full.Length,
+                                ResultAt = ts,
+                            };
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[CHAT] Failed to read tool history for {sessionId}: {ex.Message}");
         }
 
         return calls;
