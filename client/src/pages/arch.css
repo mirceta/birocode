@@ -1,0 +1,78 @@
+/* Arch tab (openspec: add-arch-agent, D9) */
+/* The page is a size container so the two-column layout keys on the width the
+   page actually gets — a studio column or the dashboard pop-up can be far
+   narrower than the viewport — and stacks when it is too narrow for both. */
+.arch { height: 100%; min-height: 0; padding: 8px; box-sizing: border-box; container-type: inline-size; }
+.arch--off { padding: 16px; color: var(--color-text-muted, #888); }
+.arch__cols { display: flex; gap: 12px; height: 100%; min-height: 0; }
+.arch__main { flex: 1 1 60%; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.arch__side { flex: 0 0 340px; display: flex; flex-direction: column; gap: 10px; overflow: auto; min-height: 0; }
+@container (max-width: 900px) {
+  .arch__cols { flex-direction: column; overflow: auto; }
+  .arch__side { flex: 0 0 auto; overflow: visible; }
+  .arch__main { flex: 0 0 auto; min-height: 60vh; }
+}
+@media (max-width: 900px) {
+  .arch__cols { flex-direction: column; overflow: auto; }
+  .arch__side { flex: 0 0 auto; overflow: visible; }
+  .arch__main { flex: 0 0 auto; min-height: 60vh; }
+}
+.arch__head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 4px 2px 8px; }
+.arch__title { font-weight: 700; font-size: 16px; }
+.arch__meta { font-size: 13px; color: var(--color-text-muted, #888); }
+.arch__pill { display: inline-block; font-size: 11px; padding: 2px 7px; border-radius: 6px; border: 1px solid var(--color-border, #444); margin-right: 4px; }
+.arch__pill--on { color: #4cc38a; border-color: #4cc38a; }
+.arch__pill--off { color: #a78bfa; border-color: #a78bfa; }
+.arch__pill--busy { color: #e0b34c; border-color: #e0b34c; }
+/* Lanes under the head — the dock's Builder | Ask segmented control, arch-sized:
+   Chat (the conversation) and Tools (the harness MCP surface). */
+.arch__lanes { display: flex; gap: 2px; flex: 0 0 auto; padding: 0 0 8px; border-bottom: 1px solid var(--color-border, #333); margin-bottom: 8px; }
+.arch__lane { flex: 0 0 auto; min-width: 110px; min-height: 26px; border: 1px solid var(--color-border, #444); border-radius: 999px; background: var(--color-surface, #14161d); color: var(--color-text-soft, #888); font-size: 12px; font-weight: 500; cursor: pointer; padding: 0 14px; }
+.arch__lane--on { background: var(--color-accent, #5ea0ef); border-color: var(--color-accent, #5ea0ef); color: #fff; }
+.arch__main > .toolsp { flex: 1 1 auto; min-height: 0; padding: 0 2px; }
+.arch__banner { padding: 8px 10px; border-radius: 8px; background: rgba(224, 179, 76, 0.12); border: 1px solid #e0b34c; font-size: 13px; margin-bottom: 8px; }
+.arch__banner--err { background: rgba(229, 115, 75, 0.12); border-color: #e5734b; }
+.arch__scroll { flex: 1 1 auto; overflow: auto; min-height: 0; padding: 4px 2px; display: flex; flex-direction: column; gap: 8px; }
+.arch__empty { color: var(--color-text-muted, #888); padding: 12px; }
+.arch__thinking { font-style: italic; color: var(--color-text-muted, #888); padding: 6px 2px; }
+.arch__composer { border-top: 1px solid var(--color-border, #333); padding-top: 8px; }
+.arch__composer textarea { width: 100%; box-sizing: border-box; resize: vertical; padding: 8px; border-radius: 8px; border: 1px solid var(--color-border, #444); background: var(--color-surface, #14161d); color: var(--color-text, #ddd); font: inherit; }
+.arch__composer-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+.arch__btn { background: var(--color-surface, #1e2230); color: var(--color-text, #ddd); border: 1px solid var(--color-border, #444); border-radius: 8px; padding: 5px 10px; cursor: pointer; font-size: 13px; }
+.arch__btn:disabled { opacity: 0.5; cursor: default; }
+.arch__btn--primary { border-color: var(--color-accent, #5ea0ef); color: var(--color-accent, #5ea0ef); }
+.arch__btn--danger { border-color: #e5734b; color: #e5734b; }
+.arch__link { background: none; border: none; color: var(--color-accent, #5ea0ef); cursor: pointer; padding: 0; font-size: 12px; }
+.arch__card { border: 1px solid var(--color-border, #333); border-radius: 10px; padding: 10px; background: var(--color-surface, #14161d); }
+.arch__card-head { display: flex; justify-content: space-between; align-items: center; font-weight: 600; margin-bottom: 8px; }
+.arch__row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.arch__row label { display: flex; flex-direction: column; font-size: 12px; color: var(--color-text-muted, #888); gap: 2px; }
+.arch__row select, .arch__row input { font: inherit; font-size: 13px; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--color-border, #444); background: var(--color-bg, #0f1117); color: var(--color-text, #ddd); }
+.arch__row input { width: 70px; }
+.arch__dim { font-size: 12px; color: var(--color-text-muted, #888); }
+.arch__mono { font-family: ui-monospace, Consolas, monospace; }
+.arch__wrap { overflow-wrap: anywhere; }
+.arch__scope { border: 1px dashed var(--color-border, #444); border-radius: 8px; padding: 8px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 4px; }
+.arch__scope-row { display: flex; gap: 6px; align-items: center; font-size: 13px; }
+.arch__agent { border-top: 1px solid var(--color-border, #2a2f3f); padding: 8px 0; display: flex; flex-direction: column; gap: 2px; }
+.arch__agent-top { display: flex; justify-content: space-between; align-items: center; }
+.arch__agent-name { font-weight: 600; }
+.arch__avail { font-size: 11px; font-family: ui-monospace, Consolas, monospace; padding: 2px 7px; border-radius: 5px; }
+.arch__avail--ok { background: #1c2b22; color: #4cc38a; }
+.arch__avail--busy { background: #2e2415; color: #e0b34c; }
+.arch__avail--claimed { background: #2e1a17; color: #e5734b; }
+.arch__avail--dim { background: #25202e; color: #a78bfa; }
+/* Fleet (openspec: add-fleet-arch-agent): a machine chip on remote agents and
+   scope rows; scope groups per machine; the Fleet card with the two opt-ins. */
+.arch__machine { display: inline-block; font-size: 11px; font-family: ui-monospace, Consolas, monospace; padding: 1px 6px; border-radius: 5px; background: #123634; color: #2dd4bf; border: 1px solid #2dd4bf; margin-right: 6px; vertical-align: middle; }
+.arch__scope-group { font-size: 12px; font-weight: 600; color: var(--color-text-muted, #888); margin-top: 6px; }
+.arch__scope-machine { display: flex; flex-direction: column; gap: 4px; }
+.arch__scope-row .arch__avail { margin-left: auto; }
+.arch__scope-row--off { opacity: 0.65; }
+.arch__blocked { color: #b45309; }
+.arch__fleet .arch__scope-row { margin: 4px 0; }
+/* The live turn (task 6c): the current arch turn streamed onto the page — the
+   repo chat's bubbles + activity steps (chat.css) inside the arch scroll. A
+   settled turn the transcript does not carry yet is dimmed a notch. */
+.arch__live { display: flex; flex-direction: column; gap: 6px; }
+.arch__live[data-live="settled"] { opacity: 0.92; }

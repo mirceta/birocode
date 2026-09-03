@@ -3,421 +3,364 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Birokrat tool: portable everywhere + preflight</title>
+<title>Arch agent + fleet: where we are, what is left, how to continue</title>
 <style>
-  :root {
-    --bg: #0f1117; --panel: #171a23; --panel2: #1e2230; --line: #2a2f3f;
-    --txt: #d7dae3; --dim: #8b90a0; --acc: #5ea0ef; --ok: #4cc38a;
-    --bad: #e5734b; --warn: #e0b34c; --mono: ui-monospace, Consolas, monospace;
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--txt);
-         font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  .wrap { max-width: 880px; margin: 0 auto; padding: 24px 16px 80px; }
-  h1 { font-size: 1.45em; margin: .2em 0 .1em; }
-  h2 { font-size: 1.12em; margin: 2em 0 .5em; color: var(--acc); }
-  .sub { color: var(--dim); margin-bottom: 1.4em; }
-  .card { background: var(--panel); border: 1px solid var(--line);
-          border-radius: 10px; padding: 14px 16px; margin: 12px 0; }
-  .verdict { border-left: 4px solid var(--ok); }
-  .verdict b { color: var(--ok); }
-  code, .mono { font-family: var(--mono); font-size: .92em; }
-  code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; }
-  table { border-collapse: collapse; width: 100%; font-size: .92em; }
-  td, th { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
-  th { color: var(--dim); font-weight: 600; }
-  .t-ok { color: var(--ok); } .t-bad { color: var(--bad); } .t-warn { color: var(--warn); } .t-dim { color: var(--dim); }
-  button { background: var(--acc); color: #0b1020; border: 0; border-radius: 7px;
-           padding: 8px 14px; font-weight: 600; cursor: pointer; font-size: .9em; }
-  button.alt { background: var(--panel); color: var(--txt); border: 1px solid var(--line); }
-
-  /* tabs */
-  .tabs { display: flex; gap: 8px; margin-bottom: 18px; }
-  .tabs button { background: var(--panel); color: var(--dim); border: 1px solid var(--line); }
-  .tabs button.on { background: var(--panel2); color: var(--txt); border-color: var(--acc); }
-
-  /* folder tree */
-  .tree { font-family: var(--mono); font-size: .88em; background: #12141c;
-          border-radius: 8px; padding: 12px 14px; white-space: pre; overflow-x: auto; line-height: 1.7; }
-  .tree .hl { color: var(--ok); font-weight: 700; }
-  .tree .ghost { color: var(--dim); }
-
-  /* preflight simulator */
-  .sim { background: var(--panel2); border-radius: 10px; padding: 16px; }
-  .togs { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0 14px; }
-  .togs label { display: flex; align-items: center; gap: 6px; background: var(--panel);
-                border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px;
-                font-size: .88em; cursor: pointer; user-select: none; }
-  .pf-rows { display: flex; flex-direction: column; gap: 6px; }
-  .pf-row { display: flex; gap: 9px; align-items: baseline; font-size: .92em; }
-  .pf-row .icon { width: 1.1em; text-align: center; font-weight: 700; }
-  .pf-row .name { font-weight: 600; min-width: 170px; }
-  .pf-row .det { color: var(--dim); font-family: var(--mono); font-size: .82em; }
-  .pf-head { margin: 8px 0 10px; font-weight: 700; }
-
-  /* wedge simulator (tab 2) */
-  .slots { display: flex; gap: 8px; margin: 10px 0 14px; }
-  .slot { flex: 1; height: 74px; border-radius: 8px; border: 1px dashed var(--line);
-          display: flex; flex-direction: column; align-items: center; justify-content: center;
-          font-size: .74em; text-align: center; padding: 4px; transition: background .25s, border-color .25s; }
-  .slot .who { font-weight: 600; }
-  .slot.free { color: var(--dim); }
-  .slot.stream { background: #2b3550; border: 1px solid #3d4d78; }
-  .slot.poll { background: #2e2a3d; border: 1px solid #4a4166; }
-  .slot.save { background: #4a2e22; border: 1px solid var(--bad); }
-  .queue { min-height: 46px; border-radius: 8px; border: 1px solid var(--line);
-           padding: 8px 10px; font-size: .85em; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .qitem { background: #4a2e22; border: 1px solid var(--bad); color: #f0b8a0;
-           border-radius: 6px; padding: 3px 9px; }
-  .qitem.waiting::after { content: " ⏳"; }
-  .btnrow { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
-  .status { margin-top: 10px; font-size: .9em; min-height: 1.4em; }
-  .legend { display: flex; gap: 14px; font-size: .8em; color: var(--dim); flex-wrap: wrap; margin-top: 8px; }
-  .chip { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
-  .fixes li { margin: .5em 0; }
-  .ev { font-family: var(--mono); font-size: .82em; background: #12141c; border-radius: 8px;
-        padding: 10px 12px; overflow-x: auto; white-space: pre; color: #a9c3e8; }
+  :root { --bg:#0f1117; --panel:#171a23; --panel2:#1e2230; --line:#2a2f3f; --txt:#d7dae3; --dim:#8b90a0;
+          --acc:#5ea0ef; --ok:#4cc38a; --bad:#e5734b; --warn:#e0b34c; --violet:#a78bfa; --pink:#f472b6; --teal:#2dd4bf;
+          --mono:ui-monospace,Consolas,monospace; }
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+  header{padding:18px 20px 8px;border-bottom:1px solid var(--line)} h1{margin:0 0 4px;font-size:20px} header p{margin:0;color:var(--dim)}
+  nav{display:flex;gap:6px;padding:10px 20px;flex-wrap:wrap;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:2}
+  nav button{background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:7px 12px;cursor:pointer;font-size:14px}
+  nav button.on{border-color:var(--acc);color:var(--acc)}
+  main{padding:18px 20px;max-width:1180px} section{display:none} section.on{display:block}
+  h2{font-size:17px;margin:0 0 10px} h3{font-size:15px;margin:18px 0 6px;color:var(--acc)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px} @media(max-width:760px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .card h3{margin-top:0}
+  .dim{color:var(--dim)} .mono{font-family:var(--mono);font-size:13px}
+  code{font-family:var(--mono);font-size:13px;background:var(--panel2);padding:1px 5px;border-radius:4px}
+  pre{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;overflow:auto;font-size:13px;line-height:1.5}
+  .pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-left:6px;vertical-align:middle}
+  .pill.ok{color:var(--ok);border-color:var(--ok)} .pill.warn{color:var(--warn);border-color:var(--warn)} .pill.bad{color:var(--bad);border-color:var(--bad)}
+  .pill.you{color:var(--pink);border-color:var(--pink)} .pill.me{color:var(--teal);border-color:var(--teal)} .pill.later{color:var(--dim)}
+  ul{margin:6px 0 6px 18px;padding:0} li{margin:4px 0}
+  .tl{display:flex;gap:0;align-items:stretch;margin:12px 0 4px;overflow:auto}
+  .tl .step{flex:1;min-width:130px;padding:10px 12px;border:1px solid var(--line);background:var(--panel);position:relative;text-align:center}
+  .tl .step:first-child{border-radius:10px 0 0 10px} .tl .step:last-child{border-radius:0 10px 10px 0}
+  .tl .step .t{font-weight:600;font-size:13px} .tl .step .s{font-size:12px;color:var(--dim)}
+  .tl .done{border-color:var(--ok);background:rgba(76,195,138,.08)} .tl .done .t{color:var(--ok)}
+  .tl .now{border-color:var(--warn);background:rgba(224,179,76,.10);box-shadow:0 0 0 1px var(--warn) inset} .tl .now .t{color:var(--warn)}
+  .tl .todo .t{color:var(--dim)}
+  .chk{list-style:none;margin:0;padding:0} .chk li{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border-bottom:1px solid var(--line)}
+  .chk li:last-child{border-bottom:0}
+  .chk .box{width:18px;height:18px;border-radius:4px;border:1px solid var(--dim);flex:none;margin-top:3px;display:grid;place-items:center;font-size:12px}
+  .chk .box.on{background:var(--ok);border-color:var(--ok);color:#06210f}
+  .chk .body{flex:1} .chk .body b{display:block}
+  .filter{display:flex;gap:6px;margin:8px 0 10px;flex-wrap:wrap}
+  .filter button{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:13px}
+  .filter button.on{border-color:var(--acc);color:var(--acc)}
+  .part-list{display:flex;flex-direction:column;gap:6px}
+  .part-list .part{cursor:pointer;border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:var(--panel2);font-size:13px}
+  .part-list .part:hover,.part-list .part.sel{border-color:var(--acc)}
+  .fleet{display:grid;grid-template-columns:1fr 60px 1fr;gap:10px;align-items:stretch;margin:12px 0}
+  .box-h{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--panel)}
+  .box-h h4{margin:0 0 8px;font-size:14px} .box-h .part{border:1px solid var(--line);border-radius:6px;padding:6px 8px;margin:6px 0;font-size:13px;background:var(--panel2);transition:box-shadow .3s,border-color .3s}
+  .box-h .part.hot{border-color:var(--warn);box-shadow:0 0 0 2px rgba(224,179,76,.35)}
+  .box-h .part.hot-ok{border-color:var(--ok);box-shadow:0 0 0 2px rgba(76,195,138,.35)}
+  .wire{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:8px;color:var(--dim);font-size:12px}
+  .wire .arrow{width:100%;height:2px;background:var(--line);transition:background .3s}
+  .wire .arrow.hot{background:var(--warn)}
+  .ctl{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px}
+  .ctl button{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:6px 12px;cursor:pointer}
+  .ctl button:hover{border-color:var(--acc)}
+  .log{font-family:var(--mono);font-size:12px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-height:120px;max-height:220px;overflow:auto;white-space:pre-wrap}
+  .sim{display:grid;grid-template-columns:1fr 1fr;gap:14px} @media(max-width:760px){.sim{grid-template-columns:1fr}}
+  .tog{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid var(--line);border-radius:6px;margin:6px 0;background:var(--panel2);cursor:pointer;user-select:none}
+  .tog .sw{width:38px;height:20px;border-radius:999px;background:#3a3f52;position:relative;flex:none}
+  .tog .sw::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .15s}
+  .tog.on .sw{background:var(--ok)} .tog.on .sw::after{left:20px}
+  .verdict{margin-top:12px;padding:12px;border-radius:8px;border:1px solid var(--line);background:var(--panel2)}
+  .verdict .r{font-family:var(--mono);font-size:16px;font-weight:600}
+  .verdict.ok{border-color:var(--ok)} .verdict.ok .r{color:var(--ok)}
+  .verdict.bad{border-color:var(--bad)} .verdict.bad .r{color:var(--bad)}
+  .verdict.warn{border-color:var(--warn)} .verdict.warn .r{color:var(--warn)}
+  table{border-collapse:collapse;width:100%;font-size:14px} th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top} th{color:var(--dim);font-weight:600}
+  .steps{counter-reset:s} .steps>div{position:relative;padding:10px 12px 10px 44px;border:1px solid var(--line);border-radius:8px;margin:8px 0;background:var(--panel)}
+  .steps>div::before{counter-increment:s;content:counter(s);position:absolute;left:12px;top:10px;width:22px;height:22px;border-radius:50%;background:var(--acc);color:#04101f;font-weight:700;display:grid;place-items:center;font-size:13px}
+  .steps>div b{display:block;margin-bottom:2px}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="tabs">
-    <button id="tabBtnPf" class="on">Portable tools &amp; preflight</button>
-    <button id="tabBtnWedge">The 6-connection wedge (previous topic)</button>
+<header>
+  <h1>Arch agent + fleet: where we are, what is left, how to continue</h1>
+  <p>State as of 2026-09-03, branch <code>feature/arch-agent</code>, PR #56 open and mergeable. Two OpenSpec changes: <code>add-arch-agent</code> and <code>add-fleet-arch-agent</code>.</p>
+</header>
+<nav>
+  <button data-v="v-status" class="on">1 · Where we are</button>
+  <button data-v="v-built">2 · What was built</button>
+  <button data-v="v-fleet">3 · A fleet send, step by step</button>
+  <button data-v="v-sim">4 · Opt-in simulator</button>
+  <button data-v="v-left">5 · What is left</button>
+  <button data-v="v-next">6 · How to continue</button>
+</nav>
+<main>
+
+<!-- ============ 1 STATUS ============ -->
+<section id="v-status" class="on">
+  <h2>The lifecycle, and where the cursor sits</h2>
+  <p class="dim">Both changes went propose → design → implement on this branch and were deployed to both boxes. The first <b>real two-machine run (2026-09-03)</b> proved the transport end to end and exposed one design hole: this box's arch sent a task to a repo on MONSTER that MONSTER's own arch did not manage, and it had no tool to know. That is fixed on the branch as decision <b>D8</b> (the peer's own scope is authoritative, and the posture is visible before a send). The cursor is on <b>redeploy both boxes, then re-run the real test</b>. PR #56 merges only after that passes.</p>
+  <div class="tl">
+    <div class="step done"><div class="t">Proposed</div><div class="s">2 OpenSpec changes, strict-valid</div></div>
+    <div class="step done"><div class="t">Implemented</div><div class="s">backend, MCP, Arch tab, peer API, fleet client</div></div>
+    <div class="step done"><div class="t">Deployed to both boxes</div><div class="s">this box (WIN-QVH03HBBI3A) + MONSTER at 192.168.0.143</div></div>
+    <div class="step done"><div class="t">Real fleet test #1</div><div class="s">transport passed; the task hit an unscoped repo on MONSTER</div></div>
+    <div class="step done"><div class="t">D8 implemented + verified isolated</div><div class="s">peer scope authoritative · list_machines · sendable/blocked · 178 unit · fleet e2e 31/31 · Arch tab 41/41</div></div>
+    <div class="step now"><div class="t">Redeploy both boxes</div><div class="s">swap.ps1 here on your "deploy", pull + rebuild on MONSTER</div></div>
+    <div class="step todo"><div class="t">Real fleet test #2</div><div class="s">MONSTER scopes game-arcade on its Arch tab first</div></div>
+    <div class="step todo"><div class="t">Merge PR #56</div><div class="s">your click, only after the real test passes</div></div>
+    <div class="step todo"><div class="t">Live arch eval · archive</div><div class="s">Tests tab run, then fold both deltas into the baseline</div></div>
   </div>
 
-  <!-- ============================ TAB 1: preflight ============================ -->
-  <div id="tabPf">
-    <h1>Birokrat tool on any machine — and the Preflight button</h1>
-    <div class="sub">What just changed: machine-independent server resolution + a one-click readiness check in the Tools lane</div>
-
-    <div class="card verdict">
-      <b>The mechanism was already portable; the configuration wasn't checkable.</b>
-      Two things are new: (1) the harness now finds the Birokrat MCP server purely by the
-      <i>sibling-checkout rule</i> — no absolute paths baked in — and (2) the Tools lane
-      grew a <b>Preflight</b> button that verifies, on the host, all five conditions a chat
-      run needs, and tells you exactly which one to fix.
-    </div>
-
-    <h2>The sibling-checkout rule</h2>
+  <div class="grid" style="margin-top:16px">
     <div class="card">
-      On every machine, the repo that hosts the MCP server is assumed to sit
-      <b>next to</b> your registered repo. The harness probes each registered repo's parent
-      folder — both checkout layouts — and never falls back to a machine-specific path
-      (the old <code>~/Desktop/playground</code> fallback is gone):
-      <div class="tree">any-parent-folder/
-├── <span class="hl">your-repo/</span>                        ← registered in the harness
-└── <span class="hl">birokrat-ai-platform/</span>             ← sibling, cloned next to it
-    ├── birokrat-ai-platform/             (nested layout — as on this box)
-    │   └── mcp-server/app/dist/index.js  ← resolved ✓
-    └── mcp-server/app/dist/index.js      (flat clone — also probed ✓)</div>
-      An explicit path in the panel's "MCP server script" field still overrides the probe,
-      for non-sibling checkouts.
+      <h3>add-arch-agent <span class="pill ok">implemented</span></h3>
+      <p>An orchestrating agent that lives in its own home repo, is woken by <code>turn.ended</code> events from the repos it manages, and can only act through five MCP tools. It has an Arch tab with Chat and Tools lanes and a live-turn stream.</p>
+      <ul>
+        <li>Tasks: 39 of 41 checked.</li>
+        <li>Open: 3.6 (unit tests for <code>send_task</code> refusals) and 4.3 (chat-systest for the arch send bubble). The behaviour is covered by the e2e scenario, not by a unit test.</li>
+        <li>Open: 7.4's <b>live</b> run from the Tests tab. It registers three fixtures on :5099 and spends turns, so it is yours to start.</li>
+      </ul>
     </div>
-
-    <h2>The five preflight checks</h2>
     <div class="card">
-      <table>
-        <tr><th>Check</th><th>How it's verified (server-side, saved config)</th><th>If it fails</th></tr>
-        <tr><td><b>Tool enabled</b></td><td>the repo's stored toggle</td><td>enable + Save</td></tr>
-        <tr><td><b>API key stored</b></td><td>effective key (default, or first company)</td><td>enter the key + Save</td></tr>
-        <tr><td><b>Node.js runtime</b></td><td>actually runs <code>node --version</code> under the harness's environment</td><td>install Node / restart harness after install (PATH!)</td></tr>
-        <tr><td><b>MCP server script</b></td><td>sibling probe finds a built <code>dist/index.js</code></td><td>clone <code>birokrat-ai-platform</code> as a sibling and build the mcp-server</td></tr>
-        <tr><td><b>API answers</b></td><td>authenticated <code>GET &lt;url&gt;/sifrant/pagelen</code> with <code>X-API-KEY</code> — the same header real tool calls use (15 s budget: a cold Birokrat service was measured &gt;6 s on first answer)</td><td>fix URL / network / key (401·403 = key rejected)</td></tr>
-      </table>
-      <p class="t-dim" style="margin:8px 0 0">Preflight checks the <b>saved</b> settings —
-      hit Save first if you just edited. Green across the board means a dock agent's next
-      run will really reach Birokrat.</p>
+      <h3>add-fleet-arch-agent <span class="pill ok">implemented</span></h3>
+      <p>The same arch agent, now able to manage repos on other harnesses. Each harness exposes a peer API. The caller's collector already knows the peer's address and password, so a fleet client borrows that. Two opt-ins gate every send.</p>
+      <ul>
+        <li>Tasks: 14 of 14 checked.</li>
+        <li>Verified on two isolated instances on this box. Not yet on two real machines.</li>
+        <li>Deliberately out: arch-to-arch delegation, scoped send tokens.</li>
+      </ul>
     </div>
+  </div>
 
-    <h2>Try it: preflight simulator</h2>
-    <div class="card sim">
-      <div>Toggle what a hypothetical machine has, watch the checklist respond — this mirrors the real button's output.</div>
-      <div class="togs" id="togs">
-        <label><input type="checkbox" data-c="enabled" checked> tool enabled + saved</label>
-        <label><input type="checkbox" data-c="key" checked> API key stored</label>
-        <label><input type="checkbox" data-c="node" checked> Node.js installed</label>
-        <label><input type="checkbox" data-c="sibling" checked> sibling checkout built</label>
-        <label><input type="checkbox" data-c="net" checked> Birokrat API reachable</label>
-      </div>
-      <div class="pf-head" id="pfHead"></div>
-      <div class="pf-rows" id="pfRows"></div>
-    </div>
+  <h3>What "verified" means here</h3>
+  <table>
+    <tr><th>Check</th><th>Result</th><th>What it proves</th></tr>
+    <tr><td>Unit tests, whole project</td><td>167 pass</td><td>wake filter across machines, key parsing, machine resolution, actor tags, state persistence</td></tr>
+    <tr><td><code>check-arch-tab.mjs</code></td><td>39 pass</td><td>Arch tab lanes, live turn, machine chips, Fleet card with both opt-ins</td></tr>
+    <tr><td><code>tests/loop-eval/arch.mjs</code> isolated</td><td>25/25, twice</td><td>arch drives two repo agents to green, leaves the claimed one alone, ignores injection bait, disarm mid-run is clean</td></tr>
+    <tr><td><code>tests/loop-eval/fleet.mjs</code> isolated</td><td>23/23, twice</td><td>A's arch sends through B's peer API, B's agent goes green, B shows <code>arch@A</code>, B's turn end comes back through A's collector and wakes A's arch</td></tr>
+  </table>
+</section>
 
-    <h2>New-machine checklist</h2>
+<!-- ============ 2 BUILT ============ -->
+<section id="v-built">
+  <h2>What was built, in one picture</h2>
+  <p class="dim">Hover or tap a part to read what it is. Left is one harness on its own. Right is what the fleet change added on top.</p>
+  <div class="grid">
     <div class="card">
-      <ol>
-        <li>Install <b>Node.js</b> (on PATH).</li>
-        <li>Clone <code>birokrat-ai-platform</code> <b>next to</b> your repo; build its
-            <code>mcp-server</code> so <code>app/dist/index.js</code> exists.</li>
-        <li>Register the repo in the harness; open the dock's <b>Tools</b> lane.</li>
-        <li>Enter the API key + a URL that machine can reach
-            (LAN <code>http://…:19000/api/v2</code> only works on that LAN; public default is
-            <code>https://next.birokrat.si/api/v2/</code>). Enable, Save.</li>
-        <li>Hit <b>Preflight</b> → all green → done. A red row names its own fix.</li>
-      </ol>
-      Your key never travels with the repo — it lives in host app-data
-      (<code>%APPDATA%\ClaudeWeb\tools.json</code>) by design, so step 4 repeats per machine.
+      <h3>One harness (add-arch-agent)</h3>
+      <div class="part-list" id="parts-a"></div>
+    </div>
+    <div class="card">
+      <h3>Across harnesses (add-fleet-arch-agent)</h3>
+      <div class="part-list" id="parts-b"></div>
     </div>
   </div>
+  <div class="card" style="margin-top:14px"><h3 id="pt-title">Pick a part</h3><p id="pt-body" class="dim">Its role, where it lives, and what constrains it.</p></div>
 
-  <!-- ============================ TAB 2: the wedge ============================ -->
-  <div id="tabWedge" style="display:none">
-  <h1>Why "Save" hung forever in the Tools lane</h1>
-  <div class="sub">Incident of 2026-08-25 ~13:12 · Tools lane save + reload both stuck on the phone</div>
+  <h3>The constraints that make it safe to run</h3>
+  <ul>
+    <li><b>Tools are the only medium.</b> The arch session runs with Edit, Write and Bash disallowed and Read fenced to the home repo. It can only observe and send.</li>
+    <li><b>The receiver owns its rules.</b> A fleet send still runs through the receiver's deny list, its claimed rule, its run slot and its autopilot gate. The caller cannot bypass any of it.</li>
+    <li><b>Provenance is stamped by the receiver.</b> The bubble tag <code>arch@&lt;machine&gt;</code> and the audit row are written on the receiving side, so no caller can post as a human.</li>
+    <li><b>The collector stays read-only.</b> Only the fleet client ever POSTs to a peer, and only for a source marked "allow sends".</li>
+    <li><b>No replay.</b> A fresh arch watermark starts at the collector's current sequence, so arming it does not wake it on history.</li>
+  </ul>
+</section>
 
-  <div class="card verdict">
-    <b>Verdict: your save actually succeeded.</b> The server received the PUT at
-    <span class="mono">13:12:12</span>, wrote <code>tools.json</code> (enabled, key stored, your LAN URL),
-    and at <span class="mono">13:14:03</span> it already injected the Birokrat MCP config into a live
-    chat run. What broke is the <i>browser</i>: your device had all
-    <b>6 HTTP/1.1 connections</b> to the harness occupied, so the save's response — and every
-    later Tools request — sat in the browser's own queue forever. The server was idle and fast
-    the whole time.
-  </div>
-
-  <h2>The one number that explains it</h2>
-  <div class="card">
-    Browsers open at most <b>6 parallel connections per origin</b> over plain HTTP/1.1
-    (no TLS ⇒ no HTTP/2 multiplexing). The dock UI is connection-hungry:
-    <table>
-      <tr><th>What</th><th>Held for</th><th>How many</th></tr>
-      <tr><td>Chat stream of a <b>running</b> agent (<code>GET /api/chat/stream</code>)</td>
-          <td class="t-bad">entire turn — minutes</td><td>1 per running dock</td></tr>
-      <tr><td>Message / status pollers (<code>ChatContext</code>, docks, sounds, flags, clock, traffic…)</td>
-          <td>~0.1–1 s each, every 4–5 s</td><td class="t-warn">20+ intervals; several in flight at once</td></tr>
-      <tr><td>Your Tools <code>PUT</code> / <code>GET</code></td>
-          <td class="t-bad">queued — never got a slot</td><td>the victim</td></tr>
-    </table>
-    With one or two agents mid-turn (long-lived streams) plus overlapping pollers on a slow
-    phone link, the 6 slots saturate. New fetches don't fail — they <b>wait silently</b>.
-    That's exactly "saving takes years" and "Loading tool settings… forever".
-  </div>
-
-  <h2>Feel it: the connection-slot simulator</h2>
-  <div class="card sim">
-    <div>6 slots to <code>:5099</code>. Streams squat; pollers churn; then click <b>Save</b>.</div>
-    <div class="slots" id="slots"></div>
-    <div>Browser queue (requests with no free slot):</div>
-    <div class="queue" id="queue"><span class="t-dim">empty</span></div>
-    <div class="btnrow">
-      <button id="btnSave">Click "Save" in Tools lane</button>
-      <button class="alt" id="btnStream">+ running agent (stream)</button>
-      <button class="alt" id="btnEndStream">− end a stream</button>
-      <button class="alt" id="btnReset">reset</button>
+<!-- ============ 3 FLEET SEND ============ -->
+<section id="v-fleet">
+  <h2>A fleet send, step by step</h2>
+  <p class="dim">This is the exact path the e2e scenario proved. Press "Play" to walk it. Machine A is this box, machine B is the other computer.</p>
+  <div class="ctl"><button id="fl-play">▶ Play</button><button id="fl-step">Step</button><button id="fl-reset">Reset</button></div>
+  <div class="fleet">
+    <div class="box-h">
+      <h4>Machine A (caller)</h4>
+      <div class="part" id="a-coll">Collector: subscribed to B, polling B's feed with B's password</div>
+      <div class="part" id="a-loop">Arch loop: watermark over A's collector events</div>
+      <div class="part" id="a-arch">Arch session: home repo, 5 tools</div>
+      <div class="part" id="a-fc">Fleet client: borrows B's address + credential</div>
+      <div class="part" id="a-audit">A's audit: <span class="mono">arch → send_task(B, repo)</span></div>
     </div>
-    <div class="status" id="status"></div>
-    <div class="legend">
-      <span><span class="chip" style="background:#2b3550;border:1px solid #3d4d78"></span>long-lived stream</span>
-      <span><span class="chip" style="background:#2e2a3d;border:1px solid #4a4166"></span>poller (4–5 s cadence)</span>
-      <span><span class="chip" style="background:#4a2e22;border:1px solid #e5734b"></span>your save / tools load</span>
-      <span><span class="chip" style="background:transparent;border:1px dashed #2a2f3f"></span>free</span>
+    <div class="wire">
+      <div class="arrow" id="w-send"></div><div>send</div>
+      <div class="arrow" id="w-back"></div><div>feed</div>
+    </div>
+    <div class="box-h">
+      <h4>Machine B (receiver)</h4>
+      <div class="part" id="b-peer">Peer API <span class="mono">/api/arch/peer/send</span></div>
+      <div class="part" id="b-gates">Checks: accept flag → gate → deny → claimed → busy</div>
+      <div class="part" id="b-bubble">Repo dock: user bubble tagged <span class="mono">arch@A</span></div>
+      <div class="part" id="b-run">Repo agent runs the task</div>
+      <div class="part" id="b-feed">B's event feed: <span class="mono">turn.ended</span></div>
     </div>
   </div>
+  <div class="log" id="fl-log">Press Play.</div>
+</section>
 
-  <h2>Timeline: what you saw vs. what the server did</h2>
-  <div class="card">
-    <table>
-      <tr><th>Time</th><th>You (phone)</th><th>Server (log evidence)</th></tr>
-      <tr><td class="mono">13:09:36</td><td>—</td><td class="t-ok">new build live, healthy</td></tr>
-      <tr><td class="mono">~13:11</td><td>Opened Tools lane, panel loaded, edited config</td><td>GET /api/tools served (a slot was free then)</td></tr>
-      <tr><td class="mono">13:12:12</td><td class="t-bad">"Save" spinner spinning… forever</td>
-          <td class="t-ok"><span class="mono">[TOOLS] Birokrat config saved (enabled=True)</span> — PUT arrived once a slot freed, handler finished in ms; the <i>response</i> never got read because you were queued/navigating</td></tr>
-      <tr><td class="mono">~13:13</td><td class="t-bad">Builder tab → back → "Loading tool settings…" forever</td>
-          <td>panel's GET stuck in the <i>browser's</i> queue — never even sent</td></tr>
-      <tr><td class="mono">13:14:03</td><td>—</td><td class="t-ok"><span class="mono">[CLI] MCP tools config injected for this run</span> — your saved config is live in real runs</td></tr>
-      <tr><td class="mono">13:15</td><td>—</td><td class="t-ok">netstat: exactly <b>6</b> ESTABLISHED connections from your device — the cap, hit</td></tr>
-    </table>
+<!-- ============ 4 SIMULATOR ============ -->
+<section id="v-sim">
+  <h2>Opt-in simulator: why a send succeeds or is refused</h2>
+  <p class="dim">Flip the switches. The verdict is the status word A's arch gets back from <code>send_task</code>, in the order the checks run. This is what you will be configuring on the two real machines.</p>
+  <div class="sim">
+    <div class="card">
+      <h3>On A (this box)</h3>
+      <div class="tog on" data-k="armed"><span>Arch loop armed</span><span class="sw"></span></div>
+      <div class="tog on" data-k="managed"><span>B's repo is in A's managed scope</span><span class="sw"></span></div>
+      <div class="tog on" data-k="allow"><span>Source B marked "allow sends"</span><span class="sw"></span></div>
+      <div class="tog" data-k="deny"><span>Task text hits A's deny list</span><span class="sw"></span></div>
+      <div class="tog on" data-k="reach"><span>B reachable, password valid, same build</span><span class="sw"></span></div>
+    </div>
+    <div class="card">
+      <h3>On B (the other computer)</h3>
+      <div class="tog on" data-k="accept"><span>"Accept fleet sends" ticked in B's Arch tab</span><span class="sw"></span></div>
+      <div class="tog on" data-k="gate"><span>B's autopilot gate open</span><span class="sw"></span></div>
+      <div class="tog on" data-k="bscope"><span>Target repo is in B's OWN arch scope (B's Arch tab) — D8</span><span class="sw"></span></div>
+      <div class="tog" data-k="bdeny"><span>Task text hits B's deny list</span><span class="sw"></span></div>
+      <div class="tog" data-k="claimed"><span>Target repo on an Operator feature branch (claimed)</span><span class="sw"></span></div>
+      <div class="tog" data-k="busy"><span>Target repo already running a turn</span><span class="sw"></span></div>
+    </div>
   </div>
+  <div class="verdict ok" id="sim-v"><div class="r">sent</div><div id="sim-why" class="dim"></div></div>
+</section>
 
-  <h2>What was ruled out</h2>
-  <div class="card">
-    <table>
-      <tr><th>Suspect</th><th>Result</th></tr>
-      <tr><td>Backend hang / lock deadlock in <code>ToolsConfigStore</code></td><td class="t-ok">cleared — lock held only for an in-memory update + tiny file write</td></tr>
-      <tr><td>Slow file probes in the response builder (server-entry check, node-on-PATH scan)</td><td class="t-ok">cleared — measured 0–7 ms with the live repo registry</td></tr>
-      <tr><td>Your API URL missing the trailing slash</td><td class="t-ok">cleared — MCP server normalizes it (<code>replace(/\/+$/,"")+"/"</code>)</td></tr>
-      <tr><td>New Tools endpoints themselves</td><td class="t-ok">victim, not culprit — any panel would wedge under a full connection pool</td></tr>
-    </table>
+<!-- ============ 5 LEFT ============ -->
+<section id="v-left">
+  <h2>What is left</h2>
+  <div class="filter"><button class="on" data-f="all">all</button><button data-f="you">yours</button><button data-f="me">mine</button><button data-f="later">deferred</button></div>
+  <ul class="chk" id="chk"></ul>
+</section>
+
+<!-- ============ 6 NEXT ============ -->
+<section id="v-next">
+  <h2>How to continue, in order</h2>
+  <div class="steps">
+    <div><b>What real run #1 proved and found <span class="pill me">me</span></b>Send over the fleet client → MONSTER ran the turn as <code>arch@WIN-QVH03HBBI3A</code> → its <code>turn.ended</code> came back through this box's collector → arch.wake named the fleet key. But the target (game-arcade) was not in MONSTER's own arch scope, and its resumed session died in one second. The arch had guessed a repoId from a name and had no way to see MONSTER's scope. Fixed as D8 on the branch.</div>
+    <div><b>Redeploy this box <span class="pill me">me</span></b>Say "deploy". I run the committed <code>swap.ps1</code> detached on <code>feature/arch-agent</code>; the guard passes. Then you say "keep it" within 15 minutes or the dead-man's switch rolls live back.</div>
+    <div><b>Redeploy MONSTER <span class="pill you">you</span></b>Pull the branch there, rebuild the client, restart on :5099. Until it runs D8, this box treats every MONSTER repo as not sendable ("peer build does not report its scope").</div>
+    <div><b>Scope the repo on MONSTER <span class="pill you">you</span></b>MONSTER's Arch tab → scope → tick game-arcade (and any other repo you want driven from here). Keep "accept fleet sends" on and the gate open. Then this box's picker shows those repos as scopeable and list_agents shows them sendable.</div>
+    <div><b>Run real test #2 <span class="pill me">me</span></b>Same driver as #1 (<code>.claudeweb-preview/fleet-live-test.mjs</code>). Pass = sendable in list_agents, the send lands, MONSTER's turn runs to a real reply, this box wakes on its turn end.</div>
+    <div><b>Merge PR #56 <span class="pill you">you</span></b>Only after the real fleet test passes. The main ruleset blocks every merge the agent account tries, so the button is yours. After the merge, both boxes pull main and redeploy so live matches main.</div>
+    <div><b>Live arch eval <span class="pill you">you</span></b>Tests tab → E2E → arch. It registers three fixtures on :5099 and spends turns. I record the measured run in the loop-eval README afterwards.</div>
+    <div><b>Close the two open test tasks <span class="pill me">me</span></b>Unit tests for <code>send_task</code> refusals and the chat-systest for the arch bubble. Small, mechanical, can happen while the other computer is being set up.</div>
+    <div><b>Archive both changes <span class="pill me">me</span></b><code>openspec archive add-arch-agent</code> and <code>add-fleet-arch-agent</code> fold the deltas into the baseline specs. Say "archive" after the merge.</div>
   </div>
+  <h3>Commands you will see me use</h3>
+<pre>pwsh is absent on this box, so the deploy is launched with powershell.exe, detached:
+  cmd /c start "" /b powershell.exe -NoProfile -File .\swap.ps1 &gt; .claudeweb-deploy\swap.log 2&gt;&amp;1
+Disarm the auto-rollback once you say "keep it":
+  powershell.exe -NoProfile -File .\keep.ps1
+Isolated re-verification of the fleet path, any time:
+  node tests/loop-eval/fleet.mjs
+Archive when done:
+  openspec archive add-arch-agent
+  openspec archive add-fleet-arch-agent</pre>
+</section>
 
-  <h2>Evidence trail</h2>
-  <div class="ev">[13:12:12] [TOOLS] Birokrat config saved for repo b6c26a78… (enabled=True, companies=0)
-[13:14:03] [CLI] MCP tools config injected for this run
-
-PS&gt; Get-NetTCPConnection -LocalPort 5099 -State Established
-    192.168.0.215  ×6        ← the per-origin browser cap, fully occupied
-
-%APPDATA%\ClaudeWeb\tools.json  (13:12:12)
-    enabled=True · keyLen=44 · url=http://192.168.0.215:19000/api/v2</div>
-
-  <h2>The fix — implemented (openspec <code>reduce-connection-appetite</code>)</h2>
-  <div class="card fixes">
-    <ol>
-      <li><b>Streams multiplexed ✓</b> — all conversations now ride ONE shared
-          <code>GET /api/chat/stream-multi</code> connection (events enveloped per run),
-          with automatic fallback to the old per-run streams if the endpoint is missing
-          (rollback safety). N running agents now squat <b>1</b> slot, not N.</li>
-      <li><b>Pollers visibility-gated ✓</b> — every steady-state poller skips its tick while
-          the tab is hidden; a locked phone generates near-zero traffic. (Consolidating them
-          into one status endpoint remains a future change.)</li>
-      <li><i>(Still open, infra)</i> TLS on :5099 would unlock HTTP/2 multiplexing and make the
-          cap irrelevant — a bigger operational change for a LAN harness.</li>
-    </ol>
-    Worst case before: ~4 squatting streams + 21-request bursts vs 6 slots.
-    Now: 1 shared stream + your own send + short-lived polls — saves always find a free slot.
-  </div>
-  </div><!-- /tabWedge -->
-</div>
-
+</main>
 <script>
-// ---- tabs -------------------------------------------------------------------
-(function () {
-  const pf = document.getElementById('tabPf');
-  const wedge = document.getElementById('tabWedge');
-  const bPf = document.getElementById('tabBtnPf');
-  const bW = document.getElementById('tabBtnWedge');
-  function show(which) {
-    pf.style.display = which === 'pf' ? '' : 'none';
-    wedge.style.display = which === 'pf' ? 'none' : '';
-    bPf.classList.toggle('on', which === 'pf');
-    bW.classList.toggle('on', which !== 'pf');
-  }
-  bPf.onclick = () => show('pf');
-  bW.onclick = () => show('wedge');
-})();
+document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));
+  document.querySelectorAll('main section').forEach(s=>s.classList.toggle('on',s.id===b.dataset.v));
+}));
 
-// ---- preflight simulator (tab 1) -------------------------------------------
-(function () {
-  const state = { enabled: true, key: true, node: true, sibling: true, net: true };
-  const rowsEl = document.getElementById('pfRows');
-  const headEl = document.getElementById('pfHead');
+// ---- 2: parts
+const PARTS_A=[
+ ['Home repo','<ProjectsRoot>/arch-home, git-inited on first arm. Holds CLAUDE.md (the role prompt), memory/ (what remember() writes and commits), assignments/ (which branch the arch handed each repo). The arch session\'s cwd; Read is fenced to it.'],
+ ['ArchLoop (@arch)','A reserved loop kind, one instance. On each tick it reads collector events past its watermark, keeps turn.start / turn.ended from managed repos, composes a wake prompt naming repo, status, cost, elapsed and every managed repo\'s availability, then sends it to the arch session. Suggest mode pre-fills the composer; drive mode sends.'],
+ ['Availability rule','available | busy | claimed | unmanaged. Busy = run slot taken. Claimed = the repo sits on a branch the Operator made, not one the arch recorded. Dirty tree on the default branch is still available. The arch never touches claimed repos.'],
+ ['MCP tools','list_agents, list_machines, git_state, read_transcript, send_task, remember, recall. Served to the arch session over the same temp --mcp-config mechanism the CLI runner already uses. Every call lands in the audit under actor arch. list_agents now carries managedThere / sendable / blocked per agent; list_machines is the whole fleet posture in one call.'],
+ ['send_task','Deny fence → slot claim → user bubble with actor arch → run on the dock session → audit kind arch. Returns sent | busy | claimed | denied(term) | capped. Records the branch in assignments/.'],
+ ['Arch tab','Advanced-mode tab and a dashboard pop-up. Chat lane streams the live arch turn through the shared stream hub. Tools lane lists the catalogue with per-tool usage, the denied built-ins, and a preflight (mcp / token / home / scope / gate).'],
+ ['Event feed: arch.wake','Published on each sent wake prompt, so the events app and sounds can react, and so a fleet e2e can prove the wake happened.'],
+];
+const PARTS_B=[
+ ['Peer API','GET /api/arch/peer (protocol, build version, machine label, acceptsSends, gateOpen, managedRepoIds, every registered repo as an agent view with a managed flag). POST /api/arch/peer/send. GET /api/arch/peer/transcript. Behind the same password middleware as everything else.'],
+ ['D8: the peer\'s own scope is authoritative','New on 2026-09-03. A repo on B is a fleet agent only if B\'s OWN arch manages it (B\'s Arch tab scope). B\'s describe says which; an unmanaged repo is "unmanaged" to the fleet; B refuses a send or transcript read for it with unmanaged, naming B\'s Arch tab. Before D8 the peer reported every repo as if managed and A\'s arch could aim at anything on B.'],
+ ['Send posture (FleetSendPosture)','A pure rule on A: peer answered with a peer API → your operator allowed sends → its operator accepts fleet sends → its gate is open → its arch manages the repo. The first failure is the block: a status word plus a reason that names whose setting is missing. Checked in send_task before any HTTP, shown per agent in list_agents (sendable / blocked), in list_machines, and on the Arch tab (picker + Fleet card).'],
+ ['Fleet client','Lives beside the collector. For a source it borrows the address and stored credential the collector already has, caches describe for 5 s, and exposes Send / ReadTranscript with a status vocabulary: ok | unreachable | unauthorized | no-peer-api | error.'],
+ ['Opt-in 1: allow sends (caller)','Per source, persisted by the collector, default off. Button in the events app, checkbox in the Arch tab Fleet card. Without it, the source\'s repos never appear in the scope picker and the fleet client refuses to send.'],
+ ['Opt-in 2: accept fleet sends (receiver)','Persisted in arch.json. Checkbox in the receiver\'s Arch tab. Without it, the peer send returns not-accepting before any other check.'],
+ ['Fleet scope keys','Local repos stay bare ids. Remote repos are sourceId/repoId. The wake filter, the scope picker and every tool resolve machines by self / self label / source label / source id.'],
+ ['Receiver-side provenance','The receiver tags the bubble arch@<caller machine> and writes its own audit row (kind arch, phase fleet:<caller>). MessageBubble derives its style from the base actor, so it renders as an arch message with a machine suffix.'],
+ ['Wake across machines','B\'s turn.ended reaches A through A\'s collector, which was already polling B\'s feed. The arch loop keys it as sourceId/repoId, finds it managed, and wakes with the machine named.'],
+];
+function renderParts(el,list){
+  const host=document.getElementById(el);
+  list.forEach(([t,b])=>{const d=document.createElement('div');d.className='part';d.textContent=t;
+    const pick=()=>{document.querySelectorAll('.part-list .part').forEach(x=>x.classList.toggle('sel',x===d));show(t,b);};
+    d.addEventListener('mouseenter',pick);d.addEventListener('click',pick);host.appendChild(d);});
+}
+function show(t,b){document.getElementById('pt-title').textContent=t;const p=document.getElementById('pt-body');p.textContent=b;p.classList.remove('dim');}
+renderParts('parts-a',PARTS_A);renderParts('parts-b',PARTS_B);
 
-  function rows() {
-    return [
-      { name: 'Tool enabled', ok: state.enabled, skip: false,
-        det: state.enabled ? '' : 'the tool is disabled — enable it and save' },
-      { name: 'API key stored', ok: state.key, skip: false,
-        det: state.key ? 'stored (····3Q8f)' : 'no API key stored for this repo' },
-      { name: 'Node.js runtime', ok: state.node, skip: false,
-        det: state.node ? 'v22.11.0' : "node is not on the harness's PATH" },
-      { name: 'MCP server script', ok: state.sibling, skip: false,
-        det: state.sibling ? '…\\birokrat-ai-platform\\…\\mcp-server\\app\\dist\\index.js'
-                           : 'not found as a sibling of any registered repo — expected at <parent>\\birokrat-ai-platform' },
-      { name: 'Birokrat API answers', ok: state.key && state.net, skip: !state.key,
-        det: !state.key ? 'skipped — no API key to probe with'
-             : state.net ? 'HTTP 200 from …/api/v2/sifrant/pagelen'
-                         : 'unreachable: …/api/v2/sifrant/pagelen (connection timed out)' },
-    ];
-  }
+// ---- 3: fleet play
+const STEPS=[
+ ['b-feed','','B\'s repo agent finishes a turn. B\'s feed publishes turn.ended.'],
+ ['a-coll','w-back','A\'s collector polls B\'s feed and stores the event under source B.'],
+ ['a-loop','','A\'s arch loop reads past its watermark, keys the event B/<repo>, finds it in the managed fleet scope, composes a wake prompt naming machine B.'],
+ ['a-arch','','A\'s arch session reads the wake, calls list_agents (or list_machines), sees B\'s repo available AND sendable (B\'s own arch manages it, B accepts, sends allowed), decides on a task, calls send_task(machine=B, repoId exactly as listed, text).'],
+ ['a-audit','','A-side checks: armed, repo in A\'s scope, source allows sends, deny list, then the posture from B\'s cached describe (reachable, peer API, accepts, gate open, managed by B\'s arch). Any block returns its status + reason with no HTTP. Then A writes its own audit row for the tool call.'],
+ ['a-fc','w-send','Fleet client POSTs to B\'s peer API with B\'s stored password.'],
+ ['b-peer','','B receives the send with from=A.'],
+ ['b-gates','','B checks in order: accept flag, autopilot gate, repo in B\'s OWN arch scope (D8), deny list, claimed, busy. Any failure returns a status word and nothing is posted.'],
+ ['b-bubble','','B posts the user bubble tagged arch@A into the repo dock and writes B\'s audit row (kind arch, phase fleet:A).'],
+ ['b-run','','B\'s repo agent runs the task. A got "sent" back and will wait for the next turn.ended rather than retry.'],
+ ['b-feed','w-back','When the turn ends, B\'s feed publishes turn.ended again, and the cycle repeats from step 2.'],
+];
+let fi=0,ftimer=null;
+function fReset(){fi=0;clearInterval(ftimer);ftimer=null;document.querySelectorAll('.fleet .part,.wire .arrow').forEach(x=>x.classList.remove('hot','hot-ok'));document.getElementById('fl-log').textContent='Press Play.';}
+function fStep(){
+  if(fi>=STEPS.length){clearInterval(ftimer);ftimer=null;return;}
+  document.querySelectorAll('.fleet .part').forEach(x=>{if(x.classList.contains('hot')){x.classList.remove('hot');x.classList.add('hot-ok');}});
+  document.querySelectorAll('.wire .arrow').forEach(x=>x.classList.remove('hot'));
+  const [p,w,txt]=STEPS[fi];const el=document.getElementById(p);el.classList.remove('hot-ok');el.classList.add('hot');
+  if(w)document.getElementById(w).classList.add('hot');
+  const log=document.getElementById('fl-log');if(fi===0)log.textContent='';log.textContent+=(fi+1)+'. '+txt+'\n';log.scrollTop=log.scrollHeight;fi++;
+}
+document.getElementById('fl-play').addEventListener('click',()=>{fReset();fStep();ftimer=setInterval(fStep,1400);});
+document.getElementById('fl-step').addEventListener('click',()=>{if(ftimer){clearInterval(ftimer);ftimer=null;}fStep();});
+document.getElementById('fl-reset').addEventListener('click',fReset);
 
-  function render() {
-    const rs = rows();
-    const ready = rs.every(r => r.ok);
-    headEl.innerHTML = ready
-      ? '<span class="t-ok">✓ All checks passed — the tool is ready on this machine.</span>'
-      : '<span class="t-bad">✕ Not ready — fix the failing checks below.</span>';
-    rowsEl.innerHTML = rs.map(r =>
-      '<div class="pf-row"><span class="icon ' + (r.ok ? 't-ok' : r.skip ? 't-dim' : 't-bad') + '">' +
-      (r.ok ? '✓' : r.skip ? '○' : '✕') + '</span><span class="name">' + r.name + '</span>' +
-      (r.det ? '<span class="det">' + r.det + '</span>' : '') + '</div>').join('');
-  }
+// ---- 4: simulator
+const S={armed:true,managed:true,allow:true,deny:false,reach:true,accept:true,gate:true,bscope:true,bdeny:false,claimed:false,busy:false};
+document.querySelectorAll('.tog').forEach(t=>t.addEventListener('click',()=>{const k=t.dataset.k;S[k]=!S[k];t.classList.toggle('on',S[k]);sim();}));
+function sim(){
+  let r,why,cls='bad';
+  if(!S.armed){r='refused';why='A-side: the arch loop is disarmed. send_task is inert until you arm it on the Arch tab.';}
+  else if(!S.managed){r='unmanaged';why='A-side: the target is not in the managed fleet scope. Add it in the scope picker (it only lists sources that allow sends).';}
+  else if(!S.allow){r='refused';why='A-side: source B is not marked "allow sends". The fleet client will not POST to a source without it. Toggle it in the events app or the Fleet card.';}
+  else if(S.deny){r='denied(term)';why='A-side: A\'s own deny list fenced the task text before it left the box.';}
+  else if(!S.reach){r='unreachable / unauthorized / no-peer-api';why='Fleet client status. Wrong password → unauthorized. Old build on B → no-peer-api. Dark → unreachable. The Fleet card shows which.';}
+  else if(!S.accept){r='not-accepting';why='B-side, first check: B has not ticked "accept fleet sends" in its Arch tab.';}
+  else if(!S.gate){r='not-accepting';why='B-side: B\'s autopilot gate is closed. Sends are treated like any autopilot action on B.';}
+  else if(!S.bscope){r='unmanaged';why='D8: B\'s OWN arch does not manage that repo. A already sees this in list_agents (managedThere=false, blocked names B\'s Arch tab) and refuses before any HTTP; if something reached B anyway, B refuses it too. The fix is on B\'s Arch tab: scope the repo there. This is exactly what the first real run hit on MONSTER\'s game-arcade.';}
+  else if(S.bdeny){r='denied(term)';why='B-side: B\'s deny list fenced it. The receiver\'s rules apply regardless of what A allowed.';}
+  else if(S.claimed){r='claimed';why='B-side: the repo is on a branch the Operator made. The arch leaves claimed repos alone; wait for the next turn.ended.';}
+  else if(S.busy){r='busy';why='B-side: the run slot is taken. No bubble is posted. A should wait for turn.ended, not retry.';cls='warn';}
+  else {r='sent';why='Every check passed. B posts the bubble tagged arch@A, writes its audit row, and runs the task. A will hear about the result through its collector.';cls='ok';}
+  const v=document.getElementById('sim-v');v.className='verdict '+cls;v.querySelector('.r').textContent=r;document.getElementById('sim-why').textContent=why;
+}
+sim();
 
-  document.getElementById('togs').addEventListener('change', (e) => {
-    const c = e.target.getAttribute('data-c');
-    if (c) { state[c] = e.target.checked; render(); }
+// ---- 5: checklist
+const LEFT=[
+ ['me','Redeploy this box with D8','swap.ps1 detached via powershell.exe on feature/arch-agent (guard passes). Then "keep it" → keep.ps1 within 15 min.'],
+ ['you','Redeploy MONSTER with D8','Pull feature/arch-agent there, rebuild the client, restart the harness on :5099. Until then this box\'s picker says "peer build does not report its scope" for every MONSTER repo.'],
+ ['you','Scope game-arcade on MONSTER\'s Arch tab','D8 makes MONSTER\'s own scope the rule: its arch must manage the repo before this box can send to it. Also make its game-arcade tab work at all (a plain message there errors instantly today).'],
+ ['me','Real two-machine fleet test #2','Driver: .claudeweb-preview/fleet-live-test.mjs. Expect list_agents to show game-arcade sendable, the send to land, MONSTER\'s turn to run, and this box to wake on its turn end.'],
+ ['you','Fix this box\'s clock','It is ~10 min slow (w32tm /resync). Cross-machine timestamps disagree until then.'],
+ ['you','Fix the collector at 192.168.0.3','It polls this box\'s /api/events with a wrong password every few seconds. Correct its stored credential for WIN-QVH03HBBI3A.'],
+ ['you','Merge PR #56','Only after the real fleet test passes. Main ruleset makes it your click. Then both boxes pull main and redeploy.'],
+ ['you','Live arch loop-eval from the Tests tab','Task 7.4, live half. Registers three fixtures on :5099, spends turns. I record the measured run afterwards.'],
+ ['me','Task 3.6: unit tests for send_task refusals','busy → busy with no bubble; deny term → denied naming it; claimed → claimed; unknown machine refused. Behaviour exists and is e2e-covered, unit test is missing.'],
+ ['me','Task 4.3: chat-systest for the arch bubble','Arch send lands in the transcript with actor arch; busy send is refused without a bubble.'],
+ ['me','Archive add-arch-agent and add-fleet-arch-agent','openspec archive folds the delta specs into the baseline. After the merge.'],
+ ['later','Arch-to-arch delegation','A remote @arch address so one arch can hand a goal to another arch instead of driving its repos directly. Deferred by design.'],
+ ['later','Scoped send tokens','Today the feed credential is the peer\'s full password. A per-source send token would narrow what a compromised caller could do. Deferred; the two opt-ins are the consent boundary for now.'],
+ ['later','"Connect two harnesses" how-to for the README','The contract doc has the peer API. A short human-Operator setup walkthrough is still unwritten.'],
+];
+function renderLeft(f){
+  const ul=document.getElementById('chk');ul.innerHTML='';
+  LEFT.filter(x=>f==='all'||x[0]===f).forEach(([who,t,b])=>{
+    const li=document.createElement('li');
+    li.innerHTML='<div class="box"></div><div class="body"><b>'+t+' <span class="pill '+who+'">'+(who==='you'?'yours':who==='me'?'mine':'deferred')+'</span></b><span class="dim">'+b+'</span></div>';
+    ul.appendChild(li);
   });
-  render();
-})();
-
-// ---- connection-slot simulator (tab 2) --------------------------------------
-(function () {
-  const N = 6;
-  const slotsEl = document.getElementById('slots');
-  const queueEl = document.getElementById('queue');
-  const statusEl = document.getElementById('status');
-  // slot: null | {kind:'stream'|'poll'|'save', label, until}
-  let slots = new Array(N).fill(null);
-  let queue = [];   // {kind:'save', label}
-  let streamsWanted = 2;
-
-  function render() {
-    slotsEl.innerHTML = '';
-    slots.forEach((s) => {
-      const d = document.createElement('div');
-      d.className = 'slot ' + (s ? s.kind : 'free');
-      d.innerHTML = s ? '<span class="who">' + s.label + '</span>' + (s.kind === 'stream' ? '<span>held for the whole turn</span>' : '')
-                      : 'free';
-      slotsEl.appendChild(d);
-    });
-    queueEl.innerHTML = queue.length
-      ? queue.map(q => '<span class="qitem waiting">' + q.label + '</span>').join('')
-      : '<span class="t-dim">empty</span>';
-  }
-
-  function freeIdx() { return slots.findIndex(s => s === null); }
-
-  function occupy(kind, label, ms) {
-    const i = freeIdx();
-    if (i < 0) return false;
-    const s = { kind, label };
-    slots[i] = s;
-    setTimeout(() => {
-      const j = slots.indexOf(s);
-      if (j >= 0) { slots[j] = null; drain(); render(); }
-    }, ms);
-    return true;
-  }
-
-  function drain() {
-    while (queue.length && freeIdx() >= 0) {
-      const q = queue.shift();
-      occupy('save', q.label, 900);
-      statusEl.innerHTML = '<span class="t-ok">' + q.label + ' finally got a slot — server answers in ms.</span>';
-    }
-  }
-
-  function ensureStreams() {
-    const have = slots.filter(s => s && s.kind === 'stream').length;
-    for (let k = have; k < streamsWanted; k++) occupy('stream', 'chat stream (agent ' + (k + 1) + ')', 1e9);
-  }
-
-  function pollTick() {
-    // a burst of overlapping pollers, like the real 4-5s cadences drifting into phase
-    const labels = ['messages poll', 'sounds poll', 'status poll', 'flags poll', 'clock poll'];
-    const burst = 2 + Math.floor(Math.random() * 3);
-    for (let k = 0; k < burst; k++) {
-      occupy('poll', labels[Math.floor(Math.random() * labels.length)], 700 + Math.random() * 1200);
-    }
-    render();
-  }
-
-  document.getElementById('btnSave').onclick = () => {
-    const label = 'PUT /api/tools/birokrat';
-    if (occupy('save', label, 900)) {
-      statusEl.innerHTML = '<span class="t-ok">A slot was free — saved instantly. (What should happen.)</span>';
-    } else {
-      queue.push({ kind: 'save', label });
-      statusEl.innerHTML = '<span class="t-bad">No free slot — the save is queued INSIDE the browser. ' +
-        'The server never even sees it. Spinner spins "forever".</span>';
-    }
-    render();
-  };
-  document.getElementById('btnStream').onclick = () => { streamsWanted = Math.min(N, streamsWanted + 1); ensureStreams(); render(); };
-  document.getElementById('btnEndStream').onclick = () => {
-    streamsWanted = Math.max(0, streamsWanted - 1);
-    const i = slots.findIndex(s => s && s.kind === 'stream');
-    if (i >= 0) { slots[i] = null; drain(); }
-    render();
-  };
-  document.getElementById('btnReset').onclick = () => {
-    slots = new Array(N).fill(null); queue = []; streamsWanted = 2; statusEl.textContent = '';
-    ensureStreams(); render();
-  };
-
-  ensureStreams(); render();
-  setInterval(pollTick, 1600);
-})();
+}
+renderLeft('all');
+document.querySelectorAll('.filter button').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.filter button').forEach(x=>x.classList.toggle('on',x===b));renderLeft(b.dataset.f);}));
 </script>
 </body>
 </html>

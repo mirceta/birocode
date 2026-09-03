@@ -178,12 +178,21 @@ export async function health(url = base()) {
 }
 
 /** Copy → git init → initial commit, so agent commits never dirty the template. */
-function materializeFixture(root, fixtureName) {
-  const fixtureRepo = join(root, 'fixture-repo');
+function materializeFixture(root, fixtureName, subdir = 'fixture-repo') {
+  const fixtureRepo = join(root, subdir);
   cpSync(join(HERE, 'fixtures', fixtureName, 'repo-template'), fixtureRepo, { recursive: true });
   const git = (...a) => spawnSync('git', ['-C', fixtureRepo, '-c', 'user.email=loopeval@local', '-c', 'user.name=loopeval', ...a], { stdio: 'ignore' });
   git('init', '-q'); git('add', '-A'); git('commit', '-qm', 'fixture: initial state');
   return fixtureRepo;
+}
+
+/** A second (third, …) working copy of a fixture inside an already-provisioned
+ *  scratch root (openspec: add-arch-agent — the arch scenario drives several
+ *  repo agents at once). Same copy → init → commit contract as the first copy;
+ *  live teardown removes the whole scratch root, so extra copies need no
+ *  bookkeeping of their own. */
+export function materializeFixtureAs(root, fixtureName, subdir) {
+  return materializeFixture(root, fixtureName, subdir);
 }
 
 /**
@@ -434,6 +443,10 @@ export async function login() {
 // teardown removes exactly that and nothing else.
 let liveRepoId = null;
 let liveTabId = null;
+// Every repo/tab this run registered on the live harness (a scenario may
+// register several — openspec: add-arch-agent); teardown walks them all.
+const liveRepoIds = [];
+const liveTabIds = [];
 
 /**
  * Live preflight (design D2) — one verdict per unmet operator precondition,
@@ -473,7 +486,7 @@ export async function registerRepo(path, name) {
   const r = await api('POST', '/api/repos', { Folder: path, Name: name, Visibility: 'advanced' });
   if (!r.json?.id) throw new Error(`repo registration failed: http ${r.status} ${JSON.stringify(r.json)}`);
   say(`fixture repo registered: ${r.json.id}`);
-  if (CFG.live) liveRepoId = r.json.id;
+  if (CFG.live) { liveRepoId = r.json.id; liveRepoIds.push(r.json.id); }
   return r.json.id;
 }
 
@@ -499,7 +512,7 @@ export async function createTab(repoId, repoName) {
   const t = await api('POST', '/api/dock', { repoId, repoName });
   const tabId = t.json?.id;
   if (!tabId) throw new Error(`dock tab creation failed: http ${t.status} ${JSON.stringify(t.json)}`);
-  if (CFG.live) liveTabId = tabId;
+  if (CFG.live) { liveTabId = tabId; liveTabIds.push(tabId); }
   say(`dock tab ${tabId} opened for ${repoName}`);
   return tabId;
 }
@@ -717,18 +730,18 @@ async function downLive(ctx) {
     say(`  3. delete the scratch copy ${ctx.root}`);
     return;
   }
-  say('live teardown: unregistering the fixture from the live harness');
-  if (liveRepoId) {
-    const stop = await api('POST', '/api/autopilot/loop', { repoId: liveRepoId, action: 'stop' }).catch(() => null);
-    if (!stop || stop.status !== 200) say(`warn: loop stop returned http ${stop?.status ?? 'error'} (fine if it already resolved)`);
+  say('live teardown: unregistering the fixture(s) from the live harness');
+  for (const id of liveRepoIds) {
+    const stop = await api('POST', '/api/autopilot/loop', { repoId: id, action: 'stop' }).catch(() => null);
+    if (!stop || stop.status !== 200) say(`warn: loop stop for ${id} returned http ${stop?.status ?? 'error'} (fine if it already resolved)`);
   }
-  if (liveTabId) {
-    const t = await api('DELETE', `/api/dock/${liveTabId}`).catch(() => null);
-    if (!t || t.status !== 200) say(`warn: dock tab ${liveTabId} not removed (http ${t?.status ?? 'error'}) — close it in the UI`);
+  for (const id of liveTabIds) {
+    const t = await api('DELETE', `/api/dock/${id}`).catch(() => null);
+    if (!t || t.status !== 200) say(`warn: dock tab ${id} not removed (http ${t?.status ?? 'error'}) — close it in the UI`);
   }
-  if (liveRepoId) {
-    const r = await api('DELETE', `/api/repos/${liveRepoId}`).catch(() => null);
-    if (!r || r.status !== 200) say(`warn: repo ${liveRepoId} not unregistered (http ${r?.status ?? 'error'}) — remove its card in the UI`);
+  for (const id of liveRepoIds) {
+    const r = await api('DELETE', `/api/repos/${id}`).catch(() => null);
+    if (!r || r.status !== 200) say(`warn: repo ${id} not unregistered (http ${r?.status ?? 'error'}) — remove its card in the UI`);
   }
   try { rmSync(ctx.root, { recursive: true, force: true, maxRetries: 3, retryDelay: 300 }); }
   catch { say(`warn: could not remove ${ctx.root} — left on disk, safe to delete later`); }

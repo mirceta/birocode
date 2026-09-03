@@ -962,8 +962,12 @@ function renderSources(list){
     const stCls = REFUSED.includes(s.status) ? "warn" : ((s.status === "unreachable" || s.status === "error") ? "err" : "");
     let acts = "";
     if (s.kind !== "self"){
+      // "sends": operator consent for THIS harness's fleet arch agent to task
+      // that machine's repo agents (openspec add-fleet-arch-agent). The
+      // collector's own polling stays read-only either way.
       acts = `<div class="acts">`+
         `<button data-act="${s.active ? "stop" : "start"}" data-id="${esc(s.id)}">${s.active ? "Stop" : "Start"}</button>`+
+        `<button data-act="${s.allowSends ? "sends-off" : "sends-on"}" data-id="${esc(s.id)}" title="${s.allowSends ? "The fleet arch agent may send tasks to this machine — click to revoke" : "Allow the fleet arch agent to send tasks to this machine"}">${s.allowSends ? "sends: on" : "sends: off"}</button>`+
         `<button data-act="remove" data-id="${esc(s.id)}" title="Remove">✕</button></div>`;
     } else {
       acts = `<div class="acts"><span class="st">built-in</span></div>`;
@@ -996,6 +1000,9 @@ function renderSources(list){
 async function sourceAction(act, id){
   try{
     if (act === "remove"){ await fetch(`${API}/collector/sources/${id}`, { method: "DELETE" }); }
+    else if (act === "sends-on" || act === "sends-off"){
+      await fetch(`${API}/collector/sources/${id}/sends`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ allow: act === "sends-on" }) });
+    }
     else { await fetch(`${API}/collector/sources/${id}/${act}`, { method: "POST" }); }
     refreshSources();
   }catch(e){ /* next tick reflects reality */ }

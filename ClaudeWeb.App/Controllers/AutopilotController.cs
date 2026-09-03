@@ -330,7 +330,9 @@ public class AutopilotController : ControllerBase
             gateOpen,
             // Revision 2: ONE unified record per agent — a suggestion instance is a
             // loop like the others, so there are no parallel suggestion fields.
-            loops = _loops.All().Select(l =>
+            // The arch instance (openspec: add-arch-agent) is keyed to a reserved
+            // id, not a repo — its status surface is /api/arch, so it is not a row here.
+            loops = _loops.All().Where(l => l.Kind != LoopConfigStore.KindArch).Select(l =>
             {
                 var st = engineStates.TryGetValue(l.RepoId, out var s) ? s : null;
                 return new

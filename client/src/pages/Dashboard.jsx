@@ -16,6 +16,7 @@ import IdeasPanel from '../components/ideas/IdeasPanel';
 import AutopilotPanel from '../components/dashboard/AutopilotPanel';
 import AgentAuditPanel from '../components/dashboard/AgentAuditPanel';
 import TrafficPanel from '../components/dashboard/TrafficPanel';
+import Arch from './Arch';
 import DockToolbar from '../components/dashboard/DockToolbar';
 import './dashboard.css';
 
@@ -113,12 +114,12 @@ function readPanels() {
     const raw = localStorage.getItem(PANELS_KEY);
     const v = raw ? JSON.parse(raw) : null;
     if (v && typeof v === 'object') {
-      return { ideas: !!v.ideas, autopilot: !!v.autopilot, audit: !!v.audit, traffic: !!v.traffic };
+      return { ideas: !!v.ideas, autopilot: !!v.autopilot, audit: !!v.audit, traffic: !!v.traffic, arch: !!v.arch };
     }
   } catch {
     /* private mode / malformed */
   }
-  return { ideas: false, autopilot: false, audit: false, traffic: false };
+  return { ideas: false, autopilot: false, audit: false, traffic: false, arch: false };
 }
 
 // Free-mode horizontal resize of the agents panel from a right-edge grip
@@ -386,6 +387,10 @@ export default function Dashboard({ onClose }) {
   // Throughput monitor joins the same way (openspec traffic-monitor): a
   // read-only citizen showing what the harness is serving right now.
   const trafficOn = useFeature('trafficPanel');
+  // The arch agent (openspec add-arch-agent) gets the same desktop treatment:
+  // a rail chip that summons the Arch page as a pop-up, so the Operator can
+  // scope / arm / talk to it without leaving the dashboard.
+  const archOn = useFeature('archTab');
   // Dock loop badges + controls (openspec adopt-autopilot-loops): one dashboard
   // poll of the READ-ONLY, non-operator-gated /autopilot/loops projection feeds
   // every card, so a loop's terminal state (done / escalated + why) stays
@@ -425,7 +430,7 @@ export default function Dashboard({ onClose }) {
   // recently summoned pop-up stacks on top.
   const [panels, setPanels] = useState(readPanels);
   const [popupOrder, setPopupOrder] = useState(() =>
-    ['autopilot', 'audit', 'traffic', 'ideas'].filter((k) => readPanels()[k]),
+    ['autopilot', 'audit', 'traffic', 'ideas', 'arch'].filter((k) => readPanels()[k]),
   );
   function togglePanel(key) {
     const on = !panels[key];
@@ -442,11 +447,13 @@ export default function Dashboard({ onClose }) {
   const showAudit = agentAuditOn && panels.audit;
   const showTraffic = trafficOn && panels.traffic;
   const showIdeas = panels.ideas;
+  const showArch = archOn && panels.arch;
   const popupShown = {
     autopilot: showAutopilot,
     audit: showAudit,
     traffic: showTraffic,
     ideas: showIdeas,
+    arch: showArch,
   };
   const popupKeys = popupOrder.filter((k) => popupShown[k]);
   // Esc dismisses the topmost pop-up. Capture + stopPropagation so the
@@ -969,6 +976,19 @@ export default function Dashboard({ onClose }) {
               <span className="dash__panel-chip-label">Traffic</span>
             </button>
           )}
+          {archOn && (
+            <button
+              type="button"
+              className={`dash__panel-chip${panels.arch ? ' dash__panel-chip--on' : ''}`}
+              onClick={() => togglePanel('arch')}
+              aria-pressed={panels.arch}
+              title={t('dashboard.panelArch')}
+              aria-label={t('dashboard.panelArch')}
+            >
+              <span aria-hidden="true">🏛</span>
+              <span className="dash__panel-chip-label">{t('nav.arch')}</span>
+            </button>
+          )}
         </div>
         {tabs.length > 0 && (
           // Layout popover (openspec dock-layout-controls): the one trigger that
@@ -1144,19 +1164,23 @@ export default function Dashboard({ onClose }) {
                 ? t('nav.autopilot')
                 : key === 'traffic'
                   ? t('dashboard.panelTraffic')
-                  : t('audit.title')
+                  : key === 'arch'
+                    ? t('nav.arch')
+                    : t('audit.title')
           }
           style={{ zIndex: 30 + i }}
         >
-          {/* Ideas gets a pop-up header (the panel itself is chromeless);
+          {/* Ideas and Arch get a pop-up header (their pages are chromeless);
               Autopilot/Audit/Traffic keep their own dock bar, which hosts the ×. */}
-          {key === 'ideas' && (
+          {(key === 'ideas' || key === 'arch') && (
             <div className="dash__popup-head">
-              <span className="dash__popup-title">💡 {t('nav.ideas')}</span>
+              <span className="dash__popup-title">
+                {key === 'ideas' ? `💡 ${t('nav.ideas')}` : `🏛 ${t('dashboard.panelArch')}`}
+              </span>
               <button
                 type="button"
                 className="dash__popup-close"
-                onClick={() => togglePanel('ideas')}
+                onClick={() => togglePanel(key)}
                 title={t('dashboard.panelClose')}
                 aria-label={t('dashboard.panelClose')}
               >
@@ -1166,6 +1190,7 @@ export default function Dashboard({ onClose }) {
           )}
           <div className="dash__popup-body">
             {key === 'ideas' && <IdeasPanel />}
+            {key === 'arch' && <Arch popup onOpenDock={onClose} />}
             {key === 'autopilot' && <AutopilotPanel popup onClose={() => togglePanel('autopilot')} />}
             {key === 'audit' && <AgentAuditPanel popup onClose={() => togglePanel('audit')} />}
             {key === 'traffic' && (

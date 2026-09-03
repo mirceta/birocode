@@ -107,4 +107,15 @@ public class AppConfig
     /// (committed examples are synthetic only, under tests/loop-evals/examples).
     /// </summary>
     public string LoopEvalsExamplesRoot { get; set; } = "";
+
+    /// <summary>
+    /// The arch agent's home repository (openspec add-arch-agent, D3): the folder
+    /// that is its Claude session's working directory and the only place it may
+    /// write (role prompt, memory/, assignments/). Empty by default = resolve at
+    /// runtime to <c>&lt;ProjectsRoot&gt;/arch-home</c> — a SIBLING of the harness's
+    /// own repo, never inside it or any registered repo, so the structural fence
+    /// (no edit/write/shell, no reads under repo paths) keeps its meaning. Set an
+    /// explicit path here to relocate it.
+    /// </summary>
+    public string ArchHomeDir { get; set; } = "";
 }

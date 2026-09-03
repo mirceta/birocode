@@ -38,6 +38,10 @@ public class LoopConfigStore
     public const string KindRecipe = "recipe";
     public const string KindGoal = "goal";
     public const string KindQueue = "queue";
+    /// <summary>The arch agent's loop kind (openspec: add-arch-agent, D2): its ONE
+    /// instance is keyed to the reserved id <c>@arch</c>, not a repo; the engine
+    /// wakes the arch session from the collector feed instead of a transcript.</summary>
+    public const string KindArch = "arch";
     // The common mode axis (revision 2, D9): what happens to a proposed next
     // prompt. "drive" = the engine sends it; "suggest" = it becomes the pending
     // prompt pre-filling the agent's composer for the human to send.
@@ -495,6 +499,36 @@ public class LoopConfigStore
         }
     }
 
+    /// <summary>Arms (or re-arms) the ARCH loop (openspec: add-arch-agent, D8): the
+    /// same record shape as every kind — mode, cap, pin, counters — under the
+    /// reserved key. Drive by default; the cap defaults low (6) because every
+    /// arch turn fans out into repo turns.</summary>
+    public LoopState StartArch(string key, string? mode, int? maxIterations, string? sessionId)
+    {
+        lock (_gate)
+        {
+            LogDisplaced(key, KindArch);
+            var e = new Entry
+            {
+                Kind = KindArch,
+                Mode = CleanMode(mode, defaultMode: ModeDrive),
+                Prompt = "",
+                Sentinel = "",
+                MaxIterations = maxIterations is { } m ? Math.Clamp(m, 1, 100) : 6,
+                Active = true,
+                ArmedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                IterationsDone = 0,
+                Status = "looping",
+                LastSentAt = 0,
+                SessionId = Clean(sessionId),
+            };
+            _data.Loops[key] = e;
+            Save();
+            _logger.Info($"[LOOP] armed arch loop ({e.Mode}, cap {e.MaxIterations}, pin {e.SessionId ?? "<none>"})");
+            return ToState(key, e);
+        }
+    }
+
     /// <summary>Flips a live instance's suggest/drive mode WITHOUT resetting its
     /// counters, kind, prompts, or phase (revision 2, D9).</summary>
     public LoopState? SetMode(string repoId, string mode)
@@ -671,6 +705,7 @@ public class LoopConfigStore
             e.Kind == KindGoal ? KindGoal
                 : e.Kind == KindSuggestion ? KindSuggestion
                 : e.Kind == KindQueue ? KindQueue
+                : e.Kind == KindArch ? KindArch
                 : KindRecipe,
             e.Mode == ModeSuggest ? ModeSuggest : ModeDrive,
             e.Prompt, e.Sentinel,

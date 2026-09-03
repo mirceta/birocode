@@ -19,6 +19,7 @@ import Projects from '../pages/Projects';
 import Guests from '../pages/Guests';
 import Settings from '../pages/Settings';
 import LoopEvals from '../pages/LoopEvals';
+import Arch from '../pages/Arch';
 
 // THE canonical tab list (plans/settings-tab.md). BottomNav, PaneStrip and
 // the Settings reorder UI all consume useOrderedTabs() — the old "keep
@@ -41,6 +42,7 @@ const STATIC_TABS = [
   { key: 'deploys', path: '/studio/deploys', labelKey: 'nav.deploys', icon: '🚀', feature: 'deploysTab', element: <Deployments /> },
   { key: 'settings', path: '/studio/settings', labelKey: 'nav.settings', icon: '⚙', feature: 'settingsTab', element: <Settings /> },
   { key: 'loopevals', path: '/studio/loopevals', labelKey: 'nav.loopEvals', icon: '🎯', feature: 'loopEvalsTab', element: <LoopEvals /> },
+  { key: 'arch', path: '/studio/arch', labelKey: 'nav.arch', icon: '🏛', feature: 'archTab', element: <Arch /> },
 ];
 
 /// Visible tabs in the user's order. The Chat/Term pair is ONE 'claude'

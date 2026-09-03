@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { apiGet, apiPost, apiStream, apiStreamGet, apiUpload } from '../api/client';
 import { hubAttach, hubSupported } from '../api/chatStreamHub';
+import { appendThinking, applyToolEvent, settleSteps } from '../components/chat/turnSteps';
 import { createSseParser } from '../components/chat/sseParser';
 import { getModel, setModel as persistModel } from '../components/chat/ModelSelector';
 import { useDock } from './DockContext';
@@ -230,17 +231,7 @@ export function ChatProvider({ children }) {
   );
 
   const addThinking = useCallback(
-    (key, text) =>
-      updateAssistant(key, (m) => {
-        const steps = (m.steps || []).slice();
-        const last = steps[steps.length - 1];
-        if (last && last.kind === 'thinking') {
-          steps[steps.length - 1] = { ...last, text: last.text + (text || '') };
-        } else {
-          steps.push({ kind: 'thinking', text: text || '' });
-        }
-        return { ...m, steps };
-      }),
+    (key, text) => updateAssistant(key, (m) => ({ ...m, steps: appendThinking(m.steps, text) })),
     [updateAssistant],
   );
 
@@ -251,17 +242,20 @@ export function ChatProvider({ children }) {
   // one (already-attached client), append it plus a fresh assistant bubble for
   // the reply that follows.
   const addServerPrompt = useCallback(
-    (key, text) =>
+    (key, text, actor) =>
       updateConvo(key, (c) => {
         const msgs = c.messages.slice();
         const last = msgs[msgs.length - 1];
+        // actor (openspec: add-arch-agent): "loop" | "arch" | "wake" — the
+        // bubble renders the tag so provenance is visible live, not only on reload.
+        const user = actor ? { role: 'user', text, actor } : { role: 'user', text };
         if (
           last && last.role === 'assistant' && last.text === '' &&
           (!last.steps || last.steps.length === 0)
         ) {
-          msgs.splice(msgs.length - 1, 0, { role: 'user', text });
+          msgs.splice(msgs.length - 1, 0, user);
         } else {
-          msgs.push({ role: 'user', text }, { role: 'assistant', text: '', steps: [] });
+          msgs.push(user, { role: 'assistant', text: '', steps: [] });
         }
         return { ...c, messages: msgs, streaming: true };
       }),
@@ -269,41 +263,7 @@ export function ChatProvider({ children }) {
   );
 
   const handleTool = useCallback(
-    (key, evt) =>
-      updateAssistant(key, (m) => {
-        const steps = (m.steps || []).slice();
-        let idx = evt.id ? steps.findIndex((s) => s.kind === 'tool' && s.id === evt.id) : -1;
-
-        if (evt.status === 'start' || evt.status === 'input') {
-          if (idx === -1) {
-            steps.push({
-              kind: 'tool', id: evt.id, name: evt.name || 'tool',
-              status: 'running', startedAt: Date.now(),
-              summary: evt.summary || '', detail: evt.detail || '', preview: '',
-            });
-          } else {
-            steps[idx] = {
-              ...steps[idx],
-              name: evt.name || steps[idx].name,
-              summary: evt.summary ?? steps[idx].summary,
-              detail: evt.detail ?? steps[idx].detail,
-            };
-          }
-        } else if (evt.status === 'end') {
-          if (idx === -1) {
-            for (let j = steps.length - 1; j >= 0; j--) {
-              if (steps[j].kind === 'tool' && steps[j].status === 'running') { idx = j; break; }
-            }
-          }
-          if (idx !== -1) {
-            steps[idx] = {
-              ...steps[idx], status: evt.ok === false ? 'error' : 'done',
-              ok: evt.ok !== false, preview: evt.preview || '',
-            };
-          }
-        }
-        return { ...m, steps };
-      }),
+    (key, evt) => updateAssistant(key, (m) => ({ ...m, steps: applyToolEvent(m.steps, evt) })),
     [updateAssistant],
   );
 
@@ -327,7 +287,7 @@ export function ChatProvider({ children }) {
           // the EXACT composition the CLI received (openspec
           // queue-loop-prompt-transparency) — the chat renders it verbatim, the
           // same way the transcript reload does.
-          if (evt.text) addServerPrompt(key, evt.text);
+          if (evt.text) addServerPrompt(key, evt.text, evt.actor);
           break;
         case 'thinking':
           addThinking(key, evt.text);
@@ -454,12 +414,7 @@ export function ChatProvider({ children }) {
           return { ...c, streaming: false, messages: msgs.slice(0, -1) };
         }
         if (last.steps?.some((s) => s.kind === 'tool' && s.status === 'running')) {
-          msgs[msgs.length - 1] = {
-            ...last,
-            steps: last.steps.map((s) =>
-              s.kind === 'tool' && s.status === 'running' ? { ...s, status: 'done' } : s,
-            ),
-          };
+          msgs[msgs.length - 1] = { ...last, steps: settleSteps(last.steps) };
         }
       }
       return { ...c, streaming: false, messages: msgs };
@@ -776,7 +731,7 @@ export function ChatProvider({ children }) {
     try {
       const data = await apiGet(`/sessions/${id}/messages`, { repoId });
       const loaded = Array.isArray(data)
-        ? data.map((m) => ({ role: m.role, text: m.text }))
+        ? data.map((m) => (m.actor ? { role: m.role, text: m.text, actor: m.actor } : { role: m.role, text: m.text }))
         : [];
       updateConvo(key, {
         messages: loaded.length > 0

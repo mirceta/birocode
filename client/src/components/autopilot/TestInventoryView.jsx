@@ -181,11 +181,16 @@ function LoopEvalRunner() {
   // NOT gated on `active`: the fixture is deliberately KEPT after the verdict
   // (the runner sets LOOPEVAL_KEEP) so the dock stays watchable until the
   // operator clicks FINISH AGENT.
-  const watchTab = tabs.find((t) => /^loopeval-.*-live$/.test(t.repoName || ''));
+  // Several fixtures at once (openspec: add-arch-agent — the arch scenario
+  // drives three repo agents): one watch button per live fixture dock.
+  const watchTabs = tabs.filter((t) => /^loopeval-.*-live$/.test(t.repoName || ''));
+  const watchTab = watchTabs[0] || null;
+  const archRun = run?.scenario === 'arch' || watchTabs.some((t) => /^loopeval-arch-/.test(t.repoName || ''));
 
-  const watchDock = useCallback(() => {
-    if (!watchTab) return;
-    setActiveTab(watchTab.id);
+  const watchDock = useCallback((tab) => {
+    const target = tab || watchTab;
+    if (!target) return;
+    setActiveTab(target.id);
     navigate('/studio');
   }, [watchTab, setActiveTab, navigate]);
 
@@ -402,15 +407,26 @@ function LoopEvalRunner() {
 
           {watchTab ? (
             <p className="autopilot__summary le-watch">
-              <button className="lp-arm st-run-btn" onClick={watchDock}>
-                ▶ Watch its agent dock
-              </button>
+              {watchTabs.length === 1 ? (
+                <button className="lp-arm st-run-btn" onClick={() => watchDock(watchTab)}>
+                  ▶ Watch its agent dock
+                </button>
+              ) : watchTabs.map((t) => (
+                <button key={t.id} className="lp-arm st-run-btn" onClick={() => watchDock(t)}>
+                  ▶ {t.repoName.replace(/^loopeval-/, '').replace(/-live$/, '')}
+                </button>
+              ))}
+              {archRun && (
+                <button className="lp-arm st-run-btn" onClick={() => navigate('/studio/arch')}>
+                  🏛 Open the Arch tab
+                </button>
+              )}
               {active ? (
-                <span> — <b>{watchTab.repoName}</b> is live in the DOCKS strip, bound to the
-                driven conversation; the loop card is on this console&apos;s Loops tab.</span>
+                <span> — {watchTabs.length === 1 ? <b>{watchTab.repoName}</b> : <b>{watchTabs.length} fixture docks</b>} live in the DOCKS strip, bound to the
+                driven conversation{archRun ? '; the arch agent that drives them is on the Arch tab' : '; the loop card is on the Loops tab of this console'}.</span>
               ) : (
-                <span> — the run is over, but <b>{watchTab.repoName}</b> stays in the DOCKS
-                strip so you can inspect what the agent did. It goes away only when you
+                <span> — the run is over, but {watchTabs.length === 1 ? <b>{watchTab.repoName}</b> : <b>the fixture docks</b>} stay in the DOCKS
+                strip so you can inspect what the agents did. They go away only when you
                 click FINISH AGENT.</span>
               )}
             </p>

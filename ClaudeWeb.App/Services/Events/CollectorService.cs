@@ -84,6 +84,10 @@ public class CollectorService
         public string Kind = "remote";          // "self" | "remote"
         public bool Active = true;
         public string? ProtectedCredential;     // encrypted at rest; null = none
+        // Operator consent for the FLEET CLIENT to send tasks to this harness
+        // (openspec add-fleet-arch-agent, D1). Off by default; the collector's own
+        // polling never looks at it — it only ever GETs the feed.
+        public bool AllowSends;
 
         // runtime (not persisted)
         // Status:  idle | connecting | active | ip-blocked | needs-credential | bad-credential
@@ -107,7 +111,8 @@ public class CollectorService
     /// needs a credential" rather than treating it as dead.</summary>
     public sealed record SourceView(
         string Id, string Label, string Address, string Kind, bool Active,
-        string Status, int LastSeq, string? LastError, long LastPolledAt, bool Alive);
+        string Status, int LastSeq, string? LastError, long LastPolledAt, bool Alive,
+        bool AllowSends = false);
 
     /// <summary>An aggregated event: the producer envelope (<see cref="Type"/>,
     /// <see cref="Source"/>, <see cref="At"/>, <see cref="Data"/>) plus which registered
@@ -116,7 +121,8 @@ public class CollectorService
         int Seq, long At, string Type, object? Source, object? Data, string SourceId, string SourceLabel);
 
     private sealed record PersistedSource(
-        string Id, string Label, string Address, string Kind, bool Active, string? Cred);
+        string Id, string Label, string Address, string Kind, bool Active, string? Cred,
+        bool AllowSends = false);
 
     // Shape of a remote /api/events response we pull.
     private sealed record RemoteFeed(
@@ -135,6 +141,70 @@ public class CollectorService
     {
         lock (_lock)
             return _sources.Select(ToView).ToList();
+    }
+
+    /// <summary>The self source's label — how THIS harness names itself to the
+    /// fleet (the machine name unless the operator relabelled it).</summary>
+    public string SelfLabel
+    {
+        get { lock (_lock) return _sources.FirstOrDefault(s => s.Kind == "self")?.Label ?? Environment.MachineName; }
+    }
+
+    /// <summary>Resolve a machine reference the way the arch tools address a
+    /// target (openspec add-fleet-arch-agent, D4): a source id, or a label
+    /// (case-insensitive). Never the credential. Null when unknown.</summary>
+    public SourceView? ResolveSource(string? machine)
+    {
+        if (string.IsNullOrWhiteSpace(machine)) return null;
+        var m = machine.Trim();
+        lock (_lock)
+        {
+            var s = _sources.FirstOrDefault(x => string.Equals(x.Id, m, StringComparison.Ordinal))
+                 ?? _sources.FirstOrDefault(x => string.Equals(x.Label, m, StringComparison.OrdinalIgnoreCase));
+            return s is null ? null : ToView(s);
+        }
+    }
+
+    /// <summary>Operator consent for fleet sends toward a remote source. The self
+    /// source has no such flag (local sends are the arch agent's own path).</summary>
+    public bool SetAllowSends(string id, bool allow)
+    {
+        lock (_lock)
+        {
+            var s = _sources.FirstOrDefault(x => x.Id == id);
+            if (s is null || s.Kind == "self") return false;
+            s.AllowSends = allow;
+            Save();
+        }
+        _logger.Info($"[COLLECTOR] source {id}: allow sends = {allow}");
+        return true;
+    }
+
+    /// <summary>Builds an authenticated request toward a remote source for the
+    /// FLEET CLIENT (openspec add-fleet-arch-agent, D1): the source's address plus
+    /// its stored credential, exactly as the feed pull sends it. The collector
+    /// itself never calls this for anything but a GET of the feed; the caller is
+    /// responsible for honouring <see cref="SourceView.AllowSends"/> before any
+    /// mutating request. Null for an unknown or self source.</summary>
+    public HttpRequestMessage? BuildPeerRequest(string sourceId, HttpMethod method, string path)
+    {
+        Source? s;
+        lock (_lock) s = _sources.FirstOrDefault(x => x.Id == sourceId && x.Kind != "self");
+        if (s is null) return null;
+        var req = new HttpRequestMessage(method, $"{s.Address}{path}");
+        req.Headers.TryAddWithoutValidation("Accept", "application/json");
+        var cred = Unprotect(s.ProtectedCredential);
+        if (cred is not null) req.Headers.TryAddWithoutValidation("X-Auth-Password", cred);
+        return req;
+    }
+
+    /// <summary>Never let a credential substring survive into text the fleet
+    /// client surfaces (mirrors the collector's own status scrubbing).</summary>
+    public string ScrubFor(string sourceId, string text)
+    {
+        Source? s;
+        lock (_lock) s = _sources.FirstOrDefault(x => x.Id == sourceId);
+        return s is null ? text : Scrub(text, s);
     }
 
     /// <summary>Aggregated events with seq &gt; <paramref name="after"/>, plus the highest
@@ -453,7 +523,7 @@ public class CollectorService
     // ---- helpers -----------------------------------------------------------
 
     private SourceView ToView(Source s) =>
-        new(s.Id, s.Label, s.Address, s.Kind, s.Active, s.Status, s.Watermark, s.LastError, s.LastPolledAtMs, s.Alive);
+        new(s.Id, s.Label, s.Address, s.Kind, s.Active, s.Status, s.Watermark, s.LastError, s.LastPolledAtMs, s.Alive, s.AllowSends);
 
     private string? Protect(string? plaintext)
     {
@@ -524,7 +594,7 @@ public class CollectorService
                     _sources.Add(new Source
                     {
                         Id = p.Id, Label = p.Label, Address = p.Address, Kind = p.Kind,
-                        Active = p.Active, ProtectedCredential = p.Cred,
+                        Active = p.Active, ProtectedCredential = p.Cred, AllowSends = p.AllowSends,
                         Status = p.Kind == "self" ? "active" : (p.Active ? "connecting" : "stopped"),
                         Watermark = -1,
                     });
@@ -543,7 +613,7 @@ public class CollectorService
         {
             Directory.CreateDirectory(System.IO.Path.GetDirectoryName(_storePath)!);
             var list = _sources.Select(s => new PersistedSource(
-                s.Id, s.Label, s.Address, s.Kind, s.Active, s.ProtectedCredential)).ToList();
+                s.Id, s.Label, s.Address, s.Kind, s.Active, s.ProtectedCredential, s.AllowSends)).ToList();
             File.WriteAllText(_storePath, JsonSerializer.Serialize(list, JsonOpts));
         }
         catch (Exception ex)

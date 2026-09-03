@@ -91,6 +91,12 @@ public class PasswordAuthMiddleware
         if (HttpMethods.IsPost(context.Request.Method) &&
             path.Equals("/api/auth/login", StringComparison.OrdinalIgnoreCase))
             return false;
+        // The arch agent's MCP endpoint (openspec: add-arch-agent, D7): called
+        // by the CLI process the harness itself launched, authenticated by the
+        // per-process bearer token the harness wrote into that run's mcp-config
+        // (checked constant-time in ArchController). Loopback-only in practice.
+        if (path.Equals("/api/arch/mcp", StringComparison.OrdinalIgnoreCase))
+            return false;
 
         return true;
     }
