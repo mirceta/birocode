@@ -89,16 +89,17 @@
 <!-- ============ 1 STATUS ============ -->
 <section id="v-status" class="on">
   <h2>The lifecycle, and where the cursor sits</h2>
-  <p class="dim">Both changes went propose → design → implement on this branch. Everything up to "verified isolated" is done. The cursor is on <b>merge + deploy</b>, which is yours, then the real two-machine test, then archive.</p>
+  <p class="dim">Both changes went propose → design → implement on this branch. Everything up to "verified isolated" is done. The cursor is on <b>deploy the branch to both boxes</b>, then the real two-machine test. PR #56 merges only after that test passes. Deploying the branch is allowed: <code>swap.ps1</code>'s guard checks that HEAD contains origin/main, and this branch does (808d9f7).</p>
   <div class="tl">
     <div class="step done"><div class="t">Proposed</div><div class="s">2 OpenSpec changes, strict-valid</div></div>
     <div class="step done"><div class="t">Implemented</div><div class="s">backend, MCP, Arch tab, peer API, fleet client</div></div>
     <div class="step done"><div class="t">Verified isolated</div><div class="s">167 unit · 39 browser · fleet e2e 23/23 ×2 · arch e2e 25/25 ×2</div></div>
     <div class="step done"><div class="t">Pushed</div><div class="s">1cf1f71 on PR #56</div></div>
-    <div class="step now"><div class="t">Merge + deploy</div><div class="s">your click (main ruleset), then swap.ps1 on both boxes</div></div>
-    <div class="step todo"><div class="t">Real fleet test</div><div class="s">this box ↔ the other computer</div></div>
-    <div class="step todo"><div class="t">Live arch eval</div><div class="s">Tests tab, spends turns on :5099</div></div>
-    <div class="step todo"><div class="t">Archive</div><div class="s">fold both deltas into the baseline specs</div></div>
+    <div class="step now"><div class="t">Deploy the branch</div><div class="s">this box via swap.ps1 (guard passes), the other computer from a fresh clone</div></div>
+    <div class="step todo"><div class="t">Wire the fleet</div><div class="s">receiver opt-in there, caller opt-in here</div></div>
+    <div class="step todo"><div class="t">Real fleet test</div><div class="s">this box = arch, the other computer = driven peer</div></div>
+    <div class="step todo"><div class="t">Merge PR #56</div><div class="s">your click, only after the real test passes</div></div>
+    <div class="step todo"><div class="t">Live arch eval · archive</div><div class="s">Tests tab run, then fold both deltas into the baseline</div></div>
   </div>
 
   <div class="grid" style="margin-top:16px">
@@ -224,15 +225,16 @@
 <section id="v-next">
   <h2>How to continue, in order</h2>
   <div class="steps">
-    <div><b>Merge PR #56 <span class="pill you">you</span></b>The main ruleset blocks every merge the agent account tries, so the merge button is yours. Nothing else on the list can start before it.</div>
-    <div><b>Deploy here <span class="pill me">me</span></b>Say "deploy". I run the committed <code>swap.ps1</code> detached, then you say "keep it" within 15 minutes or the dead-man's switch rolls live back.</div>
-    <div><b>Deploy on the other computer <span class="pill you">you</span></b>Pull main there and run the same <code>swap.ps1</code>. Until it has this build, A's Fleet card will show that peer as "no peer API on that build".</div>
-    <div><b>Open the receiver <span class="pill you">you</span></b>On the other computer: Arch tab → Fleet card → tick "accept fleet sends". Keep its autopilot gate open.</div>
-    <div><b>Point this box at it <span class="pill you">you</span></b>Events app: register the other harness as a source with its password, press "sends: on" on that source. Arch tab → scope picker → pick its repos → arm.</div>
-    <div><b>Run the real test together <span class="pill me">me</span> <span class="pill you">you</span></b>Give the arch agent a small task for a remote repo. We check the remote dock shows <code>arch@&lt;this box&gt;</code>, and that A's Arch tab wakes when the remote turn ends.</div>
+    <div><b>Deploy the branch here <span class="pill me">me</span></b>Say "deploy". I run the committed <code>swap.ps1</code> detached on <code>feature/arch-agent</code>. Its guard only requires that HEAD contains origin/main, which it does, so no bypass. Then you say "keep it" within 15 minutes or the dead-man's switch rolls live back to the pre-branch build.</div>
+    <div><b>Install the branch on the other computer <span class="pill you">you</span></b>Clone the repo there, check out <code>feature/arch-agent</code>, build the client and run the harness on :5099. No swap.ps1 needed for a first install, there is no live to swap. Until it runs this build, this box's Fleet card shows that peer as "no peer API on that build".</div>
+    <div><b>Open the receiver there <span class="pill you">you</span></b>On the other computer: Arch tab → Fleet card → tick "accept fleet sends". Keep its autopilot gate open. That computer is the driven peer, it never sends.</div>
+    <div><b>Register it on this box <span class="pill you">you</span></b>Events app: add the other harness as a source with its password, press "sends: on" on that source. Arch tab → scope picker → pick its repos → arm. This box is now the fleet arch agent.</div>
+    <div><b>Run the real test together <span class="pill me">me</span> <span class="pill you">you</span></b>Give the arch agent a small task for a repo on the other computer. We check that computer's dock shows <code>arch@&lt;this box&gt;</code>, that its turn runs, and that this box's Arch tab wakes when the turn ends. First run on real network, real passwords, real build gap.</div>
+    <div><b>Fix what the real test finds <span class="pill me">me</span></b>Anything the isolated e2e could not see: LAN reachability, IP gate on the peer, cookie vs header auth across boxes, clock skew in the freshness check. Push fixes to the same branch and redeploy.</div>
+    <div><b>Merge PR #56 <span class="pill you">you</span></b>Only after the real fleet test passes. The main ruleset blocks every merge the agent account tries, so the button is yours. After the merge, both boxes pull main and redeploy so live matches main.</div>
     <div><b>Live arch eval <span class="pill you">you</span></b>Tests tab → E2E → arch. It registers three fixtures on :5099 and spends turns. I record the measured run in the loop-eval README afterwards.</div>
-    <div><b>Close the two open test tasks <span class="pill me">me</span></b>Unit tests for <code>send_task</code> refusals and the chat-systest for the arch bubble. Small, mechanical.</div>
-    <div><b>Archive both changes <span class="pill me">me</span></b><code>openspec archive add-arch-agent</code> and <code>add-fleet-arch-agent</code> fold the deltas into the baseline specs. Say "archive" after the fleet test passes.</div>
+    <div><b>Close the two open test tasks <span class="pill me">me</span></b>Unit tests for <code>send_task</code> refusals and the chat-systest for the arch bubble. Small, mechanical, can happen while the other computer is being set up.</div>
+    <div><b>Archive both changes <span class="pill me">me</span></b><code>openspec archive add-arch-agent</code> and <code>add-fleet-arch-agent</code> fold the deltas into the baseline specs. Say "archive" after the merge.</div>
   </div>
   <h3>Commands you will see me use</h3>
 <pre>pwsh is absent on this box, so the deploy is launched with powershell.exe, detached:
@@ -331,16 +333,17 @@ sim();
 
 // ---- 5: checklist
 const LEFT=[
- ['you','Merge PR #56','The main protection ruleset makes this your click. Everything below waits on it.'],
- ['me','Deploy this box','swap.ps1 detached via powershell.exe, then "keep it" → keep.ps1 within 15 min.'],
- ['you','Deploy the other computer','Same swap.ps1 from a fresh pull of main. Both peers must run this build.'],
- ['you','Receiver opt-in on the other computer','Arch tab → Fleet card → accept fleet sends. Autopilot gate open.'],
- ['you','Caller opt-in on this box','Events app: source registered with password, "sends: on". Arch tab: scope includes its repos, armed.'],
- ['me','Real two-machine fleet test','A small task to a remote repo. Verify arch@<A> on the remote dock and the wake on A. First run on real network, real passwords, real build gap.'],
+ ['me','Deploy the branch on this box','swap.ps1 detached via powershell.exe on feature/arch-agent. Guard passes (HEAD contains origin/main). Then "keep it" → keep.ps1 within 15 min.'],
+ ['you','Install the branch on the other computer','Fresh clone, checkout feature/arch-agent, build client, run harness on :5099. First install, so no swap.ps1.'],
+ ['you','Receiver opt-in on the other computer','Arch tab → Fleet card → accept fleet sends. Autopilot gate open. That box is the driven peer.'],
+ ['you','Register + caller opt-in on this box','Events app: source registered with the peer password, "sends: on". Arch tab: scope includes its repos, armed. This box is the arch.'],
+ ['me','Real two-machine fleet test','A small task to a repo on the other computer. Verify arch@<this box> on its dock, its turn runs, this box wakes on turn end. Real network, real passwords, real build gap.'],
+ ['me','Fix what the real test finds, redeploy','LAN reachability, peer IP gate, cross-box auth, clock skew in freshness. Same branch, same PR.'],
+ ['you','Merge PR #56','Only after the real fleet test passes. Main ruleset makes it your click. Then both boxes pull main and redeploy.'],
  ['you','Live arch loop-eval from the Tests tab','Task 7.4, live half. Registers three fixtures on :5099, spends turns. I record the measured run afterwards.'],
  ['me','Task 3.6: unit tests for send_task refusals','busy → busy with no bubble; deny term → denied naming it; claimed → claimed; unknown machine refused. Behaviour exists and is e2e-covered, unit test is missing.'],
  ['me','Task 4.3: chat-systest for the arch bubble','Arch send lands in the transcript with actor arch; busy send is refused without a bubble.'],
- ['me','Archive add-arch-agent and add-fleet-arch-agent','openspec archive folds the delta specs into the baseline. After the fleet test passes.'],
+ ['me','Archive add-arch-agent and add-fleet-arch-agent','openspec archive folds the delta specs into the baseline. After the merge.'],
  ['later','Arch-to-arch delegation','A remote @arch address so one arch can hand a goal to another arch instead of driving its repos directly. Deferred by design.'],
  ['later','Scoped send tokens','Today the feed credential is the peer\'s full password. A per-source send token would narrow what a compromised caller could do. Deferred; the two opt-ins are the consent boundary for now.'],
  ['later','"Connect two harnesses" how-to for the README','The contract doc has the peer API. A short human-Operator setup walkthrough is still unwritten.'],
