@@ -1,5 +1,6 @@
 using ClaudeWeb.Services.Hosting;
 using ClaudeWeb.Services.IpFilter;
+using ClaudeWeb.Services.Auth;
 using ClaudeWeb.Services.Logging;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -25,12 +26,14 @@ public class IpFilterController : ControllerBase
 {
     private readonly IpAllowlistService _allowlist;
     private readonly IpInfoService _ipInfo;
+    private readonly DeviceTokenService _devices;
     private readonly Logger _logger;
 
-    public IpFilterController(IpAllowlistService allowlist, IpInfoService ipInfo, Logger logger)
+    public IpFilterController(IpAllowlistService allowlist, IpInfoService ipInfo, DeviceTokenService devices, Logger logger)
     {
         _allowlist = allowlist;
         _ipInfo = ipInfo;
+        _devices = devices;
         _logger = logger;
     }
 
@@ -38,6 +41,7 @@ public class IpFilterController : ControllerBase
     public IActionResult Get()
     {
         _logger.CountRequest();
+        var origin = ClientIp.GetOrigin(HttpContext);
         var (guests, attempts) = _allowlist.Snapshot();
 
         // Enrichment (plans/ip-intel.md): attach cache hits synchronously and
@@ -61,7 +65,15 @@ public class IpFilterController : ControllerBase
 
         return Ok(new
         {
-            callerIp = ClientIp.Get(HttpContext),
+            callerIp = origin.Ip,
+            // How the caller got past the gate (openspec lan-bypass-ip-gate): the
+            // Guests page tells the Operator whether they are a guest, on the LAN,
+            // or riding a device cookie. Read-only; ranges live in host config.
+            callerVia = _allowlist.IsApproved(origin.Ip) ? "guest"
+                : LanBypass.Match(origin) != null ? "lan"
+                : _devices.IsValid(Request.Cookies[DeviceTokenService.CookieName]) ? "device"
+                : "none",
+            lanBypass = LanBypass.Cidrs,
             guests = guests.Select(g => new
             {
                 ip = g.Ip,

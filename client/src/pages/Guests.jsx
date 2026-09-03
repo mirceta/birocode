@@ -126,6 +126,12 @@ export default function Guests() {
             </li>
           ))}
         </ul>
+        {data.lanBypass?.length > 0 && (
+          <p className="guests-lan" title={t('guests.lanBypassHint')}>
+            {t('guests.lanBypass', { ranges: data.lanBypass.join(', ') })}
+            {data.callerVia === 'lan' && <span className="guest__you">{t('guests.you')}</span>}
+          </p>
+        )}
       </section>
 
       <section className="guests-group">

@@ -139,3 +139,10 @@
   font-size: 0.78rem;
   color: var(--text-dim, #8a8f98);
 }
+
+/* LAN bypass note (openspec lan-bypass-ip-gate): read-only, host-configured. */
+.guests-lan {
+  margin: 8px 0 0;
+  font-size: 0.85em;
+  color: var(--text-muted, #9aa);
+}
