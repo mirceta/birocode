@@ -64,7 +64,7 @@ export default function AutopilotConsole({ embedded = false }) {
   const [root, setRoot] = useState('overview');
   const [sub, setSub] = useState({ suggestion: 'control', goal: 'agents', tests: 'unit', reference: 'autoarch', drafts: '' });
   const pickSub = useCallback((r, key) => setSub((s) => ({ ...s, [r]: key })), []);
-  const [data, setData] = useState(null); // { enabled, threshold, denyList, agents, log }
+  const [data, setData] = useState(null); // { enabled, threshold, agents, log }
   const [discover, setDiscover] = useState(null);
   const [prompts, setPrompts] = useState(null); // the EDITABLE custom-prompt library
   const [draft, setDraft] = useState({ emoji: '', label: '', text: '' }); // add-prompt form

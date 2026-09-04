@@ -157,10 +157,6 @@ public class AutopilotController : ControllerBase
         // stash IS the queue, and the between-step verification opt-out
         // (null = on, the default posture).
         string? TabId = null, bool? VerifyEnabled = null,
-        // Per-arm deny-list (openspec: advance-queue-loop, D2): the effective
-        // list for THIS arm. Null = global default; an empty list is the
-        // operator's explicit "no deny terms this arm".
-        List<string>? DenyList = null,
         // Per-arm footer-clauses opt-in (openspec: expose-goal-loop-denylist):
         // when true, work-phase driven sends append the chat footer clauses.
         // Null/false = off, today's behavior.
@@ -208,7 +204,7 @@ public class AutopilotController : ControllerBase
                     if (string.IsNullOrWhiteSpace(req.Goal))
                         return BadRequest(new { error = "a goal loop needs a goal" });
                     _loops.StartGoal(req.RepoId, req.Goal.Trim(), req.MaxIterations, req.Mode, pin,
-                        req.DenyList, req.IncludeFooterClauses);
+                        req.IncludeFooterClauses);
                     break;
                 }
                 if (string.Equals(req.Kind, LoopConfigStore.KindQueue, StringComparison.OrdinalIgnoreCase))
@@ -225,7 +221,7 @@ public class AutopilotController : ControllerBase
                     if (stash.Count == 0)
                         return BadRequest(new { error = "the stash is empty — queue a prompt before arming" });
                     _loops.StartQueue(req.RepoId, req.TabId.Trim(), req.VerifyEnabled,
-                        req.MaxIterations, req.Mode, pin, req.DenyList, req.IncludeFooterClauses);
+                        req.MaxIterations, req.Mode, pin, req.IncludeFooterClauses);
                     break;
                 }
                 if (!string.IsNullOrWhiteSpace(req.RecipeId))
@@ -234,7 +230,7 @@ public class AutopilotController : ControllerBase
                         return NotFound(new { error = $"unknown recipe \"{req.RecipeId}\"" });
                     _loops.Start(req.RepoId, recipe.Prompt, recipe.Sentinel,
                         req.MaxIterations ?? recipe.MaxIterations, recipe.Id, recipe.Name, req.Mode, pin,
-                        req.DenyList, req.IncludeFooterClauses);
+                        req.IncludeFooterClauses);
                     break;
                 }
                 if (string.IsNullOrWhiteSpace(req.Prompt))
@@ -427,7 +423,6 @@ public class AutopilotController : ControllerBase
             gateOpen,
             killSwitchEnabled = cfg.Enabled,
             threshold = cfg.Threshold,
-            denyList = gateOpen ? (object)cfg.DenyList : redactedMarker,
             repo = repo is null
                 ? null
                 : new { id = repo.Id, name = repo.Name, path = repo.Path, exists = repo.Exists },
@@ -461,10 +456,6 @@ public class AutopilotController : ControllerBase
                     // step's text and the verify template are prompt text — gated
                     // like the fields above. The binding + counts are status words.
                     queueTabId = loop.QueueTabId,
-                    // Per-arm deny-list (advance-queue-loop, D2): null = the global
-                    // default applies. Terms follow the gate like the global list.
-                    denyList = loop.DenyList is null ? null
-                        : (gateOpen ? (object)loop.DenyList : redactedMarker),
                     // Footer-clauses opt-in (expose-goal-loop-denylist): a status
                     // boolean like queueVerifyEnabled — the clause TEXTS live in the
                     // footer-clauses store, not here, so nothing to gate.
@@ -563,10 +554,6 @@ public class AutopilotController : ControllerBase
         {
             loops = _loops.All(),
             recipes = _recipes.List(),
-            // The global default deny-list (advance-queue-loop, D2): the arm forms
-            // render it as removable chips to compose a per-arm effective list.
-            // Gated like every config disclosure.
-            denyList = _config.Get().DenyList,
             goalTemplates = new
             {
                 work = LoopConfigStore.GoalWorkTemplate,
@@ -809,7 +796,6 @@ public class AutopilotController : ControllerBase
             threshold = cfg.Threshold,
             brain = cfg.Brain,
             brainModel = cfg.BrainModel,
-            denyList = cfg.DenyList,
             agents = _engine.States(),
             loops = _loops.All(),
             recipes = _recipes.List(),

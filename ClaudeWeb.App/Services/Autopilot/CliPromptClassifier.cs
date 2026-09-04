@@ -13,7 +13,7 @@ namespace ClaudeWeb.Services.Autopilot;
 /// out: chosen routine index or abstain + confidence + one-line reason), behind
 /// the exact <see cref="PromptClassifier.Verdict"/> contract the gate already
 /// consumes — the brain proposes, the gate disposes. Threshold, word-scoped
-/// deny-list, kill switch, and operator gate apply to CLI verdicts identically.
+/// kill switch and operator gate apply to CLI verdicts identically.
 ///
 /// <para><b>Off the tick path.</b> A CLI call takes seconds; the engine's 10s
 /// tick must never block on it. <see cref="TryGetOrStart"/> is per-repo
@@ -63,8 +63,7 @@ public class CliPromptClassifier
     /// in-flight. Never blocks.</summary>
     public (PromptClassifier.Verdict? Verdict, bool InFlight) TryGetOrStart(
         string repoId, string message, string snippet, double threshold,
-        IReadOnlyList<string> denyList, IReadOnlyList<PromptClassifier.Routine> routines,
-        string model)
+        IReadOnlyList<PromptClassifier.Routine> routines, string model)
     {
         var slot = _slots.GetOrAdd(repoId, _ => new Slot());
         lock (slot)
@@ -77,7 +76,7 @@ public class CliPromptClassifier
 
         _ = Task.Run(async () =>
         {
-            var v = await ClassifyOnceAsync(message, threshold, denyList, routines, model);
+            var v = await ClassifyOnceAsync(message, threshold, routines, model);
             lock (slot)
             {
                 if (slot.Snippet == snippet) slot.Verdict = v;
@@ -86,17 +85,16 @@ public class CliPromptClassifier
         return (null, true);
     }
 
-    /// <summary>One full classification: CLI call, parse, then the same fences
-    /// the stub applies (deny-list word-scoped, threshold). Falls back to the
+    /// <summary>One full classification: CLI call, parse, then the same fence
+    /// the stub applies (threshold). Falls back to the
     /// stub verdict on any CLI failure, noting the fallback in the reason.</summary>
     private async Task<PromptClassifier.Verdict> ClassifyOnceAsync(
-        string message, double threshold, IReadOnlyList<string> denyList,
-        IReadOnlyList<PromptClassifier.Routine> routines, string model)
+        string message, double threshold, IReadOnlyList<PromptClassifier.Routine> routines, string model)
     {
         // The stub already answers the degenerate cases deterministically — no
         // routines, empty message — without spending a CLI call.
         if (routines.Count == 0 || string.IsNullOrWhiteSpace(message))
-            return _stub.Classify(message, threshold, denyList, routines);
+            return _stub.Classify(message, threshold, routines);
 
         string raw;
         try
@@ -108,13 +106,13 @@ public class CliPromptClassifier
         catch (Exception ex)
         {
             _logger.Error($"[AUTOPILOT] cli brain failed ({ex.Message}) — falling back to the stub");
-            return Fallback(ex.Message, message, threshold, denyList, routines);
+            return Fallback(ex.Message, message, threshold, routines);
         }
 
         if (ParseChoice(raw) is not { } choice)
         {
             _logger.Error("[AUTOPILOT] cli brain output unparseable — falling back to the stub");
-            return Fallback("unparseable output", message, threshold, denyList, routines);
+            return Fallback("unparseable output", message, threshold, routines);
         }
 
         var (index, confidence, reason) = choice;
@@ -125,12 +123,7 @@ public class CliPromptClassifier
         var label = routines[index].Label;
         var conf = Math.Round(Math.Clamp(confidence, 0, 1), 2);
 
-        // The gate's fences apply to CLI verdicts identically (D5): word-scoped
-        // deny-list first (a risk verdict, never pendable), then the threshold.
-        var denyHit = denyList.FirstOrDefault(d => PromptClassifier.ContainsWholeWord(label, d));
-        if (denyHit != null)
-            return new PromptClassifier.Verdict(true, label, conf,
-                $"routine contains deny-listed \"{denyHit}\"", Denied: true);
+        // The gate's threshold applies to CLI verdicts identically (D5).
         if (conf < threshold)
             return new PromptClassifier.Verdict(true, label, conf,
                 $"below threshold ({conf:0.00} < {threshold:0.00}) — cli: {reason}");
@@ -138,10 +131,9 @@ public class CliPromptClassifier
     }
 
     private PromptClassifier.Verdict Fallback(
-        string why, string message, double threshold,
-        IReadOnlyList<string> denyList, IReadOnlyList<PromptClassifier.Routine> routines)
+        string why, string message, double threshold, IReadOnlyList<PromptClassifier.Routine> routines)
     {
-        var s = _stub.Classify(message, threshold, denyList, routines);
+        var s = _stub.Classify(message, threshold, routines);
         return s with { Reason = $"cli fallback ({AutopilotService.Snippet(why)}): {s.Reason}" };
     }
 

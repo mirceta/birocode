@@ -156,7 +156,7 @@ public class ArchAgentTests : IDisposable
     }
 
     private static LoopContext Ctx(LoopConfigStore store, string? reply, bool errored = false, bool stopped = false) =>
-        new(store.Get("@arch")!, reply, errored, stopped, Array.Empty<string>(), 0.9, Array.Empty<PromptClassifier.Routine>());
+        new(store.Get("@arch")!, reply, errored, stopped, 0.9, Array.Empty<PromptClassifier.Routine>());
 
     [Fact]
     public void Arch_loop_holds_without_a_wake_and_proposes_with_one()

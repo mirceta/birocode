@@ -25,7 +25,7 @@ public interface ILoop
 
 /// <summary>Everything a kind may look at: its own instance record, the agent's
 /// trailing assistant message, whether the last run errored, and the global gate
-/// inputs (deny list; classifier threshold + label space, used by the suggestion
+/// inputs (classifier threshold + label space, used by the suggestion
 /// kind only). <c>Verdict</c>, when non-null, is a classification the ENGINE
 /// already obtained off the tick path (the CLI brain's cached result —
 /// fix-suggestion-loop-inert, D5); the suggestion kind then maps it instead of
@@ -38,7 +38,6 @@ public sealed record LoopContext(
     // advance-queue-loop, D1). Checked before RunErrored: a rescue Stop is a
     // user action, never an agent failure.
     bool RunStopped,
-    IReadOnlyList<string> DenyList,
     double Threshold,
     IReadOnlyList<PromptClassifier.Routine> Routines,
     PromptClassifier.Verdict? Verdict = null,
@@ -84,14 +83,8 @@ public abstract record LoopDecision
 /// (advance-queue-loop, D1: a user action is never an agent failure);
 /// (1) run errored → stop <c>error</c>; (2) the
 /// <c>NEEDS_HUMAN:</c> marker → stop <c>escalate</c> (checked before sentinels, so a
-/// reply carrying both means blocked, not done); (3) a deny-listed term in the reply
-/// → stop <c>escalate</c>. All matching is deterministic and case-insensitive — no
-/// classifier, no LLM judge. Deny terms match as WHOLE WORDS (advance-queue-loop,
-/// D2: "pushed" no longer trips "push" — an honest commit-and-push report is not a
-/// risky action), via the same <see cref="PromptClassifier.ContainsWholeWord"/> the
-/// routine deny fence uses. The suggestion kind does NOT use this
+/// reply carrying both means blocked, not done). The suggestion kind does NOT use this
 /// ladder: it never drives a blocked agent (its escalations are non-terminal holds),
-/// and its deny handling is the classifier gate's label check.
 /// </summary>
 public abstract class DrivenLoop : ILoop
 {
@@ -115,11 +108,6 @@ public abstract class DrivenLoop : ILoop
                 return new LoopDecision.Stop("escalate", "needs-human",
                     string.IsNullOrEmpty(question) ? "the agent asked for the human" : question);
             }
-
-            var hit = ctx.DenyList.FirstOrDefault(d =>
-                !string.IsNullOrEmpty(d) && PromptClassifier.ContainsWholeWord(last, d));
-            if (hit != null)
-                return new LoopDecision.Stop("escalate", "deny-list", $"reply mentions deny-listed \"{hit}\"");
         }
 
         return DecideCore(ctx);
@@ -136,9 +124,9 @@ public abstract class DrivenLoop : ILoop
     /// contract docs/loop-driven-agent-convention.md states ("end your reply with …
     /// as the final line"). Containment within that one line, case-insensitive, so
     /// trailing punctuation survives; a reply that merely quotes or mentions the
-    /// token earlier no longer completes a loop. <c>NEEDS_HUMAN:</c> and the
-    /// deny-list stay whole-reply matches above: their false-positive direction is
-    /// "stop and ask a human", the safe side.</summary>
+    /// token earlier no longer completes a loop. <c>NEEDS_HUMAN:</c> stays a
+    /// whole-reply match above: its false-positive direction is "stop and ask a
+    /// human", the safe side.</summary>
     protected static bool FinalLineContains(string? reply, string token)
     {
         if (string.IsNullOrWhiteSpace(reply)) return false;

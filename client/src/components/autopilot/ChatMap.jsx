@@ -101,7 +101,7 @@ function Simulator() {
   const drivers = [
     { key: 'you', cls: 'you', title: 'You · the phone', dot: 'Send a turn', desc: 'A human send from the chat box.', call: 'POST /api/chat' },
     { key: 'cls', cls: 'cls', title: 'Classifier · auto-advance', dot: 'Auto-advance', desc: 'Reads the last reply, picks a routine prompt, sends only if confident, non-risky & gated.', call: 'Tick → TrySend → TryBeginRun' },
-    { key: 'lp',  cls: 'lp',  title: 'Loop mode · resend', dot: 'Resend (loop)', desc: 'Deterministically resends one fixed prompt each turn until a sentinel / cap / deny-list stop.', call: 'Tick → TrySendLoop → TryBeginRun' },
+    { key: 'lp',  cls: 'lp',  title: 'Loop mode · resend', dot: 'Resend (loop)', desc: 'Deterministically resends one fixed prompt each turn until a sentinel / cap / NEEDS_HUMAN stop.', call: 'Tick → TrySendLoop → TryBeginRun' },
   ];
 
   return (

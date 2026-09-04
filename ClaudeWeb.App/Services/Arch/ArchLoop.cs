@@ -25,9 +25,9 @@ public sealed record WakeDraft(string Prompt, int After, int UpTo, IReadOnlyList
 /// repo. Semantics only: the operator stop / errored-run ladder, the
 /// <c>NEEDS_HUMAN:</c> escalation, then "propose one arch turn when a managed repo
 /// started or ended a turn since the watermark, else hold". Deliberately NOT a
-/// <see cref="DrivenLoop"/>: the driven ladder's deny-list check judges the agent's
-/// own REPLY, and the arch agent's replies legitimately talk about pushes and
-/// merges it refused to order — the fence for the arch agent sits on its SENDS
+/// <see cref="DrivenLoop"/>: the arch agent's replies are not word-fenced (openspec
+/// remove-deny-fence); its sends are governed by the arm, the cap, availability and the
+/// audit log
 /// (<see cref="ArchAgentService.SendTask"/>), not on its narration.
 /// </summary>
 public sealed class ArchLoop : ILoop

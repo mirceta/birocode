@@ -5,20 +5,21 @@ using Xunit;
 namespace ClaudeWeb.Tests;
 
 /// <summary>
-/// Coverage for openspec expose-goal-loop-denylist: goal and recipe arms persist a
-/// per-arm deny-list and the footer-clauses opt-in exactly like queue arms, and the
+/// Coverage for openspec expose-goal-loop-denylist (minus the deny-list, removed by
+/// openspec remove-deny-fence): goal and recipe arms persist the footer-clauses opt-in
+/// exactly like queue arms, and the
 /// briefed-send composition appends active footer clauses to work sends only —
 /// never to verification sends, never when the list is empty.
 /// </summary>
-public sealed class GoalLoopDenylistUiTests : IDisposable
+public sealed class GoalLoopFooterOptInTests : IDisposable
 {
     private const string Repo = "repo-1";
     private readonly string _dir;
     private readonly LoopConfigStore _store;
 
-    public GoalLoopDenylistUiTests()
+    public GoalLoopFooterOptInTests()
     {
-        _dir = Path.Combine(Path.GetTempPath(), "cwtest-goal-deny-" + Guid.NewGuid().ToString("N"));
+        _dir = Path.Combine(Path.GetTempPath(), "cwtest-goal-footer-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_dir);
         _store = new LoopConfigStore(new Logger(), _dir);
     }
@@ -29,32 +30,26 @@ public sealed class GoalLoopDenylistUiTests : IDisposable
     }
 
     [Fact]
-    public void GoalArm_PersistsDenyListAndFooterOptIn()
+    public void GoalArm_PersistsFooterOptIn()
     {
-        var s = _store.StartGoal(Repo, "ship it", null,
-            denyList: new List<string> { "push" }, includeFooterClauses: true);
-        Assert.Equal(new[] { "push" }, s.DenyList);
+        var s = _store.StartGoal(Repo, "ship it", null, includeFooterClauses: true);
         Assert.True(s.IncludeFooterClauses);
         // Survives a reload from disk (a restart must re-arm identically).
         var reloaded = new LoopConfigStore(new Logger(), _dir).Get(Repo)!;
-        Assert.Equal(new[] { "push" }, reloaded.DenyList);
         Assert.True(reloaded.IncludeFooterClauses);
     }
 
     [Fact]
-    public void RecipeArm_PersistsDenyListAndFooterOptIn()
+    public void RecipeArm_PersistsFooterOptIn()
     {
-        var s = _store.Start(Repo, "do the ritual", null, null,
-            denyList: new List<string> { "deploy" }, includeFooterClauses: true);
-        Assert.Equal(new[] { "deploy" }, s.DenyList);
+        var s = _store.Start(Repo, "do the ritual", null, null, includeFooterClauses: true);
         Assert.True(s.IncludeFooterClauses);
     }
 
     [Fact]
-    public void UntouchedArm_KeepsNullDenyAndFooterOff()
+    public void UntouchedArm_KeepsFooterOff()
     {
         var s = _store.StartGoal(Repo, "ship it", null);
-        Assert.Null(s.DenyList);
         Assert.False(s.IncludeFooterClauses);
     }
 

@@ -33,15 +33,12 @@ public class PromptClassifier
 {
     /// <param name="Escalate">true = stop and ask the human (hard/unsure/risky/no set).</param>
     /// <param name="Label">the chosen routine prompt when not escalating; on an
-    /// escalation, the best candidate if there was one (below-threshold and
-    /// deny-listed verdicts carry it, no-candidate verdicts carry null) — so a
+    /// escalation, the best candidate if there was one (below-threshold verdicts
+    /// carry it, no-candidate verdicts carry null) — so a
     /// suggest-mode loop can still pend the near-miss (fix-suggestion-loop-inert).</param>
     /// <param name="Confidence">0–1; below the threshold always escalates.</param>
     /// <param name="Reason">short human-readable why, for the audit log / UI.</param>
-    /// <param name="Denied">true when the candidate hit the deny-list — a risk
-    /// verdict, never pendable or sendable in any mode, unlike a mere below-threshold
-    /// escalation.</param>
-    public sealed record Verdict(bool Escalate, string? Label, double Confidence, string Reason, bool Denied = false);
+    public sealed record Verdict(bool Escalate, string? Label, double Confidence, string Reason);
 
     /// <summary>One entry in the brain's label space — one of the user's editable custom
     /// prompts. <paramref name="Label"/> is the prompt text autopilot would send;
@@ -119,8 +116,7 @@ public class PromptClassifier
 
     /// <param name="routines">the label space — built from the user's mined history.</param>
     public Verdict Classify(
-        string? assistantMessage, double threshold,
-        IReadOnlyCollection<string> denyList, IReadOnlyList<Routine> routines)
+        string? assistantMessage, double threshold, IReadOnlyList<Routine> routines)
     {
         if (string.IsNullOrWhiteSpace(assistantMessage))
             return new Verdict(true, null, 0, "no message to act on");
@@ -159,43 +155,10 @@ public class PromptClassifier
         // content hit on a very frequent reply scores highest.
         var confidence = Math.Round(Math.Min(0.99, bestStrength * best.BaseConfidence), 2);
 
-        // Risky-action fence: a deny-listed label always escalates, even if confident
-        // (plans/loop-autopilot-safety.md). Word-boundary matching, not raw substring
-        // (fix-suggestion-loop-inert, D4): "prod" no longer blocks "product", and a
-        // term buried mid-sentence ("…merge to master…") only counts as whole words.
-        // The reason NAMES the matched term so the user can curate the list.
-        var denyHit = denyList.FirstOrDefault(d => ContainsWholeWord(best.Label, d));
-        if (denyHit != null)
-            return new Verdict(true, best.Label, confidence,
-                $"routine contains deny-listed \"{denyHit}\"", Denied: true);
-
         if (confidence < threshold)
             return new Verdict(true, best.Label, confidence, $"below threshold ({confidence:0.00} < {threshold:0.00})");
 
         return new Verdict(false, best.Label, confidence, "confident routine match");
-    }
-
-    /// <summary>Case-insensitive containment with word-boundary edges: the term
-    /// matches only where its alphanumeric ends don't continue into a longer word
-    /// ("deploy" hits "deploy it", not "redeployment"). Multi-word / punctuated
-    /// terms ("reset --hard") match as substrings whose outer edges still respect
-    /// boundaries; a boundary is only required where the term's own edge character
-    /// is alphanumeric, so a term ending in punctuation matches anywhere it appears.</summary>
-    internal static bool ContainsWholeWord(string text, string? term)
-    {
-        if (string.IsNullOrWhiteSpace(term)) return false;
-        var t = term.Trim();
-        var needStart = char.IsLetterOrDigit(t[0]);
-        var needEnd = char.IsLetterOrDigit(t[^1]);
-        for (var idx = text.IndexOf(t, StringComparison.OrdinalIgnoreCase);
-             idx >= 0;
-             idx = idx + 1 > text.Length - t.Length ? -1 : text.IndexOf(t, idx + 1, StringComparison.OrdinalIgnoreCase))
-        {
-            var startOk = !needStart || idx == 0 || !char.IsLetterOrDigit(text[idx - 1]);
-            var endOk = !needEnd || idx + t.Length >= text.Length || !char.IsLetterOrDigit(text[idx + t.Length]);
-            if (startOk && endOk) return true;
-        }
-        return false;
     }
 
     // Lowercased word tokens of length ≥ 3, minus stop-words — the signal carriers.

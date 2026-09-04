@@ -6,10 +6,11 @@ namespace ClaudeWeb.Tests;
 
 /// <summary>
 /// Coverage for openspec advance-queue-loop: the driven-loop ladder's operator-stop
-/// attribution (D1) and whole-word deny matching (D2) via a minimal DrivenLoop,
-/// plus the LoopConfigStore's per-arm deny-list storage (D2) and one-step Resume
-/// with phase reset (D3/D4) against a throwaway temp dir (the ctor's test-only
-/// dir override).
+/// attribution (D1) via a minimal DrivenLoop, plus the LoopConfigStore's one-step
+/// Resume with phase reset (D3/D4) against a throwaway temp dir (the ctor's
+/// test-only dir override). The word-level deny fence that used to sit on this
+/// ladder was removed (openspec remove-deny-fence, 2026-09-03): a reply is judged
+/// only by the operator stop, the run outcome, NEEDS_HUMAN and the kind's own rules.
 /// </summary>
 public sealed class AdvanceQueueLoopTests : IDisposable
 {
@@ -31,32 +32,31 @@ public sealed class AdvanceQueueLoopTests : IDisposable
     }
 
     // A DrivenLoop with inert semantics, so Decide exercises ONLY the shared
-    // safety ladder (stop attribution, NEEDS_HUMAN, deny-list).
+    // safety ladder (stop attribution, NEEDS_HUMAN).
     private sealed class LadderOnlyLoop : DrivenLoop
     {
         public override string Kind => "test";
         protected override LoopDecision DecideCore(LoopContext ctx) => new LoopDecision.Hold("held");
     }
 
-    private LoopContext Ctx(string? reply, string[]? deny = null,
-        bool errored = false, bool stopped = false) =>
+    private LoopContext Ctx(string? reply, bool errored = false, bool stopped = false) =>
         new(_store.Get(Repo) ?? _store.StartQueue(Repo, Tab, null, null),
             reply, errored, stopped,
-            deny ?? Array.Empty<string>(), 0.9, Array.Empty<PromptClassifier.Routine>());
+            0.9, Array.Empty<PromptClassifier.Routine>());
 
     // --- D1: operator stop is never an agent error --------------------------
 
     [Fact]
     public void Operator_stop_resolves_stopped_by_operator()
     {
-        var d = new LadderOnlyLoop().Decide(Ctx("partial reply", stopped: true));
+        var d = new LadderOnlyLoop().Decide(Ctx("half done", errored: false, stopped: true));
         var stop = Assert.IsType<LoopDecision.Stop>(d);
         Assert.Equal("stopped", stop.Status);
         Assert.Equal("by-operator", stop.Reason);
     }
 
     [Fact]
-    public void Operator_stop_wins_over_run_error()
+    public void Operator_stop_wins_over_errored_flag()
     {
         var d = new LadderOnlyLoop().Decide(Ctx(null, errored: true, stopped: true));
         var stop = Assert.IsType<LoopDecision.Stop>(d);
@@ -64,59 +64,34 @@ public sealed class AdvanceQueueLoopTests : IDisposable
     }
 
     [Fact]
-    public void Genuine_run_error_still_reports_error()
+    public void Genuine_error_still_reports_error()
     {
-        var d = new LadderOnlyLoop().Decide(Ctx(null, errored: true));
+        var d = new LadderOnlyLoop().Decide(Ctx(null, errored: true, stopped: false));
         var stop = Assert.IsType<LoopDecision.Stop>(d);
         Assert.Equal("error", stop.Status);
         Assert.Equal("error", stop.Reason);
     }
 
-    // --- D2: whole-word deny matching ---------------------------------------
+    // --- remove-deny-fence: risky words in a reply are NOT a stop ------------
 
     [Theory]
-    [InlineData("I committed and pushed the change.", "push")] // past tense — no whole word
-    [InlineData("Our product is ready.", "prod")]              // embedded substring
-    [InlineData("They were merged upstream weeks ago.", "merge")]
-    public void Deny_term_inside_larger_word_does_not_escalate(string reply, string term)
+    [InlineData("Next I will commit and push to main.")]
+    [InlineData("Running git reset --hard origin/main now.")]
+    [InlineData("Time to DEPLOY this, then merge and delete the branch.")]
+    public void Risky_words_in_a_reply_no_longer_escalate(string reply)
     {
-        var d = new LadderOnlyLoop().Decide(Ctx(reply, new[] { term }));
+        var d = new LadderOnlyLoop().Decide(Ctx(reply));
         Assert.IsType<LoopDecision.Hold>(d);
     }
 
-    [Theory]
-    [InlineData("Next I will commit and push to main.", "push")]
-    [InlineData("Running git reset --hard origin/main now.", "reset --hard")]
-    [InlineData("Time to DEPLOY this.", "deploy")] // case-insensitive
-    public void Whole_word_deny_term_escalates_naming_it(string reply, string term)
+    [Fact]
+    public void Needs_human_still_escalates()
     {
-        var d = new LadderOnlyLoop().Decide(Ctx(reply, new[] { term }));
+        var d = new LadderOnlyLoop().Decide(Ctx("Blocked. NEEDS_HUMAN: which branch do you want?"));
         var stop = Assert.IsType<LoopDecision.Stop>(d);
         Assert.Equal("escalate", stop.Status);
-        Assert.Equal("deny-list", stop.Reason);
-        Assert.Contains(term, stop.Detail);
-    }
-
-    // --- D2: per-arm deny-list storage ---------------------------------------
-
-    [Fact]
-    public void Queue_arm_without_deny_list_stays_null_for_global_default()
-    {
-        var s = _store.StartQueue(Repo, Tab, null, null);
-        Assert.Null(s.DenyList);
-    }
-
-    [Fact]
-    public void Queue_arm_stores_trimmed_deny_list_and_keeps_explicit_empty()
-    {
-        var s = _store.StartQueue(Repo, Tab, null, null,
-            denyList: new List<string> { " merge ", "deploy", "merge" });
-        Assert.NotNull(s.DenyList);
-        Assert.Equal(new[] { "merge", "deploy" }, s.DenyList);
-
-        var empty = _store.StartQueue(Repo, Tab, null, null, denyList: new List<string>());
-        Assert.NotNull(empty.DenyList);
-        Assert.Empty(empty.DenyList!);
+        Assert.Equal("needs-human", stop.Reason);
+        Assert.Contains("which branch", stop.Detail);
     }
 
     // --- D3/D4: resume -------------------------------------------------------
@@ -124,10 +99,10 @@ public sealed class AdvanceQueueLoopTests : IDisposable
     [Fact]
     public void Resume_reactivates_same_instance_with_fresh_budget_and_reset_phase()
     {
-        _store.StartQueue(Repo, Tab, null, 10, denyList: new List<string> { "deploy" });
+        _store.StartQueue(Repo, Tab, null, 10);
         _store.RecordQueueStep(Repo, "step one");           // phase -> verify-owed, sent history grows
         _store.RecordSend(Repo, 1234);                      // iteration counted
-        _store.Resolve(Repo, "escalate", "deny-list", "reply mentions deny-listed \"push\"");
+        _store.Resolve(Repo, "escalate", "needs-human", "which branch?");
 
         var before = _store.Get(Repo)!;
         Assert.False(before.Active);
@@ -141,11 +116,10 @@ public sealed class AdvanceQueueLoopTests : IDisposable
         Assert.Null(resumed.LastStepText);
         Assert.Null(resumed.StopReason);
         Assert.True(resumed.ArmedAt >= before.ArmedAt);
-        // Survivors: the sent-history, the binding, and the per-arm deny-list.
+        // Survivors: the sent-history and the binding.
         Assert.Equal(1, resumed.QueueSent);
         Assert.Equal(new[] { "step one" }, resumed.QueueSentTexts);
         Assert.Equal(Tab, resumed.QueueTabId);
-        Assert.Equal(new[] { "deploy" }, resumed.DenyList);
     }
 
     [Fact]
@@ -155,7 +129,7 @@ public sealed class AdvanceQueueLoopTests : IDisposable
         Assert.Null(_store.Resume(Repo)); // still active
 
         _store.Start("repo-2", "keep going", null, null); // recipe kind
-        _store.Resolve("repo-2", "escalate", "deny-list", "x");
+        _store.Resolve("repo-2", "escalate", "needs-human", "x");
         Assert.Null(_store.Resume("repo-2"));
     }
 }

@@ -1844,29 +1844,6 @@
 
 /* Per-arm deny-list chips (openspec advance-queue-loop, D2): the default
    terms, each droppable for this arm only. */
-.phone__loop-denychips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.phone__loop-denychip {
-  padding: 1px 8px;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-size: 10.5px;
-  cursor: pointer;
-}
-
-.phone__loop-denychip--off {
-  background: none;
-  border-style: dashed;
-  color: var(--color-text-soft);
-  text-decoration: line-through;
-}
-
 .phone__loop-inspect-toggle {
   align-self: flex-start;
   padding: 1px 8px;

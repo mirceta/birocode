@@ -25,7 +25,7 @@ namespace ClaudeWeb.Services.Autopilot;
 /// instance's pending prompt for the human to send from the composer — the loop
 /// advances only when the agent's reply changes.
 ///
-/// The gate (threshold + deny-list + kill switch + operator gate) lives in
+/// The gate (threshold + kill switch + operator gate) lives in
 /// <see cref="AutopilotConfigStore"/>/<see cref="AutopilotGate"/> and is applied
 /// before any send: ambiguity or risk → escalate/hold, never auto-send.
 ///
@@ -561,7 +561,7 @@ public class AutopilotService : BackgroundService
                 && !string.IsNullOrWhiteSpace(lastAssistant))
             {
                 var (v, inFlight) = _cliBrain.TryGetOrStart(
-                    repo.Id, lastAssistant!, snippet, cfg.Threshold, cfg.DenyList, routines, cfg.BrainModel);
+                    repo.Id, lastAssistant!, snippet, cfg.Threshold, routines, cfg.BrainModel);
                 if (inFlight)
                 {
                     Set(repo.Id, new AgentState(repo.Id, repo.Name, true, "idle",
@@ -590,7 +590,7 @@ public class AutopilotService : BackgroundService
             // Pre-arm freshness gate (openspec: fix-loop-arm-freshness): for DRIVEN
             // kinds, a trailing reply older than this arming is the human's previous
             // conversation, not a response to the loop — deciding on it fired the
-            // deny-list/sentinel/NEEDS_HUMAN ladder against stale history (iteration
+            // sentinel/NEEDS_HUMAN ladder against stale history (iteration
             // 0 escalates). Decide as if the agent had not spoken yet, so the first
             // act is sending the stored prompt. A missing timestamp keeps the old
             // behavior; the suggestion kind acts on the current message by design.
@@ -604,7 +604,7 @@ public class AutopilotService : BackgroundService
             // Non-blocking FLAG: capture (docs/loop-driven-agent-convention.md):
             // lift the fresh reply's "FLAG: <sentence>" lines into the ledger
             // BEFORE the kind judges it, so a reply that also stops the loop
-            // (sentinel, NEEDS_HUMAN, deny-list) still gets its flags kept. Never
+            // (sentinel, NEEDS_HUMAN) still gets its flags kept. Never
             // feeds the decision ladder; pre-arm history is never mined (those
             // flags belong to the human's previous conversation, if anything).
             // The channel switch (FlagsStore.Enabled) fences capture and the
@@ -627,10 +627,7 @@ public class AutopilotService : BackgroundService
                 noReply ? null : lastAssistant,
                 !preArm && run?.Status == "error",
                 !preArm && run?.Status == "stopped",
-                // Per-arm deny-list when the instance carries one (advance-queue-loop,
-                // D2); null = the global default. An empty per-arm list is honored —
-                // it is the operator's explicit "no deny terms this arm".
-                loop.DenyList ?? cfg.DenyList, cfg.Threshold, routines, cliVerdict,
+                cfg.Threshold, routines, cliVerdict,
                 // Queue kind (openspec: queue-based-loop, D2): the bound tab's LIVE
                 // stash, read this tick — null when the tab no longer exists (the
                 // kind resolves error). Other kinds never look.
