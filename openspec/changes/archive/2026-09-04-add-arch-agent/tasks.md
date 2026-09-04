@@ -20,13 +20,13 @@
 - [x] 3.3 `send_task(machine, repoId, text, branch?)`: refuse non-`self` machine; deny fence → slot claim → user bubble `actor:"arch"` → run on the dock session → audit kind `arch`; return `sent | busy | claimed | denied(term) | capped`; record `branch` in `assignments/<repoId>.json`
 - [x] 3.4 `remember(path, text)`: write under `memory/` and commit in the home repo; reject paths outside `memory/`
 - [x] 3.5 Every tool call recorded by the action audit under actor `arch`
-- [ ] 3.6 Unit tests: `send_task` on busy returns `busy` and emits nothing; deny term returns `denied` naming the term; claimed target returns `claimed`; non-self machine refused
+- [x] 3.6 Unit tests: `send_task` on busy returns `busy` and emits nothing; claimed target returns `claimed`; non-self machine refused. CLOSED 2026-09-04: the refusal ladder is exercised end to end (real CLI) by `tests/loop-eval/arch.mjs` (busy + claimed controls) and `tests/loop-eval/fleet.mjs` (non-self machine, peer posture); the pure pieces (availability rule table, arch loop ladder, actor attribution) are unit-tested in `ArchAgentTests.cs`. The "deny term" clause is obsolete — the word fence was removed (openspec remove-deny-fence).
 
 ## 4. Send path actor and provenance
 
 - [x] 4.1 Parameterise the loop send path in `AutopilotService` by actor (`loop` default, `arch` for arch sends); the audit line carries `kind: arch`
 - [x] 4.2 Client: dock chat and main chat render a visible actor tag on user bubbles whose `actor` is not `human`/absent (`loop`, `arch`)
-- [ ] 4.3 `tests/chat-systest`: arch send lands in the repo transcript with `actor: "arch"`; send to a busy repo is refused without a bubble
+- [x] 4.3 `tests/chat-systest`: arch send lands in the repo transcript with `actor: "arch"`; send to a busy repo is refused without a bubble. CLOSED 2026-09-04: covered by `tests/loop-eval/arch.mjs` instead (its success criteria assert the `actor: arch` bubble in the dock transcript and that a busy repo is never sent to), plus the real two-machine run of 2026-09-03 (actor `arch@WIN-QVH03HBBI3A` in MONSTER's transcript).
 
 ## 5. Arch loop kind
 
