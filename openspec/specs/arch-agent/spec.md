@@ -88,14 +88,14 @@ the receiving harness's own audit.
 - **THEN** B's dock shows a user bubble tagged `arch@A` with the task text, and the tag is still shown after a reload
 
 ### Requirement: Arch sends are fenced, capped, and audited like loop sends
-The deny-list fence, the drive cap, the suggest/drive mode, and the audit log SHALL
-apply to arch sends unchanged. A send whose text matches a deny term SHALL return
-`denied` naming the term. A send beyond the cap SHALL return `capped`. In suggest mode
-the wake prompt SHALL pre-fill the Arch tab composer instead of being sent.
+The drive cap, the suggest/drive mode, and the audit log SHALL apply to arch sends
+unchanged. The text of a send SHALL NOT be word-filtered (the deny-word fence was
+removed, openspec remove-deny-fence). A send beyond the cap SHALL return `capped`. In
+suggest mode the wake prompt SHALL pre-fill the Arch tab composer instead of being sent.
 
-#### Scenario: Deny term blocks an arch send
-- **WHEN** the arch agent calls `send_task` with text matching a deny term
-- **THEN** the tool returns `denied` with the term, nothing is sent, and the audit records the escalation
+#### Scenario: Risky words do not block an arch send
+- **WHEN** the arch agent calls `send_task` on an armed loop with text such as "commit and push, then merge"
+- **THEN** the send proceeds through the normal availability, slot and audit path
 
 #### Scenario: Suggest mode holds the wake prompt
 - **WHEN** the arch loop is armed in suggest mode and a managed repo publishes `turn.ended`
@@ -309,4 +309,25 @@ a local arch send does, and SHALL be refused with a named status (`not-accepting
 #### Scenario: B's own fence applies
 - **WHEN** B accepts fleet sends and receives a peer send whose text matches B's deny list
 - **THEN** B returns `denied` naming the term and records the escalation in its own audit
+
+### Requirement: The arch conversation is discoverable by any agent via a copyable prompt
+
+The Arch tab SHALL offer a one-click "Copy agent prompt" action that places on the
+clipboard a self-contained prompt telling any agent on this machine how to read the
+arch agent's conversation: the current arch session id, the transcript's absolute
+on-disk path (readable without credentials), and the harness API routes
+(`/api/arch/messages`, `/api/arch/tool-calls`, `/api/arch`) as a fallback. The
+prompt SHALL NOT contain the harness access code; it SHALL instruct the reader to
+obtain it from the operator. `GET /api/arch` SHALL expose the transcript path as
+`session.transcriptPath` (null before the arch agent has ever been armed).
+
+#### Scenario: Operator hands the arch conversation to a repo agent
+
+- **WHEN** the operator clicks "Copy agent prompt" on the Arch tab and pastes the result into any repo agent's chat
+- **THEN** that agent can locate and read the live arch conversation from the transcript path alone, with no prior knowledge of the harness and no credentials
+
+#### Scenario: No password in the clipboard
+
+- **WHEN** the prompt is copied
+- **THEN** it contains the API routes and the header name but not the access code itself
 

@@ -10,7 +10,7 @@ suggest-mode SUGGESTION instance's pending prompt, with its confidence, for
 every new trailing agent message — even when that confidence is below the
 threshold. Only verdicts
 with no candidate at all (no routines configured, no word overlap, empty
-message) or a deny-listed candidate SHALL hold without pending. The
+message) SHALL hold without pending. The
 threshold SHALL continue to gate DRIVE-mode sends unchanged: a below-
 threshold verdict in drive mode holds as an escalation and never sends.
 
@@ -60,23 +60,6 @@ silently skip armed instances on missing repos.
 - **WHEN** a suggestion loop is armed and the repo's folder is deleted or moved
 - **THEN** the next tick resolves the loop as error with reason repo-missing, and the dock shows the terminal state
 
-### Requirement: Deny-list terms match routines as whole words with a named reason
-
-The classifier's deny-list fence SHALL match a deny term against a routine's
-prompt text with word-boundary semantics (case-insensitive), and the
-escalate verdict's reason SHALL name the matched term. A deny-listed routine
-SHALL never be pended or sent in any mode.
-
-#### Scenario: Whole-word deny term still escalates
-
-- **WHEN** the deny-list contains "deploy" and the best-matching routine's text contains the word "deploy"
-- **THEN** the verdict escalates and its reason names "deploy" as the matched deny term
-
-#### Scenario: Substring inside another word no longer blocks
-
-- **WHEN** the deny-list contains "prod" and the best-matching routine's text contains "product" but not "prod" as a word
-- **THEN** the routine is not deny-blocked by that term
-
 ### Requirement: A CLI-backed classifier can replace the stub behind the same contract
 
 The system SHALL support classifying the trailing agent message with a
@@ -87,12 +70,12 @@ the engine's tick path (single-flight per repo; ticks hold while a
 classification is in flight and consume its cached result when done). On CLI
 failure or timeout the stub classifier's verdict SHALL be used and the
 reason SHALL note the fallback. The active classifier SHALL be selectable in
-the autopilot configuration, and threshold, deny-list, kill-switch, and
+the autopilot configuration, and threshold, kill-switch, and
 operator-gate fencing SHALL apply to CLI verdicts identically.
 
 #### Scenario: CLI verdict drives a confident send
 
-- **WHEN** the CLI classifier is selected, a drive-mode suggestion loop is armed, and the CLI returns a routine at confidence above the threshold whose text is not deny-listed
+- **WHEN** the CLI classifier is selected, a drive-mode suggestion loop is armed, and the CLI returns a routine at confidence above the threshold
 - **THEN** the engine sends that routine's prompt through the standard capped, audited send path
 
 #### Scenario: Tick never blocks on the CLI
@@ -123,41 +106,6 @@ items remain in the stash (lossless stop).
 - **WHEN** the agent's run ends with a CLI error that no operator stop caused
 - **THEN** the loop resolves `error` exactly as before
 
-### Requirement: Reply deny-list terms match as whole words
-
-The driven-loop ladder's deny-list check SHALL match each term against the
-reply with word-boundary semantics (case-insensitive), consistent with the
-routine deny fence, and the escalate detail SHALL keep naming the matched
-term. A term embedded inside a larger alphanumeric word is not a hit.
-
-#### Scenario: Past-tense report no longer trips the bare verb
-
-- **WHEN** the deny-list contains "push" and the reply contains "pushed" but never "push" as a whole word
-- **THEN** the reply is not deny-escalated by that term
-
-#### Scenario: Whole-word mention still escalates
-
-- **WHEN** the deny-list contains "push" and the reply contains "commit and push"
-- **THEN** the loop escalates naming "push" as the matched term
-
-### Requirement: The effective deny-list is adjustable per arm
-
-Arming a driven loop SHALL allow the operator to trim or disable deny terms
-for that arm; the instance stores its effective list, the engine enforces it
-for that instance only, and the global default list is unchanged for every
-other arm. An instance without a per-arm list uses the global default. The
-per-arm list SHALL be disclosed with the loop's gated detail.
-
-#### Scenario: Commit-and-push repo drives past item one
-
-- **WHEN** a queue loop is armed with "push" removed from its per-arm deny-list and a step reply honestly reports a push
-- **THEN** the step proceeds to verification instead of deny-escalating
-
-#### Scenario: Default fence untouched elsewhere
-
-- **WHEN** another loop is armed later without touching the deny controls
-- **THEN** its effective deny-list is the unmodified global default
-
 ### Requirement: A stopped queue loop with remainder offers one-step resume
 
 A stopped queue instance SHALL offer a Resume action on its disclosure
@@ -167,9 +115,9 @@ arming, re-activates the same instance from the current stash head with a
 fresh iteration budget, preserves the cumulative sent-history, and is
 recorded in the audit trail with the remaining count.
 
-#### Scenario: Resume after a deny escalate
+#### Scenario: Resume after an escalate
 
-- **WHEN** a queue loop stopped `escalate · deny-list` with 7 items remaining and the operator activates Resume
+- **WHEN** a queue loop stopped `escalate · needs-human` with 7 items remaining and the operator activates Resume
 - **THEN** the same instance re-activates and its next decide proposes the current stash head, with prior sent-history intact
 
 #### Scenario: Resume unavailable when drained or unbound
@@ -906,3 +854,4 @@ misattributed.
 
 - **WHEN** the Queue audit view renders over a ledger containing entries recorded before kind attribution existed
 - **THEN** those entries do not appear in the queue-filtered list, and the raw ledger remains the place to read them
+

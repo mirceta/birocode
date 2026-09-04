@@ -46,8 +46,8 @@
 ## 5. Ship
 
 - [x] 5.1 Docs: README config section; docs/networking.md gate note.
-- [ ] 5.2 Deploy: add `"LanBypassCidrs": ["192.168.0.0/24"]` to live's preserved
-      `.selfdev-build/run-bin/appsettings.json` before/with the swap; confirm a LAN
-      device is admitted in the live log and an internet visitor via .122 still
-      hits the gate.
-- [ ] 5.3 MONSTER: same build + range, then the fleet health probe from .215 answers 200.
+- [x] 5.2 Deploy: key added to live's preserved appsettings.json 2026-09-03; deployed
+      2026-09-04 12:08 from feature/work — startup log: `[IPFILTER] LAN bypass on for
+      192.168.0.0/24`; kept 12:09.
+- [x] 5.3 MONSTER: redeployed by the operator 2026-09-03 ~22:20 with the range; the health
+      probe from .215 answers 200 and the real two-machine arch send passed at 22:38.
