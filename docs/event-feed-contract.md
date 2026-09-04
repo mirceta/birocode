@@ -132,7 +132,7 @@ GET  /api/arch/peer/transcript?repoId=<id>&tail=<n>
   your operator must set **accept fleet sends** on your Arch tab (and your
   autopilot gate must be open). Until both hold, `send` answers
   `not-accepting` and runs nothing.
-- **Your rules apply.** A received task passes *your* deny list, *your*
+- **Your rules apply.** A received task passes *your*
   availability rule (a repo on an operator branch is `claimed`) and *your* run
   slot (`busy` is an answer, never a queue). Nothing is stashed.
 - **Honest provenance.** The task lands in the repo agent's own dock

@@ -239,11 +239,11 @@ public class LoopConfigStore
         public int MaxIterations { get; set; } = DefaultMaxIterations;
         public bool Active { get; set; }
         public int IterationsDone { get; set; }
-        public string Status { get; set; } = "stopped"; // looping | done | escalate | capped | error | stopped
+        public string Status { get; set; } = "stopped"; // looping | done | escalate | capped |that fired (sentinel | needs-human | cap | error | user)| stopped
         public long LastSentAt { get; set; }
         // Why the loop stopped, written by Resolve (additive fields — old loops.json
         // files load with both null). Reason is the machine string naming the condition
-        // that fired (sentinel | needs-human | deny-list | cap | error | user); Detail
+        // that fired (sentinel | needs-human | cap | error | user); Detail
         // is the human-readable specifics (the NEEDS_HUMAN question, the matched deny
         // word, "cap 10/10").
         public string? StopReason { get; set; }
@@ -274,12 +274,6 @@ public class LoopConfigStore
         public bool? VerifyEnabled { get; set; }
         public string? LastStepText { get; set; }
         public int? QueueSent { get; set; }
-        // Per-arm effective deny-list (openspec: advance-queue-loop, D2). Null =
-        // use the global default from autopilot.json; a non-null list (possibly
-        // empty — the operator may trim every term) replaces it for THIS instance
-        // only. The risk decision belongs to the arm, not permanently to the repo:
-        // the next arm starts from the untouched default again. Additive nullable.
-        public List<string>? DenyList { get; set; }
         // Per-arm opt-in to append the chat footer clauses to work-phase driven
         // sends (openspec: expose-goal-loop-denylist). Null/false = off, today's
         // behavior; the clauses themselves are read live at send time from
@@ -317,8 +311,6 @@ public class LoopConfigStore
         string? SessionId,
         string? QueueTabId, bool VerifyEnabled, string? LastStepText, int QueueSent,
         IReadOnlyList<string> QueueSentTexts, IReadOnlyList<int> QueueSentRevs,
-        // Per-arm deny-list (advance-queue-loop, D2): null = global default applies.
-        IReadOnlyList<string>? DenyList = null,
         // Per-arm footer-clauses opt-in (expose-goal-loop-denylist): false = off.
         bool IncludeFooterClauses = false);
 
@@ -342,7 +334,7 @@ public class LoopConfigStore
     /// Replaces this agent's one loop slot — XOR by construction (revision 2, D8).</summary>
     public LoopState Start(string repoId, string prompt, string? sentinel, int? maxIterations,
         string? recipeId = null, string? recipeName = null, string? mode = null, string? sessionId = null,
-        List<string>? denyList = null, bool? includeFooterClauses = null)
+        bool? includeFooterClauses = null)
     {
         lock (_gate)
         {
@@ -352,7 +344,6 @@ public class LoopConfigStore
                 Kind = KindRecipe,
                 Mode = CleanMode(mode),
                 Prompt = prompt,
-                DenyList = CleanDenyList(denyList),
                 IncludeFooterClauses = includeFooterClauses == true ? true : null,
                 Sentinel = string.IsNullOrWhiteSpace(sentinel) ? DefaultSentinel : sentinel.Trim(),
                 MaxIterations = Math.Clamp(maxIterations ?? DefaultMaxIterations, 1, 100),
@@ -376,7 +367,7 @@ public class LoopConfigStore
     /// work + verification prompts from the templates ONCE, stores them verbatim, and
     /// starts in the work phase. The engine only ever sends the stored text.</summary>
     public LoopState StartGoal(string repoId, string goal, int? maxIterations, string? mode = null,
-        string? sessionId = null, List<string>? denyList = null, bool? includeFooterClauses = null)
+        string? sessionId = null, bool? includeFooterClauses = null)
     {
         lock (_gate)
         {
@@ -386,7 +377,6 @@ public class LoopConfigStore
                 Kind = KindGoal,
                 Mode = CleanMode(mode),
                 Goal = goal,
-                DenyList = CleanDenyList(denyList),
                 IncludeFooterClauses = includeFooterClauses == true ? true : null,
                 Prompt = ComposeGoalWorkPrompt(goal),
                 VerifyPrompt = ComposeGoalVerifyPrompt(goal),
@@ -415,7 +405,7 @@ public class LoopConfigStore
     /// reset, ArmedAt stamped, session pinned.</summary>
     public LoopState StartQueue(string repoId, string tabId, bool? verifyEnabled,
         int? maxIterations, string? mode = null, string? sessionId = null,
-        List<string>? denyList = null, bool? includeFooterClauses = null)
+        bool? includeFooterClauses = null)
     {
         lock (_gate)
         {
@@ -427,7 +417,6 @@ public class LoopConfigStore
                 QueueTabId = tabId,
                 VerifyEnabled = verifyEnabled ?? true,
                 QueueSent = 0,
-                DenyList = CleanDenyList(denyList),
                 IncludeFooterClauses = includeFooterClauses == true ? true : null,
                 Phase = PhaseWork,
                 Sentinel = DefaultSentinel,
@@ -600,16 +589,6 @@ public class LoopConfigStore
 
     private static string? Clean(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
-    // Per-arm deny-list normalization (advance-queue-loop, D2): null stays null
-    // ("use the global default"); a provided list is trimmed and de-duplicated but
-    // an EMPTY result is kept — it is the operator's explicit "no deny terms this
-    // arm", distinct from null.
-    private static List<string>? CleanDenyList(List<string>? terms) =>
-        terms?.Select(t => t?.Trim() ?? "")
-              .Where(t => t.Length > 0)
-              .Distinct(StringComparer.OrdinalIgnoreCase)
-              .ToList();
-
     private static string CleanMode(string? mode, string defaultMode = ModeDrive) =>
         string.Equals(mode, ModeSuggest, StringComparison.OrdinalIgnoreCase) ? ModeSuggest
         : string.Equals(mode, ModeDrive, StringComparison.OrdinalIgnoreCase) ? ModeDrive
@@ -635,7 +614,7 @@ public class LoopConfigStore
 
     /// <summary>Re-activates a stopped QUEUE instance in place (openspec:
     /// advance-queue-loop, D3): same record — the sent-history and per-arm settings
-    /// (verify, deny-list, cap, binding) survive — but a FRESH activation: new
+    /// (verify, cap, binding) survive — but a FRESH activation: new
     /// ArmedAt generation (the engine clears its dedup guards on the change),
     /// iteration budget restarted, stop reason cleared, and phase reset to work
     /// (D4 — a dead drive's verify-owed never carries a verification obligation
@@ -716,7 +695,6 @@ public class LoopConfigStore
             e.QueueTabId, e.VerifyEnabled != false, e.LastStepText, e.QueueSent ?? 0,
             e.QueueSentTexts?.ToList() ?? (IReadOnlyList<string>)Array.Empty<string>(),
             e.QueueSentRevs?.ToList() ?? (IReadOnlyList<int>)Array.Empty<int>(),
-            e.DenyList?.ToList(),
             e.IncludeFooterClauses == true);
 
     private void Load()

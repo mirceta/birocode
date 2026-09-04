@@ -9,7 +9,7 @@ import '../../pages/autopilot.css';
 // loop resends one stored ritual prompt each turn until the agent's own
 // LOOP_DONE; a 🎯 GOAL loop drives toward a stated goal and, on the agent's
 // done-claim, sends a verification turn — only GOAL_VERIFIED stops it. Both
-// also stop on NEEDS_HUMAN, a deny-list hit, the iteration cap, or a run
+// also stop on NEEDS_HUMAN, the iteration cap, or a run
 // error. No brain, no LLM judge. One loop per agent, XOR with suggestion
 // arming (server-enforced).
 //
@@ -37,7 +37,6 @@ const STOP_REASON = {
   sentinel: 'agent reported done',
   verified: 'goal verified achieved',
   'needs-human': 'agent needs you',
-  'deny-list': 'risky action mentioned',
   cap: 'iteration cap reached',
   error: 'run error',
   user: 'stopped by you',
@@ -200,16 +199,12 @@ function LoopRow({ agent, loop, recipes, loopAction }) {
 // stash of the bound dock tab, plus an arm form with a tab picker — a repo can
 // hold several dock tabs and the queue is per-tab. Arming an empty stash is
 // refused server-side; the button stays disabled with the reason instead.
-function QueueRow({ agent, loop, tabs, denyDefault = [], loopAction }) {
+function QueueRow({ agent, loop, tabs, loopAction }) {
   const repoTabs = tabs.filter((tb) => tb.repoId === agent.repoId);
   const [tabId, setTabId] = useState('');
   const [verify, setVerify] = useState(true);
   const [cap, setCap] = useState('');
   const [busy, setBusy] = useState(false);
-  // Per-arm deny-list trim (openspec: advance-queue-loop, D2): terms dropped
-  // for THIS arm only. Nothing dropped → the request omits denyList → the
-  // instance follows the global default.
-  const [denyDropped, setDenyDropped] = useState([]);
 
   const isQueue = loop?.kind === 'queue';
   const active = !!loop?.active && isQueue;
@@ -232,9 +227,6 @@ function QueueRow({ agent, loop, tabs, denyDefault = [], loopAction }) {
       mode: 'drive', verifyEnabled: verify,
       maxIterations: Number(cap) >= 1 ? Number(cap) : undefined,
       sessionId: chosen.sessionId || undefined,
-      denyList: denyDropped.length > 0
-        ? denyDefault.filter((term) => !denyDropped.includes(term))
-        : undefined,
     });
   };
 
@@ -276,9 +268,6 @@ function QueueRow({ agent, loop, tabs, denyDefault = [], loopAction }) {
               what it drives on every disclosure surface. */}
           <span className="ap-muted">
             Drives <b>{boundTab?.repoName ?? agent.repoName}</b>
-            {loop.denyList != null && (
-              <> · deny-list this arm: {loop.denyList.length > 0 ? loop.denyList.join(', ') : 'none'}</>
-            )}
           </span>
           <div className="lp-live__meta">
             <span className="lp-stat">
@@ -380,34 +369,6 @@ function QueueRow({ agent, loop, tabs, denyDefault = [], loopAction }) {
                 <input type="checkbox" checked={verify} onChange={(e) => setVerify(e.target.checked)} />
                 Verify each step (agent must answer <code>STEP_VERIFIED</code>) — ~2 turns per item
               </label>
-              {/* Per-arm deny-list chips (advance-queue-loop, D2): drop a term
-                  for this arm only — e.g. "push" on a commit-and-push repo. */}
-              {denyDefault.length > 0 && (
-                <div className="lp-queue-preview">
-                  <span className="lp-field__k">Deny-list for this arm (click a term to drop it)</span>
-                  <div className="lp-denychips">
-                    {denyDefault.map((term) => {
-                      const dropped = denyDropped.includes(term);
-                      return (
-                        <button
-                          key={term} type="button"
-                          className={`lp-mini${dropped ? '' : ' on'}`}
-                          onClick={() => setDenyDropped((prev) =>
-                            dropped ? prev.filter((x) => x !== term) : [...prev, term])}
-                        >
-                          {term}{dropped ? ' (dropped)' : ' ×'}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {denyDropped.length > 0 && (
-                    <span className="ap-muted">
-                      This arm will NOT escalate on: {denyDropped.join(', ')} — the global
-                      default is unchanged for other arms.
-                    </span>
-                  )}
-                </div>
-              )}
               <div className="lp-form__actions">
                 <button className="lp-arm" type="submit" disabled={busy || !chosen || stashLen === 0}>
                   Arm queue loop
@@ -541,7 +502,7 @@ export default function LoopsView({ section = 'agents', data, loopAction, addRec
         loop</b> drives toward a stated goal and, on the agent’s done-claim, sends a
         <b> verification turn</b> — only <code>GOAL_VERIFIED</code> stops it; a <b>🗒️ queue
         loop</b> (its own subtab) drains a dock tab’s prompt stash step by step. All stop when the
-        agent asks for you with <code>NEEDS_HUMAN:</code>, mentions a deny-listed risky action,
+        agent asks for you with <code>NEEDS_HUMAN:</code>,
         or hits the iteration cap — and record <b>why</b> they stopped. Deterministic — no
         brain, no LLM judge. Arming is exclusive per agent (a loop displaces suggestion arming
         and vice versa); sends are fenced by the operator gate and the kill switch, and every
@@ -640,7 +601,7 @@ export default function LoopsView({ section = 'agents', data, loopAction, addRec
         {agents.map((a) => (
           <QueueRow
             key={a.repoId} agent={a} loop={byRepo[a.repoId]} tabs={tabs}
-            denyDefault={data?.denyList ?? []} loopAction={loopAction}
+            loopAction={loopAction}
           />
         ))}
         {agents.length === 0 && <li className="autopilot__empty">No agents yet.</li>}

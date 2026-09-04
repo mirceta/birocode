@@ -6,12 +6,12 @@ namespace ClaudeWeb.Services.Autopilot;
 /// <summary>
 /// Persisted autopilot settings (plans/loop-autopilot.md, plans/loop-autopilot-safety.md):
 /// the global kill switch, the confidence threshold the brain must clear, the set of
-/// per-agent "armed" repos, and the risky-action deny-list. Stored at
+/// per-agent "armed" repos. (The word deny-list was removed 2026-09-03, openspec remove-deny-fence.) Stored at
 /// %APPDATA%\ClaudeWeb\autopilot.json with the same atomic temp+rename write and
 /// never-reseed-on-unreadable load guard as <see cref="Notes.NotesService"/>.
 ///
 /// Slice 2 is suggest-only, so "armed" means "predict + pre-fill for this agent",
-/// not "auto-send" — but the same gate (threshold + deny-list + kill switch) is
+/// not "auto-send" — but the same gate (threshold + kill switch) is
 /// what Slice 3 will reuse to decide whether to actually send.
 /// </summary>
 public class AutopilotConfigStore
@@ -25,11 +25,6 @@ public class AutopilotConfigStore
     public const string BrainCli = "cli";
     public const string BrainStub = "stub";
     public const string DefaultBrainModel = "haiku";
-
-    // Default risky-action fence: a routine prompt whose label hits one of these is
-    // never auto-advanced — it always escalates (plans/loop-autopilot-safety.md).
-    private static readonly string[] DefaultDenyList =
-        { "deploy", "push", "force", "reset --hard", "delete", "drop", "prod", "overwrite", "merge" };
 
     private readonly Logger _logger;
     private readonly string _path;
@@ -54,21 +49,20 @@ public class AutopilotConfigStore
         public bool AutoAdvance { get; set; } = false;      // Slice 3: actually SEND, not just suggest. OFF by default.
         public double Threshold { get; set; } = 0.85;       // min confidence to suggest, else escalate
         public List<string> ArmedRepoIds { get; set; } = new();
-        public List<string> DenyList { get; set; } = DefaultDenyList.ToList();
         // Additive (fix-suggestion-loop-inert, D5): absent in old files → defaults.
         public string? Brain { get; set; }
         public string? BrainModel { get; set; }
     }
 
     public sealed record Snapshot(bool Enabled, bool AutoAdvance, double Threshold,
-        IReadOnlySet<string> ArmedRepoIds, IReadOnlyList<string> DenyList,
+        IReadOnlySet<string> ArmedRepoIds,
         string Brain, string BrainModel);
 
     public Snapshot Get()
     {
         lock (_gate)
             return new Snapshot(_data.Enabled, _data.AutoAdvance, _data.Threshold,
-                _data.ArmedRepoIds.ToHashSet(), _data.DenyList.ToList(),
+                _data.ArmedRepoIds.ToHashSet(),
                 CleanBrain(_data.Brain), string.IsNullOrWhiteSpace(_data.BrainModel) ? DefaultBrainModel : _data.BrainModel!.Trim());
     }
 
@@ -149,7 +143,6 @@ public class AutopilotConfigStore
             var data = JsonSerializer.Deserialize<Data>(File.ReadAllText(_path));
             if (data is null) return;
             data.ArmedRepoIds ??= new();
-            if (data.DenyList is null || data.DenyList.Count == 0) data.DenyList = DefaultDenyList.ToList();
             _data = data;
         }
         catch (Exception ex)

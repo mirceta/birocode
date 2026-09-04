@@ -8,7 +8,7 @@ namespace ClaudeWeb.Services.Autopilot;
 /// prompt (the instance's mode then decides pre-fill vs. send, like every loop).
 /// In SUGGEST mode even a below-threshold near-miss proposes — it only pre-fills
 /// the composer with its honest confidence, and a human sends it, so the threshold
-/// fences DRIVE sends only (fix-suggestion-loop-inert, D1). Risky (deny-listed)
+/// fences DRIVE sends only (fix-suggestion-loop-inert, D1). Risky
 /// and no-candidate verdicts are a non-terminal HOLD in every mode — the instance
 /// stays armed and simply re-evaluates when the agent next speaks; a held
 /// escalation here never disarms anything.
@@ -28,17 +28,17 @@ public sealed class SuggestionLoop : ILoop
 
         // The engine may hand in a verdict it already computed off the tick path
         // (the CLI brain's cached result); otherwise ask the stub synchronously.
-        var v = ctx.Verdict ?? _brain.Classify(ctx.LastAssistant, ctx.Threshold, ctx.DenyList, ctx.Routines);
+        var v = ctx.Verdict ?? _brain.Classify(ctx.LastAssistant, ctx.Threshold, ctx.Routines);
         if (!v.Escalate && !string.IsNullOrWhiteSpace(v.Label))
             return new LoopDecision.Propose(v.Label!, Confidence: v.Confidence);
 
         // Suggest mode always pends the best candidate (fix-suggestion-loop-inert,
         // D1): a below-threshold near-miss still pre-fills the composer with its
         // honest confidence — a human sends every suggest-mode prompt, so the
-        // threshold only fences DRIVE sends. Deny-listed candidates and verdicts
-        // with no candidate at all stay holds; drive mode is unchanged.
+        // threshold only fences DRIVE sends. Verdicts with no candidate at all stay
+        // holds; drive mode is unchanged.
         if (ctx.Instance.Mode == LoopConfigStore.ModeSuggest
-            && !v.Denied && !string.IsNullOrWhiteSpace(v.Label))
+            && !string.IsNullOrWhiteSpace(v.Label))
             return new LoopDecision.Propose(v.Label!, Confidence: v.Confidence);
 
         return new LoopDecision.Hold(v.Reason, Escalate: true, v.Label, v.Confidence);

@@ -68,9 +68,6 @@ function ManifestArms({ loop }) {
           </li>
         )}
         {loop.verifyEnabled != null && <li>verify turns <b>{loop.verifyEnabled ? 'on' : 'off'}</b></li>}
-        {Array.isArray(loop.denyList) && loop.denyList.length > 0 && (
-          <li>deny list: {loop.denyList.map((d) => <code key={d} className="le-man__deny">{d}</code>)}</li>
-        )}
       </ul>
       {loop.goal && (
         <details className="le-man__goal">
@@ -500,14 +497,10 @@ export default function TestInventoryView({ section }) {
               run error; a genuine agent error still reports as an error.
             </li>
             <li>
-              <b>Whole-word deny matching</b> — <code>pushed</code> does not trip a
-              deny term of <code>push</code>, <code>production</code> does not trip
-              <code> prod</code>; the real term escalates and is named in the reason.
-            </li>
-            <li>
-              <b>Per-arm deny storage</b> — no list at arm time stays <code>null</code>
-              (global default applies); a trimmed explicit list — including an explicit
-              empty one — is stored as given.
+              <b>Risky words never stop a loop</b> — a reply that says "push", "deploy" or
+              "reset --hard" holds like any other; only <code>NEEDS_HUMAN:</code>, the
+              operator stop, a run error, the sentinel rules and the cap end a loop
+              (the deny-word fence was removed, openspec remove-deny-fence).
             </li>
             <li>
               <b>Resume semantics</b> — Resume reactivates the <b>same</b> loop instance
@@ -522,7 +515,7 @@ export default function TestInventoryView({ section }) {
             <li>
               <b><code>DrivenLoop.Decide</code> is a pure function</b>
               (<code>ClaudeWeb.App/Services/Autopilot/ILoop.cs</code>): a
-              <code> LoopContext</code> (reply text, errored/stopped flags, deny list)
+              <code> LoopContext</code> (reply text, errored/stopped flags)
               goes in, a <code>LoopDecision</code> comes out — no timers, no CLI, no
               I/O. That seam is deliberate; keep new decision logic inside it.
             </li>
@@ -697,7 +690,7 @@ export default function TestInventoryView({ section }) {
             deterministically instead of waiting on the timer.
           </li>
           <li>
-            <b>Then whole scenarios run in milliseconds</b> with no CLI: deny-list
+            <b>Then whole scenarios run in milliseconds</b> with no CLI: NEEDS_HUMAN
             escalation mid-queue, operator stop between steps, resume after stop,
             drain to done — the same choreography the eval suite proves for real,
             but cheap enough to run on every commit.

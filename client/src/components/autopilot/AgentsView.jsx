@@ -2,7 +2,7 @@ import '../../pages/autopilot.css';
 
 // The "Agents" sub-tab of the AutopilotConsole (plans/autopilot-to-harness.md):
 // the global controls (kill switch / auto-advance / confidence threshold), the
-// read-only risky-action deny-list, and the per-agent status + arm/disarm list.
+// and the per-agent status + arm/disarm list.
 // Lives in its own file so the console stays readable; the console is rendered
 // identically by both the routed tab and the dashboard dock.
 export const BADGE = {
@@ -20,7 +20,6 @@ export default function AgentsView({ data, mutate }) {
   const enabled = data?.enabled ?? true;
   const autoAdvance = data?.autoAdvance ?? false;
   const threshold = data?.threshold ?? 0.85;
-  const denyList = data?.denyList ?? [];
   const brain = data?.brain ?? 'cli';
   const brainModel = data?.brainModel ?? 'haiku';
 
@@ -70,13 +69,6 @@ export default function AgentsView({ data, mutate }) {
           <button onClick={() => mutate({ threshold: +(threshold - 0.05).toFixed(2) })} disabled={threshold <= 0.5}>−</button>
           <button onClick={() => mutate({ threshold: +(threshold + 0.05).toFixed(2) })} disabled={threshold >= 0.99}>+</button>
         </span>
-      </div>
-
-      <div className="ap-deny">
-        Always escalates:{' '}
-        {denyList.length
-          ? denyList.map((d, i) => <code key={i}>{d}</code>)
-          : <span className="ap-muted">—</span>}
       </div>
 
       <ul className="ap-agents">

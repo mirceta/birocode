@@ -56,7 +56,7 @@ export default function AutopilotOverviewView() {
             <b> 🎯 goal loop</b> takes your free-text goal and, on the
             agent&apos;s done-claim, sends a <b>verification turn</b> — only
             <code> GOAL_VERIFIED</code> stops it as done. Both escalate on
-            <code> NEEDS_HUMAN:</code> or a deny-listed word, stop at the
+            <code> NEEDS_HUMAN:</code>, stop at the
             iteration cap, and record why they stopped. Arming is
             <b> exclusive per agent</b> and lives in the dock card&apos;s
             unified control (type picker, prompt inspection, one Disarm),
@@ -87,8 +87,8 @@ export default function AutopilotOverviewView() {
           </li>
           <li>
             <b>Safety posture</b> — the whole API sits behind the operator gate
-            (host PC only, off by default), with the deny-list, hard iteration
-            caps and the audit trail on top. This Overview is the one surface
+            (host PC only, off by default), with hard iteration caps and the
+            audit trail on top. This Overview is the one surface
             the gate never hides.
           </li>
         </ul>
@@ -192,9 +192,7 @@ export default function AutopilotOverviewView() {
               <li>
                 The arm form <b>names its binding</b> (&quot;drives &lt;repo&gt; ·
                 N queued&quot; — the first prompt fires when the agent is next
-                free), and the <b>deny-list is trimmable per arm</b> (whole-word
-                matching; drop <code>push</code> for a commit-and-push repo
-                without touching the global default).
+                free).
               </li>
               <li>
                 A stopped queue with items left offers one-tap <b>Resume</b> —
@@ -207,7 +205,7 @@ export default function AutopilotOverviewView() {
         </div>
         <p className="ca-sec__foot">
           All three modes run behind the unchanged safety posture — the host-only
-          operator gate, deny-list escalation, hard caps and the append-only
+          operator gate, hard caps and the append-only
           audit trail.
         </p>
       </section>

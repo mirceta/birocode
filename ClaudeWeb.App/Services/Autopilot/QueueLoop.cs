@@ -14,7 +14,7 @@ namespace ClaudeWeb.Services.Autopilot;
 /// human, not get buried under the next prompt. An empty stash resolves
 /// <c>done · drained</c>. <c>LOOP_DONE</c> in step replies is deliberately ignored
 /// (a queue is the operator's ritual, not the agent's claim); the shared
-/// <see cref="DrivenLoop"/> ladder (errored run / <c>NEEDS_HUMAN:</c> / deny-list)
+/// <see cref="DrivenLoop"/> ladder (errored run / <c>NEEDS_HUMAN:</c>)
 /// still stops it before the next item is unloaded.
 /// </summary>
 public sealed class QueueLoop : DrivenLoop

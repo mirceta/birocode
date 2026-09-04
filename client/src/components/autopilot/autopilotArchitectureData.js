@@ -43,7 +43,7 @@ export const AUTOPILOT_MAP = {
     { id: 'B_engine', label: 'Engine · background', box: 'sub', grp: 'auto', p: 'T_backend',
       role: 'The tick loop + its state', desc: 'A hosted BackgroundService that wakes every 10s and, per repo, decides whether to drive a turn. Holds the gate singleton and the loop/config stores it consults.' },
     { id: 'B_brain', label: 'Decision · brain', box: 'sub', grp: 'auto', p: 'T_backend',
-      role: 'Picks a prompt — or escalates', desc: 'The classifier path: by default a one-shot Claude CLI call (fast model, off the tick path) that picks one of your routine prompts or abstains; a keyword-overlap stub is the fallback and a config choice. Both are gated by the confidence threshold and the deny-list.' },
+      role: 'Picks a prompt — or escalates', desc: 'The classifier path: by default a one-shot Claude CLI call (fast model, off the tick path) that picks one of your routine prompts or abstains; a keyword-overlap stub is the fallback and a config choice. Both are gated by the confidence threshold.' },
     { id: 'B_runs', label: 'Run ownership · slot', box: 'sub', grp: 'backend', p: 'T_backend',
       role: 'The single writer slot', desc: 'The same RunSessionService + builder slot a human chat claims. The autopilot calls the identical TryBeginRun, so it can never run concurrently with you on one repo.' },
 
@@ -95,12 +95,8 @@ export const AUTOPILOT_MAP = {
     // ---- backend tier: brain ----
     { id: 'brain', label: 'CliPromptClassifier + stub', x: 620, y: 110, grp: 'auto', p: 'B_brain',
       role: 'Routes to one of YOUR prompts — or abstains',
-      desc: 'Default brain (Brain:"cli"): one background claude -p call per new agent message (single-flight per repo; ticks hold with "classifying…" and never block) that picks a routine index or abstains — it can never introduce free text. On CLI failure the word-overlap stub answers and the reason notes the fallback. Both return Verdict(Escalate, Label, Confidence, Reason): below threshold → escalate (suggest mode still pre-fills the near-miss); deny-listed → escalate even if confident.',
+      desc: 'Default brain (Brain:"cli"): one background claude -p call per new agent message (single-flight per repo; ticks hold with "classifying…" and never block) that picks a routine index or abstains — it can never introduce free text. On CLI failure the word-overlap stub answers and the reason notes the fallback. Both return Verdict(Escalate, Label, Confidence, Reason): below threshold → escalate (suggest mode still pre-fills the near-miss).',
       src: 'ClaudeWeb.App/Services/Autopilot/CliPromptClassifier.cs' },
-    { id: 'deny', label: 'deny-list', x: 620, y: 250, grp: 'backend', kind: 'slot', p: 'B_brain',
-      role: 'The risky-word fence (shared)',
-      desc: 'deploy · push · force · reset --hard · delete · drop · prod · overwrite · merge. A term hits a routine only as a WHOLE WORD ("prod" no longer blocks "production") and the escalate reason names the matched term. Hit by a classifier label → escalate (never pended or sent); hit in a loop reply → the loop escalates and stops.',
-      src: 'ClaudeWeb.App/Services/Autopilot/AutopilotConfigStore.cs' },
 
     // ---- backend tier: run ownership ----
     { id: 'runs', label: 'RunSessionService.cs', x: 300, y: 500, grp: 'backend', p: 'B_runs',
@@ -118,7 +114,7 @@ export const AUTOPILOT_MAP = {
     { id: 'f_gate', label: 'autopilot-gate.json', x: 800, y: -20, grp: 'store', kind: 'db', p: 'T_disk',
       role: 'Persisted gate state', desc: 'Survives restarts. Written only by AutopilotGate (host-driven).' },
     { id: 'f_cfg', label: 'autopilot.json', x: 800, y: 120, grp: 'store', kind: 'db', p: 'T_disk',
-      role: 'Persisted global settings', desc: 'Kill switch, auto-advance, threshold, armed set, deny-list.' },
+      role: 'Persisted global settings', desc: 'Kill switch, auto-advance, threshold, armed set.' },
     { id: 'f_loops', label: 'loops.json', x: 800, y: 260, grp: 'store', kind: 'db', p: 'T_disk',
       role: 'Persisted per-repo loops', desc: 'Atomic temp+rename writes; never reseeded on an unreadable load.' },
     { id: 'f_audit', label: 'autopilot-audit.jsonl', x: 800, y: 400, grp: 'store', kind: 'db', p: 'T_disk',
@@ -137,7 +133,6 @@ export const AUTOPILOT_MAP = {
     { s: 'tick', t: 'brain', label: 'else: classify last reply' },
     { s: 'brain', t: 'cfg', label: 'threshold · armed', rel: 'read' },
     { s: 'cfg', t: 'f_cfg', label: 'autopilot.json' },
-    { s: 'brain', t: 'deny', label: 'risky label → escalate', rel: 'reject' },
     { s: 'tick', t: 'runs', label: 'TrySend / TrySendLoop → TryBeginRun' },
     { s: 'runs', t: 'builder', label: 'claims writer slot' },
     { s: 'runs', t: 'claude', label: 'RunAsync · spawn detached', rel: 'spawn' },
@@ -151,7 +146,7 @@ export const AUTOPILOT_MAP = {
 
 // ───────────────────────── 2 · DECISION PER TURN (loop mode) ─────────────────────────
 // The deterministic loop decision, in the EXACT order HandleLoop() runs it: errored →
-// sentinel(done) → NEEDS_HUMAN(escalate) → deny-list(escalate) → cap(capped) → else
+// sentinel(done) → NEEDS_HUMAN(escalate) → cap(capped) → else
 // resend. Every outcome except "resend" is terminal (the loop stops, Active=false),
 // and each resolution records StopReason + StopDetail — the "why did it stop" readout.
 export const LOOP_FLOW = {
@@ -175,9 +170,6 @@ export const LOOP_FLOW = {
     { id: 'c_human', label: 'NEEDS_HUMAN:?', x: 470, y: 290, grp: 'auto',
       role: 'reply contains the escalation marker',
       desc: 'The looped-agent contract (docs/loop-driven-agent-convention.md): a driven agent blocked on a decision only the human can make ends with "NEEDS_HUMAN: <question>". The question is captured into StopDetail and shown on the dock badge.' },
-    { id: 'c_deny', label: 'deny-list hit?', x: 470, y: 400, grp: 'auto',
-      role: 'risky word in the reply',
-      desc: 'deploy · push · force · reset --hard · delete · drop · prod · overwrite · merge. The same fence the classifier uses — the backstop for agents that ignore the contract. StopDetail records the matched word.' },
     { id: 'escalate', label: '■ escalate', x: 700, y: 330, grp: 'actor', kind: 'actor',
       role: 'Resolve(repo, "escalate", reason, detail)', desc: 'Terminal. A blocked or risky reply is never auto-continued — the loop stops and waits for a human, recording WHY (needs-human question or matched deny word).' },
     { id: 'c_cap', label: 'cap reached?', x: 470, y: 510, grp: 'auto',
@@ -197,9 +189,7 @@ export const LOOP_FLOW = {
     { s: 'c_done', t: 'done', label: 'yes' },
     { s: 'c_done', t: 'c_human', label: 'no' },
     { s: 'c_human', t: 'escalate', label: 'yes', rel: 'reject' },
-    { s: 'c_human', t: 'c_deny', label: 'no' },
-    { s: 'c_deny', t: 'escalate', label: 'yes', rel: 'reject' },
-    { s: 'c_deny', t: 'c_cap', label: 'no' },
+    { s: 'c_human', t: 'c_cap', label: 'no' },
     { s: 'c_cap', t: 'capped', label: 'yes' },
     { s: 'c_cap', t: 'resend', label: 'no → resend' },
     { s: 'resend', t: 'read', label: 'next tick · after the reply', rel: 'read' },

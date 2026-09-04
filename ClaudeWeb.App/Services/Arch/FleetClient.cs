@@ -159,7 +159,7 @@ public class FleetClient
     // ---- send + transcript ------------------------------------------------------------
 
     /// <summary>Deliver a task to a repo agent on a peer. The caller has already
-    /// applied this harness's own checks (armed, managed, allow-sends, deny list);
+    /// applied this harness's own checks (armed, managed, allow-sends);
     /// the peer applies its own and answers with the shared outcome vocabulary.</summary>
     public ArchAgentService.ToolOutcome Send(string sourceId, string repoId, string text, string? branch, string from)
     {
