@@ -144,19 +144,37 @@ availability so a misconfigured host is explained rather than silent.
 - **WHEN** the End User submits a browser-mode prompt while another repo's browser run is active
 - **THEN** the chat shows the rejection message naming the busy repo
 
-
 ### Requirement: User bubbles carry the sending actor
 Every user message emitted into a repo's conversation SHALL carry an `actor` value
 identifying who sent it: `human` for Operator and End User sends (implied when
-absent), `loop` for autopilot loop sends, and `arch` for arch agent sends. The dock
+absent), `loop` for autopilot loop sends, `arch` for local arch agent sends, and
+`arch@<machine>` for tasks received from a fleet arch on another harness. The dock
 and chat surfaces SHALL render a visible tag for any non-human actor on the bubble,
-in the same position a human message occupies, so provenance is readable in the
-repo agent's own transcript.
+styling `arch@<machine>` like `arch`.
 
-#### Scenario: Arch send is tagged in the dock
-- **WHEN** the arch agent sends a task to a repo
-- **THEN** the repo's conversation shows a user bubble with an `arch` tag, and the repo agent's reply follows it as for any user message
+#### Scenario: Fleet send is tagged with its machine
+- **WHEN** a fleet arch on machine A sends a task to a repo on this harness
+- **THEN** the bubble shows the tag `arch@A` in the arch style
 
-#### Scenario: Human send has no tag
-- **WHEN** the Operator sends from the composer
-- **THEN** the bubble renders without an actor tag
+### Requirement: Choose the model for a chat turn
+
+The chat composer SHALL offer a model dropdown (capability `modelSelector`)
+listing the supported Claude models by friendly label. The selection is stored
+device-locally (`claudeweb_model`) and passed verbatim to the CLI as
+`--model`; when no selection is saved, the first list entry is the default.
+The list SHALL lead with the current recommended default model
+(`claude-fable-5-1`, "Fable 5.1").
+
+#### Scenario: Default model on a fresh device
+
+- **GIVEN** a device with no saved model choice
+- **WHEN** the user opens the chat composer
+- **THEN** the model dropdown shows "Fable 5.1" selected, and a sent turn
+  runs with `--model claude-fable-5-1`
+
+#### Scenario: Saved choice wins
+
+- **GIVEN** a device that previously picked another listed model
+- **WHEN** the user opens the chat composer
+- **THEN** the saved model stays selected and is used for the next turn
+
