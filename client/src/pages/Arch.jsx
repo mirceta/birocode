@@ -89,7 +89,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full' }
   // Managed agents on OTHER harnesses (openspec: add-fleet-arch-agent), as
   // keys "sourceId/repoId" — the same shape the server persists.
   const [fleetDraft, setFleetDraft] = useState([]);
-  const [cap, setCap] = useState(6);
+  const [cap, setCap] = useState(0); // 0 = no cap (openspec arch-standing-loop)
   const [mode, setMode] = useState('drive');
   // Lanes, like a repo dock's Builder | Ask | … row — the arch agent has three:
   // the conversation, its Tools (the harness MCP surface) and the History of
@@ -397,8 +397,8 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full' }
               </select>
             </label>
             <label>
-              cap
-              <input type="number" min={1} max={100} value={cap} onChange={(e) => setCap(Number(e.target.value) || 1)} disabled={armed} />
+              cap (0 = none)
+              <input type="number" min={0} max={100} value={cap} onChange={(e) => setCap(Math.max(0, Number(e.target.value) || 0))} disabled={armed} title="0 = no cap: the arch agent stays armed until you stop it" />
             </label>
           </div>
           <div className="arch__dim">
@@ -568,6 +568,9 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full' }
         {!state && <div className="arch__banner arch__banner--loading" data-loading>Loading the arch state…</div>}
         {state && !state.gateOpen && <div className="arch__banner">Autopilot is disabled by the operator (host GUI). The arch agent cannot act until the gate is open.</div>}
         {error && <div className="arch__banner arch__banner--err">{error}</div>}
+        {armed && state?.engine?.decision === 'escalate' && (
+          <div className="arch__banner" data-waiting>⏸ Waiting for you: {state.engine.label || state.engine.reason}. Reply in the conversation to continue — the loop stays armed and wake-ups from other repos still arrive.</div>
+        )}
         <div className="arch__overview" data-overview>{sideCards}</div>
       </div>
     );
@@ -658,6 +661,9 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full' }
         {state && !state.gateOpen && <div className="arch__banner">Autopilot is disabled by the operator (host GUI). The arch agent cannot act until the gate is open.</div>}
         {state?.gateOpen && state?.killSwitch === false && <div className="arch__banner">The autopilot kill switch is off: the arch loop is paused.</div>}
         {error && <div className="arch__banner arch__banner--err">{error}</div>}
+        {armed && state?.engine?.decision === 'escalate' && (
+          <div className="arch__banner" data-waiting>⏸ Waiting for you: {state.engine.label || state.engine.reason}. Reply in the conversation to continue — the loop stays armed and wake-ups from other repos still arrive.</div>
+        )}
         {lane === 'tools' ? (
           <ArchToolsPanel />
         ) : lane === 'fleet' ? (

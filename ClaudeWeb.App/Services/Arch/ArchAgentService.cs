@@ -44,7 +44,7 @@ public class ArchAgentService : IArchWakeSource
     public const string AuditKind = "arch";
     public const string AuditOutcomeSend = "arch";
     public const string AuditOutcomeTool = "arch-tool";
-    public const string RoleVersionMarker = "<!-- arch-role v3 -->";
+    public const string RoleVersionMarker = "<!-- arch-role v4 -->";
 
     /// <summary>Availability values (D4). <see cref="Unreachable"/> is the fleet
     /// addition (openspec add-fleet-arch-agent, D4): a remote agent whose harness
@@ -314,6 +314,9 @@ public class ArchAgentService : IArchWakeSource
         7. **Reply briefly** after each wake-up: what you did, what you are waiting for. When
            everything the Operator asked for is done, say so plainly. If you are blocked on
            the Operator, end your reply with a line starting with `NEEDS_HUMAN:` and the question.
+           You stay armed while the question waits: the harness keeps waking you for the
+           other repos, so carry on with them, and do not repeat a question unless something
+           changed. The Operator's answer arrives as a normal message in this conversation.
         """;
 
     /// <summary>The structural fence written to <c>.claude/settings.json</c> in the
@@ -1503,6 +1506,7 @@ public class ArchAgentService : IArchWakeSource
         var sessionId = ResolveArchSessionId();
         var sendText = text.Trim();
         _loops.SetPending(ReservedId, null);
+        ResumeLoopIfStopped();
         _logger.Info($"[ARCH] operator -> arch (session {(sessionId is null ? "new" : Short(sessionId))})");
         _ = Task.Run(async () =>
         {
@@ -1525,6 +1529,23 @@ public class ArchAgentService : IArchWakeSource
             }
         });
         return (true, "", session);
+    }
+
+    /// <summary>The Operator's message is the resume (openspec arch-standing-loop): a loop
+    /// that stopped as escalate/capped comes back armed in place, with the watermark moved
+    /// to now so the events that piled up meanwhile are not replayed as one giant wake.
+    /// A loop the Operator stopped, or that errored, stays stopped.</summary>
+    public bool ResumeLoopIfStopped()
+    {
+        var loop = _loops.Get(ReservedId);
+        if (loop is null || loop.Active || loop.Status is not ("escalate" or "capped")) return false;
+        var (_, lastSeq) = _collector.ReadEvents(int.MaxValue);
+        _state.SetWatermark(lastSeq);
+        lock (_wakeGate) _draft = null;
+        var s = _loops.ResumeArch(ReservedId);
+        if (s is null) return false;
+        _logger.Info($"[ARCH] loop resumed by the operator's message ({s.Mode}, cap {s.MaxIterations}) — watermark {lastSeq}");
+        return true;
     }
 
     /// <summary>Arm (or re-arm) the arch loop: bootstrap the home, pin the

@@ -108,7 +108,7 @@ public class ArchController : ControllerBase
                 stopDetail = loop.StopDetail, pendingPrompt = _gate.Enabled ? loop.PendingPrompt : null,
                 sessionId = loop.SessionId,
             },
-            engine = engine is null ? null : new { decision = engine.Decision, reason = engine.Reason, at = engine.UpdatedAt },
+            engine = engine is null ? null : new { decision = engine.Decision, reason = engine.Reason, label = engine.Label, at = engine.UpdatedAt },
             managedRepoIds = managed,
             managedFleet = _arch.ManagedFleet(),
             repos = _repos.GetAll().Select(r => new { id = r.Id, name = r.Name, exists = r.Exists, isSelf = r.IsSelf }),

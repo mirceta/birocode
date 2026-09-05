@@ -490,8 +490,8 @@ public class LoopConfigStore
 
     /// <summary>Arms (or re-arms) the ARCH loop (openspec: add-arch-agent, D8): the
     /// same record shape as every kind — mode, cap, pin, counters — under the
-    /// reserved key. Drive by default; the cap defaults low (6) because every
-    /// arch turn fans out into repo turns.</summary>
+    /// reserved key. Drive by default; UNCAPPED by default (openspec arch-standing-loop:
+    /// the arch agent is a standing coordinator, a cap is the Operator's opt-in).</summary>
     public LoopState StartArch(string key, string? mode, int? maxIterations, string? sessionId)
     {
         lock (_gate)
@@ -503,7 +503,7 @@ public class LoopConfigStore
                 Mode = CleanMode(mode, defaultMode: ModeDrive),
                 Prompt = "",
                 Sentinel = "",
-                MaxIterations = maxIterations is { } m ? Math.Clamp(m, 1, 100) : 6,
+                MaxIterations = maxIterations is { } m ? Math.Clamp(m, 0, 100) : 0,
                 Active = true,
                 ArmedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                 IterationsDone = 0,
@@ -603,7 +603,7 @@ public class LoopConfigStore
             if (!_data.Loops.TryGetValue(repoId, out var e)) return null;
             if (prompt != null) e.Prompt = prompt;
             if (!string.IsNullOrWhiteSpace(sentinel)) e.Sentinel = sentinel.Trim();
-            if (maxIterations is int cap) e.MaxIterations = Math.Clamp(cap, 1, 100);
+            if (maxIterations is int cap) e.MaxIterations = Math.Clamp(cap, e.Kind == KindArch ? 0 : 1, 100);
             Save();
             return ToState(repoId, e);
         }
@@ -611,6 +611,31 @@ public class LoopConfigStore
 
     /// <summary>Stops a loop by the user's hand (the Stop button).</summary>
     public LoopState? Stop(string repoId) => Resolve(repoId, "stopped", "user", "stopped by the user");
+
+    /// <summary>Re-activates the ARCH instance in place after it stopped as <c>escalate</c>
+    /// or <c>capped</c> (openspec arch-standing-loop): the Operator's message in the arch
+    /// chat is the resume. Same mode and cap, a fresh arming generation (the engine's
+    /// pre-arm freshness gate then ignores the old reply), iteration budget restarted.
+    /// A loop the Operator stopped, or that errored, is NOT resumed — null.</summary>
+    public LoopState? ResumeArch(string key)
+    {
+        lock (_gate)
+        {
+            if (!_data.Loops.TryGetValue(key, out var e) || e.Kind != KindArch || e.Active) return null;
+            if (e.Status is not ("escalate" or "capped")) return null;
+            e.Active = true;
+            e.Status = "looping";
+            e.StopReason = null;
+            e.StopDetail = null;
+            e.PendingPrompt = null;
+            e.ArmedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            e.IterationsDone = 0;
+            e.LastSentAt = 0;
+            Save();
+            _logger.Info($"[LOOP] arch loop resumed by the operator ({e.Mode}, cap {e.MaxIterations})");
+            return ToState(key, e);
+        }
+    }
 
     /// <summary>Re-activates a stopped QUEUE instance in place (openspec:
     /// advance-queue-loop, D3): same record — the sent-history and per-arm settings

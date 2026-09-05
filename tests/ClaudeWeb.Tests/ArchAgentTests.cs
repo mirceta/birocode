@@ -176,7 +176,7 @@ public class ArchAgentTests : IDisposable
     }
 
     [Fact]
-    public void Arch_loop_ladder_stops_on_operator_stop_error_and_needs_human()
+    public void Arch_loop_ladder_stops_on_operator_stop_and_error_only()
     {
         var store = new LoopConfigStore(new Logger(), _dir);
         store.StartArch("@arch", "suggest", 3, "sess");
@@ -186,10 +186,60 @@ public class ArchAgentTests : IDisposable
         Assert.Equal("stopped", stopped.Status);
         var errored = Assert.IsType<LoopDecision.Stop>(loop.Decide(Ctx(store, "…", errored: true)));
         Assert.Equal("error", errored.Status);
-        var esc = Assert.IsType<LoopDecision.Stop>(loop.Decide(Ctx(store, "Done.\nNEEDS_HUMAN: which repo first?")));
-        Assert.Equal("escalate", esc.Status);
-        Assert.Equal("needs-human", esc.Reason);
-        Assert.Contains("which repo first", esc.Detail);
+        // A question with a wake pending still proposes: other repos are not blocked by it.
+        var propose = Assert.IsType<LoopDecision.Propose>(loop.Decide(Ctx(store, "Done.\nNEEDS_HUMAN: which repo first?")));
+        Assert.Equal("x", propose.Prompt);
+    }
+
+    [Fact]
+    public void Arch_loop_holds_escalated_on_needs_human_instead_of_stopping()
+    {
+        // openspec arch-standing-loop: asking the Operator is a hold, not a stop — the loop
+        // stays armed, the question is the label, and a reply without the marker clears it.
+        var store = new LoopConfigStore(new Logger(), _dir);
+        store.StartArch("@arch", null, null, null);
+        var loop = new ArchLoop(new FakeWake());
+
+        var hold = Assert.IsType<LoopDecision.Hold>(loop.Decide(Ctx(store, "Done.\nNEEDS_HUMAN: which repo first?")));
+        Assert.True(hold.Escalate);
+        Assert.Equal("which repo first?", hold.Label);
+        Assert.StartsWith(ArchLoop.WaitingPrefix, hold.Reason);
+
+        var idle = Assert.IsType<LoopDecision.Hold>(loop.Decide(Ctx(store, "Understood, sending to birocode first.")));
+        Assert.False(idle.Escalate);
+        Assert.Null(ArchLoop.PendingQuestion(null));
+        Assert.Null(ArchLoop.PendingQuestion("all good"));
+    }
+
+    [Fact]
+    public void Arch_loop_is_uncapped_by_default_and_resumes_after_an_escalate()
+    {
+        var store = new LoopConfigStore(new Logger(), _dir);
+        Assert.Equal(0, store.StartArch("@arch", null, null, null).MaxIterations);
+        Assert.Equal(0, store.StartArch("@arch", null, 0, null).MaxIterations);
+        Assert.Equal(4, store.StartArch("@arch", null, 4, null).MaxIterations);
+        Assert.Equal(0, store.Update("@arch", null, null, 0)!.MaxIterations);
+
+        // escalate → the Operator's message resumes it in place
+        store.Resolve("@arch", "escalate", "needs-human", "which repo first?");
+        Assert.False(store.Get("@arch")!.Active);
+        var resumed = store.ResumeArch("@arch");
+        Assert.NotNull(resumed);
+        Assert.True(resumed!.Active);
+        Assert.Equal("looping", resumed.Status);
+        Assert.Null(resumed.StopReason);
+        Assert.Null(store.ResumeArch("@arch")); // already active
+
+        // capped → resumes too
+        store.Resolve("@arch", "capped", "cap", "cap 4/4 reached");
+        Assert.NotNull(store.ResumeArch("@arch"));
+
+        // the Operator's own Stop, or an error, stays stopped
+        store.Stop("@arch");
+        Assert.Null(store.ResumeArch("@arch"));
+        store.StartArch("@arch", null, null, null);
+        store.Resolve("@arch", "error", "error", "the turn errored");
+        Assert.Null(store.ResumeArch("@arch"));
     }
 
     [Fact]
@@ -460,6 +510,7 @@ public class ArchAgentTests : IDisposable
         Assert.Contains("list_machines", prompt);
         Assert.Contains("never a guess", prompt);
         Assert.Contains("managedThere", prompt);
-        Assert.Equal("<!-- arch-role v3 -->", ArchAgentService.RoleVersionMarker);
+        Assert.Equal("<!-- arch-role v4 -->", ArchAgentService.RoleVersionMarker); // v4: stays armed while a question waits (openspec arch-standing-loop)
+        Assert.Contains("do not repeat a question", prompt);
     }
 }

@@ -20,18 +20,23 @@ public interface IArchWakeSource
 public sealed record WakeDraft(string Prompt, int After, int UpTo, IReadOnlyList<string> RepoIds);
 
 /// <summary>
-/// The arch loop kind (openspec: add-arch-agent, D2/D8). Its single instance is
-/// keyed to the reserved id <see cref="ArchAgentService.ReservedId"/> rather than a
-/// repo. Semantics only: the operator stop / errored-run ladder, the
-/// <c>NEEDS_HUMAN:</c> escalation, then "propose one arch turn when a managed repo
-/// started or ended a turn since the watermark, else hold". Deliberately NOT a
-/// <see cref="DrivenLoop"/>: the arch agent's replies are not word-fenced (openspec
-/// remove-deny-fence); its sends are governed by the arm, the cap, availability and the
-/// audit log
-/// (<see cref="ArchAgentService.SendTask"/>), not on its narration.
+/// The arch loop kind (openspec: add-arch-agent, D2/D8; arch-standing-loop). Its
+/// single instance is keyed to the reserved id <see cref="ArchAgentService.ReservedId"/>
+/// rather than a repo. Semantics only: the operator stop / errored-run ladder, then
+/// "propose one arch turn when a managed repo started or ended a turn since the
+/// watermark, else hold". A reply ending in <c>NEEDS_HUMAN:</c> is a HOLD, not a stop
+/// (openspec arch-standing-loop): asking the Operator is the arch agent's normal
+/// mode, so the loop stays armed, the question is surfaced as an escalated hold, and
+/// the next wake (a managed repo finished a turn) or the Operator's reply carries on.
+/// Deliberately NOT a <see cref="DrivenLoop"/>: the arch agent's replies are not
+/// word-fenced (openspec remove-deny-fence); its sends are governed by the arm, the
+/// cap, availability and the audit log (<see cref="ArchAgentService.SendTask"/>), not
+/// on its narration.
 /// </summary>
 public sealed class ArchLoop : ILoop
 {
+    public const string WaitingPrefix = "waiting for the operator";
+
     private readonly IArchWakeSource _wake;
 
     public ArchLoop(IArchWakeSource wake)
@@ -41,6 +46,16 @@ public sealed class ArchLoop : ILoop
 
     public string Kind => LoopConfigStore.KindArch;
 
+    /// <summary>The <c>NEEDS_HUMAN:</c> question in a reply, or null when there is none.</summary>
+    public static string? PendingQuestion(string? lastAssistant)
+    {
+        if (lastAssistant is null) return null;
+        var idx = lastAssistant.IndexOf(AutopilotService.NeedsHumanMarker, StringComparison.OrdinalIgnoreCase);
+        if (idx < 0) return null;
+        var question = AutopilotService.Snippet(lastAssistant[(idx + AutopilotService.NeedsHumanMarker.Length)..]);
+        return string.IsNullOrEmpty(question) ? "the arch agent asked for the operator" : question;
+    }
+
     public LoopDecision Decide(LoopContext ctx)
     {
         if (ctx.RunStopped)
@@ -49,22 +64,21 @@ public sealed class ArchLoop : ILoop
         if (ctx.RunErrored)
             return new LoopDecision.Stop("error", "error", "the arch agent's turn errored");
 
-        var last = ctx.LastAssistant;
-        if (last != null)
-        {
-            var idx = last.IndexOf(AutopilotService.NeedsHumanMarker, StringComparison.OrdinalIgnoreCase);
-            if (idx >= 0)
-            {
-                var question = AutopilotService.Snippet(last[(idx + AutopilotService.NeedsHumanMarker.Length)..]);
-                return new LoopDecision.Stop("escalate", "needs-human",
-                    string.IsNullOrEmpty(question) ? "the arch agent asked for the operator" : question);
-            }
-        }
+        var question = PendingQuestion(ctx.LastAssistant);
 
         var draft = _wake.ComposeWake();
         if (draft is null)
-            return new LoopDecision.Hold("waiting for managed repo turns");
+        {
+            // A pending question is an escalated hold: the loop stays armed, the
+            // surface shows the question, and the Operator's reply (a new trailing
+            // message without the marker) or the next wake lifts it.
+            return question is null
+                ? new LoopDecision.Hold("waiting for managed repo turns")
+                : new LoopDecision.Hold($"{WaitingPrefix}: {question}", Escalate: true, Label: question);
+        }
 
+        // Repo turns keep flowing while a question waits: the arch agent carries on
+        // with the other repos and re-raises the question itself if it still stands.
         return new LoopDecision.Propose(draft.Prompt);
     }
 }
