@@ -534,7 +534,7 @@ public class ArchAgentService : IArchWakeSource
     /// <summary>Views of the registered repos in <paramref name="include"/>, classified
     /// against <paramref name="managed"/> (defaults to the same set: the local
     /// list_agents case, where only managed repos are listed at all).</summary>
-    private List<AgentView> LocalAgents(ISet<string> include, ISet<string>? managed = null, bool gitOnlyManaged = false)
+    private List<AgentView> LocalAgents(ISet<string> include, ISet<string>? managed = null, bool gitOnlyManaged = false, ISet<string>? gitFor = null)
     {
         managed ??= include;
         var (events, _) = _collector.ReadEvents(0);
@@ -547,8 +547,9 @@ public class ArchAgentService : IArchWakeSource
             // 7 s per describe). Only a managed repo needs its branch — an unmanaged one
             // is `unmanaged` whatever its branch — and a managed one is read through a
             // short-lived cache so the UI's polling and the fleet's describes share it.
+            var wantGit = gitFor is not null ? gitFor.Contains(repo.Id) : !gitOnlyManaged || managed.Contains(repo.Id);
             var gs = !repo.Exists ? new GitState("unknown", "main", 0, 0, false, 0, "", false, "missing")
-                : gitOnlyManaged && !managed.Contains(repo.Id) ? new GitState("unknown", "main", 0, 0, false, 0, RemoteUrl(repo.Path), false, null)
+                : !wantGit ? new GitState("unknown", "main", 0, 0, false, 0, RemoteUrl(repo.Path), false, null)
                 : ReadGitStateCached(repo);
             var avail = Classify(managed.Contains(repo.Id), busy, gs.Branch, gs.DefaultBranch, ReadAssignment(repo.Id).Branches);
             var (lastStartAt, running) = LatestTurnStart(events, repo.Id);
@@ -602,9 +603,81 @@ public class ArchAgentService : IArchWakeSource
     /// D8): classified against THIS harness's own arch scope, because that scope is
     /// authoritative — a repo the local arch does not manage is <c>unmanaged</c> to
     /// the fleet as well, and a fleet send to it is refused here.</summary>
-    public IReadOnlyList<AgentView> PeerAgents() =>
-        LocalAgents(_repos.GetAll().Select(r => r.Id).ToHashSet(StringComparer.Ordinal),
-            ManagedRepoIds().ToHashSet(StringComparer.Ordinal), gitOnlyManaged: true);
+    public IReadOnlyList<AgentView> PeerAgents()
+    {
+        // Git is read for the repos that ARE agents on this box — managed by the arch
+        // or holding a dock — so a fleet status view elsewhere sees their branch and
+        // running state; the rest of the registry is listed by name only.
+        var managed = ManagedRepoIds().ToHashSet(StringComparer.Ordinal);
+        var gitFor = new HashSet<string>(managed, StringComparer.Ordinal);
+        gitFor.UnionWith(_dock.GetAll().Select(t => t.RepoId));
+        return LocalAgents(_repos.GetAll().Select(r => r.Id).ToHashSet(StringComparer.Ordinal), managed, gitFor: gitFor);
+    }
+
+    // ---- fleet status (openspec fleet-status-tab) ----------------------------------------
+
+    /// <summary>Every repo agent on the fleet, machine by machine, the way the dashboard's
+    /// dock strip shows this box's docks: branch (and whether it is the default branch,
+    /// i.e. free to be given work), running state, last actor, arch scope. Local agents =
+    /// repos with a dock or in the arch scope; remote agents come from each peer's
+    /// cached describe (never blocking on the network).</summary>
+    public object FleetStatus()
+    {
+        var managed = ManagedRepoIds().ToHashSet(StringComparer.Ordinal);
+        var include = new HashSet<string>(managed, StringComparer.Ordinal);
+        include.UnionWith(_dock.GetAll().Select(t => t.RepoId));
+        var local = LocalAgents(include, managed);
+        var machines = new List<object>
+        {
+            new
+            {
+                machine = SelfLabel, sourceId = CollectorService.SelfId, self = true, address = (string?)null,
+                reachable = true, status = FleetClient.StatusOk, detail = (string?)null,
+                version = BuildVersion, behind = false, acceptsSends = AcceptFleetSends, acceptsUpgrades = AcceptFleetUpgrades,
+                gateOpen = _gate.Enabled, allowSends = true, managedCount = managed.Count,
+                agents = local.Select(a => (object)new
+                {
+                    key = a.Key, repoId = a.RepoId, name = a.Name, remoteUrl = a.RemoteUrl, branch = a.Branch, defaultBranch = a.DefaultBranch,
+                    onDefault = OnDefault(a.Branch, a.DefaultBranch), dirty = a.Dirty, availability = a.Availability, lastActor = a.LastActor,
+                    runningSince = a.RunningSince, managed = managed.Contains(a.RepoId), docked = a.TabId is not null, exists = a.Exists, tabId = a.TabId,
+                }).ToList(),
+            },
+        };
+        foreach (var src in _collector.ListSources().Where(s => s.Kind == "remote"))
+        {
+            var snap = _fleet.SnapshotNonBlocking(src.Id);
+            // A peer on this build reports `docked`; an older one does not, and then
+            // every repo whose branch it read counts (it read all of them).
+            var repos = snap.Repos.Where(r => r.Managed == true || r.Docked == true || r.RunningSince is not null
+                || (r.Docked is null && !string.IsNullOrEmpty(r.Branch) && r.Branch != "unknown")).ToList();
+            machines.Add(new
+            {
+                machine = src.Label, sourceId = src.Id, self = false, address = src.Address,
+                reachable = snap.Reachable, status = snap.Status, detail = snap.Detail,
+                version = snap.Info?.Version, behind = snap.Reachable && snap.Info?.Version is { } pv && pv != BuildVersion,
+                acceptsSends = snap.Info?.AcceptsSends ?? false, acceptsUpgrades = snap.Info?.AcceptsUpgrades ?? false,
+                gateOpen = snap.Info?.GateOpen ?? false, allowSends = src.AllowSends,
+                managedCount = snap.Info?.ManagedRepoIds?.Count ?? repos.Count(r => r.Managed == true),
+                agents = repos.Select(r => (object)new
+                {
+                    key = ArchStateStore.FleetKey(src.Id, r.RepoId), repoId = r.RepoId, name = r.Name, remoteUrl = r.RemoteUrl ?? "",
+                    branch = r.Branch ?? "unknown", defaultBranch = r.DefaultBranch ?? "main",
+                    onDefault = OnDefault(r.Branch, r.DefaultBranch), dirty = r.Dirty, availability = r.Availability ?? "unknown", lastActor = r.LastActor ?? "none",
+                    runningSince = r.RunningSince, managed = r.Managed == true, docked = r.Docked == true, exists = r.Exists, tabId = (string?)null,
+                }).ToList(),
+            });
+        }
+        return new { at = Now(), hubVersion = BuildVersion, machines };
+    }
+
+    /// <summary>"On main": the branch is the repo's default branch — the agent is free to
+    /// be given work (nobody claimed it on a feature branch). Unknown branches are not.</summary>
+    public static bool OnDefault(string? branch, string? defaultBranch)
+    {
+        if (string.IsNullOrWhiteSpace(branch) || branch == "unknown") return false;
+        if (!string.IsNullOrWhiteSpace(defaultBranch)) return string.Equals(branch, defaultBranch, StringComparison.Ordinal);
+        return branch is "main" or "master";
+    }
 
     private static readonly TimeSpan GitStateTtl = TimeSpan.FromSeconds(20);
     private readonly Dictionary<string, (GitState State, DateTime AtUtc)> _gitStates = new(StringComparer.Ordinal);
@@ -641,6 +714,8 @@ public class ArchAgentService : IArchWakeSource
                 dirty = a.Dirty, availability = a.Availability, lastActor = a.LastActor, runningSince = a.RunningSince,
                 exists = a.Exists, isSelf = _repos.GetAll().FirstOrDefault(r => r.Id == a.RepoId)?.IsSelf ?? false,
                 managed = managed.Contains(a.RepoId, StringComparer.Ordinal),
+                // Holds a dock here (openspec fleet-status-tab): an agent in the fleet status view.
+                docked = a.TabId is not null,
             }).ToList(),
         };
     }

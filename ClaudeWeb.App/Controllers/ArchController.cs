@@ -200,6 +200,16 @@ public class ArchController : ControllerBase
         return Ok(BuildState());
     }
 
+    /// <summary>Fleet status (openspec fleet-status-tab): every repo agent on every
+    /// machine with branch / on-default / running / last actor / arch scope — the
+    /// Management App's Status tab. Never waits on a peer (cached describes).</summary>
+    [HttpGet("fleet/status")]
+    public IActionResult FleetStatus()
+    {
+        _logger.CountRequest();
+        return Ok(_arch.FleetStatus());
+    }
+
     public sealed record FleetUpgradeRequest(string? SourceId, string? Ref);
 
     /// <summary>Operator-triggered peer upgrade from the Fleet card (openspec

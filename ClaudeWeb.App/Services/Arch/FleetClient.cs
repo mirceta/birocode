@@ -65,7 +65,10 @@ public class FleetClient
         [property: JsonPropertyName("isSelf")] bool IsSelf,
         // Whether the PEER's own arch agent manages this repo (D8). Null = the peer
         // runs a build that predates scope reporting; treated as not sendable.
-        [property: JsonPropertyName("managed")] bool? Managed = null);
+        [property: JsonPropertyName("managed")] bool? Managed = null,
+        // Whether the repo holds a dock on the peer (openspec fleet-status-tab). Null =
+        // a build that predates the field.
+        [property: JsonPropertyName("docked")] bool? Docked = null);
 
     public sealed record PeerInfo(
         [property: JsonPropertyName("protocol")] int Protocol,

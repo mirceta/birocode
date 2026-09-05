@@ -250,10 +250,9 @@
 
   <div class="tabbar" role="tablist" aria-label="Views">
     <button class="tab" id="tab-activity" role="tab" aria-controls="panel-activity" data-tab="activity">Activity</button>
-    <button class="tab" id="tab-agents" role="tab" aria-controls="panel-agents" data-tab="agents">Agents</button>
     <button class="tab" id="tab-github" role="tab" aria-controls="panel-github" data-tab="github">GitHub</button>
     <button class="tab" id="tab-sounds" role="tab" aria-controls="panel-sounds" data-tab="sounds">Sounds</button>
-    <a class="tab tab-link" href="./manage/index.html" title="The Management App: Arch agent, Ideas, and this feed in one page">🏛 Manage ↗</a>
+    <a class="tab tab-link" href="./manage/index.html" title="The Management App: Arch agent, Ideas, fleet Status, and this feed in one page">🏛 Manage ↗</a>
   </div>
 
   <div class="tabpanel" id="panel-activity" role="tabpanel" aria-labelledby="tab-activity" data-tab="activity">
@@ -275,11 +274,6 @@
         <tbody id="rows"><tr><td colspan="5" class="empty">Waiting for events… self events appear automatically; add a harness to see more.</td></tr></tbody>
       </table>
     </div>
-  </div>
-
-  <div class="tabpanel" id="panel-agents" role="tabpanel" aria-labelledby="tab-agents" data-tab="agents">
-    <h2>Agent dock <span class="hint">— which repos agents run on, per machine · reconstructed from the recent event trail</span></h2>
-    <div class="dock" id="dock"><div class="dock-note">connecting…</div></div>
   </div>
 
   <div class="tabpanel" id="panel-github" role="tabpanel" aria-labelledby="tab-github" data-tab="github">
@@ -363,7 +357,8 @@ if (DISPLAY){ toggle.textContent = "✕ Exit display"; toggle.href = location.pa
 // Two-tab shell (openspec activity-github-tabs). Tab state is device-local and
 // URL-addressable, same idea as the display toggle: ?tab= wins, else localStorage,
 // else Activity. Display mode is tabless (CSS shows both panels), so we skip it.
-const TABS = ["activity", "agents", "github", "sounds"];
+// The Agents dock moved to the Management App's Status tab (openspec fleet-status-tab).
+const TABS = ["activity", "github", "sounds"];
 const tabBtns = Array.from(document.querySelectorAll(".tabbar .tab"));
 function setTab(name, push){
   if (!TABS.includes(name)) name = "activity";

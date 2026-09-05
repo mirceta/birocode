@@ -40,3 +40,47 @@ html, body, #root { height: 100%; margin: 0; }
 @media (max-width: 720px) {
   .mg__layout-btn { padding: 3px 6px; }
 }
+
+/* Status tab (openspec fleet-status-tab): the dashboard dock strip's language,
+   one strip per machine. */
+.fs { padding: 10px 12px; overflow: auto; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; }
+.fs__head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.fs__title { font-weight: 600; }
+.fs__dim { color: var(--color-text-muted, #9aa); font-size: 12.5px; }
+.fs__mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+.fs__filters { display: flex; gap: 2px; margin-left: auto; border: 1px solid var(--color-border, #444); border-radius: 8px; padding: 2px; }
+.fs__filter { background: transparent; border: 0; color: var(--color-text-muted, #9aa); font-size: 12.5px; padding: 3px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.fs__filter--on { background: var(--color-bg, #2a2e36); color: var(--color-text, #eee); font-weight: 600; }
+.fs__count { opacity: 0.7; font-size: 11px; }
+.fs__note { color: var(--color-text-muted, #9aa); border: 1px dashed var(--color-border, #444); border-radius: 8px; padding: 8px 11px; }
+.fs__note--err { color: #e5734b; border-color: #e5734b; }
+.fs__machine { border: 1px solid var(--color-border, #333); border-radius: 10px; padding: 8px 10px; background: var(--color-surface, #14161d); }
+.fs__machine--self { border-left: 3px solid var(--color-accent, #5ea0ef); }
+.fs__machine--dark { opacity: 0.7; }
+.fs__mh { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.fs__mlabel { font-weight: 600; }
+.fs__tag { font-size: 10px; border: 1px solid var(--color-border, #444); border-radius: 999px; padding: 0 6px; color: var(--color-text-muted, #9aa); }
+.fs__mdot { width: 8px; height: 8px; border-radius: 50%; background: #888; flex: none; }
+.fs__mdot--ok { background: #3fb950; }
+.fs__mmeta { margin-left: auto; color: var(--color-text-muted, #9aa); font-size: 12px; white-space: nowrap; }
+.fs__strip { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.fs__chip { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; max-width: 220px; padding: 3px 10px; border: 1px solid var(--color-border, #444); border-radius: 999px; background: var(--color-surface, #14161d); color: var(--color-text-soft, #bbb); font-size: 12px; font-weight: 500; line-height: 1.5; cursor: pointer; text-align: left; }
+.fs__chip:hover, .fs__chip--open { color: var(--color-text, #eee); border-color: var(--color-accent, #5ea0ef); }
+.fs__chip--free { border-color: rgba(63, 185, 80, 0.6); }
+.fs__chip--running { color: var(--color-text, #eee); border-color: var(--color-text, #eee); }
+.fs__chip-text { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; overflow: hidden; }
+.fs__chip-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fs__chip-branch { max-width: 100%; font-size: 10px; line-height: 1.2; color: var(--color-text-muted, #9aa); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fs__dot { flex: 0 0 auto; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #777; }
+.fs__dot--free { background: #3fb950; }
+.fs__dot--claimed { background: #d29922; }
+.fs__dot--running { background: var(--color-text, #eee); animation: fs-pulse 1.2s ease-in-out infinite; }
+@keyframes fs-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.fs__detail { margin-top: 8px; padding: 8px 10px; border: 1px solid var(--color-border, #444); border-radius: 8px; font-size: 12.5px; display: flex; flex-direction: column; gap: 4px; }
+.fs__detail code { font-size: 12px; }
+.fs__ok { color: #3fb950; }
+.fs__warn { color: #d29922; }
+.fs__btn { background: transparent; border: 1px solid var(--color-border, #444); color: var(--color-text, #eee); border-radius: 6px; padding: 2px 10px; cursor: pointer; font-size: 12px; }
+.fs__none { color: var(--color-text-muted, #9aa); font-size: 12.5px; border: 1px dashed var(--color-border, #444); border-radius: 8px; padding: 6px 10px; }
+.fs__legend { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+.fs__legend span { display: inline-flex; align-items: center; gap: 5px; }

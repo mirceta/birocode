@@ -65,6 +65,7 @@
   "manage.title": "Yönetim",
   "manage.tabs": "Yönetim görünümleri",
   "manage.events": "Olaylar",
+  "manage.status": "Durum",
   "manage.openHarness": "Harness'i aç",
   "manage.notLoggedIn": "Bu harness'e giriş yapılmamış — Yönetim Uygulaması harness oturumunu kullanır.",
   "manage.layout": "Düzen",
