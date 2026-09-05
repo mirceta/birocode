@@ -425,6 +425,10 @@ export default function Dashboard({ onClose }) {
   );
   // Execution | Management layer (openspec split-management-dashboard).
   const [layer, setLayer] = useState(readLayer);
+  // The self repo hosts the Management App (openspec management-app); when it
+  // is registered the Management layer embeds the app instead of mounting the
+  // components itself.
+  const selfRepoId = repos.find((r) => r.isSelf)?.id || null;
   const chooseLayer = (next) => {
     try {
       localStorage.setItem(LAYER_KEY, next);
@@ -1148,19 +1152,35 @@ export default function Dashboard({ onClose }) {
           panel. Mounted only while active — the Execution body below is
           unmounted then, so neither layer polls for the other. */}
       {layer === 'management' && (
-        <div className="dash__mgmt">
-          {archOn && (
-            <div className="dash__mgmt-arch">
-              <Arch popup onOpenDock={onClose} />
-            </div>
-          )}
-          <aside className="dash__mgmt-ideas">
-            <div className="dash__mgmt-ideas-head">💡 {t('nav.ideas')}</div>
-            <div className="dash__mgmt-ideas-body">
-              <IdeasPanel />
-            </div>
-          </aside>
-        </div>
+        selfRepoId ? (
+          // The Management App (openspec management-app) is the one
+          // implementation of this layer: a refresh-to-update static app the
+          // harness serves from the self repo's worktree. Embedding it here
+          // means the dashboard door and the Local-tab door show the same thing.
+          <div className="dash__mgmt dash__mgmt--embed">
+            <iframe
+              className="dash__mgmt-frame"
+              title={t('dashboard.layerManagement')}
+              src={`/api/localview/${selfRepoId}/app/events-feed/manage/index.html?tab=arch`}
+            />
+          </div>
+        ) : (
+          // No self repo registered (an isolated or foreign-repo harness): mount
+          // the components directly, as phase 1 did.
+          <div className="dash__mgmt">
+            {archOn && (
+              <div className="dash__mgmt-arch">
+                <Arch popup onOpenDock={onClose} />
+              </div>
+            )}
+            <aside className="dash__mgmt-ideas">
+              <div className="dash__mgmt-ideas-head">💡 {t('nav.ideas')}</div>
+              <div className="dash__mgmt-ideas-body">
+                <IdeasPanel />
+              </div>
+            </aside>
+          </div>
+        )
       )}
 
       {/* Execution layer: pop-ups + the docks body. Unmounted entirely while

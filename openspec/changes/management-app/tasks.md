@@ -27,5 +27,7 @@
 
 ## 4. Optional — harness Management view embeds the app
 
-- [ ] 4.1 Dashboard Management layer renders the embed when the self repo is known;
-      falls back to the direct mounts otherwise.
+- [x] 4.1 Dashboard Management layer renders the embed when the self repo is known;
+      falls back to the direct mounts otherwise. DONE 2026-09-05: isolated check 13/13
+      (embed src → /app/events-feed/manage/, Arch + Ideas inside the frame). Needs the
+      next harness deploy to reach live.
