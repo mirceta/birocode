@@ -1558,8 +1558,33 @@ public class ArchAgentService : IArchWakeSource
         _state.SetWatermark(lastSeq);
         lock (_wakeGate) _draft = null;
         var state = _loops.StartArch(ReservedId, mode, maxIterations, ResolveArchSessionId());
+        _state.SetStandingLoop(state.Mode, state.MaxIterations);
         _logger.Info($"[ARCH] armed ({state.Mode}, cap {state.MaxIterations}) — watermark {lastSeq}, home {HomePath}");
         return state;
+    }
+
+    /// <summary>The Operator's Stop of the arch agent: clears the slot AND the
+    /// standing-loop memory, so nothing re-arms behind their back.</summary>
+    public void Disarm()
+    {
+        _loops.Stop(ReservedId);
+        _state.ClearStandingLoop();
+    }
+
+    public void ForgetStandingLoop() => _state.ClearStandingLoop();
+
+    /// <summary>A driven loop (goal, recipe) on the @arch slot ended (openspec
+    /// arch-driven-loops): if the Operator had the standing wake loop armed before,
+    /// bring it back with the same mode and cap, watermark at now. Returns whether a
+    /// loop was re-armed.</summary>
+    public bool RestoreStandingLoopIfNeeded()
+    {
+        var remembered = _state.StandingLoop;
+        if (remembered is null) return false;
+        if (_loops.Get(ReservedId) is { Active: true }) return false;
+        var s = Arm(remembered.Value.Mode, remembered.Value.Cap);
+        _logger.Info($"[ARCH] standing wake loop restored after the driven loop ended ({s.Mode}, cap {s.MaxIterations})");
+        return true;
     }
 
     public int Watermark => _state.Watermark;

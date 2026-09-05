@@ -393,7 +393,7 @@ public class ArchController : ControllerBase
                 break;
             case "disarm":
             case "stop":
-                _loops.Stop(ArchAgentService.ReservedId);
+                _arch.Disarm();
                 break;
             case "mode":
                 if (string.IsNullOrWhiteSpace(req?.Mode))

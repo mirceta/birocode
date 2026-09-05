@@ -1,4 +1,5 @@
 using ClaudeWeb.Services;
+using ClaudeWeb.Services.Arch;
 using ClaudeWeb.Services.Autopilot;
 using ClaudeWeb.Services.Chat;
 using ClaudeWeb.Services.Dock;
@@ -55,6 +56,7 @@ public class AutopilotController : ControllerBase
     private readonly SystemTestsService _systests;
     private readonly RepositoryRegistry _repos;
     private readonly DockRegistry _dock;
+    private readonly ArchAgentService _arch;
     private readonly Logger _logger;
 
     public AutopilotController(
@@ -62,8 +64,10 @@ public class AutopilotController : ControllerBase
         AutopilotConfigStore config, LoopConfigStore loops, LoopRecipeStore recipes,
         BriefingRulesStore briefing, LoopDraftsStore drafts, FlagsStore flags, AutopilotGate operatorGate,
         AutopilotAuditLog audit,
-        SystemTestsService systests, RepositoryRegistry repos, DockRegistry dock, Logger logger)
+        SystemTestsService systests, RepositoryRegistry repos, DockRegistry dock, Logger logger,
+        ArchAgentService arch)
     {
+        _arch = arch;
         _discovery = discovery;
         _engine = engine;
         _config = config;
@@ -184,6 +188,14 @@ public class AutopilotController : ControllerBase
         switch ((req.Action ?? "start").ToLowerInvariant())
         {
             case "start":
+                // The arch agent's reserved slot (openspec arch-driven-loops): goal and
+                // recipe reuse everything; the suggestion kind's newest-transcript read
+                // and the queue kind's dock stash do not apply to it.
+                var isArchAgent = req.RepoId == ArchAgentService.ReservedId;
+                if (isArchAgent && string.Equals(req.Kind, LoopConfigStore.KindSuggestion, StringComparison.OrdinalIgnoreCase))
+                    return BadRequest(new { error = "the arch agent has no suggestion loop — arm a goal or a recipe on it" });
+                if (isArchAgent && string.Equals(req.Kind, LoopConfigStore.KindQueue, StringComparison.OrdinalIgnoreCase))
+                    return BadRequest(new { error = "the arch agent has no dock stash to drain — arm a goal or a recipe on it" });
                 if (string.Equals(req.Kind, LoopConfigStore.KindSuggestion, StringComparison.OrdinalIgnoreCase))
                 {
                     _loops.StartSuggestion(req.RepoId, req.Mode
@@ -197,7 +209,7 @@ public class AutopilotController : ControllerBase
                 // with no transcript arms unpinned; the engine locks a pin in before
                 // its first send.
                 var pin = string.IsNullOrWhiteSpace(req.SessionId)
-                    ? NewestSessionId(req.RepoId)
+                    ? (isArchAgent ? _arch.ResolveArchSessionId() : NewestSessionId(req.RepoId))
                     : req.SessionId.Trim();
                 if (string.Equals(req.Kind, LoopConfigStore.KindGoal, StringComparison.OrdinalIgnoreCase))
                 {
@@ -249,9 +261,20 @@ public class AutopilotController : ControllerBase
                 break;
             case "stop":
             case "disarm":
+            {
                 // One slot per agent → one clear, whatever the kind (revision 2, D8).
+                var cur = _loops.Get(req.RepoId);
                 _loops.Stop(req.RepoId);
+                // The arch slot (openspec arch-driven-loops): disarming a driven kind
+                // hands the slot back to the standing wake loop; disarming the wake kind
+                // itself is the Operator's Stop and forgets it.
+                if (req.RepoId == ArchAgentService.ReservedId)
+                {
+                    if (cur?.Kind == LoopConfigStore.KindArch) _arch.ForgetStandingLoop();
+                    else _arch.RestoreStandingLoopIfNeeded();
+                }
                 break;
+            }
             case "resume":
             {
                 // One-step resume of a stopped QUEUE instance (openspec:
