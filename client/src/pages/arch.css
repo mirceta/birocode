@@ -9,8 +9,11 @@
 .arch__side { flex: 0 0 340px; display: flex; flex-direction: column; gap: 10px; overflow: auto; min-height: 0; min-width: 0; }
 @container (max-width: 900px) {
   .arch__cols { flex-direction: column; overflow: auto; }
-  .arch__side { flex: 0 0 auto; overflow: visible; }
+  /* Stacked: the side column sits below the conversation, so its width is the
+     pane's and the vertical divider has nothing to resize. */
+  .arch__side { flex: 0 0 auto !important; width: auto !important; overflow: visible; }
   .arch__main { flex: 0 0 auto; min-height: 60vh; }
+  .arch__gutter { display: none; }
 }
 @media (max-width: 900px) {
   .arch__cols { flex-direction: column; overflow: auto; }

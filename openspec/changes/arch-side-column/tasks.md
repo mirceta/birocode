@@ -12,4 +12,9 @@
       Managed agents, Fleet, Home repo cards full width with no side column; hide /
       show side persists; no page errors.
       DONE 2026-09-05 on live through the Management App (13/13, side 340 → 460 px).
-- [ ] 2.2 Same check on the studio route after the harness self-upgrade.
+- [x] 2.2 Same check on the studio route after the harness self-upgrade.
+      DONE 2026-09-05: the studio route at desktop widths runs the multi-pane strip, so
+      the Arch pane is ~430 px and its columns STACK (the pre-existing narrow rule); there
+      the divider is hidden and the side column takes the pane width, while the Fleet lane
+      and hide/show still work (isolated studio run PASS). The two-column resize is
+      exercised where the surface is wide: Management App / dashboard embed (live, 13/13).
