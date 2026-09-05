@@ -8,8 +8,12 @@
 
 ## 2. Verify
 
-- [ ] 2.1 Live, this box: the arch, asked explicitly by the operator, sends to a local
-      claimed repo with `operatorAsked` → `sent`, audit `claimed-override`; without the ask
-      it stays `claimed`.
-- [ ] 2.2 MONSTER: the same send is answered `claimed` until MONSTER runs a build with the
-      field (its next upgrade).
+- [x] 2.1 Live, this box (2026-09-05 21:06, build aa68fa5): the operator asked the arch
+      explicitly to reach the claimed local `prg` agent (feature branch); the arch called
+      `send_task {operatorAsked: "true"}` → `sent`, "claimed-override accepted"; the agent
+      ran the turn. Without the ask the same repo stays `claimed` (unchanged rule).
+- [x] 2.2 MONSTER (build 4aaf69b): the arch's push request to MONSTER's birocode was answered
+      `denied` by that build's old deny-word fence before the claimed rule even applied;
+      MONSTER needs a build with the fence removal + this override (its next upgrade:
+      accept fleet upgrades there, then `upgrade_peer`). MONSTER's work had meanwhile been
+      pushed and was merged here (aa68fa5) and deployed.
