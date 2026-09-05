@@ -49,6 +49,14 @@ function splitLive(messages, turn) {
 }
 
 const POLL_MS = 3000;
+// Side column (openspec arch-side-column): its width and visibility persist per
+// device; the same cards also live in the Fleet lane, full width.
+const SIDE_WIDTH_KEY = 'arch.sideWidth';
+const SIDE_OPEN_KEY = 'arch.sideOpen';
+const SIDE_MIN = 240;
+const readSideWidth = () => { try { const n = Number(localStorage.getItem(SIDE_WIDTH_KEY)); return n >= SIDE_MIN ? n : 340; } catch { return 340; } };
+const readSideOpen = () => { try { return localStorage.getItem(SIDE_OPEN_KEY) !== '0'; } catch { return true; } };
+const saveLocal = (k, v) => { try { localStorage.setItem(k, String(v)); } catch { /* private mode */ } };
 const AVAIL_CLASS = { available: 'ok', busy: 'busy', claimed: 'claimed', unmanaged: 'dim' };
 
 function ago(ms) {
@@ -82,6 +90,10 @@ export default function Arch({ popup = false, onOpenDock = null }) {
   // the conversation, its Tools (the harness MCP surface) and the History of
   // its tool calls. Chat is the default; the lane is view state, not persisted.
   const [lane, setLane] = useState('chat');
+  const [sideWidth, setSideWidth] = useState(readSideWidth);
+  const [sideOpen, setSideOpen] = useState(readSideOpen);
+  const [sideDrag, setSideDrag] = useState(false);
+  const colsRef = useRef(null);
   const [, setTick] = useState(0);
   const scrollRef = useRef(null);
   const alive = useRef(true);
@@ -251,6 +263,31 @@ export default function Arch({ popup = false, onOpenDock = null }) {
     }
   }, []);
 
+  // Receiving-side opt-in (openspec arch-peer-upgrades): let a fleet arch elsewhere
+  // upgrade THIS harness to a ref.
+  const setAcceptUpgrades = useCallback(async (accept) => {
+    try {
+      const s = await apiPost('/arch/fleet', { acceptUpgrades: accept });
+      setState(s);
+      setError('');
+    } catch (e) {
+      setError(e?.message || String(e));
+    }
+  }, []);
+
+  // Operator-triggered peer upgrade from the Fleet card (same posture as the arch tool).
+  const [upgradeNote, setUpgradeNote] = useState({});
+  const upgradePeer = useCallback(async (sourceId) => {
+    setUpgradeNote((n) => ({ ...n, [sourceId]: '…' }));
+    try {
+      const r = await apiPost('/arch/fleet/upgrade', { sourceId });
+      setUpgradeNote((n) => ({ ...n, [sourceId]: `${r.status}: ${r.detail || ''}` }));
+      setTimeout(load, 1500);
+    } catch (e) {
+      setUpgradeNote((n) => ({ ...n, [sourceId]: e?.message || String(e) }));
+    }
+  }, [load]);
+
   // Calling-side consent per subscribed harness: the collector's own flag.
   const setAllowSends = useCallback(async (sourceId, allow) => {
     try {
@@ -273,6 +310,39 @@ export default function Arch({ popup = false, onOpenDock = null }) {
     else navigate('/studio');
   }, [setActiveTab, navigate, popup, onOpenDock]);
 
+  // Drag the gutter between the conversation and the side column: the column's
+  // width follows the pointer (pointer capture keeps the drag alive over the
+  // scrolling content), clamped so neither side collapses; persisted per device.
+  const startSideDrag = useCallback((e) => {
+    const cols = colsRef.current;
+    if (!cols) return;
+    e.preventDefault();
+    const total = cols.getBoundingClientRect().width;
+    const startX = e.clientX;
+    const startW = sideWidth;
+    const gutter = e.currentTarget;
+    gutter.setPointerCapture?.(e.pointerId);
+    setSideDrag(true);
+    let latest = startW;
+    const onMove = (ev) => {
+      latest = Math.round(Math.max(SIDE_MIN, Math.min(total * 0.7, startW - (ev.clientX - startX))));
+      setSideWidth(latest);
+    };
+    const onUp = () => {
+      gutter.removeEventListener('pointermove', onMove);
+      gutter.removeEventListener('pointerup', onUp);
+      gutter.removeEventListener('pointercancel', onUp);
+      setSideDrag(false);
+      saveLocal(SIDE_WIDTH_KEY, latest);
+    };
+    gutter.addEventListener('pointermove', onMove);
+    gutter.addEventListener('pointerup', onUp);
+    gutter.addEventListener('pointercancel', onUp);
+  }, [sideWidth]);
+  const toggleSide = useCallback(() => {
+    setSideOpen((v) => { saveLocal(SIDE_OPEN_KEY, v ? '0' : '1'); return !v; });
+  }, []);
+
   if (!enabled) return <div className="arch arch--off">The Arch tab is an Advanced-mode feature.</div>;
 
   const agents = state?.agents || [];
@@ -281,9 +351,16 @@ export default function Arch({ popup = false, onOpenDock = null }) {
   const managedFleet = new Set(state?.managedFleet || []);
   const fleet = state?.fleet || { sources: [] };
   const fleetSources = fleet.sources || [];
+  // Repo id → human name for every repo the state knows (this harness's registry,
+  // the managed agents, every peer's describe): the History lane shows ids as
+  // "name (id…)" instead of a bare id.
+  const repoNames = {};
+  for (const r of repos) if (r.id) repoNames[r.id] = r.name || r.id;
+  for (const a of agents) if (a.repoId && a.name && a.name !== a.repoId) repoNames[a.repoId] = a.machine && a.machine !== 'self' ? `${a.name} @ ${a.machine}` : a.name;
+  for (const s of fleetSources) for (const r of s.repos || []) if (r.repoId && r.name) repoNames[r.repoId] = `${r.name} @ ${s.label}`;
   const peerText = (s) => {
     const p = s.peer || {};
-    if (p.status === 'ok') return `peer ok · build ${p.version || '?'} · ${p.acceptsSends ? 'accepts sends' : 'does not accept sends'}${p.gateOpen ? '' : ' · gate closed'}`;
+    if (p.status === 'ok') return `peer ok · build ${p.version || '?'}${p.behind ? ' (behind this hub)' : ''} · ${p.acceptsSends ? 'accepts sends' : 'does not accept sends'} · ${p.acceptsUpgrades ? 'accepts upgrades' : 'does not accept upgrades'}${p.gateOpen ? '' : ' · gate closed'}`;
     if (p.status === 'no-peer-api') return 'no peer API on that build — upgrade it';
     if (p.status === 'unauthorized') return 'peer refused the credential';
     if (p.status === 'unreachable') return `unreachable${p.detail ? ` · ${p.detail}` : ''}`;
@@ -291,117 +368,10 @@ export default function Arch({ popup = false, onOpenDock = null }) {
     return `${p.status || '?'}${p.detail ? ` · ${p.detail}` : ''}`;
   };
 
-  return (
-    <div className={`arch${popup ? ' arch--popup' : ''}`}>
-      <div className="arch__cols">
-      <div className="arch__main">
-        <div className="arch__head">
-          {!popup && <span className="arch__title">Arch agent</span>}
-          <span className="arch__meta">
-            {loop ? (
-              <>
-                <span className={`arch__pill arch__pill--${armed ? 'on' : 'off'}`}>{armed ? 'armed' : `loop ${loop.status}`}</span>
-                {' · '}{loop.mode}{' · '}{loop.iterationsDone}/{loop.maxIterations || '∞'}
-                {loop.stopReason ? ` · ${loop.stopReason}${loop.stopDetail ? `: ${loop.stopDetail}` : ''}` : ''}
-              </>
-            ) : <span className="arch__pill arch__pill--off">never armed</span>}
-            {running && <span className="arch__pill arch__pill--busy">turn running</span>}
-            {sessionId && <span className="arch__dim"> · session {sessionId.slice(0, 8)}</span>}
-          </span>
-          <button
-            type="button"
-            className="arch__copy-ctx"
-            title="Copy a prompt that tells a repo agent (in any chat on this harness) where this conversation lives and how to read it"
-            onClick={copyAgentPrompt}
-          >
-            {copiedCtx ? '✓ copied' : '⧉ Copy agent prompt'}
-          </button>
-        </div>
-        <div className="arch__lanes" role="tablist" aria-label="Arch lanes">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={lane === 'chat'}
-            className={`arch__lane${lane === 'chat' ? ' arch__lane--on' : ''}`}
-            title="Talk to the arch agent — the only instructions it follows"
-            onClick={() => setLane('chat')}
-          >
-            💬 Chat
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={lane === 'tools'}
-            className={`arch__lane${lane === 'tools' ? ' arch__lane--on' : ''}`}
-            title="The harness tools the arch session gets on every turn"
-            onClick={() => setLane('tools')}
-          >
-            🔌 Tools
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={lane === 'history'}
-            className={`arch__lane${lane === 'history' ? ' arch__lane--on' : ''}`}
-            title="Every tool call of this conversation, with its arguments and result"
-            onClick={() => setLane('history')}
-          >
-            🧾 History
-          </button>
-        </div>
-        {!state?.gateOpen && <div className="arch__banner">Autopilot is disabled by the operator (host GUI). The arch agent cannot act until the gate is open.</div>}
-        {state?.gateOpen && state?.killSwitch === false && <div className="arch__banner">The autopilot kill switch is off: the arch loop is paused.</div>}
-        {error && <div className="arch__banner arch__banner--err">{error}</div>}
-        {lane === 'tools' ? (
-          <ArchToolsPanel />
-        ) : lane === 'history' ? (
-          <ArchHistoryPanel liveTurn={turn} sessionId={sessionId} />
-        ) : (
-        <>
-        <div className="arch__scroll" ref={scrollRef}>
-          {messages.length === 0 && (
-            <div className="arch__empty">
-              <p>No conversation yet. Pick the repos it manages, arm it, then tell it what you want across them.</p>
-              <p className="arch__dim">Its home repo: <code>{state?.home?.path}</code>{state?.home?.exists ? '' : ' (created on first arm)'}</p>
-            </div>
-          )}
-          {visible.map((m, i) => (
-            <div key={i} className="turn">
-              <MessageBubble role={m.role} text={m.text} actor={m.actor} />
-            </div>
-          ))}
-          {turn && (
-            <div className="turn arch__live" data-live={turn.active ? 'on' : 'settled'}>
-              {turn.user && <MessageBubble role="user" text={turn.user.text} actor={turn.user.actor} />}
-              {turn.assistant.steps.length > 0 && <ActivitySteps steps={turn.assistant.steps} />}
-              {turn.assistant.text && <MessageBubble role="assistant" text={turn.assistant.text} />}
-              {turn.active && !turn.assistant.text && turn.assistant.steps.length === 0 && <ThinkingIndicator />}
-              {turn.error && <div className="arch__banner arch__banner--err">{turn.error}</div>}
-            </div>
-          )}
-          {running && !turn && <div className="arch__thinking">arch agent is working…</div>}
-        </div>
-        <div className="arch__composer">
-          <textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder={pending ? 'Pending wake-up (suggest mode) — send it or edit it' : 'Tell the arch agent what you want across the repos it manages…'}
-            rows={3}
-            onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) send(); }}
-          />
-          <div className="arch__composer-row">
-            <button type="button" className="arch__btn arch__btn--primary" onClick={send} disabled={running || !draft.trim()}>
-              {running ? 'busy' : 'Send'}
-            </button>
-            {running && <button type="button" className="arch__btn arch__btn--danger" onClick={stopTurn}>Stop turn</button>}
-            <span className="arch__dim">Ctrl+Enter sends. Messages here are the only instructions it follows.</span>
-          </div>
-        </div>
-        </>
-        )}
-      </div>
-
-      <aside className="arch__side">
+  // The side column's cards — Loop, Managed agents, Fleet, Home repo — rendered
+  // once here, shown either beside the conversation or as the Fleet lane.
+  const sideCards = (
+    <>
         <section className="arch__card">
           <div className="arch__card-head">
             <span>Loop</span>
@@ -527,6 +497,21 @@ export default function Arch({ popup = false, onOpenDock = null }) {
             />
             accept fleet sends (let arch agents on other machines task this harness's repos)
           </label>
+          <label className="arch__scope-row">
+            <input
+              type="checkbox"
+              data-accept-upgrades
+              checked={!!fleet.acceptUpgrades}
+              disabled={!state?.gateOpen}
+              onChange={(e) => setAcceptUpgrades(e.target.checked)}
+            />
+            accept fleet upgrades (let a hub's arch agent bring this harness to main and redeploy it)
+          </label>
+          {fleet.upgradeJob && (
+            <div className="arch__dim arch__mono" data-upgrade-job={fleet.upgradeJob.state}>
+              upgrade {fleet.upgradeJob.id}: {fleet.upgradeJob.state} · {String(fleet.upgradeJob.fromCommit || '').slice(0, 7)} → {String(fleet.upgradeJob.targetCommit || '').slice(0, 7)}{fleet.upgradeJob.requestedBy ? ` · by ` : ''}{fleet.upgradeJob.detail ? ` · ` : ''}
+            </div>
+          )}
           {fleetSources.length === 0 && <div className="arch__dim">No subscribed harnesses. Add one in the Harness Event Feed app (Local tab), then allow sends here.</div>}
           {fleetSources.map((s) => (
             <div key={s.id} className="arch__agent" data-source={s.id}>
@@ -546,6 +531,13 @@ export default function Arch({ popup = false, onOpenDock = null }) {
                 <input type="checkbox" checked={!!s.allowSends} onChange={(e) => setAllowSends(s.id, e.target.checked)} />
                 allow sends to {s.label}
               </label>
+              {s.peer?.status === 'ok' && s.peer?.behind && (
+                <div className="arch__dim" data-behind>
+                  <button type="button" className="arch__btn" disabled={!s.allowSends || !s.peer?.acceptsUpgrades || upgradeNote[s.id] === '…'} onClick={() => upgradePeer(s.id)}>upgrade to this build</button>
+                  {!s.peer?.acceptsUpgrades ? ' its operator has not enabled accept fleet upgrades' : !s.allowSends ? ' allow sends first' : ''}
+                  {upgradeNote[s.id] ? ` · ${upgradeNote[s.id]}` : ''}
+                </div>
+              )}
             </div>
           ))}
           <div className="arch__dim">Both sides opt in: you allow sends to a machine here; its operator accepts fleet sends there. The collector itself only ever reads.</div>
@@ -560,7 +552,159 @@ export default function Arch({ popup = false, onOpenDock = null }) {
           ))}
           <div className="arch__dim">Tools denied in its session: {(state?.disallowedTools || []).join(', ')}. It reads repos through the harness only.</div>
         </section>
-      </aside>
+    </>
+  );
+  const showSide = sideOpen && lane !== 'fleet';
+
+  return (
+    <div className={`arch${popup ? ' arch--popup' : ''}${sideDrag ? ' arch--sidedrag' : ''}`}>
+      <div className="arch__cols" ref={colsRef}>
+      <div className="arch__main">
+        <div className="arch__head">
+          {!popup && <span className="arch__title">Arch agent</span>}
+          <span className="arch__meta">
+            {loop ? (
+              <>
+                <span className={`arch__pill arch__pill--${armed ? 'on' : 'off'}`}>{armed ? 'armed' : `loop ${loop.status}`}</span>
+                {' · '}{loop.mode}{' · '}{loop.iterationsDone}/{loop.maxIterations || '∞'}
+                {loop.stopReason ? ` · ${loop.stopReason}${loop.stopDetail ? `: ${loop.stopDetail}` : ''}` : ''}
+              </>
+            ) : <span className="arch__pill arch__pill--off">never armed</span>}
+            {running && <span className="arch__pill arch__pill--busy">turn running</span>}
+            {sessionId && <span className="arch__dim"> · session {sessionId.slice(0, 8)}</span>}
+          </span>
+          <button
+            type="button"
+            className="arch__copy-ctx"
+            title="Copy a prompt that tells a repo agent (in any chat on this harness) where this conversation lives and how to read it"
+            onClick={copyAgentPrompt}
+          >
+            {copiedCtx ? '✓ copied' : '⧉ Copy agent prompt'}
+          </button>
+        </div>
+        <div className="arch__lanes" role="tablist" aria-label="Arch lanes">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={lane === 'chat'}
+            className={`arch__lane${lane === 'chat' ? ' arch__lane--on' : ''}`}
+            title="Talk to the arch agent — the only instructions it follows"
+            onClick={() => setLane('chat')}
+          >
+            💬 Chat
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={lane === 'tools'}
+            className={`arch__lane${lane === 'tools' ? ' arch__lane--on' : ''}`}
+            title="The harness tools the arch session gets on every turn"
+            onClick={() => setLane('tools')}
+          >
+            🔌 Tools
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={lane === 'history'}
+            className={`arch__lane${lane === 'history' ? ' arch__lane--on' : ''}`}
+            title="Every tool call of this conversation, with its arguments and result"
+            onClick={() => setLane('history')}
+          >
+            🧾 History
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={lane === 'fleet'}
+            className={`arch__lane${lane === 'fleet' ? ' arch__lane--on' : ''}`}
+            title="The loop, the managed agents, the fleet and the home repo, full width"
+            onClick={() => setLane('fleet')}
+          >
+            🛰 Fleet
+          </button>
+          {lane !== 'fleet' && (
+            <button
+              type="button"
+              className="arch__side-toggle"
+              aria-pressed={sideOpen}
+              title={sideOpen ? 'Hide the side column (the Fleet lane keeps its cards)' : 'Show the side column'}
+              onClick={toggleSide}
+            >
+              {sideOpen ? '▥ hide side' : '▥ show side'}
+            </button>
+          )}
+        </div>
+        {!state && <div className="arch__banner arch__banner--loading" data-loading>Loading the arch state…</div>}
+        {state && !state.gateOpen && <div className="arch__banner">Autopilot is disabled by the operator (host GUI). The arch agent cannot act until the gate is open.</div>}
+        {state?.gateOpen && state?.killSwitch === false && <div className="arch__banner">The autopilot kill switch is off: the arch loop is paused.</div>}
+        {error && <div className="arch__banner arch__banner--err">{error}</div>}
+        {lane === 'tools' ? (
+          <ArchToolsPanel />
+        ) : lane === 'fleet' ? (
+          <div className="arch__overview" data-overview>{sideCards}</div>
+        ) : lane === 'history' ? (
+          <ArchHistoryPanel liveTurn={turn} sessionId={sessionId} repoNames={repoNames} />
+        ) : (
+        <>
+        <div className="arch__scroll" ref={scrollRef}>
+          {messages.length === 0 && (
+            <div className="arch__empty">
+              <p>No conversation yet. Pick the repos it manages, arm it, then tell it what you want across them.</p>
+              <p className="arch__dim">Its home repo: <code>{state?.home?.path}</code>{state?.home?.exists ? '' : ' (created on first arm)'}</p>
+            </div>
+          )}
+          {visible.map((m, i) => (
+            <div key={i} className="turn">
+              <MessageBubble role={m.role} text={m.text} actor={m.actor} />
+            </div>
+          ))}
+          {turn && (
+            <div className="turn arch__live" data-live={turn.active ? 'on' : 'settled'}>
+              {turn.user && <MessageBubble role="user" text={turn.user.text} actor={turn.user.actor} />}
+              {turn.assistant.steps.length > 0 && <ActivitySteps steps={turn.assistant.steps} />}
+              {turn.assistant.text && <MessageBubble role="assistant" text={turn.assistant.text} />}
+              {turn.active && !turn.assistant.text && turn.assistant.steps.length === 0 && <ThinkingIndicator />}
+              {turn.error && <div className="arch__banner arch__banner--err">{turn.error}</div>}
+            </div>
+          )}
+          {running && !turn && <div className="arch__thinking">arch agent is working…</div>}
+        </div>
+        <div className="arch__composer">
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder={pending ? 'Pending wake-up (suggest mode) — send it or edit it' : 'Tell the arch agent what you want across the repos it manages…'}
+            rows={3}
+            onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) send(); }}
+          />
+          <div className="arch__composer-row">
+            <button type="button" className="arch__btn arch__btn--primary" onClick={send} disabled={running || !draft.trim()}>
+              {running ? 'busy' : 'Send'}
+            </button>
+            {running && <button type="button" className="arch__btn arch__btn--danger" onClick={stopTurn}>Stop turn</button>}
+            <span className="arch__dim">Ctrl+Enter sends. Messages here are the only instructions it follows.</span>
+          </div>
+        </div>
+        </>
+        )}
+      </div>
+
+      {showSide && (
+        <>
+          <div
+            className="arch__gutter"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Drag to resize the side column"
+            title="Drag to resize"
+            onPointerDown={startSideDrag}
+          />
+          <aside className="arch__side" style={{ flex: `0 0 ${sideWidth}px`, width: sideWidth }} data-side-width={sideWidth}>
+            {sideCards}
+          </aside>
+        </>
+      )}
       </div>
     </div>
   );

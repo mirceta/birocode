@@ -41,10 +41,19 @@ function str(v) {
 // What the call did, in one plain sentence — the harness tools have a fixed
 // vocabulary so each gets its own phrasing; a built-in tool falls back to its
 // name plus the summary the transcript reader derived.
-export function describeCall(call) {
+// A repo id reads as its name when the caller knows it (Arch passes the map it
+// builds from the state); the id stays visible, shortened, so it is still
+// greppable against the transcript.
+export function repoLabel(id, repoNames) {
+  const s = str(id);
+  const name = repoNames && repoNames[s];
+  return name && name !== s ? `${name} (${s.slice(0, 8)}…)` : s;
+}
+
+export function describeCall(call, repoNames) {
   const a = call.input && typeof call.input === 'object' ? call.input : {};
   const where = a.machine && a.machine !== 'self' ? ` on ${a.machine}` : '';
-  const repo = a.repoId ? str(a.repoId) : 'a repo';
+  const repo = a.repoId ? repoLabel(a.repoId, repoNames) : 'a repo';
   const tail = a.tail ?? 6;
   switch (call.tool) {
     case 'list_agents': return 'Listed the managed agents across the fleet';
@@ -108,7 +117,7 @@ function Value({ v }) {
   return <pre className="arch-hist__pre">{pretty(v)}</pre>;
 }
 
-function Args({ input }) {
+function Args({ input, repoNames }) {
   if (input === null || input === undefined) return <div className="arch-hist__none">no arguments</div>;
   if (typeof input !== 'object' || Array.isArray(input)) return <Value v={input} />;
   const keys = Object.keys(input);
@@ -118,7 +127,7 @@ function Args({ input }) {
       {keys.map((k) => (
         <div className="arch-hist__arg" key={k}>
           <code className="arch-hist__key">{k}</code>
-          <div className="arch-hist__val"><Value v={input[k]} /></div>
+          <div className="arch-hist__val">{k === 'repoId' ? <span className="arch-hist__repo">{repoLabel(input[k], repoNames)}</span> : <Value v={input[k]} />}</div>
         </div>
       ))}
     </div>
@@ -167,12 +176,12 @@ function clip(s, n = BRIEF_MAX) {
   const one = str(s).replace(/\s+/g, ' ').trim();
   return one.length > n ? `${one.slice(0, n - 1)}…` : one;
 }
-export function briefArgs(input) {
+export function briefArgs(input, repoNames) {
   if (input === null || input === undefined) return '';
   if (typeof input !== 'object' || Array.isArray(input)) return clip(pretty(input));
   const keys = Object.keys(input);
   if (keys.length === 0) return '';
-  return clip(keys.map((k) => `${k}: ${typeof input[k] === 'string' ? input[k] : pretty(input[k])}`).join(' · '));
+  return clip(keys.map((k) => `${k}: ${k === 'repoId' ? repoLabel(input[k], repoNames) : typeof input[k] === 'string' ? input[k] : pretty(input[k])}`).join(' · '));
 }
 export function briefResult(call) {
   if (call.ok === null || call.ok === undefined) return call.live ? 'running…' : 'no result';
@@ -187,19 +196,19 @@ export function briefResult(call) {
   return clip(r.json !== undefined ? pretty(r.json) : r.text);
 }
 
-function CallCard({ call, open }) {
+function CallCard({ call, open, repoNames }) {
   const [showRaw, setShowRaw] = useState(false);
   const running = call.ok === null || call.ok === undefined;
   const state = running ? (call.live ? 'running' : 'unknown') : call.ok ? 'ok' : 'error';
   const icon = call.server === 'arch' ? (ICONS[call.tool] || '🔌') : '🔧';
   const hasDuration = call.durationMs !== null && call.durationMs !== undefined;
-  const args = briefArgs(call.input);
+  const args = briefArgs(call.input, repoNames);
   return (
     <details className={`arch-hist__call arch-hist__call--${state}`} open={open} data-tool={call.tool} data-state={state} data-id={call.id}>
       <summary className="arch-hist__sum">
         <span className="arch-hist__icon" aria-hidden="true">{icon}</span>
         <span className="arch-hist__what">
-          <span className="arch-hist__sentence">{describeCall(call)}</span>
+          <span className="arch-hist__sentence">{describeCall(call, repoNames)}</span>
           <span className="arch-hist__toolname">
             <code>{call.tool}</code>
             {call.server === 'arch'
@@ -223,7 +232,7 @@ function CallCard({ call, open }) {
       <div className="arch-hist__body">
         <div className="arch-hist__section">
           <div className="arch-hist__label">arguments</div>
-          <Args input={call.input} />
+          <Args input={call.input} repoNames={repoNames} />
         </div>
         <div className="arch-hist__section">
           <div className="arch-hist__label">result</div>
@@ -278,7 +287,7 @@ export function mergeLive(fetched, liveTurn) {
   return { calls: [...calls, ...extra], liveCount: extra.length };
 }
 
-export default function ArchHistoryPanel({ liveTurn = null, sessionId = null }) {
+export default function ArchHistoryPanel({ liveTurn = null, sessionId = null, repoNames = null }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [toolFilter, setToolFilter] = useState(null); // null = all
@@ -322,7 +331,7 @@ export default function ArchHistoryPanel({ liveTurn = null, sessionId = null }) 
   const q = query.trim().toLowerCase();
   const shown = calls.filter((c) => (!toolFilter || c.tool === toolFilter)
     && (!errorsOnly || c.ok === false)
-    && (!q || `${c.tool} ${describeCall(c)} ${pretty(c.input)} ${c.result || ''}`.toLowerCase().includes(q)));
+    && (!q || `${c.tool} ${describeCall(c, repoNames)} ${pretty(c.input)} ${c.result || ''}`.toLowerCase().includes(q)));
 
   // Group under turns; the live-only calls form their own group at the "now" end.
   const turnsMeta = new Map((data?.turns || []).map((t) => [t.index, t]));
@@ -412,7 +421,7 @@ export default function ArchHistoryPanel({ liveTurn = null, sessionId = null }) 
               {g.meta.prompt && <span className="arch-hist__prompt" title={g.meta.prompt}>“{g.meta.prompt}”</span>}
             </header>
             <div className="arch-hist__calls">
-              {g.calls.map((c) => <CallCard key={`${openAll.v}:${c.id}`} call={c} open={openAll.open} />)}
+              {g.calls.map((c) => <CallCard key={`${openAll.v}:${c.id}`} call={c} open={openAll.open} repoNames={repoNames} />)}
             </div>
           </section>
         ))}

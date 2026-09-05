@@ -3,120 +3,204 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Understanding — LAN bypass for the IP gate</title>
+<title>Understanding — Management vs Execution layers</title>
 <style>
-  :root { --bg:#14161a; --card:#1d2027; --ink:#e6e8ec; --mut:#9aa3ad; --ok:#4cc38a; --no:#e5484d; --warn:#f5a524; --line:#2c313a; --acc:#6ea8fe; }
+  :root { --bg:#14161a; --card:#1d2027; --ink:#e6e8ec; --mut:#9aa3ad; --ok:#4cc38a; --no:#e5484d; --warn:#f5a524; --line:#2c313a; --acc:#6ea8fe; --mgmt:#b38df2; --exec:#5bc8d6; }
   * { box-sizing:border-box }
   body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 system-ui, sans-serif }
   header { padding:20px 24px 8px } h1 { margin:0 0 4px; font-size:22px } .sub { color:var(--mut) }
   nav { display:flex; gap:8px; padding:8px 24px; flex-wrap:wrap }
   nav button { background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:6px 12px; cursor:pointer }
   nav button.on { border-color:var(--acc); color:var(--acc) }
-  main { padding:8px 24px 40px; max-width:1100px }
+  main { padding:8px 24px 48px; max-width:1150px }
   section { display:none } section.on { display:block }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin:12px 0 }
   code { background:#0f1114; padding:1px 5px; border-radius:4px; font-size:13px }
-  .flow { display:grid; grid-template-columns: 1fr; gap:8px }
-  .step { display:flex; gap:12px; align-items:flex-start; padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:#181b21 }
-  .step .n { width:26px; height:26px; border-radius:50%; background:var(--line); display:grid; place-items:center; font-weight:600; flex:none }
-  .step.hit { border-color:var(--ok); background:#15251d } .step.hit .n { background:var(--ok); color:#000 }
-  .step.miss { opacity:.55 } .step.reject { border-color:var(--no); background:#2a1717 } .step.reject .n { background:var(--no) }
-  .step.new { box-shadow: inset 3px 0 0 var(--warn) }
-  .verdict { font-weight:700; margin-top:8px } .verdict.ok { color:var(--ok) } .verdict.no { color:var(--no) }
-  .sim { display:grid; grid-template-columns: 1fr 1fr; gap:16px } @media (max-width:800px){ .sim { grid-template-columns:1fr } }
-  label { display:block; margin:8px 0 4px; color:var(--mut); font-size:13px }
-  input, select { width:100%; background:#0f1114; color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:6px 8px; font:inherit }
-  .presets button { margin:4px 6px 0 0; font-size:13px; background:#0f1114; border:1px solid var(--line); color:var(--ink); border-radius:6px; padding:4px 8px; cursor:pointer }
   table { border-collapse:collapse; width:100%; font-size:14px } td, th { border-bottom:1px solid var(--line); padding:6px 8px; text-align:left; vertical-align:top }
   .ok { color:var(--ok) } .no { color:var(--no) } .warn { color:var(--warn) }
   .tag { display:inline-block; font-size:11px; padding:1px 6px; border-radius:99px; border:1px solid var(--warn); color:var(--warn); margin-left:6px; vertical-align:middle }
+  /* layer diagram */
+  .stage { display:flex; gap:16px; flex-wrap:wrap }
+  .col { flex:1 1 320px }
+  .appbox { border:1px solid var(--line); border-radius:12px; background:#181b21; padding:10px; margin-bottom:10px }
+  .appbox h4 { margin:2px 0 8px; font-size:13px; letter-spacing:.4px; text-transform:uppercase; color:var(--mut) }
+  .appbox.mgmt { border-color:var(--mgmt) } .appbox.mgmt h4 { color:var(--mgmt) }
+  .appbox.exec { border-color:var(--exec) } .appbox.exec h4 { color:var(--exec) }
+  .chip { display:inline-block; margin:3px; padding:5px 10px; border-radius:8px; border:1px solid var(--line); background:#0f1114; font-size:13px; transition: all .5s }
+  .chip.mgmt { border-color:var(--mgmt); color:var(--mgmt) }
+  .chip.exec { border-color:var(--exec); color:var(--exec) }
+  .chip.ghost { opacity:.25; text-decoration:line-through }
+  .switch { margin:10px 0 } .switch button { background:#0f1114; border:1px solid var(--line); color:var(--ink); border-radius:8px; padding:6px 14px; cursor:pointer; margin-right:8px }
+  .switch button.on { border-color:var(--warn); color:var(--warn) }
+  .flowline { color:var(--mut); font-size:13px; margin:6px 0 }
+  .arrowbox { text-align:center; color:var(--mut); font-size:20px; padding:2px 0 }
+  .verdict { font-weight:700 } .verdict.ok { color:var(--ok) } .verdict.no { color:var(--no) }
+  .cols2 { display:grid; grid-template-columns:1fr 1fr; gap:16px } @media (max-width:860px){ .cols2 { grid-template-columns:1fr } }
+  ul { margin:6px 0 6px 18px; padding:0 } li { margin:4px 0 }
 </style>
 </head>
 <body>
 <header>
-  <h1>LAN bypass for the IP gate <span class="tag">openspec lan-bypass-ip-gate</span></h1>
-  <div class="sub">What the gate decides now, why the socket peer is never the input, and why it fails closed behind a forgetful proxy.</div>
+  <h1>Management layer vs Execution layer <span class="tag">openspec split-management-dashboard</span></h1>
+  <div class="sub">Where the Arch agent and Ideas should live: a second dashboard now, a separate refresh-to-update app next — and why the arch brain never moves.</div>
 </header>
 <nav>
-  <button data-v="why" class="on">Why</button>
-  <button data-v="flow">Decision flow (simulator)</button>
-  <button data-v="cases">Cases table</button>
-  <button data-v="ship">What ships / what to do on MONSTER</button>
+  <button data-v="why" class="on">The split</button>
+  <button data-v="phase1">Phase 1 — two dashboards</button>
+  <button data-v="phase2">Phase 2 — the Management App</button>
+  <button data-v="phase3">Phase 3 — fleet upgrades</button>
+  <button data-v="options">Options weighed</button>
 </nav>
 <main>
 
 <section id="why" class="on">
   <div class="card">
-    <p><b>The tax.</b> The IP gate admits exact IPs only. Every harness in the fleet (this box, MONSTER at <code>192.168.0.143</code>, any future peer) talks to the others from a LAN address, so each pair needed both IPs approved by hand on both sides, and a missed one showed up as a silent <code>403</code>. Same for the Operator's own phone/laptop on Wi-Fi every time DHCP moved it.</p>
-    <p><b>What the gate really buys.</b> It hides the login page from the internet. Everything that passes it still needs the password, and a compromise behind the password is total (the harness runs claude with <code>--dangerously-skip-permissions</code> as Administrator). So keep the gate for the internet door, and stop applying it to addresses that are physically on the Operator's own network.</p>
-    <p><b>The change.</b> A host-side list <code>LanBypassCidrs</code> (e.g. <code>192.168.0.0/24</code>). A request whose <em>resolved</em> client IP falls in a range skips the guest list. Default is empty, so nothing changes until the Operator writes a range down. The web UI can only show it, never edit it (the old asymmetry rule stands).</p>
-    <p><b>Convention changed on purpose.</b> plans/auth-ip-filter.md said "exact IPs only, no CIDR, no exemptions". The Operator was warned and confirmed on 2026-09-03.</p>
-  </div>
-</section>
-
-<section id="flow">
-  <div class="sim">
-    <div class="card">
-      <h3 style="margin-top:0">Request</h3>
-      <label>Socket peer (who opened the TCP connection to :5099)</label>
-      <input id="peer" value="192.168.0.143">
-      <label>X-Forwarded-For header (blank = none)</label>
-      <input id="xff" value="">
-      <label>Trusted proxies (config: TrustedProxyIps + loopback always)</label>
-      <input id="proxies" value="192.168.0.122">
-      <label>LanBypassCidrs (config)</label>
-      <input id="cidrs" value="192.168.0.0/24">
-      <label>Approved guests (allowlist)</label>
-      <input id="guests" value="127.0.0.1, 89.212.3.156">
-      <label>Valid device cookie on this request?</label>
-      <select id="cookie"><option value="no">no</option><option value="yes">yes</option></select>
-      <div class="presets">
-        <label>Presets</label>
-        <button data-p="lan">MONSTER hits us directly</button>
-        <button data-p="inet">Internet visitor via IIS (.122)</button>
-        <button data-p="forge">Internet visitor forging a LAN first hop</button>
-        <button data-p="direct-forge">Direct peer forging XFF</button>
-        <button data-p="noxff">IIS forgot to forward (fail closed)</button>
-        <button data-p="local">Operator on localhost</button>
-        <button data-p="lanviaproxy">LAN phone going through IIS</button>
-      </div>
-    </div>
-    <div class="card">
-      <h3 style="margin-top:0">Gate decision</h3>
-      <div id="resolved" class="sub"></div>
-      <div class="flow" id="steps"></div>
-      <div id="verdict" class="verdict"></div>
-    </div>
-  </div>
-</section>
-
-<section id="cases">
-  <div class="card">
     <table>
-      <thead><tr><th>Case</th><th>Peer</th><th>X-Forwarded-For</th><th>Resolved IP</th><th>Before</th><th>After</th></tr></thead>
+      <thead><tr><th style="width:180px">Term</th><th>Definition</th></tr></thead>
       <tbody>
-        <tr><td>MONSTER polls us</td><td>192.168.0.143</td><td>—</td><td>192.168.0.143</td><td class="no">403 unless approved</td><td class="ok">admitted via LAN</td></tr>
-        <tr><td>Operator's phone on Wi-Fi</td><td>192.168.0.57 (DHCP)</td><td>—</td><td>192.168.0.57</td><td class="no">re-approve on each new IP</td><td class="ok">admitted via LAN</td></tr>
-        <tr><td>Internet visitor via IIS</td><td>192.168.0.122</td><td>203.0.113.9</td><td>203.0.113.9</td><td class="no">403 unless approved</td><td class="no">unchanged: 403 unless approved / cookie</td></tr>
-        <tr><td>Internet visitor forging a LAN hop</td><td>192.168.0.122</td><td>192.168.0.5, 203.0.113.9</td><td>203.0.113.9 (last hop)</td><td class="no">403</td><td class="no">403</td></tr>
-        <tr><td>Direct internet peer forging XFF</td><td>203.0.113.9</td><td>192.168.0.5 (ignored)</td><td>203.0.113.9</td><td class="no">403</td><td class="no">403</td></tr>
-        <tr><td>IIS stops forwarding</td><td>192.168.0.122</td><td>—</td><td>192.168.0.122</td><td class="no">403 (unless .122 approved)</td><td class="no warn">fail closed: LAN rule not applied</td></tr>
-        <tr><td>Operator on localhost</td><td>127.0.0.1</td><td>—</td><td>127.0.0.1</td><td class="ok">seeded guest</td><td class="ok">seeded guest (LAN rule not applied to a bare loopback peer)</td></tr>
-        <tr><td>LAN phone through IIS</td><td>192.168.0.122</td><td>192.168.0.77</td><td>192.168.0.77</td><td class="no">403 unless approved</td><td class="ok">admitted via LAN</td></tr>
+        <tr><td><b>Harness</b></td><td>The deployed Claude Web app on each box — heavy backend: runs, loops, arch brain, collector. Redeploy = build + swap + dead-man switch.</td></tr>
+        <tr><td><b style="color:var(--exec)">Execution Dashboard</b></td><td>The current dashboard: per-repo docks, runs, Autopilot, Agent Audit. "What are the agents doing right now on this box."</td></tr>
+        <tr><td><b style="color:var(--mgmt)">Management Dashboard</b></td><td>A new parallel top-level surface for direction-setting: the Arch agent and Ideas.</td></tr>
+        <tr><td><b>Management App</b></td><td>The events app grown up: a separate static page that calls Harness REST APIs. Change it → refresh, no redeploy.</td></tr>
+        <tr><td><b>Arch Backend</b></td><td>The arch agent's server side: tools, loop, fleet client, audit. In-process C# inside the Harness — a static page cannot host it.</td></tr>
       </tbody>
     </table>
-    <p class="sub">Password layer unchanged in every row: <code>/api/*</code> still needs the session cookie or <code>X-Auth-Password</code>. A LAN admission never mints a trusted-device cookie.</p>
+  </div>
+  <div class="card">
+    <p><b>The observation.</b> The dashboard's four summonable panels are two different kinds of thing. Autopilot and Agent Audit answer "what is running on this box, and what did it do" — <span style="color:var(--exec)">execution</span>. The Arch agent and Ideas answer "what should the fleet work on next" — <span style="color:var(--mgmt)">management</span>. Today all four sit in one rail, so the management tools look like just more execution widgets.</p>
+    <p><b>Why the split is real, not cosmetic.</b> Underneath, everything management-flavoured is already fleet-scoped: the Arch agent scopes repos across machines, Ideas syncs across machines through the hub, the collector watches every harness. Everything execution-flavoured is box-scoped: docks, runs, the loop engine, the audit. The UI never caught up with the architecture.</p>
+    <p><b>The two-step plan.</b> Phase 1 separates the surfaces inside the Harness (cheap, ships now). Phase 2 moves the management surface out of the Harness into the Management App (refresh-to-update, outlives any one harness). Phase 1 is deliberately thin — pure placement, components reused unchanged — so nothing built now is thrown away by phase 2.</p>
   </div>
 </section>
 
-<section id="ship">
+<section id="phase1">
   <div class="card">
+    <div class="switch">
+      <button id="btnBefore" class="on">Today</button>
+      <button id="btnAfter">After phase 1</button>
+      <span class="sub" id="stageCaption">One dashboard; all four panels summonable from one rail.</span>
+    </div>
+    <div class="stage">
+      <div class="col">
+        <div class="appbox exec">
+          <h4 id="execTitle">Dashboard (the only one)</h4>
+          <div class="flowline">docks grid — always on</div>
+          <span class="chip exec">Autopilot</span>
+          <span class="chip exec">Agent Audit</span>
+          <span class="chip mgmt" id="chipIdeas">Ideas</span>
+          <span class="chip mgmt" id="chipArch">Arch (pop-up)</span>
+          <div class="flowline">panel rail: summon / dismiss per device</div>
+        </div>
+      </div>
+      <div class="col" id="mgmtCol" style="display:none">
+        <div class="appbox mgmt">
+          <h4>Management</h4>
+          <div class="flowline">parallel top-level tab of the same overlay</div>
+          <span class="chip mgmt">Arch agent — full surface (Chat · Tools · History, scope, fleet)</span>
+          <span class="chip mgmt">Ideas — full panel</span>
+          <div class="flowline">components reused unchanged; only the mount moves</div>
+        </div>
+      </div>
+    </div>
+    <p class="sub">Entry stays as it is: the title button or Ctrl/Cmd+Shift+D opens the dashboard; a two-tab header (<span style="color:var(--exec)">Execution</span> | <span style="color:var(--mgmt)">Management</span>) switches views, remembered per device. Advanced mode only, like the dashboard itself. Basic mode is untouched.</p>
+  </div>
+</section>
+
+<section id="phase2">
+  <div class="card">
+    <div class="cols2">
+      <div>
+        <div class="appbox mgmt">
+          <h4>Management App (static page)</h4>
+          <span class="chip mgmt">Events feed</span>
+          <span class="chip mgmt">Arch UI</span>
+          <span class="chip mgmt">Ideas UI</span>
+          <div class="flowline">one self-contained page + tiny server, like the events app today. Change → save → refresh. No harness redeploy, ever.</div>
+        </div>
+        <div class="arrowbox">↓ REST only, same-origin via the localview proxy ↓</div>
+        <div class="appbox">
+          <h4>Home Harness (any box)</h4>
+          <span class="chip">/api/arch — the Arch Backend</span>
+          <span class="chip">/api/notes — Ideas store + hub</span>
+          <span class="chip">/api/collector — event sources</span>
+          <div class="flowline">the brain stays here: run slot, CLI spawn, loop engine, protected fleet credentials</div>
+        </div>
+        <div class="arrowbox">↓ server-side relays the SPA never sees ↓</div>
+        <div class="appbox">
+          <h4>The fleet</h4>
+          <span class="chip">peer API on every harness</span>
+          <span class="chip">collector pulls /api/events</span>
+          <span class="chip">ideas hub sync</span>
+          <div class="flowline">LAN bypass makes every hop credential-light; the fleet client carries the stored creds</div>
+        </div>
+      </div>
+      <div>
+        <p><b>Why the SPA talks to ONE harness, not N.</b> A browser page calling many harnesses directly means CORS and a credential per box in the page. The pattern that already works is the collector's: the page speaks only to its home Harness — same origin through the proxy, so the session cookie just works — and that Harness relays to the fleet with the peer API and stored credentials it already has. Fleet reach comes free.</p>
+        <p><b>Why the Arch Backend never moves.</b> send_task claims the builder run slot and spawns the CLI; the loop engine ticks the arch loop; the fleet client unprotects stored credentials. All of that is in-process server code. A static page has no process. So "move the arch agent to the events app" can only ever mean moving its <i>face</i> — which is cheap, because the Arch tab already does everything over REST.</p>
+        <p><b>What phase 2 actually is, then:</b> port the Arch and Ideas UIs into the Management App's page, against the same endpoints they call today. The Harness's Management tab from phase 1 shrinks to an embed or a link. Nothing server-side changes.</p>
+        <p><b>Built 2026-09-05 (openspec management-app):</b> a second Vite build of the same React source (<code>client/manage.html</code> → <code>events-app/manage/</code>), served by the harness from the worktree at <code>/api/localview/&lt;self&gt;/app/events-feed/manage/index.html</code>. Tabs Arch · Ideas · Events (the feed page embedded). Rebuild + refresh is the whole update cycle; verified on live through the proxy with the real fleet state.</p>
+        <p><b>Layouts (2026-09-05, openspec management-app-panes):</b> the app has a <i>Tabs · Side by side</i> switch. Side by side renders Arch, Ideas and Events as columns with a slim bar each (label + hide ×), draggable dividers between them and per-device persistence of the choice, the hidden set and the widths — the same idea as the harness's own multi-pane strip behind the machine/project chip. Narrow windows fall back to tabs and keep the choice.</p>
+        <p><b>Arch surface (2026-09-05, openspec arch-side-column):</b> the right-hand column (Loop · Managed agents · Fleet · Home repo) has a draggable divider and a hide/show toggle, and the same cards form a fourth lane, <i>🛰 Fleet</i>, rendered full width as a grid. Width and visibility persist per device; narrow screens stack as before.</p>
+        <p><b>Status tab (2026-09-05, openspec fleet-status-tab):</b> a fourth Management view, <i>Status</i>, shows every repo agent on every machine in the dashboard dock strip's language — a chip per agent with the running dot, the name and the branch, green when it sits on its default branch (free to be given work), amber when claimed on a feature branch — with filters All · on main · not on main · running, a detail card per chip and each machine's posture (build, behind, opt-ins, arch scope). One hub endpoint, <code>/api/arch/fleet/status</code>, relays this box's docks and every peer's cached describe, so the page never waits on another machine. The events page lost its Agents tab in favour of it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="phase3">
+  <div class="card">
+    <h2>Phase 3 — the arch agent keeps the fleet on one build <span class="tag">openspec arch-peer-upgrades</span></h2>
+    <p><b>The gap it closes.</b> Every fleet feature so far assumed the peers run a compatible build, and every upgrade was a person at each box running <code>swap.ps1</code>. Now the hub's arch agent sees drift (<code>list_machines</code> carries <code>version</code>, <code>hubVersion</code>, <code>behind</code>) and can drive the peer's redeploy itself.</p>
+    <div class="flow">
+      <div class="flowbox"><b>1 · notice</b><br>peer describe says build X, hub is build Y → <i>behind</i></div>
+      <div class="flowarrow">→</div>
+      <div class="flowbox"><b>2 · posture</b><br>loop armed · sends allowed · peer <i>accepts fleet upgrades</i> · versions differ</div>
+      <div class="flowarrow">→</div>
+      <div class="flowbox"><b>3 · upgrade_peer</b><br>POST /api/arch/peer/upgrade {ref}</div>
+      <div class="flowarrow">→</div>
+      <div class="flowbox"><b>4 · the peer does it</b><br>ff-only pull on its branch · carry new config keys · detached swap.ps1 · dead-man switch</div>
+      <div class="flowarrow">→</div>
+      <div class="flowbox"><b>5 · keep is earned</b><br>new process finds the job file; running the target commit → disarm; else rollback</div>
+    </div>
+    <p><b>Why the peer owns the deploy.</b> The receiving harness runs the same committed script its operator would, with the same guard and the same auto-rollback; the caller only says <i>which ref</i>. Refusals are honest and leave the tree untouched: <code>not-on-branch</code>, <code>dirty</code>, <code>pull-failed</code>, <code>current</code>, <code>busy</code>, <code>not-accepting</code>.</p>
+    <p><b>Two opt-ins, again.</b> Sends must be allowed to that machine on the hub, and its operator must tick <i>accept fleet upgrades</i> on its own Arch tab. The Fleet card shows drift and offers an operator <i>upgrade to this build</i> button under the same rules — the arch agent and the human use one path.</p>
+    <p><b>Built 2026-09-05.</b> Verified on an isolated instance (posture + API + Fleet card) and by a real self-upgrade of this box's live harness through the peer endpoint; the first MONSTER upgrade needs one last hand deploy there so it has the endpoint.</p>
+  </div>
+</section>
+
+<section id="options">
+  <div class="card">
+    <table>
+      <thead><tr><th>Option</th><th>What it means</th><th>Verdict</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>A — management moves out</b></td>
+          <td>Events app grows into the Management App; Arch + Ideas UIs move there; Harness keeps the backends and serves REST.</td>
+          <td class="verdict ok">chosen (phase 2)</td>
+          <td>Refresh-to-update; separation of concerns matches the fleet-scoped nature of management; compatible with the 2026-09-02 decision that the arch agent stays hosted in the Harness (only the UI moves).</td>
+        </tr>
+        <tr>
+          <td><b>B — events app moves in</b></td>
+          <td>The event feed becomes a first-class Harness citizen.</td>
+          <td class="verdict no">rejected</td>
+          <td>Moves the fast-iterating surface onto the slow deploy train — every tweak would cost a build + swap + dead-man cycle. The wrong direction.</td>
+        </tr>
+        <tr>
+          <td><b>C — hot-swap the harness client</b></td>
+          <td>Make live pick up a new client/dist without restarting the process.</td>
+          <td class="verdict warn">noted, not chosen</td>
+          <td>Would fix the redeploy pain alone (the harness frontend is also just static files), but gives no separation of concerns and no app that outlives a single harness. Worth having someday; not a substitute.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="card">
+    <p><b>Constraints carried into the spec:</b></p>
     <ul>
-      <li><b>Code:</b> <code>LanBypass.cs</code> (ranges + fail-closed rule), <code>ClientIp.GetOrigin</code> (resolved IP + proxy facts), one new branch in <code>IpFilterMiddleware</code> between allowlist and device cookie, <code>LanBypass.Configure</code> at startup, <code>GET /api/ipfilter</code> reports <code>lanBypass</code> + <code>callerVia</code>, Guests page shows the ranges.</li>
-      <li><b>Tests:</b> <code>LanBypassTests.cs</code> — parsing, direct LAN peer, forged hops, proxy-forwarded internet IP, proxy without XFF (fail closed), loopback without XFF, empty config.</li>
-      <li><b>Config:</b> repo <code>appsettings.json</code> carries <code>"LanBypassCidrs": ["192.168.0.0/24"]</code>. <span class="warn">swap.ps1 preserves live's own appsettings.json</span> — add the key there when deploying, or live keeps the old behaviour.</li>
-      <li><b>MONSTER:</b> needs the same build <em>and</em> the range in its own config before the gate stops biting in both directions. The current 401 storm from MONSTER on <code>/api/events</code> is a different problem (a stale password stored in its collector source for this box).</li>
-      <li><b>Log signature:</b> <code>[IPFILTER] LAN bypass on for 192.168.0.0/24 …</code> at startup; <code>[IPFILTER] Admitted 192.168.0.143 via LAN bypass 192.168.0.0/24</code> per admission.</li>
+      <li>The Arch Backend stays in the Harness — restated from the 2026-09-02 decision; phase 2 must not be read as reopening it.</li>
+      <li>Phase 1 moves mounts only: the Arch page, Ideas panel and their APIs are reused unchanged, so phase 2 can lift them without unwinding anything.</li>
+      <li>The Execution Dashboard keeps Autopilot and Agent Audit exactly as they are; docks stay always-on.</li>
+      <li>New UI defaults to Advanced mode (repo convention); Basic mode never sees either dashboard.</li>
     </ul>
   </div>
 </section>
@@ -124,63 +208,23 @@
 
 <script>
 (function(){
-  // nav
   document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => {
     document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
     document.querySelectorAll('main section').forEach(s => s.classList.toggle('on', s.id === b.dataset.v));
   }));
-
-  const $ = id => document.getElementById(id);
-  const list = s => s.split(',').map(x => x.trim()).filter(Boolean);
-  const norm = ip => { ip = ip.trim(); if (ip === '::1' || /^127\./.test(ip)) return '127.0.0.1'; return ip.replace(/^::ffff:/, ''); };
-  const toN = ip => { const p = ip.split('.').map(Number); return p.length === 4 && p.every(n => n >= 0 && n <= 255) ? ((p[0]<<24)>>>0) + (p[1]<<16) + (p[2]<<8) + p[3] : null; };
-  const inCidr = (ip, cidr) => {
-    const [net, bitsS] = cidr.split('/'); const bits = bitsS === undefined ? 32 : Number(bitsS);
-    const a = toN(ip), n = toN(net); if (a === null || n === null || isNaN(bits) || bits < 0 || bits > 32) return false;
-    if (bits === 0) return true; const mask = (~0 << (32 - bits)) >>> 0; return ((a & mask) >>> 0) === ((n & mask) >>> 0);
-  };
-
-  function decide() {
-    const peer = norm($('peer').value), xff = $('xff').value.trim();
-    const proxies = list($('proxies').value).map(norm), cidrs = list($('cidrs').value), guests = list($('guests').value).map(norm);
-    const cookie = $('cookie').value === 'yes';
-    const trusted = peer === '127.0.0.1' || proxies.includes(peer);
-    let ip = peer, forwarded = false;
-    if (trusted && xff) { const hops = xff.split(','); const last = hops[hops.length - 1].trim(); if (last) { ip = norm(last); forwarded = true; } }
-    $('resolved').innerHTML = `Resolved client IP: <b>${ip}</b> · peer is trusted proxy: <b>${trusted}</b> · forwarded hop used: <b>${forwarded}</b>` +
-      (!trusted && xff ? ' · <span class="warn">X-Forwarded-For ignored (peer is not a trusted proxy)</span>' : '');
-
-    const steps = [
-      { t: `Allowlist: is ${ip} an approved guest?`, hit: guests.includes(ip) },
-      { t: `LAN bypass (new): eligible = not (trusted-proxy peer without a forwarded hop) → ${!(trusted && !forwarded)}; ${ip} in ${cidrs.join(', ') || '(no ranges)'}?`,
-        hit: !(trusted && !forwarded) && cidrs.some(c => inCidr(ip, c)), isNew: true,
-        note: (trusted && !forwarded) ? 'fail closed: the proxy forwarded nothing, so the resolved IP is the proxy itself — never LAN' : null },
-      { t: 'Trusted-device cookie valid?', hit: cookie },
-      { t: 'Path is /api/notes/hub/{token}? (assume no)', hit: false },
-    ];
-    let decided = false, html = '';
-    steps.forEach((s, i) => {
-      const cls = decided ? 'miss' : (s.hit ? 'hit' : '');
-      html += `<div class="step ${cls} ${s.isNew ? 'new' : ''}"><div class="n">${i + 1}</div><div>${s.t}${s.note ? `<div class="warn" style="font-size:13px">${s.note}</div>` : ''}${(!decided && s.hit) ? '<div class="ok">→ admitted here</div>' : ''}</div></div>`;
-      if (s.hit) decided = true;
-    });
-    html += `<div class="step ${decided ? 'miss' : 'reject'}"><div class="n">5</div><div>Otherwise: record attempt, 403 rejection page${decided ? '' : ' <span class="no">→ rejected</span>'}</div></div>`;
-    $('steps').innerHTML = html;
-    $('verdict').className = 'verdict ' + (decided ? 'ok' : 'no');
-    $('verdict').textContent = decided ? 'Passes the IP gate. Password layer still applies to /api/*.' : '403 — not on the guest list.';
+  const before = document.getElementById('btnBefore'), after = document.getElementById('btnAfter');
+  function setStage(isAfter){
+    before.classList.toggle('on', !isAfter); after.classList.toggle('on', isAfter);
+    document.getElementById('mgmtCol').style.display = isAfter ? '' : 'none';
+    document.getElementById('chipIdeas').classList.toggle('ghost', isAfter);
+    document.getElementById('chipArch').classList.toggle('ghost', isAfter);
+    document.getElementById('execTitle').textContent = isAfter ? 'Execution' : 'Dashboard (the only one)';
+    document.getElementById('stageCaption').textContent = isAfter
+      ? 'Two parallel views: Execution keeps the docks + Autopilot + Audit; Arch and Ideas live in Management.'
+      : 'One dashboard; all four panels summonable from one rail.';
   }
-  ['peer','xff','proxies','cidrs','guests','cookie'].forEach(id => $(id).addEventListener('input', decide));
-  const presets = {
-    lan: { peer: '192.168.0.143', xff: '' },
-    inet: { peer: '192.168.0.122', xff: '203.0.113.9' },
-    forge: { peer: '192.168.0.122', xff: '192.168.0.5, 203.0.113.9' },
-    'direct-forge': { peer: '203.0.113.9', xff: '192.168.0.5' },
-    noxff: { peer: '192.168.0.122', xff: '' },
-    local: { peer: '127.0.0.1', xff: '' },
-    lanviaproxy: { peer: '192.168.0.122', xff: '192.168.0.77' },
-  };
-  document.querySelectorAll('.presets button').forEach(b => b.addEventListener('click', () => { const p = presets[b.dataset.p]; $('peer').value = p.peer; $('xff').value = p.xff; $('cookie').value = 'no'; decide(); }));
-  decide();
+  before.addEventListener('click', () => setStage(false));
+  after.addEventListener('click', () => setStage(true));
 })();
 </script>
 </body>

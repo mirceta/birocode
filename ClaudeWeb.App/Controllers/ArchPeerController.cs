@@ -57,4 +57,25 @@ public class ArchPeerController : ControllerBase
         var o = _arch.PeerReadTranscript(repoId, tail);
         return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
     }
+
+    public sealed record PeerUpgradeRequest(string? Ref, string? From);
+
+    /// <summary>Fleet upgrade (openspec arch-peer-upgrades): bring THIS harness to a ref.
+    /// Behind the password middleware AND the receiver opt-in "accept fleet upgrades".</summary>
+    [HttpPost("upgrade")]
+    public IActionResult Upgrade([FromBody] PeerUpgradeRequest? req)
+    {
+        _logger.CountRequest();
+        var o = _arch.PeerStartUpgrade(req?.From, req?.Ref);
+        return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
+    }
+
+    [HttpGet("upgrade/{id}")]
+    public IActionResult UpgradeStatus(string id)
+    {
+        _logger.CountRequest();
+        var job = _arch.PeerUpgradeStatus(id);
+        if (job is null) return NotFound(new { ok = false, status = "unknown", detail = $"no upgrade job {id}" });
+        return Ok(new { ok = true, status = job.State, detail = job.Detail, data = job });
+    }
 }

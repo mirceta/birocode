@@ -65,7 +65,10 @@ public class FleetClient
         [property: JsonPropertyName("isSelf")] bool IsSelf,
         // Whether the PEER's own arch agent manages this repo (D8). Null = the peer
         // runs a build that predates scope reporting; treated as not sendable.
-        [property: JsonPropertyName("managed")] bool? Managed = null);
+        [property: JsonPropertyName("managed")] bool? Managed = null,
+        // Whether the repo holds a dock on the peer (openspec fleet-status-tab). Null =
+        // a build that predates the field.
+        [property: JsonPropertyName("docked")] bool? Docked = null);
 
     public sealed record PeerInfo(
         [property: JsonPropertyName("protocol")] int Protocol,
@@ -74,7 +77,9 @@ public class FleetClient
         [property: JsonPropertyName("acceptsSends")] bool AcceptsSends,
         [property: JsonPropertyName("gateOpen")] bool GateOpen,
         [property: JsonPropertyName("repos")] List<PeerRepo>? Repos,
-        [property: JsonPropertyName("managedRepoIds")] List<string>? ManagedRepoIds = null);
+        [property: JsonPropertyName("managedRepoIds")] List<string>? ManagedRepoIds = null,
+        // Receiving-side opt-in for fleet upgrades (openspec arch-peer-upgrades); absent = off.
+        [property: JsonPropertyName("acceptsUpgrades")] bool AcceptsUpgrades = false);
 
     /// <summary>What we last learned about a peer: transport status + the describe
     /// when it answered. <see cref="At"/> is when it was taken (unix ms).</summary>
@@ -110,6 +115,36 @@ public class FleetClient
         }
         return Refresh(sourceId);
     }
+
+    /// <summary>The cached snapshot, whatever its age, never blocking the caller: when
+    /// it is missing or older than <paramref name="maxAgeMs"/> a refresh runs in the
+    /// background (one in flight per source) and the NEXT reader sees it. The UI's
+    /// contract — the Arch tab must never wait on a peer's describe (a peer with many
+    /// repos answers in seconds).</summary>
+    public PeerSnapshot SnapshotNonBlocking(string sourceId, int maxAgeMs = 10_000)
+    {
+        PeerSnapshot? cached;
+        bool start;
+        lock (_lock)
+        {
+            _snapshots.TryGetValue(sourceId, out cached);
+            start = (cached is null || Now() - cached.At > maxAgeMs) && _inFlight.Add(sourceId);
+        }
+        if (start)
+        {
+            _ = Task.Run(async () =>
+            {
+                try { await RefreshAsync(sourceId, CancellationToken.None); }
+                catch (Exception ex) { _logger.Error($"[FLEET] background describe of {sourceId} failed: {ex.Message}"); }
+                finally { lock (_lock) _inFlight.Remove(sourceId); }
+            });
+        }
+        if (cached is not null) return cached;
+        var label = _collector.ResolveSource(sourceId)?.Label ?? sourceId;
+        return new PeerSnapshot(sourceId, label, StatusNever, "probing…", null, 0);
+    }
+
+    private readonly HashSet<string> _inFlight = new(StringComparer.Ordinal);
 
     /// <summary>Blocking describe (bounded by the HTTP timeout).</summary>
     public PeerSnapshot Refresh(string sourceId)
@@ -172,6 +207,14 @@ public class FleetClient
         var path = $"{PeerPath}/transcript?repoId={Uri.EscapeDataString(repoId)}&tail={tail}";
         return Get(sourceId, path);
     }
+
+    /// <summary>Ask a peer to upgrade itself to a ref (openspec arch-peer-upgrades); the
+    /// peer applies its own opt-in and answers started | busy | not-accepting | …</summary>
+    public ArchAgentService.ToolOutcome Upgrade(string sourceId, string? refName, string from) =>
+        Post(sourceId, PeerPath + "/upgrade", new { @ref = string.IsNullOrWhiteSpace(refName) ? null : refName.Trim(), from });
+
+    public ArchAgentService.ToolOutcome UpgradeStatus(string sourceId, string jobId) =>
+        Get(sourceId, $"{PeerPath}/upgrade/{Uri.EscapeDataString(jobId)}");
 
     private ArchAgentService.ToolOutcome Post(string sourceId, string path, object body)
     {
