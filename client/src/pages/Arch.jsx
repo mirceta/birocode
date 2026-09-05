@@ -86,6 +86,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full' }
   // arch-driven-loops): what the dock loop control needs to arm a goal/recipe here.
   const [driven, setDriven] = useState(null);
   const [recipes, setRecipes] = useState([]);
+  const [quietMin, setQuietMin] = useState(5);
   const [messages, setMessages] = useState([]);
   const [sessionId, setSessionId] = useState(null);
   const [draft, setDraft] = useState('');
@@ -122,6 +123,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full' }
       if (!alive.current) return;
       setState(s);
       if (s?.loop?.sessionId) setSessionId(s.loop.sessionId);
+      if (typeof s?.drivenQuietSeconds === 'number') setQuietMin((q) => (document.activeElement?.dataset?.quietFloor !== undefined ? q : Math.max(1, Math.round(s.drivenQuietSeconds / 60))));
       try {
         const li = await apiGet('/autopilot/loops');
         if (!alive.current) return;
@@ -431,6 +433,24 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full' }
           <div className="arch__card-head"><span>Driven loop (goal · recipe)</span></div>
           <div className="arch__dim" style={{ marginBottom: 6 }}>The dock's loop kinds, armed on the arch agent's own conversation. A goal or recipe takes the one loop slot; the standing wake loop pauses and comes back when it ends. A repeat of the same prompt waits for a managed repo turn; a question holds instead of stopping.</div>
           <DockLoopControl repoId="@arch" repoName="Arch agent" sessionId={sessionId} tabId={null} stash={[]} loop={driven} recipes={recipes} onChanged={load} onUsePending={(text) => setDraft(text)} kinds={['goal', 'recipe']} />
+          <div className="arch__row" style={{ marginTop: 8 }}>
+            <label>
+              re-prompt at least every (min)
+              <input
+                type="number"
+                min={1}
+                max={1440}
+                value={quietMin}
+                onChange={(e) => setQuietMin(Math.max(1, Number(e.target.value) || 1))}
+                onBlur={() => loopAction({ action: 'quiet', quietSeconds: quietMin * 60 })}
+                title="A repeat of the same prompt waits for a managed repo turn, but never longer than this — so a dark peer cannot park the loop"
+                data-quiet-floor
+              />
+            </label>
+            {drivenArmed && state?.engine?.reason && (
+              <span className="arch__dim" data-driven-reason>engine: {state.engine.decision} — {state.engine.reason}</span>
+            )}
+          </div>
         </section>
 
         <section className="arch__card">

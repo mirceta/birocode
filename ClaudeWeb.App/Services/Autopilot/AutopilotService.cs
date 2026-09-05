@@ -480,6 +480,7 @@ public class AutopilotService : BackgroundService
             {
                 _armGen[repo.Id] = loop.ArmedAt;
                 _lastDriveSent.TryRemove(repo.Id, out _);
+                _lastDrivenPrompt.TryRemove(repo.Id, out _); // a re-arm's first send is never a "repeat" (openspec arch-driven-loops)
                 _suggestWait.TryRemove(repo.Id, out _);
                 _driveNoReply.TryRemove(repo.Id, out _);
                 _driveNoReplyMisses.TryRemove(repo.Id, out _);
@@ -526,6 +527,7 @@ public class AutopilotService : BackgroundService
                     _loops.Resolve(repo.Id, "error", "no-reply",
                         $"agent produced no reply in {misses} consecutive runs");
                     _logger.Error($"[LOOP] {repo.Name}: no reply in {misses} consecutive runs — stopping");
+                    AfterArchDrivenResolved(repo, loop);
                     Append(new LogEntry(now, repo.Name, "escalated", "no reply from agent", 0));
                     return;
                 }
@@ -642,9 +644,13 @@ public class AutopilotService : BackgroundService
             // Driven kinds on the arch agent (openspec arch-driven-loops): the arch rules
             // sit on top of the kind's decision — a question holds instead of stopping,
             // and a repeat of the last sent prompt waits for a managed repo turn (a wake).
+            // A repeat waits for a wake OR the quiet floor, whichever comes first, so a dark
+            // peer can never park the loop; the first send of an arm always goes (the
+            // instance record decides, never process memory).
             if (repo.Id == ArchAgentService.ReservedId && loop.Kind != LoopConfigStore.KindArch)
-                decision = ArchDrivenPolicy.Apply(decision,
+                decision = ArchDrivenPolicy.Apply(decision, loop,
                     _lastDrivenPrompt.TryGetValue(repo.Id, out var lastPrompt) ? lastPrompt : null,
+                    now, _arch.DrivenQuietFloor,
                     () => _arch.ComposeWake() is not null);
 
             Execute(repo, loop, decision, sessionId, snippet, intercept, now);

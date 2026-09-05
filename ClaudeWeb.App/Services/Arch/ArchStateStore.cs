@@ -40,6 +40,9 @@ public class ArchStateStore
         // cleared by the Operator's own Stop. Null mode = nothing remembered.
         public string? StandingLoopMode { get; set; }
         public int StandingLoopCap { get; set; }
+        // The quiet floor for driven loops on @arch (openspec arch-driven-loops): a repeat
+        // of the same prompt goes out after this many seconds even with no wake. 0 = default.
+        public int DrivenQuietSeconds { get; set; }
     }
 
     /// <summary>The managed-set key of an agent on a subscribed harness.</summary>
@@ -166,6 +169,24 @@ public class ArchStateStore
             if (_data.StandingLoopMode is null) return;
             _data.StandingLoopMode = null;
             _data.StandingLoopCap = 0;
+            Save();
+        }
+    }
+
+    /// <summary>Seconds of silence after which a driven @arch loop re-prompts without a
+    /// wake; 0 means the policy default.</summary>
+    public int DrivenQuietSeconds
+    {
+        get { lock (_gate) return _data.DrivenQuietSeconds; }
+    }
+
+    public void SetDrivenQuietSeconds(int seconds)
+    {
+        var clean = Math.Clamp(seconds, 0, 24 * 3600);
+        lock (_gate)
+        {
+            if (_data.DrivenQuietSeconds == clean) return;
+            _data.DrivenQuietSeconds = clean;
             Save();
         }
     }
