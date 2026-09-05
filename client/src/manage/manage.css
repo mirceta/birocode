@@ -94,3 +94,11 @@ html, body, #root { height: 100%; margin: 0; }
 .mg__status-h { margin: 6px 0 8px; font-size: 14px; font-weight: 600; }
 .mg__status-arch .arch--cards { padding: 0; height: auto; }
 .mg__status-arch .arch__overview { overflow: visible; }
+
+/* The Ideas pane must be a definite-height flex column: the Task graph inside it
+   sizes React Flow by percentage, which collapses to 0 px in a plain scroll box
+   (it did, 2026-09-05). The list and plan tabs still scroll within .ideas. */
+.mg__pane--ideas .mg__pane-body { display: flex; flex-direction: column; }
+.mg__pane--ideas .ideas { flex: 1 1 auto; min-height: 0; }
+.mg__pane--ideas .ideas__tabpanel--graph .tg-panel { height: 100%; min-height: 0; }
+.mg__pane--ideas .tg-canvas { min-height: 240px; }
