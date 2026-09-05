@@ -256,11 +256,11 @@ public class ArchAgentTests : IDisposable
     // ---- 3.x MCP surface ---------------------------------------------------------------------
 
     [Fact]
-    public void Mcp_tools_list_names_the_eight_tools_with_required_args()
+    public void Mcp_tools_list_names_the_fifteen_tools_with_required_args()
     {
         var tools = ArchMcpServer.ToolsList();
         var names = tools.Select(t => t!["name"]!.GetValue<string>()).ToList();
-        Assert.Equal(new[] { "list_agents", "list_machines", "git_state", "read_transcript", "send_task", "upgrade_peer", "remember", "recall" }, names);
+        Assert.Equal(new[] { "list_agents", "list_machines", "git_state", "read_transcript", "send_task", "upgrade_peer", "list_tasks", "create_task", "update_task", "assign_task", "dispatch_task", "list_ideas", "idea_to_task", "remember", "recall" }, names);
         var send = tools.First(t => t!["name"]!.GetValue<string>() == "send_task")!;
         var required = send["inputSchema"]!["required"]!.AsArray().Select(n => n!.GetValue<string>()).ToList();
         Assert.Contains("repoId", required);

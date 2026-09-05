@@ -61,9 +61,17 @@ public class TaskGraphService
     // optional repoId (shown as a label/colour — no live agent telemetry), an
     // optional machineId (the grouping box it lives in — null = unplaced), a
     // status, and its canvas position {x,y} (the operator places nodes by hand).
+    // Assignment (openspec task-board-kanban): SourceId names the harness whose repo
+    // agent owns the task (null = this one; RepoId is the repo there), AssignedBy who
+    // assigned it (a person or an agent label), DispatchedAt/DispatchCount when the
+    // arch last pinged that agent with it, CreatedBy who made the card, IdeaId the
+    // idea it was promoted from. All optional so boards and sync peers that predate
+    // them read back unchanged.
     public sealed record Node(
         string Id, string Title, string? Note, string? RepoId, string? MachineId, string Status,
-        double X, double Y, long CreatedAt, long UpdatedAt);
+        double X, double Y, long CreatedAt, long UpdatedAt,
+        string? SourceId = null, string? AssignedBy = null, long? AssignedAt = null,
+        long? DispatchedAt = null, int DispatchCount = 0, string? CreatedBy = null, string? IdeaId = null);
 
     // Source depends on Target (Target is the prerequisite).
     public sealed record Edge(string Id, string Source, string Target);
@@ -132,13 +140,17 @@ public class TaskGraphService
         return t;
     }
 
-    public Node? AddNode(string? title, string? note, string? repoId, string? machineId, double x, double y, long now)
+    public Node? AddNode(string? title, string? note, string? repoId, string? machineId, double x, double y, long now,
+        string? sourceId = null, string? createdBy = null, string? ideaId = null)
     {
         var clean = Clean(title, MaxTitleLength);
         if (clean is null) return null;
+        var repo = CleanRepo(repoId);
         var node = new Node(
             Guid.NewGuid().ToString("N"), clean, Clean(note, MaxNoteLength),
-            CleanRepo(repoId), CleanRepo(machineId), "todo", x, y, now, now);
+            repo, CleanRepo(machineId), "todo", x, y, now, now,
+            SourceId: repo is null ? null : CleanRepo(sourceId), AssignedBy: repo is null ? null : Clean(createdBy, 200),
+            AssignedAt: repo is null ? null : now, CreatedBy: Clean(createdBy, 200), IdeaId: CleanRepo(ideaId));
         lock (_gate)
         {
             _board.Nodes.Add(node);
@@ -200,6 +212,69 @@ public class TaskGraphService
             return updated;
         }
     }
+
+    /// <summary>Assign (or unassign with a blank repoId) a task to a repo agent:
+    /// <paramref name="sourceId"/> names the harness (null/blank = this one). A done
+    /// task stays done; a todo task stays todo — assignment is who, status is where.</summary>
+    public Node? Assign(string id, string? sourceId, string? repoId, string? by, long now)
+    {
+        Node? updated;
+        lock (_gate)
+        {
+            var i = _board.Nodes.FindIndex(n => n.Id == id);
+            if (i < 0) return null;
+            var cur = _board.Nodes[i];
+            var repo = CleanRepo(repoId);
+            updated = cur with
+            {
+                RepoId = repo,
+                SourceId = repo is null ? null : CleanRepo(sourceId),
+                AssignedBy = repo is null ? null : Clean(by, 200),
+                AssignedAt = repo is null ? null : now,
+                DispatchedAt = null,
+                DispatchCount = 0,
+                UpdatedAt = now,
+            };
+            _board.Nodes[i] = updated;
+            Save();
+        }
+        _logger.Info($"[TASKGRAPH] Assigned node {id} -> {(updated.RepoId is null ? "nobody" : $"{updated.SourceId ?? "self"}/{updated.RepoId}")} by {by ?? "?"}");
+        RaiseChanged();
+        return updated;
+    }
+
+    /// <summary>Record that the assignee was pinged with this task (openspec
+    /// task-board-kanban): the task moves to <c>doing</c> — the agent has it now.</summary>
+    public Node? MarkDispatched(string id, long now)
+    {
+        Node? updated;
+        lock (_gate)
+        {
+            var i = _board.Nodes.FindIndex(n => n.Id == id);
+            if (i < 0) return null;
+            var cur = _board.Nodes[i];
+            updated = cur with { DispatchedAt = now, DispatchCount = cur.DispatchCount + 1, Status = cur.Status == "done" ? "done" : "doing", UpdatedAt = now };
+            _board.Nodes[i] = updated;
+            Save();
+        }
+        RaiseChanged();
+        return updated;
+    }
+
+    public Node? Find(string id) { lock (_gate) return _board.Nodes.FirstOrDefault(n => n.Id == id); }
+
+    /// <summary>The prerequisites of a task (the targets of its depends-on edges).</summary>
+    public List<Node> Prerequisites(string id)
+    {
+        lock (_gate)
+        {
+            var targets = _board.Edges.Where(e => e.Source == id).Select(e => e.Target).ToHashSet(StringComparer.Ordinal);
+            return _board.Nodes.Where(n => targets.Contains(n.Id)).ToList();
+        }
+    }
+
+    /// <summary>Blocked = not done and at least one prerequisite is not done.</summary>
+    public bool IsBlocked(string id) => Find(id) is { Status: not "done" } && Prerequisites(id).Any(p => p.Status != "done");
 
     // Removes a node and any edges touching it, tombstoning the node AND those
     // edges so neither resurrects from a sync peer. Returns the count of edges

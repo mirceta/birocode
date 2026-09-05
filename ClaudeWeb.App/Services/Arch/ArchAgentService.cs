@@ -99,6 +99,8 @@ public class ArchAgentService : IArchWakeSource
     private readonly FleetClient _fleet;
     private readonly AutopilotGate _gate;
     private readonly PeerUpgradeService _upgrades;
+    private readonly TaskGraph.TaskGraphService _graph;
+    private readonly Notes.NotesService _notes;
     private readonly Logger _logger;
 
     // Per-process credential for the MCP endpoint: only a CLI run this harness
@@ -118,8 +120,10 @@ public class ArchAgentService : IArchWakeSource
         SessionService sessions, DockRegistry dock, AutopilotAuditLog audit, AutopilotConfigStore config,
         LoopConfigStore loops, CollectorService collector, HarnessEventFeed feed, ToolsConfigStore tools,
         ArchStateStore state, AppConfig appConfig, FleetClient fleet, AutopilotGate gate, Logger logger,
-        PeerUpgradeService upgrades)
+        PeerUpgradeService upgrades, TaskGraph.TaskGraphService graph, Notes.NotesService notes)
     {
+        _graph = graph;
+        _notes = notes;
         _fleet = fleet;
         _upgrades = upgrades;
         _gate = gate;
@@ -266,6 +270,23 @@ public class ArchAgentService : IArchWakeSource
         wake instead of calling again. `not-accepting` means its operator has not opted in
         (say so; never work around it); `not-on-branch` / `dirty` / `pull-failed` need a
         person at that machine. Never call `upgrade_peer` for a machine that is not behind.
+
+        ## The task board
+
+        The fleet has ONE task board (Management → Ideas → Kanban, also drawn as the Task
+        graph): the surface where the Operator, you and any future management agent
+        collaborate. `list_tasks` shows every task with its assignee (machine + repoId),
+        status, prerequisites and whether it is `awaitingDispatch` — assigned, not yet
+        pinged, not blocked. Your duties on each wake: (1) dispatch every task that is
+        `awaitingDispatch` with `dispatch_task` — the assignee gets the full brief in its
+        own conversation and the card moves to doing; (2) when a repo agent's reply ends
+        with `TASK DONE <id>` move the card to done with `update_task`, and with `TASK
+        BLOCKED <id>: …` move it back to todo and put the reason in the note; (3) when the
+        Operator asks for work to be planned, `create_task` / `idea_to_task` (from
+        `list_ideas`) and `assign_task` are how you put it on the board — a task the
+        Operator has not assigned is not yours to dispatch. Dispatch a task once; re-dispatch
+        only when the transcript shows the agent never picked it up. Never invent tasks
+        nobody asked for.
 
         ## Rules
 
@@ -887,7 +908,7 @@ public class ArchAgentService : IArchWakeSource
     /// <summary>The <c>send_task</c> tool (D1/D7): availability →
     /// slot claim → user bubble <c>actor: arch</c> → CLI on the repo's conversation
     /// → audit. Returns sent | busy | claimed | denied | disarmed | capped | error.</summary>
-    public ToolOutcome SendTask(string? machine, string? repoId, string? text, string? branch)
+    public ToolOutcome SendTask(string? machine, string? repoId, string? text, string? branch, bool requireArmed = true)
     {
         if (string.IsNullOrWhiteSpace(repoId)) return new ToolOutcome(false, "error", "repoId is required");
         if (string.IsNullOrWhiteSpace(text)) return new ToolOutcome(false, "error", "text is required");
@@ -897,11 +918,11 @@ public class ArchAgentService : IArchWakeSource
             AuditTool("send_task", repoId, $"refused machine {machine}");
             return new ToolOutcome(false, "error", target.Error + "; nothing was sent");
         }
-        return target.IsSelf ? SendLocal(repoId, text, branch) : SendRemote(target.Source!, repoId, text, branch);
+        return target.IsSelf ? SendLocal(repoId, text, branch, requireArmed) : SendRemote(target.Source!, repoId, text, branch, requireArmed);
     }
 
     /// <summary>The local send: managed → armed → claimed → slot → turn.</summary>
-    private ToolOutcome SendLocal(string repoId, string text, string? branch)
+    private ToolOutcome SendLocal(string repoId, string text, string? branch, bool requireArmed = true)
     {
         var repo = _repos.GetAll().FirstOrDefault(r => r.Id == repoId);
         if (repo is null || !IsManaged(repoId))
@@ -912,7 +933,7 @@ public class ArchAgentService : IArchWakeSource
         if (!repo.Exists)
             return new ToolOutcome(false, "error", $"{repo.Name}'s folder is missing: {repo.Path}");
 
-        if (ArmedOrRefusal(repoId, out var loop) is { } refusal) return refusal;
+        if (requireArmed && ArmedOrRefusal(repoId, out var loop) is { } refusal) return refusal;
 
         var avail = AvailabilityOf(repo);
         if (avail == Claimed)
@@ -927,7 +948,7 @@ public class ArchAgentService : IArchWakeSource
     /// D5): this harness's checks (managed, armed, allow-sends) then the
     /// peer's own, over the fleet client. Audited here under the fleet key; the
     /// peer audits the turn it runs.</summary>
-    private ToolOutcome SendRemote(CollectorService.SourceView src, string repoId, string text, string? branch)
+    private ToolOutcome SendRemote(CollectorService.SourceView src, string repoId, string text, string? branch, bool requireArmed = true)
     {
         var key = ArchStateStore.FleetKey(src.Id, repoId);
         var name = $"{src.Label}/{repoId}";
@@ -936,7 +957,7 @@ public class ArchAgentService : IArchWakeSource
             AuditTool("send_task", key, Unmanaged);
             return new ToolOutcome(false, Unmanaged, $"{repoId} on {src.Label} is not a managed agent");
         }
-        if (ArmedOrRefusal(key, out var loop) is { } refusal) return refusal;
+        if (requireArmed && ArmedOrRefusal(key, out var loop) is { } refusal) return refusal;
         if (!src.AllowSends)
         {
             AuditTool("send_task", key, "sends-not-allowed");
@@ -1002,6 +1023,188 @@ public class ArchAgentService : IArchWakeSource
     {
         if (string.IsNullOrWhiteSpace(repoId)) return new ToolOutcome(false, "error", "repoId is required");
         return ReadLocalTranscript(repoId, tail, managed: IsManaged(repoId));
+    }
+
+    // ---- task board (openspec task-board-kanban) ---------------------------------------
+
+    /// <summary>The board as the arch sees it: every task with its assignee (machine +
+    /// repo), status, blocked-ness, prerequisites and dispatch history — the shared
+    /// surface where the operator, this agent and future management agents meet.</summary>
+    public ToolOutcome ToolListTasks(string? status)
+    {
+        var board = _graph.Get();
+        var srcLabel = SourceLabels();
+        var repoName = RepoNames(board.Nodes);
+        var edgesBySource = board.Edges.GroupBy(e => e.Source).ToDictionary(g => g.Key, g => g.Select(e => e.Target).ToList());
+        var byId = board.Nodes.ToDictionary(n => n.Id);
+        var tasks = board.Nodes
+            .Where(n => string.IsNullOrWhiteSpace(status) || n.Status == status)
+            .OrderBy(n => n.Status == "done" ? 2 : n.Status == "doing" ? 1 : 0).ThenBy(n => n.CreatedAt)
+            .Select(n =>
+            {
+                var prereqs = edgesBySource.TryGetValue(n.Id, out var t) ? t.Where(byId.ContainsKey).Select(id => byId[id]).ToList() : new List<TaskGraph.TaskGraphService.Node>();
+                var blocked = n.Status != "done" && prereqs.Any(p => p.Status != "done");
+                return new
+                {
+                    id = n.Id, title = n.Title, note = n.Note, status = n.Status,
+                    machine = n.RepoId is null ? null : n.SourceId is null ? Machine : srcLabel.GetValueOrDefault(n.SourceId, n.SourceId),
+                    repoId = n.RepoId, repoName = n.RepoId is null ? null : repoName.GetValueOrDefault(n.RepoId, n.RepoId),
+                    assignedBy = n.AssignedBy, assignedAt = n.AssignedAt, dispatchedAt = n.DispatchedAt, dispatchCount = n.DispatchCount,
+                    // Assigned, not yet pinged, not blocked: the arch's cue to dispatch.
+                    awaitingDispatch = n.Status == "todo" && n.RepoId is not null && n.DispatchedAt is null && !blocked,
+                    blocked, dependsOn = prereqs.Select(p => new { id = p.Id, title = p.Title, status = p.Status }).ToList(),
+                    createdBy = n.CreatedBy, ideaId = n.IdeaId, createdAt = n.CreatedAt, updatedAt = n.UpdatedAt,
+                };
+            }).ToList();
+        AuditTool("list_tasks", null, $"{tasks.Count} task(s)");
+        return new ToolOutcome(true, "ok", $"{tasks.Count} task(s){(string.IsNullOrWhiteSpace(status) ? "" : $" with status {status}")}", new { tasks, statuses = TaskGraph.TaskGraphService.Statuses });
+    }
+
+    public ToolOutcome ToolCreateTask(string? title, string? note, string? machine, string? repoId, string? dependsOn)
+    {
+        if (string.IsNullOrWhiteSpace(title)) return new ToolOutcome(false, "error", "title is required");
+        string? sourceId = null;
+        if (!string.IsNullOrWhiteSpace(repoId))
+        {
+            var target = ResolveMachine(machine);
+            if (target.Error is not null) return new ToolOutcome(false, "error", target.Error);
+            sourceId = target.IsSelf ? null : target.Source!.Id;
+        }
+        var node = _graph.AddNode(title, note, string.IsNullOrWhiteSpace(repoId) ? null : repoId, null, 40, 40, Now(), sourceId, ActorArch, null);
+        if (node is null) return new ToolOutcome(false, "error", "title is blank");
+        var linked = 0;
+        foreach (var dep in (dependsOn ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var (edge, err) = _graph.AddEdge(node.Id, dep, Now());
+            if (edge is not null) linked++;
+            else _logger.Info($"[ARCH] create_task: dependency {dep} not linked ({err})");
+        }
+        AuditTool("create_task", node.RepoId, "created");
+        return new ToolOutcome(true, "created", $"task {node.Id} created{(linked > 0 ? $" with {linked} prerequisite(s)" : "")}", node);
+    }
+
+    public ToolOutcome ToolUpdateTask(string? id, string? status, string? title, string? note)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return new ToolOutcome(false, "error", "id is required");
+        if (status is not null && !TaskGraph.TaskGraphService.Statuses.Contains(status))
+            return new ToolOutcome(false, "error", $"status must be one of {string.Join(", ", TaskGraph.TaskGraphService.Statuses)}");
+        var node = _graph.UpdateNode(id, title, note, null, null, status, null, null, Now());
+        if (node is null) return new ToolOutcome(false, "error", $"no task {id} (or blank title)");
+        AuditTool("update_task", node.RepoId, status ?? "edited");
+        return new ToolOutcome(true, "updated", $"task {id}: {node.Status}", node);
+    }
+
+    public ToolOutcome ToolAssignTask(string? id, string? machine, string? repoId)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return new ToolOutcome(false, "error", "id is required");
+        string? sourceId = null;
+        if (!string.IsNullOrWhiteSpace(repoId))
+        {
+            var target = ResolveMachine(machine);
+            if (target.Error is not null) return new ToolOutcome(false, "error", target.Error);
+            sourceId = target.IsSelf ? null : target.Source!.Id;
+            var known = target.IsSelf
+                ? _repos.GetAll().Any(r => r.Id == repoId)
+                : _fleet.SnapshotNonBlocking(sourceId!).Repos.Any(r => r.RepoId == repoId);
+            if (!known) return new ToolOutcome(false, "error", $"no repo {repoId} on {(target.IsSelf ? SelfLabel : target.Source!.Label)} (use the repoId from list_agents / the Status tab)");
+        }
+        var node = _graph.Assign(id, sourceId, repoId, ActorArch, Now());
+        if (node is null) return new ToolOutcome(false, "error", $"no task {id}");
+        AuditTool("assign_task", node.RepoId, node.RepoId is null ? "unassigned" : "assigned");
+        return new ToolOutcome(true, node.RepoId is null ? "unassigned" : "assigned", node.RepoId is null ? $"task {id} unassigned" : $"task {id} assigned to {repoId} on {(sourceId is null ? SelfLabel : machine)}; dispatch_task pings the agent", node);
+    }
+
+    public ToolOutcome ToolDispatchTask(string? id) => DispatchTask(id, requireArmed: true, by: ActorArch);
+
+    /// <summary>Ping the assignee with the task: the composed brief lands in that repo
+    /// agent's own conversation through the same send path as send_task (its rules
+    /// apply: managed, armed unless the operator pressed the button, claimed, busy,
+    /// allow/accept sends across machines). On <c>sent</c> the card moves to doing.</summary>
+    public ToolOutcome DispatchTask(string? id, bool requireArmed, string by)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return new ToolOutcome(false, "error", "id is required");
+        var node = _graph.Find(id);
+        if (node is null) return new ToolOutcome(false, "error", $"no task {id}");
+        if (node.RepoId is null) return new ToolOutcome(false, "unassigned", $"task {id} has no assignee; assign it first");
+        if (node.Status == "done") return new ToolOutcome(false, "done", $"task {id} is already done");
+        var prereqs = _graph.Prerequisites(id);
+        if (prereqs.Any(p => p.Status != "done"))
+            return new ToolOutcome(false, "blocked", $"task {id} waits on: {string.Join(", ", prereqs.Where(p => p.Status != "done").Select(p => $"\"{p.Title}\" ({p.Status})"))}; nothing was sent");
+        var machine = node.SourceId is null ? Machine : SourceLabels().GetValueOrDefault(node.SourceId, node.SourceId);
+        var machineLabel = node.SourceId is null ? SelfLabel : machine;
+        var repoName = RepoNames(new[] { node }).GetValueOrDefault(node.RepoId, node.RepoId);
+        var text = DispatchMessage(node, prereqs, by, machineLabel, repoName);
+        var o = SendTask(machine, node.RepoId, text, null, requireArmed);
+        AuditTool("dispatch_task", node.RepoId, o.Status);
+        if (o.Ok && o.Status == "sent")
+        {
+            var updated = _graph.MarkDispatched(id, Now());
+            return new ToolOutcome(true, "sent", $"task {id} sent to {repoName} on {machineLabel}; it is now doing (ping #{updated?.DispatchCount ?? 1})", updated);
+        }
+        return o;
+    }
+
+    /// <summary>The brief a repo agent receives (pure; unit-tested). It carries everything
+    /// the agent needs — the board is not readable from inside a repo — and asks for a
+    /// recognisable closing line so the arch can move the card.</summary>
+    public static string DispatchMessage(TaskGraph.TaskGraphService.Node node, IReadOnlyList<TaskGraph.TaskGraphService.Node> prereqs, string by, string machineLabel, string repoName)
+    {
+        var sb = new StringBuilder();
+        sb.Append("[Task from the fleet board] ").Append(node.Title.Trim()).Append('\n');
+        sb.Append($"Task id: {node.Id} · assigned to you ({repoName} on {machineLabel}) by {node.AssignedBy ?? by} · pinged by {by}\n");
+        if (!string.IsNullOrWhiteSpace(node.Note)) sb.Append('\n').Append(node.Note.Trim()).Append('\n');
+        sb.Append('\n');
+        sb.Append(prereqs.Count == 0
+            ? "Prerequisites: none.\n"
+            : $"Prerequisites (all done): {string.Join("; ", prereqs.Select(p => p.Title))}.\n");
+        sb.Append("Do the task in this repository. When it is complete, end your reply with the line \"TASK DONE ")
+          .Append(node.Id).Append("\" and a two-line summary; if you cannot complete it, end with \"TASK BLOCKED ")
+          .Append(node.Id).Append(": <why>\". The fleet's arch agent reads that line to move the card on the board.");
+        return sb.ToString();
+    }
+
+    public ToolOutcome ToolListIdeas(bool activeOnly)
+    {
+        var ideas = _notes.List().Where(n => !activeOnly || n.Active).OrderByDescending(n => n.Active).ThenByDescending(n => n.Priority).ThenByDescending(n => n.UpdatedAt)
+            .Select(n => new { id = n.Id, text = n.Text, project = n.Project, priority = n.Priority, active = n.Active, updatedAt = n.UpdatedAt }).ToList();
+        AuditTool("list_ideas", null, $"{ideas.Count} idea(s)");
+        return new ToolOutcome(true, "ok", $"{ideas.Count} idea(s){(activeOnly ? " (active only)" : "")}", new { ideas });
+    }
+
+    /// <summary>Promote an idea to a task (the Ideas tab's "Send to graph" as a tool): the
+    /// card is created from the idea's text, the idea stays but leaves the Active section.</summary>
+    public ToolOutcome ToolIdeaToTask(string? ideaId, string? title, string? machine, string? repoId)
+    {
+        if (string.IsNullOrWhiteSpace(ideaId)) return new ToolOutcome(false, "error", "ideaId is required");
+        var idea = _notes.List().FirstOrDefault(n => n.Id == ideaId);
+        if (idea is null) return new ToolOutcome(false, "error", $"no idea {ideaId}");
+        var existing = _graph.Get().Nodes.FirstOrDefault(n => n.IdeaId == ideaId);
+        if (existing is not null) return new ToolOutcome(false, "exists", $"idea {ideaId} already has task {existing.Id}", existing);
+        string? sourceId = null;
+        if (!string.IsNullOrWhiteSpace(repoId))
+        {
+            var target = ResolveMachine(machine);
+            if (target.Error is not null) return new ToolOutcome(false, "error", target.Error);
+            sourceId = target.IsSelf ? null : target.Source!.Id;
+        }
+        var node = _graph.AddNode(string.IsNullOrWhiteSpace(title) ? idea.Text : title, string.IsNullOrWhiteSpace(title) ? idea.Project : idea.Text,
+            string.IsNullOrWhiteSpace(repoId) ? null : repoId, null, 40, 40, Now(), sourceId, ActorArch, ideaId);
+        if (node is null) return new ToolOutcome(false, "error", "the idea's text is blank");
+        _notes.Update(idea.Id, idea.Text, idea.Project, idea.Priority, false, Now());
+        AuditTool("idea_to_task", node.RepoId, "created");
+        return new ToolOutcome(true, "created", $"task {node.Id} created from idea {ideaId}; the idea left the Active section", node);
+    }
+
+    private Dictionary<string, string> SourceLabels() =>
+        _collector.ListSources().ToDictionary(s => s.Id, s => s.Label, StringComparer.Ordinal);
+
+    private Dictionary<string, string> RepoNames(IEnumerable<TaskGraph.TaskGraphService.Node> nodes)
+    {
+        var names = _repos.GetAll().ToDictionary(r => r.Id, r => r.Name, StringComparer.Ordinal);
+        foreach (var sid in nodes.Select(n => n.SourceId).Where(s => s is not null).Distinct())
+            foreach (var r in _fleet.SnapshotNonBlocking(sid!).Repos)
+                names.TryAdd(r.RepoId, r.Name);
+        return names;
     }
 
     // ---- fleet upgrades (openspec arch-peer-upgrades) ----------------------------------
