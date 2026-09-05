@@ -24,6 +24,19 @@ import './dashboard.css';
 // (status + activity + git, cheap), the "wall of phones" — each agent's live
 // Chat rendered in place — and "hot", a mix that renders hot agents (recently
 // used by me) as phones and cold ones as cards. The choice is per device.
+// Execution | Management layer (openspec split-management-dashboard): the
+// dashboard is two parallel top-level views under one overlay. Execution is
+// the docks world below; Management hosts the Arch surface + Ideas. The choice
+// persists per device and the overlay reopens on the last active layer.
+const LAYER_KEY = 'claudeweb_dash_layer';
+function readLayer() {
+  try {
+    return localStorage.getItem(LAYER_KEY) === 'management' ? 'management' : 'execution';
+  } catch {
+    return 'execution';
+  }
+}
+
 const VIEW_KEY = 'claudeweb_dash_view';
 function readView() {
   try {
@@ -114,12 +127,14 @@ function readPanels() {
     const raw = localStorage.getItem(PANELS_KEY);
     const v = raw ? JSON.parse(raw) : null;
     if (v && typeof v === 'object') {
-      return { ideas: !!v.ideas, autopilot: !!v.autopilot, audit: !!v.audit, traffic: !!v.traffic, arch: !!v.arch };
+      // ideas/arch keys from older builds are ignored: those panels moved to
+      // the Management layer (openspec split-management-dashboard).
+      return { autopilot: !!v.autopilot, audit: !!v.audit, traffic: !!v.traffic };
     }
   } catch {
     /* private mode / malformed */
   }
-  return { ideas: false, autopilot: false, audit: false, traffic: false, arch: false };
+  return { autopilot: false, audit: false, traffic: false };
 }
 
 // Free-mode horizontal resize of the agents panel from a right-edge grip
@@ -406,8 +421,18 @@ export default function Dashboard({ onClose }) {
   // recently summoned pop-up stacks on top.
   const [panels, setPanels] = useState(readPanels);
   const [popupOrder, setPopupOrder] = useState(() =>
-    ['autopilot', 'audit', 'traffic', 'ideas', 'arch'].filter((k) => readPanels()[k]),
+    ['autopilot', 'audit', 'traffic'].filter((k) => readPanels()[k]),
   );
+  // Execution | Management layer (openspec split-management-dashboard).
+  const [layer, setLayer] = useState(readLayer);
+  const chooseLayer = (next) => {
+    try {
+      localStorage.setItem(LAYER_KEY, next);
+    } catch {
+      /* private mode: in-memory only */
+    }
+    setLayer(next);
+  };
   function togglePanel(key) {
     const on = !panels[key];
     const next = { ...panels, [key]: on };
@@ -422,14 +447,10 @@ export default function Dashboard({ onClose }) {
   const showAutopilot = autopilotOn && panels.autopilot;
   const showAudit = agentAuditOn && panels.audit;
   const showTraffic = trafficOn && panels.traffic;
-  const showIdeas = panels.ideas;
-  const showArch = archOn && panels.arch;
   const popupShown = {
     autopilot: showAutopilot,
     audit: showAudit,
     traffic: showTraffic,
-    ideas: showIdeas,
-    arch: showArch,
   };
   const popupKeys = popupOrder.filter((k) => popupShown[k]);
   // Esc dismisses the topmost pop-up. Capture + stopPropagation so the
@@ -884,6 +905,29 @@ export default function Dashboard({ onClose }) {
   return (
     <div className="dash">
       <div className="dash__header">
+        {/* Execution | Management layer switch (openspec split-management-
+            dashboard): two parallel top-level views under this one overlay. */}
+        <div className="dash__layer" role="tablist" aria-label={t('dashboard.layers')}>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={layer === 'execution'}
+            className={`dash__layer-tab${layer === 'execution' ? ' dash__layer-tab--on' : ''}`}
+            onClick={() => chooseLayer('execution')}
+          >
+            {t('dashboard.layerExecution')}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={layer === 'management'}
+            className={`dash__layer-tab${layer === 'management' ? ' dash__layer-tab--on' : ''}`}
+            onClick={() => chooseLayer('management')}
+          >
+            {t('dashboard.layerManagement')}
+          </button>
+        </div>
+        {layer === 'execution' && (<>
         {/* Dock toolbar (openspec add-dashboard-dock-toolbar / dashboard-slim-chrome):
             leads the shared header bar, listing the full roster so hidden docks
             stay reachable. Gated on the roster, not the visible `tabs`, so it
@@ -897,19 +941,10 @@ export default function Dashboard({ onClose }) {
         />
         {/* Panel rail (openspec dashboard-focus-docks): summon/dismiss the aux
             panels. One chip per panel, pressed while its panel is visible;
-            feature-gated chips render only when their feature is on. */}
+            feature-gated chips render only when their feature is on. Ideas and
+            Arch have no chips here — they live in the Management layer
+            (openspec split-management-dashboard). */}
         <div className="dash__panel-rail" role="group" aria-label={t('dashboard.panels')}>
-          <button
-            type="button"
-            className={`dash__panel-chip${panels.ideas ? ' dash__panel-chip--on' : ''}`}
-            onClick={() => togglePanel('ideas')}
-            aria-pressed={panels.ideas}
-            title={t('dashboard.panelIdeas')}
-            aria-label={t('dashboard.panelIdeas')}
-          >
-            <span aria-hidden="true">💡</span>
-            <span className="dash__panel-chip-label">{t('nav.ideas')}</span>
-          </button>
           {autopilotOn && (
             <button
               type="button"
@@ -947,19 +982,6 @@ export default function Dashboard({ onClose }) {
             >
               <span aria-hidden="true">📡</span>
               <span className="dash__panel-chip-label">Traffic</span>
-            </button>
-          )}
-          {archOn && (
-            <button
-              type="button"
-              className={`dash__panel-chip${panels.arch ? ' dash__panel-chip--on' : ''}`}
-              onClick={() => togglePanel('arch')}
-              aria-pressed={panels.arch}
-              title={t('dashboard.panelArch')}
-              aria-label={t('dashboard.panelArch')}
-            >
-              <span aria-hidden="true">🏛</span>
-              <span className="dash__panel-chip-label">{t('nav.arch')}</span>
             </button>
           )}
         </div>
@@ -1110,6 +1132,7 @@ export default function Dashboard({ onClose }) {
             <span className="dash__only-important-label">{t('dashboard.onlyImportant')}</span>
           </button>
         )}
+        </>)}
         <button
           type="button"
           className="dash__close"
@@ -1120,6 +1143,30 @@ export default function Dashboard({ onClose }) {
         </button>
       </div>
 
+      {/* Management layer (openspec split-management-dashboard): the Arch
+          surface (component unchanged, popup-style embed) beside the Ideas
+          panel. Mounted only while active — the Execution body below is
+          unmounted then, so neither layer polls for the other. */}
+      {layer === 'management' && (
+        <div className="dash__mgmt">
+          {archOn && (
+            <div className="dash__mgmt-arch">
+              <Arch popup onOpenDock={onClose} />
+            </div>
+          )}
+          <aside className="dash__mgmt-ideas">
+            <div className="dash__mgmt-ideas-head">💡 {t('nav.ideas')}</div>
+            <div className="dash__mgmt-ideas-body">
+              <IdeasPanel />
+            </div>
+          </aside>
+        </div>
+      )}
+
+      {/* Execution layer: pop-ups + the docks body. Unmounted entirely while
+          the Management layer is active (openspec split-management-dashboard),
+          so a hidden layer issues no fetches. */}
+      {layer === 'execution' && (<>
       {/* Summoned aux panels open as big centered pop-ups over the dashboard
           (openspec dashboard-panel-popups), stacked in summon order with the
           newest on top. Deliberately NO scrim: the header's panel rail stays
@@ -1131,39 +1178,15 @@ export default function Dashboard({ onClose }) {
           className="dash__popup"
           role="dialog"
           aria-label={
-            key === 'ideas'
-              ? t('nav.ideas')
-              : key === 'autopilot'
-                ? t('nav.autopilot')
-                : key === 'traffic'
-                  ? t('dashboard.panelTraffic')
-                  : key === 'arch'
-                    ? t('nav.arch')
-                    : t('audit.title')
+            key === 'autopilot'
+              ? t('nav.autopilot')
+              : key === 'traffic'
+                ? t('dashboard.panelTraffic')
+                : t('audit.title')
           }
           style={{ zIndex: 30 + i }}
         >
-          {/* Ideas and Arch get a pop-up header (their pages are chromeless);
-              Autopilot/Audit/Traffic keep their own dock bar, which hosts the ×. */}
-          {(key === 'ideas' || key === 'arch') && (
-            <div className="dash__popup-head">
-              <span className="dash__popup-title">
-                {key === 'ideas' ? `💡 ${t('nav.ideas')}` : `🏛 ${t('dashboard.panelArch')}`}
-              </span>
-              <button
-                type="button"
-                className="dash__popup-close"
-                onClick={() => togglePanel(key)}
-                title={t('dashboard.panelClose')}
-                aria-label={t('dashboard.panelClose')}
-              >
-                &times;
-              </button>
-            </div>
-          )}
           <div className="dash__popup-body">
-            {key === 'ideas' && <IdeasPanel />}
-            {key === 'arch' && <Arch popup onOpenDock={onClose} />}
             {key === 'autopilot' && <AutopilotPanel popup onClose={() => togglePanel('autopilot')} />}
             {key === 'audit' && <AgentAuditPanel popup onClose={() => togglePanel('audit')} />}
             {key === 'traffic' && (
@@ -1270,6 +1293,7 @@ export default function Dashboard({ onClose }) {
       )}
         </div>
       </div>
+      </>)}
     </div>
   );
 }

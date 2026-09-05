@@ -3353,3 +3353,19 @@
   min-height: 0;
   padding: 0;
 }
+
+/* Execution | Management layer switch (openspec split-management-dashboard) */
+.dash__layer { display: flex; gap: 2px; flex: none; border: 1px solid var(--color-border, #444); border-radius: 8px; padding: 2px; }
+.dash__layer-tab { background: transparent; border: 0; color: var(--color-text-muted, #9aa); font-size: 12.5px; padding: 3px 10px; border-radius: 6px; cursor: pointer; }
+.dash__layer-tab--on { background: var(--color-bg, #2a2e36); color: var(--color-text, #eee); font-weight: 600; }
+
+/* Management layer body: Arch surface primary + Ideas aside */
+.dash__mgmt { flex: 1; min-height: 0; display: flex; gap: 10px; padding: 8px; overflow: hidden; }
+.dash__mgmt-arch { flex: 1 1 auto; min-width: 0; min-height: 0; overflow: auto; border: 1px solid var(--color-border, #444); border-radius: 10px; }
+.dash__mgmt-ideas { flex: 0 0 360px; min-height: 0; display: flex; flex-direction: column; border: 1px solid var(--color-border, #444); border-radius: 10px; overflow: hidden; }
+.dash__mgmt-ideas-head { flex: none; padding: 6px 10px; font-weight: 600; border-bottom: 1px solid var(--color-border, #444); }
+.dash__mgmt-ideas-body { flex: 1; min-height: 0; overflow: auto; }
+@media (max-width: 900px) {
+  .dash__mgmt { flex-direction: column; overflow: auto; }
+  .dash__mgmt-ideas { flex: none; max-height: 45vh; }
+}
