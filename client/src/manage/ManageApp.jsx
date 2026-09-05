@@ -194,10 +194,20 @@ export default function ManageApp() {
   const panes = layout === 'panes' && wide;
   const visible = panes ? TABS.filter((k) => !hidden.includes(k)) : [tab];
 
+  // The Arch tab is the conversation only; its side cards (Loop, Managed agents,
+  // Fleet, Home repo) live on the Status tab under the fleet strips.
   const renderPane = (k) => (
-    k === 'arch' ? <Arch popup onOpenDock={openHarness} />
+    k === 'arch' ? <Arch popup view="chat" onOpenDock={openHarness} />
       : k === 'ideas' ? <IdeasPanel />
-        : k === 'status' ? <FleetStatus root={root} />
+        : k === 'status' ? (
+          <div className="mg__status" data-status-pane>
+            <FleetStatus root={root} />
+            <section className="mg__status-arch" aria-label={t('manage.archControls')}>
+              <h3 className="mg__status-h">🏛 {t('manage.archControls')}</h3>
+              <Arch popup view="cards" onOpenDock={openHarness} />
+            </section>
+          </div>
+        )
         : <iframe className="mg__events" title={t('manage.events')} src="../index.html" />
   );
 

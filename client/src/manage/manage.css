@@ -84,3 +84,12 @@ html, body, #root { height: 100%; margin: 0; }
 .fs__none { color: var(--color-text-muted, #9aa); font-size: 12.5px; border: 1px dashed var(--color-border, #444); border-radius: 8px; padding: 6px 10px; }
 .fs__legend { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
 .fs__legend span { display: inline-flex; align-items: center; gap: 5px; }
+
+/* Status tab hosts the fleet strips AND the arch agent's cards (openspec
+   fleet-status-tab): one scroll container, the strips first. */
+.mg__status { height: 100%; overflow: auto; display: flex; flex-direction: column; }
+.mg__status .fs { height: auto; overflow: visible; flex: none; }
+.mg__status-arch { padding: 4px 12px 14px; }
+.mg__status-h { margin: 6px 0 8px; font-size: 14px; font-weight: 600; }
+.mg__status-arch .arch--cards { padding: 0; height: auto; }
+.mg__status-arch .arch__overview { overflow: visible; }

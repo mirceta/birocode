@@ -27,3 +27,12 @@
       counted agents, a chip opens its detail, side by side shows four panes, the events
       page tabs are Activity · GitHub · Sounds · Manage. MONSTER's chips gain `docked` once
       it runs this build.
+
+## 4. Arch cards on the Status tab
+
+- [x] 4.1 `Arch` gains `view` (full | chat | cards); the Management App renders the Arch
+      tab with `view="chat"` (no side column, no Fleet lane) and the Status tab with the
+      fleet strips followed by `Arch view="cards"`; styles + i18n.
+- [x] 4.2 Browser check `check-manage-arch-split.mjs` on live: manage Arch has three lanes
+      and no side column; Status shows the strips first and then Loop / Managed agents /
+      Fleet / Home repo with the arm control; the studio Arch tab is unchanged.

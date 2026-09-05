@@ -23,6 +23,10 @@ scope. Neither is the panel asked for.
   on main / running, a detail card per chip, machine headers with the Fleet-card
   posture; it also joins the side-by-side layout as a pane.
 - The events app **drops its Agents tab**.
+- The Management App's **Arch tab becomes the conversation only** (Chat · Tools · History);
+  its side cards — Loop, Managed agents, Fleet, Home repo — render on the **Status tab**
+  under the fleet strips (`Arch view="cards"`). The studio Arch tab keeps its side column
+  and Fleet lane.
 
 ## Out of scope
 

@@ -72,7 +72,12 @@ function ago(ms) {
 // owns the title + ×, so the page drops its own title row; "open dock" then
 // closes the dashboard via `onOpenDock` instead of navigating (the docks are
 // already underneath).
-export default function Arch({ popup = false, onOpenDock = null }) {
+// `view` (openspec fleet-status-tab, arch cards on Status): 'full' = the whole
+// surface (studio); 'chat' = the conversation and its lanes only — no side
+// column, no Fleet lane (the Management App's Arch tab); 'cards' = only the
+// Loop / Managed agents / Fleet / Home repo cards as a grid (the Management
+// App's Status tab hosts them under the fleet strips).
+export default function Arch({ popup = false, onOpenDock = null, view = 'full' }) {
   const enabled = useFeature('archTab');
   const [state, setState] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -554,10 +559,22 @@ export default function Arch({ popup = false, onOpenDock = null }) {
         </section>
     </>
   );
-  const showSide = sideOpen && lane !== 'fleet';
+  const chatOnly = view === 'chat';
+  const showSide = view === 'full' && sideOpen && lane !== 'fleet';
+
+  if (view === 'cards') {
+    return (
+      <div className="arch arch--cards" data-arch-cards>
+        {!state && <div className="arch__banner arch__banner--loading" data-loading>Loading the arch state…</div>}
+        {state && !state.gateOpen && <div className="arch__banner">Autopilot is disabled by the operator (host GUI). The arch agent cannot act until the gate is open.</div>}
+        {error && <div className="arch__banner arch__banner--err">{error}</div>}
+        <div className="arch__overview" data-overview>{sideCards}</div>
+      </div>
+    );
+  }
 
   return (
-    <div className={`arch${popup ? ' arch--popup' : ''}${sideDrag ? ' arch--sidedrag' : ''}`}>
+    <div className={`arch${popup ? ' arch--popup' : ''}${sideDrag ? ' arch--sidedrag' : ''}${chatOnly ? ' arch--chat' : ''}`}>
       <div className="arch__cols" ref={colsRef}>
       <div className="arch__main">
         <div className="arch__head">
@@ -613,17 +630,19 @@ export default function Arch({ popup = false, onOpenDock = null }) {
           >
             🧾 History
           </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={lane === 'fleet'}
-            className={`arch__lane${lane === 'fleet' ? ' arch__lane--on' : ''}`}
-            title="The loop, the managed agents, the fleet and the home repo, full width"
-            onClick={() => setLane('fleet')}
-          >
-            🛰 Fleet
-          </button>
-          {lane !== 'fleet' && (
+          {!chatOnly && (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={lane === 'fleet'}
+              className={`arch__lane${lane === 'fleet' ? ' arch__lane--on' : ''}`}
+              title="The loop, the managed agents, the fleet and the home repo, full width"
+              onClick={() => setLane('fleet')}
+            >
+              🛰 Fleet
+            </button>
+          )}
+          {!chatOnly && lane !== 'fleet' && (
             <button
               type="button"
               className="arch__side-toggle"

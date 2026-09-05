@@ -19,6 +19,13 @@ that never waits on a peer.
 - **WHEN** the operator picks "on main", "not on main" or "running"
 - **THEN** only matching agents remain in every strip and the filter shows its count
 
+#### Scenario: Arch controls on the Status tab
+
+- **WHEN** the operator opens the Status tab of the Management App
+- **THEN** below the fleet strips the arch agent's Loop, Managed agents, Fleet and Home
+  repo cards render with their controls, and the Management App's Arch tab shows only
+  the conversation with its Chat, Tools and History lanes
+
 #### Scenario: Agent detail
 
 - **WHEN** the operator clicks a chip
