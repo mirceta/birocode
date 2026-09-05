@@ -907,7 +907,7 @@ export default function Dashboard({ onClose }) {
   }
 
   return (
-    <div className="dash">
+    <div className={`dash${layer === 'management' ? ' dash--mgmt' : ''}`}>
       <div className="dash__header">
         {/* Execution | Management layer switch (openspec split-management-
             dashboard): two parallel top-level views under this one overlay. */}
