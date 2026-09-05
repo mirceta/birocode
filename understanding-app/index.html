@@ -1,230 +1,74 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Understanding — Management vs Execution layers</title>
-<style>
-  :root { --bg:#14161a; --card:#1d2027; --ink:#e6e8ec; --mut:#9aa3ad; --ok:#4cc38a; --no:#e5484d; --warn:#f5a524; --line:#2c313a; --acc:#6ea8fe; --mgmt:#b38df2; --exec:#5bc8d6; }
-  * { box-sizing:border-box }
-  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 system-ui, sans-serif }
-  header { padding:20px 24px 8px } h1 { margin:0 0 4px; font-size:22px } .sub { color:var(--mut) }
-  nav { display:flex; gap:8px; padding:8px 24px; flex-wrap:wrap }
-  nav button { background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:6px 12px; cursor:pointer }
-  nav button.on { border-color:var(--acc); color:var(--acc) }
-  main { padding:8px 24px 48px; max-width:1150px }
-  section { display:none } section.on { display:block }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin:12px 0 }
-  code { background:#0f1114; padding:1px 5px; border-radius:4px; font-size:13px }
-  table { border-collapse:collapse; width:100%; font-size:14px } td, th { border-bottom:1px solid var(--line); padding:6px 8px; text-align:left; vertical-align:top }
-  .ok { color:var(--ok) } .no { color:var(--no) } .warn { color:var(--warn) }
-  .tag { display:inline-block; font-size:11px; padding:1px 6px; border-radius:99px; border:1px solid var(--warn); color:var(--warn); margin-left:6px; vertical-align:middle }
-  /* layer diagram */
-  .stage { display:flex; gap:16px; flex-wrap:wrap }
-  .col { flex:1 1 320px }
-  .appbox { border:1px solid var(--line); border-radius:12px; background:#181b21; padding:10px; margin-bottom:10px }
-  .appbox h4 { margin:2px 0 8px; font-size:13px; letter-spacing:.4px; text-transform:uppercase; color:var(--mut) }
-  .appbox.mgmt { border-color:var(--mgmt) } .appbox.mgmt h4 { color:var(--mgmt) }
-  .appbox.exec { border-color:var(--exec) } .appbox.exec h4 { color:var(--exec) }
-  .chip { display:inline-block; margin:3px; padding:5px 10px; border-radius:8px; border:1px solid var(--line); background:#0f1114; font-size:13px; transition: all .5s }
-  .chip.mgmt { border-color:var(--mgmt); color:var(--mgmt) }
-  .chip.exec { border-color:var(--exec); color:var(--exec) }
-  .chip.ghost { opacity:.25; text-decoration:line-through }
-  .switch { margin:10px 0 } .switch button { background:#0f1114; border:1px solid var(--line); color:var(--ink); border-radius:8px; padding:6px 14px; cursor:pointer; margin-right:8px }
-  .switch button.on { border-color:var(--warn); color:var(--warn) }
-  .flowline { color:var(--mut); font-size:13px; margin:6px 0 }
-  .arrowbox { text-align:center; color:var(--mut); font-size:20px; padding:2px 0 }
-  .verdict { font-weight:700 } .verdict.ok { color:var(--ok) } .verdict.no { color:var(--no) }
-  .cols2 { display:grid; grid-template-columns:1fr 1fr; gap:16px } @media (max-width:860px){ .cols2 { grid-template-columns:1fr } }
-  ul { margin:6px 0 6px 18px; padding:0 } li { margin:4px 0 }
-</style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Understanding: the Tasks agent — from a long prompt to linked tasks</title>
+<link rel="stylesheet" href="./app.css" />
 </head>
 <body>
-<header>
-  <h1>Management layer vs Execution layer <span class="tag">openspec split-management-dashboard</span></h1>
-  <div class="sub">Where the Arch agent and Ideas should live: a second dashboard now, a separate refresh-to-update app next — and why the arch brain never moves.</div>
+<header class="top">
+  <h1>🗂 The Tasks agent</h1>
+  <p class="sub">How a long prompt in the Ideas composer becomes ordered, dependency-linked tasks on the Task graph — and why the agent can do nothing else.</p>
+  <div class="controls">
+    <button id="play" class="btn btn--primary">▶ Play the flow</button>
+    <button id="reset" class="btn">Reset</button>
+    <label class="speed">speed <input id="speed" type="range" min="1" max="3" step="1" value="2" /></label>
+  </div>
 </header>
-<nav>
-  <button data-v="why" class="on">The split</button>
-  <button data-v="phase1">Phase 1 — two dashboards</button>
-  <button data-v="phase2">Phase 2 — the Management App</button>
-  <button data-v="phase3">Phase 3 — fleet upgrades</button>
-  <button data-v="options">Options weighed</button>
-</nav>
+
 <main>
+  <section class="flow" id="flow" aria-label="The five stages">
+    <!-- stages are rendered by app.js -->
+  </section>
 
-<section id="why" class="on">
-  <div class="card">
-    <table>
-      <thead><tr><th style="width:180px">Term</th><th>Definition</th></tr></thead>
-      <tbody>
-        <tr><td><b>Harness</b></td><td>The deployed Claude Web app on each box — heavy backend: runs, loops, arch brain, collector. Redeploy = build + swap + dead-man switch.</td></tr>
-        <tr><td><b style="color:var(--exec)">Execution Dashboard</b></td><td>The current dashboard: per-repo docks, runs, Autopilot, Agent Audit. "What are the agents doing right now on this box."</td></tr>
-        <tr><td><b style="color:var(--mgmt)">Management Dashboard</b></td><td>A new parallel top-level surface for direction-setting: the Arch agent and Ideas.</td></tr>
-        <tr><td><b>Management App</b></td><td>The events app grown up: a separate static page that calls Harness REST APIs. Change it → refresh, no redeploy.</td></tr>
-        <tr><td><b>Arch Backend</b></td><td>The arch agent's server side: tools, loop, fleet client, audit. In-process C# inside the Harness — a static page cannot host it.</td></tr>
-      </tbody>
-    </table>
-  </div>
-  <div class="card">
-    <p><b>The observation.</b> The dashboard's four summonable panels are two different kinds of thing. Autopilot and Agent Audit answer "what is running on this box, and what did it do" — <span style="color:var(--exec)">execution</span>. The Arch agent and Ideas answer "what should the fleet work on next" — <span style="color:var(--mgmt)">management</span>. Today all four sit in one rail, so the management tools look like just more execution widgets.</p>
-    <p><b>Why the split is real, not cosmetic.</b> Underneath, everything management-flavoured is already fleet-scoped: the Arch agent scopes repos across machines, Ideas syncs across machines through the hub, the collector watches every harness. Everything execution-flavoured is box-scoped: docks, runs, the loop engine, the audit. The UI never caught up with the architecture.</p>
-    <p><b>The two-step plan.</b> Phase 1 separates the surfaces inside the Harness (cheap, ships now). Phase 2 moves the management surface out of the Harness into the Management App (refresh-to-update, outlives any one harness). Phase 1 is deliberately thin — pure placement, components reused unchanged — so nothing built now is thrown away by phase 2.</p>
-  </div>
-</section>
-
-<section id="phase1">
-  <div class="card">
-    <div class="switch">
-      <button id="btnBefore" class="on">Today</button>
-      <button id="btnAfter">After phase 1</button>
-      <span class="sub" id="stageCaption">One dashboard; all four panels summonable from one rail.</span>
+  <section class="detail" id="detail">
+    <h2 id="detail-title">Click a stage</h2>
+    <div id="detail-body" class="detail__body">
+      <p>Each box is one hop of the same message. Press <b>Play</b> to watch a prompt travel through, or click a box to read what happens there and where it lives in the code.</p>
     </div>
-    <div class="stage">
-      <div class="col">
-        <div class="appbox exec">
-          <h4 id="execTitle">Dashboard (the only one)</h4>
-          <div class="flowline">docks grid — always on</div>
-          <span class="chip exec">Autopilot</span>
-          <span class="chip exec">Agent Audit</span>
-          <span class="chip mgmt" id="chipIdeas">Ideas</span>
-          <span class="chip mgmt" id="chipArch">Arch (pop-up)</span>
-          <div class="flowline">panel rail: summon / dismiss per device</div>
-        </div>
+  </section>
+
+  <section class="fence">
+    <h2>The fence: why this agent is safe to unleash</h2>
+    <div class="fence__grid">
+      <div class="card">
+        <h3>Only eight tools</h3>
+        <p>Its <code>--mcp-config</code> lists one server: <code>tasks</code> at <code>POST /api/tasks/mcp</code>. The tool list is <code>list_ideas · create_idea · update_idea · list_tasks · create_task · update_task · link_tasks · delete_task</code>. Nothing reads or writes a repository.</p>
       </div>
-      <div class="col" id="mgmtCol" style="display:none">
-        <div class="appbox mgmt">
-          <h4>Management</h4>
-          <div class="flowline">parallel top-level tab of the same overlay</div>
-          <span class="chip mgmt">Arch agent — full surface (Chat · Tools · History, scope, fleet)</span>
-          <span class="chip mgmt">Ideas — full panel</span>
-          <div class="flowline">components reused unchanged; only the mount moves</div>
-        </div>
+      <div class="card">
+        <h3>Built-ins disallowed</h3>
+        <p>The run passes the arch agent's <code>--disallowedTools</code> list (Edit, Write, Bash, Read, Glob, Grep, WebFetch, …) and its home folder's <code>.claude/settings.json</code> denies <code>Read</code> under every registered repo and the data dir.</p>
+      </div>
+      <div class="card">
+        <h3>Bearer token, not the password</h3>
+        <p>The MCP route is exempt from the password middleware. Instead the harness mints a 256-bit token per process, writes it into the run's MCP config, and compares it in constant time. Wrong token → 401, no tool runs.</p>
+      </div>
+      <div class="card">
+        <h3>Everything audited</h3>
+        <p>Every tool call writes one row to the autopilot action audit (kind <code>tasks</code>, outcome <code>tasks-tool</code>, phase = tool name). The Tools lane counts them per tool.</p>
+      </div>
+      <div class="card">
+        <h3>Cycles cannot happen</h3>
+        <p><code>link_tasks</code> is a thin wrapper over <code>TaskGraphService.AddEdge</code>, which refuses missing nodes, self-loops, duplicates and cycles. The refusal comes back as an <code>isError</code> tool result with the reason, so the model fixes its order instead of retrying.</p>
+      </div>
+      <div class="card">
+        <h3>No second store</h3>
+        <p>The tools call the same <code>NotesService</code> and <code>TaskGraphService</code> the Ideas tab uses. Agent-created entries sync, merge and tombstone exactly like typed ones.</p>
       </div>
     </div>
-    <p class="sub">Entry stays as it is: the title button or Ctrl/Cmd+Shift+D opens the dashboard; a two-tab header (<span style="color:var(--exec)">Execution</span> | <span style="color:var(--mgmt)">Management</span>) switches views, remembered per device. Advanced mode only, like the dashboard itself. Basic mode is untouched.</p>
-  </div>
-</section>
+  </section>
 
-<section id="phase2">
-  <div class="card">
-    <div class="cols2">
-      <div>
-        <div class="appbox mgmt">
-          <h4>Management App (static page)</h4>
-          <span class="chip mgmt">Events feed</span>
-          <span class="chip mgmt">Arch UI</span>
-          <span class="chip mgmt">Ideas UI</span>
-          <div class="flowline">one self-contained page + tiny server, like the events app today. Change → save → refresh. No harness redeploy, ever.</div>
-        </div>
-        <div class="arrowbox">↓ REST only, same-origin via the localview proxy ↓</div>
-        <div class="appbox">
-          <h4>Home Harness (any box)</h4>
-          <span class="chip">/api/arch — the Arch Backend</span>
-          <span class="chip">/api/notes — Ideas store + hub</span>
-          <span class="chip">/api/collector — event sources</span>
-          <div class="flowline">the brain stays here: run slot, CLI spawn, loop engine, protected fleet credentials</div>
-        </div>
-        <div class="arrowbox">↓ server-side relays the SPA never sees ↓</div>
-        <div class="appbox">
-          <h4>The fleet</h4>
-          <span class="chip">peer API on every harness</span>
-          <span class="chip">collector pulls /api/events</span>
-          <span class="chip">ideas hub sync</span>
-          <div class="flowline">LAN bypass makes every hop credential-light; the fleet client carries the stored creds</div>
-        </div>
-      </div>
-      <div>
-        <p><b>Why the SPA talks to ONE harness, not N.</b> A browser page calling many harnesses directly means CORS and a credential per box in the page. The pattern that already works is the collector's: the page speaks only to its home Harness — same origin through the proxy, so the session cookie just works — and that Harness relays to the fleet with the peer API and stored credentials it already has. Fleet reach comes free.</p>
-        <p><b>Why the Arch Backend never moves.</b> send_task claims the builder run slot and spawns the CLI; the loop engine ticks the arch loop; the fleet client unprotects stored credentials. All of that is in-process server code. A static page has no process. So "move the arch agent to the events app" can only ever mean moving its <i>face</i> — which is cheap, because the Arch tab already does everything over REST.</p>
-        <p><b>What phase 2 actually is, then:</b> port the Arch and Ideas UIs into the Management App's page, against the same endpoints they call today. The Harness's Management tab from phase 1 shrinks to an embed or a link. Nothing server-side changes.</p>
-        <p><b>Built 2026-09-05 (openspec management-app):</b> a second Vite build of the same React source (<code>client/manage.html</code> → <code>events-app/manage/</code>), served by the harness from the worktree at <code>/api/localview/&lt;self&gt;/app/events-feed/manage/index.html</code>. Tabs Arch · Ideas · Events (the feed page embedded). Rebuild + refresh is the whole update cycle; verified on live through the proxy with the real fleet state.</p>
-        <p><b>Layouts (2026-09-05, openspec management-app-panes):</b> the app has a <i>Tabs · Side by side</i> switch. Side by side renders Arch, Ideas and Events as columns with a slim bar each (label + hide ×), draggable dividers between them and per-device persistence of the choice, the hidden set and the widths — the same idea as the harness's own multi-pane strip behind the machine/project chip. Narrow windows fall back to tabs and keep the choice.</p>
-        <p><b>Arch surface (2026-09-05, openspec arch-side-column):</b> the right-hand column (Loop · Managed agents · Fleet · Home repo) has a draggable divider and a hide/show toggle, and the same cards form a fourth lane, <i>🛰 Fleet</i>, rendered full width as a grid. Width and visibility persist per device; narrow screens stack as before.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section id="phase3">
-  <div class="card">
-    <h2>Phase 3 — the arch agent keeps the fleet on one build <span class="tag">openspec arch-peer-upgrades</span></h2>
-    <p><b>The gap it closes.</b> Every fleet feature so far assumed the peers run a compatible build, and every upgrade was a person at each box running <code>swap.ps1</code>. Now the hub's arch agent sees drift (<code>list_machines</code> carries <code>version</code>, <code>hubVersion</code>, <code>behind</code>) and can drive the peer's redeploy itself.</p>
-    <div class="flow">
-      <div class="flowbox"><b>1 · notice</b><br>peer describe says build X, hub is build Y → <i>behind</i></div>
-      <div class="flowarrow">→</div>
-      <div class="flowbox"><b>2 · posture</b><br>loop armed · sends allowed · peer <i>accepts fleet upgrades</i> · versions differ</div>
-      <div class="flowarrow">→</div>
-      <div class="flowbox"><b>3 · upgrade_peer</b><br>POST /api/arch/peer/upgrade {ref}</div>
-      <div class="flowarrow">→</div>
-      <div class="flowbox"><b>4 · the peer does it</b><br>ff-only pull on its branch · carry new config keys · detached swap.ps1 · dead-man switch</div>
-      <div class="flowarrow">→</div>
-      <div class="flowbox"><b>5 · keep is earned</b><br>new process finds the job file; running the target commit → disarm; else rollback</div>
-    </div>
-    <p><b>Why the peer owns the deploy.</b> The receiving harness runs the same committed script its operator would, with the same guard and the same auto-rollback; the caller only says <i>which ref</i>. Refusals are honest and leave the tree untouched: <code>not-on-branch</code>, <code>dirty</code>, <code>pull-failed</code>, <code>current</code>, <code>busy</code>, <code>not-accepting</code>.</p>
-    <p><b>Two opt-ins, again.</b> Sends must be allowed to that machine on the hub, and its operator must tick <i>accept fleet upgrades</i> on its own Arch tab. The Fleet card shows drift and offers an operator <i>upgrade to this build</i> button under the same rules — the arch agent and the human use one path.</p>
-    <p><b>Built 2026-09-05.</b> Verified on an isolated instance (posture + API + Fleet card) and by a real self-upgrade of this box's live harness through the peer endpoint; the first MONSTER upgrade needs one last hand deploy there so it has the endpoint.</p>
-  </div>
-</section>
-
-<section id="options">
-  <div class="card">
-    <table>
-      <thead><tr><th>Option</th><th>What it means</th><th>Verdict</th><th>Why</th></tr></thead>
-      <tbody>
-        <tr>
-          <td><b>A — management moves out</b></td>
-          <td>Events app grows into the Management App; Arch + Ideas UIs move there; Harness keeps the backends and serves REST.</td>
-          <td class="verdict ok">chosen (phase 2)</td>
-          <td>Refresh-to-update; separation of concerns matches the fleet-scoped nature of management; compatible with the 2026-09-02 decision that the arch agent stays hosted in the Harness (only the UI moves).</td>
-        </tr>
-        <tr>
-          <td><b>B — events app moves in</b></td>
-          <td>The event feed becomes a first-class Harness citizen.</td>
-          <td class="verdict no">rejected</td>
-          <td>Moves the fast-iterating surface onto the slow deploy train — every tweak would cost a build + swap + dead-man cycle. The wrong direction.</td>
-        </tr>
-        <tr>
-          <td><b>C — hot-swap the harness client</b></td>
-          <td>Make live pick up a new client/dist without restarting the process.</td>
-          <td class="verdict warn">noted, not chosen</td>
-          <td>Would fix the redeploy pain alone (the harness frontend is also just static files), but gives no separation of concerns and no app that outlives a single harness. Worth having someday; not a substitute.</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-  <div class="card">
-    <p><b>Constraints carried into the spec:</b></p>
-    <ul>
-      <li>The Arch Backend stays in the Harness — restated from the 2026-09-02 decision; phase 2 must not be read as reopening it.</li>
-      <li>Phase 1 moves mounts only: the Arch page, Ideas panel and their APIs are reused unchanged, so phase 2 can lift them without unwinding anything.</li>
-      <li>The Execution Dashboard keeps Autopilot and Agent Audit exactly as they are; docks stay always-on.</li>
-      <li>New UI defaults to Advanced mode (repo convention); Basic mode never sees either dashboard.</li>
-    </ul>
-  </div>
-</section>
+  <section class="graph-demo">
+    <h2>What lands on the graph</h2>
+    <p class="muted">The fixture prompt from the goal, as the agent typically splits it. Arrows read "depends on". Nodes are auto-placed in rows of four (the second row starts when the first holds four).</p>
+    <svg id="graph" viewBox="0 0 980 300" role="img" aria-label="Example task graph"></svg>
+  </section>
 </main>
 
-<script>
-(function(){
-  document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => {
-    document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
-    document.querySelectorAll('main section').forEach(s => s.classList.toggle('on', s.id === b.dataset.v));
-  }));
-  const before = document.getElementById('btnBefore'), after = document.getElementById('btnAfter');
-  function setStage(isAfter){
-    before.classList.toggle('on', !isAfter); after.classList.toggle('on', isAfter);
-    document.getElementById('mgmtCol').style.display = isAfter ? '' : 'none';
-    document.getElementById('chipIdeas').classList.toggle('ghost', isAfter);
-    document.getElementById('chipArch').classList.toggle('ghost', isAfter);
-    document.getElementById('execTitle').textContent = isAfter ? 'Execution' : 'Dashboard (the only one)';
-    document.getElementById('stageCaption').textContent = isAfter
-      ? 'Two parallel views: Execution keeps the docks + Autopilot + Audit; Arch and Ideas live in Management.'
-      : 'One dashboard; all four panels summonable from one rail.';
-  }
-  before.addEventListener('click', () => setStage(false));
-  after.addEventListener('click', () => setStage(true));
-})();
-</script>
+<footer class="foot">
+  <p>Code: <code>ClaudeWeb.App/Services/Tasks/</code> (TasksToolbox, TasksMcpServer, TasksAgentService, TasksStateStore), <code>Controllers/TasksController.cs</code>, <code>client/src/pages/Tasks.jsx</code>, <code>client/src/components/ideas/IdeasPanel.jsx</code>. Spec: <code>openspec/changes/tasks-agent/</code>.</p>
+</footer>
+<script src="./app.js"></script>
 </body>
 </html>

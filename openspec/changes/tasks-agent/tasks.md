@@ -47,5 +47,5 @@
 
 ## 4. Understanding app
 
-- [ ] 4.1 `understanding-app/index.html` (+ app.js/css, relative URLs): the flow
+- [x] 4.1 `understanding-app/index.html` (+ app.js/css, relative URLs): the flow
       composer → Tasks agent → MCP → TaskGraphService → graph panel.
