@@ -35,6 +35,14 @@
       last hand deploy here), opt-in ticked, `POST /api/arch/peer/upgrade {ref: feature/work}`
       answered `current`; the next commit is applied by a real self-upgrade through that endpoint.
       MONSTER still needs one hand deploy (its build has no upgrade endpoint) + its opt-in.
+      REAL SELF-UPGRADE #1 (2026-09-05 16:47, job 0a524e51d4b5, 71fd81a → 32de731): the
+      endpoint pulled, launched swap.ps1 detached, live restarted on the target build and the
+      new process marked the job `done`. Two defects surfaced and are fixed in the next build:
+      the startup reconcile disarmed BEFORE swap.ps1 armed the switch (16:47:57 vs 16:48:05,
+      so the arm won) → the reconcile now loops until the arm lands, then disarms; and the
+      one-shot `ClaudeWebPeerUpgrade` task outlived the killed process → deleted synchronously
+      after launch and again by the new process. Also `fromCommit` is now the running build.
+      SELF-UPGRADE #2 applies that fix through the same endpoint (result recorded below).
 
 ## 4. Ship
 

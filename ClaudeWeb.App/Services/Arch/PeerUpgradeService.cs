@@ -50,10 +50,27 @@ public sealed class PeerUpgradeService
         _logger = logger;
         _path = Path.Combine(AppPaths.DataDir, "peer-upgrade.json");
         Load();
-        // Startup reconcile: if we are the build a pending job asked for, keep it.
-        try { Refresh(); }
-        catch (Exception ex) { _logger.Error($"[UPGRADE] startup reconcile failed: {ex.Message}"); }
+        // Startup reconcile: if we are the build a pending job asked for, keep it. The
+        // loop keeps looking until the job is terminal (the arm lands seconds after we
+        // start serving), and drops any one-shot launcher task the previous process
+        // could not delete because the swap killed it first.
+        if (Current is { State: StateDeploying })
+        {
+            _ = Task.Run(async () =>
+            {
+                try { Run("schtasks", $"/Delete /TN {LauncherTask} /F"); } catch { /* best effort */ }
+                while (Current is { State: StateDeploying })
+                {
+                    try { Refresh(); }
+                    catch (Exception ex) { _logger.Error($"[UPGRADE] reconcile failed: {ex.Message}"); }
+                    await Task.Delay(TimeSpan.FromSeconds(5));
+                }
+            });
+        }
     }
+
+    private const string LauncherTask = "ClaudeWebPeerUpgrade";
+    private static readonly TimeSpan ArmGrace = TimeSpan.FromMinutes(4);
 
     public Job? Current { get { lock (_gate) return _job; } }
 
@@ -122,6 +139,9 @@ public sealed class PeerUpgradeService
             return new ArchAgentService.ToolOutcome(false, "current", $"already running {target[..7]} ({branch} is at that commit)");
 
         var carried = CarryConfigKeys(self.Path);
+        // "from" is the build being replaced — the running one when we know it (the
+        // checkout may already have been ahead of the running build before the pull).
+        if (running is { Length: >= 7 }) from = running;
         var job = new Job(Guid.NewGuid().ToString("N")[..12], branch, from, target, requestedBy, Now(), StateDeploying,
             carried.Count > 0 ? $"carried config keys: {string.Join(", ", carried)}" : null);
         lock (_gate) { _job = job; Save(); }
@@ -155,15 +175,27 @@ public sealed class PeerUpgradeService
         if (j is null || j.State != StateDeploying) return;
 
         var running = CommitOf(ArchAgentService.BuildVersion);
+        var status = _deploy.GetStatus();
         if (SameCommit(running, j.TargetCommit))
         {
             // We ARE the requested build and we are answering requests: health is real.
-            var kept = _deploy.Disarm();
-            Set(j with { State = StateDone, Detail = $"running {j.TargetCommit[..7]}; {(kept ? "kept (rollback disarmed)" : "rollback was not armed")}" });
-            _logger.Info($"[UPGRADE] job {j.Id} done: running {j.TargetCommit[..7]}, kept");
+            // But swap.ps1 arms the dead-man switch only AFTER its own health probe —
+            // a few seconds after this process starts serving — so disarming at startup
+            // would hit nothing and the switch would fire anyway (it did, 2026-09-05).
+            // Wait for the arm, then disarm; give up waiting after a generous grace.
+            if (status.Rollback.Armed)
+            {
+                var kept = _deploy.Disarm();
+                Set(j with { State = StateDone, Detail = $"running {j.TargetCommit[..7]}; {(kept ? "kept (rollback disarmed)" : "could not disarm the rollback")}" });
+                _logger.Info($"[UPGRADE] job {j.Id} done: running {j.TargetCommit[..7]}, kept={kept}");
+            }
+            else if (Age(j) > ArmGrace)
+            {
+                Set(j with { State = StateDone, Detail = $"running {j.TargetCommit[..7]}; the rollback was never armed" });
+                _logger.Info($"[UPGRADE] job {j.Id} done: running {j.TargetCommit[..7]}, rollback never armed");
+            }
             return;
         }
-        var status = _deploy.GetStatus();
         if (status.Live?.RolledBackSince == true && Age(j) > TimeSpan.FromMinutes(1))
         {
             Set(j with { State = StateRolledBack, Detail = "the dead-man switch restored last-good" });
@@ -215,15 +247,18 @@ public sealed class PeerUpgradeService
             $"cd /d \"{repoPath}\"\r\n" +
             "set RunAnalyzers=false\r\n" +
             $"powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\swap.ps1 -Port {_config.Port} > .claudeweb-deploy\\peer-upgrade.log 2>&1\r\n");
-        const string task = "ClaudeWebPeerUpgrade";
+        const string task = LauncherTask;
         Run("schtasks", $"/Delete /TN {task} /F");
         var create = Run("schtasks", $"/Create /TN {task} /SC ONCE /ST 23:59 /TR \"cmd.exe /c \\\"{launcher}\\\"\" /RL HIGHEST /F");
         if (create.Code != 0) throw new InvalidOperationException("schtasks create: " + FirstLine(create.Err + create.Out));
         var run = Run("schtasks", $"/Run /TN {task}");
         if (run.Code != 0) throw new InvalidOperationException("schtasks run: " + FirstLine(run.Err + run.Out));
         // The task instance keeps running after the definition is deleted; never leave
-        // a 23:59 trigger behind (an unattended deploy fired that way once).
-        _ = Task.Run(async () => { await Task.Delay(TimeSpan.FromSeconds(20)); Run("schtasks", $"/Delete /TN {task} /F"); });
+        // a 23:59 trigger behind (an unattended deploy fired that way once). Delete it
+        // synchronously after a short grace: a deferred timer never fired on 2026-09-05
+        // because the swap killed this process first. The new process deletes it again.
+        Thread.Sleep(3000);
+        Run("schtasks", $"/Delete /TN {task} /F");
     }
 
     private bool DeployLogAborted(Job j)
