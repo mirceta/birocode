@@ -4,6 +4,7 @@ import ErrorBanner from '../shared/ErrorBanner';
 import ArchPlanSection from './ArchPlanSection';
 import IdeasSyncBar from './IdeasSyncBar';
 import TaskGraphPanel from '../taskgraph/TaskGraphPanel';
+import KanbanBoard from '../taskgraph/KanbanBoard';
 import { useFeature } from '../../context/UiModeContext';
 import { useT } from '../../i18n/LanguageContext';
 import './ideas.css';
@@ -78,7 +79,7 @@ export default function IdeasPanel() {
 
   const [tab, setTab] = useState(() => {
     const stored = localStorage.getItem(TAB_KEY);
-    return stored === 'plan' || stored === 'graph' ? stored : 'ideas';
+    return stored === 'plan' || stored === 'graph' || stored === 'kanban' ? stored : 'ideas';
   });
   function chooseTab(next) {
     setTab(next);
@@ -246,7 +247,7 @@ export default function IdeasPanel() {
   async function sendToGraph(n) {
     setError('');
     try {
-      await apiPost('/taskgraph/nodes', { title: n.text, note: n.project || undefined });
+      await apiPost('/taskgraph/nodes', { title: n.text, note: n.project || undefined, ideaId: n.id, createdBy: 'human' });
     } catch {
       setError(t('ideas.saveError'));
       return;
@@ -397,6 +398,19 @@ export default function IdeasPanel() {
             🧩 Task graph
           </button>
         )}
+        {graphOn && (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'kanban'}
+            className={`ideas__tab${tab === 'kanban' ? ' ideas__tab--active' : ''}`}
+            title="The same tasks as the graph, as Backlog · Assigned · In progress · Done — assign to any repo agent on the fleet, the arch agent pings them"
+            onClick={() => chooseTab('kanban')}
+            data-tab-kanban
+          >
+            🗂 Kanban
+          </button>
+        )}
       </div>
 
       {tab === 'plan' ? (
@@ -409,6 +423,10 @@ export default function IdeasPanel() {
             </div>
           )}
           <TaskGraphPanel refreshKey={graphRefresh} />
+        </div>
+      ) : tab === 'kanban' && graphOn ? (
+        <div className="ideas__tabpanel ideas__tabpanel--graph">
+          <KanbanBoard />
         </div>
       ) : (
         <div className="ideas__tabpanel">

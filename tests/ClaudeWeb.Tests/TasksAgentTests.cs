@@ -154,6 +154,22 @@ public sealed class TasksAgentTests : IDisposable
         Assert.Equal("missing-node", missing.GetProperty("status").GetString());
     }
 
+    [Fact]
+    public void Delete_task_drops_its_edges_and_an_unknown_id_is_missing()
+    {
+        var a = CallTool("create_task", new JsonObject { ["title"] = "A" }).GetProperty("data").GetProperty("id").GetString()!;
+        var b = CallTool("create_task", new JsonObject { ["title"] = "B" }).GetProperty("data").GetProperty("id").GetString()!;
+        CallTool("link_tasks", new JsonObject { ["source"] = a, ["target"] = b });
+        var gone = CallTool("delete_task", new JsonObject { ["id"] = b });
+        Assert.True(gone.GetProperty("ok").GetBoolean());
+        Assert.Equal(1, gone.GetProperty("data").GetProperty("removedEdges").GetInt32());
+        Assert.Empty(_graph.Get().Edges);
+        Assert.Single(_graph.Get().Nodes);
+        var missing = CallTool("delete_task", new JsonObject { ["id"] = "nope" });
+        Assert.False(missing.GetProperty("ok").GetBoolean());
+        Assert.Equal("missing", missing.GetProperty("status").GetString());
+    }
+
     // ---- ideas ---------------------------------------------------------------------------------
 
     [Fact]

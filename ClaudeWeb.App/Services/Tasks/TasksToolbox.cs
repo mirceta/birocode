@@ -98,7 +98,7 @@ public class TasksToolbox
     public ToolOutcome CreateTask(string? title, string? note, string? repoId)
     {
         var (x, y) = NextPosition();
-        var node = _graph.AddNode(title, note, repoId, null, x, y, Now());
+        var node = _graph.AddNode(title, note, repoId, null, x, y, Now(), createdBy: "tasks-agent");
         if (node is null)
         {
             Audit("create_task", "refused: empty title");
@@ -156,14 +156,15 @@ public class TasksToolbox
 
     public ToolOutcome DeleteTask(string? id)
     {
+        // DeleteNode returns the number of edges dropped, or -1 for an unknown id.
         var removed = _graph.DeleteNode((id ?? "").Trim(), Now());
-        if (removed == 0)
+        if (removed < 0)
         {
             Audit("delete_task", $"refused: unknown id {id}");
             return new ToolOutcome(false, "missing", $"no task with id \"{id}\"");
         }
-        Audit("delete_task", $"{id} (+{removed - 1} edge(s))");
-        return new ToolOutcome(true, "deleted", $"task {id} deleted with {removed - 1} edge(s)", new { id, removedEdges = removed - 1 });
+        Audit("delete_task", $"{id} (+{removed} edge(s))");
+        return new ToolOutcome(true, "deleted", $"task {id} deleted with {removed} edge(s)", new { id, removedEdges = removed });
     }
 
     // ---- placement (openspec tasks-agent: task-graph delta) -----------------------------

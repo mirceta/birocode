@@ -66,6 +66,8 @@
   "manage.title": "Management",
   "manage.tabs": "Management views",
   "manage.events": "Events",
+  "manage.status": "Status",
+  "manage.archControls": "Arch agent — loop, scope, fleet, home repo",
   "manage.openHarness": "Open harness",
   "manage.notLoggedIn": "Not logged in to this harness — the Management App uses the harness session.",
   "manage.layout": "Layout",
