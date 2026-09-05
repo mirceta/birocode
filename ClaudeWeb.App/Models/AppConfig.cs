@@ -130,4 +130,8 @@ public class AppConfig
     /// explicit path here to relocate it.
     /// </summary>
     public string ArchHomeDir { get; set; } = "";
+
+    /// <summary>The Tasks agent's home folder (openspec tasks-agent, D5). Empty =
+    /// a <c>tasks-home</c> sibling of the harness's own repo, else under the data dir.</summary>
+    public string TasksHomeDir { get; set; } = "";
 }

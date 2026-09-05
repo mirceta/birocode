@@ -64,5 +64,6 @@ public class RepositoryResolver
 
     /// <summary>Reserved ids that name an agent that is not a repository.</summary>
     public static bool IsReserved(string? id) =>
-        string.Equals(id, Arch.ArchAgentService.ReservedId, StringComparison.Ordinal);
+        string.Equals(id, Arch.ArchAgentService.ReservedId, StringComparison.Ordinal)
+        || string.Equals(id, Tasks.TasksAgentService.ReservedId, StringComparison.Ordinal);
 }
