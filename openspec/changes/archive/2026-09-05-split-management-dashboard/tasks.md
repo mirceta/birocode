@@ -26,4 +26,4 @@
 - [x] 3.1 Deploy from feature/work; live check: both views render, Arch works from
       the Management view against the real fleet state. DONE 2026-09-05 15:41 (PID 4228,
       DLL EA2021483E73, health 200); check-mgmt-layer.mjs against live 12/12 with the
-      real docks + fleet state; dead-man switch armed 15:56, awaiting "keep it".
+      real docks + fleet state; the 15:41 deploy rolled back at 15:56 (keep came late); redeployed 15:59 (PID 21192, DLL 866DE9BB5A3B), KEPT 16:00 on the operator's word, live check 12/12 again.
