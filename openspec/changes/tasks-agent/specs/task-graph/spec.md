@@ -2,10 +2,10 @@
 
 ### Requirement: Agent-authored nodes are auto-placed
 
-When a node is created without a position (as the Tasks agent's tools do), the
-harness SHALL place it automatically below the current lowest node, filling rows of
-four left to right, so a batch created in one turn is readable on the canvas before
-anyone drags it. Nodes created with an explicit position are unchanged.
+The harness SHALL auto-place a node created without a position (as the Tasks
+agent's tools do) below the current lowest node, filling rows of four left to
+right, so a batch created in one turn is readable on the canvas before anyone drags
+it. Nodes created with an explicit position MUST keep it.
 
 #### Scenario: A batch lands in rows
 

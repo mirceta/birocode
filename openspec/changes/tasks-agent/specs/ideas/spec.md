@@ -25,8 +25,8 @@ The Ideas composer SHALL offer a "Break into tasks" action (Advanced mode) that
 hands the current draft to the Tasks agent, switches the panel to the Task graph
 section with a working indicator, and, when the agent's run ends, reloads the graph
 so the new tasks are visible without a page reload. The draft SHALL be kept until
-the run has been accepted by the harness; a refused send (agent busy, gate closed)
-SHALL show the reason and leave the draft in place.
+the run has been accepted by the harness; a refused send (agent busy) SHALL show
+the reason and leave the draft in place.
 
 #### Scenario: Draft becomes tasks
 

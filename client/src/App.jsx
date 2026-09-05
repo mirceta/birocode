@@ -23,6 +23,7 @@ import Guests from './pages/Guests';
 import Settings from './pages/Settings';
 import LoopEvals from './pages/LoopEvals';
 import Arch from './pages/Arch';
+import Tasks from './pages/Tasks';
 
 // Two layers:
 //   /        -- public landing: just the running product, no login, no chrome.
@@ -67,6 +68,7 @@ export default function App() {
             <Route path="settings" element={<Settings />} />
             <Route path="loopevals" element={<LoopEvals />} />
             <Route path="arch" element={<Arch />} />
+            <Route path="tasks" element={<Tasks />} />
           </Route>
         ) : (
           <Route path="/studio/*" element={<PasswordGate onUnlock={() => setAuth('in')} />} />

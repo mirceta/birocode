@@ -21,7 +21,7 @@ public class SettingsController : ControllerBase
     {
         "claude", "files", "git", "cockpit", "history",
         "agents", "screen", "projects", "guests", "app", "localapp", "ideas", "autopilot", "deploys", "settings",
-        "loopevals", "arch",
+        "loopevals", "arch", "tasks",
     };
 
     private readonly UiSettingsService _settings;

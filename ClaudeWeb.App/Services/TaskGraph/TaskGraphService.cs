@@ -48,10 +48,12 @@ public class TaskGraphService
     /// itself when applying remote state.</summary>
     public event Action? Changed;
 
-    public TaskGraphService(Logger logger)
+    /// <param name="dirOverride">Test seam (openspec tasks-agent, D2): a data dir other
+    /// than <see cref="AppPaths.DataDir"/>; DI leaves it null.</param>
+    public TaskGraphService(Logger logger, string? dirOverride = null)
     {
         _logger = logger;
-        var dir = AppPaths.DataDir;
+        var dir = dirOverride ?? AppPaths.DataDir;
         Directory.CreateDirectory(dir);
         _path = Path.Combine(dir, "taskgraph.json");
         Load();

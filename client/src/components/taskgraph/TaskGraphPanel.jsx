@@ -211,7 +211,7 @@ function MachineNode({ id, data, selected }) {
 
 const nodeTypes = { step: StepNode, machine: MachineNode };
 
-function TaskGraphBoard() {
+function TaskGraphBoard({ refreshKey = 0 }) {
   const { repos } = useDock();
   const repoName = useCallback((id) => repos.find((r) => r.id === id)?.name || '', [repos]);
 
@@ -293,6 +293,7 @@ function TaskGraphBoard() {
     }
   }, []);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (refreshKey) load(); }, [refreshKey, load]);
 
   // --- derived: actionable set + the selected node's dependent chain (the "why") ---
   const stepNodes = useMemo(() => nodes.filter((n) => n.type === 'step'), [nodes]);
@@ -590,12 +591,14 @@ function TaskGraphBoard() {
 }
 
 // React Flow wants a provider in scope for its hooks; wrap once here.
-export default function TaskGraphPanel() {
+// `refreshKey` (openspec tasks-agent): the host bumps it when an agent run that may
+// have changed the graph has ended; the board reloads without a page refresh.
+export default function TaskGraphPanel({ refreshKey = 0 }) {
   const on = useFeature('taskGraph');
   if (!on) return null;
   return (
     <ReactFlowProvider>
-      <TaskGraphBoard />
+      <TaskGraphBoard refreshKey={refreshKey} />
     </ReactFlowProvider>
   );
 }

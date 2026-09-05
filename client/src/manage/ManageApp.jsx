@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiGet } from '../api/client';
 import { useT } from '../i18n/LanguageContext';
 import Arch from '../pages/Arch';
+import Tasks from '../pages/Tasks';
 import IdeasPanel from '../components/ideas/IdeasPanel';
 import './manage.css';
 
@@ -18,7 +19,7 @@ import './manage.css';
 // URL-addressable tabs: ?tab=arch|ideas|events wins, else the device's last
 // choice, else arch. The harness API root is derived from our own path, the same
 // trick the events page uses, so the app works wherever the proxy mounts it.
-const TABS = ['arch', 'ideas', 'events'];
+const TABS = ['arch', 'tasks', 'ideas', 'events'];
 const TAB_KEY = 'manageapp.tab';
 const LAYOUT_KEY = 'manageapp.layout';
 const HIDDEN_KEY = 'manageapp.hidden';
@@ -27,7 +28,7 @@ const WEIGHTS_KEY = 'manageapp.paneWeights';
 // are rendered until the window is wide enough again.
 const MIN_PANES_WIDTH = 720;
 const MIN_PANE_PX = 220;
-const DEFAULT_WEIGHTS = { arch: 2, ideas: 1, events: 1 };
+const DEFAULT_WEIGHTS = { arch: 2, tasks: 1, ideas: 1, events: 1 };
 
 function harnessRoot() {
   const m = window.location.pathname.match(/^(.*?)\/api\/localview\//);
@@ -189,12 +190,13 @@ export default function ManageApp() {
 
   const root = harnessRoot();
   const openHarness = () => { window.top.location.href = `${root}/studio`; };
-  const labelOf = (k) => (k === 'arch' ? t('nav.arch') : k === 'ideas' ? t('nav.ideas') : t('manage.events'));
+  const labelOf = (k) => (k === 'arch' ? t('nav.arch') : k === 'tasks' ? t('nav.tasks') : k === 'ideas' ? t('nav.ideas') : t('manage.events'));
   const panes = layout === 'panes' && wide;
   const visible = panes ? TABS.filter((k) => !hidden.includes(k)) : [tab];
 
   const renderPane = (k) => (
     k === 'arch' ? <Arch popup onOpenDock={openHarness} />
+      : k === 'tasks' ? <Tasks popup />
       : k === 'ideas' ? <IdeasPanel />
         : <iframe className="mg__events" title={t('manage.events')} src="../index.html" />
   );
