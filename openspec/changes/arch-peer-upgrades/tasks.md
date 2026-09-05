@@ -42,10 +42,16 @@
       so the arm won) → the reconcile now loops until the arm lands, then disarms; and the
       one-shot `ClaudeWebPeerUpgrade` task outlived the killed process → deleted synchronously
       after launch and again by the new process. Also `fromCommit` is now the running build.
-      SELF-UPGRADE #2 applies that fix through the same endpoint (result recorded below).
+      SELF-UPGRADE #2 PASSED (2026-09-05 16:51, job 5cfdd84af033, 32de731 → 43f0124): pull,
+      detached swap, restart on the target, launcher task deleted at 16:52:08, switch armed
+      16:52:15, harness disarmed it 16:52:20 (after the arm), job `done` "kept", no tasks left.
+      This box now upgrades itself hands-off from the peer endpoint. Only MONSTER's first
+      arch-driven upgrade is outstanding (needs its one hand deploy + opt-in).
 
 ## 4. Ship
 
 - [ ] 4.1 Deploy both boxes by hand one last time; understanding app + docs.
       This box: deployed 2026-09-05 16:46 (71fd81a) and kept; understanding app phase-3 view +
-      docs/event-feed-contract.md §5.1 done. MONSTER: pending (operator).
+      docs/event-feed-contract.md §5.1 done; since then this box moved to 43f0124 by two
+      self-upgrades through the peer endpoint (no more hand deploys here). MONSTER: pending
+      (operator: deploy feature/work or merged main there once, tick "accept fleet upgrades").
