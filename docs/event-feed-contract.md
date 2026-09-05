@@ -112,7 +112,7 @@ GET  /api/arch/peer
                     "dirty", "availability", "lastActor", "runningSince",
                     "exists", "isSelf", "managed" } ] }
 
-POST /api/arch/peer/send        { "repoId", "text", "branch"?, "from": "<caller's label>" }
+POST /api/arch/peer/send        { "repoId", "text", "branch"?, "from": "<caller's label>", "override"?: false }
   -> { "ok", "status", "detail", "data" }
      status: sent | busy | claimed | denied | not-accepting | unmanaged | error
 
@@ -142,6 +142,11 @@ GET  /api/arch/peer/upgrade/<jobId>
 - **Your rules apply.** A received task passes *your*
   availability rule (a repo on an operator branch is `claimed`) and *your* run
   slot (`busy` is an answer, never a queue). Nothing is stashed.
+  `override: true` (openspec claimed-operator-override) says the caller's operator
+  explicitly asked to reach a claimed repo; a peer that supports it lets the send
+  through and audits it as `claimed-override from <machine>` — the trust is the one
+  both operators already granted with allow-sends / accept-sends. Older peers ignore
+  the field and still answer `claimed`.
 - **Honest provenance.** The task lands in the repo agent's own dock
   conversation as a user bubble tagged `arch@<from>`, and *you* write the audit
   row (kind `arch`, phase `fleet:<from>`), so the tag survives a reload without

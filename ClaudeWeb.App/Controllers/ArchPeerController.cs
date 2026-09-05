@@ -40,13 +40,13 @@ public class ArchPeerController : ControllerBase
         return Ok(_arch.PeerDescribe());
     }
 
-    public sealed record PeerSendRequest(string? RepoId, string? Text, string? Branch, string? From);
+    public sealed record PeerSendRequest(string? RepoId, string? Text, string? Branch, string? From, bool? Override = null);
 
     [HttpPost("send")]
     public IActionResult Send([FromBody] PeerSendRequest? req)
     {
         _logger.CountRequest();
-        var o = _arch.PeerSendTask(req?.From, req?.RepoId, req?.Text, req?.Branch);
+        var o = _arch.PeerSendTask(req?.From, req?.RepoId, req?.Text, req?.Branch, req?.Override == true);
         return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
     }
 

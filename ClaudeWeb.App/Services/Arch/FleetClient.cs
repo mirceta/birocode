@@ -196,9 +196,12 @@ public class FleetClient
     /// <summary>Deliver a task to a repo agent on a peer. The caller has already
     /// applied this harness's own checks (armed, managed, allow-sends);
     /// the peer applies its own and answers with the shared outcome vocabulary.</summary>
-    public ArchAgentService.ToolOutcome Send(string sourceId, string repoId, string text, string? branch, string from)
+    public ArchAgentService.ToolOutcome Send(string sourceId, string repoId, string text, string? branch, string from, bool overrideClaimed = false)
     {
-        var body = new { repoId, text, branch = string.IsNullOrWhiteSpace(branch) ? null : branch.Trim(), from };
+        // `override` (openspec claimed-operator-override): the hub's operator explicitly
+        // asked to reach this repo although it sits on someone's branch. A peer that
+        // predates the field ignores it and still answers `claimed`.
+        var body = new { repoId, text, branch = string.IsNullOrWhiteSpace(branch) ? null : branch.Trim(), from, @override = overrideClaimed };
         return Post(sourceId, PeerPath + "/send", body);
     }
 
