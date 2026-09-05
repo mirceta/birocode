@@ -35,6 +35,11 @@ public class ArchStateStore
         // next arm starts it at the collector's current last seq (no replay).
         public int Watermark { get; set; } = -1;
         public string? LastSessionId { get; set; }
+        // The standing wake loop the Operator had armed (openspec arch-driven-loops):
+        // remembered when a driven kind takes the @arch slot, restored when it ends,
+        // cleared by the Operator's own Stop. Null mode = nothing remembered.
+        public string? StandingLoopMode { get; set; }
+        public int StandingLoopCap { get; set; }
     }
 
     /// <summary>The managed-set key of an agent on a subscribed harness.</summary>
@@ -133,6 +138,34 @@ public class ArchStateStore
                 .Select(id => id.Trim())
                 .Distinct(StringComparer.Ordinal)
                 .ToList();
+            Save();
+        }
+    }
+
+    /// <summary>The remembered standing wake loop (mode, cap), or null.</summary>
+    public (string Mode, int Cap)? StandingLoop
+    {
+        get { lock (_gate) return _data.StandingLoopMode is { } m ? (m, _data.StandingLoopCap) : null; }
+    }
+
+    public void SetStandingLoop(string mode, int cap)
+    {
+        lock (_gate)
+        {
+            if (_data.StandingLoopMode == mode && _data.StandingLoopCap == cap) return;
+            _data.StandingLoopMode = mode;
+            _data.StandingLoopCap = cap;
+            Save();
+        }
+    }
+
+    public void ClearStandingLoop()
+    {
+        lock (_gate)
+        {
+            if (_data.StandingLoopMode is null) return;
+            _data.StandingLoopMode = null;
+            _data.StandingLoopCap = 0;
             Save();
         }
     }

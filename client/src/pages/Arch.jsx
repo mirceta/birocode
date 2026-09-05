@@ -9,7 +9,9 @@ import ThinkingIndicator from '../components/chat/ThinkingIndicator';
 import ArchToolsPanel from '../components/arch/ArchToolsPanel';
 import ArchHistoryPanel from '../components/arch/ArchHistoryPanel';
 import useArchStream from '../hooks/useArchStream';
+import DockLoopControl from '../components/dashboard/DockLoopControl';
 import '../components/chat/chat.css';
+import './dashboard.css'; // the dock loop control's styles (openspec arch-driven-loops)
 import './arch.css';
 
 // The Arch tab (openspec: add-arch-agent, D9): the arch agent's own surface.
@@ -80,6 +82,10 @@ function ago(ms) {
 export default function Arch({ popup = false, onOpenDock = null, view = 'full' }) {
   const enabled = useFeature('archTab');
   const [state, setState] = useState(null);
+  // The @arch row of the ungated loop projection + the recipe list (openspec
+  // arch-driven-loops): what the dock loop control needs to arm a goal/recipe here.
+  const [driven, setDriven] = useState(null);
+  const [recipes, setRecipes] = useState([]);
   const [messages, setMessages] = useState([]);
   const [sessionId, setSessionId] = useState(null);
   const [draft, setDraft] = useState('');
@@ -116,6 +122,14 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full' }
       if (!alive.current) return;
       setState(s);
       if (s?.loop?.sessionId) setSessionId(s.loop.sessionId);
+      try {
+        const li = await apiGet('/autopilot/loops');
+        if (!alive.current) return;
+        setDriven((li?.loops || []).find((l) => l.repoId === '@arch') || null);
+        setRecipes(li?.recipes || []);
+      } catch {
+        /* the projection is optional here */
+      }
       if (laneRef.current !== 'chat') { setError(''); return; }
       const m = await apiGet('/arch/messages');
       if (!alive.current) return;
@@ -219,6 +233,9 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full' }
   const running = state?.session?.run?.status === 'running';
   const loop = state?.loop;
   const armed = !!loop?.active;
+  // The reserved slot may hold a goal/recipe instead of the wake kind (openspec arch-driven-loops).
+  const drivenArmed = armed && !!loop?.kind && loop.kind !== 'arch';
+  const standingArmed = armed && (!loop?.kind || loop.kind === 'arch');
 
   const send = useCallback(async () => {
     const text = draft.trim();
@@ -379,8 +396,10 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full' }
     <>
         <section className="arch__card">
           <div className="arch__card-head">
-            <span>Loop</span>
-            {armed
+            <span>Standing wake loop</span>
+            {drivenArmed
+              ? <span className="arch__dim" data-standing-paused>paused while the {loop.kind} loop runs — it returns when that ends</span>
+              : standingArmed
               ? <button type="button" className="arch__btn arch__btn--danger" onClick={() => loopAction({ action: 'disarm' })}>■ Stop arch agent</button>
               : (
                 <button type="button" className="arch__btn arch__btn--primary" onClick={() => loopAction({ action: 'arm', mode, maxIterations: cap })} disabled={managed.size === 0 || !state?.gateOpen}>
@@ -406,6 +425,12 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full' }
             {' · '}watermark {state?.watermark ?? '–'}
           </div>
           <div className="arch__dim">Stop = disarm: no further sends; running repo turns finish on their own.</div>
+        </section>
+
+        <section className="arch__card" data-arch-driven>
+          <div className="arch__card-head"><span>Driven loop (goal · recipe)</span></div>
+          <div className="arch__dim" style={{ marginBottom: 6 }}>The dock's loop kinds, armed on the arch agent's own conversation. A goal or recipe takes the one loop slot; the standing wake loop pauses and comes back when it ends. A repeat of the same prompt waits for a managed repo turn; a question holds instead of stopping.</div>
+          <DockLoopControl repoId="@arch" repoName="Arch agent" sessionId={sessionId} tabId={null} stash={[]} loop={driven} recipes={recipes} onChanged={load} onUsePending={(text) => setDraft(text)} kinds={['goal', 'recipe']} />
         </section>
 
         <section className="arch__card">
@@ -591,6 +616,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full' }
               </>
             ) : <span className="arch__pill arch__pill--off">never armed</span>}
             {running && <span className="arch__pill arch__pill--busy">turn running</span>}
+            {drivenArmed && <span className="arch__pill arch__pill--on" data-driven-pill>{loop.kind} loop · {loop.iterationsDone}/{loop.maxIterations || '∞'}</span>}
             {sessionId && <span className="arch__dim"> · session {sessionId.slice(0, 8)}</span>}
           </span>
           <button

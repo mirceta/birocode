@@ -60,7 +60,9 @@ async function copyToClipboard(text) {
   }
 }
 
-export default function DockLoopControl({ repoId, repoName, sessionId, tabId, stash = [], loop, recipes = [], onChanged, onUsePending }) {
+// `kinds` (openspec arch-driven-loops): the pickable kinds — the arch agent offers
+// goal · recipe only (no dock stash, no suggestion semantics).
+export default function DockLoopControl({ repoId, repoName, sessionId, tabId, stash = [], loop, recipes = [], onChanged, onUsePending, kinds = KINDS }) {
   const { t } = useT();
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState(null);
@@ -97,7 +99,7 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
 
   const armed = !!loop?.active;
   const armedKind = armed ? loop.kind : null;
-  const selected = picked ?? armedKind ?? loop?.kind ?? 'suggestion';
+  const selected = picked ?? armedKind ?? loop?.kind ?? kinds[0];
   // The mode shown/used: the armed instance's live mode when the selected type IS
   // the armed one, otherwise the arming choice (default: drive for driven kinds,
   // suggest for the suggestion kind — safe by default for the watcher).
@@ -429,7 +431,7 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
 
           {/* Type picker: one choice, then its parameters */}
           <div className="phone__loop-types" role="radiogroup" aria-label={t('dashboard.loopTypeAria')}>
-            {KINDS.map((k) => (
+            {kinds.map((k) => (
               <button
                 key={k}
                 type="button"
