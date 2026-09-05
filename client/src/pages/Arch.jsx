@@ -491,7 +491,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full' }
         <section className="arch__card arch__fleet">
           <div className="arch__card-head">
             <span>Fleet</span>
-            <span className="arch__dim arch__mono">{fleet.selfLabel}{fleet.version ? ` · ${fleet.version}` : ''}</span>
+            <span className="arch__dim arch__mono" title={fleet.version || ''}>{fleet.selfLabel}{fleet.version ? ` · ${(/\+([0-9a-f]{7})/.exec(fleet.version) || [])[1] || fleet.version}` : ''}</span>
           </div>
           <label className="arch__scope-row">
             <input
