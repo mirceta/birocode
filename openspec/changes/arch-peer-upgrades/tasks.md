@@ -35,3 +35,5 @@
 ## 4. Ship
 
 - [ ] 4.1 Deploy both boxes by hand one last time; understanding app + docs.
+      This box: deployed 2026-09-05 16:46 (71fd81a) and kept; understanding app phase-3 view +
+      docs/event-feed-contract.md §5.1 done. MONSTER: pending (operator).
