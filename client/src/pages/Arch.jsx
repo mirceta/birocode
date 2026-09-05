@@ -306,6 +306,13 @@ export default function Arch({ popup = false, onOpenDock = null }) {
   const managedFleet = new Set(state?.managedFleet || []);
   const fleet = state?.fleet || { sources: [] };
   const fleetSources = fleet.sources || [];
+  // Repo id → human name for every repo the state knows (this harness's registry,
+  // the managed agents, every peer's describe): the History lane shows ids as
+  // "name (id…)" instead of a bare id.
+  const repoNames = {};
+  for (const r of repos) if (r.id) repoNames[r.id] = r.name || r.id;
+  for (const a of agents) if (a.repoId && a.name && a.name !== a.repoId) repoNames[a.repoId] = a.machine && a.machine !== 'self' ? `${a.name} @ ${a.machine}` : a.name;
+  for (const s of fleetSources) for (const r of s.repos || []) if (r.repoId && r.name) repoNames[r.repoId] = `${r.name} @ ${s.label}`;
   const peerText = (s) => {
     const p = s.peer || {};
     if (p.status === 'ok') return `peer ok · build ${p.version || '?'}${p.behind ? ' (behind this hub)' : ''} · ${p.acceptsSends ? 'accepts sends' : 'does not accept sends'} · ${p.acceptsUpgrades ? 'accepts upgrades' : 'does not accept upgrades'}${p.gateOpen ? '' : ' · gate closed'}`;
@@ -374,13 +381,14 @@ export default function Arch({ popup = false, onOpenDock = null }) {
             🧾 History
           </button>
         </div>
-        {!state?.gateOpen && <div className="arch__banner">Autopilot is disabled by the operator (host GUI). The arch agent cannot act until the gate is open.</div>}
+        {!state && <div className="arch__banner arch__banner--loading" data-loading>Loading the arch state…</div>}
+        {state && !state.gateOpen && <div className="arch__banner">Autopilot is disabled by the operator (host GUI). The arch agent cannot act until the gate is open.</div>}
         {state?.gateOpen && state?.killSwitch === false && <div className="arch__banner">The autopilot kill switch is off: the arch loop is paused.</div>}
         {error && <div className="arch__banner arch__banner--err">{error}</div>}
         {lane === 'tools' ? (
           <ArchToolsPanel />
         ) : lane === 'history' ? (
-          <ArchHistoryPanel liveTurn={turn} sessionId={sessionId} />
+          <ArchHistoryPanel liveTurn={turn} sessionId={sessionId} repoNames={repoNames} />
         ) : (
         <>
         <div className="arch__scroll" ref={scrollRef}>

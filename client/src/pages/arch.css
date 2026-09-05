@@ -32,6 +32,7 @@
 .arch__main > .toolsp { flex: 1 1 auto; min-height: 0; padding: 0 2px; }
 .arch__banner { padding: 8px 10px; border-radius: 8px; background: rgba(224, 179, 76, 0.12); border: 1px solid #e0b34c; font-size: 13px; margin-bottom: 8px; }
 .arch__banner--err { background: rgba(229, 115, 75, 0.12); border-color: #e5734b; }
+.arch__banner--loading { background: rgba(120, 140, 170, 0.12); border-color: var(--color-border, #667); color: var(--color-text-muted, #9aa); }
 .arch__scroll { flex: 1 1 auto; overflow: auto; min-height: 0; padding: 4px 2px; display: flex; flex-direction: column; gap: 8px; }
 .arch__empty { color: var(--color-text-muted, #888); padding: 12px; }
 .arch__thinking { font-style: italic; color: var(--color-text-muted, #888); padding: 6px 2px; }

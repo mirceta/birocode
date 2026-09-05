@@ -113,6 +113,36 @@ public class FleetClient
         return Refresh(sourceId);
     }
 
+    /// <summary>The cached snapshot, whatever its age, never blocking the caller: when
+    /// it is missing or older than <paramref name="maxAgeMs"/> a refresh runs in the
+    /// background (one in flight per source) and the NEXT reader sees it. The UI's
+    /// contract — the Arch tab must never wait on a peer's describe (a peer with many
+    /// repos answers in seconds).</summary>
+    public PeerSnapshot SnapshotNonBlocking(string sourceId, int maxAgeMs = 10_000)
+    {
+        PeerSnapshot? cached;
+        bool start;
+        lock (_lock)
+        {
+            _snapshots.TryGetValue(sourceId, out cached);
+            start = (cached is null || Now() - cached.At > maxAgeMs) && _inFlight.Add(sourceId);
+        }
+        if (start)
+        {
+            _ = Task.Run(async () =>
+            {
+                try { await RefreshAsync(sourceId, CancellationToken.None); }
+                catch (Exception ex) { _logger.Error($"[FLEET] background describe of {sourceId} failed: {ex.Message}"); }
+                finally { lock (_lock) _inFlight.Remove(sourceId); }
+            });
+        }
+        if (cached is not null) return cached;
+        var label = _collector.ResolveSource(sourceId)?.Label ?? sourceId;
+        return new PeerSnapshot(sourceId, label, StatusNever, "probing…", null, 0);
+    }
+
+    private readonly HashSet<string> _inFlight = new(StringComparer.Ordinal);
+
     /// <summary>Blocking describe (bounded by the HTTP timeout).</summary>
     public PeerSnapshot Refresh(string sourceId)
     {

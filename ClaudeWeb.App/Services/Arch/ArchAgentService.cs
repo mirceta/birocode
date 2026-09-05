@@ -209,6 +209,7 @@ public class ArchAgentService : IArchWakeSource
         {
             Git(home, "add", "-A");
             var commit = GitCommit(home, "arch home: bootstrap");
+            InvalidateHomeCommits();
             if (commit.ExitCode != 0)
                 _logger.Error($"[ARCH] bootstrap commit failed in {home}: {commit.StdErr}");
             else
@@ -506,9 +507,9 @@ public class ArchAgentService : IArchWakeSource
     /// peer's arch manages it (null = the peer does not list it, or its build predates
     /// scope reporting) and the block, if any.</summary>
     private (FleetClient.PeerSnapshot Snap, FleetClient.PeerRepo? Repo, SendBlock? Block) RemotePosture(
-        CollectorService.SourceView src, string repoId, bool refresh)
+        CollectorService.SourceView src, string repoId, bool refresh, bool nonBlocking = false)
     {
-        var snap = _fleet.Snapshot(src.Id, refresh: refresh);
+        var snap = nonBlocking ? _fleet.SnapshotNonBlocking(src.Id) : _fleet.Snapshot(src.Id, refresh: refresh);
         var r = snap.Repos.FirstOrDefault(x => string.Equals(x.RepoId, repoId, StringComparison.Ordinal));
         bool? managedThere = r is null ? (snap.Reachable ? false : null) : r.Managed;
         var block = FleetSendPosture(src.Label, snap.Status, snap.Detail, src.AllowSends,
@@ -523,17 +524,17 @@ public class ArchAgentService : IArchWakeSource
     /// subscribed harnesses as their peers reported them. Unmanaged repos are not
     /// listed at all. <paramref name="refreshPeers"/> false reads the peer cache
     /// only (the engine tick's contract, fleet D6).</summary>
-    public IReadOnlyList<AgentView> ListAgents(bool refreshPeers = true)
+    public IReadOnlyList<AgentView> ListAgents(bool refreshPeers = true, bool nonBlocking = false)
     {
         var views = LocalAgents(ManagedRepoIds().ToHashSet(StringComparer.Ordinal));
-        views.AddRange(RemoteAgents(refreshPeers));
+        views.AddRange(RemoteAgents(refreshPeers, nonBlocking));
         return views;
     }
 
     /// <summary>Views of the registered repos in <paramref name="include"/>, classified
     /// against <paramref name="managed"/> (defaults to the same set: the local
     /// list_agents case, where only managed repos are listed at all).</summary>
-    private List<AgentView> LocalAgents(ISet<string> include, ISet<string>? managed = null)
+    private List<AgentView> LocalAgents(ISet<string> include, ISet<string>? managed = null, bool gitOnlyManaged = false)
     {
         managed ??= include;
         var (events, _) = _collector.ReadEvents(0);
@@ -542,7 +543,13 @@ public class ArchAgentService : IArchWakeSource
         foreach (var repo in _repos.GetAll().Where(r => include.Contains(r.Id)))
         {
             var busy = _runs.IsBusy(repo.Id);
-            var gs = repo.Exists ? ReadGitState(repo) : new GitState("unknown", "main", 0, 0, false, 0, "", false, "missing");
+            // Git per repo is the whole cost of this list (a registry of ~90 repos took
+            // 7 s per describe). Only a managed repo needs its branch — an unmanaged one
+            // is `unmanaged` whatever its branch — and a managed one is read through a
+            // short-lived cache so the UI's polling and the fleet's describes share it.
+            var gs = !repo.Exists ? new GitState("unknown", "main", 0, 0, false, 0, "", false, "missing")
+                : gitOnlyManaged && !managed.Contains(repo.Id) ? new GitState("unknown", "main", 0, 0, false, 0, RemoteUrl(repo.Path), false, null)
+                : ReadGitStateCached(repo);
             var avail = Classify(managed.Contains(repo.Id), busy, gs.Branch, gs.DefaultBranch, ReadAssignment(repo.Id).Branches);
             var (lastStartAt, running) = LatestTurnStart(events, repo.Id);
             var lastActor = lastStartAt is null ? "none"
@@ -559,7 +566,7 @@ public class ArchAgentService : IArchWakeSource
     /// peer that did not answer yields its managed agents as <see cref="Unreachable"/>
     /// (name = the repo id, nothing else known) so the arch agent can say why it
     /// waits instead of the agent silently vanishing from the list.</summary>
-    private List<AgentView> RemoteAgents(bool refreshPeers)
+    private List<AgentView> RemoteAgents(bool refreshPeers, bool nonBlocking = false)
     {
         var views = new List<AgentView>();
         foreach (var group in ManagedFleet().Select(k => ArchStateStore.ParseFleetKey(k)!.Value).GroupBy(p => p.SourceId, StringComparer.Ordinal))
@@ -571,7 +578,7 @@ public class ArchAgentService : IArchWakeSource
             var refresh = refreshPeers;
             foreach (var (sourceId, repoId) in group)
             {
-                var (snap, r, block) = RemotePosture(src, repoId, refresh);
+                var (snap, r, block) = RemotePosture(src, repoId, refresh, nonBlocking);
                 refresh = false;
                 if (r is null)
                 {
@@ -597,7 +604,24 @@ public class ArchAgentService : IArchWakeSource
     /// the fleet as well, and a fleet send to it is refused here.</summary>
     public IReadOnlyList<AgentView> PeerAgents() =>
         LocalAgents(_repos.GetAll().Select(r => r.Id).ToHashSet(StringComparer.Ordinal),
-            ManagedRepoIds().ToHashSet(StringComparer.Ordinal));
+            ManagedRepoIds().ToHashSet(StringComparer.Ordinal), gitOnlyManaged: true);
+
+    private static readonly TimeSpan GitStateTtl = TimeSpan.FromSeconds(20);
+    private readonly Dictionary<string, (GitState State, DateTime AtUtc)> _gitStates = new(StringComparer.Ordinal);
+
+    /// <summary>Git state through a 20 s cache: the UI polls every few seconds and each
+    /// fleet peer describes us on its own schedule, and none of them needs a fresher
+    /// answer than that. Tools that act (git_state, the send posture) read fresh.</summary>
+    private GitState ReadGitStateCached(RepositoryRegistry.RepositoryInfo repo)
+    {
+        lock (_gitStates)
+        {
+            if (_gitStates.TryGetValue(repo.Id, out var hit) && DateTime.UtcNow - hit.AtUtc < GitStateTtl) return hit.State;
+        }
+        var gs = ReadGitState(repo);
+        lock (_gitStates) _gitStates[repo.Id] = (gs, DateTime.UtcNow);
+        return gs;
+    }
 
     public object PeerDescribe()
     {
@@ -1053,6 +1077,7 @@ public class ArchAgentService : IArchWakeSource
             File.WriteAllText(full, text.TrimEnd() + "\n");
             Git(home, "add", "--", rel);
             var commit = GitCommit(home, $"remember: {rel}");
+            InvalidateHomeCommits();
             var committed = commit.ExitCode == 0;
             AuditTool("remember", null, rel);
             return new ToolOutcome(true, "ok", committed ? $"wrote and committed {rel}" : $"wrote {rel} (nothing new to commit)", new { path = rel, committed });
@@ -1371,7 +1396,27 @@ public class ArchAgentService : IArchWakeSource
 
     public sealed record HomeCommit(string Sha, string Subject, long At);
 
+    // The Arch tab polls the state every few seconds and each poll listed the home
+    // commits with a git spawn (measured at 4–5 s per call on a cold instance):
+    // cache the list briefly and drop it whenever the arch itself commits.
+    private static readonly TimeSpan HomeCommitsTtl = TimeSpan.FromSeconds(15);
+    private (IReadOnlyList<HomeCommit> List, DateTime AtUtc)? _homeCommits;
+    private readonly object _homeCommitsGate = new();
+
+    public void InvalidateHomeCommits() { lock (_homeCommitsGate) _homeCommits = null; }
+
     public IReadOnlyList<HomeCommit> RecentHomeCommits(int max = 8)
+    {
+        lock (_homeCommitsGate)
+        {
+            if (_homeCommits is { } hit && DateTime.UtcNow - hit.AtUtc < HomeCommitsTtl) return hit.List;
+        }
+        var list = ReadHomeCommits(max);
+        lock (_homeCommitsGate) _homeCommits = (list, DateTime.UtcNow);
+        return list;
+    }
+
+    private IReadOnlyList<HomeCommit> ReadHomeCommits(int max)
     {
         if (!HomeExists) return Array.Empty<HomeCommit>();
         var r = Git(HomePath, "log", $"--max-count={max}", "--format=%h%x09%ct%x09%s");
@@ -1465,7 +1510,7 @@ public class ArchAgentService : IArchWakeSource
     // Memoized per path for a minute (openspec: reduce-transcript-io, D4): the
     // remote URL is read on every availability check of every managed repo, and
     // it changes about never.
-    private static readonly TimeSpan RemoteUrlTtl = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan RemoteUrlTtl = TimeSpan.FromMinutes(10);
     private readonly object _remoteUrlGate = new();
     private readonly Dictionary<string, (string Url, DateTime AtUtc)> _remoteUrls = new(StringComparer.OrdinalIgnoreCase);
 
