@@ -1050,8 +1050,11 @@ public class ArchAgentService : IArchWakeSource
                     machine = n.RepoId is null ? null : n.SourceId is null ? Machine : srcLabel.GetValueOrDefault(n.SourceId, n.SourceId),
                     repoId = n.RepoId, repoName = n.RepoId is null ? null : repoName.GetValueOrDefault(n.RepoId, n.RepoId),
                     assignedBy = n.AssignedBy, assignedAt = n.AssignedAt, dispatchedAt = n.DispatchedAt, dispatchCount = n.DispatchCount,
-                    // Assigned, not yet pinged, not blocked: the arch's cue to dispatch.
-                    awaitingDispatch = n.Status == "todo" && n.RepoId is not null && n.DispatchedAt is null && !blocked,
+                    // Assigned THROUGH THE BOARD (AssignedAt stamped), not yet pinged, not
+                    // blocked: the arch's cue to dispatch. A repo label from the graph's
+                    // pre-board days (no AssignedAt) is not an assignment anyone made.
+                    awaitingDispatch = n.Status == "todo" && n.RepoId is not null && n.AssignedAt is not null && n.DispatchedAt is null && !blocked,
+                    legacyAssignee = n.RepoId is not null && n.AssignedAt is null,
                     blocked, dependsOn = prereqs.Select(p => new { id = p.Id, title = p.Title, status = p.Status }).ToList(),
                     createdBy = n.CreatedBy, ideaId = n.IdeaId, createdAt = n.CreatedAt, updatedAt = n.UpdatedAt,
                 };

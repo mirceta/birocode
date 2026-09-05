@@ -141,6 +141,18 @@
         <p><b>Built 2026-09-05 (openspec management-app):</b> a second Vite build of the same React source (<code>client/manage.html</code> → <code>events-app/manage/</code>), served by the harness from the worktree at <code>/api/localview/&lt;self&gt;/app/events-feed/manage/index.html</code>. Tabs Arch · Ideas · Events (the feed page embedded). Rebuild + refresh is the whole update cycle; verified on live through the proxy with the real fleet state.</p>
         <p><b>Layouts (2026-09-05, openspec management-app-panes):</b> the app has a <i>Tabs · Side by side</i> switch. Side by side renders Arch, Ideas and Events as columns with a slim bar each (label + hide ×), draggable dividers between them and per-device persistence of the choice, the hidden set and the widths — the same idea as the harness's own multi-pane strip behind the machine/project chip. Narrow windows fall back to tabs and keep the choice.</p>
         <p><b>Arch surface (2026-09-05, openspec arch-side-column):</b> the right-hand column (Loop · Managed agents · Fleet · Home repo) has a draggable divider and a hide/show toggle, and the same cards form a fourth lane, <i>🛰 Fleet</i>, rendered full width as a grid. Width and visibility persist per device; narrow screens stack as before.</p>
+        <p><b>Task board (2026-09-05, openspec task-board-kanban):</b> the Ideas surface gained a <i>🗂 Kanban</i> tab — the same nodes as the Task graph read as Backlog · Assigned · In progress · Done. A card can be assigned to any repo agent on any machine (picker fed by the fleet status), pinged by hand, dragged between columns; <code>⛔ blocked</code> means a prerequisite is not done. The arch agent has tools for the same board (list/create/update/assign/dispatch_task, list_ideas, idea_to_task) and a standing duty: dispatch every card that is assigned, not yet pinged and not blocked; move a card on <code>TASK DONE &lt;id&gt;</code> / <code>TASK BLOCKED &lt;id&gt;: …</code> in the agent's reply. Dispatch is the arch send path with its rules, so a ping reaches only agents in the arch scope, on branches nobody claimed, with sends allowed across machines.</p>
+        <div class="flow">
+          <div class="flowbox"><b>idea</b><br>Ideas tab · list_ideas</div>
+          <div class="flowarrow">→</div>
+          <div class="flowbox"><b>task</b><br>Send to graph · create_task · idea_to_task</div>
+          <div class="flowarrow">→</div>
+          <div class="flowbox"><b>assigned</b><br>human picker · assign_task (machine + repo)</div>
+          <div class="flowarrow">→</div>
+          <div class="flowbox"><b>pinged → doing</b><br>Ping · dispatch_task: the brief lands in the agent's conversation</div>
+          <div class="flowarrow">→</div>
+          <div class="flowbox"><b>done</b><br>reply ends TASK DONE &lt;id&gt; · update_task</div>
+        </div>
         <p><b>Status tab (2026-09-05, openspec fleet-status-tab):</b> a fourth Management view, <i>Status</i>, shows every repo agent on every machine in the dashboard dock strip's language — a chip per agent with the running dot, the name and the branch, green when it sits on its default branch (free to be given work), amber when claimed on a feature branch — with filters All · on main · not on main · running, a detail card per chip and each machine's posture (build, behind, opt-ins, arch scope). One hub endpoint, <code>/api/arch/fleet/status</code>, relays this box's docks and every peer's cached describe, so the page never waits on another machine. The events page lost its Agents tab in favour of it.</p>
       </div>
     </div>
