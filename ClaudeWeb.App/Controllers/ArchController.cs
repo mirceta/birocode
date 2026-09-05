@@ -141,6 +141,8 @@ public class ArchController : ControllerBase
                     status = peer.Status, detail = peer.Detail, at = peer.At,
                     protocol = peer.Info?.Protocol, version = peer.Info?.Version, machine = peer.Info?.Machine,
                     acceptsSends = peer.Info?.AcceptsSends ?? false, gateOpen = peer.Info?.GateOpen ?? false,
+                    acceptsUpgrades = peer.Info?.AcceptsUpgrades ?? false,
+                    behind = peer.Reachable && peer.Info?.Version is { } pv && pv != ArchAgentService.BuildVersion,
                 },
                 repos = peer.Repos.Select(r => new
                 {
@@ -156,13 +158,15 @@ public class ArchController : ControllerBase
         {
             selfLabel = _arch.SelfLabel,
             acceptSends = _arch.AcceptFleetSends,
+            acceptUpgrades = _arch.AcceptFleetUpgrades,
+            upgradeJob = _arch.PeerUpgradeStatus(null),
             version = ArchAgentService.BuildVersion,
             protocol = Services.Arch.FleetClient.Protocol,
             sources,
         };
     }
 
-    public sealed record FleetRequest(bool? AcceptSends);
+    public sealed record FleetRequest(bool? AcceptSends, bool? AcceptUpgrades);
 
     /// <summary>Receiving-side opt-in: let fleet arch agents on other harnesses send
     /// tasks to this harness's repo agents. Operator-gated like every arch action.</summary>
@@ -171,9 +175,26 @@ public class ArchController : ControllerBase
     {
         _logger.CountRequest();
         if (GateClosed() is { } closed) return closed;
-        if (req?.AcceptSends is not bool accept) return BadRequest(new { error = "acceptSends (true|false) is required" });
-        _arch.SetAcceptFleetSends(accept);
+        if (req?.AcceptSends is not bool && req?.AcceptUpgrades is not bool)
+            return BadRequest(new { error = "acceptSends or acceptUpgrades (true|false) is required" });
+        if (req.AcceptSends is bool accept) _arch.SetAcceptFleetSends(accept);
+        if (req.AcceptUpgrades is bool up) _arch.SetAcceptFleetUpgrades(up);
         return Ok(BuildState());
+    }
+
+    public sealed record FleetUpgradeRequest(string? SourceId, string? Ref);
+
+    /// <summary>Operator-triggered peer upgrade from the Fleet card (openspec
+    /// arch-peer-upgrades): same posture as the arch tool minus the armed-loop rule.</summary>
+    [HttpPost("fleet/upgrade")]
+    public IActionResult FleetUpgrade([FromBody] FleetUpgradeRequest? req)
+    {
+        _logger.CountRequest();
+        if (GateClosed() is { } closed) return closed;
+        var src = _collector.ListSources().FirstOrDefault(s => s.Id == req?.SourceId);
+        if (src is null) return NotFound(new { error = "unknown source" });
+        var o = _arch.UpgradePeer(src.Label, req?.Ref, requireArmed: false);
+        return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
     }
 
     // ---- conversation ------------------------------------------------------------

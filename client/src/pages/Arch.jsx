@@ -251,6 +251,31 @@ export default function Arch({ popup = false, onOpenDock = null }) {
     }
   }, []);
 
+  // Receiving-side opt-in (openspec arch-peer-upgrades): let a fleet arch elsewhere
+  // upgrade THIS harness to a ref.
+  const setAcceptUpgrades = useCallback(async (accept) => {
+    try {
+      const s = await apiPost('/arch/fleet', { acceptUpgrades: accept });
+      setState(s);
+      setError('');
+    } catch (e) {
+      setError(e?.message || String(e));
+    }
+  }, []);
+
+  // Operator-triggered peer upgrade from the Fleet card (same posture as the arch tool).
+  const [upgradeNote, setUpgradeNote] = useState({});
+  const upgradePeer = useCallback(async (sourceId) => {
+    setUpgradeNote((n) => ({ ...n, [sourceId]: '…' }));
+    try {
+      const r = await apiPost('/arch/fleet/upgrade', { sourceId });
+      setUpgradeNote((n) => ({ ...n, [sourceId]: `${r.status}: ${r.detail || ''}` }));
+      setTimeout(load, 1500);
+    } catch (e) {
+      setUpgradeNote((n) => ({ ...n, [sourceId]: e?.message || String(e) }));
+    }
+  }, [load]);
+
   // Calling-side consent per subscribed harness: the collector's own flag.
   const setAllowSends = useCallback(async (sourceId, allow) => {
     try {
@@ -283,7 +308,7 @@ export default function Arch({ popup = false, onOpenDock = null }) {
   const fleetSources = fleet.sources || [];
   const peerText = (s) => {
     const p = s.peer || {};
-    if (p.status === 'ok') return `peer ok · build ${p.version || '?'} · ${p.acceptsSends ? 'accepts sends' : 'does not accept sends'}${p.gateOpen ? '' : ' · gate closed'}`;
+    if (p.status === 'ok') return `peer ok · build ${p.version || '?'}${p.behind ? ' (behind this hub)' : ''} · ${p.acceptsSends ? 'accepts sends' : 'does not accept sends'} · ${p.acceptsUpgrades ? 'accepts upgrades' : 'does not accept upgrades'}${p.gateOpen ? '' : ' · gate closed'}`;
     if (p.status === 'no-peer-api') return 'no peer API on that build — upgrade it';
     if (p.status === 'unauthorized') return 'peer refused the credential';
     if (p.status === 'unreachable') return `unreachable${p.detail ? ` · ${p.detail}` : ''}`;
@@ -527,6 +552,21 @@ export default function Arch({ popup = false, onOpenDock = null }) {
             />
             accept fleet sends (let arch agents on other machines task this harness's repos)
           </label>
+          <label className="arch__scope-row">
+            <input
+              type="checkbox"
+              data-accept-upgrades
+              checked={!!fleet.acceptUpgrades}
+              disabled={!state?.gateOpen}
+              onChange={(e) => setAcceptUpgrades(e.target.checked)}
+            />
+            accept fleet upgrades (let a hub's arch agent bring this harness to main and redeploy it)
+          </label>
+          {fleet.upgradeJob && (
+            <div className="arch__dim arch__mono" data-upgrade-job={fleet.upgradeJob.state}>
+              upgrade {fleet.upgradeJob.id}: {fleet.upgradeJob.state} · {String(fleet.upgradeJob.fromCommit || '').slice(0, 7)} → {String(fleet.upgradeJob.targetCommit || '').slice(0, 7)}{fleet.upgradeJob.requestedBy ? ` · by ` : ''}{fleet.upgradeJob.detail ? ` · ` : ''}
+            </div>
+          )}
           {fleetSources.length === 0 && <div className="arch__dim">No subscribed harnesses. Add one in the Harness Event Feed app (Local tab), then allow sends here.</div>}
           {fleetSources.map((s) => (
             <div key={s.id} className="arch__agent" data-source={s.id}>
@@ -546,6 +586,13 @@ export default function Arch({ popup = false, onOpenDock = null }) {
                 <input type="checkbox" checked={!!s.allowSends} onChange={(e) => setAllowSends(s.id, e.target.checked)} />
                 allow sends to {s.label}
               </label>
+              {s.peer?.status === 'ok' && s.peer?.behind && (
+                <div className="arch__dim" data-behind>
+                  <button type="button" className="arch__btn" disabled={!s.allowSends || !s.peer?.acceptsUpgrades || upgradeNote[s.id] === '…'} onClick={() => upgradePeer(s.id)}>upgrade to this build</button>
+                  {!s.peer?.acceptsUpgrades ? ' its operator has not enabled accept fleet upgrades' : !s.allowSends ? ' allow sends first' : ''}
+                  {upgradeNote[s.id] ? ` · ${upgradeNote[s.id]}` : ''}
+                </div>
+              )}
             </div>
           ))}
           <div className="arch__dim">Both sides opt in: you allow sends to a machine here; its operator accepts fleet sends there. The collector itself only ever reads.</div>

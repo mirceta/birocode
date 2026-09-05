@@ -74,7 +74,9 @@ public class FleetClient
         [property: JsonPropertyName("acceptsSends")] bool AcceptsSends,
         [property: JsonPropertyName("gateOpen")] bool GateOpen,
         [property: JsonPropertyName("repos")] List<PeerRepo>? Repos,
-        [property: JsonPropertyName("managedRepoIds")] List<string>? ManagedRepoIds = null);
+        [property: JsonPropertyName("managedRepoIds")] List<string>? ManagedRepoIds = null,
+        // Receiving-side opt-in for fleet upgrades (openspec arch-peer-upgrades); absent = off.
+        [property: JsonPropertyName("acceptsUpgrades")] bool AcceptsUpgrades = false);
 
     /// <summary>What we last learned about a peer: transport status + the describe
     /// when it answered. <see cref="At"/> is when it was taken (unix ms).</summary>
@@ -172,6 +174,14 @@ public class FleetClient
         var path = $"{PeerPath}/transcript?repoId={Uri.EscapeDataString(repoId)}&tail={tail}";
         return Get(sourceId, path);
     }
+
+    /// <summary>Ask a peer to upgrade itself to a ref (openspec arch-peer-upgrades); the
+    /// peer applies its own opt-in and answers started | busy | not-accepting | …</summary>
+    public ArchAgentService.ToolOutcome Upgrade(string sourceId, string? refName, string from) =>
+        Post(sourceId, PeerPath + "/upgrade", new { @ref = string.IsNullOrWhiteSpace(refName) ? null : refName.Trim(), from });
+
+    public ArchAgentService.ToolOutcome UpgradeStatus(string sourceId, string jobId) =>
+        Get(sourceId, $"{PeerPath}/upgrade/{Uri.EscapeDataString(jobId)}");
 
     private ArchAgentService.ToolOutcome Post(string sourceId, string path, object body)
     {

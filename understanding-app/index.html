@@ -48,6 +48,7 @@
   <button data-v="why" class="on">The split</button>
   <button data-v="phase1">Phase 1 — two dashboards</button>
   <button data-v="phase2">Phase 2 — the Management App</button>
+  <button data-v="phase3">Phase 3 — fleet upgrades</button>
   <button data-v="options">Options weighed</button>
 </nav>
 <main>
@@ -140,6 +141,27 @@
         <p><b>Built 2026-09-05 (openspec management-app):</b> a second Vite build of the same React source (<code>client/manage.html</code> → <code>events-app/manage/</code>), served by the harness from the worktree at <code>/api/localview/&lt;self&gt;/app/events-feed/manage/index.html</code>. Tabs Arch · Ideas · Events (the feed page embedded). Rebuild + refresh is the whole update cycle; verified on live through the proxy with the real fleet state.</p>
       </div>
     </div>
+  </div>
+</section>
+
+<section id="phase3">
+  <div class="card">
+    <h2>Phase 3 — the arch agent keeps the fleet on one build <span class="tag">openspec arch-peer-upgrades</span></h2>
+    <p><b>The gap it closes.</b> Every fleet feature so far assumed the peers run a compatible build, and every upgrade was a person at each box running <code>swap.ps1</code>. Now the hub's arch agent sees drift (<code>list_machines</code> carries <code>version</code>, <code>hubVersion</code>, <code>behind</code>) and can drive the peer's redeploy itself.</p>
+    <div class="flow">
+      <div class="flowbox"><b>1 · notice</b><br>peer describe says build X, hub is build Y → <i>behind</i></div>
+      <div class="flowarrow">→</div>
+      <div class="flowbox"><b>2 · posture</b><br>loop armed · sends allowed · peer <i>accepts fleet upgrades</i> · versions differ</div>
+      <div class="flowarrow">→</div>
+      <div class="flowbox"><b>3 · upgrade_peer</b><br>POST /api/arch/peer/upgrade {ref}</div>
+      <div class="flowarrow">→</div>
+      <div class="flowbox"><b>4 · the peer does it</b><br>ff-only pull on its branch · carry new config keys · detached swap.ps1 · dead-man switch</div>
+      <div class="flowarrow">→</div>
+      <div class="flowbox"><b>5 · keep is earned</b><br>new process finds the job file; running the target commit → disarm; else rollback</div>
+    </div>
+    <p><b>Why the peer owns the deploy.</b> The receiving harness runs the same committed script its operator would, with the same guard and the same auto-rollback; the caller only says <i>which ref</i>. Refusals are honest and leave the tree untouched: <code>not-on-branch</code>, <code>dirty</code>, <code>pull-failed</code>, <code>current</code>, <code>busy</code>, <code>not-accepting</code>.</p>
+    <p><b>Two opt-ins, again.</b> Sends must be allowed to that machine on the hub, and its operator must tick <i>accept fleet upgrades</i> on its own Arch tab. The Fleet card shows drift and offers an operator <i>upgrade to this build</i> button under the same rules — the arch agent and the human use one path.</p>
+    <p><b>Built 2026-09-05.</b> Verified on an isolated instance (posture + API + Fleet card) and by a real self-upgrade of this box's live harness through the peer endpoint; the first MONSTER upgrade needs one last hand deploy there so it has the endpoint.</p>
   </div>
 </section>
 
