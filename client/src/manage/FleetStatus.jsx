@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiGet } from '../api/client';
 
 // The Status tab (openspec fleet-status-tab): every repo agent on the whole
@@ -7,6 +7,13 @@ import { apiGet } from '../api/client';
 // fleet posture the Arch tab's Fleet card knows (build, opt-ins, scope). The
 // answer is one hub endpoint (GET /api/arch/fleet/status); the hub relays the
 // peers' cached describes, so the page never talks to another machine.
+//
+// Filters (openspec fleet-status-filters): with dozens of agents the page needs
+// a way to narrow the wall. A filter bar under the head holds a search box
+// (name, branch, remote URL, machine), one chip per machine (multi-select), and
+// the state chips (all · on main · not on main · running · managed). Counts
+// follow the current machine + search selection; a machine with nothing left
+// collapses to its header line; the whole selection persists per device.
 
 const POLL_MS = 5000;
 const FILTERS = [
@@ -14,7 +21,9 @@ const FILTERS = [
   ['main', 'on main', 'On its default branch — free to be given work'],
   ['feature', 'not on main', 'On a feature branch — claimed by someone'],
   ['running', 'running', 'A turn is running right now'],
+  ['managed', '🏛 managed', 'In the arch agent\'s scope'],
 ];
+const PERSIST_KEY = 'manageapp.fleetFilters';
 
 function ago(ms) {
   if (!ms || ms < 0) return '';
@@ -34,7 +43,32 @@ function matches(a, filter) {
   if (filter === 'running') return !!a.runningSince;
   if (filter === 'main') return a.onDefault;
   if (filter === 'feature') return !a.onDefault && a.branch && a.branch !== 'unknown';
+  if (filter === 'managed') return !!a.managed;
   return true;
+}
+
+function matchesQuery(a, machineLabel, q) {
+  if (!q) return true;
+  const hay = `${a.name || ''} ${a.branch || ''} ${a.remoteUrl || ''} ${machineLabel || ''}`.toLowerCase();
+  return q.split(/\s+/).filter(Boolean).every((w) => hay.includes(w));
+}
+
+function readPersisted() {
+  try {
+    const v = JSON.parse(localStorage.getItem(PERSIST_KEY) || 'null');
+    if (!v || typeof v !== 'object') return { filter: 'all', machines: [], q: '' };
+    return {
+      filter: FILTERS.some(([k]) => k === v.filter) ? v.filter : 'all',
+      machines: Array.isArray(v.machines) ? v.machines.filter((x) => typeof x === 'string') : [],
+      q: typeof v.q === 'string' ? v.q : '',
+    };
+  } catch {
+    return { filter: 'all', machines: [], q: '' };
+  }
+}
+
+function persist(state) {
+  try { localStorage.setItem(PERSIST_KEY, JSON.stringify(state)); } catch { /* private mode */ }
 }
 
 function AgentChip({ a, self, root, open, onToggle }) {
@@ -92,9 +126,14 @@ function AgentDetail({ a, self, root }) {
 export default function FleetStatus({ root = '' }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
-  const [filter, setFilter] = useState('all');
+  const [persisted] = useState(readPersisted);
+  const [filter, setFilterState] = useState(persisted.filter);
+  const [machineSel, setMachineSel] = useState(persisted.machines); // sourceIds; [] = every machine
+  const [q, setQ] = useState(persisted.q);
   const [open, setOpen] = useState(null);
   const [, setTick] = useState(0);
+
+  useEffect(() => { persist({ filter, machines: machineSel, q }); }, [filter, machineSel, q]);
 
   const load = useCallback(async () => {
     try {
@@ -114,36 +153,91 @@ export default function FleetStatus({ root = '' }) {
   }, [load]);
 
   const machines = data?.machines || [];
-  const totals = machines.reduce((acc, m) => {
-    for (const a of m.agents || []) {
+  const query = q.trim().toLowerCase();
+  const machineOn = useCallback((m) => machineSel.length === 0 || machineSel.includes(m.sourceId), [machineSel]);
+  const toggleMachine = (sourceId) => {
+    setMachineSel((prev) => (prev.includes(sourceId) ? prev.filter((x) => x !== sourceId) : [...prev, sourceId]));
+  };
+  const narrowed = filter !== 'all' || machineSel.length > 0 || query.length > 0;
+  const clearAll = () => { setFilterState('all'); setMachineSel([]); setQ(''); };
+
+  // Agents that survive the machine selection + the search; the state chips count over these.
+  const scoped = useMemo(() => machines.map((m) => ({
+    m,
+    agents: machineOn(m) ? (m.agents || []).filter((a) => matchesQuery(a, m.machine, query)) : [],
+  })), [machines, machineOn, query]);
+  const totals = scoped.reduce((acc, { agents }) => {
+    for (const a of agents) {
       acc.all += 1;
       if (a.runningSince) acc.running += 1;
       if (a.onDefault) acc.main += 1;
       else if (a.branch && a.branch !== 'unknown') acc.feature += 1;
+      if (a.managed) acc.managed += 1;
     }
     return acc;
-  }, { all: 0, running: 0, main: 0, feature: 0 });
+  }, { all: 0, running: 0, main: 0, feature: 0, managed: 0 });
+  const shown = scoped.reduce((n, { agents }) => n + agents.filter((a) => matches(a, filter)).length, 0);
+  const total = machines.reduce((n, m) => n + (m.agents || []).length, 0);
 
   return (
     <div className="fs" data-fleet-status>
       <div className="fs__head">
         <span className="fs__title">Fleet status</span>
         <span className="fs__dim">every repo agent on every machine · hub build {shortVersion(data?.hubVersion)}</span>
+        <span className="fs__dim fs__shown" data-shown={shown} data-total={total}>{narrowed ? `${shown} of ${total} agents` : `${total} agents`}</span>
+      </div>
+
+      <div className="fs__bar" role="search" aria-label="Filter agents" data-filter-bar>
+        <input
+          className="fs__search"
+          type="search"
+          placeholder="Search name, branch, URL, machine…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          aria-label="Search agents"
+          data-search
+        />
+        <div className="fs__filters" role="group" aria-label="Machines">
+          <button type="button" className={`fs__filter${machineSel.length === 0 ? ' fs__filter--on' : ''}`} aria-pressed={machineSel.length === 0} title="Every machine" data-machine-filter="all" onClick={() => setMachineSel([])}>
+            all machines <span className="fs__count">{machines.length}</span>
+          </button>
+          {machines.map((m) => (
+            <button
+              key={m.sourceId}
+              type="button"
+              className={`fs__filter${machineSel.includes(m.sourceId) ? ' fs__filter--on' : ''}${m.reachable ? '' : ' fs__filter--dark'}`}
+              aria-pressed={machineSel.includes(m.sourceId)}
+              title={`${m.machine}${m.self ? ' (this machine)' : ''}${m.reachable ? '' : ' — not answering'} · click to toggle`}
+              data-machine-filter={m.sourceId}
+              onClick={() => toggleMachine(m.sourceId)}
+            >
+              {m.self ? '⌂ ' : ''}{m.machine} <span className="fs__count">{(m.agents || []).length}</span>
+            </button>
+          ))}
+        </div>
         <div className="fs__filters" role="group" aria-label="Show">
           {FILTERS.map(([k, label, title]) => (
-            <button key={k} type="button" className={`fs__filter${filter === k ? ' fs__filter--on' : ''}`} title={title} aria-pressed={filter === k} data-filter={k} onClick={() => setFilter(k)}>
+            <button key={k} type="button" className={`fs__filter${filter === k ? ' fs__filter--on' : ''}`} title={title} aria-pressed={filter === k} data-filter={k} onClick={() => setFilterState(k)}>
               {label} <span className="fs__count">{totals[k]}</span>
             </button>
           ))}
         </div>
+        {narrowed && (
+          <button type="button" className="fs__clear" onClick={clearAll} title="Show every agent again" data-clear-filters>× clear</button>
+        )}
       </div>
+
       {!data && !error && <div className="fs__note" data-loading>Loading the fleet status…</div>}
       {error && <div className="fs__note fs__note--err">{error}</div>}
-      {machines.map((m) => {
-        const agents = (m.agents || []).filter((a) => matches(a, filter));
+      {data && total > 0 && shown === 0 && <div className="fs__note" data-no-match>Nothing matches — clear a filter or the search.</div>}
+      {scoped.map(({ m, agents: inScope }) => {
+        if (!machineOn(m)) return null;
+        const agents = inScope.filter((a) => matches(a, filter));
         const running = (m.agents || []).filter((a) => a.runningSince).length;
+        const hidden = (m.agents || []).length - agents.length;
+        const collapsed = narrowed && agents.length === 0 && (m.agents || []).length > 0;
         return (
-          <section key={m.sourceId} className={`fs__machine${m.self ? ' fs__machine--self' : ''}${m.reachable ? '' : ' fs__machine--dark'}`} data-machine={m.machine}>
+          <section key={m.sourceId} className={`fs__machine${m.self ? ' fs__machine--self' : ''}${m.reachable ? '' : ' fs__machine--dark'}${collapsed ? ' fs__machine--collapsed' : ''}`} data-machine={m.machine} data-collapsed={collapsed || undefined}>
             <div className="fs__mh">
               <span className={`fs__mdot${m.reachable ? ' fs__mdot--ok' : ''}`} aria-hidden="true" />
               <span className="fs__mlabel">{m.machine}</span>
@@ -154,9 +248,12 @@ export default function FleetStatus({ root = '' }) {
                 {m.reachable ? ` · ${m.acceptsSends ? 'accepts sends' : 'no sends'} · ${m.acceptsUpgrades ? 'accepts upgrades' : 'no upgrades'}${m.gateOpen ? '' : ' · gate closed'}` : ''}
                 {!m.self && m.reachable ? ` · ${m.allowSends ? 'sends allowed' : 'sends not allowed'}` : ''}
               </span>
-              <span className="fs__mmeta">{(m.agents || []).length} agent{(m.agents || []).length === 1 ? '' : 's'} · 🏛 {m.managedCount} managed{running ? ` · ▶ ${running} running` : ''}</span>
+              <span className="fs__mmeta">
+                {(m.agents || []).length} agent{(m.agents || []).length === 1 ? '' : 's'} · 🏛 {m.managedCount} managed{running ? ` · ▶ ${running} running` : ''}
+                {narrowed && hidden > 0 ? ` · ${hidden} hidden by filter` : ''}
+              </span>
             </div>
-            {agents.length === 0
+            {collapsed ? null : agents.length === 0
               ? <div className="fs__none">{(m.agents || []).length === 0 ? (m.reachable ? 'no repo agents (no docks, nothing in the arch scope)' : 'nothing known — the machine has not answered') : 'nothing matches this filter'}</div>
               : (
                 <div className="fs__strip">
