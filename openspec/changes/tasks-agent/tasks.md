@@ -35,15 +35,29 @@
 - [x] 3.1 `tests/ClaudeWeb.Tests/TasksAgentTests.cs`: tools/list names; create_task +
       link_tasks round trip; cycle → `ok=false`, status `cycle`, `isError`; bearer
       rejection (wrong / empty token, right token accepted). `dotnet test` green.
-- [ ] 3.2 `dotnet build`, `npm --prefix client run build`, `build:manage`,
+- [x] 3.2 `dotnet build`, `npm --prefix client run build`, `build:manage`,
       `openspec validate --strict` all clean.
-- [ ] 3.3 Isolated preview on :5200 (`.claudeweb-preview/bin`, `CLAUDEWEB_DATADIR` =
+      DONE 2026-09-05: build clean, `dotnet test` 227/227, both bundles built,
+      `openspec validate tasks-agent --strict` valid (`--all`: 78/79 — the one failure is
+      the pre-existing `add-dock-tools-lane` change, untouched by this work).
+- [x] 3.3 Isolated preview on :5200 (`.claudeweb-preview/bin`, `CLAUDEWEB_DATADIR` =
       copy of the store minus auth.json), launched detached.
-- [ ] 3.4 Detached Playwright (`.claudeweb-preview/playwright/verify-tasks-agent.mjs`
+      DONE: the verifier boots it itself (detached spawn) with the copied store's ideas
+      sync, hub and autopilot gate switched OFF, so nothing reaches live or the shared board.
+- [x] 3.4 Detached Playwright (`.claudeweb-preview/playwright/verify-tasks-agent.mjs`
       + `run-verify-tasks.cmd`, log + `@@TASKSAGENT@@` marker): log in, Ideas, paste
       the fixture, click Break into tasks, wait for the run; ≥ 4 new nodes, ≥ 2 edges,
       no cycle, present after reload; screenshot under `.claudeweb-preview/evidence/`.
-- [ ] 3.5 :5200 killed; tree clean; every commit on feature/work.
+      DONE 2026-09-05 21:41 — `@@TASKSAGENT@@ pass:true, 24 checks` (log
+      `.claudeweb-preview/out-tasks-agent.log`, evidence stamp 2026-09-05T19-40-16): the
+      real turn took 63 s, created 6 tasks + 5 edges, no cycle, rows of ≤ 4, rendered
+      without reload and after reload, Tasks page shows the conversation, audit counted
+      the calls, Management App Tasks tab opens the surface; MCP route 401 without / with
+      a wrong token, 405 on GET. Launched with `Start-Process cmd.exe /c <wrapper>`
+      (`cmd start /b` from the agent shell hung without starting the run).
+- [x] 3.5 :5200 killed; tree clean; every commit on feature/work.
+      DONE: the verifier kills the instance it booted (checked: nothing on :5200, no
+      leftover node/ClaudeWeb processes); live :5099 log carries no Tasks-agent traces.
 
 ## 4. Understanding app
 
