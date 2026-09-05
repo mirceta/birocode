@@ -13,7 +13,30 @@ html, body, #root { height: 100%; margin: 0; }
 .mg__banner { flex: none; padding: 8px 14px; background: #3a2a12; color: #f5c778; border-bottom: 1px solid #6a4a16; }
 .mg__banner a { color: inherit; }
 .mg__body { flex: 1; min-height: 0; display: flex; }
-.mg__pane { flex: 1; min-height: 0; min-width: 0; overflow: auto; }
+.mg__slot { flex: 1; min-height: 0; min-width: 0; display: flex; }
+.mg__pane { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; }
+.mg__pane-body { flex: 1; min-height: 0; min-width: 0; overflow: auto; }
 .mg__pane--arch .arch { height: 100%; }
-.mg__pane--ideas { padding: 10px; }
+.mg__pane--ideas .mg__pane-body { padding: 10px; }
 .mg__events { width: 100%; height: 100%; border: 0; background: #fff; }
+
+/* Side-by-side layout (openspec management-app-panes): the same visual language
+   as the harness's own pane strip — a slim bar per pane, draggable gutters. */
+.mg__layout { display: flex; gap: 2px; margin-left: 10px; border: 1px solid var(--color-border, #444); border-radius: 8px; padding: 2px; }
+.mg__layout-btn { background: transparent; border: 0; color: var(--color-text-muted, #9aa); font-size: 12.5px; padding: 3px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.mg__layout-btn--on { background: var(--color-bg, #2a2e36); color: var(--color-text, #eee); font-weight: 600; }
+.mg__note { flex: none; padding: 4px 14px; font-size: 12.5px; color: var(--color-text-muted, #9aa); border-bottom: 1px solid var(--color-border, #444); }
+.mg__body--panes { overflow: hidden; }
+.mg__body--panes .mg__slot { min-width: 220px; }
+.mg__pane-bar { flex: none; display: flex; align-items: center; justify-content: space-between; padding: 3px 8px; font-size: 12.5px; color: var(--color-text-muted, #9aa); border-bottom: 1px solid var(--color-border, #444); background: rgba(255, 255, 255, 0.03); }
+.mg__pane-label { font-weight: 600; }
+.mg__pane-hide { background: transparent; border: 0; color: var(--color-text-muted, #9aa); font-size: 16px; line-height: 1; cursor: pointer; padding: 0 4px; border-radius: 4px; }
+.mg__pane-hide:hover:not(:disabled) { color: var(--color-text, #eee); background: rgba(255, 255, 255, 0.08); }
+.mg__pane-hide:disabled { opacity: 0.35; cursor: default; }
+.mg__gutter { flex: none; width: 7px; cursor: col-resize; background: transparent; border-left: 1px solid var(--color-border, #444); touch-action: none; }
+.mg__gutter:hover, .mg--dragging .mg__gutter { background: var(--color-accent, #c96442); opacity: 0.6; }
+.mg--dragging { user-select: none; cursor: col-resize; }
+.mg--dragging iframe { pointer-events: none; }
+@media (max-width: 720px) {
+  .mg__layout-btn { padding: 3px 6px; }
+}
