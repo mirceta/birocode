@@ -31,6 +31,10 @@
       NOT DONE: swap.ps1 always targets the standard live run dir, so a second instance
       cannot redeploy itself in isolation; covered instead by the live self-upgrade below.
 - [ ] 3.3 Real fleet: this box upgrades MONSTER from main once, hands-off.
+      Receiver side proven on THIS box first (2026-09-05): live deployed 16:46 by hand (the
+      last hand deploy here), opt-in ticked, `POST /api/arch/peer/upgrade {ref: feature/work}`
+      answered `current`; the next commit is applied by a real self-upgrade through that endpoint.
+      MONSTER still needs one hand deploy (its build has no upgrade endpoint) + its opt-in.
 
 ## 4. Ship
 
