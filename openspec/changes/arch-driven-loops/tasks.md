@@ -14,6 +14,12 @@
       `/autopilot/loops` for the `@arch` row, mounts the control (goal · recipe), shows
       the driven pill and the paused note; the loop control's stylesheet is imported.
 
+- [x] 1.6 Pacing floor (2026-09-06): a repeat waits for a wake OR the operator-set quiet
+      floor (default 5 min, `ArchStateStore.DrivenQuietSeconds`, Arch page field); the
+      first send of an arm is decided from `IterationsDone`/`LastSentAt` within the arm,
+      never from the in-memory last-prompt map, which is also cleared on a re-arm; the
+      hold reason carries the countdown; no-reply errors hand the slot back too.
+
 ## 2. Tests
 
 - [x] 2.1 `ArchDrivenLoopTests`: policy table (hold on question, pass-through stops,

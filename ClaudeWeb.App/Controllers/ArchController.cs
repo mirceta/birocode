@@ -137,6 +137,7 @@ public class ArchController : ControllerBase
                 run = run is null ? null : new { status = run.Status, lastSeq = run.LastSeq, sessionId = run.SessionId },
             },
             watermark = _arch.Watermark,
+            drivenQuietSeconds = _arch.DrivenQuietSeconds,
             disallowedTools = ArchAgentService.DisallowedTools,
         };
     }
@@ -372,7 +373,7 @@ public class ArchController : ControllerBase
         return Ok(BuildState());
     }
 
-    public sealed record LoopRequest(string? Action, string? Mode, int? MaxIterations);
+    public sealed record LoopRequest(string? Action, string? Mode, int? MaxIterations, int? QuietSeconds = null);
 
     /// <summary><c>action</c> = arm | disarm | stop | mode. Arm bootstraps the home,
     /// pins the conversation and resets the watermark (no replay); disarm is the
@@ -394,6 +395,13 @@ public class ArchController : ControllerBase
             case "disarm":
             case "stop":
                 _arch.Disarm();
+                break;
+            case "quiet":
+                // The driven loops' quiet floor (openspec arch-driven-loops): how long a
+                // repeat waits for a wake before the arch agent is nudged anyway.
+                if (req?.QuietSeconds is not { } qs || qs < 30)
+                    return BadRequest(new { error = "quietSeconds must be at least 30" });
+                _arch.SetDrivenQuietSeconds(qs);
                 break;
             case "mode":
                 if (string.IsNullOrWhiteSpace(req?.Mode))

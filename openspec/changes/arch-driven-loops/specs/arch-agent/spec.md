@@ -8,8 +8,12 @@ directory, the arch MCP tools and tool denials, the briefing and the audit. Two 
 rules SHALL apply on top of the kind's decision: a reply ending in `NEEDS_HUMAN:`
 SHALL hold as escalated instead of stopping the loop, and a re-send of the same prompt
 the arch agent last received SHALL wait until a managed repo turn started or ended
-since the last arch turn, while a new prompt (the first send, a verification prompt, a
-phase change, the next step) SHALL be sent at once.
+since the last arch turn OR until an operator-set quiet floor (default 5 minutes)
+has elapsed since the last send, whichever comes first, while a new prompt (the first
+send of an arming, a verification prompt, a phase change, the next step) SHALL be sent
+at once. Whether a send is the first of an arming SHALL be decided from the instance's
+own record, never from process memory, and the hold SHALL state the time left until
+the next re-prompt.
 
 #### Scenario: A goal drives the arch agent
 - **WHEN** the Operator arms a goal loop on the arch agent and no arch turn is running
@@ -18,6 +22,14 @@ phase change, the next step) SHALL be sent at once.
 #### Scenario: The work prompt is not re-sent while repo agents work
 - **WHEN** the arch agent answered the work prompt without `LOOP_DONE` and no managed repo turn has started or ended since
 - **THEN** the loop holds, and the next managed repo turn event lets the work prompt go out again
+
+#### Scenario: Silence does not park the loop
+- **WHEN** the arch agent answered the work prompt without `LOOP_DONE`, no managed repo turn arrives, and the quiet floor elapses
+- **THEN** the work prompt is sent again, and the hold before it showed the remaining time
+
+#### Scenario: A re-arm's first send goes out
+- **WHEN** a goal loop on the arch agent had sent before, stopped, and is armed again
+- **THEN** its first send of the new arming goes out at once, without waiting for a wake
 
 #### Scenario: Verification is immediate
 - **WHEN** the arch agent's reply ends with `LOOP_DONE`

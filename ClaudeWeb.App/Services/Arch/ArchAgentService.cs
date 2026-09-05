@@ -1573,6 +1573,16 @@ public class ArchAgentService : IArchWakeSource
 
     public void ForgetStandingLoop() => _state.ClearStandingLoop();
 
+    /// <summary>The quiet floor for driven loops on the arch slot (openspec
+    /// arch-driven-loops): the longest a repeat waits for a wake before it is sent
+    /// anyway. Operator-set in seconds; 0 falls back to the policy default (5 min).</summary>
+    public TimeSpan DrivenQuietFloor =>
+        _state.DrivenQuietSeconds > 0 ? TimeSpan.FromSeconds(_state.DrivenQuietSeconds) : ArchDrivenPolicy.DefaultQuietFloor;
+
+    public int DrivenQuietSeconds => _state.DrivenQuietSeconds > 0 ? _state.DrivenQuietSeconds : (int)ArchDrivenPolicy.DefaultQuietFloor.TotalSeconds;
+
+    public void SetDrivenQuietSeconds(int seconds) => _state.SetDrivenQuietSeconds(seconds);
+
     /// <summary>A driven loop (goal, recipe) on the @arch slot ended (openspec
     /// arch-driven-loops): if the Operator had the standing wake loop armed before,
     /// bring it back with the same mode and cap, watermark at now. Returns whether a
