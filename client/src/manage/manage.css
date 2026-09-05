@@ -1,0 +1,19 @@
+/* Management App shell (openspec management-app) */
+html, body, #root { height: 100%; margin: 0; }
+.mg { display: flex; flex-direction: column; height: 100vh; background: var(--color-bg, #1e1e1e); color: var(--color-text, #ddd); }
+.mg__head { display: flex; align-items: center; gap: 14px; padding: 8px 14px; border-bottom: 1px solid var(--color-border, #444); flex: none; }
+.mg__brand { font-weight: 600; white-space: nowrap; }
+.mg__label { color: var(--color-text-muted, #9aa); font-weight: 400; }
+.mg__tabs { display: flex; gap: 4px; margin-left: 8px; }
+.mg__tab { background: transparent; border: 1px solid transparent; color: var(--color-text-muted, #9aa); padding: 4px 12px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+.mg__tab:hover { color: var(--color-text, #ddd); border-color: var(--color-border, #444); }
+.mg__tab--on { color: var(--color-text, #eee); border-color: var(--color-accent, #c96442); font-weight: 600; }
+.mg__open { margin-left: auto; color: var(--color-text-muted, #9aa); text-decoration: none; font-size: 13px; white-space: nowrap; }
+.mg__open:hover { color: var(--color-text, #ddd); }
+.mg__banner { flex: none; padding: 8px 14px; background: #3a2a12; color: #f5c778; border-bottom: 1px solid #6a4a16; }
+.mg__banner a { color: inherit; }
+.mg__body { flex: 1; min-height: 0; display: flex; }
+.mg__pane { flex: 1; min-height: 0; min-width: 0; overflow: auto; }
+.mg__pane--arch .arch { height: 100%; }
+.mg__pane--ideas { padding: 10px; }
+.mg__events { width: 100%; height: 100%; border: 0; background: #fff; }
