@@ -21,4 +21,6 @@
 
 ## 3. Ship
 
-- [ ] 3.1 Deploy with `swap.ps1` and keep on the operator's instruction.
+- [x] 3.1 Deploy with `swap.ps1` and keep on the operator's instruction.
+      DONE 2026-09-05 22:54 — deployed f448e55 from feature/fleet-status-filters, kept
+      immediately on the operator's instruction; health 200, bundles match.
