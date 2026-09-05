@@ -140,6 +140,7 @@
         <p><b>What phase 2 actually is, then:</b> port the Arch and Ideas UIs into the Management App's page, against the same endpoints they call today. The Harness's Management tab from phase 1 shrinks to an embed or a link. Nothing server-side changes.</p>
         <p><b>Built 2026-09-05 (openspec management-app):</b> a second Vite build of the same React source (<code>client/manage.html</code> → <code>events-app/manage/</code>), served by the harness from the worktree at <code>/api/localview/&lt;self&gt;/app/events-feed/manage/index.html</code>. Tabs Arch · Ideas · Events (the feed page embedded). Rebuild + refresh is the whole update cycle; verified on live through the proxy with the real fleet state.</p>
         <p><b>Layouts (2026-09-05, openspec management-app-panes):</b> the app has a <i>Tabs · Side by side</i> switch. Side by side renders Arch, Ideas and Events as columns with a slim bar each (label + hide ×), draggable dividers between them and per-device persistence of the choice, the hidden set and the widths — the same idea as the harness's own multi-pane strip behind the machine/project chip. Narrow windows fall back to tabs and keep the choice.</p>
+        <p><b>Arch surface (2026-09-05, openspec arch-side-column):</b> the right-hand column (Loop · Managed agents · Fleet · Home repo) has a draggable divider and a hide/show toggle, and the same cards form a fourth lane, <i>🛰 Fleet</i>, rendered full width as a grid. Width and visibility persist per device; narrow screens stack as before.</p>
       </div>
     </div>
   </div>
