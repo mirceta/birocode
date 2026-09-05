@@ -32,7 +32,10 @@ const MAX_ATTEMPTS = 5;
 
 const emptyTurn = () => ({ active: true, user: null, assistant: { text: '', steps: [] }, error: '' });
 
-export default function useArchStream({ onEnded }) {
+// `repoId` / `streamPath` (openspec tasks-agent, D6): the same hook renders the
+// Tasks agent's live turn — its run slot is keyed "@tasks" and its fallback
+// stream is GET /api/tasks/stream. Defaults keep the arch behaviour unchanged.
+export default function useArchStream({ onEnded, repoId = '@arch', streamPath = '/arch/stream' }) {
   const [turn, setTurn] = useState(null);
   const seqRef = useRef(0);
   const handleRef = useRef(null);   // { abort() } while attached
@@ -110,7 +113,7 @@ export default function useArchStream({ onEnded }) {
     (async () => {
       if (hubSupported()) {
         const handle = hubAttach({
-          repoId: '@arch', lane: 'builder',
+          repoId, lane: 'builder',
           getAfter: () => seqRef.current,
           onEvent: applyEvent,
         });
@@ -127,7 +130,7 @@ export default function useArchStream({ onEnded }) {
         const handle = { abort: () => controller.abort() };
         handleRef.current = handle;
         try {
-          await apiStreamGet(`/arch/stream?after=${seqRef.current}`, createSseParser(applyEvent), { signal: controller.signal });
+          await apiStreamGet(`${streamPath}?after=${seqRef.current}`, createSseParser(applyEvent), { signal: controller.signal });
           await settle('ended');
           return;
         } catch (err) {
@@ -138,7 +141,7 @@ export default function useArchStream({ onEnded }) {
       }
       await settle('lost');
     })();
-  }, [applyEvent, settle]);
+  }, [applyEvent, settle, repoId, streamPath]);
 
   // Drop a settled local turn once the transcript carries it (or a new turn
   // starts). The caller decides when; this just clears.

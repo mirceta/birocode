@@ -4,6 +4,7 @@ import ErrorBanner from '../shared/ErrorBanner';
 import ArchPlanSection from './ArchPlanSection';
 import IdeasSyncBar from './IdeasSyncBar';
 import TaskGraphPanel from '../taskgraph/TaskGraphPanel';
+import KanbanBoard from '../taskgraph/KanbanBoard';
 import { useFeature } from '../../context/UiModeContext';
 import { useT } from '../../i18n/LanguageContext';
 import './ideas.css';
@@ -72,10 +73,13 @@ export default function IdeasPanel() {
   const graphOn = useFeature('taskGraph');
   // Shared-board sync bar (openspec ideas-drive-sync), Advanced-only.
   const syncOn = useFeature('ideasSync');
+  // "Break into tasks" (openspec tasks-agent, D7): hand the draft to the Tasks
+  // agent, watch its run, reload the graph when it ends. Advanced-only.
+  const breakOn = useFeature('ideasBreakUp');
 
   const [tab, setTab] = useState(() => {
     const stored = localStorage.getItem(TAB_KEY);
-    return stored === 'plan' || stored === 'graph' ? stored : 'ideas';
+    return stored === 'plan' || stored === 'graph' || stored === 'kanban' ? stored : 'ideas';
   });
   function chooseTab(next) {
     setTab(next);
@@ -93,6 +97,11 @@ export default function IdeasPanel() {
   const [draftProject, setDraftProject] = useState('');
   const [draftPriority, setDraftPriority] = useState(0);
   const [adding, setAdding] = useState(false);
+  const [breaking, setBreaking] = useState(false);
+  const [breakMsg, setBreakMsg] = useState('');
+  const [graphRefresh, setGraphRefresh] = useState(0);
+  const breakAlive = useRef(true);
+  useEffect(() => { breakAlive.current = true; return () => { breakAlive.current = false; }; }, []);
   const [editingId, setEditingId] = useState(null);
   const [editDraft, setEditDraft] = useState('');
   const [editProject, setEditProject] = useState('');
@@ -142,6 +151,41 @@ export default function IdeasPanel() {
     } finally {
       setAdding(false);
     }
+  }
+
+  async function breakIntoTasks() {
+    const text = draft.trim();
+    if (!text || breaking || adding) return;
+    setError('');
+    setBreakMsg('');
+    const prompt = `Break the following into tasks on the task graph: create each task, then link the dependencies, and reply with the numbered summary.\n\n${text}`;
+    try {
+      await apiPost('/tasks/send', { text: prompt });
+    } catch (e) {
+      const busy = e?.status === 409 || /mid-turn/i.test(e?.message || '');
+      setError(busy ? t('ideas.breakUpBusy') : t('ideas.breakUpError'));
+      return; // the draft stays put
+    }
+    setDraft('');
+    setBreaking(true);
+    if (graphOn) chooseTab('graph');
+    // Poll the Tasks agent until its run is no longer running, then reload the graph.
+    const started = Date.now();
+    let running = true;
+    while (running && breakAlive.current && Date.now() - started < 15 * 60 * 1000) {
+      await new Promise((r) => setTimeout(r, 2000));
+      try {
+        const s = await apiGet('/tasks');
+        running = s?.session?.run?.status === 'running';
+      } catch {
+        /* transient — keep polling */
+      }
+    }
+    if (!breakAlive.current) return;
+    setGraphRefresh((n) => n + 1);
+    setBreaking(false);
+    setBreakMsg(t('ideas.breakUpDone'));
+    setTimeout(() => { if (breakAlive.current) setBreakMsg(''); }, 8000);
   }
 
   async function saveEdit(id) {
@@ -203,7 +247,7 @@ export default function IdeasPanel() {
   async function sendToGraph(n) {
     setError('');
     try {
-      await apiPost('/taskgraph/nodes', { title: n.text, note: n.project || undefined });
+      await apiPost('/taskgraph/nodes', { title: n.text, note: n.project || undefined, ideaId: n.id, createdBy: 'human' });
     } catch {
       setError(t('ideas.saveError'));
       return;
@@ -354,13 +398,35 @@ export default function IdeasPanel() {
             🧩 Task graph
           </button>
         )}
+        {graphOn && (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'kanban'}
+            className={`ideas__tab${tab === 'kanban' ? ' ideas__tab--active' : ''}`}
+            title="The same tasks as the graph, as Backlog · Assigned · In progress · Done — assign to any repo agent on the fleet, the arch agent pings them"
+            onClick={() => chooseTab('kanban')}
+            data-tab-kanban
+          >
+            🗂 Kanban
+          </button>
+        )}
       </div>
 
       {tab === 'plan' ? (
         <ArchPlanSection />
       ) : tab === 'graph' && graphOn ? (
         <div className="ideas__tabpanel ideas__tabpanel--graph">
-          <TaskGraphPanel />
+          {(breaking || breakMsg) && (
+            <div className={`ideas__working${breaking ? '' : ' ideas__working--done'}`} data-break-status={breaking ? 'working' : 'done'}>
+              {breaking ? t('ideas.breakUpWorking') : breakMsg}
+            </div>
+          )}
+          <TaskGraphPanel refreshKey={graphRefresh} />
+        </div>
+      ) : tab === 'kanban' && graphOn ? (
+        <div className="ideas__tabpanel ideas__tabpanel--graph">
+          <KanbanBoard />
         </div>
       ) : (
         <div className="ideas__tabpanel">
@@ -389,10 +455,23 @@ export default function IdeasPanel() {
           <button type="button" className="ideas__add" onClick={add} disabled={adding || !draft.trim()}>
             {adding ? t('ideas.adding') : t('ideas.add')}
           </button>
+          {breakOn && (
+            <button
+              type="button"
+              className="ideas__add ideas__break"
+              onClick={breakIntoTasks}
+              disabled={breaking || adding || !draft.trim()}
+              title={t('ideas.breakUpWorking')}
+              data-break
+            >
+              {breaking ? t('ideas.breakingUp') : `🗂 ${t('ideas.breakUp')}`}
+            </button>
+          )}
         </div>
       </div>
 
       {error && <ErrorBanner message={error} />}
+      {breaking && !graphOn && <div className="ideas__working" data-break-status="working">{t('ideas.breakUpWorking')}</div>}
 
       {!loading && notes.length > 0 && (
         <input

@@ -14,6 +14,7 @@ public static class ArchModuleExtensions
     {
         services.AddSingleton<ArchStateStore>();
         services.AddSingleton<FleetClient>();
+        services.AddSingleton<PeerUpgradeService>(); // receiving side of fleet upgrades (openspec arch-peer-upgrades)
         services.AddSingleton<ArchAgentService>();
         services.AddSingleton<IArchWakeSource>(sp => sp.GetRequiredService<ArchAgentService>());
         services.AddSingleton<ILoop, ArchLoop>();

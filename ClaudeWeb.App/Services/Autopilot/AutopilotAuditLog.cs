@@ -28,10 +28,12 @@ public sealed class AutopilotAuditLog
     private readonly object _gate = new();
     private List<Entry>? _entries; // oldest first; null until first load
 
-    public AutopilotAuditLog(Logger logger)
+    /// <param name="dirOverride">Test seam (openspec tasks-agent, D2): a data dir other
+    /// than <see cref="AppPaths.DataDir"/>; DI leaves it null.</param>
+    public AutopilotAuditLog(Logger logger, string? dirOverride = null)
     {
         _logger = logger;
-        var dir = AppPaths.DataDir;
+        var dir = dirOverride ?? AppPaths.DataDir;
         Directory.CreateDirectory(dir);
         _path = Path.Combine(dir, "autopilot-audit.jsonl");
     }

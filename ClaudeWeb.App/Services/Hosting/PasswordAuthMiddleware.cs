@@ -97,6 +97,10 @@ public class PasswordAuthMiddleware
         // (checked constant-time in ArchController). Loopback-only in practice.
         if (path.Equals("/api/arch/mcp", StringComparison.OrdinalIgnoreCase))
             return false;
+        // The Tasks agent's MCP endpoint (openspec tasks-agent, D4): same contract,
+        // its own per-process bearer token (checked constant-time in TasksController).
+        if (path.Equals("/api/tasks/mcp", StringComparison.OrdinalIgnoreCase))
+            return false;
 
         return true;
     }

@@ -464,3 +464,10 @@
   font-size: 11px;
   color: #d64545;
 }
+
+/* Break into tasks (openspec tasks-agent): the second composer action and the
+   working / done line above the graph while the Tasks agent runs. */
+.ideas__break { margin-left: 6px; }
+.ideas__working { margin: 0 0 8px; padding: 6px 10px; border-radius: 8px; font-size: 13px;
+  border: 1px solid #e0b34c; background: rgba(224, 179, 76, 0.12); }
+.ideas__working--done { border-color: #4cc38a; background: rgba(76, 195, 138, 0.12); }

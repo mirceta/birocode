@@ -28,6 +28,9 @@ public class ArchStateStore
         // Whether THIS harness lets a fleet arch on another harness send tasks to
         // its repo agents (receiving-side opt-in, default off).
         public bool AcceptFleetSends { get; set; }
+        // Whether THIS harness lets a fleet arch elsewhere (or the operator through
+        // it) upgrade this harness to a ref (openspec arch-peer-upgrades). Default off.
+        public bool AcceptFleetUpgrades { get; set; }
         // Collector seq the arch loop has consumed up to. -1 = never set: the
         // next arm starts it at the collector's current last seq (no replay).
         public int Watermark { get; set; } = -1;
@@ -92,6 +95,21 @@ public class ArchStateStore
         {
             if (_data.AcceptFleetSends == accept) return;
             _data.AcceptFleetSends = accept;
+            Save();
+        }
+    }
+
+    public bool AcceptFleetUpgrades
+    {
+        get { lock (_gate) return _data.AcceptFleetUpgrades; }
+    }
+
+    public void SetAcceptFleetUpgrades(bool accept)
+    {
+        lock (_gate)
+        {
+            if (_data.AcceptFleetUpgrades == accept) return;
+            _data.AcceptFleetUpgrades = accept;
             Save();
         }
     }

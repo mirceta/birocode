@@ -106,13 +106,13 @@ operator marked **allow sends**.
 ```
 GET  /api/arch/peer
   -> { "protocol": 1, "version": "<build>", "machine": "<label>",
-       "acceptsSends": false, "gateOpen": true,
+       "acceptsSends": false, "acceptsUpgrades": false, "gateOpen": true,
        "managedRepoIds": [ "<repoId>", … ],          # this harness's OWN arch scope
        "repos": [ { "repoId", "name", "remoteUrl", "branch", "defaultBranch",
                     "dirty", "availability", "lastActor", "runningSince",
                     "exists", "isSelf", "managed" } ] }
 
-POST /api/arch/peer/send        { "repoId", "text", "branch"?, "from": "<caller's label>" }
+POST /api/arch/peer/send        { "repoId", "text", "branch"?, "from": "<caller's label>", "override"?: false }
   -> { "ok", "status", "detail", "data" }
      status: sent | busy | claimed | denied | not-accepting | unmanaged | error
 
@@ -124,6 +124,13 @@ POST /api/arch/peer/send        { "repoId", "text", "branch"?, "from": "<caller'
 
 GET  /api/arch/peer/transcript?repoId=<id>&tail=<n>
   -> { "ok", "status", "detail", "data": { "messages": [ { role, text, at } ] } }
+
+POST /api/arch/peer/upgrade     { "ref"?: "main", "from": "<caller's label>" }
+  -> { "ok", "status", "detail", "data": <job> }
+     status: started | busy | current | not-accepting | not-on-branch | dirty | pull-failed | error
+
+GET  /api/arch/peer/upgrade/<jobId>
+  -> { "ok", "status": deploying | done | rolled-back | failed, "detail", "data": <job> }
 ```
 
 - Same auth as the feed: the `X-Auth-Password` header. The credential the
@@ -135,6 +142,11 @@ GET  /api/arch/peer/transcript?repoId=<id>&tail=<n>
 - **Your rules apply.** A received task passes *your*
   availability rule (a repo on an operator branch is `claimed`) and *your* run
   slot (`busy` is an answer, never a queue). Nothing is stashed.
+  `override: true` (openspec claimed-operator-override) says the caller's operator
+  explicitly asked to reach a claimed repo; a peer that supports it lets the send
+  through and audits it as `claimed-override from <machine>` — the trust is the one
+  both operators already granted with allow-sends / accept-sends. Older peers ignore
+  the field and still answer `claimed`.
 - **Honest provenance.** The task lands in the repo agent's own dock
   conversation as a user bubble tagged `arch@<from>`, and *you* write the audit
   row (kind `arch`, phase `fleet:<from>`), so the tag survives a reload without
@@ -144,3 +156,27 @@ GET  /api/arch/peer/transcript?repoId=<id>&tail=<n>
   "no peer API on that build" — the mismatch is visible before anyone upgrades.
 - Every logical outcome is a `200` with a named `status`; HTTP errors mean
   transport or auth, so the caller can tell "refused" from "dark".
+
+### 5.1 Fleet upgrades — a peer redeploying *itself* on request
+
+`upgrade` (openspec `arch-peer-upgrades`) is the same shape as `send` with a
+different verb: a fleet arch that sees you on an older build than its hub asks
+you to bring yourself to a ref. It is off by default (**accept fleet upgrades**
+on your Arch tab, plus the open gate) and nothing in it bypasses your own deploy
+rules:
+
+- **Your checkout, your branch.** The receiver only ever fast-forwards the
+  branch it is already on (`main` unless the caller names another). On a
+  different branch → `not-on-branch`; uncommitted changes → `dirty`;
+  a non-fast-forward → `pull-failed`; already at that commit → `current`.
+  Every refusal leaves the tree exactly as it was.
+- **Your deploy script.** It runs the committed `swap.ps1` detached — origin/main
+  guard, stage-before-stop, preserved `logs/` + `appsettings.json`, and the
+  15-minute dead-man switch. Template-declared keys missing from the preserved
+  `appsettings.json` are carried in first, with the template's value.
+- **Keep is earned, not assumed.** The job file outlives the restart; the new
+  process finds it, and only if it *is* the target commit does it disarm the
+  rollback (`done`). Otherwise the switch restores last-good (`rolled-back`)
+  or the deploy log shows the abort (`failed`).
+- **One at a time**, `busy` while a job is deploying; the caller reads your new
+  `version` from the describe on a later wake instead of polling.

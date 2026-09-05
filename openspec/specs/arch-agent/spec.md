@@ -199,8 +199,8 @@ every lane.
 - **THEN** the conversation, the composer draft and the managed-agents strip are as they were
 
 #### Scenario: Desktop reaches the same surface from the dashboard
-- **WHEN** the Operator opens the dashboard in Advanced mode and presses the Arch chip on the panel rail
-- **THEN** the Arch surface opens as a centered pop-up over the docks (same mechanism and persistence as the Ideas/Autopilot/Audit/Traffic pop-ups), the chip is pressed while it is open, Esc or × dismisses it, and "open dock" closes the dashboard onto that repo's dock; in Basic mode the chip is absent
+- **WHEN** the Operator opens the dashboard in Advanced mode and switches to the Management view
+- **THEN** the full Arch surface renders there as the view's primary column (spec `management-dashboard`) — the same component and behaviour as the studio Arch tab — and "open dock" closes the dashboard onto that repo's dock; the Execution view's panel rail offers no Arch chip, and in Basic mode neither view exists
 
 ### Requirement: The Arch tab's History lane shows every tool call of the conversation, readably
 The Arch tab's History lane SHALL list every tool call the arch agent made in the

@@ -24,15 +24,19 @@ namespace ClaudeWeb.Controllers;
 public class TaskGraphController : ControllerBase
 {
     private readonly TaskGraphService _graph;
+    private readonly Services.Arch.ArchAgentService _arch;
     private readonly Logger _logger;
 
-    public TaskGraphController(TaskGraphService graph, Logger logger)
+    public TaskGraphController(TaskGraphService graph, Services.Arch.ArchAgentService arch, Logger logger)
     {
         _graph = graph;
+        _arch = arch;
         _logger = logger;
     }
 
-    public record NodeRequest(string? Title, string? Note, string? RepoId, string? MachineId, string? Status, double? X, double? Y);
+    public record NodeRequest(string? Title, string? Note, string? RepoId, string? MachineId, string? Status, double? X, double? Y,
+        string? SourceId = null, string? CreatedBy = null, string? IdeaId = null);
+    public record AssignRequest(string? SourceId, string? RepoId, string? By);
     public record EdgeRequest(string? Source, string? Target);
     public record ScratchRequest(string? Text);
     public record MachineRequest(string? Name, double? X, double? Y, double? W, double? H);
@@ -48,7 +52,8 @@ public class TaskGraphController : ControllerBase
     public IActionResult CreateNode([FromBody] NodeRequest? request)
     {
         _logger.CountRequest();
-        var node = _graph.AddNode(request?.Title, request?.Note, request?.RepoId, request?.MachineId, request?.X ?? 0, request?.Y ?? 0, Now());
+        var node = _graph.AddNode(request?.Title, request?.Note, request?.RepoId, request?.MachineId, request?.X ?? 0, request?.Y ?? 0, Now(),
+            request?.SourceId, request?.CreatedBy ?? "human", request?.IdeaId);
         if (node is null) return BadRequest(new { error = "Node title is required." });
         return Ok(node);
     }
@@ -60,6 +65,28 @@ public class TaskGraphController : ControllerBase
         var node = _graph.UpdateNode(id, request?.Title, request?.Note, request?.RepoId, request?.MachineId, request?.Status, request?.X, request?.Y, Now());
         if (node is null) return NotFound(new { error = "Unknown node id, blank title, or invalid status." });
         return Ok(node);
+    }
+
+    /// <summary>Assign a task to a repo agent on this or another harness (openspec
+    /// task-board-kanban); blank repoId unassigns.</summary>
+    [HttpPost("nodes/{id}/assign")]
+    public IActionResult Assign(string id, [FromBody] AssignRequest? request)
+    {
+        _logger.CountRequest();
+        var node = _graph.Assign(id, request?.SourceId, request?.RepoId, request?.By ?? "human", Now());
+        if (node is null) return NotFound(new { error = "Unknown node id." });
+        return Ok(node);
+    }
+
+    /// <summary>Ping the assignee with the task (the operator's button): the task
+    /// text goes to that repo agent's conversation through the arch send path, and
+    /// the card moves to doing when the send lands.</summary>
+    [HttpPost("nodes/{id}/dispatch")]
+    public IActionResult Dispatch(string id)
+    {
+        _logger.CountRequest();
+        var o = _arch.DispatchTask(id, requireArmed: false, by: "operator");
+        return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
     }
 
     [HttpDelete("nodes/{id}")]

@@ -48,6 +48,9 @@ public static class HarnessStaticApp
         appDir = Path.GetFullPath(appDir);
         var relRaw = (rest ?? string.Empty).Trim('/');
         if (relRaw is "") relRaw = "index.html";
+        // A sub-folder request (e.g. "manage/") serves that folder's index.html — the
+        // Management App (openspec management-app) lives at <app>/manage/.
+        else if (Directory.Exists(Path.Combine(appDir, relRaw))) relRaw = relRaw.TrimEnd('/') + "/index.html";
 
         // Contain the request to appDir (no traversal).
         var target = Path.GetFullPath(Path.Combine(appDir, relRaw));

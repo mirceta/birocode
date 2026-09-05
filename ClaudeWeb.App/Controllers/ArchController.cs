@@ -73,11 +73,29 @@ public class ArchController : ControllerBase
 
     private object BuildState()
     {
+        // Segment timings: the Arch tab polls this every few seconds, so anything
+        // slow here is felt as "the tab takes forever to load" — name the culprit.
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        long T() => sw.ElapsedMilliseconds;
         var loop = _loops.Get(ArchAgentService.ReservedId);
         var engine = _engine.States().FirstOrDefault(s => s.RepoId == ArchAgentService.ReservedId);
         var run = _runs.Get(ArchAgentService.ReservedId);
         var managed = _arch.ManagedRepoIds();
         var home = _arch.HomePath;
+        var t0 = T();
+        var agents = _arch.ListAgents(refreshPeers: false, nonBlocking: true);
+        var tAgents = T() - t0;
+        t0 = T();
+        var fleet = BuildFleet();
+        var tFleet = T() - t0;
+        t0 = T();
+        var commits = _arch.RecentHomeCommits().Select(c => new { sha = c.Sha, subject = c.Subject, at = c.At }).ToList();
+        var tHome = T() - t0;
+        t0 = T();
+        var sid = _arch.ResolveArchSessionId();
+        var tSid = T() - t0;
+        if (T() > 1000)
+            _logger.Info($"[ARCH] state took {T()} ms (agents {tAgents}, fleet {tFleet}, home commits {tHome}, session {tSid}; home={_arch.HomePath})");
         return new
         {
             gateOpen = _gate.Enabled,
@@ -94,26 +112,26 @@ public class ArchController : ControllerBase
             managedRepoIds = managed,
             managedFleet = _arch.ManagedFleet(),
             repos = _repos.GetAll().Select(r => new { id = r.Id, name = r.Name, exists = r.Exists, isSelf = r.IsSelf }),
-            agents = _arch.ListAgents().Select(a => new
+            agents = agents.Select(a => new
             {
                 machine = a.Machine, sourceId = a.SourceId, key = a.Key, repoId = a.RepoId, name = a.Name, remoteUrl = a.RemoteUrl, branch = a.Branch,
                 defaultBranch = a.DefaultBranch, dirty = a.Dirty, availability = a.Availability, lastActor = a.LastActor,
                 runningSince = a.RunningSince, tabId = a.TabId, exists = a.Exists, isLocal = a.IsLocal,
                 managedThere = a.IsLocal || a.ManagedThere, sendable = a.Sendable, blocked = a.Blocked?.Reason,
             }),
-            fleet = BuildFleet(),
+            fleet,
             home = new
             {
                 path = home, exists = _arch.HomeExists,
-                commits = _arch.RecentHomeCommits().Select(c => new { sha = c.Sha, subject = c.Subject, at = c.At }),
+                commits,
             },
             session = new
             {
-                sessionId = _arch.ResolveArchSessionId(),
+                sessionId = sid,
                 // Where the arch conversation lives on disk (openspec arch-context-prompt):
                 // lets the Arch tab hand a repo agent a copyable pointer it can read
                 // without credentials.
-                transcriptPath = _arch.ResolveArchSessionId() is { Length: > 0 } sid
+                transcriptPath = sid is { Length: > 0 }
                     ? System.IO.Path.Combine(SessionService.ProjectsDirectoryFor(_arch.HomePath), sid + ".jsonl")
                     : null,
                 run = run is null ? null : new { status = run.Status, lastSeq = run.LastSeq, sessionId = run.SessionId },
@@ -131,7 +149,7 @@ public class ArchController : ControllerBase
     {
         var sources = _collector.ListSources().Where(s => s.Kind == "remote").Select(s =>
         {
-            var peer = _fleet.Snapshot(s.Id);
+            var peer = _fleet.SnapshotNonBlocking(s.Id); // the UI never waits on a peer
             return new
             {
                 id = s.Id, label = s.Label, address = s.Address, active = s.Active, status = s.Status, alive = s.Alive,
@@ -141,6 +159,8 @@ public class ArchController : ControllerBase
                     status = peer.Status, detail = peer.Detail, at = peer.At,
                     protocol = peer.Info?.Protocol, version = peer.Info?.Version, machine = peer.Info?.Machine,
                     acceptsSends = peer.Info?.AcceptsSends ?? false, gateOpen = peer.Info?.GateOpen ?? false,
+                    acceptsUpgrades = peer.Info?.AcceptsUpgrades ?? false,
+                    behind = peer.Reachable && peer.Info?.Version is { } pv && pv != ArchAgentService.BuildVersion,
                 },
                 repos = peer.Repos.Select(r => new
                 {
@@ -156,13 +176,15 @@ public class ArchController : ControllerBase
         {
             selfLabel = _arch.SelfLabel,
             acceptSends = _arch.AcceptFleetSends,
+            acceptUpgrades = _arch.AcceptFleetUpgrades,
+            upgradeJob = _arch.PeerUpgradeStatus(null),
             version = ArchAgentService.BuildVersion,
             protocol = Services.Arch.FleetClient.Protocol,
             sources,
         };
     }
 
-    public sealed record FleetRequest(bool? AcceptSends);
+    public sealed record FleetRequest(bool? AcceptSends, bool? AcceptUpgrades);
 
     /// <summary>Receiving-side opt-in: let fleet arch agents on other harnesses send
     /// tasks to this harness's repo agents. Operator-gated like every arch action.</summary>
@@ -171,9 +193,36 @@ public class ArchController : ControllerBase
     {
         _logger.CountRequest();
         if (GateClosed() is { } closed) return closed;
-        if (req?.AcceptSends is not bool accept) return BadRequest(new { error = "acceptSends (true|false) is required" });
-        _arch.SetAcceptFleetSends(accept);
+        if (req?.AcceptSends is not bool && req?.AcceptUpgrades is not bool)
+            return BadRequest(new { error = "acceptSends or acceptUpgrades (true|false) is required" });
+        if (req.AcceptSends is bool accept) _arch.SetAcceptFleetSends(accept);
+        if (req.AcceptUpgrades is bool up) _arch.SetAcceptFleetUpgrades(up);
         return Ok(BuildState());
+    }
+
+    /// <summary>Fleet status (openspec fleet-status-tab): every repo agent on every
+    /// machine with branch / on-default / running / last actor / arch scope — the
+    /// Management App's Status tab. Never waits on a peer (cached describes).</summary>
+    [HttpGet("fleet/status")]
+    public IActionResult FleetStatus()
+    {
+        _logger.CountRequest();
+        return Ok(_arch.FleetStatus());
+    }
+
+    public sealed record FleetUpgradeRequest(string? SourceId, string? Ref);
+
+    /// <summary>Operator-triggered peer upgrade from the Fleet card (openspec
+    /// arch-peer-upgrades): same posture as the arch tool minus the armed-loop rule.</summary>
+    [HttpPost("fleet/upgrade")]
+    public IActionResult FleetUpgrade([FromBody] FleetUpgradeRequest? req)
+    {
+        _logger.CountRequest();
+        if (GateClosed() is { } closed) return closed;
+        var src = _collector.ListSources().FirstOrDefault(s => s.Id == req?.SourceId);
+        if (src is null) return NotFound(new { error = "unknown source" });
+        var o = _arch.UpgradePeer(src.Label, req?.Ref, requireArmed: false);
+        return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
     }
 
     // ---- conversation ------------------------------------------------------------
