@@ -23,5 +23,7 @@
 
 ## 3. Ship
 
-- [ ] 3.1 Deploy from feature/work; live check: both views render, Arch works from
-      the Management view against the real fleet state.
+- [x] 3.1 Deploy from feature/work; live check: both views render, Arch works from
+      the Management view against the real fleet state. DONE 2026-09-05 15:41 (PID 4228,
+      DLL EA2021483E73, health 200); check-mgmt-layer.mjs against live 12/12 with the
+      real docks + fleet state; dead-man switch armed 15:56, awaiting "keep it".
