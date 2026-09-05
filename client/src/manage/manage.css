@@ -102,3 +102,16 @@ html, body, #root { height: 100%; margin: 0; }
 .mg__pane--ideas .ideas { flex: 1 1 auto; min-height: 0; }
 .mg__pane--ideas .ideas__tabpanel--graph .tg-panel { height: 100%; min-height: 0; }
 .mg__pane--ideas .tg-canvas { min-height: 240px; }
+
+/* Status tab filter bar (openspec fleet-status-filters): search + machine chips +
+   state chips on their own row under the head; collapsed machines; clear. */
+.fs__bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 8px; border: 1px solid var(--color-border, #333); border-radius: 10px; background: var(--color-surface, #14161d); }
+.fs__bar .fs__filters { margin-left: 0; flex-wrap: wrap; }
+.fs__search { flex: 1 1 220px; min-width: 160px; max-width: 360px; font: inherit; font-size: 12.5px; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--color-border, #444); background: var(--color-bg, #0f1117); color: var(--color-text, #ddd); }
+.fs__search::placeholder { color: var(--color-text-muted, #778); }
+.fs__filter--dark { opacity: 0.6; }
+.fs__clear { margin-left: auto; background: transparent; border: 1px solid var(--color-border, #444); color: var(--color-text-muted, #9aa); border-radius: 6px; padding: 3px 10px; cursor: pointer; font-size: 12.5px; white-space: nowrap; }
+.fs__clear:hover { color: var(--color-text, #eee); border-color: var(--color-text-muted, #9aa); }
+.fs__shown { margin-left: auto; font-variant-numeric: tabular-nums; }
+.fs__machine--collapsed { padding-bottom: 6px; opacity: 0.85; }
+.fs__machine--collapsed .fs__mh { margin-bottom: 0; }
