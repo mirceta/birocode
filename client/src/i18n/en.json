@@ -1114,5 +1114,6 @@
   "audit.outcome.canceled": "canceled",
   "audit.outcome.interrupted": "interrupted",
   "dashboard.splitDivider": "Resize split panes",
-  "dashboard.splitDividerHint": "Drag to resize the chat/app panes; double-click to reset to 50/50"
+  "dashboard.splitDividerHint": "Drag to resize the chat/app panes; double-click to reset to 50/50",
+  "dashboard.loopArmedBy": "by {who}"
 }

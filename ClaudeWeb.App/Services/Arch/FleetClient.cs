@@ -213,6 +213,17 @@ public class FleetClient
         return Get(sourceId, path);
     }
 
+    // ---- loops on a peer's agents (openspec arch-loop-tools) -------------------------------
+
+    /// <summary>The loop rows of a peer's managed agents (optionally one). A peer without
+    /// the route answers 404 → <see cref="StatusNoPeerApi"/>.</summary>
+    public ArchAgentService.ToolOutcome Loops(string sourceId, string? repoId) =>
+        Get(sourceId, PeerPath + "/loops" + (string.IsNullOrWhiteSpace(repoId) ? "" : $"?repoId={Uri.EscapeDataString(repoId)}"));
+
+    /// <summary>Start / update / stop a loop on a peer's agent; the body carries the Loop
+    /// panel's parameters plus <c>from</c> (this hub's label) and <c>override</c>.</summary>
+    public ArchAgentService.ToolOutcome Loop(string sourceId, object body) => Post(sourceId, PeerPath + "/loop", body);
+
     /// <summary>Ask a peer to upgrade itself to a ref (openspec arch-peer-upgrades); the
     /// peer applies its own opt-in and answers started | busy | not-accepting | …</summary>
     public ArchAgentService.ToolOutcome Upgrade(string sourceId, string? refName, string from) =>

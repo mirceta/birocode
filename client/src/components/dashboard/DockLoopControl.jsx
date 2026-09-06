@@ -293,10 +293,13 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
   // repo it drives on every disclosure surface, so a wrong-tab arm is visible
   // before its first send lands.
   const bindText = repoName ? ` · ${t('dashboard.loopQueueBind', { repo: repoName })}` : '';
+  // Who armed it (openspec arch-loop-tools): the arch agent's loops say so on the
+  // summary and the armed row; the Operator edits and stops them exactly as their own.
+  const byText = loop?.armedBy && loop.armedBy !== 'operator' ? ` · ${t('dashboard.loopArmedBy', { who: loop.armedBy })}` : '';
   const summary = loop
     ? (armed
-      ? `${EMOJI[loop.kind]} ${kindName(loop.kind)} · ${t('dashboard.loopArmedWord')} · ${modeName(loop.mode)}${loop.kind === 'suggestion' ? '' : ` · ${capText}`}${queueText}${loop.kind === 'queue' ? bindText : ''}${phaseWord ? ` · ${phaseWord}` : ''}`
-      : `${EMOJI[loop.kind]} ${kindName(loop.kind)} · ${t(`dashboard.loopStatus.${loop.status}`) || loop.status}${loop.kind === 'queue' ? queueText : ''}`)
+      ? `${EMOJI[loop.kind]} ${kindName(loop.kind)} · ${t('dashboard.loopArmedWord')} · ${modeName(loop.mode)}${loop.kind === 'suggestion' ? '' : ` · ${capText}`}${queueText}${loop.kind === 'queue' ? bindText : ''}${phaseWord ? ` · ${phaseWord}` : ''}${byText}`
+      : `${EMOJI[loop.kind]} ${kindName(loop.kind)} · ${t(`dashboard.loopStatus.${loop.status}`) || loop.status}${loop.kind === 'queue' ? queueText : ''}${byText}`)
     : t('dashboard.loopNone');
 
   return (
@@ -355,10 +358,10 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
                 <span className="phone__loop-armed-k">
                   {EMOJI[armedKind]} {t('dashboard.loopArmedAs', { mode: kindName(armedKind) })}
                 </span>
-                <span className="phone__loop-armed-v">
+                <span className="phone__loop-armed-v" data-armed-by={loop.armedBy || 'operator'}>
                   {loop.kind === 'suggestion'
                     ? modeName(loop.mode)
-                    : `${modeName(loop.mode)} · ${capText}${queueText}${loop.kind === 'queue' ? bindText : ''} · ${t(`dashboard.loopStatus.${loop.status}`) || loop.status}`}
+                    : `${modeName(loop.mode)} · ${capText}${queueText}${loop.kind === 'queue' ? bindText : ''} · ${t(`dashboard.loopStatus.${loop.status}`) || loop.status}`}{byText}
                 </span>
                 <button type="button" className="phone__loop-stop" onClick={disarm} disabled={busy}>
                   ■ {t('dashboard.loopDisarm')}
