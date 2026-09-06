@@ -17,6 +17,11 @@ public class RepositoryConfig
     /// <summary>Absolute path to the repository folder Claude operates in.</summary>
     public string Path { get; set; } = "";
 
+    /// <summary>Short stable handle (openspec stable-handles): a slug of the name, with
+    /// "#2", "#3"… when the slug repeats on this machine. Assigned once (on add or by
+    /// the one-time backfill) and never changed; null only in stores that predate it.</summary>
+    public string? Handle { get; set; }
+
     /// <summary>
     /// True for the harness's own source repository (pinned at startup). It is
     /// non-removable and serves as the default project, so "improve this app" is

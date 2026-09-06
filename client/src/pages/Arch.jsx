@@ -587,9 +587,10 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
           {agents.map((a) => (
             <div key={a.key || a.repoId} className="arch__agent" data-machine={a.machine}>
               <div className="arch__agent-top">
-                <span className="arch__agent-name">
+                <span className="arch__agent-name" title={a.handle ? `${a.handle} — say this handle to the arch agent` : undefined}>
                   {a.isLocal === false && <span className="arch__machine" title={`on machine ${a.machine}`}>{a.machine}</span>}
                   {a.name}
+                  {a.handle && <span className="arch__handle" data-handle={a.handle}>{a.handle.split('/').pop()}</span>}
                 </span>
                 <span className={`arch__avail arch__avail--${AVAIL_CLASS[a.availability] || 'dim'}`}>{a.availability}</span>
               </div>

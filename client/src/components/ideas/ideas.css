@@ -471,3 +471,6 @@
 .ideas__working { margin: 0 0 8px; padding: 6px 10px; border-radius: 8px; font-size: 13px;
   border: 1px solid #e0b34c; background: rgba(224, 179, 76, 0.12); }
 .ideas__working--done { border-color: #4cc38a; background: rgba(76, 195, 138, 0.12); }
+
+/* The idea's stable handle (openspec stable-handles): "#12" in front of the text. */
+.idea__handle { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--color-border, #444); font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: var(--color-text-muted, #9aa); vertical-align: middle; }

@@ -186,10 +186,10 @@ public class ArchController : ControllerBase
             engine = engine is null ? null : new { decision = engine.Decision, reason = engine.Reason, label = engine.Label, at = engine.UpdatedAt },
             managedRepoIds = managed,
             managedFleet = _arch.ManagedFleet(),
-            repos = _repos.GetAll().Select(r => new { id = r.Id, name = r.Name, exists = r.Exists, isSelf = r.IsSelf }),
+            repos = _repos.GetAll().Select(r => new { id = r.Id, name = r.Name, handle = r.Handle, exists = r.Exists, isSelf = r.IsSelf }),
             agents = agents.Select(a => new
             {
-                machine = a.Machine, sourceId = a.SourceId, key = a.Key, repoId = a.RepoId, name = a.Name, remoteUrl = a.RemoteUrl, branch = a.Branch,
+                handle = a.Label(_arch.SelfLabel), machine = a.Machine, sourceId = a.SourceId, key = a.Key, repoId = a.RepoId, name = a.Name, remoteUrl = a.RemoteUrl, branch = a.Branch,
                 defaultBranch = a.DefaultBranch, dirty = a.Dirty, availability = a.Availability, lastActor = a.LastActor,
                 runningSince = a.RunningSince, tabId = a.TabId, exists = a.Exists, isLocal = a.IsLocal,
                 managedThere = a.IsLocal || a.ManagedThere, sendable = a.Sendable, blocked = a.Blocked?.Reason,
