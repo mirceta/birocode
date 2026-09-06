@@ -89,7 +89,7 @@ function AgentChip({ a, self, root, open, onToggle }) {
     <button type="button" className={cls.join(' ')} title={title} onClick={onToggle} data-agent={a.key} data-on-default={a.onDefault} data-running={running}>
       <span className={`fs__dot${running ? ' fs__dot--running' : a.onDefault ? ' fs__dot--free' : known ? ' fs__dot--claimed' : ''}`} aria-hidden="true" />
       <span className="fs__chip-text">
-        <span className="fs__chip-name">{a.managed ? '🏛 ' : ''}{a.name}</span>
+        <span className="fs__chip-name" data-handle={a.handle || ''}>{a.managed ? '🏛 ' : ''}{a.handle || a.name}</span>
         <span className="fs__chip-branch"><span aria-hidden="true">⎇</span> {known ? a.branch : '?'}{a.dirty ? ' ·' : ''}{running ? ` · ${ago(Date.now() - a.runningSince)}` : ''}</span>
       </span>
     </button>
@@ -104,7 +104,7 @@ function AgentDetail({ a, self, root }) {
   };
   return (
     <div className="fs__detail" data-detail={a.key}>
-      <div className="fs__detail-row"><b>{a.name}</b>{a.remoteUrl ? <span className="fs__mono fs__dim"> · {a.remoteUrl}</span> : null}</div>
+      <div className="fs__detail-row"><b>{a.handle || a.name}</b>{a.handle && a.handle.split('/').pop() !== a.name ? <span className="fs__dim"> · {a.name}</span> : null}{a.remoteUrl ? <span className="fs__mono fs__dim"> · {a.remoteUrl}</span> : null}</div>
       <div className="fs__detail-row">
         branch <code>{a.branch || '?'}</code> (default <code>{a.defaultBranch || '?'}</code>) ·{' '}
         {a.onDefault ? <span className="fs__ok">on its default branch — free to be given work</span> : a.branch && a.branch !== 'unknown' ? <span className="fs__warn">claimed on a feature branch</span> : <span className="fs__dim">branch unknown</span>}
