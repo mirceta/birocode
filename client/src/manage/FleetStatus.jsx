@@ -324,6 +324,19 @@ export default function FleetStatus({ root = '' }) {
               <FleetScoreboardTab machine={m} />
             ) : (
               <>
+                {/* Stale board work on this machine (openspec kanban-lifecycle-columns):
+                    an unpushed task branch or a parked PR — agents-tab material. */}
+                {(m.staleTasks || []).length > 0 && (
+                  <div className="fs__stale" data-stale-tasks>
+                    {(m.staleTasks || []).map((t) => (
+                      <div key={t.id} className="fs__stale-row" title={t.title}>
+                        ⏱ stale: {t.reason === 'unpushed branch' ? `unpushed branch on ${m.machine}` : 'PR open'}
+                        {t.branch ? <span className="fs__mono"> ⎇ {t.branch}</span> : null}
+                        {' — '}{t.title}
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {collapsed ? null : agents.length === 0
                   ? <div className="fs__none">{(m.agents || []).length === 0 ? (m.reachable ? 'no repo agents (no docks, nothing in the arch scope)' : 'nothing known — the machine has not answered') : 'nothing matches this filter'}</div>
                   : (

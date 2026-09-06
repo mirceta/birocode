@@ -174,13 +174,16 @@ public sealed class ArchGoalConversationsTests : IDisposable
         Assert.Equal(new[] { "id" }, tools.First(t => t!["name"]!.GetValue<string>() == "stop_arch_goal")!["inputSchema"]!["required"]!.AsArray().Select(n => n!.GetValue<string>()).ToArray());
 
         var role = ArchAgentService.RolePrompt();
-        Assert.Equal("<!-- arch-role v7 -->", ArchAgentService.RoleVersionMarker);
+        Assert.Equal("<!-- arch-role v8 -->", ArchAgentService.RoleVersionMarker);
         Assert.Contains("## Goal conversations", role);
         Assert.Contains("start_arch_goal", role);
         Assert.Contains("never call you", role);
         Assert.Contains("check your agents yourself", role);
         Assert.Contains("Never touch an agent or task you do not drive", role);
         Assert.Contains("NEEDS_HUMAN: <the blocker>", role);
-        Assert.DoesNotContain("pr-opened", role);
+        // The goal section carries no board-side completion gate (the lifecycle lives in
+        // the task board section, openspec kanban-lifecycle-columns).
+        var goalSection = role[role.IndexOf("## Goal conversations", StringComparison.Ordinal)..role.IndexOf("## Rules", StringComparison.Ordinal)];
+        Assert.DoesNotContain("pr-opened", goalSection);
     }
 }

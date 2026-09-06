@@ -11,7 +11,7 @@
 .kb__mono { font-family: ui-monospace, Consolas, monospace; font-size: 11px; }
 .kb__note { color: var(--color-text-muted, #9aa); border: 1px dashed var(--color-border, #444); border-radius: 8px; padding: 8px 11px; }
 .kb__note--err { color: #e5734b; border-color: #e5734b; }
-.kb__cols { display: grid; grid-template-columns: repeat(4, minmax(200px, 1fr)); gap: 10px; flex: 1 1 auto; min-height: 0; overflow: auto; align-items: start; }
+.kb__cols { display: grid; grid-template-columns: repeat(6, minmax(170px, 1fr)); gap: 10px; flex: 1 1 auto; min-height: 0; overflow: auto; align-items: start; }
 .kb__col { border: 1px solid var(--color-border, #333); border-radius: 10px; background: var(--color-surface, #14161d); min-height: 160px; display: flex; flex-direction: column; }
 .kb__col--over { border-color: var(--color-accent, #5ea0ef); box-shadow: inset 0 0 0 1px var(--color-accent, #5ea0ef); }
 .kb__col-head { display: flex; justify-content: space-between; padding: 8px 10px; font-weight: 600; border-bottom: 1px solid var(--color-border, #333); }
@@ -29,6 +29,16 @@
 .kb__chip--blocked { color: #d29922; border-color: #d29922; }
 .kb__chip--pinged { color: #3fb950; border-color: rgba(63, 185, 80, 0.6); }
 .kb__chip--await { color: #5ea0ef; border-color: rgba(94, 160, 239, 0.6); }
+/* Delivery lifecycle (openspec kanban-lifecycle-columns) */
+.kb__chip--branch { color: #b085f5; border-color: rgba(176, 133, 245, 0.6); }
+.kb__chip--unpushed { color: #e5734b; border-color: rgba(229, 115, 75, 0.7); }
+.kb__chip--pr a { color: #5ea0ef; text-decoration: none; }
+.kb__chip--stale { color: #e5734b; border-color: #e5734b; }
+.kb__chip--warn { color: #d29922; border-color: #d29922; }
+.kb__warn { color: #d29922; font-size: 11.5px; }
+.kb__col--committed .kb__col-head { color: #b085f5; }
+.kb__col--pr-opened .kb__col-head { color: #5ea0ef; }
+.kb__col--pr-merged .kb__col-head { color: #3fb950; }
 .kb__detail { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--color-border, #333); padding-top: 6px; cursor: default; }
 .kb__note-text { font-size: 12.5px; white-space: pre-wrap; }
 .kb__row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; }

@@ -45,7 +45,7 @@ public partial class ArchAgentService : IArchWakeSource
     public const string AuditKind = "arch";
     public const string AuditOutcomeSend = "arch";
     public const string AuditOutcomeTool = "arch-tool";
-    public const string RoleVersionMarker = "<!-- arch-role v7 -->";
+    public const string RoleVersionMarker = "<!-- arch-role v8 -->";
 
     /// <summary>Availability values (D4). <see cref="Unreachable"/> is the fleet
     /// addition (openspec add-fleet-arch-agent, D4): a remote agent whose harness
@@ -359,17 +359,30 @@ public partial class ArchAgentService : IArchWakeSource
 
         The fleet has ONE task board (Management → Ideas → Kanban, also drawn as the Task
         graph): the surface where the Operator, you and any future management agent
-        collaborate. `list_tasks` shows every task with its assignee (machine + repoId),
-        status, prerequisites and whether it is `awaitingDispatch` — assigned, not yet
-        pinged, not blocked. Your duties on each wake: (1) dispatch every task that is
-        `awaitingDispatch` with `dispatch_task` — the assignee gets the full brief in its
-        own conversation and the card moves to doing; (2) when a repo agent's reply ends
-        with `TASK DONE <id>` move the card to done with `update_task`, and with `TASK
-        BLOCKED <id>: …` move it back to todo and put the reason in the note; (3) when the
-        Operator asks for work to be planned, `create_task` / `idea_to_task` (from
-        `list_ideas`) and `assign_task` are how you put it on the board — a task the
-        Operator has not assigned is not yours to dispatch. Dispatch a task once; re-dispatch
-        only when the transcript shows the agent never picked it up. Never invent tasks
+        collaborate. A card moves through the delivery lifecycle `todo → doing →
+        committed → pr-opened → pr-merged → done`; blocked is a flag, never a column.
+        From `committed` up the HARNESS moves the card by observing git and PR facts —
+        your `update_task` claims are clamped to the verified state, so a card can never
+        say more than the repo shows. `list_tasks` shows every task with its assignee
+        (machine + repoId), status, branch/PR linkage, `stale` (work parked in committed/
+        pr-opened past the window — report those to the Operator every time), and
+        `awaitingDispatch` — assigned, not yet pinged, not blocked.
+
+        Your duties on each wake: (1) dispatch every task that is `awaitingDispatch` with
+        `dispatch_task` — the assignee gets the full brief in its own conversation and the
+        card moves to doing; (2) relay closing lines with `update_task`: `TASK COMMITTED
+        <id> <branch> <commit>` → status committed with `branch`+`commit` args; `TASK PR
+        <id> <url>` → status pr-opened with the `pr` arg; `TASK BLOCKED <id>: …` → back to
+        todo with the reason in the note. The harness verifies each claim — if the card
+        lands lower than claimed, the branch is not where the agent said, and that is
+        worth reporting; (3) report stale cards and any `unpushedTaskBranches` from
+        `list_agents` — an unpushed branch on one machine is not finished work, it is a
+        risk; (4) when the Operator asks for work to be planned, `create_task` /
+        `idea_to_task` (from `list_ideas`) and `assign_task` are how you put it on the
+        board — a task the Operator has not assigned is not yours to dispatch. You NEVER
+        push, merge or deploy: pushing is the Operator's move (or an agent's, when the
+        Operator's brief explicitly allowed it). Dispatch a task once; re-dispatch only
+        when the transcript shows the agent never picked it up. Never invent tasks
         nobody asked for.
 
         ## Loops on repo agents
@@ -892,6 +905,7 @@ public partial class ArchAgentService : IArchWakeSource
         var include = new HashSet<string>(managed, StringComparer.Ordinal);
         include.UnionWith(_dock.GetAll().Select(t => t.RepoId));
         var local = LocalAgents(include, managed);
+        var staleBySource = StaleTasksBySource();
         var machines = new List<object>
         {
             new
@@ -900,6 +914,7 @@ public partial class ArchAgentService : IArchWakeSource
                 reachable = true, status = FleetClient.StatusOk, detail = (string?)null,
                 version = BuildVersion, behind = false, acceptsSends = AcceptFleetSends, acceptsUpgrades = AcceptFleetUpgrades,
                 gateOpen = _gate.Enabled, allowSends = true, managedCount = managed.Count,
+                staleTasks = staleBySource.GetValueOrDefault(""),
                 overview = _overview.Current(),
                 agents = local.Select(a => (object)new
                 {
@@ -926,6 +941,7 @@ public partial class ArchAgentService : IArchWakeSource
                 acceptsSends = snap.Info?.AcceptsSends ?? false, acceptsUpgrades = snap.Info?.AcceptsUpgrades ?? false,
                 gateOpen = snap.Info?.GateOpen ?? false, allowSends = src.AllowSends,
                 managedCount = snap.Info?.ManagedRepoIds?.Count ?? repos.Count(r => r.Managed == true),
+                staleTasks = staleBySource.GetValueOrDefault(src.Id),
                 // Null when the peer predates the field (openspec fleet-status-panels) → the UI shows "n/a".
                 overview = snap.Info?.Overview,
                 agents = repos.Select(r => (object)new
@@ -949,6 +965,28 @@ public partial class ArchAgentService : IArchWakeSource
         var owner = _state.OwnerOfRepo(key);
         if (owner is null || _state.GoalOf(owner) is not { } g) return null;
         return new { id = g.Id, conversation = owner, name = NameOf(owner) };
+    }
+
+    /// <summary>Stale board cards grouped by assignee machine ("" = this one), for
+    /// the fleet Status tab (openspec kanban-lifecycle-columns): "stale: unpushed
+    /// branch on <machine>" / "stale: PR open". Null when a machine has none.</summary>
+    private Dictionary<string, List<object>> StaleTasksBySource()
+    {
+        var now = Now();
+        var result = new Dictionary<string, List<object>>(StringComparer.Ordinal);
+        foreach (var n in _graph.Get().Nodes)
+        {
+            if (n.RepoId is null || !_graph.IsStale(n, now)) continue;
+            var key = n.SourceId ?? "";
+            if (!result.TryGetValue(key, out var list)) result[key] = list = new List<object>();
+            list.Add(new
+            {
+                id = n.Id, title = n.Title, status = n.Status, branch = n.Branch, prUrl = n.PrUrl,
+                reason = n.Status == TaskGraph.TaskLifecycle.Committed ? "unpushed branch" : "PR open",
+                idleMs = now - n.UpdatedAt,
+            });
+        }
+        return result;
     }
 
     // Fleet Scoreboard is fetched ON DEMAND (openspec fleet-status-panels), never on the
@@ -1063,6 +1101,7 @@ public partial class ArchAgentService : IArchWakeSource
         AuditTool("list_agents", null, $"{list.Count} managed");
         var remote = list.Count(a => !a.IsLocal);
         var blocked = list.Count(a => !a.Sendable);
+        var unpushed = UnpushedTaskBranches();
         return new ToolOutcome(true, "ok",
             $"{list.Count} managed agent(s){(remote > 0 ? $", {remote} on other machines" : "")}{(blocked > 0 ? $", {blocked} not sendable (see blocked)" : "")}",
             list.Select(a => new
@@ -1074,7 +1113,27 @@ public partial class ArchAgentService : IArchWakeSource
                 claimedReason = a.ClaimedReason, pinned = a.Pinned, adoptedBranches = a.Adopted,
                 runningSince = a.RunningSince, runningFor = a.RunningSince is { } rs ? Elapsed(rs, Now()) : null,
                 managedThere = a.IsLocal ? true : a.ManagedThere, sendable = a.Sendable, blocked = a.Blocked?.Reason,
+                // Local branches carrying board-task commits not on origin (openspec
+                // kanban-lifecycle-columns): forgotten work, visible on every wake.
+                unpushedTaskBranches = a.IsLocal && unpushed.TryGetValue(a.RepoId, out var b) ? b : null,
             }).ToList());
+    }
+
+    /// <summary>Per local repo: branches recorded on board tasks whose commits the
+    /// verifier has not seen on origin (rank ≥ committed, not pushed). Read from
+    /// the board's recorded facts only — no git calls on a list.</summary>
+    private Dictionary<string, List<object>> UnpushedTaskBranches()
+    {
+        var result = new Dictionary<string, List<object>>(StringComparer.Ordinal);
+        foreach (var n in _graph.Get().Nodes)
+        {
+            if (n.SourceId is not null || n.RepoId is null || n.Branch is null) continue;
+            if (TaskGraph.TaskLifecycle.Rank(n.Status) < TaskGraph.TaskLifecycle.Rank(TaskGraph.TaskLifecycle.Committed)) continue;
+            if (n.Pushed == true || TaskGraph.TaskLifecycle.IsDelivered(n.Status)) continue;
+            if (!result.TryGetValue(n.RepoId, out var list)) result[n.RepoId] = list = new List<object>();
+            list.Add(new { branch = n.Branch, taskId = n.Id, title = n.Title });
+        }
+        return result;
     }
 
     /// <summary>The <c>list_machines</c> tool (openspec add-fleet-arch-agent, D8): the
@@ -1595,13 +1654,14 @@ public partial class ArchAgentService : IArchWakeSource
         var repoName = RepoNames(board.Nodes);
         var edgesBySource = board.Edges.GroupBy(e => e.Source).ToDictionary(g => g.Key, g => g.Select(e => e.Target).ToList());
         var byId = board.Nodes.ToDictionary(n => n.Id);
+        var now = Now();
         var tasks = board.Nodes
             .Where(n => string.IsNullOrWhiteSpace(status) || n.Status == status)
-            .OrderBy(n => n.Status == "done" ? 2 : n.Status == "doing" ? 1 : 0).ThenBy(n => n.CreatedAt)
+            .OrderBy(n => TaskGraph.TaskLifecycle.Rank(n.Status)).ThenBy(n => n.CreatedAt)
             .Select(n =>
             {
                 var prereqs = edgesBySource.TryGetValue(n.Id, out var t) ? t.Where(byId.ContainsKey).Select(id => byId[id]).ToList() : new List<TaskGraph.TaskGraphService.Node>();
-                var blocked = n.Status != "done" && prereqs.Any(p => p.Status != "done");
+                var blocked = !TaskGraph.TaskLifecycle.IsDelivered(n.Status) && prereqs.Any(p => !TaskGraph.TaskLifecycle.IsDelivered(p.Status));
                 return new
                 {
                     id = n.Id, title = n.Title, note = n.Note, status = n.Status,
@@ -1614,6 +1674,12 @@ public partial class ArchAgentService : IArchWakeSource
                     awaitingDispatch = n.Status == "todo" && n.RepoId is not null && n.AssignedAt is not null && n.DispatchedAt is null && !blocked,
                     legacyAssignee = n.RepoId is not null && n.AssignedAt is null,
                     blocked, dependsOn = prereqs.Select(p => new { id = p.Id, title = p.Title, status = p.Status }).ToList(),
+                    // Delivery linkage + abandonment (openspec kanban-lifecycle-columns):
+                    // what the harness knows about the branch/PR, and whether the card
+                    // sits in a hand-off state past the stale window — report those.
+                    branch = n.Branch, headCommit = n.HeadCommit, pushed = n.Pushed, prUrl = n.PrUrl, prNumber = n.PrNumber,
+                    mergeCommit = n.MergeCommit, verifiedStatus = n.VerifiedStatus, warning = n.Warning,
+                    stale = _graph.IsStale(n, now),
                     createdBy = n.CreatedBy, ideaId = n.IdeaId, createdAt = n.CreatedAt, updatedAt = n.UpdatedAt,
                 };
             }).ToList();
@@ -1645,15 +1711,42 @@ public partial class ArchAgentService : IArchWakeSource
         return new ToolOutcome(true, "created", $"task {node.Id} created{(linked > 0 ? $" with {linked} prerequisite(s)" : "")}", node);
     }
 
-    public ToolOutcome ToolUpdateTask(string? id, string? status, string? title, string? note)
+    public ToolOutcome ToolUpdateTask(string? id, string? status, string? title, string? note, string? branch = null, string? commit = null, string? pr = null)
     {
         if (string.IsNullOrWhiteSpace(id)) return new ToolOutcome(false, "error", "id is required");
         if (status is not null && !TaskGraph.TaskGraphService.Statuses.Contains(status))
             return new ToolOutcome(false, "error", $"status must be one of {string.Join(", ", TaskGraph.TaskGraphService.Statuses)}");
-        var node = _graph.UpdateNode(id, title, note, null, null, status, null, null, Now());
+        var cur = _graph.Find(id);
+        if (cur is null) return new ToolOutcome(false, "error", $"no task {id}");
+
+        // Relayed claim linkage first (TASK COMMITTED <id> <branch> <commit> /
+        // TASK PR <id> <url>): it tells the verifier where to look.
+        if (branch is not null || commit is not null || pr is not null)
+            cur = _graph.RecordClaim(id, branch, commit, pr, Now()) ?? cur;
+
+        // A claim moves the card no further than the harness has verified
+        // (openspec kanban-lifecycle-columns): forward past the verified state
+        // clamps, and the overreach is recorded on the card. Backward is free.
+        var clamped = false;
+        var applied = status;
+        if (status is not null)
+        {
+            (applied, clamped) = TaskGraph.TaskLifecycle.ClampClaim(cur, status);
+            if (clamped)
+            {
+                var record = $"agent reported {status}; verified state is {applied} (branch not on origin)";
+                var baseNote = note ?? cur.Note;
+                note = string.IsNullOrWhiteSpace(baseNote) ? record : $"{baseNote.TrimEnd()}\n{record}";
+            }
+        }
+        var node = _graph.UpdateNode(id, title, note, null, null, applied, null, null, Now());
         if (node is null) return new ToolOutcome(false, "error", $"no task {id} (or blank title)");
-        AuditTool("update_task", node.RepoId, status ?? "edited");
-        return new ToolOutcome(true, "updated", $"task {id}: {node.Status}", node);
+        AuditTool("update_task", node.RepoId, applied ?? "edited");
+        return new ToolOutcome(true, "updated",
+            clamped
+                ? $"task {id}: claim '{status}' exceeds what the harness verified — card is {node.Status}; it advances when the branch/PR facts are observed"
+                : $"task {id}: {node.Status}",
+            node);
     }
 
     public ToolOutcome ToolAssignTask(string? id, string? machine, string? repoId)
@@ -1690,10 +1783,10 @@ public partial class ArchAgentService : IArchWakeSource
         var node = _graph.Find(id);
         if (node is null) return new ToolOutcome(false, "error", $"no task {id}");
         if (node.RepoId is null) return new ToolOutcome(false, "unassigned", $"task {id} has no assignee; assign it first");
-        if (node.Status == "done") return new ToolOutcome(false, "done", $"task {id} is already done");
+        if (TaskGraph.TaskLifecycle.IsDelivered(node.Status)) return new ToolOutcome(false, "done", $"task {id} is already {node.Status}");
         var prereqs = _graph.Prerequisites(id);
-        if (prereqs.Any(p => p.Status != "done"))
-            return new ToolOutcome(false, "blocked", $"task {id} waits on: {string.Join(", ", prereqs.Where(p => p.Status != "done").Select(p => $"\"{p.Title}\" ({p.Status})"))}; nothing was sent");
+        if (prereqs.Any(p => !TaskGraph.TaskLifecycle.IsDelivered(p.Status)))
+            return new ToolOutcome(false, "blocked", $"task {id} waits on: {string.Join(", ", prereqs.Where(p => !TaskGraph.TaskLifecycle.IsDelivered(p.Status)).Select(p => $"\"{p.Title}\" ({p.Status})"))}; nothing was sent");
         var machine = node.SourceId is null ? Machine : SourceLabels().GetValueOrDefault(node.SourceId, node.SourceId);
         var machineLabel = node.SourceId is null ? SelfLabel : machine;
         var repoName = RepoNames(new[] { node }).GetValueOrDefault(node.RepoId, node.RepoId);
@@ -1728,9 +1821,15 @@ public partial class ArchAgentService : IArchWakeSource
         sb.Append(prereqs.Count == 0
             ? "Prerequisites: none.\n"
             : $"Prerequisites (all done): {string.Join("; ", prereqs.Select(p => p.Title))}.\n");
-        sb.Append("Do the task in this repository. When it is complete, end your reply with the line \"TASK DONE ")
-          .Append(node.Id).Append("\" and a two-line summary; if you cannot complete it, end with \"TASK BLOCKED ")
-          .Append(node.Id).Append(": <why>\". The fleet's arch agent reads that line to move the card on the board.");
+        // The closing-line contract (openspec kanban-lifecycle-columns): commit on a
+        // named branch and report it — pushing is the Operator's move unless this
+        // brief explicitly allowed it. The harness verifies the claim against git/PR
+        // state, so the card lands where the facts are, not where the words are.
+        sb.Append("Do the task in this repository on a feature branch. Commit your work; do NOT push unless this brief explicitly allows it. ")
+          .Append("End your reply with a two-line summary and then ONE closing line: \"TASK COMMITTED ")
+          .Append(node.Id).Append(" <branch> <commit>\" (the default — work committed, not pushed); \"TASK PR ")
+          .Append(node.Id).Append(" <url>\" (only if this brief allowed pushing and you opened a PR); or \"TASK BLOCKED ")
+          .Append(node.Id).Append(": <why>\" if you cannot complete it. The fleet's arch agent relays that line and the harness verifies it against the repo's git state before the card moves.");
         return sb.ToString();
     }
 
