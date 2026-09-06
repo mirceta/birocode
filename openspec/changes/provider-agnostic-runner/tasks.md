@@ -1,4 +1,4 @@
-﻿# Tasks â€” provider-agnostic-runner
+# Tasks — provider-agnostic-runner
 
 ## 1. Abstraction
 
@@ -8,9 +8,9 @@
 
 ## 2. Codex runner
 
-- [x] 2.1 `CodexCliAdapter`: exe resolution (+ `Providers:Codex:Path`), argv for new/resume turns, laneâ†’sandbox mapping, model
-- [x] 2.2 MCP config JSON â†’ `-c mcp_servers.*` overrides (stdio servers; url skipped with log)
-- [x] 2.3 JSONL translation: thread.started/item.*/turn.completed/turn.failed â†’ session/token/thinking/tool/usage/done/error
+- [x] 2.1 `CodexCliAdapter`: exe resolution (+ `Providers:Codex:Path`), argv for new/resume turns, lane→sandbox mapping, model
+- [x] 2.2 MCP config JSON → `-c mcp_servers.*` overrides (stdio servers; url skipped with log)
+- [x] 2.3 JSONL translation: thread.started/item.*/turn.completed/turn.failed → session/token/thinking/tool/usage/done/error
 - [x] 2.4 Refuse disallowedTools (management agents deferred); browser stays claude-only
 
 ## 3. Selection + surfaces
@@ -25,4 +25,3 @@
 - [x] 4.1 OpenSpec deltas (chat, arch-agent) validate --strict
 - [x] 4.2 docs/providers.md (Codex install/auth/path config, per-repo selection, deferred list)
 - [x] 4.3 Tests: Claude argv golden (unchanged), Codex argv, Codex translation, registry/normalization, provider persistence
-
