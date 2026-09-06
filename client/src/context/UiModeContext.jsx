@@ -81,6 +81,7 @@ export const FEATURES = {
   tasksAgent: 'advanced', // the Tasks agent's surface: Tasks tab + Management App tab (openspec: tasks-agent)
   ideasBreakUp: 'advanced', // "Break into tasks" on the Ideas composer -> Tasks agent (openspec: tasks-agent)
   browserMode: 'advanced', // 🌐 chat toolbar toggle: run builder turns with Claude-in-Chrome browser tools (openspec: claude-in-chrome)
+  archHandover: 'advanced', // dock "Hand to arch" / take back / pin control for the repo's branch (openspec: arch-branch-handover)
 };
 
 const MODE_KEY = 'claudeweb_ui_mode';

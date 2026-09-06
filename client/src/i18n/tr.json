@@ -1111,5 +1111,22 @@
   "audit.outcome.canceled": "iptal edildi",
   "audit.outcome.interrupted": "kesildi",
   "dashboard.splitDivider": "Bölme boyutunu ayarla",
-  "dashboard.splitDividerHint": "Sohbet/uygulama bölmelerini yeniden boyutlandırmak için sürükleyin; 50/50 için çift tıklayın"
+  "dashboard.splitDividerHint": "Sohbet/uygulama bölmelerini yeniden boyutlandırmak için sürükleyin; 50/50 için çift tıklayın",
+  "dashboard.loopArmedBy": "{who} tarafından",
+  "handover.group": "Dalı arch ajanına devret",
+  "handover.notManaged": "arch kapsamında değil",
+  "handover.busy": "bir tur çalışıyor",
+  "handover.onDefault": "varsayılan dalda — arch için serbest",
+  "handover.pinned": "sizin olarak sabitlendi — arch dokunmaz",
+  "handover.claimedHuman": "sizin dalınız ({window} içinde çalışıldı) — arch dokunmaz",
+  "handover.handed": "arch'a devredildi — burada okuyabilir, görev gönderebilir ve dağıtabilir",
+  "handover.archBranch": "bir arch dalı (istenen ya da görev dalı) — arch burada çalışabilir",
+  "handover.unassigned": "atanmamış dal, boşta — arch dalı adlandırırsa gönderebilir",
+  "handover.hand": "Arch'a devret",
+  "handover.handTitle": "Arch ajanı {branch} üzerindeki işi bitirsin: dalı geri alana dek bu sohbeti okuyabilir, görev gönderebilir ve dağıtabilir",
+  "handover.takeBack": "Geri al",
+  "handover.takeBackTitle": "{branch} yeniden sizin olsun: arch burada okumayı ve göndermeyi bırakır",
+  "handover.pin": "Benim olarak sabitle",
+  "handover.unpin": "Sabitlemeyi kaldır",
+  "handover.pinTitle": "Sabitlendi: arch bu depoyu dalı ne olursa olsun sizin sayar"
 }
