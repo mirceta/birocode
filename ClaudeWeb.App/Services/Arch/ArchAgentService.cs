@@ -1244,19 +1244,22 @@ public class ArchAgentService : IArchWakeSource
         return sb.ToString();
     }
 
-    public ToolOutcome ToolListIdeas(bool activeOnly)
+    public ToolOutcome ToolListIdeas(bool activeOnly, bool includeConsumed = false)
     {
-        var ideas = _notes.List().Where(n => !activeOnly || n.Active).OrderByDescending(n => n.Active).ThenByDescending(n => n.Priority).ThenByDescending(n => n.UpdatedAt)
-            .Select(n => new { handle = Handles.IdeaHandle(n.Number), id = n.Id, text = n.Text, project = n.Project, priority = n.Priority, active = n.Active, updatedAt = n.UpdatedAt }).ToList();
+        var ideas = _notes.List(includeConsumed).Where(n => !activeOnly || n.Active).OrderByDescending(n => n.Active).ThenByDescending(n => n.Priority).ThenByDescending(n => n.UpdatedAt)
+            .Select(n => new { handle = Handles.IdeaHandle(n.Number), id = n.Id, text = n.Text, project = n.Project, priority = n.Priority, active = n.Active, consumed = n.ConsumedByTaskId is not null, taskId = n.ConsumedByTaskId, updatedAt = n.UpdatedAt }).ToList();
         AuditTool("list_ideas", null, $"{ideas.Count} idea(s)");
-        return new ToolOutcome(true, "ok", $"{ideas.Count} idea(s){(activeOnly ? " (active only)" : "")}", new { ideas });
+        return new ToolOutcome(true, "ok", $"{ideas.Count} idea(s){(activeOnly ? " (active only)" : "")}{(includeConsumed ? " (incl. consumed)" : "")}", new { ideas });
     }
 
     /// <summary>Promote an idea to a task (the Ideas tab's "Send to graph" as a tool): the
-    /// card is created from the idea's text, the idea stays but leaves the Active section.</summary>
+    /// card is created from the idea's text and the idea is CONSUMED — it leaves the Ideas
+    /// list, linked to the new task (openspec ideas-consume-on-promotion). Returns the
+    /// consumed idea's handle and the new task id.</summary>
     public ToolOutcome ToolIdeaToTask(string? ideaId, string? title, string? machine, string? repoId)
     {
-        // "#12", "12" or the id (openspec stable-handles).
+        // "#12", "12" or the id (openspec stable-handles). FindByRef still resolves an
+        // already-consumed idea, so the existing-task guard below stays honest.
         var (idea, ideaErr) = _notes.FindByRef(ideaId);
         if (idea is null) return new ToolOutcome(false, "error", ideaErr ?? $"no idea {ideaId}");
         var existing = _graph.Get().Nodes.FirstOrDefault(n => n.IdeaId == idea.Id);
@@ -1269,12 +1272,13 @@ public class ArchAgentService : IArchWakeSource
             sourceId = agent.Target.IsSelf ? null : agent.Target.Source!.Id;
             repoId = agent.RepoId;
         }
+        // AddNode consumes the idea (it carries the idea id) — no separate notes write here.
         var node = _graph.AddNode(string.IsNullOrWhiteSpace(title) ? idea.Text : title, string.IsNullOrWhiteSpace(title) ? idea.Project : idea.Text,
             string.IsNullOrWhiteSpace(repoId) ? null : repoId, null, 40, 40, Now(), sourceId, ActorArch, idea.Id);
         if (node is null) return new ToolOutcome(false, "error", "the idea's text is blank");
-        _notes.Update(idea.Id, idea.Text, idea.Project, idea.Priority, false, Now());
+        var handle = Handles.IdeaHandle(idea.Number);
         AuditTool("idea_to_task", node.RepoId, "created");
-        return new ToolOutcome(true, "created", $"task {node.Id} created from idea {Handles.IdeaHandle(idea.Number)}; the idea left the Active section", node);
+        return new ToolOutcome(true, "created", $"task {node.Id} created from idea {handle}; the idea is now consumed (off the Ideas list)", new { taskId = node.Id, ideaHandle = handle, node });
     }
 
     /// <summary>"&lt;machine&gt;/&lt;handle&gt;" for a repo on this box (sourceId null) or on a peer.</summary>
