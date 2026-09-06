@@ -365,8 +365,15 @@ public class AutopilotService : BackgroundService
         // The arch instances (openspec: add-arch-agent, D2; arch-conversations): one
         // per arch conversation that has a loop slot, keyed to the conversation id,
         // ticked through the SAME mechanics with the shared home repo as cwd.
+        // Goal conversations (openspec arch-goal-conversations): a goal whose loop stopped is
+        // reconciled first, and a finished goal's summary reaches the Operator-facing
+        // conversation once its slot is free.
+        try { _arch.ReconcileGoals(); }
+        catch (Exception ex) { _logger.Error($"[ARCH] goal routing tick failed: {ex.Message}"); }
         foreach (var conv in _arch.ConversationLoops())
             TickRepo(_arch.HomeInfoFor(conv.RepoId), cfg, routines, now);
+        try { _arch.DeliverGoalSummaries(); }
+        catch (Exception ex) { _logger.Error($"[ARCH] goal summary delivery failed: {ex.Message}"); }
     }
 
     private void TickRepo(RepositoryRegistry.RepositoryInfo repo, AutopilotConfigStore.Snapshot cfg, IReadOnlyList<PromptClassifier.Routine> routines, long now)
@@ -491,8 +498,11 @@ public class AutopilotService : BackgroundService
             }
 
             // Driven kinds need a session to resume into; wait for the agent to speak.
-            // The arch kind may start its conversation itself (a fresh home has no transcript).
-            if (!isSuggestionKind && loop.Kind != LoopConfigStore.KindArch && string.IsNullOrWhiteSpace(sessionId)) return;
+            // Any loop on an arch conversation may start the conversation itself (a fresh
+            // home, or a goal conversation opened a moment ago, has no transcript yet —
+            // openspec arch-goal-conversations): the send runs with no session and pins the
+            // one the CLI creates.
+            if (!isSuggestionKind && loop.Kind != LoopConfigStore.KindArch && !ArchAgentService.IsArchKey(repo.Id) && string.IsNullOrWhiteSpace(sessionId)) return;
 
             if (isSuggestionKind && string.IsNullOrWhiteSpace(lastAssistant))
             {
@@ -652,7 +662,9 @@ public class AutopilotService : BackgroundService
                 decision = ArchDrivenPolicy.Apply(decision, loop,
                     _lastDrivenPrompt.TryGetValue(repo.Id, out var lastPrompt) ? lastPrompt : null,
                     now, _arch.DrivenQuietFloor,
-                    () => _arch.ComposeWake(repo.Id) is not null);
+                    // A goal conversation polls only (openspec arch-goal-conversations): it
+                    // never takes a wake, so its repeats go out on the quiet floor alone.
+                    () => _arch.HasWake(repo.Id));
 
             Execute(repo, loop, decision, sessionId, snippet, intercept, now);
     }
@@ -761,6 +773,14 @@ public class AutopilotService : BackgroundService
                     ? ""
                     : (propose.EnterPhase == LoopConfigStore.PhaseVerify
                         ? LoopConfigStore.PhaseVerify : LoopConfigStore.PhaseWork);
+                // A goal conversation's send (openspec arch-goal-conversations) carries the
+                // Operator messages queued while it was busy ahead of the loop prompt. The
+                // decoration drains the queue, so it is composed only when the slot is free.
+                if (ArchAgentService.IsArchKey(repo.Id) && loop.Kind != LoopConfigStore.KindArch)
+                {
+                    if (_runs.Get(repo.Id)?.Status == "running") return;
+                    briefed = _arch.DecorateDrivenPrompt(repo.Id, briefed ?? propose.Prompt);
+                }
                 if (SendPrompt(repo, sessionId, loop, propose.Prompt, briefed, briefingRev,
                         sendPhase, propose.Confidence, snippet, intercept, now))
                 {
@@ -799,6 +819,9 @@ public class AutopilotService : BackgroundService
     {
         if (!ArchAgentService.IsArchKey(repo.Id) || loop.Kind == LoopConfigStore.KindArch) return;
         _lastDrivenPrompt.TryRemove(repo.Id, out _);
+        // A goal conversation's loop ended: release what it owned, summary to the Operator.
+        try { _arch.OnDrivenResolved(repo.Id, _loops.Get(repo.Id) ?? loop); }
+        catch (Exception ex) { _logger.Error($"[ARCH] could not close the goal: {ex.Message}"); }
         try { _arch.RestoreStandingLoopIfNeeded(repo.Id); }
         catch (Exception ex) { _logger.Error($"[LOOP] could not restore the arch standing loop: {ex.Message}"); }
     }

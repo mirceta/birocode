@@ -94,9 +94,10 @@ function AgentChip({ a, self, root, open, onToggle }) {
     known ? `on ${a.branch}${a.onDefault ? ' (default — free)' : ' (claimed)'}` : 'branch unknown',
     running ? `running ${ago(Date.now() - a.runningSince)}` : `idle · last actor ${a.lastActor || 'none'}`,
     a.managed ? 'in the arch scope' : null,
+    a.goal ? `driven by arch goal ${a.goal.id}` : null,
   ].filter(Boolean).join(' · ');
   return (
-    <button type="button" className={cls.join(' ')} title={title} onClick={onToggle} data-agent={a.key} data-on-default={a.onDefault} data-running={running}>
+    <button type="button" className={cls.join(' ')} title={title} onClick={onToggle} data-agent={a.key} data-on-default={a.onDefault} data-running={running} data-goal={a.goal?.id || undefined}>
       <span className={`fs__dot${running ? ' fs__dot--running' : a.onDefault ? ' fs__dot--free' : known ? ' fs__dot--claimed' : ''}`} aria-hidden="true" />
       <span className="fs__chip-text">
         <span className="fs__chip-name" data-handle={a.handle || ''}>{a.managed ? '🏛 ' : ''}{a.handle || a.name}</span>
@@ -134,6 +135,7 @@ function AgentDetail({ a, self, root, sourceId, onChanged }) {
         {a.pinned ? ' · 📌 pinned as the Operator\'s' : ''}
         {a.managed ? ' · 🏛 in the arch scope' : ' · not in the arch scope'}
         {a.docked ? ' · has a dock' : ''}
+        {a.goal ? <> · <span className="fs__ok" data-driven-by-goal={a.goal.id}>driven by arch goal {a.goal.id}{a.goal.name ? ` (${a.goal.name})` : ''}</span></> : null}
       </div>
       {/* Hand the branch to the arch / take it back (openspec arch-branch-handover):
           the arch's own machine records it; a peer gets adopt / revoke relayed. */}

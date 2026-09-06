@@ -408,6 +408,9 @@ public class AutopilotController : ControllerBase
                 name = r.Name,
                 maxIterations = r.MaxIterations,
             }),
+            // "driven by arch goal <id>" (openspec arch-goal-conversations): local repo id →
+            // the running goal conversation that owns it. Status words only.
+            goalOwners = _arch.GoalOwners(),
         });
     }
 

@@ -40,6 +40,18 @@ public class ArchStateStore
         public string? StandingLoopMode { get; set; }
         public int StandingLoopCap { get; set; }
         public long CreatedAt { get; set; }
+        // The goal this conversation runs (openspec arch-goal-conversations): what it owns
+        // for as long as the goal runs, and the outcome afterwards. Null GoalId = none.
+        public string? GoalId { get; set; }
+        public string? GoalText { get; set; }
+        public List<string> GoalRepos { get; set; } = new();
+        public List<string> GoalTasks { get; set; } = new();
+        public string? GoalState { get; set; }
+        public long GoalStartedAt { get; set; }
+        public long? GoalEndedAt { get; set; }
+        public string? GoalStartedBy { get; set; }
+        public string? GoalOutcome { get; set; }
+        public List<QueuedMessage> GoalQueue { get; set; } = new();
     }
 
     private sealed class Data
@@ -69,6 +81,17 @@ public class ArchStateStore
         public int ClaimWindowMinutes { get; set; }
         // Every arch conversation (openspec arch-conversations); the default is first.
         public List<ConversationData> Conversations { get; set; } = new();
+    }
+
+    /// <summary>An Operator message queued for a busy goal conversation; its loop reads it on the next wake.</summary>
+    public sealed record QueuedMessage(long At, string Text);
+
+    /// <summary>A goal conversation as the API, the tools and the UI see it.</summary>
+    public sealed record ArchGoal(
+        string Id, string ConversationId, string Text, IReadOnlyList<string> Repos, IReadOnlyList<string> Tasks,
+        string State, long StartedAt, long? EndedAt, string? StartedBy, string? Outcome, IReadOnlyList<QueuedMessage> Queue)
+    {
+        public bool Running => string.Equals(State, ArchGoals.Running, StringComparison.Ordinal);
     }
 
     /// <summary>A conversation as the API and the UI see it.</summary>
@@ -274,6 +297,146 @@ public class ArchStateStore
         }
     }
 
+    // ---- goals (openspec arch-goal-conversations) -----------------------------------------
+
+    private static ArchGoal? GoalView(ConversationData c) =>
+        c.GoalId is null ? null : new ArchGoal(c.GoalId, c.Id, c.GoalText ?? "", c.GoalRepos.ToList(), c.GoalTasks.ToList(),
+            c.GoalState ?? ArchGoals.Stopped, c.GoalStartedAt, c.GoalEndedAt, c.GoalStartedBy, c.GoalOutcome, c.GoalQueue.ToList());
+
+    /// <summary>The goal a conversation runs (or ran); null when it never had one.</summary>
+    public ArchGoal? GoalOf(string? convId)
+    {
+        lock (_gate) { Default(); return Find(convId) is { } c ? GoalView(c) : null; }
+    }
+
+    /// <summary>Every conversation's goal, running first, then by start time (newest first).</summary>
+    public IReadOnlyList<ArchGoal> Goals()
+    {
+        lock (_gate)
+        {
+            Default();
+            return _data.Conversations.Select(GoalView).Where(g => g is not null).Select(g => g!)
+                .OrderByDescending(g => g.Running).ThenByDescending(g => g.StartedAt).ToList();
+        }
+    }
+
+    public ArchGoal? FindGoal(string? goalId)
+    {
+        if (string.IsNullOrWhiteSpace(goalId)) return null;
+        lock (_gate) { Default(); return _data.Conversations.Where(c => string.Equals(c.GoalId, goalId, StringComparison.Ordinal)).Select(GoalView).FirstOrDefault(); }
+    }
+
+    /// <summary>The conversation whose RUNNING goal owns this managed key; null when nobody does.</summary>
+    public string? OwnerOfRepo(string? key)
+    {
+        if (string.IsNullOrWhiteSpace(key)) return null;
+        lock (_gate)
+        {
+            return _data.Conversations.FirstOrDefault(c => c.GoalId is not null && c.GoalState == ArchGoals.Running
+                && c.GoalRepos.Contains(key, StringComparer.Ordinal))?.Id;
+        }
+    }
+
+    /// <summary>The conversation whose RUNNING goal owns this board task; null when nobody does.</summary>
+    public string? OwnerOfTask(string? taskId)
+    {
+        if (string.IsNullOrWhiteSpace(taskId)) return null;
+        lock (_gate)
+        {
+            return _data.Conversations.FirstOrDefault(c => c.GoalId is not null && c.GoalState == ArchGoals.Running
+                && c.GoalTasks.Contains(taskId, StringComparer.Ordinal))?.Id;
+        }
+    }
+
+    /// <summary>Records a goal on a conversation: it owns the keys and tasks from now until
+    /// <see cref="EndGoal"/>. Throws when the conversation is unknown, is the default, or
+    /// already runs a goal.</summary>
+    public ArchGoal StartGoal(string convId, string text, IEnumerable<string> repos, IEnumerable<string> tasks, string? by, long now)
+    {
+        lock (_gate)
+        {
+            Default();
+            if (string.Equals(convId, DefaultConversationId, StringComparison.Ordinal))
+                throw new InvalidOperationException("the default arch conversation is the Operator's; a goal runs in its own conversation");
+            if (Find(convId) is not { } c) throw new InvalidOperationException($"no arch conversation \"{convId}\"");
+            if (c.GoalId is not null && c.GoalState == ArchGoals.Running)
+                throw new InvalidOperationException($"conversation {convId} already runs goal {c.GoalId}");
+            c.GoalId = ArchGoals.NewId();
+            c.GoalText = (text ?? "").Trim();
+            c.GoalRepos = repos.Where(r => !string.IsNullOrWhiteSpace(r)).Distinct(StringComparer.Ordinal).ToList();
+            c.GoalTasks = tasks.Where(t => !string.IsNullOrWhiteSpace(t)).Distinct(StringComparer.Ordinal).ToList();
+            c.GoalState = ArchGoals.Running;
+            c.GoalStartedAt = now;
+            c.GoalEndedAt = null;
+            c.GoalStartedBy = string.IsNullOrWhiteSpace(by) ? null : by.Trim();
+            c.GoalOutcome = null;
+            c.GoalQueue = new();
+            Save();
+            return GoalView(c)!;
+        }
+    }
+
+    /// <summary>Adds owned keys / tasks to a running goal (a task dispatched by the goal
+    /// conversation brings its assignee along). False when the conversation runs no goal.</summary>
+    public bool ExtendGoal(string? convId, IEnumerable<string>? repos, IEnumerable<string>? tasks)
+    {
+        lock (_gate)
+        {
+            if (Find(convId) is not { } c || c.GoalId is null || c.GoalState != ArchGoals.Running) return false;
+            var changed = false;
+            foreach (var r in repos ?? Array.Empty<string>())
+                if (!string.IsNullOrWhiteSpace(r) && !c.GoalRepos.Contains(r, StringComparer.Ordinal)) { c.GoalRepos.Add(r); changed = true; }
+            foreach (var t in tasks ?? Array.Empty<string>())
+                if (!string.IsNullOrWhiteSpace(t) && !c.GoalTasks.Contains(t, StringComparer.Ordinal)) { c.GoalTasks.Add(t); changed = true; }
+            if (changed) Save();
+            return true;
+        }
+    }
+
+    /// <summary>Ends a running goal: the conversation releases its repos and tasks (they stay
+    /// listed for the record, but own nothing), the state and outcome are kept. Null when
+    /// the conversation runs no goal; idempotent for an ended one (returns it unchanged).</summary>
+    public ArchGoal? EndGoal(string? convId, string state, string? outcome, long now)
+    {
+        lock (_gate)
+        {
+            if (Find(convId) is not { } c || c.GoalId is null) return null;
+            if (c.GoalState != ArchGoals.Running) return GoalView(c);
+            c.GoalState = string.IsNullOrWhiteSpace(state) ? ArchGoals.Stopped : state;
+            c.GoalEndedAt = now;
+            c.GoalOutcome = string.IsNullOrWhiteSpace(outcome) ? null : outcome.Trim();
+            Save();
+            return GoalView(c);
+        }
+    }
+
+    /// <summary>Queues an Operator message for a busy goal conversation. Null when it runs no goal.</summary>
+    public ArchGoal? QueueGoalMessage(string? convId, string? text, long now)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        lock (_gate)
+        {
+            if (Find(convId) is not { } c || c.GoalId is null || c.GoalState != ArchGoals.Running) return null;
+            c.GoalQueue.Add(new QueuedMessage(now, text.Trim()));
+            if (c.GoalQueue.Count > 20) c.GoalQueue.RemoveRange(0, c.GoalQueue.Count - 20);
+            Save();
+            return GoalView(c);
+        }
+    }
+
+    /// <summary>Takes the queued Operator messages (the loop's next wake carries them).</summary>
+    public IReadOnlyList<QueuedMessage> DrainGoalQueue(string? convId)
+    {
+        lock (_gate)
+        {
+            if (Find(convId) is not { } c || c.GoalQueue.Count == 0) return Array.Empty<QueuedMessage>();
+            var taken = c.GoalQueue.ToList();
+            c.GoalQueue = new();
+            Save();
+            return taken;
+        }
+    }
+
     // ---- per-conversation fields (the no-key overloads address the default) ----------------
 
     public int Watermark => WatermarkOf(DefaultConversationId);
@@ -402,6 +565,12 @@ public class ArchStateStore
                     data.ManagedRepoIds ??= new();
                     data.ManagedFleet ??= new();
                     data.Conversations ??= new();
+                    foreach (var c in data.Conversations)
+                    {
+                        c.GoalRepos ??= new();
+                        c.GoalTasks ??= new();
+                        c.GoalQueue ??= new();
+                    }
                     _data = data;
                 }
             }

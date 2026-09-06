@@ -1,43 +1,71 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding: Fleet Status per-machine panels</title>
-<link rel="stylesheet" href="./app.css" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Goal conversations — the arch on a timer</title>
+<link rel="stylesheet" href="./app.css">
 </head>
 <body>
 <header class="top">
-  <h1>🛰 Fleet Status — a Status panel for every machine</h1>
-  <p class="sub">The Management App's Fleet Status now shows each machine's Agents, an Overview (Claude / GitHub / host / admin / version), and a Scoreboard — as tabs, so nothing is crammed. The cheap Overview rides the fleet poll; the heavy Scoreboard loads on demand.</p>
+  <h1>Goal conversations: the arch on a timer</h1>
+  <p class="lead">One sentence: <b>a goal conversation is the arch agent re-prompted every N minutes; on each turn it checks its agents itself; the agents never call anyone.</b> Nothing else moves on its own. Press play.</p>
 </header>
 
-<main>
-  <section class="demo">
-    <div class="tabs" id="tabs"></div>
-    <div class="machines" id="machines"></div>
-    <p class="note" id="note"></p>
-  </section>
-
-  <section class="explain">
-    <h2>The data path</h2>
-    <div class="cards">
-      <div class="card">
-        <h3>Overview → in the poll (cheap)</h3>
-        <p>Each peer's <code>/api/arch/peer</code> describe carries an <code>overview</code>: Claude account, GitHub account, host timezone, admin state. Built non-blocking and cached at the source, so <code>GET /api/arch/fleet/status</code> (already polled every 5 s) gains one small object per machine. An older peer sends no <code>overview</code> → the hub shows <span class="na">n/a</span>, never an error.</p>
-      </div>
-      <div class="card">
-        <h3>Scoreboard → on demand (heavy)</h3>
-        <p>The analytics fold re-reads the whole <code>activity.jsonl</code> per call, uncached, and the <em>all</em> window grows unbounded. So it is <b>never</b> in the poll: opening the Scoreboard tab makes one <code>GET /api/arch/fleet/scoreboard?sourceId=&amp;window=</code> (self local, peers relayed &amp; cached ~3 min) with a spinner + Refresh, reusing the harness's own <code>ScoreboardView</code>.</p>
-      </div>
-      <div class="card">
-        <h3>Measured (this machine)</h3>
-        <p>Real ledger 31.8 KB → compute <b>&lt; 1 ms</b>, payload <b>1.2 KB</b> (today) / <b>1.8 KB</b> (7d) / <b>9.6 KB</b> (all). Cheap today, but uncached + unbounded — hence on-demand, so the fleet poll is unchanged. A test enforces the poll payload has no scoreboard field.</p>
-      </div>
+<section class="stage">
+  <div class="col">
+    <h3>Your chat with the arch</h3>
+    <div class="conv default">
+      <div class="name">Arch agent <span class="pill free">free</span></div>
+      <div class="sub">a plain chat — you type, it answers</div>
+      <div class="drop" id="drop-default"><div class="ev nothing">nothing arrives here on its own</div></div>
     </div>
-    <p class="foot">Backend: <code>ArchAgentService.PeerDescribe/FleetStatus/FleetScoreboard</code>, <code>FleetOverviewProvider</code>, <code>FleetClient.PeerInfo.Overview</code>. Frontend: <code>manage/FleetStatus.jsx</code>, <code>FleetOverviewPanel.jsx</code>, <code>FleetScoreboardTab.jsx</code>, <code>dashboard/ScoreboardView.jsx</code>. Spec: <code>openspec/changes/fleet-status-panels</code>.</p>
-  </section>
-</main>
+    <div class="notes small">
+      <b>Only two things ever come from a goal:</b>
+      <ul>
+        <li>the moment you start it: "goal g1 runs in its own conversation"</li>
+        <li>the moment it ends: one summary message (actor <code>goal</code>)</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="col">
+    <h3>The goal conversation</h3>
+    <div class="conv goal">
+      <div class="name">goal: Ship prg <span class="pill busy" id="busy">busy: goal g1</span></div>
+      <div class="sub">drives spacex/prg, spacex/fluent · cap 20 · polls every <span id="floor">5</span> min</div>
+      <div class="timer"><div class="bar" id="bar"></div><span id="clock">next poll in 5:00</span></div>
+      <div class="drop" id="drop-goal"></div>
+    </div>
+    <div class="controls">
+      <button id="play">▶ play</button>
+      <button id="poll">⏭ poll now</button>
+      <button id="finish">✓ arch says LOOP_DONE</button>
+      <button id="reset">↺ reset</button>
+    </div>
+    <div class="notes small">
+      <b>Each poll is the same turn:</b> the harness re-sends the goal (plus anything you queued); the arch calls <code>list_agents</code> (who is running?), <code>read_transcript</code> (what did a finished one say?), <code>list_tasks</code> (the board), then acts: sends a task, follows up, moves a card — or says "nothing changed yet" and ends the turn. That last line is the accepted cost.
+    </div>
+  </div>
+
+  <div class="col">
+    <h3>Repo agents — passive</h3>
+    <div class="agent" id="ag-prg"><b>spacex/prg</b><span class="state" id="st-prg">idle</span><small>does what it is asked; never calls back</small></div>
+    <div class="agent" id="ag-fluent"><b>spacex/fluent</b><span class="state" id="st-fluent">idle</span><small>does what it is asked; never calls back</small></div>
+    <div class="notes small">
+      <b>An agent finishing changes nothing by itself.</b> Its reply sits in its own conversation until the next poll reads it. Try: press play, watch prg finish, and see the goal conversation only notice at the next poll.
+    </div>
+  </div>
+</section>
+
+<section class="notes">
+  <h3>How it ends</h3>
+  <ol>
+    <li>The arch judges the goal finished and ends a reply with <code>LOOP_DONE</code>.</li>
+    <li>The harness asks it once to verify; <code>GOAL_VERIFIED</code> ends the loop. (Or: your Stop, the cap, an error. <code>NEEDS_HUMAN: …</code> keeps it busy with the question shown; your reply is queued for the next poll.)</li>
+    <li>The conversation releases its agents, becomes free, and one summary lands in your chat.</li>
+  </ol>
+</section>
 
 <script src="./app.js"></script>
 </body>

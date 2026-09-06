@@ -80,6 +80,7 @@ export default function PinnedAgent({
   onSetDependsOn,
   loop,
   loopRecipes = [],
+  loopGoal = null,
   onLoopChanged,
 }) {
   const { t } = useT();
@@ -447,6 +448,7 @@ export default function PinnedAgent({
           stash={tab.stash || []}
           loop={loop}
           recipes={loopRecipes}
+          drivenBy={loopGoal}
           onChanged={onLoopChanged}
           onUsePending={(text) => chat.setDraft(text)}
         />

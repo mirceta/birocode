@@ -1,110 +1,63 @@
-// Fleet Status per-machine panels (openspec fleet-status-panels). Build-less, relative
-// URLs. A toy model of two machines: a modern one that reports its overview, and an
-// older peer that predates the field (every overview value degrades to n/a).
+// Goal conversations, the simple model: the arch on a timer; passive agents. A sped-up
+// simulation — one real minute is ~1.5 s here. Build-less, relative only.
 (function () {
-  const TABS = [
-    ['agents', 'Agents'],
-    ['overview', 'Overview'],
-    ['scoreboard', 'Scoreboard'],
-  ];
-
-  const machines = [
-    {
-      name: 'RAZVOJ2016', self: true, build: 'a288bb4',
-      agents: [
-        { name: 'birocode#1', claimed: false },
-        { name: 'prg#2', claimed: true },
-      ],
-      overview: {
-        Version: 'a288bb4', Machine: 'RAZVOJ2016', Timezone: 'CET · UTC+2',
-        'Host active': 'yes', 'Admin active': 'active',
-        GitHub: 'octocat', Claude: 'me@x.com', 'Claude plan': 'Max',
-      },
-      scoreboard: { prompts: 128, work: '3h 12m', cost: '$4', ms: 1, bytes: '1.8 KB' },
-    },
-    {
-      name: 'OLDBOX', self: false, build: 'deadbee (old build)',
-      agents: [{ name: 'app#1', claimed: false }],
-      overview: null, // predates the overview field -> n/a everywhere
-      scoreboard: { prompts: 40, work: '52m', cost: '$1', ms: 1, bytes: '0.9 KB' },
-    },
-  ];
-
-  let tab = 'agents';
-  let loading = null; // machine name currently "loading" its scoreboard
-
-  const tabsEl = document.getElementById('tabs');
-  const machinesEl = document.getElementById('machines');
-  const noteEl = document.getElementById('note');
-
-  function renderTabs() {
-    tabsEl.innerHTML = '';
-    for (const [k, label] of TABS) {
-      const b = document.createElement('button');
-      b.className = 'tab' + (tab === k ? ' tab--on' : '');
-      b.textContent = label;
-      b.onclick = () => choose(k);
-      tabsEl.appendChild(b);
-    }
+  const FLOOR = 5; // minutes
+  const SPEED = 1500; // ms per simulated minute
+  let t = 0, running = null, sim = null, ended = false, prgTask = null, fluentTask = null, polls = 0;
+  const $ = (id) => document.getElementById(id);
+  const drop = (id, text, cls) => {
+    const box = $(id); const el = document.createElement('div');
+    el.className = 'ev ' + (cls || ''); el.textContent = text; box.prepend(el);
+    while (box.children.length > 6) box.removeChild(box.lastChild);
+  };
+  const setState = (who, s) => { $('st-' + who).textContent = s; $('ag-' + who).className = 'agent ' + (s === 'running' ? 'is-running' : s === 'finished' ? 'is-finished' : ''); };
+  function paint() {
+    const left = Math.max(0, FLOOR - (t % FLOOR));
+    $('bar').style.width = ((t % FLOOR) / FLOOR * 100) + '%';
+    $('clock').textContent = ended ? 'goal ended' : `next poll in ${Math.floor(left)}:${String(Math.round((left % 1) * 60)).padStart(2, '0')}`;
   }
-
-  function choose(k) {
-    tab = k;
-    if (k === 'scoreboard') {
-      // Model the on-demand fetch: a brief spinner per machine, then the payload.
-      loading = 'all';
-      render();
-      setTimeout(() => { loading = null; render(); }, 700);
-      noteEl.textContent = 'Scoreboard is fetched on demand (one GET per machine, cached ~3 min) — never on the fleet poll.';
-    } else if (k === 'overview') {
-      noteEl.textContent = 'Overview rides the fleet poll (cheap, cached). The old peer sent no overview, so its fields show n/a.';
-    } else {
-      noteEl.textContent = 'Agents is the default tab — the same strip Fleet Status has always shown.';
-    }
-    render();
+  function poll() {
+    if (ended) return;
+    polls += 1;
+    drop('drop-goal', `poll #${polls}: goal re-sent → arch checks list_agents / read_transcript / list_tasks`, 'wake');
+    if (prgTask === 'finished') { drop('drop-goal', 'read_transcript(prg): "TASK DONE" → card moved, next task sent to prg', ''); setState('prg', 'running'); prgTask = 'running'; }
+    else if (prgTask === null) { drop('drop-goal', 'send_task(prg, "open the PR for task 1")', ''); setState('prg', 'running'); prgTask = 'running'; }
+    else drop('drop-goal', 'prg still running → nothing to do', 'nothing');
+    if (fluentTask === null) { drop('drop-goal', 'send_task(fluent, "fix the build")', ''); setState('fluent', 'running'); fluentTask = 'running'; }
+    else if (fluentTask === 'finished') { drop('drop-goal', 'read_transcript(fluent): "TASK DONE" → card moved', ''); setState('fluent', 'idle'); fluentTask = 'done'; }
+    drop('drop-default', 'nothing — your chat is untouched', 'nothing');
   }
-
-  function na(v) { return v == null ? '<span class="na">n/a</span>' : v; }
-
-  function body(m) {
-    if (tab === 'agents') {
-      return '<div>' + m.agents.map((a) =>
-        `<span class="chip"><span class="dot${a.claimed ? ' dot--claimed' : ''}"></span>${a.name}</span>`).join('') + '</div>';
-    }
-    if (tab === 'overview') {
-      const keys = ['Version', 'Machine', 'Timezone', 'Host active', 'Admin active', 'GitHub', 'Claude', 'Claude plan'];
-      const o = m.overview;
-      const rows = keys.map((k) => {
-        // Version/Machine/Host active ride the fleet object; the rest come from overview.
-        let v = null;
-        if (k === 'Version') v = m.build.split(' ')[0];
-        else if (k === 'Machine') v = m.name;
-        else if (k === 'Host active') v = m.self ? 'yes' : 'no';
-        else v = o ? o[k] : null;
-        return `<div class="k">${k}</div><div class="v${v == null ? ' na' : ''}">${na(v)}</div>`;
-      }).join('');
-      return `<div class="ov">${rows}</div>`;
-    }
-    // scoreboard
-    if (loading) return '<div class="sb spinner">Loading the scoreboard…</div>';
-    const s = m.scoreboard;
-    return `<div class="sb">prompts <b>${s.prompts}</b> · work <b>${s.work}</b> · cost <b>${s.cost}</b>
-      <br><span style="opacity:.7">served in ${s.ms} ms · ${s.bytes}</span></div>`;
+  function tick() {
+    t += 0.5;
+    // agents finish on their own schedule; nothing happens until the next poll
+    if (prgTask === 'running' && Math.random() < 0.12) { prgTask = 'finished'; setState('prg', 'finished'); drop('drop-goal', 'prg finished — but nobody is told; it waits for the next poll', 'nothing'); }
+    if (fluentTask === 'running' && Math.random() < 0.10) { fluentTask = 'finished'; setState('fluent', 'finished'); drop('drop-goal', 'fluent finished — waits for the next poll', 'nothing'); }
+    if (t % FLOOR === 0) poll();
+    paint();
   }
-
-  function render() {
-    renderTabs();
-    machinesEl.innerHTML = '';
-    for (const m of machines) {
-      const el = document.createElement('div');
-      el.className = 'machine';
-      el.innerHTML =
-        `<div class="mh"><span class="mdot"></span><span class="mname">${m.name}</span>` +
-        `${m.self ? '<span class="mbuild">self</span>' : ''}<span class="mbuild">build ${m.build}</span></div>` +
-        body(m);
-      machinesEl.appendChild(el);
-    }
+  function finish() {
+    if (ended) return;
+    ended = true; clearInterval(sim); sim = null;
+    drop('drop-goal', 'arch: LOOP_DONE → harness: verify → arch: GOAL_VERIFIED', 'wake');
+    drop('drop-goal', 'goal done: prg, fluent released; conversation free', '');
+    $('busy').textContent = 'free · goal g1 done'; $('busy').className = 'pill free';
+    setState('prg', 'idle'); setState('fluent', 'idle');
+    drop('drop-default', 'goal g1 done — summary: what was achieved, what needs you (actor: goal)', 'wake');
+    paint();
   }
-
-  choose('agents');
+  $('play').addEventListener('click', () => {
+    if (ended) return;
+    if (sim) { clearInterval(sim); sim = null; $('play').textContent = '▶ play'; return; }
+    if (polls === 0) poll();
+    sim = setInterval(tick, SPEED / 2); $('play').textContent = '⏸ pause';
+  });
+  $('poll').addEventListener('click', () => { if (!ended) { t = Math.ceil(t / FLOOR) * FLOOR; poll(); paint(); } });
+  $('finish').addEventListener('click', finish);
+  $('reset').addEventListener('click', () => {
+    clearInterval(sim); sim = null; t = 0; ended = false; prgTask = null; fluentTask = null; polls = 0;
+    $('drop-goal').innerHTML = ''; $('drop-default').innerHTML = '<div class="ev nothing">nothing arrives here on its own</div>';
+    $('busy').textContent = 'busy: goal g1'; $('busy').className = 'pill busy'; $('play').textContent = '▶ play';
+    setState('prg', 'idle'); setState('fluent', 'idle'); paint();
+  });
+  paint();
 })();

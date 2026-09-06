@@ -34,7 +34,7 @@ namespace ClaudeWeb.Services.Arch;
 /// (D1) and is audited under actor <c>arch</c>. Nothing is queued: a busy
 /// target is an answer, and the arch agent is woken by that repo's turn end.
 /// </summary>
-public class ArchAgentService : IArchWakeSource
+public partial class ArchAgentService : IArchWakeSource
 {
     public const string ReservedId = "@arch";
     public const string DisplayName = "Arch agent";
@@ -45,7 +45,7 @@ public class ArchAgentService : IArchWakeSource
     public const string AuditKind = "arch";
     public const string AuditOutcomeSend = "arch";
     public const string AuditOutcomeTool = "arch-tool";
-    public const string RoleVersionMarker = "<!-- arch-role v7 -->";
+    public const string RoleVersionMarker = "<!-- arch-role v8 -->";
 
     /// <summary>Availability values (D4). <see cref="Unreachable"/> is the fleet
     /// addition (openspec add-fleet-arch-agent, D4): a remote agent whose harness
@@ -190,6 +190,7 @@ public class ArchAgentService : IArchWakeSource
         if (!IsArchKey(id) || string.Equals(id, ReservedId, StringComparison.Ordinal)) return false;
         if (!_state.HasConversation(id)) return false;
         _loops.Stop(id!);
+        if (_state.GoalOf(id) is { Running: true }) OnDrivenResolved(id, _loops.Get(id!)!);
         _state.ClearStandingLoop(id);
         _runs.Get(id!)?.RequestStop();
         lock (_wakeGate) _drafts.Remove(id!);
@@ -402,6 +403,36 @@ public class ArchAgentService : IArchWakeSource
         to that machine; a peer without the loop routes answers `no-peer-api`. Loop events
         (fired, escalated, capped, done, stopped) wake you like turns do: on such a wake call
         `list_loops` and report escalations and caps to the Operator instead of re-arming.
+
+        ## Goal conversations
+
+        This harness runs several arch conversations. The Operator-facing one (the default,
+        "Arch agent") is a plain chat with the Operator: nothing arrives in it on its own
+        except a finished goal's summary. Work that must be driven to completion runs in a
+        **goal conversation** — the arch agent on a timer. On the Operator's ask ("arch, run
+        a goal: <text> on <agents> / for tasks <ids>"), `start_arch_goal(goal, repos, tasks,
+        maxIterations)` opens a new conversation that drives the named repo agents (handles
+        from `list_agents`) and board tasks (ids from `list_tasks`; their assignees too),
+        arms a goal loop on it and returns its id — never on your own initiative.
+        `list_arch_goals` shows every goal conversation: id, goal, the agents and tasks it
+        drives, state (running · done · stopped · capped · error), iterations, when it last
+        polled, queued Operator messages; `stop_arch_goal(id)` stops one on the Operator's
+        ask. An agent or task is driven by one running goal at a time; a goal conversation
+        is shown busy until its goal ends.
+
+        If YOU are a goal conversation (your work prompt says "(arch goal <id>)"): the repo
+        agents are passive — they answer when asked and never call you. Your loop re-sends
+        the goal on its poll interval; on every turn check your agents yourself
+        (`list_agents` for who is still running, `read_transcript` for what a finished agent
+        said, `list_tasks` for the board), then act: dispatch, follow up, move cards. When
+        nothing changed, say so in one line and end the turn — the next poll comes by itself.
+        Never touch an agent or task you do not drive. End with `LOOP_DONE` only when the
+        goal is genuinely finished; the harness then asks you once to verify it. If a person
+        must decide or act, end with `NEEDS_HUMAN: <the blocker>` and stop: the conversation
+        stays busy and the Operator sees your question; their answer reaches you queued at
+        the top of your next poll. When the goal ends, the harness releases your agents and
+        posts a summary with your last reply to the Operator-facing conversation — make that
+        reply the summary: what was achieved, what needs the Operator.
 
         ## Rules
 
@@ -891,6 +922,7 @@ public class ArchAgentService : IArchWakeSource
                     onDefault = OnDefault(a.Branch, a.DefaultBranch), dirty = a.Dirty, availability = a.Availability, lastActor = a.LastActor,
                     runningSince = a.RunningSince, managed = managed.Contains(a.RepoId), docked = a.TabId is not null, exists = a.Exists, tabId = a.TabId,
                     claimedReason = a.ClaimedReason, pinned = a.Pinned, adopted = a.BranchAdopted,
+                    goal = GoalDriving(a.RepoId),
                 }).ToList(),
             },
         };
@@ -919,10 +951,20 @@ public class ArchAgentService : IArchWakeSource
                     onDefault = OnDefault(r.Branch, r.DefaultBranch), dirty = r.Dirty, availability = r.Availability ?? "unknown", lastActor = r.LastActor ?? "none",
                     runningSince = r.RunningSince, managed = r.Managed == true, docked = r.Docked == true, exists = r.Exists, tabId = (string?)null,
                     claimedReason = r.ClaimedReason, pinned = r.Pinned == true, adopted = r.AdoptedBranches is not null && r.Branch is not null && r.AdoptedBranches.Contains(r.Branch, StringComparer.Ordinal),
+                    goal = GoalDriving(ArchStateStore.FleetKey(src.Id, r.RepoId)),
                 }).ToList(),
             });
         }
         return new { at = Now(), hubVersion = BuildVersion, machines };
+    }
+
+    /// <summary>"driven by arch goal &lt;id&gt;" (openspec arch-goal-conversations): the running
+    /// goal that owns this managed key, for the fleet status chips and the docks.</summary>
+    private object? GoalDriving(string key)
+    {
+        var owner = _state.OwnerOfRepo(key);
+        if (owner is null || _state.GoalOf(owner) is not { } g) return null;
+        return new { id = g.Id, conversation = owner, name = NameOf(owner) };
     }
 
     /// <summary>Stale board cards grouped by assignee machine ("" = this one), for
@@ -2168,7 +2210,7 @@ public class ArchAgentService : IArchWakeSource
     /// <summary>An operator message to the arch agent (Arch tab composer) in one
     /// conversation. Same slot semantics as any chat: 409-equivalent when that
     /// conversation's turn is running.</summary>
-    public (bool Ok, string Error, RunSession? Session) SendToArch(string? convId, string text)
+    public (bool Ok, string Error, RunSession? Session) SendToArch(string? convId, string text, string actor = ActorHuman)
     {
         if (string.IsNullOrWhiteSpace(text)) return (false, "empty message", null);
         var key = KeyOrDefault(convId);
@@ -2178,13 +2220,15 @@ public class ArchAgentService : IArchWakeSource
         var sessionId = ResolveArchSessionId(key);
         var sendText = text.Trim();
         _loops.SetPending(key, null);
-        ResumeLoopIfStopped(key);
-        _logger.Info($"[ARCH] operator -> arch {key} (session {(sessionId is null ? "new" : Short(sessionId))})");
+        // Only the Operator's own message resumes a stopped loop (openspec arch-standing-loop);
+        // a goal summary (actor goal) is the harness talking, not them.
+        if (actor == ActorHuman) ResumeLoopIfStopped(key);
+        _logger.Info($"[ARCH] {actor} -> arch {key} (session {(sessionId is null ? "new" : Short(sessionId))})");
         _ = Task.Run(async () =>
         {
             try
             {
-                await session.EmitAsync(new { type = "user", text = sendText, actor = ActorHuman });
+                await session.EmitAsync(new { type = "user", text = sendText, actor });
                 await _cli.RunAsync(sendText, sessionId, workingDirectory: HomePath,
                     emit: session.EmitAsync, ct: session.Cts.Token,
                     repoId: key, repoName: NameOf(key),

@@ -118,6 +118,15 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
   const [fleetDraft, setFleetDraft] = useState([]);
   const [cap, setCap] = useState(0); // 0 = no cap (openspec arch-standing-loop)
   const [mode, setMode] = useState('drive');
+  // Goal conversations (openspec arch-goal-conversations): the start form on the Loops
+  // lane, and the queued-message composer a busy goal conversation shows instead of Send.
+  const [goalText, setGoalText] = useState('');
+  const [goalRepos, setGoalRepos] = useState([]);
+  const [goalTasks, setGoalTasks] = useState([]);
+  const [goalCap, setGoalCap] = useState(20);
+  const [boardTasks, setBoardTasks] = useState(null);
+  const [goalNote, setGoalNote] = useState('');
+  const [queueNote, setQueueNote] = useState('');
   // Lanes, like a repo dock's Builder | Ask | … row — the arch agent has three:
   // the conversation, its Tools (the harness MCP surface) and the History of
   // its tool calls. Chat is the default; the lane is view state, not persisted.
@@ -392,6 +401,51 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
     }
   }, [load]);
 
+  // Start a goal conversation from this tab (openspec arch-goal-conversations): a new
+  // conversation owning the picked agents / tasks with a goal loop armed on it; the host
+  // tab strip is told so it opens the new conversation.
+  const loadBoardTasks = useCallback(async () => {
+    try {
+      const b = await apiGet('/taskgraph');
+      setBoardTasks((b?.nodes || []).filter((n) => n.status !== 'done'));
+    } catch {
+      setBoardTasks([]);
+    }
+  }, []);
+  const startGoal = useCallback(async () => {
+    const text = goalText.trim();
+    if (!text) return;
+    setGoalNote('…');
+    try {
+      const r = await apiPost('/arch/goals', { goal: text, repos: goalRepos, tasks: goalTasks, maxIterations: goalCap });
+      setGoalNote(r?.detail || 'started');
+      setGoalText(''); setGoalRepos([]); setGoalTasks([]);
+      setError('');
+      const id = r?.goal?.conversation?.id;
+      if (id) onConversationChanged?.({ id, created: true, name: r.goal.conversation.name });
+      setTimeout(load, 500);
+    } catch (e) {
+      setGoalNote(e?.message || String(e));
+    }
+  }, [goalText, goalRepos, goalTasks, goalCap, load, onConversationChanged]);
+  const stopGoal = useCallback(async (id) => {
+    if (!window.confirm(`Stop goal ${id}? Its conversation releases the repos and tasks it owns.`)) return;
+    try { await apiPost(`/arch/goals/${encodeURIComponent(id)}/stop`, {}); setError(''); setTimeout(load, 300); } catch (e) { setError(e?.message || String(e)); }
+  }, [load]);
+  const queueForGoal = useCallback(async () => {
+    const text = draft.trim();
+    const id = state?.goal?.id;
+    if (!text || !id) return;
+    try {
+      const r = await apiPost(`/arch/goals/${encodeURIComponent(id)}/message`, { text });
+      setDraft('');
+      setQueueNote(r?.detail || 'queued');
+      setError('');
+      setTimeout(load, 300);
+    } catch (e) {
+      setError(e?.message || String(e));
+    }
+  }, [draft, state, load]);
   const stopTurn = useCallback(async () => {
     try { await apiPost(`/arch/stop-turn${convQ}`, {}); setTimeout(load, 500); } catch (e) { setError(e?.message || String(e)); }
   }, [load, convQ]);
@@ -463,6 +517,13 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
 
   const convName = state?.conversation?.name || (conv === '@arch' ? 'Arch agent' : conv);
   const isDefaultConv = !state?.conversation || state.conversation.isDefault !== false;
+  // This conversation's goal (openspec arch-goal-conversations) and whether it is busy
+  // with it: while busy the composer queues Operator messages instead of sending.
+  const goal = state?.goal || null;
+  const busy = !!state?.busy;
+  const goals = state?.goals || [];
+  const ownsText = (g) => [...(g?.owns || []).map((o) => o.handle), ...(g?.tasks || []).map((tk) => `task ${tk.title}`)].join(', ') || 'nothing';
+  const pollText = (g) => `polls every ${Math.max(1, Math.round((g?.pollSeconds || 300) / 60))} min${g?.lastSentAt ? ` · last poll ${ago(g.lastSentAt)} ago` : ''}`;
 
   // This conversation's loop cards (openspec arch-conversations): the standing wake
   // loop and the driven loop live in the Loops lane of the conversation they belong to.
@@ -499,6 +560,55 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
             {' · '}watermark {state?.watermark ?? '–'}
           </div>
           <div className="arch__dim">Stop = disarm: no further sends; running repo turns finish on their own.</div>
+        </section>
+
+        <section className="arch__card" data-arch-goal-form>
+          <div className="arch__card-head"><span>Goal conversation</span>{goal && <span className={`arch__pill arch__pill--${busy ? 'busy' : 'off'}`} data-goal-state>{busy ? `busy: goal ${goal.id}` : `goal ${goal.id} ${goal.state}`}</span>}</div>
+          {goal && (
+            <div className="arch__dim" data-goal-summary>
+              <b>{goal.goal}</b> · drives {ownsText(goal)} · {goal.iterations}/{goal.maxIterations || '∞'} turn(s) · {pollText(goal)}{goal.queued ? ` · ${goal.queued} queued message(s)` : ''}{goal.outcome ? ` · ${goal.outcome}` : ''}
+              {busy && <> <button type="button" className="arch__btn arch__btn--danger" onClick={() => stopGoal(goal.id)} data-stop-goal>■ Stop goal</button></>}
+            </div>
+          )}
+          <div className="arch__dim" style={{ marginBottom: 6 }}>Top-down work: a goal opens its own conversation — the arch on a timer. Every poll interval (the "re-prompt at least every" setting below) it re-reads the goal, checks the agents and board tasks you pick and acts; the agents never call it. This conversation stays free; the summary lands here when the goal ends.</div>
+          <textarea
+            className="arch__goal-text"
+            value={goalText}
+            onChange={(e) => setGoalText(e.target.value)}
+            placeholder="What done looks like — e.g. every open board task for prg lands as a PR against main"
+            rows={2}
+            data-goal-text
+            onFocus={() => { if (boardTasks === null) loadBoardTasks(); }}
+          />
+          <div className="arch__goal-pick" data-goal-repos>
+            <span className="arch__dim">drives agents:</span>
+            {agents.length === 0 && <span className="arch__dim"> none in scope</span>}
+            {agents.map((a) => (
+              <label key={a.key || a.repoId} className="arch__scope-row arch__scope-row--inline">
+                <input type="checkbox" checked={goalRepos.includes(a.handle || a.key)} onChange={(e) => setGoalRepos((d) => (e.target.checked ? [...d, a.handle || a.key] : d.filter((x) => x !== (a.handle || a.key))))} />
+                {a.handle || a.name}
+              </label>
+            ))}
+          </div>
+          <div className="arch__goal-pick" data-goal-tasks>
+            <span className="arch__dim">drives board tasks:</span>
+            {boardTasks === null && <button type="button" className="arch__link" onClick={loadBoardTasks}>load the board</button>}
+            {boardTasks !== null && boardTasks.length === 0 && <span className="arch__dim"> no open tasks</span>}
+            {(boardTasks || []).map((n) => (
+              <label key={n.id} className="arch__scope-row arch__scope-row--inline" title={n.id}>
+                <input type="checkbox" checked={goalTasks.includes(n.id)} onChange={(e) => setGoalTasks((d) => (e.target.checked ? [...d, n.id] : d.filter((x) => x !== n.id)))} />
+                {n.title}{n.repoId ? '' : ' (unassigned)'}
+              </label>
+            ))}
+          </div>
+          <div className="arch__row">
+            <label>
+              cap
+              <input type="number" min={1} max={100} value={goalCap} onChange={(e) => setGoalCap(Math.max(1, Math.min(100, Number(e.target.value) || 1)))} data-goal-cap />
+            </label>
+            <button type="button" className="arch__btn arch__btn--primary" style={{ alignSelf: 'flex-end' }} onClick={startGoal} disabled={!goalText.trim() || !state?.gateOpen || (goalRepos.length === 0 && goalTasks.length === 0)} data-start-goal>▶ Start goal conversation</button>
+          </div>
+          {goalNote && <div className="arch__dim" data-goal-note>{goalNote}</div>}
         </section>
 
         <section className="arch__card" data-arch-driven>
@@ -685,6 +795,23 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
           ))}
           <div className="arch__dim">Tools denied in its session: {(state?.disallowedTools || []).join(', ')}. It reads repos through the harness only.</div>
         </section>
+
+        <section className="arch__card" data-arch-goals>
+          <div className="arch__card-head"><span>Goal conversations ({goals.filter((g) => g.busy).length} busy)</span></div>
+          <div className="arch__dim" style={{ marginBottom: 6 }}>Each goal conversation is the arch on a timer: it polls the agents it drives and acts; the agents never call it. Your conversation only gets the summary.</div>
+          {goals.length === 0 && <div className="arch__dim">None yet. Start one from a conversation's Loops lane, or ask the arch agent: "arch, run a goal: … on …".</div>}
+          {goals.map((g) => (
+            <div key={g.id} className="arch__agent" data-goal={g.id} data-goal-busy={g.busy}>
+              <div className="arch__agent-top">
+                <span className="arch__agent-name">{g.conversation?.name || g.conversation?.id}</span>
+                <span className={`arch__pill arch__pill--${g.busy ? 'busy' : g.state === 'done' ? 'on' : 'off'}`}>{g.busy ? `busy: goal ${g.id}` : `${g.state} · goal ${g.id}`}</span>
+              </div>
+              <div className="arch__dim">{g.goal}</div>
+              <div className="arch__dim">drives {ownsText(g)} · {g.iterations}/{g.maxIterations || '∞'} turn(s) · {pollText(g)}{g.outcome ? ` · ${g.outcome}` : ''}</div>
+              {g.busy && <button type="button" className="arch__link" onClick={() => stopGoal(g.id)}>■ stop goal</button>}
+            </div>
+          ))}
+        </section>
     </>
   );
   const chatOnly = view === 'chat';
@@ -733,6 +860,13 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
           )}
           {running && !turn && <div className="arch__thinking">arch agent is working…</div>}
         </div>
+        {busy && goal && (
+          <div className="arch__banner" data-goal-busy-banner>
+            <b>busy: goal {goal.id}</b> — {goal.goal} · drives {ownsText(goal)} · {goal.iterations}/{goal.maxIterations || '∞'} turn(s) · {pollText(goal)}{state?.engine?.reason ? ` · ${state.engine.reason}` : ''}.
+            {' '}Messages typed here are queued as Operator messages and carried by its next poll — or start another goal conversation from the Loops lane.
+            {' '}<button type="button" className="arch__link" onClick={() => pickLane('loops')} data-new-goal>new goal conversation</button>
+          </div>
+        )}
         <div className="arch__composer">
           <textarea
             value={draft}
@@ -742,9 +876,14 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
             onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) send(); }}
           />
           <div className="arch__composer-row">
-            <button type="button" className="arch__btn arch__btn--primary" onClick={send} disabled={running || !draft.trim()}>
-              {running ? 'busy' : 'Send'}
-            </button>
+            {busy && goal
+              ? <button type="button" className="arch__btn arch__btn--primary" onClick={queueForGoal} disabled={!draft.trim()} data-queue-goal>Queue for the goal</button>
+              : (
+                <button type="button" className="arch__btn arch__btn--primary" onClick={send} disabled={running || !draft.trim()}>
+                  {running ? 'busy' : 'Send'}
+                </button>
+              )}
+            {busy && queueNote && <span className="arch__dim" data-queue-note>{queueNote}</span>}
             {running && <button type="button" className="arch__btn arch__btn--danger" onClick={stopTurn}>Stop turn</button>}
             <span className="arch__dim">Ctrl+Enter sends. Messages here are the only instructions it follows.</span>
           </div>
@@ -803,6 +942,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
             ) : <span className="arch__pill arch__pill--off">never armed</span>}
             {running && <span className="arch__pill arch__pill--busy">turn running</span>}
             {drivenArmed && <span className="arch__pill arch__pill--on" data-driven-pill>{loop.kind} loop · {loop.iterationsDone}/{loop.maxIterations || '∞'}</span>}
+            {goal && <span className={`arch__pill arch__pill--${busy ? 'busy' : 'off'}`} data-goal-pill title={`${goal.goal} — owns ${ownsText(goal)}`}>{busy ? `busy: goal ${goal.id}` : `goal ${goal.id} ${goal.state}`} · drives {ownsText(goal)}</span>}
             {sessionId && <span className="arch__dim"> · session {sessionId.slice(0, 8)}</span>}
           </span>
           <button

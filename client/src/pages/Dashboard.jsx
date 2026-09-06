@@ -742,6 +742,7 @@ export default function Dashboard({ onClose }) {
             onSetDependsOn={setDependsOn}
             loop={loopsByRepo[tab.repoId]}
             loopRecipes={loopInfo?.recipes ?? []}
+            loopGoal={loopInfo?.goalOwners?.[tab.repoId] ?? null}
             onLoopChanged={loadLoops}
           />
         </Wrapper>

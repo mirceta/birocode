@@ -290,10 +290,18 @@ export default function ManageApp() {
     }
   };
   // The Arch page tells us when a conversation was renamed or removed.
-  const onConversationChanged = ({ id, removed }) => {
+  const onConversationChanged = ({ id, removed, created }) => {
     loadConvs();
     if (removed && tab === CONV_PREFIX + id) setTab('arch');
+    // A goal conversation just started (openspec arch-goal-conversations): open it.
+    if (created && id) {
+      const key = CONV_PREFIX + id;
+      if (panes) setHidden((prev) => { const next = prev.filter((k) => k !== key); save(HIDDEN_KEY, next); return next; });
+      else setTab(key);
+    }
   };
+  // Goal-busy conversations (openspec arch-goal-conversations) carry a marker and the goal.
+  const convInfo = (k) => (isConvTab(k) ? (convs || []).find((c) => c.id === convOf(k)) : null);
 
   // The Arch tab is the conversation with its lanes (Chat · Tools · History · Loops);
   // the fleet-wide cards (Managed agents, Fleet, Home repo) live on the Status tab.
@@ -330,11 +338,13 @@ export default function ManageApp() {
                 aria-selected={panes ? undefined : on}
                 aria-pressed={panes ? on : undefined}
                 title={panes ? (on ? t('manage.hidePane') : t('manage.showPane')) : undefined}
-                className={`mg__tab${on ? ' mg__tab--on' : ''}`}
+                className={`mg__tab${on ? ' mg__tab--on' : ''}${convInfo(k)?.busy ? ' mg__tab--busy' : ''}`}
                 data-tab={k}
+                data-busy={convInfo(k)?.busy ? 'goal' : undefined}
+                title={panes ? (on ? t('manage.hidePane') : t('manage.showPane')) : (convInfo(k)?.goal ? `${convInfo(k).busy ? 'busy: ' : ''}goal ${convInfo(k).goal.id} — ${convInfo(k).goal.goal}` : undefined)}
                 onClick={() => (panes ? toggleHidden(k) : setTab(k))}
               >
-                {labelOf(k)}
+                {convInfo(k)?.busy ? '⏳ ' : ''}{labelOf(k)}
               </button>
             );
           })}
