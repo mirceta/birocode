@@ -124,7 +124,6 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
   const [goalRepos, setGoalRepos] = useState([]);
   const [goalTasks, setGoalTasks] = useState([]);
   const [goalCap, setGoalCap] = useState(20);
-  const [goalMerged, setGoalMerged] = useState(false);
   const [boardTasks, setBoardTasks] = useState(null);
   const [goalNote, setGoalNote] = useState('');
   const [queueNote, setQueueNote] = useState('');
@@ -418,7 +417,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
     if (!text) return;
     setGoalNote('…');
     try {
-      const r = await apiPost('/arch/goals', { goal: text, repos: goalRepos, tasks: goalTasks, maxIterations: goalCap, requireMerged: goalMerged });
+      const r = await apiPost('/arch/goals', { goal: text, repos: goalRepos, tasks: goalTasks, maxIterations: goalCap });
       setGoalNote(r?.detail || 'started');
       setGoalText(''); setGoalRepos([]); setGoalTasks([]);
       setError('');
@@ -428,7 +427,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
     } catch (e) {
       setGoalNote(e?.message || String(e));
     }
-  }, [goalText, goalRepos, goalTasks, goalCap, goalMerged, load, onConversationChanged]);
+  }, [goalText, goalRepos, goalTasks, goalCap, load, onConversationChanged]);
   const stopGoal = useCallback(async (id) => {
     if (!window.confirm(`Stop goal ${id}? Its conversation releases the repos and tasks it owns.`)) return;
     try { await apiPost(`/arch/goals/${encodeURIComponent(id)}/stop`, {}); setError(''); setTimeout(load, 300); } catch (e) { setError(e?.message || String(e)); }
@@ -447,13 +446,6 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
       setError(e?.message || String(e));
     }
   }, [draft, state, load]);
-  const setLegacyBroadcast = useCallback(async (on) => {
-    try { const s = await apiPost('/arch/routing', { legacyBroadcast: on }); setState(s); setError(''); } catch (e) { setError(e?.message || String(e)); }
-  }, []);
-  const clearInbox = useCallback(async () => {
-    try { await apiDelete('/arch/inbox'); setTimeout(load, 200); } catch (e) { setError(e?.message || String(e)); }
-  }, [load]);
-
   const stopTurn = useCallback(async () => {
     try { await apiPost(`/arch/stop-turn${convQ}`, {}); setTimeout(load, 500); } catch (e) { setError(e?.message || String(e)); }
   }, [load, convQ]);
@@ -531,6 +523,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
   const busy = !!state?.busy;
   const goals = state?.goals || [];
   const ownsText = (g) => [...(g?.owns || []).map((o) => o.handle), ...(g?.tasks || []).map((tk) => `task ${tk.title}`)].join(', ') || 'nothing';
+  const pollText = (g) => `polls every ${Math.max(1, Math.round((g?.pollSeconds || 300) / 60))} min${g?.lastSentAt ? ` · last poll ${ago(g.lastSentAt)} ago` : ''}`;
 
   // This conversation's loop cards (openspec arch-conversations): the standing wake
   // loop and the driven loop live in the Loops lane of the conversation they belong to.
@@ -573,11 +566,11 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
           <div className="arch__card-head"><span>Goal conversation</span>{goal && <span className={`arch__pill arch__pill--${busy ? 'busy' : 'off'}`} data-goal-state>{busy ? `busy: goal ${goal.id}` : `goal ${goal.id} ${goal.state}`}</span>}</div>
           {goal && (
             <div className="arch__dim" data-goal-summary>
-              <b>{goal.goal}</b> · owns {ownsText(goal)} · {goal.iterations}/{goal.maxIterations || '∞'} turn(s){goal.lastWake ? ` · last wake: ${goal.lastWake}` : ''}{goal.queued ? ` · ${goal.queued} queued message(s)` : ''}{goal.outcome ? ` · ${goal.outcome}` : ''}
+              <b>{goal.goal}</b> · drives {ownsText(goal)} · {goal.iterations}/{goal.maxIterations || '∞'} turn(s) · {pollText(goal)}{goal.queued ? ` · ${goal.queued} queued message(s)` : ''}{goal.outcome ? ` · ${goal.outcome}` : ''}
               {busy && <> <button type="button" className="arch__btn arch__btn--danger" onClick={() => stopGoal(goal.id)} data-stop-goal>■ Stop goal</button></>}
             </div>
           )}
-          <div className="arch__dim" style={{ marginBottom: 6 }}>Top-down work: a goal opens its own conversation that owns the agents and board tasks you pick, runs a goal loop and is woken only by what happens on them. This conversation stays free; the summary lands in the Operator-facing conversation when the goal ends.</div>
+          <div className="arch__dim" style={{ marginBottom: 6 }}>Top-down work: a goal opens its own conversation — the arch on a timer. Every poll interval (the "re-prompt at least every" setting below) it re-reads the goal, checks the agents and board tasks you pick and acts; the agents never call it. This conversation stays free; the summary lands here when the goal ends.</div>
           <textarea
             className="arch__goal-text"
             value={goalText}
@@ -588,7 +581,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
             onFocus={() => { if (boardTasks === null) loadBoardTasks(); }}
           />
           <div className="arch__goal-pick" data-goal-repos>
-            <span className="arch__dim">owns agents:</span>
+            <span className="arch__dim">drives agents:</span>
             {agents.length === 0 && <span className="arch__dim"> none in scope</span>}
             {agents.map((a) => (
               <label key={a.key || a.repoId} className="arch__scope-row arch__scope-row--inline">
@@ -598,7 +591,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
             ))}
           </div>
           <div className="arch__goal-pick" data-goal-tasks>
-            <span className="arch__dim">owns board tasks:</span>
+            <span className="arch__dim">drives board tasks:</span>
             {boardTasks === null && <button type="button" className="arch__link" onClick={loadBoardTasks}>load the board</button>}
             {boardTasks !== null && boardTasks.length === 0 && <span className="arch__dim"> no open tasks</span>}
             {(boardTasks || []).map((n) => (
@@ -612,9 +605,6 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
             <label>
               cap
               <input type="number" min={1} max={100} value={goalCap} onChange={(e) => setGoalCap(Math.max(1, Math.min(100, Number(e.target.value) || 1)))} data-goal-cap />
-            </label>
-            <label className="arch__scope-row arch__scope-row--inline" style={{ alignSelf: 'flex-end' }}>
-              <input type="checkbox" checked={goalMerged} onChange={(e) => setGoalMerged(e.target.checked)} /> done only when the tasks are pr-merged
             </label>
             <button type="button" className="arch__btn arch__btn--primary" style={{ alignSelf: 'flex-end' }} onClick={startGoal} disabled={!goalText.trim() || !state?.gateOpen || (goalRepos.length === 0 && goalTasks.length === 0)} data-start-goal>▶ Start goal conversation</button>
           </div>
@@ -808,6 +798,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
 
         <section className="arch__card" data-arch-goals>
           <div className="arch__card-head"><span>Goal conversations ({goals.filter((g) => g.busy).length} busy)</span></div>
+          <div className="arch__dim" style={{ marginBottom: 6 }}>Each goal conversation is the arch on a timer: it polls the agents it drives and acts; the agents never call it. Your conversation only gets the summary.</div>
           {goals.length === 0 && <div className="arch__dim">None yet. Start one from a conversation's Loops lane, or ask the arch agent: "arch, run a goal: … on …".</div>}
           {goals.map((g) => (
             <div key={g.id} className="arch__agent" data-goal={g.id} data-goal-busy={g.busy}>
@@ -816,18 +807,9 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
                 <span className={`arch__pill arch__pill--${g.busy ? 'busy' : g.state === 'done' ? 'on' : 'off'}`}>{g.busy ? `busy: goal ${g.id}` : `${g.state} · goal ${g.id}`}</span>
               </div>
               <div className="arch__dim">{g.goal}</div>
-              <div className="arch__dim">owns {ownsText(g)} · {g.iterations}/{g.maxIterations || '∞'} turn(s){g.lastWake ? ` · last wake: ${g.lastWake}` : ''}{g.outcome ? ` · ${g.outcome}` : ''}</div>
+              <div className="arch__dim">drives {ownsText(g)} · {g.iterations}/{g.maxIterations || '∞'} turn(s) · {pollText(g)}{g.outcome ? ` · ${g.outcome}` : ''}</div>
               {g.busy && <button type="button" className="arch__link" onClick={() => stopGoal(g.id)}>■ stop goal</button>}
             </div>
-          ))}
-          <label className="arch__scope-row" title="Before goal conversations, every armed arch conversation was woken by every managed repo turn. On = that behaviour for goal-less conversations (the default included). Off = only goal conversations are woken, by what they own; everything else goes to the inbox below.">
-            <input type="checkbox" checked={!!state?.legacyBroadcast} disabled={!state?.gateOpen} onChange={(e) => setLegacyBroadcast(e.target.checked)} data-legacy-broadcast />
-            legacy: wake the default arch on every repo event
-          </label>
-          <div className="arch__card-head" style={{ marginTop: 8 }}><span>Inbox — events nobody owns</span>{(state?.inbox || []).length > 0 && <button type="button" className="arch__link" onClick={clearInbox}>clear</button>}</div>
-          {(state?.inbox || []).length === 0 && <div className="arch__dim">empty</div>}
-          {[...(state?.inbox || [])].reverse().slice(0, 30).map((e, i) => (
-            <div key={`${e.seq}-${i}`} className="arch__dim arch__mono" data-inbox-line>{ago(e.at)} ago · {e.line}</div>
           ))}
         </section>
     </>
@@ -880,8 +862,8 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
         </div>
         {busy && goal && (
           <div className="arch__banner" data-goal-busy-banner>
-            <b>busy: goal {goal.id}</b> — {goal.goal} · owns {ownsText(goal)} · {goal.iterations}/{goal.maxIterations || '∞'} turn(s){state?.engine?.reason ? ` · ${state.engine.reason}` : ''}.
-            {' '}Messages typed here are queued as Operator messages and read on its next wake — or start another goal conversation from the Loops lane.
+            <b>busy: goal {goal.id}</b> — {goal.goal} · drives {ownsText(goal)} · {goal.iterations}/{goal.maxIterations || '∞'} turn(s) · {pollText(goal)}{state?.engine?.reason ? ` · ${state.engine.reason}` : ''}.
+            {' '}Messages typed here are queued as Operator messages and carried by its next poll — or start another goal conversation from the Loops lane.
             {' '}<button type="button" className="arch__link" onClick={() => pickLane('loops')} data-new-goal>new goal conversation</button>
           </div>
         )}
@@ -960,7 +942,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
             ) : <span className="arch__pill arch__pill--off">never armed</span>}
             {running && <span className="arch__pill arch__pill--busy">turn running</span>}
             {drivenArmed && <span className="arch__pill arch__pill--on" data-driven-pill>{loop.kind} loop · {loop.iterationsDone}/{loop.maxIterations || '∞'}</span>}
-            {goal && <span className={`arch__pill arch__pill--${busy ? 'busy' : 'off'}`} data-goal-pill title={`${goal.goal} — owns ${ownsText(goal)}`}>{busy ? `busy: goal ${goal.id}` : `goal ${goal.id} ${goal.state}`} · owns {ownsText(goal)}</span>}
+            {goal && <span className={`arch__pill arch__pill--${busy ? 'busy' : 'off'}`} data-goal-pill title={`${goal.goal} — owns ${ownsText(goal)}`}>{busy ? `busy: goal ${goal.id}` : `goal ${goal.id} ${goal.state}`} · drives {ownsText(goal)}</span>}
             {sessionId && <span className="arch__dim"> · session {sessionId.slice(0, 8)}</span>}
           </span>
           <button
