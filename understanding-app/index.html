@@ -3,72 +3,59 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding: the Tasks agent — from a long prompt to linked tasks</title>
+<title>Understanding: promoting an idea consumes it</title>
 <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
 <header class="top">
-  <h1>🗂 The Tasks agent</h1>
-  <p class="sub">How a long prompt in the Ideas composer becomes ordered, dependency-linked tasks on the Task graph — and why the agent can do nothing else.</p>
-  <div class="controls">
-    <button id="play" class="btn btn--primary">▶ Play the flow</button>
-    <button id="reset" class="btn">Reset</button>
-    <label class="speed">speed <input id="speed" type="range" min="1" max="3" step="1" value="2" /></label>
-  </div>
+  <h1>💡→🧩 Ideas that become tasks are <em>consumed</em></h1>
+  <p class="sub">Promoting an idea to a task removes it from the Ideas list and links it to the task. Delete the task and the idea comes back (inactive); complete the task and it stays gone. Play with it below.</p>
 </header>
 
 <main>
-  <section class="flow" id="flow" aria-label="The five stages">
-    <!-- stages are rendered by app.js -->
-  </section>
-
-  <section class="detail" id="detail">
-    <h2 id="detail-title">Click a stage</h2>
-    <div id="detail-body" class="detail__body">
-      <p>Each box is one hop of the same message. Press <b>Play</b> to watch a prompt travel through, or click a box to read what happens there and where it lives in the code.</p>
+  <section class="stage">
+    <div class="controls">
+      <button id="promote" class="btn btn--primary">💡 Promote idea → task</button>
+      <button id="complete" class="btn" disabled>✓ Complete task</button>
+      <button id="delete" class="btn btn--danger" disabled>🗑 Delete task</button>
+      <label class="toggle"><input type="checkbox" id="showConsumed" /> Show consumed</label>
+      <button id="reset" class="btn btn--ghost">↺ Reset</button>
     </div>
-  </section>
 
-  <section class="fence">
-    <h2>The fence: why this agent is safe to unleash</h2>
-    <div class="fence__grid">
-      <div class="card">
-        <h3>Only eight tools</h3>
-        <p>Its <code>--mcp-config</code> lists one server: <code>tasks</code> at <code>POST /api/tasks/mcp</code>. The tool list is <code>list_ideas · create_idea · update_idea · list_tasks · create_task · update_task · link_tasks · delete_task</code>. Nothing reads or writes a repository.</p>
+    <div class="boards">
+      <div class="board" id="ideasBoard">
+        <div class="board__head">Ideas list <span class="pill" id="ideasCount">0</span></div>
+        <div class="board__hint">What <code>/api/notes</code> and <code>list_ideas</code> return by default</div>
+        <ul class="cards" id="ideasCards"></ul>
+        <div class="consumed-wrap" id="consumedWrap" hidden>
+          <div class="consumed-head">▾ Consumed <span class="pill" id="consumedCount">0</span></div>
+          <ul class="cards cards--consumed" id="consumedCards"></ul>
+        </div>
       </div>
-      <div class="card">
-        <h3>Built-ins disallowed</h3>
-        <p>The run passes the arch agent's <code>--disallowedTools</code> list (Edit, Write, Bash, Read, Glob, Grep, WebFetch, …) and its home folder's <code>.claude/settings.json</code> denies <code>Read</code> under every registered repo and the data dir.</p>
-      </div>
-      <div class="card">
-        <h3>Bearer token, not the password</h3>
-        <p>The MCP route is exempt from the password middleware. Instead the harness mints a 256-bit token per process, writes it into the run's MCP config, and compares it in constant time. Wrong token → 401, no tool runs.</p>
-      </div>
-      <div class="card">
-        <h3>Everything audited</h3>
-        <p>Every tool call writes one row to the autopilot action audit (kind <code>tasks</code>, outcome <code>tasks-tool</code>, phase = tool name). The Tools lane counts them per tool.</p>
-      </div>
-      <div class="card">
-        <h3>Cycles cannot happen</h3>
-        <p><code>link_tasks</code> is a thin wrapper over <code>TaskGraphService.AddEdge</code>, which refuses missing nodes, self-loops, duplicates and cycles. The refusal comes back as an <code>isError</code> tool result with the reason, so the model fixes its order instead of retrying.</p>
-      </div>
-      <div class="card">
-        <h3>No second store</h3>
-        <p>The tools call the same <code>NotesService</code> and <code>TaskGraphService</code> the Ideas tab uses. Agent-created entries sync, merge and tombstone exactly like typed ones.</p>
+
+      <div class="board" id="taskBoard">
+        <div class="board__head">Task board <span class="pill" id="tasksCount">0</span></div>
+        <div class="board__hint">Kanban / Task graph — cards carry <code>ideaId</code></div>
+        <ul class="cards" id="taskCards"></ul>
       </div>
     </div>
+
+    <p class="log" id="log">Start by promoting the idea.</p>
   </section>
 
-  <section class="graph-demo">
-    <h2>What lands on the graph</h2>
-    <p class="muted">The fixture prompt from the goal, as the agent typically splits it. Arrows read "depends on". Nodes are auto-placed in rows of four (the second row starts when the first holds four).</p>
-    <svg id="graph" viewBox="0 0 980 300" role="img" aria-label="Example task graph"></svg>
+  <section class="explain">
+    <h2>The lifecycle</h2>
+    <ol class="steps">
+      <li><b>Promote</b> (Send to graph · Kanban · arch <code>idea_to_task</code>) → the idea is <b>consumed</b>: off the list, linked to the new task. Every path funnels through <code>TaskGraphService.AddNode</code>, so one choke point covers them all.</li>
+      <li><b>Consumed, not deleted</b> — kept behind the off-by-default “Consumed” view and <code>list_ideas ... includeConsumed</code>, each showing the task it became.</li>
+      <li><b>Delete the task</b> → the idea returns to the list <b>inactive</b>, original text/project/priority intact (only for the idea that task consumed).</li>
+      <li><b>Complete/merge</b> the task → a status change, never a delete → the idea <b>stays consumed</b>.</li>
+      <li><b>Migration</b> — on first run, ideas that already had a task pointing at them become consumed.</li>
+    </ol>
+    <p class="foot">State lives on the idea as <code>ConsumedByTaskId</code>, so it replicates over the existing ideas sync channel — no new wire shape. openspec <code>ideas-consume-on-promotion</code>.</p>
   </section>
 </main>
 
-<footer class="foot">
-  <p>Code: <code>ClaudeWeb.App/Services/Tasks/</code> (TasksToolbox, TasksMcpServer, TasksAgentService, TasksStateStore), <code>Controllers/TasksController.cs</code>, <code>client/src/pages/Tasks.jsx</code>, <code>client/src/components/ideas/IdeasPanel.jsx</code>. Spec: <code>openspec/changes/tasks-agent/</code>.</p>
-</footer>
 <script src="./app.js"></script>
 </body>
 </html>
