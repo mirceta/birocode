@@ -1,6 +1,7 @@
 using System.Text.Json;
 using ClaudeWeb.Services.Logging;
 using ClaudeWeb.Services.Notes;
+using ClaudeWeb.Services.Events;
 
 namespace ClaudeWeb.Services.TaskGraph;
 
@@ -49,6 +50,10 @@ public class TaskGraphService
     // every deletion path funnel through one place. Optional so the pure-graph unit
     // tests (and sync-only construction) can omit it — then consumption is a no-op.
     private readonly NotesService? _notes;
+    // The harness feed (openspec arch-goal-conversations): a task's status change is
+    // published as `task.status` so the goal conversation owning the task (or its
+    // assignee) is woken by it. Optional: pure-graph tests and sync-only use omit it.
+    private readonly HarnessEventFeed? _feed;
 
     /// <summary>Raised after every successful LOCAL mutation (add/update/delete/
     /// scratch). NOT raised by MergeFrom — the sync layer must not re-trigger
@@ -59,10 +64,11 @@ public class TaskGraphService
     /// than <see cref="AppPaths.DataDir"/>; DI leaves it null.</param>
     /// <param name="notes">The ideas board, for consume-on-promote / restore-on-delete
     /// (openspec ideas-consume-on-promotion). DI injects it; pure-graph tests omit it.</param>
-    public TaskGraphService(Logger logger, string? dirOverride = null, NotesService? notes = null)
+    public TaskGraphService(Logger logger, string? dirOverride = null, NotesService? notes = null, HarnessEventFeed? feed = null)
     {
         _logger = logger;
         _notes = notes;
+        _feed = feed;
         var dir = dirOverride ?? AppPaths.DataDir;
         Directory.CreateDirectory(dir);
         _path = Path.Combine(dir, "taskgraph.json");
@@ -182,8 +188,13 @@ public class TaskGraphService
     // (or a supplied title is blank / status invalid).
     public Node? UpdateNode(string id, string? title, string? note, string? repoId, string? machineId, string? status, double? x, double? y, long now)
     {
+        var before = Find(id);
         Node? updated = UpdateNodeCore(id, title, note, repoId, machineId, status, x, y, now);
-        if (updated is not null) RaiseChanged();
+        if (updated is not null)
+        {
+            if (before is not null && before.Status != updated.Status) PublishStatus(updated, before.Status, null);
+            RaiseChanged();
+        }
         return updated;
     }
 
@@ -272,12 +283,24 @@ public class TaskGraphService
             updated = cur with { DispatchedAt = now, DispatchCount = cur.DispatchCount + 1, Status = cur.Status == "done" ? "done" : "doing", UpdatedAt = now };
             _board.Nodes[i] = updated;
             Save();
+            if (cur.Status != updated.Status) PublishStatus(updated, cur.Status, "dispatch");
         }
         RaiseChanged();
         return updated;
     }
 
     public Node? Find(string id) { lock (_gate) return _board.Nodes.FirstOrDefault(n => n.Id == id); }
+
+    /// <summary>`task.status` on the harness feed (openspec arch-goal-conversations): the
+    /// source names the task and its assignee (repoId/sourceId — the arch's managed key),
+    /// the data the transition. Best-effort like every feed publish.</summary>
+    private void PublishStatus(Node n, string previous, string? by)
+    {
+        if (_feed is null) return;
+        _feed.Publish("task.status",
+            source: new { taskId = n.Id, title = n.Title, repoId = n.RepoId, sourceId = n.SourceId, repoName = n.Title },
+            data: new { status = n.Status, previous, by });
+    }
 
     /// <summary>The prerequisites of a task (the targets of its depends-on edges).</summary>
     public List<Node> Prerequisites(string id)

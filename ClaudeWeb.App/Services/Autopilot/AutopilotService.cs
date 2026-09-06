@@ -365,8 +365,15 @@ public class AutopilotService : BackgroundService
         // The arch instances (openspec: add-arch-agent, D2; arch-conversations): one
         // per arch conversation that has a loop slot, keyed to the conversation id,
         // ticked through the SAME mechanics with the shared home repo as cwd.
+        // Goal conversations (openspec arch-goal-conversations): a goal whose loop stopped is
+        // reconciled first, unowned events go to the inbox, and a finished goal's summary
+        // reaches the Operator-facing conversation once its slot is free.
+        try { _arch.ReconcileGoals(); _arch.SweepInbox(); }
+        catch (Exception ex) { _logger.Error($"[ARCH] goal routing tick failed: {ex.Message}"); }
         foreach (var conv in _arch.ConversationLoops())
             TickRepo(_arch.HomeInfoFor(conv.RepoId), cfg, routines, now);
+        try { _arch.DeliverGoalSummaries(); }
+        catch (Exception ex) { _logger.Error($"[ARCH] goal summary delivery failed: {ex.Message}"); }
     }
 
     private void TickRepo(RepositoryRegistry.RepositoryInfo repo, AutopilotConfigStore.Snapshot cfg, IReadOnlyList<PromptClassifier.Routine> routines, long now)
@@ -652,7 +659,10 @@ public class AutopilotService : BackgroundService
                 decision = ArchDrivenPolicy.Apply(decision, loop,
                     _lastDrivenPrompt.TryGetValue(repo.Id, out var lastPrompt) ? lastPrompt : null,
                     now, _arch.DrivenQuietFloor,
-                    () => _arch.ComposeWake(repo.Id) is not null);
+                    () => _arch.ComposeWake(repo.Id) is not null,
+                    // The board-side completion gate of a goal conversation (openspec
+                    // arch-goal-conversations): null for every other arch loop.
+                    () => _arch.CompletionBlocker(repo.Id));
 
             Execute(repo, loop, decision, sessionId, snippet, intercept, now);
     }
@@ -761,6 +771,15 @@ public class AutopilotService : BackgroundService
                     ? ""
                     : (propose.EnterPhase == LoopConfigStore.PhaseVerify
                         ? LoopConfigStore.PhaseVerify : LoopConfigStore.PhaseWork);
+                // A goal conversation's send (openspec arch-goal-conversations) carries the
+                // Operator messages queued while it was busy, the board check and what
+                // happened on its repos since its last turn, ahead of the loop prompt. The
+                // decoration drains the queue, so it is composed only when the slot is free.
+                if (ArchAgentService.IsArchKey(repo.Id) && loop.Kind != LoopConfigStore.KindArch)
+                {
+                    if (_runs.Get(repo.Id)?.Status == "running") return;
+                    briefed = _arch.DecorateDrivenPrompt(repo.Id, briefed ?? propose.Prompt);
+                }
                 if (SendPrompt(repo, sessionId, loop, propose.Prompt, briefed, briefingRev,
                         sendPhase, propose.Confidence, snippet, intercept, now))
                 {
@@ -799,6 +818,9 @@ public class AutopilotService : BackgroundService
     {
         if (!ArchAgentService.IsArchKey(repo.Id) || loop.Kind == LoopConfigStore.KindArch) return;
         _lastDrivenPrompt.TryRemove(repo.Id, out _);
+        // A goal conversation's loop ended: release what it owned, summary to the Operator.
+        try { _arch.OnDrivenResolved(repo.Id, _loops.Get(repo.Id) ?? loop); }
+        catch (Exception ex) { _logger.Error($"[ARCH] could not close the goal: {ex.Message}"); }
         try { _arch.RestoreStandingLoopIfNeeded(repo.Id); }
         catch (Exception ex) { _logger.Error($"[LOOP] could not restore the arch standing loop: {ex.Message}"); }
     }

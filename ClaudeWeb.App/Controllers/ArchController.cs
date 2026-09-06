@@ -101,8 +101,75 @@ public class ArchController : ControllerBase
                 id = c.Id, name = c.Name, isDefault = c.IsDefault, createdAt = c.CreatedAt, sessionId = c.SessionId,
                 loop = loops.TryGetValue(c.Id, out var l) ? new { kind = l.Kind, active = l.Active, status = l.Status } : null,
                 running = _runs.Get(c.Id)?.Status == "running",
+                // The goal it runs (openspec arch-goal-conversations) and whether that makes it busy.
+                goal = _arch.GoalOf(c.Id) is { } g ? _arch.GoalView(g) : null,
+                busy = _arch.IsBusy(c.Id),
             }),
         });
+    }
+
+    // ---- goal conversations (openspec arch-goal-conversations) ------------------------------
+
+    [HttpGet("goals")]
+    public IActionResult Goals()
+    {
+        _logger.CountRequest();
+        return Ok(new { goals = _arch.GoalViews(), legacyBroadcast = _arch.LegacyBroadcast, inbox = _arch.Inbox(50) });
+    }
+
+    public sealed record GoalRequest(string? Goal, List<string>? Repos, List<string>? Tasks, int? MaxIterations, bool? RequireMerged, string? Mode = null);
+
+    /// <summary>The Operator starts a goal conversation from the Arch tab: a new conversation
+    /// owning the repos/tasks, its goal loop armed. Same outcome words as the arch tool.</summary>
+    [HttpPost("goals")]
+    public IActionResult StartGoal([FromBody] GoalRequest? req)
+    {
+        _logger.CountRequest();
+        if (GateClosed() is { } closed) return closed;
+        var o = _arch.StartGoal(req?.Goal, req?.Repos, req?.Tasks, req?.MaxIterations, req?.RequireMerged == true, LoopConfigStore.ArmedByOperator, mode: req?.Mode);
+        return o.Ok ? Ok(new { ok = true, status = o.Status, detail = o.Detail, goal = o.Data })
+            : BadRequest(new { error = o.Detail, status = o.Status });
+    }
+
+    [HttpPost("goals/{id}/stop")]
+    public IActionResult StopGoal(string id)
+    {
+        _logger.CountRequest();
+        var o = _arch.StopGoal(id, LoopConfigStore.ArmedByOperator);
+        return o.Ok ? Ok(new { ok = true, status = o.Status, detail = o.Detail, goal = o.Data }) : NotFound(new { error = o.Detail, status = o.Status });
+    }
+
+    public sealed record GoalMessageRequest(string? Text);
+
+    /// <summary>A message for a busy goal conversation: queued, read on its next wake.</summary>
+    [HttpPost("goals/{id}/message")]
+    public IActionResult MessageGoal(string id, [FromBody] GoalMessageRequest? req)
+    {
+        _logger.CountRequest();
+        var o = _arch.QueueGoalMessage(id, req?.Text);
+        return o.Ok ? Ok(new { ok = true, status = o.Status, detail = o.Detail, goal = o.Data }) : BadRequest(new { error = o.Detail, status = o.Status });
+    }
+
+    public sealed record RoutingRequest(bool? LegacyBroadcast);
+
+    /// <summary>The legacy routing setting: wake goal-less conversations (the default included)
+    /// on every managed repo event, as before goal conversations. Default off.</summary>
+    [HttpPost("routing")]
+    public IActionResult Routing([FromBody] RoutingRequest? req)
+    {
+        _logger.CountRequest();
+        if (GateClosed() is { } closed) return closed;
+        if (req?.LegacyBroadcast is not bool on) return BadRequest(new { error = "legacyBroadcast (true|false) is required" });
+        _arch.SetLegacyBroadcast(on);
+        return Ok(BuildState());
+    }
+
+    [HttpDelete("inbox")]
+    public IActionResult ClearInbox()
+    {
+        _logger.CountRequest();
+        _arch.ClearInbox();
+        return Ok(new { cleared = true });
     }
 
     public sealed record ConversationRequest(string? Name);
@@ -216,6 +283,13 @@ public class ArchController : ControllerBase
             watermark = _arch.WatermarkOf(key),
             drivenQuietSeconds = _arch.DrivenQuietSeconds,
             disallowedTools = ArchAgentService.DisallowedTools,
+            // Goal conversations (openspec arch-goal-conversations): this conversation's goal
+            // and busy state, every goal, the routing setting and the inbox of unowned events.
+            goal = _arch.GoalOf(key) is { } goal ? _arch.GoalView(goal) : null,
+            busy = _arch.IsBusy(key),
+            goals = _arch.GoalViews(),
+            legacyBroadcast = _arch.LegacyBroadcast,
+            inbox = _arch.Inbox(30),
         };
     }
 

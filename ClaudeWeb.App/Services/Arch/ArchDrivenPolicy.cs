@@ -34,13 +34,23 @@ public static class ArchDrivenPolicy
     public static bool HasSentThisArm(LoopConfigStore.LoopState inst) =>
         inst.IterationsDone > 0 && inst.LastSentAt > 0 && inst.LastSentAt >= inst.ArmedAt;
 
+    /// <param name="completionBlocker">The board-side completion check of a goal conversation
+    /// (openspec arch-goal-conversations): called only when the kind decided <c>done</c>;
+    /// a non-null sentence means the board disagrees (an owned task is short of the
+    /// lifecycle floor) and the loop goes back to WORK with the work prompt — a new phase,
+    /// so it is sent at once; the sentence reaches the agent through the wake decoration.
+    /// Null (or no callback) lets the done stand.</param>
     public static LoopDecision Apply(LoopDecision decision, LoopConfigStore.LoopState inst, string? lastSentPrompt,
-        long nowMs, TimeSpan quietFloor, Func<bool> hasWake)
+        long nowMs, TimeSpan quietFloor, Func<bool> hasWake, Func<string?>? completionBlocker = null)
     {
         switch (decision)
         {
             case LoopDecision.Stop { Reason: "needs-human" } stop:
                 return new LoopDecision.Hold($"{ArchLoop.WaitingPrefix}: {stop.Detail}", Escalate: true, Label: stop.Detail);
+
+            case LoopDecision.Stop { Status: "done" } when completionBlocker?.Invoke() is { Length: > 0 }:
+                // Verified by the agent, refused by the board: back to work, the gap named.
+                return new LoopDecision.Propose(inst.Prompt, EnterPhase: LoopConfigStore.PhaseWork);
 
             case LoopDecision.Propose propose
                 when propose.EnterPhase is null
