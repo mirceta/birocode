@@ -67,10 +67,15 @@ function PriorityPicker({ value = 0, onChange, t }) {
 
 const TAB_KEY = 'claudeweb_ideas_tab'; // remembered tab: 'ideas' | 'plan' | 'graph'
 
-export default function IdeasPanel() {
+// `view` (openspec management-split-tabs): 'all' = the studio tab (Ideas · Arch plan ·
+// Task graph · Kanban as inner tabs); 'ideas' = the list + arch plan only; 'graph' and
+// 'kanban' = that board alone. The Management App mounts the three as its own tabs.
+export default function IdeasPanel({ view = 'all' }) {
   const { t } = useT();
   // The task graph now lives here as a third tab (plans/ideas-taskgraph-merge.md).
   const graphOn = useFeature('taskGraph');
+  // The graph/kanban inner tabs exist only in the combined view.
+  const graphTabs = graphOn && view === 'all';
   // Shared-board sync bar (openspec ideas-drive-sync), Advanced-only.
   const syncOn = useFeature('ideasSync');
   // "Break into tasks" (openspec tasks-agent, D7): hand the draft to the Tasks
@@ -79,7 +84,8 @@ export default function IdeasPanel() {
 
   const [tab, setTab] = useState(() => {
     const stored = localStorage.getItem(TAB_KEY);
-    return stored === 'plan' || stored === 'graph' || stored === 'kanban' ? stored : 'ideas';
+    const ok = stored === 'plan' || ((stored === 'graph' || stored === 'kanban') && view === 'all');
+    return ok ? stored : 'ideas';
   });
   function chooseTab(next) {
     setTab(next);
@@ -168,7 +174,7 @@ export default function IdeasPanel() {
     }
     setDraft('');
     setBreaking(true);
-    if (graphOn) chooseTab('graph');
+    if (graphTabs) chooseTab('graph');
     // Poll the Tasks agent until its run is no longer running, then reload the graph.
     const started = Date.now();
     let running = true;
@@ -261,7 +267,7 @@ export default function IdeasPanel() {
       setError(t('ideas.saveError'));
       return;
     }
-    chooseTab('graph');
+    if (graphTabs) chooseTab('graph');
   }
 
   async function remove(id) {
@@ -366,8 +372,30 @@ export default function IdeasPanel() {
     );
   }
 
+  // Standalone boards (openspec management-split-tabs): the Management App mounts the
+  // Task graph and the Kanban as their own tabs; no tab strip, no composer. The graph
+  // polls so tasks created elsewhere (the Ideas pane, the Tasks agent) show up.
+  if (view === 'graph') {
+    return (
+      <div className="ideas ideas--standalone" data-ideas-view="graph">
+        <div className="ideas__tabpanel ideas__tabpanel--graph">
+          <TaskGraphPanel refreshKey={graphRefresh} pollMs={10000} />
+        </div>
+      </div>
+    );
+  }
+  if (view === 'kanban') {
+    return (
+      <div className="ideas ideas--standalone" data-ideas-view="kanban">
+        <div className="ideas__tabpanel ideas__tabpanel--graph">
+          <KanbanBoard />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="ideas">
+    <div className="ideas" data-ideas-view={view}>
       <div className="ideas__tabs" role="tablist" aria-label={t('nav.ideas')}>
         <button
           type="button"
@@ -387,7 +415,7 @@ export default function IdeasPanel() {
         >
           {t('archplan.title')}
         </button>
-        {graphOn && (
+        {graphTabs && (
           <button
             type="button"
             role="tab"
@@ -398,7 +426,7 @@ export default function IdeasPanel() {
             🧩 Task graph
           </button>
         )}
-        {graphOn && (
+        {graphTabs && (
           <button
             type="button"
             role="tab"
@@ -415,7 +443,7 @@ export default function IdeasPanel() {
 
       {tab === 'plan' ? (
         <ArchPlanSection />
-      ) : tab === 'graph' && graphOn ? (
+      ) : tab === 'graph' && graphTabs ? (
         <div className="ideas__tabpanel ideas__tabpanel--graph">
           {(breaking || breakMsg) && (
             <div className={`ideas__working${breaking ? '' : ' ideas__working--done'}`} data-break-status={breaking ? 'working' : 'done'}>
@@ -424,7 +452,7 @@ export default function IdeasPanel() {
           )}
           <TaskGraphPanel refreshKey={graphRefresh} />
         </div>
-      ) : tab === 'kanban' && graphOn ? (
+      ) : tab === 'kanban' && graphTabs ? (
         <div className="ideas__tabpanel ideas__tabpanel--graph">
           <KanbanBoard />
         </div>
@@ -471,7 +499,11 @@ export default function IdeasPanel() {
       </div>
 
       {error && <ErrorBanner message={error} />}
-      {breaking && !graphOn && <div className="ideas__working" data-break-status="working">{t('ideas.breakUpWorking')}</div>}
+      {(breaking || breakMsg) && !graphTabs && (
+        <div className={`ideas__working${breaking ? '' : ' ideas__working--done'}`} data-break-status={breaking ? 'working' : 'done'}>
+          {breaking ? t('ideas.breakUpWorking') : breakMsg}
+        </div>
+      )}
 
       {!loading && notes.length > 0 && (
         <input
