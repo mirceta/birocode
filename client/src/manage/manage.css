@@ -135,3 +135,6 @@ html, body, #root { height: 100%; margin: 0; }
 
 /* "+" new arch conversation (openspec arch-conversations) */
 .mg__tab--new { padding: 4px 9px; font-weight: 700; }
+
+/* A conversation busy with a goal (openspec arch-goal-conversations). */
+.mg__tab--busy { border-style: dashed; }

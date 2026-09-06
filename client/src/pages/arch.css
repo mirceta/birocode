@@ -150,3 +150,9 @@
       strip then sticks to the top of that scrollport instead. */
 .arch--solo .arch__main { flex: 1 1 auto; min-height: 0; }
 .arch__top { position: sticky; top: 0; z-index: 3; flex: 0 0 auto; background: var(--color-bg, #0f1117); }
+
+/* Goal conversations (openspec arch-goal-conversations): the start form on the Loops lane
+   and the inline pick rows; the busy banner reuses .arch__banner. */
+.arch__goal-text { width: 100%; box-sizing: border-box; font: inherit; font-size: 13px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--color-border, #444); background: var(--color-bg, #0f1117); color: var(--color-text, #ddd); margin-bottom: 6px; resize: vertical; }
+.arch__goal-pick { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; margin-bottom: 6px; font-size: 12px; }
+.arch__scope-row--inline { display: inline-flex; align-items: center; gap: 4px; margin: 0; }
