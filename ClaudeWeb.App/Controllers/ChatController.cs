@@ -59,7 +59,7 @@ public class ChatController : ControllerBase
     /// conversation that can run concurrently with the builder — see
     /// plans/repo-ask-chat.md). <c>Browser</c> requests Claude-in-Chrome browser
     /// mode for this turn (openspec claude-in-chrome; builder lane only).</summary>
-    public record ChatRequest(string? Message, string? SessionId, string? Model, string? Lane, bool? Browser);
+    public record ChatRequest(string? Message, string? SessionId, string? Model, string? Lane, bool? Browser, string? Provider = null);
 
     /// <summary>Only two lanes exist; anything unrecognized falls back to the
     /// builder so a stray value can never spawn an unexpected run mode.</summary>
@@ -97,11 +97,16 @@ public class ChatController : ControllerBase
         // vs read-only ask) -- can run concurrently (plans/repo-ask-chat.md).
         var lane = NormalizeLane(request?.Lane);
 
+        // Provider (openspec provider-agnostic-runner): per-turn override, else
+        // the repo's persisted choice, else claude. Unknown values read as claude.
+        var provider = AgentProviders.Normalize(request?.Provider ?? repo.Provider);
+
         // Browser mode (openspec claude-in-chrome): builder lane only — the ask
         // lane's contract is structurally read-only, and browser tools mutate the
-        // world. The single-holder gate is claimed BEFORE the run slot so a
-        // conflict is a clean 409 with nothing to unwind.
-        var browser = request?.Browser == true && lane == "builder";
+        // world. Claude-only: Codex has no --chrome equivalent. The single-holder
+        // gate is claimed BEFORE the run slot so a conflict is a clean 409 with
+        // nothing to unwind.
+        var browser = request?.Browser == true && lane == "builder" && provider == AgentProviders.Claude;
         if (browser && !_chrome.TryAcquire(repo.Name, out var holderRepo))
         {
             _logger.Info($"[CHAT] Rejected: browser is held by \"{holderRepo}\" (requested for \"{repo.Name}\").");
@@ -164,7 +169,8 @@ public class ChatController : ControllerBase
                     repoId: repo.Id,
                     repoName: repo.Name,
                     mcpConfigJson: mcpConfigJson,
-                    browser: browser);
+                    browser: browser,
+                    provider: provider);
             }
             catch (Exception ex)
             {

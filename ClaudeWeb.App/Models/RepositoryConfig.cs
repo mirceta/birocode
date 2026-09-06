@@ -64,6 +64,13 @@ public class RepositoryConfig
     /// </summary>
     public List<LocalAppConfig> LocalApps { get; set; } = new();
 
+    /// <summary>
+    /// Which engine runs this repo's agent turns (openspec provider-agnostic-runner):
+    /// "claude" (default) or "codex". Null/absent — including every entry that
+    /// predates the field — reads as claude.
+    /// </summary>
+    public string? Provider { get; set; }
+
     // The per-project permission preset (PermissionPolicy) was removed
     // (openspec add-resilient-auth): the two auth gates are the whole
     // authorization model, so chat runs unrestricted. Any stale field in an

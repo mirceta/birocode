@@ -59,6 +59,7 @@ export const FEATURES = {
   footerClauses: 'advanced', // composer button + popup: standing instructions appended to every send while active (openspec: prompt-footer-clauses)
   localAppDiscovery: 'advanced', // Discover local apps in each agent dock: Discover + panel-opener buttons and the findings panel overlay (openspec: discover-local-apps, discover-apps-panel)
   understandingAgent: 'advanced', // "Ask for understanding" button in each agent dock: fork the conversation → build the Understanding app (openspec: add-ask-for-understanding)
+  agentProvider: 'advanced', // per-repo engine selector in each agent dock: claude | codex (openspec: provider-agnostic-runner)
   cockpitTab: 'advanced', // read-only OpenSpec Cockpit tab, scoped to the selected repo (openspec: openspec-cockpit-in-harness)
   paneSpanButtons: 'advanced', // -/+ span steppers in each multi-pane top bar; reuses the Settings tabWidths span (openspec: add-pane-span-buttons)
   operatorMessages: 'advanced', // Operator messages drawer: consolidated list of the active conversation's user-role messages (openspec: add-operator-message-history)

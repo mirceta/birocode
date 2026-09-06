@@ -256,6 +256,34 @@ export default function PinnedAgent({
   // same capability gate as the Ask button. Optimistic flip, reverted on error.
   const [autoUnderstanding, setAutoUnderstanding] = useState(false);
 
+  // Agent engine (openspec provider-agnostic-runner): claude | codex, a per-repo
+  // SERVER-persisted choice — which CLI runs this dock's turns. Loaded from the
+  // repo listing; optimistic change, reverted on error.
+  const showProvider = useFeature('agentProvider');
+  const [provider, setProvider] = useState('claude');
+  useEffect(() => {
+    if (!showProvider) return undefined;
+    let alive = true;
+    setProvider('claude');
+    (async () => {
+      try {
+        const repos = await apiGet('/repo');
+        const r = Array.isArray(repos) ? repos.find((x) => x.id === tab.repoId) : null;
+        if (alive && r?.provider) setProvider(r.provider);
+      } catch { /* leave default */ }
+    })();
+    return () => { alive = false; };
+  }, [showProvider, tab.repoId]);
+  const changeProvider = async (next) => {
+    const prev = provider;
+    setProvider(next);
+    try {
+      await apiPost(`/repo/${tab.repoId}/provider`, { provider: next });
+    } catch {
+      setProvider(prev); // revert the optimistic change
+    }
+  };
+
   // Inward-sync git actions in the dock's git row (plans/dock-git-actions.md):
   // the SAME merge / pull-main / pull-branch actions as the Git tab, scoped to
   // THIS dock's repo via repoId → X-Repo-Id, reusing the Git tab's act() flow
@@ -684,6 +712,18 @@ export default function PinnedAgent({
               {t('dashboard.understandingError', { error: understanding.error })}
             </div>
           )}
+        </div>
+      )}
+      {/* Engine selector (openspec provider-agnostic-runner): which CLI runs
+          this dock's turns — claude (default) or codex. Per-repo, server-
+          persisted; takes effect on the next turn. */}
+      {showProvider && !showFiles && (!openApp || split) && !showConsole && !showOpenspec && !showTools && (
+        <div className="phone__provider" title={t('dashboard.providerHint')} data-provider={provider}>
+          <span className="phone__provider-label">{t('dashboard.provider')}</span>
+          <select className="phone__provider-select" value={provider} onChange={(e) => changeProvider(e.target.value)}>
+            <option value="claude">claude</option>
+            <option value="codex">codex</option>
+          </select>
         </div>
       )}
       {/* The git block is chat-context furniture; hide it while the Files tab OR

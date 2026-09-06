@@ -39,7 +39,7 @@ public class RepositoryRegistry
     /// <see cref="LocalPort"/> is the default (first) app's port, kept for
     /// back-compat; <see cref="LocalApps"/> is the full list
     /// (plans/multiple-local-apps.md).</summary>
-    public sealed record RepositoryInfo(string Id, string Name, string Path, bool Exists, bool IsGitRepo, bool IsSelf, string Visibility, int? LocalPort, IReadOnlyList<LocalAppInfo> LocalApps, string Handle = "");
+    public sealed record RepositoryInfo(string Id, string Name, string Path, bool Exists, bool IsGitRepo, bool IsSelf, string Visibility, int? LocalPort, IReadOnlyList<LocalAppInfo> LocalApps, string Handle = "", string Provider = "claude");
 
     /// <summary>One local app exposed by a repo (plans/multiple-local-apps.md).</summary>
     public sealed record LocalAppInfo(string Id, string Name, int Port, string Kind);
@@ -195,6 +195,22 @@ public class RepositoryRegistry
             repo.AutoUnderstanding = enabled;
             Save();
             _logger.Info($"[REPO] Auto-understanding of \"{repo.Name}\" -> {(enabled ? "on" : "off")}");
+            return true;
+        }
+    }
+
+    /// <summary>Sets which engine runs this repo's agent turns — "claude" or
+    /// "codex" (openspec provider-agnostic-runner); anything else normalizes to
+    /// claude. No-op if the id is unknown.</summary>
+    public bool SetProvider(string id, string? provider)
+    {
+        lock (_gate)
+        {
+            var repo = _repos.FirstOrDefault(r => string.Equals(r.Id, id, StringComparison.Ordinal));
+            if (repo is null) return false;
+            repo.Provider = Chat.AgentProviders.Normalize(provider);
+            Save();
+            _logger.Info($"[REPO] Provider of \"{repo.Name}\" -> {repo.Provider}");
             return true;
         }
     }
@@ -445,7 +461,7 @@ public class RepositoryRegistry
             // mechanism. openspec add-harness-event-feed.
             infos.Add(new LocalAppInfo(EventsAppId, "Harness Event Feed", 0, "harness"));
         }
-        return new RepositoryInfo(r.Id, r.Name, r.Path, exists, isGit, r.IsSelf, NormalizeVisibility(r.Visibility), defaultPort, infos, r.Handle ?? Handles.Slug(r.Name));
+        return new RepositoryInfo(r.Id, r.Name, r.Path, exists, isGit, r.IsSelf, NormalizeVisibility(r.Visibility), defaultPort, infos, r.Handle ?? Handles.Slug(r.Name), Chat.AgentProviders.Normalize(r.Provider));
     }
 
     // Clones normalize too: LocalPort is set to the default app's port so
