@@ -36,4 +36,7 @@
 
 ## 3. Ship
 
-- [ ] 3.1 Commit on `feature/arch-conversations`; deploy/merge on the Operator's word.
+- [x] 3.1 Commit on `feature/arch-conversations`; deploy/merge on the Operator's word.
+      DONE 2026-09-06 11:17 — committed feea0d4; deployed from the branch via `swap.ps1`
+      (live 1.0.0+feea0d4, health 200) and kept immediately on the Operator's instruction;
+      the Operator confirmed it works. Merge left to the Operator via pull request.
