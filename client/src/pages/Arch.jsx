@@ -622,9 +622,12 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full' }
   }
 
   return (
-    <div className={`arch${popup ? ' arch--popup' : ''}${sideDrag ? ' arch--sidedrag' : ''}${chatOnly ? ' arch--chat' : ''}`}>
+    <div className={`arch${popup ? ' arch--popup' : ''}${sideDrag ? ' arch--sidedrag' : ''}${chatOnly ? ' arch--chat' : ''}${showSide ? '' : ' arch--solo'}`}>
       <div className="arch__cols" ref={colsRef}>
       <div className="arch__main">
+        {/* Pinned header (openspec pin-conversation-lanes): title row + lane strip
+            stay in view however far the transcript is scrolled — see arch.css. */}
+        <div className="arch__top" data-conversation-head>
         <div className="arch__head">
           {!popup && <span className="arch__title">Arch agent</span>}
           <span className="arch__meta">
@@ -702,6 +705,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full' }
               {sideOpen ? '▥ hide side' : '▥ show side'}
             </button>
           )}
+        </div>
         </div>
         {!state && <div className="arch__banner arch__banner--loading" data-loading>Loading the arch state…</div>}
         {state && !state.gateOpen && <div className="arch__banner">Autopilot is disabled by the operator (host GUI). The arch agent cannot act until the gate is open.</div>}

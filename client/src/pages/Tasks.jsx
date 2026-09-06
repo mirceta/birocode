@@ -165,9 +165,12 @@ export default function Tasks({ popup = false }) {
   }
 
   return (
-    <div className={`arch tasks${popup ? ' arch--popup' : ''}`} data-tasks>
+    <div className={`arch tasks arch--solo${popup ? ' arch--popup' : ''}`} data-tasks>
       <div className="arch__cols">
         <div className="arch__main">
+          {/* Pinned header (openspec pin-conversation-lanes): stays in view however
+              far the transcript is scrolled — see arch.css. No side column here. */}
+          <div className="arch__top" data-conversation-head>
           <div className="arch__head">
             <span className="arch__title">🗂 {t('nav.tasks')} agent</span>
             <span className="arch__meta">
@@ -178,6 +181,7 @@ export default function Tasks({ popup = false }) {
           <div className="arch__lanes" role="tablist" aria-label="Tasks lanes">
             <button type="button" role="tab" aria-selected={lane === 'chat'} className={`arch__lane${lane === 'chat' ? ' arch__lane--on' : ''}`} onClick={() => setLane('chat')}>💬 Chat</button>
             <button type="button" role="tab" aria-selected={lane === 'tools'} className={`arch__lane${lane === 'tools' ? ' arch__lane--on' : ''}`} onClick={() => setLane('tools')}>🔌 Tools</button>
+          </div>
           </div>
           {error && <div className="arch__banner arch__banner--err">{error}</div>}
           {lane === 'tools' ? (

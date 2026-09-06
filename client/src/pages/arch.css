@@ -111,3 +111,19 @@
   .arch__side { flex: 0 0 auto !important; width: auto !important; }
   .arch__overview { grid-template-columns: 1fr; }
 }
+
+/* Pinned conversation header (openspec pin-conversation-lanes). The title row and
+   the Chat / Tools / History lane strip must never scroll away with the transcript;
+   only .arch__scroll scrolls beneath them, the composer stays at the bottom.
+   Two mechanisms, because two layouts:
+   1. A conversation column with no side column below it (.arch--solo: the Tasks
+      page, the Management App's Arch pane, the studio Arch tab with the side
+      hidden) keeps owning its height in the stacked container/media layouts above
+      — otherwise those rules size .arch__main to its content and .arch__cols
+      becomes the scroller, taking the strip with it. Specificity (0,2,0) beats
+      the (0,1,0) rules inside the queries in every layout.
+   2. When the side column really does stack under the conversation (the studio
+      Arch tab on a narrow pane), .arch__cols scrolls as a whole by design; the
+      strip then sticks to the top of that scrollport instead. */
+.arch--solo .arch__main { flex: 1 1 auto; min-height: 0; }
+.arch__top { position: sticky; top: 0; z-index: 3; flex: 0 0 auto; background: var(--color-bg, #0f1117); }
