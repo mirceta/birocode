@@ -56,7 +56,12 @@ public class TaskGraphController : ControllerBase
 
     public record NodeRequest(string? Title, string? Note, string? RepoId, string? MachineId, string? Status, double? X, double? Y,
         string? SourceId = null, string? CreatedBy = null, string? IdeaId = null);
-    public record AssignRequest(string? SourceId, string? RepoId, string? By);
+    /// <summary>Legacy single assignee (sourceId + repoId, blank = unassign), or several
+    /// (openspec task-multi-assignee): <c>assignees</c> with <c>mode</c> replace | add | remove.</summary>
+    public record AssignRequest(string? SourceId, string? RepoId, string? By, List<AssigneeRequest>? Assignees = null, string? Mode = null);
+    public record AssigneeRequest(string? SourceId, string? RepoId);
+    /// <summary>Optional subset to ping (openspec task-multi-assignee); empty = every assignee not yet pinged.</summary>
+    public record DispatchRequest(List<AssigneeRequest>? Assignees = null);
     public record EdgeRequest(string? Source, string? Target);
     public record ScratchRequest(string? Text);
     public record MachineRequest(string? Name, double? X, double? Y, double? W, double? H);
@@ -96,7 +101,19 @@ public class TaskGraphController : ControllerBase
     public IActionResult Assign(string id, [FromBody] AssignRequest? request)
     {
         _logger.CountRequest();
-        var node = _graph.Assign(id, request?.SourceId, request?.RepoId, request?.By ?? "human", Now());
+        TaskGraphService.Node? node;
+        if (request?.Assignees is { } many)
+        {
+            var wanted = many.Where(a => !string.IsNullOrWhiteSpace(a.RepoId)).Select(a => (string.IsNullOrWhiteSpace(a.SourceId) ? null : a.SourceId, a.RepoId!.Trim())).ToList();
+            var by = request.By ?? "human";
+            switch ((request.Mode ?? "replace").Trim().ToLowerInvariant())
+            {
+                case "add": node = _graph.Find(id); foreach (var (src, repo) in wanted) node = _graph.AddAssignee(id, src, repo, by, Now()); break;
+                case "remove": node = _graph.Find(id); foreach (var (src, repo) in wanted) node = _graph.RemoveAssignee(id, src, repo, by, Now()); break;
+                default: node = _graph.SetAssignees(id, wanted, by, Now()); break;
+            }
+        }
+        else node = _graph.Assign(id, request?.SourceId, request?.RepoId, request?.By ?? "human", Now());
         if (node is null) return NotFound(new { error = "Unknown node id." });
         return Ok(node);
     }
@@ -105,10 +122,12 @@ public class TaskGraphController : ControllerBase
     /// text goes to that repo agent's conversation through the arch send path, and
     /// the card moves to doing when the send lands.</summary>
     [HttpPost("nodes/{id}/dispatch")]
-    public IActionResult Dispatch(string id)
+    public IActionResult Dispatch(string id, [FromBody] DispatchRequest? request = null)
     {
         _logger.CountRequest();
-        var o = _arch.DispatchTask(id, requireArmed: false, by: "operator");
+        var keys = request?.Assignees?.Where(a => !string.IsNullOrWhiteSpace(a.RepoId))
+            .Select(a => TaskGraphService.AssigneeKey(string.IsNullOrWhiteSpace(a.SourceId) ? null : a.SourceId, a.RepoId!.Trim())).ToList();
+        var o = _arch.DispatchTask(id, requireArmed: false, by: "operator", assigneeKeys: keys is { Count: > 0 } ? keys : null);
         return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
     }
 

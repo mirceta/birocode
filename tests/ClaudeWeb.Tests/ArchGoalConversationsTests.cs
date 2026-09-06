@@ -174,7 +174,7 @@ public sealed class ArchGoalConversationsTests : IDisposable
         Assert.Equal(new[] { "id" }, tools.First(t => t!["name"]!.GetValue<string>() == "stop_arch_goal")!["inputSchema"]!["required"]!.AsArray().Select(n => n!.GetValue<string>()).ToArray());
 
         var role = ArchAgentService.RolePrompt();
-        Assert.Equal("<!-- arch-role v9 -->", ArchAgentService.RoleVersionMarker);
+        Assert.Equal("<!-- arch-role v10 -->", ArchAgentService.RoleVersionMarker); // v10: multi-assignee tasks (openspec task-multi-assignee)
         Assert.Contains("## Goal conversations", role);
         Assert.Contains("start_arch_goal", role);
         Assert.Contains("never call you", role);

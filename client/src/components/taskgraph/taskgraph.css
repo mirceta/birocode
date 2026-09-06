@@ -127,6 +127,28 @@
   .tg-node.has-machine { --tg-machine-color: hsl(var(--tg-machine-h) 70% 62%); }
   .tg-node.has-repo { --tg-repo-bg: hsl(var(--tg-repo-h) 34% 24%); }
 }
+/* Several repo agents on one step (openspec task-multi-assignee): the node keeps the
+   primary's colours behind a double border, and an assignee row names every agent —
+   each chip coloured like a node would be (border = its machine, background = its
+   repo) with its OWN status; the node's status ring is the aggregate. */
+.tg-node.has-multi { border-style: double; border-width: 4px; }
+.tg-node__assignees { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.tg-assignee {
+  --tg-machine-color: var(--color-border);
+  --tg-repo-bg: var(--color-surface);
+  display: inline-flex; align-items: center; gap: 2px;
+  font-size: 10.5px; line-height: 1.5; padding: 0 7px; border-radius: 999px;
+  border: 2px solid var(--tg-machine-color); background: var(--tg-repo-bg); color: var(--color-text);
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tg-assignee.has-machine { --tg-machine-color: hsl(var(--tg-machine-h) 62% 40%); }
+.tg-assignee.has-repo { --tg-repo-bg: hsl(var(--tg-repo-h) 72% 90%); }
+.tg-assignee__status { color: var(--color-text-soft, #6b6b66); }
+.tg-assignee.st-done .tg-assignee__status, .tg-assignee.st-pr-merged .tg-assignee__status { color: #16a34a; }
+@media (prefers-color-scheme: dark) {
+  .tg-assignee.has-machine { --tg-machine-color: hsl(var(--tg-machine-h) 70% 62%); }
+  .tg-assignee.has-repo { --tg-repo-bg: hsl(var(--tg-repo-h) 34% 24%); }
+}
 /* Status rings (never the border — that is the machine's colour). Delivery
    lifecycle from openspec kanban-lifecycle-columns. */
 .tg-node.st-doing { box-shadow: 0 0 0 2px #e0552b, 0 1px 3px rgba(0, 0, 0, 0.1); }

@@ -45,7 +45,7 @@ public partial class ArchAgentService : IArchWakeSource
     public const string AuditKind = "arch";
     public const string AuditOutcomeSend = "arch";
     public const string AuditOutcomeTool = "arch-tool";
-    public const string RoleVersionMarker = "<!-- arch-role v9 -->";
+    public const string RoleVersionMarker = "<!-- arch-role v10 -->";
 
     /// <summary>Availability values (D4). <see cref="Unreachable"/> is the fleet
     /// addition (openspec add-fleet-arch-agent, D4): a remote agent whose harness
@@ -372,6 +372,21 @@ public partial class ArchAgentService : IArchWakeSource
         `verifiedStatus`, branch/PR linkage, `unverified` + `warning`, `stale` (work
         parked in committed/pr-opened past the window — report those to the Operator
         every time), and `awaitingDispatch` — assigned, not yet pinged, not blocked.
+
+        **Several repo agents on one task** (multi-assignee): work that spans repositories
+        is ONE card with several assignees, each owning its own repo and carrying its own
+        status, branch and PR. `create_task` / `assign_task` / `idea_to_task` take
+        `assignees` (comma-separated handles, e.g. "spacex/prg, MONSTER/skratek-projects");
+        `assign_task` also takes `mode` add | remove | replace. `dispatch_task` pings every
+        assignee not yet pinged (or the `assignees` you name), each with the shared brief and
+        which repo it owns; each assignee's state moves to doing. `list_tasks` returns
+        `assignees[]` with each one's status, branch, PR, verified state and warning; the
+        card's status is the AGGREGATE — as far as its slowest assignee, and out of todo as
+        soon as one has started (done only when every assignee is done). Relay a closing
+        line to the right agent: `update_task` with `assignee` (its handle) moves THAT
+        assignee's state and records its branch/PR; without `assignee` a status is applied
+        to every assignee, and a branch/PR claim on a multi-assignee card is refused until
+        you name the assignee.
 
         Your duties on each wake: (1) dispatch every task that is `awaitingDispatch` with
         `dispatch_task` — the assignee gets the full brief in its own conversation and the
@@ -1705,11 +1720,24 @@ public partial class ArchAgentService : IArchWakeSource
             {
                 var prereqs = edgesBySource.TryGetValue(n.Id, out var t) ? t.Where(byId.ContainsKey).Select(id => byId[id]).ToList() : new List<TaskGraph.TaskGraphService.Node>();
                 var blocked = !TaskGraph.TaskLifecycle.IsDelivered(n.Status) && prereqs.Any(p => !TaskGraph.TaskLifecycle.IsDelivered(p.Status));
+                var set = TaskGraph.TaskGraphService.AssigneesOf(n);
                 return new
                 {
                     id = n.Id, title = n.Title, note = n.Note, status = n.Status,
                     machine = n.RepoId is null ? null : n.SourceId is null ? Machine : srcLabel.GetValueOrDefault(n.SourceId, n.SourceId),
                     repoId = n.RepoId, repoName = n.RepoId is null ? null : repoName.GetValueOrDefault(n.RepoId, n.RepoId),
+                    // Every assignee with its OWN state (openspec task-multi-assignee); the
+                    // fields above mirror the first one, the card's status is the aggregate.
+                    assignees = set.Select(a => new
+                    {
+                        handle = AgentLabelOf(a.SourceId, a.RepoId), machine = a.SourceId is null ? Machine : srcLabel.GetValueOrDefault(a.SourceId, a.SourceId),
+                        repoId = a.RepoId, repoName = repoName.GetValueOrDefault(a.RepoId, a.RepoId), status = a.Status,
+                        assignedBy = a.AssignedBy, assignedAt = a.AssignedAt, dispatchedAt = a.DispatchedAt, dispatchCount = a.DispatchCount,
+                        branch = a.Branch, headCommit = a.HeadCommit, pushed = a.Pushed, prUrl = a.PrUrl, prNumber = a.PrNumber, mergeCommit = a.MergeCommit,
+                        verifiedStatus = a.VerifiedStatus, verifiedAt = a.VerifiedAt, warning = a.Warning,
+                        unverified = TaskGraph.TaskLifecycle.IsUnverified(a.Status, a.VerifiedStatus), stale = _graph.IsStale(a, now),
+                        awaitingDispatch = !TaskGraph.TaskLifecycle.IsDelivered(a.Status) && a.AssignedAt is not null && a.DispatchedAt is null && !blocked,
+                    }).ToList(),
                     assignedBy = n.AssignedBy, assignedAt = n.AssignedAt, dispatchedAt = n.DispatchedAt, dispatchCount = n.DispatchCount,
                     // Assigned THROUGH THE BOARD (AssignedAt stamped), not yet pinged, not
                     // blocked: the arch's cue to dispatch. A repo label from the graph's
@@ -1725,7 +1753,7 @@ public partial class ArchAgentService : IArchWakeSource
                     verifiedAt = n.VerifiedAt,
                     // The card says more than the harness has verified (openspec
                     // board-claims-advisory): report it, the status stands.
-                    unverified = TaskGraph.TaskLifecycle.IsUnverified(n.Status, n.VerifiedStatus),
+                    unverified = TaskGraph.TaskGraphService.IsUnverified(n),
                     stale = _graph.IsStale(n, now),
                     createdBy = n.CreatedBy, ideaId = n.IdeaId, createdAt = n.CreatedAt, updatedAt = n.UpdatedAt,
                 };
@@ -1742,25 +1770,51 @@ public partial class ArchAgentService : IArchWakeSource
     public static bool TaskMatches(TaskGraph.TaskGraphService.Node n, string? status, bool unassignedOnly, bool byMachine, string? sourceId, string? repoId)
     {
         if (!string.IsNullOrWhiteSpace(status) && !string.Equals(n.Status, status.Trim(), StringComparison.OrdinalIgnoreCase)) return false;
-        if (unassignedOnly) return n.RepoId is null;
-        if (repoId is not null) return string.Equals(n.RepoId, repoId, StringComparison.Ordinal) && string.Equals(n.SourceId, sourceId, StringComparison.Ordinal);
-        if (byMachine) return n.RepoId is not null && string.Equals(n.SourceId, sourceId, StringComparison.Ordinal);
+        // ANY assignee matches (openspec task-multi-assignee).
+        var set = TaskGraph.TaskGraphService.AssigneesOf(n);
+        if (unassignedOnly) return set.Count == 0;
+        if (repoId is not null) return set.Any(a => string.Equals(a.RepoId, repoId, StringComparison.Ordinal) && string.Equals(a.SourceId, sourceId, StringComparison.Ordinal));
+        if (byMachine) return set.Any(a => string.Equals(a.SourceId, sourceId, StringComparison.Ordinal));
         return true;
     }
 
-    public ToolOutcome ToolCreateTask(string? title, string? note, string? machine, string? repoId, string? dependsOn)
+    /// <summary>A resolved assignee reference (openspec task-multi-assignee).</summary>
+    public sealed record AssigneeRef(string? SourceId, string RepoId, string Label)
+    {
+        public string Key => TaskGraph.TaskGraphService.AssigneeKey(SourceId, RepoId);
+    }
+
+    /// <summary>Resolve a comma-separated list of agent references — handles
+    /// ("spacex/prg#2"), ids or unique names, each optionally qualified by
+    /// <paramref name="machine"/> — plus the legacy single <paramref name="repoId"/>, into
+    /// distinct (sourceId, repoId, label) triples. The first error stops the list.</summary>
+    public (List<AssigneeRef> Agents, string? Error) ResolveAssigneeRefs(string? machine, string? repoId, string? assignees)
+    {
+        var list = new List<AssigneeRef>();
+        var refs = new List<string>();
+        if (!string.IsNullOrWhiteSpace(repoId)) refs.Add(repoId);
+        refs.AddRange((assignees ?? "").Split(new[] { ',', ';', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        foreach (var r in refs)
+        {
+            var agent = ResolveAgentRef(machine, r);
+            if (agent.Error is not null || agent.RepoId is null) return (list, agent.Error ?? $"could not resolve \"{r}\"");
+            var src = agent.Target.IsSelf ? null : agent.Target.Source!.Id;
+            if (list.Any(x => x.SourceId == src && x.RepoId == agent.RepoId)) continue;
+            list.Add(new AssigneeRef(src, agent.RepoId, AgentLabelOf(src, agent.RepoId)));
+        }
+        return (list, null);
+    }
+
+    public ToolOutcome ToolCreateTask(string? title, string? note, string? machine, string? repoId, string? dependsOn, string? assignees = null)
     {
         if (string.IsNullOrWhiteSpace(title)) return new ToolOutcome(false, "error", "title is required");
-        string? sourceId = null;
-        if (!string.IsNullOrWhiteSpace(repoId))
-        {
-            var agent = ResolveAgentRef(machine, repoId);
-            if (agent.Error is not null) return new ToolOutcome(false, "error", agent.Error);
-            sourceId = agent.Target.IsSelf ? null : agent.Target.Source!.Id;
-            repoId = agent.RepoId;
-        }
-        var node = _graph.AddNode(title, note, string.IsNullOrWhiteSpace(repoId) ? null : repoId, null, 40, 40, Now(), sourceId, ActorArch, null);
+        var (agents, refErr) = ResolveAssigneeRefs(machine, repoId, assignees);
+        if (refErr is not null) return new ToolOutcome(false, "error", refErr);
+        var first = agents.FirstOrDefault();
+        var node = _graph.AddNode(title, note, first?.RepoId, null, 40, 40, Now(), first?.SourceId, ActorArch, null);
         if (node is null) return new ToolOutcome(false, "error", "title is blank");
+        // Several assignees (openspec task-multi-assignee): the rest join the set.
+        if (agents.Count > 1) node = _graph.SetAssignees(node.Id, agents.Select(a => (a.SourceId, a.RepoId)), ActorArch, Now()) ?? node;
         var linked = 0;
         foreach (var dep in (dependsOn ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
@@ -1769,58 +1823,109 @@ public partial class ArchAgentService : IArchWakeSource
             else _logger.Info($"[ARCH] create_task: dependency {dep} not linked ({err})");
         }
         AuditTool("create_task", node.RepoId, "created");
-        return new ToolOutcome(true, "created", $"task {node.Id} created{(linked > 0 ? $" with {linked} prerequisite(s)" : "")}", node);
+        return new ToolOutcome(true, "created", $"task {node.Id} created{(agents.Count > 0 ? $" for {string.Join(" + ", agents.Select(a => a.Label))}" : "")}{(linked > 0 ? $" with {linked} prerequisite(s)" : "")}", node);
     }
 
-    public ToolOutcome ToolUpdateTask(string? id, string? status, string? title, string? note, string? branch = null, string? commit = null, string? pr = null)
+    public ToolOutcome ToolUpdateTask(string? id, string? status, string? title, string? note, string? branch = null, string? commit = null, string? pr = null, string? assignee = null, string? machine = null)
     {
         if (string.IsNullOrWhiteSpace(id)) return new ToolOutcome(false, "error", "id is required");
         if (status is not null && !TaskGraph.TaskGraphService.Statuses.Contains(status))
             return new ToolOutcome(false, "error", $"status must be one of {string.Join(", ", TaskGraph.TaskGraphService.Statuses)}");
         var cur = _graph.Find(id);
         if (cur is null) return new ToolOutcome(false, "error", $"no task {id}");
+        var set = TaskGraph.TaskGraphService.AssigneesOf(cur);
+
+        // Which assignee (openspec task-multi-assignee): named → that one; unnamed on a
+        // card with several → a status broadcasts, a branch/PR claim is refused (it
+        // belongs to one agent's repo).
+        string? key = null;
+        string? who = null;
+        if (!string.IsNullOrWhiteSpace(assignee))
+        {
+            var agent = ResolveAgentRef(machine, assignee);
+            if (agent.Error is not null || agent.RepoId is null) return new ToolOutcome(false, "error", agent.Error ?? $"could not resolve assignee \"{assignee}\"");
+            key = TaskGraph.TaskGraphService.AssigneeKey(agent.Target.IsSelf ? null : agent.Target.Source!.Id, agent.RepoId);
+            if (set.All(a => a.Key != key))
+                return new ToolOutcome(false, "error", $"{assignee.Trim()} is not an assignee of task {id}; its assignees: {string.Join(", ", set.Select(a => AgentLabelOf(a.SourceId, a.RepoId)))}");
+            who = AgentLabelOf(agent.Target.IsSelf ? null : agent.Target.Source!.Id, agent.RepoId);
+        }
+        else if (set.Count > 1 && (branch is not null || commit is not null || pr is not null))
+            return new ToolOutcome(false, "error", $"task {id} has {set.Count} assignees ({string.Join(", ", set.Select(a => AgentLabelOf(a.SourceId, a.RepoId)))}); pass assignee to say whose branch/PR this is");
 
         // Relayed claim linkage first (TASK COMMITTED <id> <branch> <commit> /
         // TASK PR <id> <url>): it tells the verifier where to look.
         if (branch is not null || commit is not null || pr is not null)
-            cur = _graph.RecordClaim(id, branch, commit, pr, Now()) ?? cur;
+            cur = _graph.RecordClaim(id, key, branch, commit, pr, Now()) ?? cur;
 
         // The card moves to exactly what the arch says, in either direction (openspec
         // board-claims-advisory): the board is the arch's to move. The harness keeps
         // verifying afterwards and annotates — a status above the verified state carries
         // the warning badge until the facts catch up; it is never silently downgraded.
-        var node = _graph.UpdateNode(id, title, note, null, null, status, null, null, Now());
+        TaskGraph.TaskGraphService.Node? node;
+        if (key is not null)
+        {
+            node = status is null ? cur : _graph.SetAssigneeStatus(id, key, status, Now());
+            if (node is not null && (title is not null || note is not null)) node = _graph.UpdateNode(id, title, note, null, null, null, null, null, Now());
+        }
+        else node = _graph.UpdateNode(id, title, note, null, null, status, null, null, Now());
         if (node is null) return new ToolOutcome(false, "error", $"no task {id} (or blank title)");
         AuditTool("update_task", node.RepoId, status ?? "edited");
-        var unverified = TaskGraph.TaskLifecycle.IsUnverified(node.Status, node.VerifiedStatus);
+        var mine = key is null ? null : TaskGraph.TaskGraphService.AssigneesOf(node).FirstOrDefault(a => a.Key == key);
+        var unverified = mine is null ? TaskGraph.TaskGraphService.IsUnverified(node) : TaskGraph.TaskLifecycle.IsUnverified(mine.Status, mine.VerifiedStatus);
+        var warning = mine?.Warning ?? node.Warning;
+        var where = mine is null ? $"task {id}: {node.Status}" : $"task {id}: {who} {mine.Status} (card {node.Status})";
         return new ToolOutcome(true, "updated",
             unverified
-                ? $"task {id}: {node.Status} (unverified — {node.Warning}; the harness keeps checking and clears the warning when the facts catch up)"
-                : $"task {id}: {node.Status}",
+                ? $"{where} (unverified — {warning}; the harness keeps checking and clears the warning when the facts catch up)"
+                : where,
             node);
     }
 
-    public ToolOutcome ToolAssignTask(string? id, string? machine, string? repoId)
+    public ToolOutcome ToolAssignTask(string? id, string? machine, string? repoId, string? assignees = null, string? mode = null)
     {
         if (string.IsNullOrWhiteSpace(id)) return new ToolOutcome(false, "error", "id is required");
-        string? sourceId = null;
-        string? label = null;
-        if (!string.IsNullOrWhiteSpace(repoId))
+        var cur = _graph.Find(id);
+        if (cur is null) return new ToolOutcome(false, "error", $"no task {id}");
+        // A handle ("spacex/prg#2"), a name, or the raw id (openspec stable-handles); several
+        // at once, comma-separated (openspec task-multi-assignee).
+        var (agents, refErr) = ResolveAssigneeRefs(machine, repoId, assignees);
+        if (refErr is not null) return new ToolOutcome(false, "error", refErr);
+        var m = (mode ?? "replace").Trim().ToLowerInvariant();
+        if (m is not ("replace" or "add" or "remove")) return new ToolOutcome(false, "error", "mode must be replace | add | remove");
+        if (m != "replace" && agents.Count == 0) return new ToolOutcome(false, "error", $"mode {m} needs at least one assignee");
+        TaskGraph.TaskGraphService.Node? node = null;
+        switch (m)
         {
-            // A handle ("spacex/prg#2"), a name, or the raw id (openspec stable-handles).
-            var agent = ResolveAgentRef(machine, repoId);
-            if (agent.Error is not null) return new ToolOutcome(false, "error", agent.Error);
-            sourceId = agent.Target.IsSelf ? null : agent.Target.Source!.Id;
-            repoId = agent.RepoId;
-            label = AgentLabelOf(sourceId, repoId!);
+            case "replace":
+                node = agents.Count == 1 ? _graph.Assign(id, agents[0].SourceId, agents[0].RepoId, ActorArch, Now())
+                    : _graph.SetAssignees(id, agents.Select(a => (a.SourceId, a.RepoId)), ActorArch, Now(), resetDispatch: true);
+                break;
+            case "add":
+                foreach (var a in agents) node = _graph.AddAssignee(id, a.SourceId, a.RepoId, ActorArch, Now());
+                break;
+            case "remove":
+                foreach (var a in agents) node = _graph.RemoveAssignee(id, a.SourceId, a.RepoId, ActorArch, Now());
+                break;
         }
-        var node = _graph.Assign(id, sourceId, repoId, ActorArch, Now());
         if (node is null) return new ToolOutcome(false, "error", $"no task {id}");
+        var set = TaskGraph.TaskGraphService.AssigneesOf(node);
         AuditTool("assign_task", node.RepoId, node.RepoId is null ? "unassigned" : "assigned");
-        return new ToolOutcome(true, node.RepoId is null ? "unassigned" : "assigned", node.RepoId is null ? $"task {id} unassigned" : $"task {id} assigned to {label}; dispatch_task pings the agent", node);
+        var labels = string.Join(" + ", set.Select(a => AgentLabelOf(a.SourceId, a.RepoId)));
+        return new ToolOutcome(true, set.Count == 0 ? "unassigned" : "assigned",
+            set.Count == 0 ? $"task {id} unassigned" : $"task {id} assigned to {labels}; dispatch_task pings {(set.Count > 1 ? "each of them" : "the agent")}", node);
     }
 
-    public ToolOutcome ToolDispatchTask(string? id, string? branch = null) => DispatchTask(id, requireArmed: true, by: ActorArch, branch: branch);
+    public ToolOutcome ToolDispatchTask(string? id, string? branch = null, string? assignees = null, string? machine = null)
+    {
+        IReadOnlyList<string>? keys = null;
+        if (!string.IsNullOrWhiteSpace(assignees))
+        {
+            var (agents, err) = ResolveAssigneeRefs(machine, null, assignees);
+            if (err is not null) return new ToolOutcome(false, "error", err);
+            keys = agents.Select(a => a.Key).ToList();
+        }
+        return DispatchTask(id, requireArmed: true, by: ActorArch, branch: branch, assigneeKeys: keys);
+    }
 
     /// <summary>Ping the assignee with the task: the composed brief lands in that repo
     /// agent's own conversation through the same send path as send_task (its rules
@@ -1828,46 +1933,90 @@ public partial class ArchAgentService : IArchWakeSource
     /// allow/accept sends across machines). On <c>sent</c> the card moves to doing.
     /// <paramref name="branch"/> (openspec arch-branch-handover) mirrors send_task's:
     /// the branch the assignee is asked to create, recorded under the task id at once.</summary>
-    public ToolOutcome DispatchTask(string? id, bool requireArmed, string by, string? branch = null)
+    public ToolOutcome DispatchTask(string? id, bool requireArmed, string by, string? branch = null, IReadOnlyList<string>? assigneeKeys = null)
     {
         if (string.IsNullOrWhiteSpace(id)) return new ToolOutcome(false, "error", "id is required");
         var node = _graph.Find(id);
         if (node is null) return new ToolOutcome(false, "error", $"no task {id}");
-        if (node.RepoId is null) return new ToolOutcome(false, "unassigned", $"task {id} has no assignee; assign it first");
+        var set = TaskGraph.TaskGraphService.AssigneesOf(node);
+        if (set.Count == 0) return new ToolOutcome(false, "unassigned", $"task {id} has no assignee; assign it first");
         if (TaskGraph.TaskLifecycle.IsDelivered(node.Status)) return new ToolOutcome(false, "done", $"task {id} is already {node.Status}");
         var prereqs = _graph.Prerequisites(id);
         if (prereqs.Any(p => !TaskGraph.TaskLifecycle.IsDelivered(p.Status)))
             return new ToolOutcome(false, "blocked", $"task {id} waits on: {string.Join(", ", prereqs.Where(p => !TaskGraph.TaskLifecycle.IsDelivered(p.Status)).Select(p => $"\"{p.Title}\" ({p.Status})"))}; nothing was sent");
-        var machine = node.SourceId is null ? Machine : SourceLabels().GetValueOrDefault(node.SourceId, node.SourceId);
-        var machineLabel = node.SourceId is null ? SelfLabel : machine;
-        var repoName = RepoNames(new[] { node }).GetValueOrDefault(node.RepoId, node.RepoId);
-        var b = string.IsNullOrWhiteSpace(branch) ? null : branch.Trim();
-        var text = DispatchMessage(node, prereqs, by, machineLabel, repoName, b);
-        // The operator's Ping button on a card they assigned is an explicit ask, so it
-        // may reach a claimed repo; the arch's own dispatch_task keeps the claimed rule.
-        var o = SendTask(machine, node.RepoId, text, b, requireArmed, overrideClaimed: !requireArmed);
-        AuditTool("dispatch_task", node.RepoId, o.Status);
-        if (o.Ok && o.Status == "sent")
+
+        // Whom to ping (openspec task-multi-assignee): the named subset, else every
+        // assignee not yet pinged and not yet delivered.
+        List<TaskGraph.TaskGraphService.Assignee> targets;
+        if (assigneeKeys is { Count: > 0 })
         {
-            // The task's branch is known up front: record it under the task id so the
-            // repo is never claimed by its own task branch (openspec arch-branch-handover).
-            if (b is not null && node.SourceId is null) RecordTaskBranch(node.RepoId, repoName, node.Id, b);
-            var updated = _graph.MarkDispatched(id, Now());
-            return new ToolOutcome(true, "sent", $"task {id} sent to {repoName} on {machineLabel}; it is now doing (ping #{updated?.DispatchCount ?? 1})", updated);
+            var missing = assigneeKeys.Where(k => set.All(a => a.Key != k)).ToList();
+            if (missing.Count > 0) return new ToolOutcome(false, "error", $"not assignees of task {id}: {string.Join(", ", missing)}; its assignees: {string.Join(", ", set.Select(a => AgentLabelOf(a.SourceId, a.RepoId)))}");
+            targets = set.Where(a => assigneeKeys.Contains(a.Key)).ToList();
         }
-        return o;
+        else
+        {
+            targets = set.Where(a => a.DispatchedAt is null && !TaskGraph.TaskLifecycle.IsDelivered(a.Status)).ToList();
+            if (targets.Count == 0)
+                return new ToolOutcome(false, "already-dispatched", $"every assignee of task {id} has been pinged ({string.Join(", ", set.Select(a => $"{AgentLabelOf(a.SourceId, a.RepoId)} ×{a.DispatchCount}"))}); name assignees to re-ping one");
+        }
+
+        var b = string.IsNullOrWhiteSpace(branch) ? null : branch.Trim();
+        var srcLabels = SourceLabels();
+        var repoNames = RepoNames(new[] { node });
+        var coLabels = set.Select(a => AgentLabelOf(a.SourceId, a.RepoId)).ToList();
+        var results = new List<object>();
+        var sent = 0;
+        ToolOutcome? firstFailure = null;
+        TaskGraph.TaskGraphService.Node? updated = node;
+        foreach (var a in targets)
+        {
+            var machine = a.SourceId is null ? Machine : srcLabels.GetValueOrDefault(a.SourceId, a.SourceId);
+            var machineLabel = a.SourceId is null ? SelfLabel : machine;
+            var repoName = repoNames.GetValueOrDefault(a.RepoId, a.RepoId);
+            var mine = AgentLabelOf(a.SourceId, a.RepoId);
+            var text = DispatchMessage(node, prereqs, by, machineLabel, repoName, b, set.Count > 1 ? coLabels.Where(l => l != mine).ToList() : null, set.Count > 1 ? mine : null);
+            // The operator's Ping button on a card they assigned is an explicit ask, so it
+            // may reach a claimed repo; the arch's own dispatch_task keeps the claimed rule.
+            var o = SendTask(machine, a.RepoId, text, b, requireArmed, overrideClaimed: !requireArmed);
+            AuditTool("dispatch_task", a.RepoId, o.Status);
+            if (o.Ok && o.Status == "sent")
+            {
+                // The task's branch is known up front: record it under the task id so the
+                // repo is never claimed by its own task branch (openspec arch-branch-handover).
+                if (b is not null && a.SourceId is null) RecordTaskBranch(a.RepoId, repoName, node.Id, b);
+                updated = _graph.MarkDispatched(id, a.Key, Now()) ?? updated;
+                sent++;
+            }
+            else firstFailure ??= o;
+            results.Add(new { assignee = mine, machine = machineLabel, repoId = a.RepoId, o.Ok, o.Status, o.Detail });
+        }
+        if (sent == 0) return firstFailure is null ? new ToolOutcome(false, "error", "nothing to send") : firstFailure with { Data = new { results, node = updated } };
+        var status = sent == targets.Count ? "sent" : "partial";
+        var summary = targets.Count == 1
+            ? $"task {id} sent to {results.OfType<object>().Select(r => (dynamic)r).First().assignee}; it is now doing (ping #{TaskGraph.TaskGraphService.AssigneesOf(updated!).FirstOrDefault(x => x.Key == targets[0].Key)?.DispatchCount ?? 1})"
+            : $"task {id}: {sent} of {targets.Count} assignee(s) pinged ({string.Join(", ", results.Select(r => (dynamic)r).Select(r => $"{r.assignee}: {r.Status}"))}); card {updated?.Status}";
+        return new ToolOutcome(true, status, summary, new { results, node = updated });
     }
 
     /// <summary>The brief a repo agent receives (pure; unit-tested). It carries everything
     /// the agent needs — the board is not readable from inside a repo — and asks for a
     /// recognisable closing line so the arch can move the card.</summary>
-    public static string DispatchMessage(TaskGraph.TaskGraphService.Node node, IReadOnlyList<TaskGraph.TaskGraphService.Node> prereqs, string by, string machineLabel, string repoName, string? branch = null)
+    public static string DispatchMessage(TaskGraph.TaskGraphService.Node node, IReadOnlyList<TaskGraph.TaskGraphService.Node> prereqs, string by, string machineLabel, string repoName, string? branch = null, IReadOnlyList<string>? coAssignees = null, string? ownLabel = null)
     {
         var sb = new StringBuilder();
         sb.Append("[Task from the fleet board] ").Append(node.Title.Trim()).Append('\n');
         sb.Append($"Task id: {node.Id} · assigned to you ({repoName} on {machineLabel}) by {node.AssignedBy ?? by} · pinged by {by}\n");
         if (!string.IsNullOrWhiteSpace(node.Note)) sb.Append('\n').Append(node.Note.Trim()).Append('\n');
         sb.Append('\n');
+        // Several repo agents own this task (openspec task-multi-assignee): say which part
+        // is this agent's and who holds the rest, so nobody edits the other repo.
+        if (coAssignees is { Count: > 0 })
+        {
+            sb.Append($"This task spans several repositories. YOUR part is {repoName} on {machineLabel}{(ownLabel is null ? "" : $" ({ownLabel})")}; ")
+              .Append($"the other assignee(s), each owning its own repo: {string.Join(", ", coAssignees)}. ")
+              .Append("Do only your repo's part; coordinate through the task note if you need something from another repo. Your closing line reports YOUR repo's branch/PR only.\n\n");
+        }
         if (!string.IsNullOrWhiteSpace(branch)) sb.Append($"Branch: work on `{branch.Trim()}` (create it off the default branch if it does not exist).\n");
         sb.Append(prereqs.Count == 0
             ? "Prerequisites: none.\n"
@@ -1896,7 +2045,7 @@ public partial class ArchAgentService : IArchWakeSource
     /// card is created from the idea's text and the idea is CONSUMED — it leaves the Ideas
     /// list, linked to the new task (openspec ideas-consume-on-promotion). Returns the
     /// consumed idea's handle and the new task id.</summary>
-    public ToolOutcome ToolIdeaToTask(string? ideaId, string? title, string? machine, string? repoId)
+    public ToolOutcome ToolIdeaToTask(string? ideaId, string? title, string? machine, string? repoId, string? assignees = null)
     {
         // "#12", "12" or the id (openspec stable-handles). FindByRef still resolves an
         // already-consumed idea, so the existing-task guard below stays honest.
@@ -1904,18 +2053,14 @@ public partial class ArchAgentService : IArchWakeSource
         if (idea is null) return new ToolOutcome(false, "error", ideaErr ?? $"no idea {ideaId}");
         var existing = _graph.Get().Nodes.FirstOrDefault(n => n.IdeaId == idea.Id);
         if (existing is not null) return new ToolOutcome(false, "exists", $"idea {Handles.IdeaHandle(idea.Number)} already has task {existing.Id}", existing);
-        string? sourceId = null;
-        if (!string.IsNullOrWhiteSpace(repoId))
-        {
-            var agent = ResolveAgentRef(machine, repoId);
-            if (agent.Error is not null) return new ToolOutcome(false, "error", agent.Error);
-            sourceId = agent.Target.IsSelf ? null : agent.Target.Source!.Id;
-            repoId = agent.RepoId;
-        }
+        var (agents, refErr) = ResolveAssigneeRefs(machine, repoId, assignees);
+        if (refErr is not null) return new ToolOutcome(false, "error", refErr);
+        var first = agents.FirstOrDefault();
         // AddNode consumes the idea (it carries the idea id) — no separate notes write here.
         var node = _graph.AddNode(string.IsNullOrWhiteSpace(title) ? idea.Text : title, string.IsNullOrWhiteSpace(title) ? idea.Project : idea.Text,
-            string.IsNullOrWhiteSpace(repoId) ? null : repoId, null, 40, 40, Now(), sourceId, ActorArch, idea.Id);
+            first?.RepoId, null, 40, 40, Now(), first?.SourceId, ActorArch, idea.Id);
         if (node is null) return new ToolOutcome(false, "error", "the idea's text is blank");
+        if (agents.Count > 1) node = _graph.SetAssignees(node.Id, agents.Select(a => (a.SourceId, a.RepoId)), ActorArch, Now()) ?? node;
         var handle = Handles.IdeaHandle(idea.Number);
         AuditTool("idea_to_task", node.RepoId, "created");
         return new ToolOutcome(true, "created", $"task {node.Id} created from idea {handle}; the idea is now consumed (off the Ideas list)", new { taskId = node.Id, ideaHandle = handle, node });
