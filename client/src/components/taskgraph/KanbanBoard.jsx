@@ -50,6 +50,8 @@ export default function KanbanBoard() {
   const [busy, setBusy] = useState(null);
   const [note, setNote] = useState({});
   const [dragOver, setDragOver] = useState(null);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyNote, setVerifyNote] = useState('');
   const [, setTick] = useState(0);
 
   const load = useCallback(async () => {
@@ -135,6 +137,21 @@ export default function KanbanBoard() {
     if (!title) return;
     try { await apiPost('/taskgraph/nodes', { title, createdBy: 'human' }); setDraft(''); await load(); } catch (err) { setError(err?.message || String(err)); }
   };
+  // Re-verify (openspec board-verify-remote): one verifier pass now — this machine's
+  // assignees from git, every card with a PR against GitHub — so stuck cards move
+  // without waiting for the minute tick. Reports what moved.
+  const reverify = async () => {
+    setVerifying(true);
+    setVerifyNote('');
+    try {
+      const r = await apiPost('/taskgraph/verify', {});
+      const moved = (r.changes || []).map((c) => `${c.title}: ${c.from} → ${c.to}`);
+      setVerifyNote(moved.length ? `moved ${moved.length}: ${moved.join(' · ')}` : `checked ${r.checked} card(s), nothing to move${(r.notes || []).length ? ` · ${r.notes[0]}` : ''}`);
+      await load();
+    } catch (e) {
+      setVerifyNote(e?.message || String(e));
+    } finally { setVerifying(false); }
+  };
 
   // Drag a card onto a column = set that status (the operator PATCH, unclamped;
   // assignment stays — it is a chip now, not a column).
@@ -160,6 +177,8 @@ export default function KanbanBoard() {
           <button type="submit" className="kb__btn kb__btn--primary" disabled={!draft.trim()}>＋ Task</button>
         </form>
         <span className="kb__dim">Same tasks as the Task graph, read as columns. Assign a card to any repo agent on any machine; the arch agent pings assigned cards on its next wake, or press Ping.</span>
+        <button type="button" className="kb__btn" onClick={reverify} disabled={verifying} title="Run the verifier now: this machine's assignees from git, every card with a PR against GitHub (merged PR = proof, even when the branch is gone)" data-reverify>{verifying ? 'verifying…' : '↻ Re-verify board'}</button>
+        {verifyNote && <span className="kb__dim" data-reverify-note>{verifyNote}</span>}
       </div>
       <TaskFilterBar views={views} filter={filter} setFilter={setFilter} view="kanban" />
       {!board && !error && <div className="kb__note" data-loading>Loading the board…</div>}

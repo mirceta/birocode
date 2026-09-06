@@ -17,6 +17,7 @@ namespace ClaudeWeb.Controllers;
 ///   POST   /api/taskgraph/machines       -- { name?, x?, y?, w?, h? } -> machine (grouping box = one host)
 ///   PATCH  /api/taskgraph/machines/{id}  -- { name?, x?, y?, w?, h? } -> machine
 ///   DELETE /api/taskgraph/machines/{id}  -- remove box, DETACHING its member nodes
+///   POST   /api/taskgraph/verify         -- run one verifier pass now (openspec board-verify-remote) -> { checked, probed, changes, notes, at }
 /// An edge Source->Target means Source must wait on Target (Target is the prerequisite).
 /// </summary>
 [ApiController]
@@ -25,13 +26,32 @@ public class TaskGraphController : ControllerBase
 {
     private readonly TaskGraphService _graph;
     private readonly Services.Arch.ArchAgentService _arch;
+    private readonly TaskVerificationPoller _verifier;
     private readonly Logger _logger;
 
-    public TaskGraphController(TaskGraphService graph, Services.Arch.ArchAgentService arch, Logger logger)
+    public TaskGraphController(TaskGraphService graph, Services.Arch.ArchAgentService arch, TaskVerificationPoller verifier, Logger logger)
     {
         _graph = graph;
         _arch = arch;
+        _verifier = verifier;
         _logger = logger;
+    }
+
+    /// <summary>Run one verification pass right now (openspec board-verify-remote): this
+    /// machine's assignees from their clones, every card with a PR against GitHub. The
+    /// operator's "Re-verify board" button; also how stuck cards are backfilled without
+    /// waiting for the next minute tick. Serialised with the background pass.</summary>
+    [HttpPost("verify")]
+    public IActionResult Verify()
+    {
+        _logger.CountRequest();
+        var r = _verifier.VerifyOnce();
+        return Ok(new
+        {
+            r.Checked, r.Probed, r.At,
+            changes = r.Changes.Select(c => new { c.Id, c.Title, c.From, c.To }),
+            notes = r.Notes,
+        });
     }
 
     public record NodeRequest(string? Title, string? Note, string? RepoId, string? MachineId, string? Status, double? X, double? Y,
