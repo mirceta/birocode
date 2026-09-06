@@ -7,7 +7,6 @@ import {
   Handle,
   Position,
   MarkerType,
-  NodeResizer,
   applyNodeChanges,
   applyEdgeChanges,
 } from '@xyflow/react';
@@ -15,6 +14,8 @@ import '@xyflow/react/dist/style.css';
 import { apiGet, apiPost, apiPatch, apiDelete } from '../../api/client';
 import { useFeature } from '../../context/UiModeContext';
 import { useDock } from '../../context/DockContext';
+import GraphLegend from './GraphLegend';
+import { assignSlots, machineKey, repoKey, nodeStyle, readSlots, writeSlots } from './graphColors';
 import './taskgraph.css';
 
 // Task dependency graph (plans/task-dependency-graph.md): a single global board of
@@ -25,12 +26,18 @@ import './taskgraph.css';
 //   • WHY (the trace) — selecting a step highlights the chain of steps that depend
 //     on it, up to the primary task it serves.
 //
-// MACHINE GROUPS (plans/taskgraph-machine-groups.md): a step can live inside a
-// "machine" box — a React Flow group node that represents one host running agents.
-// Membership is the node's React Flow `parentId` (mirrored to the backend's
-// `machineId`); a child's stored {x,y} is RELATIVE to its box, so dragging the box
-// carries its nodes for free. An edge whose two endpoints sit in DIFFERENT boxes is
-// a cross-machine hand-off and is drawn with a distinct dashed colour.
+// COLOUR CODING (openspec taskgraph-colours): tasks lie freely on the canvas — the
+// old machine boxes are gone. A task's BORDER colour is the machine its assigned
+// agent runs on (the assignment's harness: this box or a fleet peer), its
+// BACKGROUND colour the repository (by remote URL, so one repo on two machines
+// shares a colour). Two legends pinned above the canvas name the colours and can
+// focus one machine or repo. Colours are assigned first-seen from a fixed palette
+// and persisted per device. A dependency between tasks on different machines is
+// drawn dashed in orange (a cross-machine hand-off).
+//
+// Legacy boxes: a task that still sits in a box from the old layout has box-relative
+// coordinates; it is shown at its absolute place and, once, re-saved as absolute
+// with the box link cleared, so nothing moves when the boxes are finally deleted.
 // Backend-synced via /api/taskgraph; positions persist on drag-stop.
 
 // The delivery lifecycle (openspec kanban-lifecycle-columns); a click on the
@@ -41,8 +48,7 @@ const NEXT_STATUS = { todo: 'doing', doing: 'committed', committed: 'pr-opened',
 const DELIVERED = (s) => s === 'pr-merged' || s === 'done';
 
 const CROSS_COLOR = '#e8590c'; // cross-machine edge accent (also in taskgraph.css)
-const MACHINE_MIN_W = 220;
-const MACHINE_MIN_H = 160;
+const FLEET_POLL_MS = 30_000;
 
 // Per-device saved size of the dock (mirrors the Autopilot dock): drag the
 // bottom-right grip to resize, double-click it to clear back to the default.
@@ -61,17 +67,10 @@ function readSize() {
   return null;
 }
 
-// Deterministic colour per repo so a step's agent reads at a glance (label/colour
-// only — no live agent state, by design).
-function repoHue(id) {
-  let h = 0;
-  for (let i = 0; i < id.length; i += 1) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return h % 360;
-}
-const repoColor = (id) => (id ? `hsl(${repoHue(id)} 60% 45%)` : 'var(--color-border)');
-
 // A step node. Manages its own inline-rename state; status/rename/delete flow back
-// through callbacks passed in `data`.
+// through callbacks passed in `data`. Its colours arrive as CSS custom properties
+// (--tg-machine-h for the border hue, --tg-repo-h for the background hue); absent =
+// neutral.
 function StepNode({ id, data }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(data.title);
@@ -84,10 +83,22 @@ function StepNode({ id, data }) {
     else setDraft(data.title);
   }
 
+  const cls = [
+    'tg-node',
+    `st-${data.status}`,
+    data.actionable ? 'is-actionable' : '',
+    data.dim ? 'is-dim' : '',
+    data.machineSlot != null ? 'has-machine' : '',
+    data.repoSlot != null ? 'has-repo' : '',
+  ].filter(Boolean).join(' ');
+
   return (
     <div
-      className={`tg-node st-${data.status}${data.actionable ? ' is-actionable' : ''}${data.dim ? ' is-dim' : ''}`}
-      style={{ '--repo-color': repoColor(data.repoId) }}
+      className={cls}
+      style={nodeStyle(data.machineSlot, data.repoSlot)}
+      title={[data.machineLabel ? `machine: ${data.machineLabel}` : 'no agent assigned', data.repoLabel ? `repo: ${data.repoLabel}` : null].filter(Boolean).join(' · ')}
+      data-machine={data.machineKey || ''}
+      data-repo={data.repoKey || ''}
     >
       <Handle type="target" position={Position.Top} />
       <div className="tg-node__row">
@@ -136,11 +147,11 @@ function StepNode({ id, data }) {
         ) : data.repoId ? (
           <button
             className="tg-chip tg-chip--repo nodrag"
-            style={{ '--repo-color': repoColor(data.repoId) }}
-            title="Click to change agent"
+            title={`${data.repoLabel || data.repoId}${data.machineLabel ? ` on ${data.machineLabel}` : ''} — click to change agent`}
             onClick={() => setPicking(true)}
           >
-            {data.repoName || data.repoId.slice(0, 6)}
+            {data.repoName || data.repoLabel || data.repoId.slice(0, 6)}
+            {data.machineLabel && data.machineKey !== 'self' ? <span className="tg-chip__machine"> @ {data.machineLabel}</span> : null}
           </button>
         ) : (
           <button
@@ -158,82 +169,22 @@ function StepNode({ id, data }) {
   );
 }
 
-// A machine box (plans/taskgraph-machine-groups.md): a labelled rectangle that
-// contains step nodes. Rendered behind the steps; drag it to move its members,
-// drag the bottom-right when selected to resize. Rename inline; × deletes the box
-// but KEEPS the nodes inside (they detach to the canvas).
-function MachineNode({ id, data, selected }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(data.name);
-
-  function commit() {
-    setEditing(false);
-    const t = draft.trim();
-    if (t && t !== data.name) data.onRename(id, t);
-    else setDraft(data.name);
-  }
-
-  return (
-    <div className={`tg-machine${selected ? ' is-selected' : ''}`}>
-      <NodeResizer
-        color={CROSS_COLOR}
-        isVisible={selected}
-        minWidth={MACHINE_MIN_W}
-        minHeight={MACHINE_MIN_H}
-        onResizeEnd={(_e, params) => data.onResize(id, params)}
-      />
-      <div className="tg-machine__head">
-        <span className="tg-machine__icon" aria-hidden>🖥️</span>
-        {editing ? (
-          <input
-            className="tg-machine__edit nodrag"
-            value={draft}
-            autoFocus
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={commit}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') commit();
-              if (e.key === 'Escape') { setDraft(data.name); setEditing(false); }
-            }}
-          />
-        ) : (
-          <span className="tg-machine__name" onDoubleClick={() => { setDraft(data.name); setEditing(true); }}>
-            {data.name}
-          </span>
-        )}
-        <button
-          className="tg-machine__x nodrag"
-          title="Delete machine (the steps inside are kept)"
-          onClick={() => data.onDelete(id)}
-        >
-          ×
-        </button>
-      </div>
-    </div>
-  );
-}
-
-const nodeTypes = { step: StepNode, machine: MachineNode };
+const nodeTypes = { step: StepNode };
 
 function TaskGraphBoard({ refreshKey = 0, pollMs = 0 }) {
   const { repos } = useDock();
   const repoName = useCallback((id) => repos.find((r) => r.id === id)?.name || '', [repos]);
 
-  // One React Flow node array holding BOTH machine boxes (type 'machine') and
-  // step nodes (type 'step'). Machines are kept ahead of steps in the array so a
-  // child never precedes its parent (a React Flow ordering requirement).
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
   const [selected, setSelected] = useState(null); // step id whose "why" chain is lit
+  const [focus, setFocus] = useState(null); // legend focus: { kind: 'machine'|'repo', key }
   const [draftTitle, setDraftTitle] = useState('');
   const [draftRepo, setDraftRepo] = useState('');
   const [error, setError] = useState('');
+  const [fleet, setFleet] = useState(null); // /api/arch/fleet/status: machine labels + repo remotes
   const wrapRef = useRef(null);
-
-  // Latest-nodes ref so drag-stop reparenting reads current geometry without
-  // re-creating the callback on every node change.
-  const nodesRef = useRef(nodes);
-  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+  const migratedRef = useRef(new Set()); // legacy boxed tasks already re-saved as absolute
 
   // Drag-to-resize the dock from its bottom-right grip (same UX as the Autopilot
   // dock). Size is remembered per device; double-clicking the grip resets it.
@@ -288,10 +239,19 @@ function TaskGraphBoard({ refreshKey = 0, pollMs = 0 }) {
   const load = useCallback(async () => {
     try {
       const board = await apiGet('/taskgraph');
-      const machineNodes = (board.machines || []).map(toRfMachine);
-      const stepNodes = (board.nodes || []).map(toRfNode);
-      setNodes([...machineNodes, ...stepNodes]); // machines first
+      const boxes = new Map((board.machines || []).map((m) => [m.id, m]));
+      const stepNodes = (board.nodes || []).map((n) => toRfNode(n, boxes));
+      setNodes(stepNodes);
       setEdges((board.edges || []).map(toRfEdge));
+      // One-time migration of tasks that still sit in a legacy box: re-save their
+      // absolute place and clear the box link (best effort, once per task).
+      for (const n of board.nodes || []) {
+        if (!n.machineId || migratedRef.current.has(n.id)) continue;
+        const box = boxes.get(n.machineId);
+        if (!box) continue;
+        migratedRef.current.add(n.id);
+        apiPatch(`/taskgraph/nodes/${n.id}`, { machineId: '', x: (n.x ?? 0) + (box.x ?? 0), y: (n.y ?? 0) + (box.y ?? 0) }).catch(() => {});
+      }
     } catch {
       setError('Could not load the task graph.');
     }
@@ -306,31 +266,100 @@ function TaskGraphBoard({ refreshKey = 0, pollMs = 0 }) {
     return () => clearInterval(t);
   }, [pollMs, load]);
 
+  // The fleet: machine labels and each repo's remote URL (for the colour keys).
+  // Best effort — without it, machines fall back to "this machine"/source id and
+  // repos to their id, still coloured consistently.
+  useEffect(() => {
+    let alive = true;
+    const pull = () => apiGet('/arch/fleet/status').then((f) => { if (alive) setFleet(f); }).catch(() => {});
+    pull();
+    const t = setInterval(() => { if (!document.hidden) pull(); }, FLEET_POLL_MS);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
+
+  // sourceId|repoId → { remoteUrl, name, machine } from the fleet status.
+  const fleetIndex = useMemo(() => {
+    const byKey = new Map();
+    const machines = new Map();
+    for (const m of fleet?.machines || []) {
+      const key = m.self ? 'self' : m.sourceId;
+      machines.set(key, m.machine);
+      for (const a of m.agents || []) byKey.set(`${key}|${a.repoId}`, { remoteUrl: a.remoteUrl || null, name: a.name, machine: m.machine });
+    }
+    return { byKey, machines };
+  }, [fleet]);
+  const remoteUrlOf = useCallback((n) => fleetIndex.byKey.get(`${n.sourceId || 'self'}|${n.repoId}`)?.remoteUrl || null, [fleetIndex]);
+  const machineLabelOf = useCallback((key) => (key === 'self' ? fleetIndex.machines.get('self') || 'this machine' : fleetIndex.machines.get(key) || key), [fleetIndex]);
+
   // --- derived: actionable set + the selected node's dependent chain (the "why") ---
-  const stepNodes = useMemo(() => nodes.filter((n) => n.type === 'step'), [nodes]);
-  const actionable = useMemo(() => actionableIds(stepNodes, edges), [stepNodes, edges]);
+  const actionable = useMemo(() => actionableIds(nodes, edges), [nodes, edges]);
   const lit = useMemo(() => (selected ? whyChain(selected, edges) : null), [selected, edges]);
-  // step id -> its machine (parentId or null), for cross-machine edge detection.
-  const nodeMachine = useMemo(() => {
-    const map = new Map();
-    for (const n of stepNodes) map.set(n.id, n.parentId || null);
-    return map;
-  }, [stepNodes]);
+
+  // Colour slots: first-seen order over the tasks on the board, persisted per device
+  // so a machine or repo keeps its colour across reloads.
+  const [slots, setSlots] = useState(() => readSlots(typeof localStorage === 'undefined' ? null : localStorage));
+  const keyed = useMemo(() => nodes.map((n) => ({
+    id: n.id,
+    machineKey: machineKey(n.data),
+    repoKey: repoKey(n.data, remoteUrlOf),
+  })), [nodes, remoteUrlOf]);
+  useEffect(() => {
+    const machines = assignSlots(keyed.map((k) => k.machineKey).filter(Boolean), slots.machines);
+    const reposSlots = assignSlots(keyed.map((k) => k.repoKey).filter(Boolean), slots.repos);
+    const changed = JSON.stringify(machines) !== JSON.stringify(slots.machines) || JSON.stringify(reposSlots) !== JSON.stringify(slots.repos);
+    if (changed) {
+      const next = { machines, repos: reposSlots };
+      setSlots(next);
+      writeSlots(typeof localStorage === 'undefined' ? null : localStorage, next);
+    }
+  }, [keyed, slots]);
+
+  // Legend entries: every machine / repo present on the board, with counts.
+  const legend = useMemo(() => {
+    const m = new Map();
+    const r = new Map();
+    for (const k of keyed) {
+      const node = nodes.find((n) => n.id === k.id);
+      if (k.machineKey) {
+        const e = m.get(k.machineKey) || { key: k.machineKey, label: machineLabelOf(k.machineKey), slot: slots.machines[k.machineKey], count: 0 };
+        e.count += 1; m.set(k.machineKey, e);
+      }
+      if (k.repoKey) {
+        const info = node ? fleetIndex.byKey.get(`${node.data.sourceId || 'self'}|${node.data.repoId}`) : null;
+        const label = info?.name || (node ? repoName(node.data.repoId) : '') || k.repoKey.replace(/^id:/, '').slice(0, 8);
+        const e = r.get(k.repoKey) || { key: k.repoKey, label, title: k.repoKey.startsWith('id:') ? label : k.repoKey, slot: slots.repos[k.repoKey], count: 0 };
+        e.count += 1; r.set(k.repoKey, e);
+      }
+    }
+    const bySlot = (a, b) => (a.slot ?? 0) - (b.slot ?? 0);
+    return { machines: [...m.values()].sort(bySlot), repos: [...r.values()].sort(bySlot) };
+  }, [keyed, nodes, slots, machineLabelOf, fleetIndex, repoName]);
+
+  // step id -> machine key, for cross-machine edge detection.
+  const nodeMachine = useMemo(() => new Map(keyed.map((k) => [k.id, k.machineKey])), [keyed]);
 
   // Re-decorate RF nodes/edges with derived state for rendering.
   const viewNodes = useMemo(
     () => nodes.map((n) => {
-      if (n.type === 'machine') {
-        return { ...n, data: { ...n.data, onRename: renameMachine, onDelete: deleteMachine, onResize: resizeMachine } };
-      }
+      const k = keyed.find((x) => x.id === n.id) || {};
+      const info = fleetIndex.byKey.get(`${n.data.sourceId || 'self'}|${n.data.repoId}`);
+      const focused = !focus ? true
+        : focus.kind === 'machine' ? (focus.key === '' ? !k.machineKey : k.machineKey === focus.key)
+          : (focus.key === '' ? !k.repoKey : k.repoKey === focus.key);
       return {
         ...n,
         data: {
           ...n.data,
-          repoName: repoName(n.data.repoId),
+          repoName: repoName(n.data.repoId) || info?.name || '',
           repos,
+          machineKey: k.machineKey,
+          machineLabel: k.machineKey ? machineLabelOf(k.machineKey) : null,
+          machineSlot: k.machineKey ? slots.machines[k.machineKey] : null,
+          repoKey: k.repoKey,
+          repoLabel: info?.name || repoName(n.data.repoId) || null,
+          repoSlot: k.repoKey ? slots.repos[k.repoKey] : null,
           actionable: actionable.has(n.id),
-          dim: lit ? !lit.nodes.has(n.id) : false,
+          dim: (lit ? !lit.nodes.has(n.id) : false) || !focused,
           onCycle: cycleStatus,
           onRename: renameNode,
           onSetRepo: setRepo,
@@ -338,13 +367,13 @@ function TaskGraphBoard({ refreshKey = 0, pollMs = 0 }) {
         },
       };
     }),
-    [nodes, actionable, lit, repoName, repos],
+    [nodes, keyed, fleetIndex, focus, actionable, lit, repoName, repos, slots, machineLabelOf],
   );
   const viewEdges = useMemo(
     () => edges.map((e) => {
       const a = nodeMachine.get(e.source);
       const b = nodeMachine.get(e.target);
-      const cross = Boolean(a && b && a !== b); // both placed, different boxes
+      const cross = Boolean(a && b && a !== b); // both assigned, different machines
       const dim = lit ? !lit.edges.has(e.id) : false;
       return {
         ...e,
@@ -355,8 +384,8 @@ function TaskGraphBoard({ refreshKey = 0, pollMs = 0 }) {
         // color is undefined — and createMarkerIds spreads our marker object AFTER
         // its `color || defaultColor` fallback, so an explicit `color: undefined`
         // own-key clobbers the fallback back to undefined → an INVISIBLE arrowhead.
-        // So OMIT color entirely on same-box edges to let RF's defaultColor render
-        // the head; cross-box edges pass their explicit CROSS_COLOR.
+        // So OMIT color entirely on same-machine edges to let RF's defaultColor
+        // render the head; cross-machine edges pass their explicit CROSS_COLOR.
         markerEnd: cross
           ? { type: MarkerType.ArrowClosed, color: CROSS_COLOR, width: 38, height: 38 }
           : { type: MarkerType.ArrowClosed, width: 38, height: 38 },
@@ -379,74 +408,16 @@ function TaskGraphBoard({ refreshKey = 0, pollMs = 0 }) {
     }
   }, []);
 
-  // On drag-stop: machines just persist their new position (children follow for
-  // free). Step nodes re-evaluate which box (if any) they were dropped into and
-  // re-parent, translating between absolute and box-relative coordinates.
+  // Drag-stop persists the task's absolute position (there are no boxes to re-parent into).
   const onNodeDragStop = useCallback((_e, node) => {
-    if (node.type === 'machine') {
-      apiPatch(`/taskgraph/machines/${node.id}`, { x: node.position.x, y: node.position.y }).catch(() => {});
-      return;
-    }
-    const all = nodesRef.current;
-    const oldParentId = node.parentId || null;
-    const oldParent = oldParentId ? all.find((n) => n.id === oldParentId) : null;
-    const absX = node.position.x + (oldParent?.position.x ?? 0);
-    const absY = node.position.y + (oldParent?.position.y ?? 0);
-    const w = node.measured?.width ?? 160;
-    const h = node.measured?.height ?? 60;
-    const cx = absX + w / 2;
-    const cy = absY + h / 2;
-
-    let target = null;
-    for (const m of all) {
-      if (m.type !== 'machine') continue;
-      const mw = m.measured?.width ?? m.style?.width ?? 360;
-      const mh = m.measured?.height ?? m.style?.height ?? 240;
-      if (cx >= m.position.x && cx <= m.position.x + mw && cy >= m.position.y && cy <= m.position.y + mh) {
-        target = m; // last match wins (topmost in array)
-      }
-    }
-    const newParentId = target?.id ?? null;
-    if (newParentId === oldParentId) {
-      // Membership unchanged — node.position is already in the right frame.
-      apiPatch(`/taskgraph/nodes/${node.id}`, { x: node.position.x, y: node.position.y }).catch(() => {});
-      return;
-    }
-    const newPos = target
-      ? { x: absX - target.position.x, y: absY - target.position.y }
-      : { x: absX, y: absY };
-    setNodes((nds) => nds.map((n) => (
-      n.id === node.id
-        ? { ...n, parentId: newParentId || undefined, position: newPos, data: { ...n.data, machineId: newParentId } }
-        : n
-    )));
-    apiPatch(`/taskgraph/nodes/${node.id}`, { machineId: newParentId || '', x: newPos.x, y: newPos.y }).catch(() => {});
+    apiPatch(`/taskgraph/nodes/${node.id}`, { machineId: '', x: node.position.x, y: node.position.y }).catch(() => {});
   }, []);
 
   const onEdgesDelete = useCallback((deleted) => {
     deleted.forEach((e) => apiDelete(`/taskgraph/edges/${e.id}`).catch(() => {}));
   }, []);
-  // Keyboard-deleting nodes: route machines to the machine endpoint (which detaches
-  // their members) and translate any orphaned children back to absolute coords so
-  // they don't snap to the origin once their parent is gone.
   const onNodesDelete = useCallback((deleted) => {
-    const machines = deleted.filter((n) => n.type === 'machine');
-    deleted.forEach((n) => {
-      const path = n.type === 'machine' ? 'machines' : 'nodes';
-      apiDelete(`/taskgraph/${path}/${n.id}`).catch(() => {});
-    });
-    if (machines.length) {
-      setNodes((nds) => nds.map((n) => {
-        const dm = machines.find((m) => m.id === n.parentId);
-        if (!dm) return n;
-        return {
-          ...n,
-          parentId: undefined,
-          position: { x: n.position.x + dm.position.x, y: n.position.y + dm.position.y },
-          data: { ...n.data, machineId: null },
-        };
-      }));
-    }
+    deleted.forEach((n) => apiDelete(`/taskgraph/nodes/${n.id}`).catch(() => {}));
   }, []);
 
   async function addNode(e) {
@@ -460,23 +431,10 @@ function TaskGraphBoard({ refreshKey = 0, pollMs = 0 }) {
     const y = 40 + (nodes.length % 5) * 30;
     try {
       const node = await apiPost('/taskgraph/nodes', { title, repoId: draftRepo || null, x, y });
-      setNodes((nds) => [...nds, toRfNode(node)]); // steps after machines
+      setNodes((nds) => [...nds, toRfNode(node, new Map())]);
       setDraftTitle('');
     } catch {
       setError('Could not add the step.');
-    }
-  }
-
-  async function addMachine() {
-    setError('');
-    const count = nodesRef.current.filter((n) => n.type === 'machine').length;
-    const x = 80 + (count % 4) * 60;
-    const y = 80 + (count % 4) * 60;
-    try {
-      const m = await apiPost('/taskgraph/machines', { name: `machine ${count + 1}`, x, y });
-      setNodes((nds) => [toRfMachine(m), ...nds]); // keep machines ahead of steps
-    } catch {
-      setError('Could not add the machine.');
     }
   }
 
@@ -488,10 +446,11 @@ function TaskGraphBoard({ refreshKey = 0, pollMs = 0 }) {
     setNodes((nds) => nds.map((n) => (n.id === id ? { ...n, data: { ...n.data, title } } : n)));
     apiPatch(`/taskgraph/nodes/${id}`, { title }).catch(() => {});
   }
-  // (Re)assign a step's agent. Empty string clears it to "no agent" (the backend's
-  // CleanRepo turns blank into null); a repo id sets it.
+  // (Re)assign a step's agent (a repo on THIS box; fleet assignment lives on the
+  // kanban). Empty string clears it to "no agent" (the backend's CleanRepo turns
+  // blank into null); a repo id sets it.
   function setRepo(id, repoId) {
-    setNodes((nds) => nds.map((n) => (n.id === id ? { ...n, data: { ...n.data, repoId: repoId || null } } : n)));
+    setNodes((nds) => nds.map((n) => (n.id === id ? { ...n, data: { ...n.data, repoId: repoId || null, sourceId: null } } : n)));
     apiPatch(`/taskgraph/nodes/${id}`, { repoId: repoId || '' }).catch(() => {});
   }
   function deleteNode(id) {
@@ -499,36 +458,6 @@ function TaskGraphBoard({ refreshKey = 0, pollMs = 0 }) {
     setEdges((eds) => eds.filter((e) => e.source !== id && e.target !== id));
     if (selected === id) setSelected(null);
     apiDelete(`/taskgraph/nodes/${id}`).catch(() => {});
-  }
-
-  function renameMachine(id, name) {
-    setNodes((nds) => nds.map((n) => (n.id === id ? { ...n, data: { ...n.data, name } } : n)));
-    apiPatch(`/taskgraph/machines/${id}`, { name }).catch(() => {});
-  }
-  function resizeMachine(id, params) {
-    setNodes((nds) => nds.map((n) => (
-      n.id === id
-        ? { ...n, position: { x: params.x, y: params.y }, style: { ...n.style, width: params.width, height: params.height } }
-        : n
-    )));
-    apiPatch(`/taskgraph/machines/${id}`, { x: params.x, y: params.y, w: params.width, h: params.height }).catch(() => {});
-  }
-  // Delete a box but KEEP its steps: detach each child (translate to absolute,
-  // clear parent). The backend mirrors this translation on DELETE.
-  function deleteMachine(id) {
-    setNodes((nds) => {
-      const m = nds.find((n) => n.id === id);
-      const mx = m?.position.x ?? 0;
-      const my = m?.position.y ?? 0;
-      return nds
-        .filter((n) => n.id !== id)
-        .map((n) => (
-          n.parentId === id
-            ? { ...n, parentId: undefined, position: { x: n.position.x + mx, y: n.position.y + my }, data: { ...n.data, machineId: null } }
-            : n
-        ));
-    });
-    apiDelete(`/taskgraph/machines/${id}`).catch(() => {});
   }
 
   const sizeStyle = size ? { width: size.w, height: size.h } : undefined;
@@ -549,17 +478,22 @@ function TaskGraphBoard({ refreshKey = 0, pollMs = 0 }) {
           ))}
         </select>
         <button className="tg-add__btn" type="submit" disabled={!draftTitle.trim()}>Add</button>
-        <button className="tg-add__btn tg-add__btn--machine" type="button" onClick={addMachine} title="Add a machine box">
-          🖥️ Machine
-        </button>
       </form>
 
       <p className="tg-hint">
-        Drag from a step’s bottom dot to the step it <b>waits on</b>. Green fill = an <b>open front</b> (do next).
-        Drop a step inside a <b>machine</b> box to place it there; a dependency <b>across</b> boxes is
-        drawn dashed in orange. Click a step to trace <b>why</b>.
+        Drag from a step’s bottom dot to the step it <b>waits on</b>. Green ring = an <b>open front</b> (do next).
+        <b> Border</b> = the machine its agent runs on, <b>background</b> = the repository; a dependency
+        <b> across</b> machines is drawn dashed in orange. Click a step to trace <b>why</b>; click a legend
+        entry to focus it.
         {error && <span className="tg-err"> · {error}</span>}
       </p>
+
+      {/* Pinned legends (openspec taskgraph-colours): outside the React Flow viewport,
+          so panning/zooming the graph never moves them. */}
+      <div className="tg-legends" data-legends>
+        <GraphLegend kind="machine" title="Machines" entries={legend.machines} focus={focus} onFocus={setFocus} />
+        <GraphLegend kind="repo" title="Repositories" entries={legend.repos} focus={focus} onFocus={setFocus} />
+      </div>
 
       <div className="tg-canvas">
         <ReactFlow
@@ -572,7 +506,7 @@ function TaskGraphBoard({ refreshKey = 0, pollMs = 0 }) {
           onNodeDragStop={onNodeDragStop}
           onNodesDelete={onNodesDelete}
           onEdgesDelete={onEdgesDelete}
-          onNodeClick={(_e, n) => setSelected(n.type === 'step' ? n.id : null)}
+          onNodeClick={(_e, n) => setSelected(n.id)}
           onPaneClick={() => setSelected(null)}
           defaultEdgeOptions={{ markerEnd: { type: MarkerType.ArrowClosed, width: 38, height: 38 } }}
           elevateNodesOnSelect={false}
@@ -615,25 +549,18 @@ export default function TaskGraphPanel({ refreshKey = 0, pollMs = 0 }) {
 }
 
 // --- helpers ---
-function toRfNode(n) {
-  const node = {
+// A task from the API as a React Flow node. A legacy boxed task has box-relative
+// coordinates: shown at its absolute place (box origin + offset).
+function toRfNode(n, boxes) {
+  const box = n.machineId ? boxes.get(n.machineId) : null;
+  return {
     id: n.id,
     type: 'step',
-    position: { x: n.x ?? 0, y: n.y ?? 0 },
-    data: { title: n.title, note: n.note, repoId: n.repoId, machineId: n.machineId || null, status: n.status || 'todo' },
-  };
-  // A placed step is a React Flow child of its machine box; its {x,y} is already
-  // box-relative (that's how we store it), so no translation is needed here.
-  if (n.machineId) node.parentId = n.machineId;
-  return node;
-}
-function toRfMachine(m) {
-  return {
-    id: m.id,
-    type: 'machine',
-    position: { x: m.x ?? 0, y: m.y ?? 0 },
-    style: { width: m.w ?? 360, height: m.h ?? 240 },
-    data: { name: m.name || 'machine' },
+    position: { x: (n.x ?? 0) + (box?.x ?? 0), y: (n.y ?? 0) + (box?.y ?? 0) },
+    data: {
+      title: n.title, note: n.note, repoId: n.repoId, sourceId: n.sourceId || null,
+      status: n.status || 'todo',
+    },
   };
 }
 function toRfEdge(e) {
@@ -662,11 +589,16 @@ function whyChain(startId, edges) {
   while (stack.length) {
     const cur = stack.pop();
     for (const e of edges) {
-      if (e.target === cur) {
+      if (e.target === cur && !litNodes.has(e.source)) {
+        litNodes.add(e.source);
         litEdges.add(e.id);
-        if (!litNodes.has(e.source)) { litNodes.add(e.source); stack.push(e.source); }
+        stack.push(e.source);
+      } else if (e.target === cur) {
+        litEdges.add(e.id);
       }
     }
   }
   return { nodes: litNodes, edges: litEdges };
 }
+
+export { STATUSES };

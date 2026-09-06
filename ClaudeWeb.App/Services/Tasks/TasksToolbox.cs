@@ -62,7 +62,9 @@ public class TasksToolbox
     /// overwrites; the tool must not surprise the model).</summary>
     public ToolOutcome UpdateIdea(string? id, string? text, string? project, int? priority, bool? active)
     {
-        var current = _notes.List().FirstOrDefault(n => n.Id == (id ?? "").Trim());
+        // Include consumed ideas in the id lookup: a promoted idea is hidden from the
+        // list but must still be resolvable by id (openspec ideas-consume-on-promotion).
+        var current = _notes.List(includeConsumed: true).FirstOrDefault(n => n.Id == (id ?? "").Trim());
         if (current is null)
         {
             Audit("update_idea", $"refused: unknown id {id}");

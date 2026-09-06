@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ClaudeWeb.Services.Logging;
+using ClaudeWeb.Services.Notes;
 
 namespace ClaudeWeb.Services.TaskGraph;
 
@@ -50,6 +51,12 @@ public class TaskGraphService
     private readonly string _path;
     private readonly object _gate = new();
     private Board _board = new();
+    // The ideas board (openspec ideas-consume-on-promotion): promoting an idea into a
+    // node CONSUMES the idea, and deleting that node RESTORES it. Wired here so every
+    // promotion path (the UI POST and the arch idea_to_task tool both call AddNode) and
+    // every deletion path funnel through one place. Optional so the pure-graph unit
+    // tests (and sync-only construction) can omit it — then consumption is a no-op.
+    private readonly NotesService? _notes;
 
     /// <summary>Raised after every successful LOCAL mutation (add/update/delete/
     /// scratch). NOT raised by MergeFrom — the sync layer must not re-trigger
@@ -58,9 +65,12 @@ public class TaskGraphService
 
     /// <param name="dirOverride">Test seam (openspec tasks-agent, D2): a data dir other
     /// than <see cref="AppPaths.DataDir"/>; DI leaves it null.</param>
-    public TaskGraphService(Logger logger, string? dirOverride = null)
+    /// <param name="notes">The ideas board, for consume-on-promote / restore-on-delete
+    /// (openspec ideas-consume-on-promotion). DI injects it; pure-graph tests omit it.</param>
+    public TaskGraphService(Logger logger, string? dirOverride = null, NotesService? notes = null)
     {
         _logger = logger;
+        _notes = notes;
         var dir = dirOverride ?? AppPaths.DataDir;
         Directory.CreateDirectory(dir);
         _path = Path.Combine(dir, "taskgraph.json");
@@ -182,6 +192,10 @@ public class TaskGraphService
             Save();
         }
         _logger.Info($"[TASKGRAPH] Added node {node.Id}");
+        // Promotion CONSUMES the source idea (openspec ideas-consume-on-promotion):
+        // it leaves the Ideas list, linked to this node. Outside the graph lock so a
+        // notes Save/Changed never nests under it.
+        if (node.IdeaId is { Length: > 0 } promotedIdea) _notes?.Consume(promotedIdea, node.Id, now);
         RaiseChanged();
         return node;
     }
@@ -384,9 +398,13 @@ public class TaskGraphService
     public int DeleteNode(string id, long now)
     {
         int dropped;
+        string? ideaId;
         lock (_gate)
         {
-            if (_board.Nodes.RemoveAll(n => n.Id == id) == 0) return -1;
+            var node = _board.Nodes.FirstOrDefault(n => n.Id == id);
+            if (node is null) return -1;
+            ideaId = node.IdeaId;
+            _board.Nodes.RemoveAll(n => n.Id == id);
             var deadEdges = _board.Edges.Where(e => e.Source == id || e.Target == id).ToList();
             _board.Edges.RemoveAll(e => e.Source == id || e.Target == id);
             AddTombstone(id, now);
@@ -395,8 +413,28 @@ public class TaskGraphService
             dropped = deadEdges.Count;
         }
         _logger.Info($"[TASKGRAPH] Deleted node {id} (+{dropped} edge(s))");
+        // Deleting a task RESTORES the idea it was promoted from, as inactive (openspec
+        // ideas-consume-on-promotion). Only when THIS node is the one that consumed it;
+        // completing/merging a task is a status change, never a delete, so it keeps the
+        // idea consumed. Outside the graph lock.
+        if (ideaId is { Length: > 0 }) _notes?.Unconsume(ideaId, id, now);
         RaiseChanged();
         return dropped;
+    }
+
+    /// <summary>Every node→idea promotion link (openspec ideas-consume-on-promotion):
+    /// idea id → the task node id that promoted it, for the startup consumed-idea
+    /// migration. Ties (two nodes on one idea, only possible after a cross-box merge)
+    /// keep the first.</summary>
+    public IReadOnlyDictionary<string, string> IdeaTaskLinks()
+    {
+        lock (_gate)
+        {
+            var map = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var n in _board.Nodes)
+                if (n.IdeaId is { Length: > 0 } ideaId) map.TryAdd(ideaId, n.Id);
+            return map;
+        }
     }
 
     // --- machine boxes (plans/taskgraph-machine-groups.md) ---

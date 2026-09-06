@@ -152,7 +152,8 @@ public class ArchAgentTests : IDisposable
     {
         public WakeDraft? Next;
         public int Calls;
-        public WakeDraft? ComposeWake() { Calls++; return Next; }
+        public string? LastKey;
+        public WakeDraft? ComposeWake(string key) { Calls++; LastKey = key; return Next; }
     }
 
     private static LoopContext Ctx(LoopConfigStore store, string? reply, bool errored = false, bool stopped = false) =>

@@ -97,6 +97,11 @@ export default function IdeasPanel({ view = 'all' }) {
   }
 
   const [notes, setNotes] = useState([]);
+  // Consumed ideas (promoted into a task — openspec ideas-consume-on-promotion): kept
+  // off to the side and shown only when the operator opens the "Consumed" view.
+  const [consumedNotes, setConsumedNotes] = useState([]);
+  const [taskTitles, setTaskTitles] = useState({}); // task node id -> title, for the "became" link
+  const [showConsumed, setShowConsumed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [draft, setDraft] = useState('');
@@ -118,8 +123,16 @@ export default function IdeasPanel({ view = 'all' }) {
   const load = useCallback(async () => {
     setError('');
     try {
-      const data = await apiGet('/notes');
-      setNotes(Array.isArray(data) ? data : []);
+      // One fetch with includeConsumed, split client-side: the main list drops consumed
+      // ideas (openspec ideas-consume-on-promotion), the Consumed view shows them.
+      const [data, graph] = await Promise.all([
+        apiGet('/notes?includeConsumed=true'),
+        apiGet('/taskgraph').catch(() => null),
+      ]);
+      const all = Array.isArray(data) ? data : [];
+      setNotes(all.filter((n) => !n.consumedByTaskId));
+      setConsumedNotes(all.filter((n) => n.consumedByTaskId));
+      if (graph?.nodes) setTaskTitles(Object.fromEntries(graph.nodes.map((n) => [n.id, n.title])));
     } catch {
       setError(t('ideas.loadError'));
     } finally {
@@ -246,27 +259,23 @@ export default function IdeasPanel({ view = 'all' }) {
     }
   }
 
-  // "Send to graph" (plans/ideas-taskgraph-merge.md): create a task-graph step
-  // from this idea, then CONVERT the idea — keep it in the list but clear its
-  // `active` flag (drops out of the Active section; no data loss). Jumps to the
-  // Task graph tab so the new node is visible.
+  // "Send to graph" (plans/ideas-taskgraph-merge.md): create a task-graph step from
+  // this idea. Promotion CONSUMES the idea server-side (openspec
+  // ideas-consume-on-promotion) — it leaves the Ideas list and moves to the Consumed
+  // view, linked to the new task. Jumps to the Task graph tab so the node is visible.
   async function sendToGraph(n) {
     setError('');
+    let node;
     try {
-      await apiPost('/taskgraph/nodes', { title: n.text, note: n.project || undefined, ideaId: n.id, createdBy: 'human' });
+      node = await apiPost('/taskgraph/nodes', { title: n.text, note: n.project || undefined, ideaId: n.id, createdBy: 'human' });
     } catch {
       setError(t('ideas.saveError'));
       return;
     }
-    const prev = notes;
-    setNotes((ns) => ns.map((x) => (x.id === n.id ? { ...x, active: false } : x)));
-    try {
-      await apiPatch(`/notes/${n.id}`, { text: n.text, project: n.project || '', priority: n.priority || 0, active: false });
-    } catch {
-      setNotes(prev);
-      setError(t('ideas.saveError'));
-      return;
-    }
+    // Optimistically move it out of the live list and into consumed.
+    setNotes((ns) => ns.filter((x) => x.id !== n.id));
+    setConsumedNotes((cs) => [{ ...n, active: false, consumedByTaskId: node?.id || 'pending' }, ...cs]);
+    if (node?.id && node?.title) setTaskTitles((m) => ({ ...m, [node.id]: node.title }));
     if (graphTabs) chooseTab('graph');
   }
 
@@ -550,6 +559,50 @@ export default function IdeasPanel({ view = 'all' }) {
           </>
         )}
       </div>
+
+      {/* Consumed ideas (openspec ideas-consume-on-promotion): off by default. */}
+      {!loading && consumedNotes.length > 0 && (
+        <div className="ideas__consumed">
+          <button
+            type="button"
+            className="idea__btn ideas__consumed-toggle"
+            aria-expanded={showConsumed}
+            onClick={() => setShowConsumed((v) => !v)}
+            data-consumed-toggle
+          >
+            {showConsumed ? '▾' : '▸'} Consumed <span className="ideas__group-count">{consumedNotes.length}</span>
+          </button>
+          {showConsumed && (
+            <div className="ideas__group ideas__group--consumed" data-consumed-list>
+              {consumedNotes.map((n) => (
+                <div key={n.id} className="idea idea--consumed" data-consumed>
+                  <p className="idea__text">
+                    {n.number > 0 && <span className="idea__handle" data-idea-handle>#{n.number}</span>}
+                    {n.text}
+                  </p>
+                  <div className="idea__foot">
+                    {n.project && <span className="idea__project">{n.project}</span>}
+                    <span className="idea__consumed-into">
+                      → became task: {taskTitles[n.consumedByTaskId] || n.consumedByTaskId}
+                    </span>
+                    {graphTabs && (
+                      <button
+                        type="button"
+                        className="idea__btn"
+                        title="Show this task on the Kanban board"
+                        onClick={() => chooseTab('kanban')}
+                        data-view-task
+                      >
+                        View task
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
         </div>
       )}
     </div>

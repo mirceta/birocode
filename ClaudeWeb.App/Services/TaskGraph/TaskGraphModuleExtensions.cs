@@ -11,7 +11,8 @@ public static class TaskGraphModuleExtensions
     {
         services.AddSingleton(sp =>
         {
-            var graph = new TaskGraphService(sp.GetRequiredService<Logging.Logger>());
+            // notes: consume-on-promote / restore-on-delete (openspec ideas-consume-on-promotion).
+            var graph = new TaskGraphService(sp.GetRequiredService<Logging.Logger>(), null, sp.GetRequiredService<Notes.NotesService>());
             var hours = sp.GetService<IConfiguration>()?.GetValue<int?>("TaskBoard:StaleHours") ?? TaskGraphService.DefaultStaleHours;
             if (hours > 0) graph.StaleAfterMs = hours * 3600_000L;
             return graph;

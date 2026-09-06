@@ -102,33 +102,44 @@
   background: var(--color-bg, #faf8f4);
 }
 
-/* --- the custom step node --- */
+/* --- the custom step node (openspec taskgraph-colours) ---
+   Border = the machine (a saturated, darker hue), background = the repository (a
+   pale tint of its hue), both from the node's --tg-machine-h / --tg-repo-h custom
+   properties; a node without them stays neutral. Text is the theme's text colour,
+   which reads on every pale tint; the dark-theme block below flips the lightness
+   so the same hues stay legible on a dark page. */
 .tg-node {
-  --repo-color: var(--color-border);
+  --tg-machine-color: var(--color-border);
+  --tg-repo-bg: var(--color-surface);
   min-width: 130px;
   max-width: 220px;
   padding: 8px 10px;
-  border: 1px solid var(--color-border);
-  border-left: 4px solid var(--repo-color);
+  border: 3px solid var(--tg-machine-color);
   border-radius: 10px;
-  background: var(--color-surface);
+  background: var(--tg-repo-bg);
+  color: var(--color-text);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   font-size: 12.5px;
 }
-.tg-node.st-doing { border-color: #e0552b; }
-/* Delivery lifecycle (openspec kanban-lifecycle-columns) */
-.tg-node.st-committed { border-color: #b085f5; }
-.tg-node.st-pr-opened { border-color: #5ea0ef; }
-.tg-node.st-pr-merged { opacity: 0.72; border-color: #16a34a; }
+.tg-node.has-machine { --tg-machine-color: hsl(var(--tg-machine-h) 62% 40%); }
+.tg-node.has-repo { --tg-repo-bg: hsl(var(--tg-repo-h) 72% 90%); }
+@media (prefers-color-scheme: dark) {
+  .tg-node.has-machine { --tg-machine-color: hsl(var(--tg-machine-h) 70% 62%); }
+  .tg-node.has-repo { --tg-repo-bg: hsl(var(--tg-repo-h) 34% 24%); }
+}
+/* Status rings (never the border — that is the machine's colour). Delivery
+   lifecycle from openspec kanban-lifecycle-columns. */
+.tg-node.st-doing { box-shadow: 0 0 0 2px #e0552b, 0 1px 3px rgba(0, 0, 0, 0.1); }
+.tg-node.st-committed { box-shadow: 0 0 0 2px #b085f5, 0 1px 3px rgba(0, 0, 0, 0.1); }
+.tg-node.st-pr-opened { box-shadow: 0 0 0 2px #5ea0ef, 0 1px 3px rgba(0, 0, 0, 0.1); }
+.tg-node.st-pr-merged { opacity: 0.72; box-shadow: 0 0 0 2px #16a34a, 0 1px 3px rgba(0, 0, 0, 0.1); }
 .tg-node.st-done { opacity: 0.62; }
 .tg-node.st-done .tg-node__title { text-decoration: line-through; }
 /* OPEN FRONTS — steps you can work on right now (not done, every prerequisite
-   done). The actionable set is the genuinely useful "what's workable" notion,
-   so paint it boldly: a green-tinted fill plus a green ring make these pop out
-   from the plain/blocked steps. Keeps the repo-colour left border intact. */
+   done). A green ring (never a fill: the fill is the repository's colour) plus
+   a bigger card make these pop out from the plain/blocked steps. */
 .tg-node.is-actionable {
-  background: color-mix(in srgb, #16a34a 16%, var(--color-surface));
-  box-shadow: 0 0 0 2px #16a34a, 0 2px 6px rgba(22, 163, 74, 0.28);
+  box-shadow: 0 0 0 3px #16a34a, 0 2px 6px rgba(22, 163, 74, 0.28);
   /* ~30% bigger than plain steps so the do-next leaves dominate the board */
   min-width: 170px;
   max-width: 286px;
@@ -179,14 +190,15 @@
 .tg-chip--status.st-pr-merged { background: #2c7a44; color: #fff; border-color: #2c7a44; }
 .tg-chip--status.st-done { background: #16a34a; color: #fff; border-color: #16a34a; }
 .tg-chip--repo {
-  background: color-mix(in srgb, var(--repo-color) 16%, var(--color-surface));
-  border-color: color-mix(in srgb, var(--repo-color) 40%, var(--color-border));
+  background: color-mix(in srgb, var(--tg-machine-color) 14%, var(--color-surface));
+  border-color: color-mix(in srgb, var(--tg-machine-color) 45%, var(--color-border));
   color: var(--color-text);
   text-transform: none;
   letter-spacing: 0;
   font-weight: 600;
   cursor: pointer;
 }
+.tg-chip__machine { font-weight: 500; opacity: 0.75; }
 /* "+ agent" affordance on a step with no agent yet — quiet until hovered. */
 .tg-chip--repo-empty {
   background: transparent;
@@ -212,85 +224,6 @@
 
 /* Dim non-traced edges while a "why" chain is lit. */
 .tg-edge--dim { opacity: 0.15; }
-
-/* --- machine box (plans/taskgraph-machine-groups.md) ---
-   A labelled rectangle that contains step nodes; one box = one host. The React
-   Flow node wrapper carries the size (style width/height); .tg-machine fills it
-   and renders behind its child step nodes. */
-.tg-add__btn--machine { white-space: nowrap; }
-
-.tg-machine {
-  width: 100%;
-  height: 100%;
-  box-sizing: border-box;
-  border: 1.5px dashed color-mix(in srgb, var(--color-accent, #b85c00) 55%, var(--color-border));
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--color-accent, #b85c00) 6%, var(--color-surface));
-}
-.tg-machine.is-selected {
-  border-style: solid;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent, #b85c00) 40%, transparent);
-}
-.tg-machine__head {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 6px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--color-text);
-  border-bottom: 1px solid color-mix(in srgb, var(--color-accent, #b85c00) 25%, var(--color-border));
-  background: color-mix(in srgb, var(--color-accent, #b85c00) 12%, var(--color-surface));
-  border-radius: 11px 11px 0 0;
-  cursor: grab;
-}
-.tg-machine__icon { flex: 0 0 auto; font-size: 12px; }
-.tg-machine__name { flex: 1 1 auto; word-break: break-word; cursor: text; }
-.tg-machine__edit {
-  flex: 1 1 auto;
-  min-width: 0;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  border: 1px solid var(--color-accent, #b85c00);
-  border-radius: 6px;
-  padding: 1px 4px;
-}
-.tg-machine__x {
-  flex: 0 0 auto;
-  border: none;
-  background: none;
-  color: var(--color-text-soft, #999);
-  cursor: pointer;
-  font-size: 15px;
-  line-height: 1;
-  padding: 0 2px;
-}
-.tg-machine__x:hover { color: #c0392b; }
-
-/* Fatter resize hit-zones for machine boxes. React Flow's NodeResizer draws a
-   1px edge line and ~4px corner dots by default — almost impossible to grab.
-   The machine box already shows its own dashed/solid border, so we don't need
-   the library's visible line: we drop it and turn each edge control into a
-   ~10px transparent strip straddling the border (the control is centred on the
-   edge via translate, so the grab zone sits half inside / half outside), and
-   enlarge the corner handles to a comfortable 12px. Scoped to machine nodes. */
-.react-flow__node-machine .react-flow__resize-control.line {
-  border-width: 0;
-}
-.react-flow__node-machine .react-flow__resize-control.line.left,
-.react-flow__node-machine .react-flow__resize-control.line.right {
-  width: 10px;
-}
-.react-flow__node-machine .react-flow__resize-control.line.top,
-.react-flow__node-machine .react-flow__resize-control.line.bottom {
-  height: 10px;
-}
-.react-flow__node-machine .react-flow__resize-control.handle {
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
-}
 
 /* Fatter connection handles for step nodes. React Flow's default handle is a
    ~6px dot — hard to land on to start dragging a dependency arrow. We grow the
@@ -325,4 +258,28 @@
 .react-flow__node-step .react-flow__handle:hover {
   background: #4a90d9;
   box-shadow: 0 0 0 3px rgba(74, 144, 217, 0.35);
+}
+
+/* --- pinned colour legends (openspec taskgraph-colours) ---
+   Above the canvas, outside the React Flow viewport: panning/zooming the graph
+   never moves them. One row per legend; entries wrap. */
+.tg-legends { display: flex; flex-wrap: wrap; gap: 6px 18px; flex: 0 0 auto; position: sticky; top: 0; z-index: 5; background: var(--color-bg, #faf7f2); padding: 2px 0; }
+.tg-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.tg-legend__title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-soft, #6b6b66); margin-right: 2px; }
+.tg-legend__empty { font-size: 11px; color: var(--color-text-muted, #8a8170); }
+.tg-legend__item { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text); font: inherit; font-size: 11.5px; padding: 1px 8px 1px 4px; cursor: pointer; max-width: 220px; }
+.tg-legend__item:hover { border-color: var(--color-text-soft, #888); }
+.tg-legend__item.is-active { border-color: var(--color-text); box-shadow: 0 0 0 1px var(--color-text); }
+.tg-legend__item.is-muted { opacity: 0.45; }
+.tg-legend__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tg-legend__count { font-size: 10px; color: var(--color-text-soft, #888); }
+.tg-legend__swatch { flex: 0 0 auto; width: 14px; height: 14px; border-radius: 4px; box-sizing: border-box; }
+/* Machine swatch = the border look; repository swatch = the background look — the same
+   colour maths as the nodes, so the legend is the key to the canvas. */
+.tg-legend__swatch--machine { border: 3px solid hsl(var(--tg-h) 62% 40%); background: var(--color-surface); }
+.tg-legend__swatch--repo { border: 1px solid var(--color-border); background: hsl(var(--tg-h) 72% 90%); }
+.tg-legend__swatch--neutral { border-color: var(--color-border); background: var(--color-surface); border-style: dashed; }
+@media (prefers-color-scheme: dark) {
+  .tg-legend__swatch--machine { border-color: hsl(var(--tg-h) 70% 62%); }
+  .tg-legend__swatch--repo { background: hsl(var(--tg-h) 34% 24%); }
 }
