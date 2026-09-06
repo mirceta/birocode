@@ -135,3 +135,24 @@ html, body, #root { height: 100%; margin: 0; }
 
 /* "+" new arch conversation (openspec arch-conversations) */
 .mg__tab--new { padding: 4px 9px; font-weight: 700; }
+
+/* Fleet Status per-machine view tabs (openspec fleet-status-panels) */
+.fs__tabs { display: flex; gap: 4px; margin: 6px 0 2px; }
+.fs__tab { background: transparent; border: 1px solid var(--mg-border, #2a2f3f); color: var(--mg-muted, #9aa3b2);
+  border-radius: 8px 8px 0 0; padding: 5px 12px; cursor: pointer; font: inherit; font-size: 13px; }
+.fs__tab:hover { color: var(--mg-text, #e6e6e6); }
+.fs__tab--on { color: var(--mg-text, #e6e6e6); border-color: var(--mg-accent, #5ea0ef); border-bottom-color: transparent; background: rgba(94,160,239,.10); }
+
+/* Overview tab: grouped key/value cards */
+.fs__overview { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; padding: 8px 0; }
+.fs__ov-group { border: 1px solid var(--mg-border, #2a2f3f); border-radius: 10px; padding: 8px 10px; }
+.fs__ov-title { font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--mg-muted, #9aa3b2); margin-bottom: 6px; }
+.fs__ov-rows { margin: 0; }
+.fs__ov-row { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; font-size: 13px; }
+.fs__ov-k { color: var(--mg-muted, #9aa3b2); }
+.fs__ov-v { color: var(--mg-text, #e6e6e6); font-family: ui-monospace, Consolas, monospace; text-align: right; overflow-wrap: anywhere; }
+.fs__ov-v--na { color: #6b7280; font-style: italic; }
+
+/* Scoreboard tab: window strip + refresh above the reused ScoreboardView */
+.fs__scoreboard { padding: 6px 0; }
+.fs__sb-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }

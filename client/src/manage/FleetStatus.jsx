@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiGet } from '../api/client';
 import HandToArch from '../components/dashboard/HandToArch';
+import FleetOverviewPanel from './FleetOverviewPanel';
+import FleetScoreboardTab from './FleetScoreboardTab';
+import { FLEET_TABS, FLEET_TAB_KEY, readFleetTab } from './fleetStatusTabs';
+
+// The per-machine view tabs (openspec fleet-status-panels): one selection shared by
+// every machine card so a whole view (Agents / Overview / Scoreboard) is shown at once
+// and nothing is crammed. Remembered per browser and mirrored to ?fleetTab= in the URL
+// (same idiom as ManageApp's ?tab=), so a specific tab can be pinned on a wall screen.
+const TAB_LABELS = { agents: 'Agents', overview: 'Overview', scoreboard: 'Scoreboard' };
 
 // The Status tab (openspec fleet-status-tab): every repo agent on the whole
 // fleet, machine by machine, in the language of the dashboard's dock strip —
@@ -154,6 +163,18 @@ export default function FleetStatus({ root = '' }) {
   const [q, setQ] = useState(persisted.q);
   const [open, setOpen] = useState(null);
   const [, setTick] = useState(0);
+  const [activeTab, setActiveTabState] = useState(() =>
+    readFleetTab(typeof window !== 'undefined' ? window.location.search : '', (k) => localStorage.getItem(k)));
+
+  const setActiveTab = (next) => {
+    setActiveTabState(next);
+    try { localStorage.setItem(FLEET_TAB_KEY, next); } catch { /* private mode */ }
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.set('fleetTab', next);
+      window.history.replaceState(null, '', u);
+    } catch { /* opaque origin */ }
+  };
 
   useEffect(() => { persist({ filter, machines: machineSel, q }); }, [filter, machineSel, q]);
 
@@ -209,6 +230,22 @@ export default function FleetStatus({ root = '' }) {
         <span className="fs__dim fs__shown" data-shown={shown} data-total={total}>{narrowed ? `${shown} of ${total} agents` : `${total} agents`}</span>
       </div>
 
+      <div className="fs__tabs" role="tablist" aria-label="Fleet status view" data-fleet-tabs>
+        {FLEET_TABS.map((k) => (
+          <button
+            key={k}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === k}
+            className={`fs__tab${activeTab === k ? ' fs__tab--on' : ''}`}
+            data-fleet-tab={k}
+            onClick={() => setActiveTab(k)}
+          >
+            {TAB_LABELS[k]}
+          </button>
+        ))}
+      </div>
+
       <div className="fs__bar" role="search" aria-label="Filter agents" data-filter-bar>
         <input
           className="fs__search"
@@ -237,13 +274,15 @@ export default function FleetStatus({ root = '' }) {
             </button>
           ))}
         </div>
-        <div className="fs__filters" role="group" aria-label="Show">
-          {FILTERS.map(([k, label, title]) => (
-            <button key={k} type="button" className={`fs__filter${filter === k ? ' fs__filter--on' : ''}`} title={title} aria-pressed={filter === k} data-filter={k} onClick={() => setFilterState(k)}>
-              {label} <span className="fs__count">{totals[k]}</span>
-            </button>
-          ))}
-        </div>
+        {activeTab === 'agents' && (
+          <div className="fs__filters" role="group" aria-label="Show">
+            {FILTERS.map(([k, label, title]) => (
+              <button key={k} type="button" className={`fs__filter${filter === k ? ' fs__filter--on' : ''}`} title={title} aria-pressed={filter === k} data-filter={k} onClick={() => setFilterState(k)}>
+                {label} <span className="fs__count">{totals[k]}</span>
+              </button>
+            ))}
+          </div>
+        )}
         {narrowed && (
           <button type="button" className="fs__clear" onClick={clearAll} title="Show every agent again" data-clear-filters>× clear</button>
         )}
@@ -251,13 +290,15 @@ export default function FleetStatus({ root = '' }) {
 
       {!data && !error && <div className="fs__note" data-loading>Loading the fleet status…</div>}
       {error && <div className="fs__note fs__note--err">{error}</div>}
-      {data && total > 0 && shown === 0 && <div className="fs__note" data-no-match>Nothing matches — clear a filter or the search.</div>}
+      {activeTab === 'agents' && data && total > 0 && shown === 0 && <div className="fs__note" data-no-match>Nothing matches — clear a filter or the search.</div>}
       {scoped.map(({ m, agents: inScope }) => {
         if (!machineOn(m)) return null;
         const agents = inScope.filter((a) => matches(a, filter));
         const running = (m.agents || []).filter((a) => a.runningSince).length;
         const hidden = (m.agents || []).length - agents.length;
-        const collapsed = narrowed && agents.length === 0 && (m.agents || []).length > 0;
+        // Collapse-to-header is an Agents-tab affordance only; the Overview and
+        // Scoreboard tabs always render every selected machine's card.
+        const collapsed = activeTab === 'agents' && narrowed && agents.length === 0 && (m.agents || []).length > 0;
         return (
           <section key={m.sourceId} className={`fs__machine${m.self ? ' fs__machine--self' : ''}${m.reachable ? '' : ' fs__machine--dark'}${collapsed ? ' fs__machine--collapsed' : ''}`} data-machine={m.machine} data-collapsed={collapsed || undefined}>
             <div className="fs__mh">
@@ -275,25 +316,33 @@ export default function FleetStatus({ root = '' }) {
                 {narrowed && hidden > 0 ? ` · ${hidden} hidden by filter` : ''}
               </span>
             </div>
-            {collapsed ? null : agents.length === 0
-              ? <div className="fs__none">{(m.agents || []).length === 0 ? (m.reachable ? 'no repo agents (no docks, nothing in the arch scope)' : 'nothing known — the machine has not answered') : 'nothing matches this filter'}</div>
-              : (
-                <div className="fs__strip">
-                  {agents.map((a) => (
-                    <AgentChip key={a.key} a={a} self={m.self} root={root} open={open === a.key} onToggle={() => setOpen(open === a.key ? null : a.key)} />
-                  ))}
-                </div>
-              )}
-            {agents.filter((a) => open === a.key).map((a) => <AgentDetail key={a.key} a={a} self={m.self} root={root} sourceId={m.sourceId} onChanged={load} />)}
+            {activeTab === 'overview' ? (
+              <FleetOverviewPanel machine={m} />
+            ) : activeTab === 'scoreboard' ? (
+              <FleetScoreboardTab machine={m} />
+            ) : (
+              <>
+                {collapsed ? null : agents.length === 0
+                  ? <div className="fs__none">{(m.agents || []).length === 0 ? (m.reachable ? 'no repo agents (no docks, nothing in the arch scope)' : 'nothing known — the machine has not answered') : 'nothing matches this filter'}</div>
+                  : (
+                    <div className="fs__strip">
+                      {agents.map((a) => (
+                        <AgentChip key={a.key} a={a} self={m.self} root={root} open={open === a.key} onToggle={() => setOpen(open === a.key ? null : a.key)} />
+                      ))}
+                    </div>
+                  )}
+                {agents.filter((a) => open === a.key).map((a) => <AgentDetail key={a.key} a={a} self={m.self} root={root} sourceId={m.sourceId} onChanged={load} />)}
+              </>
+            )}
           </section>
         );
       })}
-      <div className="fs__legend fs__dim">
+      {activeTab === 'agents' && <div className="fs__legend fs__dim">
         <span><span className="fs__dot fs__dot--free" aria-hidden="true" /> on its default branch — free</span>
         <span><span className="fs__dot fs__dot--claimed" aria-hidden="true" /> on a feature branch — claimed</span>
         <span><span className="fs__dot fs__dot--running" aria-hidden="true" /> running a turn</span>
         <span>🏛 in the arch agent's scope</span>
-      </div>
+      </div>}
     </div>
   );
 }

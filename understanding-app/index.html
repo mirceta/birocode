@@ -3,56 +3,39 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding: promoting an idea consumes it</title>
+<title>Understanding: Fleet Status per-machine panels</title>
 <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
 <header class="top">
-  <h1>💡→🧩 Ideas that become tasks are <em>consumed</em></h1>
-  <p class="sub">Promoting an idea to a task removes it from the Ideas list and links it to the task. Delete the task and the idea comes back (inactive); complete the task and it stays gone. Play with it below.</p>
+  <h1>🛰 Fleet Status — a Status panel for every machine</h1>
+  <p class="sub">The Management App's Fleet Status now shows each machine's Agents, an Overview (Claude / GitHub / host / admin / version), and a Scoreboard — as tabs, so nothing is crammed. The cheap Overview rides the fleet poll; the heavy Scoreboard loads on demand.</p>
 </header>
 
 <main>
-  <section class="stage">
-    <div class="controls">
-      <button id="promote" class="btn btn--primary">💡 Promote idea → task</button>
-      <button id="complete" class="btn" disabled>✓ Complete task</button>
-      <button id="delete" class="btn btn--danger" disabled>🗑 Delete task</button>
-      <label class="toggle"><input type="checkbox" id="showConsumed" /> Show consumed</label>
-      <button id="reset" class="btn btn--ghost">↺ Reset</button>
-    </div>
-
-    <div class="boards">
-      <div class="board" id="ideasBoard">
-        <div class="board__head">Ideas list <span class="pill" id="ideasCount">0</span></div>
-        <div class="board__hint">What <code>/api/notes</code> and <code>list_ideas</code> return by default</div>
-        <ul class="cards" id="ideasCards"></ul>
-        <div class="consumed-wrap" id="consumedWrap" hidden>
-          <div class="consumed-head">▾ Consumed <span class="pill" id="consumedCount">0</span></div>
-          <ul class="cards cards--consumed" id="consumedCards"></ul>
-        </div>
-      </div>
-
-      <div class="board" id="taskBoard">
-        <div class="board__head">Task board <span class="pill" id="tasksCount">0</span></div>
-        <div class="board__hint">Kanban / Task graph — cards carry <code>ideaId</code></div>
-        <ul class="cards" id="taskCards"></ul>
-      </div>
-    </div>
-
-    <p class="log" id="log">Start by promoting the idea.</p>
+  <section class="demo">
+    <div class="tabs" id="tabs"></div>
+    <div class="machines" id="machines"></div>
+    <p class="note" id="note"></p>
   </section>
 
   <section class="explain">
-    <h2>The lifecycle</h2>
-    <ol class="steps">
-      <li><b>Promote</b> (Send to graph · Kanban · arch <code>idea_to_task</code>) → the idea is <b>consumed</b>: off the list, linked to the new task. Every path funnels through <code>TaskGraphService.AddNode</code>, so one choke point covers them all.</li>
-      <li><b>Consumed, not deleted</b> — kept behind the off-by-default “Consumed” view and <code>list_ideas ... includeConsumed</code>, each showing the task it became.</li>
-      <li><b>Delete the task</b> → the idea returns to the list <b>inactive</b>, original text/project/priority intact (only for the idea that task consumed).</li>
-      <li><b>Complete/merge</b> the task → a status change, never a delete → the idea <b>stays consumed</b>.</li>
-      <li><b>Migration</b> — on first run, ideas that already had a task pointing at them become consumed.</li>
-    </ol>
-    <p class="foot">State lives on the idea as <code>ConsumedByTaskId</code>, so it replicates over the existing ideas sync channel — no new wire shape. openspec <code>ideas-consume-on-promotion</code>.</p>
+    <h2>The data path</h2>
+    <div class="cards">
+      <div class="card">
+        <h3>Overview → in the poll (cheap)</h3>
+        <p>Each peer's <code>/api/arch/peer</code> describe carries an <code>overview</code>: Claude account, GitHub account, host timezone, admin state. Built non-blocking and cached at the source, so <code>GET /api/arch/fleet/status</code> (already polled every 5 s) gains one small object per machine. An older peer sends no <code>overview</code> → the hub shows <span class="na">n/a</span>, never an error.</p>
+      </div>
+      <div class="card">
+        <h3>Scoreboard → on demand (heavy)</h3>
+        <p>The analytics fold re-reads the whole <code>activity.jsonl</code> per call, uncached, and the <em>all</em> window grows unbounded. So it is <b>never</b> in the poll: opening the Scoreboard tab makes one <code>GET /api/arch/fleet/scoreboard?sourceId=&amp;window=</code> (self local, peers relayed &amp; cached ~3 min) with a spinner + Refresh, reusing the harness's own <code>ScoreboardView</code>.</p>
+      </div>
+      <div class="card">
+        <h3>Measured (this machine)</h3>
+        <p>Real ledger 31.8 KB → compute <b>&lt; 1 ms</b>, payload <b>1.2 KB</b> (today) / <b>1.8 KB</b> (7d) / <b>9.6 KB</b> (all). Cheap today, but uncached + unbounded — hence on-demand, so the fleet poll is unchanged. A test enforces the poll payload has no scoreboard field.</p>
+      </div>
+    </div>
+    <p class="foot">Backend: <code>ArchAgentService.PeerDescribe/FleetStatus/FleetScoreboard</code>, <code>FleetOverviewProvider</code>, <code>FleetClient.PeerInfo.Overview</code>. Frontend: <code>manage/FleetStatus.jsx</code>, <code>FleetOverviewPanel.jsx</code>, <code>FleetScoreboardTab.jsx</code>, <code>dashboard/ScoreboardView.jsx</code>. Spec: <code>openspec/changes/fleet-status-panels</code>.</p>
   </section>
 </main>
 
