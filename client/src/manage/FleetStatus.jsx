@@ -253,6 +253,17 @@ export default function FleetStatus({ root = '' }) {
                 {narrowed && hidden > 0 ? ` · ${hidden} hidden by filter` : ''}
               </span>
             </div>
+            {(m.staleTasks || []).length > 0 && (
+              <div className="fs__stale" data-stale-tasks>
+                {(m.staleTasks || []).map((t) => (
+                  <div key={t.id} className="fs__stale-row" title={t.title}>
+                    ⏱ stale: {t.reason === 'unpushed branch' ? `unpushed branch on ${m.machine}` : 'PR open'}
+                    {t.branch ? <span className="fs__mono"> ⎇ {t.branch}</span> : null}
+                    {' — '}{t.title}
+                  </div>
+                ))}
+              </div>
+            )}
             {collapsed ? null : agents.length === 0
               ? <div className="fs__none">{(m.agents || []).length === 0 ? (m.reachable ? 'no repo agents (no docks, nothing in the arch scope)' : 'nothing known — the machine has not answered') : 'nothing matches this filter'}</div>
               : (

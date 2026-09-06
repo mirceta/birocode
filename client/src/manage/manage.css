@@ -132,3 +132,7 @@ html, body, #root { height: 100%; margin: 0; }
 .mg__pane-move { background: transparent; border: 0; color: var(--color-text-muted, #9aa); font-size: 11px; line-height: 1; cursor: pointer; padding: 2px 4px; border-radius: 4px; }
 .mg__pane-move:hover:not(:disabled) { color: var(--color-text, #eee); background: rgba(255, 255, 255, 0.08); }
 .mg__pane-move:disabled { opacity: 0.3; cursor: default; }
+
+/* Stale board work surfaced per machine (openspec kanban-lifecycle-columns) */
+.fs__stale { display: flex; flex-direction: column; gap: 2px; padding: 4px 10px; }
+.fs__stale-row { color: #e5734b; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

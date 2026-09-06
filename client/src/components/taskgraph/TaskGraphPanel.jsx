@@ -33,8 +33,12 @@ import './taskgraph.css';
 // a cross-machine hand-off and is drawn with a distinct dashed colour.
 // Backend-synced via /api/taskgraph; positions persist on drag-stop.
 
-const STATUSES = ['todo', 'doing', 'done'];
-const NEXT_STATUS = { todo: 'doing', doing: 'done', done: 'todo' };
+// The delivery lifecycle (openspec kanban-lifecycle-columns); a click on the
+// status chip cycles through it. From committed up the harness also advances
+// nodes itself from observed git/PR state.
+const STATUSES = ['todo', 'doing', 'committed', 'pr-opened', 'pr-merged', 'done'];
+const NEXT_STATUS = { todo: 'doing', doing: 'committed', committed: 'pr-opened', 'pr-opened': 'pr-merged', 'pr-merged': 'done', done: 'todo' };
+const DELIVERED = (s) => s === 'pr-merged' || s === 'done';
 
 const CROSS_COLOR = '#e8590c'; // cross-machine edge accent (also in taskgraph.css)
 const MACHINE_MIN_W = 220;
@@ -636,15 +640,15 @@ function toRfEdge(e) {
   return { id: e.id, source: e.source, target: e.target };
 }
 
-// A node is actionable if it isn't done and every step it depends on (its outgoing
-// edges' targets) is done.
+// A node is actionable if it isn't delivered and every step it depends on (its
+// outgoing edges' targets) is delivered — merged work unblocks its dependents.
 function actionableIds(nodes, edges) {
   const statusOf = new Map(nodes.map((n) => [n.id, n.data.status]));
   const out = new Set();
   for (const n of nodes) {
-    if (n.data.status === 'done') continue;
+    if (DELIVERED(n.data.status)) continue;
     const deps = edges.filter((e) => e.source === n.id);
-    if (deps.every((e) => statusOf.get(e.target) === 'done')) out.add(n.id);
+    if (deps.every((e) => DELIVERED(statusOf.get(e.target)))) out.add(n.id);
   }
   return out;
 }

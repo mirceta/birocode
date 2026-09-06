@@ -45,7 +45,10 @@ public class TaskGraphController : ControllerBase
     public IActionResult Get()
     {
         _logger.CountRequest();
-        return Ok(_graph.Get());
+        var b = _graph.Get();
+        // staleHours rides along so the client draws the same stale badge the
+        // harness computes (openspec kanban-lifecycle-columns).
+        return Ok(new { nodes = b.Nodes, edges = b.Edges, machines = b.Machines, scratch = b.Scratch, staleHours = _graph.StaleAfterMs / 3600_000.0 });
     }
 
     [HttpPost("nodes")]

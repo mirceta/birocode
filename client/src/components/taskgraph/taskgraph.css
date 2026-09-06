@@ -116,6 +116,10 @@
   font-size: 12.5px;
 }
 .tg-node.st-doing { border-color: #e0552b; }
+/* Delivery lifecycle (openspec kanban-lifecycle-columns) */
+.tg-node.st-committed { border-color: #b085f5; }
+.tg-node.st-pr-opened { border-color: #5ea0ef; }
+.tg-node.st-pr-merged { opacity: 0.72; border-color: #16a34a; }
 .tg-node.st-done { opacity: 0.62; }
 .tg-node.st-done .tg-node__title { text-decoration: line-through; }
 /* OPEN FRONTS — steps you can work on right now (not done, every prerequisite
@@ -170,6 +174,9 @@
 }
 .tg-chip--status { cursor: pointer; background: var(--color-bg, #efece6); color: var(--color-text); }
 .tg-chip--status.st-doing { background: #e0552b; color: #fff; border-color: #e0552b; }
+.tg-chip--status.st-committed { background: #b085f5; color: #fff; border-color: #b085f5; }
+.tg-chip--status.st-pr-opened { background: #5ea0ef; color: #fff; border-color: #5ea0ef; }
+.tg-chip--status.st-pr-merged { background: #2c7a44; color: #fff; border-color: #2c7a44; }
 .tg-chip--status.st-done { background: #16a34a; color: #fff; border-color: #16a34a; }
 .tg-chip--repo {
   background: color-mix(in srgb, var(--repo-color) 16%, var(--color-surface));

@@ -35,7 +35,15 @@ public class TaskGraphService
     // The free-text scratchpad below the graph (an experiment: if the operator
     // reaches for this instead of the graph, the graph isn't earning its keep).
     public const int MaxScratchLength = 200_000;
-    public static readonly string[] Statuses = { "todo", "doing", "done" };
+    // The delivery lifecycle, in order (openspec kanban-lifecycle-columns);
+    // TaskLifecycle carries the rules that ride on this ordering.
+    public static readonly string[] Statuses = { "todo", "doing", "committed", "pr-opened", "pr-merged", "done" };
+    // Board schema: 2 = lifecycle statuses (pre-2 boards migrate on load).
+    public const int CurrentSchemaVersion = 2;
+    public const int DefaultStaleHours = 24;
+    /// <summary>How long a card may sit in committed/pr-opened before it is
+    /// flagged stale (openspec kanban-lifecycle-columns; TaskBoard:StaleHours).</summary>
+    public long StaleAfterMs { get; set; } = DefaultStaleHours * 3600_000L;
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
 
     private readonly Logger _logger;
@@ -57,6 +65,9 @@ public class TaskGraphService
         Directory.CreateDirectory(dir);
         _path = Path.Combine(dir, "taskgraph.json");
         Load();
+        // A fresh board (no file yet) is born on the current schema — only a
+        // persisted pre-lifecycle board goes through MigrateToLifecycle.
+        if (!File.Exists(_path)) _board.SchemaVersion = CurrentSchemaVersion;
     }
 
     // A node carries only what the dashboard needs: a title + optional note, an
@@ -69,11 +80,21 @@ public class TaskGraphService
     // arch last pinged that agent with it, CreatedBy who made the card, IdeaId the
     // idea it was promoted from. All optional so boards and sync peers that predate
     // them read back unchanged.
+    // Delivery linkage (openspec kanban-lifecycle-columns), all trailing and
+    // optional so older boards and sync peers read back unchanged: Branch/
+    // HeadCommit/PrUrl may arrive as an agent's relayed claim, but Pushed/
+    // PrNumber/MergeCommit/VerifiedStatus are written only by the verifier —
+    // the harness's own observation of git/PR state. Warning carries the
+    // migration badge or a clamped over-claim ("agent reported done, branch
+    // not on origin").
     public sealed record Node(
         string Id, string Title, string? Note, string? RepoId, string? MachineId, string Status,
         double X, double Y, long CreatedAt, long UpdatedAt,
         string? SourceId = null, string? AssignedBy = null, long? AssignedAt = null,
-        long? DispatchedAt = null, int DispatchCount = 0, string? CreatedBy = null, string? IdeaId = null);
+        long? DispatchedAt = null, int DispatchCount = 0, string? CreatedBy = null, string? IdeaId = null,
+        string? Branch = null, string? HeadCommit = null, bool? Pushed = null,
+        string? PrUrl = null, int? PrNumber = null, string? MergeCommit = null,
+        string? VerifiedStatus = null, long? VerifiedAt = null, string? Warning = null);
 
     // Source depends on Target (Target is the prerequisite).
     public sealed record Edge(string Id, string Source, string Target);
@@ -111,6 +132,8 @@ public class TaskGraphService
         // When the scratchpad last changed — 0 on boards that predate sync.
         public long ScratchUpdatedAt { get; set; }
         public List<GraphTombstone> Tombstones { get; set; } = new();
+        // 0 on boards that predate the lifecycle statuses; bumped by migration.
+        public int SchemaVersion { get; set; }
     }
 
     public Board Get()
@@ -255,7 +278,10 @@ public class TaskGraphService
             var i = _board.Nodes.FindIndex(n => n.Id == id);
             if (i < 0) return null;
             var cur = _board.Nodes[i];
-            updated = cur with { DispatchedAt = now, DispatchCount = cur.DispatchCount + 1, Status = cur.Status == "done" ? "done" : "doing", UpdatedAt = now };
+            // Raise-only to doing: a re-ping must not demote a card the harness
+            // already verified as committed or further (openspec kanban-lifecycle-columns).
+            var status = TaskLifecycle.Rank(cur.Status) >= TaskLifecycle.Rank(TaskLifecycle.Doing) ? cur.Status : TaskLifecycle.Doing;
+            updated = cur with { DispatchedAt = now, DispatchCount = cur.DispatchCount + 1, Status = status, UpdatedAt = now };
             _board.Nodes[i] = updated;
             Save();
         }
@@ -264,6 +290,79 @@ public class TaskGraphService
     }
 
     public Node? Find(string id) { lock (_gate) return _board.Nodes.FirstOrDefault(n => n.Id == id); }
+
+    /// <summary>Store an agent's relayed claim of where its work lives (openspec
+    /// kanban-lifecycle-columns): branch, head commit, PR URL. Claims tell the
+    /// verifier where to look; they never advance the status (the caller clamps
+    /// status separately through <see cref="TaskLifecycle.ClampClaim"/>). Null
+    /// arguments leave the stored value; a claim never erases linkage.</summary>
+    public Node? RecordClaim(string id, string? branch, string? commit, string? prUrl, long now)
+    {
+        Node? updated;
+        lock (_gate)
+        {
+            var i = _board.Nodes.FindIndex(n => n.Id == id);
+            if (i < 0) return null;
+            var cur = _board.Nodes[i];
+            updated = cur with
+            {
+                Branch = Clean(branch, 400) ?? cur.Branch,
+                HeadCommit = Clean(commit, 64) ?? cur.HeadCommit,
+                PrUrl = Clean(prUrl, 400) ?? cur.PrUrl,
+                UpdatedAt = now,
+            };
+            if (updated == cur) return cur;
+            _board.Nodes[i] = updated;
+            Save();
+        }
+        RaiseChanged();
+        return updated;
+    }
+
+    /// <summary>Apply what the verifier observed (openspec kanban-lifecycle-columns):
+    /// records the facts and advances the status FORWARD ONLY — an observation
+    /// never demotes a card (a branch deleted after its merge must not un-merge
+    /// the task). Saves and stamps <c>UpdatedAt</c> only when something actually
+    /// changed, so an idle card can go stale and sync doesn't churn.</summary>
+    public Node? ApplyVerification(string id, TaskLifecycle.Facts facts, long now)
+    {
+        Node? updated;
+        bool changed;
+        lock (_gate)
+        {
+            var i = _board.Nodes.FindIndex(n => n.Id == id);
+            if (i < 0) return null;
+            var cur = _board.Nodes[i];
+            var observed = TaskLifecycle.FromFacts(facts);
+            var newStatus = observed is not null && TaskLifecycle.Rank(observed) > TaskLifecycle.Rank(cur.Status) ? observed : cur.Status;
+            var newVerified = observed is not null && TaskLifecycle.Rank(observed) > TaskLifecycle.Rank(cur.VerifiedStatus)
+                ? observed : cur.VerifiedStatus;
+            updated = cur with
+            {
+                Status = newStatus,
+                HeadCommit = facts.HeadCommit ?? cur.HeadCommit,
+                Pushed = facts.BranchExists ? facts.OnOrigin : cur.Pushed,
+                PrUrl = facts.PrUrl ?? cur.PrUrl,
+                PrNumber = facts.PrNumber ?? cur.PrNumber,
+                MergeCommit = facts.MergeCommit ?? cur.MergeCommit,
+                VerifiedStatus = newVerified,
+            };
+            changed = updated != cur;
+            if (changed)
+            {
+                updated = updated with { UpdatedAt = now, VerifiedAt = now };
+                _board.Nodes[i] = updated;
+                Save();
+                _logger.Info($"[TASKGRAPH] Verified node {id}: {cur.Status} -> {updated.Status} (pushed={updated.Pushed}, pr={updated.PrNumber?.ToString() ?? "-"})");
+            }
+        }
+        if (changed) RaiseChanged();
+        return updated;
+    }
+
+    /// <summary>Stale = committed/pr-opened with no activity past the configured
+    /// window — an unpushed branch or an open PR nobody is moving.</summary>
+    public bool IsStale(Node n, long now) => TaskLifecycle.IsStale(n.Status, n.UpdatedAt, now, StaleAfterMs);
 
     /// <summary>The prerequisites of a task (the targets of its depends-on edges).</summary>
     public List<Node> Prerequisites(string id)
@@ -275,8 +374,9 @@ public class TaskGraphService
         }
     }
 
-    /// <summary>Blocked = not done and at least one prerequisite is not done.</summary>
-    public bool IsBlocked(string id) => Find(id) is { Status: not "done" } && Prerequisites(id).Any(p => p.Status != "done");
+    /// <summary>Blocked = not delivered and at least one prerequisite is not
+    /// delivered (pr-merged/done). A flag, never a column.</summary>
+    public bool IsBlocked(string id) => Find(id) is { } n && !TaskLifecycle.IsDelivered(n.Status) && Prerequisites(id).Any(p => !TaskLifecycle.IsDelivered(p.Status));
 
     // Removes a node and any edges touching it, tombstoning the node AND those
     // edges so neither resurrects from a sync peer. Returns the count of edges
@@ -651,12 +751,43 @@ public class TaskGraphService
                 board.Scratch ??= "";
                 board.Tombstones ??= new List<GraphTombstone>();
                 _board = board;
+                MigrateToLifecycle();
             }
         }
         catch (Exception ex)
         {
             _logger.Error($"[TASKGRAPH] Failed to load {_path} (using defaults, file untouched): {ex.Message}");
         }
+    }
+
+    /// <summary>One-time migration to the lifecycle statuses (openspec
+    /// kanban-lifecycle-columns, schema 2): "done" meant "the agent said so", so
+    /// a done card keeps done-ness only as far as its evidence carries — merge
+    /// evidence → pr-merged, none → committed with a warning badge the operator
+    /// can resolve by hand (the node PATCH is unclamped). Runs from Load, before
+    /// any reader; idempotent via the schema stamp.</summary>
+    private void MigrateToLifecycle()
+    {
+        if (_board.SchemaVersion >= CurrentSchemaVersion) return;
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var migrated = 0;
+        for (var i = 0; i < _board.Nodes.Count; i++)
+        {
+            var n = _board.Nodes[i];
+            var evidence = n.MergeCommit is not null || (n.PrNumber is not null && TaskLifecycle.IsDelivered(n.VerifiedStatus));
+            var (status, warn) = TaskLifecycle.MigrateStatus(n.Status, evidence);
+            if (status == n.Status && !warn) continue;
+            _board.Nodes[i] = n with
+            {
+                Status = status,
+                Warning = warn ? "migrated: was done, no merged PR recorded for this task" : n.Warning,
+                UpdatedAt = now,
+            };
+            migrated++;
+        }
+        _board.SchemaVersion = CurrentSchemaVersion;
+        Save();
+        if (migrated > 0) _logger.Info($"[TASKGRAPH] Lifecycle migration: {migrated} done card(s) re-staged by evidence (schema {CurrentSchemaVersion})");
     }
 
     // Caller holds _gate. Atomic temp+rename — a kill mid-write can't truncate it.
