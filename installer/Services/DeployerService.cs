@@ -153,8 +153,8 @@ public class DeployerService
                 "GET http://localhost:<port>/api/health returns 200",
                 DeployPhase.Backend, CheckAppResponding),
 
-            new DeployStep(3, "Backend reachable on the network",
-                "Health responds on this machine's LAN IP (bound to 0.0.0.0, not just localhost)",
+            new DeployStep(3, "Backend bound to the network",
+                "The listener is on a wildcard/LAN address, not loopback-only (off-box reachability also needs step 6)",
                 DeployPhase.Backend, CheckLanReachable),
 
             new DeployStep(4, "Proxy target matches backend port",
@@ -253,34 +253,46 @@ public class DeployerService
     // ---------------- Backend (our system) checks ----------------
 
     /// <summary>
-    /// Confirms the backend is reachable on the machine's LAN IP, not just
-    /// localhost -- i.e. it is bound to 0.0.0.0 so a reverse proxy / other hosts
-    /// can reach it. (The app binds 0.0.0.0 by default; this catches a
-    /// misconfiguration or a not-running app.)
+    /// Confirms the backend is BOUND to a network-facing address (0.0.0.0 / :: /
+    /// a LAN IP) rather than loopback-only, so a reverse proxy or another host
+    /// could reach it once the firewall allows the port.
+    ///
+    /// It deliberately does NOT HTTP-probe this machine's own LAN IP. Windows
+    /// routes a host's traffic to its own address over loopback, so that probe
+    /// never crosses the firewall and cannot fail the way a real off-box client
+    /// fails -- on SQLBIROKRAT2 (2026-09-06) it returned 200 while every other
+    /// machine on the subnet timed out, because no inbound rule allowed TCP 5099.
+    /// Reading the listening socket is the strongest claim this machine can
+    /// honestly make on its own; the inbound rule is step 6's job.
     /// </summary>
     private async Task<(StepStatus, string)> CheckLanReachable(CancellationToken ct)
     {
-        string? ip = GetLanIPv4();
-        if (ip == null)
-            return (StepStatus.Warning, "No LAN IPv4 address found -- cannot test network reachability");
+        string ps =
+            $"@(Get-NetTCPConnection -LocalPort {ProxyPort} -State Listen -ErrorAction SilentlyContinue " +
+            "| Select-Object -ExpandProperty LocalAddress -Unique) -join ','";
+        var (code, stdout, _) = await RunPowerShell(ps, ct);
+        string addrs = stdout.Trim();
+        Log($"  listening on: {(addrs.Length == 0 ? "(nothing)" : addrs)}");
 
-        string url = $"http://{ip}:{ProxyPort}/api/health";
-        Log($"  GET {url}");
-        try
-        {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-            var resp = await http.GetAsync(url, ct);
-            Log($"  HTTP {(int)resp.StatusCode}");
-            return resp.IsSuccessStatusCode
-                ? (StepStatus.Ok, $"Reachable at {url} (bound to the network interface)")
-                : (StepStatus.Missing, $"HTTP {(int)resp.StatusCode} from {url}");
-        }
-        catch (Exception ex)
-        {
-            Log($"  (no response: {ex.Message})");
+        if (code != 0)
+            return (StepStatus.Warning, $"Could not read the listening sockets for TCP {ProxyPort}");
+        if (addrs.Length == 0)
             return (StepStatus.Missing,
-                $"Not reachable at {url}. If localhost works but this does not, the app is bound to localhost only (or is not running).");
-        }
+                $"Nothing is listening on TCP {ProxyPort} -- start the backend, then re-check.");
+
+        var list = addrs.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        bool wildcard = list.Any(a => a is "0.0.0.0" or "::");
+        bool loopbackOnly = list.All(a => a is "127.0.0.1" or "::1");
+
+        if (loopbackOnly)
+            return (StepStatus.Missing,
+                $"Bound to loopback only ({addrs}) -- no other host can reach it. " +
+                "The app should bind 0.0.0.0/:: (see EmbeddedApi.UseUrls).");
+
+        string where = wildcard ? $"all interfaces ({addrs})" : $"{addrs}";
+        return (StepStatus.Ok,
+            $"Listening on {where}. NOTE: this proves the bind, not off-box reachability -- " +
+            "an inbound firewall rule (step 6) is what actually lets other machines in.");
     }
 
     /// <summary>The reverse proxy target port must equal the port the backend listens on.</summary>
@@ -307,24 +319,6 @@ public class DeployerService
         catch { return 0; }
     }
 
-    /// <summary>First non-loopback, non-APIPA IPv4 address of an up interface.</summary>
-    private static string? GetLanIPv4()
-    {
-        try
-        {
-            return NetworkInterface.GetAllNetworkInterfaces()
-                .Where(n => n.OperationalStatus == OperationalStatus.Up
-                         && n.NetworkInterfaceType != NetworkInterfaceType.Loopback)
-                .SelectMany(n => n.GetIPProperties().UnicastAddresses)
-                .Select(a => a.Address)
-                .Where(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
-                         && !IPAddress.IsLoopback(a))
-                .Select(a => a.ToString())
-                .FirstOrDefault(ip => !ip.StartsWith("169.254"));
-        }
-        catch { return null; }
-    }
-
     // ---------------- Firewall checks ----------------
 
     private Task<(StepStatus, string)> CheckFirewallBackendPort(CancellationToken ct)
@@ -334,21 +328,57 @@ public class DeployerService
         => OpenFirewallPort(ProxyPort, $"Claude Web backend ({ProxyPort})", ct);
 
     /// <summary>
-    /// True if ANY enabled inbound Allow rule covers this TCP port (ours or one
-    /// IIS/api-chatbot already created), so we never add a duplicate.
+    /// True if an enabled inbound Allow rule actually admits this TCP port for
+    /// our backend (ours, or one IIS/api-chatbot already created), so we never
+    /// add a duplicate.
+    ///
+    /// The port test alone is not enough. A rule whose LocalPort is 'Any' is
+    /// almost always scoped to ONE program, and a typical Windows box has many
+    /// of them -- so matching on port alone reports OPEN on nearly every
+    /// machine. On SQLBIROKRAT2 (2026-09-06) 140 such rules matched while
+    /// inbound 5099 was in fact dropped. A rule therefore only counts when it is
+    /// unscoped or scoped to our own backend executable.
+    ///
+    /// "Unscoped" needs BOTH tests: the built-in Windows AppContainer rules
+    /// ("Cortana", "Your account", "Windows Security", ...) report Program 'Any'
+    /// yet apply only to their own UWP package -- on that same box all 130
+    /// Program-'Any' matches were package-scoped. So Package must be empty too.
+    ///
+    /// Known limitation: LocalPort ranges ('5000-5100') are not expanded, so a
+    /// range covering the port reads as CLOSED -- a false alarm is safe here
+    /// (New-NetFirewallRule just adds a redundant rule), a false OPEN is not.
     /// </summary>
     private async Task<(StepStatus, string)> CheckFirewallPort(int port, CancellationToken ct)
     {
+        string exeName = PsEscape(Path.GetFileName(_installer.BuiltExePath));
         string ps =
-            "$open = Get-NetFirewallRule -Direction Inbound -Action Allow -Enabled True -ErrorAction SilentlyContinue | " +
-            "Get-NetFirewallPortFilter | Where-Object { $_.Protocol -eq 'TCP' -and " +
-            "($_.LocalPort -contains '" + port + "' -or $_.LocalPort -eq 'Any') }; " +
-            "if ($open) { 'OPEN' } else { 'CLOSED' }";
+            "$hit = $null; " +
+            "foreach ($r in @(Get-NetFirewallRule -Direction Inbound -Action Allow -Enabled True -ErrorAction SilentlyContinue)) { " +
+            "  $pf = $r | Get-NetFirewallPortFilter; " +
+            "  if (-not $pf) { continue } " +
+            "  if ($pf.Protocol -ne 'TCP' -and $pf.Protocol -ne 'Any') { continue } " +
+            "  if (-not ($pf.LocalPort -contains '" + port + "' -or $pf.LocalPort -eq 'Any')) { continue } " +
+            "  $af = $r | Get-NetFirewallApplicationFilter; " +
+            "  $prog = if ($af -and $af.Program) { $af.Program } else { 'Any' }; " +
+            "  $pkg = if ($af -and $af.Package) { $af.Package } else { $null }; " +
+            "  $isOurs = ($prog -ne 'Any' -and (Split-Path $prog -Leaf) -eq '" + exeName + "'); " +
+            "  $isUnscoped = ($prog -eq 'Any' -and -not $pkg); " +
+            "  if (-not ($isOurs -or $isUnscoped)) { continue } " +
+            "  $hit = $r.DisplayName + ' [port=' + (@($pf.LocalPort) -join ',') + '; program=' + $prog + ']'; " +
+            "  break " +
+            "} " +
+            "if ($hit) { 'OPEN|' + $hit } else { 'CLOSED' }";
+
         var (code, stdout, _) = await RunPowerShell(ps, ct);
-        if (code == 0 && stdout.Contains("OPEN"))
-            return (StepStatus.Ok, $"Inbound TCP {port} is allowed");
+        if (code == 0 && stdout.Contains("OPEN|"))
+        {
+            string rule = stdout[(stdout.IndexOf("OPEN|", StringComparison.Ordinal) + 5)..].Trim();
+            return (StepStatus.Ok, $"Inbound TCP {port} is allowed by: {rule}");
+        }
         if (code == 0 && stdout.Contains("CLOSED"))
-            return (StepStatus.Missing, $"No inbound firewall rule allows TCP {port}");
+            return (StepStatus.Missing,
+                $"No inbound firewall rule allows TCP {port} for {exeName}. " +
+                "Other machines will time out; localhost will still work.");
         return (StepStatus.Warning, $"Could not determine the firewall state for TCP {port}");
     }
 
