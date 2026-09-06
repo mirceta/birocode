@@ -1,0 +1,28 @@
+/* The task filter bar (openspec task-filters), pinned above the Kanban and the Task
+   graph: sticky to the top of whatever scrolls (the Management pane, the dashboard),
+   above the board's own content. Chip look follows the fleet Status bar. */
+.tf { position: sticky; top: 0; z-index: 7; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 6px 0; background: var(--color-bg, #faf7f2); border-bottom: 1px solid var(--color-border, #444); }
+.tf__search { flex: 1 1 200px; min-width: 150px; max-width: 320px; font: inherit; font-size: 12.5px; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--color-border, #444); background: var(--color-surface, #14161d); color: var(--color-text, #ddd); }
+.tf__search::placeholder { color: var(--color-text-muted, #778); }
+.tf__group { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; border: 1px solid var(--color-border, #444); border-radius: 8px; padding: 2px 4px 2px 6px; }
+.tf__label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-muted, #9aa); margin-right: 2px; }
+.tf__chip { background: transparent; border: 0; color: var(--color-text-muted, #9aa); font: inherit; font-size: 12px; padding: 2px 8px; border-radius: 6px; cursor: pointer; white-space: nowrap; max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+.tf__chip:hover { color: var(--color-text, #eee); }
+.tf__chip--on { background: var(--color-surface, #2a2e36); color: var(--color-text, #eee); font-weight: 600; box-shadow: inset 0 0 0 1px var(--color-accent, #5ea0ef); }
+.tf__chip--dim { opacity: 0.55; }
+.tf__count { font-size: 10px; color: var(--color-text-muted, #9aa); }
+.tf__chip--on .tf__count { color: inherit; }
+.tf__spacer { flex: 1 1 auto; }
+.tf__shown { font-size: 12px; color: var(--color-text-muted, #9aa); white-space: nowrap; }
+.tf__clear { background: transparent; border: 1px solid var(--color-border, #444); color: var(--color-text-muted, #9aa); border-radius: 6px; padding: 3px 10px; cursor: pointer; font-size: 12.5px; white-space: nowrap; }
+.tf__clear:hover { color: var(--color-text, #eee); border-color: var(--color-text-muted, #9aa); }
+.tf__toggle { background: transparent; border: 1px solid var(--color-border, #444); color: var(--color-text-muted, #9aa); border-radius: 6px; padding: 3px 10px; cursor: pointer; font-size: 12.5px; white-space: nowrap; }
+.tf__toggle--on { color: var(--color-text, #eee); border-color: var(--color-accent, #5ea0ef); }
+
+/* Task graph: the bar and the colour legends pin together as one block; the legends
+   drop their own stickiness so they never slide under the bar. */
+.tg-pinned { position: sticky; top: 0; z-index: 7; background: var(--color-bg, #faf7f2); display: flex; flex-direction: column; gap: 4px; }
+.tg-pinned .tg-legends { position: static; }
+.tg-pinned .tf { position: static; border-bottom: 0; }
+/* Kanban: a filtered-out card is not rendered; the column head keeps its count. */
+.kb__count-of { color: var(--color-text-muted, #9aa); font-weight: 400; font-size: 11px; }

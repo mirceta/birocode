@@ -1646,9 +1646,45 @@ public partial class ArchAgentService : IArchWakeSource
 
     /// <summary>The board as the arch sees it: every task with its assignee (machine +
     /// repo), status, blocked-ness, prerequisites and dispatch history — the shared
-    /// surface where the operator, this agent and future management agents meet.</summary>
-    public ToolOutcome ToolListTasks(string? status)
+    /// surface where the operator, this agent and future management agents meet.
+    /// Optional narrowing (openspec task-filters), the same dimensions as the Kanban's
+    /// filter bar: <paramref name="status"/> (todo | doing | done), <paramref name="machine"/>
+    /// (a machine label or "self"; "unassigned" = tasks with no assignee) and
+    /// <paramref name="repoId"/> (one repo agent: handle, id or unique name, resolved like
+    /// assign_task's). AND across the three.</summary>
+    public ToolOutcome ToolListTasks(string? status, string? machine = null, string? repoId = null)
     {
+        // Resolve the assignee filter first: an unknown machine or agent is an answer, not
+        // an empty list — the arch should learn the right handle, not conclude "no tasks".
+        var unassignedOnly = false;
+        var byMachine = false;
+        string? wantSource = null;
+        string? wantRepo = null;
+        string scopeText = "";
+        if (!string.IsNullOrWhiteSpace(repoId))
+        {
+            var agent = ResolveAgentRef(machine, repoId);
+            if (agent.Error is not null) return new ToolOutcome(false, "unknown-agent", agent.Error);
+            wantSource = agent.Target.IsSelf ? null : agent.Target.Source!.Id;
+            wantRepo = agent.RepoId;
+            scopeText = $" assigned to {repoId.Trim()}";
+        }
+        else if (!string.IsNullOrWhiteSpace(machine))
+        {
+            if (string.Equals(machine.Trim(), "unassigned", StringComparison.OrdinalIgnoreCase))
+            {
+                unassignedOnly = true;
+                scopeText = " without an assignee";
+            }
+            else
+            {
+                var target = ResolveMachine(machine);
+                if (target.Error is not null) return new ToolOutcome(false, "unknown-machine", target.Error);
+                byMachine = true;
+                wantSource = target.IsSelf ? null : target.Source!.Id;
+                scopeText = $" on {(target.IsSelf ? SelfLabel : target.Source!.Label)}";
+            }
+        }
         var board = _graph.Get();
         var srcLabel = SourceLabels();
         var repoName = RepoNames(board.Nodes);
@@ -1656,7 +1692,7 @@ public partial class ArchAgentService : IArchWakeSource
         var byId = board.Nodes.ToDictionary(n => n.Id);
         var now = Now();
         var tasks = board.Nodes
-            .Where(n => string.IsNullOrWhiteSpace(status) || n.Status == status)
+            .Where(n => TaskMatches(n, status, unassignedOnly, byMachine, wantSource, wantRepo))
             .OrderBy(n => TaskGraph.TaskLifecycle.Rank(n.Status)).ThenBy(n => n.CreatedAt)
             .Select(n =>
             {
@@ -1684,7 +1720,21 @@ public partial class ArchAgentService : IArchWakeSource
                 };
             }).ToList();
         AuditTool("list_tasks", null, $"{tasks.Count} task(s)");
-        return new ToolOutcome(true, "ok", $"{tasks.Count} task(s){(string.IsNullOrWhiteSpace(status) ? "" : $" with status {status}")}", new { tasks, statuses = TaskGraph.TaskGraphService.Statuses });
+        return new ToolOutcome(true, "ok", $"{tasks.Count} task(s){(string.IsNullOrWhiteSpace(status) ? "" : $" with status {status}")}{scopeText}", new { tasks, statuses = TaskGraph.TaskGraphService.Statuses });
+    }
+
+    /// <summary>The list_tasks filter rule (openspec task-filters), pure: status when
+    /// given; then the assignee — <paramref name="unassignedOnly"/> keeps tasks with no
+    /// repo, a resolved agent (<paramref name="repoId"/> on <paramref name="sourceId"/>,
+    /// null = this harness) keeps exactly that assignee, <paramref name="byMachine"/>
+    /// keeps every assigned task whose harness is <paramref name="sourceId"/>. AND across.</summary>
+    public static bool TaskMatches(TaskGraph.TaskGraphService.Node n, string? status, bool unassignedOnly, bool byMachine, string? sourceId, string? repoId)
+    {
+        if (!string.IsNullOrWhiteSpace(status) && !string.Equals(n.Status, status.Trim(), StringComparison.OrdinalIgnoreCase)) return false;
+        if (unassignedOnly) return n.RepoId is null;
+        if (repoId is not null) return string.Equals(n.RepoId, repoId, StringComparison.Ordinal) && string.Equals(n.SourceId, sourceId, StringComparison.Ordinal);
+        if (byMachine) return n.RepoId is not null && string.Equals(n.SourceId, sourceId, StringComparison.Ordinal);
+        return true;
     }
 
     public ToolOutcome ToolCreateTask(string? title, string? note, string? machine, string? repoId, string? dependsOn)
