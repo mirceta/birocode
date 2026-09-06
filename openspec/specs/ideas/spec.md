@@ -7,7 +7,6 @@ panel. Covers the optional cross-machine replication layer — a link-configured
 store with pull/push CAS replication and per-note tombstone merge — and the harness's
 ability to itself host that shared store ("hub") at a token-bearing path.
 ## Requirements
-
 ### Requirement: Global ideas board
 The harness SHALL maintain one global ideas list — notes with text, optional project
 label, priority 0–5, and an active flag — served over `/api/notes` (list, add,
@@ -194,3 +193,21 @@ unchanged.
 #### Scenario: Scheme-less paste
 - **WHEN** the user pastes `host.example/api/notes/hub/abc` as the sync URL
 - **THEN** the stored URL is `https://host.example/api/notes/hub/abc`
+
+### Requirement: Idea handles
+
+Every idea SHALL carry a running number, shown as `#N` in the Ideas list and on task
+cards promoted from it, allocated on creation and never changed; ideas that predate
+numbers SHALL be numbered once, in creation order.
+
+#### Scenario: A new idea
+
+- **WHEN** an idea is added
+- **THEN** it receives the next free number and shows it as `#N` beside its text
+
+#### Scenario: Backfill
+
+- **WHEN** a store without numbers is loaded
+- **THEN** every idea gets a number in creation order, persisted, and a later load keeps
+  them
+

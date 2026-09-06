@@ -80,7 +80,11 @@ import { useT } from '../../i18n/LanguageContext';
 const mainlike = (branch) => branch === 'main' || branch === 'master';
 const RECENT_MS = 5 * 60 * 60 * 1000;
 
-export default function DockToolbar({ tabs, live, git, onToggle, onReorder }) {
+// `handles` (openspec stable-handles): { [repoId]: "<machine>/<handle>" } — the
+// label the fleet uses for this dock's agent; a repeated repo name shows its "#k"
+// suffix beside the name so "prg" and "prg#2" read apart, and the full label is in
+// the tooltip.
+export default function DockToolbar({ tabs, live, git, onToggle, onReorder, handles = {} }) {
   const { t } = useT();
   const [reordering, setReordering] = useState(false);
   const [pickedId, setPickedId] = useState(null);
@@ -217,8 +221,11 @@ export default function DockToolbar({ tabs, live, git, onToggle, onReorder }) {
               });
         // Glyphs never carry the meaning alone: the star and branch row are
         // also spoken as label fragments.
+        const handle = handles[tab.repoId] || '';
+        const suffix = /#\d+$/.exec(handle)?.[0] || '';
         const label = [
           base,
+          handle ? handle : null,
           tab.important ? t('dashboard.dockToolbarImportant') : null,
           branch ? t('dashboard.dockToolbarBranch', { branch }) : null,
         ]
@@ -247,7 +254,10 @@ export default function DockToolbar({ tabs, live, git, onToggle, onReorder }) {
               {unseen ? '!' : ''}
             </span>
             <span className="dash__docktab-text">
-              <span className="dash__docktab-name">{tab.repoName}</span>
+              <span className="dash__docktab-name" data-handle={handle || undefined}>
+                {tab.repoName}
+                {suffix && <span className="dash__docktab-suffix">{suffix}</span>}
+              </span>
               {branch && (
                 <span className="dash__docktab-branch">
                   <span aria-hidden="true">⎇</span> {branch}

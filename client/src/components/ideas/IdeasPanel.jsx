@@ -335,7 +335,10 @@ export default function IdeasPanel({ view = 'all' }) {
           </div>
         ) : (
           <>
-            <p className="idea__text">{n.text}</p>
+            <p className="idea__text">
+              {n.number > 0 && <span className="idea__handle" title="This idea's stable handle — say it in chat or to the arch agent" data-idea-handle>#{n.number}</span>}
+              {n.text}
+            </p>
             <div className="idea__foot">
               {n.project && <span className="idea__project">{n.project}</span>}
               <PriorityPicker value={n.priority || 0} onChange={(lvl) => changePriority(n, lvl)} t={t} />
