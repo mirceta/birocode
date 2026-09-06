@@ -360,6 +360,10 @@ public class TaskGraphService
                 PrNumber = facts.PrNumber ?? cur.PrNumber,
                 MergeCommit = facts.MergeCommit ?? cur.MergeCommit,
                 VerifiedStatus = newVerified,
+                // A verified merge settles every doubt the badge carried — the
+                // migration's "was done, no merged PR recorded" and a clamped
+                // over-claim alike (openspec board-verify-remote).
+                Warning = TaskLifecycle.Rank(newVerified) >= TaskLifecycle.Rank(TaskLifecycle.PrMerged) ? null : cur.Warning,
             };
             changed = updated != cur;
             if (changed)

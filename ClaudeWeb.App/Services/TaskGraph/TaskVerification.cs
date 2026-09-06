@@ -20,8 +20,10 @@ public interface ITaskFactsProbe
 /// deploy log for the "merge commit is live" fact on deployed-harness repos.
 /// Everything degrades: no gh → git-only facts; any git failure → an empty
 /// Facts that moves nothing (observation is forward-only anyway).
+/// It is also the <see cref="IPrFactsProbe"/> (openspec board-verify-remote): PR
+/// facts for any GitHub repo by number or head branch, and clone ancestry.
 /// </summary>
-public class GitTaskFactsProbe : ITaskFactsProbe
+public class GitTaskFactsProbe : ITaskFactsProbe, IPrFactsProbe
 {
     private readonly Logger _logger;
 
@@ -86,6 +88,71 @@ public class GitTaskFactsProbe : ITaskFactsProbe
         catch { return (null, null, false, null); }
     }
 
+    // ---- IPrFactsProbe (openspec board-verify-remote) ---------------------------------------
+
+    private const string PrFields = "number,url,state,mergeCommit,headRefOid,headRefName";
+
+    /// <summary>One PR on GitHub, by number (<c>gh pr view</c>) or by head branch
+    /// (<c>gh pr list --head</c>, newest first) in <c>owner/repo</c>. gh runs from the
+    /// temp dir so no local clone is needed — the fleet's cards name repos this hub
+    /// may not have checked out.</summary>
+    public PrFacts? ProbePr(PrRef pr)
+    {
+        var cwd = Path.GetTempPath();
+        try
+        {
+            if (pr.Number is { } number)
+            {
+                var json = Run(cwd, "gh", $"pr view {number} --repo {pr.OwnerRepo} --json {PrFields}", timeoutMs: 20_000);
+                if (string.IsNullOrWhiteSpace(json)) return null;
+                using var doc = JsonDocument.Parse(json);
+                return Parse(doc.RootElement);
+            }
+            if (!string.IsNullOrWhiteSpace(pr.Branch))
+            {
+                var json = Run(cwd, "gh", $"pr list --repo {pr.OwnerRepo} --head {pr.Branch} --state all --json {PrFields} --limit 1", timeoutMs: 20_000);
+                if (string.IsNullOrWhiteSpace(json)) return null;
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.ValueKind != JsonValueKind.Array || doc.RootElement.GetArrayLength() == 0) return null;
+                return Parse(doc.RootElement[0]);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[TASKVERIFY] gh probe failed for {pr.OwnerRepo}: {ex.Message}");
+        }
+        return null;
+    }
+
+    private static PrFacts? Parse(JsonElement e)
+    {
+        if (e.ValueKind != JsonValueKind.Object) return null;
+        string? mergeCommit = null;
+        if (e.TryGetProperty("mergeCommit", out var mc) && mc.ValueKind == JsonValueKind.Object && mc.TryGetProperty("oid", out var oid))
+            mergeCommit = oid.GetString();
+        return new PrFacts(
+            e.TryGetProperty("url", out var u) ? u.GetString() ?? "" : "",
+            e.TryGetProperty("number", out var n) ? n.GetInt32() : 0,
+            e.TryGetProperty("state", out var s) ? s.GetString() ?? "" : "",
+            mergeCommit,
+            e.TryGetProperty("headRefOid", out var h) && h.ValueKind == JsonValueKind.String ? h.GetString() : null,
+            e.TryGetProperty("headRefName", out var b) && b.ValueKind == JsonValueKind.String ? b.GetString() : null);
+    }
+
+    public bool? MergeIsAncestor(string clonePath, string mergeCommit, IReadOnlyList<string> liveCommits)
+    {
+        var unknown = true;
+        foreach (var live in liveCommits)
+        {
+            var code = Run(clonePath, "git", $"merge-base --is-ancestor {mergeCommit} {live}", exitCodeOnly: true);
+            if (code == "0") return true;
+            if (code == "1") unknown = false; // both known, not an ancestor
+        }
+        return unknown ? null : false;
+    }
+
+    public string? OriginUrl(string clonePath) => Run(clonePath, "git", "remote get-url origin");
+
     private static bool IsDeployedHarness(string repoPath) => File.Exists(Path.Combine(repoPath, "swap.ps1"));
 
     /// <summary>"Live on the machine that did the work": the merge is on the
@@ -143,27 +210,31 @@ public class GitTaskFactsProbe : ITaskFactsProbe
 
 /// <summary>
 /// The background watcher that makes transitions harness-verified (openspec
-/// kanban-lifecycle-columns): every minute it takes the board's cards that are
-/// assigned to a repo ON THIS MACHINE, carry a recorded branch, and are not
-/// yet done, probes the repo, and lets <see cref="TaskGraphService.ApplyVerification"/>
-/// advance the card as far as the facts go. Cards on other machines are that
-/// machine's poller's job — the board syncs the result back.
+/// kanban-lifecycle-columns; board-verify-remote): every minute — and once at
+/// startup, which is the backfill — it runs one <see cref="BoardVerifier"/> pass:
+/// this machine's assignees from their clones, and EVERY card that names a PR
+/// against GitHub, whichever machine its assignee is on. The operator can run a
+/// pass on demand (<c>POST /api/taskgraph/verify</c>, the board's "Re-verify"
+/// button); passes never overlap.
 /// </summary>
 public class TaskVerificationPoller : BackgroundService
 {
     public static readonly TimeSpan Interval = TimeSpan.FromSeconds(60);
-    private readonly TaskGraphService _graph;
     private readonly RepositoryRegistry _repos;
-    private readonly ITaskFactsProbe _probe;
+    private readonly BoardVerifier _verifier;
     private readonly Logger _logger;
+    private readonly object _passGate = new();
+    private BoardVerifier.Result? _last;
 
-    public TaskVerificationPoller(TaskGraphService graph, RepositoryRegistry repos, ITaskFactsProbe probe, Logger logger)
+    public TaskVerificationPoller(TaskGraphService graph, RepositoryRegistry repos, ITaskFactsProbe probe, IPrFactsProbe prProbe, Logger logger, ITaskFleetInfo? fleet = null)
     {
-        _graph = graph;
         _repos = repos;
-        _probe = probe;
         _logger = logger;
+        _verifier = new BoardVerifier(graph, probe, prProbe, fleet, logger);
     }
+
+    /// <summary>The last pass's outcome (for the board's status line), or null before the first.</summary>
+    public BoardVerifier.Result? Last => _last;
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
@@ -175,16 +246,17 @@ public class TaskVerificationPoller : BackgroundService
         }
     }
 
-    public void VerifyOnce()
+    /// <summary>One full pass, serialised: a second caller waits for the running pass.</summary>
+    public BoardVerifier.Result VerifyOnce()
     {
-        var repoById = _repos.GetAll().ToDictionary(r => r.Id, StringComparer.Ordinal);
-        foreach (var n in _graph.Get().Nodes)
+        lock (_passGate)
         {
-            if (n.Status == TaskLifecycle.Done || n.SourceId is not null) continue; // done, or another machine's job
-            if (n.RepoId is null || n.Branch is null) continue;
-            if (!repoById.TryGetValue(n.RepoId, out var repo) || !Directory.Exists(repo.Path)) continue;
-            var facts = _probe.Probe(repo.Path, n.Branch);
-            _graph.ApplyVerification(n.Id, facts, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+            var paths = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var r in _repos.GetAll())
+                if (!string.IsNullOrWhiteSpace(r.Path) && Directory.Exists(r.Path)) paths[r.Id] = r.Path;
+            var result = _verifier.VerifyOnce(paths, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+            _last = result;
+            return result;
         }
     }
 }
