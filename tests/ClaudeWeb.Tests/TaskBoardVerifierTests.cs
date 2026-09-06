@@ -241,7 +241,7 @@ public sealed class TaskBoardVerifierTests : IDisposable
     // ---- 4. never demote; done cards are not touched -----------------------------------------
 
     [Fact]
-    public void A_pass_never_demotes_and_skips_done_cards()
+    public void A_pass_never_demotes_and_checks_a_claimed_done_card()
     {
         var g = Graph();
         var merged = g.AddNode("Merged one", null, null, null, 0, 0, now: 1)!;
@@ -260,33 +260,53 @@ public sealed class TaskBoardVerifierTests : IDisposable
         Assert.Equal("pr-merged", g.Find(merged.Id)!.Status);
         Assert.Equal("done", g.Find(done.Id)!.Status);
         Assert.Empty(r.Changes);
-        Assert.Equal(1, r.Checked); // the done card is not even looked at
+        // The claimed-done card is checked too (nothing verified it — openspec
+        // board-claims-advisory); with no PR to name it is left alone, badge on.
+        Assert.Equal(2, r.Checked);
+        Assert.StartsWith("claimed done, verified: nothing", g.Find(done.Id)!.Warning);
     }
 
-    // ---- 4b. the migration warning clears once the merge is verified -----------------------------
+    // ---- 4b. the badge clears once verification catches up with the claim (advisory) -----------
 
     [Fact]
-    public void A_verified_merge_clears_the_migration_warning_on_a_remote_card()
+    public void A_done_card_keeps_done_and_sheds_its_badge_once_the_merge_is_verified_live()
     {
-        // The exact shape of the stuck cards: migrated from pre-lifecycle "done" without
-        // merge evidence (→ committed + warning), assigned to a peer's agent, PR URL relayed.
+        // The stuck cards' shape: pre-lifecycle "done" without merge evidence (kept done with
+        // the advisory badge — openspec board-claims-advisory), assigned to a peer's agent,
+        // PR URL relayed. The branch is gone from origin.
         File.WriteAllText(Path.Combine(_dir, "taskgraph.json"),
             """{"Nodes":[{"Id":"bed0f74a","Title":"Stable handles","Note":null,"RepoId":"p-birocode","MachineId":null,"Status":"done","X":0,"Y":0,"CreatedAt":1,"UpdatedAt":1,"SourceId":"src-spacex","PrUrl":"https://github.com/mirceta/birocode/pull/64"}],"Edges":[],"Machines":[],"Scratch":"","Tombstones":[]}""");
         var g = Graph();
         var stuck = g.Find("bed0f74a")!;
-        Assert.Equal("committed", stuck.Status);
-        Assert.Contains("migrated", stuck.Warning);
+        Assert.Equal("done", stuck.Status);
+        Assert.Equal("claimed done, verified: nothing — no facts observed yet", stuck.Warning);
 
+        // GitHub says merged, but no clone can judge liveness: verified pr-merged, the card
+        // stays done (never demoted), the badge now names the gap.
         var pr = new FakePr();
         pr.ByKey["mirceta/birocode#64"] = Merged(64, "m64");
-        var v = new BoardVerifier(g, new FakeLocal(), pr, new FakeFleet(), new Logger());
+        var fleet = new FakeFleet();
+        var v = new BoardVerifier(g, new FakeLocal(), pr, fleet, new Logger());
         v.VerifyOnce(new Dictionary<string, string>(), 10);
+        var mid = g.Find("bed0f74a")!;
+        Assert.Equal("done", mid.Status);
+        Assert.Equal("pr-merged", mid.VerifiedStatus);
+        Assert.Equal("claimed done, verified: pr-merged", mid.Warning);
+        Assert.Equal(64, mid.PrNumber);
+        Assert.Equal("m64", mid.MergeCommit);
 
+        // The hub's live build contains the merge: verified done, badge gone, no new gh call.
+        var clone = Clone(deployedHarness: true);
+        pr.Origins[clone] = "https://github.com/mirceta/birocode.git";
+        pr.Ancestor = true;
+        fleet.HubLiveCommit = "live1";
+        var asked = pr.Asked.Count;
+        v.VerifyOnce(new Dictionary<string, string> { ["r-self"] = clone }, 11);
         var after = g.Find("bed0f74a")!;
-        Assert.Equal("pr-merged", after.Status);
+        Assert.Equal("done", after.Status);
+        Assert.Equal("done", after.VerifiedStatus);
         Assert.Null(after.Warning);
-        Assert.Equal(64, after.PrNumber);
-        Assert.Equal("m64", after.MergeCommit);
+        Assert.Equal(asked, pr.Asked.Count);
     }
 
     [Fact]

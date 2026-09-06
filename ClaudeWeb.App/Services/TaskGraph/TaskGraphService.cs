@@ -245,6 +245,9 @@ public class TaskGraphService
                 X = x ?? cur.X,
                 Y = y ?? cur.Y,
                 UpdatedAt = now,
+                // The card moves to exactly what was asked (openspec board-claims-advisory);
+                // the badge says whether the harness has verified that much.
+                Warning = newStatus == cur.Status ? cur.Warning : TaskLifecycle.WarningFor(newStatus, cur.VerifiedStatus, cur.Pushed),
             };
             _board.Nodes[i] = updated;
             Save();
@@ -307,9 +310,9 @@ public class TaskGraphService
 
     /// <summary>Store an agent's relayed claim of where its work lives (openspec
     /// kanban-lifecycle-columns): branch, head commit, PR URL. Claims tell the
-    /// verifier where to look; they never advance the status (the caller clamps
-    /// status separately through <see cref="TaskLifecycle.ClampClaim"/>). Null
-    /// arguments leave the stored value; a claim never erases linkage.</summary>
+    /// verifier where to look; the status is moved separately through
+    /// <see cref="UpdateNode"/>. Null arguments leave the stored value; a claim never
+    /// erases linkage.</summary>
     public Node? RecordClaim(string id, string? branch, string? commit, string? prUrl, long now)
     {
         Node? updated;
@@ -333,11 +336,13 @@ public class TaskGraphService
         return updated;
     }
 
-    /// <summary>Apply what the verifier observed (openspec kanban-lifecycle-columns):
-    /// records the facts and advances the status FORWARD ONLY — an observation
-    /// never demotes a card (a branch deleted after its merge must not un-merge
-    /// the task). Saves and stamps <c>UpdatedAt</c> only when something actually
-    /// changed, so an idle card can go stale and sync doesn't churn.</summary>
+    /// <summary>Apply what the verifier observed (openspec kanban-lifecycle-columns,
+    /// board-claims-advisory): records the facts, advances the status FORWARD ONLY — an
+    /// observation never demotes a card (a branch deleted after its merge must not
+    /// un-merge the task) — and recomputes the badge: a card whose status is above the
+    /// verified state keeps its warning, one the facts have caught up with sheds it.
+    /// Saves and stamps <c>UpdatedAt</c> only when something actually changed, so an
+    /// idle card can go stale and sync doesn't churn.</summary>
     public Node? ApplyVerification(string id, TaskLifecycle.Facts facts, long now)
     {
         Node? updated;
@@ -360,11 +365,10 @@ public class TaskGraphService
                 PrNumber = facts.PrNumber ?? cur.PrNumber,
                 MergeCommit = facts.MergeCommit ?? cur.MergeCommit,
                 VerifiedStatus = newVerified,
-                // A verified merge settles every doubt the badge carried — the
-                // migration's "was done, no merged PR recorded" and a clamped
-                // over-claim alike (openspec board-verify-remote).
-                Warning = TaskLifecycle.Rank(newVerified) >= TaskLifecycle.Rank(TaskLifecycle.PrMerged) ? null : cur.Warning,
             };
+            // Advisory badge (openspec board-claims-advisory): null once the verified state
+            // covers the card's status, else the claim-vs-verified line.
+            updated = updated with { Warning = TaskLifecycle.WarningFor(updated.Status, updated.VerifiedStatus, updated.Pushed) };
             changed = updated != cur;
             if (changed)
             {
@@ -803,11 +807,10 @@ public class TaskGraphService
     }
 
     /// <summary>One-time migration to the lifecycle statuses (openspec
-    /// kanban-lifecycle-columns, schema 2): "done" meant "the agent said so", so
-    /// a done card keeps done-ness only as far as its evidence carries — merge
-    /// evidence → pr-merged, none → committed with a warning badge the operator
-    /// can resolve by hand (the node PATCH is unclamped). Runs from Load, before
-    /// any reader; idempotent via the schema stamp.</summary>
+    /// kanban-lifecycle-columns, amended by board-claims-advisory, schema 2): a card
+    /// keeps its status — nothing is downgraded — and a "done" without merge evidence
+    /// on the card gets the advisory badge until the verifier finds its merge. Runs
+    /// from Load, before any reader; idempotent via the schema stamp.</summary>
     private void MigrateToLifecycle()
     {
         if (_board.SchemaVersion >= CurrentSchemaVersion) return;
@@ -822,14 +825,14 @@ public class TaskGraphService
             _board.Nodes[i] = n with
             {
                 Status = status,
-                Warning = warn ? "migrated: was done, no merged PR recorded for this task" : n.Warning,
+                Warning = warn ? TaskLifecycle.WarningFor(status, n.VerifiedStatus, n.Pushed) : n.Warning,
                 UpdatedAt = now,
             };
             migrated++;
         }
         _board.SchemaVersion = CurrentSchemaVersion;
         Save();
-        if (migrated > 0) _logger.Info($"[TASKGRAPH] Lifecycle migration: {migrated} done card(s) re-staged by evidence (schema {CurrentSchemaVersion})");
+        if (migrated > 0) _logger.Info($"[TASKGRAPH] Lifecycle migration: {migrated} done card(s) flagged unverified (schema {CurrentSchemaVersion})");
     }
 
     // Caller holds _gate. Atomic temp+rename — a kill mid-write can't truncate it.

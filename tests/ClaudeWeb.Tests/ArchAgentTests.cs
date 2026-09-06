@@ -529,7 +529,7 @@ public class ArchAgentTests : IDisposable
         Assert.Contains("list_machines", prompt);
         Assert.Contains("never a guess", prompt);
         Assert.Contains("managedThere", prompt);
-        Assert.Equal("<!-- arch-role v8 -->", ArchAgentService.RoleVersionMarker); // v8: the delivery lifecycle (openspec kanban-lifecycle-columns) merged with goal conversations (openspec arch-goal-conversations); v7/v6 before
+        Assert.Equal("<!-- arch-role v9 -->", ArchAgentService.RoleVersionMarker); // v9: update_task moves the card, verification is advisory (openspec board-claims-advisory); v8/v7/v6 before
         Assert.Contains("do not repeat a question", prompt);
     }
 }
