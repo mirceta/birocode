@@ -51,10 +51,23 @@ public class ArchPeerController : ControllerBase
     }
 
     [HttpGet("transcript")]
-    public IActionResult Transcript([FromQuery] string? repoId, [FromQuery] int tail = 6)
+    public IActionResult Transcript([FromQuery] string? repoId, [FromQuery] int tail = 6, [FromQuery] bool @override = false, [FromQuery] string? from = null)
     {
         _logger.CountRequest();
-        var o = _arch.PeerReadTranscript(repoId, tail);
+        var o = _arch.PeerReadTranscript(repoId, tail, @override, from);
+        return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
+    }
+
+    public sealed record PeerHandoverRequest(string? RepoId, string? Branch, string? From, bool Adopt = true);
+
+    /// <summary>Branch hand-over from a fleet arch on its Operator's ask (openspec
+    /// arch-branch-handover): recorded in THIS harness's assignments, behind the same
+    /// accept-sends opt-in and gate as a fleet send.</summary>
+    [HttpPost("handover")]
+    public IActionResult HandOver([FromBody] PeerHandoverRequest? req)
+    {
+        _logger.CountRequest();
+        var o = _arch.PeerHandOver(req?.From, req?.RepoId, req?.Branch, req?.Adopt ?? true);
         return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
     }
 

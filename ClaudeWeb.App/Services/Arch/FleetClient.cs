@@ -70,7 +70,13 @@ public class FleetClient
         // a build that predates the field.
         [property: JsonPropertyName("docked")] bool? Docked = null,
         // The repo's handle on the peer ("prg#2", openspec stable-handles); null = older build.
-        [property: JsonPropertyName("handle")] string? Handle = null);
+        [property: JsonPropertyName("handle")] string? Handle = null,
+        // openspec arch-branch-handover: why the peer reports it claimed (human-active |
+        // pinned) or available on an unassigned branch; the Operator's pin; branches handed
+        // to the arch there. Null = a build that predates hand-over.
+        [property: JsonPropertyName("claimedReason")] string? ClaimedReason = null,
+        [property: JsonPropertyName("pinned")] bool? Pinned = null,
+        [property: JsonPropertyName("adoptedBranches")] List<string>? AdoptedBranches = null);
 
     public sealed record PeerInfo(
         [property: JsonPropertyName("protocol")] int Protocol,
@@ -207,11 +213,20 @@ public class FleetClient
         return Post(sourceId, PeerPath + "/send", body);
     }
 
-    public ArchAgentService.ToolOutcome ReadTranscript(string sourceId, string repoId, int tail)
+    public ArchAgentService.ToolOutcome ReadTranscript(string sourceId, string repoId, int tail, bool overrideClaimed = false)
     {
-        var path = $"{PeerPath}/transcript?repoId={Uri.EscapeDataString(repoId)}&tail={tail}";
+        // `override` + `from` (openspec arch-branch-handover): the hub's operator asked to
+        // read a claimed repo's reply; a peer that predates the field still answers claimed.
+        var path = $"{PeerPath}/transcript?repoId={Uri.EscapeDataString(repoId)}&tail={tail}"
+            + (overrideClaimed ? $"&override=true&from={Uri.EscapeDataString(_collector.SelfLabel)}" : "");
         return Get(sourceId, path);
     }
+
+    /// <summary>Hand a branch of a repo on a peer to that peer's arch (or take it back) on
+    /// the hub Operator's ask (openspec arch-branch-handover); the peer applies its own
+    /// accept-sends trust and records the branch in ITS assignments.</summary>
+    public ArchAgentService.ToolOutcome HandOver(string sourceId, string repoId, string? branch, string from, bool adopt) =>
+        Post(sourceId, PeerPath + "/handover", new { repoId, branch = string.IsNullOrWhiteSpace(branch) ? null : branch.Trim(), from, adopt });
 
     // ---- loops on a peer's agents (openspec arch-loop-tools) -------------------------------
 

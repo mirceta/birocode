@@ -603,7 +603,11 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
               <div className="arch__dim">
                 last actor {a.lastActor}
                 {a.runningSince ? ` · running ${ago(a.runningSince)}` : ''}
-                {a.availability === 'claimed' ? ' · your branch — left alone' : ''}
+                {/* openspec arch-branch-handover: why it is claimed, or the caveat on an unassigned branch */}
+                {a.availability === 'claimed' && a.claimedReason === 'pinned' ? ' · pinned as yours — left alone' : ''}
+                {a.availability === 'claimed' && a.claimedReason !== 'pinned' ? ' · your branch (worked on recently) — left alone; hand it over from the dock' : ''}
+                {a.availability !== 'claimed' && a.claimedReason === 'unassigned-branch' ? ' · unassigned branch — the arch names it in its sends' : ''}
+                {a.adopted ? ' · handed to the arch' : ''}
               </div>
               {a.tabId
                 ? <button type="button" className="arch__link" onClick={() => openDock(a.tabId)}>open dock ↗</button>

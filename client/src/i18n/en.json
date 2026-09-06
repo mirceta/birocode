@@ -1115,5 +1115,21 @@
   "audit.outcome.interrupted": "interrupted",
   "dashboard.splitDivider": "Resize split panes",
   "dashboard.splitDividerHint": "Drag to resize the chat/app panes; double-click to reset to 50/50",
-  "dashboard.loopArmedBy": "by {who}"
+  "dashboard.loopArmedBy": "by {who}",
+  "handover.group": "Branch hand-over to the arch agent",
+  "handover.notManaged": "not in the arch scope",
+  "handover.busy": "a turn is running",
+  "handover.onDefault": "on the default branch — free for the arch",
+  "handover.pinned": "pinned as yours — the arch leaves it alone",
+  "handover.claimedHuman": "your branch (worked on within {window}) — the arch leaves it alone",
+  "handover.handed": "handed to the arch — it may read, send and dispatch here",
+  "handover.archBranch": "an arch branch (asked for, or a task branch) — the arch may work here",
+  "handover.unassigned": "unassigned branch, idle — the arch may send if it names the branch",
+  "handover.hand": "Hand to arch",
+  "handover.handTitle": "Let the arch agent finish the work on {branch}: it may read this conversation, send tasks and dispatch here until you take the branch back",
+  "handover.takeBack": "Take back",
+  "handover.takeBackTitle": "Make {branch} yours again: the arch stops reading and sending here",
+  "handover.pin": "Pin as mine",
+  "handover.unpin": "Unpin",
+  "handover.pinTitle": "Pinned: the arch treats this repo as yours whatever its branch"
 }
