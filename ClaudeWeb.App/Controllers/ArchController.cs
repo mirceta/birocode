@@ -191,9 +191,11 @@ public class ArchController : ControllerBase
             {
                 handle = a.Label(_arch.SelfLabel), machine = a.Machine, sourceId = a.SourceId, key = a.Key, repoId = a.RepoId, name = a.Name, remoteUrl = a.RemoteUrl, branch = a.Branch,
                 defaultBranch = a.DefaultBranch, dirty = a.Dirty, availability = a.Availability, lastActor = a.LastActor,
+                claimedReason = a.ClaimedReason, pinned = a.Pinned, adopted = a.BranchAdopted,
                 runningSince = a.RunningSince, tabId = a.TabId, exists = a.Exists, isLocal = a.IsLocal,
                 managedThere = a.IsLocal || a.ManagedThere, sendable = a.Sendable, blocked = a.Blocked?.Reason,
             }),
+            claimWindowMinutes = _arch.ClaimWindowMinutes,
             fleet,
             home = new
             {
@@ -274,6 +276,62 @@ public class ArchController : ControllerBase
         if (req.AcceptSends is bool accept) _arch.SetAcceptFleetSends(accept);
         if (req.AcceptUpgrades is bool up) _arch.SetAcceptFleetUpgrades(up);
         return Ok(BuildState());
+    }
+
+    public sealed record HandoverRequest(string? RepoId, string? Branch, string? Action, string? SourceId);
+
+    /// <summary>Branch hand-over (openspec arch-branch-handover): the Operator hands a repo's
+    /// current branch to the arch (`adopt`), takes it back (`revoke`), or pins the repo as
+    /// theirs (`pin` / `unpin`) — from the dock or the Management App agent card. A
+    /// `sourceId` targets a repo on a peer through the fleet client.</summary>
+    [HttpPost("handover")]
+    public IActionResult HandOver([FromBody] HandoverRequest? req)
+    {
+        _logger.CountRequest();
+        if (string.IsNullOrWhiteSpace(req?.RepoId)) return BadRequest(new { error = "repoId is required" });
+        var action = (req.Action ?? "adopt").Trim().ToLowerInvariant();
+        Services.Arch.ArchAgentService.ToolOutcome o;
+        if (!string.IsNullOrWhiteSpace(req.SourceId) && req.SourceId != Services.Events.CollectorService.SelfId)
+        {
+            var src = _collector.ListSources().FirstOrDefault(s => s.Id == req.SourceId);
+            if (src is null) return NotFound(new { error = "unknown source" });
+            if (action is not ("adopt" or "revoke")) return BadRequest(new { error = "only adopt | revoke reach a peer" });
+            o = _fleet.HandOver(src.Id, req.RepoId, req.Branch, _arch.SelfLabel, adopt: action == "adopt");
+        }
+        else
+        {
+            o = action switch
+            {
+                "adopt" => _arch.HandOver(req.RepoId, req.Branch, adopt: true, by: "operator"),
+                "revoke" => _arch.HandOver(req.RepoId, req.Branch, adopt: false, by: "operator"),
+                "pin" => _arch.PinRepo(req.RepoId, true, "operator"),
+                "unpin" => _arch.PinRepo(req.RepoId, false, "operator"),
+                _ => new Services.Arch.ArchAgentService.ToolOutcome(false, "error", "action must be adopt | revoke | pin | unpin"),
+            };
+        }
+        return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data, posture = _arch.ClaimPosture(req.RepoId) });
+    }
+
+    /// <summary>One local repo's claim posture for the dock control: availability, why,
+    /// branch, adopted / pinned, the activity window.</summary>
+    [HttpGet("claim")]
+    public IActionResult Claim([FromQuery] string? repoId)
+    {
+        _logger.CountRequest();
+        if (string.IsNullOrWhiteSpace(repoId)) return BadRequest(new { error = "repoId is required" });
+        return Ok(_arch.ClaimPosture(repoId));
+    }
+
+    public sealed record ClaimWindowRequest(int? Minutes);
+
+    /// <summary>The claimed rule's activity window, operator-set (0 = default 2 h).</summary>
+    [HttpPost("claim-window")]
+    public IActionResult ClaimWindow([FromBody] ClaimWindowRequest? req)
+    {
+        _logger.CountRequest();
+        if (req?.Minutes is not int m || m < 0) return BadRequest(new { error = "minutes (>= 0) is required" });
+        _arch.SetClaimWindowMinutes(m);
+        return Ok(new { claimWindowMinutes = _arch.ClaimWindowMinutes });
     }
 
     /// <summary>Fleet status (openspec fleet-status-tab): every repo agent on every
