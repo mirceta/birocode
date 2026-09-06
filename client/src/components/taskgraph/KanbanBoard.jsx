@@ -226,7 +226,7 @@ export default function KanbanBoard() {
                       {n.branch && <span className={`kb__chip kb__chip--branch${n.pushed === false ? ' kb__chip--unpushed' : ''}`} title={n.pushed === false ? `branch ${n.branch} is NOT on origin — it lives only on the machine that did the work` : `branch ${n.branch}`}>⎇ {n.branch}{n.pushed === false ? ' ⚠ not on origin' : ''}</span>}
                       {n.prUrl && <span className="kb__chip kb__chip--pr" title={n.mergeCommit ? `merged as ${n.mergeCommit.slice(0, 8)}` : 'pull request'}><a href={n.prUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>PR{n.prNumber ? ` #${n.prNumber}` : ''}</a></span>}
                       {isStale(n) && <span className="kb__chip kb__chip--stale" title={`no activity for ${ago(Date.now() - (n.updatedAt || 0))} — ${n.status === 'committed' ? 'unpushed branch parked on one machine' : 'PR open, nobody moving it'}`}>⏱ stale</span>}
-                      {n.warning && <span className="kb__chip kb__chip--warn" title={n.warning}>⚠</span>}
+                      {n.warning && <span className="kb__chip kb__chip--warn" title={`${n.warning} — the card stays where it was put; the harness clears this once the facts catch up (or press Re-verify board)`} data-unverified>⚠ unverified</span>}
                       {n.createdBy && n.createdBy !== 'human' && <span className="kb__chip" title="created by">🏛 {n.createdBy}</span>}
                       {n.ideaId && <span className="kb__chip" title="promoted from an idea" data-idea-ref>💡{ideaNumbers[n.ideaId] ? ` #${ideaNumbers[n.ideaId]}` : ''}</span>}
                     </div>
@@ -247,7 +247,7 @@ export default function KanbanBoard() {
                         <div className="kb__row kb__actions">
                           {n.status !== 'todo' && <button type="button" className="kb__btn" onClick={() => setStatus(n, 'todo')}>◀ todo</button>}
                           {n.status !== 'doing' && <button type="button" className="kb__btn" onClick={() => setStatus(n, 'doing')}>doing</button>}
-                          {n.status !== 'done' && <button type="button" className="kb__btn" title="operator override — from committed up the harness normally moves the card itself from git/PR facts" onClick={() => setStatus(n, 'done')}>done ✓</button>}
+                          {n.status !== 'done' && <button type="button" className="kb__btn" title="move the card to done — the harness keeps verifying and badges the card until the merge is confirmed" onClick={() => setStatus(n, 'done')}>done ✓</button>}
                           <button type="button" className="kb__btn kb__btn--primary" disabled={!n.repoId || DELIVERED(n.status) || blocked || busy === n.id} title={!n.repoId ? 'assign first' : blocked ? 'a prerequisite is not delivered' : 'send the task brief to the assignee now'} onClick={() => dispatch(n)} data-dispatch>📣 Ping assignee</button>
                           <button type="button" className="kb__btn kb__btn--danger" onClick={() => remove(n)} title="delete the task">✕</button>
                         </div>
