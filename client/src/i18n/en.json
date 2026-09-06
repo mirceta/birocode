@@ -1115,6 +1115,7 @@
   "audit.outcome.interrupted": "interrupted",
   "dashboard.splitDivider": "Resize split panes",
   "dashboard.splitDividerHint": "Drag to resize the chat/app panes; double-click to reset to 50/50",
+  "dashboard.loopArmedBy": "by {who}",
   "handover.group": "Branch hand-over to the arch agent",
   "handover.notManaged": "not in the arch scope",
   "handover.busy": "a turn is running",

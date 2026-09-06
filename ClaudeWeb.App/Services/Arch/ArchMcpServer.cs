@@ -104,9 +104,20 @@ public class ArchMcpServer
             if (n is null) return dflt;
             try { return n.GetValue<int>(); } catch { return int.TryParse(n.ToString(), out var v) ? v : dflt; }
         }
+        int? IN(string k) => args[k] is null ? null : I(k, int.MinValue) is var v && v != int.MinValue ? v : null;
+        // Booleans arrive as "true"/"false" strings or JSON booleans; null = not given.
+        bool? B(string k)
+        {
+            var n = args[k];
+            if (n is null) return null;
+            try { return n.GetValue<bool>(); } catch { return string.Equals(n.ToString(), "true", StringComparison.OrdinalIgnoreCase) ? true : string.Equals(n.ToString(), "false", StringComparison.OrdinalIgnoreCase) ? false : null; }
+        }
         // operatorAsked: "true" — the Operator's own message asked for it (claimed override,
-        // adopt_branch). A string on purpose: the model states it, the tool audits it.
-        bool Asked() => string.Equals(S("operatorAsked"), "true", StringComparison.OrdinalIgnoreCase);
+        // adopt_branch, loops on a claimed repo). A string on purpose: the model states it,
+        // the tool audits it.
+        bool Asked() => B("operatorAsked") == true;
+        // The Loop panel's parameter set (openspec arch-loop-tools), flat in the call.
+        ArchLoopTools.LoopParams LoopP() => new(S("kind"), S("mode"), S("goal"), S("prompt"), S("sentinel"), IN("maxIterations"), S("recipe"), S("tabId"), B("verifyEnabled"), B("includeFooterClauses"));
         return name switch
         {
             "list_agents" => _arch.ToolListAgents(),
@@ -116,6 +127,10 @@ public class ArchMcpServer
             "send_task" => _arch.SendTask(S("machine"), S("repoId"), S("text"), S("branch"), true, Asked()),
             "adopt_branch" => _arch.ToolAdoptBranch(S("machine"), S("repoId"), S("branch"), Asked()),
             "upgrade_peer" => _arch.ToolUpgradePeer(S("machine"), S("ref")),
+            "list_loops" => _arch.ToolListLoops(S("machine"), S("repoId")),
+            "start_loop" => _arch.ToolStartLoop(S("machine"), S("repoId"), LoopP(), Asked()),
+            "update_loop" => _arch.ToolUpdateLoop(S("machine"), S("repoId"), S("loopId"), LoopP(), B("rearm") == true, Asked()),
+            "stop_loop" => _arch.ToolStopLoop(S("machine"), S("repoId"), S("loopId"), Asked()),
             "list_tasks" => _arch.ToolListTasks(S("status")),
             "create_task" => _arch.ToolCreateTask(S("title"), S("note"), S("machine"), S("repoId"), S("dependsOn")),
             "update_task" => _arch.ToolUpdateTask(S("id"), S("status"), S("title"), S("note")),
@@ -157,6 +172,29 @@ public class ArchMcpServer
         Tool("upgrade_peer",
             "Ask another machine's harness to upgrade itself to a git ref (default main): it pulls fast-forward on that branch, carries new config keys, and runs its own deploy with its own auto-rollback. Refused unless your loop is armed, sends are allowed to that machine, its operator enabled accept fleet upgrades, and its build differs from this hub's (list_machines shows behind + versions). Returns started | busy | current | not-accepting | not-on-branch | dirty | pull-failed. The peer restarts; check list_machines on a later wake for its new version. Never call this for a machine that is not behind.",
             Schema(("machine", "string", "the machine label from list_machines (never \"self\")", true), ("ref", "string", "optional branch to bring the peer to (default main)", false))),
+        Tool("list_loops",
+            "Every loop on the managed repo agents in scope (or one machine / one agent): loopId (= the agent's repoId — one loop slot per agent), kind (suggestion | recipe | goal | queue), mode (suggest | drive), state (armed | active | escalate | capped | stopped | done | error | none), goal or prompt head, recipe, sentinel, cap + iterationsDone, pacing (no interval: a drive loop fires when the agent is idle after each turn), lastFire, nextFire, createdBy (operator | arch | arch@<machine>), stopReason/stopDetail, queue progress. Also lists the recipes you may name in start_loop. Read-only; machines that did not answer are named in the detail.",
+            Schema(("machine", "string", "\"self\" or a machine label; omit for the whole fleet", false), ("repoId", "string", "one agent: handle (spacex/prg#2), repoId or unique name; omit for all", false))),
+        Tool("start_loop",
+            "Arm a loop on a managed repo agent with the dock Loop panel's own parameters — ONLY when the Operator asked for it in this conversation; never on your own initiative. kind: goal (needs goal), recipe (needs recipe id/name from list_loops, or a raw prompt + optional sentinel), queue (drains the dock's stashed prompts; needs a non-empty stash), suggestion (no params). mode suggest | drive (drive = sends; suggest = pends the prompt for the Operator), maxIterations 1–100 (cap). Same rules as send_task: your loop armed, gate open, repo managed and in scope, sends allowed to that machine, not claimed unless operatorAsked; a busy agent is fine (the loop waits for its turn to end). Returns armed with the loopId and the effective parameters; the Operator sees the loop on the dock as armed by arch and can edit or stop it there. A peer without the loop routes answers no-peer-api.",
+            Schema(("machine", "string", "\"self\" (default) or the machine label from list_agents", false), ("repoId", "string", "the agent: handle (spacex/prg#2), repoId or unique name", true),
+                ("kind", "string", "goal | recipe | queue | suggestion", true), ("mode", "string", "suggest | drive (default drive; suggestion kind defaults to the autopilot setting)", false),
+                ("goal", "string", "goal kind: what done looks like", false), ("recipe", "string", "recipe kind: a recipe id or name from list_loops", false),
+                ("prompt", "string", "recipe kind without a recipe: the raw prompt to resend", false), ("sentinel", "string", "recipe kind: the line that ends the loop (default LOOP_DONE)", false),
+                ("maxIterations", "integer", "the cap, 1–100 (default 10)", false), ("tabId", "string", "queue kind: the dock tab whose stash to drain (default: the repo's dock)", false),
+                ("verifyEnabled", "string", "queue kind: \"false\" to skip per-step verification (default on)", false), ("includeFooterClauses", "string", "\"true\" to append the chat footer clauses to work sends (default off)", false),
+                ("operatorAsked", "string", "\"true\" ONLY when the Operator's own message asked you to reach this repo although it is claimed", false))),
+        Tool("update_loop",
+            "Change a loop's parameters in place (maxIterations, sentinel, prompt, mode — the counter is kept) or re-arm it: a new goal on a goal loop re-composes its prompts (counter reset), rearm: \"true\" re-activates a stopped/capped/escalated loop with its stored parameters (a stopped queue resumes its remainder). Same gates as start_loop. Only when the Operator asked.",
+            Schema(("machine", "string", "\"self\" (default) or the machine label", false), ("repoId", "string", "the agent: handle, repoId or unique name", true), ("loopId", "string", "optional; must be the agent's repoId (one slot per agent)", false),
+                ("mode", "string", "suggest | drive", false), ("goal", "string", "goal kind: the new goal (re-arms)", false), ("prompt", "string", "recipe kind: the new prompt", false),
+                ("sentinel", "string", "recipe kind: the new sentinel", false), ("maxIterations", "integer", "the new cap, 1–100", false), ("rearm", "string", "\"true\" to re-activate a stopped loop", false),
+                ("verifyEnabled", "string", "queue kind, on rearm", false), ("includeFooterClauses", "string", "\"true\" | \"false\", on rearm", false),
+                ("operatorAsked", "string", "\"true\" ONLY when the Operator asked although the repo is claimed", false))),
+        Tool("stop_loop",
+            "Stop (never delete) a managed repo agent's loop: it stays on the dock's Loop panel as stopped by arch, and the Operator can re-arm it there. Same gates as start_loop. Only when the Operator asked; a loop that has escalated or capped is already stopped — report it instead.",
+            Schema(("machine", "string", "\"self\" (default) or the machine label", false), ("repoId", "string", "the agent: handle, repoId or unique name", true), ("loopId", "string", "optional; must be the agent's repoId", false),
+                ("operatorAsked", "string", "\"true\" ONLY when the Operator asked although the repo is claimed", false))),
         Tool("list_tasks",
             "The fleet task board (Management → Ideas → Kanban / Task graph): every task with id, title, note, status (todo|doing|done), assignee (machine + repoId + repoName), assignedBy, dispatchedAt/dispatchCount, blocked (a prerequisite is not done), dependsOn, and awaitingDispatch = assigned, not yet pinged, not blocked — those are yours to dispatch. Optional status filter.",
             Schema(("status", "string", "todo | doing | done (omit for all)", false))),

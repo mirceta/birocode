@@ -370,6 +370,8 @@ public class AutopilotController : ControllerBase
                     stopReason = l.StopReason,
                     stopDetail = l.StopDetail,
                     recipeName = l.RecipeName,
+                    // Who armed it (openspec arch-loop-tools): "operator" | "arch" | "arch@<machine>".
+                    armedBy = l.ArmedBy,
                     // The engine's live decision (fix-suggestion-loop-inert, D3): the
                     // bare decision WORD is a status word like kind/mode/phase and
                     // stays ungated ("off" when the engine holds no state — a closed

@@ -71,6 +71,32 @@ public class ArchPeerController : ControllerBase
         return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
     }
 
+    /// <summary>Loops on this harness's managed agents, for a fleet arch (openspec arch-loop-tools).</summary>
+    [HttpGet("loops")]
+    public IActionResult Loops([FromQuery] string? repoId = null)
+    {
+        _logger.CountRequest();
+        var o = _arch.PeerLoops(repoId);
+        return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
+    }
+
+    public sealed record PeerLoopRequest(
+        string? From, string? Action, string? RepoId, string? LoopId, string? Kind, string? Mode, string? Goal, string? Prompt,
+        string? Sentinel, int? MaxIterations, string? Recipe, string? TabId, bool? VerifyEnabled, bool? IncludeFooterClauses,
+        bool? Rearm = null, bool? Override = null);
+
+    /// <summary>Start / update / stop a loop on one of this harness's managed agents from a
+    /// fleet arch: this harness's accept-sends opt-in, gate, scope and claimed rule apply;
+    /// the loop is armed by <c>arch@from</c>.</summary>
+    [HttpPost("loop")]
+    public IActionResult Loop([FromBody] PeerLoopRequest? req)
+    {
+        _logger.CountRequest();
+        var p = new Services.Arch.ArchLoopTools.LoopParams(req?.Kind, req?.Mode, req?.Goal, req?.Prompt, req?.Sentinel, req?.MaxIterations, req?.Recipe, req?.TabId, req?.VerifyEnabled, req?.IncludeFooterClauses);
+        var o = _arch.PeerLoop(req?.From, (req?.Action ?? "").Trim().ToLowerInvariant(), req?.RepoId, req?.LoopId, p, req?.Rearm == true, req?.Override == true);
+        return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
+    }
+
     public sealed record PeerUpgradeRequest(string? Ref, string? From);
 
     /// <summary>Fleet upgrade (openspec arch-peer-upgrades): bring THIS harness to a ref.

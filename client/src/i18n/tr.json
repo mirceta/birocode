@@ -1112,6 +1112,7 @@
   "audit.outcome.interrupted": "kesildi",
   "dashboard.splitDivider": "Bölme boyutunu ayarla",
   "dashboard.splitDividerHint": "Sohbet/uygulama bölmelerini yeniden boyutlandırmak için sürükleyin; 50/50 için çift tıklayın",
+  "dashboard.loopArmedBy": "{who} tarafından",
   "handover.group": "Dalı arch ajanına devret",
   "handover.notManaged": "arch kapsamında değil",
   "handover.busy": "bir tur çalışıyor",
