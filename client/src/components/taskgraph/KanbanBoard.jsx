@@ -3,20 +3,23 @@ import { apiGet, apiPost, apiPatch, apiDelete } from '../../api/client';
 import TaskFilterBar from './TaskFilterBar';
 import { useTaskFilter } from './taskFilterStore';
 import { COLUMNS, columnOf } from './kanbanColumns';
-import { applyFilter, blockedIds, filterContext, isNarrowed, taskView } from './taskFilters';
+import { applyFilter, blockedIds, filterContext, flagsOf, isNarrowed, staleIds, taskView } from './taskFilters';
 import './kanban.css';
 
-// The Kanban view of the task board (openspec task-board-kanban): the same nodes
-// and depends-on edges as the Task graph, read as four columns. Where the graph
-// answers "what waits on what", the board answers "who is doing what, and has the
-// assignee been told". The operator, the arch agent (through its MCP tools) and
-// any future management agent all write to the same /api/taskgraph store.
+// The Kanban view of the task board (openspec task-board-kanban, columns per
+// openspec kanban-lifecycle-columns): the same nodes and depends-on edges as the
+// Task graph, read as the six delivery-lifecycle columns. Where the graph answers
+// "what waits on what", the board answers "where is the work really" — from
+// committed up the HARNESS moves cards by observing git/PR facts, so a card in
+// Done means the merge is real, not that an agent said so. The operator, the
+// arch agent (through its MCP tools) and any future management agent all write
+// to the same /api/taskgraph store.
 //
-// Columns (kanbanColumns.js): Backlog (todo, nobody assigned) · Assigned (todo, has
-// an assignee — the arch pings these) · In progress (doing) · Done. Cards drag
-// between columns (status), pick their assignee from the fleet status (any repo agent
-// on any machine), and can be pinged by hand ("Ping"), which sends the brief exactly
-// as the arch's dispatch_task does.
+// Columns (kanbanColumns.js, per openspec kanban-lifecycle-columns) = statuses: Todo ·
+// Doing · Committed (on a branch, NOT on origin) · PR opened · PR merged · Done.
+// Assignment is a chip on the card, not a column. Dragging writes status through the
+// operator PATCH (unclamped — the operator is the escape hatch for cards the verifier
+// cannot see).
 //
 // Filters (openspec task-filters): the bar pinned under the head narrows the cards by
 // machine, repo agent, state (column) and flag, plus a text search; the model is the
@@ -24,6 +27,8 @@ import './kanban.css';
 // uses. A filtered-out card is not rendered; the column head shows "shown of all".
 
 const POLL_MS = 5000;
+
+const DELIVERED = (s) => s === 'pr-merged' || s === 'done';
 
 function ago(ms) {
   if (!ms || ms < 0) return '';
@@ -72,13 +77,19 @@ export default function KanbanBoard() {
   const edges = board?.edges || [];
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const prereqsOf = (id) => edges.filter((e) => e.source === id).map((e) => byId.get(e.target)).filter(Boolean);
-  const isBlocked = (n) => n.status !== 'done' && prereqsOf(n.id).some((p) => p.status !== 'done');
+  const isBlocked = (n) => !DELIVERED(n.status) && prereqsOf(n.id).some((p) => !DELIVERED(p.status));
+  const staleMs = (board?.staleHours || 24) * 3600e3;
+  const isStale = (n) => (n.status === 'committed' || n.status === 'pr-opened') && Date.now() - (n.updatedAt || 0) > staleMs;
 
   // The shared task filter (openspec task-filters) over this board's cards.
   const [filter, setFilter] = useTaskFilter();
   const filterCtx = useMemo(() => filterContext(fleet, columnOf), [fleet]);
   const blockedSet = useMemo(() => blockedIds(nodes, edges), [nodes, edges]);
-  const views = useMemo(() => nodes.map((n) => taskView(n, filterCtx, blockedSet.has(n.id) ? ['blocked'] : [])), [nodes, filterCtx, blockedSet]);
+  // Stale = parked in committed / pr-opened past the board's window (the same rule as
+  // the card's stale badge), so the "stale" flag chip appears when such cards exist.
+  const staleMsForFilter = (board?.staleHours || 24) * 3600e3;
+  const staleSet = useMemo(() => staleIds(nodes, staleMsForFilter), [nodes, staleMsForFilter]);
+  const views = useMemo(() => nodes.map((n) => taskView(n, filterCtx, flagsOf(n.id, blockedSet, staleSet))), [nodes, filterCtx, blockedSet, staleSet]);
   const shownIds = useMemo(() => applyFilter(views, filter), [views, filter]);
   const narrowed = isNarrowed(filter);
 
@@ -125,18 +136,15 @@ export default function KanbanBoard() {
     try { await apiPost('/taskgraph/nodes', { title, createdBy: 'human' }); setDraft(''); await load(); } catch (err) { setError(err?.message || String(err)); }
   };
 
-  // Drag a card onto a column: Backlog/Assigned = todo (Assigned needs an assignee),
-  // In progress = doing, Done = done.
+  // Drag a card onto a column = set that status (the operator PATCH, unclamped;
+  // assignment stays — it is a chip now, not a column).
   const onDrop = (col) => (e) => {
     e.preventDefault();
     setDragOver(null);
     const id = e.dataTransfer.getData('text/task-id');
     const n = byId.get(id);
-    if (!n) return;
-    if (col === 'done') setStatus(n, 'done');
-    else if (col === 'doing') setStatus(n, 'doing');
-    else if (col === 'backlog') { if (n.repoId) assign(n, ''); else if (n.status !== 'todo') setStatus(n, 'todo'); }
-    else if (col === 'assigned') { if (!n.repoId) setNote((m) => ({ ...m, [n.id]: 'pick an assignee first' })); else setStatus(n, 'todo'); }
+    if (!n || n.status === col) return;
+    setStatus(n, col);
   };
 
   const columns = COLUMNS.map(([key, label, hint]) => {
@@ -173,7 +181,7 @@ export default function KanbanBoard() {
               </span>
             </div>
             <div className="kb__cards">
-              {c.cards.length === 0 && <div className="kb__empty">{narrowed && c.all.length > 0 ? `${c.all.length} hidden by the filter` : c.key === 'backlog' ? 'nothing waiting' : '—'}</div>}
+              {c.cards.length === 0 && <div className="kb__empty">{narrowed && c.all.length > 0 ? `${c.all.length} hidden by the filter` : c.key === 'todo' ? 'nothing waiting' : '—'}</div>}
               {c.cards.map((n) => {
                 const blocked = isBlocked(n);
                 const prereqs = prereqsOf(n.id);
@@ -194,8 +202,12 @@ export default function KanbanBoard() {
                       {blocked && <span className="kb__chip kb__chip--blocked" title={`waits on ${prereqs.filter((p) => p.status !== 'done').map((p) => p.title).join(', ')}`}>⛔ blocked</span>}
                       {!blocked && prereqs.length > 0 && <span className="kb__chip" title="prerequisites done">✓ {prereqs.length} prereq</span>}
                       {n.dispatchedAt && <span className="kb__chip kb__chip--pinged" title={`pinged ${n.dispatchCount}×`}>📣 {ago(Date.now() - n.dispatchedAt)} ago{n.dispatchCount > 1 ? ` ×${n.dispatchCount}` : ''}</span>}
-                      {c.key === 'assigned' && !n.dispatchedAt && !blocked && n.assignedAt && <span className="kb__chip kb__chip--await" title="assigned but not yet pinged — the arch dispatches it on its next wake">⏳ awaiting ping</span>}
-                      {c.key === 'assigned' && !n.assignedAt && <span className="kb__chip" title="the repo label came from the graph before the board existed; re-assign (or Ping) to make it a real assignment">📎 label only</span>}
+                      {c.key === 'todo' && n.repoId && !n.dispatchedAt && !blocked && n.assignedAt && <span className="kb__chip kb__chip--await" title="assigned but not yet pinged — the arch dispatches it on its next wake">⏳ awaiting ping</span>}
+                      {c.key === 'todo' && n.repoId && !n.assignedAt && <span className="kb__chip" title="the repo label came from the graph before the board existed; re-assign (or Ping) to make it a real assignment">📎 label only</span>}
+                      {n.branch && <span className={`kb__chip kb__chip--branch${n.pushed === false ? ' kb__chip--unpushed' : ''}`} title={n.pushed === false ? `branch ${n.branch} is NOT on origin — it lives only on the machine that did the work` : `branch ${n.branch}`}>⎇ {n.branch}{n.pushed === false ? ' ⚠ not on origin' : ''}</span>}
+                      {n.prUrl && <span className="kb__chip kb__chip--pr" title={n.mergeCommit ? `merged as ${n.mergeCommit.slice(0, 8)}` : 'pull request'}><a href={n.prUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>PR{n.prNumber ? ` #${n.prNumber}` : ''}</a></span>}
+                      {isStale(n) && <span className="kb__chip kb__chip--stale" title={`no activity for ${ago(Date.now() - (n.updatedAt || 0))} — ${n.status === 'committed' ? 'unpushed branch parked on one machine' : 'PR open, nobody moving it'}`}>⏱ stale</span>}
+                      {n.warning && <span className="kb__chip kb__chip--warn" title={n.warning}>⚠</span>}
                       {n.createdBy && n.createdBy !== 'human' && <span className="kb__chip" title="created by">🏛 {n.createdBy}</span>}
                       {n.ideaId && <span className="kb__chip" title="promoted from an idea" data-idea-ref>💡{ideaNumbers[n.ideaId] ? ` #${ideaNumbers[n.ideaId]}` : ''}</span>}
                     </div>
@@ -216,10 +228,16 @@ export default function KanbanBoard() {
                         <div className="kb__row kb__actions">
                           {n.status !== 'todo' && <button type="button" className="kb__btn" onClick={() => setStatus(n, 'todo')}>◀ todo</button>}
                           {n.status !== 'doing' && <button type="button" className="kb__btn" onClick={() => setStatus(n, 'doing')}>doing</button>}
-                          {n.status !== 'done' && <button type="button" className="kb__btn" onClick={() => setStatus(n, 'done')}>done ✓</button>}
-                          <button type="button" className="kb__btn kb__btn--primary" disabled={!n.repoId || n.status === 'done' || blocked || busy === n.id} title={!n.repoId ? 'assign first' : blocked ? 'a prerequisite is not done' : 'send the task brief to the assignee now'} onClick={() => dispatch(n)} data-dispatch>📣 Ping assignee</button>
+                          {n.status !== 'done' && <button type="button" className="kb__btn" title="operator override — from committed up the harness normally moves the card itself from git/PR facts" onClick={() => setStatus(n, 'done')}>done ✓</button>}
+                          <button type="button" className="kb__btn kb__btn--primary" disabled={!n.repoId || DELIVERED(n.status) || blocked || busy === n.id} title={!n.repoId ? 'assign first' : blocked ? 'a prerequisite is not delivered' : 'send the task brief to the assignee now'} onClick={() => dispatch(n)} data-dispatch>📣 Ping assignee</button>
                           <button type="button" className="kb__btn kb__btn--danger" onClick={() => remove(n)} title="delete the task">✕</button>
                         </div>
+                        {(n.branch || n.headCommit || n.mergeCommit) && (
+                          <div className="kb__row kb__dim kb__mono" data-linkage>
+                            {n.branch ? `⎇ ${n.branch}` : ''}{n.headCommit ? ` @ ${n.headCommit.slice(0, 8)}` : ''}{n.pushed != null ? (n.pushed ? ' · on origin' : ' · NOT on origin') : ''}{n.mergeCommit ? ` · merged ${n.mergeCommit.slice(0, 8)}` : ''}{n.verifiedStatus ? ` · verified: ${n.verifiedStatus}` : ''}
+                          </div>
+                        )}
+                        {n.warning && <div className="kb__row kb__warn" data-warning>⚠ {n.warning}</div>}
                         {note[n.id] && <div className="kb__row kb__dim" data-dispatch-note>{note[n.id]}</div>}
                         <div className="kb__row kb__dim kb__mono">id {n.id}{n.assignedBy ? ` · assigned by ${n.assignedBy}` : ''}{n.assignedAt ? ` ${ago(Date.now() - n.assignedAt)} ago` : ''}</div>
                       </div>

@@ -127,7 +127,12 @@
   .tg-node.has-machine { --tg-machine-color: hsl(var(--tg-machine-h) 70% 62%); }
   .tg-node.has-repo { --tg-repo-bg: hsl(var(--tg-repo-h) 34% 24%); }
 }
+/* Status rings (never the border — that is the machine's colour). Delivery
+   lifecycle from openspec kanban-lifecycle-columns. */
 .tg-node.st-doing { box-shadow: 0 0 0 2px #e0552b, 0 1px 3px rgba(0, 0, 0, 0.1); }
+.tg-node.st-committed { box-shadow: 0 0 0 2px #b085f5, 0 1px 3px rgba(0, 0, 0, 0.1); }
+.tg-node.st-pr-opened { box-shadow: 0 0 0 2px #5ea0ef, 0 1px 3px rgba(0, 0, 0, 0.1); }
+.tg-node.st-pr-merged { opacity: 0.72; box-shadow: 0 0 0 2px #16a34a, 0 1px 3px rgba(0, 0, 0, 0.1); }
 .tg-node.st-done { opacity: 0.62; }
 .tg-node.st-done .tg-node__title { text-decoration: line-through; }
 /* OPEN FRONTS — steps you can work on right now (not done, every prerequisite
@@ -180,6 +185,9 @@
 }
 .tg-chip--status { cursor: pointer; background: var(--color-bg, #efece6); color: var(--color-text); }
 .tg-chip--status.st-doing { background: #e0552b; color: #fff; border-color: #e0552b; }
+.tg-chip--status.st-committed { background: #b085f5; color: #fff; border-color: #b085f5; }
+.tg-chip--status.st-pr-opened { background: #5ea0ef; color: #fff; border-color: #5ea0ef; }
+.tg-chip--status.st-pr-merged { background: #2c7a44; color: #fff; border-color: #2c7a44; }
 .tg-chip--status.st-done { background: #16a34a; color: #fff; border-color: #16a34a; }
 .tg-chip--repo {
   background: color-mix(in srgb, var(--tg-machine-color) 14%, var(--color-surface));

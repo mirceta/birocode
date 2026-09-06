@@ -8,6 +8,8 @@
 // Pure module (no React, no DOM): unit-tested with `node --test`. The React glue
 // (shared store + hook) is in taskFilterStore.js; the bar is TaskFilterBar.jsx.
 
+import { DELIVERED } from './kanbanColumns.js';
+
 export const UNASSIGNED = 'unassigned';
 export const FLAGS = [
   ['blocked', 'blocked', 'a prerequisite is not done'],
@@ -271,15 +273,35 @@ export function chipsOf(counts, selected, { unassigned = false, order = null, al
   return list.map((key) => ({ key, count: counts.get(key) || 0, on: selected.includes(key) }));
 }
 
-/** Blocked ids: a task that is not done and waits on a prerequisite that is not done.
+/** Blocked ids: a task that is not delivered and waits on a prerequisite that is not
+ * delivered (openspec kanban-lifecycle-columns: merged work unblocks its dependents).
  * Edges: source waits on target. */
 export function blockedIds(nodes, edges, statusOf = (n) => n.status) {
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const out = new Set();
   for (const n of nodes) {
-    if (statusOf(n) === 'done') continue;
+    if (DELIVERED(statusOf(n))) continue;
     const waitsOn = edges.filter((e) => e.source === n.id).map((e) => byId.get(e.target)).filter(Boolean);
-    if (waitsOn.some((p) => statusOf(p) !== 'done')) out.add(n.id);
+    if (waitsOn.some((p) => !DELIVERED(statusOf(p)))) out.add(n.id);
   }
   return out;
+}
+
+/** Stale ids: parked in committed / pr-opened with no activity past the window — the
+ * same rule the Kanban's stale badge uses (`staleHours` rides on the board reply). */
+export function staleIds(nodes, staleMs, now = Date.now()) {
+  const out = new Set();
+  if (!(staleMs > 0)) return out;
+  for (const n of nodes) {
+    if ((n.status === 'committed' || n.status === 'pr-opened') && now - (n.updatedAt || 0) > staleMs) out.add(n.id);
+  }
+  return out;
+}
+
+/** The flags of one task for taskView(): ['blocked'], ['stale'], both or none. */
+export function flagsOf(id, blocked, stale) {
+  const f = [];
+  if (blocked?.has(id)) f.push('blocked');
+  if (stale?.has(id)) f.push('stale');
+  return f;
 }

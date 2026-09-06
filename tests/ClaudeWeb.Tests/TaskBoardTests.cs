@@ -22,8 +22,12 @@ public class TaskBoardTests
         Assert.Contains("game-arcade on MONSTER", text);
         Assert.Contains("Acceptance: tests green.", text);
         Assert.Contains("Prerequisites: none.", text);
-        Assert.Contains("TASK DONE t1", text);
+        // The lifecycle closing convention (openspec kanban-lifecycle-columns):
+        // committed-by-default (no push), PR only when the brief allowed it.
+        Assert.Contains("TASK COMMITTED t1 <branch> <commit>", text);
+        Assert.Contains("TASK PR t1 <url>", text);
         Assert.Contains("TASK BLOCKED t1:", text);
+        Assert.Contains("do NOT push", text);
     }
 
     [Fact]

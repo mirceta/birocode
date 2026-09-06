@@ -18,7 +18,7 @@ import GraphLegend from './GraphLegend';
 import TaskFilterBar from './TaskFilterBar';
 import { useTaskFilter } from './taskFilterStore';
 import { columnOf } from './kanbanColumns';
-import { UNASSIGNED, applyFilter, blockedIds, filterContext, taskView, toggleValue } from './taskFilters';
+import { UNASSIGNED, applyFilter, blockedIds, filterContext, flagsOf, staleIds, taskView, toggleValue } from './taskFilters';
 import { assignSlots, machineKey, repoKey, nodeStyle, readSlots, writeSlots } from './graphColors';
 import './taskgraph.css';
 
@@ -50,8 +50,12 @@ import './taskgraph.css';
 // with the box link cleared, so nothing moves when the boxes are finally deleted.
 // Backend-synced via /api/taskgraph; positions persist on drag-stop.
 
-const STATUSES = ['todo', 'doing', 'done'];
-const NEXT_STATUS = { todo: 'doing', doing: 'done', done: 'todo' };
+// The delivery lifecycle (openspec kanban-lifecycle-columns); a click on the
+// status chip cycles through it. From committed up the harness also advances
+// nodes itself from observed git/PR state.
+const STATUSES = ['todo', 'doing', 'committed', 'pr-opened', 'pr-merged', 'done'];
+const NEXT_STATUS = { todo: 'doing', doing: 'committed', committed: 'pr-opened', 'pr-opened': 'pr-merged', 'pr-merged': 'done', done: 'todo' };
+const DELIVERED = (s) => s === 'pr-merged' || s === 'done';
 
 const CROSS_COLOR = '#e8590c'; // cross-machine edge accent (also in taskgraph.css)
 const FLEET_POLL_MS = 30_000;
@@ -245,6 +249,7 @@ function TaskGraphBoard({ refreshKey = 0, pollMs = 0 }) {
   const load = useCallback(async () => {
     try {
       const board = await apiGet('/taskgraph');
+      if (board.staleHours > 0) setStaleMs(board.staleHours * 3600e3);
       const boxes = new Map((board.machines || []).map((m) => [m.id, m]));
       const stepNodes = (board.nodes || []).map((n) => toRfNode(n, boxes));
       setNodes(stepNodes);
@@ -300,8 +305,10 @@ function TaskGraphBoard({ refreshKey = 0, pollMs = 0 }) {
   // The shared task filter over this board (openspec task-filters): views the filter
   // matches on, and the ids that pass. Blocked = waits on a prerequisite not done.
   const filterCtx = useMemo(() => filterContext(fleet, columnOf), [fleet]);
+  const [staleMs, setStaleMs] = useState(24 * 3600e3); // the board's stale window (staleHours rides on the reply)
   const blockedSet = useMemo(() => blockedIds(nodes.map((n) => ({ id: n.id, status: n.data.status })), edges), [nodes, edges]);
-  const views = useMemo(() => nodes.map((n) => taskView({ id: n.id, ...n.data }, filterCtx, blockedSet.has(n.id) ? ['blocked'] : [])), [nodes, filterCtx, blockedSet]);
+  const staleSet = useMemo(() => staleIds(nodes.map((n) => ({ id: n.id, status: n.data.status, updatedAt: n.data.updatedAt })), staleMs), [nodes, staleMs]);
+  const views = useMemo(() => nodes.map((n) => taskView({ id: n.id, ...n.data }, filterCtx, flagsOf(n.id, blockedSet, staleSet))), [nodes, filterCtx, blockedSet, staleSet]);
   const shownIds = useMemo(() => applyFilter(views, filter), [views, filter]);
   const viewOf = useMemo(() => new Map(views.map((v) => [v.id, v])), [views]);
 
@@ -633,7 +640,7 @@ function toRfNode(n, boxes) {
     position: { x: (n.x ?? 0) + (box?.x ?? 0), y: (n.y ?? 0) + (box?.y ?? 0) },
     data: {
       title: n.title, note: n.note, repoId: n.repoId, sourceId: n.sourceId || null,
-      status: n.status || 'todo',
+      status: n.status || 'todo', updatedAt: n.updatedAt || 0,
     },
   };
 }
@@ -641,15 +648,15 @@ function toRfEdge(e) {
   return { id: e.id, source: e.source, target: e.target };
 }
 
-// A node is actionable if it isn't done and every step it depends on (its outgoing
-// edges' targets) is done.
+// A node is actionable if it isn't delivered and every step it depends on (its
+// outgoing edges' targets) is delivered — merged work unblocks its dependents.
 function actionableIds(nodes, edges) {
   const statusOf = new Map(nodes.map((n) => [n.id, n.data.status]));
   const out = new Set();
   for (const n of nodes) {
-    if (n.data.status === 'done') continue;
+    if (DELIVERED(n.data.status)) continue;
     const deps = edges.filter((e) => e.source === n.id);
-    if (deps.every((e) => statusOf.get(e.target) === 'done')) out.add(n.id);
+    if (deps.every((e) => DELIVERED(statusOf.get(e.target)))) out.add(n.id);
   }
   return out;
 }
