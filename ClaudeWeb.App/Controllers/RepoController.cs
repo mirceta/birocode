@@ -44,7 +44,7 @@ public class RepoController : ControllerBase
     {
         _logger.CountRequest();
         var repos = _registry.GetAll()
-            .Select(r => new { id = r.Id, name = r.Name, path = r.Path, exists = r.Exists, isGitRepo = r.IsGitRepo, isSelf = r.IsSelf, visibility = r.Visibility, localPort = r.LocalPort, localApps = AppsJson(r.LocalApps) });
+            .Select(r => new { id = r.Id, name = r.Name, handle = r.Handle, path = r.Path, exists = r.Exists, isGitRepo = r.IsGitRepo, isSelf = r.IsSelf, visibility = r.Visibility, localPort = r.LocalPort, localApps = AppsJson(r.LocalApps) });
         return Ok(repos);
     }
 

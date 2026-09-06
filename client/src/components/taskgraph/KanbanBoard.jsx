@@ -41,6 +41,7 @@ function ago(ms) {
 export default function KanbanBoard() {
   const [board, setBoard] = useState(null);
   const [fleet, setFleet] = useState(null);
+  const [ideaNumbers, setIdeaNumbers] = useState({});
   const [error, setError] = useState('');
   const [draft, setDraft] = useState('');
   const [open, setOpen] = useState(null);
@@ -51,9 +52,12 @@ export default function KanbanBoard() {
 
   const load = useCallback(async () => {
     try {
-      const [b, f] = await Promise.all([apiGet('/taskgraph'), apiGet('/arch/fleet/status').catch(() => null)]);
+      // includeConsumed: promoted ideas are consumed (hidden from the default list),
+      // but the 💡#N chip must still resolve their handle (openspec ideas-consume-on-promotion).
+      const [b, f, ideas] = await Promise.all([apiGet('/taskgraph'), apiGet('/arch/fleet/status').catch(() => null), apiGet('/notes?includeConsumed=true').catch(() => null)]);
       setBoard(b);
       if (f) setFleet(f);
+      if (Array.isArray(ideas)) setIdeaNumbers(Object.fromEntries(ideas.filter((i) => i.number > 0).map((i) => [i.id, i.number])));
       setError('');
     } catch (e) {
       setError(e?.message || String(e));
@@ -78,12 +82,13 @@ export default function KanbanBoard() {
   const machineLabel = {};
   for (const m of fleet?.machines || []) {
     machineLabel[m.self ? '' : m.sourceId] = m.machine;
-    for (const a of m.agents || []) agents.push({ key: `${m.self ? '' : m.sourceId}|${a.repoId}`, label: `${a.name} @ ${m.machine}${a.managed ? ' 🏛' : ''}`, machine: m.machine, name: a.name, managed: a.managed });
+    // The handle ("spacex/prg#2", openspec stable-handles) is the label everywhere.
+    for (const a of m.agents || []) agents.push({ key: `${m.self ? '' : m.sourceId}|${a.repoId}`, label: `${a.handle || `${m.machine}/${a.name}`}${a.managed ? ' 🏛' : ''}`, machine: m.machine, name: a.name, handle: a.handle, managed: a.managed });
   }
   const assigneeLabel = (n) => {
     if (!n.repoId) return null;
     const a = agents.find((x) => x.key === `${n.sourceId || ''}|${n.repoId}`);
-    if (a) return `${a.name} @ ${a.machine}`;
+    if (a) return a.handle || `${a.machine}/${a.name}`;
     return `${n.repoId.slice(0, 8)}… @ ${machineLabel[n.sourceId || ''] || (n.sourceId ? n.sourceId.slice(0, 8) : 'this machine')}`;
   };
 
@@ -180,7 +185,7 @@ export default function KanbanBoard() {
                       {c.key === 'assigned' && !n.dispatchedAt && !blocked && n.assignedAt && <span className="kb__chip kb__chip--await" title="assigned but not yet pinged — the arch dispatches it on its next wake">⏳ awaiting ping</span>}
                       {c.key === 'assigned' && !n.assignedAt && <span className="kb__chip" title="the repo label came from the graph before the board existed; re-assign (or Ping) to make it a real assignment">📎 label only</span>}
                       {n.createdBy && n.createdBy !== 'human' && <span className="kb__chip" title="created by">🏛 {n.createdBy}</span>}
-                      {n.ideaId && <span className="kb__chip" title="promoted from an idea">💡</span>}
+                      {n.ideaId && <span className="kb__chip" title="promoted from an idea" data-idea-ref>💡{ideaNumbers[n.ideaId] ? ` #${ideaNumbers[n.ideaId]}` : ''}</span>}
                     </div>
                     {isOpen && (
                       <div className="kb__detail" onClick={(e) => e.stopPropagation()}>

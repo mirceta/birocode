@@ -3379,3 +3379,6 @@
 .dash--mgmt .dash__header { flex: none; }
 .dash__mgmt--embed { display: flex; flex-direction: column; }
 .dash__mgmt-frame { flex: 1 1 auto; min-height: 0; }
+
+/* Dock chip: the "#2" suffix of a repeated repo name (openspec stable-handles). */
+.dash__docktab-suffix { margin-left: 3px; font-family: ui-monospace, Consolas, monospace; font-size: 10px; opacity: 0.8; }

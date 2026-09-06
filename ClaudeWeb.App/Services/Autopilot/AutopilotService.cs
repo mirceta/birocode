@@ -362,10 +362,11 @@ public class AutopilotService : BackgroundService
         foreach (var repo in _repos.GetAll())
             TickRepo(repo, cfg, routines, now);
 
-        // The arch instance (openspec: add-arch-agent, D2): keyed to the reserved
-        // id, ticked through the SAME mechanics with its home repo as cwd.
-        if (_loops.Get(ArchAgentService.ReservedId) is not null)
-            TickRepo(_arch.HomeInfo(), cfg, routines, now);
+        // The arch instances (openspec: add-arch-agent, D2; arch-conversations): one
+        // per arch conversation that has a loop slot, keyed to the conversation id,
+        // ticked through the SAME mechanics with the shared home repo as cwd.
+        foreach (var conv in _arch.ConversationLoops())
+            TickRepo(_arch.HomeInfoFor(conv.RepoId), cfg, routines, now);
     }
 
     private void TickRepo(RepositoryRegistry.RepositoryInfo repo, AutopilotConfigStore.Snapshot cfg, IReadOnlyList<PromptClassifier.Routine> routines, long now)
@@ -647,11 +648,11 @@ public class AutopilotService : BackgroundService
             // A repeat waits for a wake OR the quiet floor, whichever comes first, so a dark
             // peer can never park the loop; the first send of an arm always goes (the
             // instance record decides, never process memory).
-            if (repo.Id == ArchAgentService.ReservedId && loop.Kind != LoopConfigStore.KindArch)
+            if (ArchAgentService.IsArchKey(repo.Id) && loop.Kind != LoopConfigStore.KindArch)
                 decision = ArchDrivenPolicy.Apply(decision, loop,
                     _lastDrivenPrompt.TryGetValue(repo.Id, out var lastPrompt) ? lastPrompt : null,
                     now, _arch.DrivenQuietFloor,
-                    () => _arch.ComposeWake() is not null);
+                    () => _arch.ComposeWake(repo.Id) is not null);
 
             Execute(repo, loop, decision, sessionId, snippet, intercept, now);
     }
@@ -699,7 +700,7 @@ public class AutopilotService : BackgroundService
                     // until the agent's reply changes.
                     _loops.SetPending(repo.Id, propose.Prompt);
                     // Arch kind: the pend IS the wake landing — commit the watermark (openspec: add-arch-agent).
-                    if (repo.Id == ArchAgentService.ReservedId) _arch.CommitWake(sessionId);
+                    if (ArchAgentService.IsArchKey(repo.Id)) _arch.CommitWake(repo.Id, sessionId);
                     if (propose.EnterPhase != null) _loops.SetPhase(repo.Id, propose.EnterPhase);
                     // Queue kind: remember which stash item this pend was read
                     // from — consumed only when the wait breaks (see Tick), never
@@ -727,7 +728,7 @@ public class AutopilotService : BackgroundService
                     if (intercept != null) FinishIntercept(intercept, "escalated", null, 0, now);
                     return;
                 }
-                if (string.IsNullOrWhiteSpace(sessionId) && repo.Id != ArchAgentService.ReservedId) return;
+                if (string.IsNullOrWhiteSpace(sessionId) && !ArchAgentService.IsArchKey(repo.Id)) return;
                 // The situational briefing (openspec: loop-agent-briefing, D1/D2):
                 // composed HERE, at the one drive choke point, so every driven kind
                 // is covered and the suggest branch above stays structurally raw.
@@ -763,7 +764,7 @@ public class AutopilotService : BackgroundService
                 if (SendPrompt(repo, sessionId, loop, propose.Prompt, briefed, briefingRev,
                         sendPhase, propose.Confidence, snippet, intercept, now))
                 {
-                    if (repo.Id == ArchAgentService.ReservedId) _arch.CommitWake(sessionId);
+                    if (ArchAgentService.IsArchKey(repo.Id)) _arch.CommitWake(repo.Id, sessionId);
                     // Consume-on-land (queue kind, D2/D3): the head item leaves the
                     // stash only now that its send actually fired, and the step is
                     // stamped — RecordQueueStep sets the phase itself (verify-owed,
@@ -796,9 +797,9 @@ public class AutopilotService : BackgroundService
     /// the slot back to the standing wake loop if the Operator had one armed.</summary>
     private void AfterArchDrivenResolved(RepositoryRegistry.RepositoryInfo repo, LoopConfigStore.LoopState loop)
     {
-        if (repo.Id != ArchAgentService.ReservedId || loop.Kind == LoopConfigStore.KindArch) return;
+        if (!ArchAgentService.IsArchKey(repo.Id) || loop.Kind == LoopConfigStore.KindArch) return;
         _lastDrivenPrompt.TryRemove(repo.Id, out _);
-        try { _arch.RestoreStandingLoopIfNeeded(); }
+        try { _arch.RestoreStandingLoopIfNeeded(repo.Id); }
         catch (Exception ex) { _logger.Error($"[LOOP] could not restore the arch standing loop: {ex.Message}"); }
     }
 
@@ -855,7 +856,7 @@ public class AutopilotService : BackgroundService
         var isArch = loop.Kind == LoopConfigStore.KindArch;
         // Any kind driving the arch agent runs in its home with its tools (openspec
         // arch-driven-loops); only the wake kind's bubble is tagged as a wake.
-        var isArchHome = repo.Id == ArchAgentService.ReservedId;
+        var isArchHome = ArchAgentService.IsArchKey(repo.Id);
         _lastDrivenPrompt[repo.Id] = prompt;
         _ = Task.Run(async () =>
         {
@@ -884,7 +885,7 @@ public class AutopilotService : BackgroundService
             finally
             {
                 session.Complete();
-                if (isArchHome) _arch.NoteArchSession(session.SessionId);
+                if (isArchHome) _arch.NoteArchSession(repo.Id, session.SessionId);
                 if (intercept != null)
                     FinishIntercept(intercept, "sent", prompt, confidence,
                         DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());

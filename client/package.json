@@ -8,7 +8,8 @@
     "build": "vite build",
     "build:manage": "vite build --config vite.manage.config.js",
     "preview": "vite preview",
-    "test:ui": "node tests/ui/pinned-conversation-lanes.mjs"
+    "test:ui": "node tests/ui/pinned-conversation-lanes.mjs",
+    "test": "node --test src/components/taskgraph/graphColors.test.mjs"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",

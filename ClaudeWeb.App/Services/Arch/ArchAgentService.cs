@@ -107,9 +107,10 @@ public class ArchAgentService : IArchWakeSource
     // launched (with the config it wrote) can call the arch tools.
     private readonly string _mcpToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
 
-    // The wake draft composed this tick but not yet landed (see ComposeWake).
+    // The wake draft composed this tick but not yet landed (see ComposeWake), per
+    // conversation key (openspec arch-conversations).
     private readonly object _wakeGate = new();
-    private WakeDraft? _draft;
+    private readonly Dictionary<string, WakeDraft> _drafts = new(StringComparer.Ordinal);
 
     // When the arch last sent to each repo (unix ms) — used to attribute the
     // repo's latest turn.start to the arch (within a short window) or a human.
@@ -146,6 +147,53 @@ public class ArchAgentService : IArchWakeSource
 
     public static bool IsReserved(string? id) => string.Equals(id, ReservedId, StringComparison.Ordinal);
 
+    /// <summary>Whether <paramref name="id"/> keys an arch conversation (openspec
+    /// arch-conversations): the reserved id (the default conversation) or
+    /// <c>@arch:&lt;suffix&gt;</c>. Every conversation runs in the same home with the
+    /// same tools; each has its own run slot, loop slot, session and watermark.</summary>
+    public static bool IsArchKey(string? id) => ArchStateStore.IsConversationId(id);
+
+    /// <summary>A conversation key, defaulting to the default conversation.</summary>
+    public static string KeyOrDefault(string? convId) => IsArchKey(convId) ? convId! : ReservedId;
+
+    // ---- conversations (openspec arch-conversations) ------------------------------------------
+
+    public IReadOnlyList<ArchStateStore.Conversation> Conversations() => _state.Conversations;
+
+    public ArchStateStore.Conversation? GetConversation(string? id) => _state.GetConversation(KeyOrDefault(id));
+
+    public bool HasConversation(string? id) => _state.HasConversation(KeyOrDefault(id));
+
+    public string NameOf(string? id) => _state.NameOf(KeyOrDefault(id));
+
+    public ArchStateStore.Conversation CreateConversation(string? name)
+    {
+        var c = _state.AddConversation(name);
+        _logger.Info($"[ARCH] conversation created: {c.Id} \"{c.Name}\"");
+        return c;
+    }
+
+    public ArchStateStore.Conversation? RenameConversation(string? id, string? name) => _state.RenameConversation(KeyOrDefault(id), name);
+
+    /// <summary>Removes a non-default conversation: its loop slot is cleared, its
+    /// running turn (if any) stopped, its record dropped. The transcript stays on disk.</summary>
+    public bool DeleteConversation(string? id)
+    {
+        if (!IsArchKey(id) || string.Equals(id, ReservedId, StringComparison.Ordinal)) return false;
+        if (!_state.HasConversation(id)) return false;
+        _loops.Stop(id!);
+        _state.ClearStandingLoop(id);
+        _runs.Get(id!)?.RequestStop();
+        lock (_wakeGate) _drafts.Remove(id!);
+        var ok = _state.RemoveConversation(id);
+        if (ok) _logger.Info($"[ARCH] conversation removed: {id}");
+        return ok;
+    }
+
+    /// <summary>The loop slots of every conversation (any kind).</summary>
+    public IReadOnlyList<LoopConfigStore.LoopState> ConversationLoops() =>
+        _loops.All().Where(l => IsArchKey(l.RepoId)).ToList();
+
     // ---- home repo ---------------------------------------------------------
 
     /// <summary>The home repo path (D3): <c>ArchHomeDir</c> from appsettings when
@@ -168,10 +216,15 @@ public class ArchAgentService : IArchWakeSource
 
     /// <summary>The synthetic registry view the engine ticks the arch instance
     /// through: the reserved id, the display name, and the home repo as cwd.</summary>
-    public RepositoryRegistry.RepositoryInfo HomeInfo()
+    public RepositoryRegistry.RepositoryInfo HomeInfo() => HomeInfoFor(ReservedId);
+
+    /// <summary>The same view for one conversation (openspec arch-conversations): the
+    /// conversation key as id, its name, the shared home as cwd.</summary>
+    public RepositoryRegistry.RepositoryInfo HomeInfoFor(string? convId)
     {
+        var key = KeyOrDefault(convId);
         var home = HomePath;
-        return new RepositoryRegistry.RepositoryInfo(ReservedId, DisplayName, home,
+        return new RepositoryRegistry.RepositoryInfo(key, key == ReservedId ? DisplayName : NameOf(key), home,
             Directory.Exists(home), Directory.Exists(Path.Combine(home, ".git")), false,
             "advanced", null, Array.Empty<RepositoryRegistry.LocalAppInfo>());
     }
@@ -434,6 +487,43 @@ public class ArchAgentService : IArchWakeSource
 
     private MachineRef ResolveMachine(string? machine) => ClassifyMachine(machine, SelfLabel, _collector.ListSources());
 
+    // ---- handles (openspec stable-handles) ---------------------------------------------
+
+    /// <summary>The repo-part handles of a peer's repos: the peer's own when its build
+    /// reports them, else the same slug#k assignment computed here over its list (a
+    /// peer on an older build; stable as long as its list order is).</summary>
+    private static Dictionary<string, string> PeerHandles(FleetClient.PeerSnapshot snap) =>
+        Handles.AssignRepoHandles(snap.Repos.Select(r => (r.RepoId, r.Name, r.Handle)));
+
+    /// <summary>The resolved target of an agent reference: "spacex/prg#2", "prg#2" with a
+    /// machine, a bare name when unique, or a raw repo id. Returns the machine and the
+    /// repo id, or an error naming what was tried.</summary>
+    public sealed record AgentRef(MachineRef Target, string? RepoId, string? Error)
+    {
+        public string MachineLabel(string selfLabel) => Target.IsSelf ? selfLabel : Target.Source?.Label ?? "?";
+    }
+
+    public AgentRef ResolveAgentRef(string? machine, string? repoRef)
+    {
+        if (string.IsNullOrWhiteSpace(repoRef)) return new AgentRef(new MachineRef(true, null, null), null, "repoId is required (a handle like spacex/prg#2 or the id from list_agents)");
+        var (refMachine, repoPart) = Handles.ParseAgentRef(repoRef);
+        var target = ResolveMachine(refMachine ?? machine);
+        if (target.Error is not null) return new AgentRef(target, null, target.Error);
+        if (target.IsSelf)
+        {
+            var cands = _repos.GetAll().Select(r => (r.Id, r.Handle, r.Name)).ToList();
+            var (id, err) = Handles.ResolveRepoRef(repoPart, cands, SelfLabel);
+            return new AgentRef(target, id, err);
+        }
+        var snap = _fleet.SnapshotNonBlocking(target.Source!.Id);
+        var handles = PeerHandles(snap);
+        var remote = snap.Repos.Select(r => (r.RepoId, handles.GetValueOrDefault(r.RepoId, Handles.Slug(r.Name)), r.Name)).ToList();
+        if (remote.Count == 0 && !snap.Reachable)
+            return new AgentRef(target, null, $"{target.Source.Label} has not answered yet ({snap.Status}); its repos are unknown");
+        var (rid, rerr) = Handles.ResolveRepoRef(repoPart, remote, target.Source.Label);
+        return new AgentRef(target, rid, rerr);
+    }
+
     /// <summary>The availability rule (D4), as a pure function so the table is
     /// unit-testable: unmanaged wins, then busy, then the branch test. A dirty tree
     /// never claims.</summary>
@@ -494,8 +584,14 @@ public class ArchAgentService : IArchWakeSource
     public sealed record AgentView(
         string Machine, string RepoId, string Name, string RemoteUrl, string Branch, string DefaultBranch,
         bool Dirty, string Availability, string LastActor, long? RunningSince, string? TabId, bool Exists,
-        string SourceId = CollectorService.SelfId, SendBlock? Blocked = null, bool ManagedThere = true)
+        string SourceId = CollectorService.SelfId, SendBlock? Blocked = null, bool ManagedThere = true,
+        string? Handle = null)
     {
+        /// <summary>The repo-part handle ("prg#2"), falling back to a slug of the name for a
+        /// peer that predates handles (openspec stable-handles).</summary>
+        public string RepoHandle => string.IsNullOrWhiteSpace(Handle) ? Handles.Slug(Name) : Handle;
+        /// <summary>The label used everywhere: "&lt;machine&gt;/&lt;handle&gt;".</summary>
+        public string Label(string selfLabel) => Handles.AgentLabel(IsLocal ? selfLabel : Machine, RepoHandle);
         public bool IsLocal => SourceId == CollectorService.SelfId;
         public string Key => IsLocal ? RepoId : ArchStateStore.FleetKey(SourceId, RepoId);
         /// <summary>Whether a send could go out at all (fleet posture, D8); local
@@ -588,7 +684,7 @@ public class ArchAgentService : IArchWakeSource
                     ? ActorArch : ActorHuman;
             var tab = tabs.Where(t => t.RepoId == repo.Id).OrderByDescending(t => t.Dashboard).ThenByDescending(t => t.CreatedAt).FirstOrDefault();
             views.Add(new AgentView(Machine, repo.Id, repo.Name, gs.RemoteUrl, gs.Branch, gs.DefaultBranch,
-                gs.Dirty, avail, lastActor, busy && running ? lastStartAt : null, tab?.Id, repo.Exists));
+                gs.Dirty, avail, lastActor, busy && running ? lastStartAt : null, tab?.Id, repo.Exists, Handle: repo.Handle));
         }
         return views;
     }
@@ -622,7 +718,7 @@ public class ArchAgentService : IArchWakeSource
                 var managedThere = r.Managed == true;
                 views.Add(new AgentView(snap.Label, r.RepoId, r.Name, r.RemoteUrl ?? "", r.Branch ?? "unknown", r.DefaultBranch ?? "main",
                     r.Dirty, managedThere ? r.Availability ?? Unreachable : Unmanaged, r.LastActor ?? "none", r.RunningSince, null, r.Exists,
-                    sourceId, block, managedThere));
+                    sourceId, block, managedThere, PeerHandles(snap).GetValueOrDefault(r.RepoId)));
             }
         }
         return views;
@@ -667,7 +763,7 @@ public class ArchAgentService : IArchWakeSource
                 gateOpen = _gate.Enabled, allowSends = true, managedCount = managed.Count,
                 agents = local.Select(a => (object)new
                 {
-                    key = a.Key, repoId = a.RepoId, name = a.Name, remoteUrl = a.RemoteUrl, branch = a.Branch, defaultBranch = a.DefaultBranch,
+                    handle = a.Label(SelfLabel), key = a.Key, repoId = a.RepoId, name = a.Name, remoteUrl = a.RemoteUrl, branch = a.Branch, defaultBranch = a.DefaultBranch,
                     onDefault = OnDefault(a.Branch, a.DefaultBranch), dirty = a.Dirty, availability = a.Availability, lastActor = a.LastActor,
                     runningSince = a.RunningSince, managed = managed.Contains(a.RepoId), docked = a.TabId is not null, exists = a.Exists, tabId = a.TabId,
                 }).ToList(),
@@ -690,7 +786,7 @@ public class ArchAgentService : IArchWakeSource
                 managedCount = snap.Info?.ManagedRepoIds?.Count ?? repos.Count(r => r.Managed == true),
                 agents = repos.Select(r => (object)new
                 {
-                    key = ArchStateStore.FleetKey(src.Id, r.RepoId), repoId = r.RepoId, name = r.Name, remoteUrl = r.RemoteUrl ?? "",
+                    handle = Handles.AgentLabel(src.Label, PeerHandles(snap).GetValueOrDefault(r.RepoId, Handles.Slug(r.Name))), key = ArchStateStore.FleetKey(src.Id, r.RepoId), repoId = r.RepoId, name = r.Name, remoteUrl = r.RemoteUrl ?? "",
                     branch = r.Branch ?? "unknown", defaultBranch = r.DefaultBranch ?? "main",
                     onDefault = OnDefault(r.Branch, r.DefaultBranch), dirty = r.Dirty, availability = r.Availability ?? "unknown", lastActor = r.LastActor ?? "none",
                     runningSince = r.RunningSince, managed = r.Managed == true, docked = r.Docked == true, exists = r.Exists, tabId = (string?)null,
@@ -746,6 +842,8 @@ public class ArchAgentService : IArchWakeSource
                 managed = managed.Contains(a.RepoId, StringComparer.Ordinal),
                 // Holds a dock here (openspec fleet-status-tab): an agent in the fleet status view.
                 docked = a.TabId is not null,
+                // The repo-part handle (openspec stable-handles), so a hub labels this agent the way this box does.
+                handle = a.RepoHandle,
             }).ToList(),
         };
     }
@@ -764,7 +862,7 @@ public class ArchAgentService : IArchWakeSource
             $"{list.Count} managed agent(s){(remote > 0 ? $", {remote} on other machines" : "")}{(blocked > 0 ? $", {blocked} not sendable (see blocked)" : "")}",
             list.Select(a => new
             {
-                machine = a.Machine, sourceId = a.SourceId, repoId = a.RepoId, name = a.Name, remoteUrl = a.RemoteUrl, branch = a.Branch,
+                handle = a.Label(SelfLabel), machine = a.Machine, sourceId = a.SourceId, repoId = a.RepoId, name = a.Name, remoteUrl = a.RemoteUrl, branch = a.Branch,
                 defaultBranch = a.DefaultBranch, dirty = a.Dirty, availability = a.Availability, lastActor = a.LastActor,
                 runningSince = a.RunningSince, runningFor = a.RunningSince is { } rs ? Elapsed(rs, Now()) : null,
                 managedThere = a.IsLocal ? true : a.ManagedThere, sendable = a.Sendable, blocked = a.Blocked?.Reason,
@@ -785,7 +883,7 @@ public class ArchAgentService : IArchWakeSource
             {
                 machine = Machine, label = SelfLabel, sourceId = CollectorService.SelfId, reachable = true, status = FleetClient.StatusOk, detail = (string?)null,
                 version = BuildVersion, sendsAllowed = true, acceptsSends = AcceptFleetSends, acceptsUpgrades = AcceptFleetUpgrades, gateOpen = _gate.Enabled, behind = false,
-                managedThere = mine.Select(id => new { repoId = id, name = repos.FirstOrDefault(r => r.Id == id)?.Name ?? id }).ToList(),
+                managedThere = mine.Select(id => new { repoId = id, name = repos.FirstOrDefault(r => r.Id == id)?.Name ?? id, handle = Handles.AgentLabel(SelfLabel, repos.FirstOrDefault(r => r.Id == id)?.Handle ?? id) }).ToList(),
                 inYourScope = mine, sendable = mine, blocked = new List<object>(),
             },
         };
@@ -809,7 +907,7 @@ public class ArchAgentService : IArchWakeSource
                 version = snap.Info?.Version, sendsAllowed = src.AllowSends, acceptsSends = snap.Info?.AcceptsSends ?? false, acceptsUpgrades = snap.Info?.AcceptsUpgrades ?? false, gateOpen = snap.Info?.GateOpen ?? false,
                 // Version drift (openspec arch-peer-upgrades): a reachable peer on a different build than this hub.
                 behind = snap.Reachable && snap.Info?.Version is { } pv && pv != BuildVersion, hubVersion = BuildVersion,
-                managedThere = managedThere.Select(r => new { repoId = r.RepoId, name = r.Name }).ToList(),
+                managedThere = managedThere.Select(r => new { repoId = r.RepoId, name = r.Name, handle = Handles.AgentLabel(src.Label, PeerHandles(snap).GetValueOrDefault(r.RepoId, Handles.Slug(r.Name))) }).ToList(),
                 inYourScope = scoped, sendable, blocked = blockedList,
             });
         }
@@ -820,9 +918,10 @@ public class ArchAgentService : IArchWakeSource
 
     public ToolOutcome ToolGitState(string? machine, string? repoId)
     {
-        if (string.IsNullOrWhiteSpace(repoId)) return new ToolOutcome(false, "error", "repoId is required");
-        var target = ResolveMachine(machine);
-        if (target.Error is not null) return new ToolOutcome(false, "error", target.Error);
+        var agent = ResolveAgentRef(machine, repoId);
+        if (agent.Error is not null) return new ToolOutcome(false, "error", agent.Error);
+        var target = agent.Target;
+        repoId = agent.RepoId!;
         if (!target.IsSelf)
         {
             // Remote git state is what the peer reported in its describe (fleet D4).
@@ -860,9 +959,10 @@ public class ArchAgentService : IArchWakeSource
 
     public ToolOutcome ToolReadTranscript(string? machine, string? repoId, int tail)
     {
-        if (string.IsNullOrWhiteSpace(repoId)) return new ToolOutcome(false, "error", "repoId is required");
-        var target = ResolveMachine(machine);
-        if (target.Error is not null) return new ToolOutcome(false, "error", target.Error);
+        var agent = ResolveAgentRef(machine, repoId);
+        if (agent.Error is not null) return new ToolOutcome(false, "error", agent.Error);
+        var target = agent.Target;
+        repoId = agent.RepoId!;
         if (!target.IsSelf)
         {
             var src = target.Source!;
@@ -924,13 +1024,15 @@ public class ArchAgentService : IArchWakeSource
     {
         if (string.IsNullOrWhiteSpace(repoId)) return new ToolOutcome(false, "error", "repoId is required");
         if (string.IsNullOrWhiteSpace(text)) return new ToolOutcome(false, "error", "text is required");
-        var target = ResolveMachine(machine);
-        if (target.Error is not null)
+        // A handle ("spacex/prg#2"), a name, or the raw id (openspec stable-handles).
+        var agent = ResolveAgentRef(machine, repoId);
+        if (agent.Error is not null)
         {
-            AuditTool("send_task", repoId, $"refused machine {machine}");
-            return new ToolOutcome(false, "error", target.Error + "; nothing was sent");
+            AuditTool("send_task", repoId, "unresolved");
+            return new ToolOutcome(false, "error", agent.Error + "; nothing was sent");
         }
-        return target.IsSelf ? SendLocal(repoId, text, branch, requireArmed, overrideClaimed) : SendRemote(target.Source!, repoId, text, branch, requireArmed, overrideClaimed);
+        var target = agent.Target;
+        return target.IsSelf ? SendLocal(agent.RepoId!, text, branch, requireArmed, overrideClaimed) : SendRemote(target.Source!, agent.RepoId!, text, branch, requireArmed, overrideClaimed);
     }
 
     /// <summary>The local send: managed → armed → claimed → slot → turn.</summary>
@@ -1095,9 +1197,10 @@ public class ArchAgentService : IArchWakeSource
         string? sourceId = null;
         if (!string.IsNullOrWhiteSpace(repoId))
         {
-            var target = ResolveMachine(machine);
-            if (target.Error is not null) return new ToolOutcome(false, "error", target.Error);
-            sourceId = target.IsSelf ? null : target.Source!.Id;
+            var agent = ResolveAgentRef(machine, repoId);
+            if (agent.Error is not null) return new ToolOutcome(false, "error", agent.Error);
+            sourceId = agent.Target.IsSelf ? null : agent.Target.Source!.Id;
+            repoId = agent.RepoId;
         }
         var node = _graph.AddNode(title, note, string.IsNullOrWhiteSpace(repoId) ? null : repoId, null, 40, 40, Now(), sourceId, ActorArch, null);
         if (node is null) return new ToolOutcome(false, "error", "title is blank");
@@ -1127,20 +1230,20 @@ public class ArchAgentService : IArchWakeSource
     {
         if (string.IsNullOrWhiteSpace(id)) return new ToolOutcome(false, "error", "id is required");
         string? sourceId = null;
+        string? label = null;
         if (!string.IsNullOrWhiteSpace(repoId))
         {
-            var target = ResolveMachine(machine);
-            if (target.Error is not null) return new ToolOutcome(false, "error", target.Error);
-            sourceId = target.IsSelf ? null : target.Source!.Id;
-            var known = target.IsSelf
-                ? _repos.GetAll().Any(r => r.Id == repoId)
-                : _fleet.SnapshotNonBlocking(sourceId!).Repos.Any(r => r.RepoId == repoId);
-            if (!known) return new ToolOutcome(false, "error", $"no repo {repoId} on {(target.IsSelf ? SelfLabel : target.Source!.Label)} (use the repoId from list_agents / the Status tab)");
+            // A handle ("spacex/prg#2"), a name, or the raw id (openspec stable-handles).
+            var agent = ResolveAgentRef(machine, repoId);
+            if (agent.Error is not null) return new ToolOutcome(false, "error", agent.Error);
+            sourceId = agent.Target.IsSelf ? null : agent.Target.Source!.Id;
+            repoId = agent.RepoId;
+            label = AgentLabelOf(sourceId, repoId!);
         }
         var node = _graph.Assign(id, sourceId, repoId, ActorArch, Now());
         if (node is null) return new ToolOutcome(false, "error", $"no task {id}");
         AuditTool("assign_task", node.RepoId, node.RepoId is null ? "unassigned" : "assigned");
-        return new ToolOutcome(true, node.RepoId is null ? "unassigned" : "assigned", node.RepoId is null ? $"task {id} unassigned" : $"task {id} assigned to {repoId} on {(sourceId is null ? SelfLabel : machine)}; dispatch_task pings the agent", node);
+        return new ToolOutcome(true, node.RepoId is null ? "unassigned" : "assigned", node.RepoId is null ? $"task {id} unassigned" : $"task {id} assigned to {label}; dispatch_task pings the agent", node);
     }
 
     public ToolOutcome ToolDispatchTask(string? id) => DispatchTask(id, requireArmed: true, by: ActorArch);
@@ -1194,36 +1297,54 @@ public class ArchAgentService : IArchWakeSource
         return sb.ToString();
     }
 
-    public ToolOutcome ToolListIdeas(bool activeOnly)
+    public ToolOutcome ToolListIdeas(bool activeOnly, bool includeConsumed = false)
     {
-        var ideas = _notes.List().Where(n => !activeOnly || n.Active).OrderByDescending(n => n.Active).ThenByDescending(n => n.Priority).ThenByDescending(n => n.UpdatedAt)
-            .Select(n => new { id = n.Id, text = n.Text, project = n.Project, priority = n.Priority, active = n.Active, updatedAt = n.UpdatedAt }).ToList();
+        var ideas = _notes.List(includeConsumed).Where(n => !activeOnly || n.Active).OrderByDescending(n => n.Active).ThenByDescending(n => n.Priority).ThenByDescending(n => n.UpdatedAt)
+            .Select(n => new { handle = Handles.IdeaHandle(n.Number), id = n.Id, text = n.Text, project = n.Project, priority = n.Priority, active = n.Active, consumed = n.ConsumedByTaskId is not null, taskId = n.ConsumedByTaskId, updatedAt = n.UpdatedAt }).ToList();
         AuditTool("list_ideas", null, $"{ideas.Count} idea(s)");
-        return new ToolOutcome(true, "ok", $"{ideas.Count} idea(s){(activeOnly ? " (active only)" : "")}", new { ideas });
+        return new ToolOutcome(true, "ok", $"{ideas.Count} idea(s){(activeOnly ? " (active only)" : "")}{(includeConsumed ? " (incl. consumed)" : "")}", new { ideas });
     }
 
     /// <summary>Promote an idea to a task (the Ideas tab's "Send to graph" as a tool): the
-    /// card is created from the idea's text, the idea stays but leaves the Active section.</summary>
+    /// card is created from the idea's text and the idea is CONSUMED — it leaves the Ideas
+    /// list, linked to the new task (openspec ideas-consume-on-promotion). Returns the
+    /// consumed idea's handle and the new task id.</summary>
     public ToolOutcome ToolIdeaToTask(string? ideaId, string? title, string? machine, string? repoId)
     {
-        if (string.IsNullOrWhiteSpace(ideaId)) return new ToolOutcome(false, "error", "ideaId is required");
-        var idea = _notes.List().FirstOrDefault(n => n.Id == ideaId);
-        if (idea is null) return new ToolOutcome(false, "error", $"no idea {ideaId}");
-        var existing = _graph.Get().Nodes.FirstOrDefault(n => n.IdeaId == ideaId);
-        if (existing is not null) return new ToolOutcome(false, "exists", $"idea {ideaId} already has task {existing.Id}", existing);
+        // "#12", "12" or the id (openspec stable-handles). FindByRef still resolves an
+        // already-consumed idea, so the existing-task guard below stays honest.
+        var (idea, ideaErr) = _notes.FindByRef(ideaId);
+        if (idea is null) return new ToolOutcome(false, "error", ideaErr ?? $"no idea {ideaId}");
+        var existing = _graph.Get().Nodes.FirstOrDefault(n => n.IdeaId == idea.Id);
+        if (existing is not null) return new ToolOutcome(false, "exists", $"idea {Handles.IdeaHandle(idea.Number)} already has task {existing.Id}", existing);
         string? sourceId = null;
         if (!string.IsNullOrWhiteSpace(repoId))
         {
-            var target = ResolveMachine(machine);
-            if (target.Error is not null) return new ToolOutcome(false, "error", target.Error);
-            sourceId = target.IsSelf ? null : target.Source!.Id;
+            var agent = ResolveAgentRef(machine, repoId);
+            if (agent.Error is not null) return new ToolOutcome(false, "error", agent.Error);
+            sourceId = agent.Target.IsSelf ? null : agent.Target.Source!.Id;
+            repoId = agent.RepoId;
         }
+        // AddNode consumes the idea (it carries the idea id) — no separate notes write here.
         var node = _graph.AddNode(string.IsNullOrWhiteSpace(title) ? idea.Text : title, string.IsNullOrWhiteSpace(title) ? idea.Project : idea.Text,
-            string.IsNullOrWhiteSpace(repoId) ? null : repoId, null, 40, 40, Now(), sourceId, ActorArch, ideaId);
+            string.IsNullOrWhiteSpace(repoId) ? null : repoId, null, 40, 40, Now(), sourceId, ActorArch, idea.Id);
         if (node is null) return new ToolOutcome(false, "error", "the idea's text is blank");
-        _notes.Update(idea.Id, idea.Text, idea.Project, idea.Priority, false, Now());
+        var handle = Handles.IdeaHandle(idea.Number);
         AuditTool("idea_to_task", node.RepoId, "created");
-        return new ToolOutcome(true, "created", $"task {node.Id} created from idea {ideaId}; the idea left the Active section", node);
+        return new ToolOutcome(true, "created", $"task {node.Id} created from idea {handle}; the idea is now consumed (off the Ideas list)", new { taskId = node.Id, ideaHandle = handle, node });
+    }
+
+    /// <summary>"&lt;machine&gt;/&lt;handle&gt;" for a repo on this box (sourceId null) or on a peer.</summary>
+    private string AgentLabelOf(string? sourceId, string repoId)
+    {
+        if (sourceId is null)
+        {
+            var r = _repos.GetAll().FirstOrDefault(x => x.Id == repoId);
+            return Handles.AgentLabel(SelfLabel, r?.Handle ?? repoId);
+        }
+        var snap = _fleet.SnapshotNonBlocking(sourceId);
+        var machine = SourceLabels().GetValueOrDefault(sourceId, sourceId);
+        return Handles.AgentLabel(machine, PeerHandles(snap).GetValueOrDefault(repoId, repoId));
     }
 
     private Dictionary<string, string> SourceLabels() =>
@@ -1305,10 +1426,11 @@ public class ArchAgentService : IArchWakeSource
         return clean.Length > 40 ? clean[..40] : clean;
     }
 
-    // The arch loop must be armed for any send; capped and disarmed are answers.
+    // An arch loop must be armed for any send (any conversation's — openspec
+    // arch-conversations); capped and disarmed are answers.
     private ToolOutcome? ArmedOrRefusal(string auditKey, out LoopConfigStore.LoopState? loop)
     {
-        loop = _loops.Get(ReservedId);
+        loop = ConversationLoops().FirstOrDefault(l => l.Active) ?? _loops.Get(ReservedId);
         if (loop is { Active: true }) return null;
         var status = loop?.Status == "capped" ? "capped" : "disarmed";
         AuditTool("send_task", auditKey, status);
@@ -1479,35 +1601,40 @@ public class ArchAgentService : IArchWakeSource
     /// the CLI's project folder for the home path outlives a wiped data dir, and an
     /// isolated instance resumed a previous run's conversation that way (seen
     /// 2026-09-02). A fresh data dir starts a fresh conversation.</summary>
-    public string? ResolveArchSessionId()
+    public string? ResolveArchSessionId(string? convId = null)
     {
-        var pinned = _loops.Get(ReservedId)?.SessionId;
+        var key = KeyOrDefault(convId);
+        var pinned = _loops.Get(key)?.SessionId;
         if (!string.IsNullOrWhiteSpace(pinned)) return pinned;
-        return string.IsNullOrWhiteSpace(_state.LastSessionId) ? null : _state.LastSessionId;
+        var remembered = _state.SessionOf(key);
+        return string.IsNullOrWhiteSpace(remembered) ? null : remembered;
     }
 
     /// <summary>Called by the engine after an arch turn completes with a captured
     /// session id, and by the controller for operator sends.</summary>
-    public void NoteArchSession(string? sessionId)
+    public void NoteArchSession(string? convId, string? sessionId)
     {
         if (string.IsNullOrWhiteSpace(sessionId)) return;
-        _state.SetLastSessionId(sessionId);
-        if (_loops.Get(ReservedId) is { Active: true }) _loops.SetSessionId(ReservedId, sessionId);
+        var key = KeyOrDefault(convId);
+        _state.SetSessionId(key, sessionId);
+        if (_loops.Get(key) is { Active: true }) _loops.SetSessionId(key, sessionId);
     }
 
-    /// <summary>An operator message to the arch agent (Arch tab composer). Same
-    /// slot semantics as any chat: 409-equivalent when an arch turn is running.</summary>
-    public (bool Ok, string Error, RunSession? Session) SendToArch(string text)
+    /// <summary>An operator message to the arch agent (Arch tab composer) in one
+    /// conversation. Same slot semantics as any chat: 409-equivalent when that
+    /// conversation's turn is running.</summary>
+    public (bool Ok, string Error, RunSession? Session) SendToArch(string? convId, string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return (false, "empty message", null);
+        var key = KeyOrDefault(convId);
         EnsureHome();
-        if (!_runs.TryBeginRun(ReservedId, "builder", out var session))
+        if (!_runs.TryBeginRun(key, "builder", out var session))
             return (false, "the arch agent is mid-turn; wait for it to finish", null);
-        var sessionId = ResolveArchSessionId();
+        var sessionId = ResolveArchSessionId(key);
         var sendText = text.Trim();
-        _loops.SetPending(ReservedId, null);
-        ResumeLoopIfStopped();
-        _logger.Info($"[ARCH] operator -> arch (session {(sessionId is null ? "new" : Short(sessionId))})");
+        _loops.SetPending(key, null);
+        ResumeLoopIfStopped(key);
+        _logger.Info($"[ARCH] operator -> arch {key} (session {(sessionId is null ? "new" : Short(sessionId))})");
         _ = Task.Run(async () =>
         {
             try
@@ -1515,7 +1642,7 @@ public class ArchAgentService : IArchWakeSource
                 await session.EmitAsync(new { type = "user", text = sendText, actor = ActorHuman });
                 await _cli.RunAsync(sendText, sessionId, workingDirectory: HomePath,
                     emit: session.EmitAsync, ct: session.Cts.Token,
-                    repoId: ReservedId, repoName: DisplayName,
+                    repoId: key, repoName: NameOf(key),
                     mcpConfigJson: BuildMcpConfigJson(), disallowedTools: DisallowedTools);
             }
             catch (Exception ex)
@@ -1525,7 +1652,7 @@ public class ArchAgentService : IArchWakeSource
             finally
             {
                 session.Complete();
-                NoteArchSession(session.SessionId);
+                NoteArchSession(key, session.SessionId);
             }
         });
         return (true, "", session);
@@ -1535,43 +1662,46 @@ public class ArchAgentService : IArchWakeSource
     /// that stopped as escalate/capped comes back armed in place, with the watermark moved
     /// to now so the events that piled up meanwhile are not replayed as one giant wake.
     /// A loop the Operator stopped, or that errored, stays stopped.</summary>
-    public bool ResumeLoopIfStopped()
+    public bool ResumeLoopIfStopped(string? convId = null)
     {
-        var loop = _loops.Get(ReservedId);
+        var key = KeyOrDefault(convId);
+        var loop = _loops.Get(key);
         if (loop is null || loop.Active || loop.Status is not ("escalate" or "capped")) return false;
         var (_, lastSeq) = _collector.ReadEvents(int.MaxValue);
-        _state.SetWatermark(lastSeq);
-        lock (_wakeGate) _draft = null;
-        var s = _loops.ResumeArch(ReservedId);
+        _state.SetWatermark(key, lastSeq);
+        lock (_wakeGate) _drafts.Remove(key);
+        var s = _loops.ResumeArch(key);
         if (s is null) return false;
-        _logger.Info($"[ARCH] loop resumed by the operator's message ({s.Mode}, cap {s.MaxIterations}) — watermark {lastSeq}");
+        _logger.Info($"[ARCH] loop {key} resumed by the operator's message ({s.Mode}, cap {s.MaxIterations}) — watermark {lastSeq}");
         return true;
     }
 
-    /// <summary>Arm (or re-arm) the arch loop: bootstrap the home, pin the
-    /// conversation, and start the watermark at the collector's current last seq
+    /// <summary>Arm (or re-arm) a conversation's arch loop: bootstrap the home, pin
+    /// the conversation, and start its watermark at the collector's current last seq
     /// so history is never replayed (D2).</summary>
-    public LoopConfigStore.LoopState Arm(string? mode, int? maxIterations)
+    public LoopConfigStore.LoopState Arm(string? convId, string? mode, int? maxIterations)
     {
+        var key = KeyOrDefault(convId);
         EnsureHome();
         var (_, lastSeq) = _collector.ReadEvents(int.MaxValue);
-        _state.SetWatermark(lastSeq);
-        lock (_wakeGate) _draft = null;
-        var state = _loops.StartArch(ReservedId, mode, maxIterations, ResolveArchSessionId());
-        _state.SetStandingLoop(state.Mode, state.MaxIterations);
-        _logger.Info($"[ARCH] armed ({state.Mode}, cap {state.MaxIterations}) — watermark {lastSeq}, home {HomePath}");
+        _state.SetWatermark(key, lastSeq);
+        lock (_wakeGate) _drafts.Remove(key);
+        var state = _loops.StartArch(key, mode, maxIterations, ResolveArchSessionId(key));
+        _state.SetStandingLoop(key, state.Mode, state.MaxIterations);
+        _logger.Info($"[ARCH] {key} armed ({state.Mode}, cap {state.MaxIterations}) — watermark {lastSeq}, home {HomePath}");
         return state;
     }
 
-    /// <summary>The Operator's Stop of the arch agent: clears the slot AND the
-    /// standing-loop memory, so nothing re-arms behind their back.</summary>
-    public void Disarm()
+    /// <summary>The Operator's Stop of a conversation's arch loop: clears the slot AND
+    /// the standing-loop memory, so nothing re-arms behind their back.</summary>
+    public void Disarm(string? convId = null)
     {
-        _loops.Stop(ReservedId);
-        _state.ClearStandingLoop();
+        var key = KeyOrDefault(convId);
+        _loops.Stop(key);
+        _state.ClearStandingLoop(key);
     }
 
-    public void ForgetStandingLoop() => _state.ClearStandingLoop();
+    public void ForgetStandingLoop(string? convId = null) => _state.ClearStandingLoop(KeyOrDefault(convId));
 
     /// <summary>The quiet floor for driven loops on the arch slot (openspec
     /// arch-driven-loops): the longest a repeat waits for a wake before it is sent
@@ -1587,30 +1717,39 @@ public class ArchAgentService : IArchWakeSource
     /// arch-driven-loops): if the Operator had the standing wake loop armed before,
     /// bring it back with the same mode and cap, watermark at now. Returns whether a
     /// loop was re-armed.</summary>
-    public bool RestoreStandingLoopIfNeeded()
+    public bool RestoreStandingLoopIfNeeded(string? convId = null)
     {
-        var remembered = _state.StandingLoop;
+        var key = KeyOrDefault(convId);
+        var remembered = _state.StandingLoopOf(key);
         if (remembered is null) return false;
-        if (_loops.Get(ReservedId) is { Active: true }) return false;
-        var s = Arm(remembered.Value.Mode, remembered.Value.Cap);
-        _logger.Info($"[ARCH] standing wake loop restored after the driven loop ended ({s.Mode}, cap {s.MaxIterations})");
+        if (_loops.Get(key) is { Active: true }) return false;
+        var s = Arm(key, remembered.Value.Mode, remembered.Value.Cap);
+        _logger.Info($"[ARCH] standing wake loop of {key} restored after the driven loop ended ({s.Mode}, cap {s.MaxIterations})");
         return true;
     }
 
     public int Watermark => _state.Watermark;
 
+    public int WatermarkOf(string? convId) => _state.WatermarkOf(KeyOrDefault(convId));
+
     // ---- wake source (D2) ------------------------------------------------------------
 
-    public WakeDraft? ComposeWake()
+    public WakeDraft? ComposeWake() => ComposeWake(ReservedId);
+
+    /// <summary>Composes the wake for ONE conversation from the events past ITS
+    /// watermark (openspec arch-conversations): two armed conversations each see every
+    /// managed repo turn once.</summary>
+    public WakeDraft? ComposeWake(string? convId)
     {
+        var key = KeyOrDefault(convId);
         // Managed keys across the fleet (D3): bare repo ids locally, sourceId/repoId remotely.
         var managed = ManagedRepoIds().Concat(ManagedFleet()).ToHashSet(StringComparer.Ordinal);
-        var after = _state.Watermark;
+        var after = _state.WatermarkOf(key);
         var (all, lastSeq) = _collector.ReadEvents(0);
         if (after < 0)
         {
             // Never set (armed before this build, or store reset): start now, no replay.
-            _state.SetWatermark(lastSeq);
+            _state.SetWatermark(key, lastSeq);
             return null;
         }
         // Peer cache only — the engine tick never waits on a dark machine (fleet D6).
@@ -1623,11 +1762,11 @@ public class ArchAgentService : IArchWakeSource
         {
             // Only chat.focus / unmanaged / arch's own events: nothing to say, but
             // the watermark still moves past them (spec: unmanaged and chat.focus do not wake).
-            if (lastSeq > after) _state.SetWatermark(lastSeq);
-            lock (_wakeGate) _draft = null;
+            if (lastSeq > after) _state.SetWatermark(key, lastSeq);
+            lock (_wakeGate) _drafts.Remove(key);
             return null;
         }
-        lock (_wakeGate) _draft = draft;
+        lock (_wakeGate) _drafts[key] = draft;
         return draft;
     }
 
@@ -1635,15 +1774,16 @@ public class ArchAgentService : IArchWakeSource
     /// pended): the watermark moves past the covered events and <c>arch.wake</c>
     /// is published so the board, the sounds and a future fleet arch see the
     /// middle layer act.</summary>
-    public void CommitWake(string? sessionId)
+    public void CommitWake(string? convId, string? sessionId)
     {
+        var key = KeyOrDefault(convId);
         WakeDraft? draft;
-        lock (_wakeGate) { draft = _draft; _draft = null; }
+        lock (_wakeGate) { _drafts.Remove(key, out draft); }
         if (draft is null) return;
-        _state.SetWatermark(draft.UpTo);
+        _state.SetWatermark(key, draft.UpTo);
         _feed.Publish("arch.wake",
-            source: new { repoId = ReservedId, repoName = DisplayName },
-            data: new { after = draft.After, upTo = draft.UpTo, repoIds = draft.RepoIds, sessionId });
+            source: new { repoId = key, repoName = NameOf(key) },
+            data: new { after = draft.After, upTo = draft.UpTo, repoIds = draft.RepoIds, sessionId, conversation = key });
     }
 
     /// <summary>The managed-set key of an event: the bare repo id on the self

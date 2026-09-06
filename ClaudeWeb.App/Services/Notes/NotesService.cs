@@ -50,7 +50,14 @@ public class NotesService
     // (plans/ideas-active-section.md). All three are tolerant of older notes that
     // lack the field — System.Text.Json fills the constructor parameter with its
     // default (null / 0 / false), so no migration is needed.
-    public sealed record Note(string Id, string Text, string? Project, long CreatedAt, long UpdatedAt, int Priority, bool Active);
+    // Number (openspec stable-handles): the running number shown as "#12" — allocated
+    // on creation, backfilled once for older notes, never changed. 0 = not yet assigned
+    // (a note from a store or a sync peer that predates numbers; backfilled on load/merge).
+    // ConsumedByTaskId (openspec ideas-consume-on-promotion): non-null = this idea was
+    // promoted into that task graph node and is CONSUMED — hidden from the default Ideas
+    // list (all views and list_ideas) but kept on the board so it can be restored. Null
+    // on ideas that were never promoted, and on stores/sync peers that predate the field.
+    public sealed record Note(string Id, string Text, string? Project, long CreatedAt, long UpdatedAt, int Priority, bool Active, int Number = 0, string? ConsumedByTaskId = null);
 
     /// <summary>A recorded deletion, kept so a delete on one harness doesn't
     /// resurrect from another during sync (openspec ideas-drive-sync). Pruned
@@ -74,10 +81,14 @@ public class NotesService
         public Dictionary<string, List<Note>>? Notes { get; set; }
     }
 
-    /// <summary>All ideas, newest first.</summary>
-    public List<Note> List()
+    /// <summary>All ideas, newest first. Consumed ideas (promoted into a task —
+    /// openspec ideas-consume-on-promotion) are excluded unless
+    /// <paramref name="includeConsumed"/> is true.</summary>
+    public List<Note> List(bool includeConsumed = false)
     {
-        lock (_gate) return _ideas.AsEnumerable().Reverse().ToList();
+        lock (_gate) return _ideas.AsEnumerable().Reverse()
+            .Where(n => includeConsumed || n.ConsumedByTaskId is null)
+            .ToList();
     }
 
     /// <summary>Adds an idea. Text is trimmed and length-capped; empty text is rejected (null return). Project is optional; priority is clamped to 0–5; active defaults to false.</summary>
@@ -85,9 +96,11 @@ public class NotesService
     {
         var clean = Clean(text);
         if (clean is null) return null;
-        var note = new Note(Guid.NewGuid().ToString("N"), clean, CleanProject(project), now, now, ClampPriority(priority), active);
+        Note note;
         lock (_gate)
         {
+            // The next running number, for life (openspec stable-handles).
+            note = new Note(Guid.NewGuid().ToString("N"), clean, CleanProject(project), now, now, ClampPriority(priority), active, NextNumber());
             _ideas.Add(note);
             Save();
         }
@@ -132,6 +145,75 @@ public class NotesService
         }
         if (removed) { _logger.Info($"[NOTES] Deleted idea {id}"); RaiseChanged(); }
         return removed;
+    }
+
+    // ---- consumption (openspec ideas-consume-on-promotion) -------------------------
+
+    /// <summary>Marks an idea CONSUMED by a task graph node: it leaves the Ideas
+    /// list (all views and list_ideas) but is kept on the board, linked to the task.
+    /// Also clears Active — a consumed idea is a task now, not current idea-work.
+    /// No-op (null return) if the id is unknown; re-consuming by a different task
+    /// just re-points the link. Bumps UpdatedAt so the consumption wins LWW sync.</summary>
+    public Note? Consume(string ideaId, string taskId, long now)
+    {
+        if (string.IsNullOrWhiteSpace(taskId)) return null;
+        Note updated;
+        lock (_gate)
+        {
+            var i = _ideas.FindIndex(n => n.Id == ideaId);
+            if (i < 0) return null;
+            if (_ideas[i].ConsumedByTaskId == taskId) return _ideas[i]; // idempotent, no churn
+            updated = _ideas[i] with { ConsumedByTaskId = taskId, Active = false, UpdatedAt = now };
+            _ideas[i] = updated;
+            Save();
+        }
+        _logger.Info($"[NOTES] Idea {ideaId} consumed by task {taskId}");
+        RaiseChanged();
+        return updated;
+    }
+
+    /// <summary>Restores a consumed idea back to the list as INACTIVE, keeping its
+    /// original text/project/priority (openspec ideas-consume-on-promotion): called
+    /// when the task it became is DELETED. Only restores when the idea is consumed
+    /// by exactly <paramref name="taskId"/> (so deleting one task never frees an idea
+    /// linked to another). No-op (null return) otherwise.</summary>
+    public Note? Unconsume(string ideaId, string taskId, long now)
+    {
+        Note updated;
+        lock (_gate)
+        {
+            var i = _ideas.FindIndex(n => n.Id == ideaId);
+            if (i < 0 || _ideas[i].ConsumedByTaskId is null || _ideas[i].ConsumedByTaskId != taskId) return null;
+            updated = _ideas[i] with { ConsumedByTaskId = null, Active = false, UpdatedAt = now };
+            _ideas[i] = updated;
+            Save();
+        }
+        _logger.Info($"[NOTES] Idea {ideaId} restored (task {taskId} deleted)");
+        RaiseChanged();
+        return updated;
+    }
+
+    /// <summary>Migration (openspec ideas-consume-on-promotion): mark every idea that
+    /// already has a task pointing at it (task.ideaId) as consumed by that task, unless
+    /// it is already consumed. Idempotent; returns how many ideas were newly consumed.
+    /// Raises Changed once when anything changed so the state replicates to sync peers.</summary>
+    public int ReconcileConsumed(IReadOnlyDictionary<string, string> ideaIdToTaskId, long now)
+    {
+        int changed = 0;
+        lock (_gate)
+        {
+            for (var i = 0; i < _ideas.Count; i++)
+            {
+                var n = _ideas[i];
+                if (n.ConsumedByTaskId is not null) continue;
+                if (!ideaIdToTaskId.TryGetValue(n.Id, out var taskId) || string.IsNullOrWhiteSpace(taskId)) continue;
+                _ideas[i] = n with { ConsumedByTaskId = taskId, Active = false, UpdatedAt = now };
+                changed++;
+            }
+            if (changed > 0) Save();
+        }
+        if (changed > 0) { _logger.Info($"[NOTES] Migrated {changed} idea(s) to consumed (task already linked)"); RaiseChanged(); }
+        return changed;
     }
 
     /// <summary>Copy of the whole board (ideas + tombstones) for the sync layer.</summary>
@@ -184,10 +266,52 @@ public class NotesService
             {
                 _ideas = merged;
                 _tombstones = mergedTombs;
+                BackfillNumbers(); // remote-only notes from a peer that predates numbers
                 Save();
                 _logger.Info($"[NOTES] Merged remote board ({_ideas.Count} idea(s), {_tombstones.Count} tombstone(s))");
             }
             return new MergeOutcome(localChanged, remoteStale);
+        }
+    }
+
+    // ---- handles (openspec stable-handles) -----------------------------------------
+
+    // Caller holds _gate. The next free running number.
+    private int NextNumber() => (_ideas.Count == 0 ? 0 : _ideas.Max(n => n.Number)) + 1;
+
+    // Caller holds _gate. Numbers every unnumbered note in CreatedAt order, after the
+    // highest number already taken; numbers already assigned are never touched.
+    private bool BackfillNumbers()
+    {
+        if (_ideas.All(n => n.Number > 0)) return false;
+        var next = NextNumber();
+        foreach (var n in _ideas.Where(n => n.Number <= 0).OrderBy(n => n.CreatedAt).ToList())
+        {
+            var i = _ideas.FindIndex(x => x.Id == n.Id);
+            _ideas[i] = n with { Number = next++ };
+        }
+        return true;
+    }
+
+    /// <summary>An idea by "#12" / "12" (its number) or by id. Ambiguity (two notes
+    /// with one number, possible only after a cross-box merge) is reported, not guessed.</summary>
+    public (Note? Note, string? Error) FindByRef(string? reference)
+    {
+        if (string.IsNullOrWhiteSpace(reference)) return (null, "an idea reference is required (#12 or the id)");
+        var r = reference.Trim();
+        lock (_gate)
+        {
+            var byId = _ideas.FirstOrDefault(n => n.Id == r);
+            if (byId is not null) return (byId, null);
+            if (Handles.ParseIdeaRef(r) is int num)
+            {
+                var hits = _ideas.Where(n => n.Number == num).ToList();
+                if (hits.Count == 1) return (hits[0], null);
+                if (hits.Count > 1)
+                    return (null, $"#{num} is ambiguous ({hits.Count} ideas carry it): {string.Join(" | ", hits.Select(h => $"{h.Id} \"{Handles.Brief(h.Text, 40)}\""))}");
+                return (null, $"no idea #{num}");
+            }
+            return (null, $"no idea \"{r}\" (use #<number> from list_ideas or the id)");
         }
     }
 
@@ -228,6 +352,9 @@ public class NotesService
             if (store.Ideas != null)
             {
                 _ideas = store.Ideas;
+                // One-time backfill (openspec stable-handles): ideas from before numbers
+                // get theirs in creation order; numbers already there are never touched.
+                if (BackfillNumbers()) { Save(); _logger.Info("[NOTES] Backfilled idea numbers"); }
             }
             else if (store.Notes is { Count: > 0 })
             {
