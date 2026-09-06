@@ -344,6 +344,17 @@ public class ArchController : ControllerBase
         return Ok(_arch.FleetStatus());
     }
 
+    /// <summary>On-demand scoreboard for one fleet machine (openspec fleet-status-panels):
+    /// self when <c>sourceId</c> is omitted/self, else a peer relayed over the fleet client.
+    /// NOT part of the periodic fleet poll — the Scoreboard tab calls this only when opened
+    /// (and on its Refresh button); answers are cached a few minutes.</summary>
+    [HttpGet("fleet/scoreboard")]
+    public IActionResult FleetScoreboard([FromQuery] string? sourceId, [FromQuery] string? window)
+    {
+        _logger.CountRequest();
+        return Ok(_arch.FleetScoreboard(sourceId, window));
+    }
+
     public sealed record FleetUpgradeRequest(string? SourceId, string? Ref);
 
     /// <summary>Operator-triggered peer upgrade from the Fleet card (openspec

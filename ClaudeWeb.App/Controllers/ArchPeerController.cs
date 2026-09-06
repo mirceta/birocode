@@ -117,4 +117,15 @@ public class ArchPeerController : ControllerBase
         if (job is null) return NotFound(new { ok = false, status = "unknown", detail = $"no upgrade job {id}" });
         return Ok(new { ok = true, status = job.State, detail = job.Detail, data = job });
     }
+
+    /// <summary>This harness's scoreboard/analytics for a window, for a fleet hub's Fleet
+    /// Status Scoreboard tab (openspec fleet-status-panels). Fetched on demand only — never
+    /// on the fleet poll. <c>data</c> is the analytics payload the Scoreboard renders.</summary>
+    [HttpGet("scoreboard")]
+    public IActionResult Scoreboard([FromQuery] string? window)
+    {
+        _logger.CountRequest();
+        var o = _arch.PeerScoreboard(window);
+        return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
+    }
 }

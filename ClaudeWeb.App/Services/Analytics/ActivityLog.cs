@@ -23,10 +23,12 @@ public class ActivityLog
     private readonly string _path;
     private readonly object _gate = new();
 
-    public ActivityLog(Logger logger)
+    /// <param name="dirOverride">Test seam (openspec fleet-status-panels benchmark): a data
+    /// dir other than <see cref="AppPaths.DataDir"/>; DI leaves it null.</param>
+    public ActivityLog(Logger logger, string? dirOverride = null)
     {
         _logger = logger;
-        var dir = AppPaths.DataDir;
+        var dir = dirOverride ?? AppPaths.DataDir;
         Directory.CreateDirectory(dir);
         _path = Path.Combine(dir, "activity.jsonl");
     }

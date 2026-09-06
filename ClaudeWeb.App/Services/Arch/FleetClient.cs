@@ -87,7 +87,10 @@ public class FleetClient
         [property: JsonPropertyName("repos")] List<PeerRepo>? Repos,
         [property: JsonPropertyName("managedRepoIds")] List<string>? ManagedRepoIds = null,
         // Receiving-side opt-in for fleet upgrades (openspec arch-peer-upgrades); absent = off.
-        [property: JsonPropertyName("acceptsUpgrades")] bool AcceptsUpgrades = false);
+        [property: JsonPropertyName("acceptsUpgrades")] bool AcceptsUpgrades = false,
+        // Per-machine Overview for Fleet Status (openspec fleet-status-panels): null on a
+        // build that predates the field — the hub then surfaces "n/a" per field, not an error.
+        [property: JsonPropertyName("overview")] FleetOverview? Overview = null);
 
     /// <summary>What we last learned about a peer: transport status + the describe
     /// when it answered. <see cref="At"/> is when it was taken (unix ms).</summary>
@@ -246,6 +249,13 @@ public class FleetClient
 
     public ArchAgentService.ToolOutcome UpgradeStatus(string sourceId, string jobId) =>
         Get(sourceId, $"{PeerPath}/upgrade/{Uri.EscapeDataString(jobId)}");
+
+    /// <summary>A peer's scoreboard/analytics for a window (openspec fleet-status-panels),
+    /// fetched ON DEMAND — never on the fleet poll (the analytics fold re-reads the whole
+    /// activity ledger). A peer without the route answers 404 → <see cref="StatusNoPeerApi"/>.
+    /// The <c>data</c> of the outcome is the analytics payload the Scoreboard renders.</summary>
+    public ArchAgentService.ToolOutcome Scoreboard(string sourceId, string? window) =>
+        Get(sourceId, PeerPath + "/scoreboard" + (string.IsNullOrWhiteSpace(window) ? "" : $"?window={Uri.EscapeDataString(window)}"));
 
     private ArchAgentService.ToolOutcome Post(string sourceId, string path, object body)
     {

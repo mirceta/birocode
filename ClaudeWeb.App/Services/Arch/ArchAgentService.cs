@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Diagnostics;
 using System.Text.Json;
 using ClaudeWeb.Models;
 using ClaudeWeb.Services.Accounts;
@@ -102,6 +103,8 @@ public class ArchAgentService : IArchWakeSource
     private readonly TaskGraph.TaskGraphService _graph;
     private readonly Notes.NotesService _notes;
     private readonly LoopRecipeStore _recipes;
+    private readonly FleetOverviewProvider _overview;
+    private readonly Analytics.AnalyticsService _analytics;
     private readonly Logger _logger;
 
     // Per-process credential for the MCP endpoint: only a CLI run this harness
@@ -122,11 +125,14 @@ public class ArchAgentService : IArchWakeSource
         SessionService sessions, DockRegistry dock, AutopilotAuditLog audit, AutopilotConfigStore config,
         LoopConfigStore loops, CollectorService collector, HarnessEventFeed feed, ToolsConfigStore tools,
         ArchStateStore state, AppConfig appConfig, FleetClient fleet, AutopilotGate gate, Logger logger,
-        PeerUpgradeService upgrades, TaskGraph.TaskGraphService graph, Notes.NotesService notes, LoopRecipeStore recipes)
+        PeerUpgradeService upgrades, TaskGraph.TaskGraphService graph, Notes.NotesService notes, LoopRecipeStore recipes,
+        FleetOverviewProvider overview, Analytics.AnalyticsService analytics)
     {
         _recipes = recipes;
         _graph = graph;
         _notes = notes;
+        _overview = overview;
+        _analytics = analytics;
         _fleet = fleet;
         _upgrades = upgrades;
         _gate = gate;
@@ -863,6 +869,7 @@ public class ArchAgentService : IArchWakeSource
                 reachable = true, status = FleetClient.StatusOk, detail = (string?)null,
                 version = BuildVersion, behind = false, acceptsSends = AcceptFleetSends, acceptsUpgrades = AcceptFleetUpgrades,
                 gateOpen = _gate.Enabled, allowSends = true, managedCount = managed.Count,
+                overview = _overview.Current(),
                 agents = local.Select(a => (object)new
                 {
                     handle = a.Label(SelfLabel), key = a.Key, repoId = a.RepoId, name = a.Name, remoteUrl = a.RemoteUrl, branch = a.Branch, defaultBranch = a.DefaultBranch,
@@ -887,6 +894,8 @@ public class ArchAgentService : IArchWakeSource
                 acceptsSends = snap.Info?.AcceptsSends ?? false, acceptsUpgrades = snap.Info?.AcceptsUpgrades ?? false,
                 gateOpen = snap.Info?.GateOpen ?? false, allowSends = src.AllowSends,
                 managedCount = snap.Info?.ManagedRepoIds?.Count ?? repos.Count(r => r.Managed == true),
+                // Null when the peer predates the field (openspec fleet-status-panels) → the UI shows "n/a".
+                overview = snap.Info?.Overview,
                 agents = repos.Select(r => (object)new
                 {
                     handle = Handles.AgentLabel(src.Label, PeerHandles(snap).GetValueOrDefault(r.RepoId, Handles.Slug(r.Name))), key = ArchStateStore.FleetKey(src.Id, r.RepoId), repoId = r.RepoId, name = r.Name, remoteUrl = r.RemoteUrl ?? "",
@@ -898,6 +907,50 @@ public class ArchAgentService : IArchWakeSource
             });
         }
         return new { at = Now(), hubVersion = BuildVersion, machines };
+    }
+
+    // Fleet Scoreboard is fetched ON DEMAND (openspec fleet-status-panels), never on the
+    // periodic fleet poll: the analytics fold re-reads the whole activity ledger, so it
+    // must not run per-peer every ~5 s. Relayed answers are cached briefly so a viewer
+    // flipping windows / re-opening the tab does not re-hit a peer each time.
+    private static readonly TimeSpan ScoreboardTtl = TimeSpan.FromMinutes(3);
+    private readonly Dictionary<string, (object Payload, DateTime AtUtc)> _scoreboardCache = new(StringComparer.Ordinal);
+
+    /// <summary>This machine's scoreboard for a window (openspec fleet-status-panels) — the
+    /// peer-side producer behind <c>GET /api/arch/peer/scoreboard</c>. Times the fold and
+    /// logs ms + payload bytes so the cost is provable in the log; the data is the same
+    /// analytics payload the local Scoreboard renders.</summary>
+    public ToolOutcome PeerScoreboard(string? window)
+    {
+        var sw = Stopwatch.StartNew();
+        var data = _analytics.Compute(window);
+        sw.Stop();
+        var bytes = System.Text.Json.JsonSerializer.Serialize(data).Length;
+        _logger.Info($"[FLEET] scoreboard fold window={window ?? "all"} took {sw.ElapsedMilliseconds} ms, {bytes} bytes");
+        return new ToolOutcome(true, "ok", $"{sw.ElapsedMilliseconds} ms, {bytes} bytes", data);
+    }
+
+    /// <summary>The hub relay behind <c>GET /api/arch/fleet/scoreboard</c>: this box's own
+    /// scoreboard for <paramref name="sourceId"/> = self/null, else a peer's, fetched over the
+    /// fleet client and cached for <see cref="ScoreboardTtl"/>. Returns a plain object the
+    /// Fleet Status Scoreboard tab renders; a dark/old peer degrades to <c>ok:false</c> with
+    /// a reason, never an exception.</summary>
+    public object FleetScoreboard(string? sourceId, string? window)
+    {
+        var win = window switch { "today" => "today", "7d" => "7d", _ => "all" };
+        var self = string.IsNullOrWhiteSpace(sourceId) || sourceId == CollectorService.SelfId;
+        var key = $"{(self ? "self" : sourceId)}|{win}";
+        lock (_scoreboardCache)
+            if (_scoreboardCache.TryGetValue(key, out var hit) && DateTime.UtcNow - hit.AtUtc < ScoreboardTtl)
+                return hit.Payload;
+
+        var o = self ? PeerScoreboard(win) : _fleet.Scoreboard(sourceId!, win);
+        object payload = o.Ok
+            ? new { ok = true, self, sourceId = self ? CollectorService.SelfId : sourceId, window = win, at = Now(), data = (object?)o.Data }
+            : new { ok = false, self, sourceId, window = win, at = Now(), error = $"{o.Status}: {o.Detail}" };
+        // Only a successful answer is cached (a transient dark peer should be retried).
+        if (o.Ok) lock (_scoreboardCache) _scoreboardCache[key] = (payload, DateTime.UtcNow);
+        return payload;
     }
 
     /// <summary>"On main": the branch is the repo's default branch — the agent is free to
@@ -938,6 +991,9 @@ public class ArchAgentService : IArchWakeSource
             acceptsUpgrades = AcceptFleetUpgrades,
             gateOpen = _gate.Enabled,
             managedRepoIds = managed,
+            // Per-machine Overview for Fleet Status (openspec fleet-status-panels): cheap,
+            // cached, non-blocking — the hub reads it off this describe for every peer.
+            overview = _overview.Current(),
             repos = PeerAgents().Select(a => new
             {
                 repoId = a.RepoId, name = a.Name, remoteUrl = a.RemoteUrl, branch = a.Branch, defaultBranch = a.DefaultBranch,
