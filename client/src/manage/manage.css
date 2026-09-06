@@ -136,6 +136,10 @@ html, body, #root { height: 100%; margin: 0; }
 /* "+" new arch conversation (openspec arch-conversations) */
 .mg__tab--new { padding: 4px 9px; font-weight: 700; }
 
+/* Stale board work surfaced per machine (openspec kanban-lifecycle-columns) */
+.fs__stale { display: flex; flex-direction: column; gap: 2px; padding: 4px 10px; }
+.fs__stale-row { color: #e5734b; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* Fleet Status per-machine view tabs (openspec fleet-status-panels) */
 .fs__tabs { display: flex; gap: 4px; margin: 6px 0 2px; }
 .fs__tab { background: transparent; border: 1px solid var(--mg-border, #2a2f3f); color: var(--mg-muted, #9aa3b2);
