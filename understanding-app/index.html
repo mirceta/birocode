@@ -1,74 +1,101 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding: the Tasks agent — from a long prompt to linked tasks</title>
-<link rel="stylesheet" href="./app.css" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Why the LAN can't reach this harness</title>
+<link rel="stylesheet" href="./app.css">
 </head>
 <body>
-<header class="top">
-  <h1>🗂 The Tasks agent</h1>
-  <p class="sub">How a long prompt in the Ideas composer becomes ordered, dependency-linked tasks on the Task graph — and why the agent can do nothing else.</p>
-  <div class="controls">
-    <button id="play" class="btn btn--primary">▶ Play the flow</button>
-    <button id="reset" class="btn">Reset</button>
-    <label class="speed">speed <input id="speed" type="range" min="1" max="3" step="1" value="2" /></label>
-  </div>
+<header>
+  <h1>Why the LAN can&rsquo;t reach this harness</h1>
+  <p class="sub">
+    Diagnostic run on <strong>SQLBIROKRAT2</strong> (192.168.0.211) &mdash; 2026-09-06, after
+    deploying <code>553fb73</code> to <code>:5099</code>. The harness is healthy on localhost
+    but unreachable from any other machine. Click a stage to see what was actually measured.
+  </p>
 </header>
 
 <main>
-  <section class="flow" id="flow" aria-label="The five stages">
-    <!-- stages are rendered by app.js -->
+  <section class="panel">
+    <h2>1. The journey of a LAN request</h2>
+    <p class="hint">Four things must all say yes. Exactly one says no.</p>
+
+    <div class="journey" id="journey"><!-- built by app.js --></div>
+
+    <div class="detail" id="detail"><!-- filled on click --></div>
   </section>
 
-  <section class="detail" id="detail">
-    <h2 id="detail-title">Click a stage</h2>
-    <div id="detail-body" class="detail__body">
-      <p>Each box is one hop of the same message. Press <b>Play</b> to watch a prompt travel through, or click a box to read what happens there and where it lives in the code.</p>
-    </div>
+  <section class="panel">
+    <h2>2. The installer&rsquo;s checks &mdash; and the two that lied</h2>
+    <p class="hint">
+      <code>installer/Services/DeployerService.cs</code> has a 9-step deploy verifier.
+      Run headlessly against this box, it reported a clean bill of health &mdash; wrongly.
+      Toggle to see why.
+    </p>
+    <p class="hint">
+      <strong>Fixed 2026-09-06.</strong> Step 3 now reads the listening socket instead of
+      HTTP-probing the box&rsquo;s own IP, and says out loud that it proves the bind and not
+      reachability. Step 6 now requires a matching rule to be genuinely unscoped
+      (<code>Program = Any</code> <em>and</em> no AppContainer package) or scoped to
+      <code>ClaudeWeb.exe</code> &mdash; it correctly reports <code>CLOSED</code> here.
+    </p>
+    <label class="toggle">
+      <input type="checkbox" id="showTruth"> Show what each check <em>actually</em> proves
+    </label>
+    <table class="checks" id="checks"></table>
   </section>
 
-  <section class="fence">
-    <h2>The fence: why this agent is safe to unleash</h2>
-    <div class="fence__grid">
-      <div class="card">
-        <h3>Only eight tools</h3>
-        <p>Its <code>--mcp-config</code> lists one server: <code>tasks</code> at <code>POST /api/tasks/mcp</code>. The tool list is <code>list_ideas · create_idea · update_idea · list_tasks · create_task · update_task · link_tasks · delete_task</code>. Nothing reads or writes a repository.</p>
-      </div>
-      <div class="card">
-        <h3>Built-ins disallowed</h3>
-        <p>The run passes the arch agent's <code>--disallowedTools</code> list (Edit, Write, Bash, Read, Glob, Grep, WebFetch, …) and its home folder's <code>.claude/settings.json</code> denies <code>Read</code> under every registered repo and the data dir.</p>
-      </div>
-      <div class="card">
-        <h3>Bearer token, not the password</h3>
-        <p>The MCP route is exempt from the password middleware. Instead the harness mints a 256-bit token per process, writes it into the run's MCP config, and compares it in constant time. Wrong token → 401, no tool runs.</p>
-      </div>
-      <div class="card">
-        <h3>Everything audited</h3>
-        <p>Every tool call writes one row to the autopilot action audit (kind <code>tasks</code>, outcome <code>tasks-tool</code>, phase = tool name). The Tools lane counts them per tool.</p>
-      </div>
-      <div class="card">
-        <h3>Cycles cannot happen</h3>
-        <p><code>link_tasks</code> is a thin wrapper over <code>TaskGraphService.AddEdge</code>, which refuses missing nodes, self-loops, duplicates and cycles. The refusal comes back as an <code>isError</code> tool result with the reason, so the model fixes its order instead of retrying.</p>
-      </div>
-      <div class="card">
-        <h3>No second store</h3>
-        <p>The tools call the same <code>NotesService</code> and <code>TaskGraphService</code> the Ideas tab uses. Agent-created entries sync, merge and tombstone exactly like typed ones.</p>
-      </div>
-    </div>
+  <section class="panel">
+    <h2>3. Two different boxes</h2>
+    <p class="hint">
+      A trap worth naming: <code>next5.birokrat.si/api/health</code> returns <code>200</code>,
+      which looks like proof this box is reachable. It isn&rsquo;t &mdash; it is a
+      <em>different machine</em>. The health body gives it away.
+    </p>
+    <div class="boxes" id="boxes"></div>
   </section>
 
-  <section class="graph-demo">
-    <h2>What lands on the graph</h2>
-    <p class="muted">The fixture prompt from the goal, as the agent typically splits it. Arrows read "depends on". Nodes are auto-placed in rows of four (the second row starts when the first holds four).</p>
-    <svg id="graph" viewBox="0 0 980 300" role="img" aria-label="Example task graph"></svg>
+  <section class="panel">
+    <h2>4. The fix</h2>
+    <p class="hint">
+      One inbound rule. It needs Administrator &mdash; the agent session is not elevated,
+      so a human runs this at the host PC.
+    </p>
+    <pre class="fix"><code>New-NetFirewallRule -DisplayName 'Claude Web backend (5099)' `
+  -Direction Inbound -Protocol TCP -LocalPort 5099 `
+  -Action Allow -Profile Private `
+  -RemoteAddress 192.168.0.0/24</code></pre>
+    <p class="warn">
+      <strong>Before you open it:</strong> this box&rsquo;s access code is still the default
+      <code>changeme</code>, and <code>LanBypassCidrs</code> is <code>192.168.0.0/24</code> &mdash;
+      so every device on the subnet clears the IP gate and only that default code stands
+      between them and <code>/api/*</code>.
+    </p>
+    <p class="warn">
+      Change it with the <strong>&ldquo;Set access code&rdquo; button on the harness&rsquo;s desktop
+      window</strong> &mdash; that is the only sanctioned setter. OpenSpec
+      <code>add-desktop-access-code</code> deliberately deleted the web endpoint
+      (<code>POST /api/auth/password</code>), so there is no phone/web path by design.
+      <br><br>
+      Editing <code>appsettings.json</code> does <em>nothing</em>: <code>AuthService.LoadOrSeed</code>
+      seeds <code>%APPDATA%\ClaudeWeb\auth.json</code> (a PBKDF2 hash) on first run and ignores the
+      config value ever after. The config key is a first-run seed, not the live secret &mdash; which
+      is also why a <em>cold</em> deploy onto a fresh box silently starts life on <code>changeme</code>.
+    </p>
   </section>
 </main>
 
-<footer class="foot">
-  <p>Code: <code>ClaudeWeb.App/Services/Tasks/</code> (TasksToolbox, TasksMcpServer, TasksAgentService, TasksStateStore), <code>Controllers/TasksController.cs</code>, <code>client/src/pages/Tasks.jsx</code>, <code>client/src/components/ideas/IdeasPanel.jsx</code>. Spec: <code>openspec/changes/tasks-agent/</code>.</p>
+<footer>
+  <p>
+    Sources: <code>docs/networking/gates.md</code> &middot;
+    <code>docs/networking/troubleshooting.md</code> &middot;
+    <code>ClaudeWeb.App/Services/Hosting/EmbeddedApi.cs</code> &middot;
+    <code>ClaudeWeb.App/Services/IpFilter/LanBypass.cs</code> &middot;
+    <code>installer/Services/DeployerService.cs</code>
+  </p>
 </footer>
+
 <script src="./app.js"></script>
 </body>
 </html>

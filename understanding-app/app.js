@@ -1,167 +1,164 @@
-// Understanding app: the Tasks agent flow (openspec tasks-agent). Build-less,
-// relative URLs only — served by the harness under /api/localview/<repo>/app/understanding/.
-(function () {
-  const STAGES = [
-    {
-      icon: '💡', name: 'Ideas composer', where: 'client/src/components/ideas/IdeasPanel.jsx',
-      log: 'POST /api/tasks/send { text: "Break the following into tasks…\\n\\n<draft>" }',
-      body: `
-<p>The operator pastes a long prompt into the Ideas composer and clicks <b>🗂 Break into tasks</b> (Advanced mode, feature <code>ideasBreakUp</code>).</p>
-<ul>
-  <li>The draft is wrapped in one instruction line and posted to <code>/api/tasks/send</code>.</li>
-  <li>On success the draft is cleared, the panel switches to the <b>Task graph</b> section and shows "The Tasks agent is working…".</li>
-  <li>On a 409 (the agent is mid-turn) the panel shows the reason and the draft stays put.</li>
-  <li>The panel then polls <code>GET /api/tasks</code> every 2 s until <code>session.run.status</code> is no longer <code>running</code>, bumps <code>refreshKey</code> on <code>TaskGraphPanel</code>, and the board reloads — no page refresh.</li>
-</ul>`,
-    },
-    {
-      icon: '🗂', name: 'Tasks agent turn', where: 'Services/Tasks/TasksAgentService.cs · TasksController.cs',
-      log: 'claude -p … --mcp-config {tasks: http://127.0.0.1:5099/api/tasks/mcp, Bearer <token>} --disallowedTools …',
-      body: `
-<p><code>TasksAgentService.Send</code> takes the <code>@tasks</code> run slot (409 if busy), ensures the home folder, and launches one Claude turn through the same <code>CliRunnerService</code> every chat uses.</p>
-<ul>
-  <li><b>Home</b>: <code>TasksHomeDir</code> from appsettings, else a <code>tasks-home</code> sibling of the harness repo. It holds <code>CLAUDE.md</code> (the role prompt, versioned <code>tasks-role v1</code>) and <code>.claude/settings.json</code> (the deny fence).</li>
-  <li><b>Session</b>: the last completed session id is pinned in <code>tasks-agent.json</code>, so the conversation continues across restarts.</li>
-  <li><b>Live view</b>: the run emits <code>user / thinking / tool / token</code> events; the Tasks page and the multiplexed stream hub render them as the turn runs.</li>
-</ul>
-<p>The role prompt tells it: read the whole message, <code>list_tasks</code> first, create every task (verb-phrase title, definition of done in the note), then link dependencies, then reply with a numbered summary.</p>`,
-    },
-    {
-      icon: '🔌', name: 'Tasks MCP (JSON-RPC)', where: 'Services/Tasks/TasksMcpServer.cs · POST /api/tasks/mcp',
-      log: 'tools/call create_task {title:"Add the Tasks MCP server"} → {ok:true,status:"created",data:{id:…}}',
-      body: `
-<p>The CLI talks MCP over HTTP to the harness itself. The server is stateless: <code>initialize</code>, <code>ping</code>, <code>tools/list</code>, <code>tools/call</code>; notifications get 202; <code>GET</code> is 405.</p>
-<ul>
-  <li>Every request carries <code>Authorization: Bearer &lt;per-process token&gt;</code>; the controller checks it in constant time and answers 401 otherwise. The password middleware exempts exactly this path.</li>
-  <li>Tool results are JSON text: <code>{ ok, status, detail, data }</code>. A refused call (bad id, cycle, empty title) is <code>ok:false</code> and <code>isError:true</code>.</li>
-</ul>
-<pre>list_ideas · create_idea(text, project?, priority?, active?) · update_idea(id, …partial)
-list_tasks · create_task(title, note?, repoId?) · update_task(id, …partial, status?)
-link_tasks(source, target)   // source depends on target
-delete_task(id)</pre>`,
-    },
-    {
-      icon: '🧠', name: 'Toolbox → services', where: 'Services/Tasks/TasksToolbox.cs → NotesService · TaskGraphService · AutopilotAuditLog',
-      log: 'TaskGraphService.AddNode(title, note, repoId, null, x, y) · AddEdge(source, target) → EdgeError.None | Cycle …',
-      body: `
-<p><code>TasksToolbox</code> is the only thing the MCP server calls. It has no CLI, no HTTP and no runner, so the unit tests build it over temp-dir stores.</p>
-<ul>
-  <li><b>No second store</b>: it calls the same services the Ideas tab uses, so entries sync, merge and tombstone like typed ones.</li>
-  <li><b>Auto-placement</b>: a new node goes on the current bottom row until that row holds four, then a new row starts 140 px lower. A batch lands readable.</li>
-  <li><b>Partial updates</b> read the current note/task first, so an omitted field is kept (the REST PATCH overwrites; the tool must not surprise the model).</li>
-  <li><b>Cycle safety</b> is inherited: <code>AddEdge</code> refuses <code>MissingNode / SelfLoop / Duplicate / Cycle</code>; the toolbox maps that to status <code>missing-node / self-loop / duplicate / cycle</code>.</li>
-  <li><b>Audit</b>: one row per call — kind <code>tasks</code>, outcome <code>tasks-tool</code>, phase = tool name, message = a short summary.</li>
-</ul>`,
-    },
-    {
-      icon: '🧩', name: 'Task graph panel', where: 'client/src/components/taskgraph/TaskGraphPanel.jsx · GET /api/taskgraph',
-      log: 'refreshKey++ → load() → nodes + edges re-read → new tasks appear, actionable ones highlighted',
-      body: `
-<p>When the run ends the Ideas panel bumps <code>refreshKey</code>; the board re-reads <code>/api/taskgraph</code> and renders the new nodes and edges where the agent placed them.</p>
-<ul>
-  <li>Nodes whose dependencies are all done are highlighted as actionable; selecting a node lights the chain it unblocks.</li>
-  <li>Positions persist on drag-stop, so the operator can rearrange the agent's rows.</li>
-  <li>The same board syncs to other harnesses over the ideas shared-store wire when sync is on.</li>
-</ul>
-<p>The Tasks page (studio tab <code>/studio/tasks</code>, and the <b>Tasks</b> tab of the Management App the dashboard embeds) shows the conversation and, in its Tools lane, the eight tools with their audit-derived call counts.</p>`,
-    },
-  ];
+// Understanding app — "Why the LAN can't reach this harness".
+// Rolling latest (CLAUDE.md convention): overwritten whenever the explanation changes.
+// Build-less, self-contained, relative URLs only — it is served under
+// /api/localview/<repo>/app/understanding/, so a leading slash would escape the prefix.
 
-  const flow = document.getElementById('flow');
-  const title = document.getElementById('detail-title');
-  const body = document.getElementById('detail-body');
-  const playBtn = document.getElementById('play');
-  const resetBtn = document.getElementById('reset');
-  const speed = document.getElementById('speed');
-
-  const packet = document.createElement('div');
-  packet.className = 'packet packet--hidden';
-  packet.textContent = '📨 prompt';
-  flow.appendChild(packet);
-
-  const els = STAGES.map((s, i) => {
-    const el = document.createElement('div');
-    el.className = 'stage';
-    el.setAttribute('data-stage', String(i + 1));
-    el.innerHTML = `<span class="stage__n">${i + 1}</span><div class="stage__icon">${s.icon}</div>
-      <div class="stage__name">${s.name}</div><div class="stage__where">${s.where}</div>
-      <div class="stage__log"></div><span class="stage__arrow">➜</span>`;
-    el.addEventListener('click', () => select(i));
-    flow.appendChild(el);
-    return el;
-  });
-
-  function select(i) {
-    els.forEach((e, j) => e.classList.toggle('stage--on', i === j));
-    title.textContent = `${i + 1}. ${STAGES[i].name}`;
-    body.innerHTML = STAGES[i].body;
+// ---------------------------------------------------------------- stage data
+// Every value below was measured on SQLBIROKRAT2 on 2026-09-06, not assumed.
+const STAGES = [
+  {
+    id: 'fw',
+    n: 'Hop 1',
+    t: 'Windows Firewall',
+    v: 'FIXED',
+    state: 'ok',
+    heading: 'This was the blocker. An inbound rule was added on 2026-09-06 and the port is now open.',
+    body: [
+      '<strong>The fix:</strong> one inbound rule, scoped to the Private profile and to <code>192.168.0.0/24</code> so it mirrors <code>LanBypassCidrs</code> rather than opening the port on every network this box ever joins. Adding it requires Administrator. The corrected step-6 check now reports <code>OPEN| Claude Web backend (5099)</code>.',
+      '<strong>What was wrong:</strong> all three profiles are ON with policy <code>BlockInbound,AllowOutbound</code>, and the Ethernet NIC is on the <strong>Private</strong> profile. Windows therefore drops any inbound connection that no rule permits.',
+      'A rule-by-rule sweep found <strong>zero</strong> rules naming port 5099 and <strong>zero</strong> rules whose program is <code>ClaudeWeb.exe</code>. 140 inbound allow rules passed a naive port test, but every one was scoped — either to another program, or to a UWP app package (those report <code>Program = Any</code> yet apply only to their own package). None let 5099 through.',
+      'From another machine this looks like a connection timeout or "refused" — <em>not</em> the harness\u2019s "not approved" rejection page. That distinction is the fastest way to tell this apart from the IP gate below.'
+    ],
+    code: 'netstat -ano | findstr :5099\n  TCP  0.0.0.0:5099  LISTENING  12804   <- bound fine\n\nGet-NetFirewallProfile -> BlockInbound (Domain/Private/Public, all ON)\nrules naming port 5099 ........ 0\nrules with Program=ClaudeWeb ... 0\nrules LocalPort=Any AND Program=Any ... 0'
+  },
+  {
+    id: 'bind',
+    n: 'Hop 2',
+    t: 'Kestrel bind',
+    v: 'OK',
+    state: 'ok',
+    heading: 'The harness listens on every interface, exactly as intended',
+    body: [
+      '<code>EmbeddedApi.cs:117</code> calls <code>UseUrls("http://0.0.0.0:{Port}")</code>, and netstat confirms <code>0.0.0.0:5099 LISTENING</code> under PID 12804 (<code>.selfdev-build\\run-bin\\ClaudeWeb.exe</code>).',
+      'So this is <strong>not</strong> the classic "bound to localhost only" mistake. The socket is open to the network; the firewall simply never lets anyone arrive at it.',
+      'Note this is an IPv4-only bind (<code>0.0.0.0</code>, not <code>ListenAnyIP</code>). Harmless here — LAN clients reach it by IPv4 address — but it is the documented footgun for anything addressed as <code>localhost</code>.'
+    ],
+    code: 'ClaudeWeb.App/Services/Hosting/EmbeddedApi.cs:117\n  builder.WebHost.UseUrls($"http://0.0.0.0:{_config.Port}");'
+  },
+  {
+    id: 'ip',
+    n: 'Hop 3',
+    t: 'IP gate',
+    v: 'would pass',
+    state: 'blocked',
+    heading: 'LanBypassCidrs already admits the whole subnet',
+    body: [
+      'The outermost gate is <code>IpFilterMiddleware</code>. Live config sets <code>LanBypassCidrs: ["192.168.0.0/24"]</code>, so any device on the local subnet clears it without being individually approved.',
+      'The approved-guest list holds only <code>127.0.0.1</code> — but that does not matter for LAN clients, because the CIDR bypass admits them first.',
+      'Verdict: this gate is <strong>not</strong> the blocker. It is greyed out only because no request ever gets far enough to be judged by it.',
+      'If your other computer is on a <em>different</em> subnet, this becomes the blocker instead — and the symptom changes to a standalone "not approved" page rather than a timeout.'
+    ],
+    code: 'appsettings.json (live)\n  "LanBypassCidrs": ["192.168.0.0/24"]   <- covers 192.168.0.x\n  "TrustedProxyIps": ["192.168.0.122"]\n\n%APPDATA%\\ClaudeWeb\\ipallow.json\n  Guests: [ 127.0.0.1 ]'
+  },
+  {
+    id: 'pw',
+    n: 'Hop 4',
+    t: 'Password gate',
+    v: 'weak',
+    state: 'blocked',
+    heading: 'Guards /api/* only — and the password is still the default',
+    body: [
+      '<code>PasswordAuthMiddleware</code> gates <code>/api/*</code> and nothing else; the SPA shell and static assets are served to anyone who cleared the IP gate. <code>GET /api/health</code> and <code>/api/auth/check</code> are exempt, which is why the health probe answers without a login.',
+      'The access code is still <code>changeme</code> — the committed default, seeded into <code>auth.json</code> on this box\u2019s first run because there was no existing secret to preserve.',
+      '<strong>The live secret is not in <code>appsettings.json</code>.</strong> <code>AuthService.LoadOrSeed</code> hashes <code>AppConfig.AuthPassword</code> into <code>%APPDATA%\\ClaudeWeb\\auth.json</code> (PBKDF2-SHA256) on first run and ignores the config value from then on. Editing the JSON changes nothing.',
+      'Change it with the <strong>&ldquo;Set access code&rdquo; button on the harness\u2019s desktop window</strong> (<code>MainForm</code> \u2192 <code>AuthService.SetPassword</code>) — the only sanctioned setter, since OpenSpec <code>add-desktop-access-code</code> deleted the web endpoint on purpose. It also revokes live sessions, so every device re-authenticates.',
+      'This is not what is blocking you, but it becomes the only thing standing between the LAN and this harness the moment the firewall rule is added. Change it first.'
+    ],
+    code: 'appsettings.json (live)  <- FIRST-RUN SEED ONLY, not the live secret\n  "AuthPassword": "changeme"        <- default, never set\n  "WorkingDirectory": "C:\\\\Users\\\\km\\\\Desktop\\\\claude-web-workspace"\n                                    <- does not exist on this box\n\n%APPDATA%\\ClaudeWeb\\auth.json      <- the real secret (PBKDF2 hash)\n  seeded 2026-09-06 from "changeme"'
   }
+];
 
-  let timer = null;
-  function reset() {
-    if (timer) { clearTimeout(timer); timer = null; }
-    els.forEach((e) => { e.classList.remove('stage--active', 'stage--done'); e.querySelector('.stage__log').textContent = ''; });
-    packet.classList.add('packet--hidden');
-    playBtn.disabled = false;
-  }
+// ------------------------------------------------------------ installer checks
+// The 9 steps of installer/Services/DeployerService.cs, run headlessly.
+const CHECKS = [
+  { n: 1, label: 'Local Setup passed', got: 'ok', result: 'exe + client/dist present',
+    truth: null },
+  { n: 2, label: 'Backend responding (localhost)', got: 'ok', result: 'HTTP 200 on 127.0.0.1:5099',
+    truth: null },
+  { n: 3, label: 'Backend reachable on the network', got: 'ok', result: 'HTTP 200 on 192.168.0.211:5099',
+    lie: true,
+    truth: 'FALSE PASS. It probes the box\u2019s own LAN IP from the box itself. Windows routes that via loopback, so the packet never crosses the firewall. This check cannot fail the way a real LAN client fails — it proves the bind, not the reachability.' },
+  { n: 4, label: 'Proxy target matches backend port', got: 'ok', result: 'Port=5099 = listener 5099',
+    truth: null },
+  { n: 5, label: 'Security notes', got: 'warn', result: 'AuthPassword is still "changeme"',
+    truth: 'Correctly flagged — and it is real. Informational only, never blocks the deploy.' },
+  { n: 6, label: 'Firewall: backend port open', got: 'ok', result: 'reported OPEN',
+    lie: true,
+    truth: 'FALSE PASS. The query accepts any enabled inbound allow rule whose <code>LocalPort</code> is <code>5099</code> <em>or</em> <code>Any</code>, ignoring the program scope. Eleven rules matched here — all program-scoped to unrelated apps, none opening 5099. A port-wide test must also require <code>Program = Any</code>.' },
+  { n: 7, label: 'Reverse-proxy web.config generated', got: 'bad', result: 'not generated',
+    truth: 'Genuinely absent, but irrelevant on this box — the IIS proxy fronts a different machine.' },
+  { n: 8, label: 'Local health 200', got: 'ok', result: 'HTTP 200',
+    truth: null },
+  { n: 9, label: 'Public health 200', got: 'ok', result: 'HTTP 200 from next5.birokrat.si',
+    lie: true,
+    truth: 'MISLEADING. The 200 comes from <code>WIN-QVH03HBBI3A</code>, a different harness entirely. It says nothing about this box. See section 3.' }
+];
 
-  function play() {
-    reset();
-    playBtn.disabled = true;
-    const ms = [2600, 1700, 1000][Number(speed.value) - 1];
-    packet.classList.remove('packet--hidden');
-    let i = 0;
-    const step = () => {
-      if (i > 0) { els[i - 1].classList.remove('stage--active'); els[i - 1].classList.add('stage--done'); }
-      if (i >= els.length) { packet.classList.add('packet--hidden'); playBtn.disabled = false; timer = null; return; }
-      const r = els[i].getBoundingClientRect(), f = flow.getBoundingClientRect();
-      packet.style.left = `${r.left - f.left + 8}px`;
-      packet.textContent = ['📨 prompt', '🤖 turn', '🔌 tools/call', '💾 write', '🧩 reload'][i];
-      els[i].classList.add('stage--active');
-      els[i].querySelector('.stage__log').textContent = STAGES[i].log;
-      select(i);
-      i += 1;
-      timer = setTimeout(step, ms);
-    };
-    step();
-  }
+const BOXES = [
+  { name: 'SQLBIROKRAT2', mine: true, rows: [
+      ['LAN IP', '192.168.0.211'], ['repos', '1'], ['build', '553fb73 (just deployed)'],
+      ['reached via', 'localhost only'] ] },
+  { name: 'WIN-QVH03HBBI3A', mine: false, rows: [
+      ['role', 'the box in docs/networking.md'], ['repos', '19'],
+      ['reached via', 'next5.birokrat.si -> IIS 192.168.0.122'], ['relation', 'a different fleet machine'] ] }
+];
 
-  playBtn.addEventListener('click', play);
-  resetBtn.addEventListener('click', reset);
+// ------------------------------------------------------------------- rendering
+const journeyEl = document.getElementById('journey');
+const detailEl = document.getElementById('detail');
 
-  // ---- the example graph ----------------------------------------------------------
-  const nodes = [
-    { id: 'a', t: 'Add the Tasks MCP server', x: 40, y: 40, st: 'todo' },
-    { id: 'b', t: 'Write the Tasks agent role', x: 280, y: 40, st: 'todo' },
-    { id: 'c', t: 'Add the dock / Tasks surface', x: 520, y: 40, st: 'todo' },
-    { id: 'd', t: 'Ideas composer button', x: 760, y: 40, st: 'todo' },
-    { id: 'e', t: 'Tests for the tool layer', x: 40, y: 180, st: 'todo' },
-    { id: 'f', t: 'Understanding app', x: 280, y: 180, st: 'todo' },
-  ];
-  // source depends on target
-  const edges = [['b', 'a'], ['c', 'b'], ['d', 'c'], ['e', 'a'], ['f', 'd']];
-  const svg = document.getElementById('graph');
-  const W = 200, H = 60;
-  const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
-  const deps = Object.fromEntries(nodes.map((n) => [n.id, []]));
-  edges.forEach(([s, t]) => deps[s].push(t));
-  let html = `<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5ea0ef"/></marker></defs>`;
-  edges.forEach(([s, t]) => {
-    const a = byId[s], b = byId[t];
-    const x1 = a.x + W / 2, y1 = a.y + (a.y < b.y ? H : a.y > b.y ? 0 : H / 2);
-    const x2 = b.x + W / 2, y2 = b.y + (b.y < a.y ? H : b.y > a.y ? 0 : H / 2);
-    const sameRow = a.y === b.y;
-    const sx = sameRow ? (a.x < b.x ? a.x + W : a.x) : x1, ex = sameRow ? (a.x < b.x ? b.x : b.x + W) : x2;
-    const sy = sameRow ? a.y + H / 2 : y1, ey = sameRow ? b.y + H / 2 : y2;
-    const c = sameRow ? `M${sx},${sy} L${ex},${ey}` : `M${sx},${sy} C${sx},${(sy + ey) / 2} ${ex},${(sy + ey) / 2} ${ex},${ey}`;
-    html += `<path class="edge" d="${c}"/>`;
-  });
-  nodes.forEach((n) => {
-    const actionable = deps[n.id].every((d) => byId[d].st === 'done');
-    html += `<g class="node${actionable ? ' actionable' : ''}" transform="translate(${n.x},${n.y})"><rect width="${W}" height="${H}"/>
-      <text x="10" y="24">${n.t}</text><text class="st" x="10" y="44">${n.st}${actionable ? ' · actionable' : ''} · id ${n.id}</text></g>`;
-  });
-  svg.innerHTML = html;
+STAGES.forEach((s, i) => {
+  const b = document.createElement('button');
+  b.className = 'stage ' + s.state;
+  b.type = 'button';
+  b.setAttribute('aria-pressed', 'false');
+  b.innerHTML = `<span class="n">${s.n}</span><span class="t">${s.t}</span><span class="v">${s.v}</span>`;
+  b.addEventListener('click', () => select(i));
+  journeyEl.appendChild(b);
+});
 
-  select(0);
-})();
+function select(i) {
+  const s = STAGES[i];
+  [...journeyEl.children].forEach((el, j) =>
+    el.setAttribute('aria-pressed', j === i ? 'true' : 'false'));
+  const cls = s.state === 'bad' ? 'bad' : s.state === 'ok' ? 'ok' : '';
+  detailEl.innerHTML =
+    `<h3>${s.t} &mdash; <span class="verdict ${cls}">${s.v}</span></h3>` +
+    `<p>${s.heading}</p>` +
+    s.body.map(p => `<p>${p}</p>`).join('') +
+    (s.code ? `<pre><code>${escapeHtml(s.code)}</code></pre>` : '');
+}
+
+function escapeHtml(t) {
+  return t.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+}
+
+// Open on the failing hop — that is the answer to the question being asked.
+select(0);
+
+// checks table
+const checksEl = document.getElementById('checks');
+const showTruth = document.getElementById('showTruth');
+
+function renderChecks() {
+  const on = showTruth.checked;
+  const pill = g => `<span class="pill ${g === 'ok' ? 'ok' : g === 'warn' ? 'warn' : 'bad'}">${
+    g === 'ok' ? 'PASS' : g === 'warn' ? 'WARN' : 'FAIL'}</span>`;
+  checksEl.innerHTML =
+    `<thead><tr><th>#</th><th>Installer step</th><th>Reported</th><th>Detail</th>${
+      on ? '<th>What it actually proves</th>' : ''}</tr></thead><tbody>` +
+    CHECKS.map(c => `<tr class="${on && c.lie ? 'lie' : ''}">` +
+      `<td>${c.n}</td><td>${c.label}</td><td>${pill(c.got)}</td><td>${c.result}</td>` +
+      (on ? `<td class="truth">${c.truth || '&mdash;'}</td>` : '') +
+      `</tr>`).join('') +
+    `</tbody>`;
+}
+showTruth.addEventListener('change', renderChecks);
+renderChecks();
+
+// boxes
+document.getElementById('boxes').innerHTML = BOXES.map(b =>
+  `<div class="box ${b.mine ? 'this' : ''}">
+     <h3>${b.name}${b.mine ? '<span class="tag">this box</span>' : ''}</h3>
+     <dl>${b.rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
+   </div>`).join('');
