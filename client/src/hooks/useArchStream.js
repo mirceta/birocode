@@ -130,7 +130,7 @@ export default function useArchStream({ onEnded, repoId = '@arch', streamPath = 
         const handle = { abort: () => controller.abort() };
         handleRef.current = handle;
         try {
-          await apiStreamGet(`${streamPath}?after=${seqRef.current}`, createSseParser(applyEvent), { signal: controller.signal });
+          await apiStreamGet(`${streamPath}${streamPath.includes('?') ? '&' : '?'}after=${seqRef.current}`, createSseParser(applyEvent), { signal: controller.signal });
           await settle('ended');
           return;
         } catch (err) {

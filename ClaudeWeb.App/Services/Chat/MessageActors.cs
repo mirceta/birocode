@@ -49,7 +49,7 @@ public static class MessageActors
 
     public static string ActorOf(AutopilotAuditLog.Entry e)
     {
-        if (string.Equals(e.RepoId, "@arch", StringComparison.Ordinal)) return "wake";
+        if (Arch.ArchAgentService.IsArchKey(e.RepoId)) return "wake";
         if (string.Equals(e.Kind, "arch", StringComparison.Ordinal))
         {
             // A fleet send is tagged with the machine it came from — computed
