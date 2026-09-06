@@ -27,5 +27,8 @@
       handles, agent-ref parsing, resolution by id/handle/unique name with ambiguity
       reported, idea numbers (allocation, survive edit + reload, backfill of an old store,
       lookup, ambiguity after a merge, merge backfill). Whole suite green.
-- [ ] 4.2 Live check after deploy (the task says do not deploy): Ideas list shows `#N`,
+- [x] 4.2 Live check after deploy: Ideas list shows `#N`,
       Status chips read `<machine>/<repo>`, spacex's two `prg` read `prg` / `prg#2`.
+      DONE 2026-09-06 09:49 (deployed f05eaa5 from feature/handles merged with main, kept):
+      68 ideas numbered on live (#1 = the oldest), 19 repos with unique handles, the two
+      `prg` repos read `prg` / `prg#2` on the Status tab and in the arch tools.
