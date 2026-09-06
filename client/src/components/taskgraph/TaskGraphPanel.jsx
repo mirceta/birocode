@@ -211,7 +211,7 @@ function MachineNode({ id, data, selected }) {
 
 const nodeTypes = { step: StepNode, machine: MachineNode };
 
-function TaskGraphBoard({ refreshKey = 0 }) {
+function TaskGraphBoard({ refreshKey = 0, pollMs = 0 }) {
   const { repos } = useDock();
   const repoName = useCallback((id) => repos.find((r) => r.id === id)?.name || '', [repos]);
 
@@ -294,6 +294,13 @@ function TaskGraphBoard({ refreshKey = 0 }) {
   }, []);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { if (refreshKey) load(); }, [refreshKey, load]);
+  // Standalone board (openspec management-split-tabs): re-read on an interval so
+  // tasks created in another pane or by an agent appear without a reload.
+  useEffect(() => {
+    if (!pollMs) return undefined;
+    const t = setInterval(() => { if (!document.hidden) load(); }, pollMs);
+    return () => clearInterval(t);
+  }, [pollMs, load]);
 
   // --- derived: actionable set + the selected node's dependent chain (the "why") ---
   const stepNodes = useMemo(() => nodes.filter((n) => n.type === 'step'), [nodes]);
@@ -593,12 +600,12 @@ function TaskGraphBoard({ refreshKey = 0 }) {
 // React Flow wants a provider in scope for its hooks; wrap once here.
 // `refreshKey` (openspec tasks-agent): the host bumps it when an agent run that may
 // have changed the graph has ended; the board reloads without a page refresh.
-export default function TaskGraphPanel({ refreshKey = 0 }) {
+export default function TaskGraphPanel({ refreshKey = 0, pollMs = 0 }) {
   const on = useFeature('taskGraph');
   if (!on) return null;
   return (
     <ReactFlowProvider>
-      <TaskGraphBoard refreshKey={refreshKey} />
+      <TaskGraphBoard refreshKey={refreshKey} pollMs={pollMs} />
     </ReactFlowProvider>
   );
 }
