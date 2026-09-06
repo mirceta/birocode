@@ -942,6 +942,7 @@ export default function Dashboard({ onClose }) {
           git={gitInfo}
           onToggle={toggleDashboard}
           onReorder={reorderTabs}
+          handles={Object.fromEntries(repos.filter((r) => r.handle).map((r) => [r.id, r.handle]))}
         />
         {/* Panel rail (openspec dashboard-focus-docks): summon/dismiss the aux
             panels. One chip per panel, pressed while its panel is visible;

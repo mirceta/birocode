@@ -50,7 +50,10 @@ public class NotesService
     // (plans/ideas-active-section.md). All three are tolerant of older notes that
     // lack the field — System.Text.Json fills the constructor parameter with its
     // default (null / 0 / false), so no migration is needed.
-    public sealed record Note(string Id, string Text, string? Project, long CreatedAt, long UpdatedAt, int Priority, bool Active);
+    // Number (openspec stable-handles): the running number shown as "#12" — allocated
+    // on creation, backfilled once for older notes, never changed. 0 = not yet assigned
+    // (a note from a store or a sync peer that predates numbers; backfilled on load/merge).
+    public sealed record Note(string Id, string Text, string? Project, long CreatedAt, long UpdatedAt, int Priority, bool Active, int Number = 0);
 
     /// <summary>A recorded deletion, kept so a delete on one harness doesn't
     /// resurrect from another during sync (openspec ideas-drive-sync). Pruned
@@ -85,9 +88,11 @@ public class NotesService
     {
         var clean = Clean(text);
         if (clean is null) return null;
-        var note = new Note(Guid.NewGuid().ToString("N"), clean, CleanProject(project), now, now, ClampPriority(priority), active);
+        Note note;
         lock (_gate)
         {
+            // The next running number, for life (openspec stable-handles).
+            note = new Note(Guid.NewGuid().ToString("N"), clean, CleanProject(project), now, now, ClampPriority(priority), active, NextNumber());
             _ideas.Add(note);
             Save();
         }
@@ -184,10 +189,52 @@ public class NotesService
             {
                 _ideas = merged;
                 _tombstones = mergedTombs;
+                BackfillNumbers(); // remote-only notes from a peer that predates numbers
                 Save();
                 _logger.Info($"[NOTES] Merged remote board ({_ideas.Count} idea(s), {_tombstones.Count} tombstone(s))");
             }
             return new MergeOutcome(localChanged, remoteStale);
+        }
+    }
+
+    // ---- handles (openspec stable-handles) -----------------------------------------
+
+    // Caller holds _gate. The next free running number.
+    private int NextNumber() => (_ideas.Count == 0 ? 0 : _ideas.Max(n => n.Number)) + 1;
+
+    // Caller holds _gate. Numbers every unnumbered note in CreatedAt order, after the
+    // highest number already taken; numbers already assigned are never touched.
+    private bool BackfillNumbers()
+    {
+        if (_ideas.All(n => n.Number > 0)) return false;
+        var next = NextNumber();
+        foreach (var n in _ideas.Where(n => n.Number <= 0).OrderBy(n => n.CreatedAt).ToList())
+        {
+            var i = _ideas.FindIndex(x => x.Id == n.Id);
+            _ideas[i] = n with { Number = next++ };
+        }
+        return true;
+    }
+
+    /// <summary>An idea by "#12" / "12" (its number) or by id. Ambiguity (two notes
+    /// with one number, possible only after a cross-box merge) is reported, not guessed.</summary>
+    public (Note? Note, string? Error) FindByRef(string? reference)
+    {
+        if (string.IsNullOrWhiteSpace(reference)) return (null, "an idea reference is required (#12 or the id)");
+        var r = reference.Trim();
+        lock (_gate)
+        {
+            var byId = _ideas.FirstOrDefault(n => n.Id == r);
+            if (byId is not null) return (byId, null);
+            if (Handles.ParseIdeaRef(r) is int num)
+            {
+                var hits = _ideas.Where(n => n.Number == num).ToList();
+                if (hits.Count == 1) return (hits[0], null);
+                if (hits.Count > 1)
+                    return (null, $"#{num} is ambiguous ({hits.Count} ideas carry it): {string.Join(" | ", hits.Select(h => $"{h.Id} \"{Handles.Brief(h.Text, 40)}\""))}");
+                return (null, $"no idea #{num}");
+            }
+            return (null, $"no idea \"{r}\" (use #<number> from list_ideas or the id)");
         }
     }
 
@@ -228,6 +275,9 @@ public class NotesService
             if (store.Ideas != null)
             {
                 _ideas = store.Ideas;
+                // One-time backfill (openspec stable-handles): ideas from before numbers
+                // get theirs in creation order; numbers already there are never touched.
+                if (BackfillNumbers()) { Save(); _logger.Info("[NOTES] Backfilled idea numbers"); }
             }
             else if (store.Notes is { Count: > 0 })
             {

@@ -434,6 +434,43 @@ public class ArchAgentService : IArchWakeSource
 
     private MachineRef ResolveMachine(string? machine) => ClassifyMachine(machine, SelfLabel, _collector.ListSources());
 
+    // ---- handles (openspec stable-handles) ---------------------------------------------
+
+    /// <summary>The repo-part handles of a peer's repos: the peer's own when its build
+    /// reports them, else the same slug#k assignment computed here over its list (a
+    /// peer on an older build; stable as long as its list order is).</summary>
+    private static Dictionary<string, string> PeerHandles(FleetClient.PeerSnapshot snap) =>
+        Handles.AssignRepoHandles(snap.Repos.Select(r => (r.RepoId, r.Name, r.Handle)));
+
+    /// <summary>The resolved target of an agent reference: "spacex/prg#2", "prg#2" with a
+    /// machine, a bare name when unique, or a raw repo id. Returns the machine and the
+    /// repo id, or an error naming what was tried.</summary>
+    public sealed record AgentRef(MachineRef Target, string? RepoId, string? Error)
+    {
+        public string MachineLabel(string selfLabel) => Target.IsSelf ? selfLabel : Target.Source?.Label ?? "?";
+    }
+
+    public AgentRef ResolveAgentRef(string? machine, string? repoRef)
+    {
+        if (string.IsNullOrWhiteSpace(repoRef)) return new AgentRef(new MachineRef(true, null, null), null, "repoId is required (a handle like spacex/prg#2 or the id from list_agents)");
+        var (refMachine, repoPart) = Handles.ParseAgentRef(repoRef);
+        var target = ResolveMachine(refMachine ?? machine);
+        if (target.Error is not null) return new AgentRef(target, null, target.Error);
+        if (target.IsSelf)
+        {
+            var cands = _repos.GetAll().Select(r => (r.Id, r.Handle, r.Name)).ToList();
+            var (id, err) = Handles.ResolveRepoRef(repoPart, cands, SelfLabel);
+            return new AgentRef(target, id, err);
+        }
+        var snap = _fleet.SnapshotNonBlocking(target.Source!.Id);
+        var handles = PeerHandles(snap);
+        var remote = snap.Repos.Select(r => (r.RepoId, handles.GetValueOrDefault(r.RepoId, Handles.Slug(r.Name)), r.Name)).ToList();
+        if (remote.Count == 0 && !snap.Reachable)
+            return new AgentRef(target, null, $"{target.Source.Label} has not answered yet ({snap.Status}); its repos are unknown");
+        var (rid, rerr) = Handles.ResolveRepoRef(repoPart, remote, target.Source.Label);
+        return new AgentRef(target, rid, rerr);
+    }
+
     /// <summary>The availability rule (D4), as a pure function so the table is
     /// unit-testable: unmanaged wins, then busy, then the branch test. A dirty tree
     /// never claims.</summary>
@@ -494,8 +531,14 @@ public class ArchAgentService : IArchWakeSource
     public sealed record AgentView(
         string Machine, string RepoId, string Name, string RemoteUrl, string Branch, string DefaultBranch,
         bool Dirty, string Availability, string LastActor, long? RunningSince, string? TabId, bool Exists,
-        string SourceId = CollectorService.SelfId, SendBlock? Blocked = null, bool ManagedThere = true)
+        string SourceId = CollectorService.SelfId, SendBlock? Blocked = null, bool ManagedThere = true,
+        string? Handle = null)
     {
+        /// <summary>The repo-part handle ("prg#2"), falling back to a slug of the name for a
+        /// peer that predates handles (openspec stable-handles).</summary>
+        public string RepoHandle => string.IsNullOrWhiteSpace(Handle) ? Handles.Slug(Name) : Handle;
+        /// <summary>The label used everywhere: "&lt;machine&gt;/&lt;handle&gt;".</summary>
+        public string Label(string selfLabel) => Handles.AgentLabel(IsLocal ? selfLabel : Machine, RepoHandle);
         public bool IsLocal => SourceId == CollectorService.SelfId;
         public string Key => IsLocal ? RepoId : ArchStateStore.FleetKey(SourceId, RepoId);
         /// <summary>Whether a send could go out at all (fleet posture, D8); local
@@ -588,7 +631,7 @@ public class ArchAgentService : IArchWakeSource
                     ? ActorArch : ActorHuman;
             var tab = tabs.Where(t => t.RepoId == repo.Id).OrderByDescending(t => t.Dashboard).ThenByDescending(t => t.CreatedAt).FirstOrDefault();
             views.Add(new AgentView(Machine, repo.Id, repo.Name, gs.RemoteUrl, gs.Branch, gs.DefaultBranch,
-                gs.Dirty, avail, lastActor, busy && running ? lastStartAt : null, tab?.Id, repo.Exists));
+                gs.Dirty, avail, lastActor, busy && running ? lastStartAt : null, tab?.Id, repo.Exists, Handle: repo.Handle));
         }
         return views;
     }
@@ -622,7 +665,7 @@ public class ArchAgentService : IArchWakeSource
                 var managedThere = r.Managed == true;
                 views.Add(new AgentView(snap.Label, r.RepoId, r.Name, r.RemoteUrl ?? "", r.Branch ?? "unknown", r.DefaultBranch ?? "main",
                     r.Dirty, managedThere ? r.Availability ?? Unreachable : Unmanaged, r.LastActor ?? "none", r.RunningSince, null, r.Exists,
-                    sourceId, block, managedThere));
+                    sourceId, block, managedThere, PeerHandles(snap).GetValueOrDefault(r.RepoId)));
             }
         }
         return views;
@@ -667,7 +710,7 @@ public class ArchAgentService : IArchWakeSource
                 gateOpen = _gate.Enabled, allowSends = true, managedCount = managed.Count,
                 agents = local.Select(a => (object)new
                 {
-                    key = a.Key, repoId = a.RepoId, name = a.Name, remoteUrl = a.RemoteUrl, branch = a.Branch, defaultBranch = a.DefaultBranch,
+                    handle = a.Label(SelfLabel), key = a.Key, repoId = a.RepoId, name = a.Name, remoteUrl = a.RemoteUrl, branch = a.Branch, defaultBranch = a.DefaultBranch,
                     onDefault = OnDefault(a.Branch, a.DefaultBranch), dirty = a.Dirty, availability = a.Availability, lastActor = a.LastActor,
                     runningSince = a.RunningSince, managed = managed.Contains(a.RepoId), docked = a.TabId is not null, exists = a.Exists, tabId = a.TabId,
                 }).ToList(),
@@ -690,7 +733,7 @@ public class ArchAgentService : IArchWakeSource
                 managedCount = snap.Info?.ManagedRepoIds?.Count ?? repos.Count(r => r.Managed == true),
                 agents = repos.Select(r => (object)new
                 {
-                    key = ArchStateStore.FleetKey(src.Id, r.RepoId), repoId = r.RepoId, name = r.Name, remoteUrl = r.RemoteUrl ?? "",
+                    handle = Handles.AgentLabel(src.Label, PeerHandles(snap).GetValueOrDefault(r.RepoId, Handles.Slug(r.Name))), key = ArchStateStore.FleetKey(src.Id, r.RepoId), repoId = r.RepoId, name = r.Name, remoteUrl = r.RemoteUrl ?? "",
                     branch = r.Branch ?? "unknown", defaultBranch = r.DefaultBranch ?? "main",
                     onDefault = OnDefault(r.Branch, r.DefaultBranch), dirty = r.Dirty, availability = r.Availability ?? "unknown", lastActor = r.LastActor ?? "none",
                     runningSince = r.RunningSince, managed = r.Managed == true, docked = r.Docked == true, exists = r.Exists, tabId = (string?)null,
@@ -746,6 +789,8 @@ public class ArchAgentService : IArchWakeSource
                 managed = managed.Contains(a.RepoId, StringComparer.Ordinal),
                 // Holds a dock here (openspec fleet-status-tab): an agent in the fleet status view.
                 docked = a.TabId is not null,
+                // The repo-part handle (openspec stable-handles), so a hub labels this agent the way this box does.
+                handle = a.RepoHandle,
             }).ToList(),
         };
     }
@@ -764,7 +809,7 @@ public class ArchAgentService : IArchWakeSource
             $"{list.Count} managed agent(s){(remote > 0 ? $", {remote} on other machines" : "")}{(blocked > 0 ? $", {blocked} not sendable (see blocked)" : "")}",
             list.Select(a => new
             {
-                machine = a.Machine, sourceId = a.SourceId, repoId = a.RepoId, name = a.Name, remoteUrl = a.RemoteUrl, branch = a.Branch,
+                handle = a.Label(SelfLabel), machine = a.Machine, sourceId = a.SourceId, repoId = a.RepoId, name = a.Name, remoteUrl = a.RemoteUrl, branch = a.Branch,
                 defaultBranch = a.DefaultBranch, dirty = a.Dirty, availability = a.Availability, lastActor = a.LastActor,
                 runningSince = a.RunningSince, runningFor = a.RunningSince is { } rs ? Elapsed(rs, Now()) : null,
                 managedThere = a.IsLocal ? true : a.ManagedThere, sendable = a.Sendable, blocked = a.Blocked?.Reason,
@@ -785,7 +830,7 @@ public class ArchAgentService : IArchWakeSource
             {
                 machine = Machine, label = SelfLabel, sourceId = CollectorService.SelfId, reachable = true, status = FleetClient.StatusOk, detail = (string?)null,
                 version = BuildVersion, sendsAllowed = true, acceptsSends = AcceptFleetSends, acceptsUpgrades = AcceptFleetUpgrades, gateOpen = _gate.Enabled, behind = false,
-                managedThere = mine.Select(id => new { repoId = id, name = repos.FirstOrDefault(r => r.Id == id)?.Name ?? id }).ToList(),
+                managedThere = mine.Select(id => new { repoId = id, name = repos.FirstOrDefault(r => r.Id == id)?.Name ?? id, handle = Handles.AgentLabel(SelfLabel, repos.FirstOrDefault(r => r.Id == id)?.Handle ?? id) }).ToList(),
                 inYourScope = mine, sendable = mine, blocked = new List<object>(),
             },
         };
@@ -809,7 +854,7 @@ public class ArchAgentService : IArchWakeSource
                 version = snap.Info?.Version, sendsAllowed = src.AllowSends, acceptsSends = snap.Info?.AcceptsSends ?? false, acceptsUpgrades = snap.Info?.AcceptsUpgrades ?? false, gateOpen = snap.Info?.GateOpen ?? false,
                 // Version drift (openspec arch-peer-upgrades): a reachable peer on a different build than this hub.
                 behind = snap.Reachable && snap.Info?.Version is { } pv && pv != BuildVersion, hubVersion = BuildVersion,
-                managedThere = managedThere.Select(r => new { repoId = r.RepoId, name = r.Name }).ToList(),
+                managedThere = managedThere.Select(r => new { repoId = r.RepoId, name = r.Name, handle = Handles.AgentLabel(src.Label, PeerHandles(snap).GetValueOrDefault(r.RepoId, Handles.Slug(r.Name))) }).ToList(),
                 inYourScope = scoped, sendable, blocked = blockedList,
             });
         }
@@ -820,9 +865,10 @@ public class ArchAgentService : IArchWakeSource
 
     public ToolOutcome ToolGitState(string? machine, string? repoId)
     {
-        if (string.IsNullOrWhiteSpace(repoId)) return new ToolOutcome(false, "error", "repoId is required");
-        var target = ResolveMachine(machine);
-        if (target.Error is not null) return new ToolOutcome(false, "error", target.Error);
+        var agent = ResolveAgentRef(machine, repoId);
+        if (agent.Error is not null) return new ToolOutcome(false, "error", agent.Error);
+        var target = agent.Target;
+        repoId = agent.RepoId!;
         if (!target.IsSelf)
         {
             // Remote git state is what the peer reported in its describe (fleet D4).
@@ -860,9 +906,10 @@ public class ArchAgentService : IArchWakeSource
 
     public ToolOutcome ToolReadTranscript(string? machine, string? repoId, int tail)
     {
-        if (string.IsNullOrWhiteSpace(repoId)) return new ToolOutcome(false, "error", "repoId is required");
-        var target = ResolveMachine(machine);
-        if (target.Error is not null) return new ToolOutcome(false, "error", target.Error);
+        var agent = ResolveAgentRef(machine, repoId);
+        if (agent.Error is not null) return new ToolOutcome(false, "error", agent.Error);
+        var target = agent.Target;
+        repoId = agent.RepoId!;
         if (!target.IsSelf)
         {
             var src = target.Source!;
@@ -924,13 +971,15 @@ public class ArchAgentService : IArchWakeSource
     {
         if (string.IsNullOrWhiteSpace(repoId)) return new ToolOutcome(false, "error", "repoId is required");
         if (string.IsNullOrWhiteSpace(text)) return new ToolOutcome(false, "error", "text is required");
-        var target = ResolveMachine(machine);
-        if (target.Error is not null)
+        // A handle ("spacex/prg#2"), a name, or the raw id (openspec stable-handles).
+        var agent = ResolveAgentRef(machine, repoId);
+        if (agent.Error is not null)
         {
-            AuditTool("send_task", repoId, $"refused machine {machine}");
-            return new ToolOutcome(false, "error", target.Error + "; nothing was sent");
+            AuditTool("send_task", repoId, "unresolved");
+            return new ToolOutcome(false, "error", agent.Error + "; nothing was sent");
         }
-        return target.IsSelf ? SendLocal(repoId, text, branch, requireArmed, overrideClaimed) : SendRemote(target.Source!, repoId, text, branch, requireArmed, overrideClaimed);
+        var target = agent.Target;
+        return target.IsSelf ? SendLocal(agent.RepoId!, text, branch, requireArmed, overrideClaimed) : SendRemote(target.Source!, agent.RepoId!, text, branch, requireArmed, overrideClaimed);
     }
 
     /// <summary>The local send: managed → armed → claimed → slot → turn.</summary>
@@ -1095,9 +1144,10 @@ public class ArchAgentService : IArchWakeSource
         string? sourceId = null;
         if (!string.IsNullOrWhiteSpace(repoId))
         {
-            var target = ResolveMachine(machine);
-            if (target.Error is not null) return new ToolOutcome(false, "error", target.Error);
-            sourceId = target.IsSelf ? null : target.Source!.Id;
+            var agent = ResolveAgentRef(machine, repoId);
+            if (agent.Error is not null) return new ToolOutcome(false, "error", agent.Error);
+            sourceId = agent.Target.IsSelf ? null : agent.Target.Source!.Id;
+            repoId = agent.RepoId;
         }
         var node = _graph.AddNode(title, note, string.IsNullOrWhiteSpace(repoId) ? null : repoId, null, 40, 40, Now(), sourceId, ActorArch, null);
         if (node is null) return new ToolOutcome(false, "error", "title is blank");
@@ -1127,20 +1177,20 @@ public class ArchAgentService : IArchWakeSource
     {
         if (string.IsNullOrWhiteSpace(id)) return new ToolOutcome(false, "error", "id is required");
         string? sourceId = null;
+        string? label = null;
         if (!string.IsNullOrWhiteSpace(repoId))
         {
-            var target = ResolveMachine(machine);
-            if (target.Error is not null) return new ToolOutcome(false, "error", target.Error);
-            sourceId = target.IsSelf ? null : target.Source!.Id;
-            var known = target.IsSelf
-                ? _repos.GetAll().Any(r => r.Id == repoId)
-                : _fleet.SnapshotNonBlocking(sourceId!).Repos.Any(r => r.RepoId == repoId);
-            if (!known) return new ToolOutcome(false, "error", $"no repo {repoId} on {(target.IsSelf ? SelfLabel : target.Source!.Label)} (use the repoId from list_agents / the Status tab)");
+            // A handle ("spacex/prg#2"), a name, or the raw id (openspec stable-handles).
+            var agent = ResolveAgentRef(machine, repoId);
+            if (agent.Error is not null) return new ToolOutcome(false, "error", agent.Error);
+            sourceId = agent.Target.IsSelf ? null : agent.Target.Source!.Id;
+            repoId = agent.RepoId;
+            label = AgentLabelOf(sourceId, repoId!);
         }
         var node = _graph.Assign(id, sourceId, repoId, ActorArch, Now());
         if (node is null) return new ToolOutcome(false, "error", $"no task {id}");
         AuditTool("assign_task", node.RepoId, node.RepoId is null ? "unassigned" : "assigned");
-        return new ToolOutcome(true, node.RepoId is null ? "unassigned" : "assigned", node.RepoId is null ? $"task {id} unassigned" : $"task {id} assigned to {repoId} on {(sourceId is null ? SelfLabel : machine)}; dispatch_task pings the agent", node);
+        return new ToolOutcome(true, node.RepoId is null ? "unassigned" : "assigned", node.RepoId is null ? $"task {id} unassigned" : $"task {id} assigned to {label}; dispatch_task pings the agent", node);
     }
 
     public ToolOutcome ToolDispatchTask(string? id) => DispatchTask(id, requireArmed: true, by: ActorArch);
@@ -1197,7 +1247,7 @@ public class ArchAgentService : IArchWakeSource
     public ToolOutcome ToolListIdeas(bool activeOnly)
     {
         var ideas = _notes.List().Where(n => !activeOnly || n.Active).OrderByDescending(n => n.Active).ThenByDescending(n => n.Priority).ThenByDescending(n => n.UpdatedAt)
-            .Select(n => new { id = n.Id, text = n.Text, project = n.Project, priority = n.Priority, active = n.Active, updatedAt = n.UpdatedAt }).ToList();
+            .Select(n => new { handle = Handles.IdeaHandle(n.Number), id = n.Id, text = n.Text, project = n.Project, priority = n.Priority, active = n.Active, updatedAt = n.UpdatedAt }).ToList();
         AuditTool("list_ideas", null, $"{ideas.Count} idea(s)");
         return new ToolOutcome(true, "ok", $"{ideas.Count} idea(s){(activeOnly ? " (active only)" : "")}", new { ideas });
     }
@@ -1206,24 +1256,38 @@ public class ArchAgentService : IArchWakeSource
     /// card is created from the idea's text, the idea stays but leaves the Active section.</summary>
     public ToolOutcome ToolIdeaToTask(string? ideaId, string? title, string? machine, string? repoId)
     {
-        if (string.IsNullOrWhiteSpace(ideaId)) return new ToolOutcome(false, "error", "ideaId is required");
-        var idea = _notes.List().FirstOrDefault(n => n.Id == ideaId);
-        if (idea is null) return new ToolOutcome(false, "error", $"no idea {ideaId}");
-        var existing = _graph.Get().Nodes.FirstOrDefault(n => n.IdeaId == ideaId);
-        if (existing is not null) return new ToolOutcome(false, "exists", $"idea {ideaId} already has task {existing.Id}", existing);
+        // "#12", "12" or the id (openspec stable-handles).
+        var (idea, ideaErr) = _notes.FindByRef(ideaId);
+        if (idea is null) return new ToolOutcome(false, "error", ideaErr ?? $"no idea {ideaId}");
+        var existing = _graph.Get().Nodes.FirstOrDefault(n => n.IdeaId == idea.Id);
+        if (existing is not null) return new ToolOutcome(false, "exists", $"idea {Handles.IdeaHandle(idea.Number)} already has task {existing.Id}", existing);
         string? sourceId = null;
         if (!string.IsNullOrWhiteSpace(repoId))
         {
-            var target = ResolveMachine(machine);
-            if (target.Error is not null) return new ToolOutcome(false, "error", target.Error);
-            sourceId = target.IsSelf ? null : target.Source!.Id;
+            var agent = ResolveAgentRef(machine, repoId);
+            if (agent.Error is not null) return new ToolOutcome(false, "error", agent.Error);
+            sourceId = agent.Target.IsSelf ? null : agent.Target.Source!.Id;
+            repoId = agent.RepoId;
         }
         var node = _graph.AddNode(string.IsNullOrWhiteSpace(title) ? idea.Text : title, string.IsNullOrWhiteSpace(title) ? idea.Project : idea.Text,
-            string.IsNullOrWhiteSpace(repoId) ? null : repoId, null, 40, 40, Now(), sourceId, ActorArch, ideaId);
+            string.IsNullOrWhiteSpace(repoId) ? null : repoId, null, 40, 40, Now(), sourceId, ActorArch, idea.Id);
         if (node is null) return new ToolOutcome(false, "error", "the idea's text is blank");
         _notes.Update(idea.Id, idea.Text, idea.Project, idea.Priority, false, Now());
         AuditTool("idea_to_task", node.RepoId, "created");
-        return new ToolOutcome(true, "created", $"task {node.Id} created from idea {ideaId}; the idea left the Active section", node);
+        return new ToolOutcome(true, "created", $"task {node.Id} created from idea {Handles.IdeaHandle(idea.Number)}; the idea left the Active section", node);
+    }
+
+    /// <summary>"&lt;machine&gt;/&lt;handle&gt;" for a repo on this box (sourceId null) or on a peer.</summary>
+    private string AgentLabelOf(string? sourceId, string repoId)
+    {
+        if (sourceId is null)
+        {
+            var r = _repos.GetAll().FirstOrDefault(x => x.Id == repoId);
+            return Handles.AgentLabel(SelfLabel, r?.Handle ?? repoId);
+        }
+        var snap = _fleet.SnapshotNonBlocking(sourceId);
+        var machine = SourceLabels().GetValueOrDefault(sourceId, sourceId);
+        return Handles.AgentLabel(machine, PeerHandles(snap).GetValueOrDefault(repoId, repoId));
     }
 
     private Dictionary<string, string> SourceLabels() =>

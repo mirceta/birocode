@@ -111,3 +111,5 @@
   .arch__side { flex: 0 0 auto !important; width: auto !important; }
   .arch__overview { grid-template-columns: 1fr; }
 }
+/* The agent's repo-part handle (openspec stable-handles), shown beside the name. */
+.arch__handle { margin-left: 6px; font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: var(--color-text-muted, #888); }

@@ -68,7 +68,9 @@ public class FleetClient
         [property: JsonPropertyName("managed")] bool? Managed = null,
         // Whether the repo holds a dock on the peer (openspec fleet-status-tab). Null =
         // a build that predates the field.
-        [property: JsonPropertyName("docked")] bool? Docked = null);
+        [property: JsonPropertyName("docked")] bool? Docked = null,
+        // The repo's handle on the peer ("prg#2", openspec stable-handles); null = older build.
+        [property: JsonPropertyName("handle")] string? Handle = null);
 
     public sealed record PeerInfo(
         [property: JsonPropertyName("protocol")] int Protocol,

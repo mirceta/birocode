@@ -108,9 +108,15 @@ GET  /api/arch/peer
   -> { "protocol": 1, "version": "<build>", "machine": "<label>",
        "acceptsSends": false, "acceptsUpgrades": false, "gateOpen": true,
        "managedRepoIds": [ "<repoId>", … ],          # this harness's OWN arch scope
-       "repos": [ { "repoId", "name", "remoteUrl", "branch", "defaultBranch",
+       "repos": [ { "repoId", "name", "handle", "remoteUrl", "branch", "defaultBranch",
                     "dirty", "availability", "lastActor", "runningSince",
-                    "exists", "isSelf", "managed" } ] }
+                    "exists", "isSelf", "managed", "docked" } ] }
+
+  `handle` (openspec stable-handles) is the repo's short stable handle on that
+  harness — a slug of its name plus "#2", "#3"… when the name repeats there
+  ("prg", "prg#2"); a caller labels the agent "<machine>/<handle>". A peer that
+  predates the field gets the same slug#k assignment computed by the caller over
+  its repo list.
 
 POST /api/arch/peer/send        { "repoId", "text", "branch"?, "from": "<caller's label>", "override"?: false }
   -> { "ok", "status", "detail", "data" }
