@@ -44,7 +44,10 @@ page.on('pageerror', (e) => errors.push(e.message))
 await page.goto(`${BASE}/studio/ideas`, { waitUntil: 'domcontentloaded', timeout: 30000 })
 await page.locator('.tg-panel').waitFor({ timeout: 20000 })
 await page.locator('.react-flow__node').first().waitFor({ timeout: 20000 })
-await page.waitForTimeout(1500)
+// The fleet status (repo remotes / machine names) arrives after the nodes on a cold
+// instance; wait until the prg tasks carry their remote-keyed repo before reading colours.
+await page.waitForFunction(() => document.querySelectorAll('.tg-node[data-repo^="github.com"]').length >= 3, null, { timeout: 30000 })
+await page.waitForTimeout(500)
 
 const nodeInfo = async (id) => page.locator(`.react-flow__node[data-id="${id}"] .tg-node`).evaluate((el) => ({
   cls: el.className, machine: el.dataset.machine, repo: el.dataset.repo,
@@ -103,7 +106,8 @@ await page.locator(`[data-legend="machine"] .tg-legend__item[data-key="${sourceI
 // Persisted palette: reload keeps every colour.
 await page.reload({ waitUntil: 'domcontentloaded' })
 await page.locator('.react-flow__node').first().waitFor({ timeout: 20000 })
-await page.waitForTimeout(1200)
+await page.waitForFunction(() => document.querySelectorAll('.tg-node[data-repo^="github.com"]').length >= 3, null, { timeout: 30000 })
+await page.waitForTimeout(500)
 const ia2 = await nodeInfo(a.id), ic2 = await nodeInfo(c.id)
 checks['colours persist across reload'] = ia2.border === ia.border && ia2.bg === ia.bg && ic2.border === ic.border && ic2.bg === ic.bg
 await page.screenshot({ path: 'C:/Users/Administrator/Desktop/playground/birocode/.claudeweb-preview/out-graph-colours.png' })
