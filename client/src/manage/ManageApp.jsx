@@ -17,10 +17,15 @@ import './manage.css';
 // "panes" renders the views side by side like the harness's own multi-pane strip,
 // with draggable dividers and a hide button per pane. Both persist per device.
 //
-// URL-addressable tabs: ?tab=arch|ideas|events wins, else the device's last
-// choice, else arch. The harness API root is derived from our own path, the same
+// Ideas, Task graph and Kanban are separate tabs (openspec management-split-tabs), and
+// the side-by-side panes can be moved left/right from their bars; the order persists
+// per device and the tab strip follows it.
+//
+// URL-addressable tabs: ?tab=arch|tasks|ideas|graph|kanban|events|status wins, else
+// the device's last choice, else arch. The harness API root is derived from our own path, the same
 // trick the events page uses, so the app works wherever the proxy mounts it.
-const TABS = ['arch', 'tasks', 'ideas', 'events', 'status'];
+const TABS = ['arch', 'tasks', 'ideas', 'graph', 'kanban', 'events', 'status'];
+const ORDER_KEY = 'manageapp.paneOrder';
 const TAB_KEY = 'manageapp.tab';
 const LAYOUT_KEY = 'manageapp.layout';
 const HIDDEN_KEY = 'manageapp.hidden';
@@ -29,7 +34,7 @@ const WEIGHTS_KEY = 'manageapp.paneWeights';
 // are rendered until the window is wide enough again.
 const MIN_PANES_WIDTH = 720;
 const MIN_PANE_PX = 220;
-const DEFAULT_WEIGHTS = { arch: 2, tasks: 1, ideas: 1, events: 1, status: 1 };
+const DEFAULT_WEIGHTS = { arch: 2, tasks: 1, ideas: 1, graph: 1, kanban: 1, events: 1, status: 1 };
 
 function harnessRoot() {
   const m = window.location.pathname.match(/^(.*?)\/api\/localview\//);
@@ -72,6 +77,14 @@ function readHidden() {
   return Array.isArray(v) ? v.filter((k) => TABS.includes(k)) : [];
 }
 
+// The pane/tab order: the saved order (unknown keys dropped), then any tab the saved
+// order does not know yet, in default position — so a new tab appears without a reset.
+function readOrder() {
+  const v = readJson(ORDER_KEY, []);
+  const saved = Array.isArray(v) ? v.filter((k) => TABS.includes(k)) : [];
+  return [...saved, ...TABS.filter((k) => !saved.includes(k))];
+}
+
 function readWeights() {
   const v = readJson(WEIGHTS_KEY, {});
   const out = { ...DEFAULT_WEIGHTS };
@@ -89,6 +102,7 @@ export default function ManageApp() {
   const [layout, setLayoutState] = useState(readLayout);
   const [hidden, setHidden] = useState(readHidden);
   const [weights, setWeights] = useState(readWeights);
+  const [order, setOrder] = useState(readOrder);
   const [wide, setWide] = useState(() => window.innerWidth >= MIN_PANES_WIDTH);
   const [dragging, setDragging] = useState(false);
   const [label, setLabel] = useState('');
@@ -127,6 +141,23 @@ export default function ManageApp() {
       const next = isHidden ? prev.filter((k) => k !== key) : [...prev, key];
       if (!isHidden && TABS.every((k) => next.includes(k))) return prev;
       save(HIDDEN_KEY, next);
+      return next;
+    });
+  };
+
+  // Move a visible pane one step left/right among the VISIBLE panes (hidden ones keep
+  // their slot), persisted per device; the tab strip follows the same order.
+  const move = (key, dir) => {
+    setOrder((prev) => {
+      const shown = prev.filter((k) => !hidden.includes(k));
+      const vi = shown.indexOf(key);
+      const target = shown[vi + dir];
+      if (vi < 0 || !target) return prev;
+      const next = [...prev];
+      const a = next.indexOf(key);
+      const b = next.indexOf(target);
+      [next[a], next[b]] = [next[b], next[a]];
+      save(ORDER_KEY, next);
       return next;
     });
   };
@@ -191,16 +222,25 @@ export default function ManageApp() {
 
   const root = harnessRoot();
   const openHarness = () => { window.top.location.href = `${root}/studio`; };
-  const labelOf = (k) => (k === 'arch' ? t('nav.arch') : k === 'tasks' ? t('nav.tasks') : k === 'ideas' ? t('nav.ideas') : k === 'status' ? t('manage.status') : t('manage.events'));
+  const labelOf = (k) => (
+    k === 'arch' ? t('nav.arch')
+      : k === 'tasks' ? t('nav.tasks')
+        : k === 'ideas' ? t('nav.ideas')
+          : k === 'graph' ? t('manage.graph')
+            : k === 'kanban' ? t('manage.kanban')
+              : k === 'status' ? t('manage.status')
+                : t('manage.events'));
   const panes = layout === 'panes' && wide;
-  const visible = panes ? TABS.filter((k) => !hidden.includes(k)) : [tab];
+  const visible = panes ? order.filter((k) => !hidden.includes(k)) : [tab];
 
   // The Arch tab is the conversation only; its side cards (Loop, Managed agents,
   // Fleet, Home repo) live on the Status tab under the fleet strips.
   const renderPane = (k) => (
     k === 'arch' ? <Arch popup view="chat" onOpenDock={openHarness} />
       : k === 'tasks' ? <Tasks popup />
-      : k === 'ideas' ? <IdeasPanel />
+      : k === 'ideas' ? <IdeasPanel view="ideas" />
+      : k === 'graph' ? <IdeasPanel view="graph" />
+      : k === 'kanban' ? <IdeasPanel view="kanban" />
         : k === 'status' ? (
           <div className="mg__status" data-status-pane>
             <FleetStatus root={root} />
@@ -218,7 +258,7 @@ export default function ManageApp() {
       <header className="mg__head">
         <span className="mg__brand">🏛 {t('manage.title')}{label ? <span className="mg__label"> · {label}</span> : null}</span>
         <nav className="mg__tabs" role={panes ? 'group' : 'tablist'} aria-label={t('manage.tabs')}>
-          {TABS.map((k) => {
+          {order.map((k) => {
             const on = panes ? !hidden.includes(k) : tab === k;
             return (
               <button
@@ -287,6 +327,29 @@ export default function ManageApp() {
               {panes && (
                 <div className="mg__pane-bar">
                   <span className="mg__pane-label">{labelOf(k)}</span>
+                  <span className="mg__pane-tools">
+                  <button
+                    type="button"
+                    className="mg__pane-move"
+                    title={t('manage.moveLeft')}
+                    aria-label={`${t('manage.moveLeft')}: ${labelOf(k)}`}
+                    disabled={i === 0}
+                    onClick={() => move(k, -1)}
+                    data-move-left
+                  >
+                    ◀
+                  </button>
+                  <button
+                    type="button"
+                    className="mg__pane-move"
+                    title={t('manage.moveRight')}
+                    aria-label={`${t('manage.moveRight')}: ${labelOf(k)}`}
+                    disabled={i === visible.length - 1}
+                    onClick={() => move(k, 1)}
+                    data-move-right
+                  >
+                    ▶
+                  </button>
                   <button
                     type="button"
                     className="mg__pane-hide"
@@ -297,6 +360,7 @@ export default function ManageApp() {
                   >
                     ×
                   </button>
+                  </span>
                 </div>
               )}
               <div className="mg__pane-body">{renderPane(k)}</div>
