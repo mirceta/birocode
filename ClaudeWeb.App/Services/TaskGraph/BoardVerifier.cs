@@ -147,12 +147,14 @@ public sealed class BoardVerifier
 
         foreach (var start in _graph.Get().Nodes)
         {
-            if (start.Status == TaskLifecycle.Done)
+            // Verified done is the end of the road. A card that SAYS done but is verified
+            // less (an arch or Operator claim, a migrated pre-lifecycle card — openspec
+            // board-claims-advisory) keeps being checked like any other, so its badge
+            // clears once the facts catch up.
+            if (start.VerifiedStatus == TaskLifecycle.Done)
             {
-                // A done card is not re-verified — but one that reached done with the
-                // migration badge still on (verified before this change) sheds it now.
-                if (start.Warning is not null && TaskLifecycle.Rank(start.VerifiedStatus) >= TaskLifecycle.Rank(TaskLifecycle.PrMerged))
-                    _graph.ApplyVerification(start.Id, new TaskLifecycle.Facts(false, null, false, false, null, null, false, null, false), now);
+                // Nothing left to verify; a leftover badge on a fully verified card is recomputed away.
+                if (start.Warning is not null) _graph.ApplyVerification(start.Id, new TaskLifecycle.Facts(false, null, false, false, null, null, false, null, false), now);
                 continue;
             }
             checkedCount++;

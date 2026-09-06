@@ -45,7 +45,7 @@ public partial class ArchAgentService : IArchWakeSource
     public const string AuditKind = "arch";
     public const string AuditOutcomeSend = "arch";
     public const string AuditOutcomeTool = "arch-tool";
-    public const string RoleVersionMarker = "<!-- arch-role v8 -->";
+    public const string RoleVersionMarker = "<!-- arch-role v9 -->";
 
     /// <summary>Availability values (D4). <see cref="Unreachable"/> is the fleet
     /// addition (openspec add-fleet-arch-agent, D4): a remote agent whose harness
@@ -361,21 +361,28 @@ public partial class ArchAgentService : IArchWakeSource
         graph): the surface where the Operator, you and any future management agent
         collaborate. A card moves through the delivery lifecycle `todo → doing →
         committed → pr-opened → pr-merged → done`; blocked is a flag, never a column.
-        From `committed` up the HARNESS moves the card by observing git and PR facts —
-        your `update_task` claims are clamped to the verified state, so a card can never
-        say more than the repo shows. `list_tasks` shows every task with its assignee
-        (machine + repoId), status, branch/PR linkage, `stale` (work parked in committed/
-        pr-opened past the window — report those to the Operator every time), and
-        `awaitingDispatch` — assigned, not yet pinged, not blocked.
+        **`update_task` moves the card to exactly the status you give, in either
+        direction — the board is yours to move.** The harness never overrides you; it
+        keeps verifying git and PR facts afterwards (the assignee's clone, the PR on
+        GitHub, the deploy log) and annotates: a card whose verified state is lower than
+        its status carries a warning (`unverified: true` and `warning` in `list_tasks`,
+        a badge on the Kanban) until the facts catch up, and when the facts EXCEED the
+        status the harness advances the card itself — forward only, never back.
+        `list_tasks` shows every task with its assignee (machine + repoId), status,
+        `verifiedStatus`, branch/PR linkage, `unverified` + `warning`, `stale` (work
+        parked in committed/pr-opened past the window — report those to the Operator
+        every time), and `awaitingDispatch` — assigned, not yet pinged, not blocked.
 
         Your duties on each wake: (1) dispatch every task that is `awaitingDispatch` with
         `dispatch_task` — the assignee gets the full brief in its own conversation and the
         card moves to doing; (2) relay closing lines with `update_task`: `TASK COMMITTED
         <id> <branch> <commit>` → status committed with `branch`+`commit` args; `TASK PR
         <id> <url>` → status pr-opened with the `pr` arg; `TASK BLOCKED <id>: …` → back to
-        todo with the reason in the note. The harness verifies each claim — if the card
-        lands lower than claimed, the branch is not where the agent said, and that is
-        worth reporting; (3) report stale cards and any `unpushedTaskBranches` from
+        todo with the reason in the note; a merged PR you know of → pr-merged. The card
+        lands where you put it. Then report what the harness could not confirm: every
+        card `list_tasks` marks `unverified` (its `warning` says what is missing, e.g.
+        "branch not on origin") goes to the Operator in your reply, once per change, not
+        as a reason to move the card back; (3) report stale cards and any `unpushedTaskBranches` from
         `list_agents` — an unpushed branch on one machine is not finished work, it is a
         risk; (4) when the Operator asks for work to be planned, `create_task` /
         `idea_to_task` (from `list_ideas`) and `assign_task` are how you put it on the
@@ -1715,6 +1722,10 @@ public partial class ArchAgentService : IArchWakeSource
                     // sits in a hand-off state past the stale window — report those.
                     branch = n.Branch, headCommit = n.HeadCommit, pushed = n.Pushed, prUrl = n.PrUrl, prNumber = n.PrNumber,
                     mergeCommit = n.MergeCommit, verifiedStatus = n.VerifiedStatus, warning = n.Warning,
+                    verifiedAt = n.VerifiedAt,
+                    // The card says more than the harness has verified (openspec
+                    // board-claims-advisory): report it, the status stands.
+                    unverified = TaskGraph.TaskLifecycle.IsUnverified(n.Status, n.VerifiedStatus),
                     stale = _graph.IsStale(n, now),
                     createdBy = n.CreatedBy, ideaId = n.IdeaId, createdAt = n.CreatedAt, updatedAt = n.UpdatedAt,
                 };
@@ -1774,27 +1785,17 @@ public partial class ArchAgentService : IArchWakeSource
         if (branch is not null || commit is not null || pr is not null)
             cur = _graph.RecordClaim(id, branch, commit, pr, Now()) ?? cur;
 
-        // A claim moves the card no further than the harness has verified
-        // (openspec kanban-lifecycle-columns): forward past the verified state
-        // clamps, and the overreach is recorded on the card. Backward is free.
-        var clamped = false;
-        var applied = status;
-        if (status is not null)
-        {
-            (applied, clamped) = TaskGraph.TaskLifecycle.ClampClaim(cur, status);
-            if (clamped)
-            {
-                var record = $"agent reported {status}; verified state is {applied} (branch not on origin)";
-                var baseNote = note ?? cur.Note;
-                note = string.IsNullOrWhiteSpace(baseNote) ? record : $"{baseNote.TrimEnd()}\n{record}";
-            }
-        }
-        var node = _graph.UpdateNode(id, title, note, null, null, applied, null, null, Now());
+        // The card moves to exactly what the arch says, in either direction (openspec
+        // board-claims-advisory): the board is the arch's to move. The harness keeps
+        // verifying afterwards and annotates — a status above the verified state carries
+        // the warning badge until the facts catch up; it is never silently downgraded.
+        var node = _graph.UpdateNode(id, title, note, null, null, status, null, null, Now());
         if (node is null) return new ToolOutcome(false, "error", $"no task {id} (or blank title)");
-        AuditTool("update_task", node.RepoId, applied ?? "edited");
+        AuditTool("update_task", node.RepoId, status ?? "edited");
+        var unverified = TaskGraph.TaskLifecycle.IsUnverified(node.Status, node.VerifiedStatus);
         return new ToolOutcome(true, "updated",
-            clamped
-                ? $"task {id}: claim '{status}' exceeds what the harness verified — card is {node.Status}; it advances when the branch/PR facts are observed"
+            unverified
+                ? $"task {id}: {node.Status} (unverified — {node.Warning}; the harness keeps checking and clears the warning when the facts catch up)"
                 : $"task {id}: {node.Status}",
             node);
     }

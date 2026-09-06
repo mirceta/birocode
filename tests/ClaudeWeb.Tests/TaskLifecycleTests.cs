@@ -5,9 +5,11 @@ using Xunit;
 
 namespace ClaudeWeb.Tests;
 
-/// <summary>openspec kanban-lifecycle-columns: the delivery-lifecycle status
-/// machine — claims clamp to the verified state, observations move forward only,
-/// pre-lifecycle boards migrate by evidence, parked hand-off states go stale.</summary>
+/// <summary>openspec kanban-lifecycle-columns, amended by board-claims-advisory: the
+/// delivery-lifecycle status machine — a claim moves the card exactly where it says
+/// (no clamp), the badge says what the harness has not verified, observations move
+/// forward only and clear the badge when they catch up, pre-lifecycle boards keep
+/// their statuses, parked hand-off states go stale.</summary>
 public class TaskLifecycleTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "cwtest-lifecycle-" + Guid.NewGuid().ToString("N"));
@@ -34,26 +36,68 @@ public class TaskLifecycleTests : IDisposable
     }
 
     [Theory]
-    [InlineData("todo", null, "doing", "doing", false)]         // conversational forward: free
-    [InlineData("todo", null, "committed", "doing", true)]      // no facts: clamps to doing
-    [InlineData("doing", null, "done", "doing", true)]          // agent says done, harness saw nothing
-    [InlineData("doing", "committed", "done", "committed", true)]  // claims stop at the verified state
-    [InlineData("doing", "committed", "committed", "committed", false)] // claim matching facts: free
-    [InlineData("pr-merged", null, "todo", "todo", false)]      // backward always free (blocked → todo)
-    [InlineData("done", "done", "done", "done", false)]         // same status: free
-    public void Claims_clamp_to_the_verified_state(string current, string? verified, string requested, string expected, bool expectClamped)
+    [InlineData("todo", null, false)]              // conversational: never a badge
+    [InlineData("doing", null, false)]
+    [InlineData("committed", null, true)]          // above doing with nothing verified
+    [InlineData("done", null, true)]
+    [InlineData("committed", "committed", false)]  // verified covers it
+    [InlineData("done", "committed", true)]        // claim above the verified state
+    [InlineData("pr-merged", "done", false)]       // verified beyond the claim: fine
+    [InlineData("done", "done", false)]
+    public void A_card_is_unverified_when_its_status_is_above_max_doing_verified(string status, string? verified, bool expectUnverified)
     {
-        var (applied, clamped) = TaskLifecycle.ClampClaim(Node(current, verified), requested);
-        Assert.Equal(expected, applied);
-        Assert.Equal(expectClamped, clamped);
+        Assert.Equal(expectUnverified, TaskLifecycle.IsUnverified(status, verified));
+        Assert.Equal(expectUnverified, TaskLifecycle.WarningFor(status, verified, null) is not null);
     }
 
     [Fact]
-    public void Claim_done_past_verified_pr_merged_clamps_to_pr_merged()
+    public void The_badge_names_the_claim_the_verified_state_and_the_reason()
     {
-        var (applied, clamped) = TaskLifecycle.ClampClaim(Node("committed", verified: "pr-merged"), "done");
-        Assert.Equal("pr-merged", applied);
-        Assert.True(clamped);
+        Assert.Equal("claimed pr-merged, verified: doing — branch not on origin", TaskLifecycle.WarningFor("pr-merged", "doing", pushed: false));
+        Assert.Equal("claimed done, verified: nothing — no facts observed yet", TaskLifecycle.WarningFor("done", null, pushed: null));
+        Assert.Equal("claimed done, verified: pr-merged", TaskLifecycle.WarningFor("done", "pr-merged", pushed: true));
+        Assert.Null(TaskLifecycle.WarningFor("doing", null, pushed: false));
+    }
+
+    [Fact]
+    public void A_claim_moves_the_card_exactly_where_it_says_and_the_badge_follows_the_verified_state()
+    {
+        var g = new TaskGraphService(new Logger(), _dir);
+        var n = g.AddNode("Ship it", null, "r1", null, 0, 0, now: 1)!;
+        // The arch relays "TASK PR": pr-opened with nothing verified → moved, badged.
+        var opened = g.UpdateNode(n.Id, null, null, null, null, "pr-opened", null, null, 2)!;
+        Assert.Equal("pr-opened", opened.Status);
+        Assert.Equal("claimed pr-opened, verified: nothing — no facts observed yet", opened.Warning);
+        // A merged PR the arch knows of: pr-merged, still badged — never clamped.
+        var merged = g.UpdateNode(n.Id, null, null, null, null, "pr-merged", null, null, 3)!;
+        Assert.Equal("pr-merged", merged.Status);
+        Assert.StartsWith("claimed pr-merged, verified: nothing", merged.Warning);
+        // Backward is free and clears the badge.
+        var back = g.UpdateNode(n.Id, null, null, null, null, "doing", null, null, 4)!;
+        Assert.Equal("doing", back.Status);
+        Assert.Null(back.Warning);
+        // Verification catching up clears it; verification exceeding it advances the card.
+        g.UpdateNode(n.Id, null, null, null, null, "pr-merged", null, null, 5);
+        var verified = g.ApplyVerification(n.Id, NoFacts with { PrMerged = true, MergeCommit = "m1" }, 6)!;
+        Assert.Equal("pr-merged", verified.Status);
+        Assert.Equal("pr-merged", verified.VerifiedStatus);
+        Assert.Null(verified.Warning);
+        var live = g.ApplyVerification(n.Id, NoFacts with { PrMerged = true, MergeCommit = "m1", MergeLive = true }, 7)!;
+        Assert.Equal("done", live.Status);
+        Assert.Null(live.Warning);
+    }
+
+    [Fact]
+    public void Verification_below_the_claim_records_the_facts_and_keeps_the_badge_without_demoting()
+    {
+        var g = new TaskGraphService(new Logger(), _dir);
+        var n = g.AddNode("Ship it", null, "r1", null, 0, 0, now: 1)!;
+        g.RecordClaim(n.Id, "feature/x", "abc", null, 2);
+        g.UpdateNode(n.Id, null, null, null, null, "pr-merged", null, null, 3);
+        var seen = g.ApplyVerification(n.Id, NoFacts with { BranchExists = true, HeadCommit = "abc", HasCommits = true, OnOrigin = false }, 4)!;
+        Assert.Equal("pr-merged", seen.Status);             // the claim stands
+        Assert.Equal("committed", seen.VerifiedStatus);     // the facts are recorded
+        Assert.Equal("claimed pr-merged, verified: committed — branch not on origin", seen.Warning);
     }
 
     // ---- 2. observed facts ---------------------------------------------------------------
@@ -103,7 +147,7 @@ public class TaskLifecycleTests : IDisposable
     // ---- 3. migration --------------------------------------------------------------------
 
     [Fact]
-    public void Legacy_done_without_evidence_migrates_to_committed_with_warning_once()
+    public void Legacy_done_without_evidence_keeps_done_and_gets_the_badge_once()
     {
         Directory.CreateDirectory(_dir);
         var path = Path.Combine(_dir, "taskgraph.json");
@@ -111,22 +155,22 @@ public class TaskLifecycleTests : IDisposable
 
         var g = new TaskGraphService(new Logger(), _dir);
         var n = g.Find("a")!;
-        Assert.Equal("committed", n.Status);
-        Assert.Contains("migrated", n.Warning);
+        Assert.Equal("done", n.Status);                    // never downgraded
+        Assert.Equal("claimed done, verified: nothing — no facts observed yet", n.Warning);
 
-        // Idempotent: a reload does not re-stage the card.
+        // Idempotent: a reload does not touch the card again.
         var again = new TaskGraphService(new Logger(), _dir).Find("a")!;
-        Assert.Equal("committed", again.Status);
+        Assert.Equal("done", again.Status);
     }
 
     [Fact]
-    public void Legacy_done_with_merge_evidence_migrates_to_pr_merged()
+    public void Legacy_done_with_merge_evidence_stays_done_without_a_badge()
     {
         Directory.CreateDirectory(_dir);
         File.WriteAllText(Path.Combine(_dir, "taskgraph.json"),
             """{"Nodes":[{"Id":"a","Title":"old","Note":null,"RepoId":"r1","MachineId":null,"Status":"done","X":0,"Y":0,"CreatedAt":1,"UpdatedAt":1,"MergeCommit":"m1"}],"Edges":[],"Machines":[],"Scratch":"","Tombstones":[]}""");
         var n = new TaskGraphService(new Logger(), _dir).Find("a")!;
-        Assert.Equal("pr-merged", n.Status);
+        Assert.Equal("done", n.Status);
         Assert.Null(n.Warning);
     }
 

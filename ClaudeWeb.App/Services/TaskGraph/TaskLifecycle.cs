@@ -1,18 +1,22 @@
 namespace ClaudeWeb.Services.TaskGraph;
 
 /// <summary>
-/// The task board's delivery lifecycle (openspec kanban-lifecycle-columns): the
-/// pure rules for the six statuses <c>todo → doing → committed → pr-opened →
-/// pr-merged → done</c>. "Blocked" stays a derived flag, not a status.
+/// The task board's delivery lifecycle (openspec kanban-lifecycle-columns, amended by
+/// openspec board-claims-advisory): the pure rules for the six statuses <c>todo →
+/// doing → committed → pr-opened → pr-merged → done</c>. "Blocked" stays a derived
+/// flag, not a status.
 ///
-/// Two kinds of movement exist and they are not equal:
-///   - a CLAIM (an agent's closing line, relayed by the arch through
-///     update_task) may move a card forward only as far as the harness has
-///     verified — everything from <c>committed</c> up needs observed facts;
-///     backward moves are always free;
-///   - an OBSERVATION (the verifier reading git/PR state) moves a card forward
-///     only, never back — a branch deleted after its merge must not un-merge
-///     the task.
+/// Two kinds of movement exist:
+///   - a CLAIM (an agent's closing line relayed by the arch through update_task, the
+///     arch's own judgement, the Operator's drag) MOVES the card to exactly what was
+///     claimed, in either direction — the board is the arch's and the Operator's to
+///     move;
+///   - an OBSERVATION (the verifier reading git/PR state) annotates: it records the
+///     verified state, ADVANCES a card forward when the facts exceed its status, and
+///     never moves one back — a branch deleted after its merge must not un-merge the
+///     task.
+/// Verification is advisory: a card whose status is above what the harness verified
+/// carries a warning badge (<see cref="WarningFor"/>) until the facts catch up.
 /// </summary>
 public static class TaskLifecycle
 {
@@ -32,20 +36,25 @@ public static class TaskLifecycle
     /// <c>Status != "done"</c> check.</summary>
     public static bool IsDelivered(string? status) => status is PrMerged or Done;
 
-    /// <summary>The highest status a claim may set: <c>doing</c> is
-    /// conversational (a ping, an agent picking work up), everything above it
-    /// requires the harness-verified state recorded on the card.</summary>
-    public static int CeilingRank(TaskGraphService.Node node) =>
-        Math.Max(Rank(Doing), Rank(node.VerifiedStatus));
+    /// <summary>The status the harness vouches for: <c>doing</c> is conversational (a
+    /// ping, an agent picking work up) and needs no facts; above it the verified state
+    /// recorded on the card is the ceiling.</summary>
+    public static int VerifiedCeiling(string? verifiedStatus) => Math.Max(Rank(Doing), Rank(verifiedStatus));
 
-    /// <summary>Clamp a claimed status: backward always passes, forward lands at
-    /// the ceiling. Returns the status to apply and whether it was clamped.</summary>
-    public static (string Applied, bool Clamped) ClampClaim(TaskGraphService.Node node, string requested)
+    /// <summary>Whether a card says more than the harness has verified (openspec
+    /// board-claims-advisory): the status is above <c>max(doing, verified)</c>. Such a
+    /// card keeps its status and carries the warning badge.</summary>
+    public static bool IsUnverified(string? status, string? verifiedStatus) => Rank(status) > VerifiedCeiling(verifiedStatus);
+
+    /// <summary>The badge text for a card, or null when the verified state covers its
+    /// status: "claimed pr-merged, verified: doing — branch not on origin".</summary>
+    public static string? WarningFor(string? status, string? verifiedStatus, bool? pushed)
     {
-        var req = Rank(requested);
-        if (req <= Rank(node.Status)) return (requested, false); // backward or same: free
-        var ceiling = CeilingRank(node);
-        return req <= ceiling ? (requested, false) : (TaskGraphService.Statuses[ceiling], true);
+        if (!IsUnverified(status, verifiedStatus)) return null;
+        var reason = pushed == false ? " — branch not on origin"
+            : verifiedStatus is null ? " — no facts observed yet"
+            : "";
+        return $"claimed {status}, verified: {verifiedStatus ?? "nothing"}{reason}";
     }
 
     /// <summary>What the verifier observed about a task's recorded branch.</summary>
@@ -68,14 +77,13 @@ public static class TaskLifecycle
 
     /// <summary>Stale = sitting in the two hand-off states (<c>committed</c>:
     /// unpushed branch on one machine; <c>pr-opened</c>: PR waiting) with no
-    /// activity for the window.</summary>
+    /// activity for the window. Judged from the verified facts on the card.</summary>
     public static bool IsStale(string? status, long updatedAt, long now, long staleAfterMs) =>
         status is Committed or PrOpened && now - updatedAt > staleAfterMs;
 
-    /// <summary>Migration of a pre-lifecycle status (board schema &lt; 2):
-    /// <c>done</c> becomes <c>pr-merged</c> only with merge evidence on the
-    /// card; otherwise <c>committed</c> — the warning badge is the caller's job.
-    /// Everything else keeps its status.</summary>
+    /// <summary>Migration of a pre-lifecycle status (board schema &lt; 2): a card keeps
+    /// its status — nothing is downgraded — and a <c>done</c> without merge evidence on
+    /// the card gets the warning badge until the verifier finds its merge.</summary>
     public static (string Status, bool Warn) MigrateStatus(string status, bool hasMergeEvidence) =>
-        status == Done ? (hasMergeEvidence ? (PrMerged, false) : (Committed, true)) : (status, false);
+        (status, status == Done && !hasMergeEvidence);
 }
