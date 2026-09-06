@@ -67,6 +67,7 @@ export const FEATURES = {
   accountChips: 'advanced', // dashboard GitHub + Claude account-status chips beside the Scoreboard (openspec: add-account-status)
   gitIdentityRows: 'advanced', // per-dock "commits as / pushes as" identity rows in the git section (openspec: add-git-identity-surface)
   githubTokenControl: 'advanced', // write-only PAT control in the GitHub chip to set the global credential (openspec: add-git-identity-surface)
+  codexKeyControl: 'advanced', // write-only OpenAI API-key control under the Codex chip -> `codex login --with-api-key` (openspec: codex-real-run)
   hostClock: 'advanced', // dashboard host-clock chip: the host box's wall time beside the Scoreboard (openspec: add-dashboard-host-clock)
   headerStatusStrip: 'advanced', // collapsible status strip under the app header hosting Scoreboard + account chips + host clock (openspec: add-header-status-strip)
   agenticAudit: 'advanced', // read-only agentic-call audit trail panel on the dashboard (openspec: add-agent-audit-trail)

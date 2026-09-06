@@ -2204,7 +2204,8 @@ public partial class ArchAgentService : IArchWakeSource
                 await session.EmitAsync(new { type = "user", text = sendText, actor });
                 await _cli.RunAsync(sendText, sessionId, workingDirectory: repo.Path,
                     emit: session.EmitAsync, ct: session.Cts.Token,
-                    repoId: repo.Id, repoName: repo.Name, mcpConfigJson: mcp);
+                    repoId: repo.Id, repoName: repo.Name, mcpConfigJson: mcp,
+                    provider: repo.Provider); // the repo's engine (openspec codex-real-run)
             }
             catch (Exception ex)
             {

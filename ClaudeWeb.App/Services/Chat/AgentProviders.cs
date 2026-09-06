@@ -46,6 +46,11 @@ public sealed class TurnSink
     public Audit.AuditContext? Audit { get; init; }
     /// <summary>Audit hook: (context, toolName, summary). Null in tests.</summary>
     public Action<Audit.AuditContext, string, string>? LogTool { get; init; }
+    /// <summary>The last non-terminal notice the provider reported (Codex's
+    /// transport "error" events); the runner reads it when the CLI exits
+    /// non-zero without a terminal event, so the Operator sees the real
+    /// message rather than a bare exit code (openspec codex-real-run).</summary>
+    public string? LastNotice { get; set; }
 }
 
 /// <summary>

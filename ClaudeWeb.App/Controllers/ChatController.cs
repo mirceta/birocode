@@ -100,6 +100,8 @@ public class ChatController : ControllerBase
         // Provider (openspec provider-agnostic-runner): per-turn override, else
         // the repo's persisted choice, else claude. Unknown values read as claude.
         var provider = AgentProviders.Normalize(request?.Provider ?? repo.Provider);
+        if (provider != AgentProviders.Claude)
+            _logger.Info($"[CHAT] Engine {provider} for \"{repo.Name}\" ({(request?.Provider is null ? "repo setting" : "turn override")})");
 
         // Browser mode (openspec claude-in-chrome): builder lane only — the ask
         // lane's contract is structurally read-only, and browser tools mutate the

@@ -131,11 +131,13 @@ public class AgentProviderTests
     [Fact]
     public void Codex_resume_and_ask_lane_map_to_resume_subcommand_and_readonly_sandbox()
     {
+        // `codex exec resume` has no --sandbox flag (0.153.4); -c sandbox_mode works on
+        // both subcommands — pinned in CodexRealRunTests (openspec codex-real-run).
         var psi = new CodexCliAdapter(new Logger()).CreateProcessInfo(Spec("q", sessionId: "thread-9", model: "gpt-5-codex", readOnly: true));
         Assert.Equal(new[]
         {
             "exec", "resume", "thread-9", "--json", "--skip-git-repo-check",
-            "--sandbox", "read-only",
+            "-c", "sandbox_mode=\"read-only\"",
             "--model", "gpt-5-codex",
             "q",
         }, psi.ArgumentList);
@@ -149,8 +151,10 @@ public class AgentProviderTests
         Assert.Contains(@"mcp_servers.birokrat.command='C:\srv\birokrat.exe'", overrides);
         Assert.Contains("mcp_servers.birokrat.args=['--port','5001']", overrides);
         Assert.Contains("mcp_servers.birokrat.env={API_KEY='k1'}", overrides);
-        // url (streamable-http) servers are the deferred management slice — skipped, not mangled.
-        Assert.DoesNotContain(overrides, o => o.Contains("remote"));
+        // url (streamable-http) servers become url overrides; no headers → no token var
+        // (openspec codex-real-run).
+        Assert.Contains("mcp_servers.remote.url='http://x/mcp'", overrides);
+        Assert.DoesNotContain(overrides, o => o.Contains("remote.bearer_token_env_var"));
 
         var psi = new CodexCliAdapter(new Logger()).CreateProcessInfo(Spec("q", mcpJson: json));
         Assert.Contains("-c", psi.ArgumentList);

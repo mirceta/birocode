@@ -467,13 +467,17 @@ public class RepositoryRegistry
     // Clones normalize too: LocalPort is set to the default app's port so
     // back-compat consumers (Exposure check, the bare proxy route) keep working
     // for repos that have migrated to the LocalApps list.
-    private static RepositoryConfig Clone(RepositoryConfig r)
+    internal static RepositoryConfig Clone(RepositoryConfig r)
     {
         var apps = EffectiveApps(r);
         return new()
         {
             Id = r.Id, Name = r.Name, Path = r.Path, IsSelf = r.IsSelf, Visibility = r.Visibility,
             AutoUnderstanding = r.AutoUnderstanding,
+            // Handle + Provider ride along: the resolver hands THIS clone to the chat
+            // path, and a clone without Provider ran every codex repo on claude
+            // (found by the real-binary run, openspec codex-real-run).
+            Handle = r.Handle, Provider = r.Provider,
             LocalPort = apps.Count > 0 ? apps[0].Port : null,
             LocalApps = apps.Select(a => new LocalAppConfig { Id = a.Id, Name = a.Name, Port = a.Port, Kind = a.Kind }).ToList(),
         };

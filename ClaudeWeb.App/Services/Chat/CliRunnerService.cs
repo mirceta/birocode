@@ -140,6 +140,9 @@ public class CliRunnerService
 
             process = new Process { StartInfo = psi };
             process.Start();
+            // A provider that redirects stdin (Codex) gets it closed at once: the
+            // prompt is the argv one, nothing is appended from an inherited pipe.
+            if (psi.RedirectStandardInput) { try { process.StandardInput.Close(); } catch { /* already closed */ } }
 
             string? capturedSessionId = null;
             var sawError = false;
@@ -173,9 +176,9 @@ public class CliRunnerService
 
             if (process.ExitCode != 0 && !sawError)
             {
-                var detail = string.IsNullOrWhiteSpace(stderr)
-                    ? $"{adapter.CliLabel} exited with code {process.ExitCode}"
-                    : stderr.Trim();
+                var detail = !string.IsNullOrWhiteSpace(stderr) ? stderr.Trim()
+                    : !string.IsNullOrWhiteSpace(sink.LastNotice) ? sink.LastNotice
+                    : $"{adapter.CliLabel} exited with code {process.ExitCode}";
                 _logger.Error($"[CLI] Exit code {process.ExitCode}: {detail}");
                 record.ErrorMessage ??= detail;
                 await emit(new { type = "error", message = detail });
