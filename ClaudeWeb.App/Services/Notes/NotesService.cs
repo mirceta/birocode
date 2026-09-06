@@ -53,7 +53,11 @@ public class NotesService
     // Number (openspec stable-handles): the running number shown as "#12" — allocated
     // on creation, backfilled once for older notes, never changed. 0 = not yet assigned
     // (a note from a store or a sync peer that predates numbers; backfilled on load/merge).
-    public sealed record Note(string Id, string Text, string? Project, long CreatedAt, long UpdatedAt, int Priority, bool Active, int Number = 0);
+    // ConsumedByTaskId (openspec ideas-consume-on-promotion): non-null = this idea was
+    // promoted into that task graph node and is CONSUMED — hidden from the default Ideas
+    // list (all views and list_ideas) but kept on the board so it can be restored. Null
+    // on ideas that were never promoted, and on stores/sync peers that predate the field.
+    public sealed record Note(string Id, string Text, string? Project, long CreatedAt, long UpdatedAt, int Priority, bool Active, int Number = 0, string? ConsumedByTaskId = null);
 
     /// <summary>A recorded deletion, kept so a delete on one harness doesn't
     /// resurrect from another during sync (openspec ideas-drive-sync). Pruned
@@ -77,10 +81,14 @@ public class NotesService
         public Dictionary<string, List<Note>>? Notes { get; set; }
     }
 
-    /// <summary>All ideas, newest first.</summary>
-    public List<Note> List()
+    /// <summary>All ideas, newest first. Consumed ideas (promoted into a task —
+    /// openspec ideas-consume-on-promotion) are excluded unless
+    /// <paramref name="includeConsumed"/> is true.</summary>
+    public List<Note> List(bool includeConsumed = false)
     {
-        lock (_gate) return _ideas.AsEnumerable().Reverse().ToList();
+        lock (_gate) return _ideas.AsEnumerable().Reverse()
+            .Where(n => includeConsumed || n.ConsumedByTaskId is null)
+            .ToList();
     }
 
     /// <summary>Adds an idea. Text is trimmed and length-capped; empty text is rejected (null return). Project is optional; priority is clamped to 0–5; active defaults to false.</summary>
@@ -137,6 +145,75 @@ public class NotesService
         }
         if (removed) { _logger.Info($"[NOTES] Deleted idea {id}"); RaiseChanged(); }
         return removed;
+    }
+
+    // ---- consumption (openspec ideas-consume-on-promotion) -------------------------
+
+    /// <summary>Marks an idea CONSUMED by a task graph node: it leaves the Ideas
+    /// list (all views and list_ideas) but is kept on the board, linked to the task.
+    /// Also clears Active — a consumed idea is a task now, not current idea-work.
+    /// No-op (null return) if the id is unknown; re-consuming by a different task
+    /// just re-points the link. Bumps UpdatedAt so the consumption wins LWW sync.</summary>
+    public Note? Consume(string ideaId, string taskId, long now)
+    {
+        if (string.IsNullOrWhiteSpace(taskId)) return null;
+        Note updated;
+        lock (_gate)
+        {
+            var i = _ideas.FindIndex(n => n.Id == ideaId);
+            if (i < 0) return null;
+            if (_ideas[i].ConsumedByTaskId == taskId) return _ideas[i]; // idempotent, no churn
+            updated = _ideas[i] with { ConsumedByTaskId = taskId, Active = false, UpdatedAt = now };
+            _ideas[i] = updated;
+            Save();
+        }
+        _logger.Info($"[NOTES] Idea {ideaId} consumed by task {taskId}");
+        RaiseChanged();
+        return updated;
+    }
+
+    /// <summary>Restores a consumed idea back to the list as INACTIVE, keeping its
+    /// original text/project/priority (openspec ideas-consume-on-promotion): called
+    /// when the task it became is DELETED. Only restores when the idea is consumed
+    /// by exactly <paramref name="taskId"/> (so deleting one task never frees an idea
+    /// linked to another). No-op (null return) otherwise.</summary>
+    public Note? Unconsume(string ideaId, string taskId, long now)
+    {
+        Note updated;
+        lock (_gate)
+        {
+            var i = _ideas.FindIndex(n => n.Id == ideaId);
+            if (i < 0 || _ideas[i].ConsumedByTaskId is null || _ideas[i].ConsumedByTaskId != taskId) return null;
+            updated = _ideas[i] with { ConsumedByTaskId = null, Active = false, UpdatedAt = now };
+            _ideas[i] = updated;
+            Save();
+        }
+        _logger.Info($"[NOTES] Idea {ideaId} restored (task {taskId} deleted)");
+        RaiseChanged();
+        return updated;
+    }
+
+    /// <summary>Migration (openspec ideas-consume-on-promotion): mark every idea that
+    /// already has a task pointing at it (task.ideaId) as consumed by that task, unless
+    /// it is already consumed. Idempotent; returns how many ideas were newly consumed.
+    /// Raises Changed once when anything changed so the state replicates to sync peers.</summary>
+    public int ReconcileConsumed(IReadOnlyDictionary<string, string> ideaIdToTaskId, long now)
+    {
+        int changed = 0;
+        lock (_gate)
+        {
+            for (var i = 0; i < _ideas.Count; i++)
+            {
+                var n = _ideas[i];
+                if (n.ConsumedByTaskId is not null) continue;
+                if (!ideaIdToTaskId.TryGetValue(n.Id, out var taskId) || string.IsNullOrWhiteSpace(taskId)) continue;
+                _ideas[i] = n with { ConsumedByTaskId = taskId, Active = false, UpdatedAt = now };
+                changed++;
+            }
+            if (changed > 0) Save();
+        }
+        if (changed > 0) { _logger.Info($"[NOTES] Migrated {changed} idea(s) to consumed (task already linked)"); RaiseChanged(); }
+        return changed;
     }
 
     /// <summary>Copy of the whole board (ideas + tombstones) for the sync layer.</summary>

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { apiGet } from '../api/client';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { apiGet, apiPost } from '../api/client';
 import { useT } from '../i18n/LanguageContext';
 import Arch from '../pages/Arch';
 import Tasks from '../pages/Tasks';
@@ -25,6 +25,15 @@ import './manage.css';
 // the device's last choice, else arch. The harness API root is derived from our own path, the same
 // trick the events page uses, so the app works wherever the proxy mounts it.
 const TABS = ['arch', 'tasks', 'ideas', 'graph', 'kanban', 'events', 'status'];
+// Further arch conversations (openspec arch-conversations) are sibling tabs keyed
+// "arch:<conversation id>", placed after Arch by default; their labels are the names.
+const CONV_PREFIX = 'arch:';
+const isConvTab = (k) => typeof k === 'string' && k.startsWith(CONV_PREFIX);
+const convOf = (k) => (isConvTab(k) ? k.slice(CONV_PREFIX.length) : '@arch');
+const tabsWith = (convs) => {
+  const extra = (convs || []).filter((c) => !c.isDefault).map((c) => CONV_PREFIX + c.id);
+  return ['arch', ...extra, ...TABS.slice(1)];
+};
 const ORDER_KEY = 'manageapp.paneOrder';
 const TAB_KEY = 'manageapp.tab';
 const LAYOUT_KEY = 'manageapp.layout';
@@ -44,9 +53,9 @@ function harnessRoot() {
 function readTab() {
   try {
     const q = new URLSearchParams(window.location.search).get('tab');
-    if (TABS.includes(q)) return q;
+    if (TABS.includes(q) || isConvTab(q)) return q;
     const saved = localStorage.getItem(TAB_KEY);
-    return TABS.includes(saved) ? saved : 'arch';
+    return TABS.includes(saved) || isConvTab(saved) ? saved : 'arch';
   } catch {
     return 'arch';
   }
@@ -72,23 +81,30 @@ function readLayout() {
   }
 }
 
-function readHidden() {
+function readHidden(tabs = TABS) {
   const v = readJson(HIDDEN_KEY, []);
-  return Array.isArray(v) ? v.filter((k) => TABS.includes(k)) : [];
+  return Array.isArray(v) ? v.filter((k) => tabs.includes(k)) : [];
 }
 
 // The pane/tab order: the saved order (unknown keys dropped), then any tab the saved
-// order does not know yet, in default position — so a new tab appears without a reset.
-function readOrder() {
+// order does not know yet, slotted right after its default predecessor — so a new tab
+// (or a new arch conversation) appears without a reset.
+function readOrder(tabs = TABS) {
   const v = readJson(ORDER_KEY, []);
-  const saved = Array.isArray(v) ? v.filter((k) => TABS.includes(k)) : [];
-  return [...saved, ...TABS.filter((k) => !saved.includes(k))];
+  const out = Array.isArray(v) ? v.filter((k) => tabs.includes(k)) : [];
+  for (const k of tabs) {
+    if (out.includes(k)) continue;
+    const prev = tabs[tabs.indexOf(k) - 1];
+    const at = prev ? out.indexOf(prev) : -1;
+    out.splice(at < 0 ? out.length : at + 1, 0, k);
+  }
+  return out;
 }
 
-function readWeights() {
+function readWeights(tabs = TABS) {
   const v = readJson(WEIGHTS_KEY, {});
   const out = { ...DEFAULT_WEIGHTS };
-  for (const k of TABS) if (typeof v?.[k] === 'number' && v[k] > 0) out[k] = v[k];
+  for (const k of tabs) if (typeof v?.[k] === 'number' && v[k] > 0) out[k] = v[k];
   return out;
 }
 
@@ -107,7 +123,26 @@ export default function ManageApp() {
   const [dragging, setDragging] = useState(false);
   const [label, setLabel] = useState('');
   const [authed, setAuthed] = useState(null);
+  const [convs, setConvs] = useState(null); // null until the harness answered
   const bodyRef = useRef(null);
+  const allTabs = useMemo(() => tabsWith(convs), [convs]);
+
+  // The arch conversations (openspec arch-conversations): every non-default one is a
+  // sibling tab; the order/hidden/weights maps learn the new keys without a reset.
+  const loadConvs = useCallback(async () => {
+    try {
+      const r = await apiGet('/arch/conversations');
+      setConvs(Array.isArray(r?.conversations) ? r.conversations : []);
+    } catch {
+      setConvs((c) => c || []);
+    }
+  }, []);
+  useEffect(() => { loadConvs(); }, [loadConvs]);
+  useEffect(() => {
+    setOrder(readOrder(allTabs));
+    setHidden(readHidden(allTabs));
+    setWeights(readWeights(allTabs));
+  }, [allTabs]);
 
   const setTab = (next) => {
     setTabState(next);
@@ -139,7 +174,7 @@ export default function ManageApp() {
     setHidden((prev) => {
       const isHidden = prev.includes(key);
       const next = isHidden ? prev.filter((k) => k !== key) : [...prev, key];
-      if (!isHidden && TABS.every((k) => next.includes(k))) return prev;
+      if (!isHidden && allTabs.every((k) => next.includes(k))) return prev;
       save(HIDDEN_KEY, next);
       return next;
     });
@@ -222,8 +257,10 @@ export default function ManageApp() {
 
   const root = harnessRoot();
   const openHarness = () => { window.top.location.href = `${root}/studio`; };
+  const convName = (k) => (convs || []).find((c) => c.id === convOf(k))?.name || convOf(k);
   const labelOf = (k) => (
-    k === 'arch' ? t('nav.arch')
+    isConvTab(k) ? convName(k)
+    : k === 'arch' ? t('nav.arch')
       : k === 'tasks' ? t('nav.tasks')
         : k === 'ideas' ? t('nav.ideas')
           : k === 'graph' ? t('manage.graph')
@@ -231,12 +268,37 @@ export default function ManageApp() {
               : k === 'status' ? t('manage.status')
                 : t('manage.events'));
   const panes = layout === 'panes' && wide;
-  const visible = panes ? order.filter((k) => !hidden.includes(k)) : [tab];
+  // A tab naming a conversation that is gone (removed elsewhere) falls back to Arch.
+  const tabKnown = !isConvTab(tab) || convs === null || allTabs.includes(tab);
+  useEffect(() => { if (!tabKnown) setTab('arch'); }, [tabKnown]); // eslint-disable-line react-hooks/exhaustive-deps
+  const visible = panes ? order.filter((k) => !hidden.includes(k)) : [tabKnown ? tab : 'arch'];
 
-  // The Arch tab is the conversation only; its side cards (Loop, Managed agents,
-  // Fleet, Home repo) live on the Status tab under the fleet strips.
+  // "＋" in the tab strip: a new arch conversation, named up front, opened at once.
+  const newConversation = async () => {
+    const name = window.prompt(t('manage.newConversationPrompt'), '');
+    if (name === null) return;
+    try {
+      const r = await apiPost('/arch/conversations', { name });
+      const id = r?.conversation?.id;
+      await loadConvs();
+      if (!id) return;
+      const key = CONV_PREFIX + id;
+      if (panes) setHidden((prev) => { const next = prev.filter((k) => k !== key); save(HIDDEN_KEY, next); return next; });
+      else setTab(key);
+    } catch (e) {
+      window.alert(e?.message || String(e));
+    }
+  };
+  // The Arch page tells us when a conversation was renamed or removed.
+  const onConversationChanged = ({ id, removed }) => {
+    loadConvs();
+    if (removed && tab === CONV_PREFIX + id) setTab('arch');
+  };
+
+  // The Arch tab is the conversation with its lanes (Chat · Tools · History · Loops);
+  // the fleet-wide cards (Managed agents, Fleet, Home repo) live on the Status tab.
   const renderPane = (k) => (
-    k === 'arch' ? <Arch popup view="chat" onOpenDock={openHarness} />
+    k === 'arch' || isConvTab(k) ? <Arch popup view="chat" conv={convOf(k)} onOpenDock={openHarness} onConversationChanged={onConversationChanged} />
       : k === 'tasks' ? <Tasks popup />
       : k === 'ideas' ? <IdeasPanel view="ideas" />
       : k === 'graph' ? <IdeasPanel view="graph" />
@@ -276,6 +338,16 @@ export default function ManageApp() {
               </button>
             );
           })}
+          <button
+            type="button"
+            className="mg__tab mg__tab--new"
+            title={t('manage.newConversation')}
+            aria-label={t('manage.newConversation')}
+            onClick={newConversation}
+            data-new-conv
+          >
+            ＋
+          </button>
         </nav>
         <div className="mg__layout" role="group" aria-label={t('manage.layout')}>
           <button

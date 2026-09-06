@@ -52,7 +52,9 @@ export default function KanbanBoard() {
 
   const load = useCallback(async () => {
     try {
-      const [b, f, ideas] = await Promise.all([apiGet('/taskgraph'), apiGet('/arch/fleet/status').catch(() => null), apiGet('/notes').catch(() => null)]);
+      // includeConsumed: promoted ideas are consumed (hidden from the default list),
+      // but the 💡#N chip must still resolve their handle (openspec ideas-consume-on-promotion).
+      const [b, f, ideas] = await Promise.all([apiGet('/taskgraph'), apiGet('/arch/fleet/status').catch(() => null), apiGet('/notes?includeConsumed=true').catch(() => null)]);
       setBoard(b);
       if (f) setFleet(f);
       if (Array.isArray(ideas)) setIdeaNumbers(Object.fromEntries(ideas.filter((i) => i.number > 0).map((i) => [i.id, i.number])));
