@@ -1,16 +1,14 @@
 ## ADDED Requirements
 
-### Requirement: A goal loop on an arch conversation is gated by the board and carries its wake
+### Requirement: A goal loop on a goal conversation is paced by the quiet floor alone
 
-For a goal loop armed on an arch conversation that runs a goal, the engine SHALL apply
-a completion gate: a `done` decision SHALL stand only when no owned board task is short
-of the goal's lifecycle floor; otherwise the loop SHALL re-enter the work phase with the
-work prompt. Each send of such a loop SHALL be prefixed with the queued Operator messages,
-the board check (if any) and what happened on the owned repos and tasks since the last
-turn, composed only when the run slot is free. The task board SHALL publish `task.status`
-on the harness feed when a task's status changes, naming the task and its assignee.
+The engine SHALL treat a goal loop armed on an arch conversation that runs a goal as
+polling only: a repeat of the goal prompt SHALL wait for the quiet floor and SHALL never
+be advanced by a managed repo turn; the first send of an arm and the verification prompt
+SHALL go out at once. Each send of such a loop SHALL be prefixed with the Operator
+messages queued while the conversation was busy, composed only when the run slot is free.
 
-#### Scenario: Gate and decoration
+#### Scenario: Polling
 
-- **WHEN** the goal loop's verification reply ends with GOAL_VERIFIED and an owned task is `doing`
-- **THEN** the loop proposes the work prompt in the work phase, and the send the agent receives starts with the board check naming that task
+- **WHEN** a goal conversation answered its last poll two minutes ago with a five-minute floor and a driven agent finishes a turn
+- **THEN** the loop holds, and the next poll goes out three minutes later carrying any queued Operator message

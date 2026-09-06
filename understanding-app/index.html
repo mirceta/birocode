@@ -1,60 +1,71 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding: promoting an idea consumes it</title>
-<link rel="stylesheet" href="./app.css" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Goal conversations — the arch on a timer</title>
+<link rel="stylesheet" href="./app.css">
 </head>
 <body>
 <header class="top">
-  <h1>💡→🧩 Ideas that become tasks are <em>consumed</em></h1>
-  <p class="sub">Promoting an idea to a task removes it from the Ideas list and links it to the task. Delete the task and the idea comes back (inactive); complete the task and it stays gone. Play with it below.</p>
+  <h1>Goal conversations: the arch on a timer</h1>
+  <p class="lead">One sentence: <b>a goal conversation is the arch agent re-prompted every N minutes; on each turn it checks its agents itself; the agents never call anyone.</b> Nothing else moves on its own. Press play.</p>
 </header>
 
-<main>
-  <section class="stage">
+<section class="stage">
+  <div class="col">
+    <h3>Your chat with the arch</h3>
+    <div class="conv default">
+      <div class="name">Arch agent <span class="pill free">free</span></div>
+      <div class="sub">a plain chat — you type, it answers</div>
+      <div class="drop" id="drop-default"><div class="ev nothing">nothing arrives here on its own</div></div>
+    </div>
+    <div class="notes small">
+      <b>Only two things ever come from a goal:</b>
+      <ul>
+        <li>the moment you start it: "goal g1 runs in its own conversation"</li>
+        <li>the moment it ends: one summary message (actor <code>goal</code>)</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="col">
+    <h3>The goal conversation</h3>
+    <div class="conv goal">
+      <div class="name">goal: Ship prg <span class="pill busy" id="busy">busy: goal g1</span></div>
+      <div class="sub">drives spacex/prg, spacex/fluent · cap 20 · polls every <span id="floor">5</span> min</div>
+      <div class="timer"><div class="bar" id="bar"></div><span id="clock">next poll in 5:00</span></div>
+      <div class="drop" id="drop-goal"></div>
+    </div>
     <div class="controls">
-      <button id="promote" class="btn btn--primary">💡 Promote idea → task</button>
-      <button id="complete" class="btn" disabled>✓ Complete task</button>
-      <button id="delete" class="btn btn--danger" disabled>🗑 Delete task</button>
-      <label class="toggle"><input type="checkbox" id="showConsumed" /> Show consumed</label>
-      <button id="reset" class="btn btn--ghost">↺ Reset</button>
+      <button id="play">▶ play</button>
+      <button id="poll">⏭ poll now</button>
+      <button id="finish">✓ arch says LOOP_DONE</button>
+      <button id="reset">↺ reset</button>
     </div>
-
-    <div class="boards">
-      <div class="board" id="ideasBoard">
-        <div class="board__head">Ideas list <span class="pill" id="ideasCount">0</span></div>
-        <div class="board__hint">What <code>/api/notes</code> and <code>list_ideas</code> return by default</div>
-        <ul class="cards" id="ideasCards"></ul>
-        <div class="consumed-wrap" id="consumedWrap" hidden>
-          <div class="consumed-head">▾ Consumed <span class="pill" id="consumedCount">0</span></div>
-          <ul class="cards cards--consumed" id="consumedCards"></ul>
-        </div>
-      </div>
-
-      <div class="board" id="taskBoard">
-        <div class="board__head">Task board <span class="pill" id="tasksCount">0</span></div>
-        <div class="board__hint">Kanban / Task graph — cards carry <code>ideaId</code></div>
-        <ul class="cards" id="taskCards"></ul>
-      </div>
+    <div class="notes small">
+      <b>Each poll is the same turn:</b> the harness re-sends the goal (plus anything you queued); the arch calls <code>list_agents</code> (who is running?), <code>read_transcript</code> (what did a finished one say?), <code>list_tasks</code> (the board), then acts: sends a task, follows up, moves a card — or says "nothing changed yet" and ends the turn. That last line is the accepted cost.
     </div>
+  </div>
 
-    <p class="log" id="log">Start by promoting the idea.</p>
-  </section>
+  <div class="col">
+    <h3>Repo agents — passive</h3>
+    <div class="agent" id="ag-prg"><b>spacex/prg</b><span class="state" id="st-prg">idle</span><small>does what it is asked; never calls back</small></div>
+    <div class="agent" id="ag-fluent"><b>spacex/fluent</b><span class="state" id="st-fluent">idle</span><small>does what it is asked; never calls back</small></div>
+    <div class="notes small">
+      <b>An agent finishing changes nothing by itself.</b> Its reply sits in its own conversation until the next poll reads it. Try: press play, watch prg finish, and see the goal conversation only notice at the next poll.
+    </div>
+  </div>
+</section>
 
-  <section class="explain">
-    <h2>The lifecycle</h2>
-    <ol class="steps">
-      <li><b>Promote</b> (Send to graph · Kanban · arch <code>idea_to_task</code>) → the idea is <b>consumed</b>: off the list, linked to the new task. Every path funnels through <code>TaskGraphService.AddNode</code>, so one choke point covers them all.</li>
-      <li><b>Consumed, not deleted</b> — kept behind the off-by-default “Consumed” view and <code>list_ideas ... includeConsumed</code>, each showing the task it became.</li>
-      <li><b>Delete the task</b> → the idea returns to the list <b>inactive</b>, original text/project/priority intact (only for the idea that task consumed).</li>
-      <li><b>Complete/merge</b> the task → a status change, never a delete → the idea <b>stays consumed</b>.</li>
-      <li><b>Migration</b> — on first run, ideas that already had a task pointing at them become consumed.</li>
-    </ol>
-    <p class="foot">State lives on the idea as <code>ConsumedByTaskId</code>, so it replicates over the existing ideas sync channel — no new wire shape. openspec <code>ideas-consume-on-promotion</code>.</p>
-  </section>
-</main>
+<section class="notes">
+  <h3>How it ends</h3>
+  <ol>
+    <li>The arch judges the goal finished and ends a reply with <code>LOOP_DONE</code>.</li>
+    <li>The harness asks it once to verify; <code>GOAL_VERIFIED</code> ends the loop. (Or: your Stop, the cap, an error. <code>NEEDS_HUMAN: …</code> keeps it busy with the question shown; your reply is queued for the next poll.)</li>
+    <li>The conversation releases its agents, becomes free, and one summary lands in your chat.</li>
+  </ol>
+</section>
 
 <script src="./app.js"></script>
 </body>

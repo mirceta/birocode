@@ -1,56 +1,55 @@
-# Proposal: arch-goal-conversations — top-down arch: goal conversations own repos and tasks; events route to the owner, never to the Operator's chat
+# Proposal: arch-goal-conversations — a goal is the arch agent on a timer, in its own conversation; repo agents stay passive
 
 ## Why
 
-Repo agents waking the arch on every turn end was a mistake in one respect: everything
-landed in ONE arch conversation. While the Operator was giving it a new task, a repo
-agent's turn end arrived and the arch had to pivot — not top-down, and it hid whether
-the arch was actually free. We now have several arch conversations and loops on them
-(openspec arch-conversations, arch-driven-loops). Wanted (Operator, 2026-09-06, board
-task f9756383): run a goal loop on ONE arch conversation that keeps looping and pinging
-the agents its goal depends on until the goal is genuinely finished; while it runs that
-conversation is visibly unavailable; the Operator-facing conversation stays free.
+Repo agents waking the arch on every turn end was a mistake: everything landed in ONE
+arch conversation, so while the Operator was giving it a new task a repo agent's turn end
+arrived and the arch had to pivot — not top-down, and it hid whether the arch was free.
+We now have several arch conversations and loops on them (openspec arch-conversations,
+arch-driven-loops). Wanted (Operator, 2026-09-06, board task f9756383, then simplified
+on the Operator's review the same day): run a goal loop on ONE arch conversation that
+keeps checking the agents its goal depends on until the goal is genuinely finished;
+while it runs that conversation is visibly unavailable; the Operator-facing conversation
+stays free. **Keep it simple**: no event routing, no third component — the arch pings,
+the agents answer.
 
 ## What
 
-1. **Goal-scoped arch conversation.** A goal opens its own conversation — from the Arch
-   tab's Loops lane, or from the Operator-facing chat through `start_arch_goal(goal,
-   repos, tasks, maxIterations, requireMerged)`. The existing goal loop runs on it
-   (drive, capped, the arch's dynamic pacing). The conversation records the repos
-   (managed keys, this machine or a fleet source) and board tasks it OWNS for the goal's
-   duration; a task's assignee is owned with it. Ownership shows in the Management App's
-   tab strip (⏳ + the goal on hover), the conversation header ("busy: goal <id> · owns
-   …"), the Status tab's Goal conversations card, the fleet chips and the agent docks
-   ("driven by arch goal <id>").
-2. **Event routing instead of broadcast.** A repo turn, a loop event or a task status
-   change (`task.status`, new on the feed) wakes ONLY the conversation that owns that
-   repo or task — an early wake inside its own pacing. Events nobody owns go to the arch
-   **inbox** (Status tab), never as a turn into any conversation. The Operator-facing
-   conversation (the default) receives no repo wake-ups at all; it lists goal loops,
-   reads their status, starts and stops them.
-3. **Availability.** A goal conversation is "busy: goal <id>" while its goal runs and its
-   loop is armed. `list_arch_goals` exposes id, goal, owner conversation, owned repos and
-   tasks, state, iterations, last wake, queued messages. Opening a busy conversation shows
-   a banner; the composer queues the text as an Operator message the loop reads on its
-   next wake, and offers a new goal conversation.
-4. **Completion.** The loop ends only when the agent's own verification passes AND, for
-   board work, every owned task is at least `pr-opened` (`pr-merged` when the goal says
-   so) per the kanban lifecycle — the order is declared in `TaskLifecycle` ahead of the
-   lifecycle-columns change; today only `done` clears it. A done the board refuses sends
-   the conversation back to work with the gap named; a person's decision is
-   `NEEDS_HUMAN: <blocker>` (an escalated hold, the conversation stays busy). On
-   completion (done · stopped · capped · error) the conversation releases its repos and
-   tasks, becomes available, and a summary with its last reply is posted to the
-   Operator-facing conversation as one message (actor `goal`).
-5. **Migration.** The pre-goal behaviour — every armed conversation woken by every managed
-   repo event — stays behind the setting **legacy broadcast** (Status tab; default off).
-   Existing single-conversation setups keep working: the default conversation's standing
-   wake loop simply holds until the Operator turns the legacy setting on or starts a goal.
-6. **Role prompt v7** gains "Goal conversations": own your repos, poll on your pace, react
-   to owned events, never touch unowned repos, end only on verified completion.
+1. **Repo agents are passive.** They get a task or a question and answer it; they never
+   call the arch. Unchanged from the dock's point of view.
+2. **A goal conversation is the arch on a timer.** A goal opens its own conversation —
+   from the Arch tab's Loops lane, or from the Operator-facing chat through
+   `start_arch_goal(goal, repos, tasks, maxIterations)`. The existing goal loop runs on it
+   (drive, capped). Every poll interval (the Loops lane's "re-prompt at least every"
+   quiet floor, 5 min by default) the loop re-sends the goal; on each turn the arch
+   checks its agents itself (`list_agents` for who is running, `read_transcript` for what
+   a finished agent said, `list_tasks` for the board) and acts. A goal conversation is
+   never woken by a repo agent's turn: its repeats wait for the floor alone. The
+   conversation records the agents (managed keys) and board tasks it drives; an agent or
+   task is driven by one running goal at a time. That shows on the conversation header,
+   the Management App tab strip (⏳), the Status tab's Goal conversations card, the fleet
+   chips and the agent docks ("driven by arch goal <id>").
+3. **The Operator-facing conversation is a plain chat.** Nothing arrives in it on its own
+   except a finished goal's summary. It lists goal loops, reads their status, starts and
+   stops them (`list_arch_goals`, `stop_arch_goal`).
+4. **Availability.** A goal conversation is "busy: goal <id>" while its goal runs and its
+   loop is armed. Opening it shows a banner; the composer queues the text as an Operator
+   message carried at the top of the loop's next poll, and offers a new goal conversation.
+5. **Completion.** The loop ends when the arch says the goal is finished (`LOOP_DONE`) and
+   its one verification turn agrees (`GOAL_VERIFIED`), or on the Operator's stop, the cap
+   or an error; a person's decision is `NEEDS_HUMAN: <blocker>` (an escalated hold, the
+   conversation stays busy). On end the conversation releases what it drove, becomes
+   available, and one summary (goal, outcome, task statuses, its last reply) is posted to
+   the Operator-facing conversation as one message (actor `goal`).
+6. **Role prompt v7** gains "Goal conversations": the agents never call you; check them
+   yourself every poll; never touch what you do not drive; end only when finished.
+
+The one known downside, accepted: a goal conversation's transcript collects "nothing
+changed yet" turns between polls. The upside is that the whole model fits in one sentence.
 
 ## Out of scope
 
-The lifecycle columns themselves (`assigned`, `pr-opened`, `pr-merged` on the board —
-pending feature/kanban-lifecycle-columns); goals across machines other than through
-owned fleet keys; an inbox that wakes anyone.
+Event routing of any kind (a repo turn waking a conversation, an inbox, a legacy switch);
+a board-side veto on "done" (the kanban lifecycle columns are a separate change; the arch
+reads the board with `list_tasks`); goals across machines other than through driven
+fleet keys.
