@@ -9,7 +9,7 @@
     "build:manage": "vite build --config vite.manage.config.js",
     "preview": "vite preview",
     "test:ui": "node tests/ui/pinned-conversation-lanes.mjs",
-    "test": "node --test src/components/taskgraph/graphColors.test.mjs src/manage/fleetStatusTabs.test.mjs"
+    "test": "node --test src/components/taskgraph/graphColors.test.mjs src/components/taskgraph/taskFilters.test.mjs src/manage/fleetStatusTabs.test.mjs"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",

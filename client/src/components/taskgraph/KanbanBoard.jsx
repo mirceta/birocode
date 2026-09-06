@@ -1,5 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiGet, apiPost, apiPatch, apiDelete } from '../../api/client';
+import TaskFilterBar from './TaskFilterBar';
+import { useTaskFilter } from './taskFilterStore';
+import { COLUMNS, columnOf } from './kanbanColumns';
+import { applyFilter, blockedIds, filterContext, flagsOf, isNarrowed, staleIds, taskView } from './taskFilters';
 import './kanban.css';
 
 // The Kanban view of the task board (openspec task-board-kanban, columns per
@@ -11,25 +15,18 @@ import './kanban.css';
 // arch agent (through its MCP tools) and any future management agent all write
 // to the same /api/taskgraph store.
 //
-// Columns = statuses: Todo · Doing · Committed (on a branch, NOT on origin) ·
-// PR opened · PR merged · Done. Assignment is a chip on the card, not a column.
-// Dragging writes status through the operator PATCH (unclamped — the operator
-// is the escape hatch for cards the verifier cannot see).
+// Columns (kanbanColumns.js, per openspec kanban-lifecycle-columns) = statuses: Todo ·
+// Doing · Committed (on a branch, NOT on origin) · PR opened · PR merged · Done.
+// Assignment is a chip on the card, not a column. Dragging writes status through the
+// operator PATCH (unclamped — the operator is the escape hatch for cards the verifier
+// cannot see).
+//
+// Filters (openspec task-filters): the bar pinned under the head narrows the cards by
+// machine, repo agent, state (column) and flag, plus a text search; the model is the
+// shared task filter (URL query + last filter per browser), the same the Task graph
+// uses. A filtered-out card is not rendered; the column head shows "shown of all".
 
 const POLL_MS = 5000;
-const COLUMNS = [
-  ['todo', 'Todo', 'not started; assign + the arch pings it'],
-  ['doing', 'In progress', 'the assignee has the task'],
-  ['committed', 'Committed', 'work committed on a branch, not yet on origin'],
-  ['pr-opened', 'PR opened', 'branch pushed, PR exists'],
-  ['pr-merged', 'PR merged', 'merged into the default branch'],
-  ['done', 'Done', 'merged and live where the work was done'],
-];
-const STATUS_KEYS = COLUMNS.map(([k]) => k);
-
-function columnOf(n) {
-  return STATUS_KEYS.includes(n.status) ? n.status : 'todo';
-}
 
 const DELIVERED = (s) => s === 'pr-merged' || s === 'done';
 
@@ -83,6 +80,18 @@ export default function KanbanBoard() {
   const isBlocked = (n) => !DELIVERED(n.status) && prereqsOf(n.id).some((p) => !DELIVERED(p.status));
   const staleMs = (board?.staleHours || 24) * 3600e3;
   const isStale = (n) => (n.status === 'committed' || n.status === 'pr-opened') && Date.now() - (n.updatedAt || 0) > staleMs;
+
+  // The shared task filter (openspec task-filters) over this board's cards.
+  const [filter, setFilter] = useTaskFilter();
+  const filterCtx = useMemo(() => filterContext(fleet, columnOf), [fleet]);
+  const blockedSet = useMemo(() => blockedIds(nodes, edges), [nodes, edges]);
+  // Stale = parked in committed / pr-opened past the board's window (the same rule as
+  // the card's stale badge), so the "stale" flag chip appears when such cards exist.
+  const staleMsForFilter = (board?.staleHours || 24) * 3600e3;
+  const staleSet = useMemo(() => staleIds(nodes, staleMsForFilter), [nodes, staleMsForFilter]);
+  const views = useMemo(() => nodes.map((n) => taskView(n, filterCtx, flagsOf(n.id, blockedSet, staleSet))), [nodes, filterCtx, blockedSet, staleSet]);
+  const shownIds = useMemo(() => applyFilter(views, filter), [views, filter]);
+  const narrowed = isNarrowed(filter);
 
   // Assignee choices: every repo agent the fleet status knows, keyed "sourceId|repoId".
   const agents = [];
@@ -138,7 +147,10 @@ export default function KanbanBoard() {
     setStatus(n, col);
   };
 
-  const columns = COLUMNS.map(([key, label, hint]) => ({ key, label, hint, cards: nodes.filter((n) => columnOf(n) === key).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)) }));
+  const columns = COLUMNS.map(([key, label, hint]) => {
+    const all = nodes.filter((n) => columnOf(n) === key).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    return { key, label, hint, all, cards: all.filter((n) => shownIds.has(n.id)) };
+  });
 
   return (
     <div className="kb" data-kanban>
@@ -149,6 +161,7 @@ export default function KanbanBoard() {
         </form>
         <span className="kb__dim">Same tasks as the Task graph, read as columns. Assign a card to any repo agent on any machine; the arch agent pings assigned cards on its next wake, or press Ping.</span>
       </div>
+      <TaskFilterBar views={views} filter={filter} setFilter={setFilter} view="kanban" />
       {!board && !error && <div className="kb__note" data-loading>Loading the board…</div>}
       {error && <div className="kb__note kb__note--err">{error}</div>}
       <div className="kb__cols">
@@ -162,10 +175,13 @@ export default function KanbanBoard() {
             onDrop={onDrop(c.key)}
           >
             <div className="kb__col-head" title={c.hint}>
-              <span>{c.label}</span><span className="kb__count">{c.cards.length}</span>
+              <span>{c.label}</span>
+              <span className="kb__count" data-column-count={c.cards.length} data-column-total={c.all.length}>
+                {c.cards.length}{narrowed && c.all.length !== c.cards.length ? <span className="kb__count-of"> of {c.all.length}</span> : null}
+              </span>
             </div>
             <div className="kb__cards">
-              {c.cards.length === 0 && <div className="kb__empty">{c.key === 'todo' ? 'nothing waiting' : '—'}</div>}
+              {c.cards.length === 0 && <div className="kb__empty">{narrowed && c.all.length > 0 ? `${c.all.length} hidden by the filter` : c.key === 'todo' ? 'nothing waiting' : '—'}</div>}
               {c.cards.map((n) => {
                 const blocked = isBlocked(n);
                 const prereqs = prereqsOf(n.id);
