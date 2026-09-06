@@ -18,6 +18,9 @@ public static class NotesModuleExtensions
         // eagerly so the local-edit rev bump is live from startup.
         services.AddSingleton<IdeasHubService>();
         services.AddHostedService(sp => sp.GetRequiredService<IdeasHubService>());
+        // One-shot migration (openspec ideas-consume-on-promotion): consume ideas that
+        // already have a task pointing at them, once both boards have loaded.
+        services.AddHostedService<ConsumedIdeaMigration>();
         return services;
     }
 }
