@@ -114,10 +114,10 @@ public class ArchController : ControllerBase
     public IActionResult Goals()
     {
         _logger.CountRequest();
-        return Ok(new { goals = _arch.GoalViews(), legacyBroadcast = _arch.LegacyBroadcast, inbox = _arch.Inbox(50) });
+        return Ok(new { goals = _arch.GoalViews() });
     }
 
-    public sealed record GoalRequest(string? Goal, List<string>? Repos, List<string>? Tasks, int? MaxIterations, bool? RequireMerged, string? Mode = null);
+    public sealed record GoalRequest(string? Goal, List<string>? Repos, List<string>? Tasks, int? MaxIterations, string? Mode = null);
 
     /// <summary>The Operator starts a goal conversation from the Arch tab: a new conversation
     /// owning the repos/tasks, its goal loop armed. Same outcome words as the arch tool.</summary>
@@ -126,7 +126,7 @@ public class ArchController : ControllerBase
     {
         _logger.CountRequest();
         if (GateClosed() is { } closed) return closed;
-        var o = _arch.StartGoal(req?.Goal, req?.Repos, req?.Tasks, req?.MaxIterations, req?.RequireMerged == true, LoopConfigStore.ArmedByOperator, mode: req?.Mode);
+        var o = _arch.StartGoal(req?.Goal, req?.Repos, req?.Tasks, req?.MaxIterations, LoopConfigStore.ArmedByOperator, mode: req?.Mode);
         return o.Ok ? Ok(new { ok = true, status = o.Status, detail = o.Detail, goal = o.Data })
             : BadRequest(new { error = o.Detail, status = o.Status });
     }
@@ -150,27 +150,6 @@ public class ArchController : ControllerBase
         return o.Ok ? Ok(new { ok = true, status = o.Status, detail = o.Detail, goal = o.Data }) : BadRequest(new { error = o.Detail, status = o.Status });
     }
 
-    public sealed record RoutingRequest(bool? LegacyBroadcast);
-
-    /// <summary>The legacy routing setting: wake goal-less conversations (the default included)
-    /// on every managed repo event, as before goal conversations. Default off.</summary>
-    [HttpPost("routing")]
-    public IActionResult Routing([FromBody] RoutingRequest? req)
-    {
-        _logger.CountRequest();
-        if (GateClosed() is { } closed) return closed;
-        if (req?.LegacyBroadcast is not bool on) return BadRequest(new { error = "legacyBroadcast (true|false) is required" });
-        _arch.SetLegacyBroadcast(on);
-        return Ok(BuildState());
-    }
-
-    [HttpDelete("inbox")]
-    public IActionResult ClearInbox()
-    {
-        _logger.CountRequest();
-        _arch.ClearInbox();
-        return Ok(new { cleared = true });
-    }
 
     public sealed record ConversationRequest(string? Name);
 
@@ -284,12 +263,10 @@ public class ArchController : ControllerBase
             drivenQuietSeconds = _arch.DrivenQuietSeconds,
             disallowedTools = ArchAgentService.DisallowedTools,
             // Goal conversations (openspec arch-goal-conversations): this conversation's goal
-            // and busy state, every goal, the routing setting and the inbox of unowned events.
+            // and busy state, and every goal.
             goal = _arch.GoalOf(key) is { } goal ? _arch.GoalView(goal) : null,
             busy = _arch.IsBusy(key),
             goals = _arch.GoalViews(),
-            legacyBroadcast = _arch.LegacyBroadcast,
-            inbox = _arch.Inbox(30),
         };
     }
 

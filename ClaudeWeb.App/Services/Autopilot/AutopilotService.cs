@@ -366,9 +366,9 @@ public class AutopilotService : BackgroundService
         // per arch conversation that has a loop slot, keyed to the conversation id,
         // ticked through the SAME mechanics with the shared home repo as cwd.
         // Goal conversations (openspec arch-goal-conversations): a goal whose loop stopped is
-        // reconciled first, unowned events go to the inbox, and a finished goal's summary
-        // reaches the Operator-facing conversation once its slot is free.
-        try { _arch.ReconcileGoals(); _arch.SweepInbox(); }
+        // reconciled first, and a finished goal's summary reaches the Operator-facing
+        // conversation once its slot is free.
+        try { _arch.ReconcileGoals(); }
         catch (Exception ex) { _logger.Error($"[ARCH] goal routing tick failed: {ex.Message}"); }
         foreach (var conv in _arch.ConversationLoops())
             TickRepo(_arch.HomeInfoFor(conv.RepoId), cfg, routines, now);
@@ -498,8 +498,11 @@ public class AutopilotService : BackgroundService
             }
 
             // Driven kinds need a session to resume into; wait for the agent to speak.
-            // The arch kind may start its conversation itself (a fresh home has no transcript).
-            if (!isSuggestionKind && loop.Kind != LoopConfigStore.KindArch && string.IsNullOrWhiteSpace(sessionId)) return;
+            // Any loop on an arch conversation may start the conversation itself (a fresh
+            // home, or a goal conversation opened a moment ago, has no transcript yet —
+            // openspec arch-goal-conversations): the send runs with no session and pins the
+            // one the CLI creates.
+            if (!isSuggestionKind && loop.Kind != LoopConfigStore.KindArch && !ArchAgentService.IsArchKey(repo.Id) && string.IsNullOrWhiteSpace(sessionId)) return;
 
             if (isSuggestionKind && string.IsNullOrWhiteSpace(lastAssistant))
             {
@@ -659,10 +662,9 @@ public class AutopilotService : BackgroundService
                 decision = ArchDrivenPolicy.Apply(decision, loop,
                     _lastDrivenPrompt.TryGetValue(repo.Id, out var lastPrompt) ? lastPrompt : null,
                     now, _arch.DrivenQuietFloor,
-                    () => _arch.ComposeWake(repo.Id) is not null,
-                    // The board-side completion gate of a goal conversation (openspec
-                    // arch-goal-conversations): null for every other arch loop.
-                    () => _arch.CompletionBlocker(repo.Id));
+                    // A goal conversation polls only (openspec arch-goal-conversations): it
+                    // never takes a wake, so its repeats go out on the quiet floor alone.
+                    () => _arch.HasWake(repo.Id));
 
             Execute(repo, loop, decision, sessionId, snippet, intercept, now);
     }
@@ -772,8 +774,7 @@ public class AutopilotService : BackgroundService
                     : (propose.EnterPhase == LoopConfigStore.PhaseVerify
                         ? LoopConfigStore.PhaseVerify : LoopConfigStore.PhaseWork);
                 // A goal conversation's send (openspec arch-goal-conversations) carries the
-                // Operator messages queued while it was busy, the board check and what
-                // happened on its repos since its last turn, ahead of the loop prompt. The
+                // Operator messages queued while it was busy ahead of the loop prompt. The
                 // decoration drains the queue, so it is composed only when the slot is free.
                 if (ArchAgentService.IsArchKey(repo.Id) && loop.Kind != LoopConfigStore.KindArch)
                 {

@@ -388,31 +388,32 @@ public partial class ArchAgentService : IArchWakeSource
         ## Goal conversations
 
         This harness runs several arch conversations. The Operator-facing one (the default,
-        "Arch agent") is for the Operator and is **never woken by repo events**; work that
-        must be driven to completion runs in a **goal conversation**. On the Operator's ask
-        ("arch, run a goal: <text> on <agents> / for tasks <ids>"), `start_arch_goal(goal,
-        repos, tasks, maxIterations, requireMerged)` opens a new conversation that OWNS the
-        named repo agents (handles from `list_agents`) and board tasks (ids from
-        `list_tasks`; their assignees are owned too), arms a goal loop on it and returns its
-        id — never on your own initiative. `list_arch_goals` shows every goal conversation:
-        id, goal, owned repos and tasks, state (running · done · stopped · capped · error),
-        iterations, last wake; `stop_arch_goal(id)` stops one on the Operator's ask. A repo
-        or task belongs to one running goal at a time; a goal conversation is shown busy
-        until its goal ends.
+        "Arch agent") is a plain chat with the Operator: nothing arrives in it on its own
+        except a finished goal's summary. Work that must be driven to completion runs in a
+        **goal conversation** — the arch agent on a timer. On the Operator's ask ("arch, run
+        a goal: <text> on <agents> / for tasks <ids>"), `start_arch_goal(goal, repos, tasks,
+        maxIterations)` opens a new conversation that drives the named repo agents (handles
+        from `list_agents`) and board tasks (ids from `list_tasks`; their assignees too),
+        arms a goal loop on it and returns its id — never on your own initiative.
+        `list_arch_goals` shows every goal conversation: id, goal, the agents and tasks it
+        drives, state (running · done · stopped · capped · error), iterations, when it last
+        polled, queued Operator messages; `stop_arch_goal(id)` stops one on the Operator's
+        ask. An agent or task is driven by one running goal at a time; a goal conversation
+        is shown busy until its goal ends.
 
-        If YOU are a goal conversation (your work prompt says "(arch goal <id>)"): own your
-        repos and tasks — dispatch, read transcripts, follow up — on your own pace. Every
-        send carries what happened on your repos and tasks since your last turn and any
-        Operator message queued while you were busy; when a send says nothing happened, poll
-        `list_tasks`, `list_agents`, `read_transcript` and act. Never touch a repo or task you
-        do not own. End with `LOOP_DONE` only when the goal is genuinely finished: the harness
-        then asks you to verify, and for board work it also checks the board — every owned
-        task must be at least pr-opened (pr-merged when the goal says so); until then you are
-        sent back to work with the gap named. If a person must decide or act, end with
-        `NEEDS_HUMAN: <the blocker>` and stop: the conversation stays busy and the Operator
-        sees your question. When the goal ends, the harness releases your repos and posts a
-        summary with your last reply to the Operator-facing conversation — make that reply
-        the summary: what was achieved, what needs the Operator.
+        If YOU are a goal conversation (your work prompt says "(arch goal <id>)"): the repo
+        agents are passive — they answer when asked and never call you. Your loop re-sends
+        the goal on its poll interval; on every turn check your agents yourself
+        (`list_agents` for who is still running, `read_transcript` for what a finished agent
+        said, `list_tasks` for the board), then act: dispatch, follow up, move cards. When
+        nothing changed, say so in one line and end the turn — the next poll comes by itself.
+        Never touch an agent or task you do not drive. End with `LOOP_DONE` only when the
+        goal is genuinely finished; the harness then asks you once to verify it. If a person
+        must decide or act, end with `NEEDS_HUMAN: <the blocker>` and stop: the conversation
+        stays busy and the Operator sees your question; their answer reaches you queued at
+        the top of your next poll. When the goal ends, the harness releases your agents and
+        posts a summary with your last reply to the Operator-facing conversation — make that
+        reply the summary: what was achieved, what needs the Operator.
 
         ## Rules
 
@@ -2126,12 +2127,7 @@ public partial class ArchAgentService : IArchWakeSource
     {
         var key = KeyOrDefault(convId);
         // Managed keys across the fleet (D3): bare repo ids locally, sourceId/repoId remotely.
-        var managedAll = ManagedRepoIds().Concat(ManagedFleet()).ToHashSet(StringComparer.Ordinal);
-        // Routing (openspec arch-goal-conversations): a goal conversation is woken by the
-        // repos and tasks it owns; a goal-less one by nothing — unless the legacy broadcast
-        // setting is on, which restores the old "every managed turn wakes every loop".
-        var managed = WakeScope(key, managedAll);
-        var tasks = WakeTasks(key);
+        var managed = ManagedRepoIds().Concat(ManagedFleet()).ToHashSet(StringComparer.Ordinal);
         var after = _state.WatermarkOf(key);
         var (all, lastSeq) = _collector.ReadEvents(0);
         if (after < 0)
@@ -2148,7 +2144,7 @@ public partial class ArchAgentService : IArchWakeSource
         var names = _repos.GetAll().ToDictionary(r => r.Id, r => r.Name, StringComparer.Ordinal);
         foreach (var a in agents.Where(a => !a.IsLocal)) names[a.Key] = $"{a.Name} on {a.Machine}";
         var draft = ComposeWakeCore(all, after, lastSeq, managed, id => names.TryGetValue(id, out var n) ? n : id,
-            agents, Now(), tasks);
+            agents, Now());
         if (draft is null)
         {
             // Only chat.focus / unmanaged / arch's own events: nothing to say, but
@@ -2194,23 +2190,12 @@ public partial class ArchAgentService : IArchWakeSource
     /// prompt plus the current availability of every managed agent.</summary>
     public static WakeDraft? ComposeWakeCore(
         IReadOnlyList<CollectorService.CollectorEvent> events, int after, int lastSeq,
-        ISet<string> managed, Func<string, string> nameOf, IReadOnlyList<AgentView> agents, long now,
-        ISet<string>? tasks = null)
+        ISet<string> managed, Func<string, string> nameOf, IReadOnlyList<AgentView> agents, long now)
     {
         var relevant = new List<(CollectorService.CollectorEvent Ev, string RepoId)>();
         foreach (var ev in events)
         {
             if (ev.Seq <= after) continue;
-            // A board task's status change (openspec arch-goal-conversations) wakes the
-            // conversation owning the task, or the one owning its assignee.
-            if (ev.Type == "task.status")
-            {
-                var taskId = Str(ToElement(ev.Source), "taskId");
-                var akey = KeyOf(ev);
-                if ((taskId is not null && tasks is not null && tasks.Contains(taskId)) || (akey is not null && managed.Contains(akey)))
-                    relevant.Add((ev, akey ?? ("task:" + taskId)));
-                continue;
-            }
             // Turns, and a managed repo's loop moving (openspec arch-loop-tools): fired,
             // escalated, capped, done, error, stopped. Arming itself is not a wake.
             if (ev.Type != "turn.start" && ev.Type != "turn.ended" && !ArchLoopTools.IsWakeLoopEvent(ev.Type)) continue;
@@ -2237,12 +2222,6 @@ public partial class ArchAgentService : IArchWakeSource
             else if (ArchLoopTools.IsWakeLoopEvent(ev.Type))
             {
                 sb.AppendLine(ArchLoopTools.WakeLine(ev.Type, d, nameOf(repoId), ev.At, now));
-            }
-            else if (ev.Type == "task.status")
-            {
-                var src = ToElement(ev.Source);
-                var taskId = Str(src, "taskId") ?? "?";
-                sb.AppendLine($"- task \"{Str(src, "title") ?? taskId}\" ({(taskId.Length > 8 ? taskId[..8] : taskId)}): {Str(d, "previous") ?? "?"} → {Str(d, "status") ?? "?"}{(Str(d, "by") is { } by ? $" · {by}" : "")} · {Elapsed(ev.At, now)} ago");
             }
             else
             {

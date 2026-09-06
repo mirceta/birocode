@@ -46,13 +46,10 @@ public class ArchStateStore
         public string? GoalText { get; set; }
         public List<string> GoalRepos { get; set; } = new();
         public List<string> GoalTasks { get; set; } = new();
-        public bool GoalRequireMerged { get; set; }
         public string? GoalState { get; set; }
         public long GoalStartedAt { get; set; }
         public long? GoalEndedAt { get; set; }
         public string? GoalStartedBy { get; set; }
-        public string? GoalLastWake { get; set; }
-        public long GoalLastWakeAt { get; set; }
         public string? GoalOutcome { get; set; }
         public List<QueuedMessage> GoalQueue { get; set; } = new();
     }
@@ -84,30 +81,18 @@ public class ArchStateStore
         public int ClaimWindowMinutes { get; set; }
         // Every arch conversation (openspec arch-conversations); the default is first.
         public List<ConversationData> Conversations { get; set; } = new();
-        // Legacy routing (openspec arch-goal-conversations): wake goal-less conversations
-        // (the default included) on every managed repo event, as before goals. Default off.
-        public bool LegacyBroadcast { get; set; }
-        // The arch inbox: managed repo events no goal conversation owns, kept for the Arch
-        // tab instead of waking anyone. Bounded; the watermark is the collector seq swept.
-        public List<InboxEntry> Inbox { get; set; } = new();
-        public int InboxWatermark { get; set; } = -1;
     }
 
     /// <summary>An Operator message queued for a busy goal conversation; its loop reads it on the next wake.</summary>
     public sealed record QueuedMessage(long At, string Text);
 
-    /// <summary>A managed repo event nobody owned (openspec arch-goal-conversations).</summary>
-    public sealed record InboxEntry(int Seq, long At, string Type, string Key, string Name, string Line);
-
     /// <summary>A goal conversation as the API, the tools and the UI see it.</summary>
     public sealed record ArchGoal(
         string Id, string ConversationId, string Text, IReadOnlyList<string> Repos, IReadOnlyList<string> Tasks,
-        bool RequireMerged, string State, long StartedAt, long? EndedAt, string? StartedBy,
-        string? LastWake, long LastWakeAt, string? Outcome, IReadOnlyList<QueuedMessage> Queue)
+        string State, long StartedAt, long? EndedAt, string? StartedBy, string? Outcome, IReadOnlyList<QueuedMessage> Queue)
     {
-        public bool Running => string.Equals(State, ArchGoalRouting.Running, StringComparison.Ordinal);
+        public bool Running => string.Equals(State, ArchGoals.Running, StringComparison.Ordinal);
     }
-    public const int MaxInbox = 200;
 
     /// <summary>A conversation as the API and the UI see it.</summary>
     public sealed record Conversation(string Id, string Name, string? SessionId, int Watermark, long CreatedAt, bool IsDefault);
@@ -316,8 +301,7 @@ public class ArchStateStore
 
     private static ArchGoal? GoalView(ConversationData c) =>
         c.GoalId is null ? null : new ArchGoal(c.GoalId, c.Id, c.GoalText ?? "", c.GoalRepos.ToList(), c.GoalTasks.ToList(),
-            c.GoalRequireMerged, c.GoalState ?? ArchGoalRouting.Stopped, c.GoalStartedAt, c.GoalEndedAt, c.GoalStartedBy,
-            c.GoalLastWake, c.GoalLastWakeAt, c.GoalOutcome, c.GoalQueue.ToList());
+            c.GoalState ?? ArchGoals.Stopped, c.GoalStartedAt, c.GoalEndedAt, c.GoalStartedBy, c.GoalOutcome, c.GoalQueue.ToList());
 
     /// <summary>The goal a conversation runs (or ran); null when it never had one.</summary>
     public ArchGoal? GoalOf(string? convId)
@@ -348,7 +332,7 @@ public class ArchStateStore
         if (string.IsNullOrWhiteSpace(key)) return null;
         lock (_gate)
         {
-            return _data.Conversations.FirstOrDefault(c => c.GoalId is not null && c.GoalState == ArchGoalRouting.Running
+            return _data.Conversations.FirstOrDefault(c => c.GoalId is not null && c.GoalState == ArchGoals.Running
                 && c.GoalRepos.Contains(key, StringComparer.Ordinal))?.Id;
         }
     }
@@ -359,7 +343,7 @@ public class ArchStateStore
         if (string.IsNullOrWhiteSpace(taskId)) return null;
         lock (_gate)
         {
-            return _data.Conversations.FirstOrDefault(c => c.GoalId is not null && c.GoalState == ArchGoalRouting.Running
+            return _data.Conversations.FirstOrDefault(c => c.GoalId is not null && c.GoalState == ArchGoals.Running
                 && c.GoalTasks.Contains(taskId, StringComparer.Ordinal))?.Id;
         }
     }
@@ -367,7 +351,7 @@ public class ArchStateStore
     /// <summary>Records a goal on a conversation: it owns the keys and tasks from now until
     /// <see cref="EndGoal"/>. Throws when the conversation is unknown, is the default, or
     /// already runs a goal.</summary>
-    public ArchGoal StartGoal(string convId, string text, IEnumerable<string> repos, IEnumerable<string> tasks, bool requireMerged, string? by, long now)
+    public ArchGoal StartGoal(string convId, string text, IEnumerable<string> repos, IEnumerable<string> tasks, string? by, long now)
     {
         lock (_gate)
         {
@@ -375,19 +359,16 @@ public class ArchStateStore
             if (string.Equals(convId, DefaultConversationId, StringComparison.Ordinal))
                 throw new InvalidOperationException("the default arch conversation is the Operator's; a goal runs in its own conversation");
             if (Find(convId) is not { } c) throw new InvalidOperationException($"no arch conversation \"{convId}\"");
-            if (c.GoalId is not null && c.GoalState == ArchGoalRouting.Running)
+            if (c.GoalId is not null && c.GoalState == ArchGoals.Running)
                 throw new InvalidOperationException($"conversation {convId} already runs goal {c.GoalId}");
-            c.GoalId = ArchGoalRouting.NewId();
+            c.GoalId = ArchGoals.NewId();
             c.GoalText = (text ?? "").Trim();
             c.GoalRepos = repos.Where(r => !string.IsNullOrWhiteSpace(r)).Distinct(StringComparer.Ordinal).ToList();
             c.GoalTasks = tasks.Where(t => !string.IsNullOrWhiteSpace(t)).Distinct(StringComparer.Ordinal).ToList();
-            c.GoalRequireMerged = requireMerged;
-            c.GoalState = ArchGoalRouting.Running;
+            c.GoalState = ArchGoals.Running;
             c.GoalStartedAt = now;
             c.GoalEndedAt = null;
             c.GoalStartedBy = string.IsNullOrWhiteSpace(by) ? null : by.Trim();
-            c.GoalLastWake = null;
-            c.GoalLastWakeAt = 0;
             c.GoalOutcome = null;
             c.GoalQueue = new();
             Save();
@@ -401,7 +382,7 @@ public class ArchStateStore
     {
         lock (_gate)
         {
-            if (Find(convId) is not { } c || c.GoalId is null || c.GoalState != ArchGoalRouting.Running) return false;
+            if (Find(convId) is not { } c || c.GoalId is null || c.GoalState != ArchGoals.Running) return false;
             var changed = false;
             foreach (var r in repos ?? Array.Empty<string>())
                 if (!string.IsNullOrWhiteSpace(r) && !c.GoalRepos.Contains(r, StringComparer.Ordinal)) { c.GoalRepos.Add(r); changed = true; }
@@ -420,23 +401,12 @@ public class ArchStateStore
         lock (_gate)
         {
             if (Find(convId) is not { } c || c.GoalId is null) return null;
-            if (c.GoalState != ArchGoalRouting.Running) return GoalView(c);
-            c.GoalState = string.IsNullOrWhiteSpace(state) ? ArchGoalRouting.Stopped : state;
+            if (c.GoalState != ArchGoals.Running) return GoalView(c);
+            c.GoalState = string.IsNullOrWhiteSpace(state) ? ArchGoals.Stopped : state;
             c.GoalEndedAt = now;
             c.GoalOutcome = string.IsNullOrWhiteSpace(outcome) ? null : outcome.Trim();
             Save();
             return GoalView(c);
-        }
-    }
-
-    public void NoteGoalWake(string? convId, string? reason, long now)
-    {
-        lock (_gate)
-        {
-            if (Find(convId) is not { } c || c.GoalId is null) return;
-            c.GoalLastWake = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
-            c.GoalLastWakeAt = now;
-            Save();
         }
     }
 
@@ -446,7 +416,7 @@ public class ArchStateStore
         if (string.IsNullOrWhiteSpace(text)) return null;
         lock (_gate)
         {
-            if (Find(convId) is not { } c || c.GoalId is null || c.GoalState != ArchGoalRouting.Running) return null;
+            if (Find(convId) is not { } c || c.GoalId is null || c.GoalState != ArchGoals.Running) return null;
             c.GoalQueue.Add(new QueuedMessage(now, text.Trim()));
             if (c.GoalQueue.Count > 20) c.GoalQueue.RemoveRange(0, c.GoalQueue.Count - 20);
             Save();
@@ -465,49 +435,6 @@ public class ArchStateStore
             Save();
             return taken;
         }
-    }
-
-    public bool LegacyBroadcast
-    {
-        get { lock (_gate) return _data.LegacyBroadcast; }
-    }
-
-    public void SetLegacyBroadcast(bool on)
-    {
-        lock (_gate)
-        {
-            if (_data.LegacyBroadcast == on) return;
-            _data.LegacyBroadcast = on;
-            Save();
-        }
-    }
-
-    public int InboxWatermark
-    {
-        get { lock (_gate) return _data.InboxWatermark; }
-    }
-
-    /// <summary>Appends unowned events to the inbox (bounded) and moves the sweep watermark.</summary>
-    public void AddInbox(IEnumerable<InboxEntry> entries, int upTo)
-    {
-        lock (_gate)
-        {
-            var any = false;
-            foreach (var e in entries) { _data.Inbox.Add(e); any = true; }
-            if (_data.Inbox.Count > MaxInbox) _data.Inbox.RemoveRange(0, _data.Inbox.Count - MaxInbox);
-            if (_data.InboxWatermark != upTo) { _data.InboxWatermark = upTo; any = true; }
-            if (any) Save();
-        }
-    }
-
-    public IReadOnlyList<InboxEntry> Inbox(int take = MaxInbox)
-    {
-        lock (_gate) return _data.Inbox.Skip(Math.Max(0, _data.Inbox.Count - take)).ToList();
-    }
-
-    public void ClearInbox()
-    {
-        lock (_gate) { if (_data.Inbox.Count == 0) return; _data.Inbox.Clear(); Save(); }
     }
 
     // ---- per-conversation fields (the no-key overloads address the default) ----------------
@@ -638,7 +565,6 @@ public class ArchStateStore
                     data.ManagedRepoIds ??= new();
                     data.ManagedFleet ??= new();
                     data.Conversations ??= new();
-                    data.Inbox ??= new();
                     foreach (var c in data.Conversations)
                     {
                         c.GoalRepos ??= new();
