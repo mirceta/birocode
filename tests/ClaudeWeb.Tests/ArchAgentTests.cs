@@ -318,12 +318,12 @@ public class ArchAgentTests : IDisposable
     // ---- 3.x MCP surface ---------------------------------------------------------------------
 
     [Fact]
-    public void Mcp_tools_list_names_the_twenty_tools_with_required_args()
+    public void Mcp_tools_list_names_the_twenty_three_tools_with_required_args()
     {
         var tools = ArchMcpServer.ToolsList();
         var names = tools.Select(t => t!["name"]!.GetValue<string>()).ToList();
         // openspec arch-branch-handover adds adopt_branch; openspec arch-loop-tools adds the four loop tools.
-        Assert.Equal(new[] { "list_agents", "list_machines", "git_state", "read_transcript", "send_task", "adopt_branch", "upgrade_peer", "list_loops", "start_loop", "update_loop", "stop_loop", "list_tasks", "create_task", "update_task", "assign_task", "dispatch_task", "list_ideas", "idea_to_task", "remember", "recall" }, names);
+        Assert.Equal(new[] { "list_agents", "list_machines", "git_state", "read_transcript", "send_task", "adopt_branch", "upgrade_peer", "list_loops", "start_loop", "update_loop", "stop_loop", "start_arch_goal", "list_arch_goals", "stop_arch_goal", "list_tasks", "create_task", "update_task", "assign_task", "dispatch_task", "list_ideas", "idea_to_task", "remember", "recall" }, names);
         // openspec arch-branch-handover: adopt_branch demands the Operator's ask; the
         // override reaches read_transcript; dispatch_task takes a branch.
         var adopt = tools.First(t => t!["name"]!.GetValue<string>() == "adopt_branch")!;
@@ -529,7 +529,7 @@ public class ArchAgentTests : IDisposable
         Assert.Contains("list_machines", prompt);
         Assert.Contains("never a guess", prompt);
         Assert.Contains("managedThere", prompt);
-        Assert.Equal("<!-- arch-role v6 -->", ArchAgentService.RoleVersionMarker); // v6: branch hand-over + adopt_branch (openspec arch-branch-handover) and loops on repo agents (openspec arch-loop-tools)
+        Assert.Equal("<!-- arch-role v7 -->", ArchAgentService.RoleVersionMarker); // v7: goal conversations (openspec arch-goal-conversations); v6: branch hand-over + loops on repo agents
         Assert.Contains("do not repeat a question", prompt);
     }
 }
