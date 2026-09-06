@@ -43,6 +43,9 @@ public class ArchStateStore
         // The quiet floor for driven loops on @arch (openspec arch-driven-loops): a repeat
         // of the same prompt goes out after this many seconds even with no wake. 0 = default.
         public int DrivenQuietSeconds { get; set; }
+        // The claimed rule's activity window (openspec arch-branch-handover): minutes after
+        // the last human turn during which an unassigned branch stays claimed. 0 = default (2 h).
+        public int ClaimWindowMinutes { get; set; }
     }
 
     /// <summary>The managed-set key of an agent on a subscribed harness.</summary>
@@ -187,6 +190,24 @@ public class ArchStateStore
         {
             if (_data.DrivenQuietSeconds == clean) return;
             _data.DrivenQuietSeconds = clean;
+            Save();
+        }
+    }
+
+    /// <summary>Minutes after the last human turn during which an unassigned branch stays
+    /// claimed (openspec arch-branch-handover); 0 means the policy default.</summary>
+    public int ClaimWindowMinutes
+    {
+        get { lock (_gate) return _data.ClaimWindowMinutes; }
+    }
+
+    public void SetClaimWindowMinutes(int minutes)
+    {
+        var clean = Math.Clamp(minutes, 0, 14 * 24 * 60);
+        lock (_gate)
+        {
+            if (_data.ClaimWindowMinutes == clean) return;
+            _data.ClaimWindowMinutes = clean;
             Save();
         }
     }

@@ -5,6 +5,7 @@ import { useChatFor } from '../../context/ChatContext';
 import { useT } from '../../i18n/LanguageContext';
 import { useFeature } from '../../context/UiModeContext';
 import GitStatusSummary from '../git/GitStatusSummary';
+import HandToArch from './HandToArch';
 import DockIdentityRows from './DockIdentityRows';
 import { deriveGitActions, pullMainPath } from '../git/gitActions';
 import ProductFrame from '../app/ProductFrame';
@@ -263,6 +264,7 @@ export default function PinnedAgent({
   // Identity rows (openspec add-git-identity-surface): who this repo commits as +
   // which GitHub account it pushes as. Advanced-only.
   const showIdentityRows = useFeature('gitIdentityRows');
+  const showHandover = useFeature('archHandover');
   const [gitActing, setGitActing] = useState(''); // which action is in flight
   const [gitActMsg, setGitActMsg] = useState(null); // { ok, text }
   const ga = git ? deriveGitActions(git) : null;
@@ -690,6 +692,9 @@ export default function PinnedAgent({
         <div className="phone__git">
           <div className="phone__git-top">
             <GitStatusSummary status={git} compact />
+            {/* Whose branch is this — and hand it to the arch / take it back / pin
+                (openspec arch-branch-handover). */}
+            {showHandover && <HandToArch repoId={tab.repoId} compact />}
             {showIdentityRows && (
               <DockIdentityRows
                 commitIdentity={git.commitIdentity}

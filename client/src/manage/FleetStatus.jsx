@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiGet } from '../api/client';
+import HandToArch from '../components/dashboard/HandToArch';
 
 // The Status tab (openspec fleet-status-tab): every repo agent on the whole
 // fleet, machine by machine, in the language of the dashboard's dock strip —
@@ -96,7 +97,13 @@ function AgentChip({ a, self, root, open, onToggle }) {
   );
 }
 
-function AgentDetail({ a, self, root }) {
+const CLAIMED_REASON = {
+  'human-active': 'claimed: the Operator worked on this branch recently',
+  pinned: 'claimed: pinned as the Operator\'s',
+  'unassigned-branch': 'on a branch nobody assigned — the arch must name it in a send',
+};
+
+function AgentDetail({ a, self, root, sourceId, onChanged }) {
   const running = !!a.runningSince;
   const openDock = () => {
     try { localStorage.setItem('claudeweb_dock_active', a.tabId); } catch { /* ignore */ }
@@ -113,9 +120,24 @@ function AgentDetail({ a, self, root }) {
       <div className="fs__detail-row">
         {running ? <span className="fs__ok">▶ running for {ago(Date.now() - a.runningSince)}</span> : 'idle'} · last actor {a.lastActor || 'none'}
         {' · '}availability <code>{a.availability}</code>
+        {a.claimedReason ? <> · <span className={a.availability === 'claimed' ? 'fs__warn' : 'fs__dim'} data-claimed-reason={a.claimedReason}>{CLAIMED_REASON[a.claimedReason] || a.claimedReason}</span></> : null}
+        {a.adopted ? ' · handed to the arch' : ''}
+        {a.pinned ? ' · 📌 pinned as the Operator\'s' : ''}
         {a.managed ? ' · 🏛 in the arch scope' : ' · not in the arch scope'}
         {a.docked ? ' · has a dock' : ''}
       </div>
+      {/* Hand the branch to the arch / take it back (openspec arch-branch-handover):
+          the arch's own machine records it; a peer gets adopt / revoke relayed. */}
+      {a.managed && a.branch && a.branch !== 'unknown' && !a.onDefault && (
+        <div className="fs__detail-row">
+          <HandToArch
+            repoId={a.repoId}
+            sourceId={self ? null : sourceId}
+            initial={self ? null : { managed: true, branch: a.branch, onDefault: a.onDefault, availability: a.availability, claimedReason: a.claimedReason, adopted: a.adopted, archBranch: a.adopted, pinned: a.pinned, claimWindowMinutes: 120 }}
+            onChanged={onChanged}
+          />
+        </div>
+      )}
       {self && a.tabId && (
         <div className="fs__detail-row"><button type="button" className="fs__btn" onClick={openDock}>open dock ↗</button></div>
       )}
@@ -262,7 +284,7 @@ export default function FleetStatus({ root = '' }) {
                   ))}
                 </div>
               )}
-            {agents.filter((a) => open === a.key).map((a) => <AgentDetail key={a.key} a={a} self={m.self} root={root} />)}
+            {agents.filter((a) => open === a.key).map((a) => <AgentDetail key={a.key} a={a} self={m.self} root={root} sourceId={m.sourceId} onChanged={load} />)}
           </section>
         );
       })}
