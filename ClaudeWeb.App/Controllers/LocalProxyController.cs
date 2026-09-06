@@ -62,6 +62,7 @@ public class LocalProxyController : ControllerBase
         if (app is null)
         {
             Response.StatusCode = StatusCodes.Status404NotFound;
+            Response.Headers[VerdictHeader] = "no-app";
             await Response.WriteAsJsonAsync(new { error = "No such local app for this project." });
             return;
         }
@@ -95,11 +96,18 @@ public class LocalProxyController : ControllerBase
         if (app is null)
         {
             Response.StatusCode = StatusCodes.Status404NotFound;
+            Response.Headers[VerdictHeader] = "no-app";
             await Response.WriteAsJsonAsync(new { error = "No local app is configured for this project." });
             return;
         }
         await ProxyTo(repo!.Name, app.Port, rest);
     }
+
+    /// <summary>The harness's OWN liveness verdict on a localview answer (openspec
+    /// local-app-liveness-hysteresis): <c>unreachable</c> on the 502 it writes when the
+    /// port refused, <c>no-app</c> on its 404s. The embedded frame's probe treats only
+    /// these as "the app is down" — any status the app itself produced means it is up.</summary>
+    public const string VerdictHeader = "X-ClaudeWeb-Localview";
 
     // Forwards the current request to http://127.0.0.1:{port}/{rest}, streaming
     // the response back. Shared by both routes above.
@@ -136,6 +144,7 @@ public class LocalProxyController : ControllerBase
         {
             _logger.Error($"[LOCALVIEW] {repoName} :{port} unreachable: {ex.Message}");
             Response.StatusCode = StatusCodes.Status502BadGateway;
+            Response.Headers[VerdictHeader] = "unreachable";
             await Response.WriteAsJsonAsync(new { error = "The local app is not responding." });
             return;
         }
