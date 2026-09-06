@@ -55,11 +55,15 @@ public class NotesController : ControllerBase
     public record HubInfoRequest(bool Enabled);
     public record HubPostRequest(long BaseRev, IdeasSyncClient.SharedStore? Store);
 
+    // Consumed ideas (promoted into a task — openspec ideas-consume-on-promotion) are
+    // hidden by default; ?includeConsumed=true returns them too (each carries
+    // consumedByTaskId), backing the Ideas panel's off-by-default "Consumed" view and
+    // the Kanban/graph idea-handle chips.
     [HttpGet]
-    public IActionResult List()
+    public IActionResult List([FromQuery] bool includeConsumed = false)
     {
         _logger.CountRequest();
-        return Ok(_notes.List());
+        return Ok(_notes.List(includeConsumed));
     }
 
     [HttpPost]

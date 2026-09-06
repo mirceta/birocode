@@ -27,10 +27,14 @@ public class ArchAgentTests : IDisposable
 
     // ---- 2.2 availability rule -----------------------------------------------
 
+    // The table as amended by openspec arch-branch-handover: an operator branch is claimed
+    // while a human worked on it inside the activity window (here: a human turn one
+    // minute ago), the rest of the rows are unchanged. The window itself is covered in
+    // ArchHandoverTests.
     [Theory]
     [InlineData(true, false, "main", "main", "", "available")]        // default branch
     [InlineData(true, false, "master", "master", "", "available")]
-    [InlineData(true, false, "feature/x", "main", "", "claimed")]      // operator branch
+    [InlineData(true, false, "feature/x", "main", "", "claimed")]      // operator branch, human active
     [InlineData(true, false, "feature/y", "main", "feature/y", "available")] // arch-recorded branch
     [InlineData(true, true, "main", "main", "", "busy")]               // slot running wins over branch
     [InlineData(true, true, "feature/x", "main", "", "busy")]
@@ -40,7 +44,9 @@ public class ArchAgentTests : IDisposable
     public void Classify_follows_the_rule_table(bool managed, bool busy, string branch, string def, string archBranches, string expected)
     {
         var recorded = archBranches.Split(',', StringSplitOptions.RemoveEmptyEntries);
-        Assert.Equal(expected, ArchAgentService.Classify(managed, busy, branch, def, recorded));
+        const long now = 10_000_000;
+        var v = ArchClaims.Classify(managed, busy, branch, def, recorded, pinned: false, lastHumanAt: now - 60_000, now, ArchClaims.DefaultHumanWindow);
+        Assert.Equal(expected, v.Availability);
     }
 
     [Fact]
@@ -48,7 +54,7 @@ public class ArchAgentTests : IDisposable
     {
         // Dirtiness is not an input of the rule at all — by construction a dirty
         // default-branch tree classifies exactly like a clean one.
-        Assert.Equal("available", ArchAgentService.Classify(true, false, "main", "main", Array.Empty<string>()));
+        Assert.Equal("available", ArchClaims.Classify(true, false, "main", "main", Array.Empty<string>(), false, null, 1, ArchClaims.DefaultHumanWindow).Availability);
     }
 
     // ---- 1.4 reserved id -------------------------------------------------------------
@@ -89,6 +95,11 @@ public class ArchAgentTests : IDisposable
         Assert.Contains("busy repo is not a queue", role, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("NEEDS_HUMAN:", role);
         Assert.Contains("push", role);
+        // openspec arch-branch-handover: the arch knows the hand-over and the reasons.
+        Assert.Contains("adopt_branch", role);
+        Assert.Contains("human-active", role);
+        Assert.Contains("unassigned-branch", role);
+        Assert.Contains("Hand to arch", role);
     }
 
     [Fact]
@@ -307,11 +318,18 @@ public class ArchAgentTests : IDisposable
     // ---- 3.x MCP surface ---------------------------------------------------------------------
 
     [Fact]
-    public void Mcp_tools_list_names_the_fifteen_tools_with_required_args()
+    public void Mcp_tools_list_names_the_twenty_tools_with_required_args()
     {
         var tools = ArchMcpServer.ToolsList();
         var names = tools.Select(t => t!["name"]!.GetValue<string>()).ToList();
-        Assert.Equal(new[] { "list_agents", "list_machines", "git_state", "read_transcript", "send_task", "upgrade_peer", "list_tasks", "create_task", "update_task", "assign_task", "dispatch_task", "list_ideas", "idea_to_task", "remember", "recall" }, names);
+        // openspec arch-branch-handover adds adopt_branch; openspec arch-loop-tools adds the four loop tools.
+        Assert.Equal(new[] { "list_agents", "list_machines", "git_state", "read_transcript", "send_task", "adopt_branch", "upgrade_peer", "list_loops", "start_loop", "update_loop", "stop_loop", "list_tasks", "create_task", "update_task", "assign_task", "dispatch_task", "list_ideas", "idea_to_task", "remember", "recall" }, names);
+        // openspec arch-branch-handover: adopt_branch demands the Operator's ask; the
+        // override reaches read_transcript; dispatch_task takes a branch.
+        var adopt = tools.First(t => t!["name"]!.GetValue<string>() == "adopt_branch")!;
+        Assert.Equal(new[] { "repoId", "operatorAsked" }, adopt["inputSchema"]!["required"]!.AsArray().Select(n => n!.GetValue<string>()).ToArray());
+        Assert.NotNull(tools.First(t => t!["name"]!.GetValue<string>() == "read_transcript")!["inputSchema"]!["properties"]!["operatorAsked"]);
+        Assert.NotNull(tools.First(t => t!["name"]!.GetValue<string>() == "dispatch_task")!["inputSchema"]!["properties"]!["branch"]);
         var send = tools.First(t => t!["name"]!.GetValue<string>() == "send_task")!;
         var required = send["inputSchema"]!["required"]!.AsArray().Select(n => n!.GetValue<string>()).ToList();
         Assert.Contains("repoId", required);
@@ -511,7 +529,7 @@ public class ArchAgentTests : IDisposable
         Assert.Contains("list_machines", prompt);
         Assert.Contains("never a guess", prompt);
         Assert.Contains("managedThere", prompt);
-        Assert.Equal("<!-- arch-role v4 -->", ArchAgentService.RoleVersionMarker); // v4: stays armed while a question waits (openspec arch-standing-loop)
+        Assert.Equal("<!-- arch-role v6 -->", ArchAgentService.RoleVersionMarker); // v6: branch hand-over + adopt_branch (openspec arch-branch-handover) and loops on repo agents (openspec arch-loop-tools)
         Assert.Contains("do not repeat a question", prompt);
     }
 }

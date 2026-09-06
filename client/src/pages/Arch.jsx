@@ -603,7 +603,11 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
               <div className="arch__dim">
                 last actor {a.lastActor}
                 {a.runningSince ? ` · running ${ago(a.runningSince)}` : ''}
-                {a.availability === 'claimed' ? ' · your branch — left alone' : ''}
+                {/* openspec arch-branch-handover: why it is claimed, or the caveat on an unassigned branch */}
+                {a.availability === 'claimed' && a.claimedReason === 'pinned' ? ' · pinned as yours — left alone' : ''}
+                {a.availability === 'claimed' && a.claimedReason !== 'pinned' ? ' · your branch (worked on recently) — left alone; hand it over from the dock' : ''}
+                {a.availability !== 'claimed' && a.claimedReason === 'unassigned-branch' ? ' · unassigned branch — the arch names it in its sends' : ''}
+                {a.adopted ? ' · handed to the arch' : ''}
               </div>
               {a.tabId
                 ? <button type="button" className="arch__link" onClick={() => openDock(a.tabId)}>open dock ↗</button>
@@ -765,9 +769,12 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
   const shownLanes = split ? splitLanes.filter((l) => !(chatOnly && l === 'fleet')) : [lane];
 
   return (
-    <div className={`arch${popup ? ' arch--popup' : ''}${sideDrag ? ' arch--sidedrag' : ''}${chatOnly ? ' arch--chat' : ''}`}>
+    <div className={`arch${popup ? ' arch--popup' : ''}${sideDrag ? ' arch--sidedrag' : ''}${chatOnly ? ' arch--chat' : ''}${showSide ? '' : ' arch--solo'}`}>
       <div className="arch__cols" ref={colsRef}>
       <div className="arch__main">
+        {/* Pinned header (openspec pin-conversation-lanes): title row + lane strip
+            stay in view however far the transcript is scrolled — see arch.css. */}
+        <div className="arch__top" data-conversation-head>
         <div className="arch__head">
           <input
             className="arch__name"
@@ -834,6 +841,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
               {sideOpen ? '▥ hide side' : '▥ show side'}
             </button>
           )}
+        </div>
         </div>
         {!state && <div className="arch__banner arch__banner--loading" data-loading>Loading the arch state…</div>}
         {state && !state.gateOpen && <div className="arch__banner">Autopilot is disabled by the operator (host GUI). The arch agent cannot act until the gate is open.</div>}
