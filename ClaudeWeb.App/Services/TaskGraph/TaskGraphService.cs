@@ -97,6 +97,12 @@ public class TaskGraphService
     // the harness's own observation of git/PR state. Warning carries the
     // migration badge or a clamped over-claim ("agent reported done, branch
     // not on origin").
+    // Multiple assignees (openspec task-multi-assignee): Assignees is the full set of
+    // repo agents owning the task, each with ITS OWN lifecycle state and delivery
+    // linkage; the fields above mirror the FIRST (primary) assignee so older readers and
+    // sync peers keep working, and Status is the aggregate (AggregateStatus). Null on a
+    // node written before this change or by an older peer — AssigneesOf reads the
+    // legacy fields as the one assignee then.
     public sealed record Node(
         string Id, string Title, string? Note, string? RepoId, string? MachineId, string Status,
         double X, double Y, long CreatedAt, long UpdatedAt,
@@ -104,7 +110,121 @@ public class TaskGraphService
         long? DispatchedAt = null, int DispatchCount = 0, string? CreatedBy = null, string? IdeaId = null,
         string? Branch = null, string? HeadCommit = null, bool? Pushed = null,
         string? PrUrl = null, int? PrNumber = null, string? MergeCommit = null,
-        string? VerifiedStatus = null, long? VerifiedAt = null, string? Warning = null);
+        string? VerifiedStatus = null, long? VerifiedAt = null, string? Warning = null,
+        List<Assignee>? Assignees = null)
+    {
+        // Value equality over the assignee LIST (a record compares a List by reference,
+        // which would make every rebuilt node "changed" and churn sync/saves).
+        public bool Equals(Node? o) => o is not null && (ReferenceEquals(this, o) || (
+            Id == o.Id && Title == o.Title && Note == o.Note && RepoId == o.RepoId && MachineId == o.MachineId && Status == o.Status
+            && X.Equals(o.X) && Y.Equals(o.Y) && CreatedAt == o.CreatedAt && UpdatedAt == o.UpdatedAt
+            && SourceId == o.SourceId && AssignedBy == o.AssignedBy && AssignedAt == o.AssignedAt
+            && DispatchedAt == o.DispatchedAt && DispatchCount == o.DispatchCount && CreatedBy == o.CreatedBy && IdeaId == o.IdeaId
+            && Branch == o.Branch && HeadCommit == o.HeadCommit && Pushed == o.Pushed
+            && PrUrl == o.PrUrl && PrNumber == o.PrNumber && MergeCommit == o.MergeCommit
+            && VerifiedStatus == o.VerifiedStatus && VerifiedAt == o.VerifiedAt && Warning == o.Warning
+            && (Assignees ?? new List<Assignee>()).SequenceEqual(o.Assignees ?? new List<Assignee>())));
+        public override int GetHashCode() => HashCode.Combine(Id, UpdatedAt, Status, RepoId);
+    }
+
+    /// <summary>One repo agent owning (part of) a task (openspec task-multi-assignee): its
+    /// harness (null = this one), its repo, and its OWN lifecycle status, dispatch record
+    /// and delivery linkage — the same fields the node carried for its single assignee,
+    /// now per agent. <c>UpdatedAt</c> stamps this assignee's last change (the stale
+    /// guard runs per assignee).</summary>
+    public sealed record Assignee(
+        string? SourceId, string RepoId, string Status,
+        string? AssignedBy = null, long? AssignedAt = null, long? DispatchedAt = null, int DispatchCount = 0,
+        string? Branch = null, string? HeadCommit = null, bool? Pushed = null,
+        string? PrUrl = null, int? PrNumber = null, string? MergeCommit = null,
+        string? VerifiedStatus = null, long? VerifiedAt = null, string? Warning = null, long UpdatedAt = 0)
+    {
+        /// <summary>"sourceId|repoId" ("" for this harness): the key the tools and the UI use.</summary>
+        public string Key => AssigneeKey(SourceId, RepoId);
+    }
+
+    public static string AssigneeKey(string? sourceId, string repoId) => (string.IsNullOrEmpty(sourceId) ? "" : sourceId) + "|" + repoId;
+
+    /// <summary>The effective assignee set of a node: the recorded list, else the legacy
+    /// single assignee read from the node's own fields, else empty.</summary>
+    public static IReadOnlyList<Assignee> AssigneesOf(Node n) =>
+        n.Assignees is { Count: > 0 } ? n.Assignees
+        : n.RepoId is null ? Array.Empty<Assignee>()
+        : new[] { new Assignee(n.SourceId, n.RepoId, n.Status, n.AssignedBy, n.AssignedAt, n.DispatchedAt, n.DispatchCount,
+            n.Branch, n.HeadCommit, n.Pushed, n.PrUrl, n.PrNumber, n.MergeCommit, n.VerifiedStatus, n.VerifiedAt, n.Warning, n.UpdatedAt) };
+
+    /// <summary>The aggregate rule (openspec task-multi-assignee): the card is as far as
+    /// its SLOWEST assignee, and it leaves todo as soon as any assignee has started. So
+    /// done means every assignee is done, pr-merged means every one is at least
+    /// pr-merged, doing means someone started and nobody is beyond... the slowest; a card
+    /// with one assignee reads exactly as that assignee. No assignees: null (the card's
+    /// own status stands).</summary>
+    public static string? AggregateStatus(IReadOnlyList<Assignee> assignees)
+    {
+        if (assignees.Count == 0) return null;
+        var min = assignees.Min(a => TaskLifecycle.Rank(a.Status));
+        var anyStarted = assignees.Any(a => TaskLifecycle.Rank(a.Status) > TaskLifecycle.Rank(TaskLifecycle.Todo));
+        return Statuses[anyStarted ? Math.Max(TaskLifecycle.Rank(TaskLifecycle.Doing), min) : min];
+    }
+
+    /// <summary>Whether any assignee (or an unassigned card itself) says more than the
+    /// harness has verified (openspec board-claims-advisory, per assignee).</summary>
+    public static bool IsUnverified(Node n)
+    {
+        var list = AssigneesOf(n);
+        return list.Count == 0 ? TaskLifecycle.IsUnverified(n.Status, n.VerifiedStatus)
+            : list.Any(a => TaskLifecycle.IsUnverified(a.Status, a.VerifiedStatus));
+    }
+
+    /// <summary>The node rebuilt from an assignee list: the list stored, the legacy fields
+    /// mirroring the primary (first) assignee, the status the aggregate, the warning the
+    /// assignees' warnings joined (named per repo when there are several).</summary>
+    private static Node WithAssignees(Node cur, List<Assignee> list)
+    {
+        if (list.Count == 0)
+            return cur with { Assignees = list, RepoId = null, SourceId = null, AssignedBy = null, AssignedAt = null, DispatchedAt = null, DispatchCount = 0 };
+        var p = list[0];
+        var warnings = list.Where(a => a.Warning is not null).Select(a => list.Count == 1 ? a.Warning! : $"{a.RepoId}: {a.Warning}").ToList();
+        return cur with
+        {
+            Assignees = list, RepoId = p.RepoId, SourceId = p.SourceId, AssignedBy = p.AssignedBy, AssignedAt = p.AssignedAt,
+            DispatchedAt = p.DispatchedAt, DispatchCount = p.DispatchCount, Branch = p.Branch, HeadCommit = p.HeadCommit, Pushed = p.Pushed,
+            PrUrl = p.PrUrl, PrNumber = p.PrNumber, MergeCommit = p.MergeCommit, VerifiedStatus = p.VerifiedStatus, VerifiedAt = p.VerifiedAt,
+            Status = AggregateStatus(list)!, Warning = warnings.Count == 0 ? null : string.Join("; ", warnings),
+        };
+    }
+
+    /// <summary>A node's assignee list made explicit: a card written before this change, or
+    /// by an older peer, carries its single assignee in the legacy fields only; it becomes
+    /// the one-element list and the legacy fields are re-derived from it, so both views
+    /// agree. Idempotent; never stamps UpdatedAt (sync must not churn).</summary>
+    private static Node Normalize(Node n)
+    {
+        var list = AssigneesOf(n).ToList();
+        if (list.Count == 0) return n.Assignees is null ? n with { Assignees = new List<Assignee>() } : n;
+        var built = WithAssignees(n, list);
+        return built.Equals(n) ? n : built;
+    }
+
+    /// <summary>The wanted set applied over the current list: entries already present keep
+    /// their state (optionally with the dispatch record reset), new ones start at
+    /// <paramref name="inheritStatus"/> — the card's current status, so assigning a doing
+    /// card does not drag it back — assigned by <paramref name="by"/> now.</summary>
+    private static List<Assignee> ReplaceSet(IReadOnlyList<Assignee> current, IEnumerable<(string? SourceId, string RepoId)> wanted, string? by, long now, string inheritStatus, bool resetDispatch)
+    {
+        var list = new List<Assignee>();
+        foreach (var (src, repo) in wanted)
+        {
+            var key = AssigneeKey(CleanRepo(src), repo);
+            if (list.Any(a => a.Key == key)) continue;
+            var existing = current.FirstOrDefault(a => a.Key == key);
+            list.Add(existing is not null
+                ? (resetDispatch ? existing with { DispatchedAt = null, DispatchCount = 0, AssignedBy = Clean(by, 200) ?? existing.AssignedBy, AssignedAt = now, UpdatedAt = now } : existing)
+                : new Assignee(CleanRepo(src), repo, inheritStatus, Clean(by, 200), now, null, 0,
+                    Warning: TaskLifecycle.WarningFor(inheritStatus, null, null), UpdatedAt: now));
+        }
+        return list;
+    }
 
     // Source depends on Target (Target is the prerequisite).
     public sealed record Edge(string Id, string Source, string Target);
@@ -186,6 +306,7 @@ public class TaskGraphService
             repo, CleanRepo(machineId), "todo", x, y, now, now,
             SourceId: repo is null ? null : CleanRepo(sourceId), AssignedBy: repo is null ? null : Clean(createdBy, 200),
             AssignedAt: repo is null ? null : now, CreatedBy: Clean(createdBy, 200), IdeaId: CleanRepo(ideaId));
+        node = Normalize(node);
         lock (_gate)
         {
             _board.Nodes.Add(node);
@@ -226,7 +347,6 @@ public class TaskGraphService
                 newTitle = clean;
             }
             string? newNote = note is null ? cur.Note : Clean(note, MaxNoteLength);
-            string? newRepo = repoId is null ? cur.RepoId : CleanRepo(repoId);
             string? newMachine = machineId is null ? cur.MachineId : CleanRepo(machineId);
             string newStatus = cur.Status;
             if (status is not null)
@@ -235,20 +355,29 @@ public class TaskGraphService
                 newStatus = status;
             }
 
-            var updated = cur with
+            // The assignee set (openspec task-multi-assignee): a repoId here is the legacy
+            // single-assignee write (the graph's picker, the tasks agent) — it REPLACES the
+            // set with that one agent on this harness, or clears it when blank.
+            var list = AssigneesOf(cur).ToList();
+            if (repoId is not null)
             {
-                Title = newTitle,
-                Note = newNote,
-                RepoId = newRepo,
-                MachineId = newMachine,
-                Status = newStatus,
-                X = x ?? cur.X,
-                Y = y ?? cur.Y,
-                UpdatedAt = now,
-                // The card moves to exactly what was asked (openspec board-claims-advisory);
-                // the badge says whether the harness has verified that much.
-                Warning = newStatus == cur.Status ? cur.Warning : TaskLifecycle.WarningFor(newStatus, cur.VerifiedStatus, cur.Pushed),
-            };
+                var repo = CleanRepo(repoId);
+                list = repo is null ? new List<Assignee>() : ReplaceSet(list, new[] { ((string?)null, repo) }, cur.AssignedBy, now, cur.Status, resetDispatch: false);
+            }
+            // The card moves to exactly what was asked (openspec board-claims-advisory), and
+            // a status set on the card is set on EVERY assignee; each keeps its own badge —
+            // whether the harness has verified that much for that agent.
+            if (status is not null)
+                list = list.Select(a => a.Status == newStatus ? a : a with { Status = newStatus, Warning = TaskLifecycle.WarningFor(newStatus, a.VerifiedStatus, a.Pushed), UpdatedAt = now }).ToList();
+
+            var baseNode = cur with { Title = newTitle, Note = newNote, MachineId = newMachine, X = x ?? cur.X, Y = y ?? cur.Y, UpdatedAt = now };
+            var updated = list.Count > 0
+                ? WithAssignees(baseNode, list)
+                : (repoId is not null ? WithAssignees(baseNode, list) : baseNode) with
+                {
+                    Status = newStatus,
+                    Warning = newStatus == cur.Status ? cur.Warning : TaskLifecycle.WarningFor(newStatus, cur.VerifiedStatus, cur.Pushed),
+                };
             _board.Nodes[i] = updated;
             Save();
             return updated;
@@ -260,34 +389,14 @@ public class TaskGraphService
     /// task stays done; a todo task stays todo — assignment is who, status is where.</summary>
     public Node? Assign(string id, string? sourceId, string? repoId, string? by, long now)
     {
-        Node? updated;
-        lock (_gate)
-        {
-            var i = _board.Nodes.FindIndex(n => n.Id == id);
-            if (i < 0) return null;
-            var cur = _board.Nodes[i];
-            var repo = CleanRepo(repoId);
-            updated = cur with
-            {
-                RepoId = repo,
-                SourceId = repo is null ? null : CleanRepo(sourceId),
-                AssignedBy = repo is null ? null : Clean(by, 200),
-                AssignedAt = repo is null ? null : now,
-                DispatchedAt = null,
-                DispatchCount = 0,
-                UpdatedAt = now,
-            };
-            _board.Nodes[i] = updated;
-            Save();
-        }
-        _logger.Info($"[TASKGRAPH] Assigned node {id} -> {(updated.RepoId is null ? "nobody" : $"{updated.SourceId ?? "self"}/{updated.RepoId}")} by {by ?? "?"}");
-        RaiseChanged();
-        return updated;
+        var repo = CleanRepo(repoId);
+        return SetAssignees(id, repo is null ? Array.Empty<(string?, string)>() : new[] { (CleanRepo(sourceId), repo) }, by, now, resetDispatch: true);
     }
 
-    /// <summary>Record that the assignee was pinged with this task (openspec
-    /// task-board-kanban): the task moves to <c>doing</c> — the agent has it now.</summary>
-    public Node? MarkDispatched(string id, long now)
+    /// <summary>Replace the assignee set (openspec task-multi-assignee): agents already on
+    /// the card keep their state, new ones start at the card's current status, dropped
+    /// ones leave. Empty = unassigned (the card's status and linkage stay).</summary>
+    public Node? SetAssignees(string id, IEnumerable<(string? SourceId, string RepoId)> wanted, string? by, long now, bool resetDispatch = false)
     {
         Node? updated;
         lock (_gate)
@@ -295,10 +404,105 @@ public class TaskGraphService
             var i = _board.Nodes.FindIndex(n => n.Id == id);
             if (i < 0) return null;
             var cur = _board.Nodes[i];
-            // Raise-only to doing: a re-ping must not demote a card the harness
-            // already verified as committed or further (openspec kanban-lifecycle-columns).
-            var status = TaskLifecycle.Rank(cur.Status) >= TaskLifecycle.Rank(TaskLifecycle.Doing) ? cur.Status : TaskLifecycle.Doing;
-            updated = cur with { DispatchedAt = now, DispatchCount = cur.DispatchCount + 1, Status = status, UpdatedAt = now };
+            var clean = wanted.Where(w => !string.IsNullOrWhiteSpace(w.RepoId)).Select(w => (w.SourceId, w.RepoId.Trim())).ToList();
+            var list = ReplaceSet(AssigneesOf(cur), clean, by, now, cur.Status, resetDispatch);
+            updated = WithAssignees(cur with { UpdatedAt = now }, list);
+            _board.Nodes[i] = updated;
+            Save();
+        }
+        _logger.Info($"[TASKGRAPH] Assigned node {id} -> {(updated.RepoId is null ? "nobody" : string.Join(" + ", AssigneesOf(updated).Select(a => $"{a.SourceId ?? "self"}/{a.RepoId}")))} by {by ?? "?"}");
+        RaiseChanged();
+        return updated;
+    }
+
+    /// <summary>Add one repo agent to the card's assignees (no-op when present).</summary>
+    public Node? AddAssignee(string id, string? sourceId, string repoId, string? by, long now)
+    {
+        var cur = Find(id);
+        if (cur is null) return null;
+        var set = AssigneesOf(cur).Select(a => (a.SourceId, a.RepoId)).ToList();
+        set.Add((CleanRepo(sourceId), repoId.Trim()));
+        return SetAssignees(id, set, by, now);
+    }
+
+    /// <summary>Remove one repo agent from the card's assignees; the last one leaving
+    /// unassigns the card.</summary>
+    public Node? RemoveAssignee(string id, string? sourceId, string repoId, string? by, long now)
+    {
+        var cur = Find(id);
+        if (cur is null) return null;
+        var key = AssigneeKey(CleanRepo(sourceId), repoId.Trim());
+        var set = AssigneesOf(cur).Where(a => a.Key != key).Select(a => (a.SourceId, a.RepoId)).ToList();
+        return SetAssignees(id, set, by, now);
+    }
+
+    /// <summary>Set ONE assignee's status (openspec task-multi-assignee): that agent's card
+    /// state moves exactly as asked, its badge follows its own verified state, and the
+    /// parent re-aggregates. Null for an unknown node or assignee.</summary>
+    public Node? SetAssigneeStatus(string id, string assigneeKey, string status, long now)
+    {
+        if (!Statuses.Contains(status)) return null;
+        Node? updated;
+        lock (_gate)
+        {
+            var i = _board.Nodes.FindIndex(n => n.Id == id);
+            if (i < 0) return null;
+            var cur = _board.Nodes[i];
+            var list = AssigneesOf(cur).ToList();
+            var j = list.FindIndex(a => a.Key == assigneeKey);
+            if (j < 0) return null;
+            var a = list[j];
+            list[j] = a with { Status = status, Warning = TaskLifecycle.WarningFor(status, a.VerifiedStatus, a.Pushed), UpdatedAt = now };
+            updated = WithAssignees(cur with { UpdatedAt = now }, list);
+            _board.Nodes[i] = updated;
+            Save();
+        }
+        RaiseChanged();
+        return updated;
+    }
+
+    /// <summary>Which assignee a per-agent operation means: the given key when present; with
+    /// no key the PRIMARY (first) assignee. Null when the node has no such assignee.</summary>
+    private static int AssigneeIndex(IReadOnlyList<Assignee> list, string? key)
+    {
+        if (list.Count == 0) return -1;
+        return key is null ? 0 : list.ToList().FindIndex(a => a.Key == key);
+    }
+
+    /// <summary>Record that the assignee was pinged with this task (openspec
+    /// task-board-kanban): the task moves to <c>doing</c> — the agent has it now.</summary>
+    public Node? MarkDispatched(string id, long now) => MarkDispatched(id, null, now);
+
+    /// <summary>The same for ONE assignee (openspec task-multi-assignee); null key = every
+    /// assignee (the legacy whole-card ping). Raise-only to doing per assignee.</summary>
+    public Node? MarkDispatched(string id, string? assigneeKey, long now)
+    {
+        Node? updated;
+        lock (_gate)
+        {
+            var i = _board.Nodes.FindIndex(n => n.Id == id);
+            if (i < 0) return null;
+            var cur = _board.Nodes[i];
+            var list = AssigneesOf(cur).ToList();
+            if (list.Count == 0)
+            {
+                // Raise-only to doing: a re-ping must not demote a card the harness
+                // already verified as committed or further (openspec kanban-lifecycle-columns).
+                var status = TaskLifecycle.Rank(cur.Status) >= TaskLifecycle.Rank(TaskLifecycle.Doing) ? cur.Status : TaskLifecycle.Doing;
+                updated = cur with { DispatchedAt = now, DispatchCount = cur.DispatchCount + 1, Status = status, UpdatedAt = now };
+            }
+            else
+            {
+                if (assigneeKey is not null && list.All(a => a.Key != assigneeKey)) return null;
+                for (var j = 0; j < list.Count; j++)
+                {
+                    var a = list[j];
+                    if (assigneeKey is not null && a.Key != assigneeKey) continue;
+                    var status = TaskLifecycle.Rank(a.Status) >= TaskLifecycle.Rank(TaskLifecycle.Doing) ? a.Status : TaskLifecycle.Doing;
+                    list[j] = a with { DispatchedAt = now, DispatchCount = a.DispatchCount + 1, Status = status, Warning = status == a.Status ? a.Warning : TaskLifecycle.WarningFor(status, a.VerifiedStatus, a.Pushed), UpdatedAt = now };
+                }
+                updated = WithAssignees(cur with { UpdatedAt = now }, list);
+            }
             _board.Nodes[i] = updated;
             Save();
         }
@@ -313,7 +517,11 @@ public class TaskGraphService
     /// verifier where to look; the status is moved separately through
     /// <see cref="UpdateNode"/>. Null arguments leave the stored value; a claim never
     /// erases linkage.</summary>
-    public Node? RecordClaim(string id, string? branch, string? commit, string? prUrl, long now)
+    public Node? RecordClaim(string id, string? branch, string? commit, string? prUrl, long now) => RecordClaim(id, null, branch, commit, prUrl, now);
+
+    /// <summary>The same for ONE assignee (openspec task-multi-assignee); null key = the
+    /// primary assignee, or the card itself when it has none.</summary>
+    public Node? RecordClaim(string id, string? assigneeKey, string? branch, string? commit, string? prUrl, long now)
     {
         Node? updated;
         lock (_gate)
@@ -321,14 +529,28 @@ public class TaskGraphService
             var i = _board.Nodes.FindIndex(n => n.Id == id);
             if (i < 0) return null;
             var cur = _board.Nodes[i];
-            updated = cur with
+            var list = AssigneesOf(cur).ToList();
+            var j = AssigneeIndex(list, assigneeKey);
+            if (j < 0 && assigneeKey is not null) return null;
+            if (j < 0)
             {
-                Branch = Clean(branch, 400) ?? cur.Branch,
-                HeadCommit = Clean(commit, 64) ?? cur.HeadCommit,
-                PrUrl = Clean(prUrl, 400) ?? cur.PrUrl,
-                UpdatedAt = now,
-            };
-            if (updated == cur) return cur;
+                updated = cur with
+                {
+                    Branch = Clean(branch, 400) ?? cur.Branch,
+                    HeadCommit = Clean(commit, 64) ?? cur.HeadCommit,
+                    PrUrl = Clean(prUrl, 400) ?? cur.PrUrl,
+                    UpdatedAt = now,
+                };
+                if ((updated with { UpdatedAt = cur.UpdatedAt }).Equals(cur)) return cur;
+            }
+            else
+            {
+                var a = list[j];
+                var b = a with { Branch = Clean(branch, 400) ?? a.Branch, HeadCommit = Clean(commit, 64) ?? a.HeadCommit, PrUrl = Clean(prUrl, 400) ?? a.PrUrl };
+                if (b == a) return cur;
+                list[j] = b with { UpdatedAt = now };
+                updated = WithAssignees(cur with { UpdatedAt = now }, list);
+            }
             _board.Nodes[i] = updated;
             Save();
         }
@@ -343,7 +565,13 @@ public class TaskGraphService
     /// verified state keeps its warning, one the facts have caught up with sheds it.
     /// Saves and stamps <c>UpdatedAt</c> only when something actually changed, so an
     /// idle card can go stale and sync doesn't churn.</summary>
-    public Node? ApplyVerification(string id, TaskLifecycle.Facts facts, long now)
+    public Node? ApplyVerification(string id, TaskLifecycle.Facts facts, long now) => ApplyVerification(id, null, facts, now);
+
+    /// <summary>The same for ONE assignee (openspec task-multi-assignee): the facts are that
+    /// agent's branch/PR, its state advances forward only and its badge follows; the
+    /// parent re-aggregates. Null key = the primary assignee (or the card itself when it
+    /// has none).</summary>
+    public Node? ApplyVerification(string id, string? assigneeKey, TaskLifecycle.Facts facts, long now)
     {
         Node? updated;
         bool changed;
@@ -353,29 +581,57 @@ public class TaskGraphService
             if (i < 0) return null;
             var cur = _board.Nodes[i];
             var observed = TaskLifecycle.FromFacts(facts);
-            var newStatus = observed is not null && TaskLifecycle.Rank(observed) > TaskLifecycle.Rank(cur.Status) ? observed : cur.Status;
-            var newVerified = observed is not null && TaskLifecycle.Rank(observed) > TaskLifecycle.Rank(cur.VerifiedStatus)
-                ? observed : cur.VerifiedStatus;
-            updated = cur with
+            var list = AssigneesOf(cur).ToList();
+            var j = AssigneeIndex(list, assigneeKey);
+            if (j < 0 && assigneeKey is not null) return null;
+            string from;
+            if (j < 0)
             {
-                Status = newStatus,
-                HeadCommit = facts.HeadCommit ?? cur.HeadCommit,
-                Pushed = facts.BranchExists ? facts.OnOrigin : cur.Pushed,
-                PrUrl = facts.PrUrl ?? cur.PrUrl,
-                PrNumber = facts.PrNumber ?? cur.PrNumber,
-                MergeCommit = facts.MergeCommit ?? cur.MergeCommit,
-                VerifiedStatus = newVerified,
-            };
-            // Advisory badge (openspec board-claims-advisory): null once the verified state
-            // covers the card's status, else the claim-vs-verified line.
-            updated = updated with { Warning = TaskLifecycle.WarningFor(updated.Status, updated.VerifiedStatus, updated.Pushed) };
-            changed = updated != cur;
+                from = cur.Status;
+                var newStatus = observed is not null && TaskLifecycle.Rank(observed) > TaskLifecycle.Rank(cur.Status) ? observed : cur.Status;
+                var newVerified = observed is not null && TaskLifecycle.Rank(observed) > TaskLifecycle.Rank(cur.VerifiedStatus) ? observed : cur.VerifiedStatus;
+                updated = cur with
+                {
+                    Status = newStatus,
+                    HeadCommit = facts.HeadCommit ?? cur.HeadCommit,
+                    Pushed = facts.BranchExists ? facts.OnOrigin : cur.Pushed,
+                    PrUrl = facts.PrUrl ?? cur.PrUrl,
+                    PrNumber = facts.PrNumber ?? cur.PrNumber,
+                    MergeCommit = facts.MergeCommit ?? cur.MergeCommit,
+                    VerifiedStatus = newVerified,
+                };
+                // Advisory badge (openspec board-claims-advisory): null once the verified state
+                // covers the card's status, else the claim-vs-verified line.
+                updated = updated with { Warning = TaskLifecycle.WarningFor(updated.Status, updated.VerifiedStatus, updated.Pushed) };
+                changed = !updated.Equals(cur);
+                if (changed) updated = updated with { UpdatedAt = now, VerifiedAt = now };
+            }
+            else
+            {
+                var a = list[j];
+                from = a.Status;
+                var newStatus = observed is not null && TaskLifecycle.Rank(observed) > TaskLifecycle.Rank(a.Status) ? observed : a.Status;
+                var newVerified = observed is not null && TaskLifecycle.Rank(observed) > TaskLifecycle.Rank(a.VerifiedStatus) ? observed : a.VerifiedStatus;
+                var b = a with
+                {
+                    Status = newStatus,
+                    HeadCommit = facts.HeadCommit ?? a.HeadCommit,
+                    Pushed = facts.BranchExists ? facts.OnOrigin : a.Pushed,
+                    PrUrl = facts.PrUrl ?? a.PrUrl,
+                    PrNumber = facts.PrNumber ?? a.PrNumber,
+                    MergeCommit = facts.MergeCommit ?? a.MergeCommit,
+                    VerifiedStatus = newVerified,
+                };
+                b = b with { Warning = TaskLifecycle.WarningFor(b.Status, b.VerifiedStatus, b.Pushed) };
+                changed = b != a;
+                if (changed) list[j] = b with { UpdatedAt = now, VerifiedAt = now };
+                updated = changed ? WithAssignees(cur with { UpdatedAt = now }, list) : cur;
+            }
             if (changed)
             {
-                updated = updated with { UpdatedAt = now, VerifiedAt = now };
                 _board.Nodes[i] = updated;
                 Save();
-                _logger.Info($"[TASKGRAPH] Verified node {id}: {cur.Status} -> {updated.Status} (pushed={updated.Pushed}, pr={updated.PrNumber?.ToString() ?? "-"})");
+                _logger.Info($"[TASKGRAPH] Verified node {id}{(j >= 0 && list.Count > 1 ? $" [{list[j].RepoId}]" : "")}: {from} -> {(j >= 0 ? list[j].Status : updated.Status)} (card {updated.Status}, pushed={(j >= 0 ? list[j].Pushed : updated.Pushed)}, pr={(j >= 0 ? list[j].PrNumber : updated.PrNumber)?.ToString() ?? "-"})");
             }
         }
         if (changed) RaiseChanged();
@@ -384,7 +640,17 @@ public class TaskGraphService
 
     /// <summary>Stale = committed/pr-opened with no activity past the configured
     /// window — an unpushed branch or an open PR nobody is moving.</summary>
-    public bool IsStale(Node n, long now) => TaskLifecycle.IsStale(n.Status, n.UpdatedAt, now, StaleAfterMs);
+    public bool IsStale(Node n, long now)
+    {
+        var list = AssigneesOf(n);
+        return list.Count == 0
+            ? TaskLifecycle.IsStale(n.Status, n.UpdatedAt, now, StaleAfterMs)
+            : list.Any(a => IsStale(a, now));
+    }
+
+    /// <summary>The stale guard for one assignee (openspec task-multi-assignee): its own
+    /// hand-off state and its own last activity.</summary>
+    public bool IsStale(Assignee a, long now) => TaskLifecycle.IsStale(a.Status, a.UpdatedAt, now, StaleAfterMs);
 
     /// <summary>The prerequisites of a task (the targets of its depends-on edges).</summary>
     public List<Node> Prerequisites(string id)
@@ -629,6 +895,9 @@ public class TaskGraphService
             foreach (var t in rTombstones) tombs[t.Id] = Math.Max(t.DeletedAt, tombs.GetValueOrDefault(t.Id));
 
             var mergedNodes = MergeById(_board.Nodes, rNodes, n => n.Id, n => n.UpdatedAt, n => n.CreatedAt, tombs);
+            // A peer on an older build writes cards without the assignee list: read the
+            // legacy fields as the one assignee (openspec task-multi-assignee).
+            for (var i = 0; i < mergedNodes.Count; i++) mergedNodes[i] = Normalize(mergedNodes[i]);
             var mergedMachines = MergeById(_board.Machines, rMachines, m => m.Id, m => m.UpdatedAt, m => m.CreatedAt, tombs);
 
             // A node whose box didn't survive the merge is detached in place —
@@ -798,6 +1067,9 @@ public class TaskGraphService
                 board.Tombstones ??= new List<GraphTombstone>();
                 _board = board;
                 MigrateToLifecycle();
+                // Every card's assignee list made explicit (openspec task-multi-assignee);
+                // in memory only — the next write persists it, so idle boards do not churn.
+                for (var i = 0; i < _board.Nodes.Count; i++) _board.Nodes[i] = Normalize(_board.Nodes[i]);
             }
         }
         catch (Exception ex)

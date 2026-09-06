@@ -26,6 +26,18 @@ export function repoKey(node, remoteUrlOf) {
   return normalizeRemote(url) || `id:${node.repoId}`;
 }
 
+/** Every assignee's colour keys (openspec task-multi-assignee): the recorded list when
+ * the task has one, else the legacy single assignee; each with its machineKey / repoKey. */
+export function assigneeKeys(node, remoteUrlOf) {
+  const list = Array.isArray(node?.assignees) && node.assignees.length > 0
+    ? node.assignees
+    : (node?.repoId ? [{ sourceId: node.sourceId || null, repoId: node.repoId, status: node.status }] : []);
+  return list.map((a) => {
+    const sub = { repoId: a.repoId, sourceId: a.sourceId || null };
+    return { ...a, sourceId: sub.sourceId, status: a.status || 'todo', machineKey: machineKey(sub), repoKey: repoKey(sub, remoteUrlOf) };
+  });
+}
+
 /** "https://github.com/x/y.git" and "git@github.com:x/y.git" → "github.com/x/y". */
 export function normalizeRemote(url) {
   if (!url || typeof url !== 'string') return null;

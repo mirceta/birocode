@@ -19,7 +19,7 @@ import TaskFilterBar from './TaskFilterBar';
 import { useTaskFilter } from './taskFilterStore';
 import { columnOf } from './kanbanColumns';
 import { UNASSIGNED, applyFilter, blockedIds, filterContext, flagsOf, staleIds, taskView, toggleValue } from './taskFilters';
-import { assignSlots, machineKey, repoKey, nodeStyle, readSlots, writeSlots } from './graphColors';
+import { assignSlots, assigneeKeys, machineKey, repoKey, nodeStyle, readSlots, writeSlots } from './graphColors';
 import './taskgraph.css';
 
 // Task dependency graph (plans/task-dependency-graph.md): a single global board of
@@ -93,6 +93,7 @@ function StepNode({ id, data }) {
     else setDraft(data.title);
   }
 
+  const multi = (data.assigneeChips || []).length > 1; // several repo agents own this step (openspec task-multi-assignee)
   const cls = [
     'tg-node',
     `st-${data.status}`,
@@ -100,6 +101,7 @@ function StepNode({ id, data }) {
     data.dim ? 'is-dim' : '',
     data.machineSlot != null ? 'has-machine' : '',
     data.repoSlot != null ? 'has-repo' : '',
+    multi ? 'has-multi' : '',
   ].filter(Boolean).join(' ');
 
   return (
@@ -139,7 +141,7 @@ function StepNode({ id, data }) {
         >
           {data.status}
         </button>
-        {picking ? (
+        {multi ? null : picking ? (
           // Inline agent (repo) picker — the only way to (re)assign a step's agent
           // now that the detail view is gone. Empty value clears it to "no agent".
           <select
@@ -174,6 +176,24 @@ function StepNode({ id, data }) {
         )}
         {data.actionable && <span className="tg-chip tg-chip--go">do next</span>}
       </div>
+      {multi && (
+        // One chip per assignee, coloured like a node would be: border = its machine,
+        // background = its repo, with its OWN status (the node's is the aggregate).
+        <div className="tg-node__assignees" data-assignees={data.assigneeChips.length}>
+          {data.assigneeChips.map((a) => (
+            <span
+              key={a.key}
+              className={`tg-assignee${a.machineSlot != null ? ' has-machine' : ''}${a.repoSlot != null ? ' has-repo' : ''} st-${a.status}`}
+              style={nodeStyle(a.machineSlot, a.repoSlot)}
+              title={`${a.handle || a.label}${a.machine ? ` on ${a.machine}` : ''} · ${a.status}`}
+              data-assignee={a.key}
+            >
+              {a.label}{a.machine && a.machineKey !== 'self' ? <span className="tg-chip__machine"> @ {a.machine}</span> : null}
+              <span className="tg-assignee__status"> · {a.status}</span>
+            </span>
+          ))}
+        </div>
+      )}
       <Handle type="source" position={Position.Bottom} />
     </div>
   );
@@ -323,10 +343,12 @@ function TaskGraphBoard({ refreshKey = 0, pollMs = 0 }) {
     id: n.id,
     machineKey: machineKey(n.data),
     repoKey: repoKey(n.data, remoteUrlOf),
+    // Every assignee's keys (openspec task-multi-assignee); the two above are the primary's.
+    assignees: assigneeKeys(n.data, remoteUrlOf),
   })), [nodes, remoteUrlOf]);
   useEffect(() => {
-    const machines = assignSlots(keyed.map((k) => k.machineKey).filter(Boolean), slots.machines);
-    const reposSlots = assignSlots(keyed.map((k) => k.repoKey).filter(Boolean), slots.repos);
+    const machines = assignSlots(keyed.flatMap((k) => [k.machineKey, ...k.assignees.map((a) => a.machineKey)]).filter(Boolean), slots.machines);
+    const reposSlots = assignSlots(keyed.flatMap((k) => [k.repoKey, ...k.assignees.map((a) => a.repoKey)]).filter(Boolean), slots.repos);
     const changed = JSON.stringify(machines) !== JSON.stringify(slots.machines) || JSON.stringify(reposSlots) !== JSON.stringify(slots.repos);
     if (changed) {
       const next = { machines, repos: reposSlots };
@@ -340,21 +362,27 @@ function TaskGraphBoard({ refreshKey = 0, pollMs = 0 }) {
     const m = new Map();
     const r = new Map();
     for (const k of keyed) {
-      const node = nodes.find((n) => n.id === k.id);
-      if (k.machineKey) {
-        const e = m.get(k.machineKey) || { key: k.machineKey, label: machineLabelOf(k.machineKey), slot: slots.machines[k.machineKey], count: 0 };
-        e.count += 1; m.set(k.machineKey, e);
-      }
-      if (k.repoKey) {
-        const info = node ? fleetIndex.byKey.get(`${node.data.sourceId || 'self'}|${node.data.repoId}`) : null;
-        const label = info?.name || (node ? repoName(node.data.repoId) : '') || k.repoKey.replace(/^id:/, '').slice(0, 8);
-        const e = r.get(k.repoKey) || { key: k.repoKey, label, title: k.repoKey.startsWith('id:') ? label : k.repoKey, slot: slots.repos[k.repoKey], count: 0 };
-        e.count += 1; r.set(k.repoKey, e);
+      // A task counts once per distinct machine / repo among its assignees.
+      const seenM = new Set();
+      const seenR = new Set();
+      for (const a of k.assignees) {
+        if (a.machineKey && !seenM.has(a.machineKey)) {
+          seenM.add(a.machineKey);
+          const e = m.get(a.machineKey) || { key: a.machineKey, label: machineLabelOf(a.machineKey), slot: slots.machines[a.machineKey], count: 0 };
+          e.count += 1; m.set(a.machineKey, e);
+        }
+        if (a.repoKey && !seenR.has(a.repoKey)) {
+          seenR.add(a.repoKey);
+          const info = fleetIndex.byKey.get(`${a.sourceId || 'self'}|${a.repoId}`);
+          const label = info?.name || repoName(a.repoId) || a.repoKey.replace(/^id:/, '').slice(0, 8);
+          const e = r.get(a.repoKey) || { key: a.repoKey, label, title: a.repoKey.startsWith('id:') ? label : a.repoKey, slot: slots.repos[a.repoKey], count: 0 };
+          e.count += 1; r.set(a.repoKey, e);
+        }
       }
     }
     const bySlot = (a, b) => (a.slot ?? 0) - (b.slot ?? 0);
     return { machines: [...m.values()].sort(bySlot), repos: [...r.values()].sort(bySlot) };
-  }, [keyed, nodes, slots, machineLabelOf, fleetIndex, repoName]);
+  }, [keyed, slots, machineLabelOf, fleetIndex, repoName]);
 
   // step id -> machine key, for cross-machine edge detection.
   const nodeMachine = useMemo(() => new Map(keyed.map((k) => [k.id, k.machineKey])), [keyed]);
@@ -377,6 +405,20 @@ function TaskGraphBoard({ refreshKey = 0, pollMs = 0 }) {
           repoKey: k.repoKey,
           repoLabel: info?.name || repoName(n.data.repoId) || null,
           repoSlot: k.repoKey ? slots.repos[k.repoKey] : null,
+          // Per-assignee chips (openspec task-multi-assignee): label, machine, status, colours.
+          assigneeChips: (k.assignees || []).map((a, i) => {
+            const ai = fleetIndex.byKey.get(`${a.sourceId || 'self'}|${a.repoId}`);
+            return {
+              key: `${a.sourceId || ''}|${a.repoId}`,
+              label: ai?.name || repoName(a.repoId) || String(a.repoId).slice(0, 6),
+              machine: a.machineKey ? machineLabelOf(a.machineKey) : null,
+              machineKey: a.machineKey,
+              status: a.status || 'todo',
+              machineSlot: a.machineKey ? slots.machines[a.machineKey] : null,
+              repoSlot: a.repoKey ? slots.repos[a.repoKey] : null,
+              handle: viewOf.get(n.id)?.agents?.[i] || null,
+            };
+          }),
           actionable: actionable.has(n.id),
           dim: (lit ? !lit.nodes.has(n.id) : false) || !focused,
           onCycle: cycleStatus,
@@ -386,7 +428,7 @@ function TaskGraphBoard({ refreshKey = 0, pollMs = 0 }) {
         },
       };
     }),
-    [nodes, keyed, fleetIndex, shownIds, actionable, lit, repoName, repos, slots, machineLabelOf],
+    [nodes, keyed, fleetIndex, shownIds, actionable, lit, repoName, repos, slots, machineLabelOf, viewOf],
   );
   // "Hide filtered": the filtered-out tasks (and their edges) leave the canvas.
   const visibleNodes = useMemo(() => (filter.hide ? viewNodes.filter((n) => shownIds.has(n.id)) : viewNodes), [viewNodes, filter.hide, shownIds]);
@@ -422,11 +464,13 @@ function TaskGraphBoard({ refreshKey = 0, pollMs = 0 }) {
   const handlesOfRepo = useMemo(() => {
     const m = new Map();
     for (const k of keyed) {
-      if (!k.repoKey) continue;
-      const h = viewOf.get(k.id)?.agent;
-      if (!h) continue;
-      if (!m.has(k.repoKey)) m.set(k.repoKey, new Set());
-      m.get(k.repoKey).add(h);
+      const agents = viewOf.get(k.id)?.agents || [];
+      k.assignees.forEach((a, i) => {
+        const h = agents[i];
+        if (!a.repoKey || !h) return;
+        if (!m.has(a.repoKey)) m.set(a.repoKey, new Set());
+        m.get(a.repoKey).add(h);
+      });
     }
     return m;
   }, [keyed, viewOf]);
@@ -641,6 +685,7 @@ function toRfNode(n, boxes) {
     data: {
       title: n.title, note: n.note, repoId: n.repoId, sourceId: n.sourceId || null,
       status: n.status || 'todo', updatedAt: n.updatedAt || 0,
+      assignees: Array.isArray(n.assignees) && n.assignees.length > 0 ? n.assignees : null,
     },
   };
 }

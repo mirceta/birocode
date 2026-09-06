@@ -133,6 +133,17 @@ export function sourceKeyOf(node) {
   return node?.sourceId ? node.sourceId : 'self';
 }
 
+/** The assignees of a task (openspec task-multi-assignee): the recorded list when the
+ * card has one, else the legacy single assignee from the card's own fields, else []. Each
+ * entry carries its own status (the card's status is the aggregate). */
+export function assigneesOf(node) {
+  if (!node) return [];
+  if (Array.isArray(node.assignees) && node.assignees.length > 0) {
+    return node.assignees.map((a) => ({ ...a, sourceId: a.sourceId || null, repoId: a.repoId, status: a.status || 'todo' }));
+  }
+  return node.repoId ? [{ sourceId: node.sourceId || null, repoId: node.repoId, status: node.status || 'todo' }] : [];
+}
+
 /** Every repo agent the fleet status knows, keyed "sourceKey|repoId", with its handle
  * (openspec stable-handles). An agent without a handle gets "<machine>/<name>", and
  * "#2", "#3"… when the name repeats on that machine. */
@@ -174,24 +185,35 @@ export function filterContext(fleet, columnOf) {
 
 // ---- the task view the filter matches on --------------------------------------------
 
-/** A task reduced to what the filter reads: its machine label (null = unassigned), its
- * agent handle (null = unassigned), its state (the Kanban column), its flags, and the
- * text the search scans. `flags` is a list such as ['blocked']. */
+/** A task reduced to what the filter reads: its machine labels and agent handles — one
+ * per assignee (openspec task-multi-assignee; empty = unassigned; `machine`/`agent` are
+ * the primary's for single-value readers), its state (the Kanban column), its flags, and
+ * the text the search scans. `flags` is a list such as ['blocked']. */
 export function taskView(node, ctx, flags = []) {
-  const assigned = !!node.repoId;
-  const sourceKey = sourceKeyOf(node);
-  const machine = assigned ? ctx.machineLabel(sourceKey) : null;
-  const known = assigned ? ctx.agents.get(`${sourceKey}|${node.repoId}`) : null;
-  const agent = assigned ? (known?.handle || `${machine}/${String(node.repoId).slice(0, 8)}`) : null;
+  const set = assigneesOf(node);
+  const machines = [];
+  const agents = [];
+  const assignees = set.map((a) => {
+    const sourceKey = sourceKeyOf(a);
+    const machine = ctx.machineLabel(sourceKey);
+    const known = ctx.agents.get(`${sourceKey}|${a.repoId}`);
+    const handle = known?.handle || `${machine}/${String(a.repoId).slice(0, 8)}`;
+    if (!machines.includes(machine)) machines.push(machine);
+    agents.push(handle);
+    return { ...a, machine, handle };
+  });
   const state = ctx.columnOf(node);
   return {
     id: node.id,
     title: node.title || '',
-    machine,
-    agent,
+    machine: machines[0] ?? null,
+    agent: agents[0] ?? null,
+    machines,
+    agents,
+    assignees,
     state,
     flags: [...flags],
-    text: `${node.title || ''} ${node.note || ''} ${machine || ''} ${agent || ''} ${state} ${flags.join(' ')}`.toLowerCase(),
+    text: `${node.title || ''} ${node.note || ''} ${machines.join(' ')} ${agents.join(' ')} ${assignees.map((a) => a.status).join(' ')} ${state} ${flags.join(' ')}`.toLowerCase(),
   };
 }
 
@@ -202,10 +224,15 @@ export function matchesGroup(view, f, group) {
       const words = f.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
       return words.every((w) => view.text.includes(w));
     }
-    case 'machine':
-      return f.machines.length === 0 || f.machines.some((m) => (m === UNASSIGNED ? view.machine === null : view.machine === m));
-    case 'agent':
-      return f.agents.length === 0 || f.agents.some((a) => (a === UNASSIGNED ? view.agent === null : view.agent === a));
+    case 'machine': {
+      // ANY assignee matches (openspec task-multi-assignee).
+      const ms = view.machines || (view.machine === null ? [] : [view.machine]);
+      return f.machines.length === 0 || f.machines.some((m) => (m === UNASSIGNED ? ms.length === 0 : ms.includes(m)));
+    }
+    case 'agent': {
+      const as = view.agents || (view.agent === null ? [] : [view.agent]);
+      return f.agents.length === 0 || f.agents.some((a) => (a === UNASSIGNED ? as.length === 0 : as.includes(a)));
+    }
     case 'state':
       return f.states.length === 0 || f.states.includes(view.state);
     case 'flag':
@@ -241,8 +268,9 @@ export function facets(views, f, columns = []) {
     }
     return m;
   };
-  const machines = count('machine', (v) => [v.machine === null ? UNASSIGNED : v.machine]);
-  const agents = count('agent', (v) => [v.agent === null ? UNASSIGNED : v.agent]);
+  // A task counts once per distinct machine / agent it has (openspec task-multi-assignee).
+  const machines = count('machine', (v) => { const ms = v.machines || (v.machine === null ? [] : [v.machine]); return ms.length ? [...new Set(ms)] : [UNASSIGNED]; });
+  const agents = count('agent', (v) => { const as = v.agents || (v.agent === null ? [] : [v.agent]); return as.length ? [...new Set(as)] : [UNASSIGNED]; });
   const states = count('state', (v) => [v.state]);
   const flags = count('flag', (v) => v.flags);
   const stateKeys = [...columns.map((c) => (Array.isArray(c) ? c[0] : c.key)), ...views.map((v) => v.state)];

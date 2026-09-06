@@ -3,7 +3,7 @@ import { apiGet, apiPost, apiPatch, apiDelete } from '../../api/client';
 import TaskFilterBar from './TaskFilterBar';
 import { useTaskFilter } from './taskFilterStore';
 import { COLUMNS, columnOf } from './kanbanColumns';
-import { applyFilter, blockedIds, filterContext, flagsOf, isNarrowed, staleIds, taskView } from './taskFilters';
+import { applyFilter, assigneesOf, blockedIds, filterContext, flagsOf, isNarrowed, staleIds, taskView } from './taskFilters';
 import './kanban.css';
 
 // The Kanban view of the task board (openspec task-board-kanban, columns per
@@ -103,20 +103,25 @@ export default function KanbanBoard() {
     // The handle ("spacex/prg#2", openspec stable-handles) is the label everywhere.
     for (const a of m.agents || []) agents.push({ key: `${m.self ? '' : m.sourceId}|${a.repoId}`, label: `${a.handle || `${m.machine}/${a.name}`}${a.managed ? ' 🏛' : ''}`, machine: m.machine, name: a.name, handle: a.handle, managed: a.managed });
   }
-  const assigneeLabel = (n) => {
-    if (!n.repoId) return null;
-    const a = agents.find((x) => x.key === `${n.sourceId || ''}|${n.repoId}`);
-    if (a) return a.handle || `${a.machine}/${a.name}`;
-    return `${n.repoId.slice(0, 8)}… @ ${machineLabel[n.sourceId || ''] || (n.sourceId ? n.sourceId.slice(0, 8) : 'this machine')}`;
+  // One assignee's label: the fleet handle when known, else a readable fallback
+  // (openspec task-multi-assignee: a card carries one or several of these).
+  const keyOf = (a) => `${a.sourceId || ''}|${a.repoId}`;
+  const assigneeLabelOf = (a) => {
+    const known = agents.find((x) => x.key === keyOf(a));
+    if (known) return known.handle || `${known.machine}/${known.name}`;
+    return `${String(a.repoId).slice(0, 8)}… @ ${machineLabel[a.sourceId || ''] || (a.sourceId ? a.sourceId.slice(0, 8) : 'this machine')}`;
   };
 
   const patch = async (id, body) => {
     try { await apiPatch(`/taskgraph/nodes/${id}`, body); await load(); } catch (e) { setError(e?.message || String(e)); }
   };
   const setStatus = (n, status) => patch(n.id, { status });
-  const assign = async (n, key) => {
+  // Add / remove one assignee (openspec task-multi-assignee): the set on the card grows
+  // or shrinks; every other assignee keeps its own state.
+  const changeAssignees = async (n, key, mode) => {
     const [sourceId, repoId] = key ? key.split('|') : ['', ''];
-    try { await apiPost(`/taskgraph/nodes/${n.id}/assign`, { sourceId: sourceId || null, repoId: repoId || '', by: 'human' }); await load(); } catch (e) { setError(e?.message || String(e)); }
+    if (!repoId) return;
+    try { await apiPost(`/taskgraph/nodes/${n.id}/assign`, { assignees: [{ sourceId: sourceId || null, repoId }], mode, by: 'human' }); await load(); } catch (e) { setError(e?.message || String(e)); }
   };
   const dispatch = async (n) => {
     setBusy(n.id);
@@ -217,7 +222,14 @@ export default function KanbanBoard() {
                   >
                     <div className="kb__title">{n.title}</div>
                     <div className="kb__meta">
-                      {n.repoId && <span className="kb__chip kb__chip--who" title="assignee">👤 {assigneeLabel(n)}</span>}
+                      {assigneesOf(n).map((a) => {
+                        const multi = assigneesOf(n).length > 1;
+                        return (
+                          <span key={keyOf(a)} className={`kb__chip kb__chip--who${multi ? ' kb__chip--who-multi' : ''}${a.warning ? ' kb__chip--who-warn' : ''}`} title={`assignee${multi ? ` · ${a.status}` : ''}${a.warning ? ` · ⚠ ${a.warning}` : ''}`} data-assignee={keyOf(a)}>
+                            👤 {assigneeLabelOf(a)}{multi ? <span className="kb__who-status"> · {a.status}</span> : null}
+                          </span>
+                        );
+                      })}
                       {blocked && <span className="kb__chip kb__chip--blocked" title={`waits on ${prereqs.filter((p) => p.status !== 'done').map((p) => p.title).join(', ')}`}>⛔ blocked</span>}
                       {!blocked && prereqs.length > 0 && <span className="kb__chip" title="prerequisites done">✓ {prereqs.length} prereq</span>}
                       {n.dispatchedAt && <span className="kb__chip kb__chip--pinged" title={`pinged ${n.dispatchCount}×`}>📣 {ago(Date.now() - n.dispatchedAt)} ago{n.dispatchCount > 1 ? ` ×${n.dispatchCount}` : ''}</span>}
@@ -233,14 +245,19 @@ export default function KanbanBoard() {
                     {isOpen && (
                       <div className="kb__detail" onClick={(e) => e.stopPropagation()}>
                         {n.note && <div className="kb__note-text">{n.note}</div>}
-                        <label className="kb__row">
-                          assignee
-                          <select className="kb__select" value={n.repoId ? `${n.sourceId || ''}|${n.repoId}` : ''} onChange={(e) => assign(n, e.target.value)} data-assign>
-                            <option value="">— nobody —</option>
-                            {agents.map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
-                            {n.repoId && !agents.some((a) => a.key === `${n.sourceId || ''}|${n.repoId}`) && <option value={`${n.sourceId || ''}|${n.repoId}`}>{assigneeLabel(n)}</option>}
+                        <div className="kb__row kb__assignees" data-assignees={assigneesOf(n).length}>
+                          <span className="kb__dim">assignees</span>
+                          {assigneesOf(n).map((a) => (
+                            <span key={keyOf(a)} className="kb__chip kb__chip--who" title={`${a.status}${a.branch ? ` · ⎇ ${a.branch}` : ''}${a.prUrl ? ` · PR${a.prNumber ? ' #' + a.prNumber : ''}` : ''}${a.warning ? ` · ⚠ ${a.warning}` : ''}`}>
+                              {assigneeLabelOf(a)}{assigneesOf(n).length > 1 ? <span className="kb__who-status"> · {a.status}</span> : null}
+                              <button type="button" className="kb__x" title="remove this assignee" onClick={() => changeAssignees(n, keyOf(a), 'remove')} data-remove-assignee={keyOf(a)}>×</button>
+                            </span>
+                          ))}
+                          <select className="kb__select" value="" onChange={(e) => changeAssignees(n, e.target.value, 'add')} data-assign>
+                            <option value="">{assigneesOf(n).length ? '＋ add another assignee…' : '— nobody — pick an assignee…'}</option>
+                            {agents.filter((x) => !assigneesOf(n).some((a) => keyOf(a) === x.key)).map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
                           </select>
-                        </label>
+                        </div>
                         {prereqs.length > 0 && (
                           <div className="kb__row kb__dim">waits on: {prereqs.map((p) => `${p.title} (${p.status})`).join(' · ')}</div>
                         )}
@@ -248,7 +265,7 @@ export default function KanbanBoard() {
                           {n.status !== 'todo' && <button type="button" className="kb__btn" onClick={() => setStatus(n, 'todo')}>◀ todo</button>}
                           {n.status !== 'doing' && <button type="button" className="kb__btn" onClick={() => setStatus(n, 'doing')}>doing</button>}
                           {n.status !== 'done' && <button type="button" className="kb__btn" title="move the card to done — the harness keeps verifying and badges the card until the merge is confirmed" onClick={() => setStatus(n, 'done')}>done ✓</button>}
-                          <button type="button" className="kb__btn kb__btn--primary" disabled={!n.repoId || DELIVERED(n.status) || blocked || busy === n.id} title={!n.repoId ? 'assign first' : blocked ? 'a prerequisite is not delivered' : 'send the task brief to the assignee now'} onClick={() => dispatch(n)} data-dispatch>📣 Ping assignee</button>
+                          <button type="button" className="kb__btn kb__btn--primary" disabled={!n.repoId || DELIVERED(n.status) || blocked || busy === n.id} title={!n.repoId ? 'assign first' : blocked ? 'a prerequisite is not delivered' : assigneesOf(n).length > 1 ? 'send the task brief to every assignee not yet pinged, each told which repo is its own' : 'send the task brief to the assignee now'} onClick={() => dispatch(n)} data-dispatch>📣 {assigneesOf(n).length > 1 ? 'Ping assignees' : 'Ping assignee'}</button>
                           <button type="button" className="kb__btn kb__btn--danger" onClick={() => remove(n)} title="delete the task">✕</button>
                         </div>
                         {(n.branch || n.headCommit || n.mergeCommit) && (

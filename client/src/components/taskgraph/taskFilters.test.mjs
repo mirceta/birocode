@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import {
   UNASSIGNED, emptyFilter, isNarrowed, toggleValue, normalizeFilter, hasFilterParams, parseFilter, formatFilter,
   withFilterInUrl, readSavedFilter, writeSavedFilter, agentHandles, filterContext, taskView, matchesTask, applyFilter,
-  facets, chipsOf, blockedIds, staleIds, flagsOf,
+  facets, chipsOf, blockedIds, staleIds, flagsOf, assigneesOf,
 } from './taskFilters.js';
 import { COLUMNS, STATUS_KEYS, columnOf } from './kanbanColumns.js';
 
@@ -156,6 +156,28 @@ test('chips list every key with its count, keep a selected key that vanished, Un
   // Every column gets its chip, in column order, even when empty (count 0).
   const states = chipsOf(fx.states, [], { order: fx.stateKeys, always: fx.stateKeys });
   assert.deepEqual(states.map((c) => [c.key, c.count]), [['todo', 3], ['doing', 2], ['committed', 0], ['pr-opened', 0], ['pr-merged', 0], ['done', 1]]);
+});
+
+test('a multi-assignee task matches a machine or agent chip when ANY assignee matches, and counts once per key', () => {
+  // openspec task-multi-assignee: prg on spacex + birocode on MONSTER own one card.
+  const multi = { id: 'm', title: 'DLL-mode invoice lock', status: 'doing', repoId: 'p1', sourceId: 'src-spacex',
+    assignees: [{ sourceId: 'src-spacex', repoId: 'p1', status: 'doing' }, { sourceId: null, repoId: 'r-web', status: 'todo' }] };
+  assert.deepEqual(assigneesOf(multi).map((a) => a.repoId), ['p1', 'r-web']);
+  assert.deepEqual(assigneesOf(nodes[0]).map((a) => a.repoId), ['r-web']);          // legacy single
+  assert.deepEqual(assigneesOf(nodes[4]), []);                                        // unassigned
+  const v = taskView(multi, ctx, []);
+  assert.deepEqual(v.machines, ['spacex', 'MONSTER']);
+  assert.deepEqual(v.agents, ['spacex/prg', 'MONSTER/birocode']);
+  assert.equal(v.machine, 'spacex');                                                 // the primary, for single-value readers
+  const all = [...views, v];
+  assert.deepEqual([...applyFilter(all, { ...emptyFilter(), machines: ['MONSTER'] })].sort(), ['a', 'b', 'm']);
+  assert.deepEqual([...applyFilter(all, { ...emptyFilter(), agents: ['spacex/prg'] })].sort(), ['c', 'm']);
+  assert.deepEqual([...applyFilter(all, { ...emptyFilter(), machines: [UNASSIGNED] })], ['e']);
+  assert.equal(matchesTask(v, { ...emptyFilter(), machines: ['spacex'], agents: ['MONSTER/birocode'] }), true); // AND across groups, any assignee within
+  const fx = facets(all, emptyFilter(), COLUMNS);
+  assert.equal(fx.machines.get('spacex'), 4);   // c, d, f + the multi card once
+  assert.equal(fx.machines.get('MONSTER'), 3);  // a, b + the multi card once
+  assert.equal(fx.agents.get('spacex/prg'), 2);
 });
 
 test('toggleValue adds and removes without mutating', () => {
