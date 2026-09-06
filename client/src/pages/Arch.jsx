@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { apiGet, apiPost } from '../api/client';
+import { apiDelete, apiGet, apiPatch, apiPost } from '../api/client';
 import { useFeature } from '../context/UiModeContext';
 import { useDock } from '../context/DockContext';
 import MessageBubble from '../components/chat/MessageBubble';
@@ -58,6 +58,19 @@ const SIDE_OPEN_KEY = 'arch.sideOpen';
 const SIDE_MIN = 240;
 const readSideWidth = () => { try { const n = Number(localStorage.getItem(SIDE_WIDTH_KEY)); return n >= SIDE_MIN ? n : 340; } catch { return 340; } };
 const readSideOpen = () => { try { return localStorage.getItem(SIDE_OPEN_KEY) !== '0'; } catch { return true; } };
+// Nested side-by-side inside the Arch tab (openspec arch-conversations): which lanes
+// are shown as columns when the split is on. Per device, like the side column.
+const SPLIT_KEY = 'arch.split';
+const SPLIT_LANES_KEY = 'arch.splitLanes';
+const LANES = ['chat', 'tools', 'history', 'loops', 'fleet'];
+const readSplit = () => { try { return localStorage.getItem(SPLIT_KEY) === '1'; } catch { return false; } };
+const readSplitLanes = () => {
+  try {
+    const v = JSON.parse(localStorage.getItem(SPLIT_LANES_KEY));
+    const clean = Array.isArray(v) ? v.filter((l) => LANES.includes(l)) : [];
+    return clean.length ? clean : ['chat', 'history'];
+  } catch { return ['chat', 'history']; }
+};
 const saveLocal = (k, v) => { try { localStorage.setItem(k, String(v)); } catch { /* private mode */ } };
 const AVAIL_CLASS = { available: 'ok', busy: 'busy', claimed: 'claimed', unmanaged: 'dim' };
 
@@ -79,9 +92,16 @@ function ago(ms) {
 // column, no Fleet lane (the Management App's Arch tab); 'cards' = only the
 // Loop / Managed agents / Fleet / Home repo cards as a grid (the Management
 // App's Status tab hosts them under the fleet strips).
-export default function Arch({ popup = false, onOpenDock = null, view = 'full' }) {
+// `conv` (openspec arch-conversations): which arch conversation this page shows —
+// the default `@arch` or `@arch:<id>`. Every conversation has its own loop slot,
+// session and watermark; the scope, the fleet and the home repo are shared.
+// `onConversationChanged` tells the host (the Management App's tab strip) that
+// this conversation was renamed or removed.
+export default function Arch({ popup = false, onOpenDock = null, view = 'full', conv = '@arch', onConversationChanged = null }) {
   const enabled = useFeature('archTab');
   const [state, setState] = useState(null);
+  const convQ = conv && conv !== '@arch' ? `?conv=${encodeURIComponent(conv)}` : '';
+  const [nameDraft, setNameDraft] = useState('');
   // The @arch row of the ungated loop projection + the recipe list (openspec
   // arch-driven-loops): what the dock loop control needs to arm a goal/recipe here.
   const [driven, setDriven] = useState(null);
@@ -102,6 +122,8 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full' }
   // the conversation, its Tools (the harness MCP surface) and the History of
   // its tool calls. Chat is the default; the lane is view state, not persisted.
   const [lane, setLane] = useState('chat');
+  const [split, setSplit] = useState(readSplit);
+  const [splitLanes, setSplitLanes] = useState(readSplitLanes);
   const [sideWidth, setSideWidth] = useState(readSideWidth);
   const [sideOpen, setSideOpen] = useState(readSideOpen);
   const [sideDrag, setSideDrag] = useState(false);
@@ -117,23 +139,27 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full' }
   // state reply. laneRef keeps `load` stable across lane switches.
   const laneRef = useRef(lane);
   laneRef.current = lane;
+  const splitRef = useRef({ split, splitLanes });
+  splitRef.current = { split, splitLanes };
   const load = useCallback(async () => {
     try {
-      const s = await apiGet('/arch');
+      const s = await apiGet(`/arch${convQ}`);
       if (!alive.current) return;
       setState(s);
+      if (s?.conversation?.name !== undefined) setNameDraft((d) => (document.activeElement?.dataset?.convName !== undefined ? d : s.conversation.name));
       if (s?.loop?.sessionId) setSessionId(s.loop.sessionId);
       if (typeof s?.drivenQuietSeconds === 'number') setQuietMin((q) => (document.activeElement?.dataset?.quietFloor !== undefined ? q : Math.max(1, Math.round(s.drivenQuietSeconds / 60))));
       try {
         const li = await apiGet('/autopilot/loops');
         if (!alive.current) return;
-        setDriven((li?.loops || []).find((l) => l.repoId === '@arch') || null);
+        setDriven((li?.loops || []).find((l) => l.repoId === conv) || null);
         setRecipes(li?.recipes || []);
       } catch {
         /* the projection is optional here */
       }
-      if (laneRef.current !== 'chat') { setError(''); return; }
-      const m = await apiGet('/arch/messages');
+      const chatShown = laneRef.current === 'chat' || (splitRef.current.split && splitRef.current.splitLanes.includes('chat'));
+      if (!chatShown) { setError(''); return; }
+      const m = await apiGet(`/arch/messages${convQ}`);
       if (!alive.current) return;
       setSessionId(m.sessionId);
       setMessages(m.messages || []);
@@ -141,11 +167,11 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full' }
     } catch (e) {
       if (alive.current) setError(e?.message || String(e));
     }
-  }, []);
+  }, [conv, convQ]);
 
   // The live turn: when its stream ends, re-pull the transcript at once so the
   // hand-over (settled live turn -> persisted reply) does not wait for the poll.
-  const stream = useArchStream({ onEnded: load });
+  const stream = useArchStream({ onEnded: load, repoId: conv, streamPath: `/arch/stream${convQ}` });
   const { turn } = stream;
 
   // "Copy agent prompt" (openspec arch-context-prompt): hand any repo agent on
@@ -195,8 +221,8 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full' }
   }, [enabled, load]);
   // Switching back to the Chat lane re-pulls the transcript at once.
   useEffect(() => {
-    if (enabled && lane === 'chat') load();
-  }, [enabled, lane, load]);
+    if (enabled && (lane === 'chat' || (split && splitLanes.includes('chat')))) load();
+  }, [enabled, lane, split, splitLanes, load]);
 
   // Attach whenever the server has a running arch turn with events this page
   // has not consumed — page load, a reload mid-turn, a loop-driven wake, an
@@ -243,7 +269,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full' }
     const text = draft.trim();
     if (!text) return;
     try {
-      await apiPost('/arch/send', { text });
+      await apiPost(`/arch/send${convQ}`, { text });
       setDraft('');
       setError('');
       // The user bubble comes from the run's own `user` event (the harness
@@ -253,17 +279,60 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full' }
     } catch (e) {
       setError(e?.message || String(e));
     }
-  }, [draft, load, stream]);
+  }, [draft, load, stream, convQ]);
 
   const loopAction = useCallback(async (body) => {
     try {
-      const s = await apiPost('/arch/loop', body);
+      const s = await apiPost(`/arch/loop${convQ}`, body);
       setState(s);
       setError('');
     } catch (e) {
       setError(e?.message || String(e));
     }
+  }, [convQ]);
+
+  // Conversation name (openspec arch-conversations): editable at the top; saved on
+  // blur / Enter; the host's tab strip is told so its label follows.
+  const renameConversation = useCallback(async () => {
+    const name = nameDraft.trim();
+    if (!name || name === state?.conversation?.name) { setNameDraft(state?.conversation?.name || ''); return; }
+    try {
+      const r = await apiPatch(`/arch/conversations/${encodeURIComponent(conv)}`, { name });
+      setState((st) => (st ? { ...st, conversation: r.conversation } : st));
+      setNameDraft(r.conversation?.name || name);
+      setError('');
+      onConversationChanged?.({ id: conv, name: r.conversation?.name || name });
+    } catch (e) {
+      setError(e?.message || String(e));
+    }
+  }, [nameDraft, state, conv, onConversationChanged]);
+
+  const removeConversation = useCallback(async () => {
+    if (!window.confirm(`Remove the arch conversation "${state?.conversation?.name || conv}"? Its loop is stopped; the transcript stays on disk.`)) return;
+    try {
+      await apiDelete(`/arch/conversations/${encodeURIComponent(conv)}`);
+      onConversationChanged?.({ id: conv, removed: true });
+    } catch (e) {
+      setError(e?.message || String(e));
+    }
+  }, [state, conv, onConversationChanged]);
+
+  const toggleSplit = useCallback(() => {
+    setSplit((v) => { saveLocal(SPLIT_KEY, v ? '0' : '1'); return !v; });
   }, []);
+  // With the split on, a lane chip toggles that lane's column (at least one, at most
+  // three); off, it picks the one lane shown.
+  const pickLane = useCallback((l) => {
+    if (!split) { setLane(l); return; }
+    setSplitLanes((prev) => {
+      let next = prev.includes(l) ? prev.filter((x) => x !== l) : [...prev, l];
+      if (next.length === 0) next = [l];
+      if (next.length > 3) next = next.slice(-3);
+      next = LANES.filter((x) => next.includes(x));
+      saveLocal(SPLIT_LANES_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, [split]);
 
   const saveScope = useCallback(async () => {
     try {
@@ -324,8 +393,8 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full' }
   }, [load]);
 
   const stopTurn = useCallback(async () => {
-    try { await apiPost('/arch/stop-turn', {}); setTimeout(load, 500); } catch (e) { setError(e?.message || String(e)); }
-  }, [load]);
+    try { await apiPost(`/arch/stop-turn${convQ}`, {}); setTimeout(load, 500); } catch (e) { setError(e?.message || String(e)); }
+  }, [load, convQ]);
 
   const openDock = useCallback((tabId) => {
     if (!tabId) return;
@@ -392,11 +461,14 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full' }
     return `${p.status || '?'}${p.detail ? ` · ${p.detail}` : ''}`;
   };
 
-  // The side column's cards — Loop, Managed agents, Fleet, Home repo — rendered
-  // once here, shown either beside the conversation or as the Fleet lane.
-  const sideCards = (
+  const convName = state?.conversation?.name || (conv === '@arch' ? 'Arch agent' : conv);
+  const isDefaultConv = !state?.conversation || state.conversation.isDefault !== false;
+
+  // This conversation's loop cards (openspec arch-conversations): the standing wake
+  // loop and the driven loop live in the Loops lane of the conversation they belong to.
+  const loopCards = (
     <>
-        <section className="arch__card">
+        <section className="arch__card" data-arch-standing>
           <div className="arch__card-head">
             <span>Standing wake loop</span>
             {drivenArmed
@@ -432,7 +504,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full' }
         <section className="arch__card" data-arch-driven>
           <div className="arch__card-head"><span>Driven loop (goal · recipe)</span></div>
           <div className="arch__dim" style={{ marginBottom: 6 }}>The dock's loop kinds, armed on the arch agent's own conversation. A goal or recipe takes the one loop slot; the standing wake loop pauses and comes back when it ends. A repeat of the same prompt waits for a managed repo turn; a question holds instead of stopping.</div>
-          <DockLoopControl repoId="@arch" repoName="Arch agent" sessionId={sessionId} tabId={null} stash={[]} loop={driven} recipes={recipes} onChanged={load} onUsePending={(text) => setDraft(text)} kinds={['goal', 'recipe']} />
+          <DockLoopControl repoId={conv} repoName={convName} sessionId={sessionId} tabId={null} stash={[]} loop={driven} recipes={recipes} onChanged={load} onUsePending={(text) => setDraft(text)} kinds={['goal', 'recipe']} />
           <div className="arch__row" style={{ marginTop: 8 }}>
             <label>
               re-prompt at least every (min)
@@ -452,7 +524,13 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full' }
             )}
           </div>
         </section>
+    </>
+  );
 
+  // The fleet-wide cards — Managed agents, Fleet, Home repo — shared by every
+  // conversation: beside the conversation, as the Fleet lane, or on the Status tab.
+  const sideCards = (
+    <>
         <section className="arch__card">
           <div className="arch__card-head">
             <span>Managed agents ({agents.length})</span>
@@ -605,7 +683,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full' }
     </>
   );
   const chatOnly = view === 'chat';
-  const showSide = view === 'full' && sideOpen && lane !== 'fleet';
+  const showSide = view === 'full' && sideOpen && lane !== 'fleet' && !split;
 
   if (view === 'cards') {
     return (
@@ -613,111 +691,20 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full' }
         {!state && <div className="arch__banner arch__banner--loading" data-loading>Loading the arch state…</div>}
         {state && !state.gateOpen && <div className="arch__banner">Autopilot is disabled by the operator (host GUI). The arch agent cannot act until the gate is open.</div>}
         {error && <div className="arch__banner arch__banner--err">{error}</div>}
-        {armed && state?.engine?.decision === 'escalate' && (
-          <div className="arch__banner" data-waiting>⏸ Waiting for you: {state.engine.label || state.engine.reason}. Reply in the conversation to continue — the loop stays armed and wake-ups from other repos still arrive.</div>
-        )}
         <div className="arch__overview" data-overview>{sideCards}</div>
       </div>
     );
   }
 
-  return (
-    <div className={`arch${popup ? ' arch--popup' : ''}${sideDrag ? ' arch--sidedrag' : ''}${chatOnly ? ' arch--chat' : ''}`}>
-      <div className="arch__cols" ref={colsRef}>
-      <div className="arch__main">
-        <div className="arch__head">
-          {!popup && <span className="arch__title">Arch agent</span>}
-          <span className="arch__meta">
-            {loop ? (
-              <>
-                <span className={`arch__pill arch__pill--${armed ? 'on' : 'off'}`}>{armed ? 'armed' : `loop ${loop.status}`}</span>
-                {' · '}{loop.mode}{' · '}{loop.iterationsDone}/{loop.maxIterations || '∞'}
-                {loop.stopReason ? ` · ${loop.stopReason}${loop.stopDetail ? `: ${loop.stopDetail}` : ''}` : ''}
-              </>
-            ) : <span className="arch__pill arch__pill--off">never armed</span>}
-            {running && <span className="arch__pill arch__pill--busy">turn running</span>}
-            {drivenArmed && <span className="arch__pill arch__pill--on" data-driven-pill>{loop.kind} loop · {loop.iterationsDone}/{loop.maxIterations || '∞'}</span>}
-            {sessionId && <span className="arch__dim"> · session {sessionId.slice(0, 8)}</span>}
-          </span>
-          <button
-            type="button"
-            className="arch__copy-ctx"
-            title="Copy a prompt that tells a repo agent (in any chat on this harness) where this conversation lives and how to read it"
-            onClick={copyAgentPrompt}
-          >
-            {copiedCtx ? '✓ copied' : '⧉ Copy agent prompt'}
-          </button>
-        </div>
-        <div className="arch__lanes" role="tablist" aria-label="Arch lanes">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={lane === 'chat'}
-            className={`arch__lane${lane === 'chat' ? ' arch__lane--on' : ''}`}
-            title="Talk to the arch agent — the only instructions it follows"
-            onClick={() => setLane('chat')}
-          >
-            💬 Chat
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={lane === 'tools'}
-            className={`arch__lane${lane === 'tools' ? ' arch__lane--on' : ''}`}
-            title="The harness tools the arch session gets on every turn"
-            onClick={() => setLane('tools')}
-          >
-            🔌 Tools
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={lane === 'history'}
-            className={`arch__lane${lane === 'history' ? ' arch__lane--on' : ''}`}
-            title="Every tool call of this conversation, with its arguments and result"
-            onClick={() => setLane('history')}
-          >
-            🧾 History
-          </button>
-          {!chatOnly && (
-            <button
-              type="button"
-              role="tab"
-              aria-selected={lane === 'fleet'}
-              className={`arch__lane${lane === 'fleet' ? ' arch__lane--on' : ''}`}
-              title="The loop, the managed agents, the fleet and the home repo, full width"
-              onClick={() => setLane('fleet')}
-            >
-              🛰 Fleet
-            </button>
-          )}
-          {!chatOnly && lane !== 'fleet' && (
-            <button
-              type="button"
-              className="arch__side-toggle"
-              aria-pressed={sideOpen}
-              title={sideOpen ? 'Hide the side column (the Fleet lane keeps its cards)' : 'Show the side column'}
-              onClick={toggleSide}
-            >
-              {sideOpen ? '▥ hide side' : '▥ show side'}
-            </button>
-          )}
-        </div>
-        {!state && <div className="arch__banner arch__banner--loading" data-loading>Loading the arch state…</div>}
-        {state && !state.gateOpen && <div className="arch__banner">Autopilot is disabled by the operator (host GUI). The arch agent cannot act until the gate is open.</div>}
-        {state?.gateOpen && state?.killSwitch === false && <div className="arch__banner">The autopilot kill switch is off: the arch loop is paused.</div>}
-        {error && <div className="arch__banner arch__banner--err">{error}</div>}
-        {armed && state?.engine?.decision === 'escalate' && (
-          <div className="arch__banner" data-waiting>⏸ Waiting for you: {state.engine.label || state.engine.reason}. Reply in the conversation to continue — the loop stays armed and wake-ups from other repos still arrive.</div>
-        )}
-        {lane === 'tools' ? (
-          <ArchToolsPanel />
-        ) : lane === 'fleet' ? (
-          <div className="arch__overview" data-overview>{sideCards}</div>
-        ) : lane === 'history' ? (
-          <ArchHistoryPanel liveTurn={turn} sessionId={sessionId} repoNames={repoNames} />
-        ) : (
-        <>
+  // One lane's body (openspec arch-conversations): rendered once as the main body,
+  // or once per column when the split is on.
+  const renderLane = (l) => (
+    l === 'tools' ? <ArchToolsPanel />
+    : l === 'fleet' ? <div className="arch__overview" data-overview>{sideCards}</div>
+    : l === 'loops' ? <div className="arch__overview arch__overview--loops" data-loops-lane>{loopCards}</div>
+    : l === 'history' ? <ArchHistoryPanel liveTurn={turn} sessionId={sessionId} repoNames={repoNames} conv={conv} />
+    : (
+      <>
         <div className="arch__scroll" ref={scrollRef}>
           {messages.length === 0 && (
             <div className="arch__empty">
@@ -757,8 +744,113 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full' }
             <span className="arch__dim">Ctrl+Enter sends. Messages here are the only instructions it follows.</span>
           </div>
         </div>
-        </>
+      </>
+    )
+  );
+  const laneOn = (l) => (split ? splitLanes.includes(l) : lane === l);
+  const laneChip = (l, icon, label, title) => (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={laneOn(l)}
+      className={`arch__lane${laneOn(l) ? ' arch__lane--on' : ''}`}
+      title={split ? `${title} — click to add or remove this column` : title}
+      data-lane={l}
+      onClick={() => pickLane(l)}
+    >
+      {icon} {label}
+    </button>
+  );
+  const shownLanes = split ? splitLanes.filter((l) => !(chatOnly && l === 'fleet')) : [lane];
+
+  return (
+    <div className={`arch${popup ? ' arch--popup' : ''}${sideDrag ? ' arch--sidedrag' : ''}${chatOnly ? ' arch--chat' : ''}`}>
+      <div className="arch__cols" ref={colsRef}>
+      <div className="arch__main">
+        <div className="arch__head">
+          <input
+            className="arch__name"
+            value={nameDraft}
+            placeholder={convName}
+            title="The name of this arch conversation — edit and press Enter"
+            aria-label="Conversation name"
+            data-conv-name
+            onChange={(e) => setNameDraft(e.target.value)}
+            onBlur={renameConversation}
+            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setNameDraft(state?.conversation?.name || ''); e.currentTarget.blur(); } }}
+            size={Math.max(8, Math.min(40, (nameDraft || convName).length + 1))}
+          />
+          {!isDefaultConv && (
+            <button type="button" className="arch__btn arch__btn--ghost" title="Remove this conversation (its loop stops; the transcript stays on disk)" onClick={removeConversation} data-remove-conv>
+              × remove
+            </button>
+          )}
+          <span className="arch__meta">
+            {loop ? (
+              <>
+                <span className={`arch__pill arch__pill--${armed ? 'on' : 'off'}`}>{armed ? 'armed' : `loop ${loop.status}`}</span>
+                {' · '}{loop.mode}{' · '}{loop.iterationsDone}/{loop.maxIterations || '∞'}
+                {loop.stopReason ? ` · ${loop.stopReason}${loop.stopDetail ? `: ${loop.stopDetail}` : ''}` : ''}
+              </>
+            ) : <span className="arch__pill arch__pill--off">never armed</span>}
+            {running && <span className="arch__pill arch__pill--busy">turn running</span>}
+            {drivenArmed && <span className="arch__pill arch__pill--on" data-driven-pill>{loop.kind} loop · {loop.iterationsDone}/{loop.maxIterations || '∞'}</span>}
+            {sessionId && <span className="arch__dim"> · session {sessionId.slice(0, 8)}</span>}
+          </span>
+          <button
+            type="button"
+            className="arch__copy-ctx"
+            title="Copy a prompt that tells a repo agent (in any chat on this harness) where this conversation lives and how to read it"
+            onClick={copyAgentPrompt}
+          >
+            {copiedCtx ? '✓ copied' : '⧉ Copy agent prompt'}
+          </button>
+        </div>
+        <div className="arch__lanes" role="tablist" aria-label="Arch lanes" data-split={split ? 'on' : 'off'}>
+          {laneChip('chat', '💬', 'Chat', 'Talk to the arch agent — the only instructions it follows')}
+          {laneChip('tools', '🔌', 'Tools', 'The harness tools the arch session gets on every turn')}
+          {laneChip('history', '🧾', 'History', 'Every tool call of this conversation, with its arguments and result')}
+          {laneChip('loops', '🔁', 'Loops', "This conversation's loops: the standing wake loop and a goal or recipe driven on it")}
+          {!chatOnly && laneChip('fleet', '🛰', 'Fleet', 'The managed agents, the fleet and the home repo, full width')}
+          <button
+            type="button"
+            className={`arch__side-toggle arch__split-toggle${split ? ' arch__split-toggle--on' : ''}`}
+            aria-pressed={split}
+            title={split ? 'Back to one lane at a time' : 'Show lanes side by side (pick them with the chips)'}
+            onClick={toggleSplit}
+            data-split-toggle
+          >
+            {split ? '⫴ split on' : '⫴ split'}
+          </button>
+          {!chatOnly && lane !== 'fleet' && !split && (
+            <button
+              type="button"
+              className="arch__side-toggle"
+              aria-pressed={sideOpen}
+              title={sideOpen ? 'Hide the side column (the Fleet lane keeps its cards)' : 'Show the side column'}
+              onClick={toggleSide}
+            >
+              {sideOpen ? '▥ hide side' : '▥ show side'}
+            </button>
+          )}
+        </div>
+        {!state && <div className="arch__banner arch__banner--loading" data-loading>Loading the arch state…</div>}
+        {state && !state.gateOpen && <div className="arch__banner">Autopilot is disabled by the operator (host GUI). The arch agent cannot act until the gate is open.</div>}
+        {state?.gateOpen && state?.killSwitch === false && <div className="arch__banner">The autopilot kill switch is off: the arch loop is paused.</div>}
+        {error && <div className="arch__banner arch__banner--err">{error}</div>}
+        {armed && state?.engine?.decision === 'escalate' && (
+          <div className="arch__banner" data-waiting>⏸ Waiting for you: {state.engine.label || state.engine.reason}. Reply in the conversation to continue — the loop stays armed and wake-ups from other repos still arrive.</div>
         )}
+        {split ? (
+          <div className="arch__split" data-split-cols={shownLanes.join(',')}>
+            {shownLanes.map((l) => (
+              <div key={l} className="arch__split-col" data-split-col={l}>
+                <div className="arch__split-head">{l === 'chat' ? '💬 Chat' : l === 'tools' ? '🔌 Tools' : l === 'history' ? '🧾 History' : l === 'loops' ? '🔁 Loops' : '🛰 Fleet'}</div>
+                {renderLane(l)}
+              </div>
+            ))}
+          </div>
+        ) : renderLane(lane)}
       </div>
 
       {showSide && (

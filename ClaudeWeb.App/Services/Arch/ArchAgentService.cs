@@ -107,9 +107,10 @@ public class ArchAgentService : IArchWakeSource
     // launched (with the config it wrote) can call the arch tools.
     private readonly string _mcpToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
 
-    // The wake draft composed this tick but not yet landed (see ComposeWake).
+    // The wake draft composed this tick but not yet landed (see ComposeWake), per
+    // conversation key (openspec arch-conversations).
     private readonly object _wakeGate = new();
-    private WakeDraft? _draft;
+    private readonly Dictionary<string, WakeDraft> _drafts = new(StringComparer.Ordinal);
 
     // When the arch last sent to each repo (unix ms) — used to attribute the
     // repo's latest turn.start to the arch (within a short window) or a human.
@@ -146,6 +147,53 @@ public class ArchAgentService : IArchWakeSource
 
     public static bool IsReserved(string? id) => string.Equals(id, ReservedId, StringComparison.Ordinal);
 
+    /// <summary>Whether <paramref name="id"/> keys an arch conversation (openspec
+    /// arch-conversations): the reserved id (the default conversation) or
+    /// <c>@arch:&lt;suffix&gt;</c>. Every conversation runs in the same home with the
+    /// same tools; each has its own run slot, loop slot, session and watermark.</summary>
+    public static bool IsArchKey(string? id) => ArchStateStore.IsConversationId(id);
+
+    /// <summary>A conversation key, defaulting to the default conversation.</summary>
+    public static string KeyOrDefault(string? convId) => IsArchKey(convId) ? convId! : ReservedId;
+
+    // ---- conversations (openspec arch-conversations) ------------------------------------------
+
+    public IReadOnlyList<ArchStateStore.Conversation> Conversations() => _state.Conversations;
+
+    public ArchStateStore.Conversation? GetConversation(string? id) => _state.GetConversation(KeyOrDefault(id));
+
+    public bool HasConversation(string? id) => _state.HasConversation(KeyOrDefault(id));
+
+    public string NameOf(string? id) => _state.NameOf(KeyOrDefault(id));
+
+    public ArchStateStore.Conversation CreateConversation(string? name)
+    {
+        var c = _state.AddConversation(name);
+        _logger.Info($"[ARCH] conversation created: {c.Id} \"{c.Name}\"");
+        return c;
+    }
+
+    public ArchStateStore.Conversation? RenameConversation(string? id, string? name) => _state.RenameConversation(KeyOrDefault(id), name);
+
+    /// <summary>Removes a non-default conversation: its loop slot is cleared, its
+    /// running turn (if any) stopped, its record dropped. The transcript stays on disk.</summary>
+    public bool DeleteConversation(string? id)
+    {
+        if (!IsArchKey(id) || string.Equals(id, ReservedId, StringComparison.Ordinal)) return false;
+        if (!_state.HasConversation(id)) return false;
+        _loops.Stop(id!);
+        _state.ClearStandingLoop(id);
+        _runs.Get(id!)?.RequestStop();
+        lock (_wakeGate) _drafts.Remove(id!);
+        var ok = _state.RemoveConversation(id);
+        if (ok) _logger.Info($"[ARCH] conversation removed: {id}");
+        return ok;
+    }
+
+    /// <summary>The loop slots of every conversation (any kind).</summary>
+    public IReadOnlyList<LoopConfigStore.LoopState> ConversationLoops() =>
+        _loops.All().Where(l => IsArchKey(l.RepoId)).ToList();
+
     // ---- home repo ---------------------------------------------------------
 
     /// <summary>The home repo path (D3): <c>ArchHomeDir</c> from appsettings when
@@ -168,10 +216,15 @@ public class ArchAgentService : IArchWakeSource
 
     /// <summary>The synthetic registry view the engine ticks the arch instance
     /// through: the reserved id, the display name, and the home repo as cwd.</summary>
-    public RepositoryRegistry.RepositoryInfo HomeInfo()
+    public RepositoryRegistry.RepositoryInfo HomeInfo() => HomeInfoFor(ReservedId);
+
+    /// <summary>The same view for one conversation (openspec arch-conversations): the
+    /// conversation key as id, its name, the shared home as cwd.</summary>
+    public RepositoryRegistry.RepositoryInfo HomeInfoFor(string? convId)
     {
+        var key = KeyOrDefault(convId);
         var home = HomePath;
-        return new RepositoryRegistry.RepositoryInfo(ReservedId, DisplayName, home,
+        return new RepositoryRegistry.RepositoryInfo(key, key == ReservedId ? DisplayName : NameOf(key), home,
             Directory.Exists(home), Directory.Exists(Path.Combine(home, ".git")), false,
             "advanced", null, Array.Empty<RepositoryRegistry.LocalAppInfo>());
     }
@@ -1305,10 +1358,11 @@ public class ArchAgentService : IArchWakeSource
         return clean.Length > 40 ? clean[..40] : clean;
     }
 
-    // The arch loop must be armed for any send; capped and disarmed are answers.
+    // An arch loop must be armed for any send (any conversation's — openspec
+    // arch-conversations); capped and disarmed are answers.
     private ToolOutcome? ArmedOrRefusal(string auditKey, out LoopConfigStore.LoopState? loop)
     {
-        loop = _loops.Get(ReservedId);
+        loop = ConversationLoops().FirstOrDefault(l => l.Active) ?? _loops.Get(ReservedId);
         if (loop is { Active: true }) return null;
         var status = loop?.Status == "capped" ? "capped" : "disarmed";
         AuditTool("send_task", auditKey, status);
@@ -1479,35 +1533,40 @@ public class ArchAgentService : IArchWakeSource
     /// the CLI's project folder for the home path outlives a wiped data dir, and an
     /// isolated instance resumed a previous run's conversation that way (seen
     /// 2026-09-02). A fresh data dir starts a fresh conversation.</summary>
-    public string? ResolveArchSessionId()
+    public string? ResolveArchSessionId(string? convId = null)
     {
-        var pinned = _loops.Get(ReservedId)?.SessionId;
+        var key = KeyOrDefault(convId);
+        var pinned = _loops.Get(key)?.SessionId;
         if (!string.IsNullOrWhiteSpace(pinned)) return pinned;
-        return string.IsNullOrWhiteSpace(_state.LastSessionId) ? null : _state.LastSessionId;
+        var remembered = _state.SessionOf(key);
+        return string.IsNullOrWhiteSpace(remembered) ? null : remembered;
     }
 
     /// <summary>Called by the engine after an arch turn completes with a captured
     /// session id, and by the controller for operator sends.</summary>
-    public void NoteArchSession(string? sessionId)
+    public void NoteArchSession(string? convId, string? sessionId)
     {
         if (string.IsNullOrWhiteSpace(sessionId)) return;
-        _state.SetLastSessionId(sessionId);
-        if (_loops.Get(ReservedId) is { Active: true }) _loops.SetSessionId(ReservedId, sessionId);
+        var key = KeyOrDefault(convId);
+        _state.SetSessionId(key, sessionId);
+        if (_loops.Get(key) is { Active: true }) _loops.SetSessionId(key, sessionId);
     }
 
-    /// <summary>An operator message to the arch agent (Arch tab composer). Same
-    /// slot semantics as any chat: 409-equivalent when an arch turn is running.</summary>
-    public (bool Ok, string Error, RunSession? Session) SendToArch(string text)
+    /// <summary>An operator message to the arch agent (Arch tab composer) in one
+    /// conversation. Same slot semantics as any chat: 409-equivalent when that
+    /// conversation's turn is running.</summary>
+    public (bool Ok, string Error, RunSession? Session) SendToArch(string? convId, string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return (false, "empty message", null);
+        var key = KeyOrDefault(convId);
         EnsureHome();
-        if (!_runs.TryBeginRun(ReservedId, "builder", out var session))
+        if (!_runs.TryBeginRun(key, "builder", out var session))
             return (false, "the arch agent is mid-turn; wait for it to finish", null);
-        var sessionId = ResolveArchSessionId();
+        var sessionId = ResolveArchSessionId(key);
         var sendText = text.Trim();
-        _loops.SetPending(ReservedId, null);
-        ResumeLoopIfStopped();
-        _logger.Info($"[ARCH] operator -> arch (session {(sessionId is null ? "new" : Short(sessionId))})");
+        _loops.SetPending(key, null);
+        ResumeLoopIfStopped(key);
+        _logger.Info($"[ARCH] operator -> arch {key} (session {(sessionId is null ? "new" : Short(sessionId))})");
         _ = Task.Run(async () =>
         {
             try
@@ -1515,7 +1574,7 @@ public class ArchAgentService : IArchWakeSource
                 await session.EmitAsync(new { type = "user", text = sendText, actor = ActorHuman });
                 await _cli.RunAsync(sendText, sessionId, workingDirectory: HomePath,
                     emit: session.EmitAsync, ct: session.Cts.Token,
-                    repoId: ReservedId, repoName: DisplayName,
+                    repoId: key, repoName: NameOf(key),
                     mcpConfigJson: BuildMcpConfigJson(), disallowedTools: DisallowedTools);
             }
             catch (Exception ex)
@@ -1525,7 +1584,7 @@ public class ArchAgentService : IArchWakeSource
             finally
             {
                 session.Complete();
-                NoteArchSession(session.SessionId);
+                NoteArchSession(key, session.SessionId);
             }
         });
         return (true, "", session);
@@ -1535,43 +1594,46 @@ public class ArchAgentService : IArchWakeSource
     /// that stopped as escalate/capped comes back armed in place, with the watermark moved
     /// to now so the events that piled up meanwhile are not replayed as one giant wake.
     /// A loop the Operator stopped, or that errored, stays stopped.</summary>
-    public bool ResumeLoopIfStopped()
+    public bool ResumeLoopIfStopped(string? convId = null)
     {
-        var loop = _loops.Get(ReservedId);
+        var key = KeyOrDefault(convId);
+        var loop = _loops.Get(key);
         if (loop is null || loop.Active || loop.Status is not ("escalate" or "capped")) return false;
         var (_, lastSeq) = _collector.ReadEvents(int.MaxValue);
-        _state.SetWatermark(lastSeq);
-        lock (_wakeGate) _draft = null;
-        var s = _loops.ResumeArch(ReservedId);
+        _state.SetWatermark(key, lastSeq);
+        lock (_wakeGate) _drafts.Remove(key);
+        var s = _loops.ResumeArch(key);
         if (s is null) return false;
-        _logger.Info($"[ARCH] loop resumed by the operator's message ({s.Mode}, cap {s.MaxIterations}) — watermark {lastSeq}");
+        _logger.Info($"[ARCH] loop {key} resumed by the operator's message ({s.Mode}, cap {s.MaxIterations}) — watermark {lastSeq}");
         return true;
     }
 
-    /// <summary>Arm (or re-arm) the arch loop: bootstrap the home, pin the
-    /// conversation, and start the watermark at the collector's current last seq
+    /// <summary>Arm (or re-arm) a conversation's arch loop: bootstrap the home, pin
+    /// the conversation, and start its watermark at the collector's current last seq
     /// so history is never replayed (D2).</summary>
-    public LoopConfigStore.LoopState Arm(string? mode, int? maxIterations)
+    public LoopConfigStore.LoopState Arm(string? convId, string? mode, int? maxIterations)
     {
+        var key = KeyOrDefault(convId);
         EnsureHome();
         var (_, lastSeq) = _collector.ReadEvents(int.MaxValue);
-        _state.SetWatermark(lastSeq);
-        lock (_wakeGate) _draft = null;
-        var state = _loops.StartArch(ReservedId, mode, maxIterations, ResolveArchSessionId());
-        _state.SetStandingLoop(state.Mode, state.MaxIterations);
-        _logger.Info($"[ARCH] armed ({state.Mode}, cap {state.MaxIterations}) — watermark {lastSeq}, home {HomePath}");
+        _state.SetWatermark(key, lastSeq);
+        lock (_wakeGate) _drafts.Remove(key);
+        var state = _loops.StartArch(key, mode, maxIterations, ResolveArchSessionId(key));
+        _state.SetStandingLoop(key, state.Mode, state.MaxIterations);
+        _logger.Info($"[ARCH] {key} armed ({state.Mode}, cap {state.MaxIterations}) — watermark {lastSeq}, home {HomePath}");
         return state;
     }
 
-    /// <summary>The Operator's Stop of the arch agent: clears the slot AND the
-    /// standing-loop memory, so nothing re-arms behind their back.</summary>
-    public void Disarm()
+    /// <summary>The Operator's Stop of a conversation's arch loop: clears the slot AND
+    /// the standing-loop memory, so nothing re-arms behind their back.</summary>
+    public void Disarm(string? convId = null)
     {
-        _loops.Stop(ReservedId);
-        _state.ClearStandingLoop();
+        var key = KeyOrDefault(convId);
+        _loops.Stop(key);
+        _state.ClearStandingLoop(key);
     }
 
-    public void ForgetStandingLoop() => _state.ClearStandingLoop();
+    public void ForgetStandingLoop(string? convId = null) => _state.ClearStandingLoop(KeyOrDefault(convId));
 
     /// <summary>The quiet floor for driven loops on the arch slot (openspec
     /// arch-driven-loops): the longest a repeat waits for a wake before it is sent
@@ -1587,30 +1649,39 @@ public class ArchAgentService : IArchWakeSource
     /// arch-driven-loops): if the Operator had the standing wake loop armed before,
     /// bring it back with the same mode and cap, watermark at now. Returns whether a
     /// loop was re-armed.</summary>
-    public bool RestoreStandingLoopIfNeeded()
+    public bool RestoreStandingLoopIfNeeded(string? convId = null)
     {
-        var remembered = _state.StandingLoop;
+        var key = KeyOrDefault(convId);
+        var remembered = _state.StandingLoopOf(key);
         if (remembered is null) return false;
-        if (_loops.Get(ReservedId) is { Active: true }) return false;
-        var s = Arm(remembered.Value.Mode, remembered.Value.Cap);
-        _logger.Info($"[ARCH] standing wake loop restored after the driven loop ended ({s.Mode}, cap {s.MaxIterations})");
+        if (_loops.Get(key) is { Active: true }) return false;
+        var s = Arm(key, remembered.Value.Mode, remembered.Value.Cap);
+        _logger.Info($"[ARCH] standing wake loop of {key} restored after the driven loop ended ({s.Mode}, cap {s.MaxIterations})");
         return true;
     }
 
     public int Watermark => _state.Watermark;
 
+    public int WatermarkOf(string? convId) => _state.WatermarkOf(KeyOrDefault(convId));
+
     // ---- wake source (D2) ------------------------------------------------------------
 
-    public WakeDraft? ComposeWake()
+    public WakeDraft? ComposeWake() => ComposeWake(ReservedId);
+
+    /// <summary>Composes the wake for ONE conversation from the events past ITS
+    /// watermark (openspec arch-conversations): two armed conversations each see every
+    /// managed repo turn once.</summary>
+    public WakeDraft? ComposeWake(string? convId)
     {
+        var key = KeyOrDefault(convId);
         // Managed keys across the fleet (D3): bare repo ids locally, sourceId/repoId remotely.
         var managed = ManagedRepoIds().Concat(ManagedFleet()).ToHashSet(StringComparer.Ordinal);
-        var after = _state.Watermark;
+        var after = _state.WatermarkOf(key);
         var (all, lastSeq) = _collector.ReadEvents(0);
         if (after < 0)
         {
             // Never set (armed before this build, or store reset): start now, no replay.
-            _state.SetWatermark(lastSeq);
+            _state.SetWatermark(key, lastSeq);
             return null;
         }
         // Peer cache only — the engine tick never waits on a dark machine (fleet D6).
@@ -1623,11 +1694,11 @@ public class ArchAgentService : IArchWakeSource
         {
             // Only chat.focus / unmanaged / arch's own events: nothing to say, but
             // the watermark still moves past them (spec: unmanaged and chat.focus do not wake).
-            if (lastSeq > after) _state.SetWatermark(lastSeq);
-            lock (_wakeGate) _draft = null;
+            if (lastSeq > after) _state.SetWatermark(key, lastSeq);
+            lock (_wakeGate) _drafts.Remove(key);
             return null;
         }
-        lock (_wakeGate) _draft = draft;
+        lock (_wakeGate) _drafts[key] = draft;
         return draft;
     }
 
@@ -1635,15 +1706,16 @@ public class ArchAgentService : IArchWakeSource
     /// pended): the watermark moves past the covered events and <c>arch.wake</c>
     /// is published so the board, the sounds and a future fleet arch see the
     /// middle layer act.</summary>
-    public void CommitWake(string? sessionId)
+    public void CommitWake(string? convId, string? sessionId)
     {
+        var key = KeyOrDefault(convId);
         WakeDraft? draft;
-        lock (_wakeGate) { draft = _draft; _draft = null; }
+        lock (_wakeGate) { _drafts.Remove(key, out draft); }
         if (draft is null) return;
-        _state.SetWatermark(draft.UpTo);
+        _state.SetWatermark(key, draft.UpTo);
         _feed.Publish("arch.wake",
-            source: new { repoId = ReservedId, repoName = DisplayName },
-            data: new { after = draft.After, upTo = draft.UpTo, repoIds = draft.RepoIds, sessionId });
+            source: new { repoId = key, repoName = NameOf(key) },
+            data: new { after = draft.After, upTo = draft.UpTo, repoIds = draft.RepoIds, sessionId, conversation = key });
     }
 
     /// <summary>The managed-set key of an event: the bare repo id on the self
