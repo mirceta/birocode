@@ -15,6 +15,10 @@ import { apiGet, apiPost, apiPatch, apiDelete } from '../../api/client';
 import { useFeature } from '../../context/UiModeContext';
 import { useDock } from '../../context/DockContext';
 import GraphLegend from './GraphLegend';
+import TaskFilterBar from './TaskFilterBar';
+import { useTaskFilter } from './taskFilterStore';
+import { columnOf } from './kanbanColumns';
+import { UNASSIGNED, applyFilter, blockedIds, filterContext, taskView, toggleValue } from './taskFilters';
 import { assignSlots, machineKey, repoKey, nodeStyle, readSlots, writeSlots } from './graphColors';
 import './taskgraph.css';
 
@@ -34,6 +38,12 @@ import './taskgraph.css';
 // focus one machine or repo. Colours are assigned first-seen from a fixed palette
 // and persisted per device. A dependency between tasks on different machines is
 // drawn dashed in orange (a cross-machine hand-off).
+//
+// FILTERS (openspec task-filters): the same filter bar as the Kanban, pinned above
+// the legends, narrows by machine, repo agent, state (Kanban column) and flag. A
+// filtered-out task is DIMMED, not removed, so the dependency edges still make sense;
+// the bar's "hide filtered" toggle removes them (and their edges). Clicking a legend
+// entry applies the same filter — legends and bar share one model.
 //
 // Legacy boxes: a task that still sits in a box from the old layout has box-relative
 // coordinates; it is shown at its absolute place and, once, re-saved as absolute
@@ -174,7 +184,7 @@ function TaskGraphBoard({ refreshKey = 0, pollMs = 0 }) {
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
   const [selected, setSelected] = useState(null); // step id whose "why" chain is lit
-  const [focus, setFocus] = useState(null); // legend focus: { kind: 'machine'|'repo', key }
+  const [filter, setFilter] = useTaskFilter(); // the shared task filter (openspec task-filters)
   const [draftTitle, setDraftTitle] = useState('');
   const [draftRepo, setDraftRepo] = useState('');
   const [error, setError] = useState('');
@@ -287,6 +297,14 @@ function TaskGraphBoard({ refreshKey = 0, pollMs = 0 }) {
   const remoteUrlOf = useCallback((n) => fleetIndex.byKey.get(`${n.sourceId || 'self'}|${n.repoId}`)?.remoteUrl || null, [fleetIndex]);
   const machineLabelOf = useCallback((key) => (key === 'self' ? fleetIndex.machines.get('self') || 'this machine' : fleetIndex.machines.get(key) || key), [fleetIndex]);
 
+  // The shared task filter over this board (openspec task-filters): views the filter
+  // matches on, and the ids that pass. Blocked = waits on a prerequisite not done.
+  const filterCtx = useMemo(() => filterContext(fleet, columnOf), [fleet]);
+  const blockedSet = useMemo(() => blockedIds(nodes.map((n) => ({ id: n.id, status: n.data.status })), edges), [nodes, edges]);
+  const views = useMemo(() => nodes.map((n) => taskView({ id: n.id, ...n.data }, filterCtx, blockedSet.has(n.id) ? ['blocked'] : [])), [nodes, filterCtx, blockedSet]);
+  const shownIds = useMemo(() => applyFilter(views, filter), [views, filter]);
+  const viewOf = useMemo(() => new Map(views.map((v) => [v.id, v])), [views]);
+
   // --- derived: actionable set + the selected node's dependent chain (the "why") ---
   const actionable = useMemo(() => actionableIds(nodes, edges), [nodes, edges]);
   const lit = useMemo(() => (selected ? whyChain(selected, edges) : null), [selected, edges]);
@@ -339,9 +357,7 @@ function TaskGraphBoard({ refreshKey = 0, pollMs = 0 }) {
     () => nodes.map((n) => {
       const k = keyed.find((x) => x.id === n.id) || {};
       const info = fleetIndex.byKey.get(`${n.data.sourceId || 'self'}|${n.data.repoId}`);
-      const focused = !focus ? true
-        : focus.kind === 'machine' ? (focus.key === '' ? !k.machineKey : k.machineKey === focus.key)
-          : (focus.key === '' ? !k.repoKey : k.repoKey === focus.key);
+      const focused = shownIds.has(n.id);
       return {
         ...n,
         data: {
@@ -363,8 +379,10 @@ function TaskGraphBoard({ refreshKey = 0, pollMs = 0 }) {
         },
       };
     }),
-    [nodes, keyed, fleetIndex, focus, actionable, lit, repoName, repos, slots, machineLabelOf],
+    [nodes, keyed, fleetIndex, shownIds, actionable, lit, repoName, repos, slots, machineLabelOf],
   );
+  // "Hide filtered": the filtered-out tasks (and their edges) leave the canvas.
+  const visibleNodes = useMemo(() => (filter.hide ? viewNodes.filter((n) => shownIds.has(n.id)) : viewNodes), [viewNodes, filter.hide, shownIds]);
   const viewEdges = useMemo(
     () => edges.map((e) => {
       const a = nodeMachine.get(e.source);
@@ -389,6 +407,45 @@ function TaskGraphBoard({ refreshKey = 0, pollMs = 0 }) {
     }),
     [edges, lit, nodeMachine],
   );
+  const visibleEdges = useMemo(() => (filter.hide ? viewEdges.filter((e) => shownIds.has(e.source) && shownIds.has(e.target)) : viewEdges), [viewEdges, filter.hide, shownIds]);
+
+  // Legend ⇄ filter (openspec task-filters): a machine entry stands for its machine
+  // chip (by label), a repository entry for the agent chips of every task in that
+  // repo (one repo on two machines = two handles), the neutral entry for Unassigned.
+  const handlesOfRepo = useMemo(() => {
+    const m = new Map();
+    for (const k of keyed) {
+      if (!k.repoKey) continue;
+      const h = viewOf.get(k.id)?.agent;
+      if (!h) continue;
+      if (!m.has(k.repoKey)) m.set(k.repoKey, new Set());
+      m.get(k.repoKey).add(h);
+    }
+    return m;
+  }, [keyed, viewOf]);
+  const activeMachines = useMemo(() => {
+    const on = new Set(legend.machines.filter((e) => filter.machines.includes(e.label)).map((e) => e.key));
+    if (filter.machines.includes(UNASSIGNED)) on.add('');
+    return on;
+  }, [legend.machines, filter.machines]);
+  const activeRepos = useMemo(() => {
+    const on = new Set();
+    for (const [key, handles] of handlesOfRepo) if (handles.size > 0 && [...handles].every((h) => filter.agents.includes(h))) on.add(key);
+    if (filter.agents.includes(UNASSIGNED)) on.add('');
+    return on;
+  }, [handlesOfRepo, filter.agents]);
+  const toggleMachineLegend = useCallback((key) => {
+    const label = key === '' ? UNASSIGNED : machineLabelOf(key);
+    setFilter((f) => ({ ...f, machines: toggleValue(f.machines, label) }));
+  }, [machineLabelOf, setFilter]);
+  const toggleRepoLegend = useCallback((key) => {
+    if (key === '') { setFilter((f) => ({ ...f, agents: toggleValue(f.agents, UNASSIGNED) })); return; }
+    const handles = [...(handlesOfRepo.get(key) || [])];
+    setFilter((f) => {
+      const allOn = handles.length > 0 && handles.every((h) => f.agents.includes(h));
+      return { ...f, agents: allOn ? f.agents.filter((h) => !handles.includes(h)) : [...new Set([...f.agents, ...handles])] };
+    });
+  }, [handlesOfRepo, setFilter]);
 
   // --- mutations ---
   const onNodesChange = useCallback((changes) => setNodes((nds) => applyNodeChanges(changes, nds)), []);
@@ -480,21 +537,42 @@ function TaskGraphBoard({ refreshKey = 0, pollMs = 0 }) {
         Drag from a step’s bottom dot to the step it <b>waits on</b>. Green ring = an <b>open front</b> (do next).
         <b> Border</b> = the machine its agent runs on, <b>background</b> = the repository; a dependency
         <b> across</b> machines is drawn dashed in orange. Click a step to trace <b>why</b>; click a legend
-        entry to focus it.
+        entry or a filter chip to narrow the board (filtered-out steps dim; “hide filtered” removes them).
         {error && <span className="tg-err"> · {error}</span>}
       </p>
 
-      {/* Pinned legends (openspec taskgraph-colours): outside the React Flow viewport,
-          so panning/zooming the graph never moves them. */}
-      <div className="tg-legends" data-legends>
-        <GraphLegend kind="machine" title="Machines" entries={legend.machines} focus={focus} onFocus={setFocus} />
-        <GraphLegend kind="repo" title="Repositories" entries={legend.repos} focus={focus} onFocus={setFocus} />
+      {/* Pinned block (openspec task-filters + taskgraph-colours): the filter bar and
+          the legends, outside the React Flow viewport, so panning/zooming the graph
+          never moves them and scrolling the pane keeps them in view. */}
+      <div className="tg-pinned" data-pinned>
+        <TaskFilterBar
+          views={views}
+          filter={filter}
+          setFilter={setFilter}
+          view="graph"
+          extra={(
+            <button
+              type="button"
+              className={`tf__toggle${filter.hide ? ' tf__toggle--on' : ''}`}
+              aria-pressed={filter.hide}
+              title="Remove the filtered-out steps from the canvas instead of dimming them"
+              onClick={() => setFilter((f) => ({ ...f, hide: !f.hide }))}
+              data-hide-filtered
+            >
+              {filter.hide ? '◌ hide filtered: on' : '◌ hide filtered'}
+            </button>
+          )}
+        />
+        <div className="tg-legends" data-legends>
+          <GraphLegend kind="machine" title="Machines" entries={legend.machines} active={activeMachines} onToggle={toggleMachineLegend} />
+          <GraphLegend kind="repo" title="Repositories" entries={legend.repos} active={activeRepos} onToggle={toggleRepoLegend} />
+        </div>
       </div>
 
       <div className="tg-canvas">
         <ReactFlow
-          nodes={viewNodes}
-          edges={viewEdges}
+          nodes={visibleNodes}
+          edges={visibleEdges}
           nodeTypes={nodeTypes}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}

@@ -1,5 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiGet, apiPost, apiPatch, apiDelete } from '../../api/client';
+import TaskFilterBar from './TaskFilterBar';
+import { useTaskFilter } from './taskFilterStore';
+import { COLUMNS, columnOf } from './kanbanColumns';
+import { applyFilter, blockedIds, filterContext, isNarrowed, taskView } from './taskFilters';
 import './kanban.css';
 
 // The Kanban view of the task board (openspec task-board-kanban): the same nodes
@@ -8,25 +12,18 @@ import './kanban.css';
 // assignee been told". The operator, the arch agent (through its MCP tools) and
 // any future management agent all write to the same /api/taskgraph store.
 //
-// Columns: Backlog (todo, nobody assigned) · Assigned (todo, has an assignee — the
-// arch pings these) · In progress (doing) · Done. Cards drag between columns
-// (status), pick their assignee from the fleet status (any repo agent on any
-// machine), and can be pinged by hand ("Ping"), which sends the brief exactly as
-// the arch's dispatch_task does.
+// Columns (kanbanColumns.js): Backlog (todo, nobody assigned) · Assigned (todo, has
+// an assignee — the arch pings these) · In progress (doing) · Done. Cards drag
+// between columns (status), pick their assignee from the fleet status (any repo agent
+// on any machine), and can be pinged by hand ("Ping"), which sends the brief exactly
+// as the arch's dispatch_task does.
+//
+// Filters (openspec task-filters): the bar pinned under the head narrows the cards by
+// machine, repo agent, state (column) and flag, plus a text search; the model is the
+// shared task filter (URL query + last filter per browser), the same the Task graph
+// uses. A filtered-out card is not rendered; the column head shows "shown of all".
 
 const POLL_MS = 5000;
-const COLUMNS = [
-  ['backlog', 'Backlog', 'todo, nobody assigned yet'],
-  ['assigned', 'Assigned', 'todo with an assignee — the arch pings these'],
-  ['doing', 'In progress', 'the assignee has the task'],
-  ['done', 'Done', ''],
-];
-
-function columnOf(n) {
-  if (n.status === 'done') return 'done';
-  if (n.status === 'doing') return 'doing';
-  return n.repoId ? 'assigned' : 'backlog';
-}
 
 function ago(ms) {
   if (!ms || ms < 0) return '';
@@ -74,6 +71,14 @@ export default function KanbanBoard() {
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const prereqsOf = (id) => edges.filter((e) => e.source === id).map((e) => byId.get(e.target)).filter(Boolean);
   const isBlocked = (n) => n.status !== 'done' && prereqsOf(n.id).some((p) => p.status !== 'done');
+
+  // The shared task filter (openspec task-filters) over this board's cards.
+  const [filter, setFilter] = useTaskFilter();
+  const filterCtx = useMemo(() => filterContext(fleet, columnOf), [fleet]);
+  const blockedSet = useMemo(() => blockedIds(nodes, edges), [nodes, edges]);
+  const views = useMemo(() => nodes.map((n) => taskView(n, filterCtx, blockedSet.has(n.id) ? ['blocked'] : [])), [nodes, filterCtx, blockedSet]);
+  const shownIds = useMemo(() => applyFilter(views, filter), [views, filter]);
+  const narrowed = isNarrowed(filter);
 
   // Assignee choices: every repo agent the fleet status knows, keyed "sourceId|repoId".
   const agents = [];
@@ -132,7 +137,10 @@ export default function KanbanBoard() {
     else if (col === 'assigned') { if (!n.repoId) setNote((m) => ({ ...m, [n.id]: 'pick an assignee first' })); else setStatus(n, 'todo'); }
   };
 
-  const columns = COLUMNS.map(([key, label, hint]) => ({ key, label, hint, cards: nodes.filter((n) => columnOf(n) === key).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)) }));
+  const columns = COLUMNS.map(([key, label, hint]) => {
+    const all = nodes.filter((n) => columnOf(n) === key).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    return { key, label, hint, all, cards: all.filter((n) => shownIds.has(n.id)) };
+  });
 
   return (
     <div className="kb" data-kanban>
@@ -143,6 +151,7 @@ export default function KanbanBoard() {
         </form>
         <span className="kb__dim">Same tasks as the Task graph, read as columns. Assign a card to any repo agent on any machine; the arch agent pings assigned cards on its next wake, or press Ping.</span>
       </div>
+      <TaskFilterBar views={views} filter={filter} setFilter={setFilter} view="kanban" />
       {!board && !error && <div className="kb__note" data-loading>Loading the board…</div>}
       {error && <div className="kb__note kb__note--err">{error}</div>}
       <div className="kb__cols">
@@ -156,10 +165,13 @@ export default function KanbanBoard() {
             onDrop={onDrop(c.key)}
           >
             <div className="kb__col-head" title={c.hint}>
-              <span>{c.label}</span><span className="kb__count">{c.cards.length}</span>
+              <span>{c.label}</span>
+              <span className="kb__count" data-column-count={c.cards.length} data-column-total={c.all.length}>
+                {c.cards.length}{narrowed && c.all.length !== c.cards.length ? <span className="kb__count-of"> of {c.all.length}</span> : null}
+              </span>
             </div>
             <div className="kb__cards">
-              {c.cards.length === 0 && <div className="kb__empty">{c.key === 'backlog' ? 'nothing waiting' : '—'}</div>}
+              {c.cards.length === 0 && <div className="kb__empty">{narrowed && c.all.length > 0 ? `${c.all.length} hidden by the filter` : c.key === 'backlog' ? 'nothing waiting' : '—'}</div>}
               {c.cards.map((n) => {
                 const blocked = isBlocked(n);
                 const prereqs = prereqsOf(n.id);
