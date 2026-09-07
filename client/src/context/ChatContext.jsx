@@ -4,6 +4,7 @@ import { hubAttach, hubSupported } from '../api/chatStreamHub';
 import { appendThinking, applyToolEvent, settleSteps } from '../components/chat/turnSteps';
 import { createSseParser } from '../components/chat/sseParser';
 import { getModel, setModel as persistModel } from '../components/chat/ModelSelector';
+import { providerOf, effectiveModelFor } from '../components/chat/models';
 import { useDock } from './DockContext';
 import { useFooterClauses } from './FooterClausesContext';
 import { useRepo } from './RepoContext';
@@ -72,7 +73,7 @@ function emptyConversation(greeting) {
 
 export function ChatProvider({ children }) {
   const { t } = useT();
-  const { currentRepoId, repos } = useRepo();
+  const { currentRepoId, repos, reloadRepos } = useRepo();
   const { tabs, activeTab, activeTabId, updateTab, loaded: dockLoaded, chatView, setChatView } = useDock();
   const dualChat = useFeature('dualChat');
   const { isAdvanced } = useUiMode();
@@ -98,8 +99,20 @@ export function ChatProvider({ children }) {
   // Set while the user explicitly stopped a run, so reattach logic stands down.
   const stopRefs = useRef({});
 
-  const [model, setModelState] = useState(getModel);
-  const changeModel = useCallback((id) => { persistModel(id); setModelState(id); }, []);
+  // The stored model choice is device-local and shared across repos; what a repo
+  // actually receives is the EFFECTIVE model for its engine (openspec
+  // codex-account-and-models): a Claude id on a codex repo becomes the codex
+  // default and vice versa, so the picker and the repo's Engine never disagree.
+  const [storedModel, setModelState] = useState(getModel);
+  // While a cross-family model pick is being persisted (and the repo listing reloads),
+  // remember the engine we asked for so the picker updates synchronously instead of
+  // snapping back to the old engine's default for a beat.
+  const [provOverride, setProvOverride] = useState({});
+  const repoProviderOf = useCallback(
+    (repoId) => provOverride[repoId]
+      ?? (repos.find((r) => r.id === repoId)?.provider === 'codex' ? 'codex' : 'claude'),
+    [repos, provOverride],
+  );
 
   // Browser mode (openspec claude-in-chrome): device-local toggle, like the
   // model choice. While on, builder-lane sends carry `browser: true` so the
@@ -156,6 +169,27 @@ export function ChatProvider({ children }) {
   // phones", plans/agent-dashboard.md). Every action takes an explicit target,
   // so a background phone never touches the active conversation.
   const activeTarget = { key: activeKey, repoId: activeRepoId, tabId: visibleTabId, lane: activeLane };
+
+  // The picker shows the effective model for the active repo. Picking a model from
+  // the OTHER family switches the repo's Engine on the server (the same POST the
+  // dock's Engine select makes) and reloads the listing, so the next send runs on
+  // that engine with that model. Management chats have no repo provider: the POST
+  // fails harmlessly and the server drops a mismatched model anyway.
+  const model = effectiveModelFor(storedModel, repoProviderOf(activeRepoId));
+  const changeModel = useCallback(async (id) => {
+    persistModel(id);
+    setModelState(id);
+    const family = providerOf(id);
+    if (family && activeRepoId && family !== repoProviderOf(activeRepoId)) {
+      setProvOverride((m) => ({ ...m, [activeRepoId]: family })); // optimistic: no flicker
+      try {
+        await apiPost(`/repos/${activeRepoId}/provider`, { provider: family }); // route base is api/repos (plural)
+        await reloadRepos();
+      } catch {
+        setProvOverride((m) => { const n = { ...m }; delete n[activeRepoId]; return n; }); // revert
+      }
+    }
+  }, [activeRepoId, repoProviderOf, reloadRepos]);
 
   // Ensure a conversation entry exists for the active key. If the tab was
   // restored from localStorage with a stored sessionId (page reload), resume
@@ -356,7 +390,10 @@ export function ChatProvider({ children }) {
     const parse = createSseParser(handleEvent);
 
     try {
-      const body = { message: fullText, model };
+      // The model of the target repo's engine family, plus the engine itself so a
+      // stale listing can never send one engine the other's model.
+      const repoProvider = repoProviderOf(repoId);
+      const body = { message: fullText, model: effectiveModelFor(storedModel, repoProvider), provider: repoProvider };
       const currentConvo = convos[key];
       if (currentConvo?.sessionId) body.sessionId = currentConvo.sessionId;
       if (lane && lane !== 'builder') body.lane = lane;

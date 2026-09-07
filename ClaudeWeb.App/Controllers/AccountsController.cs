@@ -12,7 +12,10 @@ namespace ClaudeWeb.Controllers;
 ///   GET /api/claude-usage   -- plan usage: 5-hour window + weekly quota
 ///                              (openspec add-claude-usage)
 ///   GET /api/codex-account  -- the Codex CLI login the codex provider runs as
-///                              (openspec codex-real-run)
+///                              (openspec codex-real-run); who + plan (openspec
+///                              codex-account-and-models)
+///   GET /api/codex-usage    -- ChatGPT plan usage: 5-hour / weekly windows,
+///                              per-model limits, credits
 ///
 /// All always return 200: "not installed" / "not authenticated" / "usage
 /// unavailable" are valid statuses, not HTTP errors, so the frontend renders
@@ -27,16 +30,18 @@ public class AccountsController : ControllerBase
     private readonly ClaudeAccountService _claude;
     private readonly ClaudeUsageService _usage;
     private readonly CodexAccountService _codex;
+    private readonly CodexUsageService _codexUsage;
     private readonly Logger _logger;
 
     public AccountsController(
         GitHubAccountService github, ClaudeAccountService claude, ClaudeUsageService usage,
-        CodexAccountService codex, Logger logger)
+        CodexAccountService codex, CodexUsageService codexUsage, Logger logger)
     {
         _github = github;
         _claude = claude;
         _usage = usage;
         _codex = codex;
+        _codexUsage = codexUsage;
         _logger = logger;
     }
 
@@ -59,6 +64,13 @@ public class AccountsController : ControllerBase
     {
         _logger.CountRequest();
         return Ok(_codex.Get());
+    }
+
+    [HttpGet("codex-usage")]
+    public async Task<IActionResult> CodexUsage()
+    {
+        _logger.CountRequest();
+        return Ok(await _codexUsage.GetAsync());
     }
 
     [HttpGet("claude-usage")]

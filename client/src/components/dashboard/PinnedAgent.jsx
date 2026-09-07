@@ -267,7 +267,7 @@ export default function PinnedAgent({
     setProvider('claude');
     (async () => {
       try {
-        const repos = await apiGet('/repo');
+        const repos = await apiGet('/repos');
         const r = Array.isArray(repos) ? repos.find((x) => x.id === tab.repoId) : null;
         if (alive && r?.provider) setProvider(r.provider);
       } catch { /* leave default */ }
@@ -278,7 +278,7 @@ export default function PinnedAgent({
     const prev = provider;
     setProvider(next);
     try {
-      await apiPost(`/repo/${tab.repoId}/provider`, { provider: next });
+      await apiPost(`/repos/${tab.repoId}/provider`, { provider: next }); // route base is api/repos (plural)
     } catch {
       setProvider(prev); // revert the optimistic change
     }

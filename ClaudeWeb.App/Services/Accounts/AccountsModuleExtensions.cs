@@ -22,6 +22,8 @@ public static class AccountsModuleExtensions
         // API-key control piped to `codex login --with-api-key`.
         services.AddSingleton<CodexAccountService>();
         services.AddSingleton<CodexCredentialsService>();
+        // ChatGPT plan usage for the Codex chip (openspec codex-account-and-models).
+        services.AddSingleton<CodexUsageService>();
         return services;
     }
 }

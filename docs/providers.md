@@ -108,6 +108,19 @@ runs main), and what evidence the first real run leaves.
 - Cost: Codex reports tokens, not USD — the run record's cost stays empty and
   the scoreboard counts the run's time, not spend.
 
+## Account chip and model picker (openspec codex-account-and-models)
+
+- The header status strip has a **Codex chip** beside the Claude one: account email,
+  name, ChatGPT plan and subscription end (from the login's id-token claims), login
+  method, and live plan usage (5-hour / weekly windows, per-model limits, credits) from
+  `GET /api/codex-account` + `GET /api/codex-usage`. Token values never leave the probe.
+- The chat composer's **model picker** groups Anthropic (Claude) and OpenAI (Codex)
+  models. The Codex list is the models the logged-in account may actually run (from the
+  usage endpoint's `model_usage`), falling back to the CLI default — it never offers a
+  slug that 401s. Picking an OpenAI model sets the repo's Engine to codex and a Claude
+  model sets it back, so the picker and the dock's Engine selector agree; the chosen
+  model is sent only to its own engine and a mismatch is dropped server-side.
+
 ## Deferred (Claude-only for now)
 
 - **Management agents** (arch, Tasks): their structural tool fence

@@ -15,6 +15,26 @@ public static class AgentProviders
 
     public static string Normalize(string? provider) =>
         string.Equals(provider?.Trim(), Codex, StringComparison.OrdinalIgnoreCase) ? Codex : Claude;
+
+    /// <summary>The engine a model id belongs to (openspec codex-account-and-models):
+    /// <c>claude-*</c> → claude; <c>gpt-*</c>, <c>o3*</c>/<c>o4*</c>, <c>codex-*</c> → codex;
+    /// anything else → null (unknown family, no opinion).</summary>
+    public static string? ProviderOfModel(string? model)
+    {
+        var m = model?.Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(m)) return null;
+        if (m.StartsWith("claude")) return Claude;
+        if (m.StartsWith("gpt-") || m.StartsWith("codex") || m == "o3" || m.StartsWith("o3-") || m == "o4" || m.StartsWith("o4-")) return Codex;
+        return null;
+    }
+
+    /// <summary>True when <paramref name="model"/> may be passed to <paramref name="provider"/>'s
+    /// CLI: its family matches, or it is unknown (the CLI decides).</summary>
+    public static bool ModelBelongsTo(string provider, string? model)
+    {
+        var family = ProviderOfModel(model);
+        return family is null || family == Normalize(provider);
+    }
 }
 
 /// <summary>Everything provider-specific a turn needs, resolved by the caller

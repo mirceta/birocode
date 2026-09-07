@@ -138,6 +138,15 @@ public class ChatController : ControllerBase
         // The Run itself: background task, Run Session token (NOT RequestAborted).
         var sessionId = request?.SessionId;
         var model = request?.Model;
+        // A model from the other engine's family (a Claude id on a codex repo, or the
+        // reverse) would make the CLI fail on --model; drop it and let the CLI use its
+        // default. The client's picker keeps the two in step; this is the backstop
+        // (openspec codex-account-and-models).
+        if (!string.IsNullOrWhiteSpace(model) && !AgentProviders.ModelBelongsTo(provider, model))
+        {
+            _logger.Info($"[CHAT] Model \"{model}\" is not a {provider} model; running {provider} with its default model.");
+            model = null;
+        }
         var path = repo.Path;
         var readOnly = lane == "ask"; // the ask lane runs claude in read-only plan mode
         // Per-project permission presets were removed (openspec add-resilient-auth):
