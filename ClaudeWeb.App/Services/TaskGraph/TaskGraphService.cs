@@ -512,6 +512,37 @@ public class TaskGraphService
 
     public Node? Find(string id) { lock (_gate) return _board.Nodes.FirstOrDefault(n => n.Id == id); }
 
+    /// <summary>The short, stable card reference shown on the board (openspec
+    /// kanban-card-ref): the first 8 hex characters of the id, as "#5cc3e900". Ids are
+    /// 32-hex GUIDs, so the prefix is stable for the card's life.</summary>
+    public const int ShortIdLength = 8;
+    public static string ShortId(string id) => id.Length > ShortIdLength ? id[..ShortIdLength] : id;
+    public static string CardRef(string id) => "#" + ShortId(id);
+
+    /// <summary>Resolve a task reference the Operator or the arch may type (openspec
+    /// kanban-card-ref): the full id; "#5cc3e900", "task 5cc3e900…" or a bare prefix of at
+    /// least 6 hex characters that matches exactly one card. Returns the id, or null with
+    /// the reason (unknown, ambiguous, too short).</summary>
+    public (string? Id, string? Error) ResolveTaskRef(string? reference)
+    {
+        if (string.IsNullOrWhiteSpace(reference)) return (null, "task id is required");
+        var r = reference.Trim();
+        if (r.StartsWith("task ", StringComparison.OrdinalIgnoreCase)) r = r[5..].Trim();
+        r = r.TrimStart('#').Trim();
+        if (r.Length == 0) return (null, "task id is required");
+        lock (_gate)
+        {
+            if (_board.Nodes.Any(n => n.Id == r)) return (r, null);
+            if (r.Length < 6 || !r.All(Uri.IsHexDigit)) return (null, $"no task {reference.Trim()}");
+            var hits = _board.Nodes.Where(n => n.Id.StartsWith(r, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (hits.Count == 1) return (hits[0].Id, null);
+            if (hits.Count == 0) return (null, $"no task {reference.Trim()}");
+            return (null, $"{reference.Trim()} matches {hits.Count} tasks ({string.Join(", ", hits.Select(h => CardRef(h.Id) + " " + Brief(h.Title)))}); use a longer prefix or the full id");
+        }
+    }
+
+    private static string Brief(string title) => title.Length > 40 ? title[..40].TrimEnd() + "…" : title;
+
     /// <summary>Store an agent's relayed claim of where its work lives (openspec
     /// kanban-lifecycle-columns): branch, head commit, PR URL. Claims tell the
     /// verifier where to look; the status is moved separately through

@@ -4,6 +4,7 @@ import TaskFilterBar from './TaskFilterBar';
 import { useTaskFilter } from './taskFilterStore';
 import { COLUMNS, columnOf } from './kanbanColumns';
 import { applyFilter, assigneesOf, blockedIds, filterContext, flagsOf, isNarrowed, staleIds, taskView } from './taskFilters';
+import { useTaskColors, machineKey, repoKey } from './useTaskColors';
 import './kanban.css';
 
 // The Kanban view of the task board (openspec task-board-kanban, columns per
@@ -52,6 +53,7 @@ export default function KanbanBoard() {
   const [dragOver, setDragOver] = useState(null);
   const [verifying, setVerifying] = useState(false);
   const [verifyNote, setVerifyNote] = useState('');
+  const [copiedId, setCopiedId] = useState(null); // the card whose reference was just copied
   const [, setTick] = useState(0);
 
   const load = useCallback(async () => {
@@ -101,8 +103,16 @@ export default function KanbanBoard() {
   for (const m of fleet?.machines || []) {
     machineLabel[m.self ? '' : m.sourceId] = m.machine;
     // The handle ("spacex/prg#2", openspec stable-handles) is the label everywhere.
-    for (const a of m.agents || []) agents.push({ key: `${m.self ? '' : m.sourceId}|${a.repoId}`, label: `${a.handle || `${m.machine}/${a.name}`}${a.managed ? ' 🏛' : ''}`, machine: m.machine, name: a.name, handle: a.handle, managed: a.managed });
+    for (const a of m.agents || []) agents.push({ key: `${m.self ? '' : m.sourceId}|${a.repoId}`, label: `${a.handle || `${m.machine}/${a.name}`}${a.managed ? ' 🏛' : ''}`, machine: m.machine, name: a.name, handle: a.handle, managed: a.managed, remoteUrl: a.remoteUrl });
   }
+  // Shared machine/repo colours (fleet-status task 327aa5ae): the SAME palette + slot map
+  // the Task graph and Fleet Status use, so a machine/agent has one hue across all views.
+  // A chip's border = its machine's hue, its background tint = its repo's hue.
+  const remoteUrlOf = (a) => agents.find((x) => x.key === `${a.sourceId || ''}|${a.repoId}`)?.remoteUrl || null;
+  const mkOf = (a) => machineKey({ sourceId: a.sourceId || null, repoId: a.repoId });
+  const rkOf = (a) => repoKey({ sourceId: a.sourceId || null, repoId: a.repoId }, remoteUrlOf);
+  const allAssignees = nodes.flatMap((n) => assigneesOf(n));
+  const colors = useTaskColors(allAssignees.map(mkOf), allAssignees.map(rkOf));
   // One assignee's label: the fleet handle when known, else a readable fallback
   // (openspec task-multi-assignee: a card carries one or several of these).
   const keyOf = (a) => `${a.sourceId || ''}|${a.repoId}`;
@@ -141,6 +151,26 @@ export default function KanbanBoard() {
     const title = draft.trim();
     if (!title) return;
     try { await apiPost('/taskgraph/nodes', { title, createdBy: 'human' }); setDraft(''); await load(); } catch (err) { setError(err?.message || String(err)); }
+  };
+  // Card reference (openspec kanban-card-ref): the short stable code "#5cc3e900" is the
+  // first 8 characters of the task id; the COPIED text is "task <full id>", which the
+  // arch resolves exactly (its tools take the id; they also accept the #ref itself).
+  const cardRef = (n) => `#${String(n.id).slice(0, 8)}`;
+  const copyRef = async (e, n) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const text = `task ${n.id}`;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Clipboard API can be unavailable over plain HTTP on the LAN: legacy path.
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); } catch { /* nothing more to try */ }
+      document.body.removeChild(ta);
+    }
+    setCopiedId(n.id);
+    setTimeout(() => setCopiedId((cur) => (cur === n.id ? null : cur)), 1500);
   };
   // Re-verify (openspec board-verify-remote): one verifier pass now — this machine's
   // assignees from git, every card with a PR against GitHub — so stuck cards move
@@ -220,12 +250,30 @@ export default function KanbanBoard() {
                     data-task={n.id}
                     data-column={c.key}
                   >
-                    <div className="kb__title">{n.title}</div>
+                    <div className="kb__title">
+                      {n.title}
+                      <span className="kb__ref" data-card-ref={cardRef(n)} title={`card ${cardRef(n)} — task id ${n.id}`}>
+                        <code className="kb__ref-code">{cardRef(n)}</code>
+                        <button
+                          type="button"
+                          className={`kb__copy${copiedId === n.id ? ' kb__copy--done' : ''}`}
+                          title="Copy a reference to this card for the arch agent prompt (task <id>)"
+                          aria-label={`Copy reference to card ${cardRef(n)}`}
+                          draggable={false}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => copyRef(e, n)}
+                          data-copy-ref
+                        >
+                          {copiedId === n.id ? '✓ copied' : '⧉'}
+                        </button>
+                      </span>
+                    </div>
                     <div className="kb__meta">
                       {assigneesOf(n).map((a) => {
                         const multi = assigneesOf(n).length > 1;
+                        const c = colors.chip(mkOf(a), rkOf(a));
                         return (
-                          <span key={keyOf(a)} className={`kb__chip kb__chip--who${multi ? ' kb__chip--who-multi' : ''}${a.warning ? ' kb__chip--who-warn' : ''}`} title={`assignee${multi ? ` · ${a.status}` : ''}${a.warning ? ` · ⚠ ${a.warning}` : ''}`} data-assignee={keyOf(a)}>
+                          <span key={keyOf(a)} className={`kb__chip kb__chip--who${c.cls}${multi ? ' kb__chip--who-multi' : ''}${a.warning ? ' kb__chip--who-warn' : ''}`} style={c.style} title={`${assigneeLabelOf(a)} — this machine + repo agent's colour matches Fleet Status${multi ? ` · ${a.status}` : ''}${a.warning ? ` · ⚠ ${a.warning}` : ''}`} data-assignee={keyOf(a)}>
                             👤 {assigneeLabelOf(a)}{multi ? <span className="kb__who-status"> · {a.status}</span> : null}
                           </span>
                         );
@@ -247,12 +295,14 @@ export default function KanbanBoard() {
                         {n.note && <div className="kb__note-text">{n.note}</div>}
                         <div className="kb__row kb__assignees" data-assignees={assigneesOf(n).length}>
                           <span className="kb__dim">assignees</span>
-                          {assigneesOf(n).map((a) => (
-                            <span key={keyOf(a)} className="kb__chip kb__chip--who" title={`${a.status}${a.branch ? ` · ⎇ ${a.branch}` : ''}${a.prUrl ? ` · PR${a.prNumber ? ' #' + a.prNumber : ''}` : ''}${a.warning ? ` · ⚠ ${a.warning}` : ''}`}>
+                          {assigneesOf(n).map((a) => {
+                            const c = colors.chip(mkOf(a), rkOf(a));
+                            return (
+                            <span key={keyOf(a)} className={`kb__chip kb__chip--who${c.cls}`} style={c.style} title={`${a.status}${a.branch ? ` · ⎇ ${a.branch}` : ''}${a.prUrl ? ` · PR${a.prNumber ? ' #' + a.prNumber : ''}` : ''}${a.warning ? ` · ⚠ ${a.warning}` : ''}`}>
                               {assigneeLabelOf(a)}{assigneesOf(n).length > 1 ? <span className="kb__who-status"> · {a.status}</span> : null}
                               <button type="button" className="kb__x" title="remove this assignee" onClick={() => changeAssignees(n, keyOf(a), 'remove')} data-remove-assignee={keyOf(a)}>×</button>
                             </span>
-                          ))}
+                          ); })}
                           <select className="kb__select" value="" onChange={(e) => changeAssignees(n, e.target.value, 'add')} data-assign>
                             <option value="">{assigneesOf(n).length ? '＋ add another assignee…' : '— nobody — pick an assignee…'}</option>
                             {agents.filter((x) => !assigneesOf(n).some((a) => keyOf(a) === x.key)).map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
@@ -275,7 +325,11 @@ export default function KanbanBoard() {
                         )}
                         {n.warning && <div className="kb__row kb__warn" data-warning>⚠ {n.warning}</div>}
                         {note[n.id] && <div className="kb__row kb__dim" data-dispatch-note>{note[n.id]}</div>}
-                        <div className="kb__row kb__dim kb__mono">id {n.id}{n.assignedBy ? ` · assigned by ${n.assignedBy}` : ''}{n.assignedAt ? ` ${ago(Date.now() - n.assignedAt)} ago` : ''}</div>
+                        <div className="kb__row kb__dim kb__mono">
+                          id {n.id}
+                          <button type="button" className={`kb__copy${copiedId === n.id ? ' kb__copy--done' : ''}`} title="Copy a reference to this card (task <id>)" onClick={(e) => copyRef(e, n)} data-copy-ref-detail>{copiedId === n.id ? '✓ copied' : '⧉ copy'}</button>
+                          {n.assignedBy ? ` · assigned by ${n.assignedBy}` : ''}{n.assignedAt ? ` ${ago(Date.now() - n.assignedAt)} ago` : ''}
+                        </div>
                       </div>
                     )}
                   </article>

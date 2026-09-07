@@ -23,12 +23,31 @@
 .kb__card--blocked { border-left: 3px solid #d29922; }
 .kb__col--done .kb__card { opacity: 0.75; }
 .kb__title { font-size: 13px; font-weight: 500; line-height: 1.35; word-break: break-word; }
+/* The card reference (openspec kanban-card-ref): a small stable code + copy button, right of the title. */
+.kb__ref { float: right; display: inline-flex; align-items: center; gap: 2px; margin-left: 8px; }
+.kb__ref-code { font-family: ui-monospace, Consolas, monospace; font-size: 10.5px; font-weight: 400; color: var(--color-text-muted, #9aa); }
+.kb__copy { border: 1px solid transparent; background: transparent; color: var(--color-text-muted, #9aa); border-radius: 4px; padding: 0 4px; font-size: 11px; line-height: 1.4; cursor: pointer; white-space: nowrap; }
+.kb__copy:hover { color: var(--color-text, #eee); border-color: var(--color-border, #444); }
+.kb__copy--done { color: #3fb950; border-color: rgba(63, 185, 80, 0.6); }
 .kb__meta { display: flex; flex-wrap: wrap; gap: 4px; }
 .kb__chip { font-size: 10.5px; border: 1px solid var(--color-border, #444); border-radius: 999px; padding: 0 7px; color: var(--color-text-muted, #9aa); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .kb__chip--who { color: var(--color-text, #eee); }
 /* Several assignees on one card (openspec task-multi-assignee): each chip carries its own status. */
 .kb__chip--who-multi { border-style: double; border-width: 3px; padding-top: 0; padding-bottom: 0; }
 .kb__chip--who-warn { border-color: #d29922; }
+/* Machine + repo colour (fleet-status task 327aa5ae): the SAME shared hue palette the
+   Task graph nodes and Fleet Status agent chips use, so a machine/agent reads as one
+   colour across all three views. Border = its machine's hue, background tint = its
+   repo's hue; identical hsl() formulas to .tg-assignee so the colours line up exactly.
+   Text stays the theme text colour (dark on the pale light-mode tint, light on the dark
+   one) for accessible contrast. Placed after --who-warn so the machine colour always
+   shows; the over-claim warning still reads via the card's ⚠ unverified chip + title. */
+.kb__chip--who.has-machine { border-width: 2px; border-color: hsl(var(--tg-machine-h) 62% 40%); }
+.kb__chip--who.has-repo { background: hsl(var(--tg-repo-h) 72% 90%); color: #17181d; }
+@media (prefers-color-scheme: dark) {
+  .kb__chip--who.has-machine { border-color: hsl(var(--tg-machine-h) 70% 62%); }
+  .kb__chip--who.has-repo { background: hsl(var(--tg-repo-h) 34% 24%); color: var(--color-text, #eee); }
+}
 .kb__who-status { color: var(--color-text-muted, #9aa); }
 .kb__assignees { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .kb__x { border: 0; background: transparent; color: inherit; margin-left: 4px; padding: 0 2px; cursor: pointer; font-size: 12px; line-height: 1; }

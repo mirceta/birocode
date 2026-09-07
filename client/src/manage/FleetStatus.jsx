@@ -5,6 +5,7 @@ import FleetOverviewPanel from './FleetOverviewPanel';
 import FleetScoreboardTab from './FleetScoreboardTab';
 import { harnessHref } from './harnessLink';
 import { FLEET_TABS, FLEET_TAB_KEY, readFleetTab } from './fleetStatusTabs';
+import { useTaskColors, repoKey } from '../components/taskgraph/useTaskColors';
 
 // The per-machine view tabs (openspec fleet-status-panels): one selection shared by
 // every machine card so a whole view (Agents / Overview / Scoreboard) is shown at once
@@ -82,7 +83,7 @@ function persist(state) {
   try { localStorage.setItem(PERSIST_KEY, JSON.stringify(state)); } catch { /* private mode */ }
 }
 
-function AgentChip({ a, self, root, open, onToggle }) {
+function AgentChip({ a, self, root, open, onToggle, color }) {
   const running = !!a.runningSince;
   const known = a.branch && a.branch !== 'unknown';
   const cls = ['fs__chip'];
@@ -90,6 +91,10 @@ function AgentChip({ a, self, root, open, onToggle }) {
   if (a.onDefault) cls.push('fs__chip--free');
   else if (known) cls.push('fs__chip--claimed');
   if (open) cls.push('fs__chip--open');
+  // Shared machine/repo colour (fleet-status task 327aa5ae): same hue this machine +
+  // repo agent gets on the Kanban cards and the Task graph. Border = machine hue,
+  // background tint = repo hue; the state (free/claimed/running) still reads via the dot.
+  if (color?.cls) cls.push(...color.cls.trim().split(/\s+/));
   const title = [
     a.name,
     known ? `on ${a.branch}${a.onDefault ? ' (default — free)' : ' (claimed)'}` : 'branch unknown',
@@ -98,7 +103,7 @@ function AgentChip({ a, self, root, open, onToggle }) {
     a.goal ? `driven by arch goal ${a.goal.id}` : null,
   ].filter(Boolean).join(' · ');
   return (
-    <button type="button" className={cls.join(' ')} title={title} onClick={onToggle} data-agent={a.key} data-on-default={a.onDefault} data-running={running} data-goal={a.goal?.id || undefined}>
+    <button type="button" className={cls.join(' ')} style={color?.style} title={title} onClick={onToggle} data-agent={a.key} data-on-default={a.onDefault} data-running={running} data-goal={a.goal?.id || undefined}>
       <span className={`fs__dot${running ? ' fs__dot--running' : a.onDefault ? ' fs__dot--free' : known ? ' fs__dot--claimed' : ''}`} aria-hidden="true" />
       <span className="fs__chip-text">
         <span className="fs__chip-name" data-handle={a.handle || ''}>{a.managed ? '🏛 ' : ''}{a.handle || a.name}</span>
@@ -199,6 +204,14 @@ export default function FleetStatus({ root = '' }) {
   }, [load]);
 
   const machines = data?.machines || [];
+  // Shared machine/repo colours (fleet-status task 327aa5ae): one palette so a given
+  // machine + repo agent has the SAME hue here and on the Kanban cards / Task graph.
+  const mkOfMachine = (m) => (m.self ? 'self' : m.sourceId);
+  const rkOfAgent = (a) => repoKey({ repoId: a.repoId }, () => a.remoteUrl);
+  const colors = useTaskColors(
+    machines.flatMap((m) => (m.agents || []).map(() => mkOfMachine(m))),
+    machines.flatMap((m) => (m.agents || []).map((a) => rkOfAgent(a))),
+  );
   const query = q.trim().toLowerCase();
   const machineOn = useCallback((m) => machineSel.length === 0 || machineSel.includes(m.sourceId), [machineSel]);
   const toggleMachine = (sourceId) => {
@@ -366,7 +379,7 @@ export default function FleetStatus({ root = '' }) {
                   : (
                     <div className="fs__strip">
                       {agents.map((a) => (
-                        <AgentChip key={a.key} a={a} self={m.self} root={root} open={open === a.key} onToggle={() => setOpen(open === a.key ? null : a.key)} />
+                        <AgentChip key={a.key} a={a} self={m.self} root={root} color={colors.chip(mkOfMachine(m), rkOfAgent(a))} open={open === a.key} onToggle={() => setOpen(open === a.key ? null : a.key)} />
                       ))}
                     </div>
                   )}
