@@ -77,6 +77,12 @@ A turn without a credential fails cleanly: the thread id still arrives, the
 CLI's transient "Reconnecting…" notices are logged (never shown as errors), and
 one error carries the CLI's verdict (`unexpected status 401 Unauthorized …`).
 
+## Try it out on this box
+
+See `docs/codex-runbook.md`: what is proven vs. never executed, where the
+credential goes, why the test runs on an isolated instance of the branch (live
+runs main), and what evidence the first real run leaves.
+
 ## How the lanes and tools map (codex-cli 0.153.4)
 
 - Builder lane → `codex exec --json --skip-git-repo-check
