@@ -6,6 +6,7 @@ import FleetScoreboardTab from './FleetScoreboardTab';
 import { harnessHref } from './harnessLink';
 import { FLEET_TABS, FLEET_TAB_KEY, readFleetTab } from './fleetStatusTabs';
 import { useTaskColors, repoKey } from '../components/taskgraph/useTaskColors';
+import AgentStatusDot, { agentDotState } from '../components/shared/AgentStatusDot';
 
 // The per-machine view tabs (openspec fleet-status-panels): one selection shared by
 // every machine card so a whole view (Agents / Overview / Scoreboard) is shown at once
@@ -104,7 +105,7 @@ function AgentChip({ a, self, root, open, onToggle, color }) {
   ].filter(Boolean).join(' · ');
   return (
     <button type="button" className={cls.join(' ')} style={color?.style} title={title} onClick={onToggle} data-agent={a.key} data-on-default={a.onDefault} data-running={running} data-goal={a.goal?.id || undefined}>
-      <span className={`fs__dot${running ? ' fs__dot--running' : a.onDefault ? ' fs__dot--free' : known ? ' fs__dot--claimed' : ''}`} aria-hidden="true" />
+      <AgentStatusDot state={agentDotState(a)} />
       <span className="fs__chip-text">
         <span className="fs__chip-name" data-handle={a.handle || ''}>{a.managed ? '🏛 ' : ''}{a.handle || a.name}</span>
         <span className="fs__chip-branch"><span aria-hidden="true">⎇</span> {known ? a.branch : '?'}{a.dirty ? ' ·' : ''}{running ? ` · ${ago(Date.now() - a.runningSince)}` : ''}</span>

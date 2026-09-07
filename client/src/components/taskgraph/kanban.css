@@ -31,7 +31,7 @@
 .kb__copy--done { color: #3fb950; border-color: rgba(63, 185, 80, 0.6); }
 .kb__meta { display: flex; flex-wrap: wrap; gap: 4px; }
 .kb__chip { font-size: 10.5px; border: 1px solid var(--color-border, #444); border-radius: 999px; padding: 0 7px; color: var(--color-text-muted, #9aa); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-.kb__chip--who { color: var(--color-text, #eee); }
+.kb__chip--who { color: var(--color-text, #eee); display: inline-flex; align-items: center; gap: 5px; }
 /* Several assignees on one card (openspec task-multi-assignee): each chip carries its own status. */
 .kb__chip--who-multi { border-style: double; border-width: 3px; padding-top: 0; padding-bottom: 0; }
 .kb__chip--who-warn { border-color: #d29922; }
