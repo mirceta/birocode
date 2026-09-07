@@ -18,6 +18,12 @@ public static class AccountsModuleExtensions
         // Write-only credential control (openspec add-git-identity-surface): reuses
         // the GitHub probe to re-derive the account after establishing a token.
         services.AddSingleton<GitHubCredentialsService>();
+        // Codex (openspec codex-real-run): `codex login status` probe + write-only
+        // API-key control piped to `codex login --with-api-key`.
+        services.AddSingleton<CodexAccountService>();
+        services.AddSingleton<CodexCredentialsService>();
+        // ChatGPT plan usage for the Codex chip (openspec codex-account-and-models).
+        services.AddSingleton<CodexUsageService>();
         return services;
     }
 }

@@ -44,7 +44,7 @@ public class RepoController : ControllerBase
     {
         _logger.CountRequest();
         var repos = _registry.GetAll()
-            .Select(r => new { id = r.Id, name = r.Name, handle = r.Handle, path = r.Path, exists = r.Exists, isGitRepo = r.IsGitRepo, isSelf = r.IsSelf, visibility = r.Visibility, localPort = r.LocalPort, localApps = AppsJson(r.LocalApps) });
+            .Select(r => new { id = r.Id, name = r.Name, handle = r.Handle, path = r.Path, exists = r.Exists, isGitRepo = r.IsGitRepo, isSelf = r.IsSelf, visibility = r.Visibility, provider = r.Provider, model = r.Model, localPort = r.LocalPort, localApps = AppsJson(r.LocalApps) });
         return Ok(repos);
     }
 
@@ -171,6 +171,20 @@ public class RepoController : ControllerBase
     }
 
     public record VisibilityRequest(string? Visibility);
+
+    public record ProviderRequest(string? Provider, string? Model = null);
+
+    /// <summary>Which engine runs this repo's agent turns — claude | codex
+    /// (openspec provider-agnostic-runner).</summary>
+    [HttpPost("{id}/provider")]
+    public IActionResult SetProvider(string id, [FromBody] ProviderRequest? request)
+    {
+        _logger.CountRequest();
+        if (!_registry.SetProvider(id, request?.Provider, request?.Model))
+            return NotFound(new { error = "Unknown repository id." });
+        var r = _registry.GetAll().First(x => x.Id == id);
+        return Ok(new { id = r.Id, provider = r.Provider });
+    }
 
     /// <summary>Sets a project's UI-mode visibility ("basic" or "advanced").</summary>
     [HttpPost("{id}/visibility")]

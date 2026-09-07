@@ -3382,3 +3382,8 @@
 
 /* Dock chip: the "#2" suffix of a repeated repo name (openspec stable-handles). */
 .dash__docktab-suffix { margin-left: 3px; font-family: ui-monospace, Consolas, monospace; font-size: 10px; opacity: 0.8; }
+
+/* Agent engine selector (openspec provider-agnostic-runner) */
+.phone__provider { display: flex; align-items: center; gap: 6px; padding: 2px 0; font-size: 12px; color: var(--color-text-muted, #9aa); }
+.phone__provider-select { padding: 2px 6px; border: 1px solid var(--color-border, #444); border-radius: 6px; background: var(--color-surface, #14161d); color: var(--color-text, #eee); font-size: 12px; }
+.phone__provider[data-provider='codex'] .phone__provider-select { border-color: #10a37f; }

@@ -10,6 +10,8 @@ import OperatorMessagesPanel from '../components/chat/OperatorMessagesPanel';
 import ErrorBanner from '../components/shared/ErrorBanner';
 import ClaudeViewToggle from '../components/shared/ClaudeViewToggle';
 import ModelSelector from '../components/chat/ModelSelector';
+import ProviderCapabilities from '../components/chat/ProviderCapabilities';
+import { providerOf, defaultModelFor } from '../components/chat/models';
 import { apiGet } from '../api/client';
 import { useChat } from '../context/ChatContext';
 import { useDock } from '../context/DockContext';
@@ -87,6 +89,7 @@ export default function Chat({
     liveToolCalls,
     activeRepoId,
   } = injected || active;
+  const provider = providerOf(model) || 'claude';
 
   // Main-page counterpart of the dock's queueLoop prop: poll the ungated loop
   // projection only while an agent tab is active with a non-empty stash — the
@@ -117,7 +120,7 @@ export default function Chat({
   // next to the toggle rather than failing silently.
   const [chromeStatus, setChromeStatus] = useState(null);
   const browserVisible =
-    showBrowserMode && (embedded ? injected?.lane !== 'ask' : chatView !== 'ask');
+    showBrowserMode && provider === 'claude' && (embedded ? injected?.lane !== 'ask' : chatView !== 'ask');
   useEffect(() => {
     if (!browserVisible || !browserOn) {
       setChromeStatus(null);
@@ -285,16 +288,17 @@ export default function Chat({
         </div>
       )}
       {!embedded && showDualChat && chatView === 'ask' && (
-        <p className="chat__ask-note">{t('chat.askHint')}</p>
+        <p className="chat__ask-note">{provider === 'codex' ? 'Codex Ask blocks filesystem writes. Connected MCP services may still perform external actions.' : t('chat.askHint')}</p>
       )}
+      {!embedded && <ProviderCapabilities provider={provider} onChooseClaude={() => changeModel(defaultModelFor('claude'))} />}
       <div className="chat__bar">
         {!embedded && <ClaudeViewToggle />}
         <button type="button" className="chat__conversations" onClick={openPicker}>
           {t('chat.yourConversations')}
         </button>
         {showContextMeter && contextTokens > 0 && (
-          <span className="chat__ctx" title={`${contextTokens.toLocaleString()} context tokens`}>
-            ctx {Math.round(contextTokens / 1000)}K
+          <span className="chat__ctx" title={provider === 'codex' ? `${contextTokens.toLocaleString()} turn input tokens, including cached input. Context occupancy is not reported.` : `${contextTokens.toLocaleString()} context tokens`}>
+            {provider === 'codex' ? 'turn input' : 'ctx'} {Math.round(contextTokens / 1000)}K
           </span>
         )}
         <ModelSelector value={model} onChange={changeModel} />

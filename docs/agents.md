@@ -18,7 +18,7 @@ change the definitions **here**, not there.
 ## The one-paragraph version
 
 A **Repo Agent** builds; a **Management Agent** decides who builds what. Each
-Repo Agent is one Claude session pointed at one registered Repo, and it is the
+Repo Agent is a Claude or Codex conversation pointed at one registered Repo, and it is the
 only kind of agent that may touch that repo's files. The Arch Agent — the
 management agent this harness ships — has *no* file powers at all: it works
 purely by sending conversational tasks into repo agents' docks and reading what
@@ -56,7 +56,7 @@ flowchart TD
 
 ### Repo Agent
 
-**One Claude Code session bound to one registered Repo, surfaced as a tab in the
+**One Claude or Codex conversation bound to one registered Repo, surfaced as a tab in the
 agent dock.** It is the thing that reads and writes that repo's files, runs its
 commands, and makes its commits — the harness's unit of work.
 

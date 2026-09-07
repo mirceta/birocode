@@ -4,6 +4,7 @@ import { hubAttach, hubSupported } from '../api/chatStreamHub';
 import { appendThinking, applyToolEvent, settleSteps } from '../components/chat/turnSteps';
 import { createSseParser } from '../components/chat/sseParser';
 import { getModel, setModel as persistModel } from '../components/chat/ModelSelector';
+import { providerOf, effectiveModelFor } from '../components/chat/models';
 import { useDock } from './DockContext';
 import { useFooterClauses } from './FooterClausesContext';
 import { useRepo } from './RepoContext';
@@ -72,7 +73,7 @@ function emptyConversation(greeting) {
 
 export function ChatProvider({ children }) {
   const { t } = useT();
-  const { currentRepoId, repos } = useRepo();
+  const { currentRepoId, repos, reloadRepos } = useRepo();
   const { tabs, activeTab, activeTabId, updateTab, loaded: dockLoaded, chatView, setChatView } = useDock();
   const dualChat = useFeature('dualChat');
   const { isAdvanced } = useUiMode();
@@ -98,8 +99,21 @@ export function ChatProvider({ children }) {
   // Set while the user explicitly stopped a run, so reattach logic stands down.
   const stopRefs = useRef({});
 
-  const [model, setModelState] = useState(getModel);
-  const changeModel = useCallback((id) => { persistModel(id); setModelState(id); }, []);
+  // The stored model choice is device-local and shared across repos; what a repo
+  // actually receives is the EFFECTIVE model for its engine (openspec
+  // codex-account-and-models): a Claude id on a codex repo becomes the codex
+  // default and vice versa, so the picker and the repo's Engine never disagree.
+  const [storedModel, setModelState] = useState(getModel);
+  // While a cross-family model pick is being persisted (and the repo listing reloads),
+  // remember the engine we asked for so the picker updates synchronously instead of
+  // snapping back to the old engine's default for a beat.
+  const [provOverride, setProvOverride] = useState({});
+  const [modelErrors, setModelErrors] = useState({});
+  const repoProviderOf = useCallback(
+    (repoId) => provOverride[repoId]?.provider
+      ?? (repos.find((r) => r.id === repoId)?.provider === 'codex' ? 'codex' : 'claude'),
+    [repos, provOverride],
+  );
 
   // Browser mode (openspec claude-in-chrome): device-local toggle, like the
   // model choice. While on, builder-lane sends carry `browser: true` so the
@@ -156,6 +170,31 @@ export function ChatProvider({ children }) {
   // phones", plans/agent-dashboard.md). Every action takes an explicit target,
   // so a background phone never touches the active conversation.
   const activeTarget = { key: activeKey, repoId: activeRepoId, tabId: visibleTabId, lane: activeLane };
+
+  // The picker shows the effective model for the active repo. Picking a model from
+  // the OTHER family switches the repo's Engine on the server (the same POST the
+  // dock's Engine select makes) and reloads the listing, so the next send runs on
+  // that engine with that model. Management chats have no repo provider: the POST
+  // fails harmlessly and the server drops a mismatched model anyway.
+  const modelForRepo = (repoId) => effectiveModelFor(provOverride[repoId]?.model ?? repos.find((r) => r.id === repoId)?.model ?? storedModel, repoProviderOf(repoId));
+  const model = modelForRepo(activeRepoId);
+  const changeModel = useCallback(async (id, targetRepoId = activeRepoId) => {
+    persistModel(id);
+    setModelState(id);
+    const family = providerOf(id);
+    if (family && targetRepoId) {
+      setProvOverride((m) => ({ ...m, [targetRepoId]: { provider: family, model: id } }));
+      setModelErrors((m) => ({ ...m, [targetRepoId]: '' }));
+      try {
+        await apiPost(`/repos/${targetRepoId}/provider`, { provider: family, model: id }); // route base is api/repos (plural)
+        await reloadRepos();
+      } catch (e) {
+        setModelErrors((m) => ({ ...m, [targetRepoId]: `Could not save the agent model: ${e.message}` }));
+      } finally {
+        setProvOverride((m) => { const n = { ...m }; delete n[targetRepoId]; return n; });
+      }
+    }
+  }, [activeRepoId, repoProviderOf, reloadRepos]);
 
   // Ensure a conversation entry exists for the active key. If the tab was
   // restored from localStorage with a stored sessionId (page reload), resume
@@ -275,7 +314,11 @@ export function ChatProvider({ children }) {
         seqRefs.current[key] = evt.seq;
       }
       switch (evt.type) {
+        case 'handoff':
+          updateConvo(key, (c) => ({ ...c, messages: [...c.messages.slice(0, -2), { role: 'assistant', text: evt.message }, ...c.messages.slice(-2)] }));
+          break;
         case 'session':
+          reloadRepos();
           if (evt.sessionId) {
             updateConvo(key, { sessionId: evt.sessionId });
             if (tabId) updateTab(tabId, { sessionId: evt.sessionId });
@@ -356,13 +399,17 @@ export function ChatProvider({ children }) {
     const parse = createSseParser(handleEvent);
 
     try {
-      const body = { message: fullText, model };
+      // The model of the target repo's engine family. The engine itself is NOT sent:
+      // the server's persisted Engine is the source of truth (a page whose repo list
+      // is stale after an Engine flip elsewhere must not override it), and the server
+      // drops a model from the other family anyway.
+      const body = { message: fullText, model: modelForRepo(repoId) };
       const currentConvo = convos[key];
       if (currentConvo?.sessionId) body.sessionId = currentConvo.sessionId;
       if (lane && lane !== 'builder') body.lane = lane;
       // Browser mode rides every builder send while the toggle is on; the
       // server coerces it off for the ask lane anyway (defense in depth).
-      if (browserRef.current && lane !== 'ask') body.browser = true;
+      if (browserRef.current && lane !== 'ask' && repoProviderOf(repoId) === 'claude') body.browser = true;
       await apiStream('/chat', body, parse, { signal: controller.signal, repoId });
     } catch (err) {
       if (err.name === 'AbortError') {
@@ -805,7 +852,7 @@ export function ChatProvider({ children }) {
     attachment: conv.attachment,
     setAttachment: (a) => updateConvo(activeKey, { attachment: a }),
     streaming: conv.streaming,
-    error: conv.error,
+    error: conv.error || modelErrors[activeRepoId],
     contextTokens: conv.contextTokens,
     pickerOpen,
     setPickerOpen,
@@ -814,6 +861,9 @@ export function ChatProvider({ children }) {
     sessionsError,
     model,
     changeModel,
+    modelForRepo,
+    modelErrors,
+    changeModelForRepo: (id, repoId) => changeModel(id, repoId),
     // Browser mode (openspec claude-in-chrome): device-local toggle; builder
     // sends carry the flag while on.
     browserOn,
@@ -920,10 +970,10 @@ export function useChatFor({ key, repoId, tabId, sessionId, lane = 'builder' }) 
     attachment: conv.attachment,
     setAttachment: (a) => ctx.updateConvo(key, { attachment: a }),
     streaming: conv.streaming,
-    error: conv.error,
+    error: conv.error || ctx.modelErrors[repoId],
     contextTokens: conv.contextTokens,
-    model: ctx.model,
-    changeModel: ctx.changeModel,
+    model: ctx.modelForRepo(repoId),
+    changeModel: (id) => ctx.changeModelForRepo(id, repoId),
     // Browser mode (openspec claude-in-chrome): the toggle is device-global —
     // a dock flips the same flag the main chat uses, and sendTo() already
     // attaches it to every builder-lane send. `lane` lets the embedded <Chat>

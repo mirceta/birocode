@@ -1144,6 +1144,7 @@ public partial class ArchAgentService : IArchWakeSource
         var remote = list.Count(a => !a.IsLocal);
         var blocked = list.Count(a => !a.Sendable);
         var unpushed = UnpushedTaskBranches();
+        var providerById = _repos.GetAll().ToDictionary(r => r.Id, r => r.Provider, StringComparer.Ordinal);
         return new ToolOutcome(true, "ok",
             $"{list.Count} managed agent(s){(remote > 0 ? $", {remote} on other machines" : "")}{(blocked > 0 ? $", {blocked} not sendable (see blocked)" : "")}",
             list.Select(a => new
@@ -1155,6 +1156,9 @@ public partial class ArchAgentService : IArchWakeSource
                 claimedReason = a.ClaimedReason, pinned = a.Pinned, adoptedBranches = a.Adopted,
                 runningSince = a.RunningSince, runningFor = a.RunningSince is { } rs ? Elapsed(rs, Now()) : null,
                 managedThere = a.IsLocal ? true : a.ManagedThere, sendable = a.Sendable, blocked = a.Blocked?.Reason,
+                // Which engine runs this agent's turns (openspec provider-agnostic-runner);
+                // known for local agents only — a peer reports its own.
+                provider = a.IsLocal ? providerById.GetValueOrDefault(a.RepoId, Chat.AgentProviders.Claude) : null,
                 // Local branches carrying board-task commits not on origin (openspec
                 // kanban-lifecycle-columns): forgotten work, visible on every wake.
                 unpushedTaskBranches = a.IsLocal && unpushed.TryGetValue(a.RepoId, out var b) ? b : null,
@@ -2253,7 +2257,8 @@ public partial class ArchAgentService : IArchWakeSource
                 await session.EmitAsync(new { type = "user", text = sendText, actor });
                 await _cli.RunAsync(sendText, sessionId, workingDirectory: repo.Path,
                     emit: session.EmitAsync, ct: session.Cts.Token,
-                    repoId: repo.Id, repoName: repo.Name, mcpConfigJson: mcp);
+                    repoId: repo.Id, repoName: repo.Name, mcpConfigJson: mcp,
+                    provider: repo.Provider); // the repo's engine (openspec codex-real-run)
             }
             catch (Exception ex)
             {
@@ -3118,15 +3123,11 @@ public partial class ArchAgentService : IArchWakeSource
         }
     }
 
-    private static string? NewestSessionId(string workingDir)
+    private string? NewestSessionId(string workingDir)
     {
         try
         {
-            var dir = SessionService.ProjectsDirectoryFor(workingDir);
-            if (!Directory.Exists(dir)) return null;
-            var newest = new DirectoryInfo(dir).EnumerateFiles("*.jsonl")
-                .OrderByDescending(f => f.LastWriteTimeUtc).FirstOrDefault();
-            return newest is null ? null : Path.GetFileNameWithoutExtension(newest.Name);
+            return _sessions.ListSessions(workingDir).FirstOrDefault()?.Id;
         }
         catch { return null; }
     }

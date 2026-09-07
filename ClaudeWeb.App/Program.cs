@@ -14,8 +14,14 @@ namespace ClaudeWeb;
 static class Program
 {
     [STAThread]
-    static void Main()
+    static void Main(string[] args)
     {
+        if (args is ["--mcp-stdio-proxy", var configPath, var serverName])
+        {
+            try { Environment.ExitCode = Services.Chat.McpStdioProxy.RunAsync(configPath, serverName).GetAwaiter().GetResult(); }
+            catch (Exception ex) { Console.Error.WriteLine("MCP stdio proxy failed: " + ex.Message); Environment.ExitCode = 1; }
+            return;
+        }
         ApplicationConfiguration.Initialize();
 
         // Load strongly typed config from appsettings.json (copied next to the exe).

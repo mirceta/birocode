@@ -1,72 +1,58 @@
 <!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Goal conversations — the arch on a timer</title>
-<link rel="stylesheet" href="./app.css">
-</head>
-<body>
-<header class="top">
-  <h1>Goal conversations: the arch on a timer</h1>
-  <p class="lead">One sentence: <b>a goal conversation is the arch agent re-prompted every N minutes; on each turn it checks its agents itself; the agents never call anyone.</b> Nothing else moves on its own. Press play.</p>
-</header>
-
-<section class="stage">
-  <div class="col">
-    <h3>Your chat with the arch</h3>
-    <div class="conv default">
-      <div class="name">Arch agent <span class="pill free">free</span></div>
-      <div class="sub">a plain chat — you type, it answers</div>
-      <div class="drop" id="drop-default"><div class="ev nothing">nothing arrives here on its own</div></div>
-    </div>
-    <div class="notes small">
-      <b>Only two things ever come from a goal:</b>
-      <ul>
-        <li>the moment you start it: "goal g1 runs in its own conversation"</li>
-        <li>the moment it ends: one summary message (actor <code>goal</code>)</li>
-      </ul>
-    </div>
-  </div>
-
-  <div class="col">
-    <h3>The goal conversation</h3>
-    <div class="conv goal">
-      <div class="name">goal: Ship prg <span class="pill busy" id="busy">busy: goal g1</span></div>
-      <div class="sub">drives spacex/prg, spacex/fluent · cap 20 · polls every <span id="floor">5</span> min</div>
-      <div class="timer"><div class="bar" id="bar"></div><span id="clock">next poll in 5:00</span></div>
-      <div class="drop" id="drop-goal"></div>
-    </div>
-    <div class="controls">
-      <button id="play">▶ play</button>
-      <button id="poll">⏭ poll now</button>
-      <button id="finish">✓ arch says LOOP_DONE</button>
-      <button id="reset">↺ reset</button>
-    </div>
-    <div class="notes small">
-      <b>Each poll is the same turn:</b> the harness re-sends the goal (plus anything you queued); the arch calls <code>list_agents</code> (who is running?), <code>read_transcript</code> (what did a finished one say?), <code>list_tasks</code> (the board), then acts: sends a task, follows up, moves a card — or says "nothing changed yet" and ends the turn. That last line is the accepted cost.
-    </div>
-  </div>
-
-  <div class="col">
-    <h3>Repo agents — passive</h3>
-    <div class="agent" id="ag-prg"><b>spacex/prg</b><span class="state" id="st-prg">idle</span><small>does what it is asked; never calls back</small></div>
-    <div class="agent" id="ag-fluent"><b>spacex/fluent</b><span class="state" id="st-fluent">idle</span><small>does what it is asked; never calls back</small></div>
-    <div class="notes small">
-      <b>An agent finishing changes nothing by itself.</b> Its reply sits in its own conversation until the next poll reads it. Try: press play, watch prg finish, and see the goal conversation only notice at the next poll.
-    </div>
-  </div>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Claude and Codex · how the harness connects them</title>
+<style>
+:root{font:16px/1.55 system-ui,sans-serif;color:#19313c;background:#f3f5f2}*{box-sizing:border-box}body{margin:0}main{max-width:1100px;margin:auto;padding:36px 24px}h1{font-size:clamp(30px,5vw,48px);line-height:1.12;max-width:850px;margin:16px 0}h2{font-size:23px;margin:0 0 12px}h3{margin:0 0 8px;font-size:17px}p{margin:10px 0}.eyebrow{color:#246950;letter-spacing:.1em;font-size:12px;font-weight:750;text-transform:uppercase}.lead{font-size:19px;max-width:850px;color:#46606a}nav{display:flex;gap:8px;flex-wrap:wrap;margin:28px 0 18px}button{font:inherit;border:1px solid #b9cbc4;border-radius:24px;padding:9px 16px;background:white;color:inherit;cursor:pointer}button[aria-selected=true]{background:#193e35;color:white;border-color:#193e35}button:focus-visible{outline:3px solid #e7a345;outline-offset:3px}.panel{background:white;border:1px solid #d9e2dd;border-radius:20px;padding:26px}.flow{display:grid;grid-template-columns:1fr 1.25fr 1fr;gap:16px;margin:22px 0}.card{border-radius:14px;padding:18px;background:#edf1f7;border:1px solid #dce3eb}.bridge{background:#e5f2e9;border-color:#b2d5bd}.claude{background:#fff0e4;border-color:#edd3bf}code{font:13px ui-monospace,monospace;overflow-wrap:anywhere}.label{font-size:12px;font-weight:750;text-transform:uppercase;letter-spacing:.07em;display:block;margin-bottom:10px}.note{border-left:4px solid #d99e3e;background:#fff8e9;padding:14px 18px;margin-top:20px}.checks{display:flex;gap:12px;flex-wrap:wrap;margin:24px 0}.checks span{background:#e5eee7;border-radius:8px;padding:8px 12px;font-size:14px}table{width:100%;border-collapse:collapse}th,td{text-align:left;vertical-align:top;padding:13px;border-bottom:1px solid #dfe6e2}th{font-size:13px}footer{font-size:13px;color:#576a70;margin-top:24px}a{color:#17654f}label{display:block;margin:16px 0}input{accent-color:#246950} [hidden]{display:none!important}@media(max-width:720px){.flow{grid-template-columns:1fr}.panel{padding:18px}main{padding:24px 16px}th,td{padding:9px;font-size:14px}}
+</style>
+<main>
+<div class="eyebrow">Provider reconciliation · implemented 7 September 2026</div>
+<h1>Two native engines.<br>One continuous harness conversation.</h1>
+<p class="lead">The first integration unified live replies but left history, loops and helpers tied to Claude. The harness now connects those paths explicitly. Native JSONL files remain separate.</p>
+<nav role="tablist" aria-label="Explore provider behavior">
+<button role="tab" aria-selected="true" aria-controls="switch" id="tab-switch" data-tab="switch">Switch engines</button>
+<button role="tab" aria-selected="false" aria-controls="history" id="tab-history" data-tab="history">Reload history</button>
+<button role="tab" aria-selected="false" aria-controls="automation" id="tab-automation" data-tab="automation">Tools &amp; loops</button>
+<button role="tab" aria-selected="false" aria-controls="boundaries" id="tab-boundaries" data-tab="boundaries">Native differences</button>
+</nav>
+<section class="panel" role="tabpanel" id="switch" aria-labelledby="tab-switch">
+<h2>Switching starts a new native session with a visible handoff</h2>
+<p>A native Claude session ID cannot resume a Codex thread. The shared runner validates the ID and repository, transfers context, and saves a durable snapshot when the new engine returns its session ID.</p>
+<div class="flow"><div class="card claude"><span class="label">Claude · source</span><h3>Existing conversation</h3><p>User messages, assistant replies and tool history stay available in Claude's original transcript.</p></div>
+<div class="card bridge"><span class="label">Harness · bridge</span><h3>Context + durable history</h3><p id="transfer">Recent visible conversation is included with the current request. The UI announces the switch.</p><code>app-data/conversation-handoffs/</code></div>
+<div class="card"><span class="label">Codex · destination</span><h3>New native thread</h3><p>Receives transferred visible context and works in the same repository. Later Codex turns resume this thread normally.</p></div></div>
+<label><input type="checkbox" id="long-history"> Simulate a conversation longer than the 12,000-character inline budget</label>
+<div class="note">The bridge works in both directions. It preserves visible conversation, not hidden reasoning or the other CLI's internal compaction state. Missing source history produces an explicit error.</div>
 </section>
-
-<section class="notes">
-  <h3>How it ends</h3>
-  <ol>
-    <li>The arch judges the goal finished and ends a reply with <code>LOOP_DONE</code>.</li>
-    <li>The harness asks it once to verify; <code>GOAL_VERIFIED</code> ends the loop. (Or: your Stop, the cap, an error. <code>NEEDS_HUMAN: …</code> keeps it busy with the question shown; your reply is queued for the next poll.)</li>
-    <li>The conversation releases its agents, becomes free, and one summary lands in your chat.</li>
-  </ol>
+<section class="panel" role="tabpanel" id="history" aria-labelledby="tab-history" hidden>
+<h2>JSONL is a container, not a shared conversation format</h2>
+<div class="flow"><div class="card claude"><span class="label">Claude native store</span><code>~/.claude/projects/…/*.jsonl</code><p>Claude message and tool-use/result rows.</p></div><div class="card bridge"><span class="label">Harness reader</span><h3>One history interface</h3><p>NativeTranscripts normalizes Codex rows. SessionService combines native messages with saved handoffs.</p></div><div class="card"><span class="label">Codex native store</span><code>CODEX_HOME/sessions/…/*.jsonl</code><p>Session metadata, response items and function/custom-tool outputs.</p></div></div>
+<p>The picker identifies the engine. Reload, activity, tool details and automation observers all read through the shared interface. Duplicate native message events and injected environment rows are filtered.</p>
+<div class="note">The native files are never converted in place. Session discovery checks the actual working directory and session ID before continuation.</div>
 </section>
-
-<script src="./app.js"></script>
-</body>
-</html>
+<section class="panel" role="tabpanel" id="automation" aria-labelledby="tab-automation" hidden>
+<h2>Manual and automated turns resolve the same repository configuration</h2>
+<div class="flow"><div class="card"><span class="label">Entry points</span><p>Composer · recipe loop · management dispatch · discovery · Understanding</p></div><div class="card bridge"><span class="label">Shared runner</span><p>Saved provider + model<br>Enabled harness MCP tools<br>Resume or handoff<br>Cancellation and errors</p></div><div class="card"><span class="label">Shared observations</span><p>Messages and tool results<br>Loop completion sentinel<br>Run status and monitoring</p></div></div>
+<p>MCP server names, headers and per-server environment values are preserved. Conflicting environment values use an isolated stdio proxy. Injected secrets stay out of process arguments.</p>
+<p>Helpers use fresh ephemeral sessions, so discovery and Understanding do not add helper conversations to the user's history or mutate the active native thread.</p>
+<div class="note">The Windows launcher now finds the packaged Codex executable. Long and multiline prompts use stdin; stdout and stderr drain concurrently. A late error takes precedence over a prior done event.</div>
+</section>
+<section class="panel" role="tabpanel" id="boundaries" aria-labelledby="tab-boundaries" hidden>
+<h2>Some native capabilities need an explicit boundary</h2>
+<table><thead><tr><th>Capability</th><th>How it is integrated</th></tr></thead><tbody>
+<tr><td>Project instructions</td><td>Codex uses AGENTS precedence with CLAUDE.md as a fallback. Claude is directed to AGENTS guidance when root CLAUDE.md is absent. If both exist, reference the same shared guide from each.</td></tr>
+<tr><td>Chrome</td><td>The Codex capability panel offers “Use Claude for Chrome tasks.” Unsupported Codex browser requests fail explicitly.</td></tr>
+<tr><td>Management agent</td><td>Remains Claude because its restricted tool interface depends on Claude tool denial. It can dispatch to Codex repo agents.</td></tr>
+<tr><td>Ask</td><td>Codex uses a read-only filesystem sandbox; Claude uses plan mode. External MCP services can still have effects, as disclosed in the GUI.</td></tr>
+<tr><td>Skills, hooks, plugins, login and auto-memory</td><td>Stay native to each CLI. Shared procedures and memory belong in repository files referenced by project instructions.</td></tr>
+<tr><td>Streaming and usage</td><td>Codex may emit completed message items. Its input counter is labeled turn input, not current context occupancy.</td></tr>
+</tbody></table>
+</section>
+<div class="checks"><span>468 backend tests passed</span><span>67 client tests passed</span><span>29 real CLI + browser checks passed</span><span>11 additional UI checks passed</span></div>
+<footer>Verified in isolated harness instances; production was not deployed. See <a href="../docs/provider-parity-audit.md">the reconciliation audit</a> and <a href="../tests/provider-parity/README.md">reproduction instructions</a> for evidence and limits. This explanation uses no external scripts or services.</footer>
+</main>
+<script>
+const buttons=[...document.querySelectorAll('[data-tab]')];
+function show(button){buttons.forEach(b=>b.setAttribute('aria-selected',String(b===button)));document.querySelectorAll('[role=tabpanel]').forEach(p=>p.hidden=p.id!==button.dataset.tab);}
+buttons.forEach((button,i)=>{button.addEventListener('click',()=>show(button));button.addEventListener('keydown',e=>{if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight')return;e.preventDefault();const next=buttons[(i+(e.key==='ArrowRight'?1:buttons.length-1))%buttons.length];next.focus();show(next);});});
+document.querySelector('#long-history').addEventListener('change',e=>{document.querySelector('#transfer').textContent=e.target.checked?'The most recent 12,000 characters are included inline. The agent receives a path to the full visible transcript; all earlier messages remain in harness history.':'Recent visible conversation is included with the current request. The UI announces the switch.';});
+</script></html>

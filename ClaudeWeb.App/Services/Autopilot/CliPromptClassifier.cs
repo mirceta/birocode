@@ -40,11 +40,15 @@ public class CliPromptClassifier
 
     private readonly PromptClassifier _stub;
     private readonly Logger _logger;
+    private readonly AgentHelperRunner? _helper;
+    private readonly Repositories.RepositoryRegistry? _repos;
 
-    public CliPromptClassifier(PromptClassifier stub, Logger logger)
+    public CliPromptClassifier(PromptClassifier stub, Logger logger, AgentHelperRunner? helper = null, Repositories.RepositoryRegistry? repos = null)
     {
         _stub = stub;
         _logger = logger;
+        _helper = helper;
+        _repos = repos;
     }
 
     // One slot per repo: the snippet being (or already) classified and, once the
@@ -76,7 +80,7 @@ public class CliPromptClassifier
 
         _ = Task.Run(async () =>
         {
-            var v = await ClassifyOnceAsync(message, threshold, routines, model);
+            var v = await ClassifyOnceAsync(message, threshold, routines, model, repoId);
             lock (slot)
             {
                 if (slot.Snippet == snippet) slot.Verdict = v;
@@ -89,7 +93,7 @@ public class CliPromptClassifier
     /// the stub applies (threshold). Falls back to the
     /// stub verdict on any CLI failure, noting the fallback in the reason.</summary>
     private async Task<PromptClassifier.Verdict> ClassifyOnceAsync(
-        string message, double threshold, IReadOnlyList<PromptClassifier.Routine> routines, string model)
+        string message, double threshold, IReadOnlyList<PromptClassifier.Routine> routines, string model, string? repoId = null)
     {
         // The stub already answers the degenerate cases deterministically — no
         // routines, empty message — without spending a CLI call.
@@ -100,7 +104,15 @@ public class CliPromptClassifier
         try
         {
             var sw = Stopwatch.StartNew();
-            raw = await RunCliAsync(BuildPrompt(message, routines), model);
+            if (_helper != null && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("CLAUDEWEB_BRAIN_CLI")))
+            {
+                var repo = _repos?.TryGet(repoId);
+                using var timeout = new CancellationTokenSource(CliTimeout);
+                raw = await _helper.RunAsync(BuildPrompt(message, routines), Path.GetTempPath(), true, timeout.Token,
+                    repo?.Provider == AgentProviders.Codex ? repo.Model : model, repo?.Provider ?? AgentProviders.Claude);
+                raw = JsonSerializer.Serialize(new { result = raw });
+            }
+            else raw = await RunCliAsync(BuildPrompt(message, routines), model);
             _logger.Info($"[AUTOPILOT] cli brain answered in {sw.Elapsed.TotalSeconds:0.0}s");
         }
         catch (Exception ex)
