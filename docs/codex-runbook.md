@@ -10,13 +10,22 @@ and closes the turn with `provider=codex` on the lifecycle events. The dashboard
 probe reports installed / version / not logged in / the credential home.
 
 **Executed for real on 2026-09-07** (after the Operator logged the CLI in with
-`codex login --device-auth`, ChatGPT plan), `codex-authenticated-e2e.ps1` 16/16 on an
-isolated instance of the branch: a builder turn produced commit `f2a975a codex hello`
-with `hello.txt`, `codex exec resume` on the same thread recalled the message, the ask
-lane could not write, and the MCP probe `harness.harness_probe` was called through the
-adapter's exact `-c mcp_servers.*` overrides and its token came back in the answer.
+`codex login --device-auth`, ChatGPT plan), `codex-authenticated-e2e.ps1` **20/20** on an
+isolated instance of the branch:
+
+- a builder turn produced a real commit (`codex hello`, `hello.txt`);
+- `codex exec resume` on the same thread recalled the commit message;
+- the ask lane could not write (`-c sandbox_mode="read-only"`);
+- **the real goal:** a harness-driven turn where the harness itself injected an MCP
+  tool through its OWN config path (`ToolsConfigStore.BuildMcpConfigJson` -> a per-run
+  temp file -> `CodexCliAdapter` `-c mcp_servers.*` overrides), pointed at the probe
+  server via the Birokrat mechanism; Codex called `birokrat.harness_probe`, the token
+  the harness passed in `BIROKRAT_API_KEY` came back through the tool, and Codex
+  committed it (`mcp commit`, `mcp.txt`);
+- plus a direct-spawn MCP probe as a control.
+
 Still never executed: `codex login --with-api-key` through the dashboard field (the
-Operator used device auth), and a Birokrat MCP tool (no key on this box).
+Operator used device auth), and the real Birokrat tool (no Birokrat key/checkout on this box).
 
 ## (a) Supply the credential
 

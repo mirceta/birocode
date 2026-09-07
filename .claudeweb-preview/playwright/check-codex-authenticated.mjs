@@ -101,6 +101,31 @@ if (LOG && fs.existsSync(LOG)) {
   checks['log: [CODEX] Done for the builder turn'] = /\[CODEX\] Done: thread/.test(log)
 }
 
+// 4b. THE REAL GOAL: a harness-driven Codex turn where the harness itself injects an MCP
+// tool (via its own Birokrat MCP config path, ToolsConfigStore.BuildMcpConfigJson ->
+// CliRunnerService temp file -> CodexCliAdapter -c mcp_servers.* overrides) pointed at
+// the probe server, the Codex agent calls that tool, and commits its token — all in ONE
+// turn through POST /api/chat, not a side-channel spawn.
+const probeAbs = path.resolve('mcp-probe-server.mjs')
+const htoken = 'HMCP-' + Math.random().toString(36).slice(2, 10).toUpperCase()
+await fetch(`${BASE}/api/tools/host`, { method: 'PUT', headers: RH, body: JSON.stringify({ birokratServerEntry: probeAbs }) })
+await fetch(`${BASE}/api/tools/birokrat?repoId=${target.id}`, { method: 'PUT', headers: RH, body: JSON.stringify({ enabled: true, apiKey: htoken, apiUrl: 'http://127.0.0.1:9/unused', companies: [] }) })
+const headBeforeMcp = git('rev-parse', 'HEAD')
+t0 = Date.now()
+raw = await fetch(`${BASE}/api/chat`, { method: 'POST', headers: RH, body: JSON.stringify({ message: 'You have an MCP tool available from the "birokrat" server named harness_probe that returns a token string. Call harness_probe, take the token it returns (the part after "token:"), write ONLY that token to a file named mcp.txt in the repo, then run `git add mcp.txt` and `git commit -c user.name=codex -c user.email=codex@example.invalid -m "mcp commit"`. Reply with the token.' }) }).then((r) => r.text())
+ev = sse(raw); types = ev.map((e) => e.type)
+console.log(`turn 4 (harness-injected MCP) closed after ${((Date.now() - t0) / 1000).toFixed(1)}s; events:`, types.join(' '))
+const mcpTool = ev.find((e) => e.type === 'tool' && /harness_probe/.test(e.name || ''))
+const mcpFile = fs.existsSync(path.join(REPO_PATH, 'mcp.txt')) ? fs.readFileSync(path.join(REPO_PATH, 'mcp.txt'), 'utf8').trim() : ''
+console.log('mcp.txt =', JSON.stringify(mcpFile), '| tool event:', mcpTool ? mcpTool.name : 'none')
+checks['turn 4: harness injected the MCP tool and codex CALLED it (birokrat.harness_probe tool event)'] = !!mcpTool
+checks['turn 4: the token the harness passed via BIROKRAT_API_KEY came back through the tool into the commit'] = mcpFile.includes(htoken)
+checks['turn 4: codex committed the MCP result'] = git('rev-parse', 'HEAD') !== headBeforeMcp && /mcp commit/.test(git('log', '-1', '--format=%s'))
+if (LOG && fs.existsSync(LOG)) {
+  const log2 = fs.readFileSync(LOG).subarray(logOffset).toString('utf8')
+  checks['turn 4: harness log shows the MCP config was injected + the tool ran'] = /\[CLI\] MCP tools config injected for this run/.test(log2) && /\[CODEX\] Tool: birokrat\.harness_probe/.test(log2)
+}
+
 // 5. MCP over the harness's exact overrides, driven directly on the real CLI
 const probe = path.resolve('mcp-probe-server.mjs')
 const token = 'PRB-' + Math.random().toString(36).slice(2, 10).toUpperCase()

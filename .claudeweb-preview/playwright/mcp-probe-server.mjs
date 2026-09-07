@@ -11,7 +11,11 @@ const TOOL = {
   description: 'Returns the harness probe token. Call it when asked to prove MCP works.',
   inputSchema: { type: 'object', properties: {}, additionalProperties: false },
 }
-const TOKEN = process.env.HARNESS_PROBE_TOKEN || 'PROBE-TOKEN-UNSET'
+// HARNESS_PROBE_TOKEN when spawned directly; BIROKRAT_API_KEY when the harness injects
+// this server through its own Birokrat MCP config path (ToolsConfigStore.BuildEnv sets
+// BIROKRAT_API_KEY from the saved ApiKey) — so a returned token proves the harness's
+// env injection reached the MCP child, not just that the process started.
+const TOKEN = process.env.HARNESS_PROBE_TOKEN || process.env.BIROKRAT_API_KEY || 'PROBE-TOKEN-UNSET'
 
 function send(msg) { process.stdout.write(JSON.stringify(msg) + '\n') }
 
