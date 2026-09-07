@@ -76,6 +76,80 @@ public class FleetOverviewTests
         Assert.Null(info.Overview.Admin);
     }
 
+    // ---- openspec fleet-overview-honest: the strip's whole field set rides the describe ----
+
+    private const string HonestDescribe = """
+    {
+      "protocol": 1, "version": "1.0.0+84cd5a8", "machine": "SPACEX",
+      "acceptsSends": true, "gateOpen": true, "repos": [],
+      "overview": {
+        "capturedAt": 1789000000000,
+        "claude": { "installed": true, "authenticated": true, "account": "me@x.com", "plan": "Max",
+          "usage": { "available": true, "stale": false, "fetchedAt": "2026-09-07T10:00:00Z",
+            "session": { "label": null, "percent": 23.4, "resetsAt": "2026-09-07T14:00:00Z", "severity": "normal" },
+            "weekly": { "label": null, "percent": 61.0, "resetsAt": "2026-09-10T00:00:00Z", "severity": "normal" },
+            "scopedWeekly": [ { "label": "Opus", "percent": 12.0, "resetsAt": "2026-09-10T00:00:00Z", "severity": "normal" } ],
+            "error": null } },
+        "github": { "installed": true, "authenticated": true, "account": "octocat", "host": "github.com" },
+        "host": { "timeZoneId": "Central Europe Standard Time", "utcOffsetMinutes": 120, "nowUnixMs": 1789000000123, "nowIso": "2026-09-07T12:26:40+02:00" },
+        "admin": { "supported": true, "state": "active", "registrySet": true, "elevated": true }
+      }
+    }
+    """;
+
+    [Fact]
+    public void Describe_carries_the_plan_usage_host_clock_and_admin_facts_of_a_peer()
+    {
+        var info = JsonSerializer.Deserialize<FleetClient.PeerInfo>(HonestDescribe, Web)!;
+        var o = info.Overview!;
+        Assert.Equal(1789000000000, o.CapturedAt);
+        var u = o.Claude!.Usage!;
+        Assert.True(u.Available);
+        Assert.Equal(23.4, u.Session!.Percent);
+        Assert.Equal("2026-09-07T14:00:00Z", u.Session.ResetsAt);
+        Assert.Equal(61.0, u.Weekly!.Percent);
+        Assert.Single(u.ScopedWeekly!);
+        Assert.Equal("Opus", u.ScopedWeekly![0].Label);
+        Assert.Equal(1789000000123, o.Host!.NowUnixMs);
+        Assert.True(o.Admin!.RegistrySet);
+        Assert.True(o.Admin.Elevated);
+    }
+
+    [Fact]
+    public void A_peer_from_before_the_honest_overview_leaves_the_new_fields_null_not_blank()
+    {
+        // The modern (fleet-status-panels) shape, without usage / clock / admin facts / capturedAt.
+        var info = JsonSerializer.Deserialize<FleetClient.PeerInfo>(ModernDescribe, Web)!;
+        var o = info.Overview!;
+        Assert.Null(o.CapturedAt);
+        Assert.Null(o.Claude!.Usage);
+        Assert.Null(o.Host!.NowUnixMs);
+        Assert.Null(o.Admin!.RegistrySet);
+        Assert.Null(o.Admin.Elevated);
+        Assert.Equal("Max", o.Claude.Plan); // the older facts still read
+    }
+
+    [Fact]
+    public void Usage_maps_one_to_one_from_the_strips_probe_including_an_honest_failure()
+    {
+        var ok = new ClaudeWeb.Services.Accounts.ClaudeUsageService.ClaudeUsageStatus(true, true, "2026-09-07T10:00:00Z",
+            new ClaudeWeb.Services.Accounts.ClaudeUsageService.UsageLimit(null, 23.4, "r1", "normal"),
+            new ClaudeWeb.Services.Accounts.ClaudeUsageService.UsageLimit(null, 61, "r2", "elevated"),
+            new[] { new ClaudeWeb.Services.Accounts.ClaudeUsageService.UsageLimit("Opus", 12, "r3", "normal") }, null);
+        var m = FleetOverviewProvider.MapUsage(ok);
+        Assert.True(m.Available);
+        Assert.True(m.Stale);
+        Assert.Equal(23.4, m.Session!.Percent);
+        Assert.Equal("elevated", m.Weekly!.Severity);
+        Assert.Equal("Opus", m.ScopedWeekly![0].Label);
+
+        var failed = new ClaudeWeb.Services.Accounts.ClaudeUsageService.ClaudeUsageStatus(false, false, null, null, null, Array.Empty<ClaudeWeb.Services.Accounts.ClaudeUsageService.UsageLimit>(), "session expired");
+        var f = FleetOverviewProvider.MapUsage(failed);
+        Assert.False(f.Available);
+        Assert.Equal("session expired", f.Error);
+        Assert.Null(f.Session);
+    }
+
     [Fact]
     public void The_poll_payload_never_carries_a_scoreboard_field()
     {
@@ -83,6 +157,7 @@ public class FleetOverviewTests
         // identity groups — no analytics/scoreboard/concurrency — so the heavy, uncached
         // analytics fold can never sneak into the poll (openspec fleet-status-panels 3).
         var props = typeof(FleetOverview).GetProperties().Select(p => p.Name).OrderBy(n => n).ToArray();
-        Assert.Equal(new[] { "Admin", "Claude", "GitHub", "Host" }, props);
+        Assert.Equal(new[] { "Admin", "CapturedAt", "Claude", "GitHub", "Host" }, props);
+        Assert.DoesNotContain(props, n => n.Contains("Score", StringComparison.OrdinalIgnoreCase) || n.Contains("Analytic", StringComparison.OrdinalIgnoreCase));
     }
 }

@@ -7,6 +7,7 @@ import { harnessHref } from './harnessLink';
 import { FLEET_TABS, FLEET_TAB_KEY, readFleetTab } from './fleetStatusTabs';
 import { useTaskColors, repoKey } from '../components/taskgraph/useTaskColors';
 import AgentMark from '../components/taskgraph/AgentMark';
+import AgentStatusDot, { agentDotState } from '../components/shared/AgentStatusDot';
 
 // The per-machine view tabs (openspec fleet-status-panels): one selection shared by
 // every machine card so a whole view (Agents / Overview / Scoreboard) is shown at once
@@ -105,7 +106,7 @@ function AgentChip({ a, self, root, open, onToggle, color, mark }) {
   ].filter(Boolean).join(' · ');
   return (
     <button type="button" className={cls.join(' ')} style={color?.style} title={`${mark ? `${mark.glyph} ${mark.monogram} · ` : ''}${title}`} onClick={onToggle} data-agent={a.key} data-on-default={a.onDefault} data-running={running} data-goal={a.goal?.id || undefined}>
-      <span className={`fs__dot${running ? ' fs__dot--running' : a.onDefault ? ' fs__dot--free' : known ? ' fs__dot--claimed' : ''}`} aria-hidden="true" />
+      <AgentStatusDot state={agentDotState(a)} />
       <span className="fs__chip-text">
         {/* The colour-independent identity (fleet task 4ddcfce3): the same glyph + monogram
             this agent's chip carries on the Kanban cards, from the shared colour module. */}
