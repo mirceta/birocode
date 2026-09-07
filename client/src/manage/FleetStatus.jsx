@@ -6,6 +6,7 @@ import FleetScoreboardTab from './FleetScoreboardTab';
 import { harnessHref } from './harnessLink';
 import { FLEET_TABS, FLEET_TAB_KEY, readFleetTab } from './fleetStatusTabs';
 import { useTaskColors, repoKey } from '../components/taskgraph/useTaskColors';
+import AgentMark from '../components/taskgraph/AgentMark';
 
 // The per-machine view tabs (openspec fleet-status-panels): one selection shared by
 // every machine card so a whole view (Agents / Overview / Scoreboard) is shown at once
@@ -83,7 +84,7 @@ function persist(state) {
   try { localStorage.setItem(PERSIST_KEY, JSON.stringify(state)); } catch { /* private mode */ }
 }
 
-function AgentChip({ a, self, root, open, onToggle, color }) {
+function AgentChip({ a, self, root, open, onToggle, color, mark }) {
   const running = !!a.runningSince;
   const known = a.branch && a.branch !== 'unknown';
   const cls = ['fs__chip'];
@@ -103,10 +104,12 @@ function AgentChip({ a, self, root, open, onToggle, color }) {
     a.goal ? `driven by arch goal ${a.goal.id}` : null,
   ].filter(Boolean).join(' · ');
   return (
-    <button type="button" className={cls.join(' ')} style={color?.style} title={title} onClick={onToggle} data-agent={a.key} data-on-default={a.onDefault} data-running={running} data-goal={a.goal?.id || undefined}>
+    <button type="button" className={cls.join(' ')} style={color?.style} title={`${mark ? `${mark.glyph} ${mark.monogram} · ` : ''}${title}`} onClick={onToggle} data-agent={a.key} data-on-default={a.onDefault} data-running={running} data-goal={a.goal?.id || undefined}>
       <span className={`fs__dot${running ? ' fs__dot--running' : a.onDefault ? ' fs__dot--free' : known ? ' fs__dot--claimed' : ''}`} aria-hidden="true" />
       <span className="fs__chip-text">
-        <span className="fs__chip-name" data-handle={a.handle || ''}>{a.managed ? '🏛 ' : ''}{a.handle || a.name}</span>
+        {/* The colour-independent identity (fleet task 4ddcfce3): the same glyph + monogram
+            this agent's chip carries on the Kanban cards, from the shared colour module. */}
+        <span className="fs__chip-name" data-handle={a.handle || ''}>{mark && <AgentMark mark={mark} compact />}{a.managed ? '🏛 ' : ''}{a.handle || a.name}</span>
         <span className="fs__chip-branch"><span aria-hidden="true">⎇</span> {known ? a.branch : '?'}{a.dirty ? ' ·' : ''}{running ? ` · ${ago(Date.now() - a.runningSince)}` : ''}</span>
       </span>
     </button>
@@ -379,7 +382,7 @@ export default function FleetStatus({ root = '' }) {
                   : (
                     <div className="fs__strip">
                       {agents.map((a) => (
-                        <AgentChip key={a.key} a={a} self={m.self} root={root} color={colors.chip(mkOfMachine(m), rkOfAgent(a))} open={open === a.key} onToggle={() => setOpen(open === a.key ? null : a.key)} />
+                        <AgentChip key={a.key} a={a} self={m.self} root={root} color={colors.chip(mkOfMachine(m), rkOfAgent(a))} mark={colors.mark(mkOfMachine(m), rkOfAgent(a), m.machine, a.handle || a.name)} open={open === a.key} onToggle={() => setOpen(open === a.key ? null : a.key)} />
                       ))}
                     </div>
                   )}

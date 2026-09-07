@@ -5,6 +5,7 @@ import { useTaskFilter } from './taskFilterStore';
 import { COLUMNS, columnOf } from './kanbanColumns';
 import { applyFilter, assigneesOf, blockedIds, filterContext, flagsOf, isNarrowed, staleIds, taskView } from './taskFilters';
 import { useTaskColors, machineKey, repoKey } from './useTaskColors';
+import AgentMark from './AgentMark';
 import './kanban.css';
 
 // The Kanban view of the task board (openspec task-board-kanban, columns per
@@ -120,6 +121,14 @@ export default function KanbanBoard() {
     const known = agents.find((x) => x.key === keyOf(a));
     if (known) return known.handle || `${known.machine}/${known.name}`;
     return `${String(a.repoId).slice(0, 8)}… @ ${machineLabel[a.sourceId || ''] || (a.sourceId ? a.sourceId.slice(0, 8) : 'this machine')}`;
+  };
+  // The assignee's colour-independent identity (fleet task 4ddcfce3): the SAME glyph +
+  // monogram its chip carries on Fleet Status, from the shared module — machine label and
+  // repo handle as the fleet reports them, so the two views agree letter for letter.
+  const markOf = (a) => {
+    const known = agents.find((x) => x.key === keyOf(a));
+    const machine = known?.machine || machineLabel[a.sourceId || ''] || (a.sourceId ? a.sourceId.slice(0, 8) : 'this machine');
+    return colors.mark(mkOf(a), rkOf(a), machine, known?.handle || known?.name || String(a.repoId).slice(0, 8));
   };
 
   const patch = async (id, body) => {
@@ -273,8 +282,8 @@ export default function KanbanBoard() {
                         const multi = assigneesOf(n).length > 1;
                         const c = colors.chip(mkOf(a), rkOf(a));
                         return (
-                          <span key={keyOf(a)} className={`kb__chip kb__chip--who${c.cls}${multi ? ' kb__chip--who-multi' : ''}${a.warning ? ' kb__chip--who-warn' : ''}`} style={c.style} title={`${assigneeLabelOf(a)} — this machine + repo agent's colour matches Fleet Status${multi ? ` · ${a.status}` : ''}${a.warning ? ` · ⚠ ${a.warning}` : ''}`} data-assignee={keyOf(a)}>
-                            👤 {assigneeLabelOf(a)}{multi ? <span className="kb__who-status"> · {a.status}</span> : null}
+                          <span key={keyOf(a)} className={`kb__chip kb__chip--who${c.cls}${multi ? ' kb__chip--who-multi' : ''}${a.warning ? ' kb__chip--who-warn' : ''}`} style={c.style} title={`${assigneeLabelOf(a)} — this machine + repo agent's colour and mark match Fleet Status${multi ? ` · ${a.status}` : ''}${a.warning ? ` · ⚠ ${a.warning}` : ''}`} data-assignee={keyOf(a)}>
+                            <AgentMark mark={markOf(a)} compact /> {assigneeLabelOf(a)}{multi ? <span className="kb__who-status"> · {a.status}</span> : null}
                           </span>
                         );
                       })}
@@ -298,8 +307,8 @@ export default function KanbanBoard() {
                           {assigneesOf(n).map((a) => {
                             const c = colors.chip(mkOf(a), rkOf(a));
                             return (
-                            <span key={keyOf(a)} className={`kb__chip kb__chip--who${c.cls}`} style={c.style} title={`${a.status}${a.branch ? ` · ⎇ ${a.branch}` : ''}${a.prUrl ? ` · PR${a.prNumber ? ' #' + a.prNumber : ''}` : ''}${a.warning ? ` · ⚠ ${a.warning}` : ''}`}>
-                              {assigneeLabelOf(a)}{assigneesOf(n).length > 1 ? <span className="kb__who-status"> · {a.status}</span> : null}
+                            <span key={keyOf(a)} className={`kb__chip kb__chip--who${c.cls}`} style={c.style} title={`${assigneeLabelOf(a)} · ${a.status}${a.branch ? ` · ⎇ ${a.branch}` : ''}${a.prUrl ? ` · PR${a.prNumber ? ' #' + a.prNumber : ''}` : ''}${a.warning ? ` · ⚠ ${a.warning}` : ''}`}>
+                              <AgentMark mark={markOf(a)} compact /> {assigneeLabelOf(a)}{assigneesOf(n).length > 1 ? <span className="kb__who-status"> · {a.status}</span> : null}
                               <button type="button" className="kb__x" title="remove this assignee" onClick={() => changeAssignees(n, keyOf(a), 'remove')} data-remove-assignee={keyOf(a)}>×</button>
                             </span>
                           ); })}
