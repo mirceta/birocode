@@ -6,7 +6,7 @@ import { COLUMNS, columnOf } from './kanbanColumns';
 import { applyFilter, assigneesOf, blockedIds, filterContext, flagsOf, isNarrowed, staleIds, taskView } from './taskFilters';
 import { useTaskColors, machineKey, repoKey } from './useTaskColors';
 import AgentMark from './AgentMark';
-import AgentStatusDot, { agentDotState } from '../shared/AgentStatusDot';
+import AgentStatusDot, { agentDotState, workingBadgeClass } from '../shared/AgentStatusDot';
 import './kanban.css';
 
 // The Kanban view of the task board (openspec task-board-kanban, columns per
@@ -311,9 +311,14 @@ export default function KanbanBoard() {
                       {assigneesOf(n).map((a) => {
                         const multi = assigneesOf(n).length > 1;
                         const c = colors.chip(mkOf(a), rkOf(a));
+                        // Working emphasis (task 3546287b): the SAME state that drives the
+                        // blinking dot decides it — on a multi-assignee card only the
+                        // assignee that is actually running enlarges.
+                        const st = agentDotState(fleetAgentOf(a));
+                        const working = workingBadgeClass(st);
                         return (
-                          <span key={keyOf(a)} className={`kb__chip kb__chip--who${c.cls}${multi ? ' kb__chip--who-multi' : ''}${a.warning ? ' kb__chip--who-warn' : ''}`} style={c.style} title={`${assigneeLabelOf(a)} — this machine + repo agent's colour, mark and activity dot match Fleet Status${multi ? ` · ${a.status}` : ''}${a.warning ? ` · ⚠ ${a.warning}` : ''}`} data-assignee={keyOf(a)}>
-                            <AgentStatusDot state={agentDotState(fleetAgentOf(a))} /><AgentMark mark={markOf(a)} compact /> {assigneeLabelOf(a)}{multi ? <span className="kb__who-status"> · {a.status}</span> : null}
+                          <span key={keyOf(a)} className={`kb__chip kb__chip--who${c.cls}${multi ? ' kb__chip--who-multi' : ''}${a.warning ? ' kb__chip--who-warn' : ''}${working ? ` ${working} kb__chip--working` : ''}`} style={c.style} title={`${assigneeLabelOf(a)} — this machine + repo agent's colour, mark and activity dot match Fleet Status${working ? ' · WORKING NOW' : ''}${multi ? ` · ${a.status}` : ''}${a.warning ? ` · ⚠ ${a.warning}` : ''}`} data-assignee={keyOf(a)} data-working={working ? 'true' : undefined}>
+                            <AgentStatusDot state={st} /><AgentMark mark={markOf(a)} compact /> {assigneeLabelOf(a)}{multi ? <span className="kb__who-status"> · {a.status}</span> : null}
                           </span>
                         );
                       })}

@@ -12,3 +12,16 @@
 @media (prefers-reduced-motion: reduce) {
   .agent-dot--running { animation: none; box-shadow: 0 0 0 2px var(--color-text, #eee); }
 }
+
+/* Working-badge emphasis (task 3546287b): the badge of an ACTIVELY WORKING agent
+   (the blinking-dot 'running' state) pops out of the idle crowd. Shared effects
+   here — weight, a static glow (no new animation, nothing to reduce), a bigger
+   dot; each view adds its own ~50% size step (.kb__chip--working /
+   .fs__chip--working) so enlargement reflows inside its own layout instead of
+   a transform overlapping neighbours. The size change is a reflow, not motion;
+   the gentle transition is opt-in for no-preference only. */
+.agent-badge--working { font-weight: 600; box-shadow: 0 0 0 1px var(--color-accent, #5ea0ef), 0 0 9px rgba(94, 160, 239, 0.4); }
+.agent-badge--working .agent-dot { width: 11px; height: 11px; }
+@media (prefers-reduced-motion: no-preference) {
+  .agent-badge--working { transition: font-size 0.2s ease, padding 0.2s ease; }
+}

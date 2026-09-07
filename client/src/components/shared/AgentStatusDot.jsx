@@ -1,4 +1,4 @@
-import { agentDotState, AGENT_STATE_LABEL } from './agentActivity';
+import { agentDotState, AGENT_STATE_LABEL, workingBadgeClass } from './agentActivity';
 import './agentStatusDot.css';
 
 // The live per-agent activity dot (fleet-status task dfee16ea): the SAME indicator that
@@ -17,4 +17,4 @@ export default function AgentStatusDot({ state, title }) {
   return <span className={`agent-dot agent-dot--${s}`} role="img" aria-label={label} title={label} />;
 }
 
-export { agentDotState };
+export { agentDotState, workingBadgeClass };

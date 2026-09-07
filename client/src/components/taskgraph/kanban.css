@@ -49,6 +49,11 @@
   .kb__chip--who.has-repo { background: hsl(var(--tg-repo-h) 34% 24%); color: var(--color-text, #eee); }
 }
 .kb__who-status { color: var(--color-text-muted, #9aa); }
+/* Working-agent emphasis (task 3546287b): ~50% larger than the 10.5px idle chip
+   (15px type + taller padding), on top of the shared .agent-badge--working glow.
+   A font/padding step, not transform: scale() — the chip row wraps and the card
+   grows, so nothing overlaps or clips. */
+.kb__chip--working { font-size: 15px; padding: 2px 11px; }
 .kb__assignees { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .kb__x { border: 0; background: transparent; color: inherit; margin-left: 4px; padding: 0 2px; cursor: pointer; font-size: 12px; line-height: 1; }
 .kb__x:hover { color: #e57373; }
