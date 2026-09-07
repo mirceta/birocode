@@ -3,6 +3,7 @@ import { apiGet } from '../api/client';
 import HandToArch from '../components/dashboard/HandToArch';
 import FleetOverviewPanel from './FleetOverviewPanel';
 import FleetScoreboardTab from './FleetScoreboardTab';
+import { harnessHref } from './harnessLink';
 import { FLEET_TABS, FLEET_TAB_KEY, readFleetTab } from './fleetStatusTabs';
 
 // The per-machine view tabs (openspec fleet-status-panels): one selection shared by
@@ -308,6 +309,29 @@ export default function FleetStatus({ root = '' }) {
               <span className="fs__mlabel">{m.machine}</span>
               {m.self && <span className="fs__tag">self</span>}
               {!m.self && m.address && <span className="fs__mono fs__dim">{m.address}</span>}
+              {/* Jump to THAT machine's harness (task e5cddb1e): href from the
+                  peer registry's address (self: this harness's root) — disabled,
+                  never guessed, when the address isn't known. */}
+              {harnessHref(m, root) ? (
+                <a
+                  className="fs__openlink"
+                  href={harnessHref(m, root)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={m.self ? 'Open this harness in a new tab' : `Open the harness on ${m.machine} in a new tab (${m.address})`}
+                  data-open-harness={m.sourceId}
+                >
+                  open harness ↗
+                </a>
+              ) : (
+                <span
+                  className="fs__openlink fs__openlink--off"
+                  title="This machine's harness address is not known to the hub — set it on the fleet source to enable the link"
+                  data-open-harness-disabled={m.sourceId}
+                >
+                  open harness
+                </span>
+              )}
               <span className="fs__dim">
                 {m.reachable ? `build ${shortVersion(m.version)}${m.behind ? ' · behind the hub' : ''}` : `${m.status}${m.detail ? ` · ${m.detail}` : ''}`}
                 {m.reachable ? ` · ${m.acceptsSends ? 'accepts sends' : 'no sends'} · ${m.acceptsUpgrades ? 'accepts upgrades' : 'no upgrades'}${m.gateOpen ? '' : ' · gate closed'}` : ''}
