@@ -56,6 +56,7 @@ export default function KanbanBoard() {
   const [verifying, setVerifying] = useState(false);
   const [verifyNote, setVerifyNote] = useState('');
   const [copiedId, setCopiedId] = useState(null); // the card whose reference was just copied
+  const [confirmDelete, setConfirmDelete] = useState(null); // the card whose delete is armed (fleet task e3b7065c)
   const [, setTick] = useState(0);
 
   const load = useCallback(async () => {
@@ -159,9 +160,30 @@ export default function KanbanBoard() {
       setNote((m) => ({ ...m, [n.id]: e?.message || String(e) }));
     } finally { setBusy(null); }
   };
+  // Delete a task (fleet task e3b7065c): the confirmed trash button and the detail's
+  // Delete both land here → DELETE /api/taskgraph/nodes/{id} removes the node, its
+  // assignee rows and its edges (and restores any promoted idea), then reload so the card
+  // vanishes from the Kanban and the Task graph at once. Two-step confirm via confirmDelete
+  // so nothing is deleted by accident.
   const remove = async (n) => {
-    try { await apiDelete(`/taskgraph/nodes/${n.id}`); setOpen(null); await load(); } catch (e) { setError(e?.message || String(e)); }
+    setConfirmDelete(null);
+    setOpen((o) => (o === n.id ? null : o));
+    try { await apiDelete(`/taskgraph/nodes/${n.id}`); await load(); } catch (e) { setError(e?.message || String(e)); }
   };
+  // The delete affordance, used on the card face and in the detail. Armed = show the
+  // confirm pair; otherwise a small trash button. Every handler stops propagation so it
+  // never opens the card or starts a drag; the buttons are draggable=false for the same.
+  const deleteControl = (n, variant) => (
+    confirmDelete === n.id ? (
+      <span className={`kb__del-confirm${variant === 'detail' ? ' kb__del-confirm--detail' : ''}`} onClick={(e) => e.stopPropagation()} data-delete-confirm={n.id}>
+        <span className="kb__del-q">Delete?</span>
+        <button type="button" className="kb__btn kb__btn--danger" draggable={false} onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); remove(n); }} data-confirm-delete={n.id}>🗑 Delete</button>
+        <button type="button" className="kb__btn" draggable={false} onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setConfirmDelete(null); }}>Cancel</button>
+      </span>
+    ) : (
+      <button type="button" className="kb__del" title="Delete this task" aria-label={`Delete task ${cardRef(n)}`} draggable={false} onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setConfirmDelete(n.id); }} data-delete={n.id}>🗑</button>
+    )
+  );
   const add = async (e) => {
     e.preventDefault();
     const title = draft.trim();
@@ -267,7 +289,7 @@ export default function KanbanBoard() {
                     data-column={c.key}
                   >
                     <div className="kb__title">
-                      {n.title}
+                      <span className="kb__title-text">{n.title}</span>
                       <span className="kb__ref" data-card-ref={cardRef(n)} title={`card ${cardRef(n)} — task id ${n.id}`}>
                         <code className="kb__ref-code">{cardRef(n)}</code>
                         <button
@@ -283,6 +305,7 @@ export default function KanbanBoard() {
                           {copiedId === n.id ? '✓ copied' : '⧉'}
                         </button>
                       </span>
+                      {deleteControl(n)}
                     </div>
                     <div className="kb__meta">
                       {assigneesOf(n).map((a) => {
@@ -332,7 +355,7 @@ export default function KanbanBoard() {
                           {n.status !== 'doing' && <button type="button" className="kb__btn" onClick={() => setStatus(n, 'doing')}>doing</button>}
                           {n.status !== 'done' && <button type="button" className="kb__btn" title="move the card to done — the harness keeps verifying and badges the card until the merge is confirmed" onClick={() => setStatus(n, 'done')}>done ✓</button>}
                           <button type="button" className="kb__btn kb__btn--primary" disabled={!n.repoId || DELIVERED(n.status) || blocked || busy === n.id} title={!n.repoId ? 'assign first' : blocked ? 'a prerequisite is not delivered' : assigneesOf(n).length > 1 ? 'send the task brief to every assignee not yet pinged, each told which repo is its own' : 'send the task brief to the assignee now'} onClick={() => dispatch(n)} data-dispatch>📣 {assigneesOf(n).length > 1 ? 'Ping assignees' : 'Ping assignee'}</button>
-                          <button type="button" className="kb__btn kb__btn--danger" onClick={() => remove(n)} title="delete the task">✕</button>
+                          {deleteControl(n, 'detail')}
                         </div>
                         {(n.branch || n.headCommit || n.mergeCommit) && (
                           <div className="kb__row kb__dim kb__mono" data-linkage>
