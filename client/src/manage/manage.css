@@ -177,3 +177,9 @@ html, body, #root { height: 100%; margin: 0; }
 /* Scoreboard tab: window strip + refresh above the reused ScoreboardView */
 .fs__scoreboard { padding: 6px 0; }
 .fs__sb-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+
+/* "Open harness" per-machine link (task e5cddb1e): jump to that computer's own
+   harness in a new tab; dimmed when the hub does not know its address. */
+.fs__openlink { font-size: 12px; color: var(--color-accent, #5ea0ef); text-decoration: none; border: 1px solid var(--color-border, #444); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+.fs__openlink:hover { border-color: var(--color-accent, #5ea0ef); }
+.fs__openlink--off { color: var(--color-text-muted, #667); opacity: 0.55; cursor: default; }
