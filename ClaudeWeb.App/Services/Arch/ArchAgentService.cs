@@ -1723,7 +1723,7 @@ public partial class ArchAgentService : IArchWakeSource
                 var set = TaskGraph.TaskGraphService.AssigneesOf(n);
                 return new
                 {
-                    id = n.Id, title = n.Title, note = n.Note, status = n.Status,
+                    id = n.Id, @ref = TaskGraph.TaskGraphService.CardRef(n.Id), title = n.Title, note = n.Note, status = n.Status,
                     machine = n.RepoId is null ? null : n.SourceId is null ? Machine : srcLabel.GetValueOrDefault(n.SourceId, n.SourceId),
                     repoId = n.RepoId, repoName = n.RepoId is null ? null : repoName.GetValueOrDefault(n.RepoId, n.RepoId),
                     // Every assignee with its OWN state (openspec task-multi-assignee); the
@@ -1816,8 +1816,9 @@ public partial class ArchAgentService : IArchWakeSource
         // Several assignees (openspec task-multi-assignee): the rest join the set.
         if (agents.Count > 1) node = _graph.SetAssignees(node.Id, agents.Select(a => (a.SourceId, a.RepoId)), ActorArch, Now()) ?? node;
         var linked = 0;
-        foreach (var dep in (dependsOn ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        foreach (var depRef in (dependsOn ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
+            var dep = _graph.ResolveTaskRef(depRef).Id ?? depRef;
             var (edge, err) = _graph.AddEdge(node.Id, dep, Now());
             if (edge is not null) linked++;
             else _logger.Info($"[ARCH] create_task: dependency {dep} not linked ({err})");
@@ -1831,8 +1832,12 @@ public partial class ArchAgentService : IArchWakeSource
         if (string.IsNullOrWhiteSpace(id)) return new ToolOutcome(false, "error", "id is required");
         if (status is not null && !TaskGraph.TaskGraphService.Statuses.Contains(status))
             return new ToolOutcome(false, "error", $"status must be one of {string.Join(", ", TaskGraph.TaskGraphService.Statuses)}");
-        var cur = _graph.Find(id);
-        if (cur is null) return new ToolOutcome(false, "error", $"no task {id}");
+        // A card reference resolves like the board's own: full id, "#5cc3e900", "task …" or
+        // a unique prefix (openspec kanban-card-ref) — what the Operator pastes from a card.
+        var (resolvedId, idErr) = _graph.ResolveTaskRef(id);
+        if (resolvedId is null) return new ToolOutcome(false, "error", idErr ?? $"no task {id}");
+        id = resolvedId;
+        var cur = _graph.Find(id)!;
         var set = TaskGraph.TaskGraphService.AssigneesOf(cur);
 
         // Which assignee (openspec task-multi-assignee): named → that one; unnamed on a
@@ -1884,8 +1889,12 @@ public partial class ArchAgentService : IArchWakeSource
     public ToolOutcome ToolAssignTask(string? id, string? machine, string? repoId, string? assignees = null, string? mode = null)
     {
         if (string.IsNullOrWhiteSpace(id)) return new ToolOutcome(false, "error", "id is required");
-        var cur = _graph.Find(id);
-        if (cur is null) return new ToolOutcome(false, "error", $"no task {id}");
+        // A card reference resolves like the board's own: full id, "#5cc3e900", "task …" or
+        // a unique prefix (openspec kanban-card-ref) — what the Operator pastes from a card.
+        var (resolvedId, idErr) = _graph.ResolveTaskRef(id);
+        if (resolvedId is null) return new ToolOutcome(false, "error", idErr ?? $"no task {id}");
+        id = resolvedId;
+        var cur = _graph.Find(id)!;
         // A handle ("spacex/prg#2"), a name, or the raw id (openspec stable-handles); several
         // at once, comma-separated (openspec task-multi-assignee).
         var (agents, refErr) = ResolveAssigneeRefs(machine, repoId, assignees);
@@ -1936,8 +1945,10 @@ public partial class ArchAgentService : IArchWakeSource
     public ToolOutcome DispatchTask(string? id, bool requireArmed, string by, string? branch = null, IReadOnlyList<string>? assigneeKeys = null)
     {
         if (string.IsNullOrWhiteSpace(id)) return new ToolOutcome(false, "error", "id is required");
-        var node = _graph.Find(id);
-        if (node is null) return new ToolOutcome(false, "error", $"no task {id}");
+        var (resolvedId, idErr) = _graph.ResolveTaskRef(id);
+        if (resolvedId is null) return new ToolOutcome(false, "error", idErr ?? $"no task {id}");
+        id = resolvedId;
+        var node = _graph.Find(id)!;
         var set = TaskGraph.TaskGraphService.AssigneesOf(node);
         if (set.Count == 0) return new ToolOutcome(false, "unassigned", $"task {id} has no assignee; assign it first");
         if (TaskGraph.TaskLifecycle.IsDelivered(node.Status)) return new ToolOutcome(false, "done", $"task {id} is already {node.Status}");

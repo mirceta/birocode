@@ -52,6 +52,7 @@ export default function KanbanBoard() {
   const [dragOver, setDragOver] = useState(null);
   const [verifying, setVerifying] = useState(false);
   const [verifyNote, setVerifyNote] = useState('');
+  const [copiedId, setCopiedId] = useState(null); // the card whose reference was just copied
   const [, setTick] = useState(0);
 
   const load = useCallback(async () => {
@@ -142,6 +143,26 @@ export default function KanbanBoard() {
     if (!title) return;
     try { await apiPost('/taskgraph/nodes', { title, createdBy: 'human' }); setDraft(''); await load(); } catch (err) { setError(err?.message || String(err)); }
   };
+  // Card reference (openspec kanban-card-ref): the short stable code "#5cc3e900" is the
+  // first 8 characters of the task id; the COPIED text is "task <full id>", which the
+  // arch resolves exactly (its tools take the id; they also accept the #ref itself).
+  const cardRef = (n) => `#${String(n.id).slice(0, 8)}`;
+  const copyRef = async (e, n) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const text = `task ${n.id}`;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Clipboard API can be unavailable over plain HTTP on the LAN: legacy path.
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); } catch { /* nothing more to try */ }
+      document.body.removeChild(ta);
+    }
+    setCopiedId(n.id);
+    setTimeout(() => setCopiedId((cur) => (cur === n.id ? null : cur)), 1500);
+  };
   // Re-verify (openspec board-verify-remote): one verifier pass now — this machine's
   // assignees from git, every card with a PR against GitHub — so stuck cards move
   // without waiting for the minute tick. Reports what moved.
@@ -220,7 +241,24 @@ export default function KanbanBoard() {
                     data-task={n.id}
                     data-column={c.key}
                   >
-                    <div className="kb__title">{n.title}</div>
+                    <div className="kb__title">
+                      {n.title}
+                      <span className="kb__ref" data-card-ref={cardRef(n)} title={`card ${cardRef(n)} — task id ${n.id}`}>
+                        <code className="kb__ref-code">{cardRef(n)}</code>
+                        <button
+                          type="button"
+                          className={`kb__copy${copiedId === n.id ? ' kb__copy--done' : ''}`}
+                          title="Copy a reference to this card for the arch agent prompt (task <id>)"
+                          aria-label={`Copy reference to card ${cardRef(n)}`}
+                          draggable={false}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => copyRef(e, n)}
+                          data-copy-ref
+                        >
+                          {copiedId === n.id ? '✓ copied' : '⧉'}
+                        </button>
+                      </span>
+                    </div>
                     <div className="kb__meta">
                       {assigneesOf(n).map((a) => {
                         const multi = assigneesOf(n).length > 1;
@@ -275,7 +313,11 @@ export default function KanbanBoard() {
                         )}
                         {n.warning && <div className="kb__row kb__warn" data-warning>⚠ {n.warning}</div>}
                         {note[n.id] && <div className="kb__row kb__dim" data-dispatch-note>{note[n.id]}</div>}
-                        <div className="kb__row kb__dim kb__mono">id {n.id}{n.assignedBy ? ` · assigned by ${n.assignedBy}` : ''}{n.assignedAt ? ` ${ago(Date.now() - n.assignedAt)} ago` : ''}</div>
+                        <div className="kb__row kb__dim kb__mono">
+                          id {n.id}
+                          <button type="button" className={`kb__copy${copiedId === n.id ? ' kb__copy--done' : ''}`} title="Copy a reference to this card (task <id>)" onClick={(e) => copyRef(e, n)} data-copy-ref-detail>{copiedId === n.id ? '✓ copied' : '⧉ copy'}</button>
+                          {n.assignedBy ? ` · assigned by ${n.assignedBy}` : ''}{n.assignedAt ? ` ${ago(Date.now() - n.assignedAt)} ago` : ''}
+                        </div>
                       </div>
                     )}
                   </article>
