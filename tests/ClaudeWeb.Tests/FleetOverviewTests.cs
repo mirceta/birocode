@@ -157,7 +157,31 @@ public class FleetOverviewTests
         // identity groups — no analytics/scoreboard/concurrency — so the heavy, uncached
         // analytics fold can never sneak into the poll (openspec fleet-status-panels 3).
         var props = typeof(FleetOverview).GetProperties().Select(p => p.Name).OrderBy(n => n).ToArray();
-        Assert.Equal(new[] { "Admin", "CapturedAt", "Claude", "GitHub", "Host" }, props);
+        Assert.Equal(new[] { "Admin", "CapturedAt", "Claude", "GitHub", "Host", "Watchdog" }, props);
         Assert.DoesNotContain(props, n => n.Contains("Score", StringComparison.OrdinalIgnoreCase) || n.Contains("Analytic", StringComparison.OrdinalIgnoreCase));
+    }
+
+    // ---- fleet task c96de7ae: the keep-alive (watchdog) state rides the describe ----
+
+    [Fact]
+    public void Describe_carries_the_watchdog_keep_alive_state_of_a_peer()
+    {
+        const string withWatchdog = """
+        { "protocol": 1, "version": "v", "machine": "M", "acceptsSends": true, "gateOpen": true, "repos": [],
+          "overview": { "watchdog": { "supported": true, "state": "healthy" } } }
+        """;
+        var info = JsonSerializer.Deserialize<FleetClient.PeerInfo>(withWatchdog, Web)!;
+        Assert.NotNull(info.Overview!.Watchdog);
+        Assert.True(info.Overview.Watchdog!.Supported);
+        Assert.Equal("healthy", info.Overview.Watchdog.State);
+    }
+
+    [Fact]
+    public void A_peer_from_before_the_watchdog_field_leaves_it_null_not_blank()
+    {
+        // ModernDescribe / HonestDescribe predate the watchdog field: it must read null so
+        // the fleet column says "unknown", never fabricating an armed/not-set-up state.
+        var info = JsonSerializer.Deserialize<FleetClient.PeerInfo>(ModernDescribe, Web)!;
+        Assert.Null(info.Overview!.Watchdog);
     }
 }

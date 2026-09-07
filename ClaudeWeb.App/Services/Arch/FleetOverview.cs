@@ -26,7 +26,18 @@ public sealed record FleetOverview(
     [property: JsonPropertyName("admin")] OverviewAdmin? Admin,
     // Unix ms when the account/usage part was built on the reporting machine (null on a
     // build that predates it): lets a reader say "as of 40 s ago" instead of pretending.
-    [property: JsonPropertyName("capturedAt")] long? CapturedAt = null);
+    [property: JsonPropertyName("capturedAt")] long? CapturedAt = null,
+    // The OS keep-alive (watchdog scheduled task) state this machine's status strip shows
+    // (fleet task c96de7ae): null on a peer whose build predates the field → the UI says
+    // "unknown", never a blank. Appended last (with a default) so the positional builders
+    // that predate it keep compiling and just leave it null unless set via `with`.
+    [property: JsonPropertyName("watchdog")] OverviewWatchdog? Watchdog = null);
+
+public sealed record OverviewWatchdog(
+    [property: JsonPropertyName("supported")] bool Supported,
+    // healthy | not_set_up | error | unsupported — the SAME states WatchdogPlan.StateOf
+    // produces for the local status-strip tile, so the fleet column and the strip agree.
+    [property: JsonPropertyName("state")] string? State);
 
 public sealed record OverviewClaude(
     [property: JsonPropertyName("installed")] bool Installed,
@@ -137,10 +148,10 @@ public sealed class FleetOverviewProvider
                 lock (_gate) { _cached = built; _at = Now(); _building = false; }
             });
         }
-        // Host + admin are instant reads, so answer with fresh ones even on a cold
-        // start; account fields come from the cache (null until the first build).
+        // Host + admin + watchdog are instant reads, so answer with fresh ones even on a
+        // cold start; account fields come from the cache (null until the first build).
         var warm = cached ?? Empty();
-        return warm with { Host = ReadHost(), Admin = ReadAdmin() };
+        return warm with { Host = ReadHost(), Admin = ReadAdmin(), Watchdog = ReadWatchdog() };
     }
 
     private FleetOverview Build()
@@ -165,7 +176,7 @@ public sealed class FleetOverviewProvider
         try { var g = _github.Get(); github = new OverviewGitHub(g.GhInstalled, g.Authenticated, g.Account, g.Host); }
         catch (Exception ex) { _logger.Error($"[FLEET] overview github: {ex.Message}"); }
 
-        return new FleetOverview(claude, github, ReadHost(), ReadAdmin(), Now());
+        return new FleetOverview(claude, github, ReadHost(), ReadAdmin(), Now(), ReadWatchdog());
     }
 
     /// <summary>The strip's usage rows, one shape for the fleet (pure; unit-tested).</summary>
@@ -176,7 +187,16 @@ public sealed class FleetOverviewProvider
             u.ScopedWeekly.Select(L).Where(x => x is not null).Select(x => x!).ToList(), u.Error);
     }
 
-    private static FleetOverview Empty() => new(null, null, ReadHost(), ReadAdmin(), null);
+    private static FleetOverview Empty() => new(null, null, ReadHost(), ReadAdmin(), null, ReadWatchdog());
+
+    // This machine's keep-alive state via the shared probe (WatchdogProbe) — the SAME
+    // source the status-strip tile reads, so the fleet column and the strip never drift
+    // (fleet task c96de7ae). Instant + degrade-not-throw, like ReadHost/ReadAdmin.
+    private static OverviewWatchdog ReadWatchdog()
+    {
+        var (supported, state) = ClaudeWeb.Services.Watchdog.WatchdogProbe.Read();
+        return new OverviewWatchdog(supported, state);
+    }
 
     private static OverviewHost ReadHost()
     {

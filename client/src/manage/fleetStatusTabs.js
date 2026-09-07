@@ -93,6 +93,16 @@ function accountLine(a) {
 const unknown = (reason) => ({ value: reason, tone: 'unknown' });
 const yesNo = (b) => (b ? { value: 'yes', tone: 'ok' } : { value: 'no', tone: 'muted' });
 
+// The harness keep-alive (watchdog) state, per machine (fleet task c96de7ae). The states
+// are exactly WatchdogPlan.StateOf's — one source, so the fleet column and the local
+// status-strip tile agree. An unrecognised value is treated as an honest "predates".
+const WATCHDOG_STATE = {
+  healthy: { value: 'auto-start armed', tone: 'ok' },
+  not_set_up: { value: 'not set up', tone: 'warn' },
+  error: { value: 'error — not running', tone: 'bad' },
+  unsupported: { value: 'unsupported', tone: 'muted' },
+};
+
 /** One usage window → a meter row: percent, reset time, severity tone. */
 function usageMeterRow(label, entry) {
   if (!entry || typeof entry.percent !== 'number') return { label, ...unknown(UNKNOWN.predates) };
@@ -118,6 +128,7 @@ export function overviewGroups(overview, machine, now = Date.now()) {
   const github = o?.github || null;
   const host = o?.host || null;
   const admin = o?.admin || null;
+  const watchdog = o?.watchdog || null;
   const hasCapture = typeof o?.capturedAt === 'number';
 
   const harness = [
@@ -138,6 +149,8 @@ export function overviewGroups(overview, machine, now = Date.now()) {
     { label: 'Admin active', ...(admin ? (admin.supported ? { value: admin.state || NA, tone: admin.state === 'active' ? 'ok' : admin.state === 'reboot_pending' ? 'warn' : 'muted' } : { value: 'unsupported', tone: 'muted' }) : unknown(sub(admin))) },
     { label: 'UAC policy set', ...(admin ? (typeof admin.registrySet === 'boolean' ? yesNo(admin.registrySet) : unknown(UNKNOWN.predates)) : unknown(sub(admin))) },
     { label: 'Harness elevated', ...(admin ? (typeof admin.elevated === 'boolean' ? yesNo(admin.elevated) : unknown(UNKNOWN.predates)) : unknown(sub(admin))) },
+    // Keep-alive: the OS watchdog scheduled-task state, the same the status-strip tile shows.
+    { label: 'Keep-alive', ...(watchdog ? (WATCHDOG_STATE[watchdog.state] || unknown(UNKNOWN.predates)) : unknown(sub(watchdog))) },
   ];
 
   const accounts = [
@@ -208,6 +221,7 @@ export const STRIP_FIELDS = [
   ['Admin tile · state', 'Admin active'],
   ['Admin tile · UAC policy set (behind the state)', 'UAC policy set'],
   ['Admin tile · harness elevated (behind the state)', 'Harness elevated'],
+  ['Keep-alive tile · watchdog state (fleet task c96de7ae)', 'Keep-alive'],
   ['Strip summary · harness build', 'Build'],
 ];
 export const STRIP_EXCEPTIONS = [['Scoreboard (prompts, peak, longest, work, cost, activity, agents)', 'Fleet Status → Scoreboard tab (on demand)']];

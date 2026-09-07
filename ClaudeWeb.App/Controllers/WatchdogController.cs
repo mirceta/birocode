@@ -120,6 +120,8 @@ public class WatchdogController : ControllerBase
 
     // --- probe ---------------------------------------------------------------
 
+    // The strip's status, from the shared probe (WatchdogProbe) so the tile and the fleet feed
+    // never drift. Off Windows / on a probe failure it degrades to a typed record, never a 500.
     private WatchdogStatus ReadStatus()
     {
         if (!OperatingSystem.IsWindows())
@@ -127,32 +129,14 @@ public class WatchdogController : ControllerBase
 
         try
         {
-            var (exists, enabled) = ProbeTask();
+            var (exists, enabled) = WatchdogProbe.Probe();
             return new WatchdogStatus(true, exists, enabled, WatchdogPlan.TaskName,
                 WatchdogPlan.StateOf(true, exists, enabled));
         }
         catch
         {
-            // A probe failure (schtasks missing, locked down) is an honest ERROR, not a 500.
             return new WatchdogStatus(true, false, false, WatchdogPlan.TaskName, "error");
         }
-    }
-
-    // schtasks /query is a direct exe (no PowerShell spin-up): exit != 0 => the task does not
-    // exist; otherwise the LIST /v output carries "Scheduled Task State: Enabled|Disabled".
-    [SupportedOSPlatform("windows")]
-    private static (bool exists, bool enabled) ProbeTask()
-    {
-        var (code, stdout, _) = Capture("schtasks.exe",
-            new[] { "/query", "/tn", WatchdogPlan.TaskName, "/fo", "LIST", "/v" });
-        if (code != 0)
-            return (false, false); // ERROR: The system cannot find the file specified.
-
-        var enabled = stdout
-            .Split('\n')
-            .Where(l => l.Contains("Scheduled Task State", StringComparison.OrdinalIgnoreCase))
-            .Any(l => l.Contains("Enabled", StringComparison.OrdinalIgnoreCase));
-        return (true, enabled);
     }
 
     // --- writes --------------------------------------------------------------
@@ -223,32 +207,5 @@ public class WatchdogController : ControllerBase
             try { proc.Kill(entireProcessTree: true); } catch { /* already gone */ }
             throw new TimeoutException("watchdog installer timed out");
         }
-    }
-
-    // Run a console exe to completion, capturing exit code + streams. Used only for the
-    // non-privileged schtasks probe.
-    [SupportedOSPlatform("windows")]
-    private static (int code, string stdout, string stderr) Capture(string file, string[] args)
-    {
-        var psi = new ProcessStartInfo
-        {
-            FileName = file,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true,
-        };
-        foreach (var a in args) psi.ArgumentList.Add(a);
-
-        using var proc = Process.Start(psi)
-            ?? throw new InvalidOperationException($"failed to start {file}");
-        var stdout = proc.StandardOutput.ReadToEnd();
-        var stderr = proc.StandardError.ReadToEnd();
-        if (!proc.WaitForExit(15_000))
-        {
-            try { proc.Kill(entireProcessTree: true); } catch { /* already gone */ }
-            throw new TimeoutException($"{file} timed out");
-        }
-        return (proc.ExitCode, stdout, stderr);
     }
 }
