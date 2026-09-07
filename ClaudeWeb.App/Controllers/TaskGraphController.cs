@@ -90,6 +90,8 @@ public class TaskGraphController : ControllerBase
     public IActionResult UpdateNode(string id, [FromBody] NodeRequest? request)
     {
         _logger.CountRequest();
+        // The card reference works here too (openspec kanban-card-ref): "#5cc3e900" / a unique prefix.
+        id = _graph.ResolveTaskRef(id).Id ?? id;
         var node = _graph.UpdateNode(id, request?.Title, request?.Note, request?.RepoId, request?.MachineId, request?.Status, request?.X, request?.Y, Now());
         if (node is null) return NotFound(new { error = "Unknown node id, blank title, or invalid status." });
         return Ok(node);
@@ -101,6 +103,7 @@ public class TaskGraphController : ControllerBase
     public IActionResult Assign(string id, [FromBody] AssignRequest? request)
     {
         _logger.CountRequest();
+        id = _graph.ResolveTaskRef(id).Id ?? id;
         TaskGraphService.Node? node;
         if (request?.Assignees is { } many)
         {
@@ -125,6 +128,7 @@ public class TaskGraphController : ControllerBase
     public IActionResult Dispatch(string id, [FromBody] DispatchRequest? request = null)
     {
         _logger.CountRequest();
+        id = _graph.ResolveTaskRef(id).Id ?? id;
         var keys = request?.Assignees?.Where(a => !string.IsNullOrWhiteSpace(a.RepoId))
             .Select(a => TaskGraphService.AssigneeKey(string.IsNullOrWhiteSpace(a.SourceId) ? null : a.SourceId, a.RepoId!.Trim())).ToList();
         var o = _arch.DispatchTask(id, requireArmed: false, by: "operator", assigneeKeys: keys is { Count: > 0 } ? keys : null);
