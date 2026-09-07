@@ -4,6 +4,7 @@ import TaskFilterBar from './TaskFilterBar';
 import { useTaskFilter } from './taskFilterStore';
 import { COLUMNS, columnOf } from './kanbanColumns';
 import { applyFilter, assigneesOf, blockedIds, filterContext, flagsOf, isNarrowed, staleIds, taskView } from './taskFilters';
+import { useTaskColors, machineKey, repoKey } from './useTaskColors';
 import './kanban.css';
 
 // The Kanban view of the task board (openspec task-board-kanban, columns per
@@ -102,8 +103,16 @@ export default function KanbanBoard() {
   for (const m of fleet?.machines || []) {
     machineLabel[m.self ? '' : m.sourceId] = m.machine;
     // The handle ("spacex/prg#2", openspec stable-handles) is the label everywhere.
-    for (const a of m.agents || []) agents.push({ key: `${m.self ? '' : m.sourceId}|${a.repoId}`, label: `${a.handle || `${m.machine}/${a.name}`}${a.managed ? ' 🏛' : ''}`, machine: m.machine, name: a.name, handle: a.handle, managed: a.managed });
+    for (const a of m.agents || []) agents.push({ key: `${m.self ? '' : m.sourceId}|${a.repoId}`, label: `${a.handle || `${m.machine}/${a.name}`}${a.managed ? ' 🏛' : ''}`, machine: m.machine, name: a.name, handle: a.handle, managed: a.managed, remoteUrl: a.remoteUrl });
   }
+  // Shared machine/repo colours (fleet-status task 327aa5ae): the SAME palette + slot map
+  // the Task graph and Fleet Status use, so a machine/agent has one hue across all views.
+  // A chip's border = its machine's hue, its background tint = its repo's hue.
+  const remoteUrlOf = (a) => agents.find((x) => x.key === `${a.sourceId || ''}|${a.repoId}`)?.remoteUrl || null;
+  const mkOf = (a) => machineKey({ sourceId: a.sourceId || null, repoId: a.repoId });
+  const rkOf = (a) => repoKey({ sourceId: a.sourceId || null, repoId: a.repoId }, remoteUrlOf);
+  const allAssignees = nodes.flatMap((n) => assigneesOf(n));
+  const colors = useTaskColors(allAssignees.map(mkOf), allAssignees.map(rkOf));
   // One assignee's label: the fleet handle when known, else a readable fallback
   // (openspec task-multi-assignee: a card carries one or several of these).
   const keyOf = (a) => `${a.sourceId || ''}|${a.repoId}`;
@@ -262,8 +271,9 @@ export default function KanbanBoard() {
                     <div className="kb__meta">
                       {assigneesOf(n).map((a) => {
                         const multi = assigneesOf(n).length > 1;
+                        const c = colors.chip(mkOf(a), rkOf(a));
                         return (
-                          <span key={keyOf(a)} className={`kb__chip kb__chip--who${multi ? ' kb__chip--who-multi' : ''}${a.warning ? ' kb__chip--who-warn' : ''}`} title={`assignee${multi ? ` · ${a.status}` : ''}${a.warning ? ` · ⚠ ${a.warning}` : ''}`} data-assignee={keyOf(a)}>
+                          <span key={keyOf(a)} className={`kb__chip kb__chip--who${c.cls}${multi ? ' kb__chip--who-multi' : ''}${a.warning ? ' kb__chip--who-warn' : ''}`} style={c.style} title={`${assigneeLabelOf(a)} — this machine + repo agent's colour matches Fleet Status${multi ? ` · ${a.status}` : ''}${a.warning ? ` · ⚠ ${a.warning}` : ''}`} data-assignee={keyOf(a)}>
                             👤 {assigneeLabelOf(a)}{multi ? <span className="kb__who-status"> · {a.status}</span> : null}
                           </span>
                         );
@@ -285,12 +295,14 @@ export default function KanbanBoard() {
                         {n.note && <div className="kb__note-text">{n.note}</div>}
                         <div className="kb__row kb__assignees" data-assignees={assigneesOf(n).length}>
                           <span className="kb__dim">assignees</span>
-                          {assigneesOf(n).map((a) => (
-                            <span key={keyOf(a)} className="kb__chip kb__chip--who" title={`${a.status}${a.branch ? ` · ⎇ ${a.branch}` : ''}${a.prUrl ? ` · PR${a.prNumber ? ' #' + a.prNumber : ''}` : ''}${a.warning ? ` · ⚠ ${a.warning}` : ''}`}>
+                          {assigneesOf(n).map((a) => {
+                            const c = colors.chip(mkOf(a), rkOf(a));
+                            return (
+                            <span key={keyOf(a)} className={`kb__chip kb__chip--who${c.cls}`} style={c.style} title={`${a.status}${a.branch ? ` · ⎇ ${a.branch}` : ''}${a.prUrl ? ` · PR${a.prNumber ? ' #' + a.prNumber : ''}` : ''}${a.warning ? ` · ⚠ ${a.warning}` : ''}`}>
                               {assigneeLabelOf(a)}{assigneesOf(n).length > 1 ? <span className="kb__who-status"> · {a.status}</span> : null}
                               <button type="button" className="kb__x" title="remove this assignee" onClick={() => changeAssignees(n, keyOf(a), 'remove')} data-remove-assignee={keyOf(a)}>×</button>
                             </span>
-                          ))}
+                          ); })}
                           <select className="kb__select" value="" onChange={(e) => changeAssignees(n, e.target.value, 'add')} data-assign>
                             <option value="">{assigneesOf(n).length ? '＋ add another assignee…' : '— nobody — pick an assignee…'}</option>
                             {agents.filter((x) => !assigneesOf(n).some((a) => keyOf(a) === x.key)).map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
