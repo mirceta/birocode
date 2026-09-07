@@ -323,7 +323,7 @@ public class ArchAgentTests : IDisposable
         var tools = ArchMcpServer.ToolsList();
         var names = tools.Select(t => t!["name"]!.GetValue<string>()).ToList();
         // openspec arch-branch-handover adds adopt_branch; openspec arch-loop-tools adds the four loop tools.
-        Assert.Equal(new[] { "list_agents", "list_machines", "git_state", "read_transcript", "send_task", "adopt_branch", "upgrade_peer", "list_loops", "start_loop", "update_loop", "stop_loop", "start_arch_goal", "list_arch_goals", "stop_arch_goal", "list_tasks", "create_task", "update_task", "assign_task", "dispatch_task", "list_ideas", "idea_to_task", "remember", "recall" }, names);
+        Assert.Equal(new[] { "list_agents", "list_machines", "git_state", "read_transcript", "send_task", "adopt_branch", "upgrade_peer", "list_loops", "start_loop", "update_loop", "stop_loop", "start_arch_goal", "list_arch_goals", "stop_arch_goal", "list_tasks", "create_task", "update_task", "assign_task", "dispatch_task", "delete_task", "list_ideas", "idea_to_task", "remember", "recall" }, names);
         // openspec arch-branch-handover: adopt_branch demands the Operator's ask; the
         // override reaches read_transcript; dispatch_task takes a branch.
         var adopt = tools.First(t => t!["name"]!.GetValue<string>() == "adopt_branch")!;
