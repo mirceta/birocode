@@ -105,3 +105,88 @@ export function readSlots(storage) {
 export function writeSlots(storage, slots) {
   try { storage?.setItem(SLOTS_KEY, JSON.stringify(slots)); } catch { /* private mode */ }
 }
+
+// ---- agent identity marks (fleet task 4ddcfce3) -------------------------------------
+//
+// Colour alone stops distinguishing agents once ~6 of them share a hue (the same repo
+// on many machines, or the 12-hue palette wrapping). Every agent therefore also gets a
+// second, colour-independent dimension, rendered by the SAME badge in Fleet Status and
+// on the Kanban cards: a GLYPH (one of 16 geometric shapes) and a MONOGRAM
+// ("rz/prg2" = machine skeleton / repo prefix + handle index). Both are pure functions
+// of the agent's stable identity — its machine key + repo key and its labels — never of
+// list order or persisted state, so the same agent shows the same mark on every device,
+// after every reload, in both views. Hue + glyph + monogram together are unique even
+// when the hue repeats; the monogram alone is readable without colour.
+
+/** 16 shapes that render alike in system fonts and stay distinct at 11 px. */
+export const GLYPHS = ['●', '■', '▲', '◆', '★', '✚', '⬟', '⬢', '✦', '◐', '◑', '◩', '◪', '▼', '⬖', '✖'];
+
+/** FNV-1a 32-bit over UTF-16 code units — small, stable, dependency-free. */
+export function hashKey(s) {
+  let h = 0x811c9dc5;
+  const str = String(s ?? '');
+  for (let i = 0; i < str.length; i += 1) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h >>> 0;
+}
+
+/** The agent's identity key: machine key + repo key (what both views already derive). */
+export function agentKey(machineKey_, repoKey_) {
+  return `${machineKey_ ?? ''}|${repoKey_ ?? ''}`;
+}
+
+/** The glyph of an agent — a pure function of its identity key. */
+export function glyphOf(machineKey_, repoKey_) {
+  return GLYPHS[hashKey(agentKey(machineKey_, repoKey_)) % GLYPHS.length];
+}
+
+const VOWELS = new Set(['a', 'e', 'i', 'o', 'u']);
+
+/** A machine label's 2-letter skeleton: first letter + first consonant after it, vowels
+ * only when nothing else is left ("razvoj2016" → "rz", "living room" → "lv", "laptop" →
+ * "lp", "MONSTER" → "mn", "DESKTOP-POAPPP3" → "ds"). */
+export function abbrMachine(label) {
+  const letters = String(label ?? '').toLowerCase().replace(/[^a-z]/g, '');
+  if (!letters) return '??';
+  const first = letters[0];
+  const rest = letters.slice(1);
+  const consonants = [...rest].filter((c) => !VOWELS.has(c));
+  const vowels = [...rest].filter((c) => VOWELS.has(c));
+  return (first + consonants.concat(vowels).join('')).slice(0, 2).padEnd(2, first);
+}
+
+/** A repo handle's short form: the repo part of "machine/slug#k" — a single word keeps
+ * its first three letters, a multi-word slug its initials (max 3) — plus the handle index
+ * when there is one ("prg" → "prg", "prg#2" → "prg2", "game-arcade" → "ga", "web" → "web"). */
+export function abbrRepo(handleOrName) {
+  let s = String(handleOrName ?? '').trim();
+  if (s.includes('/')) s = s.slice(s.lastIndexOf('/') + 1);
+  const m = /^(.*?)(?:#(\d+))?$/.exec(s);
+  const slug = (m?.[1] ?? s).toLowerCase();
+  const idx = m?.[2] ?? '';
+  const words = slug.split(/[^a-z0-9]+/).filter(Boolean);
+  let core;
+  if (words.length === 0) core = '?';
+  else if (words.length === 1) core = words[0].slice(0, 3);
+  else core = words.slice(0, 3).map((w) => w[0]).join('');
+  return core + idx;
+}
+
+/** "rz/prg2": the monogram of an agent from its machine label and repo handle. */
+export function monogramOf(machineLabel, repoHandleOrName) {
+  return `${abbrMachine(machineLabel)}/${abbrRepo(repoHandleOrName)}`;
+}
+
+/**
+ * The shared identity mark of one agent, rendered identically by Fleet Status and the
+ * Kanban cards: { key, glyph, monogram, label }. `label` is the full handle for the
+ * title / aria-label, so the badge is identifiable without colour AND fully named.
+ */
+export function agentMark(machineKey_, repoKey_, machineLabel, repoHandleOrName) {
+  const key = agentKey(machineKey_, repoKey_);
+  const handle = String(repoHandleOrName ?? '');
+  const label = handle.includes('/') ? handle : `${machineLabel ?? ''}/${handle}`;
+  return { key, glyph: glyphOf(machineKey_, repoKey_), monogram: monogramOf(machineLabel, repoHandleOrName), label };
+}
