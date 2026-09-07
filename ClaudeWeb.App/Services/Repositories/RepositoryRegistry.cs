@@ -28,10 +28,10 @@ public class RepositoryRegistry
 
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
 
-    public RepositoryRegistry(AppConfig config, Logger logger)
+    public RepositoryRegistry(AppConfig config, Logger logger, string? dataDir = null)
     {
         _logger = logger;
-        _storePath = ResolveStorePath();
+        _storePath = dataDir == null ? ResolveStorePath() : System.IO.Path.Combine(dataDir, "repositories.json");
         Load(config);
     }
 
@@ -39,7 +39,7 @@ public class RepositoryRegistry
     /// <see cref="LocalPort"/> is the default (first) app's port, kept for
     /// back-compat; <see cref="LocalApps"/> is the full list
     /// (plans/multiple-local-apps.md).</summary>
-    public sealed record RepositoryInfo(string Id, string Name, string Path, bool Exists, bool IsGitRepo, bool IsSelf, string Visibility, int? LocalPort, IReadOnlyList<LocalAppInfo> LocalApps, string Handle = "", string Provider = "claude");
+    public sealed record RepositoryInfo(string Id, string Name, string Path, bool Exists, bool IsGitRepo, bool IsSelf, string Visibility, int? LocalPort, IReadOnlyList<LocalAppInfo> LocalApps, string Handle = "", string Provider = "claude", string? Model = null);
 
     /// <summary>One local app exposed by a repo (plans/multiple-local-apps.md).</summary>
     public sealed record LocalAppInfo(string Id, string Name, int Port, string Kind);
@@ -202,13 +202,15 @@ public class RepositoryRegistry
     /// <summary>Sets which engine runs this repo's agent turns — "claude" or
     /// "codex" (openspec provider-agnostic-runner); anything else normalizes to
     /// claude. No-op if the id is unknown.</summary>
-    public bool SetProvider(string id, string? provider)
+    public bool SetProvider(string id, string? provider, string? model = null)
     {
         lock (_gate)
         {
             var repo = _repos.FirstOrDefault(r => string.Equals(r.Id, id, StringComparison.Ordinal));
             if (repo is null) return false;
             repo.Provider = Chat.AgentProviders.Normalize(provider);
+            if (model != null) repo.Model = model.Trim();
+            if (!Chat.AgentProviders.ModelBelongsTo(repo.Provider, repo.Model)) repo.Model = null;
             Save();
             _logger.Info($"[REPO] Provider of \"{repo.Name}\" -> {repo.Provider}");
             return true;
@@ -461,7 +463,7 @@ public class RepositoryRegistry
             // mechanism. openspec add-harness-event-feed.
             infos.Add(new LocalAppInfo(EventsAppId, "Harness Event Feed", 0, "harness"));
         }
-        return new RepositoryInfo(r.Id, r.Name, r.Path, exists, isGit, r.IsSelf, NormalizeVisibility(r.Visibility), defaultPort, infos, r.Handle ?? Handles.Slug(r.Name), Chat.AgentProviders.Normalize(r.Provider));
+        return new RepositoryInfo(r.Id, r.Name, r.Path, exists, isGit, r.IsSelf, NormalizeVisibility(r.Visibility), defaultPort, infos, r.Handle ?? Handles.Slug(r.Name), Chat.AgentProviders.Normalize(r.Provider), r.Model);
     }
 
     // Clones normalize too: LocalPort is set to the default app's port so
@@ -477,7 +479,7 @@ public class RepositoryRegistry
             // Handle + Provider ride along: the resolver hands THIS clone to the chat
             // path, and a clone without Provider ran every codex repo on claude
             // (found by the real-binary run, openspec codex-real-run).
-            Handle = r.Handle, Provider = r.Provider,
+            Handle = r.Handle, Provider = r.Provider, Model = r.Model,
             LocalPort = apps.Count > 0 ? apps[0].Port : null,
             LocalApps = apps.Select(a => new LocalAppConfig { Id = a.Id, Name = a.Name, Port = a.Port, Kind = a.Kind }).ToList(),
         };

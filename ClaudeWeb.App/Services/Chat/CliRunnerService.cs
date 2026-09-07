@@ -40,9 +40,13 @@ public class CliRunnerService
     private readonly Audit.AuditService _audit;
     private readonly Events.HarnessEventFeed _feed;
     private readonly AgentProviderRegistry _providers;
+    private readonly SessionService _sessions;
+    private readonly Repositories.RepositoryRegistry? _repos;
+    private readonly Tools.ToolsConfigStore? _tools;
 
     public CliRunnerService(Logger logger, CallLog callLog, ActivityLog activity, Audit.AuditService audit,
-        Events.HarnessEventFeed feed, AgentProviderRegistry providers)
+        Events.HarnessEventFeed feed, AgentProviderRegistry providers, SessionService? sessions = null,
+        Repositories.RepositoryRegistry? repos = null, Tools.ToolsConfigStore? tools = null)
     {
         _logger = logger;
         _callLog = callLog;
@@ -50,6 +54,9 @@ public class CliRunnerService
         _audit = audit;
         _feed = feed;
         _providers = providers;
+        _sessions = sessions ?? new SessionService(logger);
+        _repos = repos;
+        _tools = tools;
     }
 
     /// <summary>The resolved Claude CLI executable, shared with the one-shot
@@ -87,14 +94,44 @@ public class CliRunnerService
         string? mcpConfigJson = null,
         bool browser = false,
         IReadOnlyList<string>? disallowedTools = null,
-        string? provider = null)
+        string? provider = null,
+        bool ephemeral = false)
     {
+        emit ??= _ => Task.CompletedTask;
+        var repo = _repos?.TryGet(repoId);
+        if (repo != null)
+        {
+            provider = repo.Provider;
+            model ??= repo.Model;
+            mcpConfigJson ??= _tools?.BuildMcpConfigJson(repo.Id, _repos!.GetAll().Select(r => r.Path));
+        }
         var adapter = _providers.Resolve(provider);
+        if (!AgentProviders.ModelBelongsTo(adapter.Provider, model)) model = null;
+        ConversationHandoff.Snapshot? handoff = null;
+        string? preparationError = null;
+        if (!string.IsNullOrWhiteSpace(sessionId) && !SessionOwnership.BelongsTo(adapter.Provider, sessionId, workingDirectory))
+        {
+            var messages = _sessions.GetMessages(workingDirectory, sessionId);
+            if (messages.Count == 0)
+            {
+                preparationError = "The source conversation is missing or belongs to another repository. Start a new conversation explicitly, or restore its native transcript.";
+            }
+            else
+            {
+                var original = message;
+                var export = messages.Sum(m => m.Text.Length + m.Role.Length + 5) > 12000 ? ConversationHandoff.Export(workingDirectory, messages) : null;
+                message = ConversationHandoff.BuildPrompt(messages, message, out var truncated, export);
+                handoff = new(sessionId, adapter.Provider, messages, _sessions.GetToolCallHistory(workingDirectory, sessionId), original, truncated);
+                await emit(new { type = "handoff", fromSessionId = sessionId, provider = adapter.Provider, truncated,
+                    message = $"Continuing with {adapter.Provider}. " + (truncated ? "Recent conversation transferred; older messages remain in history and a full transcript file is available to the agent." : "Conversation transferred; repository files are shared.") });
+                sessionId = null;
+            }
+        }
         var resuming = !string.IsNullOrWhiteSpace(sessionId);
 
         // Create the monitoring record up front so the GUI shows a "Running" row
         // immediately. Updated in place as events translate; finalized below.
-        var displaySpec = new TurnSpec(message, sessionId, workingDirectory, model, readOnly, mcpConfigJson, null, browser, disallowedTools);
+        var displaySpec = new TurnSpec(message, sessionId, workingDirectory, model, readOnly, mcpConfigJson, null, browser, disallowedTools, ephemeral);
         var record = _callLog.StartCall(
             prompt: message,
             commandLine: adapter.DisplayCommand(displaySpec),
@@ -121,6 +158,7 @@ public class CliRunnerService
         string? mcpConfigPath = null;
         try
         {
+            if (preparationError != null) throw new InvalidOperationException(preparationError);
             if (!string.IsNullOrWhiteSpace(mcpConfigJson))
             {
                 // Secret-bearing, so app-data (not the repo, not shared %TEMP%
@@ -134,15 +172,34 @@ public class CliRunnerService
 
             var spec = displaySpec with { McpConfigPath = mcpConfigPath };
             var psi = adapter.CreateProcessInfo(spec);
+            // Windows has a process command-line limit. Long handoffs/prompts travel
+            // through stdin using each CLI's native convention, without truncation.
+            var pipedPrompt = spec.Message.Length > 8000 || spec.Message.Contains('\n') || spec.Message.Contains('\r');
+            if (pipedPrompt)
+            {
+                var promptIndex = psi.ArgumentList.IndexOf(spec.Message);
+                if (promptIndex >= 0) psi.ArgumentList.RemoveAt(promptIndex);
+                if (adapter.Provider == AgentProviders.Codex) psi.ArgumentList.Add("-");
+                psi.RedirectStandardInput = true;
+                psi.StandardInputEncoding = new System.Text.UTF8Encoding(false);
+            }
             _logger.Info(resuming
                 ? $"[CLI] Resuming session {Short(sessionId!)} in {workingDirectory} ({adapter.Provider})"
                 : $"[CLI] Starting new session in {workingDirectory} ({adapter.Provider})");
 
             process = new Process { StartInfo = psi };
             process.Start();
+            // Drain concurrently: stderr can fill while stdout is still open.
+            var stderrTask = process.StandardError.ReadToEndAsync(ct);
+            async Task SendPromptAsync()
+            {
+                await process.StandardInput.WriteAsync(spec.Message.AsMemory(), ct);
+                process.StandardInput.Close();
+            }
+            var inputTask = pipedPrompt ? SendPromptAsync() : Task.CompletedTask;
             // A provider that redirects stdin (Codex) gets it closed at once: the
             // prompt is the argv one, nothing is appended from an inherited pipe.
-            if (psi.RedirectStandardInput) { try { process.StandardInput.Close(); } catch { /* already closed */ } }
+            if (psi.RedirectStandardInput && !pipedPrompt) { try { process.StandardInput.Close(); } catch { /* already closed */ } }
 
             string? capturedSessionId = null;
             var sawError = false;
@@ -151,7 +208,11 @@ public class CliRunnerService
                 Emit = emit!,
                 Record = record,
                 Update = _callLog.Update,
-                OnSessionId = id => capturedSessionId = id,
+                OnSessionId = id =>
+                {
+                    capturedSessionId = id;
+                    if (handoff != null) ConversationHandoff.Save(workingDirectory, id, handoff);
+                },
                 OnError = () => sawError = true,
                 Audit = audit,
                 LogTool = (a, name, summary) => _audit.LogTool(a, name, summary),
@@ -172,7 +233,8 @@ public class CliRunnerService
             }
 
             await process.WaitForExitAsync(ct);
-            var stderr = await process.StandardError.ReadToEndAsync(ct);
+            await inputTask;
+            var stderr = await stderrTask;
 
             if (process.ExitCode != 0 && !sawError)
             {

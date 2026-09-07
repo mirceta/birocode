@@ -3084,15 +3084,11 @@ public partial class ArchAgentService : IArchWakeSource
         }
     }
 
-    private static string? NewestSessionId(string workingDir)
+    private string? NewestSessionId(string workingDir)
     {
         try
         {
-            var dir = SessionService.ProjectsDirectoryFor(workingDir);
-            if (!Directory.Exists(dir)) return null;
-            var newest = new DirectoryInfo(dir).EnumerateFiles("*.jsonl")
-                .OrderByDescending(f => f.LastWriteTimeUtc).FirstOrDefault();
-            return newest is null ? null : Path.GetFileNameWithoutExtension(newest.Name);
+            return _sessions.ListSessions(workingDir).FirstOrDefault()?.Id;
         }
         catch { return null; }
     }

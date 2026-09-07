@@ -975,12 +975,8 @@ public class AutopilotService : BackgroundService
     {
         try
         {
-            var dir = SessionService.ProjectsDirectoryFor(repoPath);
-            if (!Directory.Exists(dir)) return (null, null, null);
-            var newest = new DirectoryInfo(dir).EnumerateFiles("*.jsonl")
-                .OrderByDescending(f => f.LastWriteTimeUtc).FirstOrDefault();
-            if (newest is null) return (null, null, null);
-            var sessionId = Path.GetFileNameWithoutExtension(newest.Name);
+            var sessionId = _sessions.ListSessions(repoPath).FirstOrDefault()?.Id;
+            if (sessionId is null) return (null, null, null);
             var (text, at) = LastAssistantMessageIn(repoPath, sessionId);
             return (sessionId, text, at);
         }

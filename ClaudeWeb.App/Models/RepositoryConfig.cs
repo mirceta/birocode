@@ -70,6 +70,8 @@ public class RepositoryConfig
     /// predates the field — reads as claude.
     /// </summary>
     public string? Provider { get; set; }
+    /// <summary>Shared default for composer, loop and dispatched turns.</summary>
+    public string? Model { get; set; }
 
     // The per-project permission preset (PermissionPolicy) was removed
     // (openspec add-resilient-auth): the two auth gates are the whole

@@ -20,7 +20,7 @@ public static class SessionOwnership
         if (string.IsNullOrWhiteSpace(sessionId)) return true;
         if (sessionId.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) return false;
         return AgentProviders.Normalize(provider) == AgentProviders.Codex
-            ? IsCodexThread(codexHome ?? Accounts.CodexAccountService.CodexHome(), sessionId)
+            ? (codexHome != null ? IsCodexThread(codexHome, sessionId) : NativeTranscripts.Find(workingDirectory, sessionId) != null)
             : IsClaudeSession(SessionService.ProjectsDirectoryFor(workingDirectory), sessionId);
     }
 

@@ -315,11 +315,7 @@ public class AutopilotController : ControllerBase
         try
         {
             if (_repos.GetAll().FirstOrDefault(r => r.Id == repoId) is not { } repo) return null;
-            var dir = SessionService.ProjectsDirectoryFor(repo.Path);
-            if (!Directory.Exists(dir)) return null;
-            var newest = new DirectoryInfo(dir).EnumerateFiles("*.jsonl")
-                .OrderByDescending(f => f.LastWriteTimeUtc).FirstOrDefault();
-            return newest is null ? null : Path.GetFileNameWithoutExtension(newest.Name);
+            return new SessionService(_logger).ListSessions(repo.Path).FirstOrDefault()?.Id;
         }
         catch (Exception ex)
         {
