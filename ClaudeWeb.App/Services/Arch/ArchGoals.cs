@@ -28,9 +28,20 @@ public static class ArchGoals
     public static bool IsBusy(ArchStateStore.ArchGoal? goal, LoopConfigStore.LoopState? loop) =>
         goal is { Running: true } && loop is { Active: true };
 
+    /// <summary>Whether a conversation may take repo wake-ups, i.e. a standing wake loop.
+    /// The Operator-facing (default) conversation never does (openspec arch-default-no-wakes):
+    /// it is a plain chat — nothing arrives in it on its own except a finished goal's
+    /// summary. A sibling conversation keeps its opt-in standing wake loop.</summary>
+    public static bool TakesRepoWakes(string? conversationId) =>
+        !string.Equals(ArchAgentService.KeyOrDefault(conversationId), ArchStateStore.DefaultConversationId, StringComparison.Ordinal);
+
+    /// <summary>Why arming a wake loop on the default conversation is refused.</summary>
+    public const string NoWakeLoopReason = "the Operator-facing conversation takes no wake loop: it is a plain chat that repo agents never wake. Arm a standing wake loop on a sibling conversation, or start a goal";
+
     /// <summary>A goal conversation polls on its own clock: it is never woken by a repo
-    /// agent's turn. The (opt-in) standing wake loop of a goal-less conversation is the only
-    /// thing that still reads the feed, unchanged.</summary>
+    /// agent's turn. The (opt-in) standing wake loop of a goal-less SIBLING conversation is
+    /// the only thing that still reads the feed; the default conversation never does
+    /// (<see cref="TakesRepoWakes"/>).</summary>
     public static bool PollsOnly(ArchStateStore.ArchGoal? goal) => goal is { Running: true };
 
     /// <summary>The goal state a loop's terminal status means.</summary>

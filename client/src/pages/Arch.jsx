@@ -529,6 +529,12 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
   // loop and the driven loop live in the Loops lane of the conversation they belong to.
   const loopCards = (
     <>
+        {isDefaultConv ? (
+        <section className="arch__card" data-arch-standing data-no-wakes>
+          <div className="arch__card-head"><span>Standing wake loop</span><span className="arch__dim">not on this conversation</span></div>
+          <div className="arch__dim">The Operator-facing conversation is a plain chat: repo agents never wake it, and nothing arrives here on its own except a finished goal's summary. Top-down work runs in a goal conversation (below); a standing wake loop can be armed on a sibling conversation.</div>
+        </section>
+        ) : (
         <section className="arch__card" data-arch-standing>
           <div className="arch__card-head">
             <span>Standing wake loop</span>
@@ -561,6 +567,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
           </div>
           <div className="arch__dim">Stop = disarm: no further sends; running repo turns finish on their own.</div>
         </section>
+        )}
 
         <section className="arch__card" data-arch-goal-form>
           <div className="arch__card-head"><span>Goal conversation</span>{goal && <span className={`arch__pill arch__pill--${busy ? 'busy' : 'off'}`} data-goal-state>{busy ? `busy: goal ${goal.id}` : `goal ${goal.id} ${goal.state}`}</span>}</div>
