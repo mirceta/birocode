@@ -1,3 +1,5 @@
+import ProviderCapabilities from '../chat/ProviderCapabilities';
+import { defaultModelFor } from '../chat/models';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Chat from '../../pages/Chat';
 import { apiGet, apiPost } from '../../api/client';
@@ -261,26 +263,17 @@ export default function PinnedAgent({
   // SERVER-persisted choice — which CLI runs this dock's turns. Loaded from the
   // repo listing; optimistic change, reverted on error.
   const showProvider = useFeature('agentProvider');
-  const { reloadRepos } = useRepo();
+  const { repos: providerRepos, reloadRepos } = useRepo();
   const [provider, setProvider] = useState('claude');
   useEffect(() => {
     if (!showProvider) return undefined;
-    let alive = true;
-    setProvider('claude');
-    (async () => {
-      try {
-        const repos = await apiGet('/repos');
-        const r = Array.isArray(repos) ? repos.find((x) => x.id === tab.repoId) : null;
-        if (alive && r?.provider) setProvider(r.provider);
-      } catch { /* leave default */ }
-    })();
-    return () => { alive = false; };
-  }, [showProvider, tab.repoId]);
+    setProvider(providerRepos.find((r) => r.id === tab.repoId)?.provider || 'claude');
+  }, [showProvider, tab.repoId, providerRepos]);
   const changeProvider = async (next) => {
     const prev = provider;
     setProvider(next);
     try {
-      await apiPost(`/repos/${tab.repoId}/provider`, { provider: next }); // route base is api/repos (plural)
+      await apiPost(`/repos/${tab.repoId}/provider`, { provider: next, model: defaultModelFor(next) });
       reloadRepos(); // the composer's model picker reads the shared list
     } catch {
       setProvider(prev); // revert the optimistic change
@@ -721,13 +714,13 @@ export default function PinnedAgent({
           this dock's turns — claude (default) or codex. Per-repo, server-
           persisted; takes effect on the next turn. */}
       {showProvider && !showFiles && (!openApp || split) && !showConsole && !showOpenspec && !showTools && (
-        <div className="phone__provider" title={t('dashboard.providerHint')} data-provider={provider}>
+        <><div className="phone__provider" title={t('dashboard.providerHint')} data-provider={provider}>
           <span className="phone__provider-label">{t('dashboard.provider')}</span>
           <select className="phone__provider-select" value={provider} onChange={(e) => changeProvider(e.target.value)}>
             <option value="claude">claude</option>
             <option value="codex">codex</option>
           </select>
-        </div>
+        </div><ProviderCapabilities provider={provider} onChooseClaude={() => changeProvider('claude')} /></>
       )}
       {/* The git block is chat-context furniture; hide it while the Files tab OR
           a local app is open so that surface gets the full dock height (not just
