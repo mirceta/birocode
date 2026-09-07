@@ -5,6 +5,7 @@ import { useTaskFilter } from './taskFilterStore';
 import { COLUMNS, columnOf } from './kanbanColumns';
 import { applyFilter, assigneesOf, blockedIds, filterContext, flagsOf, isNarrowed, staleIds, taskView } from './taskFilters';
 import { useTaskColors, machineKey, repoKey } from './useTaskColors';
+import AgentStatusDot, { agentDotState } from '../shared/AgentStatusDot';
 import './kanban.css';
 
 // The Kanban view of the task board (openspec task-board-kanban, columns per
@@ -102,8 +103,14 @@ export default function KanbanBoard() {
   for (const m of fleet?.machines || []) {
     machineLabel[m.self ? '' : m.sourceId] = m.machine;
     // The handle ("spacex/prg#2", openspec stable-handles) is the label everywhere.
-    for (const a of m.agents || []) agents.push({ key: `${m.self ? '' : m.sourceId}|${a.repoId}`, label: `${a.handle || `${m.machine}/${a.name}`}${a.managed ? ' 🏛' : ''}`, machine: m.machine, name: a.name, handle: a.handle, managed: a.managed, remoteUrl: a.remoteUrl });
+    for (const a of m.agents || []) agents.push({ key: `${m.self ? '' : m.sourceId}|${a.repoId}`, label: `${a.handle || `${m.machine}/${a.name}`}${a.managed ? ' 🏛' : ''}`, machine: m.machine, name: a.name, handle: a.handle, managed: a.managed, remoteUrl: a.remoteUrl, runningSince: a.runningSince, onDefault: a.onDefault, branch: a.branch });
   }
+  // The live activity of one assignee (fleet-status task dfee16ea): look the assignee up
+  // in the SAME fleet-status snapshot Fleet Status uses, so the shared AgentStatusDot
+  // reflects real current state (pulsing while running, green when free) and updates on
+  // the board's 5 s fleet poll — not a stale card field. null when the fleet doesn't know
+  // the agent (offline / unmanaged) → the dot reads "unknown".
+  const fleetAgentOf = (a) => agents.find((x) => x.key === `${a.sourceId || ''}|${a.repoId}`) || null;
   // Shared machine/repo colours (fleet-status task 327aa5ae): the SAME palette + slot map
   // the Task graph and Fleet Status use, so a machine/agent has one hue across all views.
   // A chip's border = its machine's hue, its background tint = its repo's hue.
@@ -236,7 +243,7 @@ export default function KanbanBoard() {
                         const c = colors.chip(mkOf(a), rkOf(a));
                         return (
                           <span key={keyOf(a)} className={`kb__chip kb__chip--who${c.cls}${multi ? ' kb__chip--who-multi' : ''}${a.warning ? ' kb__chip--who-warn' : ''}`} style={c.style} title={`${assigneeLabelOf(a)} — this machine + repo agent's colour matches Fleet Status${multi ? ` · ${a.status}` : ''}${a.warning ? ` · ⚠ ${a.warning}` : ''}`} data-assignee={keyOf(a)}>
-                            👤 {assigneeLabelOf(a)}{multi ? <span className="kb__who-status"> · {a.status}</span> : null}
+                            <AgentStatusDot state={agentDotState(fleetAgentOf(a))} />👤 {assigneeLabelOf(a)}{multi ? <span className="kb__who-status"> · {a.status}</span> : null}
                           </span>
                         );
                       })}
@@ -261,7 +268,7 @@ export default function KanbanBoard() {
                             const c = colors.chip(mkOf(a), rkOf(a));
                             return (
                             <span key={keyOf(a)} className={`kb__chip kb__chip--who${c.cls}`} style={c.style} title={`${a.status}${a.branch ? ` · ⎇ ${a.branch}` : ''}${a.prUrl ? ` · PR${a.prNumber ? ' #' + a.prNumber : ''}` : ''}${a.warning ? ` · ⚠ ${a.warning}` : ''}`}>
-                              {assigneeLabelOf(a)}{assigneesOf(n).length > 1 ? <span className="kb__who-status"> · {a.status}</span> : null}
+                              <AgentStatusDot state={agentDotState(fleetAgentOf(a))} />{assigneeLabelOf(a)}{assigneesOf(n).length > 1 ? <span className="kb__who-status"> · {a.status}</span> : null}
                               <button type="button" className="kb__x" title="remove this assignee" onClick={() => changeAssignees(n, keyOf(a), 'remove')} data-remove-assignee={keyOf(a)}>×</button>
                             </span>
                           ); })}

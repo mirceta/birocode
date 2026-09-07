@@ -1,0 +1,14 @@
+/* The shared live-activity dot (fleet-status task dfee16ea). Same 8px circle, same
+   colours and the same 1.2s fade pulse Fleet Status used (was .fs__dot + fs-pulse), now
+   in one place so the Fleet Status chips and the Kanban card badges agree. */
+.agent-dot { flex: 0 0 auto; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #777; }
+.agent-dot--free { background: #3fb950; }
+.agent-dot--claimed { background: #d29922; }
+.agent-dot--idle { background: #777; }
+.agent-dot--unknown { background: #777; opacity: 0.5; }
+.agent-dot--running { background: var(--color-text, #eee); animation: agent-dot-pulse 1.2s ease-in-out infinite; }
+@keyframes agent-dot-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+/* Respect reduced-motion: don't blink; ring the dot so "busy" is still distinguishable. */
+@media (prefers-reduced-motion: reduce) {
+  .agent-dot--running { animation: none; box-shadow: 0 0 0 2px var(--color-text, #eee); }
+}
