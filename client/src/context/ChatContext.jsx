@@ -390,10 +390,11 @@ export function ChatProvider({ children }) {
     const parse = createSseParser(handleEvent);
 
     try {
-      // The model of the target repo's engine family, plus the engine itself so a
-      // stale listing can never send one engine the other's model.
-      const repoProvider = repoProviderOf(repoId);
-      const body = { message: fullText, model: effectiveModelFor(storedModel, repoProvider), provider: repoProvider };
+      // The model of the target repo's engine family. The engine itself is NOT sent:
+      // the server's persisted Engine is the source of truth (a page whose repo list
+      // is stale after an Engine flip elsewhere must not override it), and the server
+      // drops a model from the other family anyway.
+      const body = { message: fullText, model: effectiveModelFor(storedModel, repoProviderOf(repoId)) };
       const currentConvo = convos[key];
       if (currentConvo?.sessionId) body.sessionId = currentConvo.sessionId;
       if (lane && lane !== 'builder') body.lane = lane;

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import Chat from '../../pages/Chat';
 import { apiGet, apiPost } from '../../api/client';
 import { useChatFor } from '../../context/ChatContext';
+import { useRepo } from '../../context/RepoContext';
 import { useT } from '../../i18n/LanguageContext';
 import { useFeature } from '../../context/UiModeContext';
 import GitStatusSummary from '../git/GitStatusSummary';
@@ -260,6 +261,7 @@ export default function PinnedAgent({
   // SERVER-persisted choice — which CLI runs this dock's turns. Loaded from the
   // repo listing; optimistic change, reverted on error.
   const showProvider = useFeature('agentProvider');
+  const { reloadRepos } = useRepo();
   const [provider, setProvider] = useState('claude');
   useEffect(() => {
     if (!showProvider) return undefined;
@@ -279,6 +281,7 @@ export default function PinnedAgent({
     setProvider(next);
     try {
       await apiPost(`/repos/${tab.repoId}/provider`, { provider: next }); // route base is api/repos (plural)
+      reloadRepos(); // the composer's model picker reads the shared list
     } catch {
       setProvider(prev); // revert the optimistic change
     }

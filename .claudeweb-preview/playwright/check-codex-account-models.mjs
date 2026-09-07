@@ -86,6 +86,20 @@ console.log(`turn (gpt-6-astra) after ${((Date.now() - t0) / 1000).toFixed(1)}s:
 checks['turn: real codex turn with the account model (--model gpt-6-astra) completed'] = types.includes('done') && !types.includes('error')
 checks['usage: the account-available models include the model that ran'] = Array.isArray(usage.models) && usage.models.includes('gpt-6-astra')
 
+// 4b. an Engine switch under a live conversation: a Claude session id sent to the codex
+// repo must start a NEW codex thread (not fail resuming a foreign id), and the page's
+// stale engine must not override the server's (no provider in the body).
+t0 = Date.now()
+ev = sse(await fetch(`${BASE}/api/chat`, { method: 'POST', headers: RH, body: JSON.stringify({ message: 'Reply with exactly: SWITCH-OK', model: 'claude-fable-5-1', sessionId: '11111111-2222-4333-8444-555555555555' }) }).then((r) => r.text()))
+types = ev.map((e) => e.type)
+const newSession = ev.find((e) => e.type === 'session')?.sessionId
+console.log(`turn (foreign session id on codex repo) after ${((Date.now() - t0) / 1000).toFixed(1)}s:`, types.join(' '), '| new session', newSession)
+checks['switch: foreign session id starts a fresh codex thread and completes'] = types.includes('done') && !types.includes('error') && !!newSession && newSession !== '11111111-2222-4333-8444-555555555555'
+if (LOG && fs.existsSync(LOG)) {
+  const log3 = fs.readFileSync(LOG).subarray(logOffset).toString('utf8')
+  checks['switch: log says the session is not a codex conversation and a new one started'] = /is not a codex conversation; starting a new codex conversation/.test(log3)
+}
+
 // 5. the guard: a Claude model on the codex engine runs with the default model instead of failing
 t0 = Date.now()
 ev = sse(await fetch(`${BASE}/api/chat`, { method: 'POST', headers: RH, body: JSON.stringify({ message: 'Reply with exactly: GUARD-OK', model: 'claude-fable-5-1', provider: 'codex', lane: 'ask' }) }).then((r) => r.text()))

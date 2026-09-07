@@ -148,6 +148,15 @@ public class ChatController : ControllerBase
             model = null;
         }
         var path = repo.Path;
+        // The conversation's id must belong to the engine that will run it: after an
+        // Engine switch under a live chat, a Claude session id handed to codex (or a
+        // Codex thread id to claude) cannot be resumed. Start a fresh conversation on
+        // the new engine instead of failing (openspec codex-account-and-models).
+        if (!string.IsNullOrWhiteSpace(sessionId) && !SessionOwnership.BelongsTo(provider, sessionId, path))
+        {
+            _logger.Info($"[CHAT] Session {sessionId[..Math.Min(12, sessionId.Length)]}... is not a {provider} conversation; starting a new {provider} conversation for \"{repo.Name}\".");
+            sessionId = null;
+        }
         var readOnly = lane == "ask"; // the ask lane runs claude in read-only plan mode
         // Per-project permission presets were removed (openspec add-resilient-auth):
         // a user past both gates is fully trusted, bounded only by the OS account. The
