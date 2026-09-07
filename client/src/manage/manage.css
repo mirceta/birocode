@@ -1,4 +1,25 @@
 /* Management App shell (openspec management-app) */
+@import './fleetOverview.css';
+/* Theme tokens (openspec fleet-overview-honest): the Fleet Status sheet used --mg-*
+   tokens that were never defined, so it rendered dark-theme fallbacks (#e6e6e6 text,
+   #9aa3b2 labels) on the light page — 1.3:1 and 2.5:1. Defined here for both schemes,
+   all ≥ 4.5:1 on their surface. */
+:root {
+  --mg-text: var(--color-text, #2b2b29);
+  --mg-muted: var(--color-text-muted, #5b5b57);
+  --mg-border: var(--color-border, #ece6dd);
+  --mg-accent: var(--color-accent, #c96442);
+  --mg-surface: var(--color-surface, #ffffff);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mg-text: #e8e8e6;
+    --mg-muted: #b9bfc9;
+    --mg-border: #3a3f4a;
+    --mg-accent: #7fb3f5;
+    --mg-surface: #1c1f27;
+  }
+}
 html, body, #root { height: 100%; margin: 0; }
 .mg { display: flex; flex-direction: column; height: 100vh; background: var(--color-bg, #1e1e1e); color: var(--color-text, #ddd); }
 .mg__head { display: flex; align-items: center; gap: 14px; padding: 8px 14px; border-bottom: 1px solid var(--color-border, #444); flex: none; }
@@ -69,6 +90,12 @@ html, body, #root { height: 100%; margin: 0; }
 .fs__chip:hover, .fs__chip--open { color: var(--color-text, #eee); border-color: var(--color-accent, #5ea0ef); }
 .fs__chip--free { border-color: rgba(63, 185, 80, 0.6); }
 .fs__chip--running { color: var(--color-text, #eee); border-color: var(--color-text, #eee); }
+/* Working-agent emphasis (task 3546287b): ~50% larger than the 12px idle chip
+   (15px name line, 12px branch line, taller padding, wider cap) on top of the
+   shared .agent-badge--working glow. A size step, not transform: scale() — the
+   strip is flex-wrap, so the bigger chip reflows instead of overlapping. */
+.fs__chip--working { font-size: 15px; padding: 5px 13px; max-width: 300px; }
+.fs__chip--working .fs__chip-branch { font-size: 12px; }
 /* Machine + repo colour (fleet-status task 327aa5ae): the SAME shared hue palette the
    Kanban cards and Task-graph nodes use, so a machine/agent reads as one colour across
    all three views. Border = its machine's hue, background tint = its repo's hue (identical
@@ -159,20 +186,12 @@ html, body, #root { height: 100%; margin: 0; }
 
 /* Fleet Status per-machine view tabs (openspec fleet-status-panels) */
 .fs__tabs { display: flex; gap: 4px; margin: 6px 0 2px; }
-.fs__tab { background: transparent; border: 1px solid var(--mg-border, #2a2f3f); color: var(--mg-muted, #9aa3b2);
+.fs__tab { background: transparent; border: 1px solid var(--mg-border, #ece6dd); color: var(--mg-muted, #5b5b57);
   border-radius: 8px 8px 0 0; padding: 5px 12px; cursor: pointer; font: inherit; font-size: 13px; }
-.fs__tab:hover { color: var(--mg-text, #e6e6e6); }
-.fs__tab--on { color: var(--mg-text, #e6e6e6); border-color: var(--mg-accent, #5ea0ef); border-bottom-color: transparent; background: rgba(94,160,239,.10); }
+.fs__tab:hover { color: var(--mg-text, #2b2b29); }
+.fs__tab--on { color: var(--mg-text, #2b2b29); border-color: var(--mg-accent, #c96442); border-bottom-color: transparent; background: rgba(201, 100, 66, 0.10); font-weight: 600; }
 
-/* Overview tab: grouped key/value cards */
-.fs__overview { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; padding: 8px 0; }
-.fs__ov-group { border: 1px solid var(--mg-border, #2a2f3f); border-radius: 10px; padding: 8px 10px; }
-.fs__ov-title { font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--mg-muted, #9aa3b2); margin-bottom: 6px; }
-.fs__ov-rows { margin: 0; }
-.fs__ov-row { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; font-size: 13px; }
-.fs__ov-k { color: var(--mg-muted, #9aa3b2); }
-.fs__ov-v { color: var(--mg-text, #e6e6e6); font-family: ui-monospace, Consolas, monospace; text-align: right; overflow-wrap: anywhere; }
-.fs__ov-v--na { color: #6b7280; font-style: italic; }
+/* Overview tab rows: see fleetOverview.css (shared with the header strip's Machine tile). */
 
 /* Scoreboard tab: window strip + refresh above the reused ScoreboardView */
 .fs__scoreboard { padding: 6px 0; }

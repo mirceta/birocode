@@ -5,28 +5,52 @@ using ClaudeWeb.Services.Logging;
 
 namespace ClaudeWeb.Services.Arch;
 
-// The per-machine "Overview" that the harness's own Status strip shows (Claude
-// info, GitHub account, host info, admin active), carried through the fleet
-// describe/status so the Management App's Fleet Status can show it for every
-// machine (openspec fleet-status-panels). The SAME record is serialized by the
-// peer's describe AND deserialized on the hub (FleetClient.PeerInfo.Overview), so
-// there is one shape and no drift. Every field is nullable/defaulted: an older
-// peer that predates this returns no `overview`, the hub sees null, the UI shows
-// "n/a" — never an error. Version + build and the machine name already ride the
-// fleet object (machine.version / machine.machine); "host active" is the operator
-// gate already carried as machine.gateOpen. This adds only the missing pieces.
+// The per-machine "Overview" — EVERYTHING the harness's own header status strip shows
+// (openspec fleet-status-panels; completed by openspec fleet-overview-honest): the
+// Claude account with its plan AND its plan usage (the 5-hour window, the weekly quota,
+// the per-model weekly limits, stale/unavailable), the GitHub account, the host clock
+// (time, zone, offset), the always-admin state with its two underlying facts, and when
+// the snapshot was captured. The SAME record is serialized by the peer's describe AND
+// deserialized on the hub (FleetClient.PeerInfo.Overview), so there is ONE shape and no
+// drift; the hub's own strip reads the same record through GET /api/arch/overview.
+// Every field is nullable/defaulted: an older peer that predates a field returns none of
+// it, the hub sees null, and the UI says "unknown" with the reason — never a blank, never
+// an error. Version + build and the machine name already ride the fleet object
+// (machine.version / machine.machine); "host active" is the operator gate carried as
+// machine.gateOpen.
 
 public sealed record FleetOverview(
     [property: JsonPropertyName("claude")] OverviewClaude? Claude,
     [property: JsonPropertyName("github")] OverviewGitHub? GitHub,
     [property: JsonPropertyName("host")] OverviewHost? Host,
-    [property: JsonPropertyName("admin")] OverviewAdmin? Admin);
+    [property: JsonPropertyName("admin")] OverviewAdmin? Admin,
+    // Unix ms when the account/usage part was built on the reporting machine (null on a
+    // build that predates it): lets a reader say "as of 40 s ago" instead of pretending.
+    [property: JsonPropertyName("capturedAt")] long? CapturedAt = null);
 
 public sealed record OverviewClaude(
     [property: JsonPropertyName("installed")] bool Installed,
     [property: JsonPropertyName("authenticated")] bool Authenticated,
     [property: JsonPropertyName("account")] string? Account,
-    [property: JsonPropertyName("plan")] string? Plan);
+    [property: JsonPropertyName("plan")] string? Plan,
+    // Plan usage as the strip's Claude chip shows it (openspec claude-usage): null on a
+    // peer that predates the field; Available=false with the reason when the probe failed.
+    [property: JsonPropertyName("usage")] OverviewUsage? Usage = null);
+
+public sealed record OverviewUsage(
+    [property: JsonPropertyName("available")] bool Available,
+    [property: JsonPropertyName("stale")] bool Stale,
+    [property: JsonPropertyName("fetchedAt")] string? FetchedAt,
+    [property: JsonPropertyName("session")] OverviewUsageLimit? Session,
+    [property: JsonPropertyName("weekly")] OverviewUsageLimit? Weekly,
+    [property: JsonPropertyName("scopedWeekly")] List<OverviewUsageLimit>? ScopedWeekly,
+    [property: JsonPropertyName("error")] string? Error);
+
+public sealed record OverviewUsageLimit(
+    [property: JsonPropertyName("label")] string? Label,
+    [property: JsonPropertyName("percent")] double? Percent,
+    [property: JsonPropertyName("resetsAt")] string? ResetsAt,
+    [property: JsonPropertyName("severity")] string? Severity);
 
 public sealed record OverviewGitHub(
     [property: JsonPropertyName("installed")] bool Installed,
@@ -36,11 +60,19 @@ public sealed record OverviewGitHub(
 
 public sealed record OverviewHost(
     [property: JsonPropertyName("timeZoneId")] string? TimeZoneId,
-    [property: JsonPropertyName("utcOffsetMinutes")] int UtcOffsetMinutes);
+    [property: JsonPropertyName("utcOffsetMinutes")] int UtcOffsetMinutes,
+    // The host clock as the strip shows it (openspec dashboard-host-clock): the machine's
+    // own "now" when this overview was produced. Null on a peer that predates the field.
+    [property: JsonPropertyName("nowUnixMs")] long? NowUnixMs = null,
+    [property: JsonPropertyName("nowIso")] string? NowIso = null);
 
 public sealed record OverviewAdmin(
     [property: JsonPropertyName("supported")] bool Supported,
-    [property: JsonPropertyName("state")] string? State);
+    [property: JsonPropertyName("state")] string? State,
+    // The two facts behind the state (openspec always-admin): the UAC policy trio set,
+    // and the harness's own token elevated. Null on a peer that predates the fields.
+    [property: JsonPropertyName("registrySet")] bool? RegistrySet = null,
+    [property: JsonPropertyName("elevated")] bool? Elevated = null);
 
 /// <summary>
 /// Builds THIS machine's <see cref="FleetOverview"/> for the describe/status,
@@ -48,11 +80,11 @@ public sealed record OverviewAdmin(
 /// last built overview instantly and kicks a background rebuild when the cache is
 /// older than <see cref="TtlMs"/> (single-flight). This matters because the
 /// describe is produced on every hub poll (~10 s): the underlying account probes
-/// are themselves cached (Claude 1 min, GitHub 5 min) but a GitHub cache miss
-/// spawns <c>gh.exe</c> and can block for seconds — building off the request
+/// are themselves cached (Claude 1 min, GitHub 5 min, usage 5 min) but a GitHub cache
+/// miss spawns <c>gh.exe</c> and can block for seconds — building off the request
 /// thread keeps the fleet poll cheap and never times a peer's describe out.
-/// Cold start returns an empty overview (all fields null → the UI shows "n/a")
-/// until the first background build lands.
+/// Cold start returns an empty overview (account fields null → the UI says "unknown,
+/// not probed yet") until the first background build lands.
 /// </summary>
 public sealed class FleetOverviewProvider
 {
@@ -62,23 +94,29 @@ public sealed class FleetOverviewProvider
 
     private readonly ClaudeAccountService _claude;
     private readonly GitHubAccountService _github;
+    private readonly ClaudeUsageService? _usage;
     private readonly Logger _logger;
     private readonly object _gate = new();
     private FleetOverview? _cached;
     private long _at;
     private bool _building;
 
-    public FleetOverviewProvider(ClaudeAccountService claude, GitHubAccountService github, Logger logger)
+    public FleetOverviewProvider(ClaudeAccountService claude, GitHubAccountService github, Logger logger, ClaudeUsageService? usage = null)
     {
         _claude = claude;
         _github = github;
+        _usage = usage;
         _logger = logger;
+        // Warm up at construction (openspec fleet-overview-honest): the first reader — a
+        // hub's poll, the strip's Machine tile — should not see "not probed yet" for the
+        // account and usage fields just because nobody had asked before.
+        _ = Task.Run(() => { try { Current(); } catch { /* logged inside */ } });
     }
 
     private static long Now() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
     /// <summary>The last built overview (host/admin are recomputed inline — they are
-    /// instant), refreshing the account fields in the background when stale.</summary>
+    /// instant), refreshing the account and usage fields in the background when stale.</summary>
     public FleetOverview Current()
     {
         FleetOverview? cached;
@@ -108,27 +146,47 @@ public sealed class FleetOverviewProvider
     private FleetOverview Build()
     {
         OverviewClaude? claude = null;
-        try { var c = _claude.Get(); claude = new OverviewClaude(c.ClaudeInstalled, c.Authenticated, c.Account, c.Plan); }
+        try
+        {
+            var c = _claude.Get();
+            // Usage only makes sense for an authenticated session; a failed probe is an
+            // honest "unavailable: <reason>", never a blank (openspec claude-usage).
+            OverviewUsage? usage = null;
+            if (c.Authenticated && _usage is not null)
+            {
+                try { usage = MapUsage(_usage.GetAsync().GetAwaiter().GetResult()); }
+                catch (Exception ex) { _logger.Info($"[FLEET] overview usage: {ex.GetType().Name}"); usage = new OverviewUsage(false, false, null, null, null, null, "usage probe failed"); }
+            }
+            claude = new OverviewClaude(c.ClaudeInstalled, c.Authenticated, c.Account, c.Plan, usage);
+        }
         catch (Exception ex) { _logger.Error($"[FLEET] overview claude: {ex.Message}"); }
 
         OverviewGitHub? github = null;
         try { var g = _github.Get(); github = new OverviewGitHub(g.GhInstalled, g.Authenticated, g.Account, g.Host); }
         catch (Exception ex) { _logger.Error($"[FLEET] overview github: {ex.Message}"); }
 
-        return new FleetOverview(claude, github, ReadHost(), ReadAdmin());
+        return new FleetOverview(claude, github, ReadHost(), ReadAdmin(), Now());
     }
 
-    private static FleetOverview Empty() => new(null, null, ReadHost(), ReadAdmin());
+    /// <summary>The strip's usage rows, one shape for the fleet (pure; unit-tested).</summary>
+    public static OverviewUsage MapUsage(ClaudeUsageService.ClaudeUsageStatus u)
+    {
+        static OverviewUsageLimit? L(ClaudeUsageService.UsageLimit? x) => x is null ? null : new OverviewUsageLimit(x.Label, x.Percent, x.ResetsAt, x.Severity);
+        return new OverviewUsage(u.Available, u.Stale, u.FetchedAt, L(u.Session), L(u.Weekly),
+            u.ScopedWeekly.Select(L).Where(x => x is not null).Select(x => x!).ToList(), u.Error);
+    }
+
+    private static FleetOverview Empty() => new(null, null, ReadHost(), ReadAdmin(), null);
 
     private static OverviewHost ReadHost()
     {
         try
         {
+            var now = DateTimeOffset.Now;
             var tz = TimeZoneInfo.Local;
-            var offset = (int)tz.GetUtcOffset(DateTimeOffset.UtcNow).TotalMinutes;
-            return new OverviewHost(tz.Id, offset);
+            return new OverviewHost(tz.Id, (int)now.Offset.TotalMinutes, now.ToUnixTimeMilliseconds(), now.ToString("o"));
         }
-        catch { return new OverviewHost(null, 0); }
+        catch { return new OverviewHost(null, 0, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), null); }
     }
 
     // The always-admin (UAC master switch) state, read the same way as
@@ -139,7 +197,7 @@ public sealed class FleetOverviewProvider
     // canonical writer/owner. Non-Windows or a locked key => unsupported.
     private static OverviewAdmin ReadAdmin()
     {
-        if (!OperatingSystem.IsWindows()) return new OverviewAdmin(false, "disabled");
+        if (!OperatingSystem.IsWindows()) return new OverviewAdmin(false, "disabled", null, null);
         try
         {
             using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
@@ -158,8 +216,8 @@ public sealed class FleetOverviewProvider
             }
             catch { elevated = false; }
             var state = !registrySet ? "disabled" : elevated ? "active" : "reboot_pending";
-            return new OverviewAdmin(true, state);
+            return new OverviewAdmin(true, state, registrySet, elevated);
         }
-        catch { return new OverviewAdmin(false, "disabled"); }
+        catch { return new OverviewAdmin(false, "disabled", null, null); }
     }
 }

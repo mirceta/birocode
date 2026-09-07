@@ -386,7 +386,9 @@ public partial class ArchAgentService : IArchWakeSource
         line to the right agent: `update_task` with `assignee` (its handle) moves THAT
         assignee's state and records its branch/PR; without `assignee` a status is applied
         to every assignee, and a branch/PR claim on a multi-assignee card is refused until
-        you name the assignee.
+        you name the assignee. When the Operator asks to delete or remove a junk/cancelled
+        card, `delete_task` (by #ref, full id or a unique prefix) hard-deletes it from the
+        board — the card and its edges vanish from the Kanban and the Task graph.
 
         Your duties on each wake: (1) dispatch every task that is `awaitingDispatch` with
         `dispatch_task` — the assignee gets the full brief in its own conversation and the
@@ -921,6 +923,24 @@ public partial class ArchAgentService : IArchWakeSource
     /// i.e. free to be given work), running state, last actor, arch scope. Local agents =
     /// repos with a dock or in the arch scope; remote agents come from each peer's
     /// cached describe (never blocking on the network).</summary>
+    /// <summary>This machine as the fleet sees it (openspec fleet-overview-honest): the
+    /// identity fields of the fleet object plus the SAME overview record the describe
+    /// carries — the header strip's Machine tile renders it with the Overview tab's rows,
+    /// so the strip and a hub can never disagree about this box.</summary>
+    public object SelfOverview()
+    {
+        var managed = ManagedRepoIds().ToHashSet(StringComparer.Ordinal);
+        var include = new HashSet<string>(managed, StringComparer.Ordinal);
+        include.UnionWith(_dock.GetAll().Select(t => t.RepoId));
+        return new
+        {
+            machine = SelfLabel, sourceId = CollectorService.SelfId, self = true, reachable = true, status = FleetClient.StatusOk,
+            version = BuildVersion, gateOpen = _gate.Enabled, acceptsSends = AcceptFleetSends, acceptsUpgrades = AcceptFleetUpgrades,
+            managedCount = managed.Count, agentCount = LocalAgents(include, managed).Count, staleTasks = StaleTasksBySource().GetValueOrDefault(""),
+            overview = _overview.Current(),
+        };
+    }
+
     public object FleetStatus()
     {
         var managed = ManagedRepoIds().ToHashSet(StringComparer.Ordinal);
@@ -1926,6 +1946,28 @@ public partial class ArchAgentService : IArchWakeSource
         var labels = string.Join(" + ", set.Select(a => AgentLabelOf(a.SourceId, a.RepoId)));
         return new ToolOutcome(true, set.Count == 0 ? "unassigned" : "assigned",
             set.Count == 0 ? $"task {id} unassigned" : $"task {id} assigned to {labels}; dispatch_task pings {(set.Count > 1 ? "each of them" : "the agent")}", node);
+    }
+
+    /// <summary>Delete a task from the board (fleet task e3b7065c): resolve the ref the same
+    /// way the other task tools do — full id, "#5cc3e900" or a unique prefix (openspec
+    /// kanban-card-ref, what the Operator pastes from a card) — then remove the node, its
+    /// assignee rows and its dependency edges, and unlink any idea it was promoted from
+    /// (DeleteNode tombstones the node + edges and restores the idea). Hard delete, for
+    /// clearing junk/cancelled cards; the card vanishes from the Kanban and the Task graph.
+    /// Returns the removed task's #ref and title.</summary>
+    public ToolOutcome ToolDeleteTask(string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return new ToolOutcome(false, "error", "id is required");
+        var (resolvedId, idErr) = _graph.ResolveTaskRef(id);
+        if (resolvedId is null) return new ToolOutcome(false, "error", idErr ?? $"no task {id}");
+        var node = _graph.Find(resolvedId);
+        var cardRef = TaskGraph.TaskGraphService.CardRef(resolvedId);
+        var title = node?.Title ?? "";
+        var brief = title.Length > 60 ? title[..60].TrimEnd() + "…" : title;
+        var dropped = _graph.DeleteNode(resolvedId, Now());
+        if (dropped < 0) return new ToolOutcome(false, "error", idErr ?? $"no task {id}");
+        AuditTool("delete_task", node?.RepoId, $"deleted {cardRef}{(dropped > 0 ? $" (+{dropped} edge(s))" : "")}");
+        return new ToolOutcome(true, "deleted", $"deleted task {cardRef} \"{brief}\"{(dropped > 0 ? $" and {dropped} dependency edge(s)" : "")}", new { id = resolvedId, @ref = cardRef, title });
     }
 
     public ToolOutcome ToolDispatchTask(string? id, string? branch = null, string? assignees = null, string? machine = null)

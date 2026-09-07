@@ -1,0 +1,27 @@
+/* The shared live-activity dot (fleet-status task dfee16ea). Same 8px circle, same
+   colours and the same 1.2s fade pulse Fleet Status used (was .fs__dot + fs-pulse), now
+   in one place so the Fleet Status chips and the Kanban card badges agree. */
+.agent-dot { flex: 0 0 auto; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #777; }
+.agent-dot--free { background: #3fb950; }
+.agent-dot--claimed { background: #d29922; }
+.agent-dot--idle { background: #777; }
+.agent-dot--unknown { background: #777; opacity: 0.5; }
+.agent-dot--running { background: var(--color-text, #eee); animation: agent-dot-pulse 1.2s ease-in-out infinite; }
+@keyframes agent-dot-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+/* Respect reduced-motion: don't blink; ring the dot so "busy" is still distinguishable. */
+@media (prefers-reduced-motion: reduce) {
+  .agent-dot--running { animation: none; box-shadow: 0 0 0 2px var(--color-text, #eee); }
+}
+
+/* Working-badge emphasis (task 3546287b): the badge of an ACTIVELY WORKING agent
+   (the blinking-dot 'running' state) pops out of the idle crowd. Shared effects
+   here — weight, a static glow (no new animation, nothing to reduce), a bigger
+   dot; each view adds its own ~50% size step (.kb__chip--working /
+   .fs__chip--working) so enlargement reflows inside its own layout instead of
+   a transform overlapping neighbours. The size change is a reflow, not motion;
+   the gentle transition is opt-in for no-preference only. */
+.agent-badge--working { font-weight: 600; box-shadow: 0 0 0 1px var(--color-accent, #5ea0ef), 0 0 9px rgba(94, 160, 239, 0.4); }
+.agent-badge--working .agent-dot { width: 11px; height: 11px; }
+@media (prefers-reduced-motion: no-preference) {
+  .agent-badge--working { transition: font-size 0.2s ease, padding 0.2s ease; }
+}

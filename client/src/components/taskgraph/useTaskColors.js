@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { assignSlots, hueOf, machineKey, repoKey, readSlots, writeSlots } from './graphColors';
+import { assignSlots, hueOf, machineKey, repoKey, readSlots, writeSlots, agentMark } from './graphColors';
 
 // The ONE shared machine/repo colour mapping (openspec taskgraph-colours), consumed by
 // the Task graph, the Kanban board AND Fleet Status so the same machine/agent gets the
@@ -46,9 +46,12 @@ export function useTaskColors(machineKeys, repoKeys) {
       const cls = `${mh != null ? ' has-machine' : ''}${rh != null ? ' has-repo' : ''}`;
       return { style, cls };
     };
-    return { slots, machineHue, repoHue, chip };
+    // The agent's colour-independent identity (fleet task 4ddcfce3): glyph + monogram
+    // from the same machine/repo keys, so both views render one token per agent.
+    const mark = (mk, rk, machineLabel, repoHandleOrName) => agentMark(mk, rk, machineLabel, repoHandleOrName);
+    return { slots, machineHue, repoHue, chip, mark };
   }, [slots]);
 }
 
 // Re-export the key derivations so callers import one module for the shared scheme.
-export { machineKey, repoKey };
+export { machineKey, repoKey, agentMark };

@@ -1,0 +1,11 @@
+/* Agent identity mark (fleet task 4ddcfce3): glyph + monogram, shared by the Fleet
+   Status chips and the Kanban assignee chips. Inherits the chip's text colour so it
+   stays legible on the machine/repo tints in light and dark themes; the glyph is a
+   touch larger than the text so the shape reads at badge size. */
+.agent-mark { display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto; font-family: ui-monospace, Consolas, "Segoe UI Mono", monospace; font-weight: 700; letter-spacing: 0.02em; white-space: nowrap; }
+.agent-mark__glyph { font-family: "Segoe UI Symbol", "Apple Symbols", "Noto Sans Symbols 2", "DejaVu Sans", sans-serif; font-size: 1.1em; line-height: 1; }
+.agent-mark__mono { font-size: 0.95em; line-height: 1; opacity: 0.95; }
+.agent-mark--compact .agent-mark__mono { font-size: 0.9em; }
+/* On the Fleet Status chip the mark leads the name column; on a Kanban chip it leads the handle. */
+.fs__chip .agent-mark { margin-right: 2px; }
+.kb__chip .agent-mark { margin-right: 3px; }

@@ -5,6 +5,8 @@ import { useTaskFilter } from './taskFilterStore';
 import { COLUMNS, columnOf } from './kanbanColumns';
 import { applyFilter, assigneesOf, blockedIds, filterContext, flagsOf, isNarrowed, staleIds, taskView } from './taskFilters';
 import { useTaskColors, machineKey, repoKey } from './useTaskColors';
+import AgentMark from './AgentMark';
+import AgentStatusDot, { agentDotState, workingBadgeClass } from '../shared/AgentStatusDot';
 import './kanban.css';
 
 // The Kanban view of the task board (openspec task-board-kanban, columns per
@@ -54,6 +56,7 @@ export default function KanbanBoard() {
   const [verifying, setVerifying] = useState(false);
   const [verifyNote, setVerifyNote] = useState('');
   const [copiedId, setCopiedId] = useState(null); // the card whose reference was just copied
+  const [confirmDelete, setConfirmDelete] = useState(null); // the card whose delete is armed (fleet task e3b7065c)
   const [, setTick] = useState(0);
 
   const load = useCallback(async () => {
@@ -103,8 +106,14 @@ export default function KanbanBoard() {
   for (const m of fleet?.machines || []) {
     machineLabel[m.self ? '' : m.sourceId] = m.machine;
     // The handle ("spacex/prg#2", openspec stable-handles) is the label everywhere.
-    for (const a of m.agents || []) agents.push({ key: `${m.self ? '' : m.sourceId}|${a.repoId}`, label: `${a.handle || `${m.machine}/${a.name}`}${a.managed ? ' 🏛' : ''}`, machine: m.machine, name: a.name, handle: a.handle, managed: a.managed, remoteUrl: a.remoteUrl });
+    for (const a of m.agents || []) agents.push({ key: `${m.self ? '' : m.sourceId}|${a.repoId}`, label: `${a.handle || `${m.machine}/${a.name}`}${a.managed ? ' 🏛' : ''}`, machine: m.machine, name: a.name, handle: a.handle, managed: a.managed, remoteUrl: a.remoteUrl, runningSince: a.runningSince, onDefault: a.onDefault, branch: a.branch });
   }
+  // The live activity of one assignee (fleet-status task dfee16ea): look the assignee up
+  // in the SAME fleet-status snapshot Fleet Status uses, so the shared AgentStatusDot
+  // reflects real current state (pulsing while running, green when free) and updates on
+  // the board's 5 s fleet poll — not a stale card field. null when the fleet doesn't know
+  // the agent (offline / unmanaged) → the dot reads "unknown".
+  const fleetAgentOf = (a) => agents.find((x) => x.key === `${a.sourceId || ''}|${a.repoId}`) || null;
   // Shared machine/repo colours (fleet-status task 327aa5ae): the SAME palette + slot map
   // the Task graph and Fleet Status use, so a machine/agent has one hue across all views.
   // A chip's border = its machine's hue, its background tint = its repo's hue.
@@ -120,6 +129,14 @@ export default function KanbanBoard() {
     const known = agents.find((x) => x.key === keyOf(a));
     if (known) return known.handle || `${known.machine}/${known.name}`;
     return `${String(a.repoId).slice(0, 8)}… @ ${machineLabel[a.sourceId || ''] || (a.sourceId ? a.sourceId.slice(0, 8) : 'this machine')}`;
+  };
+  // The assignee's colour-independent identity (fleet task 4ddcfce3): the SAME glyph +
+  // monogram its chip carries on Fleet Status, from the shared module — machine label and
+  // repo handle as the fleet reports them, so the two views agree letter for letter.
+  const markOf = (a) => {
+    const known = agents.find((x) => x.key === keyOf(a));
+    const machine = known?.machine || machineLabel[a.sourceId || ''] || (a.sourceId ? a.sourceId.slice(0, 8) : 'this machine');
+    return colors.mark(mkOf(a), rkOf(a), machine, known?.handle || known?.name || String(a.repoId).slice(0, 8));
   };
 
   const patch = async (id, body) => {
@@ -143,9 +160,30 @@ export default function KanbanBoard() {
       setNote((m) => ({ ...m, [n.id]: e?.message || String(e) }));
     } finally { setBusy(null); }
   };
+  // Delete a task (fleet task e3b7065c): the confirmed trash button and the detail's
+  // Delete both land here → DELETE /api/taskgraph/nodes/{id} removes the node, its
+  // assignee rows and its edges (and restores any promoted idea), then reload so the card
+  // vanishes from the Kanban and the Task graph at once. Two-step confirm via confirmDelete
+  // so nothing is deleted by accident.
   const remove = async (n) => {
-    try { await apiDelete(`/taskgraph/nodes/${n.id}`); setOpen(null); await load(); } catch (e) { setError(e?.message || String(e)); }
+    setConfirmDelete(null);
+    setOpen((o) => (o === n.id ? null : o));
+    try { await apiDelete(`/taskgraph/nodes/${n.id}`); await load(); } catch (e) { setError(e?.message || String(e)); }
   };
+  // The delete affordance, used on the card face and in the detail. Armed = show the
+  // confirm pair; otherwise a small trash button. Every handler stops propagation so it
+  // never opens the card or starts a drag; the buttons are draggable=false for the same.
+  const deleteControl = (n, variant) => (
+    confirmDelete === n.id ? (
+      <span className={`kb__del-confirm${variant === 'detail' ? ' kb__del-confirm--detail' : ''}`} onClick={(e) => e.stopPropagation()} data-delete-confirm={n.id}>
+        <span className="kb__del-q">Delete?</span>
+        <button type="button" className="kb__btn kb__btn--danger" draggable={false} onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); remove(n); }} data-confirm-delete={n.id}>🗑 Delete</button>
+        <button type="button" className="kb__btn" draggable={false} onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setConfirmDelete(null); }}>Cancel</button>
+      </span>
+    ) : (
+      <button type="button" className="kb__del" title="Delete this task" aria-label={`Delete task ${cardRef(n)}`} draggable={false} onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setConfirmDelete(n.id); }} data-delete={n.id}>🗑</button>
+    )
+  );
   const add = async (e) => {
     e.preventDefault();
     const title = draft.trim();
@@ -251,7 +289,7 @@ export default function KanbanBoard() {
                     data-column={c.key}
                   >
                     <div className="kb__title">
-                      {n.title}
+                      <span className="kb__title-text">{n.title}</span>
                       <span className="kb__ref" data-card-ref={cardRef(n)} title={`card ${cardRef(n)} — task id ${n.id}`}>
                         <code className="kb__ref-code">{cardRef(n)}</code>
                         <button
@@ -267,14 +305,20 @@ export default function KanbanBoard() {
                           {copiedId === n.id ? '✓ copied' : '⧉'}
                         </button>
                       </span>
+                      {deleteControl(n)}
                     </div>
                     <div className="kb__meta">
                       {assigneesOf(n).map((a) => {
                         const multi = assigneesOf(n).length > 1;
                         const c = colors.chip(mkOf(a), rkOf(a));
+                        // Working emphasis (task 3546287b): the SAME state that drives the
+                        // blinking dot decides it — on a multi-assignee card only the
+                        // assignee that is actually running enlarges.
+                        const st = agentDotState(fleetAgentOf(a));
+                        const working = workingBadgeClass(st);
                         return (
-                          <span key={keyOf(a)} className={`kb__chip kb__chip--who${c.cls}${multi ? ' kb__chip--who-multi' : ''}${a.warning ? ' kb__chip--who-warn' : ''}`} style={c.style} title={`${assigneeLabelOf(a)} — this machine + repo agent's colour matches Fleet Status${multi ? ` · ${a.status}` : ''}${a.warning ? ` · ⚠ ${a.warning}` : ''}`} data-assignee={keyOf(a)}>
-                            👤 {assigneeLabelOf(a)}{multi ? <span className="kb__who-status"> · {a.status}</span> : null}
+                          <span key={keyOf(a)} className={`kb__chip kb__chip--who${c.cls}${multi ? ' kb__chip--who-multi' : ''}${a.warning ? ' kb__chip--who-warn' : ''}${working ? ` ${working} kb__chip--working` : ''}`} style={c.style} title={`${assigneeLabelOf(a)} — this machine + repo agent's colour, mark and activity dot match Fleet Status${working ? ' · WORKING NOW' : ''}${multi ? ` · ${a.status}` : ''}${a.warning ? ` · ⚠ ${a.warning}` : ''}`} data-assignee={keyOf(a)} data-working={working ? 'true' : undefined}>
+                            <AgentStatusDot state={st} /><AgentMark mark={markOf(a)} compact /> {assigneeLabelOf(a)}{multi ? <span className="kb__who-status"> · {a.status}</span> : null}
                           </span>
                         );
                       })}
@@ -298,8 +342,8 @@ export default function KanbanBoard() {
                           {assigneesOf(n).map((a) => {
                             const c = colors.chip(mkOf(a), rkOf(a));
                             return (
-                            <span key={keyOf(a)} className={`kb__chip kb__chip--who${c.cls}`} style={c.style} title={`${a.status}${a.branch ? ` · ⎇ ${a.branch}` : ''}${a.prUrl ? ` · PR${a.prNumber ? ' #' + a.prNumber : ''}` : ''}${a.warning ? ` · ⚠ ${a.warning}` : ''}`}>
-                              {assigneeLabelOf(a)}{assigneesOf(n).length > 1 ? <span className="kb__who-status"> · {a.status}</span> : null}
+                            <span key={keyOf(a)} className={`kb__chip kb__chip--who${c.cls}`} style={c.style} title={`${assigneeLabelOf(a)} · ${a.status}${a.branch ? ` · ⎇ ${a.branch}` : ''}${a.prUrl ? ` · PR${a.prNumber ? ' #' + a.prNumber : ''}` : ''}${a.warning ? ` · ⚠ ${a.warning}` : ''}`}>
+                              <AgentStatusDot state={agentDotState(fleetAgentOf(a))} /><AgentMark mark={markOf(a)} compact /> {assigneeLabelOf(a)}{assigneesOf(n).length > 1 ? <span className="kb__who-status"> · {a.status}</span> : null}
                               <button type="button" className="kb__x" title="remove this assignee" onClick={() => changeAssignees(n, keyOf(a), 'remove')} data-remove-assignee={keyOf(a)}>×</button>
                             </span>
                           ); })}
@@ -316,7 +360,7 @@ export default function KanbanBoard() {
                           {n.status !== 'doing' && <button type="button" className="kb__btn" onClick={() => setStatus(n, 'doing')}>doing</button>}
                           {n.status !== 'done' && <button type="button" className="kb__btn" title="move the card to done — the harness keeps verifying and badges the card until the merge is confirmed" onClick={() => setStatus(n, 'done')}>done ✓</button>}
                           <button type="button" className="kb__btn kb__btn--primary" disabled={!n.repoId || DELIVERED(n.status) || blocked || busy === n.id} title={!n.repoId ? 'assign first' : blocked ? 'a prerequisite is not delivered' : assigneesOf(n).length > 1 ? 'send the task brief to every assignee not yet pinged, each told which repo is its own' : 'send the task brief to the assignee now'} onClick={() => dispatch(n)} data-dispatch>📣 {assigneesOf(n).length > 1 ? 'Ping assignees' : 'Ping assignee'}</button>
-                          <button type="button" className="kb__btn kb__btn--danger" onClick={() => remove(n)} title="delete the task">✕</button>
+                          {deleteControl(n, 'detail')}
                         </div>
                         {(n.branch || n.headCommit || n.mergeCommit) && (
                           <div className="kb__row kb__dim kb__mono" data-linkage>
