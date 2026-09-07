@@ -52,7 +52,7 @@ test('overviewGroups: an old peer (no overview) says every overview field is UNK
   assert.equal(flat.Version.value, 'deadbee');
   assert.equal(flat.Machine.value, 'OLDBOX');
   assert.equal(flat['Host active'].value, 'no');
-  for (const k of ['Timezone', 'Host time', 'Admin active', 'GitHub', 'Claude', '5-hour window', 'Weekly quota']) {
+  for (const k of ['Timezone', 'Host time', 'Admin active', 'Keep-alive', 'GitHub', 'Claude', '5-hour window', 'Weekly quota']) {
     assert.equal(flat[k].value, UNKNOWN.oldBuild, k);
     assert.equal(flat[k].tone, 'unknown', k);
   }
@@ -110,6 +110,19 @@ test('overviewGroups: usage is an explicit state in every case — no session, c
   assert.equal(un.value, 'unavailable — session expired');
   assert.equal(un.tone, 'bad');
   assert.equal(row({ claude: null, capturedAt: 1 }).value, UNKNOWN.cold);
+});
+
+test('overviewGroups: the keep-alive (watchdog) row reflects the per-machine state, one per fleet peer', () => {
+  const machine = { machine: 'M', version: 'v', gateOpen: true, reachable: true };
+  const keepAlive = (ov) => Object.fromEntries(overviewGroups(ov, machine).flatMap((g) => g.rows).map((r) => [r.label, r]))['Keep-alive'];
+  // The same states WatchdogPlan.StateOf emits for the local strip tile — one source, no drift.
+  assert.deepEqual(keepAlive({ watchdog: { supported: true, state: 'healthy' }, capturedAt: 1 }), { label: 'Keep-alive', value: 'auto-start armed', tone: 'ok' });
+  assert.equal(keepAlive({ watchdog: { supported: true, state: 'not_set_up' }, capturedAt: 1 }).tone, 'warn');
+  assert.equal(keepAlive({ watchdog: { supported: true, state: 'error' }, capturedAt: 1 }).tone, 'bad');
+  assert.equal(keepAlive({ watchdog: { supported: false, state: 'unsupported' }, capturedAt: 1 }).value, 'unsupported');
+  // A peer that predates the field must NOT be fabricated — it is an explicit unknown.
+  assert.equal(keepAlive({ claude: null, capturedAt: 1 }).tone, 'unknown');
+  assert.equal(keepAlive({ watchdog: null, capturedAt: 1 }).value, UNKNOWN.cold);
 });
 
 test('every field the header strip shows has an Overview row (the audit, executable)', () => {
