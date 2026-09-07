@@ -97,6 +97,58 @@ public class TaskBoardTests
         Assert.Empty(Ids("done", true, false, null, null));
     }
 
+    // ---- card references (openspec kanban-card-ref) -----------------------------------------
+
+    [Fact]
+    public void A_card_reference_is_the_short_stable_prefix_and_resolves_back_to_the_exact_card()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "cwtest-cardref-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var g = new TaskGraphService(new ClaudeWeb.Services.Logging.Logger(), dir);
+            var a = g.AddNode("Alpha", null, null, null, 0, 0, now: 1)!;
+            var b = g.AddNode("Beta", null, null, null, 0, 0, now: 2)!;
+            Assert.Equal("#" + a.Id[..8], TaskGraphService.CardRef(a.Id));
+            Assert.Equal(a.Id[..8], TaskGraphService.ShortId(a.Id));
+
+            // Everything the Operator might paste resolves to the exact card.
+            Assert.Equal((a.Id, (string?)null), g.ResolveTaskRef(a.Id));
+            Assert.Equal((a.Id, (string?)null), g.ResolveTaskRef($"task {a.Id}"));
+            Assert.Equal((a.Id, (string?)null), g.ResolveTaskRef(TaskGraphService.CardRef(a.Id)));
+            Assert.Equal((a.Id, (string?)null), g.ResolveTaskRef("  " + a.Id[..8].ToUpperInvariant() + " "));
+            Assert.Equal((a.Id, (string?)null), g.ResolveTaskRef("task #" + a.Id[..12]));
+            Assert.Equal(b.Id, g.ResolveTaskRef("#" + b.Id[..8]).Id);
+
+            // Too short, unknown, blank: refused with a reason, never a guess.
+            Assert.Null(g.ResolveTaskRef(a.Id[..5]).Id);
+            Assert.Null(g.ResolveTaskRef("zzzzzzzz").Id);
+            Assert.Contains("no task", g.ResolveTaskRef("zzzzzzzz").Error);
+            Assert.Contains("required", g.ResolveTaskRef("  ").Error);
+        }
+        finally { try { Directory.Delete(dir, recursive: true); } catch { /* best effort */ } }
+    }
+
+    [Fact]
+    public void An_ambiguous_prefix_is_refused_and_names_the_candidates()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "cwtest-cardref-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "taskgraph.json"),
+                """{"SchemaVersion":2,"Nodes":[{"Id":"abcdef0011112222333344445555666a","Title":"First","Note":null,"RepoId":null,"MachineId":null,"Status":"todo","X":0,"Y":0,"CreatedAt":1,"UpdatedAt":1},{"Id":"abcdef00aaaabbbbccccddddeeeeffff","Title":"Second","Note":null,"RepoId":null,"MachineId":null,"Status":"todo","X":0,"Y":0,"CreatedAt":1,"UpdatedAt":1}],"Edges":[],"Machines":[],"Scratch":"","Tombstones":[]}""");
+            var g = new TaskGraphService(new ClaudeWeb.Services.Logging.Logger(), dir);
+            var (id, err) = g.ResolveTaskRef("#abcdef00");
+            Assert.Null(id);
+            Assert.Contains("matches 2 tasks", err);
+            Assert.Contains("First", err);
+            Assert.Contains("Second", err);
+            Assert.Equal("abcdef0011112222333344445555666a", g.ResolveTaskRef("abcdef001").Id); // one more character disambiguates
+        }
+        finally { try { Directory.Delete(dir, recursive: true); } catch { /* best effort */ } }
+    }
+
     [Fact]
     public void Old_node_json_without_assignment_fields_reads_back_with_defaults()
     {

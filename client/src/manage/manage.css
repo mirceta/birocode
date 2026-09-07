@@ -69,6 +69,20 @@ html, body, #root { height: 100%; margin: 0; }
 .fs__chip:hover, .fs__chip--open { color: var(--color-text, #eee); border-color: var(--color-accent, #5ea0ef); }
 .fs__chip--free { border-color: rgba(63, 185, 80, 0.6); }
 .fs__chip--running { color: var(--color-text, #eee); border-color: var(--color-text, #eee); }
+/* Machine + repo colour (fleet-status task 327aa5ae): the SAME shared hue palette the
+   Kanban cards and Task-graph nodes use, so a machine/agent reads as one colour across
+   all three views. Border = its machine's hue, background tint = its repo's hue (identical
+   hsl() formulas to the Kanban .kb__chip--who and .tg-assignee). The free/claimed/running
+   STATE still reads via the coloured dot inside the chip, so colouring the border by
+   machine loses nothing. Placed after --free/--running so the machine hue wins. */
+.fs__chip.has-machine { border-color: hsl(var(--tg-machine-h) 62% 40%); }
+.fs__chip.has-repo { background: hsl(var(--tg-repo-h) 72% 90%); color: #17181d; }
+.fs__chip.has-repo .fs__chip-branch { color: #3f434d; }
+@media (prefers-color-scheme: dark) {
+  .fs__chip.has-machine { border-color: hsl(var(--tg-machine-h) 70% 62%); }
+  .fs__chip.has-repo { background: hsl(var(--tg-repo-h) 34% 24%); color: var(--color-text, #eee); }
+  .fs__chip.has-repo .fs__chip-branch { color: var(--color-text-muted, #9aa); }
+}
 .fs__chip-text { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; overflow: hidden; }
 .fs__chip-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fs__chip-branch { max-width: 100%; font-size: 10px; line-height: 1.2; color: var(--color-text-muted, #9aa); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -163,3 +177,9 @@ html, body, #root { height: 100%; margin: 0; }
 /* Scoreboard tab: window strip + refresh above the reused ScoreboardView */
 .fs__scoreboard { padding: 6px 0; }
 .fs__sb-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+
+/* "Open harness" per-machine link (task e5cddb1e): jump to that computer's own
+   harness in a new tab; dimmed when the hub does not know its address. */
+.fs__openlink { font-size: 12px; color: var(--color-accent, #5ea0ef); text-decoration: none; border: 1px solid var(--color-border, #444); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+.fs__openlink:hover { border-color: var(--color-accent, #5ea0ef); }
+.fs__openlink--off { color: var(--color-text-muted, #667); opacity: 0.55; cursor: default; }
