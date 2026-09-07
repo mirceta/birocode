@@ -598,7 +598,8 @@ public class ArchController : ControllerBase
                 // Local repos or agents on subscribed harnesses — either makes a scope (fleet D3).
                 if (_arch.ManagedRepoIds().Count + _arch.ManagedFleet().Count == 0)
                     return BadRequest(new { error = "pick at least one managed repo (on this or another machine) before arming" });
-                _arch.Arm(key, req?.Mode, req?.MaxIterations);
+                try { _arch.Arm(key, req?.Mode, req?.MaxIterations); }
+                catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
                 break;
             case "disarm":
             case "stop":

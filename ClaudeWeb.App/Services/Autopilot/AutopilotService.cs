@@ -370,6 +370,10 @@ public class AutopilotService : BackgroundService
         // conversation once its slot is free.
         try { _arch.ReconcileGoals(); }
         catch (Exception ex) { _logger.Error($"[ARCH] goal routing tick failed: {ex.Message}"); }
+        // The Operator-facing conversation takes no wake loop (openspec arch-default-no-wakes):
+        // one left behind by an older build is retired before the instances tick.
+        try { _arch.RetireDefaultWakeLoop(); }
+        catch (Exception ex) { _logger.Error($"[ARCH] could not retire the default wake loop: {ex.Message}"); }
         foreach (var conv in _arch.ConversationLoops())
             TickRepo(_arch.HomeInfoFor(conv.RepoId), cfg, routines, now);
         try { _arch.DeliverGoalSummaries(); }

@@ -25,6 +25,33 @@ public sealed class ArchGoalConversationsTests : IDisposable
     private static ArchStateStore.ArchGoal Goal(params string[] repos) =>
         new("g1", "@arch:aaaa0001", "ship it", repos, Array.Empty<string>(), ArchGoals.Running, 1, null, "operator", null, Array.Empty<ArchStateStore.QueuedMessage>());
 
+    // ---- the default conversation takes no repo wake-ups (openspec arch-default-no-wakes) ----
+
+    [Fact]
+    public void The_default_conversation_takes_no_repo_wakes_but_a_sibling_still_can()
+    {
+        Assert.False(ArchGoals.TakesRepoWakes(ArchStateStore.DefaultConversationId));
+        Assert.False(ArchGoals.TakesRepoWakes(null));           // null resolves to the default
+        Assert.False(ArchGoals.TakesRepoWakes("not-a-conversation"));
+        Assert.True(ArchGoals.TakesRepoWakes("@arch:aaaa0001"));
+        Assert.Contains("plain chat", ArchGoals.NoWakeLoopReason);
+    }
+
+    [Fact]
+    public void The_default_conversations_standing_loop_memory_can_be_cleared_and_stays_cleared()
+    {
+        var store = new ArchStateStore(new Logger(), _dir);
+        store.SetStandingLoop(ArchStateStore.DefaultConversationId, "drive", 0);
+        Assert.NotNull(store.StandingLoopOf(ArchStateStore.DefaultConversationId));
+        store.ClearStandingLoop(ArchStateStore.DefaultConversationId);
+        Assert.Null(store.StandingLoopOf(ArchStateStore.DefaultConversationId));
+        // A sibling's memory is its own and untouched by that.
+        var sib = store.AddConversation("Deploy train");
+        store.SetStandingLoop(sib.Id, "suggest", 3);
+        store.ClearStandingLoop(ArchStateStore.DefaultConversationId);
+        Assert.Equal(("suggest", 3), store.StandingLoopOf(sib.Id));
+    }
+
     // ---- ownership in the store --------------------------------------------------------------
 
     [Fact]

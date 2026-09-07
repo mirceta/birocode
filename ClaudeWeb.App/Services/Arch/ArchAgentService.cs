@@ -2455,6 +2455,7 @@ public partial class ArchAgentService : IArchWakeSource
         var key = KeyOrDefault(convId);
         var loop = _loops.Get(key);
         if (loop is null || loop.Active || loop.Status is not ("escalate" or "capped")) return false;
+        if (!ArchGoals.TakesRepoWakes(key)) return false;
         var (_, lastSeq) = _collector.ReadEvents(int.MaxValue);
         _state.SetWatermark(key, lastSeq);
         lock (_wakeGate) _drafts.Remove(key);
@@ -2470,6 +2471,8 @@ public partial class ArchAgentService : IArchWakeSource
     public LoopConfigStore.LoopState Arm(string? convId, string? mode, int? maxIterations)
     {
         var key = KeyOrDefault(convId);
+        // The default conversation never takes a wake loop (openspec arch-default-no-wakes).
+        if (!ArchGoals.TakesRepoWakes(key)) throw new InvalidOperationException(ArchGoals.NoWakeLoopReason);
         EnsureHome();
         var (_, lastSeq) = _collector.ReadEvents(int.MaxValue);
         _state.SetWatermark(key, lastSeq);
@@ -2508,12 +2511,38 @@ public partial class ArchAgentService : IArchWakeSource
     public bool RestoreStandingLoopIfNeeded(string? convId = null)
     {
         var key = KeyOrDefault(convId);
+        // The default conversation's wake loop is never brought back (openspec
+        // arch-default-no-wakes): a goal loop ending there hands the slot to nobody.
+        if (!ArchGoals.TakesRepoWakes(key)) { _state.ClearStandingLoop(key); return false; }
         var remembered = _state.StandingLoopOf(key);
         if (remembered is null) return false;
         if (_loops.Get(key) is { Active: true }) return false;
         var s = Arm(key, remembered.Value.Mode, remembered.Value.Cap);
         _logger.Info($"[ARCH] standing wake loop of {key} restored after the driven loop ended ({s.Mode}, cap {s.MaxIterations})");
         return true;
+    }
+
+    /// <summary>The Operator-facing conversation takes no wake loop (openspec
+    /// arch-default-no-wakes): a wake-kind loop still armed on it by an older build, and the
+    /// standing-loop memory that kept re-arming it after every goal loop, are retired.
+    /// Engine tick, idempotent and cheap. Returns whether anything was retired.</summary>
+    public bool RetireDefaultWakeLoop()
+    {
+        var retired = false;
+        if (_loops.Get(ReservedId) is { Kind: LoopConfigStore.KindArch, Active: true })
+        {
+            _loops.Stop(ReservedId);
+            lock (_wakeGate) _drafts.Remove(ReservedId);
+            _logger.Info($"[ARCH] wake loop on {ReservedId} retired: the Operator-facing conversation takes no repo wake-ups");
+            retired = true;
+        }
+        if (_state.StandingLoopOf(ReservedId) is not null)
+        {
+            _state.ClearStandingLoop(ReservedId);
+            _logger.Info($"[ARCH] standing wake loop memory of {ReservedId} cleared: it is never restored");
+            retired = true;
+        }
+        return retired;
     }
 
     public int Watermark => _state.Watermark;
@@ -2530,6 +2559,16 @@ public partial class ArchAgentService : IArchWakeSource
     public WakeDraft? ComposeWake(string? convId)
     {
         var key = KeyOrDefault(convId);
+        if (!ArchGoals.TakesRepoWakes(key))
+        {
+            // The Operator-facing conversation takes no repo wake-ups (openspec
+            // arch-default-no-wakes): whatever happened on the managed repos, nothing is
+            // composed for it; its watermark just follows the feed so nothing piles up.
+            var (_, last) = _collector.ReadEvents(int.MaxValue);
+            if (last > _state.WatermarkOf(key)) _state.SetWatermark(key, last);
+            lock (_wakeGate) _drafts.Remove(key);
+            return null;
+        }
         // Managed keys across the fleet (D3): bare repo ids locally, sourceId/repoId remotely.
         var managed = ManagedRepoIds().Concat(ManagedFleet()).ToHashSet(StringComparer.Ordinal);
         var after = _state.WatermarkOf(key);
