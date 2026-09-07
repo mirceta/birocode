@@ -7,7 +7,7 @@ The harness runs every agent turn through a provider adapter (openspec
 | provider | engine | status |
 |---|---|---|
 | `claude` | Claude Code CLI (`claude -p`, stream-json) | default; behaviour unchanged |
-| `codex` | OpenAI Codex CLI (`codex exec --json`, headless; verified on codex-cli 0.153.4) | repo agents |
+| `codex` | OpenAI Codex CLI (`codex exec --json`, headless; verified on codex-cli 0.153.4, authenticated end-to-end 2026-09-07) | repo agents |
 
 ## Choosing a provider
 

@@ -143,6 +143,26 @@ public class CodexRealRunTests
         Assert.Equal(new[] { "shell" }, c.Record.Tools);
     }
 
+    [Fact]
+    public async Task Real_mcp_tool_call_items_translate_to_tool_start_and_end()
+    {
+        // Verbatim from the authenticated run of 2026-09-07 (codex-cli 0.153.4, MCP probe
+        // server driven through the adapter's -c mcp_servers.* overrides).
+        var adapter = new CodexCliAdapter(new Logger());
+        var c = NewSink();
+        await adapter.TranslateLineAsync("""{"type":"item.started","item":{"id":"item_0","type":"mcp_tool_call","server":"harness","tool":"harness_probe","arguments":{},"result":null,"error":null,"status":"in_progress"}}""", c.Sink);
+        await adapter.TranslateLineAsync("""{"type":"item.completed","item":{"id":"item_0","type":"mcp_tool_call","server":"harness","tool":"harness_probe","arguments":{},"result":{"content":[{"type":"text","text":"harness probe token: PRB-BRTBS778"}],"structured_content":null},"error":null,"status":"completed"}}""", c.Sink);
+        await adapter.TranslateLineAsync("""{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"PRB-BRTBS778"}}""", c.Sink);
+        await adapter.TranslateLineAsync("""{"type":"turn.completed","usage":{"input_tokens":31106,"cached_input_tokens":24576,"cache_write_input_tokens":0,"output_tokens":85,"reasoning_output_tokens":0}}""", c.Sink);
+        Assert.Contains(c.Events, e => e.Contains("\"tool\"") && e.Contains("harness.harness_probe") && e.Contains("\"start\""));
+        Assert.Contains(c.Events, e => e.Contains("\"tool\"") && e.Contains("\"end\"") && e.Contains("\"ok\":true"));
+        Assert.Equal(new[] { "harness.harness_probe" }, c.Record.Tools);
+        Assert.Equal("PRB-BRTBS778", c.Record.Output.ToString());
+        Assert.Equal(31106, c.Record.InputTokens);
+        Assert.Contains(c.Events, e => e.Contains("\"done\""));
+        Assert.False(c.Errored);
+    }
+
     // ---- `codex login status` outcomes --------------------------------------------------
 
     [Fact]

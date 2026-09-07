@@ -2,7 +2,7 @@
 # instance shape as codex-real-run-e2e.ps1 (own data dir, copy of the live registry + a
 # throwaway git repo with engine codex, harness built from feature/codex-real-run into
 # .selfdev-build\p3check\bin), then check-codex-authenticated.mjs drives three real
-# Codex turns (builder → commit, resume, ask) and one direct MCP probe run.
+# Codex turns (builder -> commit, resume, ask) and one direct MCP probe run.
 # Exit 2 = BLOCKED (codex not logged in); 0 = all evidence green; 1 = a check failed.
 $ErrorActionPreference = 'Continue'
 $repo = 'C:\Users\Administrator\Desktop\playground\birocode'

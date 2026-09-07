@@ -107,7 +107,20 @@ const token = 'PRB-' + Math.random().toString(36).slice(2, 10).toUpperCase()
 const args = ['exec', '--json', '--skip-git-repo-check', '--dangerously-bypass-approvals-and-sandbox',
   '-c', `mcp_servers.harness.command='node'`, '-c', `mcp_servers.harness.args=['${probe.replace(/\\/g, '/')}']`, '-c', `mcp_servers.harness.env={HARNESS_PROBE_TOKEN='${token}'}`,
   'Call the MCP tool harness_probe (server "harness") and reply with exactly the token it returns, nothing else.']
-const cli = spawnSync(process.platform === 'win32' ? 'codex.cmd' : 'codex', args, { encoding: 'utf8', cwd: REPO_PATH, timeout: 180000, shell: process.platform === 'win32' })
+// Spawn the real binary directly (no shell, so the prompt is never re-split): the npm
+// global exposes codex.cmd -> node -> the native codex.exe somewhere under
+// node_modules/@openai/codex; walk that tree for it.
+import { execSync } from 'node:child_process'
+function walk(dir, out) { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { const f = path.join(dir, e.name); if (e.isDirectory()) walk(f, out); else if (/^codex(-[\w-]+)?\.exe$/i.test(e.name)) out.push(f) } return out }
+function codexExe() {
+  if (process.platform !== 'win32') return 'codex'
+  const npmRoot = execSync('npm root -g', { encoding: 'utf8' }).trim()
+  const hits = walk(path.join(npmRoot, '@openai', 'codex'), [])
+  if (!hits.length) throw new Error('codex.exe not found under ' + npmRoot)
+  return hits.sort((a, b) => a.length - b.length)[0]
+}
+const exe = codexExe(); console.log('MCP probe binary:', exe)
+const cli = spawnSync(exe, args, { encoding: 'utf8', cwd: REPO_PATH, timeout: 180000 })
 const jsonl = (cli.stdout || '').split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l) } catch { return null } }).filter(Boolean)
 console.log('--- MCP probe run (raw JSONL, first 12) ---'); for (const e of jsonl.slice(0, 12)) console.log(JSON.stringify(e).slice(0, 220))
 const mcpItems = jsonl.filter((e) => e.item?.type === 'mcp_tool_call')

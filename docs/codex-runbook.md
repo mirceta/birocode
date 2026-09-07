@@ -9,10 +9,14 @@ logs the CLI's transient notices, surfaces exactly one error with the CLI's verd
 and closes the turn with `provider=codex` on the lifecycle events. The dashboard
 probe reports installed / version / not logged in / the credential home.
 
-**Never executed here**: an authenticated Codex turn, an MCP tool call made by
-Codex, a commit produced by Codex, `codex exec resume` on a real thread, the
-read-only sandbox on a real turn, and `codex login --with-api-key` through the
-dashboard field. All of those exist as code and tests but have not run for real.
+**Executed for real on 2026-09-07** (after the Operator logged the CLI in with
+`codex login --device-auth`, ChatGPT plan), `codex-authenticated-e2e.ps1` 16/16 on an
+isolated instance of the branch: a builder turn produced commit `f2a975a codex hello`
+with `hello.txt`, `codex exec resume` on the same thread recalled the message, the ask
+lane could not write, and the MCP probe `harness.harness_probe` was called through the
+adapter's exact `-c mcp_servers.*` overrides and its token came back in the answer.
+Still never executed: `codex login --with-api-key` through the dashboard field (the
+Operator used device auth), and a Birokrat MCP tool (no key on this box).
 
 ## (a) Supply the credential
 
