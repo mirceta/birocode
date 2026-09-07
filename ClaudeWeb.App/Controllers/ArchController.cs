@@ -388,6 +388,15 @@ public class ArchController : ControllerBase
     /// <summary>Fleet status (openspec fleet-status-tab): every repo agent on every
     /// machine with branch / on-default / running / last actor / arch scope — the
     /// Management App's Status tab. Never waits on a peer (cached describes).</summary>
+    /// <summary>This machine's overview as the fleet sees it (openspec fleet-overview-honest):
+    /// the strip's Machine tile reads this — the same record the describe carries.</summary>
+    [HttpGet("overview")]
+    public IActionResult Overview()
+    {
+        _logger.CountRequest();
+        return Ok(_arch.SelfOverview());
+    }
+
     [HttpGet("fleet/status")]
     public IActionResult FleetStatus()
     {
