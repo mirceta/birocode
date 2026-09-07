@@ -123,6 +123,7 @@ public class AgentProviderTests
         Assert.Equal(new[]
         {
             "exec", "--json", "--skip-git-repo-check",
+            "-c", "project_doc_fallback_filenames=[\"CLAUDE.md\"]",
             "--dangerously-bypass-approvals-and-sandbox",
             "do the thing",
         }, psi.ArgumentList);
@@ -137,6 +138,7 @@ public class AgentProviderTests
         Assert.Equal(new[]
         {
             "exec", "resume", "thread-9", "--json", "--skip-git-repo-check",
+            "-c", "project_doc_fallback_filenames=[\"CLAUDE.md\"]",
             "-c", "sandbox_mode=\"read-only\"",
             "--model", "gpt-5-codex",
             "q",
@@ -150,7 +152,7 @@ public class AgentProviderTests
         var overrides = new CodexCliAdapter(new Logger()).McpOverrides(json);
         Assert.Contains(@"mcp_servers.birokrat.command='C:\srv\birokrat.exe'", overrides);
         Assert.Contains("mcp_servers.birokrat.args=['--port','5001']", overrides);
-        Assert.Contains("mcp_servers.birokrat.env={API_KEY='k1'}", overrides);
+        Assert.Contains("mcp_servers.birokrat.env_vars=['API_KEY']", overrides);
         // url (streamable-http) servers become url overrides; no headers → no token var
         // (openspec codex-real-run).
         Assert.Contains("mcp_servers.remote.url='http://x/mcp'", overrides);
@@ -195,7 +197,7 @@ public class AgentProviderTests
         Assert.Contains(c.Events, e => e.Contains("\"tool\"") && e.Contains("\"end\"") && e.Contains("clean"));
         Assert.Contains(c.Events, e => e.Contains("birokrat.simple_get"));
         Assert.Contains(c.Events, e => e.Contains("\"token\"") && e.Contains("All good."));
-        Assert.Contains(c.Events, e => e.Contains("\"usage\"") && e.Contains("140")); // input + cached
+        Assert.Contains(c.Events, e => e.Contains("\"usage\"") && e.Contains("100")); // cached input is already included
         Assert.Contains(c.Events, e => e.Contains("\"done\"") && e.Contains("th-42"));
         Assert.Equal("All good.", c.Record.Output.ToString());
         Assert.Equal(100, c.Record.InputTokens);

@@ -54,6 +54,7 @@ public class CodexRealRunTests
         Assert.Equal(new[]
         {
             "exec", "--json", "--skip-git-repo-check",
+            "-c", "project_doc_fallback_filenames=[\"CLAUDE.md\"]",
             "--dangerously-bypass-approvals-and-sandbox",
             "do the thing",
         }, psi.ArgumentList);
@@ -69,6 +70,7 @@ public class CodexRealRunTests
         Assert.Equal(new[]
         {
             "exec", "resume", "thread-9", "--json", "--skip-git-repo-check",
+            "-c", "project_doc_fallback_filenames=[\"CLAUDE.md\"]",
             "-c", "sandbox_mode=\"read-only\"",
             "--model", "gpt-5-codex",
             "q",
@@ -91,14 +93,14 @@ public class CodexRealRunTests
         Assert.Equal(new[]
         {
             "mcp_servers.arch.url='http://127.0.0.1:5099/api/arch/mcp'",
-            "mcp_servers.arch.bearer_token_env_var='CLAUDEWEB_MCP_ARCH_TOKEN'",
+            "mcp_servers.arch.bearer_token_env_var='CLAUDEWEB_MCP_61726368_TOKEN'",
         }, overrides);
-        Assert.Equal("s3cret-token", env["CLAUDEWEB_MCP_ARCH_TOKEN"]);
+        Assert.Equal("s3cret-token", env["CLAUDEWEB_MCP_61726368_TOKEN"]);
 
         var psi = adapter.CreateProcessInfo(Spec("q", mcpJson: json));
-        Assert.Equal("s3cret-token", psi.Environment["CLAUDEWEB_MCP_ARCH_TOKEN"]);
+        Assert.Equal("s3cret-token", psi.Environment["CLAUDEWEB_MCP_61726368_TOKEN"]);
         Assert.DoesNotContain(psi.ArgumentList, a => a.Contains("s3cret-token"));
-        Assert.Contains("mcp_servers.arch.bearer_token_env_var='CLAUDEWEB_MCP_ARCH_TOKEN'", psi.ArgumentList);
+        Assert.Contains("mcp_servers.arch.bearer_token_env_var='CLAUDEWEB_MCP_61726368_TOKEN'", psi.ArgumentList);
     }
 
     // ---- the verbatim unauthenticated stream ------------------------------------------

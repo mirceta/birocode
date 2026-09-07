@@ -86,6 +86,17 @@ public class ClaudeCliAdapter : IAgentCliAdapter
         psi.ArgumentList.Add("stream-json");
         psi.ArgumentList.Add("--include-partial-messages");
         psi.ArgumentList.Add("--verbose");
+        if (spec.Ephemeral) psi.ArgumentList.Add("--no-session-persistence");
+
+        // Repositories maintained for Codex may only have AGENTS.md. Claude's
+        // own CLAUDE.md discovery stays authoritative when that file exists.
+        if (!string.IsNullOrWhiteSpace(spec.WorkingDirectory) &&
+            !File.Exists(Path.Combine(spec.WorkingDirectory, "CLAUDE.md")) &&
+            (File.Exists(Path.Combine(spec.WorkingDirectory, "AGENTS.md")) || File.Exists(Path.Combine(spec.WorkingDirectory, "AGENTS.override.md"))))
+        {
+            psi.ArgumentList.Add("--append-system-prompt");
+            psi.ArgumentList.Add("Read AGENTS.override.md if present, otherwise AGENTS.md, in the working directory before starting. Follow its repository instructions and any nested AGENTS.override.md or AGENTS.md that applies to files you edit. This is the harness's shared-instruction fallback for this repository.");
+        }
 
         if (!string.IsNullOrWhiteSpace(spec.Model))
         {
@@ -507,6 +518,15 @@ public static class CliExeResolver
                 {
                     var npmExe = Path.Combine(d, npmRelativeExe);
                     if (File.Exists(npmExe)) return npmExe;
+                    // Current npm Codex packages put the executable inside a
+                    // platform package's vendor tree, not bin/codex.exe.
+                    var package = Path.GetDirectoryName(Path.GetDirectoryName(npmExe));
+                    if (package != null && Directory.Exists(package))
+                    {
+                        var native = Directory.EnumerateFiles(package, baseName + ".exe", SearchOption.AllDirectories)
+                            .OrderBy(p => p.Length).FirstOrDefault();
+                        if (native != null) return native;
+                    }
                 }
 
                 if (cmdFallback is null)

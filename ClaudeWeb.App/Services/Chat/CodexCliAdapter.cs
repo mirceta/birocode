@@ -105,9 +105,12 @@ public class CodexCliAdapter : IAgentCliAdapter
             psi.ArgumentList.Add(spec.SessionId);
         }
         psi.ArgumentList.Add("--json");
+        if (spec.Ephemeral) psi.ArgumentList.Add("--ephemeral");
         // The repo is always a git repo, but a brand-new folder may not be yet;
         // the harness (not codex) is the boundary here, same as with Claude.
         psi.ArgumentList.Add("--skip-git-repo-check");
+        psi.ArgumentList.Add("-c");
+        psi.ArgumentList.Add("project_doc_fallback_filenames=[\"CLAUDE.md\"]");
 
         if (spec.ReadOnly)
         {
@@ -125,8 +128,8 @@ public class CodexCliAdapter : IAgentCliAdapter
             psi.ArgumentList.Add(spec.Model);
         }
 
-        var env = new Dictionary<string, string>();
-        foreach (var over in McpOverrides(spec.McpConfigJson, env))
+        var env = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var over in McpOverrides(spec.McpConfigJson, env, spec.McpConfigPath))
         {
             psi.ArgumentList.Add("-c");
             psi.ArgumentList.Add(over);
@@ -152,7 +155,7 @@ public class CodexCliAdapter : IAgentCliAdapter
     /// <c>CLAUDEWEB_MCP_&lt;NAME&gt;_TOKEN</c>, whose value is added to
     /// <paramref name="env"/> for the child's environment. These are the exact
     /// keys <c>codex mcp add</c> writes to config.toml (codex-cli 0.153.4).</summary>
-    public IReadOnlyList<string> McpOverrides(string? mcpConfigJson, IDictionary<string, string>? env = null)
+    public IReadOnlyList<string> McpOverrides(string? mcpConfigJson, IDictionary<string, string>? env = null, string? configPath = null)
     {
         var result = new List<string>();
         if (string.IsNullOrWhiteSpace(mcpConfigJson)) return result;
@@ -161,12 +164,28 @@ public class CodexCliAdapter : IAgentCliAdapter
             using var doc = JsonDocument.Parse(mcpConfigJson);
             if (!doc.RootElement.TryGetProperty("mcpServers", out var servers) || servers.ValueKind != JsonValueKind.Object)
                 return result;
+            var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var conflictingEnv = false;
+            foreach (var entry in servers.EnumerateObject())
+                if (entry.Value.TryGetProperty("env", out var vars) && vars.ValueKind == JsonValueKind.Object)
+                    foreach (var pair in vars.EnumerateObject().Where(p => p.Value.ValueKind == JsonValueKind.String))
+                    {
+                        var value = pair.Value.GetString() ?? "";
+                        if (values.TryGetValue(pair.Name, out var old) && old != value) conflictingEnv = true;
+                        values[pair.Name] = value;
+                    }
             foreach (var server in servers.EnumerateObject())
             {
-                var name = new string(server.Name.Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray());
+                var name = server.Name.All(c => char.IsAsciiLetterOrDigit(c) || c == '_') ? server.Name : Toml(server.Name);
                 var v = server.Value;
                 if (v.TryGetProperty("command", out var cmd) && cmd.ValueKind == JsonValueKind.String)
                 {
+                    if (conflictingEnv && configPath != null)
+                    {
+                        result.Add($"mcp_servers.{name}.command={Toml(Environment.ProcessPath!)}");
+                        result.Add($"mcp_servers.{name}.args=[{Toml("--mcp-stdio-proxy")},{Toml(configPath)},{Toml(server.Name)}]");
+                        continue;
+                    }
                     result.Add($"mcp_servers.{name}.command={Toml(cmd.GetString() ?? "")}");
                     if (v.TryGetProperty("args", out var args) && args.ValueKind == JsonValueKind.Array)
                     {
@@ -177,10 +196,19 @@ public class CodexCliAdapter : IAgentCliAdapter
                     }
                     if (v.TryGetProperty("env", out var envObj) && envObj.ValueKind == JsonValueKind.Object)
                     {
-                        var pairs = envObj.EnumerateObject()
-                            .Where(p => p.Value.ValueKind == JsonValueKind.String)
-                            .Select(p => $"{p.Name}={Toml(p.Value.GetString() ?? "")}");
-                        result.Add($"mcp_servers.{name}.env={{{string.Join(",", pairs)}}}");
+                        var keys = new List<string>();
+                        foreach (var pair in envObj.EnumerateObject().Where(p => p.Value.ValueKind == JsonValueKind.String))
+                        {
+                            var value = pair.Value.GetString() ?? "";
+                            if (env != null)
+                            {
+                                if (env.TryGetValue(pair.Name, out var existing) && existing != value)
+                                    throw new InvalidOperationException($"MCP servers require conflicting values for environment variable {pair.Name}. Use distinct variable names or separate server launchers.");
+                                env[pair.Name] = value;
+                            }
+                            keys.Add(Toml(pair.Name));
+                        }
+                        result.Add($"mcp_servers.{name}.env_vars=[{string.Join(",", keys)}]");
                     }
                     continue;
                 }
@@ -196,15 +224,15 @@ public class CodexCliAdapter : IAgentCliAdapter
                             if (h.Name.Equals("Authorization", StringComparison.OrdinalIgnoreCase) &&
                                 value.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
                             {
-                                var varName = $"CLAUDEWEB_MCP_{name.ToUpperInvariant()}_TOKEN";
+                                var varName = "CLAUDEWEB_MCP_" + Convert.ToHexString(System.Text.Encoding.UTF8.GetBytes(server.Name)) + "_TOKEN";
                                 result.Add($"mcp_servers.{name}.bearer_token_env_var={Toml(varName)}");
                                 if (env is not null) env[varName] = value["Bearer ".Length..].Trim();
                             }
                             else
                             {
-                                // Codex has no per-header override we have verified; a
-                                // non-bearer header is dropped loudly rather than mangled.
-                                _logger.Info($"[CODEX] MCP server \"{server.Name}\": header {h.Name} not translated (only Authorization: Bearer is)");
+                                var varName = "CLAUDEWEB_MCP_HEADER_" + Convert.ToHexString(System.Text.Encoding.UTF8.GetBytes(server.Name + ":" + h.Name));
+                                result.Add($"mcp_servers.{name}.env_http_headers.{Toml(h.Name)}={Toml(varName)}");
+                                if (env != null) env[varName] = value;
                             }
                         }
                     }
@@ -214,9 +242,9 @@ public class CodexCliAdapter : IAgentCliAdapter
                 _logger.Info($"[CODEX] MCP server \"{server.Name}\" skipped (neither command nor url)");
             }
         }
-        catch (Exception ex)
+        catch (JsonException ex)
         {
-            _logger.Error($"[CODEX] MCP config not translated: {ex.Message}");
+            throw new InvalidOperationException("Invalid injected MCP configuration", ex);
         }
         return result;
     }
@@ -226,7 +254,7 @@ public class CodexCliAdapter : IAgentCliAdapter
     private static string Toml(string s) =>
         !s.Contains('\'') && !s.Any(char.IsControl)
             ? $"'{s}'"
-            : $"\"{s.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"";
+            : JsonSerializer.Serialize(s);
 
     // --- codex exec --json -> stable SSE translation -----------------------
 
@@ -374,12 +402,16 @@ public class CodexCliAdapter : IAgentCliAdapter
                     _logger.Info($"[CODEX] Tool: {name}");
                     TurnText.AddTool(sink, name);
                     await sink.Emit(new { type = "tool", id, name, status = "start" });
-                    if (sink.Audit != null && sink.LogTool != null) sink.LogTool(sink.Audit, name, "");
+                    var input = item.TryGetProperty("arguments", out var args) ? args.GetRawText() : "";
+                    await sink.Emit(new { type = "tool", id, name, status = "input", summary = TurnText.Truncate(input, 140), detail = TurnText.Truncate(input, 1200) });
+                    if (sink.Audit != null && sink.LogTool != null) sink.LogTool(sink.Audit, name, TurnText.Truncate(input, 140));
                 }
                 else if (completed)
                 {
                     var status = Text("status");
-                    await sink.Emit(new { type = "tool", id, status = "end", ok = status != "failed", preview = "" });
+                    var result = item.TryGetProperty("result", out var res) ? res.GetRawText() : "";
+                    var error = item.TryGetProperty("error", out var err) && err.ValueKind != JsonValueKind.Null ? err.GetRawText() : "";
+                    await sink.Emit(new { type = "tool", id, status = "end", ok = status != "failed" && error.Length == 0, preview = TurnText.Truncate(error.Length > 0 ? error : result, 800, maxLines: 15) });
                 }
                 break;
             }
@@ -399,7 +431,10 @@ public class CodexCliAdapter : IAgentCliAdapter
                 if (completed) Notice(Text("message"), sink);
                 break;
 
-            // todo_list / others: no user-visible mapping yet.
+            case "todo_list":
+                if (item.TryGetProperty("items", out var todos))
+                    await sink.Emit(new { type = "tool", id, name = "plan", status = "input", summary = "Plan updated", detail = todos.GetRawText() });
+                break;
         }
     }
 
@@ -411,7 +446,7 @@ public class CodexCliAdapter : IAgentCliAdapter
             record.InputTokens = TurnText.ReadLong(usage, "input_tokens");
             record.CacheReadTokens = TurnText.ReadLong(usage, "cached_input_tokens");
             record.OutputTokens = TurnText.ReadLong(usage, "output_tokens");
-            var contextTokens = record.InputTokens + record.CacheReadTokens;
+            var contextTokens = record.InputTokens;
             if (contextTokens > 0) await sink.Emit(new { type = "usage", contextTokens });
         }
         // Codex reports tokens, not USD — CostUsd stays null by design.

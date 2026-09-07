@@ -51,7 +51,8 @@ public sealed record TurnSpec(
     string? McpConfigJson,
     string? McpConfigPath,
     bool Browser,
-    IReadOnlyList<string>? DisallowedTools);
+    IReadOnlyList<string>? DisallowedTools,
+    bool Ephemeral = false);
 
 /// <summary>The lifecycle's callbacks handed to an adapter while translating a
 /// CLI's output stream. Carries a plain <see cref="CallRecord"/> and an update
