@@ -4,7 +4,7 @@
 // > claimed (feature branch) > idle, and an agent the fleet doesn't know reads "unknown".
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { agentDotState } from './agentActivity.js';
+import { agentDotState, workingBadgeClass } from './agentActivity.js';
 
 test('running wins over every branch state (pulsing dot)', () => {
   assert.equal(agentDotState({ runningSince: Date.now(), onDefault: true, branch: 'main' }), 'running');
@@ -27,4 +27,16 @@ test('unknown branch, not running, not on default → idle (grey)', () => {
 test('agent not in the fleet snapshot → unknown', () => {
   assert.equal(agentDotState(null), 'unknown');
   assert.equal(agentDotState(undefined), 'unknown');
+});
+
+// task 3546287b: ONLY the blinking-dot 'running' state earns the working-badge
+// emphasis; every idle-ish state (and unknown) stays normal size.
+test('working emphasis follows the running state and nothing else', () => {
+  assert.equal(workingBadgeClass('running'), 'agent-badge--working');
+  for (const s of ['free', 'claimed', 'idle', 'unknown', '', null, undefined]) {
+    assert.equal(workingBadgeClass(s), '');
+  }
+  // End to end over the same rule that drives the dot:
+  assert.equal(workingBadgeClass(agentDotState({ runningSince: Date.now() })), 'agent-badge--working');
+  assert.equal(workingBadgeClass(agentDotState({ runningSince: null, onDefault: true })), '');
 });

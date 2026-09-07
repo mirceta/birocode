@@ -11,6 +11,15 @@ export function agentDotState(a) {
   return 'idle';
 }
 
+/// Working-badge emphasis (task 3546287b): a badge whose agent is ACTIVELY
+/// WORKING — the same 'running' state that makes the dot blink — carries this
+/// shared class so both the Kanban assignee chips and the Fleet Status chips
+/// emphasize from ONE rule (each view adds its own size step on top; the
+/// state→emphasis decision lives only here). Every other state: no class.
+export function workingBadgeClass(state) {
+  return state === 'running' ? 'agent-badge--working' : '';
+}
+
 export const AGENT_STATE_LABEL = {
   running: 'busy — a turn is running',
   free: 'free — on its default branch',

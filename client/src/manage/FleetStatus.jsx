@@ -7,7 +7,7 @@ import { harnessHref } from './harnessLink';
 import { FLEET_TABS, FLEET_TAB_KEY, readFleetTab } from './fleetStatusTabs';
 import { useTaskColors, repoKey } from '../components/taskgraph/useTaskColors';
 import AgentMark from '../components/taskgraph/AgentMark';
-import AgentStatusDot, { agentDotState } from '../components/shared/AgentStatusDot';
+import AgentStatusDot, { agentDotState, workingBadgeClass } from '../components/shared/AgentStatusDot';
 
 // The per-machine view tabs (openspec fleet-status-panels): one selection shared by
 // every machine card so a whole view (Agents / Overview / Scoreboard) is shown at once
@@ -86,10 +86,15 @@ function persist(state) {
 }
 
 function AgentChip({ a, self, root, open, onToggle, color, mark }) {
-  const running = !!a.runningSince;
+  // ONE activity rule (task 3546287b + dfee16ea): the state that drives the
+  // blinking dot also decides the working emphasis — no parallel check.
+  const state = agentDotState(a);
+  const running = state === 'running';
+  const working = workingBadgeClass(state);
   const known = a.branch && a.branch !== 'unknown';
   const cls = ['fs__chip'];
   if (running) cls.push('fs__chip--running');
+  if (working) cls.push(working, 'fs__chip--working');
   if (a.onDefault) cls.push('fs__chip--free');
   else if (known) cls.push('fs__chip--claimed');
   if (open) cls.push('fs__chip--open');
@@ -106,7 +111,7 @@ function AgentChip({ a, self, root, open, onToggle, color, mark }) {
   ].filter(Boolean).join(' · ');
   return (
     <button type="button" className={cls.join(' ')} style={color?.style} title={`${mark ? `${mark.glyph} ${mark.monogram} · ` : ''}${title}`} onClick={onToggle} data-agent={a.key} data-on-default={a.onDefault} data-running={running} data-goal={a.goal?.id || undefined}>
-      <AgentStatusDot state={agentDotState(a)} />
+      <AgentStatusDot state={state} />
       <span className="fs__chip-text">
         {/* The colour-independent identity (fleet task 4ddcfce3): the same glyph + monogram
             this agent's chip carries on the Kanban cards, from the shared colour module. */}
