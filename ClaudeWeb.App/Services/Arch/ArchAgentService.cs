@@ -921,6 +921,24 @@ public partial class ArchAgentService : IArchWakeSource
     /// i.e. free to be given work), running state, last actor, arch scope. Local agents =
     /// repos with a dock or in the arch scope; remote agents come from each peer's
     /// cached describe (never blocking on the network).</summary>
+    /// <summary>This machine as the fleet sees it (openspec fleet-overview-honest): the
+    /// identity fields of the fleet object plus the SAME overview record the describe
+    /// carries — the header strip's Machine tile renders it with the Overview tab's rows,
+    /// so the strip and a hub can never disagree about this box.</summary>
+    public object SelfOverview()
+    {
+        var managed = ManagedRepoIds().ToHashSet(StringComparer.Ordinal);
+        var include = new HashSet<string>(managed, StringComparer.Ordinal);
+        include.UnionWith(_dock.GetAll().Select(t => t.RepoId));
+        return new
+        {
+            machine = SelfLabel, sourceId = CollectorService.SelfId, self = true, reachable = true, status = FleetClient.StatusOk,
+            version = BuildVersion, gateOpen = _gate.Enabled, acceptsSends = AcceptFleetSends, acceptsUpgrades = AcceptFleetUpgrades,
+            managedCount = managed.Count, agentCount = LocalAgents(include, managed).Count, staleTasks = StaleTasksBySource().GetValueOrDefault(""),
+            overview = _overview.Current(),
+        };
+    }
+
     public object FleetStatus()
     {
         var managed = ManagedRepoIds().ToHashSet(StringComparer.Ordinal);
