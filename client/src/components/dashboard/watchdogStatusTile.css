@@ -1,0 +1,59 @@
+/* Harness keep-alive watchdog tile (fleet task c96de7ae). Reuses the astile chip visuals
+   (adminStatusTile.css); adds only the error dot colour and the copyable elevated-command
+   block the privilege-honest path shows when the harness can't register the task itself. */
+
+.astile__dot--err {
+  background: #c62828;
+}
+
+.wtile__elevate {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* The exact command to run in an elevated terminal — monospace, selectable, wraps. */
+.wtile__cmd {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.wtile__cmd code {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg, #00000010);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: all;
+}
+
+.wtile__copy {
+  flex: none;
+  align-self: flex-start;
+  padding: 5px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.wtile__copy:hover {
+  filter: brightness(1.06);
+}
+
+.wtile__path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  word-break: break-all;
+  user-select: all;
+}

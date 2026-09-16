@@ -60,6 +60,10 @@
   border-color: #6e5494;
 }
 
+.acct-chip--codex .acct-chip__kind {
+  color: #10a37f;
+}
+
 .acct-chip--claude .acct-chip__kind {
   color: var(--color-accent); /* brand terracotta */
   border-color: var(--color-accent);

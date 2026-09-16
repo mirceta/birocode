@@ -1,0 +1,53 @@
+/* The machine overview rows (openspec fleet-overview-honest): one sheet for the Fleet
+   Status Overview tab AND the header strip's Machine tile. High-contrast by design —
+   labels and values use the page's text tokens (WCAG AA ≥ 4.5:1 on the surface in
+   both schemes), an unknown value is dark amber italic with its reason, a meter is a
+   bar with a legible caption. Tokens fall back to the light palette. */
+:root {
+  --ov-text: var(--color-text, #2b2b29);
+  --ov-label: var(--color-text-muted, #5b5b57);
+  --ov-title: var(--color-text, #2b2b29);
+  --ov-border: var(--color-border, #ece6dd);
+  --ov-surface: var(--color-surface, #ffffff);
+  --ov-ok: #1f6b2f;
+  --ov-warn: #8a5a0f;
+  --ov-bad: #a12b1f;
+  --ov-unknown: #7a4a12;
+  --ov-bar: #e6e0d6;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ov-ok: #6fcf7a;
+    --ov-warn: #e0b35a;
+    --ov-bad: #ff8a80;
+    --ov-unknown: #e8b56a;
+    --ov-bar: #3a3f4a;
+  }
+}
+
+.fs__overview { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; padding: 8px 0; }
+.fs__overview--compact { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
+/* Compact (the strip tile): narrow cards, so a row stacks label over value and a meter's
+   caption never gets squeezed off the card. */
+.fs__overview--compact .fs__ov-row { grid-template-columns: 1fr; row-gap: 1px; }
+.fs__overview--compact .fs__ov-v { text-align: left; }
+.fs__overview--compact .fs__ov-v--meter { justify-content: flex-start; }
+.fs__overview--compact .fs__ov-bar { flex: 0 0 70px; }
+.fs__ov-group { border: 1px solid var(--ov-border); border-radius: 10px; padding: 10px 12px; background: var(--ov-surface); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); }
+.fs__ov-title { margin: 0 0 8px; font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ov-title); border-bottom: 1px solid var(--ov-border); padding-bottom: 4px; }
+.fs__ov-rows { margin: 0; }
+.fs__ov-row { display: grid; grid-template-columns: minmax(96px, 42%) 1fr; column-gap: 10px; align-items: baseline; padding: 3px 0; font-size: 13px; }
+.fs__ov-k { margin: 0; color: var(--ov-label); font-weight: 500; }
+.fs__ov-v { margin: 0; color: var(--ov-text); font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; text-align: right; overflow-wrap: anywhere; }
+.fs__ov-v--ok { color: var(--ov-ok); font-weight: 600; }
+.fs__ov-v--warn { color: var(--ov-warn); font-weight: 600; }
+.fs__ov-v--bad { color: var(--ov-bad); font-weight: 600; }
+.fs__ov-v--muted { color: var(--ov-label); }
+.fs__ov-v--unknown { color: var(--ov-unknown); font-style: italic; font-family: inherit; }
+.fs__ov-v--meter { display: flex; align-items: center; justify-content: flex-end; gap: 8px; font-family: inherit; }
+.fs__ov-bar { flex: 0 0 90px; height: 8px; border-radius: 999px; background: var(--ov-bar); overflow: hidden; }
+.fs__ov-fill { display: block; height: 100%; background: var(--ov-ok); }
+.fs__ov-v--warn .fs__ov-fill { background: var(--ov-warn); }
+.fs__ov-v--bad .fs__ov-fill { background: var(--ov-bad); }
+.fs__ov-meter-txt { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; color: var(--ov-text); white-space: nowrap; }
+.fs__ov-v--na { color: var(--ov-unknown); font-style: italic; }

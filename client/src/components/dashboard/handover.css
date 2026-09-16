@@ -1,0 +1,17 @@
+/* Branch hand-over control (openspec arch-branch-handover): whose branch this is,
+   plus Hand to arch / Take back / Pin. Lives in the dock's git block and in the
+   Management App's Status card, so it carries its own stylesheet. */
+.handover { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; color: var(--color-text-muted, #9aa); margin: 4px 0; }
+.handover--compact { font-size: 11.5px; }
+.handover__text { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.handover__dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: #888; }
+.handover__dot--claimed { background: #e5734b; }
+.handover__dot--arch { background: #4cc38a; }
+.handover__dot--free { background: #a78bfa; }
+.handover__actions { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.handover__btn { font: inherit; font-size: 11.5px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--color-border, #444); background: transparent; color: var(--color-text-soft, #bbb); cursor: pointer; white-space: nowrap; }
+.handover__btn:hover:not(:disabled) { color: var(--color-text, #eee); border-color: var(--color-text-muted, #9aa); }
+.handover__btn:disabled { opacity: 0.5; cursor: default; }
+.handover__btn--primary { border-color: var(--color-accent, #5ea0ef); color: var(--color-accent, #5ea0ef); }
+.handover__btn--on { border-color: #e5734b; color: #e5734b; }
+.handover__err { flex-basis: 100%; color: #e5734b; }

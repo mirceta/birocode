@@ -5,6 +5,8 @@ import Scoreboard from '../dashboard/Scoreboard';
 import AccountChips from '../dashboard/AccountChips';
 import HostClock from '../dashboard/HostClock';
 import AdminStatusTile from '../dashboard/AdminStatusTile';
+import WatchdogStatusTile from '../dashboard/WatchdogStatusTile';
+import MachineOverviewTile from './MachineOverviewTile';
 import './headerStrip.css';
 
 // Header status strip (openspec add-header-status-strip): the at-a-glance
@@ -31,6 +33,7 @@ export default function HeaderStatusStrip() {
   const accountChipsOn = useFeature('accountChips');
   const hostClockOn = useFeature('hostClock');
   const adminStatusOn = useFeature('adminStatus');
+  const watchdogStatusOn = useFeature('watchdogStatus');
   const [collapsed, setCollapsed] = useState(readCollapsed);
 
   if (!stripOn) return null;
@@ -68,6 +71,10 @@ export default function HeaderStatusStrip() {
           {accountChipsOn && <AccountChips />}
           {hostClockOn && <HostClock />}
           {adminStatusOn && <AdminStatusTile />}
+          {watchdogStatusOn && <WatchdogStatusTile />}
+          {/* This machine as the fleet sees it (openspec fleet-overview-honest): the same
+              record and rows the Fleet Status Overview tab renders for every computer. */}
+          <MachineOverviewTile />
         </div>
       )}
     </div>

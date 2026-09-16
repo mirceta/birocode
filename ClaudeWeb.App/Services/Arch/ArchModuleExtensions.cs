@@ -14,6 +14,12 @@ public static class ArchModuleExtensions
     {
         services.AddSingleton<ArchStateStore>();
         services.AddSingleton<FleetClient>();
+        // The task verifier's window onto the fleet (openspec board-verify-remote):
+        // remote assignees' remotes + live builds from the cached peer describes.
+        services.AddSingleton<TaskGraph.ITaskFleetInfo, FleetTaskInfo>();
+        // Per-machine Overview for Fleet Status (openspec fleet-status-panels): a
+        // non-blocking cached snapshot of this box's account/host/admin identity.
+        services.AddSingleton<FleetOverviewProvider>();
         services.AddSingleton<PeerUpgradeService>(); // receiving side of fleet upgrades (openspec arch-peer-upgrades)
         services.AddSingleton<ArchAgentService>();
         services.AddSingleton<IArchWakeSource>(sp => sp.GetRequiredService<ArchAgentService>());

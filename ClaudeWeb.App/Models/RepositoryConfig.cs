@@ -17,6 +17,11 @@ public class RepositoryConfig
     /// <summary>Absolute path to the repository folder Claude operates in.</summary>
     public string Path { get; set; } = "";
 
+    /// <summary>Short stable handle (openspec stable-handles): a slug of the name, with
+    /// "#2", "#3"… when the slug repeats on this machine. Assigned once (on add or by
+    /// the one-time backfill) and never changed; null only in stores that predate it.</summary>
+    public string? Handle { get; set; }
+
     /// <summary>
     /// True for the harness's own source repository (pinned at startup). It is
     /// non-removable and serves as the default project, so "improve this app" is
@@ -58,6 +63,15 @@ public class RepositoryConfig
     /// Empty = none (or, for an un-migrated entry, see <see cref="LocalPort"/>).
     /// </summary>
     public List<LocalAppConfig> LocalApps { get; set; } = new();
+
+    /// <summary>
+    /// Which engine runs this repo's agent turns (openspec provider-agnostic-runner):
+    /// "claude" (default) or "codex". Null/absent — including every entry that
+    /// predates the field — reads as claude.
+    /// </summary>
+    public string? Provider { get; set; }
+    /// <summary>Shared default for composer, loop and dispatched turns.</summary>
+    public string? Model { get; set; }
 
     // The per-project permission preset (PermissionPolicy) was removed
     // (openspec add-resilient-auth): the two auth gates are the whole

@@ -11,8 +11,10 @@ public interface IArchWakeSource
     /// Returns null (and advances the watermark) when nothing relevant happened.
     /// Never advances the watermark past relevant events — the ENGINE commits a
     /// draft once the wake actually landed (sent, or pended in suggest mode), so a
-    /// failed slot claim re-composes the same events next tick.</summary>
-    WakeDraft? ComposeWake();
+    /// failed slot claim re-composes the same events next tick. <paramref name="key"/>
+    /// is the conversation the loop instance belongs to (openspec arch-conversations):
+    /// each conversation has its own watermark.</summary>
+    WakeDraft? ComposeWake(string key);
 }
 
 /// <summary>A composed wake-up: the prompt, the watermark it was read after, the
@@ -21,8 +23,8 @@ public sealed record WakeDraft(string Prompt, int After, int UpTo, IReadOnlyList
 
 /// <summary>
 /// The arch loop kind (openspec: add-arch-agent, D2/D8; arch-standing-loop). Its
-/// single instance is keyed to the reserved id <see cref="ArchAgentService.ReservedId"/>
-/// rather than a repo. Semantics only: the operator stop / errored-run ladder, then
+/// instances are keyed to the reserved id <see cref="ArchAgentService.ReservedId"/> (the
+/// default conversation) or a conversation key <c>@arch:&lt;id&gt;</c> rather than a repo. Semantics only: the operator stop / errored-run ladder, then
 /// "propose one arch turn when a managed repo started or ended a turn since the
 /// watermark, else hold". A reply ending in <c>NEEDS_HUMAN:</c> is a HOLD, not a stop
 /// (openspec arch-standing-loop): asking the Operator is the arch agent's normal
@@ -66,7 +68,7 @@ public sealed class ArchLoop : ILoop
 
         var question = PendingQuestion(ctx.LastAssistant);
 
-        var draft = _wake.ComposeWake();
+        var draft = _wake.ComposeWake(ctx.Instance.RepoId);
         if (draft is null)
         {
             // A pending question is an escalated hold: the loop stays armed, the

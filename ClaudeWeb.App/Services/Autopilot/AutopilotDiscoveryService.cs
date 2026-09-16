@@ -90,7 +90,8 @@ public class AutopilotDiscoveryService
             var dir = SessionService.ProjectsDirectoryFor(repo.Path);
             foreach (var session in sessions.Take(MaxSessionsPerRepo))
             {
-                var path = Path.Combine(dir, session.Id + ".jsonl");
+                var path = SessionService.TranscriptPath(repo.Path, session.Id);
+                if (path is null) continue;
                 seen.Add(path);
                 var mined = MineSession(repo.Path, session.Id, path, ref reparsed);
                 if (mined is null || mined.UserMessages == 0 && mined.Contributions.Count == 0) continue;

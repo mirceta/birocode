@@ -59,6 +59,7 @@ export const FEATURES = {
   footerClauses: 'advanced', // composer button + popup: standing instructions appended to every send while active (openspec: prompt-footer-clauses)
   localAppDiscovery: 'advanced', // Discover local apps in each agent dock: Discover + panel-opener buttons and the findings panel overlay (openspec: discover-local-apps, discover-apps-panel)
   understandingAgent: 'advanced', // "Ask for understanding" button in each agent dock: fork the conversation → build the Understanding app (openspec: add-ask-for-understanding)
+  agentProvider: 'advanced', // per-repo engine selector in each agent dock: claude | codex (openspec: provider-agnostic-runner)
   cockpitTab: 'advanced', // read-only OpenSpec Cockpit tab, scoped to the selected repo (openspec: openspec-cockpit-in-harness)
   paneSpanButtons: 'advanced', // -/+ span steppers in each multi-pane top bar; reuses the Settings tabWidths span (openspec: add-pane-span-buttons)
   operatorMessages: 'advanced', // Operator messages drawer: consolidated list of the active conversation's user-role messages (openspec: add-operator-message-history)
@@ -66,6 +67,7 @@ export const FEATURES = {
   accountChips: 'advanced', // dashboard GitHub + Claude account-status chips beside the Scoreboard (openspec: add-account-status)
   gitIdentityRows: 'advanced', // per-dock "commits as / pushes as" identity rows in the git section (openspec: add-git-identity-surface)
   githubTokenControl: 'advanced', // write-only PAT control in the GitHub chip to set the global credential (openspec: add-git-identity-surface)
+  codexKeyControl: 'advanced', // write-only OpenAI API-key control under the Codex chip -> `codex login --with-api-key` (openspec: codex-real-run)
   hostClock: 'advanced', // dashboard host-clock chip: the host box's wall time beside the Scoreboard (openspec: add-dashboard-host-clock)
   headerStatusStrip: 'advanced', // collapsible status strip under the app header hosting Scoreboard + account chips + host clock (openspec: add-header-status-strip)
   agenticAudit: 'advanced', // read-only agentic-call audit trail panel on the dashboard (openspec: add-agent-audit-trail)
@@ -73,6 +75,7 @@ export const FEATURES = {
   dockLoopControls: 'advanced', // loop badge + arm-from-recipe control on dock agent cards (openspec: adopt-autopilot-loops)
   dockAppSplit: 'advanced', // dock split view: opened local app beside the chat instead of over the dock (openspec: dock-app-split-view)
   adminStatus: 'advanced', // always-admin status tile in the header strip: UAC-off state + enabler (openspec: add-always-admin-status)
+  watchdogStatus: 'advanced', // harness keep-alive watchdog tile in the header strip: OS auto-start/restart state + one-click scheduled-task create (fleet task c96de7ae)
   loopEvalsTab: 'advanced', // Operator-facing golden-example curation for loop evals (openspec: loop-evals)
   flagsFooter: 'advanced', // agent-flags footer strip: undismissed FLAG: lines from driven-loop replies (docs/loop-driven-agent-convention.md; no openspec — user opted out 2026-07-31)
   flagsDockBadge: 'advanced', // per-dock ⚑ badge + inline dismiss for that agent's open flags (same opt-out as flagsFooter)
@@ -81,6 +84,7 @@ export const FEATURES = {
   tasksAgent: 'advanced', // the Tasks agent's surface: Tasks tab + Management App tab (openspec: tasks-agent)
   ideasBreakUp: 'advanced', // "Break into tasks" on the Ideas composer -> Tasks agent (openspec: tasks-agent)
   browserMode: 'advanced', // 🌐 chat toolbar toggle: run builder turns with Claude-in-Chrome browser tools (openspec: claude-in-chrome)
+  archHandover: 'advanced', // dock "Hand to arch" / take back / pin control for the repo's branch (openspec: arch-branch-handover)
 };
 
 const MODE_KEY = 'claudeweb_ui_mode';

@@ -203,9 +203,16 @@ public class LoopConfigStore
     /// the host exactly which file holds the durable loop state.</summary>
     public string FilePath => _path;
 
-    public LoopConfigStore(Logger logger, string? dirOverride = null)
+    // Loop transitions on the harness feed (openspec arch-loop-tools): armed, fired,
+    // escalated, capped, done, error, stopped — so the arch agent's wake-up sees a
+    // managed repo's loop move the way it sees its turns. Optional: tests build the
+    // store without a feed, and nothing here depends on a subscriber.
+    private readonly Events.HarnessEventFeed? _feed;
+
+    public LoopConfigStore(Logger logger, string? dirOverride = null, Events.HarnessEventFeed? feed = null)
     {
         _logger = logger;
+        _feed = feed;
         // AppPaths (not %APPDATA% directly) so an isolated CLAUDEWEB_DATADIR
         // instance keeps its own loops instead of sharing the operator's live
         // ones. dirOverride is test-only (same pattern as LocalAppDiscoveryCache).
@@ -258,6 +265,11 @@ public class LoopConfigStore
         // freshly armed loop acts on the agent's CURRENT trailing message even if
         // a previous instance already acted on that same message.
         public long ArmedAt { get; set; }
+        // Who armed this instance (openspec arch-loop-tools): null/"operator" = the
+        // Operator through the UI; "arch" = the arch agent's start_loop; "arch@<machine>"
+        // = a fleet arch through the peer API. Display + audit only — the loop itself
+        // runs the same whoever armed it, and the Operator edits/stops it as usual.
+        public string? ArmedBy { get; set; }
         // Driven kinds: the session id of the ONE conversation this loop drives
         // (openspec: fix-loop-conversation-identity). Seeded at arm time, advanced
         // to each builder-lane run's forked session id on completion. Null on old
@@ -312,7 +324,33 @@ public class LoopConfigStore
         string? QueueTabId, bool VerifyEnabled, string? LastStepText, int QueueSent,
         IReadOnlyList<string> QueueSentTexts, IReadOnlyList<int> QueueSentRevs,
         // Per-arm footer-clauses opt-in (expose-goal-loop-denylist): false = off.
-        bool IncludeFooterClauses = false);
+        bool IncludeFooterClauses = false,
+        // Who armed it (openspec arch-loop-tools): "operator" | "arch" | "arch@<machine>".
+        string ArmedBy = ArmedByOperator);
+
+    public const string ArmedByOperator = "operator";
+    public const string ArmedByArch = "arch";
+
+    /// <summary>Publish a loop transition on the harness feed (openspec arch-loop-tools).
+    /// The source carries the repo id the way turn events do, so the arch wake filter
+    /// keys it against the managed set; the data is status words only (no prompt text).</summary>
+    private void Publish(string type, string repoId, Entry e, string? reason = null, string? detail = null)
+    {
+        _feed?.Publish(type, new { repoId, repoName = repoId }, new
+        {
+            kind = e.Kind ?? KindRecipe, mode = e.Mode ?? ModeDrive, status = e.Status, iterationsDone = e.IterationsDone,
+            maxIterations = e.MaxIterations, armedBy = e.ArmedBy ?? ArmedByOperator, reason, detail,
+        });
+    }
+
+    /// <summary>The feed event type of a terminal status (Resolve): done | escalate |
+    /// capped | error | stopped → loop.done | loop.escalated | loop.capped | loop.error | loop.stopped.</summary>
+    public static string EventTypeFor(string status) => status switch
+    {
+        "escalate" => "loop.escalated",
+        "done" or "capped" or "error" or "stopped" => "loop." + status,
+        _ => "loop.resolved",
+    };
 
     public IReadOnlyList<LoopState> All()
     {
@@ -334,12 +372,13 @@ public class LoopConfigStore
     /// Replaces this agent's one loop slot — XOR by construction (revision 2, D8).</summary>
     public LoopState Start(string repoId, string prompt, string? sentinel, int? maxIterations,
         string? recipeId = null, string? recipeName = null, string? mode = null, string? sessionId = null,
-        bool? includeFooterClauses = null)
+        bool? includeFooterClauses = null, string? armedBy = null)
     {
+        Entry e;
         lock (_gate)
         {
             LogDisplaced(repoId, KindRecipe);
-            var e = new Entry
+            e = new Entry
             {
                 Kind = KindRecipe,
                 Mode = CleanMode(mode),
@@ -349,6 +388,7 @@ public class LoopConfigStore
                 MaxIterations = Math.Clamp(maxIterations ?? DefaultMaxIterations, 1, 100),
                 Active = true,
                 ArmedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                ArmedBy = CleanArmedBy(armedBy),
                 IterationsDone = 0,
                 Status = "looping",
                 LastSentAt = 0,
@@ -358,22 +398,27 @@ public class LoopConfigStore
             };
             _data.Loops[repoId] = e;
             Save();
-            _logger.Info($"[LOOP] armed recipe loop {repoId} ({e.Mode}, cap {e.MaxIterations}, sentinel \"{e.Sentinel}\", pinned {e.SessionId ?? "<none yet>"})");
-            return ToState(repoId, e);
+            _logger.Info($"[LOOP] armed recipe loop {repoId} ({e.Mode}, cap {e.MaxIterations}, sentinel \"{e.Sentinel}\", pinned {e.SessionId ?? "<none yet>"}, by {e.ArmedBy})");
         }
+        Publish("loop.armed", repoId, e);
+        return ToState(repoId, e);
     }
+
+    private static string? CleanArmedBy(string? by) => string.IsNullOrWhiteSpace(by) ? null : by.Trim();
 
     /// <summary>Arms (or re-arms) a GOAL loop (openspec: unify-loop-types): composes the
     /// work + verification prompts from the templates ONCE, stores them verbatim, and
     /// starts in the work phase. The engine only ever sends the stored text.</summary>
     public LoopState StartGoal(string repoId, string goal, int? maxIterations, string? mode = null,
-        string? sessionId = null, bool? includeFooterClauses = null)
+        string? sessionId = null, bool? includeFooterClauses = null, string? armedBy = null)
     {
+        Entry e;
         lock (_gate)
         {
             LogDisplaced(repoId, KindGoal);
-            var e = new Entry
+            e = new Entry
             {
+                ArmedBy = CleanArmedBy(armedBy),
                 Kind = KindGoal,
                 Mode = CleanMode(mode),
                 Goal = goal,
@@ -392,9 +437,10 @@ public class LoopConfigStore
             };
             _data.Loops[repoId] = e;
             Save();
-            _logger.Info($"[LOOP] armed goal loop {repoId} ({e.Mode}, cap {e.MaxIterations}, pinned {e.SessionId ?? "<none yet>"})");
-            return ToState(repoId, e);
+            _logger.Info($"[LOOP] armed goal loop {repoId} ({e.Mode}, cap {e.MaxIterations}, pinned {e.SessionId ?? "<none yet>"}, by {e.ArmedBy ?? ArmedByOperator})");
         }
+        Publish("loop.armed", repoId, e);
+        return ToState(repoId, e);
     }
 
     /// <summary>Arms (or re-arms) a 🗒️ QUEUE loop (openspec: queue-based-loop, D2/D8):
@@ -405,13 +451,15 @@ public class LoopConfigStore
     /// reset, ArmedAt stamped, session pinned.</summary>
     public LoopState StartQueue(string repoId, string tabId, bool? verifyEnabled,
         int? maxIterations, string? mode = null, string? sessionId = null,
-        bool? includeFooterClauses = null)
+        bool? includeFooterClauses = null, string? armedBy = null)
     {
+        Entry e;
         lock (_gate)
         {
             LogDisplaced(repoId, KindQueue);
-            var e = new Entry
+            e = new Entry
             {
+                ArmedBy = CleanArmedBy(armedBy),
                 Kind = KindQueue,
                 Mode = CleanMode(mode),
                 QueueTabId = tabId,
@@ -430,9 +478,10 @@ public class LoopConfigStore
             };
             _data.Loops[repoId] = e;
             Save();
-            _logger.Info($"[LOOP] armed queue loop {repoId} on tab {tabId} ({e.Mode}, verify {(e.VerifyEnabled == true ? "on" : "off")}, cap {e.MaxIterations}, pinned {e.SessionId ?? "<none yet>"})");
-            return ToState(repoId, e);
+            _logger.Info($"[LOOP] armed queue loop {repoId} on tab {tabId} ({e.Mode}, verify {(e.VerifyEnabled == true ? "on" : "off")}, cap {e.MaxIterations}, pinned {e.SessionId ?? "<none yet>"}, by {e.ArmedBy ?? ArmedByOperator})");
         }
+        Publish("loop.armed", repoId, e);
+        return ToState(repoId, e);
     }
 
     /// <summary>Engine, queue kind (openspec: queue-based-loop): a stash item's send
@@ -463,13 +512,15 @@ public class LoopConfigStore
     /// <summary>Arms (or re-arms) the SUGGESTION loop (revision 2 — suggestion is a
     /// loop instance like the others). Uncapped by default: the cap only bounds
     /// drive-mode sends.</summary>
-    public LoopState StartSuggestion(string repoId, string? mode = null)
+    public LoopState StartSuggestion(string repoId, string? mode = null, string? armedBy = null)
     {
+        Entry e;
         lock (_gate)
         {
             LogDisplaced(repoId, KindSuggestion);
-            var e = new Entry
+            e = new Entry
             {
+                ArmedBy = CleanArmedBy(armedBy),
                 Kind = KindSuggestion,
                 Mode = CleanMode(mode, defaultMode: ModeSuggest),
                 Prompt = "",
@@ -483,9 +534,10 @@ public class LoopConfigStore
             };
             _data.Loops[repoId] = e;
             Save();
-            _logger.Info($"[LOOP] armed suggestion loop {repoId} ({e.Mode})");
-            return ToState(repoId, e);
+            _logger.Info($"[LOOP] armed suggestion loop {repoId} ({e.Mode}, by {e.ArmedBy ?? ArmedByOperator})");
         }
+        Publish("loop.armed", repoId, e);
+        return ToState(repoId, e);
     }
 
     /// <summary>Arms (or re-arms) the ARCH loop (openspec: add-arch-agent, D8): the
@@ -609,8 +661,10 @@ public class LoopConfigStore
         }
     }
 
-    /// <summary>Stops a loop by the user's hand (the Stop button).</summary>
-    public LoopState? Stop(string repoId) => Resolve(repoId, "stopped", "user", "stopped by the user");
+    /// <summary>Stops a loop by the user's hand (the Stop button) — or, with <paramref name="by"/>,
+    /// by the arch agent's stop_loop (openspec arch-loop-tools): same clear, named actor.</summary>
+    public LoopState? Stop(string repoId, string? by = null) =>
+        by is null ? Resolve(repoId, "stopped", "user", "stopped by the user") : Resolve(repoId, "stopped", by, $"stopped by {by}");
 
     /// <summary>Re-activates the ARCH instance in place after it stopped as <c>escalate</c>
     /// or <c>capped</c> (openspec arch-standing-loop): the Operator's message in the arch
@@ -672,9 +726,10 @@ public class LoopConfigStore
     /// Clears Active so the loop no longer ticks; keeps the counter for the UI.</summary>
     public LoopState? Resolve(string repoId, string status, string? reason = null, string? detail = null)
     {
+        Entry e;
         lock (_gate)
         {
-            if (!_data.Loops.TryGetValue(repoId, out var e)) return null;
+            if (!_data.Loops.TryGetValue(repoId, out e!)) return null;
             e.Active = false;
             e.Status = status;
             e.StopReason = reason;
@@ -683,16 +738,18 @@ public class LoopConfigStore
             Save();
             _logger.Info($"[LOOP] {repoId} -> {status} after {e.IterationsDone} iteration(s)"
                 + (reason is null ? "" : $" ({reason}{(string.IsNullOrEmpty(detail) ? "" : $": {detail}")})"));
-            return ToState(repoId, e);
         }
+        Publish(EventTypeFor(status), repoId, e, reason, detail);
+        return ToState(repoId, e);
     }
 
     /// <summary>Engine: record one resend — bumps the iteration counter and timestamp.</summary>
     public LoopState? RecordSend(string repoId, long at)
     {
+        Entry e;
         lock (_gate)
         {
-            if (!_data.Loops.TryGetValue(repoId, out var e)) return null;
+            if (!_data.Loops.TryGetValue(repoId, out e!)) return null;
             e.IterationsDone++;
             e.LastSentAt = at;
             e.Status = "looping";
@@ -700,8 +757,9 @@ public class LoopConfigStore
             e.StopDetail = null;
             e.PendingPrompt = null;
             Save();
-            return ToState(repoId, e);
         }
+        Publish("loop.fired", repoId, e);
+        return ToState(repoId, e);
     }
 
     private static LoopState ToState(string repoId, Entry e) =>
@@ -720,7 +778,8 @@ public class LoopConfigStore
             e.QueueTabId, e.VerifyEnabled != false, e.LastStepText, e.QueueSent ?? 0,
             e.QueueSentTexts?.ToList() ?? (IReadOnlyList<string>)Array.Empty<string>(),
             e.QueueSentRevs?.ToList() ?? (IReadOnlyList<int>)Array.Empty<int>(),
-            e.IncludeFooterClauses == true);
+            e.IncludeFooterClauses == true,
+            string.IsNullOrWhiteSpace(e.ArmedBy) ? ArmedByOperator : e.ArmedBy);
 
     private void Load()
     {

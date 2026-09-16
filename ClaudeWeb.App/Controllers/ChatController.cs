@@ -59,7 +59,7 @@ public class ChatController : ControllerBase
     /// conversation that can run concurrently with the builder — see
     /// plans/repo-ask-chat.md). <c>Browser</c> requests Claude-in-Chrome browser
     /// mode for this turn (openspec claude-in-chrome; builder lane only).</summary>
-    public record ChatRequest(string? Message, string? SessionId, string? Model, string? Lane, bool? Browser);
+    public record ChatRequest(string? Message, string? SessionId, string? Model, string? Lane, bool? Browser, string? Provider = null);
 
     /// <summary>Only two lanes exist; anything unrecognized falls back to the
     /// builder so a stray value can never spawn an unexpected run mode.</summary>
@@ -97,11 +97,24 @@ public class ChatController : ControllerBase
         // vs read-only ask) -- can run concurrently (plans/repo-ask-chat.md).
         var lane = NormalizeLane(request?.Lane);
 
+        // Provider (openspec provider-agnostic-runner): per-turn override, else
+        // the repo's persisted choice, else claude. Unknown values read as claude.
+        var provider = AgentProviders.Normalize(request?.Provider ?? repo.Provider);
+        if (provider != AgentProviders.Claude)
+            _logger.Info($"[CHAT] Engine {provider} for \"{repo.Name}\" ({(request?.Provider is null ? "repo setting" : "turn override")})");
+
         // Browser mode (openspec claude-in-chrome): builder lane only — the ask
         // lane's contract is structurally read-only, and browser tools mutate the
-        // world. The single-holder gate is claimed BEFORE the run slot so a
-        // conflict is a clean 409 with nothing to unwind.
-        var browser = request?.Browser == true && lane == "builder";
+        // world. Claude-only: Codex has no --chrome equivalent. The single-holder
+        // gate is claimed BEFORE the run slot so a conflict is a clean 409 with
+        // nothing to unwind.
+        if (request?.Browser == true && lane == "builder" && provider != AgentProviders.Claude)
+        {
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            await Response.WriteAsJsonAsync(new { error = "Claude-in-Chrome requires the Claude engine. Switch this repository to Claude for browser tasks.", code = "provider-capability" });
+            return;
+        }
+        var browser = request?.Browser == true && lane == "builder" && provider == AgentProviders.Claude;
         if (browser && !_chrome.TryAcquire(repo.Name, out var holderRepo))
         {
             _logger.Info($"[CHAT] Rejected: browser is held by \"{holderRepo}\" (requested for \"{repo.Name}\").");
@@ -131,7 +144,18 @@ public class ChatController : ControllerBase
         // The Run itself: background task, Run Session token (NOT RequestAborted).
         var sessionId = request?.SessionId;
         var model = request?.Model;
+        // A model from the other engine's family (a Claude id on a codex repo, or the
+        // reverse) would make the CLI fail on --model; drop it and let the CLI use its
+        // default. The client's picker keeps the two in step; this is the backstop
+        // (openspec codex-account-and-models).
+        if (!string.IsNullOrWhiteSpace(model) && !AgentProviders.ModelBelongsTo(provider, model))
+        {
+            _logger.Info($"[CHAT] Model \"{model}\" is not a {provider} model; running {provider} with its default model.");
+            model = null;
+        }
         var path = repo.Path;
+        if (!string.IsNullOrWhiteSpace(model) && model != repo.Model)
+            _registry.SetProvider(repo.Id, provider, model);
         var readOnly = lane == "ask"; // the ask lane runs claude in read-only plan mode
         // Per-project permission presets were removed (openspec add-resilient-auth):
         // a user past both gates is fully trusted, bounded only by the OS account. The
@@ -164,7 +188,8 @@ public class ChatController : ControllerBase
                     repoId: repo.Id,
                     repoName: repo.Name,
                     mcpConfigJson: mcpConfigJson,
-                    browser: browser);
+                    browser: browser,
+                    provider: provider);
             }
             catch (Exception ex)
             {

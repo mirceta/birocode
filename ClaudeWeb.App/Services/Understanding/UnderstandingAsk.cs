@@ -33,6 +33,10 @@ public sealed record UnderstandingResult(bool Success, string? Error)
 /// </summary>
 public class UnderstandingAsk
 {
+    private readonly AgentHelperRunner? _helper;
+    private readonly SessionService? _sessions;
+    public UnderstandingAsk(AgentHelperRunner? helper = null, SessionService? sessions = null)
+    { _helper = helper; _sessions = sessions; }
     // Per-call gateway identity, same reasoning as StructuredAskRunner: a UNIQUE
     // app name makes "latest record for this app" unambiguously THIS call's own, so
     // concurrent runs across repos never cross-wire their gateway metadata.
@@ -54,6 +58,22 @@ public class UnderstandingAsk
         // sessionId is a UUID file name; reject anything that could escape the folder.
         if (sessionId.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
             return UnderstandingResult.Fail($"Invalid session id '{sessionId}'.");
+
+        if (_helper != null && _sessions != null)
+        {
+            var messages = _sessions.GetMessages(workingDirectory, sessionId);
+            if (messages.Count == 0) return UnderstandingResult.Fail("No conversation transcript found for this dock yet.");
+            try
+            {
+                var export = messages.Sum(m => m.Text.Length + m.Role.Length + 5) > 12000
+                    ? ConversationHandoff.Export(workingDirectory, messages) : null;
+                var prompt = ConversationHandoff.BuildPrompt(messages, BuildPrompt(workingDirectory), out _, export);
+                await _helper.RunAsync(prompt, workingDirectory, false, ct);
+                return UnderstandingResult.Ok();
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex) { return UnderstandingResult.Fail(ex.Message); }
+        }
 
         var snapshotPath = Path.Combine(
             SessionService.ProjectsDirectoryFor(workingDirectory), sessionId + ".jsonl");

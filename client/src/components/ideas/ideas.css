@@ -471,3 +471,15 @@
 .ideas__working { margin: 0 0 8px; padding: 6px 10px; border-radius: 8px; font-size: 13px;
   border: 1px solid #e0b34c; background: rgba(224, 179, 76, 0.12); }
 .ideas__working--done { border-color: #4cc38a; background: rgba(76, 195, 138, 0.12); }
+
+/* The idea's stable handle (openspec stable-handles): "#12" in front of the text. */
+.idea__handle { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--color-border, #444); font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: var(--color-text-muted, #9aa); vertical-align: middle; }
+
+/* Consumed ideas (openspec ideas-consume-on-promotion): an off-by-default section
+   under the list showing ideas that were promoted into a task, muted, with a link
+   to the task they became. */
+.ideas__consumed { margin-top: 10px; border-top: 1px dashed var(--color-border, #444); padding-top: 8px; }
+.ideas__consumed-toggle { display: inline-flex; align-items: center; gap: 6px; }
+.ideas__group--consumed { margin-top: 8px; }
+.idea--consumed { opacity: 0.72; }
+.idea__consumed-into { font-size: 12px; color: var(--color-text-muted, #9aa); }

@@ -287,7 +287,7 @@ export function mergeLive(fetched, liveTurn) {
   return { calls: [...calls, ...extra], liveCount: extra.length };
 }
 
-export default function ArchHistoryPanel({ liveTurn = null, sessionId = null, repoNames = null }) {
+export default function ArchHistoryPanel({ liveTurn = null, sessionId = null, repoNames = null, conv = '@arch' }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [toolFilter, setToolFilter] = useState(null); // null = all
@@ -300,13 +300,14 @@ export default function ArchHistoryPanel({ liveTurn = null, sessionId = null, re
 
   const load = useCallback(async () => {
     try {
-      const d = await apiGet('/arch/tool-calls');
+      // `conv` (openspec arch-conversations): the tool calls of THIS conversation.
+      const d = await apiGet(conv && conv !== '@arch' ? `/arch/tool-calls?conv=${encodeURIComponent(conv)}` : '/arch/tool-calls');
       setData(d);
       setError(null);
     } catch (e) {
       setError(e?.message || String(e));
     }
-  }, []);
+  }, [conv]);
 
   // Poll while the lane is open; a change of session or the end of a live turn
   // re-pulls at once so the hand-over from live to durable does not wait.

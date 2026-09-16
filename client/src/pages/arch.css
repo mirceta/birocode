@@ -111,3 +111,48 @@
   .arch__side { flex: 0 0 auto !important; width: auto !important; }
   .arch__overview { grid-template-columns: 1fr; }
 }
+
+/* Conversations (openspec arch-conversations): the editable name at the top, the
+   Loops lane, and the nested side-by-side columns inside the Arch tab. */
+.arch__name { font-weight: 700; font-size: 16px; background: transparent; border: 1px solid transparent; border-radius: 6px; color: var(--color-text, #eee); padding: 1px 6px; min-width: 6ch; max-width: 40ch; font-family: inherit; }
+.arch__name:hover { border-color: var(--color-border, #444); }
+.arch__name:focus { outline: none; border-color: var(--color-accent, #5ea0ef); background: var(--color-surface, #14161d); }
+.arch__btn--ghost { background: transparent; border-color: transparent; color: var(--color-text-muted, #888); }
+.arch__btn--ghost:hover { color: #f87171; border-color: var(--color-border, #444); }
+.arch__split-toggle { margin-left: auto; }
+.arch__split-toggle--on { color: var(--color-accent, #5ea0ef); border-color: var(--color-accent, #5ea0ef); }
+.arch__split-toggle + .arch__side-toggle { margin-left: 0; }
+.arch__lanes[data-split="on"] .arch__lane--on { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35); }
+.arch__split { flex: 1 1 auto; min-height: 0; display: flex; gap: 10px; }
+.arch__split-col { flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; border: 1px solid var(--color-border, #2a2d36); border-radius: 8px; padding: 6px 8px; }
+.arch__split-head { flex: 0 0 auto; font-size: 11px; color: var(--color-text-muted, #888); text-transform: uppercase; letter-spacing: 0.04em; padding: 0 0 6px; }
+.arch__split-col > .toolsp, .arch__split-col > .arch-hist { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 0 2px; }
+.arch__split-col > .arch__overview { flex: 1 1 auto; }
+.arch__overview--loops { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+@media (max-width: 900px) {
+  .arch__split { flex-direction: column; overflow: auto; }
+  .arch__split-col { flex: 0 0 auto; min-height: 40vh; }
+}
+/* The agent's repo-part handle (openspec stable-handles), shown beside the name. */
+.arch__handle { margin-left: 6px; font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: var(--color-text-muted, #888); }
+/* Pinned conversation header (openspec pin-conversation-lanes). The title row and
+   the Chat / Tools / History lane strip must never scroll away with the transcript;
+   only .arch__scroll scrolls beneath them, the composer stays at the bottom.
+   Two mechanisms, because two layouts:
+   1. A conversation column with no side column below it (.arch--solo: the Tasks
+      page, the Management App's Arch pane, the studio Arch tab with the side
+      hidden) keeps owning its height in the stacked container/media layouts above
+      — otherwise those rules size .arch__main to its content and .arch__cols
+      becomes the scroller, taking the strip with it. Specificity (0,2,0) beats
+      the (0,1,0) rules inside the queries in every layout.
+   2. When the side column really does stack under the conversation (the studio
+      Arch tab on a narrow pane), .arch__cols scrolls as a whole by design; the
+      strip then sticks to the top of that scrollport instead. */
+.arch--solo .arch__main { flex: 1 1 auto; min-height: 0; }
+.arch__top { position: sticky; top: 0; z-index: 3; flex: 0 0 auto; background: var(--color-bg, #0f1117); }
+
+/* Goal conversations (openspec arch-goal-conversations): the start form on the Loops lane
+   and the inline pick rows; the busy banner reuses .arch__banner. */
+.arch__goal-text { width: 100%; box-sizing: border-box; font: inherit; font-size: 13px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--color-border, #444); background: var(--color-bg, #0f1117); color: var(--color-text, #ddd); margin-bottom: 6px; resize: vertical; }
+.arch__goal-pick { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; margin-bottom: 6px; font-size: 12px; }
+.arch__scope-row--inline { display: inline-flex; align-items: center; gap: 4px; margin: 0; }

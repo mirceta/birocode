@@ -58,7 +58,7 @@ export default function SessionPicker({
                   {s.title || s.firstPrompt || t('picker.untitled')}
                 </span>
                 <span className="picker__item-meta">
-                  {[friendlyDate(s.lastModified, t), messageCount(s.turnCount, t)]
+                  {[s.provider || 'claude', friendlyDate(s.lastModified, t), messageCount(s.turnCount, t)]
                     .filter(Boolean)
                     .join(' -- ')}
                 </span>

@@ -38,7 +38,9 @@ and merge.
 
 ## Glossary
 
-These terms are used consistently across the docs, plans, and code comments:
+These terms are used consistently across the docs, plans, and code comments.
+
+**What is served where** — the serving topology:
 
 | Term | Definition |
 |------|------------|
@@ -49,6 +51,21 @@ These terms are used consistently across the docs, plans, and code comments:
 | **Self-Development** | The special case where the opened Repo is the Harness's own repo, so Product = Harness. Requires isolated builds (see `docs/claude-web/self-dev.md`). |
 | **Operator** | The human at the host PC: sees the monitoring GUI, clicks "Prepare for preview". |
 | **End User** | The person on the phone using the web UI served by the Harness. |
+
+**Who does what to which repo** — the acting topology. These are first-class
+concepts: the specs use them constantly, so know them before touching agent code.
+Full concept map, powers and constraints: **`docs/agents.md`** — the single source
+of truth; change definitions **there**, not here.
+
+| Term | Definition |
+|------|------------|
+| **Repo Agent** | One Claude session bound to one registered Repo, surfaced as a tab in the agent dock. The harness's unit of work, and the **only** kind of agent that touches a repo's files. Created by `POST /api/dock` on a registered repo; unstarted until its first prompt. |
+| **Management Agent** | Umbrella term for an agent that **assigns and tracks** work rather than doing it. Defining constraint: no write access to managed repos. Two members ship today — the Arch Agent and the Tasks Agent. |
+| **Arch Agent** (`@arch`) | The standing management agent, one per Harness. Middle management: parcels the Operator's intent out to Repo Agents across the Fleet, by conversation only (`send_task`), with edit/write/shell/file-read tools disallowed. Writes solely to its own **Home Repository**. |
+| **Tasks Agent** | The management agent for the **backlog** rather than for machines: an MCP server over the existing ideas and task-graph services. |
+| **Agent Dock** | The per-repo surface a Repo Agent lives in — tab, lane switcher (**Builder / Ask / Files**), chat, git block. A repo's **run slot** makes it `busy` while its builder lane runs, for any actor. |
+| **Fleet** | More than one Harness, each on its own machine, aware of the others. The Arch Agent can send a task to a peer's Repo Agent; there is no central server. |
+| **Home Repository** | The Arch Agent's own git repo (`<ProjectsRoot>/arch-home`), holding its role prompt, `memory/` and `assignments/`. Deliberately **not** a registered Repo. |
 
 ## UI modes
 
@@ -145,6 +162,9 @@ all restores use `robocopy /MIR`, never copy.
 
 - `README.md` — setup, build, deploy for human operators
 - `ANALYSIS.md` — why this app exists (design rationale)
+- `docs/agents.md` — **the agent concept map**: Repo Agent, Management Agent,
+  Arch Agent, Tasks Agent, Agent Dock, Fleet — what they are, what powers each
+  one has, and how to add a repo agent. Read before touching agent code.
 - `docs/networking.md` — how the homepage / App tab / Local tab are served,
   the gates, and a "won't serve" decision tree — read when ANY surface won't load
 - `plans/INTEGRATION.md` — module conventions (how controllers/services plug in)

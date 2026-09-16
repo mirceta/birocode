@@ -64,22 +64,140 @@ public class ArchController : ControllerBase
 
     // ---- state ---------------------------------------------------------------
 
+    /// <summary><c>conv</c> (openspec arch-conversations) names the arch conversation;
+    /// omitted = the default (<c>@arch</c>). Same for messages, tool-calls, send, stream,
+    /// stop-turn and loop below.</summary>
     [HttpGet("")]
-    public IActionResult State()
+    public IActionResult State([FromQuery] string? conv = null)
     {
         _logger.CountRequest();
-        return Ok(BuildState());
+        if (UnknownConversation(conv, out var key) is { } missing) return missing;
+        return Ok(BuildState(key));
     }
 
-    private object BuildState()
+    // The conversation key for `conv`: the default when omitted, 404 when it names a
+    // conversation this harness does not have.
+    private IActionResult? UnknownConversation(string? conv, out string key)
     {
+        key = ArchAgentService.KeyOrDefault(conv);
+        if (string.IsNullOrWhiteSpace(conv) || _arch.HasConversation(key)) return null;
+        return NotFound(new { error = $"no arch conversation \"{conv}\"" });
+    }
+
+    private static object ConversationView(ArchStateStore.Conversation c) =>
+        new { id = c.Id, name = c.Name, isDefault = c.IsDefault, createdAt = c.CreatedAt, sessionId = c.SessionId };
+
+    // ---- conversations (openspec arch-conversations) --------------------------------------
+
+    [HttpGet("conversations")]
+    public IActionResult Conversations()
+    {
+        _logger.CountRequest();
+        var loops = _loops.All().Where(l => ArchAgentService.IsArchKey(l.RepoId)).ToDictionary(l => l.RepoId, StringComparer.Ordinal);
+        return Ok(new
+        {
+            conversations = _arch.Conversations().Select(c => new
+            {
+                id = c.Id, name = c.Name, isDefault = c.IsDefault, createdAt = c.CreatedAt, sessionId = c.SessionId,
+                loop = loops.TryGetValue(c.Id, out var l) ? new { kind = l.Kind, active = l.Active, status = l.Status } : null,
+                running = _runs.Get(c.Id)?.Status == "running",
+                // The goal it runs (openspec arch-goal-conversations) and whether that makes it busy.
+                goal = _arch.GoalOf(c.Id) is { } g ? _arch.GoalView(g) : null,
+                busy = _arch.IsBusy(c.Id),
+            }),
+        });
+    }
+
+    // ---- goal conversations (openspec arch-goal-conversations) ------------------------------
+
+    [HttpGet("goals")]
+    public IActionResult Goals()
+    {
+        _logger.CountRequest();
+        return Ok(new { goals = _arch.GoalViews() });
+    }
+
+    public sealed record GoalRequest(string? Goal, List<string>? Repos, List<string>? Tasks, int? MaxIterations, string? Mode = null);
+
+    /// <summary>The Operator starts a goal conversation from the Arch tab: a new conversation
+    /// owning the repos/tasks, its goal loop armed. Same outcome words as the arch tool.</summary>
+    [HttpPost("goals")]
+    public IActionResult StartGoal([FromBody] GoalRequest? req)
+    {
+        _logger.CountRequest();
+        if (GateClosed() is { } closed) return closed;
+        var o = _arch.StartGoal(req?.Goal, req?.Repos, req?.Tasks, req?.MaxIterations, LoopConfigStore.ArmedByOperator, mode: req?.Mode);
+        return o.Ok ? Ok(new { ok = true, status = o.Status, detail = o.Detail, goal = o.Data })
+            : BadRequest(new { error = o.Detail, status = o.Status });
+    }
+
+    [HttpPost("goals/{id}/stop")]
+    public IActionResult StopGoal(string id)
+    {
+        _logger.CountRequest();
+        var o = _arch.StopGoal(id, LoopConfigStore.ArmedByOperator);
+        return o.Ok ? Ok(new { ok = true, status = o.Status, detail = o.Detail, goal = o.Data }) : NotFound(new { error = o.Detail, status = o.Status });
+    }
+
+    public sealed record GoalMessageRequest(string? Text);
+
+    /// <summary>A message for a busy goal conversation: queued, read on its next wake.</summary>
+    [HttpPost("goals/{id}/message")]
+    public IActionResult MessageGoal(string id, [FromBody] GoalMessageRequest? req)
+    {
+        _logger.CountRequest();
+        var o = _arch.QueueGoalMessage(id, req?.Text);
+        return o.Ok ? Ok(new { ok = true, status = o.Status, detail = o.Detail, goal = o.Data }) : BadRequest(new { error = o.Detail, status = o.Status });
+    }
+
+
+    public sealed record ConversationRequest(string? Name);
+
+    [HttpPost("conversations")]
+    public IActionResult CreateConversation([FromBody] ConversationRequest? req)
+    {
+        _logger.CountRequest();
+        try
+        {
+            var c = _arch.CreateConversation(req?.Name);
+            return Ok(new { conversation = ConversationView(c) });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpPatch("conversations/{id}")]
+    public IActionResult RenameConversation(string id, [FromBody] ConversationRequest? req)
+    {
+        _logger.CountRequest();
+        if (!ArchAgentService.IsArchKey(id) || !_arch.HasConversation(id)) return NotFound(new { error = $"no arch conversation \"{id}\"" });
+        if (req is null || string.IsNullOrWhiteSpace(req.Name)) return BadRequest(new { error = "name is required" });
+        var c = _arch.RenameConversation(id, req.Name);
+        return c is null ? NotFound(new { error = $"no arch conversation \"{id}\"" }) : Ok(new { conversation = ConversationView(c) });
+    }
+
+    [HttpDelete("conversations/{id}")]
+    public IActionResult DeleteConversation(string id)
+    {
+        _logger.CountRequest();
+        if (string.Equals(id, ArchAgentService.ReservedId, StringComparison.Ordinal))
+            return BadRequest(new { error = "the default arch conversation cannot be removed" });
+        if (!ArchAgentService.IsArchKey(id) || !_arch.HasConversation(id)) return NotFound(new { error = $"no arch conversation \"{id}\"" });
+        return Ok(new { removed = _arch.DeleteConversation(id) });
+    }
+
+    private object BuildState(string? conv = null)
+    {
+        var key = ArchAgentService.KeyOrDefault(conv);
         // Segment timings: the Arch tab polls this every few seconds, so anything
         // slow here is felt as "the tab takes forever to load" — name the culprit.
         var sw = System.Diagnostics.Stopwatch.StartNew();
         long T() => sw.ElapsedMilliseconds;
-        var loop = _loops.Get(ArchAgentService.ReservedId);
-        var engine = _engine.States().FirstOrDefault(s => s.RepoId == ArchAgentService.ReservedId);
-        var run = _runs.Get(ArchAgentService.ReservedId);
+        var loop = _loops.Get(key);
+        var engine = _engine.States().FirstOrDefault(s => s.RepoId == key);
+        var run = _runs.Get(key);
         var managed = _arch.ManagedRepoIds();
         var home = _arch.HomePath;
         var t0 = T();
@@ -92,14 +210,17 @@ public class ArchController : ControllerBase
         var commits = _arch.RecentHomeCommits().Select(c => new { sha = c.Sha, subject = c.Subject, at = c.At }).ToList();
         var tHome = T() - t0;
         t0 = T();
-        var sid = _arch.ResolveArchSessionId();
+        var sid = _arch.ResolveArchSessionId(key);
         var tSid = T() - t0;
         if (T() > 1000)
             _logger.Info($"[ARCH] state took {T()} ms (agents {tAgents}, fleet {tFleet}, home commits {tHome}, session {tSid}; home={_arch.HomePath})");
+        var conversation = _arch.GetConversation(key);
         return new
         {
             gateOpen = _gate.Enabled,
             killSwitch = _config.Get().Enabled,
+            conversation = conversation is null ? null : ConversationView(conversation),
+            conversations = _arch.Conversations().Select(ConversationView).ToList(),
             loop = loop is null ? null : new
             {
                 kind = loop.Kind, mode = loop.Mode, active = loop.Active, status = loop.Status,
@@ -111,14 +232,16 @@ public class ArchController : ControllerBase
             engine = engine is null ? null : new { decision = engine.Decision, reason = engine.Reason, label = engine.Label, at = engine.UpdatedAt },
             managedRepoIds = managed,
             managedFleet = _arch.ManagedFleet(),
-            repos = _repos.GetAll().Select(r => new { id = r.Id, name = r.Name, exists = r.Exists, isSelf = r.IsSelf }),
+            repos = _repos.GetAll().Select(r => new { id = r.Id, name = r.Name, handle = r.Handle, exists = r.Exists, isSelf = r.IsSelf }),
             agents = agents.Select(a => new
             {
-                machine = a.Machine, sourceId = a.SourceId, key = a.Key, repoId = a.RepoId, name = a.Name, remoteUrl = a.RemoteUrl, branch = a.Branch,
+                handle = a.Label(_arch.SelfLabel), machine = a.Machine, sourceId = a.SourceId, key = a.Key, repoId = a.RepoId, name = a.Name, remoteUrl = a.RemoteUrl, branch = a.Branch,
                 defaultBranch = a.DefaultBranch, dirty = a.Dirty, availability = a.Availability, lastActor = a.LastActor,
+                claimedReason = a.ClaimedReason, pinned = a.Pinned, adopted = a.BranchAdopted,
                 runningSince = a.RunningSince, tabId = a.TabId, exists = a.Exists, isLocal = a.IsLocal,
                 managedThere = a.IsLocal || a.ManagedThere, sendable = a.Sendable, blocked = a.Blocked?.Reason,
             }),
+            claimWindowMinutes = _arch.ClaimWindowMinutes,
             fleet,
             home = new
             {
@@ -136,9 +259,14 @@ public class ArchController : ControllerBase
                     : null,
                 run = run is null ? null : new { status = run.Status, lastSeq = run.LastSeq, sessionId = run.SessionId },
             },
-            watermark = _arch.Watermark,
+            watermark = _arch.WatermarkOf(key),
             drivenQuietSeconds = _arch.DrivenQuietSeconds,
             disallowedTools = ArchAgentService.DisallowedTools,
+            // Goal conversations (openspec arch-goal-conversations): this conversation's goal
+            // and busy state, and every goal.
+            goal = _arch.GoalOf(key) is { } goal ? _arch.GoalView(goal) : null,
+            busy = _arch.IsBusy(key),
+            goals = _arch.GoalViews(),
         };
     }
 
@@ -201,14 +329,90 @@ public class ArchController : ControllerBase
         return Ok(BuildState());
     }
 
+    public sealed record HandoverRequest(string? RepoId, string? Branch, string? Action, string? SourceId);
+
+    /// <summary>Branch hand-over (openspec arch-branch-handover): the Operator hands a repo's
+    /// current branch to the arch (`adopt`), takes it back (`revoke`), or pins the repo as
+    /// theirs (`pin` / `unpin`) — from the dock or the Management App agent card. A
+    /// `sourceId` targets a repo on a peer through the fleet client.</summary>
+    [HttpPost("handover")]
+    public IActionResult HandOver([FromBody] HandoverRequest? req)
+    {
+        _logger.CountRequest();
+        if (string.IsNullOrWhiteSpace(req?.RepoId)) return BadRequest(new { error = "repoId is required" });
+        var action = (req.Action ?? "adopt").Trim().ToLowerInvariant();
+        Services.Arch.ArchAgentService.ToolOutcome o;
+        if (!string.IsNullOrWhiteSpace(req.SourceId) && req.SourceId != Services.Events.CollectorService.SelfId)
+        {
+            var src = _collector.ListSources().FirstOrDefault(s => s.Id == req.SourceId);
+            if (src is null) return NotFound(new { error = "unknown source" });
+            if (action is not ("adopt" or "revoke")) return BadRequest(new { error = "only adopt | revoke reach a peer" });
+            o = _fleet.HandOver(src.Id, req.RepoId, req.Branch, _arch.SelfLabel, adopt: action == "adopt");
+        }
+        else
+        {
+            o = action switch
+            {
+                "adopt" => _arch.HandOver(req.RepoId, req.Branch, adopt: true, by: "operator"),
+                "revoke" => _arch.HandOver(req.RepoId, req.Branch, adopt: false, by: "operator"),
+                "pin" => _arch.PinRepo(req.RepoId, true, "operator"),
+                "unpin" => _arch.PinRepo(req.RepoId, false, "operator"),
+                _ => new Services.Arch.ArchAgentService.ToolOutcome(false, "error", "action must be adopt | revoke | pin | unpin"),
+            };
+        }
+        return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data, posture = _arch.ClaimPosture(req.RepoId) });
+    }
+
+    /// <summary>One local repo's claim posture for the dock control: availability, why,
+    /// branch, adopted / pinned, the activity window.</summary>
+    [HttpGet("claim")]
+    public IActionResult Claim([FromQuery] string? repoId)
+    {
+        _logger.CountRequest();
+        if (string.IsNullOrWhiteSpace(repoId)) return BadRequest(new { error = "repoId is required" });
+        return Ok(_arch.ClaimPosture(repoId));
+    }
+
+    public sealed record ClaimWindowRequest(int? Minutes);
+
+    /// <summary>The claimed rule's activity window, operator-set (0 = default 2 h).</summary>
+    [HttpPost("claim-window")]
+    public IActionResult ClaimWindow([FromBody] ClaimWindowRequest? req)
+    {
+        _logger.CountRequest();
+        if (req?.Minutes is not int m || m < 0) return BadRequest(new { error = "minutes (>= 0) is required" });
+        _arch.SetClaimWindowMinutes(m);
+        return Ok(new { claimWindowMinutes = _arch.ClaimWindowMinutes });
+    }
+
     /// <summary>Fleet status (openspec fleet-status-tab): every repo agent on every
     /// machine with branch / on-default / running / last actor / arch scope — the
     /// Management App's Status tab. Never waits on a peer (cached describes).</summary>
+    /// <summary>This machine's overview as the fleet sees it (openspec fleet-overview-honest):
+    /// the strip's Machine tile reads this — the same record the describe carries.</summary>
+    [HttpGet("overview")]
+    public IActionResult Overview()
+    {
+        _logger.CountRequest();
+        return Ok(_arch.SelfOverview());
+    }
+
     [HttpGet("fleet/status")]
     public IActionResult FleetStatus()
     {
         _logger.CountRequest();
         return Ok(_arch.FleetStatus());
+    }
+
+    /// <summary>On-demand scoreboard for one fleet machine (openspec fleet-status-panels):
+    /// self when <c>sourceId</c> is omitted/self, else a peer relayed over the fleet client.
+    /// NOT part of the periodic fleet poll — the Scoreboard tab calls this only when opened
+    /// (and on its Refresh button); answers are cached a few minutes.</summary>
+    [HttpGet("fleet/scoreboard")]
+    public IActionResult FleetScoreboard([FromQuery] string? sourceId, [FromQuery] string? window)
+    {
+        _logger.CountRequest();
+        return Ok(_arch.FleetScoreboard(sourceId, window));
     }
 
     public sealed record FleetUpgradeRequest(string? SourceId, string? Ref);
@@ -231,13 +435,14 @@ public class ArchController : ControllerBase
     /// <summary>The arch conversation transcript, annotated with each user
     /// message's actor (human | wake).</summary>
     [HttpGet("messages")]
-    public IActionResult Messages([FromQuery] string? sessionId = null)
+    public IActionResult Messages([FromQuery] string? sessionId = null, [FromQuery] string? conv = null)
     {
         _logger.CountRequest();
-        var sid = string.IsNullOrWhiteSpace(sessionId) ? _arch.ResolveArchSessionId() : sessionId;
+        if (UnknownConversation(conv, out var key) is { } missing) return missing;
+        var sid = string.IsNullOrWhiteSpace(sessionId) ? _arch.ResolveArchSessionId(key) : sessionId;
         if (sid is null) return Ok(new { sessionId = (string?)null, messages = Array.Empty<object>() });
         var messages = _sessions.GetMessages(_arch.HomePath, sid);
-        var annotated = MessageActors.Annotate(messages, _audit.Recent(5000), ArchAgentService.ReservedId, ArchAgentService.ActorHuman);
+        var annotated = MessageActors.Annotate(messages, _audit.Recent(5000), key, ArchAgentService.ActorHuman);
         return Ok(new { sessionId = sid, messages = annotated });
     }
 
@@ -251,10 +456,11 @@ public class ArchController : ControllerBase
     /// harness tool (<c>mcp__arch__x</c>) is reported as server <c>arch</c> with
     /// its short name; anything else as <c>builtin</c>.</summary>
     [HttpGet("tool-calls")]
-    public IActionResult ToolCalls([FromQuery] string? sessionId = null)
+    public IActionResult ToolCalls([FromQuery] string? sessionId = null, [FromQuery] string? conv = null)
     {
         _logger.CountRequest();
-        var sid = string.IsNullOrWhiteSpace(sessionId) ? _arch.ResolveArchSessionId() : sessionId;
+        if (UnknownConversation(conv, out var key) is { } missing) return missing;
+        var sid = string.IsNullOrWhiteSpace(sessionId) ? _arch.ResolveArchSessionId(key) : sessionId;
         if (sid is null) return Ok(new { sessionId = (string?)null, calls = Array.Empty<object>(), turns = Array.Empty<object>() });
         var records = _sessions.GetToolCallHistory(_arch.HomePath, sid);
 
@@ -265,7 +471,7 @@ public class ArchController : ControllerBase
         // Actor per turn: the same audit match the transcript uses (a wake prompt is
         // an audit row keyed by its exact text; anything else is the human).
         var prompts = turnRows.Select(t => new ChatMessage("user", t.Prompt)).ToList();
-        var annotated = MessageActors.Annotate(prompts, _audit.Recent(5000), ArchAgentService.ReservedId, ArchAgentService.ActorHuman);
+        var annotated = MessageActors.Annotate(prompts, _audit.Recent(5000), key, ArchAgentService.ActorHuman);
         var turns = turnRows.Select((t, i) => new
         {
             index = t.Index,
@@ -302,12 +508,13 @@ public class ArchController : ControllerBase
     public sealed record SendRequest(string? Text);
 
     [HttpPost("send")]
-    public IActionResult Send([FromBody] SendRequest? req)
+    public IActionResult Send([FromBody] SendRequest? req, [FromQuery] string? conv = null)
     {
         _logger.CountRequest();
         if (GateClosed() is { } closed) return closed;
+        if (UnknownConversation(conv, out var key) is { } missing) return missing;
         if (req is null || string.IsNullOrWhiteSpace(req.Text)) return BadRequest(new { error = "text is required" });
-        var (ok, error, session) = _arch.SendToArch(req.Text);
+        var (ok, error, session) = _arch.SendToArch(key, req.Text);
         if (!ok) return StatusCode(StatusCodes.Status409Conflict, new { error });
         return Ok(new { sent = true, lastSeq = session!.LastSeq });
     }
@@ -315,10 +522,10 @@ public class ArchController : ControllerBase
     /// <summary>Reattach to the arch run's event stream (same contract as
     /// <c>GET /api/chat/stream</c>): replay after <paramref name="after"/>, then live.</summary>
     [HttpGet("stream")]
-    public async Task Stream([FromQuery] int after = 0)
+    public async Task Stream([FromQuery] int after = 0, [FromQuery] string? conv = null)
     {
         _logger.CountRequest();
-        var session = _runs.Get(ArchAgentService.ReservedId);
+        var session = _runs.Get(ArchAgentService.KeyOrDefault(conv));
         if (session is null)
         {
             Response.StatusCode = StatusCodes.Status404NotFound;
@@ -347,10 +554,10 @@ public class ArchController : ControllerBase
     /// <summary>Stops the arch agent's CURRENT turn (kills its CLI). Distinct from
     /// disarm: this is the chat Stop button for the arch conversation.</summary>
     [HttpPost("stop-turn")]
-    public IActionResult StopTurn()
+    public IActionResult StopTurn([FromQuery] string? conv = null)
     {
         _logger.CountRequest();
-        var session = _runs.Get(ArchAgentService.ReservedId);
+        var session = _runs.Get(ArchAgentService.KeyOrDefault(conv));
         if (session is null || session.Status != "running")
             return NotFound(new { error = "No running arch turn." });
         session.RequestStop();
@@ -379,10 +586,11 @@ public class ArchController : ControllerBase
     /// pins the conversation and resets the watermark (no replay); disarm is the
     /// kill switch for the arch agent — no further sends, running repo turns finish.</summary>
     [HttpPost("loop")]
-    public IActionResult Loop([FromBody] LoopRequest? req)
+    public IActionResult Loop([FromBody] LoopRequest? req, [FromQuery] string? conv = null)
     {
         _logger.CountRequest();
         if (GateClosed() is { } closed) return closed;
+        if (UnknownConversation(conv, out var key) is { } missing) return missing;
         switch ((req?.Action ?? "").ToLowerInvariant())
         {
             case "arm":
@@ -390,11 +598,12 @@ public class ArchController : ControllerBase
                 // Local repos or agents on subscribed harnesses — either makes a scope (fleet D3).
                 if (_arch.ManagedRepoIds().Count + _arch.ManagedFleet().Count == 0)
                     return BadRequest(new { error = "pick at least one managed repo (on this or another machine) before arming" });
-                _arch.Arm(req?.Mode, req?.MaxIterations);
+                try { _arch.Arm(key, req?.Mode, req?.MaxIterations); }
+                catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
                 break;
             case "disarm":
             case "stop":
-                _arch.Disarm();
+                _arch.Disarm(key);
                 break;
             case "quiet":
                 // The driven loops' quiet floor (openspec arch-driven-loops): how long a
@@ -406,13 +615,13 @@ public class ArchController : ControllerBase
             case "mode":
                 if (string.IsNullOrWhiteSpace(req?.Mode))
                     return BadRequest(new { error = "the mode action needs a mode (suggest | drive)" });
-                if (_loops.SetMode(ArchAgentService.ReservedId, req.Mode) is null)
+                if (_loops.SetMode(key, req.Mode) is null)
                     return NotFound(new { error = "the arch loop has never been armed" });
                 break;
             default:
                 return BadRequest(new { error = $"unknown action \"{req?.Action}\"" });
         }
-        return Ok(BuildState());
+        return Ok(BuildState(key));
     }
 
     // ---- tools lane ---------------------------------------------------------------------
@@ -444,7 +653,7 @@ public class ArchController : ControllerBase
                 calls = mine.Count,
                 lastAt = last?.At,
                 lastOutcome = last?.AnsweredMessage,
-                lastRepo = last is null || last.RepoId == ArchAgentService.ReservedId ? null : last.RepoName,
+                lastRepo = last is null || ArchAgentService.IsArchKey(last.RepoId) ? null : last.RepoName,
             };
         }).ToList();
         return Ok(new

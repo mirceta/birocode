@@ -62,7 +62,7 @@ async function copyToClipboard(text) {
 
 // `kinds` (openspec arch-driven-loops): the pickable kinds — the arch agent offers
 // goal · recipe only (no dock stash, no suggestion semantics).
-export default function DockLoopControl({ repoId, repoName, sessionId, tabId, stash = [], loop, recipes = [], onChanged, onUsePending, kinds = KINDS }) {
+export default function DockLoopControl({ repoId, repoName, sessionId, tabId, stash = [], loop, recipes = [], onChanged, onUsePending, kinds = KINDS, drivenBy = null }) {
   const { t } = useT();
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState(null);
@@ -293,11 +293,17 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
   // repo it drives on every disclosure surface, so a wrong-tab arm is visible
   // before its first send lands.
   const bindText = repoName ? ` · ${t('dashboard.loopQueueBind', { repo: repoName })}` : '';
-  const summary = loop
+  // Who armed it (openspec arch-loop-tools): the arch agent's loops say so on the
+  // summary and the armed row; the Operator edits and stops them exactly as their own.
+  const byText = loop?.armedBy && loop.armedBy !== 'operator' ? ` · ${t('dashboard.loopArmedBy', { who: loop.armedBy })}` : '';
+  // "driven by arch goal <id>" (openspec arch-goal-conversations): a goal conversation
+  // owns this agent for now — its wakes and dispatches come from there.
+  const goalText = drivenBy?.goalId ? ` · ${t('dashboard.loopDrivenByGoal', { id: drivenBy.goalId })}` : '';
+  const summary = (loop
     ? (armed
-      ? `${EMOJI[loop.kind]} ${kindName(loop.kind)} · ${t('dashboard.loopArmedWord')} · ${modeName(loop.mode)}${loop.kind === 'suggestion' ? '' : ` · ${capText}`}${queueText}${loop.kind === 'queue' ? bindText : ''}${phaseWord ? ` · ${phaseWord}` : ''}`
-      : `${EMOJI[loop.kind]} ${kindName(loop.kind)} · ${t(`dashboard.loopStatus.${loop.status}`) || loop.status}${loop.kind === 'queue' ? queueText : ''}`)
-    : t('dashboard.loopNone');
+      ? `${EMOJI[loop.kind]} ${kindName(loop.kind)} · ${t('dashboard.loopArmedWord')} · ${modeName(loop.mode)}${loop.kind === 'suggestion' ? '' : ` · ${capText}`}${queueText}${loop.kind === 'queue' ? bindText : ''}${phaseWord ? ` · ${phaseWord}` : ''}${byText}`
+      : `${EMOJI[loop.kind]} ${kindName(loop.kind)} · ${t(`dashboard.loopStatus.${loop.status}`) || loop.status}${loop.kind === 'queue' ? queueText : ''}${byText}`)
+    : t('dashboard.loopNone')) + goalText;
 
   return (
     <div className="phone__loop">
@@ -306,7 +312,8 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
           type="button"
           className={`phone__loop-btn${open ? ' phone__loop-btn--on' : ''}${armed ? ' phone__loop-btn--armed' : ''}`}
           onClick={() => setOpen((v) => !v)}
-          title={t('dashboard.loopHint')}
+          title={drivenBy?.goal ? `${t('dashboard.loopDrivenByGoal', { id: drivenBy.goalId })}: ${drivenBy.goal}` : t('dashboard.loopHint')}
+          data-driven-by-goal={drivenBy?.goalId || undefined}
         >
           ⟳ {summary}
         </button>
@@ -355,10 +362,10 @@ export default function DockLoopControl({ repoId, repoName, sessionId, tabId, st
                 <span className="phone__loop-armed-k">
                   {EMOJI[armedKind]} {t('dashboard.loopArmedAs', { mode: kindName(armedKind) })}
                 </span>
-                <span className="phone__loop-armed-v">
+                <span className="phone__loop-armed-v" data-armed-by={loop.armedBy || 'operator'}>
                   {loop.kind === 'suggestion'
                     ? modeName(loop.mode)
-                    : `${modeName(loop.mode)} · ${capText}${queueText}${loop.kind === 'queue' ? bindText : ''} · ${t(`dashboard.loopStatus.${loop.status}`) || loop.status}`}
+                    : `${modeName(loop.mode)} · ${capText}${queueText}${loop.kind === 'queue' ? bindText : ''} · ${t(`dashboard.loopStatus.${loop.status}`) || loop.status}`}{byText}
                 </span>
                 <button type="button" className="phone__loop-stop" onClick={disarm} disabled={busy}>
                   ■ {t('dashboard.loopDisarm')}

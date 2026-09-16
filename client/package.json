@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "build:manage": "vite build --config vite.manage.config.js",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:ui": "node tests/ui/pinned-conversation-lanes.mjs",
+    "test": "node --test src/components/taskgraph/graphColors.test.mjs src/components/taskgraph/taskFilters.test.mjs src/components/taskgraph/assigneeColorParity.test.mjs src/manage/fleetStatusTabs.test.mjs src/manage/harnessLink.test.mjs src/manage/agentLabel.test.mjs src/components/app/liveness.test.mjs src/components/chat/models.test.mjs src/components/shared/agentStatusDot.test.mjs src/components/taskgraph/agentIdentity.test.mjs"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",
@@ -25,6 +27,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
+    "playwright": "^1.63.0",
     "vite": "^6.0.7"
   }
 }

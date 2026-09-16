@@ -11,7 +11,7 @@
 .kb__mono { font-family: ui-monospace, Consolas, monospace; font-size: 11px; }
 .kb__note { color: var(--color-text-muted, #9aa); border: 1px dashed var(--color-border, #444); border-radius: 8px; padding: 8px 11px; }
 .kb__note--err { color: #e5734b; border-color: #e5734b; }
-.kb__cols { display: grid; grid-template-columns: repeat(4, minmax(200px, 1fr)); gap: 10px; flex: 1 1 auto; min-height: 0; overflow: auto; align-items: start; }
+.kb__cols { display: grid; grid-template-columns: repeat(6, minmax(170px, 1fr)); gap: 10px; flex: 1 1 auto; min-height: 0; overflow: auto; align-items: start; }
 .kb__col { border: 1px solid var(--color-border, #333); border-radius: 10px; background: var(--color-surface, #14161d); min-height: 160px; display: flex; flex-direction: column; }
 .kb__col--over { border-color: var(--color-accent, #5ea0ef); box-shadow: inset 0 0 0 1px var(--color-accent, #5ea0ef); }
 .kb__col-head { display: flex; justify-content: space-between; padding: 8px 10px; font-weight: 600; border-bottom: 1px solid var(--color-border, #333); }
@@ -23,15 +23,67 @@
 .kb__card--blocked { border-left: 3px solid #d29922; }
 .kb__col--done .kb__card { opacity: 0.75; }
 .kb__title { font-size: 13px; font-weight: 500; line-height: 1.35; word-break: break-word; }
+/* The card reference (openspec kanban-card-ref): a small stable code + copy button, right of the title. */
+.kb__ref { float: right; display: inline-flex; align-items: center; gap: 2px; margin-left: 8px; }
+.kb__ref-code { font-family: ui-monospace, Consolas, monospace; font-size: 10.5px; font-weight: 400; color: var(--color-text-muted, #9aa); }
+.kb__copy { border: 1px solid transparent; background: transparent; color: var(--color-text-muted, #9aa); border-radius: 4px; padding: 0 4px; font-size: 11px; line-height: 1.4; cursor: pointer; white-space: nowrap; }
+.kb__copy:hover { color: var(--color-text, #eee); border-color: var(--color-border, #444); }
+.kb__copy--done { color: #3fb950; border-color: rgba(63, 185, 80, 0.6); }
 .kb__meta { display: flex; flex-wrap: wrap; gap: 4px; }
 .kb__chip { font-size: 10.5px; border: 1px solid var(--color-border, #444); border-radius: 999px; padding: 0 7px; color: var(--color-text-muted, #9aa); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-.kb__chip--who { color: var(--color-text, #eee); }
+.kb__chip--who { color: var(--color-text, #eee); display: inline-flex; align-items: center; gap: 5px; }
+/* Several assignees on one card (openspec task-multi-assignee): each chip carries its own status. */
+.kb__chip--who-multi { border-style: double; border-width: 3px; padding-top: 0; padding-bottom: 0; }
+.kb__chip--who-warn { border-color: #d29922; }
+/* Machine + repo colour (fleet-status task 327aa5ae): the SAME shared hue palette the
+   Task graph nodes and Fleet Status agent chips use, so a machine/agent reads as one
+   colour across all three views. Border = its machine's hue, background tint = its
+   repo's hue; identical hsl() formulas to .tg-assignee so the colours line up exactly.
+   Text stays the theme text colour (dark on the pale light-mode tint, light on the dark
+   one) for accessible contrast. Placed after --who-warn so the machine colour always
+   shows; the over-claim warning still reads via the card's ⚠ unverified chip + title. */
+.kb__chip--who.has-machine { border-width: 2px; border-color: hsl(var(--tg-machine-h) 62% 40%); }
+.kb__chip--who.has-repo { background: hsl(var(--tg-repo-h) 72% 90%); color: #17181d; }
+@media (prefers-color-scheme: dark) {
+  .kb__chip--who.has-machine { border-color: hsl(var(--tg-machine-h) 70% 62%); }
+  .kb__chip--who.has-repo { background: hsl(var(--tg-repo-h) 34% 24%); color: var(--color-text, #eee); }
+}
+.kb__who-status { color: var(--color-text-muted, #9aa); }
+/* Working-agent emphasis (task 3546287b): ~50% larger than the 10.5px idle chip
+   (15px type + taller padding), on top of the shared .agent-badge--working glow.
+   A font/padding step, not transform: scale() — the chip row wraps and the card
+   grows, so nothing overlaps or clips. */
+.kb__chip--working { font-size: 15px; padding: 2px 11px; }
+.kb__assignees { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.kb__x { border: 0; background: transparent; color: inherit; margin-left: 4px; padding: 0 2px; cursor: pointer; font-size: 12px; line-height: 1; }
+.kb__x:hover { color: #e57373; }
 .kb__chip--blocked { color: #d29922; border-color: #d29922; }
 .kb__chip--pinged { color: #3fb950; border-color: rgba(63, 185, 80, 0.6); }
 .kb__chip--await { color: #5ea0ef; border-color: rgba(94, 160, 239, 0.6); }
+/* Delivery lifecycle (openspec kanban-lifecycle-columns) */
+.kb__chip--branch { color: #b085f5; border-color: rgba(176, 133, 245, 0.6); }
+.kb__chip--unpushed { color: #e5734b; border-color: rgba(229, 115, 75, 0.7); }
+.kb__chip--pr a { color: #5ea0ef; text-decoration: none; }
+.kb__chip--stale { color: #e5734b; border-color: #e5734b; }
+.kb__chip--warn { color: #d29922; border-color: #d29922; }
+.kb__warn { color: #d29922; font-size: 11.5px; }
+.kb__col--committed .kb__col-head { color: #b085f5; }
+.kb__col--pr-opened .kb__col-head { color: #5ea0ef; }
+.kb__col--pr-merged .kb__col-head { color: #3fb950; }
 .kb__detail { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--color-border, #333); padding-top: 6px; cursor: default; }
 .kb__note-text { font-size: 12.5px; white-space: pre-wrap; }
 .kb__row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; }
 .kb__select { flex: 1; min-width: 160px; padding: 3px 6px; border: 1px solid var(--color-border, #444); border-radius: 6px; background: var(--color-surface, #14161d); color: var(--color-text, #eee); font-size: 12px; }
 .kb__actions { gap: 4px; }
 @media (max-width: 900px) { .kb__cols { grid-template-columns: repeat(2, minmax(160px, 1fr)); } }
+
+/* Delete a task (fleet task e3b7065c): a small trash button on the card (and in the
+   detail) that arms a two-step confirm, so nothing is deleted by accident. Sits at the
+   right of the title row; muted until hover/confirm so it never competes with the title. */
+.kb__title { display: flex; align-items: flex-start; gap: 6px; }
+.kb__title-text { flex: 1 1 auto; min-width: 0; word-break: break-word; }
+.kb__del { flex: 0 0 auto; border: 0; background: transparent; color: var(--color-text-muted, #9aa); cursor: pointer; font-size: 12px; line-height: 1; padding: 2px 4px; border-radius: 6px; opacity: 0.55; }
+.kb__del:hover { opacity: 1; color: #e5734b; background: rgba(229, 115, 75, 0.12); }
+.kb__del-confirm { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; }
+.kb__del-confirm .kb__btn { padding: 1px 6px; font-size: 11px; }
+.kb__del-q { font-size: 11px; color: #e5734b; font-weight: 600; }

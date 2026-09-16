@@ -17,6 +17,7 @@ namespace ClaudeWeb.Controllers;
 ///   POST   /api/taskgraph/machines       -- { name?, x?, y?, w?, h? } -> machine (grouping box = one host)
 ///   PATCH  /api/taskgraph/machines/{id}  -- { name?, x?, y?, w?, h? } -> machine
 ///   DELETE /api/taskgraph/machines/{id}  -- remove box, DETACHING its member nodes
+///   POST   /api/taskgraph/verify         -- run one verifier pass now (openspec board-verify-remote) -> { checked, probed, changes, notes, at }
 /// An edge Source->Target means Source must wait on Target (Target is the prerequisite).
 /// </summary>
 [ApiController]
@@ -25,18 +26,42 @@ public class TaskGraphController : ControllerBase
 {
     private readonly TaskGraphService _graph;
     private readonly Services.Arch.ArchAgentService _arch;
+    private readonly TaskVerificationPoller _verifier;
     private readonly Logger _logger;
 
-    public TaskGraphController(TaskGraphService graph, Services.Arch.ArchAgentService arch, Logger logger)
+    public TaskGraphController(TaskGraphService graph, Services.Arch.ArchAgentService arch, TaskVerificationPoller verifier, Logger logger)
     {
         _graph = graph;
         _arch = arch;
+        _verifier = verifier;
         _logger = logger;
+    }
+
+    /// <summary>Run one verification pass right now (openspec board-verify-remote): this
+    /// machine's assignees from their clones, every card with a PR against GitHub. The
+    /// operator's "Re-verify board" button; also how stuck cards are backfilled without
+    /// waiting for the next minute tick. Serialised with the background pass.</summary>
+    [HttpPost("verify")]
+    public IActionResult Verify()
+    {
+        _logger.CountRequest();
+        var r = _verifier.VerifyOnce();
+        return Ok(new
+        {
+            r.Checked, r.Probed, r.At,
+            changes = r.Changes.Select(c => new { c.Id, c.Title, c.From, c.To }),
+            notes = r.Notes,
+        });
     }
 
     public record NodeRequest(string? Title, string? Note, string? RepoId, string? MachineId, string? Status, double? X, double? Y,
         string? SourceId = null, string? CreatedBy = null, string? IdeaId = null);
-    public record AssignRequest(string? SourceId, string? RepoId, string? By);
+    /// <summary>Legacy single assignee (sourceId + repoId, blank = unassign), or several
+    /// (openspec task-multi-assignee): <c>assignees</c> with <c>mode</c> replace | add | remove.</summary>
+    public record AssignRequest(string? SourceId, string? RepoId, string? By, List<AssigneeRequest>? Assignees = null, string? Mode = null);
+    public record AssigneeRequest(string? SourceId, string? RepoId);
+    /// <summary>Optional subset to ping (openspec task-multi-assignee); empty = every assignee not yet pinged.</summary>
+    public record DispatchRequest(List<AssigneeRequest>? Assignees = null);
     public record EdgeRequest(string? Source, string? Target);
     public record ScratchRequest(string? Text);
     public record MachineRequest(string? Name, double? X, double? Y, double? W, double? H);
@@ -45,7 +70,10 @@ public class TaskGraphController : ControllerBase
     public IActionResult Get()
     {
         _logger.CountRequest();
-        return Ok(_graph.Get());
+        var b = _graph.Get();
+        // staleHours rides along so the client draws the same stale badge the
+        // harness computes (openspec kanban-lifecycle-columns).
+        return Ok(new { nodes = b.Nodes, edges = b.Edges, machines = b.Machines, scratch = b.Scratch, staleHours = _graph.StaleAfterMs / 3600_000.0 });
     }
 
     [HttpPost("nodes")]
@@ -62,6 +90,8 @@ public class TaskGraphController : ControllerBase
     public IActionResult UpdateNode(string id, [FromBody] NodeRequest? request)
     {
         _logger.CountRequest();
+        // The card reference works here too (openspec kanban-card-ref): "#5cc3e900" / a unique prefix.
+        id = _graph.ResolveTaskRef(id).Id ?? id;
         var node = _graph.UpdateNode(id, request?.Title, request?.Note, request?.RepoId, request?.MachineId, request?.Status, request?.X, request?.Y, Now());
         if (node is null) return NotFound(new { error = "Unknown node id, blank title, or invalid status." });
         return Ok(node);
@@ -73,7 +103,20 @@ public class TaskGraphController : ControllerBase
     public IActionResult Assign(string id, [FromBody] AssignRequest? request)
     {
         _logger.CountRequest();
-        var node = _graph.Assign(id, request?.SourceId, request?.RepoId, request?.By ?? "human", Now());
+        id = _graph.ResolveTaskRef(id).Id ?? id;
+        TaskGraphService.Node? node;
+        if (request?.Assignees is { } many)
+        {
+            var wanted = many.Where(a => !string.IsNullOrWhiteSpace(a.RepoId)).Select(a => (string.IsNullOrWhiteSpace(a.SourceId) ? null : a.SourceId, a.RepoId!.Trim())).ToList();
+            var by = request.By ?? "human";
+            switch ((request.Mode ?? "replace").Trim().ToLowerInvariant())
+            {
+                case "add": node = _graph.Find(id); foreach (var (src, repo) in wanted) node = _graph.AddAssignee(id, src, repo, by, Now()); break;
+                case "remove": node = _graph.Find(id); foreach (var (src, repo) in wanted) node = _graph.RemoveAssignee(id, src, repo, by, Now()); break;
+                default: node = _graph.SetAssignees(id, wanted, by, Now()); break;
+            }
+        }
+        else node = _graph.Assign(id, request?.SourceId, request?.RepoId, request?.By ?? "human", Now());
         if (node is null) return NotFound(new { error = "Unknown node id." });
         return Ok(node);
     }
@@ -82,10 +125,13 @@ public class TaskGraphController : ControllerBase
     /// text goes to that repo agent's conversation through the arch send path, and
     /// the card moves to doing when the send lands.</summary>
     [HttpPost("nodes/{id}/dispatch")]
-    public IActionResult Dispatch(string id)
+    public IActionResult Dispatch(string id, [FromBody] DispatchRequest? request = null)
     {
         _logger.CountRequest();
-        var o = _arch.DispatchTask(id, requireArmed: false, by: "operator");
+        id = _graph.ResolveTaskRef(id).Id ?? id;
+        var keys = request?.Assignees?.Where(a => !string.IsNullOrWhiteSpace(a.RepoId))
+            .Select(a => TaskGraphService.AssigneeKey(string.IsNullOrWhiteSpace(a.SourceId) ? null : a.SourceId, a.RepoId!.Trim())).ToList();
+        var o = _arch.DispatchTask(id, requireArmed: false, by: "operator", assigneeKeys: keys is { Count: > 0 } ? keys : null);
         return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
     }
 

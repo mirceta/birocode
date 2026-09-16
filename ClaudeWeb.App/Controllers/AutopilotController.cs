@@ -191,7 +191,7 @@ public class AutopilotController : ControllerBase
                 // The arch agent's reserved slot (openspec arch-driven-loops): goal and
                 // recipe reuse everything; the suggestion kind's newest-transcript read
                 // and the queue kind's dock stash do not apply to it.
-                var isArchAgent = req.RepoId == ArchAgentService.ReservedId;
+                var isArchAgent = ArchAgentService.IsArchKey(req.RepoId);
                 if (isArchAgent && string.Equals(req.Kind, LoopConfigStore.KindSuggestion, StringComparison.OrdinalIgnoreCase))
                     return BadRequest(new { error = "the arch agent has no suggestion loop — arm a goal or a recipe on it" });
                 if (isArchAgent && string.Equals(req.Kind, LoopConfigStore.KindQueue, StringComparison.OrdinalIgnoreCase))
@@ -209,7 +209,7 @@ public class AutopilotController : ControllerBase
                 // with no transcript arms unpinned; the engine locks a pin in before
                 // its first send.
                 var pin = string.IsNullOrWhiteSpace(req.SessionId)
-                    ? (isArchAgent ? _arch.ResolveArchSessionId() : NewestSessionId(req.RepoId))
+                    ? (isArchAgent ? _arch.ResolveArchSessionId(req.RepoId) : NewestSessionId(req.RepoId))
                     : req.SessionId.Trim();
                 if (string.Equals(req.Kind, LoopConfigStore.KindGoal, StringComparison.OrdinalIgnoreCase))
                 {
@@ -268,10 +268,10 @@ public class AutopilotController : ControllerBase
                 // The arch slot (openspec arch-driven-loops): disarming a driven kind
                 // hands the slot back to the standing wake loop; disarming the wake kind
                 // itself is the Operator's Stop and forgets it.
-                if (req.RepoId == ArchAgentService.ReservedId)
+                if (ArchAgentService.IsArchKey(req.RepoId))
                 {
-                    if (cur?.Kind == LoopConfigStore.KindArch) _arch.ForgetStandingLoop();
-                    else _arch.RestoreStandingLoopIfNeeded();
+                    if (cur?.Kind == LoopConfigStore.KindArch) _arch.ForgetStandingLoop(req.RepoId);
+                    else _arch.RestoreStandingLoopIfNeeded(req.RepoId);
                 }
                 break;
             }
@@ -315,11 +315,7 @@ public class AutopilotController : ControllerBase
         try
         {
             if (_repos.GetAll().FirstOrDefault(r => r.Id == repoId) is not { } repo) return null;
-            var dir = SessionService.ProjectsDirectoryFor(repo.Path);
-            if (!Directory.Exists(dir)) return null;
-            var newest = new DirectoryInfo(dir).EnumerateFiles("*.jsonl")
-                .OrderByDescending(f => f.LastWriteTimeUtc).FirstOrDefault();
-            return newest is null ? null : Path.GetFileNameWithoutExtension(newest.Name);
+            return new SessionService(_logger).ListSessions(repo.Path).FirstOrDefault()?.Id;
         }
         catch (Exception ex)
         {
@@ -370,6 +366,8 @@ public class AutopilotController : ControllerBase
                     stopReason = l.StopReason,
                     stopDetail = l.StopDetail,
                     recipeName = l.RecipeName,
+                    // Who armed it (openspec arch-loop-tools): "operator" | "arch" | "arch@<machine>".
+                    armedBy = l.ArmedBy,
                     // The engine's live decision (fix-suggestion-loop-inert, D3): the
                     // bare decision WORD is a status word like kind/mode/phase and
                     // stays ungated ("off" when the engine holds no state — a closed
@@ -406,6 +404,9 @@ public class AutopilotController : ControllerBase
                 name = r.Name,
                 maxIterations = r.MaxIterations,
             }),
+            // "driven by arch goal <id>" (openspec arch-goal-conversations): local repo id →
+            // the running goal conversation that owns it. Status words only.
+            goalOwners = _arch.GoalOwners(),
         });
     }
 

@@ -67,10 +67,15 @@ function PriorityPicker({ value = 0, onChange, t }) {
 
 const TAB_KEY = 'claudeweb_ideas_tab'; // remembered tab: 'ideas' | 'plan' | 'graph'
 
-export default function IdeasPanel() {
+// `view` (openspec management-split-tabs): 'all' = the studio tab (Ideas · Arch plan ·
+// Task graph · Kanban as inner tabs); 'ideas' = the list + arch plan only; 'graph' and
+// 'kanban' = that board alone. The Management App mounts the three as its own tabs.
+export default function IdeasPanel({ view = 'all' }) {
   const { t } = useT();
   // The task graph now lives here as a third tab (plans/ideas-taskgraph-merge.md).
   const graphOn = useFeature('taskGraph');
+  // The graph/kanban inner tabs exist only in the combined view.
+  const graphTabs = graphOn && view === 'all';
   // Shared-board sync bar (openspec ideas-drive-sync), Advanced-only.
   const syncOn = useFeature('ideasSync');
   // "Break into tasks" (openspec tasks-agent, D7): hand the draft to the Tasks
@@ -79,7 +84,8 @@ export default function IdeasPanel() {
 
   const [tab, setTab] = useState(() => {
     const stored = localStorage.getItem(TAB_KEY);
-    return stored === 'plan' || stored === 'graph' || stored === 'kanban' ? stored : 'ideas';
+    const ok = stored === 'plan' || ((stored === 'graph' || stored === 'kanban') && view === 'all');
+    return ok ? stored : 'ideas';
   });
   function chooseTab(next) {
     setTab(next);
@@ -91,6 +97,11 @@ export default function IdeasPanel() {
   }
 
   const [notes, setNotes] = useState([]);
+  // Consumed ideas (promoted into a task — openspec ideas-consume-on-promotion): kept
+  // off to the side and shown only when the operator opens the "Consumed" view.
+  const [consumedNotes, setConsumedNotes] = useState([]);
+  const [taskTitles, setTaskTitles] = useState({}); // task node id -> title, for the "became" link
+  const [showConsumed, setShowConsumed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [draft, setDraft] = useState('');
@@ -112,8 +123,16 @@ export default function IdeasPanel() {
   const load = useCallback(async () => {
     setError('');
     try {
-      const data = await apiGet('/notes');
-      setNotes(Array.isArray(data) ? data : []);
+      // One fetch with includeConsumed, split client-side: the main list drops consumed
+      // ideas (openspec ideas-consume-on-promotion), the Consumed view shows them.
+      const [data, graph] = await Promise.all([
+        apiGet('/notes?includeConsumed=true'),
+        apiGet('/taskgraph').catch(() => null),
+      ]);
+      const all = Array.isArray(data) ? data : [];
+      setNotes(all.filter((n) => !n.consumedByTaskId));
+      setConsumedNotes(all.filter((n) => n.consumedByTaskId));
+      if (graph?.nodes) setTaskTitles(Object.fromEntries(graph.nodes.map((n) => [n.id, n.title])));
     } catch {
       setError(t('ideas.loadError'));
     } finally {
@@ -168,7 +187,7 @@ export default function IdeasPanel() {
     }
     setDraft('');
     setBreaking(true);
-    if (graphOn) chooseTab('graph');
+    if (graphTabs) chooseTab('graph');
     // Poll the Tasks agent until its run is no longer running, then reload the graph.
     const started = Date.now();
     let running = true;
@@ -240,28 +259,24 @@ export default function IdeasPanel() {
     }
   }
 
-  // "Send to graph" (plans/ideas-taskgraph-merge.md): create a task-graph step
-  // from this idea, then CONVERT the idea — keep it in the list but clear its
-  // `active` flag (drops out of the Active section; no data loss). Jumps to the
-  // Task graph tab so the new node is visible.
+  // "Send to graph" (plans/ideas-taskgraph-merge.md): create a task-graph step from
+  // this idea. Promotion CONSUMES the idea server-side (openspec
+  // ideas-consume-on-promotion) — it leaves the Ideas list and moves to the Consumed
+  // view, linked to the new task. Jumps to the Task graph tab so the node is visible.
   async function sendToGraph(n) {
     setError('');
+    let node;
     try {
-      await apiPost('/taskgraph/nodes', { title: n.text, note: n.project || undefined, ideaId: n.id, createdBy: 'human' });
+      node = await apiPost('/taskgraph/nodes', { title: n.text, note: n.project || undefined, ideaId: n.id, createdBy: 'human' });
     } catch {
       setError(t('ideas.saveError'));
       return;
     }
-    const prev = notes;
-    setNotes((ns) => ns.map((x) => (x.id === n.id ? { ...x, active: false } : x)));
-    try {
-      await apiPatch(`/notes/${n.id}`, { text: n.text, project: n.project || '', priority: n.priority || 0, active: false });
-    } catch {
-      setNotes(prev);
-      setError(t('ideas.saveError'));
-      return;
-    }
-    chooseTab('graph');
+    // Optimistically move it out of the live list and into consumed.
+    setNotes((ns) => ns.filter((x) => x.id !== n.id));
+    setConsumedNotes((cs) => [{ ...n, active: false, consumedByTaskId: node?.id || 'pending' }, ...cs]);
+    if (node?.id && node?.title) setTaskTitles((m) => ({ ...m, [node.id]: node.title }));
+    if (graphTabs) chooseTab('graph');
   }
 
   async function remove(id) {
@@ -329,7 +344,10 @@ export default function IdeasPanel() {
           </div>
         ) : (
           <>
-            <p className="idea__text">{n.text}</p>
+            <p className="idea__text">
+              {n.number > 0 && <span className="idea__handle" title="This idea's stable handle — say it in chat or to the arch agent" data-idea-handle>#{n.number}</span>}
+              {n.text}
+            </p>
             <div className="idea__foot">
               {n.project && <span className="idea__project">{n.project}</span>}
               <PriorityPicker value={n.priority || 0} onChange={(lvl) => changePriority(n, lvl)} t={t} />
@@ -366,8 +384,30 @@ export default function IdeasPanel() {
     );
   }
 
+  // Standalone boards (openspec management-split-tabs): the Management App mounts the
+  // Task graph and the Kanban as their own tabs; no tab strip, no composer. The graph
+  // polls so tasks created elsewhere (the Ideas pane, the Tasks agent) show up.
+  if (view === 'graph') {
+    return (
+      <div className="ideas ideas--standalone" data-ideas-view="graph">
+        <div className="ideas__tabpanel ideas__tabpanel--graph">
+          <TaskGraphPanel refreshKey={graphRefresh} pollMs={10000} />
+        </div>
+      </div>
+    );
+  }
+  if (view === 'kanban') {
+    return (
+      <div className="ideas ideas--standalone" data-ideas-view="kanban">
+        <div className="ideas__tabpanel ideas__tabpanel--graph">
+          <KanbanBoard />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="ideas">
+    <div className="ideas" data-ideas-view={view}>
       <div className="ideas__tabs" role="tablist" aria-label={t('nav.ideas')}>
         <button
           type="button"
@@ -387,7 +427,7 @@ export default function IdeasPanel() {
         >
           {t('archplan.title')}
         </button>
-        {graphOn && (
+        {graphTabs && (
           <button
             type="button"
             role="tab"
@@ -398,7 +438,7 @@ export default function IdeasPanel() {
             🧩 Task graph
           </button>
         )}
-        {graphOn && (
+        {graphTabs && (
           <button
             type="button"
             role="tab"
@@ -415,7 +455,7 @@ export default function IdeasPanel() {
 
       {tab === 'plan' ? (
         <ArchPlanSection />
-      ) : tab === 'graph' && graphOn ? (
+      ) : tab === 'graph' && graphTabs ? (
         <div className="ideas__tabpanel ideas__tabpanel--graph">
           {(breaking || breakMsg) && (
             <div className={`ideas__working${breaking ? '' : ' ideas__working--done'}`} data-break-status={breaking ? 'working' : 'done'}>
@@ -424,7 +464,7 @@ export default function IdeasPanel() {
           )}
           <TaskGraphPanel refreshKey={graphRefresh} />
         </div>
-      ) : tab === 'kanban' && graphOn ? (
+      ) : tab === 'kanban' && graphTabs ? (
         <div className="ideas__tabpanel ideas__tabpanel--graph">
           <KanbanBoard />
         </div>
@@ -471,7 +511,11 @@ export default function IdeasPanel() {
       </div>
 
       {error && <ErrorBanner message={error} />}
-      {breaking && !graphOn && <div className="ideas__working" data-break-status="working">{t('ideas.breakUpWorking')}</div>}
+      {(breaking || breakMsg) && !graphTabs && (
+        <div className={`ideas__working${breaking ? '' : ' ideas__working--done'}`} data-break-status={breaking ? 'working' : 'done'}>
+          {breaking ? t('ideas.breakUpWorking') : breakMsg}
+        </div>
+      )}
 
       {!loading && notes.length > 0 && (
         <input
@@ -515,6 +559,50 @@ export default function IdeasPanel() {
           </>
         )}
       </div>
+
+      {/* Consumed ideas (openspec ideas-consume-on-promotion): off by default. */}
+      {!loading && consumedNotes.length > 0 && (
+        <div className="ideas__consumed">
+          <button
+            type="button"
+            className="idea__btn ideas__consumed-toggle"
+            aria-expanded={showConsumed}
+            onClick={() => setShowConsumed((v) => !v)}
+            data-consumed-toggle
+          >
+            {showConsumed ? '▾' : '▸'} Consumed <span className="ideas__group-count">{consumedNotes.length}</span>
+          </button>
+          {showConsumed && (
+            <div className="ideas__group ideas__group--consumed" data-consumed-list>
+              {consumedNotes.map((n) => (
+                <div key={n.id} className="idea idea--consumed" data-consumed>
+                  <p className="idea__text">
+                    {n.number > 0 && <span className="idea__handle" data-idea-handle>#{n.number}</span>}
+                    {n.text}
+                  </p>
+                  <div className="idea__foot">
+                    {n.project && <span className="idea__project">{n.project}</span>}
+                    <span className="idea__consumed-into">
+                      → became task: {taskTitles[n.consumedByTaskId] || n.consumedByTaskId}
+                    </span>
+                    {graphTabs && (
+                      <button
+                        type="button"
+                        className="idea__btn"
+                        title="Show this task on the Kanban board"
+                        onClick={() => chooseTab('kanban')}
+                        data-view-task
+                      >
+                        View task
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
         </div>
       )}
     </div>

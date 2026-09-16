@@ -28,10 +28,10 @@ public class RepositoryRegistry
 
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
 
-    public RepositoryRegistry(AppConfig config, Logger logger)
+    public RepositoryRegistry(AppConfig config, Logger logger, string? dataDir = null)
     {
         _logger = logger;
-        _storePath = ResolveStorePath();
+        _storePath = dataDir == null ? ResolveStorePath() : System.IO.Path.Combine(dataDir, "repositories.json");
         Load(config);
     }
 
@@ -39,7 +39,7 @@ public class RepositoryRegistry
     /// <see cref="LocalPort"/> is the default (first) app's port, kept for
     /// back-compat; <see cref="LocalApps"/> is the full list
     /// (plans/multiple-local-apps.md).</summary>
-    public sealed record RepositoryInfo(string Id, string Name, string Path, bool Exists, bool IsGitRepo, bool IsSelf, string Visibility, int? LocalPort, IReadOnlyList<LocalAppInfo> LocalApps);
+    public sealed record RepositoryInfo(string Id, string Name, string Path, bool Exists, bool IsGitRepo, bool IsSelf, string Visibility, int? LocalPort, IReadOnlyList<LocalAppInfo> LocalApps, string Handle = "", string Provider = "claude", string? Model = null);
 
     /// <summary>One local app exposed by a repo (plans/multiple-local-apps.md).</summary>
     public sealed record LocalAppInfo(string Id, string Name, int Port, string Kind);
@@ -115,6 +115,8 @@ public class RepositoryRegistry
                 Path = full,
                 Visibility = NormalizeVisibility(visibility),
             };
+            // A handle for life (openspec stable-handles): unique among this box's repos.
+            repo.Handle = Handles.AssignRepoHandles(_repos.Select(x => (x.Id, x.Name, x.Handle)).Append((repo.Id, repo.Name, (string?)null)))[repo.Id];
             _repos.Add(repo);
             Save();
             _logger.Info($"[REPO] Added \"{repo.Name}\" ({repo.Path})");
@@ -193,6 +195,24 @@ public class RepositoryRegistry
             repo.AutoUnderstanding = enabled;
             Save();
             _logger.Info($"[REPO] Auto-understanding of \"{repo.Name}\" -> {(enabled ? "on" : "off")}");
+            return true;
+        }
+    }
+
+    /// <summary>Sets which engine runs this repo's agent turns — "claude" or
+    /// "codex" (openspec provider-agnostic-runner); anything else normalizes to
+    /// claude. No-op if the id is unknown.</summary>
+    public bool SetProvider(string id, string? provider, string? model = null)
+    {
+        lock (_gate)
+        {
+            var repo = _repos.FirstOrDefault(r => string.Equals(r.Id, id, StringComparison.Ordinal));
+            if (repo is null) return false;
+            repo.Provider = Chat.AgentProviders.Normalize(provider);
+            if (model != null) repo.Model = model.Trim();
+            if (!Chat.AgentProviders.ModelBelongsTo(repo.Provider, repo.Model)) repo.Model = null;
+            Save();
+            _logger.Info($"[REPO] Provider of \"{repo.Name}\" -> {repo.Provider}");
             return true;
         }
     }
@@ -329,6 +349,7 @@ public class RepositoryRegistry
                             _repos.Add(r);
                 }
                 _logger.Info($"[REPO] Loaded {_repos.Count} repositor(y/ies) from {_storePath}");
+                BackfillHandles();
                 return;
             }
         }
@@ -360,6 +381,32 @@ public class RepositoryRegistry
             {
                 _logger.Error($"[REPO] Failed to seed initial repository: {ex.Message}");
             }
+        }
+    }
+
+    /// <summary>One-time backfill (openspec stable-handles): every repo without a handle
+    /// gets one, in registry order, without touching the handles already assigned.</summary>
+    private void BackfillHandles()
+    {
+        lock (_gate)
+        {
+            if (_repos.All(r => !string.IsNullOrWhiteSpace(r.Handle))) return;
+            var assigned = Handles.AssignRepoHandles(_repos.Select(r => (r.Id, r.Name, r.Handle)));
+            var n = 0;
+            foreach (var r in _repos.Where(r => string.IsNullOrWhiteSpace(r.Handle))) { r.Handle = assigned[r.Id]; n++; }
+            Save();
+            _logger.Info($"[REPO] Backfilled {n} repo handle(s)");
+        }
+    }
+
+    /// <summary>The repo whose handle (case-insensitive) or id matches, or null.</summary>
+    public RepositoryInfo? FindByHandle(string reference)
+    {
+        lock (_gate)
+        {
+            var r = _repos.FirstOrDefault(x => x.Id == reference)
+                ?? _repos.FirstOrDefault(x => string.Equals(x.Handle, reference, StringComparison.OrdinalIgnoreCase));
+            return r is null ? null : ToInfo(r);
         }
     }
 
@@ -416,19 +463,23 @@ public class RepositoryRegistry
             // mechanism. openspec add-harness-event-feed.
             infos.Add(new LocalAppInfo(EventsAppId, "Harness Event Feed", 0, "harness"));
         }
-        return new RepositoryInfo(r.Id, r.Name, r.Path, exists, isGit, r.IsSelf, NormalizeVisibility(r.Visibility), defaultPort, infos);
+        return new RepositoryInfo(r.Id, r.Name, r.Path, exists, isGit, r.IsSelf, NormalizeVisibility(r.Visibility), defaultPort, infos, r.Handle ?? Handles.Slug(r.Name), Chat.AgentProviders.Normalize(r.Provider), r.Model);
     }
 
     // Clones normalize too: LocalPort is set to the default app's port so
     // back-compat consumers (Exposure check, the bare proxy route) keep working
     // for repos that have migrated to the LocalApps list.
-    private static RepositoryConfig Clone(RepositoryConfig r)
+    internal static RepositoryConfig Clone(RepositoryConfig r)
     {
         var apps = EffectiveApps(r);
         return new()
         {
             Id = r.Id, Name = r.Name, Path = r.Path, IsSelf = r.IsSelf, Visibility = r.Visibility,
             AutoUnderstanding = r.AutoUnderstanding,
+            // Handle + Provider ride along: the resolver hands THIS clone to the chat
+            // path, and a clone without Provider ran every codex repo on claude
+            // (found by the real-binary run, openspec codex-real-run).
+            Handle = r.Handle, Provider = r.Provider, Model = r.Model,
             LocalPort = apps.Count > 0 ? apps[0].Port : null,
             LocalApps = apps.Select(a => new LocalAppConfig { Id = a.Id, Name = a.Name, Port = a.Port, Kind = a.Kind }).ToList(),
         };

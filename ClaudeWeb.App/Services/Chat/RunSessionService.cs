@@ -33,6 +33,7 @@ public class RunSession
     private DateTime? _replyAtUtc;
     private int _seq;
     private bool _sawDone;
+    private bool _sawError;
 
     /// <param name="startSeq">Seq to continue counting from (the previous
     /// run's last seq). Seq is monotonic per repo across runs so a client
@@ -119,6 +120,7 @@ public class RunSession
                 if (!string.IsNullOrEmpty(sid)) SessionId = sid;
             }
             if (type == "done") _sawDone = true;
+            if (type == "error") _sawError = true;
             if (type == "token")
             {
                 var text = (string?)node["text"];
@@ -149,7 +151,7 @@ public class RunSession
         lock (_lock)
         {
             if (Status != "running") return;
-            Status = _sawDone ? "done" : (_stopRequested ? "stopped" : "error");
+            Status = _sawDone && !_sawError ? "done" : (_stopRequested ? "stopped" : "error");
             foreach (var ch in _subscribers) ch.Writer.TryComplete();
             _subscribers.Clear();
             completed = Completed;

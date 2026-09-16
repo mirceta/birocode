@@ -13,15 +13,10 @@ public sealed record StructuredAskResult<T>(bool Success, T? Report, string? Err
 }
 
 /// <summary>
-/// Sends a prompt through the REUSED ClaudeMonitor gateway, isolates the JSON from
-/// the reply, parses it into a typed report, and retries with a correction prompt
-/// when parsing fails. A near-verbatim port of web-flow-autodev's AgentRunner
-/// (app/Autodev.AgenticStage/agent_runner/AgentRunner.cs), but built on the shared
-/// ClaudeMonitor.Client instead of a bespoke in-harness runner -- see
-/// openspec/changes/discover-local-apps/design.md (D2).
-///
-/// Read-only by construction (D3): the request's AllowedTools is restricted to
-/// non-mutating tools, so the scan can read/search but cannot modify a repo.
+/// Production DI runs a fresh provider-aware helper with the CLI's read-only mode,
+/// extracts a typed JSON report and retries parse failures with a correction.
+/// The original ClaudeMonitor gateway and tool allowlist remain a fallback for
+/// standalone consumers that do not inject AgentHelperRunner.
 /// </summary>
 public class StructuredAskRunner
 {
@@ -35,11 +30,13 @@ public class StructuredAskRunner
 
     private readonly string _appName;
     private readonly int _maxRetries;
+    private readonly Chat.AgentHelperRunner? _helper;
 
-    public StructuredAskRunner(string appName = "claudeweb-structured-ask", int maxRetries = 2)
+    public StructuredAskRunner(string appName = "claudeweb-structured-ask", int maxRetries = 2, Chat.AgentHelperRunner? helper = null)
     {
         _appName = appName;
         _maxRetries = maxRetries;
+        _helper = helper;
     }
 
     public async Task<StructuredAskResult<T>> RunAsync<T>(
@@ -48,6 +45,23 @@ public class StructuredAskRunner
         string workingDirectory,
         CancellationToken ct = default) where T : class
     {
+        if (_helper != null)
+        {
+            var next = SystemPrompt + "\n" + prompt;
+            for (var attempt = 0; attempt <= _maxRetries; attempt++)
+            {
+                string answer;
+                try { answer = await _helper.RunAsync(next, workingDirectory, true, ct); }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex) { return StructuredAskResult<T>.Fail(ex.Message); }
+                try { return StructuredAskResult<T>.Ok(parse(PromptUtils.ExtractJson(answer))); }
+                catch (Exception ex) when (ex is JsonException or FormatException)
+                {
+                    if (attempt == _maxRetries) return StructuredAskResult<T>.Fail(ex.Message);
+                    next = SystemPrompt + "\nOriginal task:\n" + prompt + "\nCorrect this invalid response:\n" + answer + "\nValidation error: " + ex.Message;
+                }
+            }
+        }
         // Per-call gateway identity (openspec change discover-local-apps-resilient,
         // task 3): give every call a UNIQUE app name (claudeweb-structured-ask#<id>)
         // rather than the shared base name. The ClaudeMonitor gateway resolves a

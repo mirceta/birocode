@@ -3,6 +3,7 @@ import { apiGet } from '../../api/client';
 import { useT } from '../../i18n/LanguageContext';
 import { useFeature } from '../../context/UiModeContext';
 import GitHubTokenControl from './GitHubTokenControl';
+import CodexKeyControl from './CodexKeyControl';
 import './accountChips.css';
 
 // Dashboard account-status chips (openspec add-account-status): two compact,
@@ -11,6 +12,11 @@ import './accountChips.css';
 // read-only backend probe on the Scoreboard's cadence:
 //   GitHub → GET /api/github-account  { ghInstalled, authenticated, account, host }
 //   Claude → GET /api/claude-account  { claudeInstalled, authenticated, account, plan }
+//   Codex  → GET /api/codex-account   { codexInstalled, authenticated, method, version, home,
+//                                        account, name, plan, subscriptionUntil, authProvider }
+//            + GET /api/codex-usage    { available, session, weekly, scopedWeekly, credits, … }
+//            (openspec codex-real-run / codex-account-and-models — the login the codex
+//            engine runs as, and its ChatGPT plan usage, same rows as the Claude chip)
 // Open/closed state is per device (localStorage), independent per chip — mirroring
 // the Scoreboard's own collapse idiom.
 //
@@ -234,15 +240,82 @@ function claudeView(data, usage, t) {
   };
 }
 
+// "until 7 Oct" for the subscription end; null when missing/unparseable.
+function formatUntil(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString([], { day: 'numeric', month: 'short' });
+}
+
+// Map the Codex probe payload (+ usage probe) → chip view, the Claude chip's twin:
+// identity rows from the login's own claims (email, plan, subscription end), then
+// the same usage meters (5h / week / per-model) from GET /api/codex-usage. `method`
+// is whatever `codex login status` printed, re-derived by the probe — never from
+// anything the Operator typed.
+function codexView(data, usage, t) {
+  if (!data) return { state: 'loading', handle: t('account.checking'), rows: [] };
+  const yes = { value: t('account.yes'), tone: 'yes' };
+  const no = { value: t('account.no'), tone: 'no' };
+  if (!data.codexInstalled) {
+    return {
+      state: 'missing',
+      handle: t('account.codex.missing'),
+      rows: [{ label: t('account.installed'), ...no }],
+    };
+  }
+  const tail = [
+    { label: t('account.version'), value: data.version || '—' },
+    { label: t('account.home'), value: data.home || '—' },
+  ];
+  if (!data.authenticated) {
+    return {
+      state: 'unauth',
+      handle: t('account.notAuthed'),
+      rows: [
+        { label: t('account.installed'), ...yes },
+        { label: t('account.loggedIn'), ...no },
+        ...tail,
+      ],
+    };
+  }
+  const handle = data.account
+    ? (data.plan ? `${data.account} · ${data.plan}` : data.account)
+    : (data.method || t('account.yes'));
+  const until = formatUntil(data.subscriptionUntil);
+  return {
+    state: 'ok',
+    handle,
+    rows: [
+      { label: t('account.installed'), ...yes },
+      { label: t('account.loggedIn'), ...yes },
+      { label: t('account.account'), value: data.account || '—' },
+      ...(data.name ? [{ label: t('account.name'), value: data.name }] : []),
+      { label: t('account.plan'), value: data.plan || '—' },
+      ...(until ? [{ label: t('account.subscription'), value: t('account.until', { date: until }) }] : []),
+      { label: t('account.method'), value: data.method || '—' },
+      ...usageRows(usage, t),
+      ...(usage?.available && usage.credits
+        ? [{ label: t('account.credits'), value: usage.credits.unlimited ? t('account.creditsUnlimited') : (usage.credits.hasCredits ? usage.credits.balance || t('account.yes') : t('account.no')), muted: !usage.credits.hasCredits }]
+        : []),
+      ...tail,
+    ],
+  };
+}
+
 export default function AccountChips() {
   const { t } = useT();
   const github = useAccountProbe('/github-account');
   const claude = useAccountProbe('/claude-account');
   const usage = useAccountProbe('/claude-usage'); // backend caches for minutes; polling stays cheap
+  const codex = useAccountProbe('/codex-account');
+  const codexUsage = useAccountProbe('/codex-usage'); // backend caches for minutes; polling stays cheap
   const tokenControlOn = useFeature('githubTokenControl');
+  const codexKeyOn = useFeature('codexKeyControl');
 
   const gh = githubView(github, t);
   const cl = claudeView(claude, usage, t);
+  const cx = codexView(codex, codexUsage, t);
 
   return (
     <div className="acct-strip" aria-label={t('account.title')}>
@@ -261,6 +334,15 @@ export default function AccountChips() {
         collapseKey="claudeweb_claude_account_collapsed"
         {...cl}
       />
+      <div className="acct-col">
+        <AccountChip
+          kind="codex"
+          title={t('account.codex.title')}
+          collapseKey="claudeweb_codex_account_collapsed"
+          {...cx}
+        />
+        {codexKeyOn && <CodexKeyControl />}
+      </div>
     </div>
   );
 }

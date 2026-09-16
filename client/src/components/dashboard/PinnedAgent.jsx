@@ -1,10 +1,14 @@
+import ProviderCapabilities from '../chat/ProviderCapabilities';
+import { defaultModelFor } from '../chat/models';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Chat from '../../pages/Chat';
 import { apiGet, apiPost } from '../../api/client';
 import { useChatFor } from '../../context/ChatContext';
+import { useRepo } from '../../context/RepoContext';
 import { useT } from '../../i18n/LanguageContext';
 import { useFeature } from '../../context/UiModeContext';
 import GitStatusSummary from '../git/GitStatusSummary';
+import HandToArch from './HandToArch';
 import DockIdentityRows from './DockIdentityRows';
 import { deriveGitActions, pullMainPath } from '../git/gitActions';
 import ProductFrame from '../app/ProductFrame';
@@ -79,6 +83,7 @@ export default function PinnedAgent({
   onSetDependsOn,
   loop,
   loopRecipes = [],
+  loopGoal = null,
   onLoopChanged,
 }) {
   const { t } = useT();
@@ -254,6 +259,27 @@ export default function PinnedAgent({
   // same capability gate as the Ask button. Optimistic flip, reverted on error.
   const [autoUnderstanding, setAutoUnderstanding] = useState(false);
 
+  // Agent engine (openspec provider-agnostic-runner): claude | codex, a per-repo
+  // SERVER-persisted choice — which CLI runs this dock's turns. Loaded from the
+  // repo listing; optimistic change, reverted on error.
+  const showProvider = useFeature('agentProvider');
+  const { repos: providerRepos, reloadRepos } = useRepo();
+  const [provider, setProvider] = useState('claude');
+  useEffect(() => {
+    if (!showProvider) return undefined;
+    setProvider(providerRepos.find((r) => r.id === tab.repoId)?.provider || 'claude');
+  }, [showProvider, tab.repoId, providerRepos]);
+  const changeProvider = async (next) => {
+    const prev = provider;
+    setProvider(next);
+    try {
+      await apiPost(`/repos/${tab.repoId}/provider`, { provider: next, model: defaultModelFor(next) });
+      reloadRepos(); // the composer's model picker reads the shared list
+    } catch {
+      setProvider(prev); // revert the optimistic change
+    }
+  };
+
   // Inward-sync git actions in the dock's git row (plans/dock-git-actions.md):
   // the SAME merge / pull-main / pull-branch actions as the Git tab, scoped to
   // THIS dock's repo via repoId → X-Repo-Id, reusing the Git tab's act() flow
@@ -263,6 +289,7 @@ export default function PinnedAgent({
   // Identity rows (openspec add-git-identity-surface): who this repo commits as +
   // which GitHub account it pushes as. Advanced-only.
   const showIdentityRows = useFeature('gitIdentityRows');
+  const showHandover = useFeature('archHandover');
   const [gitActing, setGitActing] = useState(''); // which action is in flight
   const [gitActMsg, setGitActMsg] = useState(null); // { ok, text }
   const ga = git ? deriveGitActions(git) : null;
@@ -445,6 +472,7 @@ export default function PinnedAgent({
           stash={tab.stash || []}
           loop={loop}
           recipes={loopRecipes}
+          drivenBy={loopGoal}
           onChanged={onLoopChanged}
           onUsePending={(text) => chat.setDraft(text)}
         />
@@ -682,6 +710,18 @@ export default function PinnedAgent({
           )}
         </div>
       )}
+      {/* Engine selector (openspec provider-agnostic-runner): which CLI runs
+          this dock's turns — claude (default) or codex. Per-repo, server-
+          persisted; takes effect on the next turn. */}
+      {showProvider && !showFiles && (!openApp || split) && !showConsole && !showOpenspec && !showTools && (
+        <><div className="phone__provider" title={t('dashboard.providerHint')} data-provider={provider}>
+          <span className="phone__provider-label">{t('dashboard.provider')}</span>
+          <select className="phone__provider-select" value={provider} onChange={(e) => changeProvider(e.target.value)}>
+            <option value="claude">claude</option>
+            <option value="codex">codex</option>
+          </select>
+        </div><ProviderCapabilities provider={provider} onChooseClaude={() => changeProvider('claude')} /></>
+      )}
       {/* The git block is chat-context furniture; hide it while the Files tab OR
           a local app is open so that surface gets the full dock height (not just
           the strip below git) — plans/agent-dock-files-tab.md (Files) and
@@ -690,6 +730,9 @@ export default function PinnedAgent({
         <div className="phone__git">
           <div className="phone__git-top">
             <GitStatusSummary status={git} compact />
+            {/* Whose branch is this — and hand it to the arch / take it back / pin
+                (openspec arch-branch-handover). */}
+            {showHandover && <HandToArch repoId={tab.repoId} compact />}
             {showIdentityRows && (
               <DockIdentityRows
                 commitIdentity={git.commitIdentity}

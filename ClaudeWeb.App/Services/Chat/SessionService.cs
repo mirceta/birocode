@@ -14,7 +14,7 @@ public record SessionSummary(
     string Title,
     int TurnCount,
     DateTime LastModified,
-    string? FirstPrompt);
+    string? FirstPrompt, string Provider = "claude");
 
 /// <summary>One human-visible message in a transcript: role is "user" or "assistant".
 /// Timestamp is the JSONL line time (when available) — the dashboard uses the last
@@ -106,10 +106,10 @@ public class SessionService
     public SessionService(Logger logger)
     {
         _logger = logger;
-        _messages = new TranscriptCache<MessagesAcc>(() => new MessagesAcc(), (a, r) => a.Feed(r), logger: logger);
-        _toolCalls = new TranscriptCache<ToolCallsAcc>(() => new ToolCallsAcc(), (a, r) => a.Feed(r), logger: logger);
-        _toolHistory = new TranscriptCache<ToolHistoryAcc>(() => new ToolHistoryAcc(DefaultMaxResultChars), (a, r) => a.Feed(r), capacity: 8, logger: logger);
-        _metadata = new TranscriptCache<MetadataAcc>(() => new MetadataAcc(), (a, r) => a.Feed(r), capacity: 1, logger: logger);
+        _messages = new TranscriptCache<MessagesAcc>(() => new MessagesAcc(), (a, r) => NativeTranscripts.Feed(r, a.Feed), logger: logger);
+        _toolCalls = new TranscriptCache<ToolCallsAcc>(() => new ToolCallsAcc(), (a, r) => NativeTranscripts.Feed(r, a.Feed), logger: logger);
+        _toolHistory = new TranscriptCache<ToolHistoryAcc>(() => new ToolHistoryAcc(DefaultMaxResultChars), (a, r) => NativeTranscripts.Feed(r, a.Feed), capacity: 8, logger: logger);
+        _metadata = new TranscriptCache<MetadataAcc>(() => new MetadataAcc(), (a, r) => NativeTranscripts.Feed(r, a.Feed), capacity: 1, logger: logger);
     }
 
     /// <summary>Parse passes (full or delta) the message cache has run — diagnostics/tests.</summary>
@@ -140,11 +140,12 @@ public class SessionService
 
     /// <summary>Absolute transcript path for a session, or null when the id could
     /// escape the folder (it must be a plain UUID file name).</summary>
-    private static string? TranscriptPath(string workingDir, string sessionId)
+    public static string? TranscriptPath(string workingDir, string sessionId)
     {
         if (string.IsNullOrWhiteSpace(sessionId)) return null;
         if (sessionId.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) return null;
-        return Path.Combine(ProjectsDirectoryFor(workingDir), sessionId + ".jsonl");
+        var claude = Path.Combine(ProjectsDirectoryFor(workingDir), sessionId + ".jsonl");
+        return File.Exists(claude) ? claude : NativeTranscripts.Find(workingDir, sessionId);
     }
 
     /// <summary>
@@ -156,18 +157,12 @@ public class SessionService
     public List<SessionSummary> ListSessions(string workingDir)
     {
         var dir = ProjectsDirectoryFor(workingDir);
-        if (!Directory.Exists(dir))
-        {
-            _logger.Info($"[CHAT] No session folder yet for working directory ({dir})");
-            return [];
-        }
-
         var sessions = new List<SessionSummary>();
-        foreach (var path in Directory.EnumerateFiles(dir, "*.jsonl"))
-        {
-            var summary = ExtractMetadata(path);
-            if (summary != null) sessions.Add(summary);
-        }
+        if (Directory.Exists(dir))
+            foreach (var path in Directory.EnumerateFiles(dir, "*.jsonl"))
+                if (ExtractMetadata(path) is { } summary) sessions.Add(summary);
+        foreach (var (_, path) in NativeTranscripts.CodexFiles(workingDir))
+            if (ExtractMetadata(path) is { } summary) sessions.Add(summary with { Provider = "codex" });
 
         return sessions.OrderByDescending(s => s.LastModified).ToList();
     }
@@ -188,7 +183,8 @@ public class SessionService
         {
             var list = _messages.Read(path, acc => acc.Messages.ToList());
             if (list is null) _logger.Info($"[CHAT] Transcript not found: {path}");
-            return list ?? [];
+            var prior = ConversationHandoff.Read(workingDir, sessionId);
+            return prior is null ? list ?? [] : prior.Messages.Concat(new[] { new ChatMessage("assistant", $"Continuing with {prior.Provider}. " + (prior.Truncated ? "Recent conversation transferred; older messages remain in history and a full transcript file is available to the agent." : "Conversation transferred; repository files are shared."), Synthetic: true) }).Concat(list ?? []).ToList();
         }
         catch (Exception ex)
         {
@@ -221,23 +217,9 @@ public class SessionService
         if (path is null) return null;
         try
         {
-            return _messages.Read(path, acc =>
-            {
-                var msgs = acc.Messages;
-                var activity = "";
-                DateTime? lastUserAt = null;
-                for (var i = msgs.Count - 1; i >= 0; i--)
-                {
-                    var m = msgs[i];
-                    if (activity.Length == 0 && m.Role == "assistant" && m.Text.Length > 0) activity = OneLine(m.Text);
-                    if (lastUserAt is null && m.Role == "user" && m.Timestamp is not null) lastUserAt = m.Timestamp;
-                    if (activity.Length > 0 && lastUserAt is not null) break;
-                }
-                // Newest message of any role when the agent has not spoken yet
-                // (a just-sent prompt) — what the dashboard showed before.
-                if (activity.Length == 0 && msgs.Count > 0) activity = OneLine(msgs[^1].Text);
-                return new SessionActivity(activity, lastUserAt, msgs.Count);
-            });
+            var msgs = GetMessages(workingDir, sessionId);
+            var last = msgs.LastOrDefault(m => m.Role == "assistant") ?? msgs.LastOrDefault();
+            return new SessionActivity(OneLine(last?.Text ?? ""), msgs.LastOrDefault(m => m.Role == "user")?.Timestamp, msgs.Count);
         }
         catch (Exception ex)
         {
@@ -264,19 +246,8 @@ public class SessionService
     /// </summary>
     public List<ToolCall> GetToolCalls(string workingDir, string sessionId)
     {
-        var path = TranscriptPath(workingDir, sessionId);
-        if (path is null) return [];
-        try
-        {
-            var list = _toolCalls.Read(path, acc => acc.Calls.ToList());
-            if (list is null) _logger.Info($"[CHAT] Transcript not found: {path}");
-            return list ?? [];
-        }
-        catch (Exception ex)
-        {
-            _logger.Error($"[CHAT] Failed to read tool calls for {sessionId}: {ex.Message}");
-            return [];
-        }
+        return GetToolCallHistory(workingDir, sessionId).Select(c => new ToolCall(c.Id, c.Name, c.Summary,
+            Truncate(c.Input?.ToJsonString() ?? "", 1200), c.Ok, Truncate(c.Result, 800, 15), c.At)).ToList();
     }
 
     /// <summary>
@@ -297,18 +268,29 @@ public class SessionService
         {
             if (maxResultChars != DefaultMaxResultChars)
             {
-                var once = new TranscriptCache<ToolHistoryAcc>(() => new ToolHistoryAcc(maxResultChars), (a, r) => a.Feed(r), capacity: 1, logger: _logger);
-                return once.ReadUncached(path)?.Calls ?? [];
+                var once = new TranscriptCache<ToolHistoryAcc>(() => new ToolHistoryAcc(maxResultChars), (a, r) => NativeTranscripts.Feed(r, a.Feed), capacity: 1, logger: _logger);
+                return WithPriorTools(workingDir, sessionId, once.ReadUncached(path)?.Calls ?? [], maxResultChars);
             }
             var list = _toolHistory.Read(path, acc => acc.Calls.ToList());
             if (list is null) _logger.Info($"[CHAT] Transcript not found: {path}");
-            return list ?? [];
+            return WithPriorTools(workingDir, sessionId, list ?? [], maxResultChars);
         }
         catch (Exception ex)
         {
             _logger.Error($"[CHAT] Failed to read tool history for {sessionId}: {ex.Message}");
             return [];
         }
+    }
+
+    private static List<ToolCallRecord> WithPriorTools(string cwd, string id, List<ToolCallRecord> native, int budget)
+    {
+        var prior = ConversationHandoff.Read(cwd, id);
+        if (prior is null) return native;
+        var turns = prior.Messages.Count(m => m.Role == "user");
+        return prior.Tools.Select(t => t with { Id = prior.PreviousSessionId + ":" + t.Id,
+            Result = t.Result.Length > budget ? t.Result[..budget] : t.Result,
+            ResultClipped = t.ResultClipped || t.Result.Length > budget })
+            .Concat(native.Select(t => t with { Turn = t.Turn + turns })).ToList();
     }
 
     /// <summary>Pulls the text of a tool_result whose content may be a plain string
@@ -347,7 +329,8 @@ public class SessionService
 
         var s = name switch
         {
-            "Bash" => Get("command"),
+            "Bash" or "shell" => Get("command"),
+            "exec_command" => Get("cmd"),
             "Read" or "Write" or "Edit" or "NotebookEdit" => Get("file_path"),
             "Glob" or "Grep" => Get("pattern"),
             "Task" or "Agent" => Get("description"),
@@ -355,6 +338,7 @@ public class SessionService
             "Skill" => Get("skill"),
             _ => Get("command") + Get("file_path") + Get("path") + Get("pattern") + Get("url") + Get("description"),
         };
+        if (s.Length == 0) s = input.GetRawText();
         return Truncate(s.Replace("\r", " ").Replace("\n", " "), 140);
     }
 
@@ -486,7 +470,7 @@ public class SessionService
     {
         if (string.IsNullOrWhiteSpace(text)) return null;
         if (text.StartsWith("<ide_") || text.StartsWith("<system-reminder>")) return null;
-        return text;
+        return ConversationHandoff.VisiblePrompt(text);
     }
 
     private static string Truncate(string text, int max) =>

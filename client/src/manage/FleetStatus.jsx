@@ -1,5 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiGet } from '../api/client';
+import HandToArch from '../components/dashboard/HandToArch';
+import FleetOverviewPanel from './FleetOverviewPanel';
+import FleetScoreboardTab from './FleetScoreboardTab';
+import { harnessHref } from './harnessLink';
+import { FLEET_TABS, FLEET_TAB_KEY, readFleetTab } from './fleetStatusTabs';
+import { useTaskColors, repoKey } from '../components/taskgraph/useTaskColors';
+import AgentMark from '../components/taskgraph/AgentMark';
+import AgentStatusDot, { agentDotState, workingBadgeClass } from '../components/shared/AgentStatusDot';
+import { repoAgentLabel } from './agentLabel';
+
+// The per-machine view tabs (openspec fleet-status-panels): one selection shared by
+// every machine card so a whole view (Agents / Overview / Scoreboard) is shown at once
+// and nothing is crammed. Remembered per browser and mirrored to ?fleetTab= in the URL
+// (same idiom as ManageApp's ?tab=), so a specific tab can be pinned on a wall screen.
+const TAB_LABELS = { agents: 'Agents', overview: 'Overview', scoreboard: 'Scoreboard' };
 
 // The Status tab (openspec fleet-status-tab): every repo agent on the whole
 // fleet, machine by machine, in the language of the dashboard's dock strip —
@@ -71,32 +86,55 @@ function persist(state) {
   try { localStorage.setItem(PERSIST_KEY, JSON.stringify(state)); } catch { /* private mode */ }
 }
 
-function AgentChip({ a, self, root, open, onToggle }) {
-  const running = !!a.runningSince;
+function AgentChip({ a, self, root, open, onToggle, color, mark, machine }) {
+  // ONE activity rule (task 3546287b + dfee16ea): the state that drives the
+  // blinking dot also decides the working emphasis — no parallel check.
+  const state = agentDotState(a);
+  const running = state === 'running';
+  const working = workingBadgeClass(state);
   const known = a.branch && a.branch !== 'unknown';
   const cls = ['fs__chip'];
   if (running) cls.push('fs__chip--running');
+  if (working) cls.push(working, 'fs__chip--working');
   if (a.onDefault) cls.push('fs__chip--free');
   else if (known) cls.push('fs__chip--claimed');
   if (open) cls.push('fs__chip--open');
+  // Shared machine/repo colour (fleet-status task 327aa5ae): same hue this machine +
+  // repo agent gets on the Kanban cards and the Task graph. Border = machine hue,
+  // background tint = repo hue; the state (free/claimed/running) still reads via the dot.
+  if (color?.cls) cls.push(...color.cls.trim().split(/\s+/));
+  // The visible label is the repo agent alone (task 1dc2812c): the machine is the
+  // section header above the strip, so "<machine>/" in every chip was redundant and,
+  // on a long machine name, truncated the very part that tells agents apart. The
+  // FULL handle stays on data-handle and in the title; nothing else reads the label.
+  const label = repoAgentLabel(a.handle, a.name, machine);
   const title = [
-    a.name,
+    a.handle && a.handle !== a.name ? `${a.handle} (${a.name})` : a.name,
     known ? `on ${a.branch}${a.onDefault ? ' (default — free)' : ' (claimed)'}` : 'branch unknown',
     running ? `running ${ago(Date.now() - a.runningSince)}` : `idle · last actor ${a.lastActor || 'none'}`,
     a.managed ? 'in the arch scope' : null,
+    a.goal ? `driven by arch goal ${a.goal.id}` : null,
   ].filter(Boolean).join(' · ');
   return (
-    <button type="button" className={cls.join(' ')} title={title} onClick={onToggle} data-agent={a.key} data-on-default={a.onDefault} data-running={running}>
-      <span className={`fs__dot${running ? ' fs__dot--running' : a.onDefault ? ' fs__dot--free' : known ? ' fs__dot--claimed' : ''}`} aria-hidden="true" />
+    <button type="button" className={cls.join(' ')} style={color?.style} title={`${mark ? `${mark.glyph} ${mark.monogram} · ` : ''}${title}`} onClick={onToggle} data-agent={a.key} data-on-default={a.onDefault} data-running={running} data-goal={a.goal?.id || undefined}>
+      <AgentStatusDot state={state} />
       <span className="fs__chip-text">
-        <span className="fs__chip-name">{a.managed ? '🏛 ' : ''}{a.name}</span>
+        {/* The colour-independent identity (fleet task 4ddcfce3): the same glyph + monogram
+            this agent's chip carries on the Kanban cards, from the shared colour module. */}
+        <span className="fs__chip-name" data-handle={a.handle || ''} data-label={label}>{mark && <AgentMark mark={mark} compact />}{a.managed ? '🏛 ' : ''}{label}</span>
         <span className="fs__chip-branch"><span aria-hidden="true">⎇</span> {known ? a.branch : '?'}{a.dirty ? ' ·' : ''}{running ? ` · ${ago(Date.now() - a.runningSince)}` : ''}</span>
       </span>
     </button>
   );
 }
 
-function AgentDetail({ a, self, root }) {
+const CLAIMED_REASON = {
+  'human-active': 'claimed: the Operator worked on this branch recently',
+  pinned: 'claimed: pinned as the Operator\'s',
+  'unassigned-branch': 'on a branch nobody assigned — the arch must name it in a send',
+};
+
+function AgentDetail({ a, self, root, sourceId, onChanged }) {
   const running = !!a.runningSince;
   const openDock = () => {
     try { localStorage.setItem('claudeweb_dock_active', a.tabId); } catch { /* ignore */ }
@@ -104,7 +142,7 @@ function AgentDetail({ a, self, root }) {
   };
   return (
     <div className="fs__detail" data-detail={a.key}>
-      <div className="fs__detail-row"><b>{a.name}</b>{a.remoteUrl ? <span className="fs__mono fs__dim"> · {a.remoteUrl}</span> : null}</div>
+      <div className="fs__detail-row"><b>{a.handle || a.name}</b>{a.handle && a.handle.split('/').pop() !== a.name ? <span className="fs__dim"> · {a.name}</span> : null}{a.remoteUrl ? <span className="fs__mono fs__dim"> · {a.remoteUrl}</span> : null}</div>
       <div className="fs__detail-row">
         branch <code>{a.branch || '?'}</code> (default <code>{a.defaultBranch || '?'}</code>) ·{' '}
         {a.onDefault ? <span className="fs__ok">on its default branch — free to be given work</span> : a.branch && a.branch !== 'unknown' ? <span className="fs__warn">claimed on a feature branch</span> : <span className="fs__dim">branch unknown</span>}
@@ -113,9 +151,25 @@ function AgentDetail({ a, self, root }) {
       <div className="fs__detail-row">
         {running ? <span className="fs__ok">▶ running for {ago(Date.now() - a.runningSince)}</span> : 'idle'} · last actor {a.lastActor || 'none'}
         {' · '}availability <code>{a.availability}</code>
+        {a.claimedReason ? <> · <span className={a.availability === 'claimed' ? 'fs__warn' : 'fs__dim'} data-claimed-reason={a.claimedReason}>{CLAIMED_REASON[a.claimedReason] || a.claimedReason}</span></> : null}
+        {a.adopted ? ' · handed to the arch' : ''}
+        {a.pinned ? ' · 📌 pinned as the Operator\'s' : ''}
         {a.managed ? ' · 🏛 in the arch scope' : ' · not in the arch scope'}
         {a.docked ? ' · has a dock' : ''}
+        {a.goal ? <> · <span className="fs__ok" data-driven-by-goal={a.goal.id}>driven by arch goal {a.goal.id}{a.goal.name ? ` (${a.goal.name})` : ''}</span></> : null}
       </div>
+      {/* Hand the branch to the arch / take it back (openspec arch-branch-handover):
+          the arch's own machine records it; a peer gets adopt / revoke relayed. */}
+      {a.managed && a.branch && a.branch !== 'unknown' && !a.onDefault && (
+        <div className="fs__detail-row">
+          <HandToArch
+            repoId={a.repoId}
+            sourceId={self ? null : sourceId}
+            initial={self ? null : { managed: true, branch: a.branch, onDefault: a.onDefault, availability: a.availability, claimedReason: a.claimedReason, adopted: a.adopted, archBranch: a.adopted, pinned: a.pinned, claimWindowMinutes: 120 }}
+            onChanged={onChanged}
+          />
+        </div>
+      )}
       {self && a.tabId && (
         <div className="fs__detail-row"><button type="button" className="fs__btn" onClick={openDock}>open dock ↗</button></div>
       )}
@@ -132,6 +186,18 @@ export default function FleetStatus({ root = '' }) {
   const [q, setQ] = useState(persisted.q);
   const [open, setOpen] = useState(null);
   const [, setTick] = useState(0);
+  const [activeTab, setActiveTabState] = useState(() =>
+    readFleetTab(typeof window !== 'undefined' ? window.location.search : '', (k) => localStorage.getItem(k)));
+
+  const setActiveTab = (next) => {
+    setActiveTabState(next);
+    try { localStorage.setItem(FLEET_TAB_KEY, next); } catch { /* private mode */ }
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.set('fleetTab', next);
+      window.history.replaceState(null, '', u);
+    } catch { /* opaque origin */ }
+  };
 
   useEffect(() => { persist({ filter, machines: machineSel, q }); }, [filter, machineSel, q]);
 
@@ -153,6 +219,14 @@ export default function FleetStatus({ root = '' }) {
   }, [load]);
 
   const machines = data?.machines || [];
+  // Shared machine/repo colours (fleet-status task 327aa5ae): one palette so a given
+  // machine + repo agent has the SAME hue here and on the Kanban cards / Task graph.
+  const mkOfMachine = (m) => (m.self ? 'self' : m.sourceId);
+  const rkOfAgent = (a) => repoKey({ repoId: a.repoId }, () => a.remoteUrl);
+  const colors = useTaskColors(
+    machines.flatMap((m) => (m.agents || []).map(() => mkOfMachine(m))),
+    machines.flatMap((m) => (m.agents || []).map((a) => rkOfAgent(a))),
+  );
   const query = q.trim().toLowerCase();
   const machineOn = useCallback((m) => machineSel.length === 0 || machineSel.includes(m.sourceId), [machineSel]);
   const toggleMachine = (sourceId) => {
@@ -187,6 +261,22 @@ export default function FleetStatus({ root = '' }) {
         <span className="fs__dim fs__shown" data-shown={shown} data-total={total}>{narrowed ? `${shown} of ${total} agents` : `${total} agents`}</span>
       </div>
 
+      <div className="fs__tabs" role="tablist" aria-label="Fleet status view" data-fleet-tabs>
+        {FLEET_TABS.map((k) => (
+          <button
+            key={k}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === k}
+            className={`fs__tab${activeTab === k ? ' fs__tab--on' : ''}`}
+            data-fleet-tab={k}
+            onClick={() => setActiveTab(k)}
+          >
+            {TAB_LABELS[k]}
+          </button>
+        ))}
+      </div>
+
       <div className="fs__bar" role="search" aria-label="Filter agents" data-filter-bar>
         <input
           className="fs__search"
@@ -215,13 +305,15 @@ export default function FleetStatus({ root = '' }) {
             </button>
           ))}
         </div>
-        <div className="fs__filters" role="group" aria-label="Show">
-          {FILTERS.map(([k, label, title]) => (
-            <button key={k} type="button" className={`fs__filter${filter === k ? ' fs__filter--on' : ''}`} title={title} aria-pressed={filter === k} data-filter={k} onClick={() => setFilterState(k)}>
-              {label} <span className="fs__count">{totals[k]}</span>
-            </button>
-          ))}
-        </div>
+        {activeTab === 'agents' && (
+          <div className="fs__filters" role="group" aria-label="Show">
+            {FILTERS.map(([k, label, title]) => (
+              <button key={k} type="button" className={`fs__filter${filter === k ? ' fs__filter--on' : ''}`} title={title} aria-pressed={filter === k} data-filter={k} onClick={() => setFilterState(k)}>
+                {label} <span className="fs__count">{totals[k]}</span>
+              </button>
+            ))}
+          </div>
+        )}
         {narrowed && (
           <button type="button" className="fs__clear" onClick={clearAll} title="Show every agent again" data-clear-filters>× clear</button>
         )}
@@ -229,13 +321,15 @@ export default function FleetStatus({ root = '' }) {
 
       {!data && !error && <div className="fs__note" data-loading>Loading the fleet status…</div>}
       {error && <div className="fs__note fs__note--err">{error}</div>}
-      {data && total > 0 && shown === 0 && <div className="fs__note" data-no-match>Nothing matches — clear a filter or the search.</div>}
+      {activeTab === 'agents' && data && total > 0 && shown === 0 && <div className="fs__note" data-no-match>Nothing matches — clear a filter or the search.</div>}
       {scoped.map(({ m, agents: inScope }) => {
         if (!machineOn(m)) return null;
         const agents = inScope.filter((a) => matches(a, filter));
         const running = (m.agents || []).filter((a) => a.runningSince).length;
         const hidden = (m.agents || []).length - agents.length;
-        const collapsed = narrowed && agents.length === 0 && (m.agents || []).length > 0;
+        // Collapse-to-header is an Agents-tab affordance only; the Overview and
+        // Scoreboard tabs always render every selected machine's card.
+        const collapsed = activeTab === 'agents' && narrowed && agents.length === 0 && (m.agents || []).length > 0;
         return (
           <section key={m.sourceId} className={`fs__machine${m.self ? ' fs__machine--self' : ''}${m.reachable ? '' : ' fs__machine--dark'}${collapsed ? ' fs__machine--collapsed' : ''}`} data-machine={m.machine} data-collapsed={collapsed || undefined}>
             <div className="fs__mh">
@@ -243,6 +337,29 @@ export default function FleetStatus({ root = '' }) {
               <span className="fs__mlabel">{m.machine}</span>
               {m.self && <span className="fs__tag">self</span>}
               {!m.self && m.address && <span className="fs__mono fs__dim">{m.address}</span>}
+              {/* Jump to THAT machine's harness (task e5cddb1e): href from the
+                  peer registry's address (self: this harness's root) — disabled,
+                  never guessed, when the address isn't known. */}
+              {harnessHref(m, root) ? (
+                <a
+                  className="fs__openlink"
+                  href={harnessHref(m, root)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={m.self ? 'Open this harness in a new tab' : `Open the harness on ${m.machine} in a new tab (${m.address})`}
+                  data-open-harness={m.sourceId}
+                >
+                  open harness ↗
+                </a>
+              ) : (
+                <span
+                  className="fs__openlink fs__openlink--off"
+                  title="This machine's harness address is not known to the hub — set it on the fleet source to enable the link"
+                  data-open-harness-disabled={m.sourceId}
+                >
+                  open harness
+                </span>
+              )}
               <span className="fs__dim">
                 {m.reachable ? `build ${shortVersion(m.version)}${m.behind ? ' · behind the hub' : ''}` : `${m.status}${m.detail ? ` · ${m.detail}` : ''}`}
                 {m.reachable ? ` · ${m.acceptsSends ? 'accepts sends' : 'no sends'} · ${m.acceptsUpgrades ? 'accepts upgrades' : 'no upgrades'}${m.gateOpen ? '' : ' · gate closed'}` : ''}
@@ -253,25 +370,46 @@ export default function FleetStatus({ root = '' }) {
                 {narrowed && hidden > 0 ? ` · ${hidden} hidden by filter` : ''}
               </span>
             </div>
-            {collapsed ? null : agents.length === 0
-              ? <div className="fs__none">{(m.agents || []).length === 0 ? (m.reachable ? 'no repo agents (no docks, nothing in the arch scope)' : 'nothing known — the machine has not answered') : 'nothing matches this filter'}</div>
-              : (
-                <div className="fs__strip">
-                  {agents.map((a) => (
-                    <AgentChip key={a.key} a={a} self={m.self} root={root} open={open === a.key} onToggle={() => setOpen(open === a.key ? null : a.key)} />
-                  ))}
-                </div>
-              )}
-            {agents.filter((a) => open === a.key).map((a) => <AgentDetail key={a.key} a={a} self={m.self} root={root} />)}
+            {activeTab === 'overview' ? (
+              <FleetOverviewPanel machine={m} />
+            ) : activeTab === 'scoreboard' ? (
+              <FleetScoreboardTab machine={m} />
+            ) : (
+              <>
+                {/* Stale board work on this machine (openspec kanban-lifecycle-columns):
+                    an unpushed task branch or a parked PR — agents-tab material. */}
+                {(m.staleTasks || []).length > 0 && (
+                  <div className="fs__stale" data-stale-tasks>
+                    {(m.staleTasks || []).map((t) => (
+                      <div key={t.id} className="fs__stale-row" title={t.title}>
+                        ⏱ stale: {t.reason === 'unpushed branch' ? `unpushed branch on ${m.machine}` : 'PR open'}
+                        {t.branch ? <span className="fs__mono"> ⎇ {t.branch}</span> : null}
+                        {' — '}{t.title}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {collapsed ? null : agents.length === 0
+                  ? <div className="fs__none">{(m.agents || []).length === 0 ? (m.reachable ? 'no repo agents (no docks, nothing in the arch scope)' : 'nothing known — the machine has not answered') : 'nothing matches this filter'}</div>
+                  : (
+                    <div className="fs__strip">
+                      {agents.map((a) => (
+                        <AgentChip key={a.key} a={a} self={m.self} root={root} machine={m.machine} color={colors.chip(mkOfMachine(m), rkOfAgent(a))} mark={colors.mark(mkOfMachine(m), rkOfAgent(a), m.machine, a.handle || a.name)} open={open === a.key} onToggle={() => setOpen(open === a.key ? null : a.key)} />
+                      ))}
+                    </div>
+                  )}
+                {agents.filter((a) => open === a.key).map((a) => <AgentDetail key={a.key} a={a} self={m.self} root={root} sourceId={m.sourceId} onChanged={load} />)}
+              </>
+            )}
           </section>
         );
       })}
-      <div className="fs__legend fs__dim">
+      {activeTab === 'agents' && <div className="fs__legend fs__dim">
         <span><span className="fs__dot fs__dot--free" aria-hidden="true" /> on its default branch — free</span>
         <span><span className="fs__dot fs__dot--claimed" aria-hidden="true" /> on a feature branch — claimed</span>
         <span><span className="fs__dot fs__dot--running" aria-hidden="true" /> running a turn</span>
         <span>🏛 in the arch agent's scope</span>
-      </div>
+      </div>}
     </div>
   );
 }

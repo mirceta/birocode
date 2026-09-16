@@ -22,8 +22,12 @@ public class TaskBoardTests
         Assert.Contains("game-arcade on MONSTER", text);
         Assert.Contains("Acceptance: tests green.", text);
         Assert.Contains("Prerequisites: none.", text);
-        Assert.Contains("TASK DONE t1", text);
+        // The lifecycle closing convention (openspec kanban-lifecycle-columns):
+        // committed-by-default (no push), PR only when the brief allowed it.
+        Assert.Contains("TASK COMMITTED t1 <branch> <commit>", text);
+        Assert.Contains("TASK PR t1 <url>", text);
         Assert.Contains("TASK BLOCKED t1:", text);
+        Assert.Contains("do NOT push", text);
     }
 
     [Fact]
@@ -32,6 +36,117 @@ public class TaskBoardTests
         var pre = new List<TaskGraphService.Node> { new("p1", "Open the gateway", null, null, null, "done", 0, 0, 1, 1) };
         var text = ArchAgentService.DispatchMessage(Node(), pre, "operator", "WIN", "prg");
         Assert.Contains("Prerequisites (all done): Open the gateway.", text);
+    }
+
+    // ---- list_tasks filters (openspec task-filters) ----------------------------------------
+
+    private static readonly TaskGraphService.Node[] Board =
+    {
+        new("a", "Ship filters", null, "r-web", null, "doing", 0, 0, 1, 1),                         // this harness
+        new("b", "Arcade sounds", null, "r-arc", null, "todo", 0, 0, 1, 1),                         // this harness
+        new("c", "Prg deploy", null, "p1", null, "todo", 0, 0, 1, 1, SourceId: "src-spacex"),         // spacex
+        new("d", "Prg tests", null, "p2", null, "done", 0, 0, 1, 1, SourceId: "src-spacex"),          // spacex
+        new("e", "Write the plan", null, null, null, "todo", 0, 0, 1, 1),                           // unassigned
+    };
+
+    private static string[] Ids(string? status, bool unassigned, bool byMachine, string? source, string? repo) =>
+        Board.Where(n => ArchAgentService.TaskMatches(n, status, unassigned, byMachine, source, repo)).Select(n => n.Id).ToArray();
+
+    [Fact]
+    public void List_tasks_without_filters_returns_everything()
+    {
+        Assert.Equal(new[] { "a", "b", "c", "d", "e" }, Ids(null, false, false, null, null));
+        Assert.Equal(new[] { "a", "b", "c", "d", "e" }, Ids("", false, false, null, null));
+    }
+
+    [Fact]
+    public void List_tasks_status_filter_is_case_insensitive_and_trimmed()
+    {
+        Assert.Equal(new[] { "b", "c", "e" }, Ids("todo", false, false, null, null));
+        Assert.Equal(new[] { "d" }, Ids(" Done ", false, false, null, null));
+    }
+
+    [Fact]
+    public void List_tasks_machine_filter_keeps_assigned_tasks_of_that_harness_only()
+    {
+        Assert.Equal(new[] { "c", "d" }, Ids(null, false, true, "src-spacex", null));   // a peer
+        Assert.Equal(new[] { "a", "b" }, Ids(null, false, true, null, null));           // self (null source)
+        Assert.Empty(Ids(null, false, true, "src-nowhere", null));
+    }
+
+    [Fact]
+    public void List_tasks_agent_filter_keeps_exactly_that_assignee()
+    {
+        Assert.Equal(new[] { "c" }, Ids(null, false, false, "src-spacex", "p1"));
+        Assert.Equal(new[] { "a" }, Ids(null, false, false, null, "r-web"));
+        Assert.Empty(Ids(null, false, false, null, "p1")); // p1 lives on spacex, not here
+    }
+
+    [Fact]
+    public void List_tasks_unassigned_filter_keeps_tasks_without_a_repo()
+    {
+        Assert.Equal(new[] { "e" }, Ids(null, true, false, null, null));
+    }
+
+    [Fact]
+    public void List_tasks_filters_and_across_status_and_assignee()
+    {
+        Assert.Equal(new[] { "c" }, Ids("todo", false, true, "src-spacex", null));
+        Assert.Empty(Ids("doing", false, true, "src-spacex", null));
+        Assert.Equal(new[] { "e" }, Ids("todo", true, false, null, null));
+        Assert.Empty(Ids("done", true, false, null, null));
+    }
+
+    // ---- card references (openspec kanban-card-ref) -----------------------------------------
+
+    [Fact]
+    public void A_card_reference_is_the_short_stable_prefix_and_resolves_back_to_the_exact_card()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "cwtest-cardref-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var g = new TaskGraphService(new ClaudeWeb.Services.Logging.Logger(), dir);
+            var a = g.AddNode("Alpha", null, null, null, 0, 0, now: 1)!;
+            var b = g.AddNode("Beta", null, null, null, 0, 0, now: 2)!;
+            Assert.Equal("#" + a.Id[..8], TaskGraphService.CardRef(a.Id));
+            Assert.Equal(a.Id[..8], TaskGraphService.ShortId(a.Id));
+
+            // Everything the Operator might paste resolves to the exact card.
+            Assert.Equal((a.Id, (string?)null), g.ResolveTaskRef(a.Id));
+            Assert.Equal((a.Id, (string?)null), g.ResolveTaskRef($"task {a.Id}"));
+            Assert.Equal((a.Id, (string?)null), g.ResolveTaskRef(TaskGraphService.CardRef(a.Id)));
+            Assert.Equal((a.Id, (string?)null), g.ResolveTaskRef("  " + a.Id[..8].ToUpperInvariant() + " "));
+            Assert.Equal((a.Id, (string?)null), g.ResolveTaskRef("task #" + a.Id[..12]));
+            Assert.Equal(b.Id, g.ResolveTaskRef("#" + b.Id[..8]).Id);
+
+            // Too short, unknown, blank: refused with a reason, never a guess.
+            Assert.Null(g.ResolveTaskRef(a.Id[..5]).Id);
+            Assert.Null(g.ResolveTaskRef("zzzzzzzz").Id);
+            Assert.Contains("no task", g.ResolveTaskRef("zzzzzzzz").Error);
+            Assert.Contains("required", g.ResolveTaskRef("  ").Error);
+        }
+        finally { try { Directory.Delete(dir, recursive: true); } catch { /* best effort */ } }
+    }
+
+    [Fact]
+    public void An_ambiguous_prefix_is_refused_and_names_the_candidates()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "cwtest-cardref-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "taskgraph.json"),
+                """{"SchemaVersion":2,"Nodes":[{"Id":"abcdef0011112222333344445555666a","Title":"First","Note":null,"RepoId":null,"MachineId":null,"Status":"todo","X":0,"Y":0,"CreatedAt":1,"UpdatedAt":1},{"Id":"abcdef00aaaabbbbccccddddeeeeffff","Title":"Second","Note":null,"RepoId":null,"MachineId":null,"Status":"todo","X":0,"Y":0,"CreatedAt":1,"UpdatedAt":1}],"Edges":[],"Machines":[],"Scratch":"","Tombstones":[]}""");
+            var g = new TaskGraphService(new ClaudeWeb.Services.Logging.Logger(), dir);
+            var (id, err) = g.ResolveTaskRef("#abcdef00");
+            Assert.Null(id);
+            Assert.Contains("matches 2 tasks", err);
+            Assert.Contains("First", err);
+            Assert.Contains("Second", err);
+            Assert.Equal("abcdef0011112222333344445555666a", g.ResolveTaskRef("abcdef001").Id); // one more character disambiguates
+        }
+        finally { try { Directory.Delete(dir, recursive: true); } catch { /* best effort */ } }
     }
 
     [Fact]

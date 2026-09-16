@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useLocalAppFramesMaybe } from '../../context/LocalAppFramesContext';
 import { useT } from '../../i18n/LanguageContext';
+import { classify, next as nextLiveness, initial as initialLiveness, PROBE_INTERVAL_MS, PROBE_TIMEOUT_MS } from './liveness';
 import './product.css';
 
 // Shows whatever product is listening on the preview port, by iframing it. Used
@@ -33,14 +34,16 @@ const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 2;
 const ZOOM_STEP = 0.25;
 
-// Is it up? Cross-origin direct ports (App tab / Landing) can't expose CORS, so
-// we no-cors-probe and treat any answer as "up". Same-origin URLs (the Local
-// tab's /api/localview/ proxy, plans/local-app-proxy.md) DO let us read the
-// status, so we check res.ok — a 502 from a dead local app then shows the empty
-// state instead of the proxy's error body.
+// Is it up? One sample: up | down | unknown (openspec local-app-liveness-hysteresis).
+// Cross-origin direct ports (App tab / Landing) can't expose CORS, so we no-cors-
+// probe and any answer is "up". Same-origin URLs (the /api/localview/ proxy,
+// plans/local-app-proxy.md) let us read the harness's OWN verdict header: only
+// "unreachable" (502, the port refused) and "no-app" (404) mean down — an app that
+// answered anything is alive, and a probe that timed out says nothing. The verdict
+// itself is taken with hysteresis in `check` below, never from one sample.
 async function probe(url) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 3000);
+  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
   const sameOrigin = url.startsWith('/') || url.startsWith(window.location.origin);
   try {
     const res = await fetch(url, {
@@ -48,9 +51,9 @@ async function probe(url) {
       cache: 'no-store',
       signal: controller.signal,
     });
-    return sameOrigin ? res.ok : true;
-  } catch {
-    return false;
+    return classify({ res, sameOrigin });
+  } catch (e) {
+    return classify({ error: e?.name || 'Error', sameOrigin });
   } finally {
     clearTimeout(timer);
   }
@@ -76,13 +79,20 @@ export default function ProductFrame({
   const [zoom, setZoom] = useState(1); // 0.25-steps are exact binary fractions, so !== 1 is safe
   const pollRef = useRef(null);
   const slotRef = useRef(null);
+  // The liveness state behind `online` (misses, last good sample): a live app is
+  // hidden only after several consecutive harness "down" verdicts over ten seconds
+  // (openspec local-app-liveness-hysteresis); one bad probe never tears the frame down.
+  const liveRef = useRef(initialLiveness(hosted && framesApi.frames[frameKey] ? true : null));
+  const probingRef = useRef(false);
 
   // Frame identity changed (app/surface switch in place): re-derive liveness
   // for the NEW frame the same way instead of inheriting the old one's.
   const lastKeyRef = useRef(frameKey);
   if (lastKeyRef.current !== frameKey) {
     lastKeyRef.current = frameKey;
-    setOnline(hosted && framesApi.frames[frameKey] ? true : null);
+    const seed = hosted && framesApi.frames[frameKey] ? true : null;
+    liveRef.current = initialLiveness(seed);
+    setOnline(seed);
   }
 
   // Keep the latest onStatus without making it a hook dependency (parents often
@@ -91,19 +101,27 @@ export default function ProductFrame({
   onStatusRef.current = onStatus;
 
   const check = useCallback(async () => {
-    if (!url) return;
-    const up = await probe(url);
-    setOnline(up);
-    onStatusRef.current?.(up);
+    if (!url || probingRef.current) return; // a slow probe is not restarted underneath itself
+    probingRef.current = true;
+    let sample;
+    try { sample = await probe(url); } finally { probingRef.current = false; }
+    const before = liveRef.current;
+    const after = nextLiveness(before, sample, Date.now());
+    liveRef.current = after;
+    if (after.online !== before.online) {
+      setOnline(after.online);
+      onStatusRef.current?.(after.online);
+    }
   }, [url]);
 
   // Poll while open so the product appears as soon as it's started; also re-check
   // when the parent forces a reload.
   useEffect(() => {
     if (!url) return undefined;
+    liveRef.current = initialLiveness(liveRef.current.online);
     check();
     // Hidden tab = no probing (openspec reduce-connection-appetite).
-    pollRef.current = setInterval(() => { if (!document.hidden) check(); }, 4000);
+    pollRef.current = setInterval(() => { if (!document.hidden) check(); }, PROBE_INTERVAL_MS);
     return () => clearInterval(pollRef.current);
   }, [url, check, reloadKey]);
 
