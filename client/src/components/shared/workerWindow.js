@@ -1,35 +1,51 @@
-// The ONE reused worker window (board task afed9d6d): the management surface (M)
-// jumps to any machine's harness in a single shared window (W) instead of piling
-// up tabs. The whole mechanism is the browser's own named-target rule:
-// window.open(url, FIXED_NAME) REUSES the auxiliary browsing context this page
-// opened under that name and NAVIGATES it — cross-origin included — rather than
-// opening a new one. Verified against real Chromium/Edge in
-// .claudeweb-preview/playwright/check-worker-window.mjs (4/4: reuse, cross-origin
-// renavigation, and the association even survives a reload of M).
+// Per-agent tabs (Operator follow-up to board task afed9d6d): every repo agent
+// gets its OWN named tab, and clicking that agent on a Kanban card FOCUSES its
+// existing tab wherever it lives — any Chrome window, any monitor — without
+// reloading it. This supersedes the first design (one shared "birocode-worker"
+// window that every click renavigated).
 //
-// Two-screen use (verified, checks 5–7 of the same script): the worker opens as
-// a tab; DRAG IT OUT into its own Chrome window (e.g. onto a second monitor) and
-// every later click keeps reusing it there — the name lookup finds the browsing
-// context regardless of which OS window hosts it, and a dragged tab keeps its
-// name + opener.
+// The mechanism, engine-verified in
+// .claudeweb-preview/playwright/check-agent-tabs.mjs (6/6):
+//  - window.open('', PER_AGENT_NAME): an EXISTING named tab is FOUND but NOT
+//    navigated (empty URL = no reload; in-page state survives — proven); a
+//    brand-new one comes back at about:blank and only then gets the deep link.
+//  - w.focus() from the click's user gesture actually switches Chrome to that
+//    tab — including a tab living in ANOTHER OS window (visibility=visible,
+//    hasFocus=true measured after the click), so a tab dragged to a second
+//    monitor keeps working.
+//  - Distinct names never collide: two agents = two tabs, re-clicks never
+//    duplicate (also proven in check-worker-window.mjs for the name mechanics:
+//    cross-origin reach, association surviving an M reload).
 //
 // Known limits, by design of the platform:
-//  - the name association is scoped to the opener's tab — a second management tab
-//    gets its own worker window (still one worker PER management window), and a
-//    brand-new M tab (after closing the old one) starts a fresh worker;
-//  - focus() is best-effort: the browser navigates the worker reliably, but may
-//    decline to raise a background OS window without its own user gesture — on a
-//    two-screen layout that hardly matters, the worker is visible on its screen.
+//  - the name association is scoped to the opener's tab — a brand-new management
+//    tab (after closing the old one) is not "familiar" with old agent tabs and
+//    starts fresh ones (a plain reload keeps them);
+//  - an existing tab is focused AS-IS (never renavigated), so if you browsed it
+//    somewhere else it comes back wherever you left it — predictable, no lost work.
 // Must be called from a click handler (user gesture) or the popup blocker wins.
 
-export const WORKER_WINDOW_NAME = 'birocode-worker';
+/** The per-agent window name for an assignee key ("sourceId|repoId"): stable,
+ * distinct per agent, safe charset. Pure — unit-tested. */
+export function agentTabName(key) {
+  const k = (key || '').trim();
+  if (!k) return null;
+  return `birocode-agent-${k.replace(/[^\w.-]/g, '_')}`;
+}
 
-/** Opens/renavigates the shared worker window to `url`; true when the browser
- * gave us a handle (false = popup blocked / no url). */
-export function openInWorker(url) {
-  if (!url) return false;
-  const w = window.open(url, WORKER_WINDOW_NAME);
+/** Focus the agent's own tab, opening it at `url` only when it does not exist
+ * yet; true when the browser gave us a handle (false = blocked / nothing to open). */
+export function focusAgentTab(key, url) {
+  const name = agentTabName(key);
+  if (!name || !url) return false;
+  const w = window.open('', name);
   if (!w) return false;
-  try { w.focus(); } catch { /* cross-origin handle: focus is allowed, but never guaranteed to raise */ }
+  try {
+    // Same-origin (or brand-new about:blank) handle: navigate ONLY the fresh one.
+    if (w.location.href === 'about:blank') w.location.href = url;
+  } catch {
+    // Cross-origin handle: the tab already shows another machine's harness — just focus.
+  }
+  try { w.focus(); } catch { /* focus is cross-origin-allowed but never guaranteed to raise */ }
   return true;
 }
