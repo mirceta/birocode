@@ -4,25 +4,28 @@ using ClaudeWeb.Services.Events;
 namespace ClaudeWeb.Services.Understanding;
 
 /// <summary>
-/// Backend-owned registry of "Ask for understanding" runs, one job per repository
-/// (openspec change add-ask-for-understanding). Modeled on
-/// <see cref="StructuredAsk.LocalAppDiscoveryJobs"/>: the run is owned server-side
-/// on a background task with the job's OWN cancellation token (never the request's),
-/// so a phone refresh / disconnect mid-run leaves it running to completion, and the
-/// dock reattaches via status on load.
+/// Backend-owned registry of conversation-app builds — "Ask for understanding" and
+/// "Update goal" — one job per repository AND kind (openspec change
+/// add-ask-for-understanding, generalised by <see cref="AppBuildKind"/> in openspec
+/// goal-app). Modeled on <see cref="StructuredAsk.LocalAppDiscoveryJobs"/>: the run
+/// is owned server-side on a background task with the job's OWN cancellation token
+/// (never the request's), so a phone refresh / disconnect mid-run leaves it running
+/// to completion, and the dock reattaches via status on load.
 ///
-/// In-memory and latest-only per repo: a harness restart simply means "no recent
-/// run", and only the most recent job per repo is retained (the next start
-/// overwrites a terminal one) so jobs never accumulate.
+/// In-memory and latest-only per (kind, repo): a harness restart simply means "no
+/// recent run", and only the most recent job per slot is retained (the next start
+/// overwrites a terminal one) so jobs never accumulate. The understanding and the
+/// goal runs of one repo are independent slots: they can run at the same time.
 ///
 /// The auto path (openspec auto-understanding-after-turn) adds one pending slot
-/// per repo: <see cref="EnqueueLatest"/> during a run remembers only the NEWEST
-/// session, and the run's completion chains it — coalescing, never queuing, so
-/// turns that finish faster than builds complete cost at most one follow-up run.
+/// per (kind, repo): <see cref="EnqueueLatest(AppBuildKind, string, string, string, string)"/>
+/// during a run remembers only the NEWEST session, and the run's completion chains
+/// it — coalescing, never queuing, so turns that finish faster than builds complete
+/// cost at most one follow-up run.
 /// </summary>
 public class UnderstandingJobs
 {
-    private readonly UnderstandingAsk _ask;
+    private readonly IReadOnlyDictionary<string, IConversationAppBuilder> _builders;
     private readonly RepoEventLog _events;
     private readonly AgenticAuditLog _audit;
     private readonly Logging.Logger _logger;
@@ -41,62 +44,80 @@ public class UnderstandingJobs
 
     private sealed record PendingRun(string RepoName, string Path, string SessionId);
 
-    public UnderstandingJobs(UnderstandingAsk ask, RepoEventLog events, AgenticAuditLog audit, Logging.Logger logger)
+    public UnderstandingJobs(IEnumerable<IConversationAppBuilder> builders, RepoEventLog events, AgenticAuditLog audit, Logging.Logger logger)
     {
-        _ask = ask;
+        _builders = builders.ToDictionary(b => b.Kind.Key, StringComparer.Ordinal);
         _events = events;
         _audit = audit;
         _logger = logger;
     }
 
+    private static string Slot(AppBuildKind kind, string repoId) => $"{kind.Key}:{repoId}";
+
+    private IConversationAppBuilder BuilderFor(AppBuildKind kind) =>
+        _builders.TryGetValue(kind.Key, out var b) ? b
+            : throw new InvalidOperationException($"No conversation-app builder registered for kind '{kind.Key}'.");
+
+    /// <summary>Understanding-kind shorthand (the original API).</summary>
+    public UnderstandingJob StartOrJoin(string repoId, string repoName, string workingDirectory, string sessionId, string actor, string ip) =>
+        StartOrJoin(AppBuildKind.Understanding, repoId, repoName, workingDirectory, sessionId, actor, ip);
+
     /// <summary>
-    /// Join the repo's run if one is already in progress, otherwise start a new one
+    /// Join the slot's run if one is already in progress, otherwise start a new one
     /// on a background task and return it. The start-or-join decision is atomic per
-    /// repo: a Running job is returned as-is; any terminal (Done/Error) job is
+    /// (kind, repo): a Running job is returned as-is; any terminal (Done/Error) job is
     /// replaced by a fresh run (latest-only). Actor + IP come from the controller
     /// (identity is request-scoped) and are recorded in the agentic audit trail —
     /// only on an actual start, never on a join (openspec add-agent-audit-trail).
     /// </summary>
-    public UnderstandingJob StartOrJoin(string repoId, string repoName, string workingDirectory, string sessionId, string actor, string ip)
+    public UnderstandingJob StartOrJoin(AppBuildKind kind, string repoId, string repoName, string workingDirectory, string sessionId, string actor, string ip)
     {
+        var slot = Slot(kind, repoId);
         lock (_gate)
         {
-            if (_jobs.TryGetValue(repoId, out var existing) && existing.Status == UnderstandingStatus.Running)
+            if (_jobs.TryGetValue(slot, out var existing) && existing.Status == UnderstandingStatus.Running)
                 return existing;
-            var job = StartNew(repoId, repoName, workingDirectory, sessionId, actor, ip);
-            _jobs[repoId] = job;
+            var job = StartNew(kind, repoId, repoName, workingDirectory, sessionId, actor, ip);
+            _jobs[slot] = job;
             return job;
         }
     }
+
+    /// <summary>Understanding-kind shorthand (the original API).</summary>
+    public UnderstandingJob EnqueueLatest(string repoId, string repoName, string workingDirectory, string sessionId) =>
+        EnqueueLatest(AppBuildKind.Understanding, repoId, repoName, workingDirectory, sessionId);
 
     /// <summary>
     /// The auto-trigger's entry point (openspec auto-understanding-after-turn):
-    /// start a run now if the repo is idle/terminal (same as
-    /// <see cref="StartOrJoin"/>), else overwrite the repo's single pending slot
-    /// with this newest session; the in-flight run starts it when it finishes.
-    /// Intermediate sessions are dropped by design — a fork always explains the
-    /// transcript's latest turn, so only the newest matters. Audited as actor
-    /// "auto" (there is no request identity on this path).
+    /// start a run now if the slot is idle/terminal (same as StartOrJoin), else
+    /// overwrite the slot's single pending entry with this newest session; the
+    /// in-flight run starts it when it finishes. Intermediate sessions are dropped
+    /// by design — a build always reads the transcript's latest turn, so only the
+    /// newest matters. Audited as actor "auto" (there is no request identity here).
     /// </summary>
-    public UnderstandingJob EnqueueLatest(string repoId, string repoName, string workingDirectory, string sessionId)
+    public UnderstandingJob EnqueueLatest(AppBuildKind kind, string repoId, string repoName, string workingDirectory, string sessionId)
     {
+        var slot = Slot(kind, repoId);
         lock (_gate)
         {
-            if (_jobs.TryGetValue(repoId, out var existing) && existing.Status == UnderstandingStatus.Running)
+            if (_jobs.TryGetValue(slot, out var existing) && existing.Status == UnderstandingStatus.Running)
             {
-                _pending[repoId] = new PendingRun(repoName, workingDirectory, sessionId);
+                _pending[slot] = new PendingRun(repoName, workingDirectory, sessionId);
                 return existing;
             }
-            var job = StartNew(repoId, repoName, workingDirectory, sessionId, AutoActor, AutoIp);
-            _jobs[repoId] = job;
+            var job = StartNew(kind, repoId, repoName, workingDirectory, sessionId, AutoActor, AutoIp);
+            _jobs[slot] = job;
             return job;
         }
     }
 
-    /// <summary>The most recent job for the repo, or null if none has ever run.</summary>
-    public UnderstandingJob? Get(string repoId)
+    /// <summary>The most recent understanding job for the repo, or null if none has ever run.</summary>
+    public UnderstandingJob? Get(string repoId) => Get(AppBuildKind.Understanding, repoId);
+
+    /// <summary>The most recent job of that kind for the repo, or null if none has ever run.</summary>
+    public UnderstandingJob? Get(AppBuildKind kind, string repoId)
     {
-        lock (_gate) return _jobs.GetValueOrDefault(repoId);
+        lock (_gate) return _jobs.GetValueOrDefault(Slot(kind, repoId));
     }
 
     // Chains the pending run, if any, when a job reaches its terminal state —
@@ -104,34 +125,35 @@ public class UnderstandingJobs
     // and is already Running (a manual press), the pending slot is left alone:
     // THAT run's completion will land here too and chain it then. Only the auto
     // path writes the slot, so chained runs are audited as "auto".
-    private void StartPendingIfAny(string repoId)
+    private void StartPendingIfAny(AppBuildKind kind, string repoId)
     {
+        var slot = Slot(kind, repoId);
         lock (_gate)
         {
-            if (!_pending.TryGetValue(repoId, out var next)) return;
-            if (_jobs.TryGetValue(repoId, out var existing) && existing.Status == UnderstandingStatus.Running)
+            if (!_pending.TryGetValue(slot, out var next)) return;
+            if (_jobs.TryGetValue(slot, out var existing) && existing.Status == UnderstandingStatus.Running)
                 return;
-            _pending.Remove(repoId);
-            _jobs[repoId] = StartNew(repoId, next.RepoName, next.Path, next.SessionId, AutoActor, AutoIp);
+            _pending.Remove(slot);
+            _jobs[slot] = StartNew(kind, repoId, next.RepoName, next.Path, next.SessionId, AutoActor, AutoIp);
         }
     }
 
-    private UnderstandingJob StartNew(string repoId, string repoName, string workingDirectory, string sessionId, string actor, string ip)
+    private UnderstandingJob StartNew(AppBuildKind kind, string repoId, string repoName, string workingDirectory, string sessionId, string actor, string ip)
     {
-        var job = new UnderstandingJob();
-        // Which session each run explains lands in the host log — the audit
-        // trail that a coalesced follow-up ran for the NEWEST pending session.
-        _logger.Info($"[UNDERSTANDING] run started for {repoId} (session {sessionId[..Math.Min(8, sessionId.Length)]}…)");
+        var builder = BuilderFor(kind);
+        var job = new UnderstandingJob { Kind = kind };
+        // Which session each run reads lands in the host log — the audit trail that
+        // a coalesced follow-up ran for the NEWEST pending session.
+        _logger.Info($"[{kind.Key.ToUpperInvariant()}] run started for {repoId} (session {sessionId[..Math.Min(8, sessionId.Length)]}…)");
         // Event Console: "started" fires only here — on a genuine NEW run — so
         // joining an already-running job does not emit a duplicate start.
-        _events.Emit(repoId, "understanding", "started", "Understanding",
-            "forking the conversation — building the Understanding app…");
+        _events.Emit(repoId, kind.Op, "started", kind.Title, kind.StartedDetail);
         // Agentic audit (openspec add-agent-audit-trail): durable "started" entry,
         // same only-on-actual-start boundary. The callId lives on the job so the
         // trail endpoint can tell a live "running" from a crash-orphaned start.
-        job.AuditCallId = _audit.RecordStart("ask-for-understanding", repoId, repoName, actor, ip);
+        job.AuditCallId = _audit.RecordStart(kind.AuditFeature, repoId, repoName, actor, ip);
         void AuditEnd(string outcome, string? error = null) =>
-            _audit.RecordEnd(job.AuditCallId!, "ask-for-understanding", repoId, repoName, actor, ip,
+            _audit.RecordEnd(job.AuditCallId!, kind.AuditFeature, repoId, repoName, actor, ip,
                 outcome, (long)(DateTimeOffset.UtcNow - job.StartedAt).TotalMilliseconds, error);
         // Fire-and-forget on a background task with the job's OWN token. We never
         // pass the request's abort token in, so a client disconnect can't cancel it.
@@ -139,40 +161,39 @@ public class UnderstandingJobs
         {
             try
             {
-                var result = await _ask.BuildAsync(workingDirectory, sessionId, job.Cts.Token);
+                var result = await builder.BuildAsync(workingDirectory, sessionId, job.Cts.Token);
                 if (result.Success)
                 {
                     job.MarkDone();
-                    _events.Emit(repoId, "understanding", "done", "Understanding",
-                        "built understanding-app/ — reload the Local tab's Understanding app to see it");
+                    _events.Emit(repoId, kind.Op, "done", kind.Title, kind.DoneDetail);
                     AuditEnd("done");
                 }
                 else
                 {
-                    var err = result.Error ?? "understanding run failed";
+                    var err = result.Error ?? kind.FailedDefault;
                     job.MarkError(err);
-                    _events.Emit(repoId, "understanding", "error", "Understanding", err);
+                    _events.Emit(repoId, kind.Op, "error", kind.Title, err);
                     AuditEnd("error", err);
                 }
             }
             catch (OperationCanceledException)
             {
-                job.MarkError("understanding run cancelled");
-                _events.Emit(repoId, "understanding", "error", "Understanding", "understanding run cancelled");
+                job.MarkError(kind.CancelledDetail);
+                _events.Emit(repoId, kind.Op, "error", kind.Title, kind.CancelledDetail);
                 AuditEnd("canceled");
             }
             catch (Exception ex)
             {
                 var err = $"{ex.GetType().Name}: {ex.Message}";
                 job.MarkError(err);
-                _events.Emit(repoId, "understanding", "error", "Understanding", err);
+                _events.Emit(repoId, kind.Op, "error", kind.Title, err);
                 AuditEnd("error", err);
             }
             finally
             {
                 // Coalescing continuation: the terminal run itself starts the
                 // pending "latest" (if a qualifying turn landed while we ran).
-                StartPendingIfAny(repoId);
+                StartPendingIfAny(kind, repoId);
             }
         });
         return job;
@@ -182,11 +203,12 @@ public class UnderstandingJobs
 public enum UnderstandingStatus { Running, Done, Error }
 
 /// <summary>
-/// One repository's most recent "Ask for understanding" run. Lives independently of
-/// any HTTP request: <see cref="Cts"/> is the only cancellation source.
+/// One repository's most recent run of one kind. Lives independently of any HTTP
+/// request: <see cref="Cts"/> is the only cancellation source.
 /// </summary>
 public class UnderstandingJob
 {
+    public AppBuildKind Kind { get; init; } = AppBuildKind.Understanding;
     public UnderstandingStatus Status { get; private set; } = UnderstandingStatus.Running;
     public string? Error { get; private set; }
     public DateTimeOffset StartedAt { get; } = DateTimeOffset.UtcNow;

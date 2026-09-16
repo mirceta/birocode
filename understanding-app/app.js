@@ -1,5 +1,6 @@
-// Understanding app — the proposed per-agent Goal app laid over the existing "Ask for
-// understanding" feature (fleet task f7224e55; a START + design pass, no implementation).
+// Understanding app — the per-agent Goal app laid over the existing "Ask for
+// understanding" feature (fleet task f7224e55; investigated, then decided and built as
+// openspec goal-app — the tab-1 tags reuse / clone / new are the shape of the code).
 // Build-less, relative URLs only; cytoscape is vendored. Every node is a real piece of
 // the harness, with the file it lives in; the Goal tab tags each piece reuse / clone / new.
 
@@ -219,7 +220,7 @@ window.addEventListener('resize', () => cys[current]?.resize());
 const qs = $('#qs');
 for (const q of QUESTIONS) {
   const d = document.createElement('details'); d.className = 'q'; d.open = q.n === 'Q1';
-  d.innerHTML = `<summary><span class="qn">${q.n}</span><span>${q.title}</span></summary><div class="body"><p class="why">${q.why}</p><ol>${q.options.map((o) => `<li>${o}</li>`).join('')}</ol><p class="rec"><b>My recommendation:</b> ${q.rec}</p><button type="button" class="jump" data-node="${q.node}">show on the diagram ↗</button></div>`;
+  d.innerHTML = `<summary><span class="qn">${q.n}</span><span>${q.title}</span></summary><div class="body"><p class="why">${q.why}</p><ol>${q.options.map((o) => `<li>${o}</li>`).join('')}</ol><p class="rec"><b>Decided and built:</b> ${q.rec}</p><button type="button" class="jump" data-node="${q.node}">show on the diagram ↗</button></div>`;
   qs.appendChild(d);
 }
 qs.addEventListener('click', (ev) => {

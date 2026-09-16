@@ -26,6 +26,7 @@ import DockLoopControl from './DockLoopControl';
 import BriefingRules from './BriefingRules';
 import DockFlags from './DockFlags';
 import useLocalAppDiscovery from './useLocalAppDiscovery';
+import useAppBuild from './useAppBuild';
 import DiscoverAppsPanel from './DiscoverAppsPanel';
 
 // Per-dock local-app view memory (openspec persist-dock-split-view): which app
@@ -238,26 +239,19 @@ export default function PinnedAgent({
   const disc = useLocalAppDiscovery({ repoId: tab.repoId, enabled: canDiscover });
   const [showDiscoverPanel, setShowDiscoverPanel] = useState(false);
 
-  // "Ask for understanding" (openspec add-ask-for-understanding): the second, more
-  // advanced agentic dock button. It FORKS this dock's builder conversation into
-  // Claude Monitor (snapshot-resume) and has the forked agent build the repo's
-  // Understanding app explaining the latest reply — so it never touches the live
-  // chat. Like Discover, the run is backend-owned (survives a refresh): we POST
-  // /understanding/ask, then poll /understanding/status until terminal, and reattach
-  // to a running job on mount/repo-change. Disabled until the builder lane has a
-  // conversation (a sessionId). Advanced-mode only; progress also shows in the
-  // Console lane (op="understanding").
+  // "Ask for understanding" (openspec add-ask-for-understanding) and its twin
+  // "Update goal" (openspec goal-app): the two agentic dock buttons that hand this
+  // dock's builder conversation to a subagent which (re)builds an app at the repo
+  // root — the Understanding app explaining the latest reply, the Goal app showing
+  // the goal of what we are building as the chat has set it. Both runs are
+  // backend-owned (survive a refresh) and each has a per-repo SERVER-persisted Auto
+  // flag that re-runs it after every completed builder turn; the whole start / poll /
+  // reattach / auto / nudge state machine lives ONCE in useAppBuild. Disabled until
+  // the builder lane has a conversation (a sessionId). Advanced-mode only, each
+  // behind its own capability; progress also shows in the Console lane
+  // (op="understanding" / op="goal").
   const canUnderstand = useFeature('understandingAgent');
-  const [understanding, setUnderstanding] = useState(null); // { status, error? } | null
-  const understandingBusy = understanding?.status === 'running';
-  const uPollRef = useRef(null);
-
-  // Auto-understanding (openspec auto-understanding-after-turn): a per-repo,
-  // SERVER-persisted flag — when on, the backend starts the same understanding
-  // run by itself at the end of every completed builder turn (it fires with no
-  // browser attached, which is the point). The dock only views/flips the flag;
-  // same capability gate as the Ask button. Optimistic flip, reverted on error.
-  const [autoUnderstanding, setAutoUnderstanding] = useState(false);
+  const canGoal = useFeature('goalAgent');
 
   // Agent engine (openspec provider-agnostic-runner): claude | codex, a per-repo
   // SERVER-persisted choice — which CLI runs this dock's turns. Loaded from the
@@ -312,107 +306,11 @@ export default function PinnedAgent({
     }
   };
 
-  // --- Ask for understanding: backend-owned run, same start/poll/reattach shape as
-  // Discover but for the snapshot-resume build (openspec add-ask-for-understanding).
-  const stopUPoll = () => {
-    if (uPollRef.current) {
-      clearInterval(uPollRef.current);
-      uPollRef.current = null;
-    }
-  };
-
-  const fetchUnderstandingStatus = useCallback(async () => {
-    try {
-      const r = await apiGet('/understanding/status', { repoId: tab.repoId });
-      setUnderstanding(r);
-      if (r.status !== 'running') stopUPoll();
-      return r;
-    } catch {
-      stopUPoll();
-      return null;
-    }
-  }, [tab.repoId]);
-
-  const startUPoll = () => {
-    if (uPollRef.current) return;
-    uPollRef.current = setInterval(fetchUnderstandingStatus, 5000); // dock cadence
-  };
-
-  // Reattach on mount / repo-change: pick up a running build (spinner + poll) or a
-  // result/error that landed while this dock was away — without starting a new run.
-  useEffect(() => {
-    if (!canUnderstand) return undefined;
-    let alive = true;
-    setUnderstanding(null);
-    (async () => {
-      const r = await fetchUnderstandingStatus();
-      if (alive && r?.status === 'running') startUPoll();
-    })();
-    return () => {
-      alive = false;
-      stopUPoll();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canUnderstand, tab.repoId, fetchUnderstandingStatus]);
-
-  // Load the persisted auto flag on mount / repo-change.
-  useEffect(() => {
-    if (!canUnderstand) return undefined;
-    let alive = true;
-    setAutoUnderstanding(false);
-    (async () => {
-      try {
-        const r = await apiGet('/understanding/auto', { repoId: tab.repoId });
-        if (alive) setAutoUnderstanding(!!r.enabled);
-      } catch { /* leave off; the toggle just shows the default */ }
-    })();
-    return () => { alive = false; };
-  }, [canUnderstand, tab.repoId]);
-
-  const toggleAutoUnderstanding = async () => {
-    const next = !autoUnderstanding;
-    setAutoUnderstanding(next);
-    try {
-      await apiPost('/understanding/auto', { enabled: next }, { repoId: tab.repoId });
-    } catch {
-      setAutoUnderstanding(!next); // revert the optimistic flip
-    }
-  };
-
-  // Poll nudge: when THIS dock watches its builder turn finish while auto is on,
-  // the backend is starting (or has started) an auto-run — look for it shortly
-  // after so the spinner/result appears without a manual refresh. Short grace
-  // because the client can see the chat's "done" a beat before the server-side
-  // trigger enqueues the job.
-  const prevStatusRef = useRef(status);
-  useEffect(() => {
-    const prev = prevStatusRef.current;
-    prevStatusRef.current = status;
-    if (!canUnderstand || !autoUnderstanding || isAsk) return undefined;
-    if (prev !== 'running' || status !== 'done') return undefined;
-    const timer = setTimeout(async () => {
-      const r = await fetchUnderstandingStatus();
-      if (r?.status === 'running') startUPoll();
-    }, 1500);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, canUnderstand, autoUnderstanding, isAsk, fetchUnderstandingStatus]);
-
-  const askUnderstanding = async () => {
-    try {
-      // Start-or-join, scoped to this dock's repo (X-Repo-Id); body carries the
-      // builder lane's sessionId. Drive off server state and poll until terminal.
-      const r = await apiPost('/understanding/ask', { sessionId: tab.sessionId }, { repoId: tab.repoId });
-      setUnderstanding(r);
-      if (r.status === 'running') startUPoll();
-    } catch (err) {
-      let text = err.message;
-      try {
-        text = JSON.parse(err.message).error || text;
-      } catch { /* raw text */ }
-      setUnderstanding({ status: 'error', error: text });
-    }
-  };
+  // --- The two conversation-app builds, one state machine each (useAppBuild): the
+  // understanding run (openspec add-ask-for-understanding) and the goal run
+  // (openspec goal-app). The nudge is off on the Ask lane: it has no builder turn.
+  const understanding = useAppBuild({ repoId: tab.repoId, base: '/understanding', enabled: canUnderstand, sessionId: tab.sessionId, chatStatus: status, nudge: !isAsk });
+  const goal = useAppBuild({ repoId: tab.repoId, base: '/goal', enabled: canGoal, sessionId: tab.sessionId, chatStatus: status, nudge: !isAsk });
 
   return (
     <div
@@ -671,41 +569,86 @@ export default function PinnedAgent({
           Sibling of Discover; reuses the .phone__discover furniture styling. Hidden
           while Files / a local app / the Console is open; disabled until the builder
           lane has a conversation. */}
-      {canUnderstand && !showFiles && (!openApp || split) && !showConsole && !showOpenspec && !showTools && (
+      {(canUnderstand || canGoal) && !showFiles && (!openApp || split) && !showConsole && !showOpenspec && !showTools && (
         <div className="phone__discover phone__understanding">
+          {/* ONE row: 🧠 Ask for understanding + its Auto, then 🎯 Update goal + its
+              Auto right next to it (openspec goal-app). Each button+Auto is a pair
+              that wraps together on a narrow dock. */}
           <div className="phone__understanding-row">
-            <button
-              type="button"
-              className="phone__discover-btn"
-              onClick={askUnderstanding}
-              disabled={understandingBusy || !tab.sessionId}
-              title={tab.sessionId ? t('dashboard.understandingHint') : t('dashboard.understandingDisabled')}
-            >
-              {understandingBusy ? t('dashboard.understandingAsking') : `🧠 ${t('dashboard.understanding')}`}
-            </button>
-            {/* Auto-mode toggle (openspec auto-understanding-after-turn): views/flips
-                the repo's SERVER-persisted flag — the backend re-runs understanding
-                by itself after every completed builder turn, browser or not. */}
-            <label
-              className={`phone__understanding-auto${autoUnderstanding ? ' phone__understanding-auto--on' : ''}`}
-              title={t('dashboard.understandingAutoHint')}
-            >
-              <input
-                type="checkbox"
-                checked={autoUnderstanding}
-                onChange={toggleAutoUnderstanding}
-              />
-              {t('dashboard.understandingAuto')}
-            </label>
+            {canUnderstand && (
+              <span className="phone__understanding-pair" data-understanding-row>
+                <button
+                  type="button"
+                  className="phone__discover-btn"
+                  onClick={understanding.ask}
+                  disabled={understanding.busy || !tab.sessionId}
+                  title={tab.sessionId ? t('dashboard.understandingHint') : t('dashboard.understandingDisabled')}
+                  data-understanding-btn
+                >
+                  {understanding.busy ? t('dashboard.understandingAsking') : `🧠 ${t('dashboard.understanding')}`}
+                </button>
+                {/* Auto-mode toggle (openspec auto-understanding-after-turn): views/flips
+                    the repo's SERVER-persisted flag — the backend re-runs understanding
+                    by itself after every completed builder turn, browser or not. */}
+                <label
+                  className={`phone__understanding-auto${understanding.auto ? ' phone__understanding-auto--on' : ''}`}
+                  title={t('dashboard.understandingAutoHint')}
+                >
+                  <input
+                    type="checkbox"
+                    checked={understanding.auto}
+                    onChange={understanding.toggleAuto}
+                    data-understanding-auto
+                  />
+                  {t('dashboard.understandingAuto')}
+                </label>
+              </span>
+            )}
+            {canGoal && (
+              <span className="phone__understanding-pair" data-goal-row>
+                <button
+                  type="button"
+                  className="phone__discover-btn"
+                  onClick={goal.ask}
+                  disabled={goal.busy || !tab.sessionId}
+                  title={tab.sessionId ? t('dashboard.goalHint') : t('dashboard.goalDisabled')}
+                  data-goal-btn
+                >
+                  {goal.busy ? t('dashboard.goalAsking') : `🎯 ${t('dashboard.goal')}`}
+                </button>
+                <label
+                  className={`phone__understanding-auto${goal.auto ? ' phone__understanding-auto--on' : ''}`}
+                  title={t('dashboard.goalAutoHint')}
+                >
+                  <input
+                    type="checkbox"
+                    checked={goal.auto}
+                    onChange={goal.toggleAuto}
+                    data-goal-auto
+                  />
+                  {t('dashboard.goalAuto')}
+                </label>
+              </span>
+            )}
           </div>
-          {understanding?.status === 'done' && (
+          {understanding.run?.status === 'done' && (
             <div className="phone__discover-msg" role="status">
               {t('dashboard.understandingDone')}
             </div>
           )}
-          {understanding?.status === 'error' && (
+          {understanding.run?.status === 'error' && (
             <div className="phone__discover-msg phone__discover-msg--err" role="status">
-              {t('dashboard.understandingError', { error: understanding.error })}
+              {t('dashboard.understandingError', { error: understanding.run.error })}
+            </div>
+          )}
+          {goal.run?.status === 'done' && (
+            <div className="phone__discover-msg" role="status" data-goal-msg>
+              {t('dashboard.goalDone')}
+            </div>
+          )}
+          {goal.run?.status === 'error' && (
+            <div className="phone__discover-msg phone__discover-msg--err" role="status" data-goal-msg>
+              {t('dashboard.goalError', { error: goal.run.error })}
             </div>
           )}
         </div>

@@ -33,3 +33,8 @@ client/dist.lastgood/
 
 client/dist-preview/
 .loop-evals/
+
+# The agent-authored Goal app (openspec goal-app): per-machine, per-agent state on
+# the harness's own repo, unlike understanding-app/ — never committed here. Anchored
+# to the root: openspec/changes/goal-app/ must stay tracked.
+/goal-app/

@@ -72,7 +72,7 @@ public class UnderstandingController : ControllerBase
         // is request-scoped — and hand it to the registry, which owns the lifecycle
         // and records the call only if this is an actual start (not a join).
         var actor = _audit.ResolveActor(HttpContext);
-        var job = _jobs.StartOrJoin(repo.Id, repo.Name, repo.Path, body.SessionId, actor.Display, actor.Ip);
+        var job = _jobs.StartOrJoin(AppBuildKind.Understanding, repo.Id, repo.Name, repo.Path, body.SessionId, actor.Display, actor.Ip);
         return Ok(JobBody(repo.Id, repo.Name, job));
     }
 
@@ -88,7 +88,7 @@ public class UnderstandingController : ControllerBase
         if (repo is null)
             return NotFound(new { error = "No repository selected." });
 
-        var job = _jobs.Get(repo.Id);
+        var job = _jobs.Get(AppBuildKind.Understanding, repo.Id);
         return Ok(JobBody(repo.Id, repo.Name, job));
     }
 
@@ -134,9 +134,10 @@ public class UnderstandingController : ControllerBase
         public bool Enabled { get; set; }
     }
 
-    // Shared projection. A null job means "no recent run" (idle); otherwise we
-    // surface running/done/error with the error detail on error.
-    private static object JobBody(string repoId, string repoName, UnderstandingJob? job)
+    // Shared projection (also used by GoalController — same body shape for both
+    // kinds). A null job means "no recent run" (idle); otherwise we surface
+    // running/done/error with the error detail on error.
+    internal static object JobBody(string repoId, string repoName, UnderstandingJob? job)
     {
         if (job is null)
             return new { repoId, repoName, status = "idle" };

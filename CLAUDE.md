@@ -104,6 +104,13 @@ this box (including one in another repo) can read off disk. It's what the homepa
 "Use the Understanding app in any agent" topic points other agents at. If the convention
 changes, change it **there**, not by re-describing it here or in the paste.
 
+The Understanding app has a twin, the **Goal app** (`goal-app/` at the repo root, the
+Local tab's always-on **Goal** slot): the goal of what is being built in a repo agent, as
+its chat has set it, kept current by the dock's 🎯 **Update goal** button / Auto box. Its
+rules ("The Goal app" section of the same convention doc) are the four-line contract plus
+`goal-app/goal.json` as the record and "unchanged means untouched". On birocode
+`goal-app/` is gitignored (per-machine, per-agent state).
+
 The sibling case — exposing a **real product you run yourself** (not a harness-served
 static app) on the Local tab — has its own agent-agnostic doc,
 `docs/local-exposure-convention.md`: the three-rule contract (dual-stack bind, serve at
