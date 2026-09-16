@@ -40,8 +40,17 @@ mechanical judge had already flagged, the only thing it could write from a trans
    vocabulary, a Can / Cannot table, and where its provenance lives. All of it is data in
    `policemanDiagram.js` rendered to SVG — the same data the understanding app renders,
    so the explanation cannot drift from the product.
-5. **Understanding app** (`understanding-app/`) rewritten for the same content, with a
-   "try a pass" simulation.
+5. **Understanding app** (`understanding-app/`) models the policeman ONE OWNER PER GRAPH, rendered by
+   vendored cytoscape from `policemanMachines.js`: three DETERMINISTIC graphs where every box and arrow
+   names the C# module and routine that owns it (1 the loop & lifecycle — AutopilotService /
+   ArchAgentService.Policeman / LoopConfigStore; 2 card facts & the mechanical judge — TaskVerificationPoller /
+   BoardVerifier / TaskLifecycle / BoardIntegrity; 3 tools & the three fences — ArchMcpServer /
+   DisallowedToolsFor / the tools), and two PROMPT graphs labelled with their ArchPoliceman.Prompt step (4 the
+   pass; 5 how it judges a card, saying which inputs come ready-made from code). The only places the two meet
+   are the marked contract boxes (the model's turn) and the one contract arrow (NEEDS_HUMAN read back).
+   Flowchart shapes; click a box to light its arrows; hover for the full "where". Validated by tests: every
+   element names where it lives, a code graph has no model element but its contract boundary, a prompt graph
+   is all the model's.
 
 The policeman's allowed set is now 17 of 31 tools; the 14 acting tools stay withheld.
 
