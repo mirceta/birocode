@@ -13,7 +13,8 @@ code { font-family: ui-monospace, Consolas, monospace; font-size: 0.92em; backgr
 .tabs { display: flex; flex-wrap: wrap; gap: 6px; }
 .tab { background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 8px; padding: 6px 12px; font: inherit; cursor: pointer; }
 .tab.is-on { color: var(--text); border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-main { padding: 20px 24px 40px; max-width: 1100px; }
+main { padding: 20px 24px 40px; }
+.view:not([data-view="machine"]) { max-width: 1100px; }
 .view { display: none; } .view.is-on { display: block; }
 .note { color: var(--muted); font-size: 13.5px; }
 .btn { background: transparent; border: 1px solid var(--accent); color: var(--text); border-radius: 8px; padding: 6px 14px; font: inherit; cursor: pointer; }
@@ -30,7 +31,7 @@ main { padding: 20px 24px 40px; max-width: 1100px; }
 .pd__state--ok rect { stroke: var(--green); } .pd__state--warn rect { stroke: var(--amber); fill: rgba(210,153,34,.08); } .pd__state--bad rect { stroke: var(--red); fill: rgba(229,72,77,.08); } .pd__state--plain rect { stroke-dasharray: 4 3; }
 .pd__label { font-size: 14px; font-weight: 700; fill: var(--text); } .pd__sub { font-size: 11px; fill: var(--muted); }
 .pd__edge path { fill: none; stroke: var(--muted); stroke-width: 1.4; } .pd__arrowhead { fill: var(--muted); }
-.cy { width: 100%; height: 820px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.cy { width: 100%; height: calc(100vh - 250px); min-height: 640px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
 .cybar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0; }
 .legend { color: var(--muted); font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-left: 8px; }
 .sw { display: inline-block; width: 14px; height: 10px; border: 2px solid var(--border); border-radius: 3px; background: var(--surface); margin-left: 6px; }

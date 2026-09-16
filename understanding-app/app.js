@@ -73,6 +73,7 @@ $('#cy-fit').addEventListener('click', () => cy.animate({ fit: { eles: cy.elemen
 $('#cy-agent').addEventListener('click', () => focus('node[kind="state"], node#pass'));
 $('#cy-pass').addEventListener('click', () => focus('node#pass'));
 $('#cy-cards').addEventListener('click', () => focus('node#cards'));
+window.addEventListener('resize', () => { cy.resize(); cy.fit(undefined, 30); });
 // The tab is hidden until shown: cytoscape needs a resize + fit once it becomes visible.
 document.querySelector('[data-view="machine"]').addEventListener('click', () => setTimeout(() => { cy.resize(); cy.fit(undefined, 30); }, 0));
 
