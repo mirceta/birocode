@@ -1,19 +1,12 @@
-// Understanding app — the Kanban policeman as ONE state diagram (openspec policeman-observes-agents).
-// Build-less, relative URLs only; cytoscape is vendored; the data module is a vendored copy of
-// client/src/components/taskgraph/policemanStateMachine.js (validated by the client tests).
-import { toElements } from './policemanStateMachine.js';
+// Understanding app — the Kanban policeman as a state diagram in three levels (openspec
+// policeman-observes-agents). Build-less, relative URLs only; cytoscape is vendored; the data
+// module is a vendored copy of client/src/components/taskgraph/policemanStateMachine.js.
+import { LEVELS, levelElements } from './policemanStateMachine.js';
 
 const $ = (s) => document.querySelector(s);
-
-// The full state diagram (cytoscape, vendored): three nested compounds, preset positions.
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-const cy = window.cytoscape({
-  container: $('#cy'),
-  elements: toElements(),
-  layout: { name: 'preset', fit: true, padding: 30 },
-  wheelSensitivity: 0.2,
-  autounselectify: true,
-  style: [
+
+const STYLE = [
     { selector: 'node', style: { 'label': 'data(label)', 'text-wrap': 'wrap', 'text-max-width': 190, 'font-size': 15, 'font-weight': 700, 'color': css('--text'), 'text-valign': 'center', 'text-halign': 'center', 'shape': 'round-rectangle', 'width': 230, 'height': 64, 'background-color': css('--surface'), 'border-width': 2, 'border-color': css('--border'), 'text-margin-y': -8 } },
     { selector: 'node[sub]', style: { 'label': (n) => n.data('label') + '\n' + n.data('sub') } },
     { selector: 'node.step', style: { 'shape': 'rectangle', 'width': 250, 'height': 66, 'font-size': 13.5 } },
@@ -39,22 +32,47 @@ const cy = window.cytoscape({
     { selector: 'edge.lit', style: { 'line-color': css('--accent'), 'target-arrow-color': css('--accent'), 'width': 4, 'color': css('--accent'), 'font-weight': 700, 'font-size': 14, 'z-index': 9 } },
     { selector: 'node.lit', style: { 'border-width': 4, 'border-color': css('--accent') } },
     { selector: 'node:selected, edge:selected', style: { 'overlay-opacity': 0 } },
-  ],
-});
-window.cy = cy;
-cy.on('tap', 'node', (ev) => {
-  const n = ev.target;
-  if (n.hasClass('group')) return;
-  const again = n.hasClass('lit');
-  cy.elements().removeClass('lit');
-  if (again) return; // a second click on the same state clears it
-  n.connectedEdges().addClass('lit');
-  n.addClass('lit');
-});
-cy.on('tap', (ev) => { if (ev.target === cy) cy.elements().removeClass('lit'); });
-const focus = (sel) => cy.animate({ fit: { eles: cy.$(sel), padding: 40 }, duration: 350 });
-$('#cy-fit').addEventListener('click', () => cy.animate({ fit: { eles: cy.elements(), padding: 30 }, duration: 350 }));
-$('#cy-agent').addEventListener('click', () => focus('node[kind="state"], node#pass'));
-$('#cy-pass').addEventListener('click', () => focus('node#pass'));
-$('#cy-cards').addEventListener('click', () => focus('node#cards'));
-window.addEventListener('resize', () => { cy.resize(); cy.fit(undefined, 30); });
+
+  // The stand-in for the nested level: a dashed accent box; clicking it opens that level's tab.
+  { selector: 'node.shape-ref', style: { 'shape': 'round-rectangle', 'corner-radius': '14px', 'width': 320, 'height': 84, 'border-style': 'dashed', 'border-width': 3, 'border-color': css('--accent'), 'color': css('--accent'), 'background-color': css('--bg'), 'font-size': 16 } },
+];
+
+const cys = {};
+let current = 'agent';
+for (const level of Object.keys(LEVELS)) {
+  const cy = window.cytoscape({
+    container: $('#cy-' + level),
+    elements: levelElements(level),
+    layout: { name: 'preset', fit: true, padding: 40 },
+    wheelSensitivity: 0.2,
+    autounselectify: true,
+    style: STYLE,
+  });
+  cy.on('tap', 'node', (ev) => {
+    const n = ev.target;
+    if (n.data('kind') === 'ref') { show(n.data('to')); return; }
+    const again = n.hasClass('lit');
+    cy.elements().removeClass('lit');
+    if (again) return; // a second click on the same state clears it
+    n.connectedEdges().addClass('lit');
+    n.addClass('lit');
+  });
+  cy.on('tap', (ev) => { if (ev.target === cy) cy.elements().removeClass('lit'); });
+  cys[level] = cy;
+}
+window.cys = cys;
+window.cy = cys.agent;
+
+function show(level) {
+  current = level;
+  document.querySelectorAll('[data-tabs] .tab').forEach((t) => t.classList.toggle('is-on', t.dataset.level === level));
+  document.querySelectorAll('[data-cy]').forEach((d) => d.classList.toggle('is-on', d.dataset.cy === level));
+  $('#blurb').innerHTML = `<b>${LEVELS[level].title}</b> — ${LEVELS[level].blurb}.`;
+  window.cy = cys[level];
+  setTimeout(() => { cys[level].resize(); cys[level].fit(undefined, 40); }, 0);
+}
+document.querySelectorAll('[data-tabs] .tab').forEach((t) => t.addEventListener('click', () => show(t.dataset.level)));
+$('#cy-fit').addEventListener('click', () => cys[current].animate({ fit: { eles: cys[current].elements(), padding: 40 }, duration: 350 }));
+window.addEventListener('resize', () => { cys[current].resize(); cys[current].fit(undefined, 40); });
+window.showLevel = show;
+show('agent');

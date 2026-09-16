@@ -3,7 +3,7 @@
 // no dead end but the terminal ones, and the card level never moves a card backwards.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { NODES, EDGES, SHAPES, toElements, validate } from './policemanStateMachine.js';
+import { NODES, EDGES, SHAPES, LEVELS, levelElements, toElements, validate } from './policemanStateMachine.js';
 
 test('the diagram validates and nests agent → pass → cards', () => {
   const v = validate();
@@ -40,6 +40,24 @@ test('flowchart shapes: pills at start and ends, parallelograms read, rectangles
   for (const id of ['s6', 's7']) assert.equal(byId[id].shape, 'process', id);
   for (const n of NODES) if (n.kind !== 'group') assert.ok(SHAPES[n.shape || 'state'], n.id + ' has an unknown shape');
   assert.ok(toElements().some((e) => e.data.id === 's4' && /shape-decision/.test(e.classes)));
+});
+
+test('each level is its own complete picture, with the nested level as one stand-in that links onward', () => {
+  const count = (els) => ({ nodes: els.filter((e) => !e.data.source).length, edges: els.filter((e) => e.data.source).length, ref: els.find((e) => e.data.kind === 'ref') });
+  const a = count(levelElements('agent'));
+  assert.equal(a.nodes, 8); // 7 states + the PASS RUNNING stand-in
+  assert.equal(a.edges, EDGES.filter((e) => e.kind === 'lifecycle').length); // every lifecycle edge survives, incl. those to/from the pass
+  assert.equal(a.ref.data.to, 'pass');
+  const p = count(levelElements('pass'));
+  assert.equal(p.nodes, 9); // 8 steps + the EACH CARD stand-in
+  assert.equal(p.edges, EDGES.filter((e) => e.kind === 'flow' || e.kind === 'link').length);
+  assert.equal(p.ref.data.to, 'cards');
+  const c = count(levelElements('cards'));
+  assert.equal(c.nodes, 9);
+  assert.equal(c.edges, EDGES.filter((e) => e.kind === 'card').length);
+  assert.equal(c.ref, undefined);
+  assert.deepEqual(Object.keys(LEVELS), ['agent', 'pass', 'cards']);
+  assert.throws(() => levelElements('nope'));
 });
 
 test('cytoscape elements carry positions for states and none for groups', () => {

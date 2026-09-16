@@ -38,7 +38,7 @@ export const NODES = [
   S('stopped', 'Stopped', 'you pressed ■ Stop · no tick re-arms it', -1300, 200, { parent: 'agent' }),
   S('paused', 'Disarmed', 'operator gate closed / kill switch off', -1300, 480, { parent: 'agent', tone: 'warn' }),
   S('wait', 'Waiting for you', 'the pass ended with NEEDS_HUMAN:', -900, 560, { parent: 'agent', tone: 'warn' }),
-  S('rollover', 'Rolling over', 'context ≥ cap · session cut · handover parked', -900, 860, { parent: 'agent' }),
+  S('rollover', 'Rolling over', 'context ≥ cap · session cut · handover parked', -80, 860, { parent: 'agent' }),
   S('errored', 'Errored', 'the turn crashed · cooldown', -1300, 860, { parent: 'agent', tone: 'bad' }),
 
   // ---- level 2: the pass (inside "pass") ---------------------------------------------------
@@ -129,6 +129,34 @@ export function toElements() {
  * policeman leaves alone has nowhere further to go). */
 export const ENTRIES = new Set(['off', 's1', 'c-unassigned']);
 export const TERMINALS = new Set(['s8', 'c-skip']);
+
+/** The three levels as three separate pictures (one tab each): the nested level appears as ONE
+ * stand-in node (kind 'ref') that links to its own tab, so no picture is crowded. */
+export const LEVELS = {
+  agent: { title: 'The agent', blurb: 'the states the policeman conversation itself is in, and what moves it', ref: { id: 'pass', label: 'PASS RUNNING', sub: 'one pass, in order → see its tab', x: -420, y: 300, to: 'pass' } },
+  pass: { title: 'The pass', blurb: 'the steps of one pass, in order, with its two inner loops', ref: { id: 'cards', label: 'EACH CARD', sub: 'one state per card, one action → see its tab', x: 960, y: 440, to: 'cards' } },
+  cards: { title: 'Each card', blurb: 'the nine states a card can be in as the policeman sees it, what a pass finds to move it, and the one action it takes there', ref: null },
+};
+
+export function levelElements(level) {
+  const L = LEVELS[level];
+  if (!L) throw new Error('unknown level ' + level);
+  const own = NODES.filter((n) => n.kind !== 'group' && n.parent === level);
+  const ids = new Set(own.map((n) => n.id));
+  const nodes = own.map((n) => ({
+    data: { id: n.id, label: n.label, sub: n.sub || '', kind: n.kind, tone: n.tone || 'plain', shape: n.shape || 'state' },
+    position: { x: n.x, y: n.y },
+    classes: `${n.kind} tone-${n.tone || 'plain'} shape-${n.shape || 'state'}`,
+  }));
+  if (L.ref) {
+    ids.add(L.ref.id);
+    nodes.push({ data: { id: L.ref.id, label: L.ref.label, sub: L.ref.sub, kind: 'ref', tone: 'plain', shape: 'ref', to: L.ref.to }, position: { x: L.ref.x, y: L.ref.y }, classes: 'ref shape-ref' });
+  }
+  const edges = EDGES.filter((e) => ids.has(e.source) && ids.has(e.target)).map((e) => ({
+    data: { id: e.id, source: e.source, target: e.target, label: e.label, kind: e.kind, curve: e.curve || 'bezier' }, classes: e.kind,
+  }));
+  return [...nodes, ...edges];
+}
 
 /** Every endpoint and parent exists; every state (not a group) is reachable and, except the
  * terminal "Not mine", has a way out; the card machine never moves a card backwards. */
