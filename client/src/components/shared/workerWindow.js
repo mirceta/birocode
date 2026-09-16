@@ -7,11 +7,19 @@
 // .claudeweb-preview/playwright/check-worker-window.mjs (4/4: reuse, cross-origin
 // renavigation, and the association even survives a reload of M).
 //
+// Two-screen use (verified, checks 5–7 of the same script): the worker opens as
+// a tab; DRAG IT OUT into its own Chrome window (e.g. onto a second monitor) and
+// every later click keeps reusing it there — the name lookup finds the browsing
+// context regardless of which OS window hosts it, and a dragged tab keeps its
+// name + opener.
+//
 // Known limits, by design of the platform:
 //  - the name association is scoped to the opener's tab — a second management tab
-//    gets its own worker window (still one worker PER management window);
+//    gets its own worker window (still one worker PER management window), and a
+//    brand-new M tab (after closing the old one) starts a fresh worker;
 //  - focus() is best-effort: the browser navigates the worker reliably, but may
-//    decline to raise a background OS window without its own user gesture.
+//    decline to raise a background OS window without its own user gesture — on a
+//    two-screen layout that hardly matters, the worker is visible on its screen.
 // Must be called from a click handler (user gesture) or the popup blocker wins.
 
 export const WORKER_WINDOW_NAME = 'birocode-worker';
